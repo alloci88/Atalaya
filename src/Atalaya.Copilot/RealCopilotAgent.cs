@@ -18,6 +18,7 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
     private readonly string? _baseDirectory;
     private readonly ILogger _logger;
     private readonly string? _model;
+    private readonly TimeSpan _sendTimeout;
     private CopilotClient? _client;
     private bool _started;
 
@@ -26,11 +27,13 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
     /// which is where the `copilot` CLI stores the login — so <c>UseLoggedInUser</c> actually finds it.
     /// Setting a custom directory isolates the SDK from the CLI's auth and breaks discovery.
     /// </param>
-    public RealCopilotAgent(string? baseDirectory = null, ILogger? logger = null, string? model = null)
+    public RealCopilotAgent(string? baseDirectory = null, ILogger? logger = null, string? model = null, TimeSpan? sendTimeout = null)
     {
         _baseDirectory = string.IsNullOrWhiteSpace(baseDirectory) ? null : baseDirectory;
         _logger = logger ?? NullLogger.Instance;
         _model = model;
+        // The SDK default (1 min) is too short for auditing a real code unit.
+        _sendTimeout = sendTimeout is { TotalSeconds: > 0 } ? sendTimeout.Value : TimeSpan.FromMinutes(15);
     }
 
     public string? ModelName => _model;
@@ -139,7 +142,7 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
             CopilotSession session = await _client!.CreateSessionAsync(config, ct);
             try
             {
-                await session.SendAndWaitAsync(prompt, null, ct);
+                await session.SendAndWaitAsync(prompt, _sendTimeout, ct);
             }
             finally
             {

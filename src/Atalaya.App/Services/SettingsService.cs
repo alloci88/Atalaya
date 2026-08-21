@@ -35,6 +35,12 @@ public sealed class AppSettings
     /// if you deliberately want the SDK isolated to a custom directory.
     /// </summary>
     public string? CopilotBaseDirectory { get; set; }
+
+    /// <summary>
+    /// Max minutes to wait for the agent to finish auditing ONE unit before timing out (§5.1).
+    /// The SDK default is 1 minute, which is too short for a real audit. Default here: 15.
+    /// </summary>
+    public int CopilotTimeoutMinutes { get; set; } = 15;
 }
 
 /// <summary>
