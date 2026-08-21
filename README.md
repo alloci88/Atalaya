@@ -49,6 +49,70 @@ los `BUG-0042` son alias de presentación (mejora 2).
 La ruta del clon local es **por máquina** (`%LOCALAPPDATA%/Atalaya/machines.json`),
 nunca va al hub.
 
+## Conectar con Copilot
+
+> **Importante:** el indicador **verde** de la barra es SOLO la sincronización con git
+> (el hub). **No** significa que Copilot esté listo. Copilot es un sistema aparte y su
+> login **no se hace dentro de Atalaya**: la app reutiliza (`UseLoggedInUser = true`) un
+> login que haces **una vez por máquina** con el CLI `copilot`.
+
+Copilot solo se usa al pulsar **Auditar** (crear una sesión). Prerrequisitos:
+
+1. **Asiento de Copilot** activo en la cuenta que vayas a usar
+   (`github.com/settings/copilot`).
+2. **Node.js** instalado (para instalar el CLI).
+
+### Pasos (una vez por máquina)
+
+1. **Instala el CLI de Copilot:**
+   ```
+   npm install -g @github/copilot
+   ```
+   > En equipos con la **Execution Policy de PowerShell capada** (típico en empresas),
+   > `npm` falla porque en Windows es `npm.ps1`. Solución: **usa `cmd.exe`** (Símbolo del
+   > sistema), no PowerShell — ejecuta ahí `npm install -g @github/copilot` y luego
+   > `copilot`. Los shims `.cmd` se saltan la política. Comprueba tu política con
+   > `Get-ExecutionPolicy -List`; si `MachinePolicy`/`UserPolicy` están restringidas es
+   > por GPO y no la puedes cambiar tú → cmd.exe es el camino.
+
+2. **Autentícate una vez:**
+   ```
+   copilot
+   ```
+   Dentro, usa `/login` y completa el device-flow **con la cuenta que tiene el asiento**.
+
+   > Si en la web el botón **Authorize** sale **deshabilitado**, es la **política de la
+   > organización de GitHub** (restricción de OAuth Apps / SAML SSO), no un fallo de
+   > Atalaya. En la sección *Organization access* pulsa **"Request"** (o pide a un *owner*
+   > de la org que **apruebe la app "GitHub Copilot CLI"**). Si usa SAML, entra antes en
+   > `github.com` y completa el SSO, luego reintenta.
+
+3. **Verifica desde la app:** Atalaya → **Ajustes → "Comprobar Copilot"**. Debe salir
+   **`✓ Copilot autenticado como <login>`**. (Este botón te lo dice sin tener que lanzar
+   una auditoría; si falta el login, muestra la ayuda en vez de un error crudo.)
+
+4. **Audita:** Inventario (V2) → selecciona una unidad → **Auditar selección** → sigue el
+   progreso en **V5 (sesión en vivo)**.
+
+### Ajustes relacionados (en `%LOCALAPPDATA%/Atalaya/settings.json`)
+
+- `copilotTimeoutMinutes` (por defecto **15**): tiempo máximo por unidad. El SDK trae 1
+  minuto por defecto, insuficiente para una auditoría real; súbelo si tienes unidades muy
+  grandes.
+- `copilotBaseDirectory` (por defecto **vacío**): déjalo vacío para que el SDK use su
+  ubicación estándar, que es **donde el CLI guarda el login** (así `UseLoggedInUser` lo
+  encuentra). Solo ponle una ruta si necesitas aislar el SDK a una carpeta concreta.
+
+### Diagnóstico rápido
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| "Comprobar Copilot" dice no autenticado | Falta el `copilot /login` en esa máquina | Pasos 1–2 |
+| `npm`/`copilot` no ejecutan en PowerShell | Execution Policy capada | Usa **cmd.exe** |
+| Botón *Authorize* deshabilitado en la web | Política de OAuth/SSO de la org | Pide aprobación a un *owner* / completa SSO |
+| `session was not created with authentication info…` | El SDK no ve el login | Verifica `copilotBaseDirectory` vacío y re-loguea |
+| `SendAndWaitAsync timed out after 1 min` | Timeout por defecto del SDK | Ya se usa 15 min; sube `copilotTimeoutMinutes` |
+
 ## Flujos
 
 - **Lotes** (V2 → seleccionar unidades → *Auditar selección*): reclama unidades, audita
