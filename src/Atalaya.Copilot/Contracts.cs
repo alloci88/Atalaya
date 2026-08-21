@@ -24,6 +24,26 @@ public sealed record SubmitFindingResult(bool Accepted, string? DuplicateOf = nu
 /// <summary>Per-call token/cost sample from the SDK usage event (§6.3), isolated from the SDK types.</summary>
 public sealed record UsageSample(long InputTokens, long OutputTokens, decimal? Cost, string? Model);
 
+/// <summary>Whether the agent can run, with a human-readable reason (§6.1 help screen).</summary>
+public sealed record AgentReadiness(bool Ready, string Message);
+
+/// <summary>
+/// Thrown when a Copilot operation fails because the CLI is not authenticated (§6.1). Carries the
+/// help text so the UI can show "ejecuta `copilot` y autentícate" instead of a raw SDK error.
+/// </summary>
+public sealed class CopilotAuthenticationException : Exception
+{
+    public CopilotAuthenticationException(string message, Exception? inner = null) : base(message, inner) { }
+}
+
+/// <summary>Canonical help text for the not-authenticated case (§6.1).</summary>
+public static class CopilotHelp
+{
+    public const string NotAuthenticated =
+        "Copilot no está autenticado en esta máquina. Instala el CLI (npm install -g @github/copilot), "
+        + "ejecuta `copilot` en una terminal, usa /login una vez con tu cuenta con asiento de Copilot, y reintenta.";
+}
+
 /// <summary>What the app hands the agent to audit one unit (§5.1.3).</summary>
 public sealed record AuditUnitRequest(
     string UnitPath,
@@ -74,6 +94,9 @@ public interface ICopilotAgent
 
     /// <summary>Verifies the agent can run; false means auth is needed (§6.1 help screen).</summary>
     Task<bool> EnsureReadyAsync(CancellationToken ct);
+
+    /// <summary>Detailed readiness check (auth state + reason) for the "Comprobar Copilot" action.</summary>
+    Task<AgentReadiness> CheckAsync(CancellationToken ct);
 
     /// <summary>Audits one unit, reporting via <paramref name="toolbox"/> and ending on unit_done.</summary>
     Task AuditUnitAsync(AuditUnitRequest request, IAuditToolbox toolbox, CancellationToken ct);

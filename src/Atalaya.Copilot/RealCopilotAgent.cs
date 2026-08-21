@@ -34,18 +34,26 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
 
     public event Action<UsageSample>? UsageReported;
 
-    public async Task<bool> EnsureReadyAsync(CancellationToken ct)
+    public async Task<bool> EnsureReadyAsync(CancellationToken ct) => (await CheckAsync(ct)).Ready;
+
+    public async Task<AgentReadiness> CheckAsync(CancellationToken ct)
     {
         try
         {
             await EnsureStartedAsync(ct);
-            await _client!.PingAsync("atalaya", ct);
-            return true;
+            GetAuthStatusResponse status = await _client!.GetAuthStatusAsync(ct);
+            if (status is { IsAuthenticated: true })
+            {
+                return new AgentReadiness(true, $"Copilot autenticado como {status.Login ?? "?"}.");
+            }
+
+            string extra = string.IsNullOrWhiteSpace(status?.StatusMessage) ? "" : $" [{status.StatusMessage}]";
+            return new AgentReadiness(false, CopilotHelp.NotAuthenticated + extra);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Copilot not ready (auth?). Show the 'run copilot in a terminal' help.");
-            return false;
+            _logger.LogWarning(ex, "Copilot readiness check failed");
+            return new AgentReadiness(false, CopilotHelp.NotAuthenticated);
         }
     }
 
@@ -114,15 +122,36 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
 
     private async Task RunAsync(SessionConfig config, string prompt, CancellationToken ct)
     {
-        CopilotSession session = await _client!.CreateSessionAsync(config, ct);
+        // Fail fast with the friendly help message instead of a raw SDK auth error (§6.1).
+        AgentReadiness readiness = await CheckAsync(ct);
+        if (!readiness.Ready)
+        {
+            throw new CopilotAuthenticationException(readiness.Message);
+        }
+
         try
         {
-            await session.SendAndWaitAsync(prompt, null, ct);
+            CopilotSession session = await _client!.CreateSessionAsync(config, ct);
+            try
+            {
+                await session.SendAndWaitAsync(prompt, null, ct);
+            }
+            finally
+            {
+                await session.DisposeAsync();
+            }
         }
-        finally
+        catch (Exception ex) when (LooksLikeAuthError(ex))
         {
-            await session.DisposeAsync();
+            throw new CopilotAuthenticationException(CopilotHelp.NotAuthenticated, ex);
         }
+    }
+
+    private static bool LooksLikeAuthError(Exception ex)
+    {
+        string m = ex.Message?.ToLowerInvariant() ?? string.Empty;
+        return m.Contains("authentication") || m.Contains("not authenticated")
+            || m.Contains("custom provider") || m.Contains("unauthorized");
     }
 
     private void OnSessionEvent(SessionEvent ev)

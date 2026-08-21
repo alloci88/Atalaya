@@ -10,11 +10,13 @@ public sealed partial class SettingsViewModel : ViewModelBase
 {
     private readonly SettingsService _settings;
     private readonly HubContext _hub;
+    private readonly Atalaya.Copilot.ICopilotAgent _agent;
 
-    public SettingsViewModel(SettingsService settings, HubContext hub)
+    public SettingsViewModel(SettingsService settings, HubContext hub, Atalaya.Copilot.ICopilotAgent agent)
     {
         _settings = settings;
         _hub = hub;
+        _agent = agent;
         AppSettings s = settings.Current;
         _gitUserName = s.GitUserName ?? string.Empty;
         _gitUserEmail = s.GitUserEmail ?? string.Empty;
@@ -72,6 +74,26 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
         ThemeService.Apply(IsLightTheme ? "light" : "dark");
         StatusMessage = "Ajustes guardados.";
+    }
+
+    [RelayCommand]
+    private async Task CheckCopilot()
+    {
+        IsBusy = true;
+        StatusMessage = "Comprobando Copilot…";
+        try
+        {
+            Atalaya.Copilot.AgentReadiness readiness = await _agent.CheckAsync(CancellationToken.None);
+            StatusMessage = readiness.Ready ? $"✓ {readiness.Message}" : readiness.Message;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error comprobando Copilot: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
     [RelayCommand]

@@ -77,9 +77,10 @@ public sealed partial class SessionViewModel : ViewModelBase
             return;
         }
 
-        if (!await _agent.EnsureReadyAsync(CancellationToken.None))
+        AgentReadiness readiness = await _agent.CheckAsync(CancellationToken.None);
+        if (!readiness.Ready)
         {
-            StatusMessage = "Copilot no está autenticado. Ejecuta `copilot` en una terminal, autentícate una vez y reintenta.";
+            StatusMessage = readiness.Message;
             return;
         }
 
@@ -96,6 +97,10 @@ public sealed partial class SessionViewModel : ViewModelBase
         catch (OperationCanceledException)
         {
             StatusMessage = "Sesión detenida.";
+        }
+        catch (CopilotAuthenticationException authEx)
+        {
+            StatusMessage = authEx.Message; // §6.1 help text instead of a raw SDK error
         }
         catch (Exception ex)
         {

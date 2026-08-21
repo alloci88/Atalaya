@@ -25,6 +25,9 @@ public sealed class FakeCopilotAgent : ICopilotAgent
 
     public Task<bool> EnsureReadyAsync(CancellationToken ct) => Task.FromResult(true);
 
+    public Task<AgentReadiness> CheckAsync(CancellationToken ct)
+        => Task.FromResult(new AgentReadiness(true, "Agente falso listo (sin Copilot real)."));
+
     public Task AuditUnitAsync(AuditUnitRequest request, IAuditToolbox toolbox, CancellationToken ct)
     {
         TextStreamed?.Invoke($"[fake] auditando {request.UnitPath}\n");

@@ -52,6 +52,21 @@ public class PromptComposerTests
 public class FakeAgentTests
 {
     [Fact]
+    public async Task Fake_is_always_ready()
+    {
+        AgentReadiness readiness = await new FakeCopilotAgent().CheckAsync(CancellationToken.None);
+        readiness.Ready.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Auth_help_text_names_the_copilot_login_step()
+    {
+        CopilotHelp.NotAuthenticated.Should().Contain("copilot");
+        CopilotHelp.NotAuthenticated.Should().Contain("/login");
+        new CopilotAuthenticationException(CopilotHelp.NotAuthenticated).Message.Should().Contain("autenticado");
+    }
+
+    [Fact]
     public async Task Fake_reports_scripted_findings_and_calls_unit_done()
     {
         var toolbox = new RecordingToolbox();

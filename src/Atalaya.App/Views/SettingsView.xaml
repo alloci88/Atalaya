@@ -15,7 +15,10 @@
             <ui:TextBox PlaceholderText="URL del repo del hub" Text="{Binding HubRepoUrl}" Margin="0,0,0,8" />
             <ui:TextBox PlaceholderText="Nombre de la organización (para hub.json)" Text="{Binding OrganizationName}" Margin="0,0,0,8" />
             <ui:TextBox PlaceholderText="PAT (se guarda cifrado con DPAPI)" Text="{Binding Pat}" Margin="0,0,0,8" />
-            <ui:Button Content="Conectar / crear hub" Command="{Binding ConnectHubCommand}" Appearance="Primary" Margin="0,0,0,16" />
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                <ui:Button Content="Conectar / crear hub" Command="{Binding ConnectHubCommand}" Appearance="Primary" Margin="0,0,8,0" />
+                <ui:Button Content="Comprobar Copilot" Command="{Binding CheckCopilotCommand}" />
+            </StackPanel>
 
             <TextBlock Text="Editor preferido" FontWeight="SemiBold" Margin="0,4,0,6" />
             <ComboBox SelectedValue="{Binding Editor}" SelectedValuePath="Tag" Width="220" HorizontalAlignment="Left" Margin="0,0,0,16">

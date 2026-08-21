@@ -141,6 +141,20 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   vía `scripts/publish.ps1`, en lugar de MSIX **[LIBERTAD]**: sin firma ni certificados,
   reproducible en cualquier máquina con el SDK. Verificado: produce `dist/Atalaya.exe`.
 
+## Post-entrega — Robustez de autenticación Copilot
+
+- **D-029 — Chequeo de auth real + pantalla de ayuda (§6.1).** El error crudo del SDK
+  ("session was not created with authentication info or custom provider") aparecía al
+  auditar cuando el CLI `copilot` no había hecho login. Ahora:
+  - `ICopilotAgent.CheckAsync` usa `CopilotClient.GetAuthStatusAsync().IsAuthenticated`;
+    `RealCopilotAgent` falla rápido con `CopilotAuthenticationException` (texto de ayuda
+    `CopilotHelp.NotAuthenticated`) en vez del error crudo, y mapea errores de sesión que
+    parezcan de auth.
+  - V5 muestra ese texto; **Ajustes** tiene un botón **"Comprobar Copilot"** para verificar
+    el login sin lanzar una auditoría.
+  - Recordatorio de diseño: el login de Copilot NO ocurre dentro de Atalaya; es un
+    `copilot` + `/login` único por máquina (el verde de la barra es solo git/hub, no Copilot).
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de
