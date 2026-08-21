@@ -15,15 +15,20 @@ namespace Atalaya.Copilot;
 /// </summary>
 public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
 {
-    private readonly string _baseDirectory;
+    private readonly string? _baseDirectory;
     private readonly ILogger _logger;
     private readonly string? _model;
     private CopilotClient? _client;
     private bool _started;
 
-    public RealCopilotAgent(string baseDirectory, ILogger? logger = null, string? model = null)
+    /// <param name="baseDirectory">
+    /// Optional SDK base directory. LEAVE NULL by default: then the SDK uses its standard location,
+    /// which is where the `copilot` CLI stores the login — so <c>UseLoggedInUser</c> actually finds it.
+    /// Setting a custom directory isolates the SDK from the CLI's auth and breaks discovery.
+    /// </param>
+    public RealCopilotAgent(string? baseDirectory = null, ILogger? logger = null, string? model = null)
     {
-        _baseDirectory = baseDirectory;
+        _baseDirectory = string.IsNullOrWhiteSpace(baseDirectory) ? null : baseDirectory;
         _logger = logger ?? NullLogger.Instance;
         _model = model;
     }
@@ -175,12 +180,19 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
             return;
         }
 
-        _client ??= new CopilotClient(new CopilotClientOptions
+        var options = new CopilotClientOptions
         {
             UseLoggedInUser = true,
-            BaseDirectory = _baseDirectory,
             Logger = _logger,
-        });
+        };
+        // Only override BaseDirectory when explicitly configured; otherwise the SDK's default
+        // location matches the `copilot` CLI login and UseLoggedInUser can find it.
+        if (_baseDirectory is not null)
+        {
+            options.BaseDirectory = _baseDirectory;
+        }
+
+        _client ??= new CopilotClient(options);
         await _client.StartAsync(ct);
         _started = true;
     }

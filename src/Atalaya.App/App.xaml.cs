@@ -73,8 +73,11 @@ public partial class App : Application
         services.AddSingleton<ImportService>();
 
         // Copilot: the real SDK agent by default (falls back to a help screen when no seat).
+        // BaseDirectory is left to the SDK default so UseLoggedInUser finds the `copilot` CLI login;
+        // an explicit override can be set in Settings if ever needed.
         services.AddSingleton<ICopilotAgent>(sp => new RealCopilotAgent(
-            paths.Copilot, sp.GetRequiredService<ILoggerFactory>().CreateLogger("Copilot")));
+            sp.GetRequiredService<SettingsService>().Current.CopilotBaseDirectory,
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger("Copilot")));
         services.AddTransient<SessionCoordinator>();
         services.AddTransient<VerifyCoordinator>();
         services.AddSingleton<GovernanceService>();

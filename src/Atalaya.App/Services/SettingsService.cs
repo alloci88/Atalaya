@@ -28,6 +28,13 @@ public sealed class AppSettings
 
     /// <summary>Feature flag for the assisted-fix flow (§5.7, H9).</summary>
     public bool EnableAssistedFix { get; set; }
+
+    /// <summary>
+    /// Optional Copilot SDK BaseDirectory. Leave empty (default): the SDK uses its standard location,
+    /// which is where the `copilot` CLI stores the login, so UseLoggedInUser finds it. Only set this
+    /// if you deliberately want the SDK isolated to a custom directory.
+    /// </summary>
+    public string? CopilotBaseDirectory { get; set; }
 }
 
 /// <summary>
