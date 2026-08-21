@@ -1,0 +1,157 @@
+using System.Collections.ObjectModel;
+using System.Windows;
+using Atalaya.App.Services;
+using Atalaya.Copilot;
+using Atalaya.Domain;
+using Atalaya.Domain.Ingestion;
+using Atalaya.Domain.Model;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+
+namespace Atalaya.App.ViewModels;
+
+/// <summary>A unit row in the live session queue (V5).</summary>
+public sealed partial class UnitRow : ObservableObject
+{
+    public required string Path { get; init; }
+
+    [ObservableProperty]
+    private string _phase = "en cola";
+}
+
+/// <summary>V5 Sesión en vivo (§8): queue, streamed agent text, findings entering, tokens/cost.</summary>
+public sealed partial class SessionViewModel : ViewModelBase
+{
+    private readonly SessionCoordinator _coordinator;
+    private readonly ICopilotAgent _agent;
+    private CancellationTokenSource? _cts;
+    private SessionRequest? _request;
+
+    public SessionViewModel(SessionCoordinator coordinator, ICopilotAgent agent)
+    {
+        _coordinator = coordinator;
+        _agent = agent;
+        _coordinator.UnitPhaseChanged += OnUnitPhase;
+        _coordinator.FindingReported += OnFinding;
+        _coordinator.TextStreamed += OnText;
+        _coordinator.UsageUpdated += OnUsage;
+    }
+
+    public override string Title => "Sesión en vivo";
+
+    public ObservableCollection<UnitRow> Queue { get; } = new();
+    public ObservableCollection<string> Findings { get; } = new();
+
+    [ObservableProperty] private string _streamed = string.Empty;
+    [ObservableProperty] private long _inputTokens;
+    [ObservableProperty] private long _outputTokens;
+    [ObservableProperty] private decimal? _cost;
+    [ObservableProperty] private bool _isRunning;
+    [ObservableProperty] private string _statusMessage = string.Empty;
+    [ObservableProperty] private string _headerText = string.Empty;
+
+    public void Configure(SessionRequest request, IReadOnlyList<string> displayPaths)
+    {
+        _request = request;
+        HeaderText = $"{request.Mode} · {request.Slug}";
+        Queue.Clear();
+        foreach (string p in displayPaths)
+        {
+            Queue.Add(new UnitRow { Path = p });
+        }
+    }
+
+    public override async Task LoadAsync()
+    {
+        if (_request is not null && !IsRunning)
+        {
+            await Start();
+        }
+    }
+
+    [RelayCommand]
+    private async Task Start()
+    {
+        if (_request is null || IsRunning)
+        {
+            return;
+        }
+
+        if (!await _agent.EnsureReadyAsync(CancellationToken.None))
+        {
+            StatusMessage = "Copilot no está autenticado. Ejecuta `copilot` en una terminal, autentícate una vez y reintenta.";
+            return;
+        }
+
+        IsRunning = true;
+        StatusMessage = "Auditando…";
+        _cts = new CancellationTokenSource();
+        try
+        {
+            SessionResult result = await Task.Run(() => _coordinator.RunAsync(_request, _cts.Token));
+            StatusMessage = $"Sesión completada. Nuevos {result.Counters.New}, confirmados {result.Counters.Confirmed}, "
+                + $"resueltos {result.Counters.Resolved}, silenciados respetados {result.Counters.SilencedRespected}."
+                + (result.ReachedZeroPending ? " Ciclo sin pendientes." : "");
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = "Sesión detenida.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsRunning = false;
+        }
+    }
+
+    [RelayCommand]
+    private void Stop()
+    {
+        _cts?.Cancel();
+        StatusMessage = "Deteniendo tras la unidad actual…";
+    }
+
+    private void OnUnitPhase(string path, string phase) => OnUi(() =>
+    {
+        UnitRow? row = Queue.FirstOrDefault(r => r.Path == path);
+        if (row is not null)
+        {
+            row.Phase = phase;
+        }
+    });
+
+    private void OnFinding(Finding f, IngestionKind kind) => OnUi(() =>
+        Findings.Add($"[{f.Severity}] {f.Title}  ({kind})"));
+
+    private void OnText(string t) => OnUi(() =>
+    {
+        Streamed += t;
+        if (Streamed.Length > 8000)
+        {
+            Streamed = Streamed[^8000..];
+        }
+    });
+
+    private void OnUsage(long input, long output, decimal? cost) => OnUi(() =>
+    {
+        InputTokens = input;
+        OutputTokens = output;
+        Cost = cost;
+    });
+
+    private static void OnUi(Action action)
+    {
+        Application? app = Application.Current;
+        if (app is null)
+        {
+            action();
+        }
+        else
+        {
+            app.Dispatcher.Invoke(action);
+        }
+    }
+}

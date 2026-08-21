@@ -1,0 +1,76 @@
+<UserControl
+    x:Class="Atalaya.App.Views.FindingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    Focusable="True"
+    KeyDown="OnKeyDown">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Hallazgos" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,12" />
+
+        <!-- Filters -->
+        <WrapPanel Grid.Row="1" Margin="0,0,0,8">
+            <ui:TextBox PlaceholderText="Buscar (título/ruleId)…" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Width="240" Margin="0,0,8,8" />
+            <ComboBox ItemsSource="{Binding Severities}" SelectedItem="{Binding SeverityFilter}" Width="130" Margin="0,0,8,8" />
+            <CheckBox Content="Ver silenciados" IsChecked="{Binding ShowSilenced}" VerticalAlignment="Center" Margin="0,0,12,8" />
+            <CheckBox Content="Solo needsReview" IsChecked="{Binding OnlyNeedsReview}" VerticalAlignment="Center" Margin="0,0,8,8" />
+        </WrapPanel>
+
+        <!-- Bulk actions -->
+        <WrapPanel Grid.Row="2" Margin="0,0,0,10">
+            <ComboBox ItemsSource="{Binding Reasons}" SelectedItem="{Binding SilenceReason}" Width="170" Margin="0,0,6,6" />
+            <ui:TextBox PlaceholderText="Caduca (días, 0=nunca)" Text="{Binding SilenceExpiryDays}" Width="150" Margin="0,0,6,6" />
+            <ui:Button Content="Silenciar sel." Command="{Binding SilenceSelectedCommand}" Margin="0,0,12,6" />
+            <ui:TextBox PlaceholderText="Asignar a…" Text="{Binding Assignee}" Width="140" Margin="0,0,6,6" />
+            <ui:Button Content="Asignar sel." Command="{Binding AssignSelectedCommand}" Margin="0,0,12,6" />
+            <ui:Button Content="Verify sel." Command="{Binding VerifySelectedCommand}" Appearance="Primary" Margin="0,0,6,6" />
+        </WrapPanel>
+
+        <DataGrid
+            Grid.Row="3"
+            ItemsSource="{Binding Rows}"
+            AutoGenerateColumns="False"
+            IsReadOnly="False"
+            CanUserAddRows="False"
+            HeadersVisibility="Column"
+            GridLinesVisibility="Horizontal"
+            SelectionMode="Extended"
+            EnableRowVirtualization="True">
+            <DataGrid.Columns>
+                <DataGridCheckBoxColumn Header="" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="30" />
+                <DataGridTextColumn Header="Sev" Binding="{Binding Severity}" Width="70" />
+                <DataGridTextColumn Header="Conf" Binding="{Binding Confidence}" Width="60" />
+                <DataGridTextColumn Header="Estado" Binding="{Binding Status}" Width="90" />
+                <DataGridTextColumn Header="App" Binding="{Binding Slug}" Width="100" />
+                <DataGridTextColumn Header="Título" Binding="{Binding Title}" Width="*" />
+                <DataGridTextColumn Header="Ubicación" Binding="{Binding Location}" Width="200" />
+                <DataGridTextColumn Header="Días" Binding="{Binding DaysSinceConfirmed}" Width="60" />
+                <DataGridTemplateColumn Header="" Width="150">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:Button Content="Ver" Command="{Binding DataContext.OpenDetailCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" CommandParameter="{Binding}" Margin="0,0,4,0" Padding="8,2" />
+                                <ui:Button Content="Editor" Command="{Binding DataContext.OpenInEditorCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" CommandParameter="{Binding}" Padding="8,2" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <TextBlock Grid.Row="3" Text="Sin hallazgos con estos filtros." Opacity="0.6"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
+
+        <TextBlock Grid.Row="4" Text="{Binding StatusMessage}" Opacity="0.85" Margin="0,8,0,0"
+                   Visibility="{Binding StatusMessage, Converter={StaticResource NotEmptyToVisibility}}" />
+    </Grid>
+</UserControl>

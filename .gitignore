@@ -1,0 +1,23 @@
+## .NET build output
+bin/
+obj/
+dist/
+publish/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+.vs/
+
+## Test / coverage
+[Tt]est[Rr]esults/
+*.trx
+coverage*.json
+coverage*.xml
+
+## Rider / VS Code
+.idea/
+.vscode/
+
+## Local machine config (never committed — §4)
+machines.json

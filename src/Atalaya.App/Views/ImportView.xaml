@@ -1,0 +1,34 @@
+<UserControl
+    x:Class="Atalaya.App.Views.ImportView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="640" HorizontalAlignment="Left">
+            <TextBlock Text="Importar auditoría v4" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,6" />
+            <TextBlock Text="Apunta a una carpeta CodeAudit/ del formato markdown v4. La importación es tolerante: lo no importable se registra en el log."
+                       Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,16" />
+
+            <TextBlock Text="Nombre de la aplicación" FontWeight="SemiBold" Margin="0,4,0,4" />
+            <ui:TextBox Text="{Binding AppName}" Margin="0,0,0,12" />
+            <TextBlock Text="URL del repo (opcional)" FontWeight="SemiBold" Margin="0,4,0,4" />
+            <ui:TextBox Text="{Binding RepoUrl}" Margin="0,0,0,12" />
+            <TextBlock Text="Ruta de la carpeta CodeAudit/" FontWeight="SemiBold" Margin="0,4,0,4" />
+            <ui:TextBox Text="{Binding CodeAuditPath}" Margin="0,0,0,12" />
+
+            <ui:Button Content="Importar" Command="{Binding ImportCommand}" Appearance="Primary" HorizontalAlignment="Left" />
+            <TextBlock Text="{Binding StatusMessage}" Opacity="0.85" Margin="0,12,0,8"
+                       Visibility="{Binding StatusMessage, Converter={StaticResource NotEmptyToVisibility}}" />
+
+            <Border Background="#12808080" CornerRadius="6" Padding="10" Margin="0,4,0,0">
+                <ItemsControl ItemsSource="{Binding Log}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" Margin="0,1" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

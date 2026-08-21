@@ -1,0 +1,48 @@
+<UserControl
+    x:Class="Atalaya.App.Views.SettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="620" HorizontalAlignment="Left">
+            <TextBlock Text="Ajustes" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,16" />
+
+            <TextBlock Text="Identidad git" FontWeight="SemiBold" Margin="0,4,0,6" />
+            <ui:TextBox PlaceholderText="Nombre" Text="{Binding GitUserName}" Margin="0,0,0,8" />
+            <ui:TextBox PlaceholderText="Email" Text="{Binding GitUserEmail}" Margin="0,0,0,16" />
+
+            <TextBlock Text="Hub (audit-hub)" FontWeight="SemiBold" Margin="0,4,0,6" />
+            <ui:TextBox PlaceholderText="URL del repo del hub" Text="{Binding HubRepoUrl}" Margin="0,0,0,8" />
+            <ui:TextBox PlaceholderText="Nombre de la organización (para hub.json)" Text="{Binding OrganizationName}" Margin="0,0,0,8" />
+            <ui:TextBox PlaceholderText="PAT (se guarda cifrado con DPAPI)" Text="{Binding Pat}" Margin="0,0,0,8" />
+            <ui:Button Content="Conectar / crear hub" Command="{Binding ConnectHubCommand}" Appearance="Primary" Margin="0,0,0,16" />
+
+            <TextBlock Text="Editor preferido" FontWeight="SemiBold" Margin="0,4,0,6" />
+            <ComboBox SelectedValue="{Binding Editor}" SelectedValuePath="Tag" Width="220" HorizontalAlignment="Left" Margin="0,0,0,16">
+                <ComboBoxItem Content="Visual Studio" Tag="vs" />
+                <ComboBoxItem Content="VS Code" Tag="vscode" />
+            </ComboBox>
+
+            <ui:ToggleSwitch Content="Tema claro" IsChecked="{Binding IsLightTheme}" Margin="0,0,0,8" />
+            <ui:ToggleSwitch Content="Habilitar arreglo asistido (experimental)" IsChecked="{Binding EnableAssistedFix}" Margin="0,0,0,16" />
+
+            <TextBlock Text="Umbrales por defecto" FontWeight="SemiBold" Margin="0,4,0,6" />
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                <TextBlock Text="Unidad grande (LOC):" VerticalAlignment="Center" Width="180" />
+                <ui:TextBox Text="{Binding LargeUnitLoc}" Width="120" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                <TextBlock Text="Frescura (días):" VerticalAlignment="Center" Width="180" />
+                <ui:TextBox Text="{Binding FreshnessDays}" Width="120" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                <TextBlock Text="Polling (segundos):" VerticalAlignment="Center" Width="180" />
+                <ui:TextBox Text="{Binding PollingSeconds}" Width="120" />
+            </StackPanel>
+
+            <ui:Button Content="Guardar" Command="{Binding SaveCommand}" Appearance="Primary" HorizontalAlignment="Left" />
+            <TextBlock Text="{Binding StatusMessage}" Opacity="0.85" Margin="0,12,0,0"
+                       Visibility="{Binding StatusMessage, Converter={StaticResource NotEmptyToVisibility}}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

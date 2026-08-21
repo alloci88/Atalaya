@@ -1,0 +1,13 @@
+<Project>
+  <!-- Common build settings for all Atalaya projects. -->
+  <PropertyGroup>
+    <LangVersion>12</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <Deterministic>true</Deterministic>
+    <NeutralLanguage>en</NeutralLanguage>
+    <!-- Per §11: warnings-as-errors is enforced in Domain and Storage explicitly.
+         We keep it off globally so WPF/XAML analyzer noise in App does not block builds. -->
+  </PropertyGroup>
+</Project>

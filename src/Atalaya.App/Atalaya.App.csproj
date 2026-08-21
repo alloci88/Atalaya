@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Atalaya.App</RootNamespace>
+    <AssemblyName>Atalaya</AssemblyName>
+    <ApplicationIcon></ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageReference Include="WPF-UI" Version="3.0.5" />
+    <PackageReference Include="AvalonEdit" Version="6.3.0.90" />
+    <PackageReference Include="Serilog" Version="4.1.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Atalaya.Domain\Atalaya.Domain.csproj" />
+    <ProjectReference Include="..\Atalaya.Storage\Atalaya.Storage.csproj" />
+    <ProjectReference Include="..\Atalaya.Inventory\Atalaya.Inventory.csproj" />
+    <ProjectReference Include="..\Atalaya.Copilot\Atalaya.Copilot.csproj" />
+    <ProjectReference Include="..\Atalaya.ImportV4\Atalaya.ImportV4.csproj" />
+  </ItemGroup>
+
+</Project>

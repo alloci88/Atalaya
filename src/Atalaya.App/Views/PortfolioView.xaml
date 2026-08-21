@@ -1,0 +1,117 @@
+<UserControl
+    x:Class="Atalaya.App.Views.PortfolioView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,14">
+            <TextBlock Text="Portafolio" FontSize="24" FontWeight="SemiBold" />
+            <ui:Button
+                Content="+ Nueva aplicación"
+                Command="{Binding NewAppCommand}"
+                Appearance="Primary"
+                Margin="16,0,0,0"
+                VerticalAlignment="Center" />
+        </StackPanel>
+
+        <!-- Empty state -->
+        <StackPanel
+            Grid.Row="1"
+            VerticalAlignment="Center"
+            HorizontalAlignment="Center"
+            Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="No hay aplicaciones todavía" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
+            <TextBlock
+                Text="Pulsa «Nueva aplicación» para registrar un repo y lanzar tu primera auditoría."
+                Opacity="0.7"
+                Margin="0,6,0,0"
+                HorizontalAlignment="Center" />
+        </StackPanel>
+
+        <ScrollViewer
+            Grid.Row="1"
+            VerticalScrollBarVisibility="Auto"
+            Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
+            <ItemsControl ItemsSource="{Binding Apps}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <ui:Card Width="330" Margin="0,0,14,14">
+                            <StackPanel>
+                                <Grid>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Name}" FontSize="17" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding Stack}" Opacity="0.6" FontSize="12" />
+                                    </StackPanel>
+                                    <Border
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Top"
+                                        Background="#333FB950"
+                                        CornerRadius="10"
+                                        Padding="8,2"
+                                        Visibility="{Binding AuditingNow, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock Text="auditando ahora" FontSize="10" Foreground="#5FD97A" />
+                                    </Border>
+                                </Grid>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                    <TextBlock Text="Ciclo " Opacity="0.6" />
+                                    <TextBlock Text="{Binding CurrentCycle}" FontWeight="SemiBold" />
+                                    <TextBlock Text="  ·  " Opacity="0.4" />
+                                    <TextBlock Text="{Binding Progress, Converter={StaticResource ProgressToPercent}}" FontWeight="SemiBold" />
+                                    <TextBlock Text=" auditado" Opacity="0.6" />
+                                </StackPanel>
+                                <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}" Height="6" Margin="0,6,0,0" />
+
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Border Background="#33D13A3A" CornerRadius="8" Padding="8,3" Margin="0,0,6,0">
+                                        <TextBlock FontSize="12">
+                                            <Run Text="Crít " /><Run Text="{Binding Critica}" FontWeight="Bold" />
+                                        </TextBlock>
+                                    </Border>
+                                    <Border Background="#33E07A2B" CornerRadius="8" Padding="8,3" Margin="0,0,6,0">
+                                        <TextBlock FontSize="12">
+                                            <Run Text="Alta " /><Run Text="{Binding Alta}" FontWeight="Bold" />
+                                        </TextBlock>
+                                    </Border>
+                                    <Border Background="#33D2B036" CornerRadius="8" Padding="8,3" Margin="0,0,6,0">
+                                        <TextBlock FontSize="12">
+                                            <Run Text="Media " /><Run Text="{Binding Media}" FontWeight="Bold" />
+                                        </TextBlock>
+                                    </Border>
+                                    <Border Background="#336C93C0" CornerRadius="8" Padding="8,3">
+                                        <TextBlock FontSize="12">
+                                            <Run Text="Baja " /><Run Text="{Binding Baja}" FontWeight="Bold" />
+                                        </TextBlock>
+                                    </Border>
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <TextBlock Text="Última sesión: " Opacity="0.6" FontSize="12" />
+                                    <TextBlock Text="{Binding LastSessionBy}" FontSize="12" />
+                                </StackPanel>
+
+                                <ui:Button
+                                    Content="Abrir inventario"
+                                    Command="{Binding DataContext.OpenAppCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                    CommandParameter="{Binding}"
+                                    Appearance="Secondary"
+                                    HorizontalAlignment="Stretch"
+                                    Margin="0,14,0,0" />
+                            </StackPanel>
+                        </ui:Card>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

@@ -1,0 +1,53 @@
+<Application
+    x:Class="Atalaya.App.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:local="clr-namespace:Atalaya.App"
+    xmlns:vm="clr-namespace:Atalaya.App.ViewModels"
+    xmlns:views="clr-namespace:Atalaya.App.Views">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ui:ThemesDictionary Theme="Dark" />
+                <ui:ControlsDictionary />
+            </ResourceDictionary.MergedDictionaries>
+
+            <local:SyncHealthToBrushConverter x:Key="SyncHealthToBrush" />
+            <local:SeverityToBrushConverter x:Key="SeverityToBrush" />
+            <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
+            <local:NotEmptyToVisibilityConverter x:Key="NotEmptyToVisibility" />
+            <local:ProgressToPercentConverter x:Key="ProgressToPercent" />
+            <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+            <!-- VM-first navigation: each page VM renders as its view. -->
+            <DataTemplate DataType="{x:Type vm:PortfolioViewModel}">
+                <views:PortfolioView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:InventoryViewModel}">
+                <views:InventoryView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
+                <views:SettingsView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:OnboardingViewModel}">
+                <views:OnboardingView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:SessionViewModel}">
+                <views:SessionView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:FindingsViewModel}">
+                <views:FindingsView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:FindingDetailViewModel}">
+                <views:FindingDetailView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:MetricsViewModel}">
+                <views:MetricsView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:ImportViewModel}">
+                <views:ImportView />
+            </DataTemplate>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
