@@ -289,8 +289,11 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   donde ese valor sí existe.
 
 - **D-046 — El estado de sync es diagnosticable sin logs.** La página de Cuenta muestra la ruta
-  del clon local (seleccionable), el estado, la última sincronización y el error de git si lo hay,
-  con botones **Sincronizar ahora** y **Abrir carpeta**.
+  del clon local (seleccionable, para copiarla), el estado, la última sincronización y el error de
+  git si lo hay, con un botón **Sincronizar ahora**. Se descartó un botón "Abrir carpeta": la ruta
+  ya es copiable, así que solo ahorraba un pegado, y abrir el clon invita a editarlo a mano, que es
+  justo como se deja el repo en un estado que Atalaya no espera. El diagnóstico debe salir del
+  panel de estado, no de que el usuario entre en la carpeta.
 
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 

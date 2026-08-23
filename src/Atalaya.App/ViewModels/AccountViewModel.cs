@@ -323,21 +323,6 @@ public sealed partial class AccountViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Opens the hub clone in the file explorer.</summary>
-    [RelayCommand]
-    private void OpenHubFolder()
-    {
-        try
-        {
-            Directory.CreateDirectory(HubClonePath);
-            Process.Start(new ProcessStartInfo(HubClonePath) { UseShellExecute = true });
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"No se pudo abrir {HubClonePath} ({ex.Message}).";
-        }
-    }
-
     /// <summary>
     /// Forgets the account: deletes <c>auth.dat</c> and drops the token. The Copilot runtime and
     /// the git credentials are keyed on that token, so both are torn down and rebuilt on their

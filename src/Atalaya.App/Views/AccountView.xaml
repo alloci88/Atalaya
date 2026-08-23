@@ -151,7 +151,6 @@
                     <ui:Button Content="Comprobar conexión" Command="{Binding CheckConnectionCommand}"
                                Appearance="Primary" Margin="0,0,8,0" />
                     <ui:Button Content="Sincronizar ahora" Command="{Binding SyncNowCommand}" Margin="0,0,8,0" />
-                    <ui:Button Content="Abrir carpeta" Command="{Binding OpenHubFolderCommand}" Margin="0,0,8,0" />
                     <ui:Button Content="Desconectar" Command="{Binding DisconnectCommand}" />
                 </StackPanel>
             </StackPanel>
