@@ -98,7 +98,8 @@ public partial class App : Application
                 s.CopilotBaseDirectory,
                 sp.GetRequiredService<ILoggerFactory>().CreateLogger("Copilot"),
                 sendTimeout: TimeSpan.FromMinutes(Math.Max(1, s.CopilotTimeoutMinutes)),
-                tokenProvider: () => account.Token);
+                tokenProvider: () => account.Token,
+                loginProvider: () => account.Current?.Login);
         });
         services.AddTransient<SessionCoordinator>();
         services.AddTransient<VerifyCoordinator>();

@@ -120,13 +120,38 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <TextBlock Margin="0,0,0,16" Opacity="0.7" FontSize="12">
-                    <Run Text="Última sincronización del hub:" /><Run Text=" " /><Run Text="{Binding LastSync, Mode=OneWay}" />
-                </TextBlock>
+                <TextBlock Text="Hub local" FontWeight="SemiBold" Margin="0,0,0,6" />
+                <Border Background="#18808080" CornerRadius="8" Padding="12,10" Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock FontSize="12" Opacity="0.75" Margin="0,0,0,2">
+                            <Run Text="Estado:" /><Run Text=" " /><Run Text="{Binding SyncState, Mode=OneWay}" />
+                            <Run Text=" · última sincronización:" /><Run Text=" " /><Run Text="{Binding LastSync, Mode=OneWay}" />
+                        </TextBlock>
+                        <TextBox
+                            Text="{Binding HubClonePath, Mode=OneWay}"
+                            IsReadOnly="True"
+                            BorderThickness="0"
+                            Background="Transparent"
+                            Padding="0"
+                            FontFamily="Consolas"
+                            FontSize="12"
+                            Opacity="0.8"
+                            ToolTip="Ruta del clon local del hub en esta máquina" />
+                        <TextBlock
+                            Text="{Binding SyncError}"
+                            TextWrapping="Wrap"
+                            FontSize="12"
+                            Foreground="#E0A030"
+                            Margin="0,6,0,0"
+                            Visibility="{Binding SyncError, Converter={StaticResource NotEmptyToVisibility}}" />
+                    </StackPanel>
+                </Border>
 
                 <StackPanel Orientation="Horizontal">
                     <ui:Button Content="Comprobar conexión" Command="{Binding CheckConnectionCommand}"
                                Appearance="Primary" Margin="0,0,8,0" />
+                    <ui:Button Content="Sincronizar ahora" Command="{Binding SyncNowCommand}" Margin="0,0,8,0" />
+                    <ui:Button Content="Abrir carpeta" Command="{Binding OpenHubFolderCommand}" Margin="0,0,8,0" />
                     <ui:Button Content="Desconectar" Command="{Binding DisconnectCommand}" />
                 </StackPanel>
             </StackPanel>

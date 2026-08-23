@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Windows;
 using Atalaya.App.Services;
+using Atalaya.Storage.Sync;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -68,6 +69,11 @@ public sealed partial class AccountViewModel : ViewModelBase
     [ObservableProperty] private string? _avatarUrl;
     [ObservableProperty] private string _lastSync = "nunca";
     [ObservableProperty] private bool _needsReconnect;
+    [ObservableProperty] private string _syncState = string.Empty;
+    [ObservableProperty] private string _syncError = string.Empty;
+
+    /// <summary>Where the hub clone lives on this machine — the first thing to check when sync misbehaves.</summary>
+    public string HubClonePath => _hub.HubPaths.Root;
 
     public bool IsDisconnected => Mode == AccountMode.Disconnected;
 
@@ -126,6 +132,13 @@ public sealed partial class AccountViewModel : ViewModelBase
 
         NeedsReconnect = _account.NeedsReconnect;
         LastSync = _hub.LastSync is { } t ? t.ToLocalTime().ToString("g") : "nunca";
+        SyncState = _hub.Health switch
+        {
+            SyncHealth.Green => "sincronizado",
+            SyncHealth.Amber => _hub.IsCloned ? "pendiente de sincronizar" : "sin clonar",
+            _ => "con errores",
+        };
+        SyncError = _hub.LastSyncError ?? string.Empty;
     }
 
     [RelayCommand]
@@ -272,6 +285,56 @@ public sealed partial class AccountViewModel : ViewModelBase
         {
             Sync();
             IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Pulls the hub right now, cloning it first if needed. Makes the sync state diagnosable from
+    /// the UI instead of from the log.
+    /// </summary>
+    [RelayCommand]
+    private async Task SyncNow()
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        StatusMessage = "Sincronizando con el hub…";
+        try
+        {
+            await Task.Run(_hub.EnsureHub);
+            StatusMessage = _hub.Health == SyncHealth.Green
+                ? $"Hub sincronizado ({_hub.LastSync?.ToLocalTime():g})."
+                : _hub.LastSyncError is { } error
+                    ? $"No se pudo sincronizar: {error}"
+                    : "No se pudo sincronizar con el hub.";
+        }
+        catch (Exception ex)
+        {
+            _account.NoteFailure(ex);
+            StatusMessage = ConnectionChecker.DescribeHubFailure(ex, Login).Detail;
+        }
+        finally
+        {
+            Sync();
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>Opens the hub clone in the file explorer.</summary>
+    [RelayCommand]
+    private void OpenHubFolder()
+    {
+        try
+        {
+            Directory.CreateDirectory(HubClonePath);
+            Process.Start(new ProcessStartInfo(HubClonePath) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"No se pudo abrir {HubClonePath} ({ex.Message}).";
         }
     }
 

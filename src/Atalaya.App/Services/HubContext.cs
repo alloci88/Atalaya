@@ -1,3 +1,4 @@
+using Atalaya.Domain.Model;
 using Atalaya.Storage;
 using Atalaya.Storage.Sync;
 using LibGit2Sharp;
@@ -84,13 +85,26 @@ public sealed class HubContext
 
     public SyncHealth Health => Sync?.Health ?? SyncHealth.Amber;
 
+    /// <summary>Why the last sync failed, or null when it succeeded. Surfaced in the Cuenta page.</summary>
+    public string? LastSyncError => Sync?.LastError;
+
     /// <summary>When the hub was last successfully pulled, for the Cuenta page.</summary>
     public DateTimeOffset? LastSync { get; private set; }
 
     /// <summary>Raised (on a background thread) when a pull brought in changes.</summary>
     public event Action<PullResult>? Changed;
 
-    /// <summary>Clones/opens the hub and does an initial pull. Safe to call repeatedly.</summary>
+    /// <summary>
+    /// Raised (possibly on a background thread) whenever <see cref="Health"/>, <see cref="LastSync"/>
+    /// or the credential changed, so the shell's indicator updates without waiting for a poll tick.
+    /// </summary>
+    public event Action? SyncStateChanged;
+
+    /// <summary>
+    /// Clones/opens the hub, does a full pull, and initializes an empty hub on first use. Safe to
+    /// call repeatedly. Never throws for a merely failed pull (offline is a normal state, §3):
+    /// inspect <see cref="Health"/> and <see cref="LastSyncError"/> for that.
+    /// </summary>
     public void EnsureHub()
     {
         if (!IsConfigured)
@@ -101,6 +115,28 @@ public sealed class HubContext
         EnsureSync();
         Sync!.EnsureCloned(HubUrl!);
         Pull();
+        InitializeIfEmpty();
+    }
+
+    /// <summary>
+    /// Writes <c>hub.json</c> and pushes it the first time we meet a brand-new, empty hub — what
+    /// the old "Conectar / crear hub" button in Ajustes used to do before the connection moved to
+    /// the Cuenta page. Only runs when the sync is healthy, so we never push over a broken pull.
+    /// </summary>
+    private void InitializeIfEmpty()
+    {
+        if (Sync is null || Health != SyncHealth.Green || Store.TryReadHub() is not null)
+        {
+            return;
+        }
+
+        string organization = _deploy.ChecksOrgMembership
+            ? _deploy.OrganizationLogin
+            : _account.Current?.DisplayName ?? ResolveIdentity().Name;
+
+        Store.WriteHub(new HubInfo { OrganizationName = organization });
+        Sync.CommitAndPush("hub: init");
+        SyncStateChanged?.Invoke();
     }
 
     /// <summary>
@@ -137,8 +173,14 @@ public sealed class HubContext
             PullResult result = Sync.Pull();
             if (Sync.Health == SyncHealth.Green)
             {
+                // A successful fetch IS the sync, even when it brought nothing in: this is what
+                // makes the first connection show a real timestamp instead of "nunca".
                 LastSync = DateTimeOffset.Now;
                 _account.ClearNeedsReconnect();
+            }
+            else if (Sync.LastError is { } error)
+            {
+                _account.NoteFailure(new InvalidOperationException(error));
             }
 
             return result;
@@ -147,6 +189,10 @@ public sealed class HubContext
         {
             _account.NoteFailure(ex);
             throw;
+        }
+        finally
+        {
+            SyncStateChanged?.Invoke();
         }
     }
 

@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Windows;
+using System.Windows.Threading;
 using Atalaya.App.Services;
 using Atalaya.Storage.Sync;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -28,6 +30,9 @@ public sealed partial class MainViewModel : ObservableObject
         _settings = settings;
         _account = account;
         _account.Changed += SyncAccount;
+        // Connecting clones and pulls the hub off the UI thread; without this the indicator would
+        // stay amber until the next polling tick even though the sync already succeeded.
+        _hub.SyncStateChanged += OnSyncStateChanged;
         SyncAccount();
     }
 
@@ -77,6 +82,13 @@ public sealed partial class MainViewModel : ObservableObject
         {
             await Task.Run(_hub.EnsureHub);
             SyncHealth = _hub.Health;
+
+            // EnsureHub does not throw for a merely failed pull (offline is normal), so say so
+            // here instead of leaving an unexplained amber light.
+            if (SyncHealth != SyncHealth.Green)
+            {
+                Toasts.Add("No se pudo sincronizar el hub. Revisa «Cuenta».");
+            }
         }
         catch (Exception ex)
         {
@@ -95,15 +107,33 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>A pre-F2 setup: a PAT stored on this machine is enough to keep working (D4).</summary>
     private bool HasLegacyCredentials() => _settings.GetPat() is not null;
 
-    private void SyncAccount()
+    private void SyncAccount() => OnUiThread(() =>
     {
         GitHubAccount? account = _account.Current;
         AccountAvatarUrl = account?.AvatarUrl;
         AccountLabel = account?.Login ?? "Sin cuenta";
         AccountNeedsAttention = _account.NeedsReconnect;
-        // Connecting builds the sync service and clones the hub: reflect the new health at once
-        // instead of waiting for the next polling tick.
         SyncHealth = _hub.Health;
+    });
+
+    private void OnSyncStateChanged() => OnUiThread(() =>
+    {
+        SyncHealth = _hub.Health;
+        AccountNeedsAttention = _account.NeedsReconnect;
+    });
+
+    /// <summary>The hub events fire from background pulls; marshal before touching bound state.</summary>
+    private static void OnUiThread(Action action)
+    {
+        Dispatcher? dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            action();
+        }
+        else
+        {
+            dispatcher.Invoke(action);
+        }
     }
 
     [RelayCommand]

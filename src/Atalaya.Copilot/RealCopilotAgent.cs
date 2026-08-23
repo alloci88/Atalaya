@@ -29,6 +29,7 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
     private readonly string? _model;
     private readonly TimeSpan _sendTimeout;
     private readonly Func<string?>? _tokenProvider;
+    private readonly Func<string?>? _loginProvider;
     private readonly SemaphoreSlim _startGate = new(1, 1);
     private CopilotClient? _client;
     private string? _startedWithToken;
@@ -43,12 +44,18 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
     /// null when the account is not connected. Read on every start so connecting, disconnecting
     /// or switching account takes effect without restarting the app.
     /// </param>
+    /// <param name="loginProvider">
+    /// The GitHub login of the connected account. When authenticating by token the runtime does
+    /// not resolve a login of its own (<c>GetAuthStatusAsync</c> reports <c>authType: "token"</c>
+    /// with no <c>Login</c>), so the profile we already fetched is the authoritative source.
+    /// </param>
     public RealCopilotAgent(
         string? baseDirectory = null,
         ILogger? logger = null,
         string? model = null,
         TimeSpan? sendTimeout = null,
-        Func<string?>? tokenProvider = null)
+        Func<string?>? tokenProvider = null,
+        Func<string?>? loginProvider = null)
     {
         _baseDirectory = string.IsNullOrWhiteSpace(baseDirectory) ? null : baseDirectory;
         _logger = logger ?? NullLogger.Instance;
@@ -56,6 +63,7 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
         // The SDK default (1 min) is too short for auditing a real code unit.
         _sendTimeout = sendTimeout is { TotalSeconds: > 0 } ? sendTimeout.Value : TimeSpan.FromMinutes(15);
         _tokenProvider = tokenProvider;
+        _loginProvider = loginProvider;
     }
 
     public string? ModelName => _model;
@@ -99,7 +107,11 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
                 return new AgentReadiness(false, CopilotHelp.NoSeat, AgentProblem.NoSeat);
             }
 
-            return new AgentReadiness(true, $"Copilot autenticado como {status.Login ?? "?"}.");
+            // The account profile wins: with a token credential the runtime has no login to report.
+            // Falling back to status.Login keeps the legacy CLI path naming its own user.
+            string? login = Blank(_loginProvider?.Invoke()) ?? Blank(status.Login);
+            return new AgentReadiness(true,
+                login is null ? "Copilot autenticado." : $"Copilot autenticado como {login}.");
         }
         catch (OperationCanceledException)
         {
@@ -150,11 +162,9 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
         await RunAsync(config, request.Prompt, ct);
     }
 
-    private string? CurrentToken()
-    {
-        string? token = _tokenProvider?.Invoke();
-        return string.IsNullOrWhiteSpace(token) ? null : token;
-    }
+    private string? CurrentToken() => Blank(_tokenProvider?.Invoke());
+
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     private SessionConfig NewSessionConfig()
     {

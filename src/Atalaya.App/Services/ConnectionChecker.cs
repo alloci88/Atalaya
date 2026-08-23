@@ -1,4 +1,5 @@
 using Atalaya.Copilot;
+using Atalaya.Storage.Sync;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Atalaya.App.Services;
@@ -203,9 +204,23 @@ public sealed class ConnectionChecker
         {
             try
             {
+                // A full clone + pull with the account token. EnsureHub swallows a failed pull
+                // (offline is a normal state), so the health is what tells us whether the sync
+                // actually happened — otherwise this step would go green over a broken hub.
                 await Task.Run(_hub.EnsureHub, ct);
-                hub.Succeed("Acceso al hub",
-                    _hub.LastSync is { } t ? $"Última sincronización: {t:g}" : "Clon local listo.");
+
+                if (_hub.Health == SyncHealth.Green && _hub.LastSync is { } t)
+                {
+                    hub.Succeed("Acceso al hub", $"Sincronizado {t.ToLocalTime():g} · {_hub.HubPaths.Root}");
+                }
+                else
+                {
+                    (string detail, string? help) = _hub.LastSyncError is { } error
+                        ? DescribeHubFailure(new InvalidOperationException(error), _account.Current?.Login ?? "?")
+                        : ("El clon existe pero no se ha podido sincronizar con el hub.", null);
+                    hub.Fail(detail, help);
+                    firstProblem ??= detail;
+                }
             }
             catch (OperationCanceledException)
             {

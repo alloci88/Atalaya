@@ -36,6 +36,13 @@ public sealed class HubSyncService : IDisposable
     /// <summary>Current sync indicator (§3). Starts amber until the first successful pull.</summary>
     public SyncHealth Health { get; private set; } = SyncHealth.Amber;
 
+    /// <summary>
+    /// Why the last pull/push failed, or null after a successful one. Pull swallows git errors on
+    /// purpose (offline is a normal state, §3 / D-007), so this is the only way a caller can tell
+    /// "nothing to pull" from "the pull failed" without reading the log.
+    /// </summary>
+    public string? LastError { get; private set; }
+
     /// <summary>Raised after a pull that changed files, so the UI can react live.</summary>
     public event Action<PullResult>? Pulled;
 
@@ -90,7 +97,9 @@ public sealed class HubSyncService : IDisposable
             Branch? remote = Repo.Branches[$"origin/{local.FriendlyName}"];
             if (remote?.Tip is null)
             {
-                Health = SyncHealth.Green;
+                // Remote branch has no commits yet (a brand-new, empty hub): nothing to integrate,
+                // but the fetch succeeded, so the sync is healthy.
+                Succeeded();
                 return PullResult.Empty;
             }
 
@@ -98,7 +107,7 @@ public sealed class HubSyncService : IDisposable
             var notifications = Integrate(local, remote);
             Commit newTip = Repo.Head.Tip;
 
-            Health = SyncHealth.Green;
+            Succeeded();
             if (oldTip == newTip && notifications.Count == 0)
             {
                 return PullResult.Empty;
@@ -116,9 +125,21 @@ public sealed class HubSyncService : IDisposable
         catch (LibGit2SharpException ex)
         {
             _log.LogWarning(ex, "Pull failed; staying on last pull (offline?)");
-            Health = SyncHealth.Amber;
+            Failed(ex, SyncHealth.Amber);
             return PullResult.Empty;
         }
+    }
+
+    private void Succeeded()
+    {
+        Health = SyncHealth.Green;
+        LastError = null;
+    }
+
+    private void Failed(Exception ex, SyncHealth health)
+    {
+        Health = health;
+        LastError = ex.Message;
     }
 
     /// <summary>
@@ -141,7 +162,7 @@ public sealed class HubSyncService : IDisposable
 
                 Remote origin = Repo.Network.Remotes["origin"];
                 Repo.Network.Push(origin, $"refs/heads/{local.FriendlyName}", pushOptions);
-                Health = SyncHealth.Green;
+                Succeeded();
                 return true;
             }
             catch (NonFastForwardException)
@@ -152,7 +173,7 @@ public sealed class HubSyncService : IDisposable
             catch (LibGit2SharpException ex)
             {
                 _log.LogWarning(ex, "Push failed on attempt {Attempt}/3", attempt);
-                Health = attempt == 3 ? SyncHealth.Red : SyncHealth.Amber;
+                Failed(ex, attempt == 3 ? SyncHealth.Red : SyncHealth.Amber);
                 Backoff(attempt);
             }
         }

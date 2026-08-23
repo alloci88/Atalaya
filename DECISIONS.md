@@ -257,6 +257,41 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   ayuda `CopilotHelp.NotAuthenticated` sigue existiendo. Igual con el PAT en Opciones avanzadas.
   Anti-objetivo explícito del prompt.
 
+### F2.6 — Ajustes post-entrega (sincronización y diagnóstico)
+
+- **D-042 — Un pull fallido dejaba de verse.** `HubSyncService.Pull` traga los errores de git a
+  propósito (operar offline es un estado normal, §3 / D-007), así que "no había nada que traer" y
+  "el pull reventó" eran indistinguibles desde fuera. Ahora expone `LastError` (null tras un pull
+  correcto) y la comprobación **Acceso al hub** exige `Health == Green` **y** una marca de
+  sincronización: antes se ponía en verde solo con que `EnsureHub` no lanzara excepción, que es
+  justo lo que producía "3 comprobaciones en verde, piloto ámbar y última sincronización: nunca".
+  Si el pull falla, el paso se pone en rojo con el texto real de git y la página de Cuenta lo
+  muestra.
+
+- **D-043 — Regresión propia de F2: el hub vacío ya no se montaba.** Al sacar la conexión de
+  Ajustes desapareció el botón "Conectar / crear hub", que era el único sitio que escribía
+  `hub.json` y hacía el primer push en un hub recién creado. Restaurado dentro de
+  `HubContext.EnsureHub` (`InitializeIfEmpty`), y solo con la sincronización sana, para no
+  empujar nunca encima de un pull roto. `OrganizationName` sale de `organizationLogin` si está
+  configurado, y si no del perfil de la cuenta. Cubierto con un remoto `--bare` local: clonar →
+  pull → `hub.json` escrito y presente en el remoto, con la identidad derivada del perfil y sin
+  generar commits nuevos al repetir la comprobación.
+
+- **D-044 — El piloto se actualiza por evento, no por polling.** `HubContext.SyncStateChanged` se
+  emite tras cada pull y tras montar el hub; `MainViewModel` se suscribe y marshalea al dispatcher
+  (los pulls corren en `Task.Run`). Antes, al conectar, `SyncAccount` leía la salud **antes** de
+  que el clon terminara y el indicador se quedaba ámbar hasta el siguiente tick de 60 s.
+
+- **D-045 — El login de Copilot sale del perfil, no del SDK.** Autenticando por token,
+  `GetAuthStatusAsync` devuelve `authType: "token"` sin `Login`, y el mensaje quedaba en "Copilot
+  autenticado como: ?". `RealCopilotAgent` recibe ahora un `loginProvider` (el login ya guardado
+  en `GitHubAccountService`) y solo cae a `status.Login` en el camino heredado del CLI, que es
+  donde ese valor sí existe.
+
+- **D-046 — El estado de sync es diagnosticable sin logs.** La página de Cuenta muestra la ruta
+  del clon local (seleccionable), el estado, la última sincronización y el error de git si lo hay,
+  con botones **Sincronizar ahora** y **Abrir carpeta**.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de
