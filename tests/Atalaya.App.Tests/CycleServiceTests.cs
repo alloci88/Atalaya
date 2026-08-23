@@ -29,7 +29,7 @@ public sealed class CycleServiceTests : IDisposable
         var paths = new AppPaths(Path.Combine(_root, "local"));
         var settings = new SettingsService(paths);
         settings.Load();
-        _hub = new HubContext(paths, settings, NullLoggerFactory.Instance);
+        _hub = TestFactory.Hub(paths, settings);
         _machines = new MachineConfigStore(paths.MachinesJson);
         _machines.SetClonePath("app", _clone);
         _ingestion = new FindingIngestionService(_hub, _ulids);

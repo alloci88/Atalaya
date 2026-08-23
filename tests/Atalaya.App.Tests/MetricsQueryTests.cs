@@ -23,7 +23,7 @@ public sealed class MetricsQueryTests : IDisposable
         var paths = new AppPaths(Path.Combine(_root, "local"));
         var settings = new SettingsService(paths);
         settings.Load();
-        _hub = new HubContext(paths, settings, NullLoggerFactory.Instance);
+        _hub = TestFactory.Hub(paths, settings);
         _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 1 });
     }
 

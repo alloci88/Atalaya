@@ -5,51 +5,61 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Atalaya.App.ViewModels;
 
-/// <summary>Ajustes (§8): identity, hub URL/PAT, editor, thresholds, theme, polling.</summary>
+/// <summary>
+/// Ajustes (§8) — preferences ONLY since F2 (D4): theme, editor, thresholds, polling and feature
+/// flags. Everything about the connection (hub URL, PAT, git identity, "Comprobar Copilot") moved
+/// to the Cuenta page. What remains here of the old world lives collapsed under "Opciones
+/// avanzadas": the PAT fallback for organizations that block OAuth Apps, and a development-only
+/// hub URL override.
+/// </summary>
 public sealed partial class SettingsViewModel : ViewModelBase
 {
     private readonly SettingsService _settings;
     private readonly HubContext _hub;
-    private readonly Atalaya.Copilot.ICopilotAgent _agent;
+    private readonly GitHubAccountService _account;
 
-    public SettingsViewModel(SettingsService settings, HubContext hub, Atalaya.Copilot.ICopilotAgent agent)
+    public SettingsViewModel(SettingsService settings, HubContext hub, GitHubAccountService account)
     {
         _settings = settings;
         _hub = hub;
-        _agent = agent;
+        _account = account;
         AppSettings s = settings.Current;
-        _gitUserName = s.GitUserName ?? string.Empty;
-        _gitUserEmail = s.GitUserEmail ?? string.Empty;
-        _hubRepoUrl = s.HubRepoUrl ?? string.Empty;
         _editor = s.Editor;
         _isLightTheme = string.Equals(s.Theme, "light", StringComparison.OrdinalIgnoreCase);
         _pollingSeconds = s.PollingSeconds;
         _largeUnitLoc = s.DefaultThresholds.LargeUnitLoc;
         _freshnessDays = s.DefaultThresholds.FreshnessDays;
         _enableAssistedFix = s.EnableAssistedFix;
+        _copilotTimeoutMinutes = s.CopilotTimeoutMinutes;
+        _hubUrlOverride = s.HubUrlOverride ?? string.Empty;
+        _hasStoredPat = settings.GetPat() is not null;
     }
 
     public override string Title => "Ajustes";
 
-    [ObservableProperty] private string _gitUserName;
-    [ObservableProperty] private string _gitUserEmail;
-    [ObservableProperty] private string _hubRepoUrl;
-    [ObservableProperty] private string _organizationName = "Mi organización";
-    [ObservableProperty] private string _pat = string.Empty;
     [ObservableProperty] private string _editor;
     [ObservableProperty] private bool _isLightTheme;
     [ObservableProperty] private int _pollingSeconds;
     [ObservableProperty] private int _largeUnitLoc;
     [ObservableProperty] private int _freshnessDays;
     [ObservableProperty] private bool _enableAssistedFix;
+    [ObservableProperty] private int _copilotTimeoutMinutes;
     [ObservableProperty] private string _statusMessage = string.Empty;
+
+    // --- Opciones avanzadas (colapsadas) ---
+    [ObservableProperty] private string _pat = string.Empty;
+    [ObservableProperty] private string _hubUrlOverride;
+    [ObservableProperty] private bool _hasStoredPat;
+
+    /// <summary>The hub actually in use — shown read-only under advanced options, for support.</summary>
+    public string EffectiveHubUrl => _hub.HubUrl ?? "(sin configurar)";
+
+    /// <summary>The PAT is ignored while an account is connected (D3).</summary>
+    public bool AccountOverridesPat => _account.IsConnected;
 
     private AppSettings BuildSettings()
     {
         AppSettings s = _settings.Current;
-        s.GitUserName = NullIfBlank(GitUserName);
-        s.GitUserEmail = NullIfBlank(GitUserEmail);
-        s.HubRepoUrl = NullIfBlank(HubRepoUrl);
         s.Editor = Editor;
         s.Theme = IsLightTheme ? "light" : "dark";
         s.PollingSeconds = Math.Max(15, PollingSeconds);
@@ -59,6 +69,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
             FreshnessDays = FreshnessDays,
         };
         s.EnableAssistedFix = EnableAssistedFix;
+        s.CopilotTimeoutMinutes = Math.Max(1, CopilotTimeoutMinutes);
+        s.HubUrlOverride = string.IsNullOrWhiteSpace(HubUrlOverride) ? null : HubUrlOverride.Trim();
         return s;
     }
 
@@ -70,68 +82,20 @@ public sealed partial class SettingsViewModel : ViewModelBase
         {
             _settings.SetPat(Pat);
             Pat = string.Empty;
+            HasStoredPat = true;
         }
 
         ThemeService.Apply(IsLightTheme ? "light" : "dark");
+        OnPropertyChanged(nameof(EffectiveHubUrl));
         StatusMessage = "Ajustes guardados.";
     }
 
     [RelayCommand]
-    private async Task CheckCopilot()
+    private void ClearPat()
     {
-        IsBusy = true;
-        StatusMessage = "Comprobando Copilot…";
-        try
-        {
-            Atalaya.Copilot.AgentReadiness readiness = await _agent.CheckAsync(CancellationToken.None);
-            StatusMessage = readiness.Ready ? $"✓ {readiness.Message}" : readiness.Message;
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Error comprobando Copilot: {ex.Message}";
-        }
-        finally
-        {
-            IsBusy = false;
-        }
+        _settings.SetPat(null);
+        Pat = string.Empty;
+        HasStoredPat = false;
+        StatusMessage = "PAT borrado.";
     }
-
-    [RelayCommand]
-    private async Task ConnectHub()
-    {
-        Save();
-        if (!_hub.IsConfigured)
-        {
-            StatusMessage = "Indica la URL del repo del hub.";
-            return;
-        }
-
-        IsBusy = true;
-        StatusMessage = "Conectando con el hub…";
-        try
-        {
-            await Task.Run(() =>
-            {
-                _hub.EnsureHub();
-                if (_hub.Store.TryReadHub() is null)
-                {
-                    // Empty remote — initialize hub.json and push (§11 "montar el hub").
-                    _hub.Store.WriteHub(new HubInfo { OrganizationName = OrganizationName });
-                    _hub.Sync?.CommitAndPush("hub: init");
-                }
-            });
-
-            StatusMessage = $"Hub conectado. Estado de sync: {_hub.Health}.";
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Error conectando: {ex.Message}";
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
-    private static string? NullIfBlank(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 }

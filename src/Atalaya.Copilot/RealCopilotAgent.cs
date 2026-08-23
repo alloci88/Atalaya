@@ -7,11 +7,20 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Atalaya.Copilot;
 
 /// <summary>
-/// The real agent: wraps the GitHub Copilot SDK (§6.1–6.3). ONE client per process, created with
-/// <c>UseLoggedInUser = true</c> and a BaseDirectory under LOCALAPPDATA so each user consumes their
-/// own seat. The agent only ever calls our registered tools; the permission handler rejects
-/// everything else (shell, files, network), so it can touch nothing. Compiled against SDK 1.0.11;
-/// its runtime path needs a Copilot seat (unavailable in CI — the fake covers tests).
+/// The real agent: wraps the GitHub Copilot SDK (§6.1–6.3). ONE client per process.
+/// <para>
+/// Authentication (F2.3): the client is created with <c>GitHubToken</c> = the token from the
+/// in-app GitHub login and <c>UseLoggedInUser = false</c>, so the run is billed to that user's
+/// Copilot seat and no console login is needed. When there is no account token we fall back to
+/// <c>UseLoggedInUser = true</c> — the pre-F2 behaviour, which reuses whatever the `copilot`
+/// CLI stored on the machine — so existing users keep working untouched.
+/// </para>
+/// <para>
+/// The runtime is ALWAYS the CLI bundled with the SDK package (<see cref="CopilotCliLocator"/>),
+/// never a <c>copilot</c> resolved from PATH.
+/// </para>
+/// The agent only ever calls our registered tools; the permission handler rejects everything else
+/// (shell, files, network), so it can touch nothing. Compiled against SDK 1.0.11.
 /// </summary>
 public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
 {
@@ -19,21 +28,34 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
     private readonly ILogger _logger;
     private readonly string? _model;
     private readonly TimeSpan _sendTimeout;
+    private readonly Func<string?>? _tokenProvider;
+    private readonly SemaphoreSlim _startGate = new(1, 1);
     private CopilotClient? _client;
-    private bool _started;
+    private string? _startedWithToken;
 
     /// <param name="baseDirectory">
     /// Optional SDK base directory. LEAVE NULL by default: then the SDK uses its standard location,
-    /// which is where the `copilot` CLI stores the login — so <c>UseLoggedInUser</c> actually finds it.
-    /// Setting a custom directory isolates the SDK from the CLI's auth and breaks discovery.
+    /// which is also where the `copilot` CLI stores its login — so the legacy
+    /// <c>UseLoggedInUser</c> fallback still finds it.
     /// </param>
-    public RealCopilotAgent(string? baseDirectory = null, ILogger? logger = null, string? model = null, TimeSpan? sendTimeout = null)
+    /// <param name="tokenProvider">
+    /// Supplies the current GitHub account token (<c>gho_</c>/<c>ghu_</c>/<c>github_pat_</c>), or
+    /// null when the account is not connected. Read on every start so connecting, disconnecting
+    /// or switching account takes effect without restarting the app.
+    /// </param>
+    public RealCopilotAgent(
+        string? baseDirectory = null,
+        ILogger? logger = null,
+        string? model = null,
+        TimeSpan? sendTimeout = null,
+        Func<string?>? tokenProvider = null)
     {
         _baseDirectory = string.IsNullOrWhiteSpace(baseDirectory) ? null : baseDirectory;
         _logger = logger ?? NullLogger.Instance;
         _model = model;
         // The SDK default (1 min) is too short for auditing a real code unit.
         _sendTimeout = sendTimeout is { TotalSeconds: > 0 } ? sendTimeout.Value : TimeSpan.FromMinutes(15);
+        _tokenProvider = tokenProvider;
     }
 
     public string? ModelName => _model;
@@ -44,24 +66,49 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
 
     public async Task<bool> EnsureReadyAsync(CancellationToken ct) => (await CheckAsync(ct)).Ready;
 
+    /// <summary>
+    /// Cheapest possible readiness check on SDK 1.0.11 (F2.1): <c>GetAuthStatusAsync</c> tells us
+    /// whether the runtime holds a usable credential; <c>ListModelsAsync</c> (cached by the SDK
+    /// after the first call) is the cheapest call that actually exercises the Copilot entitlement,
+    /// so it is what separates "no seat" from "not authenticated". No session is created.
+    /// </summary>
     public async Task<AgentReadiness> CheckAsync(CancellationToken ct)
     {
+        bool hasToken = !string.IsNullOrWhiteSpace(CurrentToken());
+
         try
         {
             await EnsureStartedAsync(ct);
             GetAuthStatusResponse status = await _client!.GetAuthStatusAsync(ct);
-            if (status is { IsAuthenticated: true })
+            if (status is not { IsAuthenticated: true })
             {
-                return new AgentReadiness(true, $"Copilot autenticado como {status.Login ?? "?"}.");
+                string extra = string.IsNullOrWhiteSpace(status?.StatusMessage) ? "" : $" [{status.StatusMessage}]";
+                return hasToken
+                    ? new AgentReadiness(false, CopilotHelp.TokenRejected + extra, AgentProblem.TokenRejected)
+                    : new AgentReadiness(false, CopilotHelp.NoAccount + extra, AgentProblem.NotAuthenticated);
             }
 
-            string extra = string.IsNullOrWhiteSpace(status?.StatusMessage) ? "" : $" [{status.StatusMessage}]";
-            return new AgentReadiness(false, CopilotHelp.NotAuthenticated + extra);
+            // Authenticated. Now check the entitlement — a valid token with no seat fails here.
+            try
+            {
+                await _client.ListModelsAsync(ct);
+            }
+            catch (Exception ex) when (LooksLikeNoSeat(ex))
+            {
+                _logger.LogWarning(ex, "Copilot token valid but no seat");
+                return new AgentReadiness(false, CopilotHelp.NoSeat, AgentProblem.NoSeat);
+            }
+
+            return new AgentReadiness(true, $"Copilot autenticado como {status.Login ?? "?"}.");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Copilot readiness check failed");
-            return new AgentReadiness(false, CopilotHelp.NotAuthenticated);
+            return Classify(ex, hasToken);
         }
     }
 
@@ -101,6 +148,12 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
             "Registra el veredicto de un hallazgo por su ULID: confirmado | resuelto | no-verificable.");
 
         await RunAsync(config, request.Prompt, ct);
+    }
+
+    private string? CurrentToken()
+    {
+        string? token = _tokenProvider?.Invoke();
+        return string.IsNullOrWhiteSpace(token) ? null : token;
     }
 
     private SessionConfig NewSessionConfig()
@@ -149,17 +202,73 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
                 await session.DisposeAsync();
             }
         }
-        catch (Exception ex) when (LooksLikeAuthError(ex))
+        catch (Exception ex) when (LooksLikeAuthError(ex) || LooksLikeNoSeat(ex))
         {
-            throw new CopilotAuthenticationException(CopilotHelp.NotAuthenticated, ex);
+            throw new CopilotAuthenticationException(Classify(ex, CurrentToken() is not null).Message, ex);
         }
+    }
+
+    /// <summary>Maps an SDK/transport failure onto a specific, actionable diagnosis (F2.3).</summary>
+    private static AgentReadiness Classify(Exception ex, bool hasToken)
+    {
+        if (LooksLikeNoSeat(ex))
+        {
+            return new AgentReadiness(false, CopilotHelp.NoSeat, AgentProblem.NoSeat);
+        }
+
+        if (LooksLikeOffline(ex))
+        {
+            return new AgentReadiness(
+                false,
+                "No hay conexión con GitHub. Comprueba la red o el proxy y reintenta.",
+                AgentProblem.Offline);
+        }
+
+        if (!hasToken)
+        {
+            return new AgentReadiness(false, CopilotHelp.NoAccount, AgentProblem.NotAuthenticated);
+        }
+
+        return LooksLikeAuthError(ex)
+            ? new AgentReadiness(false, CopilotHelp.TokenRejected, AgentProblem.TokenRejected)
+            : new AgentReadiness(false, CopilotHelp.TokenRejected, AgentProblem.Unknown);
     }
 
     private static bool LooksLikeAuthError(Exception ex)
     {
-        string m = ex.Message?.ToLowerInvariant() ?? string.Empty;
+        string m = Flatten(ex);
         return m.Contains("authentication") || m.Contains("not authenticated")
-            || m.Contains("custom provider") || m.Contains("unauthorized");
+            || m.Contains("custom provider") || m.Contains("unauthorized") || m.Contains("401");
+    }
+
+    private static bool LooksLikeNoSeat(Exception ex)
+    {
+        string m = Flatten(ex);
+        return m.Contains("seat") || m.Contains("subscription") || m.Contains("not entitled")
+            || m.Contains("entitlement") || m.Contains("quota") || m.Contains("403") || m.Contains("forbidden");
+    }
+
+    private static bool LooksLikeOffline(Exception ex)
+    {
+        if (ex is HttpRequestException)
+        {
+            return true;
+        }
+
+        string m = Flatten(ex);
+        return m.Contains("no such host") || m.Contains("network") || m.Contains("connection refused")
+            || m.Contains("name or service not known") || m.Contains("timed out while connecting");
+    }
+
+    private static string Flatten(Exception? ex)
+    {
+        var text = new System.Text.StringBuilder();
+        for (Exception? e = ex; e is not null; e = e.InnerException)
+        {
+            text.Append(e.Message).Append(' ');
+        }
+
+        return text.ToString().ToLowerInvariant();
     }
 
     private void OnSessionEvent(SessionEvent ev)
@@ -178,33 +287,89 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
 
     private async Task EnsureStartedAsync(CancellationToken ct)
     {
-        if (_started)
+        string? token = CurrentToken();
+
+        await _startGate.WaitAsync(ct);
+        try
+        {
+            if (_client is not null && _startedWithToken == token)
+            {
+                return;
+            }
+
+            // The account changed (connected / disconnected / switched user): the token is baked
+            // into the runtime process environment, so the client has to be rebuilt.
+            if (_client is not null)
+            {
+                _logger.LogInformation("Copilot: credential changed, restarting the runtime client");
+                await DisposeClientAsync();
+            }
+
+            var options = new CopilotClientOptions
+            {
+                // With an account token we authenticate explicitly and bill that user's seat;
+                // without one we keep the pre-F2 behaviour (the `copilot` CLI login on this machine).
+                GitHubToken = token,
+                UseLoggedInUser = token is null,
+                Logger = _logger,
+            };
+
+            // ALWAYS the CLI bundled by the SDK package — never one resolved from PATH (F2.1).
+            string? bundled = CopilotCliLocator.ResolveBundled();
+            if (bundled is not null)
+            {
+                options.Connection = RuntimeConnection.ForStdio(bundled);
+            }
+            else
+            {
+                // The SDK's own default is also the bundled runtime; log it so a broken deployment
+                // (CLI missing from runtimes/) is visible instead of silently probing elsewhere.
+                _logger.LogWarning(
+                    "Copilot: bundled CLI not found under {Base}runtimes/*/native; falling back to the SDK default",
+                    AppContext.BaseDirectory);
+            }
+
+            // Only override BaseDirectory when explicitly configured; otherwise the SDK's default
+            // location matches the `copilot` CLI login the legacy fallback needs.
+            if (_baseDirectory is not null)
+            {
+                options.BaseDirectory = _baseDirectory;
+            }
+
+            var client = new CopilotClient(options);
+            await client.StartAsync(ct);
+            _client = client;
+            _startedWithToken = token;
+        }
+        finally
+        {
+            _startGate.Release();
+        }
+    }
+
+    private async Task DisposeClientAsync()
+    {
+        CopilotClient? client = _client;
+        _client = null;
+        _startedWithToken = null;
+        if (client is null)
         {
             return;
         }
 
-        var options = new CopilotClientOptions
+        try
         {
-            UseLoggedInUser = true,
-            Logger = _logger,
-        };
-        // Only override BaseDirectory when explicitly configured; otherwise the SDK's default
-        // location matches the `copilot` CLI login and UseLoggedInUser can find it.
-        if (_baseDirectory is not null)
-        {
-            options.BaseDirectory = _baseDirectory;
+            await client.DisposeAsync();
         }
-
-        _client ??= new CopilotClient(options);
-        await _client.StartAsync(ct);
-        _started = true;
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Copilot: error disposing the runtime client");
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_client is not null)
-        {
-            await _client.DisposeAsync();
-        }
+        await DisposeClientAsync();
+        _startGate.Dispose();
     }
 }

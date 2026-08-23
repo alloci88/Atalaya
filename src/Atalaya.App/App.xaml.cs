@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System.Windows;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
@@ -48,6 +49,8 @@ public partial class App : Application
         // Load settings and apply theme before showing any window.
         SettingsService settings = _host.Services.GetRequiredService<SettingsService>();
         settings.Load();
+        // One-time, silent migration of pre-F2 connection settings (D4): existing users keep working.
+        settings.MigrateConnection(_host.Services.GetRequiredService<DeployConfig>());
         ThemeService.Apply(settings.Current.Theme);
 
         var window = _host.Services.GetRequiredService<MainWindow>();
@@ -63,6 +66,16 @@ public partial class App : Application
         services.AddSingleton<IClock>(SystemClock.Instance);
         services.AddSingleton<IUlidFactory>(sp => new UlidFactory(sp.GetRequiredService<IClock>()));
         services.AddSingleton<SettingsService>();
+
+        // Connection (F2): deployment config → device flow → one account token → three consumers.
+        services.AddSingleton(DeployConfig.Load());
+        services.AddSingleton(new HttpClient { Timeout = TimeSpan.FromSeconds(30) });
+        services.AddSingleton(sp => new GitHubDeviceFlow(sp.GetRequiredService<HttpClient>()));
+        services.AddSingleton(sp => new GitHubApiClient(sp.GetRequiredService<HttpClient>()));
+        services.AddSingleton<AccountStore>();
+        services.AddSingleton<GitHubAccountService>();
+        services.AddSingleton<ConnectionChecker>();
+
         services.AddSingleton<HubContext>();
         services.AddSingleton<NavigationService>();
         services.AddSingleton(sp => new MachineConfigStore(paths.MachinesJson));
@@ -72,16 +85,20 @@ public partial class App : Application
         services.AddSingleton(sp => new MetricsQuery(sp.GetRequiredService<HubContext>()));
         services.AddSingleton<ImportService>();
 
-        // Copilot: the real SDK agent by default (falls back to a help screen when no seat).
-        // BaseDirectory is left to the SDK default so UseLoggedInUser finds the `copilot` CLI login;
-        // an explicit override can be set in Settings if ever needed.
+        // Copilot: the real SDK agent, authenticated with the account token (D3) and always
+        // running the CLI bundled with the SDK package — no npm install, no `copilot /login`.
+        // The token is read lazily on every start, so connecting or switching account takes
+        // effect immediately. With no account token the adapter falls back to the pre-F2
+        // behaviour (UseLoggedInUser = true) so existing machines keep working.
         services.AddSingleton<ICopilotAgent>(sp =>
         {
             AppSettings s = sp.GetRequiredService<SettingsService>().Current;
+            var account = sp.GetRequiredService<GitHubAccountService>();
             return new RealCopilotAgent(
                 s.CopilotBaseDirectory,
                 sp.GetRequiredService<ILoggerFactory>().CreateLogger("Copilot"),
-                sendTimeout: TimeSpan.FromMinutes(Math.Max(1, s.CopilotTimeoutMinutes)));
+                sendTimeout: TimeSpan.FromMinutes(Math.Max(1, s.CopilotTimeoutMinutes)),
+                tokenProvider: () => account.Token);
         });
         services.AddTransient<SessionCoordinator>();
         services.AddTransient<VerifyCoordinator>();
@@ -98,6 +115,7 @@ public partial class App : Application
         services.AddTransient<PortfolioViewModel>();
         services.AddTransient<InventoryViewModel>();
         services.AddTransient<SettingsViewModel>();
+        services.AddTransient<AccountViewModel>();
         services.AddTransient<OnboardingViewModel>();
         services.AddTransient<SessionViewModel>();
         services.AddTransient<FindingsViewModel>();

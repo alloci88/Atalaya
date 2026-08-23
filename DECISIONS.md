@@ -155,6 +155,102 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   - Recordatorio de diseño: el login de Copilot NO ocurre dentro de Atalaya; es un
     `copilot` + `/login` único por máquina (el verde de la barra es solo git/hub, no Copilot).
 
+## F2 — Rediseño del setup y la conexión
+
+### F2.1 — Verificación de la superficie real (antes de tocar UI)
+
+- **D-030 — Superficie de auth del SDK 1.0.11 (verificada contra el paquete instalado).**
+  Comprobado por reflexión sobre `GitHub.Copilot.SDK.dll` (net8.0) y su XML de documentación:
+  - **Opción de token**: `CopilotClientOptions.GitHubToken` (`string`). La doc del paquete dice
+    literalmente *"When provided, the token is passed to the runtime via environment variable.
+    This takes priority over other authentication methods."*
+  - **Flag de usuario logueado**: `CopilotClientOptions.UseLoggedInUser` (`bool?`). *"Default: true
+    (but defaults to false when GitHubToken is provided)."* Aun así lo ponemos **explícito a
+    `false`** cuando hay token de cuenta, para no depender de un default.
+  - **Estado de auth**: `CopilotClient.GetAuthStatusAsync()` → `GetAuthStatusResponse`
+    (`IsAuthenticated`, `AuthType` ∈ {user, env, gh-cli, hmac, api-key, **token**}, `Host`,
+    `Login`, `StatusMessage`). Es la comprobación **más barata**: no crea sesión.
+  - **Comprobación de asiento**: `GetAuthStatusAsync` solo dice si hay credencial. Para separar
+    *"sin asiento"* de *"no autenticado"* se usa `ListModelsAsync()`, que la doc marca como
+    cacheada tras la primera llamada y que sí ejercita el *entitlement* de Copilot. Sigue siendo
+    más barato que crear y desechar una sesión.
+
+- **D-031 — El CLI ya viene embebido; lo forzamos explícitamente.** Los targets del paquete
+  (`build/GitHub.Copilot.SDK.targets`) descargan el CLI en build-time y lo copian a
+  `$(OutDir)runtimes/{rid}/native/copilot.exe`, registrándolo además como `ContentWithTargetPath`
+  para que fluya por *project reference* hasta `Atalaya.App` (verificado: el binario está en
+  `bin/Debug/net8.0-windows/runtimes/win-x64/native/`). El SDK lo resuelve solo
+  (`CopilotClient.GetBundledCliPath` → `AppContext.BaseDirectory/runtimes/{rid}/native/copilot.exe`,
+  invocado por reflexión en la sonda) y `Connection == null` ⇒ `RuntimeConnection.ForStdio(null)`
+  ⇒ *bundled runtime*. Aun así pasamos la ruta **explícita** vía `CopilotCliLocator.ResolveBundled()`:
+  así el requisito "siempre el binario embebido, nunca el PATH" queda **testeado**, y un despliegue
+  roto (sin `runtimes/`) se ve en el log en vez de degradar en silencio.
+  **Consecuencia: `npm install -g @github/copilot` deja de ser requisito.**
+
+- **D-032 — El device flow no se pudo probar contra GitHub en esta fase.** Requiere el `client_id`
+  de una OAuth App registrada por una persona (prerrequisito humano declarado en el README). El
+  campo `gitHubClientId` se entrega **vacío** y la ventana de Cuenta lo dice con un diagnóstico
+  específico en vez de fallar. Toda la máquina de estados (pending → slow_down → success,
+  caducidad, denegación, device flow deshabilitado) está cubierta por tests con el endpoint OAuth
+  simulado y reloj/espera inyectados.
+
+### F2.2–F2.4 — Diseño
+
+- **D-033 — OAuth App, no GitHub App [LIBERTAD].** El prompt deja libre la elección. Se elige
+  **OAuth App con device flow**: los `gho_` no caducan por defecto, así que no hay que implementar
+  ni almacenar *refresh tokens* (los `ghu_` de GitHub App caducan a las 8 h y obligarían a un
+  refresco transparente). Menos piezas, menos estado, mismo resultado. La migración a la
+  organización se resuelve re-registrando la app allí (o aprobándola) y cambiando el `client_id`
+  en el fichero de despliegue. Si algún día hace falta GitHub App, el cambio queda confinado a
+  `GitHubDeviceFlow` + `GitHubAccountService`.
+
+- **D-034 — `appsettings.deploy.json` embebido *y* en disco.** El JSON se embebe como recurso
+  (default de fábrica) **y** se copia junto al ejecutable (`CopyToOutputDirectory`). Resolución:
+  disco → embebido; un override corrupto no puede dejar la app inservible. El `client_id` **no es
+  secreto** (device flow no usa client secret), así que va en claro: no se incumple el anti-objetivo
+  de "no incrustar secretos".
+
+- **D-035 — Cuenta es una *página*, no una ventana modal.** Coherente con D-012 (navegación
+  VM-first): entra en el rail, en el clic del avatar de la barra de estado y en el primer arranque,
+  sin gestionar una ventana aparte ni su ciclo de vida.
+
+- **D-036 — Precedencia de credencial: cuenta > PAT > gestor de credenciales del SO.**
+  `HubContext.CredentialSource` lo expone (y lo testean los tests). Ambas rutas comparten forma:
+  `UsernamePasswordCredentials { Username = "x-access-token", Password = token }` — la que ya
+  usaba el PAT contra GitHub, así que el token de cuenta entra sin tocar `HubSyncService`.
+  `HubContext` reconstruye el `HubSyncService` cuando cambia la credencial o la identidad, para que
+  conectar/desconectar/cambiar de cuenta surta efecto sin reiniciar la app.
+
+- **D-037 — Identidad de commits derivada del perfil.** Nombre = `name` (o `login`); email = el
+  público si existe, si no el `noreply` `{id}+{login}@users.noreply.github.com`. Así basta el scope
+  `read:user` (no hace falta `user:email`) y nunca se filtra un email privado. El formulario manual
+  de nombre/email desaparece de Ajustes; los valores antiguos sobreviven como *fallback* para
+  usuarios sin cuenta conectada.
+
+- **D-038 — Migración silenciosa de usuarios pre-F2.** Al arrancar, una vez:
+  - si el `hubRepoUrl` guardado **coincide** con el del despliegue → se descarta (ese usuario pasa
+    a seguir el despliegue);
+  - si **difiere** → se conserva como `hubUrlOverride` en Opciones avanzadas, porque un equipo con
+    otro hub no puede romperse al actualizar;
+  - el PAT y la identidad git **no se tocan**: siguen funcionando como hasta ahora.
+  Un usuario con PAT y sin cuenta **no** ve la pantalla de bienvenida: va directo al portafolio.
+
+- **D-039 — Expiración/revocación.** Cualquier consumidor que vea un 401 llama a
+  `GitHubAccountService.NoteFailure`; la cuenta queda "requiere reconexión", la barra de estado lo
+  muestra en ámbar junto al avatar y la página de Cuenta lo explica. Un pull correcto lo limpia.
+  Se reconocen tanto el 401 de la API REST como el mensaje típico de LibGit2Sharp
+  (*"too many redirects or authentication replays"*).
+
+- **D-040 — Diagnósticos, no errores crudos.** `ConnectionHelp` centraliza los textos (política de
+  OAuth Apps de la org, SAML SSO, sin asiento de Copilot, sin red, sin client id) y la tabla del
+  README usa exactamente los mismos. `AgentReadiness` gana `AgentProblem` para que "sin asiento"
+  no se confunda nunca con "no autenticado" — eran el mismo mensaje antes de F2.
+
+- **D-041 — El fallback antiguo se conserva, no se borra.** Sin token de cuenta, el adaptador de
+  Copilot vuelve a `UseLoggedInUser = true` (credenciales del CLI en la máquina) y el texto de
+  ayuda `CopilotHelp.NotAuthenticated` sigue existiendo. Igual con el PAT en Opciones avanzadas.
+  Anti-objetivo explícito del prompt.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

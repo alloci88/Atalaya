@@ -68,6 +68,13 @@
                         HorizontalContentAlignment="Left"
                         Margin="0,2" />
                     <ui:Button
+                        Command="{Binding ShowAccountCommand}"
+                        Content="Cuenta"
+                        Appearance="Secondary"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Margin="0,2" />
+                    <ui:Button
                         Command="{Binding ShowSettingsCommand}"
                         Content="Ajustes"
                         Appearance="Secondary"
@@ -95,6 +102,32 @@
                         Height="16"
                         Margin="12,0,0,0"
                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+
+                    <!-- Connected account (D4): click goes to Cuenta. -->
+                    <Button
+                        Command="{Binding ShowAccountCommand}"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="6,0"
+                        Margin="14,0,0,0"
+                        Cursor="Hand"
+                        ToolTip="Cuenta de GitHub">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="18" Height="18" CornerRadius="9">
+                                <Border.Background>
+                                    <ImageBrush ImageSource="{Binding AccountAvatarUrl}" Stretch="UniformToFill" />
+                                </Border.Background>
+                            </Border>
+                            <TextBlock Text="{Binding AccountLabel}" Margin="7,0,0,0" VerticalAlignment="Center" Opacity="0.85" />
+                            <TextBlock
+                                Text="⚠"
+                                Foreground="#E0A030"
+                                Margin="6,0,0,0"
+                                VerticalAlignment="Center"
+                                ToolTip="Reconecta tu cuenta de GitHub"
+                                Visibility="{Binding AccountNeedsAttention, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
                 <ItemsControl ItemsSource="{Binding Toasts}" HorizontalAlignment="Right">
                     <ItemsControl.ItemsPanel>

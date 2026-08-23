@@ -24,6 +24,9 @@ public sealed class AppPaths
     /// <summary>Machine-local config: clone paths per app (§4).</summary>
     public string MachinesJson => Path.Combine(Root, "machines.json");
 
-    /// <summary>Machine-local settings: identity, hub URL, editor, theme… (never the hub).</summary>
+    /// <summary>Machine-local settings: preferences and thresholds (never secrets, never the hub).</summary>
     public string SettingsJson => Path.Combine(Root, "settings.json");
+
+    /// <summary>The connected GitHub account, DPAPI-encrypted (D2.2).</summary>
+    public string AuthDat => Path.Combine(Root, "auth.dat");
 }

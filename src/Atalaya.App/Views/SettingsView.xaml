@@ -5,20 +5,8 @@
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel MaxWidth="620" HorizontalAlignment="Left">
-            <TextBlock Text="Ajustes" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,16" />
-
-            <TextBlock Text="Identidad git" FontWeight="SemiBold" Margin="0,4,0,6" />
-            <ui:TextBox PlaceholderText="Nombre" Text="{Binding GitUserName}" Margin="0,0,0,8" />
-            <ui:TextBox PlaceholderText="Email" Text="{Binding GitUserEmail}" Margin="0,0,0,16" />
-
-            <TextBlock Text="Hub (audit-hub)" FontWeight="SemiBold" Margin="0,4,0,6" />
-            <ui:TextBox PlaceholderText="URL del repo del hub" Text="{Binding HubRepoUrl}" Margin="0,0,0,8" />
-            <ui:TextBox PlaceholderText="Nombre de la organización (para hub.json)" Text="{Binding OrganizationName}" Margin="0,0,0,8" />
-            <ui:TextBox PlaceholderText="PAT (se guarda cifrado con DPAPI)" Text="{Binding Pat}" Margin="0,0,0,8" />
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                <ui:Button Content="Conectar / crear hub" Command="{Binding ConnectHubCommand}" Appearance="Primary" Margin="0,0,8,0" />
-                <ui:Button Content="Comprobar Copilot" Command="{Binding CheckCopilotCommand}" />
-            </StackPanel>
+            <TextBlock Text="Ajustes" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,4" />
+            <TextBlock Text="La conexión con GitHub y el hub vive en «Cuenta»." Opacity="0.65" FontSize="12" Margin="0,0,0,16" />
 
             <TextBlock Text="Editor preferido" FontWeight="SemiBold" Margin="0,4,0,6" />
             <ComboBox SelectedValue="{Binding Editor}" SelectedValuePath="Tag" Width="220" HorizontalAlignment="Left" Margin="0,0,0,16">
@@ -31,17 +19,48 @@
 
             <TextBlock Text="Umbrales por defecto" FontWeight="SemiBold" Margin="0,4,0,6" />
             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                <TextBlock Text="Unidad grande (LOC):" VerticalAlignment="Center" Width="180" />
+                <TextBlock Text="Unidad grande (LOC):" VerticalAlignment="Center" Width="200" />
                 <ui:TextBox Text="{Binding LargeUnitLoc}" Width="120" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                <TextBlock Text="Frescura (días):" VerticalAlignment="Center" Width="180" />
+                <TextBlock Text="Frescura (días):" VerticalAlignment="Center" Width="200" />
                 <ui:TextBox Text="{Binding FreshnessDays}" Width="120" />
             </StackPanel>
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                <TextBlock Text="Polling (segundos):" VerticalAlignment="Center" Width="180" />
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                <TextBlock Text="Polling (segundos):" VerticalAlignment="Center" Width="200" />
                 <ui:TextBox Text="{Binding PollingSeconds}" Width="120" />
             </StackPanel>
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                <TextBlock Text="Timeout de Copilot (minutos):" VerticalAlignment="Center" Width="200" />
+                <ui:TextBox Text="{Binding CopilotTimeoutMinutes}" Width="120" />
+            </StackPanel>
+
+            <!-- ============ Opciones avanzadas (colapsadas) ============ -->
+            <Expander Header="Opciones avanzadas" Margin="0,8,0,16">
+                <StackPanel Margin="0,10,0,0">
+                    <TextBlock
+                        Text="Solo si tu organización bloquea el acceso normal. Con la cuenta de GitHub conectada, estos campos se ignoran."
+                        TextWrapping="Wrap" Opacity="0.75" FontSize="12" Margin="0,0,0,12" />
+
+                    <TextBlock Text="PAT de respaldo" FontWeight="SemiBold" Margin="0,0,0,6" />
+                    <TextBlock
+                        Text="Hay un PAT guardado en esta máquina."
+                        FontSize="12" Opacity="0.7" Margin="0,0,0,6"
+                        Visibility="{Binding HasStoredPat, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock
+                        Text="Tu cuenta de GitHub está conectada: el PAT no se usa."
+                        FontSize="12" Opacity="0.7" Margin="0,0,0,6"
+                        Visibility="{Binding AccountOverridesPat, Converter={StaticResource BoolToVisibility}}" />
+                    <ui:TextBox PlaceholderText="PAT (se guarda cifrado con DPAPI)" Text="{Binding Pat}" Margin="0,0,0,8" />
+                    <ui:Button Content="Borrar PAT guardado" Command="{Binding ClearPatCommand}" HorizontalAlignment="Left" Margin="0,0,0,16" />
+
+                    <TextBlock Text="URL del hub (solo desarrollo)" FontWeight="SemiBold" Margin="0,0,0,6" />
+                    <TextBlock FontSize="12" Opacity="0.7" Margin="0,0,0,6">
+                        <Run Text="En uso:" /><Run Text=" " /><Run Text="{Binding EffectiveHubUrl, Mode=OneWay}" />
+                    </TextBlock>
+                    <ui:TextBox PlaceholderText="Dejar vacío para usar la del despliegue" Text="{Binding HubUrlOverride}" />
+                </StackPanel>
+            </Expander>
 
             <ui:Button Content="Guardar" Command="{Binding SaveCommand}" Appearance="Primary" HorizontalAlignment="Left" />
             <TextBlock Text="{Binding StatusMessage}" Opacity="0.85" Margin="0,12,0,0"

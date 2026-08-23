@@ -24,8 +24,31 @@ public sealed record SubmitFindingResult(bool Accepted, string? DuplicateOf = nu
 /// <summary>Per-call token/cost sample from the SDK usage event (§6.3), isolated from the SDK types.</summary>
 public sealed record UsageSample(long InputTokens, long OutputTokens, decimal? Cost, string? Model);
 
+/// <summary>
+/// Why the agent is not ready. Lets the UI show a *specific* remedy instead of one generic
+/// "not authenticated" for three very different situations (F2.3 diagnostics).
+/// </summary>
+public enum AgentProblem
+{
+    None = 0,
+
+    /// <summary>No usable credential: no account token and no CLI login either.</summary>
+    NotAuthenticated,
+
+    /// <summary>The token is valid but the account has no Copilot seat assigned.</summary>
+    NoSeat,
+
+    /// <summary>The credential was rejected (revoked / expired) — reconnect the account.</summary>
+    TokenRejected,
+
+    /// <summary>Could not reach GitHub.</summary>
+    Offline,
+
+    Unknown,
+}
+
 /// <summary>Whether the agent can run, with a human-readable reason (§6.1 help screen).</summary>
-public sealed record AgentReadiness(bool Ready, string Message);
+public sealed record AgentReadiness(bool Ready, string Message, AgentProblem Problem = AgentProblem.None);
 
 /// <summary>
 /// Thrown when a Copilot operation fails because the CLI is not authenticated (§6.1). Carries the
@@ -36,9 +59,30 @@ public sealed class CopilotAuthenticationException : Exception
     public CopilotAuthenticationException(string message, Exception? inner = null) : base(message, inner) { }
 }
 
-/// <summary>Canonical help text for the not-authenticated case (§6.1).</summary>
+/// <summary>Canonical help texts for the not-ready cases (§6.1, F2.3).</summary>
 public static class CopilotHelp
 {
+    /// <summary>
+    /// The normal path since F2: Copilot authenticates with the account token obtained by the
+    /// in-app GitHub login, so the remedy is a click in Atalaya, not a console.
+    /// </summary>
+    public const string NoAccount =
+        "Copilot no está autenticado. Ve a Cuenta y pulsa «Conectar con GitHub»: "
+        + "el mismo login habilita el hub y tu asiento de Copilot.";
+
+    /// <summary>The account token was accepted but the account has no Copilot seat.</summary>
+    public const string NoSeat =
+        "Tu cuenta no tiene asiento de Copilot asignado; pídelo al administrador de la organización "
+        + "(github.com/settings/copilot). Esto NO es un problema de autenticación.";
+
+    /// <summary>The credential was rejected (revoked, expirado o SSO caducado).</summary>
+    public const string TokenRejected =
+        "GitHub ha rechazado tus credenciales (revocadas o caducadas). Ve a Cuenta y vuelve a conectar.";
+
+    /// <summary>
+    /// Legacy fallback text: used only when there is no account token and Atalaya falls back to
+    /// the credentials the `copilot` CLI stored on this machine (pre-F2 setup, kept working).
+    /// </summary>
     public const string NotAuthenticated =
         "Copilot no está autenticado en esta máquina. Instala el CLI (npm install -g @github/copilot), "
         + "ejecuta `copilot` en una terminal, usa /login una vez con tu cuenta con asiento de Copilot, y reintenta.";

@@ -12,6 +12,19 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The connection services expose a few internal seams (config parsing, URL comparison,
+         failure diagnosis) that the tests drive directly. -->
+    <InternalsVisibleTo Include="Atalaya.App.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Deployment configuration (D1): embedded as the built-in default AND copied next to the
+         executable so a corporate deployment can override it without rebuilding. -->
+    <EmbeddedResource Include="appsettings.deploy.json" />
+    <Content Include="appsettings.deploy.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
     <PackageReference Include="WPF-UI" Version="3.0.5" />

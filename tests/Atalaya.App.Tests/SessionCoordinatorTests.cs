@@ -31,7 +31,7 @@ public sealed class SessionCoordinatorTests : IDisposable
 
         var settings = new SettingsService(_paths);
         settings.Load(); // hub not configured → Sync is null → CommitAndPush is skipped (offline)
-        _hub = new HubContext(_paths, settings, NullLoggerFactory.Instance);
+        _hub = TestFactory.Hub(_paths, settings);
         _machines = new MachineConfigStore(_paths.MachinesJson);
         _ingestion = new FindingIngestionService(_hub, _ulids);
 

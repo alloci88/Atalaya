@@ -99,3 +99,53 @@ public class FakeAgentTests
         public string ReadSignatures(string path) => "";
     }
 }
+
+/// <summary>
+/// The F2 token/CLI pipeline: the runtime is always the bundled CLI, and the three not-ready
+/// causes stay distinguishable so the UI can show a specific remedy.
+/// </summary>
+public class BundledCliTests
+{
+    [Fact]
+    public void Bundled_cli_is_deployed_with_the_package()
+    {
+        string? path = CopilotCliLocator.ResolveBundled();
+
+        path.Should().NotBeNull("el paquete del SDK despliega el CLI en runtimes/{rid}/native");
+        File.Exists(path).Should().BeTrue();
+        Path.GetFileName(path).Should().Be(CopilotCliLocator.BinaryName);
+    }
+
+    [Fact]
+    public void Missing_bundle_is_null_rather_than_a_PATH_lookup()
+    {
+        string empty = Path.Combine(Path.GetTempPath(), "atalaya-nocli", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(empty);
+        try
+        {
+            CopilotCliLocator.ResolveBundled(empty).Should().BeNull();
+        }
+        finally
+        {
+            Directory.Delete(empty, true);
+        }
+    }
+
+    [Fact]
+    public void Runtime_identifier_matches_the_sdk_output_layout()
+        => CopilotCliLocator.RuntimeIdentifier().Should().MatchRegex("^(win|linux|osx)-(x64|arm64)$");
+
+    [Fact]
+    public void Readiness_defaults_to_no_problem_when_ready()
+        => new AgentReadiness(true, "ok").Problem.Should().Be(AgentProblem.None);
+
+    [Fact]
+    public void Each_not_ready_cause_has_its_own_text()
+    {
+        CopilotHelp.NoAccount.Should().Contain("Conectar con GitHub");
+        CopilotHelp.NoSeat.Should().Contain("asiento");
+        CopilotHelp.TokenRejected.Should().Contain("vuelve a conectar");
+        // The pre-F2 CLI fallback text is kept: existing machines still get their instructions.
+        CopilotHelp.NotAuthenticated.Should().Contain("/login");
+    }
+}

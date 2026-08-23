@@ -6,20 +6,46 @@ using Microsoft.Extensions.Logging;
 
 namespace Atalaya.App.Services;
 
+/// <summary>Where the hub's git credential comes from (D3).</summary>
+public enum HubCredentialSource
+{
+    /// <summary>The token from the in-app GitHub login. The normal path.</summary>
+    Account,
+
+    /// <summary>The DPAPI-protected PAT: hidden fallback for orgs that block OAuth Apps.</summary>
+    Pat,
+
+    /// <summary>Neither: LibGit2Sharp falls back to the OS credential manager.</summary>
+    OsCredentialManager,
+}
+
 /// <summary>
-/// Owns the live hub: the <see cref="HubStore"/> and the <see cref="HubSyncService"/> built
-/// from settings. Resolves the git identity (falling back to the global git config, §3) and
-/// the credentials (from the DPAPI-protected PAT). Everything the views need to read/write
-/// hub state goes through here.
+/// Owns the live hub: the <see cref="HubStore"/> and the <see cref="HubSyncService"/>.
+/// <para>
+/// Since F2 the hub URL comes from the deployment configuration (D1) — opaque to the user — and
+/// the credentials come from the connected GitHub account (D3). The DPAPI-protected PAT survives
+/// as a hidden fallback for teams whose organization blocks OAuth Apps; when an account token
+/// exists, the PAT is ignored.
+/// </para>
 /// </summary>
 public sealed class HubContext
 {
     private readonly SettingsService _settings;
+    private readonly GitHubAccountService _account;
+    private readonly DeployConfig _deploy;
     private readonly ILoggerFactory _loggerFactory;
+    private string? _builtWithCredential;
 
-    public HubContext(AppPaths paths, SettingsService settings, ILoggerFactory loggerFactory)
+    public HubContext(
+        AppPaths paths,
+        SettingsService settings,
+        GitHubAccountService account,
+        DeployConfig deploy,
+        ILoggerFactory loggerFactory)
     {
         _settings = settings;
+        _account = account;
+        _deploy = deploy;
         _loggerFactory = loggerFactory;
         HubPaths = new HubPaths(paths.Hub);
         Store = new HubStore(HubPaths, loggerFactory.CreateLogger<HubStore>());
@@ -31,9 +57,35 @@ public sealed class HubContext
 
     public HubSyncService? Sync { get; private set; }
 
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(_settings.Current.HubRepoUrl);
+    /// <summary>
+    /// The hub repository actually used: the developer override from advanced settings first
+    /// (dev only), then the deployment configuration, then the legacy per-user setting kept for
+    /// users configured before F2.
+    /// </summary>
+    public string? HubUrl
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(_settings.Current.HubUrlOverride))
+            {
+                return _settings.Current.HubUrlOverride!.Trim();
+            }
+
+            return _deploy.HasHubUrl ? _deploy.HubUrl.Trim()
+                : string.IsNullOrWhiteSpace(_settings.Current.HubRepoUrl) ? null
+                : _settings.Current.HubRepoUrl!.Trim();
+        }
+    }
+
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(HubUrl);
+
+    /// <summary>True when the local clone already exists (no network needed to read the hub).</summary>
+    public bool IsCloned => Repository.IsValid(HubPaths.Root);
 
     public SyncHealth Health => Sync?.Health ?? SyncHealth.Amber;
+
+    /// <summary>When the hub was last successfully pulled, for the Cuenta page.</summary>
+    public DateTimeOffset? LastSync { get; private set; }
 
     /// <summary>Raised (on a background thread) when a pull brought in changes.</summary>
     public event Action<PullResult>? Changed;
@@ -46,23 +98,69 @@ public sealed class HubContext
             return;
         }
 
-        if (Sync is null)
-        {
-            Sync = new HubSyncService(
-                HubPaths, ResolveIdentity(), BuildCredentials(),
-                _loggerFactory.CreateLogger<HubSyncService>());
-            Sync.Pulled += r => Changed?.Invoke(r);
-        }
-
-        Sync.EnsureCloned(_settings.Current.HubRepoUrl!);
-        Sync.Pull();
+        EnsureSync();
+        Sync!.EnsureCloned(HubUrl!);
+        Pull();
     }
 
-    public Task<PullResult> PullAsync() => Task.Run(() => Sync?.Pull() ?? PullResult.Empty);
+    /// <summary>
+    /// Builds the sync service, rebuilding it when the credential changed (connect / disconnect /
+    /// switch account) so a new token takes effect without restarting the app.
+    /// </summary>
+    public void EnsureSync()
+    {
+        string credentialKey = CredentialKey();
+        if (Sync is not null && _builtWithCredential == credentialKey)
+        {
+            return;
+        }
 
-    /// <summary>Git identity: explicit setting, else the global git config, else a placeholder.</summary>
+        Sync?.Dispose();
+        Sync = new HubSyncService(
+            HubPaths, ResolveIdentity(), BuildCredentials(),
+            _loggerFactory.CreateLogger<HubSyncService>());
+        Sync.Pulled += r => Changed?.Invoke(r);
+        _builtWithCredential = credentialKey;
+    }
+
+    public Task<PullResult> PullAsync() => Task.Run(Pull);
+
+    private PullResult Pull()
+    {
+        if (Sync is null)
+        {
+            return PullResult.Empty;
+        }
+
+        try
+        {
+            PullResult result = Sync.Pull();
+            if (Sync.Health == SyncHealth.Green)
+            {
+                LastSync = DateTimeOffset.Now;
+                _account.ClearNeedsReconnect();
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _account.NoteFailure(ex);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Git identity for hub commits: the connected account's profile (D2.2), else the explicit
+    /// setting kept from before F2, else the global git config, else a placeholder.
+    /// </summary>
     public (string Name, string Email) ResolveIdentity()
     {
+        if (_account.GitIdentity is { } fromAccount)
+        {
+            return fromAccount;
+        }
+
         string? name = _settings.Current.GitUserName;
         string? email = _settings.Current.GitUserEmail;
 
@@ -83,10 +181,15 @@ public sealed class HubContext
         return (name ?? Environment.UserName, email ?? $"{Environment.UserName}@localhost");
     }
 
+    /// <summary>
+    /// The credential handed to LibGit2Sharp. GitHub over HTTPS accepts the user token as the
+    /// password with the fixed username <c>x-access-token</c> — the same shape the PAT already
+    /// used, so both paths share one code path.
+    /// </summary>
     private CredentialsHandler? BuildCredentials()
     {
-        string? pat = _settings.GetPat();
-        if (string.IsNullOrEmpty(pat))
+        string? token = ResolveCredentialToken();
+        if (string.IsNullOrEmpty(token))
         {
             return null; // fall back to the OS credential manager
         }
@@ -94,7 +197,29 @@ public sealed class HubContext
         return (_, _, _) => new UsernamePasswordCredentials
         {
             Username = "x-access-token",
-            Password = pat,
+            Password = token,
         };
+    }
+
+    /// <summary>Account token wins; the PAT is the hidden fallback (D3).</summary>
+    private string? ResolveCredentialToken() => _account.Token ?? _settings.GetPat();
+
+    /// <summary>Which credential the hub is using right now. Shown in Ajustes → avanzadas.</summary>
+    public HubCredentialSource CredentialSource =>
+        _account.Token is not null ? HubCredentialSource.Account
+        : _settings.GetPat() is not null ? HubCredentialSource.Pat
+        : HubCredentialSource.OsCredentialManager;
+
+    /// <summary>
+    /// Identifies the credential + identity the current <see cref="Sync"/> was built with, so we
+    /// know when to rebuild it. Never contains the token itself.
+    /// </summary>
+    private string CredentialKey()
+    {
+        (string name, string email) = ResolveIdentity();
+        string source = _account.Token is not null ? $"account:{_account.Current?.Login}"
+            : _settings.GetPat() is not null ? "pat"
+            : "none";
+        return $"{source}|{name}|{email}";
     }
 }

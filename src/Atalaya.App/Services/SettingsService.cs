@@ -9,12 +9,34 @@ namespace Atalaya.App.Services;
 /// <summary>Machine-local application settings (§8 Ajustes). Never stored in the hub.</summary>
 public sealed class AppSettings
 {
+    /// <summary>
+    /// Legacy explicit git identity. Since F2 the identity is derived from the connected GitHub
+    /// profile (D2.2) and this is only a fallback for users configured before F2.
+    /// </summary>
     public string? GitUserName { get; set; }
+
+    /// <summary>Legacy explicit git identity email. See <see cref="GitUserName"/>.</summary>
     public string? GitUserEmail { get; set; }
+
+    /// <summary>
+    /// Legacy per-user hub URL. Since F2 the hub comes from <c>appsettings.deploy.json</c> (D1);
+    /// this is migrated once into <see cref="HubUrlOverride"/> when it differs, then cleared.
+    /// </summary>
     public string? HubRepoUrl { get; set; }
 
-    /// <summary>DPAPI-protected Personal Access Token (base64). Decrypt via the service.</summary>
+    /// <summary>
+    /// Advanced / development only: overrides the deployment hub URL. Shown collapsed in Ajustes.
+    /// </summary>
+    public string? HubUrlOverride { get; set; }
+
+    /// <summary>
+    /// DPAPI-protected Personal Access Token (base64). Since F2 this is the HIDDEN FALLBACK for
+    /// teams whose organization blocks OAuth Apps; the account token always wins when present.
+    /// </summary>
     public string? ProtectedPat { get; set; }
+
+    /// <summary>True once the pre-F2 → F2 settings migration has run (D4).</summary>
+    public bool ConnectionMigrated { get; set; }
 
     /// <summary>Preferred editor for "open in editor" (§8): "vs" or "vscode".</summary>
     public string Editor { get; set; } = "vs";
@@ -85,6 +107,48 @@ public sealed class SettingsService
         Current = settings;
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
         File.WriteAllText(_path, JsonSerializer.Serialize(settings, JsonOptions));
+    }
+
+    /// <summary>
+    /// One-time, silent migration of pre-F2 settings (D4). Users who already had a hub URL and a
+    /// PAT must keep working untouched: their PAT stays (it is now the hidden fallback), and their
+    /// hub URL is kept as an advanced override **only when it differs** from the deployment's —
+    /// otherwise it is simply dropped, so those users follow the deployment from now on.
+    /// </summary>
+    public void MigrateConnection(DeployConfig deploy)
+    {
+        if (Current.ConnectionMigrated)
+        {
+            return;
+        }
+
+        string? legacy = Current.HubRepoUrl;
+        if (!string.IsNullOrWhiteSpace(legacy)
+            && !SameRepo(legacy, deploy.HubUrl)
+            && string.IsNullOrWhiteSpace(Current.HubUrlOverride))
+        {
+            Current.HubUrlOverride = legacy!.Trim();
+        }
+
+        Current.HubRepoUrl = null;
+        Current.ConnectionMigrated = true;
+        Save(Current);
+    }
+
+    /// <summary>Compares two remote URLs ignoring case, a trailing slash and a trailing ".git".</summary>
+    internal static bool SameRepo(string? a, string? b)
+    {
+        static string Normalize(string? url) => (url ?? string.Empty)
+            .Trim()
+            .TrimEnd('/')
+            .TrimEnd()
+            is var u && u.EndsWith(".git", StringComparison.OrdinalIgnoreCase)
+                ? u[..^4].TrimEnd('/')
+                : u;
+
+        string na = Normalize(a);
+        string nb = Normalize(b);
+        return na.Length > 0 && string.Equals(na, nb, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Encrypts and stores a PAT with DPAPI (current-user scope).</summary>

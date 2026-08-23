@@ -15,9 +15,9 @@ Solución en capas; las flechas indican dependencias
 | `src/Atalaya.Domain` | Entidades, ULID, fingerprint semántico, máquina de confianza, dedupe. Sin dependencias. | `net8.0` |
 | `src/Atalaya.Storage` | Serialización del esquema (§2), `HubSyncService` (LibGit2Sharp: pull/rebase/push + resolución de conflictos). | `net8.0` |
 | `src/Atalaya.Inventory` | Escaneo de clones: stack, módulos, unidades, LOC, hashes, re-escaneo con renombres. | `net8.0` |
-| `src/Atalaya.Copilot` | Integración `GitHub.Copilot.SDK` (adaptador real) + `ICopilotAgent` con fake inyectable; tools, permisos, coste, prompts/brief. | `net8.0` |
+| `src/Atalaya.Copilot` | Integración `GitHub.Copilot.SDK` (adaptador real, autenticado con el token de cuenta y usando siempre el CLI embebido del paquete) + `ICopilotAgent` con fake inyectable; tools, permisos, coste, prompts/brief. | `net8.0` |
 | `src/Atalaya.ImportV4` | Importador tolerante del formato markdown v4. | `net8.0` |
-| `src/Atalaya.App` | WPF + MVVM (CommunityToolkit.Mvvm), Generic Host (DI), tema Fluent (WPF-UI), vistas V1–V6. | `net8.0-windows` |
+| `src/Atalaya.App` | WPF + MVVM (CommunityToolkit.Mvvm), Generic Host (DI), tema Fluent (WPF-UI), vistas V1–V6 + Cuenta; device flow de GitHub y el `GitHubAccountService` que sirve el token a git, a Copilot y a la identidad de commits. | `net8.0-windows` |
 | `tests/*` | xUnit + FluentAssertions, un proyecto por `src`. | |
 
 **Principios**: el agente de IA nunca escribe estado — entrega hallazgos por una tool
@@ -25,93 +25,106 @@ tipada y la app valida y persiste (mejora 1). Los dashboards se calculan siempre
 disco solo viven datos primarios (mejora 8). Identidad de hallazgo = ULID + fingerprint;
 los `BUG-0042` son alias de presentación (mejora 2).
 
-## Requisitos
+## Empezar
 
-- **Windows 10/11** y el **.NET 8 SDK** (para compilar) / runtime (para ejecutar).
-- Una **cuenta con asiento de GitHub Copilot**. El SDK no ofrece login programático:
-  la primera vez ejecuta `copilot` en una terminal y **autentícate una vez**; Atalaya
-  reutiliza esa sesión (`UseLoggedInUser = true`). Si falla la autenticación, la app
-  muestra una pantalla de ayuda con botón de reintento.
-- Git instalado (Atalaya usa LibGit2Sharp; no hace shell-out a `git.exe`).
-
-## Montar el repositorio audit-hub
-
-1. Crea un **repositorio git vacío** (local `--bare`, o en GitHub/GitLab), p.ej.
-   `git init --bare //servidor/atalaya-hub.git`.
-2. Abre Atalaya → **Ajustes** → pega la **URL del hub**, tu **identidad git**
-   (nombre/email; si faltan se toman de la config global) y, si el remoto lo requiere,
-   un **PAT** (se guarda cifrado con DPAPI; Atalaya no tiene almacén propio de secretos).
-3. Pulsa **Conectar / crear hub**: clona el hub y, si está vacío, escribe `hub.json`
-   y hace el primer push.
-4. **Nueva aplicación**: indica ruta del clon local + URL del repo; Atalaya detecta el
-   stack, construye el inventario del primer ciclo y lo publica.
-
-La ruta del clon local es **por máquina** (`%LOCALAPPDATA%/Atalaya/machines.json`),
-nunca va al hub.
-
-## Conectar con Copilot
-
-> **Importante:** el indicador **verde** de la barra es SOLO la sincronización con git
-> (el hub). **No** significa que Copilot esté listo. Copilot es un sistema aparte y su
-> login **no se hace dentro de Atalaya**: la app reutiliza (`UseLoggedInUser = true`) un
-> login que haces **una vez por máquina** con el CLI `copilot`.
-
-Copilot solo se usa al pulsar **Auditar** (crear una sesión). Prerrequisitos:
-
-1. **Asiento de Copilot** activo en la cuenta que vayas a usar
-   (`github.com/settings/copilot`).
-2. **Node.js** instalado (para instalar el CLI).
-
-### Pasos (una vez por máquina)
-
-1. **Instala el CLI de Copilot:**
-   ```
-   npm install -g @github/copilot
-   ```
-   > En equipos con la **Execution Policy de PowerShell capada** (típico en empresas),
-   > `npm` falla porque en Windows es `npm.ps1`. Solución: **usa `cmd.exe`** (Símbolo del
-   > sistema), no PowerShell — ejecuta ahí `npm install -g @github/copilot` y luego
-   > `copilot`. Los shims `.cmd` se saltan la política. Comprueba tu política con
-   > `Get-ExecutionPolicy -List`; si `MachinePolicy`/`UserPolicy` están restringidas es
-   > por GPO y no la puedes cambiar tú → cmd.exe es el camino.
-
-2. **Autentícate una vez:**
-   ```
-   copilot
-   ```
-   Dentro, usa `/login` y completa el device-flow **con la cuenta que tiene el asiento**.
-
-   > Si en la web el botón **Authorize** sale **deshabilitado**, es la **política de la
-   > organización de GitHub** (restricción de OAuth Apps / SAML SSO), no un fallo de
-   > Atalaya. En la sección *Organization access* pulsa **"Request"** (o pide a un *owner*
-   > de la org que **apruebe la app "GitHub Copilot CLI"**). Si usa SAML, entra antes en
-   > `github.com` y completa el SSO, luego reintenta.
-
-3. **Verifica desde la app:** Atalaya → **Ajustes → "Comprobar Copilot"**. Debe salir
-   **`✓ Copilot autenticado como <login>`**. (Este botón te lo dice sin tener que lanzar
-   una auditoría; si falta el login, muestra la ayuda en vez de un error crudo.)
-
-4. **Audita:** Inventario (V2) → selecciona una unidad → **Auditar selección** → sigue el
+1. **Instala Atalaya.**
+2. **Conectar con GitHub.** Al abrirla por primera vez aterrizas en **Cuenta**: pulsa
+   **Conectar con GitHub**, escribe en `github.com/login/device` el código que te muestra
+   (el botón lo copia solo) y autoriza. Atalaya verifica en cadena que estás autenticado,
+   que tienes acceso al hub —lo clona ahí mismo— y que tu Copilot responde.
+3. **Audita.** Inventario (V2) → selecciona unidades → **Auditar selección** → sigue el
    progreso en **V5 (sesión en vivo)**.
+
+No hay nada más que configurar: **ni la URL del hub, ni un PAT, ni la identidad git, ni una
+consola**. Ese mismo login de GitHub sirve para las tres cosas — el acceso git al hub, la
+autenticación de Copilot y el autor de los commits.
+
+**Requisitos:** Windows 10/11 con el runtime de .NET 8 (el SDK 8 si vas a compilar), una
+cuenta de GitHub **con asiento de Copilot** y que el administrador haya hecho el
+[registro de la OAuth App](#anexo-registrar-la-oauth-app-administrador). No necesitas
+Node.js ni el CLI de Copilot: Atalaya usa el binario que trae el propio paquete del SDK.
+
+### Después de conectar
+
+- **Nueva aplicación**: indica ruta del clon local + URL del repo; Atalaya detecta el stack,
+  construye el inventario del primer ciclo y lo publica. La ruta del clon local es **por
+  máquina** (`%LOCALAPPDATA%/Atalaya/machines.json`), nunca va al hub.
+- **Cuenta** (rail izquierdo, o clic en tu avatar de la barra de estado) muestra tu perfil,
+  el estado de las cuatro comprobaciones —re-ejecutables con **Comprobar conexión**—, la
+  fecha del último sync y el botón **Desconectar** (borra tus credenciales; **no** toca el
+  clon del hub, así que puedes reconectar con otra cuenta sin perder nada).
+- El indicador **verde/ámbar/rojo** de la barra es la sincronización con git. Junto a él, tu
+  avatar; si sale un **⚠ ámbar**, GitHub ha rechazado tus credenciales y hay que reconectar.
+
+### Diagnóstico rápido
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| El botón **Authorize** de github.com sale deshabilitado | La organización **restringe las OAuth Apps** y no ha aprobado «Atalaya» | En la sección *Organization access*, pulsa **Request**; o pide a un *owner* que apruebe la app. [Doc de GitHub](https://docs.github.com/es/organizations/managing-oauth-access-to-your-organizations-data/about-oauth-app-access-restrictions) |
+| «Entra primero en github.com y completa el SSO…» | La organización usa **SAML SSO** y tu sesión no está activa | Abre `github.com`, completa el SSO de la organización y pulsa **Comprobar conexión** |
+| «Tu cuenta X no pertenece a la organización Y» | La cuenta con la que te has autenticado no es miembro | Pide acceso a un *owner*, o conéctate con la cuenta correcta |
+| «Tu cuenta no tiene asiento de Copilot asignado» | Autenticación correcta, **falta el asiento** (no es un fallo de login) | Pídelo al administrador; compruébalo en [github.com/settings/copilot](https://github.com/settings/copilot) |
+| «El código ha caducado» | Han pasado ~15 min sin autorizar | Vuelve a pulsar **Conectar con GitHub** |
+| «Sin conexión con GitHub» | Red o proxy | Corrige la red y pulsa **Reintentar** / **Comprobar conexión** |
+| «Este despliegue no tiene configurado el client id…» | Falta el prerrequisito del administrador | Ver el [anexo](#anexo-registrar-la-oauth-app-administrador) |
+| GitHub rechaza las credenciales tras funcionar | Token revocado o expirado por la organización | **Cuenta → Conectar con GitHub** otra vez |
+
+### Si tu organización bloquea las OAuth Apps y no hay un *owner* disponible
+
+**Ajustes → Opciones avanzadas** conserva el camino antiguo: un **PAT** (cifrado con DPAPI)
+que se usa **solo** si no hay cuenta conectada. Es una salida de emergencia, no el camino
+normal. Ahí mismo hay un override de la URL del hub, **solo para desarrollo**.
 
 ### Ajustes relacionados (en `%LOCALAPPDATA%/Atalaya/settings.json`)
 
 - `copilotTimeoutMinutes` (por defecto **15**): tiempo máximo por unidad. El SDK trae 1
   minuto por defecto, insuficiente para una auditoría real; súbelo si tienes unidades muy
   grandes.
-- `copilotBaseDirectory` (por defecto **vacío**): déjalo vacío para que el SDK use su
-  ubicación estándar, que es **donde el CLI guarda el login** (así `UseLoggedInUser` lo
-  encuentra). Solo ponle una ruta si necesitas aislar el SDK a una carpeta concreta.
+- `copilotBaseDirectory` (por defecto **vacío**): déjalo vacío. Solo tiene efecto en el
+  camino heredado (sin cuenta conectada), donde marca dónde busca el SDK el login del CLI.
 
-### Diagnóstico rápido
+Los secretos **no** están aquí: la cuenta vive cifrada con DPAPI en
+`%LOCALAPPDATA%/Atalaya/auth.dat`, y nunca sale de tu máquina.
 
-| Síntoma | Causa | Solución |
-|---|---|---|
-| "Comprobar Copilot" dice no autenticado | Falta el `copilot /login` en esa máquina | Pasos 1–2 |
-| `npm`/`copilot` no ejecutan en PowerShell | Execution Policy capada | Usa **cmd.exe** |
-| Botón *Authorize* deshabilitado en la web | Política de OAuth/SSO de la org | Pide aprobación a un *owner* / completa SSO |
-| `session was not created with authentication info…` | El SDK no ve el login | Verifica `copilotBaseDirectory` vacío y re-loguea |
-| `SendAndWaitAsync timed out after 1 min` | Timeout por defecto del SDK | Ya se usa 15 min; sube `copilotTimeoutMinutes` |
+## Configuración de despliegue
+
+Junto al ejecutable viaja **`appsettings.deploy.json`** (también embebido en el binario como
+valor de fábrica; el fichero de disco gana):
+
+```json
+{
+  "hubUrl": "https://github.com/alloci88/atalaya-hub",
+  "gitHubClientId": "<CLIENT_ID>",
+  "organizationLogin": ""
+}
+```
+
+- **`hubUrl`** — el repositorio audit-hub. El usuario nunca lo ve ni lo escribe. **Migrar el
+  hub al repo de la organización = cambiar esta línea en el despliegue**, cero acciones de
+  usuario (el clon local existente se conserva).
+- **`gitHubClientId`** — el client id de la OAuth App (ver anexo). **No es un secreto**: el
+  device flow no usa client secret, por eso puede ir embebido.
+- **`organizationLogin`** — si se rellena, tras el login Atalaya comprueba la pertenencia a
+  esa organización y lo dice claro si falta, en vez de fallar después al clonar. Vacío =
+  no se comprueba (correcto mientras el hub sea un repo personal: el clon es la puerta real).
+
+## Anexo: registrar la OAuth App (administrador)
+
+Prerrequisito **humano**, una sola vez para todo el equipo:
+
+1. GitHub → **Settings** → **Developer settings** → **OAuth Apps** → **New OAuth App**.
+2. *Application name*: `Atalaya`. *Homepage URL*: cualquiera (p. ej. la del repo).
+   *Authorization callback URL*: irrelevante en device flow — pon la misma homepage.
+3. Marca **Enable Device Flow**. ← imprescindible.
+4. Copia el **Client ID** y pégalo en `gitHubClientId` de `appsettings.deploy.json` en el
+   despliegue.
+
+Cuando el hub migre a la organización: se re-registra la app allí (o un *owner* aprueba la
+app existente para la organización) y solo cambian `gitHubClientId` / `hubUrl` en el fichero
+de despliegue.
+
+**Scopes que pide Atalaya:** `repo` (git contra el hub privado), `read:org` (comprobar
+pertenencia) y `read:user` (login, nombre, avatar, email). Nada más.
 
 ## Flujos
 
@@ -151,6 +164,14 @@ pwsh scripts/publish.ps1 -SelfContained
   contra la superficie real del paquete `GitHub.Copilot.SDK` 1.0.11, pero su ruta de
   ejecución requiere un asiento Copilot (no disponible en CI); los tests end-to-end
   usan el `FakeCopilotAgent`, que ejercita todo el pipeline.
+- El **device flow contra GitHub** no está ejercitado de extremo a extremo: necesita el
+  `client_id` de la OAuth App, que registra una persona (ver el anexo). Con
+  `gitHubClientId` vacío la app lo dice con un mensaje específico en vez de fallar. La
+  máquina de estados (pending → slow_down → éxito, caducidad, denegación, device flow
+  deshabilitado) sí está cubierta por tests con el endpoint OAuth simulado.
+- La **verificación de asiento de Copilot** usa `ListModelsAsync` y clasifica el fallo por
+  el texto del error; si GitHub cambia esos mensajes, el caso "sin asiento" podría caer en
+  el diagnóstico genérico.
 - `read_signatures` usa una heurística de líneas; la extracción con Roslyn para C#
   queda pendiente.
 - Las gráficas de V6 se dibujan con WPF puro (barras) para evitar dependencias nativas

@@ -18,6 +18,8 @@
             <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
             <local:NotEmptyToVisibilityConverter x:Key="NotEmptyToVisibility" />
             <local:ProgressToPercentConverter x:Key="ProgressToPercent" />
+            <local:CheckStateToGlyphConverter x:Key="CheckStateToGlyph" />
+            <local:CheckStateToBrushConverter x:Key="CheckStateToBrush" />
             <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
 
             <!-- VM-first navigation: each page VM renders as its view. -->
@@ -29,6 +31,9 @@
             </DataTemplate>
             <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
                 <views:SettingsView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:AccountViewModel}">
+                <views:AccountView />
             </DataTemplate>
             <DataTemplate DataType="{x:Type vm:OnboardingViewModel}">
                 <views:OnboardingView />
