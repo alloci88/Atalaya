@@ -55,12 +55,28 @@ public sealed class HubSyncService : IDisposable
 
     private Signature Signature => new(_identity, DateTimeOffset.Now);
 
-    /// <summary>Clones the hub if the working directory is not yet a repo; otherwise opens it.</summary>
+    /// <summary>
+    /// The hub URL an existing clone was re-pointed at, or null. Non-null means the deployment
+    /// moved the hub (e.g. to the organization) and we followed it — worth telling the user.
+    /// </summary>
+    public string? RemoteRepointedTo { get; private set; }
+
+    /// <summary>
+    /// Clones the hub if the working directory is not yet a repo; otherwise opens it — and, when
+    /// the deployment now names a DIFFERENT hub, re-points <c>origin</c> at it.
+    /// <para>
+    /// Without that last step, migrating the hub (changing <c>hubUrl</c> in the deployment) would
+    /// silently keep every existing user syncing against the old repository: the directory is a
+    /// valid clone, so we would just open it. Re-pointing keeps the local history, which is what
+    /// publishes it into an empty destination on the next push.
+    /// </para>
+    /// </summary>
     public void EnsureCloned(string repoUrl)
     {
         if (Repository.IsValid(_paths.Root))
         {
             _ = Repo;
+            RepointOriginIfNeeded(repoUrl);
             return;
         }
 
@@ -75,6 +91,35 @@ public sealed class HubSyncService : IDisposable
 
         Repository.Clone(repoUrl, _paths.Root, options);
         _repo = new Repository(_paths.Root);
+    }
+
+    private void RepointOriginIfNeeded(string repoUrl)
+    {
+        Remote? origin = Repo.Network.Remotes["origin"];
+        if (origin is null || SameRemote(origin.Url, repoUrl))
+        {
+            return;
+        }
+
+        _log.LogWarning(
+            "Hub moved: re-pointing origin from {Old} to {New}. Local history is kept and will be "
+            + "published to the new remote on the next push.",
+            origin.Url, repoUrl);
+
+        Repo.Network.Remotes.Update("origin", r => r.Url = repoUrl);
+        RemoteRepointedTo = repoUrl;
+    }
+
+    /// <summary>Compares remote URLs ignoring case, a trailing slash and a trailing ".git".</summary>
+    internal static bool SameRemote(string? a, string? b)
+    {
+        static string Normalize(string? url)
+        {
+            string u = (url ?? string.Empty).Trim().TrimEnd('/');
+            return u.EndsWith(".git", StringComparison.OrdinalIgnoreCase) ? u[..^4].TrimEnd('/') : u;
+        }
+
+        return string.Equals(Normalize(a), Normalize(b), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Stages every change (including deletions) and commits if there is anything to commit.</summary>

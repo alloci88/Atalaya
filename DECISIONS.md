@@ -329,6 +329,34 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   con `ProxyType.Auto` por defecto, así que el proxy del sistema se usa sin configurar nada; no
   hacía falta tocarlo.
 
+### F2.8 — Migración del hub y el 404 de GitHub
+
+- **D-050 — Fallo propio: cambiar `hubUrl` no movía a los usuarios existentes.** `EnsureCloned`
+  solo comprobaba que el directorio fuera un repo git válido; si lo era, lo abría y ya. Con un clon
+  existente, cambiar `hubUrl` en el despliegue habría dejado a todo el equipo sincronizando
+  **contra el hub viejo, en silencio** — es decir, la promesa de D1 ("migrar = cambiar una línea")
+  estaba rota. Ahora `EnsureCloned` compara el `origin` con la URL del despliegue y lo re-apunta,
+  conservando el historial local, y lo expone en `RemoteRepointedTo` para que la página de Cuenta
+  lo diga.
+
+- **D-051 — Y re-apuntar tampoco bastaba.** Tras el re-apuntado, el destino se quedaba vacío:
+  `InitializeIfEmpty` no hace nada (el `hub.json` local ya existe) y no había ninguna escritura
+  pendiente que disparara un push. `PublishAfterMigration` empuja el historial local al remoto
+  nuevo; si otro usuario migró antes, el `Push` normal rebasa sobre lo que ya hay, que es el
+  comportamiento convergente de siempre (§3). Lo destapó el test de migración, no el razonamiento.
+
+- **D-052 — El 404 de GitHub es ambiguo por diseño y hay que preguntarle a la API.** GitHub
+  responde **404** para "no existe", para "existe pero no puedes verlo" y para "push sin permiso de
+  escritura" — para no filtrar la existencia de repos privados. git no puede distinguirlos, así que
+  `DescribeHubFailure` estaba **adivinando**, y adivinaba "política de OAuth Apps de la
+  organización" incluso cuando el caso real era "puedo leer pero no escribir" (que fue lo que pasó
+  de verdad contra un hub personal desde una cuenta con solo lectura). Ahora, cuando el paso del
+  hub falla, se consulta `GET /repos/{owner}/{repo}` con el token y se distingue: `ReadWrite`
+  (el problema es otro, se respeta el mensaje de git), `ReadOnly` (pide permiso Write),
+  `NotVisible` (no existe o no te han dado acceso; se nombra la URL), `OrgPolicyBlocked`,
+  `SamlRequired`, `TokenRejected`. Si la API no puede ayudar (offline, URL no-GitHub) se conserva
+  el mensaje original: nunca se degrada un diagnóstico específico a uno más vago.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

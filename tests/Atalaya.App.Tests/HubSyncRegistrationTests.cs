@@ -124,6 +124,45 @@ public sealed class HubSyncRegistrationTests : IDisposable
     }
 
     [Fact]
+    public void Migrating_the_hub_repoints_an_existing_clone_and_keeps_its_history()
+    {
+        _account.Connect("gho_x", new GitHubUser(7, "ana", "Ana L.", null, null));
+        Hub().EnsureHub();
+
+        // The deployment now names a different hub (e.g. the organization's repo).
+        string moved = Path.Combine(_root, "organizacion.git");
+        Repository.Init(moved, isBare: true);
+        var migrated = new HubContext(
+            _paths, _settings, _account, new DeployConfig { HubUrl = moved }, NullLoggerFactory.Instance);
+
+        migrated.EnsureHub();
+
+        migrated.RemoteRepointedTo.Should().Be(moved, "el usuario tiene que enterarse del cambio");
+        using (var local = new Repository(_paths.Hub))
+        {
+            local.Network.Remotes["origin"].Url.Should().Be(moved,
+                "si no, el clon seguiria sincronizando contra el hub viejo en silencio");
+        }
+
+        // The local history reached the new remote.
+        string check = Path.Combine(_root, "check");
+        Repository.Clone(moved, check);
+        File.Exists(Path.Combine(check, "hub.json")).Should().BeTrue();
+    }
+
+    [Fact]
+    public void An_unchanged_hub_url_is_not_treated_as_a_migration()
+    {
+        _account.Connect("gho_x", new GitHubUser(7, "ana", "Ana L.", null, null));
+        Hub().EnsureHub();
+
+        HubContext again = Hub();
+        again.EnsureHub();
+
+        again.RemoteRepointedTo.Should().BeNull();
+    }
+
+    [Fact]
     public void An_unconfigured_hub_is_a_no_op()
     {
         var hub = new HubContext(_paths, _settings, _account, new DeployConfig(), NullLoggerFactory.Instance);

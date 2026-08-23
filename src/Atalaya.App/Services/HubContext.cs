@@ -94,6 +94,9 @@ public sealed class HubContext
     /// </summary>
     public string? RevocationUncheckedHost => Sync?.CertificatePolicy.RevocationUncheckedHost;
 
+    /// <summary>Non-null when the deployment moved the hub and we re-pointed the existing clone.</summary>
+    public string? RemoteRepointedTo => Sync?.RemoteRepointedTo;
+
     /// <summary>When the hub was last successfully pulled, for the Cuenta page.</summary>
     public DateTimeOffset? LastSync { get; private set; }
 
@@ -121,7 +124,25 @@ public sealed class HubContext
         EnsureSync();
         Sync!.EnsureCloned(HubUrl!);
         Pull();
+        PublishAfterMigration();
         InitializeIfEmpty();
+    }
+
+    /// <summary>
+    /// After the deployment moved the hub and we re-pointed the clone, push the local history to
+    /// the new remote. Without this the destination stays empty: <see cref="InitializeIfEmpty"/>
+    /// does nothing (the local <c>hub.json</c> already exists) and no other write is pending, so
+    /// the migration would silently publish nothing.
+    /// </summary>
+    private void PublishAfterMigration()
+    {
+        if (Sync?.RemoteRepointedTo is null || Health != SyncHealth.Green)
+        {
+            return;
+        }
+
+        Sync.Push();
+        SyncStateChanged?.Invoke();
     }
 
     /// <summary>

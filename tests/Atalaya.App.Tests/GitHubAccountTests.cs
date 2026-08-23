@@ -108,6 +108,75 @@ public sealed class GitHubAccountTests : IDisposable
         (await act.Should().ThrowAsync<GitHubApiException>()).Which.Problem.Should().Be(GitHubApiProblem.Offline);
     }
 
+    [Theory]
+    [InlineData("https://github.com/alloci88/atalaya-hub", "alloci88", "atalaya-hub")]
+    [InlineData("https://github.com/alloci88/atalaya-hub.git", "alloci88", "atalaya-hub")]
+    [InlineData("https://github.com/Org/Hub/", "Org", "Hub")]
+    public void Repository_urls_split_into_owner_and_repo(string url, string owner, string repo)
+        => GitHubApiClient.ParseRepositoryUrl(url).Should().Be((owner, repo));
+
+    [Theory]
+    [InlineData("https://gitlab.com/a/b")]
+    [InlineData("https://github.com/soloowner")]
+    [InlineData("C:\\ruta\\local\\hub")]
+    [InlineData(null)]
+    public void Non_github_urls_are_not_parsed(string? url)
+        => GitHubApiClient.ParseRepositoryUrl(url).Should().BeNull();
+
+    [Fact]
+    public async Task Read_without_write_is_detected_so_the_404_can_be_explained()
+    {
+        // GitHub answers a push without write access with 404, exactly like "does not exist".
+        // Only the API can tell them apart.
+        var api = new GitHubApiClient(new HttpStub()
+            .Json("""{"full_name":"o/r","permissions":{"admin":false,"push":false,"pull":true}}""")
+            .Client());
+
+        (await api.GetRepositoryAccessAsync("gho_x", "o", "r", CancellationToken.None))
+            .Should().Be(RepositoryAccess.ReadOnly);
+    }
+
+    [Fact]
+    public async Task Write_access_is_detected()
+    {
+        var api = new GitHubApiClient(new HttpStub()
+            .Json("""{"full_name":"o/r","permissions":{"admin":true,"push":true,"pull":true}}""")
+            .Client());
+
+        (await api.GetRepositoryAccessAsync("gho_x", "o", "r", CancellationToken.None))
+            .Should().Be(RepositoryAccess.ReadWrite);
+    }
+
+    [Fact]
+    public async Task A_404_on_the_repository_means_it_is_not_visible()
+    {
+        var api = new GitHubApiClient(new HttpStub()
+            .Status(HttpStatusCode.NotFound, """{"message":"Not Found"}""")
+            .Client());
+
+        (await api.GetRepositoryAccessAsync("gho_x", "o", "r", CancellationToken.None))
+            .Should().Be(RepositoryAccess.NotVisible);
+    }
+
+    [Fact]
+    public async Task An_org_that_has_not_approved_the_app_is_told_apart_from_a_missing_repo()
+    {
+        var api = new GitHubApiClient(new HttpStub()
+            .Status(HttpStatusCode.Forbidden, """{"message":"Forbidden"}""")
+            .Client());
+
+        (await api.GetRepositoryAccessAsync("gho_x", "o", "r", CancellationToken.None))
+            .Should().Be(RepositoryAccess.OrgPolicyBlocked);
+    }
+
+    [Fact]
+    public void Read_only_help_names_the_account_and_the_repository()
+    {
+        string help = ConnectionHelp.HubReadOnly("alopezciller", "https://github.com/alloci88/atalaya-hub");
+
+        help.Should().Contain("alopezciller").And.Contain("atalaya-hub").And.Contain("Write");
+    }
+
     [Fact]
     public void Token_is_stored_encrypted_and_round_trips()
     {

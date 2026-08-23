@@ -63,6 +63,8 @@ nuevo, ver el [anexo de la OAuth App](#anexo-registrar-la-oauth-app-administrado
 | El botón **Authorize** de github.com sale deshabilitado | La organización **restringe las OAuth Apps** y no ha aprobado «Atalaya» | En la sección *Organization access*, pulsa **Request**; o pide a un *owner* que apruebe la app. [Doc de GitHub](https://docs.github.com/es/organizations/managing-oauth-access-to-your-organizations-data/about-oauth-app-access-restrictions) |
 | «Entra primero en github.com y completa el SSO…» | La organización usa **SAML SSO** y tu sesión no está activa | Abre `github.com`, completa el SSO de la organización y pulsa **Comprobar conexión** |
 | «Tu cuenta X no pertenece a la organización Y» | La cuenta con la que te has autenticado no es miembro | Pide acceso a un *owner*, o conéctate con la cuenta correcta |
+| «puede leer … pero NO escribir en él» | Tienes acceso de lectura al hub, pero Atalaya necesita publicar. GitHub devuelve **404** a un push sin permiso de escritura, igual que si el repo no existiera | Pide permiso **Write** sobre el repositorio del hub |
+| «no ve el repositorio …: o no existe, o es privado» | La URL del despliegue apunta a un repo que tu cuenta no ve | Revisa `hubUrl` en `appsettings.deploy.json` y que te hayan añadido al repositorio |
 | «Tu cuenta no tiene asiento de Copilot asignado» | Autenticación correcta, **falta el asiento** (no es un fallo de login) | Pídelo al administrador; compruébalo en [github.com/settings/copilot](https://github.com/settings/copilot) |
 | «El código ha caducado» | Han pasado ~15 min sin autorizar | Vuelve a pulsar **Conectar con GitHub** |
 | «Sin conexión con GitHub» | Red o proxy | Corrige la red y pulsa **Reintentar** / **Comprobar conexión** |
@@ -103,7 +105,11 @@ valor de fábrica; el fichero de disco gana):
 
 - **`hubUrl`** — el repositorio audit-hub. El usuario nunca lo ve ni lo escribe. **Migrar el
   hub al repo de la organización = cambiar esta línea en el despliegue**, cero acciones de
-  usuario (el clon local existente se conserva).
+  usuario: los clones existentes se re-apuntan solos al nuevo remoto conservando su historial, que
+  se publica en el siguiente push, y la página de Cuenta avisa del cambio.
+  Antes de migrar, comprueba que cada usuario tenga permiso **Write** sobre el repo destino (ser
+  miembro de la organización no basta) y, si la organización restringe las OAuth Apps, que
+  «Atalaya» esté aprobada para ella.
 - **`gitHubClientId`** — el client id de la OAuth App (ver anexo). **No es un secreto**: el
   device flow no usa client secret, por eso puede ir embebido.
 - **`organizationLogin`** — si se rellena, tras el login Atalaya comprueba la pertenencia a

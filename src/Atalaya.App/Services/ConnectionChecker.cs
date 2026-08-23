@@ -218,6 +218,10 @@ public sealed class ConnectionChecker
                     (string detail, string? help) = _hub.LastSyncError is { } error
                         ? DescribeHubFailure(new InvalidOperationException(error), _account.Current?.Login ?? "?")
                         : ("El clon existe pero no se ha podido sincronizar con el hub.", null);
+
+                    // git cannot tell "does not exist" from "no read access" from "no write
+                    // access" — they are all 404. The API can, so ask it instead of guessing.
+                    (detail, help) = await RefineWithApiAsync(detail, help, token, ct);
                     hub.Fail(detail, help);
                     firstProblem ??= detail;
                 }
@@ -230,6 +234,7 @@ public sealed class ConnectionChecker
             {
                 _account.NoteFailure(ex);
                 (string detail, string? help) = DescribeHubFailure(ex, _account.Current?.Login ?? "?");
+                (detail, help) = await RefineWithApiAsync(detail, help, token, ct);
                 hub.Fail(detail, help);
                 firstProblem ??= detail;
             }
@@ -264,6 +269,36 @@ public sealed class ConnectionChecker
         }
 
         return new ConnectionCheckResult(Steps.All(s => s.State is CheckState.Ok or CheckState.Skipped), firstProblem);
+    }
+
+    /// <summary>
+    /// Replaces a guessed git diagnosis with what the API actually says about the hub repository.
+    /// Leaves the original text when the API cannot help (offline, non-GitHub URL) so we never
+    /// downgrade a specific message into a vaguer one.
+    /// </summary>
+    private async Task<(string Detail, string? HelpUrl)> RefineWithApiAsync(
+        string detail, string? helpUrl, string token, CancellationToken ct)
+    {
+        if (GitHubApiClient.ParseRepositoryUrl(_hub.HubUrl) is not var (owner, repo))
+        {
+            return (detail, helpUrl);
+        }
+
+        string login = _account.Current?.Login ?? "?";
+        RepositoryAccess access = await _api.GetRepositoryAccessAsync(token, owner, repo, ct);
+
+        return access switch
+        {
+            RepositoryAccess.ReadOnly => (ConnectionHelp.HubReadOnly(login, _hub.HubUrl!), null),
+            RepositoryAccess.NotVisible => (ConnectionHelp.HubNotVisible(login, _hub.HubUrl!), null),
+            RepositoryAccess.OrgPolicyBlocked => (ConnectionHelp.OrgPolicyBlocked, ConnectionHelp.DocsOAuthPolicy),
+            RepositoryAccess.SamlRequired => (ConnectionHelp.SamlRequired, ConnectionHelp.DocsSamlSso),
+            RepositoryAccess.TokenRejected => (ConnectionHelp.TokenRejected, null),
+
+            // The API says we have read AND write, so the failure is not about repo permissions;
+            // keep whatever git reported.
+            _ => (detail, helpUrl),
+        };
     }
 
     private void SkipRest(params string[] keys)

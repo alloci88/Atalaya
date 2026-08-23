@@ -42,6 +42,31 @@ public enum GitHubApiProblem
     Unknown,
 }
 
+/// <summary>What the connected account can do with the hub repository.</summary>
+public enum RepositoryAccess
+{
+    /// <summary>Read and write: the hub works.</summary>
+    ReadWrite,
+
+    /// <summary>Can clone and pull, but a push will fail with a misleading 404.</summary>
+    ReadOnly,
+
+    /// <summary>Does not exist, or exists and this account may not see it.</summary>
+    NotVisible,
+
+    /// <summary>The organization has not approved the OAuth App for its repositories.</summary>
+    OrgPolicyBlocked,
+
+    /// <summary>The organization enforces SAML and this token has no active SSO session.</summary>
+    SamlRequired,
+
+    /// <summary>The token was rejected outright.</summary>
+    TokenRejected,
+
+    /// <summary>Could not find out (offline, or not a GitHub URL).</summary>
+    Unknown,
+}
+
 /// <summary>An API call that failed, carrying the specific remedy text.</summary>
 public sealed class GitHubApiException : Exception
 {
@@ -108,6 +133,66 @@ public sealed class GitHubApiClient
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// What the token can actually do with a repository. GitHub answers <b>404</b> both for
+    /// "does not exist" and for "exists but you may not see it" — and a push without write access
+    /// is a 404 too — so git alone can never tell those apart. This asks the API, which can.
+    /// </summary>
+    public async Task<RepositoryAccess> GetRepositoryAccessAsync(string token, string owner, string repo, CancellationToken ct)
+    {
+        try
+        {
+            using JsonDocument doc = await GetJsonAsync($"/repos/{owner}/{repo}", token, ct);
+            JsonElement root = doc.RootElement;
+
+            bool canPush = root.ValueKind == JsonValueKind.Object
+                           && root.TryGetProperty("permissions", out JsonElement perms)
+                           && perms.ValueKind == JsonValueKind.Object
+                           && perms.TryGetProperty("push", out JsonElement push)
+                           && push.ValueKind == JsonValueKind.True;
+
+            return canPush ? RepositoryAccess.ReadWrite : RepositoryAccess.ReadOnly;
+        }
+        catch (GitHubApiException ex)
+        {
+            return ex.Problem switch
+            {
+                GitHubApiProblem.SamlRequired => RepositoryAccess.SamlRequired,
+                GitHubApiProblem.OrgPolicyBlocked => RepositoryAccess.OrgPolicyBlocked,
+                GitHubApiProblem.TokenRejected => RepositoryAccess.TokenRejected,
+                GitHubApiProblem.Offline => RepositoryAccess.Unknown,
+                _ => RepositoryAccess.NotVisible,
+            };
+        }
+    }
+
+    /// <summary>
+    /// Splits <c>https://github.com/owner/repo(.git)</c> into its two parts, or null when the URL
+    /// is not a GitHub repository we can ask about (a local path, another host…).
+    /// </summary>
+    public static (string Owner, string Repo)? ParseRepositoryUrl(string? url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri)
+            || !uri.Host.EndsWith("github.com", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        string[] parts = uri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2)
+        {
+            return null;
+        }
+
+        string repo = parts[1];
+        if (repo.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+        {
+            repo = repo[..^4];
+        }
+
+        return string.IsNullOrEmpty(repo) ? null : (parts[0], repo);
     }
 
     private async Task<JsonDocument> GetJsonAsync(string path, string token, CancellationToken ct)

@@ -72,6 +72,7 @@ public sealed partial class AccountViewModel : ViewModelBase
     [ObservableProperty] private string _syncState = string.Empty;
     [ObservableProperty] private string _syncError = string.Empty;
     [ObservableProperty] private string _tlsNotice = string.Empty;
+    [ObservableProperty] private string _migrationNotice = string.Empty;
 
     /// <summary>Where the hub clone lives on this machine — the first thing to check when sync misbehaves.</summary>
     public string HubClonePath => _hub.HubPaths.Root;
@@ -145,6 +146,11 @@ public sealed partial class AccountViewModel : ViewModelBase
             ? $"Esta red no permite comprobar la revocación del certificado de {host}. "
               + "La conexión usa un certificado de confianza y en vigor, pero pide a IT que "
               + "desbloquee los endpoints CRL/OCSP."
+            : string.Empty;
+
+        MigrationNotice = _hub.RemoteRepointedTo is { } moved
+            ? $"El hub del despliegue ha cambiado: este clon se ha re-apuntado a {moved}. "
+              + "Tu historial local se conserva y se publicará en el siguiente push."
             : string.Empty;
     }
 

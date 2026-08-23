@@ -63,9 +63,24 @@ public static class ConnectionHelp
     public static string NotAnOrgMember(string login, string org)
         => $"Tu cuenta {login} no pertenece a la organización {org}. Pide acceso a un owner y reintenta.";
 
-    /// <summary>The token authenticates but git refuses the hub repository.</summary>
+    /// <summary>The token authenticates but git refuses the hub repository, and we could not ask why.</summary>
     public static string HubAccessDenied(string login)
         => $"GitHub ha aceptado tu cuenta ({login}) pero no te da acceso al repositorio del hub. "
         + "Si tu organización restringe las OAuth Apps, aprueba «Atalaya» para la organización; "
         + "si usa SAML, completa el SSO en github.com y reintenta.";
+
+    /// <summary>
+    /// Read works, write does not. GitHub answers a push without write access with 404, so without
+    /// asking the API this is indistinguishable from "the repo does not exist".
+    /// </summary>
+    public static string HubReadOnly(string login, string hubUrl)
+        => $"Tu cuenta ({login}) puede leer {hubUrl} pero NO escribir en él, y Atalaya necesita "
+        + "publicar en el hub. Pide permiso «Write» sobre ese repositorio (Settings → Collaborators, "
+        + "o el equipo correspondiente si es de una organización).";
+
+    /// <summary>The repository does not exist, or the account cannot see it at all.</summary>
+    public static string HubNotVisible(string login, string hubUrl)
+        => $"Tu cuenta ({login}) no ve el repositorio {hubUrl}: o no existe, o es privado y no te "
+        + "han dado acceso. Comprueba la URL del despliegue (appsettings.deploy.json) y que te "
+        + "hayan añadido al repositorio.";
 }

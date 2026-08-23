@@ -151,6 +151,13 @@
                             Opacity="0.7"
                             Margin="0,6,0,0"
                             Visibility="{Binding TlsNotice, Converter={StaticResource NotEmptyToVisibility}}" />
+                        <TextBlock
+                            Text="{Binding MigrationNotice}"
+                            TextWrapping="Wrap"
+                            FontSize="12"
+                            Opacity="0.7"
+                            Margin="0,6,0,0"
+                            Visibility="{Binding MigrationNotice, Converter={StaticResource NotEmptyToVisibility}}" />
                     </StackPanel>
                 </Border>
 
