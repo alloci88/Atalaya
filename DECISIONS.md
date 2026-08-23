@@ -187,12 +187,18 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   roto (sin `runtimes/`) se ve en el log en vez de degradar en silencio.
   **Consecuencia: `npm install -g @github/copilot` deja de ser requisito.**
 
-- **D-032 — El device flow no se pudo probar contra GitHub en esta fase.** Requiere el `client_id`
-  de una OAuth App registrada por una persona (prerrequisito humano declarado en el README). El
-  campo `gitHubClientId` se entrega **vacío** y la ventana de Cuenta lo dice con un diagnóstico
-  específico en vez de fallar. Toda la máquina de estados (pending → slow_down → success,
-  caducidad, denegación, device flow deshabilitado) está cubierta por tests con el endpoint OAuth
-  simulado y reloj/espera inyectados.
+- **D-032 — Device flow: solicitud de código verificada en vivo; la autorización, no.** La OAuth App
+  ya está registrada (prerrequisito humano cumplido) y su `client_id` **`Ov23liC0Kt139QXJauYV`**
+  va en `appsettings.deploy.json`. Verificado contra GitHub de verdad:
+  `POST https://github.com/login/device/code` con ese `client_id` y los tres scopes devuelve
+  **200** con `{device_code, user_code, verification_uri, expires_in: 899, interval: 5}` — o sea,
+  el id es válido, **Enable Device Flow está activo** y la respuesta tiene exactamente la forma que
+  parsea `RequestCodeAsync`.
+  Lo que **no** está verificado end-to-end es la segunda pata: teclear el código en
+  `github.com/login/device`, autorizar y recibir el `gho_`. Eso exige una persona delante de un
+  navegador. La máquina de estados de esa pata (pending → slow_down con backoff → success,
+  caducidad, denegación, device flow deshabilitado) sí está cubierta por tests con el endpoint
+  OAuth simulado y reloj/espera inyectados.
 
 ### F2.2–F2.4 — Diseño
 

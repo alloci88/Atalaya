@@ -39,10 +39,10 @@ No hay nada más que configurar: **ni la URL del hub, ni un PAT, ni la identidad
 consola**. Ese mismo login de GitHub sirve para las tres cosas — el acceso git al hub, la
 autenticación de Copilot y el autor de los commits.
 
-**Requisitos:** Windows 10/11 con el runtime de .NET 8 (el SDK 8 si vas a compilar), una
-cuenta de GitHub **con asiento de Copilot** y que el administrador haya hecho el
-[registro de la OAuth App](#anexo-registrar-la-oauth-app-administrador). No necesitas
-Node.js ni el CLI de Copilot: Atalaya usa el binario que trae el propio paquete del SDK.
+**Requisitos:** Windows 10/11 con el runtime de .NET 8 (el SDK 8 si vas a compilar) y una
+cuenta de GitHub **con asiento de Copilot**. No necesitas Node.js ni el CLI de Copilot:
+Atalaya usa el binario que trae el propio paquete del SDK. (Para montar un despliegue
+nuevo, ver el [anexo de la OAuth App](#anexo-registrar-la-oauth-app-administrador).)
 
 ### Después de conectar
 
@@ -110,6 +110,10 @@ valor de fábrica; el fichero de disco gana):
 
 ## Anexo: registrar la OAuth App (administrador)
 
+> **Ya está hecho** para el despliegue actual: la app «Atalaya» está registrada y su client id
+> (`Ov23liC0Kt139QXJauYV`) viaja en `appsettings.deploy.json`. Estos pasos son la receta para
+> re-registrarla al migrar el hub a la organización, o para montar un despliegue nuevo.
+
 Prerrequisito **humano**, una sola vez para todo el equipo:
 
 1. GitHub → **Settings** → **Developer settings** → **OAuth Apps** → **New OAuth App**.
@@ -164,11 +168,11 @@ pwsh scripts/publish.ps1 -SelfContained
   contra la superficie real del paquete `GitHub.Copilot.SDK` 1.0.11, pero su ruta de
   ejecución requiere un asiento Copilot (no disponible en CI); los tests end-to-end
   usan el `FakeCopilotAgent`, que ejercita todo el pipeline.
-- El **device flow contra GitHub** no está ejercitado de extremo a extremo: necesita el
-  `client_id` de la OAuth App, que registra una persona (ver el anexo). Con
-  `gitHubClientId` vacío la app lo dice con un mensaje específico en vez de fallar. La
-  máquina de estados (pending → slow_down → éxito, caducidad, denegación, device flow
-  deshabilitado) sí está cubierta por tests con el endpoint OAuth simulado.
+- Del **device flow** está verificada contra GitHub la petición de código (devuelve un grant
+  válido con el `client_id` del despliegue, así que la OAuth App y su *Enable Device Flow*
+  están bien). La segunda pata —autorizar en el navegador y recibir el token— exige una
+  persona delante y no se ha ejercitado; su máquina de estados (pending → slow_down →
+  éxito, caducidad, denegación) sí está cubierta por tests con el endpoint OAuth simulado.
 - La **verificación de asiento de Copilot** usa `ListModelsAsync` y clasifica el fallo por
   el texto del error; si GitHub cambia esos mensajes, el caso "sin asiento" podría caer en
   el diagnóstico genérico.
