@@ -54,6 +54,13 @@
                     <ui:TextBox PlaceholderText="PAT (se guarda cifrado con DPAPI)" Text="{Binding Pat}" Margin="0,0,0,8" />
                     <ui:Button Content="Borrar PAT guardado" Command="{Binding ClearPatCommand}" HorizontalAlignment="Left" Margin="0,0,0,16" />
 
+                    <TextBlock Text="TLS" FontWeight="SemiBold" Margin="0,0,0,6" />
+                    <ui:ToggleSwitch Content="Exigir comprobación de revocación TLS"
+                                     IsChecked="{Binding RequireTlsRevocationCheck}" Margin="0,0,0,4" />
+                    <TextBlock
+                        Text="Por defecto desactivado: si tu red bloquea los endpoints CRL/OCSP (proxy corporativo), Atalaya continúa siempre que el certificado sea de confianza, esté en vigor y corresponda al servidor. Actívalo para exigir además que la revocación se pueda comprobar."
+                        TextWrapping="Wrap" Opacity="0.65" FontSize="11" Margin="0,0,0,16" />
+
                     <TextBlock Text="URL del hub (solo desarrollo)" FontWeight="SemiBold" Margin="0,0,0,6" />
                     <TextBlock FontSize="12" Opacity="0.7" Margin="0,0,0,6">
                         <Run Text="En uso:" /><Run Text=" " /><Run Text="{Binding EffectiveHubUrl, Mode=OneWay}" />

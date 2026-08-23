@@ -71,6 +71,7 @@ public sealed partial class AccountViewModel : ViewModelBase
     [ObservableProperty] private bool _needsReconnect;
     [ObservableProperty] private string _syncState = string.Empty;
     [ObservableProperty] private string _syncError = string.Empty;
+    [ObservableProperty] private string _tlsNotice = string.Empty;
 
     /// <summary>Where the hub clone lives on this machine — the first thing to check when sync misbehaves.</summary>
     public string HubClonePath => _hub.HubPaths.Root;
@@ -139,6 +140,12 @@ public sealed partial class AccountViewModel : ViewModelBase
             _ => "con errores",
         };
         SyncError = _hub.LastSyncError ?? string.Empty;
+        // Never silent: if we let a connection through without being able to check revocation, say so.
+        TlsNotice = _hub.RevocationUncheckedHost is { } host
+            ? $"Esta red no permite comprobar la revocación del certificado de {host}. "
+              + "La conexión usa un certificado de confianza y en vigor, pero pide a IT que "
+              + "desbloquee los endpoints CRL/OCSP."
+            : string.Empty;
     }
 
     [RelayCommand]

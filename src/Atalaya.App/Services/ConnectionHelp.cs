@@ -32,6 +32,22 @@ public static class ConnectionHelp
     public const string Offline =
         "Sin conexión con GitHub. Comprueba la red o el proxy y pulsa «Reintentar».";
 
+    /// <summary>
+    /// libgit2 hard-fails when it cannot reach the CRL/OCSP responder. Not a credentials problem:
+    /// a network one. Atalaya soft-fails this by default, so seeing it means the strict option is on.
+    /// </summary>
+    public const string TlsRevocationUnavailable =
+        "Tu red no deja comprobar si el certificado de GitHub está revocado (CRL/OCSP bloqueados, "
+        + "típico con un proxy corporativo que inspecciona TLS). No es un problema de tus credenciales. "
+        + "Lo correcto es que IT permita esos endpoints; mientras tanto, desactiva «Exigir comprobación "
+        + "de revocación TLS» en Ajustes → Opciones avanzadas.";
+
+    /// <summary>The chain itself is untrusted — typically a TLS-intercepting proxy whose CA is missing.</summary>
+    public const string TlsUntrusted =
+        "El certificado que presenta el servidor no es de confianza en esta máquina. Si tu empresa "
+        + "inspecciona el tráfico TLS, falta instalar su CA corporativa en el almacén de Windows. "
+        + "Atalaya no acepta certificados no confiables.";
+
     /// <summary>The deployment has no client id yet (administrator prerequisite).</summary>
     public const string NoClientId =
         "Este despliegue no tiene configurado el client id de la OAuth App «Atalaya». "

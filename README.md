@@ -66,6 +66,8 @@ nuevo, ver el [anexo de la OAuth App](#anexo-registrar-la-oauth-app-administrado
 | «Tu cuenta no tiene asiento de Copilot asignado» | Autenticación correcta, **falta el asiento** (no es un fallo de login) | Pídelo al administrador; compruébalo en [github.com/settings/copilot](https://github.com/settings/copilot) |
 | «El código ha caducado» | Han pasado ~15 min sin autorizar | Vuelve a pulsar **Conectar con GitHub** |
 | «Sin conexión con GitHub» | Red o proxy | Corrige la red y pulsa **Reintentar** / **Comprobar conexión** |
+| «certificate revocation status could not be verified» | Tu red bloquea los endpoints **CRL/OCSP** (proxy corporativo que inspecciona TLS). No es un fallo de credenciales | Atalaya continúa por defecto si el certificado es de confianza, está en vigor y corresponde al servidor; te lo avisa en **Cuenta**. El arreglo correcto es que IT desbloquee esos endpoints. Si lo ves como error, tienes activado **Exigir comprobación de revocación TLS** en Opciones avanzadas |
+| «El certificado que presenta el servidor no es de confianza» | Tu empresa inspecciona TLS y falta su **CA corporativa** en el almacén de Windows | Instala la CA de tu organización. Atalaya nunca acepta certificados no confiables |
 | «Este despliegue no tiene configurado el client id…» | Falta el prerrequisito del administrador | Ver el [anexo](#anexo-registrar-la-oauth-app-administrador) |
 | GitHub rechaza las credenciales tras funcionar | Token revocado o expirado por la organización | **Cuenta → Conectar con GitHub** otra vez |
 

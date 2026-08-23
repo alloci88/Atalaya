@@ -38,6 +38,14 @@ public sealed class AppSettings
     /// <summary>True once the pre-F2 → F2 settings migration has run (D4).</summary>
     public bool ConnectionMigrated { get; set; }
 
+    /// <summary>
+    /// Restore libgit2's hard failure when a certificate's revocation status cannot be checked.
+    /// Default false: Atalaya soft-fails that single condition (as browsers do) while still
+    /// requiring a trusted, in-date certificate that matches the host, because corporate networks
+    /// routinely block the CRL/OCSP responders. Advanced option.
+    /// </summary>
+    public bool RequireTlsRevocationCheck { get; set; }
+
     /// <summary>Preferred editor for "open in editor" (§8): "vs" or "vscode".</summary>
     public string Editor { get; set; } = "vs";
 

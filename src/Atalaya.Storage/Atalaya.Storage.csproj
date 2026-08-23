@@ -9,6 +9,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The TLS policy decision is internal so it can be tested without a network. -->
+    <InternalsVisibleTo Include="Atalaya.Storage.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="LibGit2Sharp" Version="0.31.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
   </ItemGroup>

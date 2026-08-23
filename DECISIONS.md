@@ -295,6 +295,40 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   justo como se deja el repo en un estado que Atalaya no espera. El diagnóstico debe salir del
   panel de estado, no de que el usuario entre en la carpeta.
 
+### F2.7 — TLS en red corporativa
+
+- **D-047 — Soft-fail de la comprobación de revocación TLS [decisión con impacto de seguridad].**
+  En la red de la organización el clon fallaba con *"certificate revocation status could not be
+  verified"*. Verificado que ese literal **es de libgit2** (aparece en `git2-3f4182d.dll` junto a
+  `CertVerifyCertificateChainPolicy`): libgit2 valida la cadena con las APIs de Windows y
+  **hard-failea** cuando no puede alcanzar el respondedor CRL/OCSP — lo normal con un proxy
+  corporativo que inspecciona TLS o que bloquea esos endpoints. No es un problema de credenciales
+  ni de permisos del repo.
+  - Los navegadores hacen **soft-fail** de ese caso concreto, porque quien puede interceptar el
+    tráfico también puede bloquear el respondedor: el fallo duro cuesta disponibilidad sin aportar
+    apenas seguridad. Atalaya adopta ese criterio **por defecto**.
+  - Se relaja **solo** esa condición: `HubCertificatePolicy` revalida la cadena con
+    `X509RevocationMode.NoCheck` y exige que siga siendo de confianza, en vigor y que
+    `MatchesHostname` case con el host. Una raíz no confiable —que es como se ve un MITM real sin
+    la CA corporativa instalada— **se sigue rechazando**; hay tests con un certificado autofirmado
+    que lo demuestran.
+  - No es silencioso: se registra un warning y la página de Cuenta muestra en qué host no se pudo
+    comprobar la revocación, con la recomendación de que IT desbloquee CRL/OCSP (el arreglo
+    correcto de verdad).
+  - `RequireTlsRevocationCheck` en Ajustes → Opciones avanzadas restaura el hard-fail de libgit2.
+  - Viable porque el callback está cableado en este transporte: el binario nativo contiene
+    `git_transport_smart_certificate_check` y `user rejected certificate for %s`.
+
+- **D-048 — Los errores de TLS se diagnostican antes que los de red.** *"failed to send request:
+  certificate revocation…"* casaba con el patrón de offline y salía como "comprueba la red", que
+  manda al usuario en la dirección equivocada. `DescribeHubFailure` evalúa ahora TLS primero y
+  distingue dos casos: revocación no comprobable (problema de red corporativa, con la salida por
+  Opciones avanzadas) y certificado no confiable (falta la CA corporativa en el almacén).
+
+- **D-049 — El proxy ya estaba cubierto.** `FetchOptions.ProxyOptions` de LibGit2Sharp 0.31 viene
+  con `ProxyType.Auto` por defecto, así que el proxy del sistema se usa sin configurar nada; no
+  hacía falta tocarlo.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

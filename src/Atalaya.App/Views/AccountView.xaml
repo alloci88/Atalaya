@@ -144,6 +144,13 @@
                             Foreground="#E0A030"
                             Margin="0,6,0,0"
                             Visibility="{Binding SyncError, Converter={StaticResource NotEmptyToVisibility}}" />
+                        <TextBlock
+                            Text="{Binding TlsNotice}"
+                            TextWrapping="Wrap"
+                            FontSize="12"
+                            Opacity="0.7"
+                            Margin="0,6,0,0"
+                            Visibility="{Binding TlsNotice, Converter={StaticResource NotEmptyToVisibility}}" />
                     </StackPanel>
                 </Border>
 

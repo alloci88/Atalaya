@@ -88,6 +88,12 @@ public sealed class HubContext
     /// <summary>Why the last sync failed, or null when it succeeded. Surfaced in the Cuenta page.</summary>
     public string? LastSyncError => Sync?.LastError;
 
+    /// <summary>
+    /// The host whose certificate revocation status could not be checked, or null. Non-null means
+    /// the connection worked but this network blocks the CRL/OCSP responders — worth showing.
+    /// </summary>
+    public string? RevocationUncheckedHost => Sync?.CertificatePolicy.RevocationUncheckedHost;
+
     /// <summary>When the hub was last successfully pulled, for the Cuenta page.</summary>
     public DateTimeOffset? LastSync { get; private set; }
 
@@ -154,7 +160,10 @@ public sealed class HubContext
         Sync?.Dispose();
         Sync = new HubSyncService(
             HubPaths, ResolveIdentity(), BuildCredentials(),
-            _loggerFactory.CreateLogger<HubSyncService>());
+            _loggerFactory.CreateLogger<HubSyncService>(),
+            new HubCertificatePolicy(
+                _settings.Current.RequireTlsRevocationCheck,
+                _loggerFactory.CreateLogger<HubCertificatePolicy>()));
         Sync.Pulled += r => Changed?.Invoke(r);
         _builtWithCredential = credentialKey;
     }

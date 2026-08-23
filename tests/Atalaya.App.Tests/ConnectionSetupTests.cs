@@ -239,6 +239,27 @@ public sealed class ConnectionSetupTests : IDisposable
         help.Should().Be(ConnectionHelp.DocsOAuthPolicy);
     }
 
+    [Theory]
+    // The exact libgit2 wording, plus the shape it arrives in when wrapped by the transport.
+    [InlineData("certificate revocation status could not be verified")]
+    [InlineData("failed to send request: certificate revocation is offline or stale")]
+    public void A_blocked_revocation_check_is_named_as_a_TLS_problem(string message)
+    {
+        (string detail, _) = ConnectionChecker.DescribeHubFailure(new Exception(message), "ana");
+
+        detail.Should().Be(ConnectionHelp.TlsRevocationUnavailable);
+        detail.Should().Contain("No es un problema de tus credenciales")
+            .And.Contain("CRL/OCSP", "el usuario tiene que poder decírselo a IT tal cual");
+    }
+
+    [Theory]
+    [InlineData("user rejected certificate for github.com")]
+    [InlineData("the certificate cannot be verified")]
+    [InlineData("certificate root is not trusted")]
+    public void An_untrusted_certificate_points_at_the_corporate_CA(string message)
+        => ConnectionChecker.DescribeHubFailure(new Exception(message), "ana").Detail
+            .Should().Be(ConnectionHelp.TlsUntrusted);
+
     [Fact]
     public void Network_failures_are_reported_as_offline()
     {

@@ -25,13 +25,18 @@ public sealed class HubSyncService : IDisposable
         HubPaths paths,
         (string Name, string Email) identity,
         CredentialsHandler? credentials = null,
-        ILogger<HubSyncService>? log = null)
+        ILogger<HubSyncService>? log = null,
+        HubCertificatePolicy? certificatePolicy = null)
     {
         _paths = paths;
         _identity = new Identity(identity.Name, identity.Email);
         _credentials = credentials;
         _log = log ?? NullLogger<HubSyncService>.Instance;
+        CertificatePolicy = certificatePolicy ?? new HubCertificatePolicy(log: _log);
     }
+
+    /// <summary>The TLS policy applied to every fetch/clone/push. Never null.</summary>
+    public HubCertificatePolicy CertificatePolicy { get; }
 
     /// <summary>Current sync indicator (§3). Starts amber until the first successful pull.</summary>
     public SyncHealth Health { get; private set; } = SyncHealth.Amber;
@@ -65,6 +70,8 @@ public sealed class HubSyncService : IDisposable
         {
             options.FetchOptions.CredentialsProvider = _credentials;
         }
+
+        options.FetchOptions.CertificateCheck = CertificatePolicy.Check;
 
         Repository.Clone(repoUrl, _paths.Root, options);
         _repo = new Repository(_paths.Root);
@@ -154,7 +161,7 @@ public sealed class HubSyncService : IDisposable
             {
                 Pull(); // rebase onto latest remote first
                 Branch local = Repo.Head;
-                var pushOptions = new PushOptions();
+                var pushOptions = new PushOptions { CertificateCheck = CertificatePolicy.Check };
                 if (_credentials is not null)
                 {
                     pushOptions.CredentialsProvider = _credentials;
@@ -192,7 +199,7 @@ public sealed class HubSyncService : IDisposable
     private void Fetch()
     {
         Remote origin = Repo.Network.Remotes["origin"];
-        var options = new FetchOptions();
+        var options = new FetchOptions { CertificateCheck = CertificatePolicy.Check };
         if (_credentials is not null)
         {
             options.CredentialsProvider = _credentials;

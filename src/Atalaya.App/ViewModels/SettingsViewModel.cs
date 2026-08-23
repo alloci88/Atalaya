@@ -33,6 +33,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _copilotTimeoutMinutes = s.CopilotTimeoutMinutes;
         _hubUrlOverride = s.HubUrlOverride ?? string.Empty;
         _hasStoredPat = settings.GetPat() is not null;
+        _requireTlsRevocationCheck = s.RequireTlsRevocationCheck;
     }
 
     public override string Title => "Ajustes";
@@ -50,6 +51,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _pat = string.Empty;
     [ObservableProperty] private string _hubUrlOverride;
     [ObservableProperty] private bool _hasStoredPat;
+    [ObservableProperty] private bool _requireTlsRevocationCheck;
 
     /// <summary>The hub actually in use — shown read-only under advanced options, for support.</summary>
     public string EffectiveHubUrl => _hub.HubUrl ?? "(sin configurar)";
@@ -71,6 +73,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         s.EnableAssistedFix = EnableAssistedFix;
         s.CopilotTimeoutMinutes = Math.Max(1, CopilotTimeoutMinutes);
         s.HubUrlOverride = string.IsNullOrWhiteSpace(HubUrlOverride) ? null : HubUrlOverride.Trim();
+        s.RequireTlsRevocationCheck = RequireTlsRevocationCheck;
         return s;
     }
 

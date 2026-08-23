@@ -289,6 +289,20 @@ public sealed class ConnectionChecker
     {
         string m = ex.Message?.ToLowerInvariant() ?? string.Empty;
 
+        // TLS first: these arrive worded like transport failures but are neither network outages
+        // nor credential problems, and telling the user "comprueba la red" sends them the wrong way.
+        if (m.Contains("revocation"))
+        {
+            return (ConnectionHelp.TlsRevocationUnavailable, null);
+        }
+
+        if (m.Contains("user rejected certificate") || m.Contains("certificate is not trusted")
+            || m.Contains("certificate root is not trusted") || m.Contains("certificate is not valid")
+            || m.Contains("the certificate cannot be verified"))
+        {
+            return (ConnectionHelp.TlsUntrusted, null);
+        }
+
         if (m.Contains("could not resolve host") || m.Contains("failed to send request")
             || m.Contains("timed out") || m.Contains("failed to connect"))
         {
