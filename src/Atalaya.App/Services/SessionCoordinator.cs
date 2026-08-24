@@ -51,7 +51,7 @@ public sealed class SessionCoordinator
     public event Action<string, string>? UnitPhaseChanged;   // (path, phase)
     public event Action<Finding, IngestionKind>? FindingReported;
     public event Action<string>? TextStreamed;
-    public event Action<long, long, decimal?>? UsageUpdated;  // cumulative in/out/cost
+    public event Action<long, long, decimal?, string?>? UsageUpdated;  // cumulative in/out/cost/costUnit
 
     public async Task<SessionResult> RunAsync(SessionRequest request, CancellationToken ct)
     {
@@ -99,10 +99,52 @@ public sealed class SessionCoordinator
         }
 
         void OnText(string t) => TextStreamed?.Invoke(t);
+
+        // Hito 1a: per-unit breakdown. The coordinator owns which unit is "current" so the
+        // usage handler can attribute each SDK sample to the right row.
+        // Hito 1c: also enforces the per-unit token budget from Thresholds.MaxTokensPerUnit —
+        // when tripped, the current unit's CTS is cancelled and the unit is closed as
+        // "presupuesto-superado", but the SESSION continues with the next unit.
+        UnitUsageBreakdown? currentBreakdown = null;
+        CancellationTokenSource? unitCts = null;
+        bool budgetTripped = false;
+        long maxTokensPerUnit = Math.Max(0, app.Thresholds.MaxTokensPerUnit);
         void OnUsage(UsageSample u)
         {
-            session.Usage.Add(u.InputTokens, u.OutputTokens, u.Cost);
-            UsageUpdated?.Invoke(session.Usage.InputTokens, session.Usage.OutputTokens, session.Usage.Cost);
+            session.Usage.Add(u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.Cost);
+            if (u.CostUnit is not null && string.IsNullOrEmpty(session.Usage.Currency))
+            {
+                session.Usage.Currency = u.CostUnit;
+            }
+
+            if (currentBreakdown is not null)
+            {
+                currentBreakdown.Calls++;
+                currentBreakdown.InputTokens += u.InputTokens;
+                currentBreakdown.OutputTokens += u.OutputTokens;
+                currentBreakdown.CacheReadTokens += u.CacheReadTokens;
+                currentBreakdown.CacheWriteTokens += u.CacheWriteTokens;
+                if (u.Cost is not null)
+                {
+                    currentBreakdown.Cost = (currentBreakdown.Cost ?? 0m) + u.Cost.Value;
+                }
+
+                currentBreakdown.Samples.Add(new CallSample(
+                    currentBreakdown.Calls,
+                    u.InputTokens, u.OutputTokens,
+                    u.CacheReadTokens, u.CacheWriteTokens,
+                    u.Cost, u.Model));
+
+                if (maxTokensPerUnit > 0
+                    && currentBreakdown.InputTokens + currentBreakdown.OutputTokens > maxTokensPerUnit
+                    && !budgetTripped)
+                {
+                    budgetTripped = true;
+                    try { unitCts?.Cancel(); } catch { /* already disposed */ }
+                }
+            }
+
+            UsageUpdated?.Invoke(session.Usage.InputTokens, session.Usage.OutputTokens, session.Usage.Cost, session.Usage.Currency);
         }
 
         _agent.TextStreamed += OnText;
@@ -130,8 +172,44 @@ public sealed class SessionCoordinator
 
                 string content = await File.ReadAllTextAsync(abs, ct);
                 string prompt = PromptComposer.ComposeUnitPrompt(unit.Path, content, brief, request.Mode);
-                await _agent.AuditUnitAsync(
-                    new AuditUnitRequest(unit.Path, content, prompt, app.Stack, request.Mode), toolbox, ct);
+
+                var breakdown = new UnitUsageBreakdown
+                {
+                    Unit = unit.Path,
+                    PromptTokensEstimate = EstimateTokens(prompt),
+                };
+                session.UsageBreakdown.Add(breakdown);
+                currentBreakdown = breakdown;
+                toolbox.ResetToolCallCount();
+
+                budgetTripped = false;
+                unitCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                bool overBudget = false;
+                try
+                {
+                    await _agent.AuditUnitAsync(
+                        new AuditUnitRequest(unit.Path, content, prompt, app.Stack, request.Mode), toolbox, unitCts.Token);
+                }
+                catch (OperationCanceledException) when (budgetTripped && !ct.IsCancellationRequested)
+                {
+                    overBudget = true;
+                }
+                finally
+                {
+                    breakdown.ToolCalls = toolbox.ToolCallCount;
+                    currentBreakdown = null;
+                    unitCts.Dispose();
+                    unitCts = null;
+                }
+
+                if (overBudget)
+                {
+                    string note = $"presupuesto superado ({breakdown.InputTokens + breakdown.OutputTokens} > {maxTokensPerUnit} tokens)";
+                    session.Units.Add(new UnitVerdictRecord(unit.Path, unit.Module, "presupuesto-superado", note));
+                    session.Notes.Add($"{unit.Path}: {note}");
+                    UnitPhaseChanged?.Invoke(unit.Path, "over-budget");
+                    continue;
+                }
 
                 session.Units.Add(new UnitVerdictRecord(unit.Path, unit.Module, "auditada", toolbox.LastUnitSummary));
                 auditedPaths.Add(Fingerprint.NormalizePath(unit.Path));
@@ -254,4 +332,12 @@ public sealed class SessionCoordinator
             }
         }
     }
+
+    /// <summary>
+    /// Rough token estimate for the initial prompt (Hito 1a). ~4 chars per token is the same
+    /// heuristic OpenAI/Anthropic docs quote for English/code; good enough to spot a bloated brief
+    /// against actual SDK <c>InputTokens</c> without adding a tokenizer dependency.
+    /// </summary>
+    private static int EstimateTokens(string text)
+        => string.IsNullOrEmpty(text) ? 0 : (text.Length + 3) / 4;
 }

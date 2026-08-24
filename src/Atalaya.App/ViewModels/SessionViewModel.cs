@@ -46,6 +46,7 @@ public sealed partial class SessionViewModel : ViewModelBase
     [ObservableProperty] private long _inputTokens;
     [ObservableProperty] private long _outputTokens;
     [ObservableProperty] private decimal? _cost;
+    [ObservableProperty] private string _costUnit = "(unidad SDK)";
     [ObservableProperty] private bool _isRunning;
     [ObservableProperty] private string _statusMessage = string.Empty;
     [ObservableProperty] private string _headerText = string.Empty;
@@ -140,11 +141,12 @@ public sealed partial class SessionViewModel : ViewModelBase
         }
     });
 
-    private void OnUsage(long input, long output, decimal? cost) => OnUi(() =>
+    private void OnUsage(long input, long output, decimal? cost, string? costUnit) => OnUi(() =>
     {
         InputTokens = input;
         OutputTokens = output;
         Cost = cost;
+        CostUnit = string.IsNullOrWhiteSpace(costUnit) ? "(unidad SDK)" : costUnit!;
     });
 
     private static void OnUi(Action action)

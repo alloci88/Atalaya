@@ -32,13 +32,20 @@ public sealed class FakeCopilotAgent : ICopilotAgent
     {
         TextStreamed?.Invoke($"[fake] auditando {request.UnitPath}\n");
 
-        foreach (SubmitFindingArgs finding in _auditScript(request))
+        // The fake agent honours the batching contract (F3 Hito 1c): all findings for a unit go
+        // in a single tool call. This is what the real agent is instructed to do too.
+        SubmitFindingArgs[] batch = _auditScript(request).ToArray();
+        ct.ThrowIfCancellationRequested();
+        if (batch.Length > 0)
         {
-            ct.ThrowIfCancellationRequested();
-            SubmitFindingResult result = toolbox.SubmitFinding(finding);
-            TextStreamed?.Invoke(result.Accepted
-                ? $"[fake] hallazgo aceptado: {finding.Title}\n"
-                : $"[fake] hallazgo rechazado ({result.Error}): {finding.Title}\n");
+            SubmitFindingsResult batchResult = toolbox.SubmitFindings(batch);
+            for (int i = 0; i < batch.Length; i++)
+            {
+                SubmitFindingResult r = batchResult.Results[i];
+                TextStreamed?.Invoke(r.Accepted
+                    ? $"[fake] hallazgo aceptado: {batch[i].Title}\n"
+                    : $"[fake] hallazgo rechazado ({r.Error}): {batch[i].Title}\n");
+            }
         }
 
         // Simulate token usage proportional to the unit size.

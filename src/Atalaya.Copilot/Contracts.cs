@@ -21,8 +21,22 @@ public sealed record SubmitLocation(string Path, int Line, string? Snippet);
 /// <summary>Result returned to the agent from <c>submit_finding</c> (§6.2).</summary>
 public sealed record SubmitFindingResult(bool Accepted, string? DuplicateOf = null, string? Error = null);
 
+/// <summary>
+/// Batched variant of <see cref="SubmitFindingResult"/> for <c>submit_findings</c> (F3 Hito 1c):
+/// per-item outcome so the agent knows exactly which ones the app persisted and which it rejected,
+/// without paying an extra turn per finding.
+/// </summary>
+public sealed record SubmitFindingsResult(IReadOnlyList<SubmitFindingResult> Results);
+
 /// <summary>Per-call token/cost sample from the SDK usage event (§6.3), isolated from the SDK types.</summary>
-public sealed record UsageSample(long InputTokens, long OutputTokens, decimal? Cost, string? Model);
+public sealed record UsageSample(
+    long InputTokens,
+    long OutputTokens,
+    decimal? Cost,
+    string? Model,
+    long CacheReadTokens = 0,
+    long CacheWriteTokens = 0,
+    string? CostUnit = null);
 
 /// <summary>
 /// Why the agent is not ready. Lets the UI show a *specific* remedy instead of one generic
@@ -108,6 +122,13 @@ public sealed record VerifyRequest(string Prompt, IReadOnlyList<VerifyTarget> Ta
 public interface IAuditToolbox
 {
     SubmitFindingResult SubmitFinding(SubmitFindingArgs args);
+
+    /// <summary>
+    /// Batched variant (F3 Hito 1c): submit an array of findings in a single tool call. Reduces
+    /// agent turns dramatically when the model complies. Same validation as singular; per-item
+    /// outcome returned in order.
+    /// </summary>
+    SubmitFindingsResult SubmitFindings(SubmitFindingArgs[] findings);
 
     void UnitDone(string unitPath, string summary);
 

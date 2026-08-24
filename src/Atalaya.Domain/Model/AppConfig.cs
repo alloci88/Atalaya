@@ -27,6 +27,15 @@ public sealed class Thresholds
 
     /// <summary>Default claim TTL in minutes (§2).</summary>
     public int ClaimTtlMinutes { get; set; } = 30;
+
+    /// <summary>
+    /// Hard ceiling on in+out tokens spent auditing a single unit (F3 Hito 1c). When exceeded
+    /// the app aborts THAT unit (verdict <c>presupuesto-superado</c>, sibling of <c>grande</c>)
+    /// and continues with the next one, so a run-away agent loop can never spend without a cap.
+    /// Default 300 000, chosen against the pilot baseline (37 turns / 1,26 M input on one class):
+    /// well above a healthy batched run, well below a pathological one.
+    /// </summary>
+    public long MaxTokensPerUnit { get; set; } = 300_000;
 }
 
 /// <summary>

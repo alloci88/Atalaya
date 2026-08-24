@@ -357,6 +357,60 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   `SamlRequired`, `TokenRejected`. Si la API no puede ayudar (offline, URL no-GitHub) se conserva
   el mensaje original: nunca se degrada un diagnóstico específico a uno más vago.
 
+## F3 — Sesión en vivo: coste, integridad y experiencia
+
+### F3 · Hito 1b — Diagnóstico de coste por unidad (con evidencia instrumentada)
+
+- **D-053 — Instrumentación primero (Hito 1a).** Antes de tocar nada, `SessionCoordinator`
+  registra por unidad: nº de llamadas al modelo, tokens in/out/cacheRead/cacheWrite por llamada,
+  tamaño estimado del prompt inicial (chars/4) y nº de tool calls. Se persiste en el fichero de
+  sesión (`AuditSession.UsageBreakdown`) y se pinta como tabla en el informe (§7). Sin esa tabla
+  no hay decisión de optimización posible: la evidencia de abajo sale de ella.
+
+- **D-054 — Evidencia real (una unidad: `CommonStatics.cs`).**
+
+  | Métrica | Valor |
+  |---|---:|
+  | Prompt inicial estimado | 3.009 tokens |
+  | Llamadas al modelo | 37 |
+  | Tool calls | 45 |
+  | Input tokens | 1.262.937 |
+  | Output tokens | 24.005 |
+  | Cache read | 1.218.607 (**96,5 %** del input) |
+  | Cache write | 44.193 |
+
+  Lecturas:
+  - **El caché de prompt del SDK YA ACTÚA** (96,5 % de la entrada). No hay margen barato ahí; no
+    se toca.
+  - **El brief inicial es irrelevante** (3 k / 1,26 M = 0,24 %). Recortarlo al bloque del stack no
+    mueve la aguja. **Descartado** (contra la propuesta inicial del Hito 1c).
+  - **El multiplicador son los 37 turnos** del bucle agéntico: un `submit_finding` por hallazgo
+    fuerza un turno adicional que reenvía el contexto entero. Aquí es donde se ataca.
+
+- **D-055 — Optimización aplicada: batching de hallazgos.** Se añade la tool `submit_findings`
+  (array) sin retirar la singular. El prompt del auditor instruye entregar TODOS los hallazgos de
+  la unidad en UNA llamada y llamar a `unit_done` en el mismo turno final cuando sea posible.
+  Objetivo orientativo: **< 10 turnos por unidad** frente a los 37 medidos. La singular se conserva
+  como fallback tolerante para reintentos del modelo (algunos modelos rompen la instrucción de
+  lote la primera vez).
+
+- **D-056 — Salvaguarda `maxTokensPerUnit` (por defecto 300 000).** Nuevo umbral en `Thresholds`,
+  editable por app. Cuando el acumulado in+out de una unidad rebasa el techo, la app cancela esa
+  unidad, la marca con verdicto **`presupuesto-superado`** (pariente visible de `grande`), libera
+  el claim y continúa con la siguiente. Ningún bucle sin techo. No es una optimización: es una red
+  de seguridad para que un imprevisto no dispare la factura.
+
+- **D-057 — Etiquetado de la unidad de coste (Hito 1d).** El SDK devuelve `Cost` sin unidad
+  determinable de forma estable entre versiones. `UsageAdapter` intenta leer reflectivamente
+  `Currency` / `CostUnit` / `Unit` del evento y lo propaga por `UsageSample.CostUnit` →
+  `UsageTotals.Currency`. Si no es determinable, la UI y el informe muestran `(unidad SDK)` — nunca
+  un número desnudo. Evidencia o incertidumbre declarada.
+
+- **D-058 — Descartes explícitos.** No se recorta el brief (D-054), no se reconfigura el caché
+  (ya cachea 96,5 %), no se cambia SDK ni modelo (anti-objetivo). Validación pendiente:
+  re-ejecutar la sesión medida sobre `CommonStatics.cs` con el lote activo y comparar tokens y
+  turnos con la línea base de D-054.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

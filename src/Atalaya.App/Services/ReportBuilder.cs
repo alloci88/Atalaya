@@ -24,7 +24,12 @@ public static class ReportBuilder
         sb.AppendLine($"- **Modelo**: {session.Model ?? "n/d"}");
         sb.AppendLine($"- **Ciclo**: {session.CycleN}");
         sb.AppendLine($"- **Tokens**: entrada {session.Usage.InputTokens}, salida {session.Usage.OutputTokens}"
-            + (session.Usage.Cost is { } c ? $", coste {c:0.####} {session.Usage.Currency}" : ""));
+            + (session.Usage.CacheReadTokens > 0 || session.Usage.CacheWriteTokens > 0
+                ? $", caché lectura {session.Usage.CacheReadTokens}, escritura {session.Usage.CacheWriteTokens}"
+                : "")
+            + (session.Usage.Cost is { } c
+                ? $", coste {c:0.####} {(string.IsNullOrWhiteSpace(session.Usage.Currency) ? "(unidad SDK)" : session.Usage.Currency)}"
+                : ""));
         sb.AppendLine();
 
         sb.AppendLine("## Cobertura");
@@ -41,6 +46,20 @@ public static class ReportBuilder
             + $"  · Silenciados respetados: {cn.SilencedRespected}  · Reincidencias: {cn.Recurrences}");
         sb.AppendLine($"- % criterio (informativo): {criterioPct:0}%");
         sb.AppendLine();
+
+        if (session.UsageBreakdown.Count > 0)
+        {
+            sb.AppendLine("## Desglose por unidad (instrumentación Hito 1a)");
+            sb.AppendLine("| Unidad | Prompt~ | Llamadas | ToolCalls | In | Out | CacheRead | CacheWrite |");
+            sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|");
+            foreach (UnitUsageBreakdown b in session.UsageBreakdown)
+            {
+                sb.AppendLine($"| {b.Unit} | {b.PromptTokensEstimate} | {b.Calls} | {b.ToolCalls} "
+                    + $"| {b.InputTokens} | {b.OutputTokens} | {b.CacheReadTokens} | {b.CacheWriteTokens} |");
+            }
+
+            sb.AppendLine();
+        }
 
         if (newFindings.Count > 0)
         {

@@ -134,13 +134,19 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
             => toolbox.SubmitFinding(new SubmitFindingArgs(
                 ruleId, pillar, tag, severity, title, description, impact, recommendation, locations, symbol));
 
+        SubmitFindingsResult SubmitFindings(SubmitFindingArgs[] findings)
+            => toolbox.SubmitFindings(findings ?? Array.Empty<SubmitFindingArgs>());
+
         void UnitDone(string unitPath, string summary) => toolbox.UnitDone(unitPath, summary);
 
         string ReadSignatures(string path) => toolbox.ReadSignatures(path);
 
         var config = NewSessionConfig();
+        AddTool(config, SubmitFindings, "submit_findings",
+            "PREFERIDA. Reporta TODOS los hallazgos de la unidad en UNA sola llamada, pasando un array. "
+            + "Devuelve un array de {accepted, duplicateOf, error} en el mismo orden.");
         AddTool(config, SubmitFinding, "submit_finding",
-            "Reporta un hallazgo. La app valida y persiste; devuelve {accepted, duplicateOf}.");
+            "Fallback singular. Úsala solo si por alguna razón no puedes agrupar; cada llamada añade un turno.");
         AddTool(config, UnitDone, "unit_done", "Cierra la unidad en curso con un resumen.", terminal: true);
         AddTool(config, ReadSignatures, "read_signatures",
             "Devuelve las firmas (no cuerpos) de las dependencias directas de la unidad.");

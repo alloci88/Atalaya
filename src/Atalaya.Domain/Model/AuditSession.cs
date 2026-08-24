@@ -20,18 +20,67 @@ public sealed class UsageTotals
 {
     public long InputTokens { get; set; }
     public long OutputTokens { get; set; }
+
+    /// <summary>Cached input tokens the SDK reports as reused between turns, when available.</summary>
+    public long CacheReadTokens { get; set; }
+
+    /// <summary>Input tokens the SDK reports as written to prompt cache, when available.</summary>
+    public long CacheWriteTokens { get; set; }
+
     public decimal? Cost { get; set; }
     public string? Currency { get; set; }
 
     public void Add(long input, long output, decimal? cost)
+        => Add(input, output, 0, 0, cost);
+
+    public void Add(long input, long output, long cacheRead, long cacheWrite, decimal? cost)
     {
         InputTokens += input;
         OutputTokens += output;
+        CacheReadTokens += cacheRead;
+        CacheWriteTokens += cacheWrite;
         if (cost is not null)
         {
             Cost = (Cost ?? 0m) + cost.Value;
         }
     }
+}
+
+/// <summary>
+/// One SDK usage event captured verbatim (Hito 1a): tells us how many turns the agent needed for
+/// a single unit and where the tokens actually went, so optimisation (cache, batching, brief
+/// trimming, per-unit budget) can be driven by evidence instead of guesswork.
+/// </summary>
+public sealed record CallSample(
+    int Index,
+    long InputTokens,
+    long OutputTokens,
+    long CacheReadTokens,
+    long CacheWriteTokens,
+    decimal? Cost,
+    string? Model);
+
+/// <summary>Per-unit token/cost breakdown (Hito 1a).</summary>
+public sealed class UnitUsageBreakdown
+{
+    public required string Unit { get; set; }
+
+    /// <summary>Estimated tokens of the initial prompt (brief + unit + extras). Rough: chars/4.</summary>
+    public int PromptTokensEstimate { get; set; }
+
+    /// <summary>Number of tool calls the agent issued for this unit.</summary>
+    public int ToolCalls { get; set; }
+
+    /// <summary>Number of model calls (SDK usage events) observed for this unit.</summary>
+    public int Calls { get; set; }
+
+    public long InputTokens { get; set; }
+    public long OutputTokens { get; set; }
+    public long CacheReadTokens { get; set; }
+    public long CacheWriteTokens { get; set; }
+    public decimal? Cost { get; set; }
+
+    public List<CallSample> Samples { get; set; } = new();
 }
 
 /// <summary>
@@ -67,6 +116,9 @@ public sealed class AuditSession
     public SessionCounters Counters { get; set; } = new();
 
     public UsageTotals Usage { get; set; } = new();
+
+    /// <summary>Per-unit token/cost breakdown (Hito 1a). Empty for legacy sessions.</summary>
+    public List<UnitUsageBreakdown> UsageBreakdown { get; set; } = new();
 
     /// <summary>Free-text notes, e.g. "no signature extractor available for stack Go".</summary>
     public List<string> Notes { get; set; } = new();

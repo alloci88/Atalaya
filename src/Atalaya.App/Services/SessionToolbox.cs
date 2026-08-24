@@ -40,8 +40,18 @@ public sealed class SessionToolbox : IAuditToolbox
 
     public string? LastUnitSummary { get; private set; }
 
+    /// <summary>
+    /// Tool calls issued by the agent since the last <see cref="ResetToolCallCount"/> (Hito 1a).
+    /// Feeds the per-unit token breakdown so we can see whether the bucle agéntico is spending
+    /// tokens on many tiny turns or on a few big ones.
+    /// </summary>
+    public int ToolCallCount { get; private set; }
+
+    public void ResetToolCallCount() => ToolCallCount = 0;
+
     public SubmitFindingResult SubmitFinding(SubmitFindingArgs args)
     {
+        ToolCallCount++;
         // 1. ruleId must be a catalog rule or criterio.* (§6.2).
         if (!RuleCatalog.IsValid(args.RuleId))
         {
@@ -92,7 +102,38 @@ public sealed class SessionToolbox : IAuditToolbox
         return new SubmitFindingResult(true, DuplicateOf: duplicateOf);
     }
 
-    public void UnitDone(string unitPath, string summary) => LastUnitSummary = summary;
+    public SubmitFindingsResult SubmitFindings(SubmitFindingArgs[] findings)
+    {
+        // ONE tool call for the whole array (F3 Hito 1c) — but each item is validated & ingested
+        // through the exact same path as the singular tool, so downstream invariants (fingerprint,
+        // silences, implicit resolution) hold unchanged.
+        ToolCallCount++;
+        var results = new List<SubmitFindingResult>(findings?.Length ?? 0);
+        if (findings is not null)
+        {
+            foreach (SubmitFindingArgs args in findings)
+            {
+                results.Add(SubmitFindingCore(args));
+            }
+        }
+
+        return new SubmitFindingsResult(results);
+    }
+
+    private SubmitFindingResult SubmitFindingCore(SubmitFindingArgs args)
+    {
+        // Same body as SubmitFinding, minus the ToolCallCount++ (the caller already counted).
+        int previous = ToolCallCount;
+        SubmitFindingResult r = SubmitFinding(args);
+        ToolCallCount = previous; // undo the double count from the singular path
+        return r;
+    }
+
+    public void UnitDone(string unitPath, string summary)
+    {
+        ToolCallCount++;
+        LastUnitSummary = summary;
+    }
 
     /// <summary>
     /// The only extra code access allowed (§6.2): a lightweight signatures view of a dependency.
@@ -100,6 +141,7 @@ public sealed class SessionToolbox : IAuditToolbox
     /// </summary>
     public string ReadSignatures(string path)
     {
+        ToolCallCount++;
         try
         {
             string abs = Path.Combine(_clonePath, path.Replace('/', Path.DirectorySeparatorChar));

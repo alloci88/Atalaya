@@ -59,11 +59,12 @@ public static class PromptComposer
     private const string AuditorRules =
         "Eres un auditor de código. Reglas:\n" +
         "- Cubre ÍNTEGRAMENTE la unidad.\n" +
-        "- Reporta CADA hallazgo llamando a la herramienta submit_finding, nunca en texto.\n" +
+        "- Reporta CADA hallazgo llamando a submit_findings con un ARRAY de todos los hallazgos de la unidad en UNA sola llamada. Nunca en texto.\n" +
+        "- No llames varias veces a submit_finding singular: cada tool call es un turno adicional y multiplica el coste. La versión singular solo existe como fallback.\n" +
         "- Marca cada hallazgo con su ruleId de checklist o criterio.<área>, y cita fichero y línea.\n" +
         "- NO asignes IDs ni confianza (eso es de la app). NO filtres silenciados (lo hace la app).\n" +
         "- Puedes pedir firmas de dependencias con read_signatures(path); es tu única lectura extra.\n" +
-        "- Cuando termines la unidad, llama a unit_done con un resumen.\n";
+        "- Cuando termines la unidad, llama a unit_done con un resumen — a ser posible en el MISMO turno que submit_findings.\n";
 
     public static string ComposeUnitPrompt(string unitPath, string unitContent, string brief, AuditMode mode)
     {
