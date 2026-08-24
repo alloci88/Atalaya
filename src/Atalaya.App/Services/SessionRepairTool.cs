@@ -55,7 +55,7 @@ public sealed class SessionRepairTool
         // acotamos por rango temporal [startedUtc, endedUtc + 1min] y por ruta de las unidades
         // auditadas — es lo bastante estrecho para el caso del piloto.
         DateTimeOffset from = session.StartedUtc;
-        DateTimeOffset to = session.EndedUtc.AddMinutes(1);
+        DateTimeOffset to = (session.EndedUtc ?? session.StartedUtc).AddMinutes(1);
         HashSet<string> auditedPaths = session.Units
             .Where(u => u.Verdict == "auditada")
             .Select(u => Fingerprint.NormalizePath(u.Unit))
@@ -80,7 +80,7 @@ public sealed class SessionRepairTool
             var submitted = new SubmittedFinding(
                 neu.RuleId, neu.Pillar, neu.Tag, neu.Severity,
                 neu.Title, neu.Description, neu.Impact, neu.Recommendation,
-                neu.Locations, symbol: null);
+                neu.Locations, Symbol: null);
 
             SecondPassMatch? match = SecondPassMatcher.TryMatch(submitted, pool);
             if (match is null || match.Finding.Status != FindingStatus.Resuelto)
