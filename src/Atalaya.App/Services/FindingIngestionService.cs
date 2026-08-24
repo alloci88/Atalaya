@@ -43,10 +43,23 @@ public sealed class FindingIngestionService
         // payload como reconfirmación, migramos el fingerprint al esquema nuevo y guardamos el
         // antiguo en PreviousFingerprints — para que silencios/comentarios registrados con el
         // hash viejo sigan aplicando (HubStore.FindByFingerprint mira ambos).
-        if (existing.Count == 0 && live is null)
+        // F3.1 Bloque 1b (D-069): la 2ª pasada se ejecuta también cuando `existing` contiene
+        // SÓLO resueltos. Sin esto, un baseline con gemelos resueltos cuyo hash coincide con el
+        // que el LLM calcula en la nueva sesión cortocircuita el matcher (existing.Count > 0)
+        // y la ingestión va por la vía de recurrencia — creando un duplicado aunque el reabierto
+        // legítimo esté ahí. Si el matcher encuentra un ACTIVO gana sobre esa vía; si sólo
+        // encuentra resueltos, se cae al camino actual (recurrencia).
+        bool onlyResolved = existing.Count > 0 && existing.All(f => f.Status == FindingStatus.Resuelto);
+        if ((existing.Count == 0 || onlyResolved) && live is null)
         {
             IReadOnlyList<Finding> all = _hub.Store.ListFindings(slug);
-            SecondPassMatch? match = SecondPassMatcher.TryMatch(submitted, all);
+            // Prioriza activos: cuando hay un reabierto por 2ª pasada anterior conviviendo con
+            // gemelos resueltos del mismo linaje, el activo es SIEMPRE el destino correcto.
+            SecondPassMatch? activeMatch = SecondPassMatcher.TryMatch(
+                submitted, all.Where(f => f.Status == FindingStatus.Activo).ToList());
+            SecondPassMatch? match = activeMatch
+                ?? (existing.Count == 0 ? SecondPassMatcher.TryMatch(submitted, all) : null);
+
             if (match is not null && match.Finding.Fingerprint != fingerprint)
             {
                 // Silencio activo bajo el hash VIEJO: sigue suprimiendo la detección.

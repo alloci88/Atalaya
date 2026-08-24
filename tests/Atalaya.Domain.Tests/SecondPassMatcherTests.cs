@@ -68,7 +68,7 @@ public class SecondPassMatcherTests
     public void HexStringToByteArray_pair_from_pilot_is_matched()
     {
         var resolved = Existing(
-            "HexStringToByteArray descarta silenciosamente el último carácter en cadenas de longitud impar",
+            "HexStringToByteArray no valida cadenas hexadecimales de longitud impar",
             "errores.calculo.negocio", 151);
 
         var payload = Payload(

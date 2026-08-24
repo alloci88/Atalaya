@@ -21,3 +21,6 @@ coverage*.xml
 
 ## Local machine config (never committed — §4)
 machines.json
+
+# Copias locales para diagn�stico forense (F3.1 Bloque 1)
+diagnostics/

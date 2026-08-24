@@ -353,7 +353,13 @@ public sealed class SessionCoordinator
         {
             bool allCovered = f.Locations.Count > 0
                 && f.Locations.All(l => auditedPaths.Contains(Fingerprint.NormalizePath(l.Path)));
-            if (allCovered && !reportedFingerprints.Contains(f.Fingerprint))
+            // F3.1 Bloque 1b (D-070): un hallazgo puede llevar fingerprints obsoletos en
+            // PreviousFingerprints (repair, 2ª pasada anterior). Si el payload de esta sesión
+            // trae CUALQUIER hash del linaje se cuenta como "re-reportado" — cerrar por implícita
+            // aquí sería reintroducir el ciclo duplicar→resolver.
+            bool reReported = reportedFingerprints.Contains(f.Fingerprint)
+                || f.PreviousFingerprints.Any(reportedFingerprints.Contains);
+            if (allCovered && !reReported)
             {
                 f.Resolve(new ResolutionStamp(now, ResolutionVia.Implicita, request.Mode, commit, by,
                     "cubierta por la sesión y no re-reportada"));

@@ -104,6 +104,76 @@ public partial class App : Application
         return true;
     }
 
+    private bool TryHandleConsolidate(string[] args)
+    {
+        int i = Array.IndexOf(args, "--consolidate");
+        if (i < 0 || i + 1 >= args.Length)
+        {
+            return false;
+        }
+
+        string slug = args[i + 1];
+        bool apply = Array.IndexOf(args, "--apply") >= 0;
+        SessionRepairTool tool = _host!.Services.GetRequiredService<SessionRepairTool>();
+        DateTimeOffset nowUtc = DateTimeOffset.UtcNow;
+
+        var appPaths = new AppPaths();
+        string stamp = nowUtc.ToString("yyyyMMdd");
+        string markerPath = Path.Combine(appPaths.Logs, $"consolidate-dryrun-{slug}-{stamp}.marker");
+
+        ConsolidationPlan plan = tool.PlanConsolidation(slug, nowUtc);
+
+        if (!apply)
+        {
+            string logPath = Path.Combine(appPaths.Logs, $"consolidate-{slug}-{stamp}.log");
+            using (var sw = new StreamWriter(logPath, append: false))
+            {
+                sw.WriteLine($"consolidate DRY-RUN · app={slug} · {nowUtc:o}");
+                sw.WriteLine($"clusters: {plan.Clusters.Count} · purges: {plan.Purges.Count}");
+                foreach (ConsolidationCluster c in plan.Clusters)
+                {
+                    sw.WriteLine($"  cluster canónico={c.CanonicalUlid} · «{c.CanonicalTitle}» · fp={c.CanonicalFingerprint}");
+                    for (int k = 0; k < c.MergeUlids.Count; k++)
+                    {
+                        sw.WriteLine($"    ← absorbe {c.MergeUlids[k]} · fp={c.MergeFingerprints[k]}");
+                    }
+                }
+
+                foreach (ConsolidationPurge p in plan.Purges)
+                {
+                    sw.WriteLine($"  purge {p.Ulid} · «{p.Title}» · {p.Reason}");
+                }
+            }
+
+            File.WriteAllText(markerPath, nowUtc.ToString("o"));
+            MessageBox.Show(
+                $"consolidate DRY-RUN completado.\n\nClusters: {plan.Clusters.Count}\nPurges: {plan.Purges.Count}\n\nDetalle: {logPath}\nMarca: {markerPath}\n\nRelanza con --apply el mismo día para ejecutar.",
+                "Atalaya · consolidate", MessageBoxButton.OK, MessageBoxImage.Information);
+            return true;
+        }
+
+        if (!File.Exists(markerPath))
+        {
+            MessageBox.Show(
+                $"consolidate --apply requiere un dry-run previo del mismo día (D-074).\nMarca esperada: {markerPath}\n\nRelanza sin --apply primero.",
+                "Atalaya · consolidate", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return true;
+        }
+
+        ConsolidationResult result = tool.Apply(plan, nowUtc, Environment.UserName);
+        string applyLog = Path.Combine(appPaths.Logs, $"consolidate-apply-{slug}-{stamp}.log");
+        using (var sw = new StreamWriter(applyLog, append: false))
+        {
+            sw.WriteLine($"consolidate APPLY · app={slug} · {nowUtc:o}");
+            sw.WriteLine($"clusters={result.ClustersConsolidated} · absorbed={result.FindingsAbsorbed} · purged={result.FindingsPurged}");
+        }
+
+        MessageBox.Show(
+            $"consolidate APPLY completado.\n\nClusters: {result.ClustersConsolidated}\nAbsorbidos: {result.FindingsAbsorbed}\nPurgados: {result.FindingsPurged}\n\nDetalle: {applyLog}",
+            "Atalaya · consolidate", MessageBoxButton.OK, MessageBoxImage.Information);
+        return true;
+    }
+
     private static void ConfigureServices(IServiceCollection services, AppPaths paths)
     {
         services.AddSingleton(paths);

@@ -513,6 +513,131 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   xblast/CommonStatics.cs`. La salvaguarda `TestFactory.AssertIsolated` (D-062) previene
   la reincidencia.
 
+### F3.1 · Bloque 1b — Reincidencia del ciclo duplicar→resolver (post-repair)
+
+- **D-068 — Veredicto forense: el ciclo NO estaba en el matcher; estaba (a) en el ORDEN de
+  condiciones de la ingestión y (b) en el ÁRBOL de gemelos del baseline.** El agente nuevo
+  reabre esta autopsia porque la sesión S3 sobre `xblast/CommonStatics.cs` volvió a producir
+  `nuevos:4, resueltos:4, recurrences:3` con el `SecondPassMatcher` desplegado. Evidencia
+  reconstruida directamente del hub del usuario (JSON reales, no fixtures):
+
+  - **Timeline de sesiones sobre `CommonStatics.cs` el 2026-08-24:**
+    | Sesión | UTC | Counters | Interpretación |
+    |---|---|---|---|
+    | S1 `01M0SYAJSWC…` | 13:11 | new:5, resolved:5 | La sesión mala original. |
+    | S2 `01M0T2RT…`    | 14:28 | new:0, **confirmed:4**, resolved:2 | La **2ª pasada de la ingestión** hizo su trabajo aquí (no la utilidad — no existe log `repair-*.log` en `%LOCALAPPDATA%\Atalaya\logs`). El reabierto `01M0SK8NR7Y…` lleva en su `history`: `fingerprint migrated (2nd-pass match score=1,00)` a las 14:28:40. |
+    | S3 `01M0T3H386…` | 14:41 | new:4, resolved:4, **recurrences:3** | Reincidencia inmediata. |
+
+  - **Los 4 "nuevos" de S3, leídos de disco:**
+    | Ulid | Status | `RecurrenceOf` | Fingerprint | Ruta |
+    |---|---|---|---|---|
+    | `01M0T3J5J0J…` | activo | `01M0J5W49D5…` (resuelto ciclo 21-08) | `0ee574551cbd…` | alloc |
+    | `01M0T3J5FKAB…` | activo | `01M0J5TSM7A…` (**residuo fixture "test"**) | `2366e1413b84…` | calc.neg |
+    | `01M0T3J5GYN…` | activo | `01M0SK8NVM…` (gemelo resuelto en S2) | `e8cc7f458030…` | null.desref |
+    | `01M0T3J5M0A…` | activo | *(sin RecurrenceOf)* | `fcc62d3d4032…` | criterio.dominio |
+
+  - **3 de 4 son recurrencias**, no findings nuevos. El único genuinamente nuevo
+    (`01M0T3J5M0A…`, `criterio.dominio`) es un problema real distinto — el sistema estaba
+    haciendo su trabajo en ese caso.
+
+- **D-069 — Causa raíz A: la 2ª pasada nunca se ejecuta cuando el fp colisiona con un
+  resuelto gemelo.** `FindingIngestionService.Ingest` guarda la 2ª pasada tras
+  `if (existing.Count == 0 && live is null)`. Como el baseline contiene múltiples gemelos
+  con `Fingerprint` estable — la propia ingestión los ha ido creando sesión tras sesión —
+  cualquier payload nuevo cuyo `Fingerprint.Compute(ruleId, path, symbol)` coincida con uno
+  de esos gemelos entra directamente por la vía de **recurrencia** de `IngestionEngine`
+  (§2): resucita el gemelo como nuevo activo y deja el viejo `resuelto`. La 2ª pasada,
+  que habría encontrado al reabierto de S2 con Jaccard=1.0, ni siquiera se llama.
+  Prueba directa: el reabierto `01M0SK8NR7Y…` (fp `30171d34…`) no aparece como
+  `RecurrenceOf` de ningún activo de S3, pero `01M0SK8NVM…` (fp `e8cc7f45…`) sí — ambos
+  tienen el mismo título literal en el hub.
+
+- **D-070 — Causa raíz B: `ApplyImplicitResolution` mira solo `Finding.Fingerprint`, no
+  `PreviousFingerprints`.** El reabierto `01M0SK8NR7Y…` quedó fuera de
+  `SessionToolbox.ReportedFingerprints` en S3 (porque el payload de S3 tenía `e8cc7f45…`,
+  no `30171d34…`), y como su unidad estaba en `auditedPaths`, se cerró otra vez por
+  implícita a las 14:41:56 con `resolved via Implicita: cubierta por la sesión y no
+  re-reportada` (línea 6 de su history). Cualquier reabierto con `PreviousFingerprints`
+  poblado que reciba un payload cuyo hash haya derivado a otro miembro del linaje muere
+  del mismo modo.
+
+- **D-071 — Causa raíz C (secundaria): `SessionRepairTool` sobrescribe `Fingerprint` con
+  el hash del duplicado.** Ese hash lo determinan el `ruleId` y el `symbol` que el LLM
+  emitió en la sesión mala — inputs volátiles entre sesiones. Migrar el reabierto a ese
+  hash lo deja apuntando a un objetivo que **no vuelve a aparecer**. En este hub concreto
+  el reabierto fue producido por la ingestión (D-069), no por la utilidad, así que este
+  bug no se manifestó en el piloto — pero es idéntico en forma y activo en el código.
+  Prueba: `01M0SK8NR7Y.previousFingerprints = [091226c8…]` (el original v4) y
+  `Fingerprint = 30171d34…` (el del duplicado de S2). Ese `30171d34…` no vuelve a
+  aparecer en ningún JSON del hub.
+
+- **D-072 — Autopsia de D-067: decisión escrita sin ejecutar.** Verificado leyendo
+  `%LOCALAPPDATA%\Atalaya\hub\.git\logs\HEAD` completo: 30 commits en el reflog local,
+  ninguno con `purga`/`purge`/`F3.1`. HEAD local = HEAD remoto = `f8bc8c644…`. Cero
+  commits sin pushear. Los 3 JSON conservan `CreationTimeUtc` originales (21-08 y 24-08)
+  — no hubo borrado y restore. **Escenario (a)**: se escribió la decisión sin correr la
+  purga. **Lección de proceso** (norma N-2 reforzada): toda decisión que diga haber
+  tocado disco debe verificarse en disco **antes** de commitear la propia decisión. Se
+  añade la comprobación al procedimiento de la utilidad F3.1b: la consolidación imprime
+  un dry-run y el operador aprueba antes del apply; el apply verifica en disco tras
+  ejecutar y falla ruidosamente si el estado esperado no se materializó.
+
+- **D-073 — Arreglo mínimo (F3.1 Bloque 1b).** Tres cambios quirúrgicos, ninguno toca
+  `Fingerprint.Compute` (ver deuda D-076):
+  1. **`FindingIngestionService.Ingest`**: la 2ª pasada se ejecuta también cuando
+     `existing` contiene SOLO `resueltos`. Si el matcher encuentra un `activo` (típicamente
+     un reabierto previo), gana sobre la ruta de recurrencia: se trata como reconfirmación
+     y se migra su fingerprint. Si no encuentra activo alguno se cae al camino actual
+     (recurrencia). Rompe el bucle en el punto exacto donde se generaba.
+  2. **`SessionRepairTool.Repair`**: deja de sobrescribir `Fingerprint` con el hash del
+     duplicado. El reabierto conserva su `Fingerprint` canónico (el más antiguo del
+     linaje) y **AMBOS** hashes (el original y el del duplicado) se añaden a
+     `PreviousFingerprints`. Así cualquier payload cuyo hash caiga en cualquier hash del
+     linaje encuentra al reabierto vía `HubStore.FindByFingerprint`.
+  3. **`SessionCoordinator.ApplyImplicitResolution`**: el chequeo pasa a
+     `f.Fingerprint ∈ reported ∨ ∃ prev ∈ f.PreviousFingerprints : prev ∈ reported`.
+     Blinda el caso "el reabierto lleva un fp obsoleto y el payload de la sesión trae
+     otro del mismo linaje".
+
+- **D-074 — Consolidación multi-generación con dry-run obligatorio.** El baseline acumula
+  gemelos de S1/S2/S3 (`HexStringToByteArray`×3, `Date/TimeToByteArray`×4, etc.). La
+  utilidad `SessionRepairTool` estrena dos operaciones:
+  - `PlanConsolidation(slug)` — pura, no escribe. Agrupa findings de la app por ruta
+    normalizada y cluster por Jaccard≥0,5 de título. Elige canónico: `activo` si lo hay,
+    si no el más antiguo por `FirstDetected`. Devuelve `RepairPlan { Reopens, Merges,
+    Purges }` con títulos, fingerprints y ULIDs, apto para pintarse por consola.
+  - `Apply(RepairPlan)` — absorbe miembros no-canónicos (mueve `History`, añade
+    `Fingerprint`+`PreviousFingerprints` al canónico como `PreviousFingerprints`, borra
+    ficheros), y purga residuos fixture ("test", "test5") como paso separado listado en
+    `Purges`. Idempotente por construcción: segunda ejecución encuentra clusters de
+    tamaño 1. Tras el apply, verifica en disco (`FindingFile(id)` no debe existir para
+    cada purga; canónico debe tener el `PreviousFingerprints` esperado) y falla ruidosa
+    si algo no cuadra — corolario operacional de D-072.
+  - Cableado: `--repair-session <slug> <sessionUlid>` conserva su semántica (repair de
+    UNA sesión); se añade `--consolidate <slug> [--apply]`. Sin `--apply` es dry-run
+    obligatorio que imprime el plan y sale con `exit 0`. Con `--apply` requiere haberse
+    ejecutado un dry-run el mismo día (marca en `%LOCALAPPDATA%\Atalaya\logs\`) o falla.
+
+- **D-075 — Test de regresión sobre datos reales.** Se añade `PilotS3RegressionTests` en
+  `Atalaya.App.Tests` que carga los 8 JSON reales de S3 (los 4 reabiertos por S2 + los 4
+  duplicados de S3 con sus gemelos como poblado del hub), simula la ingestión de S3 con
+  el agente falso y afirma:
+  `counters.new == 0`, `counters.confirmed >= 3`, `counters.resolved == 0`. Debe fallar
+  hoy por D-069+D-070; verde tras D-073. Blindaje contra reintroducción del mismo bug.
+
+- **D-076 — Deuda de diseño (backlog, NO ahora): símbolo derivado desde `Location`.** La
+  causa profunda del árbol de gemelos es que los inputs de `Fingerprint.Compute`
+  (`ruleId`, `symbol`) los emite el LLM y varían entre sesiones para el mismo defecto —
+  la misma clase de fallo que motivó la retirada de `Tag` (D-059). El parche D-073 tapa
+  el síntoma sin arreglar la causa. La alternativa estructural, para un hito futuro:
+  que la app derive `symbol` desde `Location(path, line)` vía Roslyn (miembro contenedor
+  del identificador en esa línea) y dejar al modelo sólo lo que la app no puede
+  calcular. Fija el hash entre sesiones sin cambiar el algoritmo. Coste: dependencia
+  Roslyn en `Atalaya.App` (o en un `Atalaya.Symbols`), migración one-shot del linaje
+  existente, y un fallback documentado cuando la línea no ancle (`NeedsReview` en vez
+  de fingerprint por título). No es blocker de F3.1 Bloque 1b: se registra aquí para
+  que no se pierda y no se vuelva a debatir.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

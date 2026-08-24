@@ -84,8 +84,10 @@ public static class SecondPassMatcher
 
     /// <summary>Tokeniza un título: minúsculas, sin acentos, sin puntuación, palabras &gt;=3 chars
     /// y sin stopwords castellanas comunes. Preserva identificadores de código
-    /// (<c>StringToByteArray</c> → {stringtobytearray}) porque justo esos son la señal fuerte.</summary>
-    internal static HashSet<string> Tokenize(string? title)
+    /// (<c>StringToByteArray</c> → {stringtobytearray}) porque justo esos son la señal fuerte.
+    /// <para>Público desde F3.1 Bloque 1b para que <c>SessionRepairTool</c> pueda reutilizarlo
+    /// en la consolidación multi-generación (D-074).</para></summary>
+    public static HashSet<string> Tokenize(string? title)
     {
         var result = new HashSet<string>(StringComparer.Ordinal);
         if (string.IsNullOrWhiteSpace(title))

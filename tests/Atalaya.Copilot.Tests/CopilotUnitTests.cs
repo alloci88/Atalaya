@@ -72,7 +72,7 @@ public class FakeAgentTests
         var toolbox = new RecordingToolbox();
         var fake = new FakeCopilotAgent(auditScript: _ => new[]
         {
-            new SubmitFindingArgs("errores.null.desreferencia", "errores", "checklist", "alta",
+            new SubmitFindingArgs("errores.null.desreferencia", "errores", "alta",
                 "NPE", "d", "i", "r", new[] { new SubmitLocation("a.cs", 5, null) }, null),
         });
 
@@ -92,6 +92,16 @@ public class FakeAgentTests
         {
             Submitted.Add(args);
             return new SubmitFindingResult(true);
+        }
+
+        public SubmitFindingsResult SubmitFindings(SubmitFindingArgs[] findings)
+        {
+            var results = new List<SubmitFindingResult>(findings.Length);
+            foreach (SubmitFindingArgs a in findings)
+            {
+                results.Add(SubmitFinding(a));
+            }
+            return new SubmitFindingsResult(results);
         }
 
         public void UnitDone(string unitPath, string summary) => UnitDoneCalled = true;

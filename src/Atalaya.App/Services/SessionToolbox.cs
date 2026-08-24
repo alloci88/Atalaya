@@ -103,6 +103,7 @@ public sealed class SessionToolbox : IAuditToolbox
             string reason = "submit_findings recibido sin hallazgos (array nulo o vacío).";
             RejectedPayloads.Add(reason);
             RejectionReasons.Add(reason);
+            Counters.Rejected++;
             return new SubmitFindingsResult(new[]
             {
                 new SubmitFindingResult(false, Error: reason),
@@ -178,6 +179,7 @@ public sealed class SessionToolbox : IAuditToolbox
         string title = args?.Title is { Length: > 0 } t ? t : "(sin título)";
         RejectedPayloads.Add($"{reason} · payload: {title}");
         RejectionReasons.Add(reason);
+        Counters.Rejected++;
         return new SubmitFindingResult(false, Error: reason);
     }
 
