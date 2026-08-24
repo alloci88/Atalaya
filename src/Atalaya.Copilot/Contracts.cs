@@ -3,11 +3,19 @@ using Atalaya.Domain.Model;
 
 namespace Atalaya.Copilot;
 
-/// <summary>The <c>submit_finding</c> payload as the agent delivers it (§6.2). All strings.</summary>
+/// <summary>
+/// The <c>submit_finding</c> payload as the agent delivers it (§6.2). All strings.
+/// <para>
+/// <b>Tag</b> is intentionally NOT part of this payload (F3.1 Bloque 0): it is derivable from
+/// <c>RuleId</c> (<c>criterio.*</c> → Criterio, resto → Checklist), y pedirla al modelo generaba
+/// rechazos por variantes inventadas (pilot 2026-08-24: 25 rechazos por <c>tag</c> inválido en una
+/// sola unidad). Menos superficie de tool, menos tokens, cero oportunidad de que el modelo la
+/// rellene mal. La ingestión sigue tolerando payloads legados que la traigan (se ignora).
+/// </para>
+/// </summary>
 public sealed record SubmitFindingArgs(
     string RuleId,
     string Pillar,
-    string Tag,
     string Severity,
     string Title,
     string Description,

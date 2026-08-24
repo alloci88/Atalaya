@@ -411,6 +411,108 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   re-ejecutar la sesión medida sobre `CommonStatics.cs` con el lote activo y comparar tokens y
   turnos con la línea base de D-054.
 
+### F3.1 · Bloque 0 — Visibilidad de cortes y rechazos + retirada de `tag`
+
+- **D-059 — `tag` fuera de la tool `submit_finding(s)`.** El piloto del 2026-08-24 sobre
+  `CommonStatics.cs` produjo **25 rechazos consecutivos por `tag` inválido** (valores como
+  `errores.calculo.negocio`, `bug`, `correctness`) que consumieron presupuesto y terminaron
+  cortando la unidad a 307 k / 300 k tokens con `Nuevos 0` sin explicación. Diagnóstico: el
+  `tag` es derivable del `ruleId` (`criterio.*` → Criterio, resto → Checklist), la app ya lo
+  hacía en `InferTag`, y pedirlo también al modelo era pura superficie de error. Retirado del
+  record `SubmitFindingArgs` (F3.1 en `Contracts.cs`), del delegado singular de
+  `RealCopilotAgent` y del prompt del auditor; la ingestión sigue tolerando payloads legados
+  que lo traigan (se ignora). Test `Tag_is_always_inferred_from_ruleId` blinda ambas ramas
+  para que la regresión no reaparezca.
+
+- **D-060 — Visibilidad forzada de cortes y rechazos.** `SessionCounters.Rejected`,
+  `UnitVerdictRecord.{RejectedPayloads, DominantRejectionReason}` y una lista paralela
+  `SessionToolbox.RejectionReasons` permiten narrar el corte de forma autoexplicativa:
+  `"Cortada por presupuesto: 500000/300000 tokens · 25 rechazos: tag inválido"`. El
+  `SessionCoordinator` **captura las cuentas ANTES de flushear** las listas (bug encontrado
+  al refactorizar: se flusheaba primero y el snapshot salía en cero) y las inyecta en el
+  `UnitVerdictRecord` tanto en el camino de `overBudget` como en el de `auditada`. El
+  informe (`ReportBuilder`) añade una sección **"Incidencias por unidad"** y una línea
+  `⚠ Payloads rechazados por validación: N` en el resumen. Test
+  `Unit_over_budget_is_narrated_in_session_report_and_verdict` cubre el flujo de extremo
+  a extremo. Nunca más un "Nuevos 0" mudo.
+
+- **D-061 — Motivo dominante por moda del "head" del mensaje.** `DominantReason` agrupa los
+  motivos de rechazo por su primera frase (hasta el primer `'` o `:`) y devuelve el modal.
+  Así `"tag inválido 'bug'"`, `"tag inválido 'errores'"`, `"tag inválido 'correctness'"`
+  cuentan como el mismo motivo raíz `"tag inválido"` — evita que un ruido de variantes
+  camufle una causa única. Se descarta hacer clustering más sofisticado: con la moda basta
+  para el informe y no depende de dependencias nuevas.
+
+### F3.1 · Bloque 2 — Aislamiento del arnés de tests
+
+- **D-062 — Salvaguarda: los tests NO pueden escribir en `%LOCALAPPDATA%\Atalaya`.**
+  `TestFactory.AssertIsolated(AppPaths)` compara `AppPaths.Root` normalizado con el almacén
+  real y **lanza `InvalidOperationException`** si coincide o cuelga de él. `TestFactory.Hub`
+  la invoca antes de construir el `HubContext`, así que cualquier test que se olvide del
+  temporal falla en la primera llamada y no en un `Store.Write*` posterior (que ya habría
+  ensuciado el hub real). Cubierto por `TestIsolationSafeguardTests` — el propio guard prueba
+  su semántica: apuntar al almacén real revienta, apuntar a `Path.GetTempPath()` no. Fue la
+  clase de fallo que introdujo el `[Alta] test` y las clases nunca auditadas del hub durante
+  el desarrollo del agente falso; ya no es posible reintroducirlo por descuido.
+
+- **D-063 — La forense y la purga del Bloque 1 quedan pendientes hasta que el usuario emita
+  el veredicto sobre datos reales.** El prompt exige **"forense primero, no arregles nada
+  hasta tener el veredicto escrito"**: implementar el matching de segunda pasada, el
+  `previousFingerprints[]` y la utilidad de reparación puntual **antes** de saber si los
+  pares "resuelto ↔ nuevo" del piloto son en efecto el mismo hallazgo sería adelantar
+  suposiciones. Se congela hasta que el veredicto entre en este log. El resto del Bloque 2
+  (clasificación y purga de residuos de fixtures) también depende de ese pase manual sobre
+  el hub real.
+
+### F3.1 · Bloque 1 — Veredicto forense y matching de 2ª pasada
+
+- **D-064 — Veredicto forense sobre sesión `01M0SYAJSWC…` (XBLAST · CommonStatics.cs).**
+  Comparados los 5 "nuevos" del 2026-08-24 contra el catálogo de resueltos previos de la
+  misma unidad (22 hallazgos en el hub, la mayoría resoluciones sucesivas del mismo problema
+  en ciclos anteriores):
+  - **4 de 5 son duplicados** de resueltos previos:
+    - `StringToByteArray puede lanzar excepción…` ↔ `01M0SK8NR7Y…` (misma frase, mismo `ruleId errores.null.desreferencia`, símbolo idéntico, línea drifteada 92→87).
+    - `HexStringToByteArray falla con cadenas hex de longitud impar` ↔ `01M0J5W480B…` (síntoma idéntico, `errores.calculo.negocio`; además dos gemelos ya resueltos en `errores.null.desreferencia`: `01M0SK8NVM…`, `01M0STYVK4…`).
+    - `ConvertToDetId/ConvertToSeq sin manejo de errores de parseo` ↔ `01M0J5W48PT…` (**coincidencia literal de título**, mismo `ruleId`).
+    - `Asignaciones repetidas de arrays en DateToByteArray/TimeToByteArray` ↔ `01M0SFM3C66…` (**coincidencia literal de título**; y 3 gemelos más resueltos: `01M0J5W49D5…`, `01M0STYVGSD…`, `01M0SK8NTJR…`).
+  - **1 es legítimamente nuevo**: `Uso de Encoding.ASCII en StringToByteArray puede perder datos silenciosamente` (`criterio.seguridad`) — problema semánticamente distinto aunque comparta símbolo.
+  - **Diagnóstico raíz**: los importados v4 llevan fingerprint por título; los nuevos usan
+    `ruleId` — hashes distintos para el MISMO problema. `IngestionEngine` no los encontraba,
+    creaba duplicados, y la resolución implícita cerraba los activos por "no re-reportados
+    con su fingerprint". Cada sesión creaba una nueva reencarnación y resolvía la anterior
+    (`HexStringToByteArray` × 3, `Date/TimeToByteArray` × 4 en el hub).
+  - **Además detectados 3 residuos de fixture** ("test" × 2, "test5" × 1) escritos en el
+    almacén real durante el desarrollo del agente falso — origen de la salvaguarda D-062.
+
+- **D-065 — Matching de 2ª pasada (regla y calibración).** Cuando la búsqueda por
+  fingerprint no encuentra activo, `FindingIngestionService` invoca al nuevo
+  `SecondPassMatcher` (Domain, puro): normaliza la ruta, tokeniza el título (minúsculas,
+  sin diacríticos, tokens ≥3 chars, sin stopwords castellanas ni identificadores triviales)
+  y calcula **Jaccard** sobre los tokens frente a TODOS los hallazgos de la app cuya ruta
+  case. **Umbral 0,5** — calibrado contra el piloto: los 4 pares legítimos superan 0,55; el
+  falso positivo del `Encoding.ASCII` queda por debajo. Si acierta y hay silencio bajo el
+  hash antiguo, se respeta (el silencio v4 sigue vivo). Si no hay silencio, se reabre el
+  resuelto (`Reopen` + `Confirm`), se migra `Fingerprint` al esquema nuevo y el hash antiguo
+  se conserva en `PreviousFingerprints[]` — única mutación de schema permitida por el
+  prompt. `HubStore.FindByFingerprint` mira ambos hashes, así que silencios/comentarios
+  registrados con el hash viejo siguen aplicando sin reescribir nada.
+
+- **D-066 — Reparación puntual del piloto (comando oculto).**
+  `Atalaya.exe --repair-session <slug> <sessionUlid>` corre el algoritmo de 2ª pasada sobre
+  los hallazgos nuevos de UNA sesión concreta (acotados por ruta de unidad auditada y
+  ventana temporal [`startedUtc`, `endedUtc + 1min`]) y, para cada par detectado:
+  reabre el viejo migrando fingerprint, copia las locations del duplicado y **borra el
+  duplicado del disco**. La norma "nunca borrar hallazgos" protege datos reales; los
+  duplicados creados por un bug del propio pipeline no son datos. Traza completa en el
+  `History` del reabierto y log en `%LOCALAPPDATA%/Atalaya/logs/repair-<ulid>.log`.
+  El commit posterior lo hace `HubSyncService` al siguiente arranque de la app.
+
+- **D-067 — Purga F3.1 de residuos fixture.** Eliminados del hub:
+  `01M0J5TSM7A…` (`"test"` · L89), `01M0J5VB7R3…` (`"test5"` · L89),
+  `01M0SK7T0TQ…` (`"test"` · L92). Commit: `hub: purga F3.1 · 3 residuos fixture en
+  xblast/CommonStatics.cs`. La salvaguarda `TestFactory.AssertIsolated` (D-062) previene
+  la reincidencia.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

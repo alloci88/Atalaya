@@ -53,11 +53,55 @@ public partial class App : Application
         settings.MigrateConnection(_host.Services.GetRequiredService<DeployConfig>());
         ThemeService.Apply(settings.Current.Theme);
 
+        // F3.1 Bloque 1: comando oculto para re-vincular pares "resuelto ↔ duplicado nuevo"
+        // detectados por la 2ª pasada en una sesión concreta. Uso:
+        //   Atalaya.exe --repair-session <slug> <sessionUlid>
+        // Escribe a stdout el reporte y sale sin abrir la UI.
+        if (TryHandleRepairSession(e.Args))
+        {
+            Shutdown();
+            return;
+        }
+
         var window = _host.Services.GetRequiredService<MainWindow>();
         window.Show();
 
         MainViewModel main = _host.Services.GetRequiredService<MainViewModel>();
         await main.InitializeAsync();
+    }
+
+    private bool TryHandleRepairSession(string[] args)
+    {
+        int i = Array.IndexOf(args, "--repair-session");
+        if (i < 0 || i + 2 >= args.Length)
+        {
+            return false;
+        }
+
+        string slug = args[i + 1];
+        string sessionUlid = args[i + 2];
+        SessionRepairTool tool = _host!.Services.GetRequiredService<SessionRepairTool>();
+        SessionRepairReport report = tool.Repair(slug, sessionUlid, DateTimeOffset.UtcNow, Environment.UserName);
+
+        string logPath = Path.Combine(new AppPaths().Logs, $"repair-{sessionUlid}.log");
+        using var sw = new StreamWriter(logPath, append: false);
+        sw.WriteLine($"repair-session {sessionUlid} · app={slug} · {DateTimeOffset.UtcNow:o}");
+        sw.WriteLine($"pairs reparados: {report.Pairs.Count}");
+        foreach (SessionRepairPair p in report.Pairs)
+        {
+            sw.WriteLine($"  · reabierto {p.ReopenedFindingUlid} · duplicado borrado {p.DeletedDuplicateUlid} · score={p.MatchScore:0.00}");
+        }
+
+        sw.WriteLine($"nuevos sin par (skipped): {report.Skipped.Count}");
+        foreach (string s in report.Skipped)
+        {
+            sw.WriteLine($"  · {s}");
+        }
+
+        MessageBox.Show(
+            $"repair-session completado.\n\nPares reparados: {report.Pairs.Count}\nSaltados: {report.Skipped.Count}\n\nDetalle: {logPath}",
+            "Atalaya · repair-session", MessageBoxButton.OK, MessageBoxImage.Information);
+        return true;
     }
 
     private static void ConfigureServices(IServiceCollection services, AppPaths paths)
@@ -81,6 +125,7 @@ public partial class App : Application
         services.AddSingleton(sp => new MachineConfigStore(paths.MachinesJson));
         services.AddSingleton<InventoryScanner>();
         services.AddSingleton<FindingIngestionService>();
+        services.AddSingleton<SessionRepairTool>();
         services.AddSingleton(sp => new PortfolioQuery(sp.GetRequiredService<HubContext>().Store));
         services.AddSingleton(sp => new MetricsQuery(sp.GetRequiredService<HubContext>()));
         services.AddSingleton<ImportService>();

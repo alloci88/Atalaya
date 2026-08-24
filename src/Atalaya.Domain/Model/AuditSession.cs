@@ -3,7 +3,13 @@ using Atalaya.Domain.Ids;
 namespace Atalaya.Domain.Model;
 
 /// <summary>Per-unit verdict recorded in a session (§2).</summary>
-public sealed record UnitVerdictRecord(string Unit, string Module, string Verdict, string? Summary);
+public sealed record UnitVerdictRecord(
+    string Unit,
+    string Module,
+    string Verdict,
+    string? Summary,
+    int RejectedPayloads = 0,
+    string? DominantRejectionReason = null);
 
 /// <summary>Session tallies (§2).</summary>
 public sealed class SessionCounters
@@ -13,6 +19,13 @@ public sealed class SessionCounters
     public int Resolved { get; set; }
     public int SilencedRespected { get; set; }
     public int Recurrences { get; set; }
+
+    /// <summary>
+    /// Total payloads the toolbox validated and rebotó (F3.1 Bloque 0). Uno visible aquí evita
+    /// que un "todo a 0" quede sin explicación: si <c>Rejected &gt; 0</c> el operador sabe que la
+    /// causa está en los payloads del agente, no en la ausencia de hallazgos.
+    /// </summary>
+    public int Rejected { get; set; }
 }
 
 /// <summary>Token/cost totals for a session (§6.3).</summary>

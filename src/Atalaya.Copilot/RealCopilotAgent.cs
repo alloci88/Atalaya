@@ -129,10 +129,10 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
         await EnsureStartedAsync(ct);
 
         SubmitFindingResult SubmitFinding(
-            string ruleId, string pillar, string tag, string severity, string title,
+            string ruleId, string pillar, string severity, string title,
             string description, string impact, string recommendation, SubmitLocation[] locations, string? symbol)
             => toolbox.SubmitFinding(new SubmitFindingArgs(
-                ruleId, pillar, tag, severity, title, description, impact, recommendation, locations, symbol));
+                ruleId, pillar, severity, title, description, impact, recommendation, locations, symbol));
 
         SubmitFindingsResult SubmitFindings(SubmitFindingArgs[] findings)
             => toolbox.SubmitFindings(findings ?? Array.Empty<SubmitFindingArgs>());

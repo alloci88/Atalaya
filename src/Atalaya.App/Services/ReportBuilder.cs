@@ -45,7 +45,28 @@ public static class ReportBuilder
         sb.AppendLine($"- Nuevos: {cn.New}  · Confirmados: {cn.Confirmed}  · Resueltos: {cn.Resolved}"
             + $"  · Silenciados respetados: {cn.SilencedRespected}  · Reincidencias: {cn.Recurrences}");
         sb.AppendLine($"- % criterio (informativo): {criterioPct:0}%");
+        if (cn.Rejected > 0)
+        {
+            sb.AppendLine($"- ⚠ Payloads rechazados por validación: {cn.Rejected}");
+        }
+
         sb.AppendLine();
+
+        // F3.1 Bloque 0: cualquier unidad cortada por presupuesto (o con rechazos) se narra explícitamente
+        // para que un “Nuevos 0” nunca vuelva a aparecer sin causa visible en el informe.
+        var incidencias = session.Units
+            .Where(u => u.Verdict == "presupuesto-superado" || u.RejectedPayloads > 0)
+            .ToList();
+        if (incidencias.Count > 0)
+        {
+            sb.AppendLine("## Incidencias por unidad");
+            foreach (UnitVerdictRecord u in incidencias)
+            {
+                sb.AppendLine($"- **{u.Unit}** — {u.Verdict}: {u.Summary}");
+            }
+
+            sb.AppendLine();
+        }
 
         if (session.UsageBreakdown.Count > 0)
         {

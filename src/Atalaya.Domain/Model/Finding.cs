@@ -66,6 +66,15 @@ public sealed class Finding
 
     public List<HistoryEntry> History { get; set; } = new();
 
+    /// <summary>
+    /// Fingerprints anteriores de este hallazgo (F3.1 Bloque 1). Se rellena cuando el matching de
+    /// 2ª pasada de la ingestión emparejaba un hallazgo importado del v4 (fingerprint por título)
+    /// con un payload nuevo (fingerprint por ruleId) y MIGRABA el <see cref="Fingerprint"/> al
+    /// esquema nuevo. Preserva la trazabilidad (silencios y auditorías viejas siguen apuntando
+    /// aquí) sin romper la unicidad de la clave activa. Nunca se limpia.
+    /// </summary>
+    public List<string> PreviousFingerprints { get; set; } = new();
+
     /// <summary>Builds a brand-new finding, assigning confidence from the origin mode.</summary>
     public static Finding CreateNew(
         Ulid id,

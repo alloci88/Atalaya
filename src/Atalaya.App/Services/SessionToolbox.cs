@@ -44,6 +44,12 @@ public sealed class SessionToolbox : IAuditToolbox
     public List<string> RejectedPayloads { get; } = new();
 
     /// <summary>
+    /// Solo el motivo raíz de cada rechazo (F3.1 Bloque 0), para poder calcular el motivo
+    /// dominante por unidad sin re-parsear <see cref="RejectedPayloads"/>.
+    /// </summary>
+    public List<string> RejectionReasons { get; } = new();
+
+    /// <summary>
     /// Positive trace of every tool the agent invoked, in order, with the payload shape
     /// (F3 Hito 1c diagnóstico). This is the ONLY way to tell apart "the agent never called
     /// submit_findings" from "it called it but with an empty/broken payload" without a debugger.
@@ -71,6 +77,7 @@ public sealed class SessionToolbox : IAuditToolbox
         SubmitInvocations = 0;
         ToolCallLog.Clear();
         RejectedPayloads.Clear();
+        RejectionReasons.Clear();
     }
 
     public SubmitFindingResult SubmitFinding(SubmitFindingArgs args)
@@ -95,6 +102,7 @@ public sealed class SessionToolbox : IAuditToolbox
         {
             string reason = "submit_findings recibido sin hallazgos (array nulo o vacío).";
             RejectedPayloads.Add(reason);
+            RejectionReasons.Add(reason);
             return new SubmitFindingsResult(new[]
             {
                 new SubmitFindingResult(false, Error: reason),
@@ -133,16 +141,8 @@ public sealed class SessionToolbox : IAuditToolbox
             return Reject($"severity inválida '{args.Severity}'.", args);
         }
 
-        // `tag` is fully derivable from `ruleId` (criterio.* → Criterio, cualquier otro → Checklist),
-        // así que si el agente lo manda mal lo INFERIMOS en vez de rechazar el hallazgo. Evidencia
-        // real del piloto 2026-08-24: 25 rechazos por variantes de tag ("errores.calculo.negocio",
-        // "bug", "correctness", "otros"…) que dispararon 9 turnos y reventaron el presupuesto sin
-        // ingerir nada. Solo rechazamos si el modelo pone algo explícito y contradictorio.
+        // Tag ya no es parte de la tool (F3.1 Bloque 0): se infiere del ruleId.
         FindingTag tag = InferTag(args.RuleId);
-        if (!string.IsNullOrWhiteSpace(args.Tag) && TryParseTag(args.Tag, out FindingTag explicitTag))
-        {
-            tag = explicitTag;
-        }
 
         if (args.Locations is null || args.Locations.Length == 0)
         {
@@ -177,6 +177,7 @@ public sealed class SessionToolbox : IAuditToolbox
     {
         string title = args?.Title is { Length: > 0 } t ? t : "(sin título)";
         RejectedPayloads.Add($"{reason} · payload: {title}");
+        RejectionReasons.Add(reason);
         return new SubmitFindingResult(false, Error: reason);
     }
 
@@ -258,20 +259,10 @@ public sealed class SessionToolbox : IAuditToolbox
         }
     }
 
-    private static bool TryParseTag(string s, out FindingTag tag)
-    {
-        switch (s.Trim().ToLowerInvariant())
-        {
-            case "checklist": tag = FindingTag.Checklist; return true;
-            case "criterio": tag = FindingTag.Criterio; return true;
-            default: tag = default; return false;
-        }
-    }
-
     /// <summary>
-    /// Derives the tag from the ruleId (F3 hotfix): <c>criterio.&lt;área&gt;</c> → Criterio,
-    /// cualquier otro ruleId del catálogo → Checklist. Es determinista y coincide con la definición
-    /// del §6.2, así que la app puede calcularlo sin pedírselo al modelo.
+    /// Derives the tag from the ruleId (F3.1 Bloque 0): <c>criterio.&lt;área&gt;</c> → Criterio,
+    /// cualquier otro ruleId del catálogo → Checklist. Determinista y alineado con §6.2, así que
+    /// la app lo calcula sin pedírselo al modelo.
     /// </summary>
     private static FindingTag InferTag(string ruleId)
         => !string.IsNullOrEmpty(ruleId) && ruleId.StartsWith("criterio.", StringComparison.OrdinalIgnoreCase)

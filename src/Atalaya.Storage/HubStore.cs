@@ -75,9 +75,14 @@ public sealed class HubStore
     public void WriteFinding(string slug, Finding finding)
         => WriteJson(_paths.FindingFile(slug, finding.Id.ToString()), finding, SchemaValidation.Validate);
 
-    /// <summary>All findings (any status) sharing a fingerprint — the dedupe lookup (§2).</summary>
+    /// <summary>All findings (any status) sharing a fingerprint — la búsqueda de dedupe (§2).
+    /// F3.1 Bloque 1: incluye también los hallazgos cuyo <see cref="Finding.PreviousFingerprints"/>
+    /// contiene el hash, para que un silencio o un dedupe por el fingerprint antiguo siga viendo
+    /// al hallazgo migrado.</summary>
     public IReadOnlyList<Finding> FindByFingerprint(string slug, string fingerprint)
-        => ListFindings(slug).Where(f => f.Fingerprint == fingerprint).ToList();
+        => ListFindings(slug)
+            .Where(f => f.Fingerprint == fingerprint || f.PreviousFingerprints.Contains(fingerprint))
+            .ToList();
 
     // --- Silences ---
 

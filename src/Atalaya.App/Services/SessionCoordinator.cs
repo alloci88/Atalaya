@@ -202,7 +202,14 @@ public sealed class SessionCoordinator
                     unitCts = null;
                 }
 
-                if (toolbox.RejectedPayloads.Count > 0)
+                // Snapshot de rechazos ANTES de volcarlos: la moda alimenta el UnitVerdictRecord
+                // para que el corte sea auto-descriptivo ("Cortada por presupuesto · 25 rechazos:
+                // tag inválido") en informe y UI (F3.1 Bloque 0).
+                int rejectedInUnit = toolbox.RejectedPayloads.Count;
+                string? dominantReason = DominantReason(toolbox.RejectionReasons);
+                session.Counters.Rejected += rejectedInUnit;
+
+                if (rejectedInUnit > 0)
                 {
                     // Never swallow: surface every rejected payload in the session notes so an
                     // operator can see why "9 tool calls, 0 findings" happened.
@@ -212,6 +219,7 @@ public sealed class SessionCoordinator
                     }
 
                     toolbox.RejectedPayloads.Clear();
+                    toolbox.RejectionReasons.Clear();
                 }
 
                 // Positive trace: log every tool the agent invoked in this unit. This is the
@@ -232,14 +240,22 @@ public sealed class SessionCoordinator
 
                 if (overBudget)
                 {
-                    string note = $"presupuesto superado ({breakdown.InputTokens + breakdown.OutputTokens} > {maxTokensPerUnit} tokens)";
-                    session.Units.Add(new UnitVerdictRecord(unit.Path, unit.Module, "presupuesto-superado", note));
-                    session.Notes.Add($"{unit.Path}: {note}");
+                    long spent = breakdown.InputTokens + breakdown.OutputTokens;
+                    string summary = $"Cortada por presupuesto: {spent}/{maxTokensPerUnit} tokens"
+                        + (rejectedInUnit > 0
+                            ? $" · {rejectedInUnit} rechazos" + (dominantReason is null ? "" : $": {dominantReason}")
+                            : "");
+                    session.Units.Add(new UnitVerdictRecord(
+                        unit.Path, unit.Module, "presupuesto-superado", summary,
+                        rejectedInUnit, dominantReason));
+                    session.Notes.Add($"{unit.Path}: {summary}");
                     UnitPhaseChanged?.Invoke(unit.Path, "over-budget");
                     continue;
                 }
 
-                session.Units.Add(new UnitVerdictRecord(unit.Path, unit.Module, "auditada", toolbox.LastUnitSummary));
+                session.Units.Add(new UnitVerdictRecord(
+                    unit.Path, unit.Module, "auditada", toolbox.LastUnitSummary,
+                    rejectedInUnit, dominantReason));
                 auditedPaths.Add(Fingerprint.NormalizePath(unit.Path));
                 UnitPhaseChanged?.Invoke(unit.Path, "done");
             }
@@ -368,4 +384,29 @@ public sealed class SessionCoordinator
     /// </summary>
     private static int EstimateTokens(string text)
         => string.IsNullOrEmpty(text) ? 0 : (text.Length + 3) / 4;
+
+    /// <summary>
+    /// Motivo dominante de rechazo por unidad (F3.1 Bloque 0). Se colapsa cada motivo por su
+    /// primera frase (hasta el primer punto o dos puntos) para que "tag inválido 'X'" y "tag
+    /// inválido 'Y'" cuenten como el mismo motivo raíz. Devuelve null si no hay rechazos.
+    /// </summary>
+    private static string? DominantReason(IReadOnlyCollection<string> reasons)
+    {
+        if (reasons.Count == 0)
+        {
+            return null;
+        }
+
+        static string Head(string s)
+        {
+            int end = s.IndexOfAny(new[] { '\'', ':' });
+            string head = end > 0 ? s[..end].TrimEnd() : s;
+            return head.TrimEnd('.', ' ');
+        }
+
+        return reasons
+            .GroupBy(Head, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(g => g.Count())
+            .First().Key;
+    }
 }

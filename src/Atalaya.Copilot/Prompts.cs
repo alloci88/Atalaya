@@ -64,9 +64,9 @@ public static class PromptComposer
         "- Campos obligatorios de cada hallazgo:\n" +
         "    * ruleId: usa un id EXACTO del catálogo (los listados en el brief como [rule.id]) o, si no encaja ninguno, uno de la forma criterio.<área> con las áreas listadas en el brief.\n" +
         "    * pillar: exactamente uno de {optimizacion, mejoras, errores}.\n" +
-        "    * tag: exactamente uno de {checklist, criterio}. Debe ser \u0027criterio\u0027 solo si el ruleId empieza por \u0027criterio.\u0027; en cualquier otro caso es \u0027checklist\u0027. No inventes otros valores.\n" +
         "    * severity: exactamente uno de {critica, alta, media, baja}.\n" +
         "    * locations: al menos una con {path, line} y opcionalmente snippet.\n" +
+        "- NO envíes tag: la app lo deriva de ruleId (criterio.* → criterio; resto → checklist).\n" +
         "- NO asignes IDs ni confianza (eso es de la app). NO filtres silenciados (lo hace la app).\n" +
         "- Puedes pedir firmas de dependencias con read_signatures(path); es tu única lectura extra.\n" +
         "- Cuando termines la unidad, llama a unit_done con un resumen — a ser posible en el MISMO turno que submit_findings.\n";
