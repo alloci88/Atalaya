@@ -36,6 +36,24 @@ public sealed class SessionToolbox : IAuditToolbox
     /// <summary>Fingerprints reported by the agent this session (drives implicit resolution).</summary>
     public HashSet<string> ReportedFingerprints { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Rejected payloads (F3 Hito 1c hotfix): every schema/catalog validation failure lands here
+    /// with the reason, so no rejection is ever swallowed. The coordinator flushes this into
+    /// <c>session.Notes</c> and it also feeds the log surface.
+    /// </summary>
+    public List<string> RejectedPayloads { get; } = new();
+
+    /// <summary>
+    /// Positive trace of every tool the agent invoked, in order, with the payload shape
+    /// (F3 Hito 1c diagnóstico). This is the ONLY way to tell apart "the agent never called
+    /// submit_findings" from "it called it but with an empty/broken payload" without a debugger.
+    /// Format: <c>tool · detail</c>. Flushed to <c>session.Notes</c> by the coordinator.
+    /// </summary>
+    public List<string> ToolCallLog { get; } = new();
+
+    /// <summary>How many <c>submit_finding(s)</c> invocations landed in this unit (F3 Hito 1c).</summary>
+    public int SubmitInvocations { get; private set; }
+
     public SessionCounters Counters { get; } = new();
 
     public string? LastUnitSummary { get; private set; }
@@ -47,35 +65,88 @@ public sealed class SessionToolbox : IAuditToolbox
     /// </summary>
     public int ToolCallCount { get; private set; }
 
-    public void ResetToolCallCount() => ToolCallCount = 0;
+    public void ResetToolCallCount()
+    {
+        ToolCallCount = 0;
+        SubmitInvocations = 0;
+        ToolCallLog.Clear();
+        RejectedPayloads.Clear();
+    }
 
     public SubmitFindingResult SubmitFinding(SubmitFindingArgs args)
     {
         ToolCallCount++;
+        SubmitInvocations++;
+        ToolCallLog.Add($"submit_finding · title='{args?.Title ?? "(null)"}' locs={args?.Locations?.Length ?? 0}");
+        return SubmitFindingCore(args!);
+    }
+
+    public SubmitFindingsResult SubmitFindings(SubmitFindingArgs[] findings)
+    {
+        // ONE tool call for the whole array (F3 Hito 1c) — but each item is validated & ingested
+        // through the exact same path as the singular tool, so downstream invariants (fingerprint,
+        // silences, implicit resolution) hold unchanged. Never swallow: an empty/null array is
+        // recorded as a rejection so the operator can see the agent sent a malformed payload.
+        ToolCallCount++;
+        SubmitInvocations++;
+        int count = findings?.Length ?? 0;
+        ToolCallLog.Add($"submit_findings · items={count}");
+        if (findings is null || findings.Length == 0)
+        {
+            string reason = "submit_findings recibido sin hallazgos (array nulo o vacío).";
+            RejectedPayloads.Add(reason);
+            return new SubmitFindingsResult(new[]
+            {
+                new SubmitFindingResult(false, Error: reason),
+            });
+        }
+
+        var results = new List<SubmitFindingResult>(findings.Length);
+        foreach (SubmitFindingArgs args in findings)
+        {
+            results.Add(SubmitFindingCore(args));
+        }
+
+        return new SubmitFindingsResult(results);
+    }
+
+    private SubmitFindingResult SubmitFindingCore(SubmitFindingArgs args)
+    {
+        if (args is null)
+        {
+            return Reject("submit_finding con args nulo", args: null);
+        }
+
         // 1. ruleId must be a catalog rule or criterio.* (§6.2).
         if (!RuleCatalog.IsValid(args.RuleId))
         {
-            return new SubmitFindingResult(false, Error: $"ruleId desconocido '{args.RuleId}'. Usa el catálogo o criterio.<área>.");
+            return Reject($"ruleId desconocido '{args.RuleId}'. Usa el catálogo o criterio.<área>.", args);
         }
 
         if (!TryParsePillar(args.Pillar, out Pillar pillar))
         {
-            return new SubmitFindingResult(false, Error: $"pillar inválido '{args.Pillar}'.");
+            return Reject($"pillar inválido '{args.Pillar}'.", args);
         }
 
         if (!TryParseSeverity(args.Severity, out Severity severity))
         {
-            return new SubmitFindingResult(false, Error: $"severity inválida '{args.Severity}'.");
+            return Reject($"severity inválida '{args.Severity}'.", args);
         }
 
-        if (!TryParseTag(args.Tag, out FindingTag tag))
+        // `tag` is fully derivable from `ruleId` (criterio.* → Criterio, cualquier otro → Checklist),
+        // así que si el agente lo manda mal lo INFERIMOS en vez de rechazar el hallazgo. Evidencia
+        // real del piloto 2026-08-24: 25 rechazos por variantes de tag ("errores.calculo.negocio",
+        // "bug", "correctness", "otros"…) que dispararon 9 turnos y reventaron el presupuesto sin
+        // ingerir nada. Solo rechazamos si el modelo pone algo explícito y contradictorio.
+        FindingTag tag = InferTag(args.RuleId);
+        if (!string.IsNullOrWhiteSpace(args.Tag) && TryParseTag(args.Tag, out FindingTag explicitTag))
         {
-            return new SubmitFindingResult(false, Error: $"tag inválido '{args.Tag}'.");
+            tag = explicitTag;
         }
 
-        if (args.Locations.Count == 0)
+        if (args.Locations is null || args.Locations.Length == 0)
         {
-            return new SubmitFindingResult(false, Error: "un hallazgo debe tener al menos una ubicación.");
+            return Reject("un hallazgo debe tener al menos una ubicación.", args);
         }
 
         var locations = args.Locations
@@ -102,38 +173,22 @@ public sealed class SessionToolbox : IAuditToolbox
         return new SubmitFindingResult(true, DuplicateOf: duplicateOf);
     }
 
-    public SubmitFindingsResult SubmitFindings(SubmitFindingArgs[] findings)
+    private SubmitFindingResult Reject(string reason, SubmitFindingArgs? args)
     {
-        // ONE tool call for the whole array (F3 Hito 1c) — but each item is validated & ingested
-        // through the exact same path as the singular tool, so downstream invariants (fingerprint,
-        // silences, implicit resolution) hold unchanged.
-        ToolCallCount++;
-        var results = new List<SubmitFindingResult>(findings?.Length ?? 0);
-        if (findings is not null)
-        {
-            foreach (SubmitFindingArgs args in findings)
-            {
-                results.Add(SubmitFindingCore(args));
-            }
-        }
-
-        return new SubmitFindingsResult(results);
-    }
-
-    private SubmitFindingResult SubmitFindingCore(SubmitFindingArgs args)
-    {
-        // Same body as SubmitFinding, minus the ToolCallCount++ (the caller already counted).
-        int previous = ToolCallCount;
-        SubmitFindingResult r = SubmitFinding(args);
-        ToolCallCount = previous; // undo the double count from the singular path
-        return r;
+        string title = args?.Title is { Length: > 0 } t ? t : "(sin título)";
+        RejectedPayloads.Add($"{reason} · payload: {title}");
+        return new SubmitFindingResult(false, Error: reason);
     }
 
     public void UnitDone(string unitPath, string summary)
     {
         ToolCallCount++;
+        ToolCallLog.Add($"unit_done · unit='{unitPath}' summary='{Truncate(summary, 80)}'");
         LastUnitSummary = summary;
     }
+
+    private static string Truncate(string? s, int max)
+        => string.IsNullOrEmpty(s) ? "" : (s!.Length <= max ? s : s.Substring(0, max) + "…");
 
     /// <summary>
     /// The only extra code access allowed (§6.2): a lightweight signatures view of a dependency.
@@ -142,6 +197,7 @@ public sealed class SessionToolbox : IAuditToolbox
     public string ReadSignatures(string path)
     {
         ToolCallCount++;
+        ToolCallLog.Add($"read_signatures · path='{path}'");
         try
         {
             string abs = Path.Combine(_clonePath, path.Replace('/', Path.DirectorySeparatorChar));
@@ -211,4 +267,14 @@ public sealed class SessionToolbox : IAuditToolbox
             default: tag = default; return false;
         }
     }
+
+    /// <summary>
+    /// Derives the tag from the ruleId (F3 hotfix): <c>criterio.&lt;área&gt;</c> → Criterio,
+    /// cualquier otro ruleId del catálogo → Checklist. Es determinista y coincide con la definición
+    /// del §6.2, así que la app puede calcularlo sin pedírselo al modelo.
+    /// </summary>
+    private static FindingTag InferTag(string ruleId)
+        => !string.IsNullOrEmpty(ruleId) && ruleId.StartsWith("criterio.", StringComparison.OrdinalIgnoreCase)
+            ? FindingTag.Criterio
+            : FindingTag.Checklist;
 }

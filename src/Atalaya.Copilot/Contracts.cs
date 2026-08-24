@@ -13,7 +13,7 @@ public sealed record SubmitFindingArgs(
     string Description,
     string Impact,
     string Recommendation,
-    IReadOnlyList<SubmitLocation> Locations,
+    SubmitLocation[] Locations,
     string? Symbol);
 
 public sealed record SubmitLocation(string Path, int Line, string? Snippet);

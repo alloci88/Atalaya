@@ -202,6 +202,34 @@ public sealed class SessionCoordinator
                     unitCts = null;
                 }
 
+                if (toolbox.RejectedPayloads.Count > 0)
+                {
+                    // Never swallow: surface every rejected payload in the session notes so an
+                    // operator can see why "9 tool calls, 0 findings" happened.
+                    foreach (string r in toolbox.RejectedPayloads)
+                    {
+                        session.Notes.Add($"{unit.Path}: rechazo · {r}");
+                    }
+
+                    toolbox.RejectedPayloads.Clear();
+                }
+
+                // Positive trace: log every tool the agent invoked in this unit. This is the
+                // evidence that lets us tell apart "no invocations at all" from "invoked but
+                // rejected" without a debugger.
+                foreach (string entry in toolbox.ToolCallLog)
+                {
+                    session.Notes.Add($"{unit.Path}: tool · {entry}");
+                }
+
+                if (toolbox.SubmitInvocations == 0)
+                {
+                    session.Notes.Add(
+                        $"{unit.Path}: sin invocaciones a submit_finding(s) — el agente terminó sin reportar hallazgos por tool.");
+                }
+
+                toolbox.ToolCallLog.Clear();
+
                 if (overBudget)
                 {
                     string note = $"presupuesto superado ({breakdown.InputTokens + breakdown.OutputTokens} > {maxTokensPerUnit} tokens)";

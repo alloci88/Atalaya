@@ -56,7 +56,10 @@
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
                     <TextBlock><Run Text="Tokens in: " /><Run Text="{Binding InputTokens}" FontWeight="Bold" /></TextBlock>
                     <TextBlock><Run Text="Tokens out: " /><Run Text="{Binding OutputTokens}" FontWeight="Bold" /></TextBlock>
-                    <TextBlock><Run Text="Coste: " /><Run Text="{Binding Cost}" FontWeight="Bold" /></TextBlock>
+                    <TextBlock>
+                        <Run Text="Coste: " /><Run Text="{Binding Cost}" FontWeight="Bold" />
+                        <Run Text=" " /><Run Text="{Binding CostUnit}" Foreground="#99FFFFFF" />
+                    </TextBlock>
                 </StackPanel>
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <ItemsControl ItemsSource="{Binding Findings}">

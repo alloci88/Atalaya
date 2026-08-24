@@ -167,4 +167,75 @@ public sealed class SessionCoordinatorTests : IDisposable
     {
         try { Directory.Delete(_root, true); } catch { }
     }
-}
+
+    // ---------- F3 · Hito 1c — batched submit_findings ----------
+
+    /// <summary>
+    /// Regresión detectada 2026-08-24: el batching contaba tool calls pero no ingería nada
+    /// ("9 llamadas, 0 hallazgos"). Este test blinda el camino: N hallazgos en UN lote → N
+    /// eventos, N ingeridos, resumen correcto y sin rechazos silenciosos.
+    /// </summary>
+    [Fact]
+    public async Task Batched_submit_findings_ingests_every_item_in_a_single_call()
+    {
+        SubmitFindingArgs a = SampleFinding("A.cs") with { Title = "Uno", Symbol = "A.M1" };
+        SubmitFindingArgs b = SampleFinding("A.cs") with { Title = "Dos", Symbol = "A.M2" };
+        SubmitFindingArgs c = SampleFinding("A.cs") with { Title = "Tres", Symbol = "A.M3" };
+
+        var coordinator = NewCoordinator(new FakeCopilotAgent(_ => new[] { a, b, c }));
+        int events = 0;
+        coordinator.FindingReported += (_, _) => events++;
+
+        SessionResult result = await coordinator
+            .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
+
+        result.Counters.New.Should().Be(3);
+        events.Should().Be(3);
+        _hub.Store.ListFindings("app").Should().HaveCount(3);
+
+        // No rejection notes: everything was ingested cleanly.
+        AuditSession session = _hub.Store.ListSessions("app").Single();
+        session.Notes.Should().NotContain(n => n.Contains("rechazo"));
+    }
+
+    /// <summary>
+    /// Un payload inválido dentro del lote NO debe tumbar el resto y DEBE devolver un error
+    /// concreto al agente + quedar registrado en las notas de la sesión (nunca se traga).
+    /// </summary>
+    [Fact]
+    public async Task Batched_invalid_payload_reports_error_back_to_agent_and_logs_it()
+    {
+        SubmitFindingArgs good = SampleFinding("A.cs");
+        SubmitFindingArgs bad = good with { RuleId = "esto.no.existe" };
+        SubmitFindingArgs badSev = good with { Severity = "urgentísima", Symbol = "A.X" };
+
+        SessionResult result = await NewCoordinator(new FakeCopilotAgent(_ => new[] { good, bad, badSev }))
+            .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
+
+        result.Counters.New.Should().Be(1);
+        _hub.Store.ListFindings("app").Should().ContainSingle();
+
+        AuditSession session = _hub.Store.ListSessions("app").Single();
+            /// <summary>
+            /// Regresión piloto 2026-08-24 (`CommonStatics.cs`): el modelo mandaba <c>tag</c>s inválidos
+            /// ("errores.calculo.negocio", "bug", …) y la app rechazaba TODO el hallazgo, quemando 9
+            /// turnos hasta reventar el presupuesto sin ingerir nada. `tag` es derivable de `ruleId`, así
+            /// que ahora se infiere y solo se acepta el explícito si es válido. Este test blinda ese
+            /// comportamiento.
+            /// </summary>
+            [Fact]
+            public async Task Invalid_tag_from_agent_is_inferred_from_ruleId_and_finding_is_ingested()
+            {
+                SubmitFindingArgs bogusTag = SampleFinding("A.cs") with
+                {
+                    Tag = "errores.calculo.negocio", // basura del modelo
+                };
+
+                SessionResult result = await NewCoordinator(new FakeCopilotAgent(_ => new[] { bogusTag }))
+                    .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
+
+                result.Counters.New.Should().Be(1);
+                _hub.Store.ListFindings("app").Should().ContainSingle()
+                    .Which.Tag.Should().Be(FindingTag.Checklist); // ruleId no empieza por "criterio."
+            }
+        }
