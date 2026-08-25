@@ -31,6 +31,21 @@ public sealed record SubmitFindingArgs(
 
 public sealed record SubmitLocation(string Path, int Line, string? Snippet);
 
+/// <summary>
+/// Payload de <c>add_locations</c> (F4.1): extiende un hallazgo YA existente con ubicaciones
+/// nuevas dentro de la misma unidad.
+/// <para>
+/// Es la pieza de vocabulario que faltaba. Sin ella, la única forma que tenía el auditor de decir
+/// "este mismo defecto también pasa en la línea 105" era reportar OTRO hallazgo — y por eso un
+/// defecto sistémico se fragmentaba en uno por miembro y el barrido no convergía nunca
+/// (2026-08-25: 5 hallazgos distintos para "no valida argumentos nulos"). Ver D-090.
+/// </para>
+/// </summary>
+public sealed record AddLocationsArgs(string FindingId, SubmitLocation[] Locations);
+
+/// <summary>Resultado de <c>add_locations</c>: cuántas ubicaciones nuevas se añadieron.</summary>
+public sealed record AddLocationsResult(bool Accepted, int Added = 0, string? Error = null);
+
 /// <summary>Result returned to the agent from <c>submit_finding</c> (§6.2).</summary>
 public sealed record SubmitFindingResult(bool Accepted, string? DuplicateOf = null, string? Error = null);
 
@@ -182,6 +197,13 @@ public interface IAuditToolbox
     /// en la lista se rechaza con un error tipado y no toca nada.
     /// </summary>
     ReportVerdictsResult ReportVerdicts(VerdictArgs[] verdicts);
+
+    /// <summary>
+    /// Extiende un hallazgo existente con ubicaciones nuevas (F4.1). El <paramref name="findingId"/>
+    /// debe estar en la lista de existentes de la unidad o haberse creado en este mismo barrido, y
+    /// las ubicaciones deben caer dentro de la unidad que se está auditando.
+    /// </summary>
+    AddLocationsResult AddLocations(string findingId, SubmitLocation[] locations);
 
     void UnitDone(string unitPath, string summary);
 

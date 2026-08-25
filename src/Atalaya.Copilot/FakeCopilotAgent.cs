@@ -9,20 +9,26 @@ public sealed class FakeCopilotAgent : ICopilotAgent
     private readonly Func<AuditUnitRequest, IEnumerable<SubmitFindingArgs>> _auditScript;
     private readonly Func<VerifyTarget, string> _verdictScript;
     private readonly Func<AuditUnitRequest, IEnumerable<VerdictArgs>>? _reconcileScript;
+    private readonly Func<AuditUnitRequest, IEnumerable<AddLocationsArgs>>? _extendScript;
 
     /// <param name="reconcileScript">
     /// F4: qué veredictos emite el agente sobre los hallazgos existentes de la unidad. Por defecto
     /// declara TODOS "presente" — el comportamiento de un auditor que reconcilia completo. Pasa un
     /// script propio para simular omisiones, "arreglado", o IDs inexistentes.
     /// </param>
+    /// <param name="extendScript">
+    /// F4.1: qué hallazgos existentes extiende el agente con ubicaciones nuevas.
+    /// </param>
     public FakeCopilotAgent(
         Func<AuditUnitRequest, IEnumerable<SubmitFindingArgs>>? auditScript = null,
         Func<VerifyTarget, string>? verdictScript = null,
-        Func<AuditUnitRequest, IEnumerable<VerdictArgs>>? reconcileScript = null)
+        Func<AuditUnitRequest, IEnumerable<VerdictArgs>>? reconcileScript = null,
+        Func<AuditUnitRequest, IEnumerable<AddLocationsArgs>>? extendScript = null)
     {
         _auditScript = auditScript ?? (_ => Array.Empty<SubmitFindingArgs>());
         _verdictScript = verdictScript ?? (_ => "confirmado");
         _reconcileScript = reconcileScript;
+        _extendScript = extendScript;
     }
 
     public string? ModelName => "fake-model";
@@ -72,6 +78,14 @@ public sealed class FakeCopilotAgent : ICopilotAgent
                     ? $"[fake] hallazgo aceptado: {batch[i].Title}\n"
                     : $"[fake] hallazgo rechazado ({r.Error}): {batch[i].Title}\n");
             }
+        }
+
+        foreach (AddLocationsArgs ext in _extendScript?.Invoke(request) ?? Array.Empty<AddLocationsArgs>())
+        {
+            AddLocationsResult r = toolbox.AddLocations(ext.FindingId, ext.Locations);
+            TextStreamed?.Invoke(r.Accepted
+                ? $"[fake] {r.Added} ubicacion(es) anadidas a {ext.FindingId}\n"
+                : $"[fake] extension rechazada ({r.Error})\n");
         }
 
         // Simulate token usage proportional to the unit size.

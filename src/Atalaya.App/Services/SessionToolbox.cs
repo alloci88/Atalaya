@@ -23,6 +23,7 @@ public sealed class SessionToolbox : IAuditToolbox
     private readonly DetectionStamp _stamp;
     private readonly FindingIngestionService _ingestion;
     private readonly ReconciliationService _reconciliation;
+    private readonly Storage.HubStore _hub;
     private readonly string _clonePath;
     private readonly Action<Finding, string>? _onFinding;
 
@@ -43,13 +44,17 @@ public sealed class SessionToolbox : IAuditToolbox
     /// mismo barrido el código no cambia, así que un veredicto «arreglado» sobre uno de éstos es
     /// una contradicción del modelo, no una resolución: se ignora y se registra.
     /// </summary>
-    private readonly HashSet<string> _createdInSweep = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Finding> _createdInSweep = new(StringComparer.Ordinal);
+
+    /// <summary>Ruta normalizada de la unidad en curso: acota dónde pueden caer las ubicaciones.</summary>
+    private string _unitPath = string.Empty;
 
     public SessionToolbox(
         string slug, AuditMode mode, DetectionStamp stamp,
-        FindingIngestionService ingestion, ReconciliationService reconciliation, string clonePath,
-        Action<Finding, string>? onFinding = null)
+        FindingIngestionService ingestion, ReconciliationService reconciliation, Storage.HubStore hub,
+        string clonePath, Action<Finding, string>? onFinding = null)
     {
+        _hub = hub;
         _slug = slug;
         _mode = mode;
         _stamp = stamp;
@@ -109,7 +114,11 @@ public sealed class SessionToolbox : IAuditToolbox
     public void BeginUnit(IReadOnlyList<Finding> existing) => BeginPass(existing);
 
     /// <summary>Arranca el barrido de una unidad nueva: olvida lo creado en la unidad anterior.</summary>
-    public void BeginUnitSweep() => _createdInSweep.Clear();
+    public void BeginUnitSweep(string unitPath = "")
+    {
+        _createdInSweep.Clear();
+        _unitPath = CodeAnchor.NormalizePath(unitPath);
+    }
 
     /// <summary>
     /// Arranca UNA pasada del barrido: fija los hallazgos existentes que se le muestran al auditor
@@ -131,6 +140,7 @@ public sealed class SessionToolbox : IAuditToolbox
         RejectionReasons.Clear();
         LastUnitSummary = null;
         PassNew = PassConfirmed = PassResolved = PassNonVerifiable = PassRejected = 0;
+        PassLocationsAdded = 0;
         PassHasNonPresentVerdict = false;
     }
 
@@ -145,6 +155,12 @@ public sealed class SessionToolbox : IAuditToolbox
 
     public int PassRejected { get; private set; }
 
+    /// <summary>
+    /// Ubicaciones añadidas a hallazgos existentes en la pasada (F4.1). Cuentan como rendimiento:
+    /// extender un defecto sistémico a un sitio nuevo ES cobertura, aunque no cree un hallazgo.
+    /// </summary>
+    public int PassLocationsAdded { get; private set; }
+
     /// <summary>Algún veredicto de la pasada no fue «presente» (ni silencio respetado).</summary>
     public bool PassHasNonPresentVerdict { get; private set; }
 
@@ -152,7 +168,90 @@ public sealed class SessionToolbox : IAuditToolbox
     /// La pasada queda SECA cuando no aportó nada nuevo y todos sus veredictos fueron «presente».
     /// Es la condición de parada del barrido (F4.1).
     /// </summary>
-    public bool PassIsDry => PassNew == 0 && !PassHasNonPresentVerdict;
+    public bool PassIsDry => PassNew == 0 && PassLocationsAdded == 0 && !PassHasNonPresentVerdict;
+
+    // ---------- F4.1 · extensión de ubicaciones ----------
+
+    /// <summary>
+    /// Añade ubicaciones a un hallazgo ya existente. Sin esta tool, la única manera que tenía el
+    /// auditor de decir "el mismo defecto también está en la línea 105" era crear otro hallazgo,
+    /// y un defecto sistémico se fragmentaba en uno por miembro (D-090).
+    /// </summary>
+    public AddLocationsResult AddLocations(string findingId, SubmitLocation[] locations)
+    {
+        ToolCallCount++;
+        int count = locations?.Length ?? 0;
+        ToolCallLog.Add($"add_locations · id='{findingId}' locs={count}");
+
+        if (string.IsNullOrWhiteSpace(findingId))
+        {
+            return RejectExtension("add_locations sin findingId.");
+        }
+
+        string id = findingId.Trim();
+
+        // Solo lo que el auditor tiene delante: la lista de la unidad, o lo que él mismo ha
+        // reportado en este barrido. Cualquier otro ULID no toca nada.
+        if (!_listed.TryGetValue(id, out Finding? finding) && !_createdInSweep.TryGetValue(id, out finding))
+        {
+            return RejectExtension(
+                $"findingId desconocido '{id}': solo puedes extender hallazgos listados en esta unidad "
+                + "o que hayas reportado en ella.");
+        }
+
+        if (locations is null || locations.Length == 0)
+        {
+            return RejectExtension($"add_locations sobre {id} sin ubicaciones.");
+        }
+
+        var existing = new HashSet<string>(
+            finding.Locations.Select(l => $"{CodeAnchor.NormalizePath(l.Path)}:{l.Line}"), StringComparer.Ordinal);
+
+        int added = 0;
+        foreach (SubmitLocation l in locations)
+        {
+            string path = CodeAnchor.NormalizePath(l.Path ?? string.Empty);
+
+            // Fuera de la unidad no: el auditor solo ha visto esta unidad, así que no puede
+            // afirmar nada sobre otro fichero.
+            if (_unitPath.Length > 0 && !string.Equals(path, _unitPath, StringComparison.Ordinal))
+            {
+                RejectExtension($"ubicación fuera de la unidad en {id}: '{l.Path}' (unidad: {_unitPath}).");
+                continue;
+            }
+
+            if (!existing.Add($"{path}:{l.Line}"))
+            {
+                continue; // ya la tenía: no es un fallo, simplemente no aporta
+            }
+
+            finding.Locations.Add(new Location(
+                l.Path!, l.Line, l.Snippet is null ? null : CodeAnchor.ComputeSnippetHash(l.Snippet)));
+            added++;
+        }
+
+        if (added == 0)
+        {
+            return new AddLocationsResult(true, 0);
+        }
+
+        finding.History.Add(new HistoryEntry(_stamp.Utc, FindingEvent.Confirmed, _stamp.By,
+            $"auditor: {added} ubicación(es) añadidas — mismo defecto en otros puntos de la unidad"));
+        _hub.WriteFinding(_slug, finding);
+        PassLocationsAdded += added;
+        Counters.LocationsAdded += added;
+        _onFinding?.Invoke(finding, "ubicaciones");
+        return new AddLocationsResult(true, added);
+    }
+
+    private AddLocationsResult RejectExtension(string reason)
+    {
+        RejectedPayloads.Add($"add_locations rechazado · {reason}");
+        RejectionReasons.Add(reason);
+        Counters.Rejected++;
+        PassRejected++;
+        return new AddLocationsResult(false, 0, reason);
+    }
 
     // ---------- F4 · reconciliación ----------
 
@@ -212,7 +311,7 @@ public sealed class SessionToolbox : IAuditToolbox
         // que declarar «arreglado» un hallazgo que el propio barrido acaba de crear es una
         // contradicción del modelo. Se degrada a «presente» y se deja constancia: «arreglado»
         // solo tiene sentido entre auditorías distintas, con código cambiado de por medio.
-        if (verdict == ReconcileVerdict.Arreglado && _createdInSweep.Contains(id))
+        if (verdict == ReconcileVerdict.Arreglado && _createdInSweep.ContainsKey(id))
         {
             string note = $"veredicto 'arreglado' ignorado sobre {id}: lo reportó este mismo "
                 + "barrido y el código no ha cambiado entre pasadas. Se mantiene presente.";
@@ -332,7 +431,7 @@ public sealed class SessionToolbox : IAuditToolbox
         }
 
         Finding created = _ingestion.Create(submitted, _slug, _mode, _stamp);
-        _createdInSweep.Add(created.Id.ToString());
+        _createdInSweep[created.Id.ToString()] = created;
         Counters.New++;
         PassNew++;
         _onFinding?.Invoke(created, "nuevo");

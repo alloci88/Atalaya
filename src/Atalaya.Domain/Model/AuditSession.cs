@@ -41,7 +41,8 @@ public sealed record UnitPassRecord(
     int NonVerifiable,
     int Rejected,
     bool Dry,
-    string? Summary);
+    string? Summary,
+    int LocationsAdded = 0);
 
 /// <summary>Session tallies (§2).</summary>
 public sealed class SessionCounters
@@ -56,6 +57,12 @@ public sealed class SessionCounters
     /// <c>needsReview</c>. Se cuenta aparte para que nunca se confunda con "resuelto".
     /// </summary>
     public int NoVerificables { get; set; }
+
+    /// <summary>
+    /// Ubicaciones añadidas a hallazgos existentes (F4.1). Un defecto sistémico es UN hallazgo con
+    /// N ubicaciones; esto mide cuánta de esa cobertura aportó la sesión.
+    /// </summary>
+    public int LocationsAdded { get; set; }
 
     /// <summary>
     /// Total payloads the toolbox validated and rebotó (F3.1 Bloque 0). Uno visible aquí evita

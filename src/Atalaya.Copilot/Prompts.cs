@@ -93,6 +93,13 @@ public static class PromptComposer
         para gastarlo: es preferible una auditoría profunda y cara que una barata e incompleta. Lo
         que se agrupa en una sola llamada son los HALLAZGOS (ver abajo), no tu razonamiento.
 
+        UN DEFECTO SISTÉMICO ES UN SOLO HALLAZGO. Si el mismo problema aparece en varios miembros
+        (p. ej. "no valida argumentos nulos" en cinco métodos), NO reportes cinco hallazgos:
+        reporta UNO con las cinco ubicaciones en su array `locations`. Y si ese hallazgo YA existe
+        —está en la lista de abajo, o lo acabas de reportar en esta unidad— no crees otro: llama a
+        add_locations(findingId, locations) para extenderlo con los sitios nuevos. Fragmentar un
+        defecto por miembro infla el baseline y no aporta información.
+
         Tienes dos cosas que entregar en cada unidad:
 
         1) RECONCILIAR los hallazgos que ya existen en esta unidad (se te listan abajo). Llama UNA vez a
@@ -126,6 +133,8 @@ public static class PromptComposer
           con estado 'silenciado' y debes pronunciarte sobre ellos igual; decir 'presente' NO los reactiva.
         - Nunca reportes hallazgos en texto: solo por tool.
         - Puedes pedir firmas de dependencias con read_signatures(path); es tu única lectura extra.
+        - add_locations solo acepta ULIDs de la lista de existentes o de hallazgos que hayas
+          reportado en ESTA unidad, y ubicaciones dentro de la unidad que estás auditando.
         - Termina con unit_done. Su resumen DEBE empezar por la lista de miembros que has revisado,
           con el formato: "Revisados: A, B, C." Es la prueba de tu cobertura y queda en el informe.
         """;

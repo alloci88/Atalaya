@@ -46,7 +46,10 @@ public static class ReportBuilder
             if (u.Passes is { Count: > 0 })
             {
                 string trace = string.Join(" · ", u.Passes.Select(pp =>
-                    pp.Dry ? $"pasada {pp.Index}: seca" : $"pasada {pp.Index}: {pp.New} nuevos"));
+                    pp.Dry
+                        ? $"pasada {pp.Index}: seca"
+                        : $"pasada {pp.Index}: {pp.New} nuevos"
+                          + (pp.LocationsAdded > 0 ? $", {pp.LocationsAdded} ubicaciones" : "")));
                 sb.AppendLine($"    - Barrido: {trace}");
             }
 
@@ -73,6 +76,12 @@ public static class ReportBuilder
             + $"  · Silenciados respetados: {cn.SilencedRespected}");
         // F4: números con causa. Solo aparecen si los hay, y siempre acompañados del detalle de
         // qué unidades y qué hallazgos los produjeron (secciones de abajo).
+        if (cn.LocationsAdded > 0)
+        {
+            sb.AppendLine($"- Ubicaciones añadidas a hallazgos existentes: {cn.LocationsAdded}"
+                + " (un defecto sistémico es un hallazgo con varias ubicaciones)");
+        }
+
         if (cn.NoVerificables > 0)
         {
             sb.AppendLine($"- No verificables (marcados para revisión): {cn.NoVerificables}");

@@ -113,6 +113,14 @@ public class FakeAgentTests
             return new ReportVerdictsResult(verdicts.Select(_ => new ReportVerdictResult(true)).ToList());
         }
 
+        public List<AddLocationsArgs> Extensions { get; } = new();
+
+        public AddLocationsResult AddLocations(string findingId, SubmitLocation[] locations)
+        {
+            Extensions.Add(new AddLocationsArgs(findingId, locations));
+            return new AddLocationsResult(true, locations.Length);
+        }
+
         public void UnitDone(string unitPath, string summary) => UnitDoneCalled = true;
 
         public string ReadSignatures(string path) => "";

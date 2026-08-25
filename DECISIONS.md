@@ -840,6 +840,35 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   resumen de `unit_done` (`"Revisados: A, B, C."`) y el informe la publica por pasada. Comparada
   entre pasadas enseña qué zonas revisita el modelo — que es precisamente cómo se detectó D-086.
 
+- **D-090 — La cola no eran defectos nuevos: era un defecto fragmentado por miembro.** Con el
+  barrido de 3 pasadas sobre `CommonStatics.cs` (6 → 3 → 3, tope alcanzado), los 12 hallazgos
+  resultantes contenían **cinco** variantes del mismo defecto sistémico —`ReadCSV`,
+  `StringToByteArray`, `CombineArrays`, `ConvertToDetId`, `ConvertToSeq` "no validan argumentos
+  nulos"— y dos casi solapadas en `HexStringToByteArray`. El auditor no estaba encontrando
+  problemas nuevos en cada pasada: estaba repartiendo el mismo problema entre más miembros. Con
+  10 miembros hay 10 pasadas posibles, así que el barrido no podía converger por diseño.
+
+- **D-091 — La tool `add_locations` es la mitad estructural de la consolidación.** La instrucción
+  ("un defecto sistémico es UN hallazgo con N ubicaciones") orienta; la tool garantiza que hacerlo
+  bien sea *posible*. Sin ella, la única forma que tenía el auditor de decir "esto también pasa en
+  la línea 105" era reportar otro hallazgo — el vocabulario le obligaba a duplicar.
+  `add_locations(findingId, locations[])` extiende un hallazgo de la lista de la unidad o creado en
+  el barrido en curso. Validación: ULID a la vista y ubicación **dentro de la unidad** (el auditor
+  no ha visto otros ficheros, así que no puede afirmar nada sobre ellos). Las ubicaciones repetidas
+  se ignoran sin error; los ULID desconocidos y las rutas ajenas se rechazan con motivo tipado.
+
+- **D-092 — Sequedad actualizada: extender ubicaciones ES rendimiento.** Una pasada está seca con
+  **0 nuevos Y 0 ubicaciones añadidas Y todos los veredictos «presente»**. Extender un defecto a un
+  punto nuevo es cobertura real aunque no cree un hallazgo, así que el barrido debe continuar.
+
+- **D-093 — `MaxTokensPerUnit` se aplica POR PASADA, no al barrido completo.** El barrido de tres
+  pasadas gastó 224,5 k de un tope de 300 k: medirlo contra el barrido entero habría cortado
+  unidades sanas por el mero hecho de barrerlas, y habría hecho que subir `MaxPassesPerUnit`
+  redujera el presupuesto efectivo de cada pasada. El techo real por unidad pasa a ser
+  `MaxTokensPerUnit × MaxPassesPerUnit` (900 k por defecto) en el peor caso; con la consolidación
+  no debería acercarse. La salvaguarda sigue siendo dura: agotada una pasada, la unidad se cierra
+  como `presupuesto-superado` y la sesión continúa.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

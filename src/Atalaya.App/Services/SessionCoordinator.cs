@@ -130,6 +130,14 @@ public sealed class SessionCoordinator
         bool budgetTripped = false;
         long maxTokensPerUnit = Math.Max(0, app.Thresholds.MaxTokensPerUnit);
         int maxPasses = Math.Max(1, app.Thresholds.MaxPassesPerUnit);
+
+        // F4.1 — DECISIÓN: MaxTokensPerUnit se aplica POR PASADA, no al barrido completo.
+        // El barrido de 3 pasadas del 2026-08-25 gastó 224,5 k de los 300 k del tope, así que
+        // medirlo contra el barrido entero habría cortado unidades sanas por el mero hecho de
+        // barrerlas. El techo real por unidad pasa a ser MaxTokensPerUnit × MaxPassesPerUnit
+        // (900 k por defecto) en el peor caso; con consolidación no debería acercarse.
+        long passInput = 0;
+        long passOutput = 0;
         void OnUsage(UsageSample u)
         {
             session.Usage.Add(u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.Cost);
@@ -156,8 +164,10 @@ public sealed class SessionCoordinator
                     u.CacheReadTokens, u.CacheWriteTokens,
                     u.Cost, u.Model));
 
+                passInput += u.InputTokens;
+                passOutput += u.OutputTokens;
                 if (maxTokensPerUnit > 0
-                    && currentBreakdown.InputTokens + currentBreakdown.OutputTokens > maxTokensPerUnit
+                    && passInput + passOutput > maxTokensPerUnit
                     && !budgetTripped)
                 {
                     budgetTripped = true;
@@ -173,7 +183,7 @@ public sealed class SessionCoordinator
 
         var stamp = new DetectionStamp(now, request.Mode, commit, by);
         var toolbox = new SessionToolbox(
-            request.Slug, request.Mode, stamp, _ingestion, _reconciliation, clone!, OnFinding);
+            request.Slug, request.Mode, stamp, _ingestion, _reconciliation, _hub.Store, clone!, OnFinding);
         var auditedPaths = new HashSet<string>(StringComparer.Ordinal);
         int incompleteUnits = 0;
 
@@ -215,7 +225,8 @@ public sealed class SessionCoordinator
                 bool overBudget = false;
                 bool dry = false;
                 IReadOnlyList<Finding> withoutVerdict = Array.Empty<Finding>();
-                toolbox.BeginUnitSweep();
+                toolbox.BeginUnitSweep(unit.Path);
+                int locationsInUnit = 0;
 
                 for (int pass = 1; pass <= maxPasses && !dry && !overBudget; pass++)
                 {
@@ -228,6 +239,8 @@ public sealed class SessionCoordinator
                     breakdown.PromptTokensEstimate += EstimateTokens(prompt);
 
                     budgetTripped = false;
+                    passInput = 0;
+                    passOutput = 0;
                     unitCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     try
                     {
@@ -249,9 +262,11 @@ public sealed class SessionCoordinator
                     dry = !overBudget && toolbox.PassIsDry;
                     withoutVerdict = toolbox.PendingVerdicts;
                     coverageSummary = toolbox.LastUnitSummary ?? coverageSummary;
+                    locationsInUnit += toolbox.PassLocationsAdded;
                     passes.Add(new UnitPassRecord(
                         pass, toolbox.PassNew, toolbox.PassConfirmed, toolbox.PassResolved,
-                        toolbox.PassNonVerifiable, toolbox.PassRejected, dry, toolbox.LastUnitSummary));
+                        toolbox.PassNonVerifiable, toolbox.PassRejected, dry, toolbox.LastUnitSummary,
+                        toolbox.PassLocationsAdded));
 
                     // Nunca se traga un rechazo: cada pasada vuelca los suyos, etiquetados.
                     rejectedInUnit += toolbox.RejectedPayloads.Count;
@@ -308,7 +323,7 @@ public sealed class SessionCoordinator
                 {
                     unitVerdict = "cobertura posiblemente incompleta";
                     unitSummary = $"Cobertura posiblemente incompleta: {passes.Count} pasada(s) sin llegar a seca "
-                        + $"(la última aportó {passes[^1].New} nuevo(s))"
+                        + $"(la última aportó {passes[^1].New} nuevo(s) y {passes[^1].LocationsAdded} ubicación(es))"
                         + (unitSummary is null ? "" : $" · {unitSummary}");
                     session.Notes.Add($"{unit.Path}: {unitSummary}");
                 }

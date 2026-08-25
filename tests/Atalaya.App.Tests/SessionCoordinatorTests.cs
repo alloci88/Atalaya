@@ -544,6 +544,114 @@ public sealed class SessionCoordinatorTests : IDisposable
         _hub.Store.TryReadFinding("app", old.Id.ToString())!.Status.Should().Be(FindingStatus.Resuelto);
     }
 
+    // ---------- F4.1 · consolidación por ubicaciones ----------
+
+    /// <summary>
+    /// Un defecto sistémico es UN hallazgo con N ubicaciones. <c>add_locations</c> extiende el que
+    /// ya existe en vez de crear otro — es la pieza que faltaba: sin ella, decir "esto también
+    /// pasa en la línea 105" obligaba a duplicar, y por eso el barrido no convergía (D-090).
+    /// </summary>
+    [Fact]
+    public async Task Add_locations_extends_the_finding_instead_of_duplicating_it()
+    {
+        SetMaxPasses(3);
+
+        int pass = 0;
+        var agent = new FakeCopilotAgent(
+            auditScript: _ =>
+            {
+                pass++;
+                return pass == 1
+                    ? new[] { SampleFinding() with { Title = "No valida argumentos nulos" } }
+                    : Array.Empty<SubmitFindingArgs>();
+            },
+            // A partir de la 2ª pasada el auditor amplía el mismo hallazgo a otros dos puntos.
+            extendScript: r => pass == 2
+                ? r.Existing.Select(e => new AddLocationsArgs(
+                    e.FindingId, new[] { new SubmitLocation("A.cs", 42, null), new SubmitLocation("A.cs", 77, null) }))
+                : Array.Empty<AddLocationsArgs>());
+
+        SessionResult result = await RunLotes(agent);
+
+        result.Counters.New.Should().Be(1);
+        result.Counters.LocationsAdded.Should().Be(2);
+
+        Finding f = _hub.Store.ListFindings("app").Should().ContainSingle().Subject;
+        f.Locations.Select(l => l.Line).Should().BeEquivalentTo(new[] { 1, 42, 77 });
+    }
+
+    /// <summary>
+    /// Una pasada que SOLO extiende ubicaciones no está seca: extender es cobertura real, así que
+    /// el barrido debe continuar para ver si aún queda más.
+    /// </summary>
+    [Fact]
+    public async Task A_pass_that_only_adds_locations_is_not_dry()
+    {
+        SetMaxPasses(3);
+
+        int pass = 0;
+        var agent = new FakeCopilotAgent(
+            auditScript: _ =>
+            {
+                pass++;
+                return pass == 1 ? new[] { SampleFinding() } : Array.Empty<SubmitFindingArgs>();
+            },
+            extendScript: r => pass == 2
+                ? r.Existing.Select(e => new AddLocationsArgs(e.FindingId, new[] { new SubmitLocation("A.cs", 9, null) }))
+                : Array.Empty<AddLocationsArgs>());
+
+        await RunLotes(agent);
+
+        UnitVerdictRecord unit = _hub.Store.ListSessions("app").Single().Units.Single();
+        unit.Passes.Should().HaveCount(3);
+        unit.Passes![1].LocationsAdded.Should().Be(1);
+        unit.Passes[1].Dry.Should().BeFalse("extender ubicaciones es rendimiento de la pasada");
+        unit.Passes[2].Dry.Should().BeTrue();
+        unit.CoverageIncomplete.Should().BeFalse();
+    }
+
+    /// <summary>Extender un ULID que no está a la vista no toca nada y se le devuelve el error.</summary>
+    [Fact]
+    public async Task Add_locations_on_an_unknown_id_is_rejected()
+    {
+        SetMaxPasses(1);
+        string ghost = _ulids.NewUlid().ToString();
+
+        var agent = new FakeCopilotAgent(
+            extendScript: _ => new[] { new AddLocationsArgs(ghost, new[] { new SubmitLocation("A.cs", 5, null) }) });
+
+        SessionResult result = await RunLotes(agent);
+
+        result.Counters.Rejected.Should().Be(1);
+        result.Counters.LocationsAdded.Should().Be(0);
+        _hub.Store.ListSessions("app").Single().Notes
+            .Should().Contain(n => n.Contains("add_locations rechazado") && n.Contains(ghost));
+    }
+
+    /// <summary>
+    /// Una ubicación fuera de la unidad se rechaza: el auditor solo ha visto esta unidad, así que
+    /// no puede afirmar nada sobre otro fichero.
+    /// </summary>
+    [Fact]
+    public async Task Add_locations_outside_the_audited_unit_is_rejected()
+    {
+        SetMaxPasses(1);
+        Finding existing = SeedExisting("Ya existia");
+
+        var agent = new FakeCopilotAgent(
+            extendScript: _ => new[]
+            {
+                new AddLocationsArgs(existing.Id.ToString(), new[] { new SubmitLocation("B.cs", 3, null) }),
+            });
+
+        SessionResult result = await RunLotes(agent);
+
+        result.Counters.LocationsAdded.Should().Be(0);
+        _hub.Store.TryReadFinding("app", existing.Id.ToString())!.Locations.Should().ContainSingle();
+        _hub.Store.ListSessions("app").Single().Notes
+            .Should().Contain(n => n.Contains("fuera de la unidad"));
+    }
+
     // ---------- F3.1 Bloque 0 — presupuesto y rechazos ----------
 
     /// <summary>

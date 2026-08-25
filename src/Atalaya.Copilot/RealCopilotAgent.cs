@@ -140,6 +140,9 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
         ReportVerdictsResult ReportVerdicts(VerdictArgs[] verdicts)
             => toolbox.ReportVerdicts(verdicts ?? Array.Empty<VerdictArgs>());
 
+        AddLocationsResult AddLocations(string findingId, SubmitLocation[] locations)
+            => toolbox.AddLocations(findingId, locations ?? Array.Empty<SubmitLocation>());
+
         void UnitDone(string unitPath, string summary) => toolbox.UnitDone(unitPath, summary);
 
         string ReadSignatures(string path) => toolbox.ReadSignatures(path);
@@ -154,6 +157,11 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
             "OBLIGATORIA cuando la unidad tiene hallazgos existentes. Un array con un veredicto por CADA "
             + "hallazgo listado: {findingId (ULID exacto de la lista), verdict (presente|arreglado|no-verificable), "
             + "evidence}. Devuelve un array de {accepted, error} en el mismo orden.");
+        AddTool(config, AddLocations, "add_locations",
+            "Extiende un hallazgo YA existente con ubicaciones nuevas de esta misma unidad. Úsala cuando "
+            + "el MISMO defecto aparece en varios sitios: un defecto sistémico es UN hallazgo con N "
+            + "ubicaciones, no N hallazgos. findingId debe ser un ULID de la lista de existentes o de uno "
+            + "que hayas reportado en esta unidad.");
         AddTool(config, UnitDone, "unit_done", "Cierra la unidad en curso con un resumen.", terminal: true);
         AddTool(config, ReadSignatures, "read_signatures",
             "Devuelve las firmas (no cuerpos) de las dependencias directas de la unidad.");
