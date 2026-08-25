@@ -22,6 +22,13 @@ public sealed record SessionResult(Ulid SessionId, SessionCounters Counters, boo
     /// sesión, pero es visible: esos hallazgos no se han tocado y hay que volver sobre ellos.
     /// </summary>
     public int IncompleteUnits { get; init; }
+
+    /// <summary>
+    /// El usuario pulsó «Detener» (F5.1b). La sesión se cierra igualmente —registro, informe,
+    /// claims liberados y push— con lo que se llevara auditado; simplemente no cubrió todo y no
+    /// cierra ciclo.
+    /// </summary>
+    public bool Interrupted { get; init; }
 }
 
 /// <summary>
@@ -107,9 +114,20 @@ public sealed class SessionCoordinator
         // claims, que hace commit+push) es incancelable, asi que pulsar Detener durante esa fase
         // no hacia nada visible. Estos dos cortes hacen que la sesion aborte en cuanto la fase
         // termina, en vez de seguir y auditar la unidad igualmente.
-        ct.ThrowIfCancellationRequested();
-        PublishClaims(request.Slug, units, inventory, by);
-        ct.ThrowIfCancellationRequested();
+        //
+        // F5.1b: y detener ya NO aborta la sesion a medio cerrar. Hasta aqui, cancelar hacia que
+        // RunAsync lanzara OperationCanceledException y se saltara TODO lo posterior al bucle:
+        // el registro de sesion, el informe, la liberacion de claims y el commit+push. Los
+        // hallazgos, en cambio, ya estaban escritos (la ingesta persiste en vivo), asi que una
+        // sesion detenida dejaba el hub mutado sin ninguna traza de quien lo hizo — justo lo que
+        // se vio el 2026-08-25 a las 12:13 local: un hallazgo confirmado sin fichero de sesion.
+        // Ahora una parada es un final ordenado: se cierra con lo que se llevara hecho.
+        bool stopped = ct.IsCancellationRequested;
+        if (!stopped)
+        {
+            PublishClaims(request.Slug, units, inventory, by);
+            stopped = ct.IsCancellationRequested;
+        }
 
         var newFindings = new List<Finding>();
         void OnFinding(Finding f, string kind)
@@ -188,7 +206,9 @@ public sealed class SessionCoordinator
         _agent.TextStreamed += OnText;
         _agent.UsageReported += OnUsage;
 
-        var stamp = new DetectionStamp(now, request.Mode, commit, by);
+        // El modelo va en el sello (F5.1b): es quien hace la observación, y hace falta para poder
+        // nombrar a quién discrepa cuando dos modelos se contradicen sobre el mismo hallazgo.
+        var stamp = new DetectionStamp(now, request.Mode, commit, by, Model: _agent.ModelName);
         var toolbox = new SessionToolbox(
             request.Slug, request.Mode, stamp, _ingestion, _reconciliation, _hub.Store, clone!, OnFinding);
         var auditedPaths = new HashSet<string>(StringComparer.Ordinal);
@@ -212,6 +232,12 @@ public sealed class SessionCoordinator
 
                 string content = await File.ReadAllTextAsync(abs, ct);
 
+                // Huella del contenido EXACTO que el auditor va a ver (F5.1b). Se calcula sobre los
+                // bytes crudos, igual que el inventario, para que ambos hashes sean comparables. Es
+                // la segunda capa de la guarda de evidencia de cambio: permite distinguir "el repo
+                // avanzó" de "esta unidad cambió", que es lo único que legitima un «arreglado».
+                string? unitContentHash = TryHashUnit(abs);
+
                 var breakdown = new UnitUsageBreakdown { Unit = unit.Path };
                 session.UsageBreakdown.Add(breakdown);
                 currentBreakdown = breakdown;
@@ -232,7 +258,7 @@ public sealed class SessionCoordinator
                 bool overBudget = false;
                 bool dry = false;
                 IReadOnlyList<Finding> withoutVerdict = Array.Empty<Finding>();
-                toolbox.BeginUnitSweep(unit.Path);
+                toolbox.BeginUnitSweep(unit.Path, unitContentHash);
                 int locationsInUnit = 0;
 
                 for (int pass = 1; pass <= maxPasses && !dry && !overBudget; pass++)
@@ -283,6 +309,14 @@ public sealed class SessionCoordinator
                         session.Notes.Add($"{unit.Path} (pasada {pass}): rechazo · {r}");
                     }
 
+                    // Ninguna degradación es silenciosa (F5.1b): un «arreglado» sin evidencia de
+                    // cambio y una discrepancia de criterio quedan nombrados en la sesión, y de ahí
+                    // los recoge el informe.
+                    foreach (string degraded in toolbox.DegradedVerdicts)
+                    {
+                        session.Notes.Add($"{unit.Path} (pasada {pass}): veredicto degradado · {degraded}");
+                    }
+
                     foreach (string entry in toolbox.ToolCallLog)
                     {
                         session.Notes.Add($"{unit.Path} (pasada {pass}): tool · {entry}");
@@ -296,6 +330,7 @@ public sealed class SessionCoordinator
 
                     toolbox.RejectedPayloads.Clear();
                     toolbox.RejectionReasons.Clear();
+                    toolbox.DegradedVerdicts.Clear();
                     toolbox.ToolCallLog.Clear();
                 }
 
@@ -355,6 +390,12 @@ public sealed class SessionCoordinator
                 UnitPhaseChanged?.Invoke(unit.Path, withoutVerdict.Count > 0 ? "incomplete" : "done");
             }
         }
+        catch (OperationCanceledException)
+        {
+            // Parada del usuario. No es un error: es un final anticipado, y lo auditado hasta aqui
+            // ya esta en el hub. Se sigue al cierre ordenado en vez de dejarlo huerfano.
+            stopped = true;
+        }
         finally
         {
             _agent.TextStreamed -= OnText;
@@ -364,10 +405,27 @@ public sealed class SessionCoordinator
         MarkAuditedInInventory(inventory, auditedPaths, sessionId);
         _hub.Store.WriteInventory(request.Slug, inventory);
 
+        // Liberar los claims es lo mas urgente de una parada: sin esto la unidad quedaba reclamada
+        // por este usuario hasta que caducara el TTL, bloqueando a los demas por nada.
         ReleaseClaims(request.Slug, units);
+
+        // «Interrumpida» se mide por COBERTURA, no por el botón: si la parada llegó cuando ya se
+        // habían procesado todas las unidades pedidas, la sesión cubrió lo que decía cubrir y es
+        // una sesión completa a todos los efectos. Lo que marca una sesión es haber dejado
+        // unidades sin tocar.
+        bool interrupted = stopped && session.Units.Count < units.Count;
 
         session.EndedUtc = DateTimeOffset.UtcNow;
         session.Counters = toolbox.Counters;
+        session.Interrupted = interrupted;
+        if (interrupted)
+        {
+            int pendientes = units.Count - session.Units.Count;
+            session.Notes.Add(
+                $"Sesión detenida por el usuario: {session.Units.Count} de {units.Count} unidad(es) "
+                + $"procesadas, {pendientes} sin auditar. Lo hecho hasta aquí queda registrado.");
+        }
+
         _hub.Store.WriteSession(session);
 
         int pending = inventory.Units.Count(u => u.State == UnitState.Pendiente);
@@ -375,14 +433,17 @@ public sealed class SessionCoordinator
         string report = ReportBuilder.BuildSessionReport(app, session, newFindings, pending, large);
         _hub.Store.WriteReport(request.Slug, sessionId.ToString(), report);
 
-        _hub.Sync?.CommitAndPush($"session: {request.Mode.ToString().ToLowerInvariant()} {request.Slug} {session.Units.Count} unidades");
+        _hub.Sync?.CommitAndPush(
+            $"session: {request.Mode.ToString().ToLowerInvariant()} {request.Slug} {session.Units.Count} unidades"
+            + (interrupted ? " (detenida)" : ""));
 
         // Courtesy ESTADO.md export into the audited repo (§7).
         _statusExporter?.ExportIfEnabled(request.Slug);
 
         // If the cycle is now empty, attempt the close (only one user actually closes it).
+        // Una sesion detenida NO cierra ciclo: no ha cubierto lo que decia cubrir.
         bool cycleClosed = false;
-        if (pending == 0 && request.Mode is AuditMode.Lotes or AuditMode.Integral)
+        if (!interrupted && pending == 0 && request.Mode is AuditMode.Lotes or AuditMode.Integral)
         {
             cycleClosed = _cycles?.TryCloseCycle(request.Slug, app.CurrentCycle) ?? false;
         }
@@ -391,6 +452,7 @@ public sealed class SessionCoordinator
         {
             CycleClosed = cycleClosed,
             IncompleteUnits = incompleteUnits,
+            Interrupted = interrupted,
         };
     }
 
@@ -462,6 +524,28 @@ public sealed class SessionCoordinator
     /// </summary>
     private static int EstimateTokens(string text)
         => string.IsNullOrEmpty(text) ? 0 : (text.Length + 3) / 4;
+
+    /// <summary>
+    /// SHA-256 de los bytes de la unidad, con el mismo algoritmo y prefijo que usa el inventario
+    /// (<c>InventoryScanner</c>), para que los dos hashes se puedan comparar. Null si el fichero no
+    /// se puede leer: sin hash la guarda de F5.1b cae a la capa del commit, que es lo correcto —
+    /// no poder probar que nada cambió no es lo mismo que probar que cambió.
+    /// </summary>
+    private static string? TryHashUnit(string absolutePath)
+    {
+        try
+        {
+            return HashUtil.Sha256Hex(File.ReadAllBytes(absolutePath));
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Motivo dominante de rechazo por unidad (F3.1 Bloque 0). Se colapsa cada motivo por su

@@ -98,6 +98,30 @@ normal. Ahí mismo hay un override de la URL del hub, **solo para desarrollo**.
 Los secretos **no** están aquí: la cuenta vive cifrada con DPAPI en
 `%LOCALAPPDATA%/Atalaya/auth.dat`, y nunca sale de tu máquina.
 
+## Veredictos del auditor y disputas
+
+Cuando el auditor revisa una unidad se pronuncia sobre cada hallazgo que ya existe en ella:
+
+| Veredicto | Qué hace la app |
+|---|---|
+| `presente` | Reconfirma el hallazgo (máquina de confianza). |
+| `arreglado` | Lo resuelve — **solo si la unidad cambió** desde la última vez que se vio (mismo commit o mismo contenido ⇒ se degrada a `presente` y queda registrado). |
+| `no-es-defecto` | Discrepa de quien lo reportó: **no resuelve ni desactiva**, marca el hallazgo como *disputado* con el razonamiento y el modelo. |
+| `no-verificable` | Lo marca `needsReview`. |
+
+Un hallazgo **disputado** sigue activo y espera decisión humana. En **V3 → «Solo disputados»** se
+cierra la disputa en una de las dos direcciones, siempre con autor:
+
+- **«Es falso positivo»** — se silencia con motivo `falso-positivo`. No es una resolución: nunca
+  hubo nada que arreglar.
+- **«Sigue siendo defecto»** — se retira la marca y el hallazgo continúa igual.
+
+Varios modelos discrepando del mismo hallazgo se acumulan (`⚖ disputado ×N modelos`): es la señal
+de que merece una mirada humana.
+
+Detener una sesión es un final ordenado: se guarda lo auditado hasta la parada, con su informe, se
+liberan los claims y se publica. Una sesión detenida no cierra ciclo.
+
 ## Configuración de despliegue
 
 Junto al ejecutable viaja **`appsettings.deploy.json`** (también embebido en el binario como

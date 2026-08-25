@@ -73,6 +73,53 @@ public sealed class GovernanceService
         Push(slug, $"resolve: {f.DisplayId ?? f.Id.ToString()}");
     }
 
+    /// <summary>
+    /// Cierra una disputa dando la razón al auditor que discrepó (F5.1b): el hallazgo NO se
+    /// resuelve —nunca hubo nada que arreglar— sino que se silencia con motivo
+    /// <see cref="SilenceReason.FalsoPositivo"/>, que es el cajón que §2 ya tenía para esto, con
+    /// autor y fecha. La marca de disputa se retira porque la decisión ya está tomada; el
+    /// historial la conserva.
+    /// </summary>
+    public void ResolveDisputeAsFalsePositive(string slug, Ulid findingId, string? notes)
+    {
+        Finding f = Require(slug, findingId);
+        string justification = notes ?? DescribeDisputes(f);
+
+        _hub.Store.WriteSilence(slug, new Silence
+        {
+            FindingUlid = f.Id,
+            Reason = SilenceReason.FalsoPositivo,
+            Notes = justification,
+            By = Me,
+            Utc = DateTimeOffset.UtcNow,
+            ExpiresUtc = null,
+        });
+
+        f.ClearDisputes(DateTimeOffset.UtcNow, Me, $"disputa aceptada como falso positivo: {justification}");
+        f.MarkSilenced(DateTimeOffset.UtcNow, Me, justification);
+        _hub.Store.WriteFinding(slug, f);
+        Push(slug, $"dispute: falso-positivo {f.DisplayId ?? f.Id.ToString()}");
+    }
+
+    /// <summary>
+    /// Cierra una disputa dando la razón a quien lo reportó (F5.1b): sigue siendo un defecto. Se
+    /// retira la marca y el hallazgo continúa exactamente como estaba.
+    /// </summary>
+    public void DismissDispute(string slug, Ulid findingId, string? notes)
+    {
+        Finding f = Require(slug, findingId);
+        f.ClearDisputes(DateTimeOffset.UtcNow, Me,
+            notes is null ? null : $"sigue siendo un defecto: {notes}");
+        _hub.Store.WriteFinding(slug, f);
+        Push(slug, $"dispute: mantenido {f.DisplayId ?? f.Id.ToString()}");
+    }
+
+    /// <summary>Resume quién discrepó y por qué, para dejarlo escrito en el silencio.</summary>
+    private static string DescribeDisputes(Finding f)
+        => f.Disputes.Count == 0
+            ? "falso positivo (sin disputa registrada)"
+            : string.Join(" · ", f.Disputes.Select(d => $"{d.Model ?? "auditor"}: {d.Justification}"));
+
     public void Reopen(string slug, Ulid findingId, string? detail)
     {
         Finding f = Require(slug, findingId);

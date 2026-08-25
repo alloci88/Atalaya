@@ -179,8 +179,11 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
             "Fallback singular. Úsala solo si por alguna razón no puedes agrupar; cada llamada añade un turno.");
         AddTool(config, ReportVerdicts, "report_verdicts",
             "OBLIGATORIA cuando la unidad tiene hallazgos existentes. Un array con un veredicto por CADA "
-            + "hallazgo listado: {findingId (ULID exacto de la lista), verdict (presente|arreglado|no-verificable), "
-            + "evidence}. Devuelve un array de {accepted, error} en el mismo orden.");
+            + "hallazgo listado: {findingId (ULID exacto de la lista), verdict "
+            + "(presente|arreglado|no-es-defecto|no-verificable), evidence}. Usa 'arreglado' SOLO si el "
+            + "código cambió y por eso el problema ya no está; si lo que ocurre es que discrepas de quien "
+            + "lo reportó, usa 'no-es-defecto' con tu razonamiento. Devuelve un array de {accepted, error} "
+            + "en el mismo orden.");
         AddTool(config, AddLocations, "add_locations",
             "Extiende un hallazgo YA existente con ubicaciones nuevas de esta misma unidad. Úsala cuando "
             + "el MISMO defecto aparece en varios sitios: un defecto sistémico es UN hallazgo con N "

@@ -56,6 +56,13 @@ public sealed class SessionToolbox : IAuditToolbox
     /// <summary>Ruta normalizada de la unidad en curso: acota dónde pueden caer las ubicaciones.</summary>
     private string _unitPath = string.Empty;
 
+    /// <summary>
+    /// Hash del contenido de la unidad en curso (F5.1b). Se sella en cada detección y confirmación
+    /// para que una sesión futura pueda comprobar si el fichero cambió antes de aceptar un
+    /// «arreglado». Vacío si no se pudo calcular.
+    /// </summary>
+    private string? _unitContentHash;
+
     public SessionToolbox(
         string slug, AuditMode mode, DetectionStamp stamp,
         FindingIngestionService ingestion, ReconciliationService reconciliation, Storage.HubStore hub,
@@ -92,6 +99,14 @@ public sealed class SessionToolbox : IAuditToolbox
     /// </summary>
     public List<string> ToolCallLog { get; } = new();
 
+    /// <summary>
+    /// Veredictos que la app NO aplicó tal cual y por qué (F5.1b): un «arreglado» sin evidencia de
+    /// cambio degradado a presente, o una discrepancia registrada como disputa. No son rechazos
+    /// —el payload era válido y la app hizo algo con él—, así que van por su propio canal y NO
+    /// inflan <c>Counters.Rejected</c>. El coordinador los vuelca en las notas de la sesión.
+    /// </summary>
+    public List<string> DegradedVerdicts { get; } = new();
+
     /// <summary>How many <c>submit_finding(s)</c> invocations landed in this unit (F3 Hito 1c).</summary>
     public int SubmitInvocations { get; private set; }
 
@@ -121,12 +136,20 @@ public sealed class SessionToolbox : IAuditToolbox
     public void BeginUnit(IReadOnlyList<Finding> existing) => BeginPass(existing);
 
     /// <summary>Arranca el barrido de una unidad nueva: olvida lo creado en la unidad anterior.</summary>
-    public void BeginUnitSweep(string unitPath = "")
+    public void BeginUnitSweep(string unitPath = "", string? unitContentHash = null)
     {
         _createdInSweep.Clear();
         _reconciledInSweep.Clear();
         _unitPath = CodeAnchor.NormalizePath(unitPath);
+        _unitContentHash = unitContentHash;
     }
+
+    /// <summary>
+    /// El sello de la sesión, anclado a la unidad en curso (F5.1b). El sello de sesión es uno para
+    /// toda la sesión, pero el contenido es por unidad: sin esto, el hash que se guardaría en cada
+    /// hallazgo sería el de otra unidad cualquiera.
+    /// </summary>
+    private DetectionStamp Stamp => _stamp with { UnitContentHash = _unitContentHash };
 
     /// <summary>
     /// Arranca UNA pasada del barrido: fija los hallazgos existentes que se le muestran al auditor
@@ -146,6 +169,7 @@ public sealed class SessionToolbox : IAuditToolbox
         ToolCallLog.Clear();
         RejectedPayloads.Clear();
         RejectionReasons.Clear();
+        DegradedVerdicts.Clear();
         LastUnitSummary = null;
         PassNew = PassConfirmed = PassResolved = PassNonVerifiable = PassRejected = 0;
         PassLocationsAdded = 0;
@@ -243,7 +267,7 @@ public sealed class SessionToolbox : IAuditToolbox
             return new AddLocationsResult(true, 0);
         }
 
-        finding.History.Add(new HistoryEntry(_stamp.Utc, FindingEvent.Confirmed, _stamp.By,
+        finding.History.Add(new HistoryEntry(Stamp.Utc, FindingEvent.Confirmed, Stamp.By,
             $"auditor: {added} ubicación(es) añadidas — mismo defecto en otros puntos de la unidad"));
         _hub.WriteFinding(_slug, finding);
         PassLocationsAdded += added;
@@ -345,13 +369,34 @@ public sealed class SessionToolbox : IAuditToolbox
             return new ReportVerdictResult(true);
         }
 
-        ReconcileOutcome outcome = _reconciliation.Apply(_slug, finding, verdict, v.Evidence, _mode, _stamp);
+        ReconcileOutcome outcome = _reconciliation.Apply(
+            _slug, finding, verdict, v.Evidence, _mode, Stamp, out string? refusal);
         switch (outcome)
         {
             case ReconcileOutcome.Reconfirmed: Counters.Confirmed++; PassConfirmed++; break;
             case ReconcileOutcome.Resolved: Counters.Resolved++; PassResolved++; PassHasNonPresentVerdict = true; break;
             case ReconcileOutcome.NeedsReview: Counters.NoVerificables++; PassNonVerifiable++; PassHasNonPresentVerdict = true; break;
             case ReconcileOutcome.SilenceRespected: Counters.SilencedRespected++; break;
+
+            // «Arreglado» sin evidencia de cambio: el hallazgo se confirma, no se resuelve, y la
+            // degradación se nombra. No marca la pasada como no-seca: la app ya ha decidido, y
+            // dejar que el desacuerdo del modelo alargara el barrido solo quemaría presupuesto
+            // (mismo criterio que la guarda intra-barrido de D-088).
+            case ReconcileOutcome.ResolutionRefused:
+                Counters.Confirmed++;
+                Counters.ResolutionsRefused++;
+                PassConfirmed++;
+                DegradedVerdicts.Add(
+                    $"«arreglado» degradado a presente sobre {id} «{Truncate(finding.Title, 60)}» — {refusal}");
+                break;
+
+            // Discrepancia de criterio: ni resuelve ni desactiva. Queda marcado para una persona.
+            case ReconcileOutcome.Disputed:
+                Counters.Disputed++;
+                DegradedVerdicts.Add(
+                    $"disputado {id} «{Truncate(finding.Title, 60)}» — el auditor sostiene que nunca fue "
+                    + $"un defecto: {Truncate(v.Evidence, 160)}");
+                break;
         }
 
         _onFinding?.Invoke(finding, outcome.ToString().ToLowerInvariant());
@@ -455,7 +500,7 @@ public sealed class SessionToolbox : IAuditToolbox
             return Reject("duplicado exacto dentro de esta sesión (mismo título y misma ubicación).", args);
         }
 
-        Finding created = _ingestion.Create(submitted, _slug, _mode, _stamp);
+        Finding created = _ingestion.Create(submitted, _slug, _mode, Stamp);
         _createdInSweep[created.Id.ToString()] = created;
         Counters.New++;
         PassNew++;

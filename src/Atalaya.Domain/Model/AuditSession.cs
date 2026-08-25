@@ -65,6 +65,19 @@ public sealed class SessionCounters
     public int LocationsAdded { get; set; }
 
     /// <summary>
+    /// Veredictos «arreglado» degradados a «presente» por falta de evidencia de que la unidad
+    /// cambiara (F5.1b). Nunca se suman a <see cref="Resolved"/>: son lo contrario de una
+    /// resolución. Si es &gt; 0, el informe nombra cuáles y por qué.
+    /// </summary>
+    public int ResolutionsRefused { get; set; }
+
+    /// <summary>
+    /// Hallazgos marcados como disputados en esta sesión (F5.1b): el auditor sostiene que nunca
+    /// fueron un defecto. No resuelven ni desactivan nada; esperan decisión humana.
+    /// </summary>
+    public int Disputed { get; set; }
+
+    /// <summary>
     /// Total payloads the toolbox validated and rebotó (F3.1 Bloque 0). Uno visible aquí evita
     /// que un "todo a 0" quede sin explicación: si <c>Rejected &gt; 0</c> el operador sabe que la
     /// causa está en los payloads del agente, no en la ausencia de hallazgos.
@@ -173,6 +186,13 @@ public sealed class AuditSession
     /// convergió» o «el tope estaba en 1». 0 en sesiones anteriores a F5.1.
     /// </summary>
     public int MaxPassesPerUnit { get; set; }
+
+    /// <summary>
+    /// La sesión se detuvo antes de cubrir todas sus unidades (F5.1b). Se registra igual: los
+    /// hallazgos se persisten en vivo, así que una parada sin registro dejaba el hub mutado sin
+    /// traza de quién lo hizo. False en sesiones anteriores a F5.1b y en las completas.
+    /// </summary>
+    public bool Interrupted { get; set; }
 
     public int CycleN { get; set; }
 

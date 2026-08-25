@@ -21,7 +21,9 @@
             <ui:TextBox PlaceholderText="Buscar (título/ruleId)…" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Width="240" Margin="0,0,8,8" />
             <ComboBox ItemsSource="{Binding Severities}" SelectedItem="{Binding SeverityFilter}" Width="130" Margin="0,0,8,8" />
             <CheckBox Content="Ver silenciados" IsChecked="{Binding ShowSilenced}" VerticalAlignment="Center" Margin="0,0,12,8" />
-            <CheckBox Content="Solo needsReview" IsChecked="{Binding OnlyNeedsReview}" VerticalAlignment="Center" Margin="0,0,8,8" />
+            <CheckBox Content="Solo needsReview" IsChecked="{Binding OnlyNeedsReview}" VerticalAlignment="Center" Margin="0,0,12,8" />
+            <CheckBox Content="Solo disputados" IsChecked="{Binding OnlyDisputed}" VerticalAlignment="Center" Margin="0,0,8,8"
+                      ToolTip="Hallazgos que un auditor sostiene que nunca fueron un defecto. Los decide una persona." />
         </WrapPanel>
 
         <!-- Bulk actions -->
@@ -31,7 +33,11 @@
             <ui:Button Content="Silenciar sel." Command="{Binding SilenceSelectedCommand}" Margin="0,0,12,6" />
             <ui:TextBox PlaceholderText="Asignar a…" Text="{Binding Assignee}" Width="140" Margin="0,0,6,6" />
             <ui:Button Content="Asignar sel." Command="{Binding AssignSelectedCommand}" Margin="0,0,12,6" />
-            <ui:Button Content="Verify sel." Command="{Binding VerifySelectedCommand}" Appearance="Primary" Margin="0,0,6,6" />
+            <ui:Button Content="Verify sel." Command="{Binding VerifySelectedCommand}" Appearance="Primary" Margin="0,0,12,6" />
+            <ui:Button Content="Disputa: es falso positivo" Command="{Binding AcceptDisputeCommand}" Margin="0,0,6,6"
+                       ToolTip="Da la razón al auditor que discrepó: se silencia como falso positivo, con tu nombre. No es una resolución." />
+            <ui:Button Content="Disputa: sigue siendo defecto" Command="{Binding DismissDisputeCommand}" Margin="0,0,6,6"
+                       ToolTip="Da la razón a quien lo reportó: se retira la marca y el hallazgo sigue igual." />
         </WrapPanel>
 
         <DataGrid
@@ -53,6 +59,7 @@
                 <DataGridTextColumn Header="Título" Binding="{Binding Title}" Width="*" />
                 <DataGridTextColumn Header="Ubicación" Binding="{Binding Location}" Width="200" />
                 <DataGridTextColumn Header="Días" Binding="{Binding DaysSinceConfirmed}" Width="60" />
+                <DataGridTextColumn Header="Disputa" Binding="{Binding DisputeLabel}" Width="170" />
                 <DataGridTemplateColumn Header="" Width="150">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>

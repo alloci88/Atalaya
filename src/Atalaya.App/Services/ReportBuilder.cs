@@ -41,6 +41,12 @@ public static class ReportBuilder
         sb.AppendLine();
 
         sb.AppendLine("## Cobertura");
+        if (session.Interrupted)
+        {
+            sb.AppendLine("- ⚠ **Sesión detenida por el usuario**: no cubrió todas sus unidades. "
+                + "Lo auditado hasta la parada sí está registrado aquí.");
+        }
+
         sb.AppendLine($"- Unidades procesadas: {session.Units.Count}");
         sb.AppendLine($"- Pendientes tras la sesión: {pendingUnits}");
         sb.AppendLine($"- Grandes: {largeUnits}");
@@ -95,6 +101,20 @@ public static class ReportBuilder
             sb.AppendLine($"- No verificables (marcados para revisión): {cn.NoVerificables}");
         }
 
+        // F5.1b: los dos números que impiden que un desacuerdo del modelo pase por resolución.
+        // Nunca aparecen sin la sección que los detalla, más abajo.
+        if (cn.ResolutionsRefused > 0)
+        {
+            sb.AppendLine($"- ⚠ «Arreglado» sin evidencia de cambio, degradados a presente: {cn.ResolutionsRefused}"
+                + " (resolver exige que la unidad haya cambiado)");
+        }
+
+        if (cn.Disputed > 0)
+        {
+            sb.AppendLine($"- Disputados (el auditor sostiene que nunca fueron defecto): {cn.Disputed}"
+                + " — no resueltos: esperan decisión humana");
+        }
+
         var incompletas = session.Units.Where(u => u.MissingVerdicts > 0).ToList();
         if (incompletas.Count > 0)
         {
@@ -136,6 +156,25 @@ public static class ReportBuilder
 
                 sb.AppendLine();
             }
+        }
+
+        // F5.1b: qué veredictos no se aplicaron tal cual y por qué. Las notas los nombran por ULID;
+        // sin esta sección, «1 degradado» sería otro número sin causa (D-060).
+        var degradados = session.Notes.Where(n => n.Contains(": veredicto degradado · ")).ToList();
+        if (degradados.Count > 0)
+        {
+            sb.AppendLine("## Veredictos que la app no aplicó tal cual");
+            sb.AppendLine();
+            sb.AppendLine("Un «arreglado» solo resuelve si la unidad cambió desde la última vez que se vio el");
+            sb.AppendLine("hallazgo. Sin esa evidencia se degrada a presente. Y una discrepancia de criterio");
+            sb.AppendLine("(«no es un defecto») marca el hallazgo como disputado, sin cerrarlo.");
+            sb.AppendLine();
+            foreach (string n in degradados)
+            {
+                sb.AppendLine($"- {n.Replace(": veredicto degradado · ", " · ")}");
+            }
+
+            sb.AppendLine();
         }
 
         if (session.UsageBreakdown.Count > 0)

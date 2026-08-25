@@ -16,6 +16,15 @@ public enum FindingEvent
     Recurrence,
     /// <summary>An assisted-fix branch was proposed (§5.7, H9).</summary>
     FixProposed,
+
+    /// <summary>
+    /// El auditor sostuvo que esto nunca fue un defecto (F5.1b). NO cierra el hallazgo: lo deja
+    /// marcado como disputado a la espera de que lo decida una persona.
+    /// </summary>
+    Disputed,
+
+    /// <summary>Una persona cerró la disputa por gobernanza (F5.1b).</summary>
+    DisputeCleared,
 }
 
 /// <summary>One immutable entry in a finding's audit trail.</summary>

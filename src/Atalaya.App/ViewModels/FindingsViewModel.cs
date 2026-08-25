@@ -25,6 +25,21 @@ public sealed partial class FindingRow : ObservableObject
     public bool NeedsReview { get; init; }
     public bool IsStale { get; init; }
 
+    /// <summary>Cuántos auditores sostienen que esto nunca fue un defecto (F5.1b).</summary>
+    public int DisputeCount { get; init; }
+
+    /// <summary>Cuántos MODELOS distintos discrepan. Tres es una señal muy fuerte.</summary>
+    public int DisputingModels { get; init; }
+
+    public bool IsDisputed => DisputeCount > 0;
+
+    /// <summary>Etiqueta de la marca de disputa, para la tabla.</summary>
+    public string DisputeLabel => DisputeCount == 0
+        ? string.Empty
+        : DisputingModels > 1
+            ? $"⚖ disputado ×{DisputingModels} modelos"
+            : "⚖ disputado";
+
     [ObservableProperty]
     private bool _isSelected;
 }
@@ -62,6 +77,7 @@ public sealed partial class FindingsViewModel : ViewModelBase
     [ObservableProperty] private Severity? _severityFilter;
     [ObservableProperty] private bool _showSilenced;
     [ObservableProperty] private bool _onlyNeedsReview;
+    [ObservableProperty] private bool _onlyDisputed;
     [ObservableProperty] private string _searchText = string.Empty;
     [ObservableProperty] private SilenceReason _silenceReason = SilenceReason.FalsoPositivo;
     [ObservableProperty] private string _silenceNotes = string.Empty;
@@ -75,6 +91,7 @@ public sealed partial class FindingsViewModel : ViewModelBase
     partial void OnSeverityFilterChanged(Severity? value) => Reload();
     partial void OnShowSilencedChanged(bool value) => Reload();
     partial void OnOnlyNeedsReviewChanged(bool value) => Reload();
+    partial void OnOnlyDisputedChanged(bool value) => Reload();
     partial void OnSearchTextChanged(string value) => Reload();
     partial void OnAppFilterChanged(string? value) => Reload();
 
@@ -102,6 +119,11 @@ public sealed partial class FindingsViewModel : ViewModelBase
                 }
 
                 if (OnlyNeedsReview && !f.NeedsReview)
+                {
+                    continue;
+                }
+
+                if (OnlyDisputed && f.Disputes.Count == 0)
                 {
                     continue;
                 }
@@ -135,6 +157,11 @@ public sealed partial class FindingsViewModel : ViewModelBase
                     DaysSinceConfirmed = days,
                     NeedsReview = f.NeedsReview,
                     IsStale = days > freshness,
+                    DisputeCount = f.Disputes.Count,
+                    DisputingModels = f.Disputes
+                        .Select(d => d.Model ?? "(sin modelo)")
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .Count(),
                 });
             }
         }
@@ -198,6 +225,51 @@ public sealed partial class FindingsViewModel : ViewModelBase
         }
 
         StatusMessage = $"{selected.Count} hallazgo(s) asignado(s).";
+        Reload();
+    }
+
+    /// <summary>
+    /// Cierra la disputa dando la razón al auditor que discrepó (F5.1b): falso positivo, con autor.
+    /// No es una resolución — nunca hubo nada que arreglar.
+    /// </summary>
+    [RelayCommand]
+    private void AcceptDispute()
+    {
+        var selected = Selected.Where(r => r.IsDisputed).ToList();
+        if (selected.Count == 0)
+        {
+            StatusMessage = "Selecciona hallazgos disputados.";
+            return;
+        }
+
+        foreach (FindingRow row in selected)
+        {
+            _governance.ResolveDisputeAsFalsePositive(
+                row.Slug, row.Id, string.IsNullOrWhiteSpace(SilenceNotes) ? null : SilenceNotes.Trim());
+        }
+
+        StatusMessage = $"{selected.Count} disputa(s) aceptada(s) como falso positivo.";
+        Reload();
+    }
+
+    /// <summary>Cierra la disputa dando la razón a quien lo reportó: sigue siendo un defecto.</summary>
+    [RelayCommand]
+    private void DismissDispute()
+    {
+        var selected = Selected.Where(r => r.IsDisputed).ToList();
+        if (selected.Count == 0)
+        {
+            StatusMessage = "Selecciona hallazgos disputados.";
+            return;
+        }
+
+        foreach (FindingRow row in selected)
+        {
+            _governance.DismissDispute(
+                row.Slug, row.Id, string.IsNullOrWhiteSpace(SilenceNotes) ? null : SilenceNotes.Trim());
+        }
+
+        StatusMessage = $"{selected.Count} disputa(s) descartada(s): siguen siendo defectos.";
         Reload();
     }
 

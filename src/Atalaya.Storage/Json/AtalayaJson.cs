@@ -94,7 +94,8 @@ public static class AtalayaJson
         o.Converters.Add(new EnumJsonConverter<ReconcileVerdict>(
             (ReconcileVerdict.Presente, "presente"),
             (ReconcileVerdict.Arreglado, "arreglado"),
-            (ReconcileVerdict.NoVerificable, "no-verificable")));
+            (ReconcileVerdict.NoVerificable, "no-verificable"),
+            (ReconcileVerdict.NoEsDefecto, "no-es-defecto")));
 
         o.Converters.Add(new EnumJsonConverter<ResolutionVia>(
             (ResolutionVia.Implicita, "implicita"),
@@ -114,7 +115,9 @@ public static class AtalayaJson
             (FindingEvent.Unsilenced, "unsilenced"),
             (FindingEvent.Commented, "commented"),
             (FindingEvent.Recurrence, "recurrence"),
-            (FindingEvent.FixProposed, "fixProposed")));
+            (FindingEvent.FixProposed, "fixProposed"),
+            (FindingEvent.Disputed, "disputed"),
+            (FindingEvent.DisputeCleared, "disputeCleared")));
 
         o.Converters.Add(new EnumJsonConverter<TechStack>(
             (TechStack.Unknown, "unknown"),

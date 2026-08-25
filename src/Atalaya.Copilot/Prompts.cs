@@ -106,13 +106,19 @@ public static class PromptComposer
            report_verdicts con un ARRAY que contenga un veredicto por CADA hallazgo de la lista. Cada
            veredicto es {findingId, verdict, evidence}:
              * findingId: el ULID EXACTO tal cual aparece en la lista. No lo inventes ni lo abrevies.
-             * verdict: exactamente uno de {presente, arreglado, no-verificable}.
+             * verdict: exactamente uno de {presente, arreglado, no-verificable, no-es-defecto}.
                  - presente: el problema sigue en el código que estás viendo.
-                 - arreglado: el problema YA NO está. Solo si lo has comprobado en el código de la unidad.
+                 - arreglado: SOLO si el código CAMBIÓ y por eso el problema ya no está. Es una
+                   afirmación sobre un cambio, no sobre tu criterio.
+                 - no-es-defecto: crees que esto NUNCA fue un defecto — el código es el mismo y
+                   discrepas de quien lo reportó. Explica tu razonamiento en evidence. No cierra el
+                   hallazgo: lo marca como disputado y lo decide una persona.
                  - no-verificable: no puedes determinarlo desde esta unidad (p. ej. depende de otro fichero).
              * evidence: una frase con la razón concreta (línea, construcción, qué cambió). Obligatoria.
            Si NO te pronuncias sobre alguno, la unidad queda marcada INCOMPLETA y ese hallazgo no se toca.
            Nada se resuelve por omisión: un hallazgo solo se cierra si dices 'arreglado' explícitamente.
+           NO uses 'arreglado' para expresar desacuerdo: si el código no ha cambiado, nada se ha
+           arreglado, y la app lo degradará a 'presente'. Para discrepar está 'no-es-defecto'.
 
         2) REPORTAR los hallazgos NUEVOS con submit_findings, un ARRAY con todos los de la unidad en UNA
            sola llamada. IMPORTANTE: si el problema que has encontrado se corresponde con uno de la lista

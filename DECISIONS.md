@@ -1009,6 +1009,116 @@ presupuesto): lo único que cambia dentro es de DÓNDE lee el coordinador el top
   no gana ninguna opción más allá de las dos de esta tanda, y la conexión sigue viviendo en
   **Cuenta** (D2). El rediseño de V5 y la navegación de sesión son la tanda siguiente.
 
+## F5.1b — Parche de veredictos (evidencia de cambio, disputa, parada limpia)
+
+Origen: el usuario preguntó por qué una auditoría había marcado un hallazgo como **resuelto** sin
+haber tocado el código. No era una impresión.
+
+- **D-104 — La prueba: mismo commit en los tres sellos.** El hallazgo
+  `01M0W3XH1CCMWEA365Z23QAGD5` (`CommonStatics.cs:68`, «CsvReader/StreamReader no se disponen si
+  el constructor lanza») tenía en disco `firstDetected.commit = lastConfirmed.commit =
+  resolved.commit = f86a301`. Las tres sesiones auditaron el mismo árbol. El código no cambió, y la
+  app tenía los tres commits guardados sin compararlos.
+
+  Y la justificación del modelo no decía que se hubiera arreglado nada, sino que **nunca fue un
+  defecto**: «las declaraciones using locales se inicializan en orden … no hay un recurso creado
+  antes de completar un using que quede sin Dispose». Es una **discrepancia de criterio** con el
+  modelo anterior (se había cambiado a `gpt-5.5` en esa sesión), probablemente acertada en cuanto a
+  la semántica de C# — y aun así «resuelto» era el cajón equivocado.
+
+- **D-105 — La premisa de D-088 nunca se comprobaba.** D-088 rechaza un «arreglado» *intra-barrido*
+  porque el código no cambia entre pasadas, pero declaraba que entre sesiones «resuelve con
+  normalidad, que es su significado legítimo (código cambiado de por medio)». **Nadie comprobaba ese
+  «de por medio».** Era la misma contradicción a mayor escala temporal, y peor: `resuelto` saca el
+  hallazgo de la lista de activos, así que ninguna sesión futura vuelve a mostrárselo a nadie. Una
+  resolución falsa es invisible y permanente — «resolver por accidente», que D-078 declaró imposible.
+
+- **D-106 — Resolver exige evidencia de cambio, en dos capas.** `ReconciliationService`
+  (`UnchangedSinceLastSighting`): un «arreglado» solo resuelve si NO se puede probar que la unidad
+  siga igual desde el último avistamiento.
+  1. **Mismo commit** → degradado.
+  2. **Mismo `contentHash` de la unidad** → degradado aunque el commit difiera. Sin esta capa, un
+     commit en cualquier otra parte del repositorio bastaría para colar una resolución falsa. El
+     hash se sella ahora en cada detección y confirmación (`DetectionStamp.UnitContentHash`),
+     calculado sobre los bytes crudos igual que el inventario para que ambos sean comparables.
+
+  Las dos capas solo devuelven `true` con **prueba positiva** de que nada cambió, así que degradar
+  nunca acusa en falso. Lo declarado como no cubierto: un hallazgo anterior a F5.1b no tiene hash y
+  solo cuenta con la capa del commit; un árbol sucio cambia el código sin cambiar el commit. En
+  ambos casos la duda favorece al auditor y se resuelve.
+
+  **El centinela `unknown` se excluye a propósito.** `GitInfo.HeadSha` devuelve `unknown` cuando
+  el clon no es un repositorio git; dos `unknown` no prueban que el código sea el mismo, prueban que
+  no lo sabemos. Compararlos habría bloqueado TODA resolución legítima en un clon sin git — el falso
+  positivo que esta guarda no puede permitirse. Lo descubrió el tercer mutante, que al principio no
+  fallaba porque el test no ejercitaba el caso; se reescribió con un clon sin git de verdad.
+
+- **D-107 — Un «arreglado» degradado se confirma, no se descarta, y no alarga el barrido.** Cuenta
+  como `Confirmed` (el hallazgo sigue ahí) y además en `SessionCounters.ResolutionsRefused`, que
+  jamás se suma a `Resolved`. No marca la pasada como no-seca: la app ya ha decidido, y dejar que el
+  desacuerdo del modelo alargara el barrido solo quemaría presupuesto (mismo criterio que la guarda
+  intra-barrido de D-088).
+
+- **D-108 — La casilla que faltaba: `no-es-defecto`.** El vocabulario del auditor era
+  {presente, arreglado, no-verificable}. Para expresar desacuerdo, la única casilla disponible era
+  «arreglado». **Es el patrón de D-091 otra vez**: cuando el vocabulario no cubre lo que el auditor
+  quiere decir, el modelo no calla — usa la casilla más cercana y la app registra algo falso. Allí un
+  defecto sistémico se fragmentaba en cinco hallazgos; aquí un desacuerdo se archivaba como arreglo.
+  - `ReconcileVerdict.NoEsDefecto` **no resuelve y no desactiva**: cuelga una `DisputeEntry` con el
+    razonamiento, el modelo que discrepó y la fecha, y no toca `Status`, `Confidence`,
+    `TimesConfirmed` ni `LastConfirmed` — mover cualquiera de los tres convertiría un desacuerdo en
+    evidencia.
+  - **Se acumulan.** Tres modelos distintos discrepando del mismo hallazgo es la señal fuerte; V3 lo
+    enseña como «⚖ disputado ×N modelos» y tiene filtro «Solo disputados».
+  - **La salida es SOLO humana**, en las dos direcciones: `ResolveDisputeAsFalsePositive` (silencio
+    con motivo `falso-positivo`, con autor — reutiliza el cajón que §2 ya tenía, no inventa un
+    estado) o `DismissDispute` («sigue siendo defecto»: retira la marca y deja el hallazgo igual).
+    El historial conserva las disputas aunque la marca se limpie.
+  - El prompt del auditor y la descripción de `report_verdicts` lo dicen explícitamente: usa
+    «arreglado» SOLO si el código cambió; para discrepar, «no-es-defecto».
+
+- **D-109 — Detener una sesión es un final ordenado, no un aborto.** Investigando la «sesión
+  fantasma» (un `lastConfirmed` a las 12:13 local sin fichero de sesión ni informe) el mecanismo
+  resultó estar en el código, no en el misterio: la ingesta persiste los hallazgos **en vivo**, pero
+  al cancelar, `RunAsync` lanzaba `OperationCanceledException` y se saltaba TODO lo posterior al
+  bucle de unidades — registro de sesión, informe, **liberación de claims** y commit+push. Una
+  parada dejaba el hub mutado sin traza de quién lo hizo y las unidades reclamadas hasta que
+  caducara el TTL.
+  - Ahora la cancelación se captura y la sesión se cierra igual, con lo que llevara hecho.
+  - **«Interrumpida» se mide por cobertura, no por el botón**: `session.Units.Count < units.Count`.
+    Una parada que llega cuando ya se procesaron todas las unidades pedidas no es una interrupción —
+    la sesión cubrió lo que decía cubrir. Este matiz apareció al escribir el test, que con una sola
+    unidad esperaba lo contrario de lo correcto.
+  - Una sesión interrumpida **no cierra ciclo**, marca solo las unidades realmente auditadas, y V5
+    dice qué se guardó en vez de un «detenida» que hacía parecer perdido el trabajo.
+  - **Nota de método:** al leer el log confundí husos (el log va en local `+02:00`, las sesiones en
+    UTC) y estuve a punto de dar por buena una correlación falsa con un arranque del CLI. La lección
+    de D-096 otra vez: verificar antes de afirmar, y verificar también las unidades.
+
+- **D-110 — Lo que NO se ha construido, y por qué.** El caso «la app muere de golpe» (cierre
+  forzado, cuelgue) sigue pudiendo dejar escrituras huérfanas: la parada limpia solo cubre la
+  cancelación cooperativa. El arreglo natural es una **marca de sesión abierta** que la siguiente
+  ejecución encuentre y cierre como interrumpida. No se hace aquí porque exige un artefacto nuevo en
+  el hub y un paso de recuperación al arranque, y esta tanda ya toca la reconciliación. Queda
+  propuesto, no prometido.
+
+- **D-111 — Corrección del dato real.** `01M0W3XH1CCMWEA365Z23QAGD5` se ha revertido a **activo** y
+  marcado **disputado** por `gpt-5.5`, conservando su razonamiento. La resolución era inválida
+  procedimentalmente con independencia de lo acertado del argumento; decidirlo es de una persona,
+  por gobernanza, y ahora hay un cajón donde esperar esa decisión.
+
+- **D-113 — El coste no es por tokens, es por llamada.** Medido sobre tres sesiones reales de la
+  misma unidad: `coste = llamadas × multiplicador`, exacto (14×1=14, 3×1=3, 12×**7,5**=90). Bajar el
+  tope del barrido de 5 a 3 hizo lo suyo (14 → 12 llamadas, 420 k → 260 k tokens) y quedó sepultado
+  bajo el ×7,5 de cambiar a `gpt-5.5`. Consecuencia práctica: **la palanca de coste es el
+  multiplicador del modelo**, que F5.1 ya enseña en el desplegable; el tope de pasadas mueve ±15 %.
+  Y cortar el tope por debajo de la convergencia sale MÁS caro por unidad de cobertura, porque se
+  pagan varios barridos incompletos en vez de uno que cierra.
+
+- **D-112 — Cobertura.** 18 tests nuevos (`VerdictGuardTests`, `StoppedSessionTests`). Verificados
+  por mutación: desactivar la guarda entera tumba 3; desactivar solo la capa del `contentHash` tumba
+  1; no excluir el centinela `unknown` tumba 1; volver a lanzar en la cancelación tumba 7.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

@@ -98,4 +98,17 @@ public enum ReconcileVerdict
 
     /// <summary>No se puede determinar desde la unidad → <c>needsReview</c>.</summary>
     NoVerificable,
+
+    /// <summary>
+    /// El auditor sostiene que NUNCA fue un defecto (F5.1b) — una discrepancia de criterio con
+    /// quien lo reportó, no un arreglo. No resuelve ni desactiva: marca el hallazgo como disputado
+    /// y lo deja para una persona.
+    /// <para>
+    /// Sin esta casilla el modelo no tenía forma de expresar desacuerdo y usaba «arreglado», que
+    /// cerraba el hallazgo en silencio. Mismo patrón que D-091: cuando el vocabulario no cubre lo
+    /// que el auditor quiere decir, no calla — usa la casilla más cercana y la app registra algo
+    /// falso.
+    /// </para>
+    /// </summary>
+    NoEsDefecto,
 }

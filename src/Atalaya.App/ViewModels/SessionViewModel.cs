@@ -116,7 +116,10 @@ public sealed partial class SessionViewModel : ViewModelBase
             SessionResult result = await Task.Run(() => _coordinator.RunAsync(_request, _cts.Token));
             // F4: el resumen gana "no verificables" e "incompletas" — pero solo si los hay, y con
             // la causa implícita en el propio texto. Sin números sin causa.
-            StatusMessage = $"Sesión completada. Nuevos {result.Counters.New}, confirmados {result.Counters.Confirmed}, "
+            // F5.1b: una parada también reporta lo que SÍ se guardó — antes decía solo "detenida"
+            // y el trabajo hecho parecía perdido, cuando estaba en el hub.
+            StatusMessage = (result.Interrupted ? "Sesión detenida; lo auditado queda guardado." : "Sesión completada.")
+                + $" Nuevos {result.Counters.New}, confirmados {result.Counters.Confirmed}, "
                 + $"resueltos {result.Counters.Resolved}, silenciados respetados {result.Counters.SilencedRespected}."
                 + (result.Counters.NoVerificables > 0
                     ? $" {result.Counters.NoVerificables} no verificables (marcados para revisión)."

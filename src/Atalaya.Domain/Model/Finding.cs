@@ -54,6 +54,18 @@ public sealed class Finding
     /// <summary>Set when a location could not be re-anchored or verify said non-verifiable (§5.4).</summary>
     public bool NeedsReview { get; set; }
 
+    /// <summary>
+    /// Discrepancias de criterio abiertas sobre este hallazgo (F5.1b): auditores que sostienen que
+    /// nunca fue un defecto. Estar disputado NO es un estado del hallazgo — sigue activo, con su
+    /// severidad y su confianza intactas — sino una marca que pide una decisión humana.
+    /// <para>
+    /// Se acumulan: dos o tres modelos distintos discrepando del mismo hallazgo es la señal fuerte.
+    /// La marca solo la quita una persona (<see cref="ClearDisputes"/>) o el silencio por
+    /// falso-positivo; el historial conserva las entradas aunque la marca se limpie.
+    /// </para>
+    /// </summary>
+    public List<DisputeEntry> Disputes { get; set; } = new();
+
     public string? Assignee { get; set; }
 
     /// <summary>Previous <see cref="DisplayId"/> values, if an alias ever changed (§2).</summary>
@@ -116,6 +128,37 @@ public sealed class Finding
         Resolved = stamp;
         History.Add(new HistoryEntry(stamp.Utc, FindingEvent.Resolved, stamp.By,
             $"resolved via {stamp.Via}" + (stamp.Justification is null ? "" : $": {stamp.Justification}")));
+    }
+
+    /// <summary>
+    /// Registra que un auditor sostiene que esto nunca fue un defecto (F5.1b). NO resuelve y NO
+    /// desactiva: el hallazgo se queda exactamente donde está, con una disputa colgada.
+    /// <para>
+    /// Tampoco cuenta como confirmación: quien discrepa no está diciendo «el defecto sigue ahí»,
+    /// así que <see cref="TimesConfirmed"/>, <see cref="Confidence"/> y <see cref="LastConfirmed"/>
+    /// no se tocan. Mover cualquiera de los tres convertiría un desacuerdo en evidencia.
+    /// </para>
+    /// </summary>
+    public void Dispute(DateTimeOffset utc, string by, string? model, string justification)
+    {
+        string reason = string.IsNullOrWhiteSpace(justification)
+            ? "sin razonamiento aportado"
+            : justification.Trim();
+        Disputes.Add(new DisputeEntry(utc, model, by, reason));
+        History.Add(new HistoryEntry(utc, FindingEvent.Disputed, by,
+            $"no-es-defecto según {model ?? "el auditor"}: {reason}"));
+    }
+
+    /// <summary>
+    /// Cierra la disputa dejando el hallazgo en pie: una persona ha decidido que SÍ es un defecto
+    /// (§5.6, gobernanza). El historial conserva las disputas; lo que se retira es la marca.
+    /// </summary>
+    public void ClearDisputes(DateTimeOffset utc, string by, string? detail)
+    {
+        int count = Disputes.Count;
+        Disputes.Clear();
+        History.Add(new HistoryEntry(utc, FindingEvent.DisputeCleared, by,
+            detail ?? $"{count} disputa(s) descartada(s): sigue siendo un defecto"));
     }
 
     /// <summary>Reopens a resolved finding (governance).</summary>
