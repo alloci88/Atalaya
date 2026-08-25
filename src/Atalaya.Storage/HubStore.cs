@@ -1,3 +1,4 @@
+using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Storage.Json;
 using Microsoft.Extensions.Logging;
@@ -75,31 +76,23 @@ public sealed class HubStore
     public void WriteFinding(string slug, Finding finding)
         => WriteJson(_paths.FindingFile(slug, finding.Id.ToString()), finding, SchemaValidation.Validate);
 
-    /// <summary>All findings (any status) sharing a fingerprint — la búsqueda de dedupe (§2).
-    /// F3.1 Bloque 1: incluye también los hallazgos cuyo <see cref="Finding.PreviousFingerprints"/>
-    /// contiene el hash, para que un silencio o un dedupe por el fingerprint antiguo siga viendo
-    /// al hallazgo migrado.</summary>
-    public IReadOnlyList<Finding> FindByFingerprint(string slug, string fingerprint)
-        => ListFindings(slug)
-            .Where(f => f.Fingerprint == fingerprint || f.PreviousFingerprints.Contains(fingerprint))
-            .ToList();
-
     // --- Silences ---
 
     public IReadOnlyList<Silence> ListSilences(string slug)
         => ReadAll<Silence>(_paths.SilencesDir(slug), SchemaValidation.Validate);
 
-    public Silence? TryReadSilence(string slug, string fingerprint)
-        => File.Exists(_paths.SilenceFile(slug, fingerprint))
-            ? ReadJson<Silence>(_paths.SilenceFile(slug, fingerprint), SchemaValidation.Validate)
+    /// <summary>F4: el silencio se busca por el ULID del hallazgo, no por fingerprint.</summary>
+    public Silence? TryReadSilence(string slug, Ulid findingUlid)
+        => File.Exists(_paths.SilenceFile(slug, findingUlid.ToString()))
+            ? ReadJson<Silence>(_paths.SilenceFile(slug, findingUlid.ToString()), SchemaValidation.Validate)
             : null;
 
     public void WriteSilence(string slug, Silence silence)
-        => WriteJson(_paths.SilenceFile(slug, silence.Fingerprint), silence, SchemaValidation.Validate);
+        => WriteJson(_paths.SilenceFile(slug, silence.FindingUlid.ToString()), silence, SchemaValidation.Validate);
 
-    public bool DeleteSilence(string slug, string fingerprint)
+    public bool DeleteSilence(string slug, Ulid findingUlid)
     {
-        string path = _paths.SilenceFile(slug, fingerprint);
+        string path = _paths.SilenceFile(slug, findingUlid.ToString());
         if (!File.Exists(path))
         {
             return false;

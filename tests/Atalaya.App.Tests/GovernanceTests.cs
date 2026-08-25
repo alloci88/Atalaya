@@ -2,7 +2,7 @@ using Atalaya.App.Services;
 using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
-using Atalaya.Domain.Fingerprinting;
+using Atalaya.Domain.Anchoring;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Inventory;
@@ -44,13 +44,12 @@ public sealed class GovernanceTests : IDisposable
         var f = new Finding
         {
             Id = _ulids.NewUlid(),
-            Fingerprint = Fingerprint.Compute("errores.recursos.no-liberado", "A.cs", "A.M", "leak"),
             RuleId = "errores.recursos.no-liberado",
             Pillar = Pillar.Errores,
             Severity = Severity.Alta,
             Confidence = Confidence.Media,
             Title = "leak",
-            Locations = { new Location("A.cs", 2, Fingerprint.ComputeSnippetHash(line)) },
+            Locations = { new Location("A.cs", 2, CodeAnchor.ComputeSnippetHash(line)) },
             Origin = AuditMode.Lotes,
             FirstDetected = stamp,
             LastConfirmed = stamp,
@@ -66,11 +65,11 @@ public sealed class GovernanceTests : IDisposable
         _gov.Silence("app", f.Id, SilenceReason.FalsoPositivo, "no aplica", expiresUtc: null);
 
         _hub.Store.TryReadFinding("app", f.Id.ToString())!.Status.Should().Be(FindingStatus.Silenciado);
-        _hub.Store.TryReadSilence("app", f.Fingerprint).Should().NotBeNull();
+        _hub.Store.TryReadSilence("app", f.Id).Should().NotBeNull();
 
         _gov.Unsilence("app", f.Id);
         _hub.Store.TryReadFinding("app", f.Id.ToString())!.Status.Should().Be(FindingStatus.Activo);
-        _hub.Store.TryReadSilence("app", f.Fingerprint).Should().BeNull();
+        _hub.Store.TryReadSilence("app", f.Id).Should().BeNull();
     }
 
     [Fact]

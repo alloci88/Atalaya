@@ -12,7 +12,7 @@ public sealed class Location
 
     public int Line { get; set; }
 
-    /// <summary>Hash of the anchored code snippet (<see cref="Fingerprinting.Fingerprint.ComputeSnippetHash"/>).</summary>
+    /// <summary>Hash of the anchored code snippet (<see cref="Anchoring.CodeAnchor.ComputeSnippetHash"/>).</summary>
     public string? SnippetHash { get; set; }
 
     public Location() { }

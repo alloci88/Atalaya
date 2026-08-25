@@ -29,8 +29,8 @@ public sealed class HubPaths
 
     public string SilencesDir(string slug) => Path.Combine(AppDir(slug), "silences");
 
-    /// <summary>Silence file name derives from the fingerprint hex (':' is illegal on Windows).</summary>
-    public string SilenceFile(string slug, string fingerprint) => Path.Combine(SilencesDir(slug), $"{HashToFileName(fingerprint)}.json");
+    /// <summary>F4: un silencio se nombra por el ULID del hallazgo que silencia.</summary>
+    public string SilenceFile(string slug, string findingUlid) => Path.Combine(SilencesDir(slug), $"{findingUlid}.json");
 
     public string ClaimsDir(string slug) => Path.Combine(AppDir(slug), "claims");
 

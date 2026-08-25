@@ -29,14 +29,13 @@ public sealed class HubStoreTests : IDisposable
     }
 
     [Fact]
-    public void Finding_roundtrip_and_lookup_by_fingerprint()
+    public void Finding_roundtrip_and_lookup_by_ulid()
     {
         Finding f = Samples.Finding();
         _store.WriteFinding("webapp", f);
 
         _store.TryReadFinding("webapp", f.Id.ToString())!.Title.Should().Be("Conn leaked");
         _store.ListFindings("webapp").Should().ContainSingle();
-        _store.FindByFingerprint("webapp", f.Fingerprint).Should().ContainSingle();
     }
 
     [Fact]

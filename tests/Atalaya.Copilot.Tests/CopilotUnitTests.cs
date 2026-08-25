@@ -76,7 +76,8 @@ public class FakeAgentTests
                 "NPE", "d", "i", "r", new[] { new SubmitLocation("a.cs", 5, null) }, null),
         });
 
-        await fake.AuditUnitAsync(new AuditUnitRequest("a.cs", "code", "prompt", TechStack.DotNet, AuditMode.Lotes),
+        await fake.AuditUnitAsync(
+            new AuditUnitRequest("a.cs", "code", "prompt", TechStack.DotNet, AuditMode.Lotes, Array.Empty<ExistingFinding>()),
             toolbox, CancellationToken.None);
 
         toolbox.Submitted.Should().ContainSingle();
@@ -102,6 +103,14 @@ public class FakeAgentTests
                 results.Add(SubmitFinding(a));
             }
             return new SubmitFindingsResult(results);
+        }
+
+        public List<VerdictArgs> Verdicts { get; } = new();
+
+        public ReportVerdictsResult ReportVerdicts(VerdictArgs[] verdicts)
+        {
+            Verdicts.AddRange(verdicts);
+            return new ReportVerdictsResult(verdicts.Select(_ => new ReportVerdictResult(true)).ToList());
         }
 
         public void UnitDone(string unitPath, string summary) => UnitDoneCalled = true;

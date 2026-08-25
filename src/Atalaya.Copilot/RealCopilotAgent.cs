@@ -137,6 +137,9 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
         SubmitFindingsResult SubmitFindings(SubmitFindingArgs[] findings)
             => toolbox.SubmitFindings(findings ?? Array.Empty<SubmitFindingArgs>());
 
+        ReportVerdictsResult ReportVerdicts(VerdictArgs[] verdicts)
+            => toolbox.ReportVerdicts(verdicts ?? Array.Empty<VerdictArgs>());
+
         void UnitDone(string unitPath, string summary) => toolbox.UnitDone(unitPath, summary);
 
         string ReadSignatures(string path) => toolbox.ReadSignatures(path);
@@ -147,6 +150,10 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
             + "Devuelve un array de {accepted, duplicateOf, error} en el mismo orden.");
         AddTool(config, SubmitFinding, "submit_finding",
             "Fallback singular. Úsala solo si por alguna razón no puedes agrupar; cada llamada añade un turno.");
+        AddTool(config, ReportVerdicts, "report_verdicts",
+            "OBLIGATORIA cuando la unidad tiene hallazgos existentes. Un array con un veredicto por CADA "
+            + "hallazgo listado: {findingId (ULID exacto de la lista), verdict (presente|arreglado|no-verificable), "
+            + "evidence}. Devuelve un array de {accepted, error} en el mismo orden.");
         AddTool(config, UnitDone, "unit_done", "Cierra la unidad en curso con un resumen.", terminal: true);
         AddTool(config, ReadSignatures, "read_signatures",
             "Devuelve las firmas (no cuerpos) de las dependencias directas de la unidad.");

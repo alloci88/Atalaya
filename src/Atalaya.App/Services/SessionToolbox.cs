@@ -1,6 +1,7 @@
 using Atalaya.Copilot;
 using Atalaya.Domain;
-using Atalaya.Domain.Fingerprinting;
+using Atalaya.Domain.Anchoring;
+using Atalaya.Domain.Ids;
 using Atalaya.Domain.Ingestion;
 using Atalaya.Domain.Model;
 
@@ -8,8 +9,12 @@ namespace Atalaya.App.Services;
 
 /// <summary>
 /// The tools the app hands the agent for one session (§6.2). It validates every payload against
-/// the schema and the ruleId catalog, persists via <see cref="FindingIngestionService"/>, and
-/// tracks which fingerprints were re-reported (for implicit resolution). The agent writes nothing.
+/// the schema and the ruleId catalog and persists. The agent writes nothing.
+/// <para>
+/// F4: además de <c>submit_finding(s)</c> expone <c>report_verdicts</c>, la reconciliación por el
+/// auditor. La app aplica decisiones tipadas por ULID y NO deduce nada: lo que el auditor no
+/// declara, no se toca (y la unidad queda incompleta).
+/// </para>
 /// </summary>
 public sealed class SessionToolbox : IAuditToolbox
 {
@@ -17,24 +22,35 @@ public sealed class SessionToolbox : IAuditToolbox
     private readonly AuditMode _mode;
     private readonly DetectionStamp _stamp;
     private readonly FindingIngestionService _ingestion;
+    private readonly ReconciliationService _reconciliation;
     private readonly string _clonePath;
-    private readonly Action<Finding, IngestionKind>? _onFinding;
+    private readonly Action<Finding, string>? _onFinding;
+
+    /// <summary>Hallazgos existentes mostrados al auditor en la unidad en curso, por ULID.</summary>
+    private readonly Dictionary<string, Finding> _listed = new(StringComparer.Ordinal);
+
+    /// <summary>ULIDs de la unidad en curso sobre los que el auditor YA se ha pronunciado.</summary>
+    private readonly HashSet<string> _verdicted = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Claves de los hallazgos nuevos ya admitidos en ESTA sesión. Única salvaguarda de duplicado
+    /// que queda (F4): el mismo título normalizado en la misma ubicación no entra dos veces.
+    /// </summary>
+    private readonly HashSet<string> _submittedKeys = new(StringComparer.Ordinal);
 
     public SessionToolbox(
         string slug, AuditMode mode, DetectionStamp stamp,
-        FindingIngestionService ingestion, string clonePath,
-        Action<Finding, IngestionKind>? onFinding = null)
+        FindingIngestionService ingestion, ReconciliationService reconciliation, string clonePath,
+        Action<Finding, string>? onFinding = null)
     {
         _slug = slug;
         _mode = mode;
         _stamp = stamp;
         _ingestion = ingestion;
+        _reconciliation = reconciliation;
         _clonePath = clonePath;
         _onFinding = onFinding;
     }
-
-    /// <summary>Fingerprints reported by the agent this session (drives implicit resolution).</summary>
-    public HashSet<string> ReportedFingerprints { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Rejected payloads (F3 Hito 1c hotfix): every schema/catalog validation failure lands here
@@ -65,20 +81,115 @@ public sealed class SessionToolbox : IAuditToolbox
     public string? LastUnitSummary { get; private set; }
 
     /// <summary>
-    /// Tool calls issued by the agent since the last <see cref="ResetToolCallCount"/> (Hito 1a).
+    /// Tool calls issued by the agent since the last <see cref="BeginUnit"/> (Hito 1a).
     /// Feeds the per-unit token breakdown so we can see whether the bucle agéntico is spending
     /// tokens on many tiny turns or on a few big ones.
     /// </summary>
     public int ToolCallCount { get; private set; }
 
-    public void ResetToolCallCount()
+    /// <summary>
+    /// F4: hallazgos listados en la unidad en curso sobre los que el auditor NO se pronunció.
+    /// Si no está vacío, la unidad se cierra como <c>incompleta</c> y esos hallazgos quedan
+    /// intactos — nunca resueltos por omisión.
+    /// </summary>
+    public IReadOnlyList<Finding> PendingVerdicts
+        => _listed.Where(kv => !_verdicted.Contains(kv.Key)).Select(kv => kv.Value).ToList();
+
+    /// <summary>
+    /// Arranca una unidad: fija los hallazgos existentes que se le han mostrado al auditor (los
+    /// únicos ULIDs sobre los que puede pronunciarse) y reinicia los contadores por unidad.
+    /// </summary>
+    public void BeginUnit(IReadOnlyList<Finding> existing)
     {
+        _listed.Clear();
+        _verdicted.Clear();
+        foreach (Finding f in existing)
+        {
+            _listed[f.Id.ToString()] = f;
+        }
+
         ToolCallCount = 0;
         SubmitInvocations = 0;
         ToolCallLog.Clear();
         RejectedPayloads.Clear();
         RejectionReasons.Clear();
     }
+
+    // ---------- F4 · reconciliación ----------
+
+    public ReportVerdictsResult ReportVerdicts(VerdictArgs[] verdicts)
+    {
+        ToolCallCount++;
+        int count = verdicts?.Length ?? 0;
+        ToolCallLog.Add($"report_verdicts · items={count}");
+        if (verdicts is null || verdicts.Length == 0)
+        {
+            string reason = "report_verdicts recibido sin veredictos (array nulo o vacío).";
+            RejectedPayloads.Add(reason);
+            RejectionReasons.Add(reason);
+            Counters.Rejected++;
+            return new ReportVerdictsResult(new[] { new ReportVerdictResult(false, reason) });
+        }
+
+        var results = new List<ReportVerdictResult>(verdicts.Length);
+        foreach (VerdictArgs v in verdicts)
+        {
+            results.Add(ApplyVerdict(v));
+        }
+
+        return new ReportVerdictsResult(results);
+    }
+
+    private ReportVerdictResult ApplyVerdict(VerdictArgs? v)
+    {
+        if (v is null || string.IsNullOrWhiteSpace(v.FindingId))
+        {
+            return RejectVerdict("veredicto sin findingId.");
+        }
+
+        string id = v.FindingId.Trim();
+
+        // Error tipado: el auditor solo puede pronunciarse sobre lo que se le ha listado. Un ULID
+        // inventado o de otra unidad NO toca nada — se le devuelve el motivo para que se corrija.
+        if (!_listed.TryGetValue(id, out Finding? finding))
+        {
+            return RejectVerdict(
+                $"findingId desconocido '{id}': no está en la lista de hallazgos existentes de esta unidad. "
+                + "Usa solo los ULID listados; si el problema no está en la lista, repórtalo con submit_findings.");
+        }
+
+        if (!ReconciliationService.TryParseVerdict(v.Verdict, out ReconcileVerdict verdict))
+        {
+            return RejectVerdict($"verdict inválido '{v.Verdict}' para {id}. Usa presente | arreglado | no-verificable.");
+        }
+
+        if (!_verdicted.Add(id))
+        {
+            return RejectVerdict($"veredicto duplicado sobre {id} en la misma unidad.");
+        }
+
+        ReconcileOutcome outcome = _reconciliation.Apply(_slug, finding, verdict, v.Evidence, _mode, _stamp);
+        switch (outcome)
+        {
+            case ReconcileOutcome.Reconfirmed: Counters.Confirmed++; break;
+            case ReconcileOutcome.Resolved: Counters.Resolved++; break;
+            case ReconcileOutcome.NeedsReview: Counters.NoVerificables++; break;
+            case ReconcileOutcome.SilenceRespected: Counters.SilencedRespected++; break;
+        }
+
+        _onFinding?.Invoke(finding, outcome.ToString().ToLowerInvariant());
+        return new ReportVerdictResult(true);
+    }
+
+    private ReportVerdictResult RejectVerdict(string reason)
+    {
+        RejectedPayloads.Add($"veredicto rechazado · {reason}");
+        RejectionReasons.Add(reason);
+        Counters.Rejected++;
+        return new ReportVerdictResult(false, reason);
+    }
+
+    // ---------- hallazgos nuevos ----------
 
     public SubmitFindingResult SubmitFinding(SubmitFindingArgs args)
     {
@@ -91,8 +202,7 @@ public sealed class SessionToolbox : IAuditToolbox
     public SubmitFindingsResult SubmitFindings(SubmitFindingArgs[] findings)
     {
         // ONE tool call for the whole array (F3 Hito 1c) — but each item is validated & ingested
-        // through the exact same path as the singular tool, so downstream invariants (fingerprint,
-        // silences, implicit resolution) hold unchanged. Never swallow: an empty/null array is
+        // through the exact same path as the singular tool. Never swallow: an empty/null array is
         // recorded as a rejection so the operator can see the agent sent a malformed payload.
         ToolCallCount++;
         SubmitInvocations++;
@@ -151,7 +261,7 @@ public sealed class SessionToolbox : IAuditToolbox
         }
 
         var locations = args.Locations
-            .Select(l => new Location(l.Path, l.Line, l.Snippet is null ? null : Fingerprint.ComputeSnippetHash(l.Snippet)))
+            .Select(l => new Location(l.Path, l.Line, l.Snippet is null ? null : CodeAnchor.ComputeSnippetHash(l.Snippet)))
             .ToList();
 
         var submitted = new SubmittedFinding(
@@ -159,19 +269,17 @@ public sealed class SessionToolbox : IAuditToolbox
             args.Title, args.Description, args.Impact, args.Recommendation,
             locations, args.Symbol);
 
-        string fingerprint = Fingerprint.Compute(submitted.RuleId, submitted.PrimaryPath, submitted.Symbol, submitted.Title);
-        ReportedFingerprints.Add(fingerprint);
-
-        IngestionOutcome outcome = _ingestion.Ingest(_slug, submitted, _mode, _stamp);
-        Tally(outcome);
-
-        if (outcome.Finding is not null)
+        // F4: la ÚNICA deduplicación superviviente — el mismo payload dos veces en la misma
+        // sesión. Contra el histórico no se compara nada: eso es trabajo del auditor.
+        if (!_submittedKeys.Add(submitted.SessionDuplicateKey))
         {
-            _onFinding?.Invoke(outcome.Finding, outcome.Kind);
+            return Reject("duplicado exacto dentro de esta sesión (mismo título y misma ubicación).", args);
         }
 
-        string? duplicateOf = outcome.Kind == IngestionKind.Reconfirmed ? outcome.Finding?.Id.ToString() : null;
-        return new SubmitFindingResult(true, DuplicateOf: duplicateOf);
+        Finding created = _ingestion.Create(submitted, _slug, _mode, _stamp);
+        Counters.New++;
+        _onFinding?.Invoke(created, "nuevo");
+        return new SubmitFindingResult(true);
     }
 
     private SubmitFindingResult Reject(string reason, SubmitFindingArgs? args)
@@ -226,17 +334,6 @@ public sealed class SessionToolbox : IAuditToolbox
            && (line.StartsWith("public") || line.StartsWith("private") || line.StartsWith("internal")
                || line.StartsWith("protected") || line.StartsWith("def ") || line.StartsWith("func ")
                || line.StartsWith("fn ") || line.StartsWith("function"));
-
-    private void Tally(IngestionOutcome outcome)
-    {
-        switch (outcome.Kind)
-        {
-            case IngestionKind.New: Counters.New++; break;
-            case IngestionKind.Reconfirmed: Counters.Confirmed++; break;
-            case IngestionKind.Recurrence: Counters.New++; Counters.Recurrences++; break;
-            case IngestionKind.SuppressedBySilence: Counters.SilencedRespected++; break;
-        }
-    }
 
     private static bool TryParsePillar(string s, out Pillar pillar)
     {

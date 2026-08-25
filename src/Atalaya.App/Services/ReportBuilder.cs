@@ -39,11 +39,24 @@ public static class ReportBuilder
         sb.AppendLine();
 
         SessionCounters cn = session.Counters;
-        int total = cn.New + cn.Confirmed + cn.Resolved + cn.SilencedRespected;
+        int total = cn.New + cn.Confirmed + cn.Resolved + cn.SilencedRespected + cn.NoVerificables;
         double criterioPct = total == 0 ? 0 : 100.0 * newFindings.Count(f => f.Tag == FindingTag.Criterio) / Math.Max(1, newFindings.Count);
         sb.AppendLine("## Resumen de hallazgos");
         sb.AppendLine($"- Nuevos: {cn.New}  · Confirmados: {cn.Confirmed}  · Resueltos: {cn.Resolved}"
-            + $"  · Silenciados respetados: {cn.SilencedRespected}  · Reincidencias: {cn.Recurrences}");
+            + $"  · Silenciados respetados: {cn.SilencedRespected}");
+        // F4: números con causa. Solo aparecen si los hay, y siempre acompañados del detalle de
+        // qué unidades y qué hallazgos los produjeron (secciones de abajo).
+        if (cn.NoVerificables > 0)
+        {
+            sb.AppendLine($"- No verificables (marcados para revisión): {cn.NoVerificables}");
+        }
+
+        var incompletas = session.Units.Where(u => u.MissingVerdicts > 0).ToList();
+        if (incompletas.Count > 0)
+        {
+            sb.AppendLine($"- ⚠ Unidades incompletas: {incompletas.Count}"
+                + $" ({incompletas.Sum(u => u.MissingVerdicts)} hallazgo(s) sin veredicto del auditor, intactos)");
+        }
         sb.AppendLine($"- % criterio (informativo): {criterioPct:0}%");
         if (cn.Rejected > 0)
         {
@@ -55,7 +68,7 @@ public static class ReportBuilder
         // F3.1 Bloque 0: cualquier unidad cortada por presupuesto (o con rechazos) se narra explícitamente
         // para que un “Nuevos 0” nunca vuelva a aparecer sin causa visible en el informe.
         var incidencias = session.Units
-            .Where(u => u.Verdict == "presupuesto-superado" || u.RejectedPayloads > 0)
+            .Where(u => u.Verdict is "presupuesto-superado" or "incompleta" || u.RejectedPayloads > 0)
             .ToList();
         if (incidencias.Count > 0)
         {
@@ -66,6 +79,19 @@ public static class ReportBuilder
             }
 
             sb.AppendLine();
+            // Qué hallazgos concretos quedaron sin veredicto: las notas de la sesión los nombran
+            // por ULID. Sin esto, "1 incompleta" sería un número sin causa.
+            var sinVeredicto = session.Notes.Where(n => n.Contains(": sin veredicto · ")).ToList();
+            if (sinVeredicto.Count > 0)
+            {
+                sb.AppendLine("### Hallazgos sin veredicto (no modificados)");
+                foreach (string n in sinVeredicto)
+                {
+                    sb.AppendLine($"- {n.Replace(": sin veredicto · ", " · ")}");
+                }
+
+                sb.AppendLine();
+            }
         }
 
         if (session.UsageBreakdown.Count > 0)

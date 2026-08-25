@@ -3,7 +3,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
-using Atalaya.Domain.Fingerprinting;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 
@@ -83,7 +82,6 @@ public sealed class V4Importer
                 {
                     Id = _ulids.NewUlid(),
                     DisplayId = displayId,
-                    Fingerprint = Fingerprint.Compute(ruleId, locations[0].Path, null, title),
                     RuleId = ruleId,
                     Pillar = pillar,
                     Tag = FindingTag.Criterio,
@@ -133,13 +131,12 @@ public sealed class V4Importer
 
                 var silence = new Silence
                 {
-                    Fingerprint = finding.Fingerprint,
+                    FindingUlid = finding.Id,
                     Reason = ParseReason(Get(fields, "motivo", "reason")),
                     Notes = Get(fields, "notas", "notes"),
                     By = Get(fields, "por", "by", "autor") ?? "import",
                     Utc = ParseDate(Get(fields, "fecha", "date")) ?? DateTimeOffset.UnixEpoch,
                     ExpiresUtc = ParseDate(Get(fields, "caduca", "expires", "expira")),
-                    FindingUlids = { finding.Id },
                 };
 
                 finding.MarkSilenced(silence.Utc, silence.By, "silenciado (import v4)");

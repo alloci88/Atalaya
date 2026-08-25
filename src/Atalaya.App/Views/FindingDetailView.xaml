@@ -75,16 +75,6 @@
                 <ui:Button Content="Comentar" Command="{Binding AddCommentCommand}" />
             </StackPanel>
 
-            <!-- Reincidencias -->
-            <TextBlock Text="Reincidencias" FontWeight="SemiBold" FontSize="16" Margin="0,20,0,8" />
-            <ItemsControl ItemsSource="{Binding Recurrences}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" Margin="0,2" />
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-
             <!-- Historial -->
             <TextBlock Text="Historial" FontWeight="SemiBold" FontSize="16" Margin="0,20,0,8" />
             <ItemsControl ItemsSource="{Binding History}">

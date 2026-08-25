@@ -12,7 +12,7 @@ public sealed record AppActive(string Slug, int Active);
 /// <summary>All V6 metrics (§8), computed from primary data (mejora 8).</summary>
 public sealed record MetricsSummary(
     int ActiveTotal, int Critica, int Alta, int Media, int Baja,
-    int Resolved, int Silenced, int Recurrences,
+    int Resolved, int Silenced,
     double AvgDaysToResolution, double CriterioPct,
     long InputTokens, long OutputTokens, decimal? Cost,
     IReadOnlyList<WeekBucket> Burndown, IReadOnlyList<AppActive> PerApp);
@@ -65,7 +65,6 @@ public sealed class MetricsQuery
         return new MetricsSummary(
             active.Count, Count(Severity.Critica), Count(Severity.Alta), Count(Severity.Media), Count(Severity.Baja),
             resolved.Count, findings.Count(f => f.Status == FindingStatus.Silenciado),
-            findings.Count(f => f.RecurrenceOf is not null),
             avgDays, criterioPct, inTok, outTok, cost,
             BuildBurndown(findings, resolved), perApp.OrderByDescending(a => a.Active).ToList());
     }

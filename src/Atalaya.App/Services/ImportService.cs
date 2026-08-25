@@ -33,7 +33,7 @@ public sealed class ImportService
 
         foreach (Silence s in result.Silences)
         {
-            TryWrite(() => _hub.Store.WriteSilence(slug, s), log, $"silence {s.Fingerprint}");
+            TryWrite(() => _hub.Store.WriteSilence(slug, s), log, $"silence {s.FindingUlid}");
         }
 
         if (result.Inventory is not null)

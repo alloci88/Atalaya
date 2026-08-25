@@ -1,6 +1,6 @@
 using Atalaya.Copilot;
 using Atalaya.Domain;
-using Atalaya.Domain.Fingerprinting;
+using Atalaya.Domain.Anchoring;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Inventory;
@@ -155,7 +155,7 @@ public static class SnippetAnchor
         }
 
         // Still at the recorded line?
-        if (line >= 1 && line <= lines.Length && Fingerprint.ComputeSnippetHash(lines[line - 1]) == snippetHash)
+        if (line >= 1 && line <= lines.Length && CodeAnchor.ComputeSnippetHash(lines[line - 1]) == snippetHash)
         {
             return (true, line, lines[line - 1]);
         }
@@ -163,7 +163,7 @@ public static class SnippetAnchor
         // Moved — search the file for the matching snippet.
         for (int i = 0; i < lines.Length; i++)
         {
-            if (Fingerprint.ComputeSnippetHash(lines[i]) == snippetHash)
+            if (CodeAnchor.ComputeSnippetHash(lines[i]) == snippetHash)
             {
                 return (true, i + 1, lines[i]);
             }

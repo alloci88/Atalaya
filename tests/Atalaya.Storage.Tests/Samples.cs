@@ -28,7 +28,6 @@ internal static class Samples
         return new Finding
         {
             Id = Ulids.NewUlid(),
-            Fingerprint = "sha256:" + new string('a', 64),
             RuleId = ruleId,
             Pillar = Pillar.Errores,
             Tag = FindingTag.Criterio,

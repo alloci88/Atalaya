@@ -38,7 +38,6 @@ public sealed class MetricsQueryTests : IDisposable
         var f = new Finding
         {
             Id = _ulids.NewUlid(),
-            Fingerprint = "sha256:" + Guid.NewGuid().ToString("N") + new string('a', 32),
             RuleId = "criterio.x",
             Pillar = Pillar.Errores,
             Tag = FindingTag.Criterio,

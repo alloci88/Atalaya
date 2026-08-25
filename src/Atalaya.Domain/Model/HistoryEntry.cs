@@ -12,7 +12,7 @@ public enum FindingEvent
     Silenced,
     Unsilenced,
     Commented,
-    /// <summary>Recurrence of a previously resolved fingerprint (§2).</summary>
+    /// <summary>LEGADO — no se emite desde F4. Se conserva para leer historiales anteriores.</summary>
     Recurrence,
     /// <summary>An assisted-fix branch was proposed (§5.7, H9).</summary>
     FixProposed,

@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using Atalaya.Domain.Fingerprinting;
+using Atalaya.Domain.Anchoring;
 
 namespace Atalaya.Domain.Hashing;
 
@@ -23,5 +23,5 @@ public static class HashUtil
     /// cycles and edits (it is NOT the content hash), so a claim survives edits.
     /// This is the name used for <c>claims/{unitHash}.json</c>.
     /// </summary>
-    public static string UnitHash(string unitPath) => Sha256Hex(Fingerprint.NormalizePath(unitPath));
+    public static string UnitHash(string unitPath) => Sha256Hex(CodeAnchor.NormalizePath(unitPath));
 }

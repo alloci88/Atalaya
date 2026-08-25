@@ -57,32 +57,85 @@ public static class PillarBrief
 public static class PromptComposer
 {
     private const string AuditorRules =
-        "Eres un auditor de código. Reglas:\n" +
-        "- Cubre ÍNTEGRAMENTE la unidad.\n" +
-        "- Reporta CADA hallazgo llamando a submit_findings con un ARRAY de todos los hallazgos de la unidad en UNA sola llamada. Nunca en texto.\n" +
-        "- No llames varias veces a submit_finding singular: cada tool call es un turno adicional y multiplica el coste. La versión singular solo existe como fallback.\n" +
-        "- Campos obligatorios de cada hallazgo:\n" +
-        "    * ruleId: usa un id EXACTO del catálogo (los listados en el brief como [rule.id]) o, si no encaja ninguno, uno de la forma criterio.<área> con las áreas listadas en el brief.\n" +
-        "    * pillar: exactamente uno de {optimizacion, mejoras, errores}.\n" +
-        "    * severity: exactamente uno de {critica, alta, media, baja}.\n" +
-        "    * locations: al menos una con {path, line} y opcionalmente snippet.\n" +
-        "- NO envíes tag: la app lo deriva de ruleId (criterio.* → criterio; resto → checklist).\n" +
-        "- NO asignes IDs ni confianza (eso es de la app). NO filtres silenciados (lo hace la app).\n" +
-        "- Puedes pedir firmas de dependencias con read_signatures(path); es tu única lectura extra.\n" +
-        "- Cuando termines la unidad, llama a unit_done con un resumen — a ser posible en el MISMO turno que submit_findings.\n";
+        """
+        Eres un auditor de código. Tienes DOS obligaciones en cada unidad:
 
-    public static string ComposeUnitPrompt(string unitPath, string unitContent, string brief, AuditMode mode)
+        1) RECONCILIAR los hallazgos que ya existen en esta unidad (se te listan abajo). Llama UNA vez a
+           report_verdicts con un ARRAY que contenga un veredicto por CADA hallazgo de la lista. Cada
+           veredicto es {findingId, verdict, evidence}:
+             * findingId: el ULID EXACTO tal cual aparece en la lista. No lo inventes ni lo abrevies.
+             * verdict: exactamente uno de {presente, arreglado, no-verificable}.
+                 - presente: el problema sigue en el código que estás viendo.
+                 - arreglado: el problema YA NO está. Solo si lo has comprobado en el código de la unidad.
+                 - no-verificable: no puedes determinarlo desde esta unidad (p. ej. depende de otro fichero).
+             * evidence: una frase con la razón concreta (línea, construcción, qué cambió). Obligatoria.
+           Si NO te pronuncias sobre alguno, la unidad queda marcada INCOMPLETA y ese hallazgo no se toca.
+           Nada se resuelve por omisión: un hallazgo solo se cierra si dices 'arreglado' explícitamente.
+
+        2) REPORTAR los hallazgos NUEVOS con submit_findings, un ARRAY con todos los de la unidad en UNA
+           sola llamada. IMPORTANTE: si el problema que has encontrado se corresponde con uno de la lista
+           de existentes, NO lo reportes como nuevo — referéncialo en report_verdicts como 'presente'.
+           submit_findings es SOLO para problemas que no están en la lista.
+
+        Reglas de forma:
+        - No llames varias veces a submit_finding singular: cada tool call es un turno adicional y
+          multiplica el coste. La versión singular solo existe como fallback.
+        - Campos obligatorios de cada hallazgo nuevo:
+            * ruleId: un id EXACTO del catálogo (los listados en el brief como [rule.id]) o, si no encaja
+              ninguno, uno de la forma criterio.<área> con las áreas listadas en el brief.
+            * pillar: exactamente uno de {optimizacion, mejoras, errores}.
+            * severity: exactamente uno de {critica, alta, media, baja}.
+            * locations: al menos una con {path, line} y opcionalmente snippet.
+        - NO envíes tag: la app lo deriva de ruleId (criterio.* → criterio; resto → checklist).
+        - NO asignes IDs ni confianza (eso es de la app). NO filtres silenciados: los verás en la lista
+          con estado 'silenciado' y debes pronunciarte sobre ellos igual; decir 'presente' NO los reactiva.
+        - Cubre ÍNTEGRAMENTE la unidad. Nunca reportes hallazgos en texto: solo por tool.
+        - Puedes pedir firmas de dependencias con read_signatures(path); es tu única lectura extra.
+        - Cuando termines la unidad, llama a unit_done con un resumen — a ser posible en el MISMO turno.
+        """;
+
+    public static string ComposeUnitPrompt(
+        string unitPath, string unitContent, string brief, AuditMode mode,
+        IReadOnlyList<ExistingFinding>? existing = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine(AuditorRules);
         sb.AppendLine($"MODO: {mode}. Los hallazgos nuevos nacen con la confianza que la app asigne.");
         sb.AppendLine();
         sb.AppendLine(brief);
+        sb.AppendLine(ExistingBlock(unitPath, existing));
         sb.AppendLine($"UNIDAD: {unitPath}");
         sb.AppendLine("CONTENIDO ÍNTEGRO DE LA UNIDAD (entre marcadores):");
         sb.AppendLine("<<<UNIT");
         sb.AppendLine(unitContent);
         sb.AppendLine("UNIT>>>");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// La lista de hallazgos existentes de la unidad (F4). Es barata en tokens — son pocos por
+    /// unidad — y es lo que sustituye a toda la maquinaria de fingerprints: el auditor ve qué se
+    /// sabe ya y se pronuncia. Cuando no hay ninguno se dice explícitamente, para que el modelo no
+    /// invente veredictos sobre una lista vacía.
+    /// </summary>
+    private static string ExistingBlock(string unitPath, IReadOnlyList<ExistingFinding>? existing)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"HALLAZGOS YA EXISTENTES EN {unitPath} (reconcilia TODOS con report_verdicts):");
+        if (existing is null || existing.Count == 0)
+        {
+            sb.AppendLine("  (ninguno — no llames a report_verdicts en esta unidad)");
+            return sb.ToString();
+        }
+
+        foreach (ExistingFinding f in existing)
+        {
+            string alias = string.IsNullOrWhiteSpace(f.DisplayId) ? "" : $" [{f.DisplayId}]";
+            sb.AppendLine($"  - findingId: {f.FindingId}{alias}");
+            sb.AppendLine($"      titulo: {f.Title}");
+            sb.AppendLine($"      severidad: {f.Severity} · ubicacion: {f.Location} · estado: {f.State}");
+        }
+
         return sb.ToString();
     }
 

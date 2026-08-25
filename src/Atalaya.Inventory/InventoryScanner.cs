@@ -27,7 +27,7 @@ public sealed class InventoryScanner
     /// <summary>The stable ruleId used for auto "unit too large" findings.</summary>
     public const string LargeUnitRuleId = "mejoras.mantenibilidad.unidad-grande";
 
-    /// <summary>A constant title so the fingerprint dedupes the finding across cycles (§4).</summary>
+    /// <summary>Un título constante para que el auditor lo reconozca entre ciclos (§4, F4).</summary>
     private const string LargeUnitTitle = "Unidad demasiado grande para auditar como una sola unidad";
 
     public ScanOutput Scan(string root, AppConfig config, int cycleN)
@@ -83,7 +83,7 @@ public sealed class InventoryScanner
 
     /// <summary>
     /// Builds the auto refactor finding for an oversized unit. Title is constant and LOC lives
-    /// only in the description, so the fingerprint (ruleId + path + normalized title) is stable
+    /// only in the description, so the title the auditor reconciles against is stable
     /// across cycles even as the file grows.
     /// </summary>
     public static SubmittedFinding BuildLargeUnitFinding(string path, int loc, Thresholds thresholds)

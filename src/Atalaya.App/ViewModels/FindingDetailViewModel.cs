@@ -44,7 +44,6 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
 
     public ObservableCollection<HistoryEntry> History { get; } = new();
     public ObservableCollection<Comment> Comments { get; } = new();
-    public ObservableCollection<string> Recurrences { get; } = new();
     public IReadOnlyList<SilenceReason> Reasons { get; } = Enum.GetValues<SilenceReason>();
     public IReadOnlyList<Severity> Severities { get; } = Enum.GetValues<Severity>();
 
@@ -59,7 +58,6 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         Finding = _hub.Store.TryReadFinding(Slug, id.ToString());
         History.Clear();
         Comments.Clear();
-        Recurrences.Clear();
         if (Finding is null)
         {
             return;
@@ -76,11 +74,6 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         foreach (Comment c in _hub.Store.ListComments(Slug, Finding.Id.ToString()).OrderBy(c => c.Utc))
         {
             Comments.Add(c);
-        }
-
-        foreach (Finding other in _hub.Store.ListFindings(Slug).Where(x => x.RecurrenceOf == Finding.Id))
-        {
-            Recurrences.Add($"{other.DisplayId ?? other.Id.ToString()} · {other.Status}");
         }
 
         Snippet = ReadSnippet(Finding);

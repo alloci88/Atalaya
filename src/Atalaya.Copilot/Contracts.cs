@@ -6,6 +6,11 @@ namespace Atalaya.Copilot;
 /// <summary>
 /// The <c>submit_finding</c> payload as the agent delivers it (§6.2). All strings.
 /// <para>
+/// F4: <c>submit_finding(s)</c> queda SOLO para hallazgos genuinamente nuevos. Si el problema ya
+/// figura en la lista de existentes de la unidad, el auditor debe referenciarlo por ULID en
+/// <c>report_verdicts</c>, no re-reportarlo aquí.
+/// </para>
+/// <para>
 /// <b>Tag</b> is intentionally NOT part of this payload (F3.1 Bloque 0): it is derivable from
 /// <c>RuleId</c> (<c>criterio.*</c> → Criterio, resto → Checklist), y pedirla al modelo generaba
 /// rechazos por variantes inventadas (pilot 2026-08-24: 25 rechazos por <c>tag</c> inválido en una
@@ -110,13 +115,45 @@ public static class CopilotHelp
         + "ejecuta `copilot` en una terminal, usa /login una vez con tu cuenta con asiento de Copilot, y reintenta.";
 }
 
+/// <summary>
+/// Un hallazgo YA EXISTENTE de la unidad, tal y como se le presenta al auditor (F4). Son pocos
+/// por unidad, así que van íntegros en el prompt: es lo que permite que la identidad la decida
+/// el LLM en el momento de auditar en vez de un hash calculado a posteriori.
+/// </summary>
+/// <param name="FindingId">El ULID. Es el identificador que el auditor DEBE devolver.</param>
+/// <param name="DisplayId">Alias legible (BUG-0042) si lo tiene; solo contexto.</param>
+/// <param name="State">Estado visible: <c>activo</c> o <c>silenciado</c>.</param>
+public sealed record ExistingFinding(
+    string FindingId,
+    string? DisplayId,
+    string Title,
+    string Severity,
+    string Location,
+    string State);
+
 /// <summary>What the app hands the agent to audit one unit (§5.1.3).</summary>
 public sealed record AuditUnitRequest(
     string UnitPath,
     string UnitContent,
     string Prompt,
     TechStack Stack,
-    AuditMode Mode);
+    AuditMode Mode,
+    IReadOnlyList<ExistingFinding> Existing);
+
+/// <summary>
+/// Un veredicto de reconciliación tal y como lo entrega el agente (F4, tool
+/// <c>report_verdicts</c>). Todo strings: la app parsea y valida.
+/// </summary>
+/// <param name="FindingId">ULID de un hallazgo de la lista de existentes de esta unidad.</param>
+/// <param name="Verdict"><c>presente</c> | <c>arreglado</c> | <c>no-verificable</c>.</param>
+/// <param name="Evidence">Por qué. Obligatoria: una resolución sin evidencia no es una resolución.</param>
+public sealed record VerdictArgs(string FindingId, string Verdict, string Evidence);
+
+/// <summary>Resultado por veredicto devuelto al agente.</summary>
+public sealed record ReportVerdictResult(bool Accepted, string? Error = null);
+
+/// <summary>Resultado batched de <c>report_verdicts</c>, en el mismo orden que la entrada.</summary>
+public sealed record ReportVerdictsResult(IReadOnlyList<ReportVerdictResult> Results);
 
 /// <summary>A verify target (§5.4): a finding to re-check, re-anchored by snippet.</summary>
 public sealed record VerifyTarget(string FindingUlid, string Path, int Line, string? Snippet, string Title, string Description);
@@ -137,6 +174,14 @@ public interface IAuditToolbox
     /// outcome returned in order.
     /// </summary>
     SubmitFindingsResult SubmitFindings(SubmitFindingArgs[] findings);
+
+    /// <summary>
+    /// Reconciliación por el auditor (F4): el veredicto sobre CADA hallazgo existente listado en
+    /// el prompt de la unidad. Es el ÚNICO camino por el que un hallazgo previo cambia de estado
+    /// durante una auditoría — no existe la resolución implícita. Un <c>findingId</c> que no esté
+    /// en la lista se rechaza con un error tipado y no toca nada.
+    /// </summary>
+    ReportVerdictsResult ReportVerdicts(VerdictArgs[] verdicts);
 
     void UnitDone(string unitPath, string summary);
 

@@ -3,13 +3,19 @@ using Atalaya.Domain.Ids;
 namespace Atalaya.Domain.Model;
 
 /// <summary>Per-unit verdict recorded in a session (§2).</summary>
+/// <param name="Verdict"><c>auditada</c> | <c>incompleta</c> | <c>presupuesto-superado</c> | <c>no-localizado</c>.</param>
+/// <param name="MissingVerdicts">
+/// F4: hallazgos existentes de la unidad sobre los que el auditor NO se pronunció. &gt; 0 significa
+/// unidad incompleta: esos hallazgos quedaron intactos (nada se resuelve por omisión).
+/// </param>
 public sealed record UnitVerdictRecord(
     string Unit,
     string Module,
     string Verdict,
     string? Summary,
     int RejectedPayloads = 0,
-    string? DominantRejectionReason = null);
+    string? DominantRejectionReason = null,
+    int MissingVerdicts = 0);
 
 /// <summary>Session tallies (§2).</summary>
 public sealed class SessionCounters
@@ -18,7 +24,12 @@ public sealed class SessionCounters
     public int Confirmed { get; set; }
     public int Resolved { get; set; }
     public int SilencedRespected { get; set; }
-    public int Recurrences { get; set; }
+
+    /// <summary>
+    /// Veredictos <c>no-verificable</c> del auditor (F4): el hallazgo sigue activo pero marcado
+    /// <c>needsReview</c>. Se cuenta aparte para que nunca se confunda con "resuelto".
+    /// </summary>
+    public int NoVerificables { get; set; }
 
     /// <summary>
     /// Total payloads the toolbox validated and rebotó (F3.1 Bloque 0). Uno visible aquí evita

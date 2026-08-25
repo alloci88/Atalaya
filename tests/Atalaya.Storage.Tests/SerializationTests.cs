@@ -17,7 +17,6 @@ public class SerializationTests
         Finding back = AtalayaJson.Deserialize<Finding>(json);
 
         back.Id.Should().Be(original.Id);
-        back.Fingerprint.Should().Be(original.Fingerprint);
         back.Severity.Should().Be(Severity.Critica);
         back.Confidence.Should().Be(Confidence.Media);
         back.Status.Should().Be(FindingStatus.Activo);
@@ -63,7 +62,7 @@ public class SerializationTests
     {
         var silence = new Silence
         {
-            Fingerprint = "sha256:" + new string('b', 64),
+            FindingUlid = Samples.Finding().Id,
             By = "maria",
             Utc = Samples.T0,
             Reason = SilenceReason.DecisionArquitectonica,

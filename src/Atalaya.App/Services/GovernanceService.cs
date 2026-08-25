@@ -27,13 +27,12 @@ public sealed class GovernanceService
         Finding f = Require(slug, findingId);
         _hub.Store.WriteSilence(slug, new Silence
         {
-            Fingerprint = f.Fingerprint,
+            FindingUlid = f.Id,
             Reason = reason,
             Notes = notes,
             By = Me,
             Utc = DateTimeOffset.UtcNow,
             ExpiresUtc = expiresUtc,
-            FindingUlids = { f.Id },
         });
 
         f.MarkSilenced(DateTimeOffset.UtcNow, Me, notes);
@@ -44,7 +43,7 @@ public sealed class GovernanceService
     public void Unsilence(string slug, Ulid findingId)
     {
         Finding f = Require(slug, findingId);
-        _hub.Store.DeleteSilence(slug, f.Fingerprint);
+        _hub.Store.DeleteSilence(slug, f.Id);
         f.Unsilence(DateTimeOffset.UtcNow, Me, "des-silenciado");
         _hub.Store.WriteFinding(slug, f);
         Push(slug, $"unsilence: {f.DisplayId ?? f.Id.ToString()}");

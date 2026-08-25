@@ -53,125 +53,11 @@ public partial class App : Application
         settings.MigrateConnection(_host.Services.GetRequiredService<DeployConfig>());
         ThemeService.Apply(settings.Current.Theme);
 
-        // F3.1 Bloque 1: comando oculto para re-vincular pares "resuelto ↔ duplicado nuevo"
-        // detectados por la 2ª pasada en una sesión concreta. Uso:
-        //   Atalaya.exe --repair-session <slug> <sessionUlid>
-        // Escribe a stdout el reporte y sale sin abrir la UI.
-        if (TryHandleRepairSession(e.Args))
-        {
-            Shutdown();
-            return;
-        }
-
         var window = _host.Services.GetRequiredService<MainWindow>();
         window.Show();
 
         MainViewModel main = _host.Services.GetRequiredService<MainViewModel>();
         await main.InitializeAsync();
-    }
-
-    private bool TryHandleRepairSession(string[] args)
-    {
-        int i = Array.IndexOf(args, "--repair-session");
-        if (i < 0 || i + 2 >= args.Length)
-        {
-            return false;
-        }
-
-        string slug = args[i + 1];
-        string sessionUlid = args[i + 2];
-        SessionRepairTool tool = _host!.Services.GetRequiredService<SessionRepairTool>();
-        SessionRepairReport report = tool.Repair(slug, sessionUlid, DateTimeOffset.UtcNow, Environment.UserName);
-
-        string logPath = Path.Combine(new AppPaths().Logs, $"repair-{sessionUlid}.log");
-        using var sw = new StreamWriter(logPath, append: false);
-        sw.WriteLine($"repair-session {sessionUlid} · app={slug} · {DateTimeOffset.UtcNow:o}");
-        sw.WriteLine($"pairs reparados: {report.Pairs.Count}");
-        foreach (SessionRepairPair p in report.Pairs)
-        {
-            sw.WriteLine($"  · reabierto {p.ReopenedFindingUlid} · duplicado borrado {p.DeletedDuplicateUlid} · score={p.MatchScore:0.00}");
-        }
-
-        sw.WriteLine($"nuevos sin par (skipped): {report.Skipped.Count}");
-        foreach (string s in report.Skipped)
-        {
-            sw.WriteLine($"  · {s}");
-        }
-
-        MessageBox.Show(
-            $"repair-session completado.\n\nPares reparados: {report.Pairs.Count}\nSaltados: {report.Skipped.Count}\n\nDetalle: {logPath}",
-            "Atalaya · repair-session", MessageBoxButton.OK, MessageBoxImage.Information);
-        return true;
-    }
-
-    private bool TryHandleConsolidate(string[] args)
-    {
-        int i = Array.IndexOf(args, "--consolidate");
-        if (i < 0 || i + 1 >= args.Length)
-        {
-            return false;
-        }
-
-        string slug = args[i + 1];
-        bool apply = Array.IndexOf(args, "--apply") >= 0;
-        SessionRepairTool tool = _host!.Services.GetRequiredService<SessionRepairTool>();
-        DateTimeOffset nowUtc = DateTimeOffset.UtcNow;
-
-        var appPaths = new AppPaths();
-        string stamp = nowUtc.ToString("yyyyMMdd");
-        string markerPath = Path.Combine(appPaths.Logs, $"consolidate-dryrun-{slug}-{stamp}.marker");
-
-        ConsolidationPlan plan = tool.PlanConsolidation(slug, nowUtc);
-
-        if (!apply)
-        {
-            string logPath = Path.Combine(appPaths.Logs, $"consolidate-{slug}-{stamp}.log");
-            using (var sw = new StreamWriter(logPath, append: false))
-            {
-                sw.WriteLine($"consolidate DRY-RUN · app={slug} · {nowUtc:o}");
-                sw.WriteLine($"clusters: {plan.Clusters.Count} · purges: {plan.Purges.Count}");
-                foreach (ConsolidationCluster c in plan.Clusters)
-                {
-                    sw.WriteLine($"  cluster canónico={c.CanonicalUlid} · «{c.CanonicalTitle}» · fp={c.CanonicalFingerprint}");
-                    for (int k = 0; k < c.MergeUlids.Count; k++)
-                    {
-                        sw.WriteLine($"    ← absorbe {c.MergeUlids[k]} · fp={c.MergeFingerprints[k]}");
-                    }
-                }
-
-                foreach (ConsolidationPurge p in plan.Purges)
-                {
-                    sw.WriteLine($"  purge {p.Ulid} · «{p.Title}» · {p.Reason}");
-                }
-            }
-
-            File.WriteAllText(markerPath, nowUtc.ToString("o"));
-            MessageBox.Show(
-                $"consolidate DRY-RUN completado.\n\nClusters: {plan.Clusters.Count}\nPurges: {plan.Purges.Count}\n\nDetalle: {logPath}\nMarca: {markerPath}\n\nRelanza con --apply el mismo día para ejecutar.",
-                "Atalaya · consolidate", MessageBoxButton.OK, MessageBoxImage.Information);
-            return true;
-        }
-
-        if (!File.Exists(markerPath))
-        {
-            MessageBox.Show(
-                $"consolidate --apply requiere un dry-run previo del mismo día (D-074).\nMarca esperada: {markerPath}\n\nRelanza sin --apply primero.",
-                "Atalaya · consolidate", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return true;
-        }
-
-        ConsolidationResult result = tool.Apply(plan, nowUtc, Environment.UserName);
-        string applyLog = Path.Combine(appPaths.Logs, $"consolidate-apply-{slug}-{stamp}.log");
-        using (var sw = new StreamWriter(applyLog, append: false))
-        {
-            sw.WriteLine($"consolidate APPLY · app={slug} · {nowUtc:o}");
-            sw.WriteLine($"clusters={result.ClustersConsolidated} · absorbed={result.FindingsAbsorbed} · purged={result.FindingsPurged}");
-        }
-
-        MessageBox.Show(
-            $"consolidate APPLY completado.\n\nClusters: {result.ClustersConsolidated}\nAbsorbidos: {result.FindingsAbsorbed}\nPurgados: {result.FindingsPurged}\n\nDetalle: {applyLog}",
-            "Atalaya · consolidate", MessageBoxButton.OK, MessageBoxImage.Information);
-        return true;
     }
 
     private static void ConfigureServices(IServiceCollection services, AppPaths paths)
@@ -195,7 +81,7 @@ public partial class App : Application
         services.AddSingleton(sp => new MachineConfigStore(paths.MachinesJson));
         services.AddSingleton<InventoryScanner>();
         services.AddSingleton<FindingIngestionService>();
-        services.AddSingleton<SessionRepairTool>();
+        services.AddSingleton<ReconciliationService>();
         services.AddSingleton(sp => new PortfolioQuery(sp.GetRequiredService<HubContext>().Store));
         services.AddSingleton(sp => new MetricsQuery(sp.GetRequiredService<HubContext>()));
         services.AddSingleton<ImportService>();

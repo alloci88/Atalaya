@@ -30,7 +30,6 @@ public class ImportTests
         bug1.TimesConfirmed.Should().Be(3);
         bug1.Locations.Single().Path.Should().Be("src/Db/Pool.cs");
         bug1.Locations.Single().Line.Should().Be(120);
-        bug1.Fingerprint.Should().StartWith("sha256:");
     }
 
     [Fact]
@@ -42,10 +41,10 @@ public class ImportTests
         r.Silences.Should().Contain(s => s.Reason == SilenceReason.DeudaAceptada);
         r.Silences.Should().Contain(s => s.Reason == SilenceReason.FalsoPositivo);
 
-        // The corresponding findings are silenced and the silence fingerprint matches.
+        // The corresponding findings are silenced and the silence points at the finding's ULID.
         Finding bug2 = r.Findings.Single(f => f.DisplayId == "BUG-0002");
         bug2.Status.Should().Be(FindingStatus.Silenciado);
-        r.Silences.Should().Contain(s => s.Fingerprint == bug2.Fingerprint);
+        r.Silences.Should().Contain(s => s.FindingUlid == bug2.Id);
     }
 
     [Fact]

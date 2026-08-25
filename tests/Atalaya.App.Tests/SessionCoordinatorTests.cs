@@ -6,7 +6,6 @@ using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Inventory;
 using FluentAssertions;
-using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Atalaya.App.Tests;
@@ -20,6 +19,7 @@ public sealed class SessionCoordinatorTests : IDisposable
     private readonly HubContext _hub;
     private readonly MachineConfigStore _machines;
     private readonly FindingIngestionService _ingestion;
+    private readonly ReconciliationService _reconciliation;
     private readonly UlidFactory _ulids = new(SystemClock.Instance);
 
     public SessionCoordinatorTests()
@@ -34,6 +34,7 @@ public sealed class SessionCoordinatorTests : IDisposable
         _hub = TestFactory.Hub(_paths, settings);
         _machines = new MachineConfigStore(_paths.MachinesJson);
         _ingestion = new FindingIngestionService(_hub, _ulids);
+        _reconciliation = new ReconciliationService(_hub);
 
         Seed();
     }
@@ -62,11 +63,34 @@ public sealed class SessionCoordinatorTests : IDisposable
             "Conn leaked", "desc", "impact", "reco",
             new[] { new SubmitLocation(path, 1, "snippet") }, "A.M");
 
-    private SessionCoordinator NewCoordinator(FakeCopilotAgent agent)
-        => new(_hub, _ingestion, _machines, _ulids, agent);
-
     private SessionCoordinator NewCoordinator(ICopilotAgent agent)
-        => new(_hub, _ingestion, _machines, _ulids, agent);
+        => new(_hub, _ingestion, _reconciliation, _machines, _ulids, agent);
+
+    private Task<SessionResult> RunLotes(ICopilotAgent agent, params string[] units)
+        => NewCoordinator(agent).RunAsync(
+            new SessionRequest("app", AuditMode.Lotes, units.Length == 0 ? new[] { "A.cs" } : units),
+            CancellationToken.None);
+
+    /// <summary>Siembra un hallazgo activo ya existente en el hub, anclado a <paramref name="path"/>.</summary>
+    private Finding SeedExisting(string title, string path = "A.cs", string ruleId = "errores.null.desreferencia")
+    {
+        var stamp = new DetectionStamp(DateTimeOffset.UtcNow.AddDays(-7), AuditMode.Lotes, "old", "alvaro");
+        var f = new Finding
+        {
+            Id = _ulids.NewUlid(),
+            RuleId = ruleId,
+            Pillar = Pillar.Errores,
+            Severity = Severity.Alta,
+            Confidence = Confidence.Media,
+            Title = title,
+            Locations = { new Location(path, 1) },
+            Origin = AuditMode.Lotes,
+            FirstDetected = stamp,
+            LastConfirmed = stamp,
+        };
+        _hub.Store.WriteFinding("app", f);
+        return f;
+    }
 
     [Fact]
     public async Task Lotes_session_ingests_findings_marks_audited_and_writes_session_and_report()
@@ -74,8 +98,7 @@ public sealed class SessionCoordinatorTests : IDisposable
         var agent = new FakeCopilotAgent(auditScript: r =>
             r.UnitPath == "A.cs" ? new[] { SampleFinding() } : Array.Empty<SubmitFindingArgs>());
 
-        SessionResult result = await NewCoordinator(agent)
-            .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
+        SessionResult result = await RunLotes(agent);
 
         result.Counters.New.Should().Be(1);
 
@@ -95,220 +118,301 @@ public sealed class SessionCoordinatorTests : IDisposable
         _hub.Store.ListClaims("app").Should().BeEmpty();
     }
 
+    // ---------- F4 · reconciliación por el auditor ----------
+
+    /// <summary>
+    /// El escenario canónico del pivote (D-077): 3 hallazgos existentes en la unidad, el auditor
+    /// declara 2 "presente", 1 "arreglado" y aporta 1 nuevo. Estado final exacto y CERO implícitos:
+    /// nada se resuelve por omisión, ningún duplicado aparece.
+    /// </summary>
     [Fact]
-    public async Task Implicit_resolution_resolves_covered_and_not_rereported_findings()
+    public async Task Auditor_reconciles_existing_and_adds_new_with_no_implicit_effects()
     {
-        // First session on A.cs reports a finding.
-        await NewCoordinator(new FakeCopilotAgent(_ => new[] { SampleFinding() }))
-            .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
-        _hub.Store.ListFindings("app").Single().Status.Should().Be(FindingStatus.Activo);
+        Finding a = SeedExisting("Fuga de conexión en la ruta de error");
+        Finding b = SeedExisting("Parseo sin manejo de errores", ruleId: "errores.calculo.negocio");
+        Finding c = SeedExisting("Asignaciones repetidas de arrays", ruleId: "optimizacion.alloc.bucle");
 
-        // Second session on A.cs reports NOTHING → the finding is covered and not re-reported → resolved.
-        await NewCoordinator(new FakeCopilotAgent(_ => Array.Empty<SubmitFindingArgs>()))
-            .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
+        var agent = new FakeCopilotAgent(
+            auditScript: _ => new[] { SampleFinding() with { Title = "Encoding.ASCII pierde datos" } },
+            reconcileScript: r => new[]
+            {
+                new VerdictArgs(a.Id.ToString(), "presente", "sigue en la línea 12"),
+                new VerdictArgs(b.Id.ToString(), "presente", "el try/catch no cubre el parse"),
+                new VerdictArgs(c.Id.ToString(), "arreglado", "ahora se reutiliza el buffer"),
+            });
 
-        _hub.Store.ListFindings("app").Single().Status.Should().Be(FindingStatus.Resuelto);
+        SessionResult result = await RunLotes(agent);
+
+        result.Counters.Confirmed.Should().Be(2);
+        result.Counters.Resolved.Should().Be(1);
+        result.Counters.New.Should().Be(1);
+        result.Counters.NoVerificables.Should().Be(0);
+        result.IncompleteUnits.Should().Be(0);
+
+        var findings = _hub.Store.ListFindings("app");
+        findings.Should().HaveCount(4); // 3 previos + 1 nuevo: ningún duplicado
+        findings.Single(f => f.Id == a.Id).Status.Should().Be(FindingStatus.Activo);
+        findings.Single(f => f.Id == a.Id).TimesConfirmed.Should().Be(2);
+        findings.Single(f => f.Id == b.Id).Status.Should().Be(FindingStatus.Activo);
+
+        Finding resolved = findings.Single(f => f.Id == c.Id);
+        resolved.Status.Should().Be(FindingStatus.Resuelto);
+        resolved.Resolved!.Via.Should().Be(ResolutionVia.Auditor);
+        resolved.Resolved.Justification.Should().Be("ahora se reutiliza el buffer");
     }
 
+    /// <summary>
+    /// La propiedad que nunca se cumplió con los fingerprints: dos sesiones consecutivas sobre la
+    /// misma unidad sin cambios en el código → la segunda es TODO confirmaciones, 0 nuevos,
+    /// 0 resueltos. El agente falso, como el real, ve la lista de existentes y responde "presente".
+    /// </summary>
     [Fact]
-    public async Task Superficial_never_resolves_even_when_covered_and_not_rereported()
+    public async Task Two_consecutive_sessions_are_stable_zero_new_zero_resolved()
     {
-        await NewCoordinator(new FakeCopilotAgent(_ => new[] { SampleFinding() }))
-            .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
+        var findings = new[]
+        {
+            SampleFinding() with { Title = "Uno", Symbol = "A.M1" },
+            SampleFinding() with { Title = "Dos", Symbol = "A.M2" },
+            SampleFinding() with { Title = "Tres", Symbol = "A.M3" },
+        };
 
-        await NewCoordinator(new FakeCopilotAgent(_ => Array.Empty<SubmitFindingArgs>()))
-            .RunAsync(new SessionRequest("app", AuditMode.Superficial, new[] { "A.cs" }), CancellationToken.None);
+        // 1ª sesión: baseline vacío → 3 nuevos.
+        SessionResult first = await RunLotes(new FakeCopilotAgent(_ => findings));
+        first.Counters.New.Should().Be(3);
 
-        _hub.Store.ListFindings("app").Single().Status.Should().Be(FindingStatus.Activo); // anti-degradation
+        // 2ª sesión: el auditor ve los 3 en la lista, los declara presentes y no reporta nada nuevo.
+        SessionResult second = await RunLotes(new FakeCopilotAgent(_ => Array.Empty<SubmitFindingArgs>()));
+
+        second.Counters.New.Should().Be(0);
+        second.Counters.Resolved.Should().Be(0);
+        second.Counters.Confirmed.Should().Be(3);
+        second.IncompleteUnits.Should().Be(0);
+        _hub.Store.ListFindings("app").Should().HaveCount(3)
+            .And.OnlyContain(f => f.Status == FindingStatus.Activo);
     }
 
+    /// <summary>
+    /// El auditor omite un veredicto → la unidad queda INCOMPLETA (visible en veredicto, informe y
+    /// resultado) y el hallazgo huérfano queda INTACTO. Esto es lo que sustituye a la resolución
+    /// implícita: el silencio del auditor ya no cierra nada.
+    /// </summary>
     [Fact]
-    public async Task Silence_flow_suppresses_then_reappears_after_expiry()
+    public async Task Missing_verdict_marks_the_unit_incomplete_and_leaves_the_finding_untouched()
     {
-        // Detect the finding.
-        await NewCoordinator(new FakeCopilotAgent(_ => new[] { SampleFinding() }))
-            .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
-        Finding finding = _hub.Store.ListFindings("app").Single();
+        Finding a = SeedExisting("Con veredicto");
+        Finding b = SeedExisting("Sin veredicto", ruleId: "errores.calculo.negocio");
 
-        // Silence it (human action) — no expiry, and mark the finding silenced.
+        var agent = new FakeCopilotAgent(
+            reconcileScript: _ => new[] { new VerdictArgs(a.Id.ToString(), "presente", "sigue ahí") });
+
+        SessionResult result = await RunLotes(agent);
+
+        result.IncompleteUnits.Should().Be(1);
+        result.Counters.Resolved.Should().Be(0);
+
+        Finding untouched = _hub.Store.TryReadFinding("app", b.Id.ToString())!;
+        untouched.Status.Should().Be(FindingStatus.Activo);
+        untouched.TimesConfirmed.Should().Be(1);         // ni confirmado
+        untouched.LastConfirmed.Utc.Should().Be(b.LastConfirmed.Utc); // ni tocado
+
+        AuditSession session = _hub.Store.ListSessions("app").Single();
+        UnitVerdictRecord unit = session.Units.Single();
+        unit.Verdict.Should().Be("incompleta");
+        unit.MissingVerdicts.Should().Be(1);
+        session.Notes.Should().Contain(n => n.Contains("sin veredicto") && n.Contains(b.Id.ToString()));
+
+        string report = File.ReadAllText(_hub.HubPaths.ReportFile("app", result.SessionId.ToString()));
+        report.Should().Contain("Unidades incompletas: 1");
+        report.Should().Contain("Hallazgos sin veredicto");
+        report.Should().Contain(b.Id.ToString());
+    }
+
+    /// <summary>
+    /// Un hallazgo silenciado se le muestra al auditor con estado <c>silenciado</c>. Si dice
+    /// "presente", la detección se registra pero el hallazgo NO se reactiva: el silencio es una
+    /// decisión humana y el auditor no la revoca.
+    /// </summary>
+    [Fact]
+    public async Task Silenced_finding_detected_present_stays_silenced_and_records_the_detection()
+    {
+        Finding f = SeedExisting("Deuda aceptada a propósito");
+        f.MarkSilenced(DateTimeOffset.UtcNow.AddDays(-1), "maria", "deuda aceptada");
+        _hub.Store.WriteFinding("app", f);
         _hub.Store.WriteSilence("app", new Silence
         {
-            Fingerprint = finding.Fingerprint,
+            FindingUlid = f.Id,
             By = "maria",
-            Utc = DateTimeOffset.UtcNow,
+            Utc = DateTimeOffset.UtcNow.AddDays(-1),
             Reason = SilenceReason.DeudaAceptada,
-            FindingUlids = { finding.Id },
         });
-        finding.MarkSilenced(DateTimeOffset.UtcNow, "maria", "silenced");
-        _hub.Store.WriteFinding("app", finding);
 
-        // Re-detection while silenced → suppressed, no new finding, stays silenced.
-        SessionResult suppressed = await NewCoordinator(new FakeCopilotAgent(_ => new[] { SampleFinding() }))
-            .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
-        suppressed.Counters.SilencedRespected.Should().Be(1);
-        _hub.Store.ListFindings("app").Should().ContainSingle()
-            .Which.Status.Should().Be(FindingStatus.Silenciado);
+        var agent = new FakeCopilotAgent(
+            reconcileScript: _ => new[] { new VerdictArgs(f.Id.ToString(), "presente", "sigue en la línea 3") });
 
-        // Expire the silence, then re-detect → the finding reappears (active).
+        SessionResult result = await RunLotes(agent);
+
+        result.Counters.SilencedRespected.Should().Be(1);
+        result.Counters.Confirmed.Should().Be(0);
+        result.Counters.New.Should().Be(0);
+        result.IncompleteUnits.Should().Be(0);
+
+        Finding after = _hub.Store.TryReadFinding("app", f.Id.ToString())!;
+        after.Status.Should().Be(FindingStatus.Silenciado);
+        after.Confidence.Should().Be(Confidence.Media);        // la confianza no se toca
+        after.History.Should().Contain(h => h.Detail!.Contains("detectado presente durante el silencio"));
+    }
+
+    /// <summary>Un silencio CADUCADO no suprime: la detección lo levanta y el hallazgo vuelve a activo (§2).</summary>
+    [Fact]
+    public async Task Expired_silence_lets_the_finding_reappear_on_detection()
+    {
+        Finding f = SeedExisting("Silencio con fecha");
+        f.MarkSilenced(DateTimeOffset.UtcNow.AddDays(-3), "maria", "temporal");
+        _hub.Store.WriteFinding("app", f);
         _hub.Store.WriteSilence("app", new Silence
         {
-            Fingerprint = finding.Fingerprint,
+            FindingUlid = f.Id,
             By = "maria",
-            Utc = DateTimeOffset.UtcNow.AddDays(-2),
+            Utc = DateTimeOffset.UtcNow.AddDays(-3),
             ExpiresUtc = DateTimeOffset.UtcNow.AddDays(-1),
             Reason = SilenceReason.DeudaAceptada,
         });
 
-        await NewCoordinator(new FakeCopilotAgent(_ => new[] { SampleFinding() }))
-            .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
+        SessionResult result = await RunLotes(new FakeCopilotAgent());
+
+        result.Counters.Confirmed.Should().Be(1);
+        _hub.Store.TryReadFinding("app", f.Id.ToString())!.Status.Should().Be(FindingStatus.Activo);
+    }
+
+    /// <summary>
+    /// Un veredicto sobre un ULID que no está en la lista de la unidad se rechaza con un error
+    /// tipado devuelto AL AGENTE, no toca nada, y queda registrado en las notas de la sesión.
+    /// </summary>
+    [Fact]
+    public async Task Verdict_on_unknown_id_is_rejected_with_a_typed_error_and_changes_nothing()
+    {
+        Finding real = SeedExisting("Existe de verdad");
+        string ghost = _ulids.NewUlid().ToString();
+
+        var agent = new FakeCopilotAgent(reconcileScript: _ => new[]
+        {
+            new VerdictArgs(real.Id.ToString(), "presente", "sigue ahí"),
+            new VerdictArgs(ghost, "arreglado", "me lo he inventado"),
+        });
+
+        SessionResult result = await RunLotes(agent);
+
+        result.Counters.Rejected.Should().Be(1);
+        result.Counters.Resolved.Should().Be(0);
+        result.Counters.Confirmed.Should().Be(1);
+        result.IncompleteUnits.Should().Be(0);   // el único listado SÍ tuvo veredicto
 
         _hub.Store.ListFindings("app").Should().ContainSingle()
             .Which.Status.Should().Be(FindingStatus.Activo);
+
+        AuditSession session = _hub.Store.ListSessions("app").Single();
+        session.Notes.Should().Contain(n =>
+            n.Contains("findingId desconocido") && n.Contains(ghost));
     }
 
-    // ---------- F3.1 · Bloque 1 — matching de 2ª pasada ----------
-
-    /// <summary>
-    /// Réplica del piloto 2026-08-24 CommonStatics.cs: un hallazgo v4 (fingerprint por título)
-    /// resuelto en la sesión anterior, y un payload nuevo (mismo problema, ruleId → fingerprint
-    /// distinto). Sin la 2ª pasada esto sería New. Con la 2ª pasada debe reabrir el resuelto,
-    /// migrar el fingerprint y preservar el antiguo en <c>PreviousFingerprints</c>.
-    /// </summary>
+    /// <summary>Un verdict con vocabulario inválido se rechaza igual: la app no adivina.</summary>
     [Fact]
-    public async Task Second_pass_match_reopens_falsely_resolved_and_migrates_fingerprint()
+    public async Task Unknown_verdict_word_is_rejected_and_leaves_the_unit_incomplete()
     {
-        // Sembrar el "resuelto v4": fingerprint arbitrario (título-based), mismo símbolo/ruta.
-        var oldStamp = new DetectionStamp(DateTimeOffset.UtcNow.AddDays(-7), AuditMode.Lotes, "old", "alvaro");
-        string oldFp = "sha256:" + new string('a', 64);
-        var legacy = new Finding
+        Finding f = SeedExisting("Un hallazgo");
+
+        var agent = new FakeCopilotAgent(reconcileScript: _ => new[]
         {
-            Id = _ulids.NewUlid(),
-            Fingerprint = oldFp,
-            RuleId = "errores.recursos.no-liberado",
-            Pillar = Pillar.Errores,
-            Severity = Severity.Critica,
-            Title = "Conn leaked in acquire path",
-            Locations = { new Location("A.cs", 1) },
-            Origin = AuditMode.Lotes,
-            FirstDetected = oldStamp,
-            LastConfirmed = oldStamp,
-        };
-        legacy.Resolve(new ResolutionStamp(DateTimeOffset.UtcNow.AddDays(-1),
-            ResolutionVia.Implicita, AuditMode.Lotes, "c", "alvaro", "cubierta"));
-        _hub.Store.WriteFinding("app", legacy);
-
-        // Payload nuevo: mismo problema, título muy parecido.
-        var payload = new SubmitFindingArgs(
-            "errores.recursos.no-liberado", "errores", "critica",
-            "Conn leaked in the acquire path", "d", "i", "r",
-            new[] { new SubmitLocation("A.cs", 1, "s") }, "A.M");
-
-        SessionResult result = await NewCoordinator(new FakeCopilotAgent(_ => new[] { payload }))
-            .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
-
-        // Un solo hallazgo (el reabierto), status activo, fingerprint migrado.
-        var findings = _hub.Store.ListFindings("app");
-        findings.Should().ContainSingle();
-        Finding f = findings.Single();
-        f.Id.Should().Be(legacy.Id);
-        f.Status.Should().Be(FindingStatus.Activo);
-        f.Fingerprint.Should().NotBe(oldFp);
-        f.PreviousFingerprints.Should().Contain(oldFp);
-        result.Counters.New.Should().Be(0);
-        result.Counters.Confirmed.Should().Be(1);
-    }
-
-    /// <summary>
-    /// Un silencio registrado con el fingerprint VIEJO debe seguir suprimiendo la detección
-    /// cuando entra por el nuevo hash (via 2ª pasada). Sin esto la migración rompería silencios
-    /// legítimos del v4.
-    /// </summary>
-    [Fact]
-    public async Task Silence_registered_with_old_fingerprint_survives_migration()
-    {
-        string oldFp = "sha256:" + new string('b', 64);
-        var oldStamp = new DetectionStamp(DateTimeOffset.UtcNow.AddDays(-7), AuditMode.Lotes, "old", "alvaro");
-        var legacy = new Finding
-        {
-            Id = _ulids.NewUlid(),
-            Fingerprint = oldFp,
-            RuleId = "errores.recursos.no-liberado",
-            Pillar = Pillar.Errores,
-            Severity = Severity.Alta,
-            Status = FindingStatus.Silenciado,
-            Title = "Conn leaked in acquire path",
-            Locations = { new Location("A.cs", 1) },
-            Origin = AuditMode.Lotes,
-            FirstDetected = oldStamp,
-            LastConfirmed = oldStamp,
-        };
-        _hub.Store.WriteFinding("app", legacy);
-        _hub.Store.WriteSilence("app", new Silence
-        {
-            Fingerprint = oldFp,
-            By = "maria",
-            Utc = DateTimeOffset.UtcNow.AddDays(-3),
-            Reason = SilenceReason.DeudaAceptada,
-            FindingUlids = { legacy.Id },
+            new VerdictArgs(f.Id.ToString(), "resuelto-creo", "hmm"),
         });
 
-        var payload = new SubmitFindingArgs(
-            "errores.recursos.no-liberado", "errores", "critica",
-            "Conn leaked in the acquire path", "d", "i", "r",
-            new[] { new SubmitLocation("A.cs", 1, "s") }, "A.M");
+        SessionResult result = await RunLotes(agent);
 
-        SessionResult result = await NewCoordinator(new FakeCopilotAgent(_ => new[] { payload }))
-            .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
+        result.Counters.Rejected.Should().Be(1);
+        result.IncompleteUnits.Should().Be(1);   // sin veredicto válido → incompleta
+        _hub.Store.TryReadFinding("app", f.Id.ToString())!.Status.Should().Be(FindingStatus.Activo);
+    }
 
-        result.Counters.SilencedRespected.Should().Be(1);
-        result.Counters.New.Should().Be(0);
+    /// <summary>"no-verificable" no resuelve nada: marca <c>needsReview</c> y se cuenta aparte.</summary>
+    [Fact]
+    public async Task Non_verifiable_verdict_flags_needs_review_and_is_reported()
+    {
+        Finding f = SeedExisting("Depende de otro fichero");
 
-        // El hallazgo NO se migra en este camino (el silencio corta antes de tocarlo); sigue
-        // silenciado con su fingerprint original. Comportamiento intencional: silencios v4
-        // siguen aplicando SIN reescribir hashes.
-        Finding f = _hub.Store.ListFindings("app").Single();
-        f.Status.Should().Be(FindingStatus.Silenciado);
-        f.Fingerprint.Should().Be(oldFp);
+        var agent = new FakeCopilotAgent(reconcileScript: _ => new[]
+        {
+            new VerdictArgs(f.Id.ToString(), "no-verificable", "el estado lo fija Config.cs"),
+        });
+
+        SessionResult result = await RunLotes(agent);
+
+        result.Counters.NoVerificables.Should().Be(1);
+        result.Counters.Resolved.Should().Be(0);
+
+        Finding after = _hub.Store.TryReadFinding("app", f.Id.ToString())!;
+        after.NeedsReview.Should().BeTrue();
+        after.Status.Should().Be(FindingStatus.Activo);
+
+        string report = File.ReadAllText(_hub.HubPaths.ReportFile("app", result.SessionId.ToString()));
+        report.Should().Contain("No verificables (marcados para revisión): 1");
     }
 
     /// <summary>
-    /// El matching NO debe emparejar dos problemas distintos aunque compartan ruta y símbolo:
-    /// un hallazgo de <c>Encoding.ASCII</c> no es el mismo que un desbordamiento de longitud
-    /// aunque ambos vivan en <c>StringToByteArray</c> (piloto real, caso #5).
+    /// La lista de existentes está acotada POR UNIDAD: un hallazgo de B.cs no se le ofrece al
+    /// auditor de A.cs, así que no puede pronunciarse sobre él ni dejarlo incompleto.
     /// </summary>
     [Fact]
-    public async Task Second_pass_does_not_match_semantically_different_problems_in_same_symbol()
+    public async Task Existing_list_is_scoped_to_the_audited_unit()
     {
-        var oldStamp = new DetectionStamp(DateTimeOffset.UtcNow.AddDays(-7), AuditMode.Lotes, "old", "alvaro");
-        var legacy = new Finding
-        {
-            Id = _ulids.NewUlid(),
-            Fingerprint = "sha256:" + new string('c', 64),
-            RuleId = "errores.null.desreferencia",
-            Pillar = Pillar.Errores,
-            Severity = Severity.Alta,
-            Title = "StringToByteArray puede lanzar excepción si la cadena excede la longitud destino",
-            Locations = { new Location("A.cs", 1) },
-            Origin = AuditMode.Lotes,
-            FirstDetected = oldStamp,
-            LastConfirmed = oldStamp,
-        };
-        legacy.Resolve(new ResolutionStamp(DateTimeOffset.UtcNow.AddDays(-1),
-            ResolutionVia.Implicita, AuditMode.Lotes, "c", "alvaro", "cubierta"));
-        _hub.Store.WriteFinding("app", legacy);
+        SeedExisting("Vive en B", path: "B.cs");
 
-        var payload = new SubmitFindingArgs(
-            "criterio.seguridad", "errores", "baja",
-            "Uso de Encoding.ASCII en StringToByteArray puede perder datos silenciosamente",
-            "d", "i", "r",
-            new[] { new SubmitLocation("A.cs", 1, "s") }, "A.M");
+        SessionResult result = await RunLotes(new FakeCopilotAgent(), "A.cs");
 
-        SessionResult result = await NewCoordinator(new FakeCopilotAgent(_ => new[] { payload }))
-            .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
+        result.IncompleteUnits.Should().Be(0);
+        result.Counters.Confirmed.Should().Be(0);
+    }
+
+    /// <summary>
+    /// Única salvaguarda de dedupe superviviente (F4): el mismo título y la misma ubicación dos
+    /// veces en la MISMA sesión entra una sola vez. Contra el histórico no se compara nada.
+    /// </summary>
+    [Fact]
+    public async Task Exact_duplicate_within_the_same_session_is_rejected_once()
+    {
+        SubmitFindingArgs one = SampleFinding();
+        SubmitFindingArgs twin = SampleFinding() with { Symbol = "A.Otro" }; // mismo título y ubicación
+
+        SessionResult result = await RunLotes(new FakeCopilotAgent(_ => new[] { one, twin }));
 
         result.Counters.New.Should().Be(1);
-        _hub.Store.ListFindings("app").Should().HaveCount(2);
+        result.Counters.Rejected.Should().Be(1);
+        _hub.Store.ListFindings("app").Should().ContainSingle();
     }
+
+    /// <summary>
+    /// Y el reverso: el MISMO payload en dos sesiones distintas NO se deduplica en la ingestión —
+    /// pero tampoco duplica, porque el auditor lo ve en la lista y lo reconcilia. Sin la lista
+    /// (agente que ignora la reconciliación) sí se crearía un duplicado: es el precio explícito y
+    /// autocorregible del modelo (ver D-077).
+    /// </summary>
+    [Fact]
+    public async Task Agent_ignoring_the_existing_list_creates_a_duplicate_but_resolves_nothing()
+    {
+        await RunLotes(new FakeCopilotAgent(_ => new[] { SampleFinding() }));
+
+        // Agente "malo": re-reporta el mismo problema como nuevo y no emite veredictos.
+        SessionResult second = await RunLotes(new FakeCopilotAgent(
+            auditScript: _ => new[] { SampleFinding() },
+            reconcileScript: _ => Array.Empty<VerdictArgs>()));
+
+        second.Counters.New.Should().Be(1);
+        second.Counters.Resolved.Should().Be(0);           // lo que importa: NADA se resolvió
+        second.IncompleteUnits.Should().Be(1);             // y el fallo es visible
+        _hub.Store.ListFindings("app").Should().HaveCount(2)
+            .And.OnlyContain(f => f.Status == FindingStatus.Activo);
+    }
+
+    // ---------- F3.1 Bloque 0 — presupuesto y rechazos ----------
 
     /// <summary>
     /// F3.1 Bloque 0: cuando una unidad se corta por presupuesto (<c>MaxTokensPerUnit</c>) la sesión
@@ -322,8 +426,7 @@ public sealed class SessionCoordinatorTests : IDisposable
     {
         var agent = new BudgetTrippingAgent(inputTokens: 400_000, outputTokens: 100_000, rejectPayloads: 3);
 
-        SessionResult result = await NewCoordinator((ICopilotAgent)agent)
-            .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
+        SessionResult result = await RunLotes(agent);
 
         AuditSession session = _hub.Store.ListSessions("app").Single();
         UnitVerdictRecord unit = session.Units.Single();
@@ -440,11 +543,10 @@ public sealed class SessionCoordinatorTests : IDisposable
     public async Task Batched_invalid_payload_reports_error_back_to_agent_and_logs_it()
     {
         SubmitFindingArgs good = SampleFinding("A.cs");
-        SubmitFindingArgs bad = good with { RuleId = "esto.no.existe" };
-        SubmitFindingArgs badSev = good with { Severity = "urgentísima", Symbol = "A.X" };
+        SubmitFindingArgs bad = good with { RuleId = "esto.no.existe", Title = "Otro" };
+        SubmitFindingArgs badSev = good with { Severity = "urgentísima", Title = "Y otro" };
 
-        SessionResult result = await NewCoordinator(new FakeCopilotAgent(_ => new[] { good, bad, badSev }))
-            .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
+        SessionResult result = await RunLotes(new FakeCopilotAgent(_ => new[] { good, bad, badSev }));
 
         result.Counters.New.Should().Be(1);
         _hub.Store.ListFindings("app").Should().ContainSingle();
@@ -470,8 +572,7 @@ public sealed class SessionCoordinatorTests : IDisposable
             Title = "Otro hallazgo",
         };
 
-        await NewCoordinator(new FakeCopilotAgent(_ => new[] { checklistItem, criterioItem }))
-            .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
+        await RunLotes(new FakeCopilotAgent(_ => new[] { checklistItem, criterioItem }));
 
         var findings = _hub.Store.ListFindings("app");
         findings.Should().HaveCount(2);

@@ -11,8 +11,18 @@ public sealed record DetectionStamp(DateTimeOffset Utc, AuditMode Mode, string C
 /// <summary>How a finding reached <see cref="FindingStatus.Resuelto"/> (§5.7 — four vías).</summary>
 public enum ResolutionVia
 {
-    /// <summary>Implicit: a lotes/integral re-audit covered its units and did not re-report it.</summary>
+    /// <summary>
+    /// LEGADO — no se emite desde F4. La resolución implícita ("cubierta por la sesión y no
+    /// re-reportada") está eliminada: nada se resuelve por omisión. Se conserva el valor SOLO
+    /// para poder leer hallazgos resueltos por sesiones anteriores sin romper.
+    /// </summary>
     Implicita,
+
+    /// <summary>
+    /// El auditor declaró el hallazgo <c>arreglado</c> en <c>report_verdicts</c> durante una
+    /// sesión de auditoría, con evidencia (F4). Es la vía normal de resolución.
+    /// </summary>
+    Auditor,
 
     /// <summary>A verify session returned verdict <see cref="Verdict.Resuelto"/>.</summary>
     Verify,

@@ -126,6 +126,39 @@ public sealed class HubContext
         Pull();
         PublishAfterMigration();
         InitializeIfEmpty();
+        MigrateSilencesToUlidKeys();
+    }
+
+    /// <summary>
+    /// F4: los silencios pasan de estar nombrados por fingerprint a estarlo por el ULID del
+    /// hallazgo que silencian. Idempotente y barata (los silencios son pocos), así que corre en
+    /// cada apertura del hub; en cuanto no queda ninguno con el nombre viejo no hace nada.
+    /// Se commitea solo si movió algo — nunca genera un commit vacío.
+    /// </summary>
+    private void MigrateSilencesToUlidKeys()
+    {
+        if (Sync is null || Health != SyncHealth.Green)
+        {
+            return;
+        }
+
+        int moved = 0;
+        foreach (string slug in Store.ListAppSlugs())
+        {
+            SilenceMigration.Result result = SilenceMigration.MigrateApp(HubPaths, slug);
+            moved += result.Migrated.Count;
+            foreach (string skipped in result.Skipped)
+            {
+                _loggerFactory.CreateLogger<HubContext>()
+                    .LogWarning("Silencio no migrable en {Slug}: {Detail}", slug, skipped);
+            }
+        }
+
+        if (moved > 0)
+        {
+            Sync.CommitAndPush($"silences: migración F4 a clave por ULID ({moved})");
+            SyncStateChanged?.Invoke();
+        }
     }
 
     /// <summary>

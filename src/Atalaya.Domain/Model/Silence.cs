@@ -3,14 +3,21 @@ using Atalaya.Domain.Ids;
 namespace Atalaya.Domain.Model;
 
 /// <summary>
-/// A silence (§2), keyed by fingerprint, with optional expiry. Silencing is always a
-/// human action with author and reason. An expired silence is non-existent for filtering.
+/// A silence (§2), con caducidad opcional. Silenciar es siempre una acción humana con autor y
+/// motivo. Un silencio caducado es inexistente a efectos de filtrado.
+/// <para>
+/// F4: la clave pasa a ser el <b>ULID del hallazgo</b> (<see cref="FindingUlid"/>), no el
+/// fingerprint. El hallazgo silenciado sigue existiendo con estado
+/// <see cref="FindingStatus.Silenciado"/> y el auditor lo ve en la lista de existentes de su
+/// unidad, así que puede declararlo "presente" sin que reaparezca.
+/// </para>
 /// </summary>
 public sealed class Silence
 {
     public int SchemaVersion { get; set; } = 1;
 
-    public required string Fingerprint { get; set; }
+    /// <summary>El hallazgo silenciado. Es la clave: <c>silences/{ulid}.json</c>.</summary>
+    public Ulid FindingUlid { get; set; }
 
     public SilenceReason Reason { get; set; }
 
@@ -22,9 +29,6 @@ public sealed class Silence
 
     /// <summary>Null = never expires.</summary>
     public DateTimeOffset? ExpiresUtc { get; set; }
-
-    /// <summary>The findings this silence was created against (for provenance).</summary>
-    public List<Ulid> FindingUlids { get; set; } = new();
 
     /// <summary>A silence is live (suppresses) until its expiry, if any.</summary>
     public bool IsLiveAt(DateTimeOffset now) => ExpiresUtc is null || ExpiresUtc.Value > now;

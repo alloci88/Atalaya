@@ -2,7 +2,6 @@ using Atalaya.App.Services;
 using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
-using Atalaya.Domain.Fingerprinting;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Inventory;
@@ -49,7 +48,6 @@ public sealed class CycleServiceTests : IDisposable
         var f = new Finding
         {
             Id = _ulids.NewUlid(),
-            Fingerprint = Fingerprint.Compute("errores.x", "A.cs", "s", "t"),
             RuleId = "errores.x",
             Pillar = Pillar.Errores,
             Severity = Severity.Alta,
@@ -114,7 +112,7 @@ public sealed class CycleServiceTests : IDisposable
         });
 
         var coordinator = new SessionCoordinator(
-            _hub, _ingestion, _machines, _ulids,
+            _hub, _ingestion, new ReconciliationService(_hub), _machines, _ulids,
             new FakeCopilotAgent(_ => Array.Empty<SubmitFindingArgs>()),
             new CycleService(_hub, _ulids), new StatusExporter(_hub, _machines));
 

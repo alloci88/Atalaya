@@ -7,7 +7,7 @@ public sealed record RuleDef(string RuleId, Pillar Pillar, string Title, string 
 
 /// <summary>
 /// The versioned checklist catalog (§6.4). Each rule has a STABLE <c>ruleId</c> — the basis of
-/// the fingerprint — so silences and dedupe survive across cycles and re-wordings. Findings may
+/// the auditor's reconciliation list — so a re-worded title still maps to the same rule. Findings may
 /// also carry a <c>criterio.&lt;área&gt;</c> id for professional-judgement items.
 /// </summary>
 public static class RuleCatalog

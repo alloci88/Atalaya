@@ -1,9 +1,8 @@
 using Atalaya.Copilot;
 using Atalaya.Domain;
-using Atalaya.Domain.Fingerprinting;
+using Atalaya.Domain.Anchoring;
 using Atalaya.Domain.Hashing;
 using Atalaya.Domain.Ids;
-using Atalaya.Domain.Ingestion;
 using Atalaya.Domain.Model;
 using Atalaya.Inventory;
 
@@ -17,17 +16,29 @@ public sealed record SessionResult(Ulid SessionId, SessionCounters Counters, boo
 {
     /// <summary>True when this session actually triggered the cycle close (§5.1).</summary>
     public bool CycleClosed { get; init; }
+
+    /// <summary>
+    /// Unidades en las que el auditor dejó hallazgos existentes sin veredicto (F4). No bloquea la
+    /// sesión, pero es visible: esos hallazgos no se han tocado y hay que volver sobre ellos.
+    /// </summary>
+    public int IncompleteUnits { get; init; }
 }
 
 /// <summary>
 /// Orchestrates a full audit session end-to-end (§5.1): claims → per-unit agent audit with live
-/// ingestion → implicit resolution → inventory update → session + report → commit/push. UI-agnostic;
-/// V5 subscribes to its events. Superficial never resolves (anti-degradation, §5.3).
+/// ingestion y reconciliación por el auditor → inventory update → session + report → commit/push.
+/// UI-agnostic; V5 subscribes to its events.
+/// <para>
+/// F4: NO hay resolución implícita. Un hallazgo previo solo cambia de estado si el auditor emite
+/// un veredicto explícito sobre su ULID (<c>report_verdicts</c>). Los que quedan sin veredicto
+/// dejan la unidad marcada como <c>incompleta</c> y permanecen intactos.
+/// </para>
 /// </summary>
 public sealed class SessionCoordinator
 {
     private readonly HubContext _hub;
     private readonly FindingIngestionService _ingestion;
+    private readonly ReconciliationService _reconciliation;
     private readonly MachineConfigStore _machines;
     private readonly IUlidFactory _ulids;
     private readonly ICopilotAgent _agent;
@@ -35,12 +46,13 @@ public sealed class SessionCoordinator
     private readonly StatusExporter? _statusExporter;
 
     public SessionCoordinator(
-        HubContext hub, FindingIngestionService ingestion, MachineConfigStore machines,
-        IUlidFactory ulids, ICopilotAgent agent,
+        HubContext hub, FindingIngestionService ingestion, ReconciliationService reconciliation,
+        MachineConfigStore machines, IUlidFactory ulids, ICopilotAgent agent,
         CycleService? cycles = null, StatusExporter? statusExporter = null)
     {
         _hub = hub;
         _ingestion = ingestion;
+        _reconciliation = reconciliation;
         _machines = machines;
         _ulids = ulids;
         _agent = agent;
@@ -49,7 +61,9 @@ public sealed class SessionCoordinator
     }
 
     public event Action<string, string>? UnitPhaseChanged;   // (path, phase)
-    public event Action<Finding, IngestionKind>? FindingReported;
+
+    /// <summary>(hallazgo, qué le pasó: nuevo | reconfirmed | resolved | needsreview | silencerespected).</summary>
+    public event Action<Finding, string>? FindingReported;
     public event Action<string>? TextStreamed;
     public event Action<long, long, decimal?, string?>? UsageUpdated;  // cumulative in/out/cost/costUnit
 
@@ -88,9 +102,9 @@ public sealed class SessionCoordinator
         PublishClaims(request.Slug, units, inventory, by);
 
         var newFindings = new List<Finding>();
-        void OnFinding(Finding f, IngestionKind kind)
+        void OnFinding(Finding f, string kind)
         {
-            if (kind is IngestionKind.New or IngestionKind.Recurrence)
+            if (kind == "nuevo")
             {
                 newFindings.Add(f);
             }
@@ -151,8 +165,10 @@ public sealed class SessionCoordinator
         _agent.UsageReported += OnUsage;
 
         var stamp = new DetectionStamp(now, request.Mode, commit, by);
-        var toolbox = new SessionToolbox(request.Slug, request.Mode, stamp, _ingestion, clone!, OnFinding);
+        var toolbox = new SessionToolbox(
+            request.Slug, request.Mode, stamp, _ingestion, _reconciliation, clone!, OnFinding);
         var auditedPaths = new HashSet<string>(StringComparer.Ordinal);
+        int incompleteUnits = 0;
 
         try
         {
@@ -171,7 +187,14 @@ public sealed class SessionCoordinator
                 }
 
                 string content = await File.ReadAllTextAsync(abs, ct);
-                string prompt = PromptComposer.ComposeUnitPrompt(unit.Path, content, brief, request.Mode);
+
+                // F4: la lista de hallazgos existentes de la unidad viaja EN EL PROMPT y acota los
+                // ULIDs sobre los que el auditor puede pronunciarse. Es lo que sustituye a toda la
+                // maquinaria de fingerprints: la identidad la decide quien sabe decidirla.
+                IReadOnlyList<Finding> existing = _reconciliation.ExistingForUnit(request.Slug, unit.Path);
+                toolbox.BeginUnit(existing);
+                var listed = existing.Select(ToExisting).ToList();
+                string prompt = PromptComposer.ComposeUnitPrompt(unit.Path, content, brief, request.Mode, listed);
 
                 var breakdown = new UnitUsageBreakdown
                 {
@@ -180,7 +203,6 @@ public sealed class SessionCoordinator
                 };
                 session.UsageBreakdown.Add(breakdown);
                 currentBreakdown = breakdown;
-                toolbox.ResetToolCallCount();
 
                 budgetTripped = false;
                 unitCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -188,7 +210,8 @@ public sealed class SessionCoordinator
                 try
                 {
                     await _agent.AuditUnitAsync(
-                        new AuditUnitRequest(unit.Path, content, prompt, app.Stack, request.Mode), toolbox, unitCts.Token);
+                        new AuditUnitRequest(unit.Path, content, prompt, app.Stack, request.Mode, listed),
+                        toolbox, unitCts.Token);
                 }
                 catch (OperationCanceledException) when (budgetTripped && !ct.IsCancellationRequested)
                 {
@@ -253,11 +276,29 @@ public sealed class SessionCoordinator
                     continue;
                 }
 
+                // F4: sin veredicto no se toca nada. La unidad se marca incompleta y se nombra a
+                // los hallazgos huérfanos — visible, pero no bloquea la sesión.
+                IReadOnlyList<Finding> withoutVerdict = toolbox.PendingVerdicts;
+                string unitVerdict = "auditada";
+                string? unitSummary = toolbox.LastUnitSummary;
+                if (withoutVerdict.Count > 0)
+                {
+                    incompleteUnits++;
+                    unitVerdict = "incompleta";
+                    unitSummary = $"Incompleta: {withoutVerdict.Count} hallazgo(s) existentes sin veredicto del "
+                        + "auditor (no se han modificado)"
+                        + (unitSummary is null ? "" : $" · {unitSummary}");
+                    foreach (Finding f in withoutVerdict)
+                    {
+                        session.Notes.Add($"{unit.Path}: sin veredicto · {f.Id} «{f.Title}»");
+                    }
+                }
+
                 session.Units.Add(new UnitVerdictRecord(
-                    unit.Path, unit.Module, "auditada", toolbox.LastUnitSummary,
-                    rejectedInUnit, dominantReason));
-                auditedPaths.Add(Fingerprint.NormalizePath(unit.Path));
-                UnitPhaseChanged?.Invoke(unit.Path, "done");
+                    unit.Path, unit.Module, unitVerdict, unitSummary,
+                    rejectedInUnit, dominantReason, withoutVerdict.Count));
+                auditedPaths.Add(CodeAnchor.NormalizePath(unit.Path));
+                UnitPhaseChanged?.Invoke(unit.Path, withoutVerdict.Count > 0 ? "incomplete" : "done");
             }
         }
         finally
@@ -266,8 +307,6 @@ public sealed class SessionCoordinator
             _agent.UsageReported -= OnUsage;
         }
 
-        int resolved = ApplyImplicitResolution(request, auditedPaths, toolbox.ReportedFingerprints, commit, by, now);
-
         MarkAuditedInInventory(inventory, auditedPaths, sessionId);
         _hub.Store.WriteInventory(request.Slug, inventory);
 
@@ -275,7 +314,6 @@ public sealed class SessionCoordinator
 
         session.EndedUtc = DateTimeOffset.UtcNow;
         session.Counters = toolbox.Counters;
-        session.Counters.Resolved += resolved;
         _hub.Store.WriteSession(session);
 
         int pending = inventory.Units.Count(u => u.State == UnitState.Pendiente);
@@ -298,6 +336,7 @@ public sealed class SessionCoordinator
         return new SessionResult(sessionId, session.Counters, ReachedZeroPending: pending == 0)
         {
             CycleClosed = cycleClosed,
+            IncompleteUnits = incompleteUnits,
         };
     }
 
@@ -337,50 +376,29 @@ public sealed class SessionCoordinator
         }
     }
 
-    // §0 implicit resolution: in lotes/integral, an active finding whose locations all fall in
-    // audited units and that was NOT re-reported becomes resolved. Superficial/verify never do this.
-    private int ApplyImplicitResolution(
-        SessionRequest request, HashSet<string> auditedPaths, HashSet<string> reportedFingerprints,
-        string commit, string by, DateTimeOffset now)
-    {
-        if (request.Mode is not (AuditMode.Lotes or AuditMode.Integral))
-        {
-            return 0;
-        }
-
-        int resolved = 0;
-        foreach (Finding f in _hub.Store.ListFindings(request.Slug).Where(f => f.Status == FindingStatus.Activo))
-        {
-            bool allCovered = f.Locations.Count > 0
-                && f.Locations.All(l => auditedPaths.Contains(Fingerprint.NormalizePath(l.Path)));
-            // F3.1 Bloque 1b (D-070): un hallazgo puede llevar fingerprints obsoletos en
-            // PreviousFingerprints (repair, 2ª pasada anterior). Si el payload de esta sesión
-            // trae CUALQUIER hash del linaje se cuenta como "re-reportado" — cerrar por implícita
-            // aquí sería reintroducir el ciclo duplicar→resolver.
-            bool reReported = reportedFingerprints.Contains(f.Fingerprint)
-                || f.PreviousFingerprints.Any(reportedFingerprints.Contains);
-            if (allCovered && !reReported)
-            {
-                f.Resolve(new ResolutionStamp(now, ResolutionVia.Implicita, request.Mode, commit, by,
-                    "cubierta por la sesión y no re-reportada"));
-                _hub.Store.WriteFinding(request.Slug, f);
-                resolved++;
-            }
-        }
-
-        return resolved;
-    }
-
     private static void MarkAuditedInInventory(InventoryCycle inventory, HashSet<string> auditedPaths, Ulid sessionId)
     {
         foreach (InventoryUnit u in inventory.Units)
         {
-            if (auditedPaths.Contains(Fingerprint.NormalizePath(u.Path)) && u.State != UnitState.Grande)
+            if (auditedPaths.Contains(CodeAnchor.NormalizePath(u.Path)) && u.State != UnitState.Grande)
             {
                 u.State = UnitState.Auditada;
                 u.AuditedInSession = sessionId;
             }
         }
+    }
+
+    /// <summary>Un hallazgo del hub, tal y como se le presenta al auditor (F4).</summary>
+    private static ExistingFinding ToExisting(Finding f)
+    {
+        Location? loc = f.Locations.Count > 0 ? f.Locations[0] : null;
+        return new ExistingFinding(
+            f.Id.ToString(),
+            f.DisplayId,
+            f.Title,
+            f.Severity.ToString().ToLowerInvariant(),
+            loc is null ? "(sin ubicación)" : $"{loc.Path}:{loc.Line}",
+            f.Status == FindingStatus.Silenciado ? "silenciado" : "activo");
     }
 
     /// <summary>

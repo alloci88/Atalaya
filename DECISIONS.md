@@ -638,6 +638,131 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   de fingerprint por título). No es blocker de F3.1 Bloque 1b: se registra aquí para
   que no se pierda y no se vuelva a debatir.
 
+## F4 — Reconciliación por el auditor (pivote arquitectónico mayor)
+
+- **D-077 — La deduplicación por fingerprint se retira. La identidad de un hallazgo es su
+  ULID, y quien la decide es el auditor.** Decisión arquitectónica, no un parche más.
+
+  - **Evidencia (D-068 a D-071, tres generaciones de intentos):** el fingerprint se computa
+    sobre `ruleId + ruta + symbol|título`, y de esos cuatro inputs **tres los redacta un LLM
+    que varía entre sesiones para el mismo defecto**. Cada capa que se añadió tapó un caso y
+    abrió otro:
+    1. `SecondPassMatcher` (Jaccard sobre títulos, D-065) — no se ejecutaba cuando el hash
+       colisionaba con un gemelo resuelto (D-069).
+    2. `previousFingerprints[]` + migración de hash (D-065, D-073) — la resolución implícita
+       miraba solo `Fingerprint`, así que el reabierto moría igual (D-070).
+    3. `SessionRepairTool` (D-066, D-074) — migraba el hallazgo canónico al hash de la sesión
+       mala, un objetivo volátil que no vuelve a aparecer (D-071).
+    El resultado observable fue el ciclo **duplicar→resolver**: S1 `new:5, resolved:5`,
+    S3 `new:4, resolved:4, recurrences:3` sobre la MISMA unidad sin cambios en el código.
+
+  - **Diagnóstico:** la pregunta "¿es este el mismo problema que aquel?" es semántica y no es
+    computable con hashes ni con solape de tokens cuando los inputs los escribe un modelo. Es
+    la misma clase de fallo que retiró `tag` de la tool (D-059) y la que D-076 registró como
+    deuda: seguir pidiéndole al hash lo que solo el LLM sabe decidir.
+
+  - **El modelo nuevo:** al auditar una unidad, la app incluye en el prompt la lista de sus
+    hallazgos existentes (ULID, displayId, título, severidad, ubicación, estado activo o
+    silenciado). Son pocos por unidad; el coste en tokens es despreciable frente a la
+    maquinaria que elimina. El auditor tiene la **obligación** de pronunciarse sobre cada uno
+    vía la tool nueva `report_verdicts(verdicts[])`, con
+    `{findingId, verdict: presente | arreglado | no-verificable, evidence}`.
+    `submit_finding(s)` queda **solo** para hallazgos genuinamente nuevos; el prompt lo dice
+    explícitamente ("si el problema corresponde a uno de la lista, referéncialo en
+    `report_verdicts`; no lo re-reportes como nuevo").
+
+  - **La app aplica decisiones tipadas por ULID** (`ReconciliationService`):
+    `presente` → reconfirmación (máquina de confianza intacta); `arreglado` → resuelto con
+    `ResolutionVia.Auditor` y la evidencia como justificación; `no-verificable` →
+    `needsReview` sin cambiar de estado; **silenciado detectado presente** → se registra la
+    detección en el historial y NO se reactiva (el silencio es una decisión humana y el
+    auditor no la revoca). Un silencio **caducado** sí deja reaparecer el hallazgo (§2 intacto).
+
+  - **Validación:** los `findingId` se acotan a los ULID listados en esa unidad. Uno que no
+    esté produce un **error tipado devuelto al agente** ("findingId desconocido … usa solo los
+    ULID listados") sin tocar nada, y queda en las notas de la sesión.
+
+- **D-078 — La resolución implícita se ELIMINA. Nada se resuelve por omisión.**
+  `SessionCoordinator.ApplyImplicitResolution` desaparece con su `ReportedFingerprints`.
+  Un hallazgo solo se cierra por (a) `verdict: arreglado` explícito, (b) gobernanza manual o
+  (c) verify — ninguna de las dos últimas cambia. Si el auditor no se pronuncia sobre algún
+  hallazgo listado, la unidad se cierra con veredicto **`incompleta`**
+  (`UnitVerdictRecord.MissingVerdicts > 0`), los hallazgos huérfanos quedan **intactos** y se
+  nombran por ULID en `session.Notes` y en el informe. No bloquea la sesión.
+
+  **Por qué esto mata el ciclo para siempre:** duplicar exige que el LLM ignore una lista que
+  tiene delante (raro, y autocorregible en la sesión siguiente, donde el duplicado aparecerá
+  en la lista); resolver exige una afirmación explícita. Las dos mitades del ciclo dejan de
+  poder ocurrir por accidente. El test
+  `Agent_ignoring_the_existing_list_creates_a_duplicate_but_resolves_nothing` fija justo esa
+  asimetría: el peor caso crea un duplicado visible, pero **no resuelve nada**.
+
+- **D-079 — Los silencios pasan a referenciar ULIDs.** `silences/{ulid}.json` en vez de
+  `silences/{fingerprintHex}.json`; `Silence.FindingUlid` sustituye a `Fingerprint` y a la
+  lista de procedencia `FindingUlids`. `SilenceMigration.MigrateApp` reescribe los ficheros
+  legados tomando el ULID que el propio silencio ya referenciaba; es idempotente, corre en
+  cada `HubContext.EnsureHub` y **nunca borra en silencio**: un silencio sin `findingUlids`
+  se deja donde está y se reporta al log. El hallazgo silenciado sigue existiendo con estado
+  `silenciado` y el auditor lo ve en su lista, que es lo que permite decir "presente" sin
+  reactivarlo.
+
+- **D-080 — Lo eliminado (Bloque 2).** No comentado: eliminado; git conserva la historia.
+  - `SecondPassMatcher` + `SecondPassMatcherTests` (183 + 134 líneas).
+  - `IngestionEngine` + `IngestionEngineTests` (106 + 117) — con la 2ª pasada y la
+    recurrencia fuera, sus cinco ramas se reducían a una: crear. Vive en
+    `FindingIngestionService.Create`, de 8 líneas.
+  - La **vía de recurrencia** completa: `Finding.RecurrenceOf`, `SessionCounters.Recurrences`
+    y la métrica "Reincidencias" de V6 con su tile. Si un resuelto reaparece, el auditor no lo
+    ve en la lista (solo se listan activos y silenciados), lo reporta como nuevo, y eso ES la
+    reincidencia. Simplicidad gana (`FindingEvent.Recurrence` se conserva en el enum solo para
+    poder leer historiales antiguos).
+  - `SessionRepairTool` + `SessionRepairToolConsolidationTests` (415 + 170) y los comandos
+    ocultos `--repair-session` y `--consolidate` de `App.xaml.cs`. Nota: `--consolidate` nunca
+    llegó a cablearse en `OnStartup` — era código muerto desde que se escribió (D-074).
+  - `PilotS3RegressionTests` (194): blindaba un mecanismo que ya no existe.
+  - `Finding.Fingerprint`, `Finding.PreviousFingerprints`, `HubStore.FindByFingerprint`,
+    `SchemaValidation.RequireHash` sobre hallazgo y silencio, y la clase `Fingerprint` entera.
+  - **La derivación de símbolo con Roslyn (D-076) nunca llegó a implementarse** — se verificó
+    con `grep -rn "Roslyn\|CodeAnalysis"`: la única mención era un comentario en
+    `SessionToolbox.ReadSignatures` sobre una mejora futura. No había nada que demoler.
+
+- **D-081 — Decisión sobre el campo `fingerprint`: eliminado, no congelado.** El prompt daba
+  la opción de conservarlo como metadato informativo. Se elimina: un hash de inputs que un LLM
+  redacta, guardado "solo informativo" junto a la identidad real, es exactamente el artefacto
+  que invita a que la siguiente generación de código vuelva a usarlo como clave. La tolerancia
+  al leer ficheros viejos está garantizada por `System.Text.Json`, que ignora miembros no
+  mapeados por defecto (`UnmappedMemberHandling` no está configurado en `AtalayaJson`): un
+  `finding.json` de v4/F3 con `fingerprint` y `previousFingerprints` se lee sin error y los
+  campos simplemente se pierden en la siguiente escritura.
+
+  Lo que **sí** sobrevive de la clase antigua está en `Atalaya.Domain.Anchoring.CodeAnchor`:
+  `NormalizePath` (comparar ubicaciones entre sistemas de ficheros) y `ComputeSnippetHash`
+  (el ancla que re-localiza una línea movida, §5.4 verify). Ninguna de las dos tiene que ver
+  con identidad, y el nombre nuevo lo deja claro. La palabra "fingerprint" ya no aparece como
+  identificador en ningún punto del código.
+
+- **D-082 — La única deduplicación superviviente es intra-sesión y barata.**
+  `SubmittedFinding.SessionDuplicateKey` = título normalizado (minúsculas, espacios
+  colapsados) + ruta normalizada + línea. Rechaza el mismo payload dos veces en la MISMA
+  sesión y **nunca** se compara contra el histórico. Protege del agente que repite un payload
+  entre dos tool calls; no pretende decidir identidad semántica.
+
+- **D-083 — Informe y V5 ganan "no verificables" e "incompletas", con causa.**
+  `SessionCounters.NoVerificables` se cuenta aparte para que jamás se confunda con "resuelto".
+  El informe añade la línea solo si el número es > 0, mete las unidades `incompleta` en la
+  sección "Incidencias por unidad" y añade **"Hallazgos sin veredicto (no modificados)"** con
+  el ULID y el título de cada uno. Sin números sin causa (D-060 sigue vigente).
+
+- **D-084 — Cobertura E2E del modelo nuevo** (`SessionCoordinatorTests`, agente falso):
+  reconciliación completa (2 presentes + 1 arreglado + 1 nuevo, cero implícitos);
+  **dos sesiones consecutivas estables** (0 nuevos, 0 resueltos, N confirmados) — la propiedad
+  que nunca se cumplió con los fingerprints; veredicto omitido → unidad incompleta y hallazgo
+  intacto (ni confirmado ni tocado); silenciado detectado presente → sigue silenciado, con
+  detección en el historial y confianza sin tocar; silencio caducado → reaparece; ULID
+  inexistente → error tipado, cero efectos; verdict con vocabulario inválido → rechazado (la
+  app no adivina); lista acotada por unidad; duplicado exacto intra-sesión. La salvaguarda de
+  aislamiento `TestFactory.AssertIsolated` (D-062) sigue vigente y sin tocar.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

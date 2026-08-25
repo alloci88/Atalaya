@@ -91,8 +91,14 @@ public static class AtalayaJson
             (Verdict.Resuelto, "resuelto"),
             (Verdict.NoVerificable, "no-verificable")));
 
+        o.Converters.Add(new EnumJsonConverter<ReconcileVerdict>(
+            (ReconcileVerdict.Presente, "presente"),
+            (ReconcileVerdict.Arreglado, "arreglado"),
+            (ReconcileVerdict.NoVerificable, "no-verificable")));
+
         o.Converters.Add(new EnumJsonConverter<ResolutionVia>(
             (ResolutionVia.Implicita, "implicita"),
+            (ResolutionVia.Auditor, "auditor"),
             (ResolutionVia.Verify, "verify"),
             (ResolutionVia.Manual, "manual")));
 

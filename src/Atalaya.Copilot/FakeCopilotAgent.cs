@@ -8,13 +8,21 @@ public sealed class FakeCopilotAgent : ICopilotAgent
 {
     private readonly Func<AuditUnitRequest, IEnumerable<SubmitFindingArgs>> _auditScript;
     private readonly Func<VerifyTarget, string> _verdictScript;
+    private readonly Func<AuditUnitRequest, IEnumerable<VerdictArgs>>? _reconcileScript;
 
+    /// <param name="reconcileScript">
+    /// F4: qué veredictos emite el agente sobre los hallazgos existentes de la unidad. Por defecto
+    /// declara TODOS "presente" — el comportamiento de un auditor que reconcilia completo. Pasa un
+    /// script propio para simular omisiones, "arreglado", o IDs inexistentes.
+    /// </param>
     public FakeCopilotAgent(
         Func<AuditUnitRequest, IEnumerable<SubmitFindingArgs>>? auditScript = null,
-        Func<VerifyTarget, string>? verdictScript = null)
+        Func<VerifyTarget, string>? verdictScript = null,
+        Func<AuditUnitRequest, IEnumerable<VerdictArgs>>? reconcileScript = null)
     {
         _auditScript = auditScript ?? (_ => Array.Empty<SubmitFindingArgs>());
         _verdictScript = verdictScript ?? (_ => "confirmado");
+        _reconcileScript = reconcileScript;
     }
 
     public string? ModelName => "fake-model";
@@ -31,6 +39,24 @@ public sealed class FakeCopilotAgent : ICopilotAgent
     public Task AuditUnitAsync(AuditUnitRequest request, IAuditToolbox toolbox, CancellationToken ct)
     {
         TextStreamed?.Invoke($"[fake] auditando {request.UnitPath}\n");
+
+        // Reconciliación primero (F4): el auditor se pronuncia sobre lo que ya existe antes de
+        // reportar nada nuevo. Por defecto, todo "presente".
+        VerdictArgs[] verdicts = (_reconcileScript is not null
+                ? _reconcileScript(request)
+                : request.Existing.Select(e => new VerdictArgs(e.FindingId, "presente", "sigue en el código (fake)")))
+            .ToArray();
+        if (verdicts.Length > 0)
+        {
+            ReportVerdictsResult verdictResult = toolbox.ReportVerdicts(verdicts);
+            for (int i = 0; i < verdicts.Length; i++)
+            {
+                ReportVerdictResult r = verdictResult.Results[i];
+                TextStreamed?.Invoke(r.Accepted
+                    ? $"[fake] veredicto {verdicts[i].Verdict} sobre {verdicts[i].FindingId}\n"
+                    : $"[fake] veredicto rechazado ({r.Error})\n");
+            }
+        }
 
         // The fake agent honours the batching contract (F3 Hito 1c): all findings for a unit go
         // in a single tool call. This is what the real agent is instructed to do too.

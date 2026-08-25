@@ -27,12 +27,6 @@
                         <TextBlock Text="{Binding Summary.Resolved}" FontSize="28" FontWeight="Bold" />
                     </StackPanel>
                 </Border>
-                <Border Background="#14808080" CornerRadius="8" Padding="14" Margin="0,0,12,12" MinWidth="150">
-                    <StackPanel>
-                        <TextBlock Text="Reincidencias" Opacity="0.6" />
-                        <TextBlock Text="{Binding Summary.Recurrences}" FontSize="28" FontWeight="Bold" />
-                    </StackPanel>
-                </Border>
                 <Border Background="#14808080" CornerRadius="8" Padding="14" Margin="0,0,12,12" MinWidth="180">
                     <StackPanel>
                         <TextBlock Text="Tiempo medio a resolución" Opacity="0.6" />

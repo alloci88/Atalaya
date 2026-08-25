@@ -100,7 +100,7 @@ public sealed partial class OnboardingViewModel : ViewModelBase
                 var stamp = new DetectionStamp(DateTimeOffset.UtcNow, AuditMode.Lotes, commit, _hub.ResolveIdentity().Name);
                 foreach (SubmittedFinding large in scan.LargeUnitFindings)
                 {
-                    _ingestion.Ingest(slug, large, AuditMode.Lotes, stamp);
+                    _ingestion.Create(large, slug, AuditMode.Lotes, stamp);
                 }
 
                 _machines.SetClonePath(slug, ClonePath);

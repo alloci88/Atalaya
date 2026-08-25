@@ -23,7 +23,6 @@ public static class SchemaValidation
     {
         Require(f.SchemaVersion == CurrentSchemaVersion, "finding.schemaVersion must be 1");
         Require(f.Id != Ulid.Empty, "finding.id must be a non-empty ULID");
-        RequireHash(f.Fingerprint, "finding.fingerprint");
         RequireText(f.RuleId, "finding.ruleId");
         RequireText(f.Title, "finding.title");
         Require(f.Locations.Count > 0, "finding.locations must have at least one entry");
@@ -41,7 +40,7 @@ public static class SchemaValidation
     public static void Validate(Silence s)
     {
         Require(s.SchemaVersion == CurrentSchemaVersion, "silence.schemaVersion must be 1");
-        RequireHash(s.Fingerprint, "silence.fingerprint");
+        Require(s.FindingUlid != Ulid.Empty, "silence.findingUlid must be a non-empty ULID");
         RequireText(s.By, "silence.by");
     }
 
@@ -108,8 +107,4 @@ public static class SchemaValidation
 
     private static void RequireText(string? value, string field)
         => Require(!string.IsNullOrWhiteSpace(value), $"{field} must be non-empty");
-
-    private static void RequireHash(string? value, string field)
-        => Require(value is not null && value.StartsWith("sha256:", StringComparison.Ordinal) && value.Length > 7,
-            $"{field} must be a 'sha256:...' hash");
 }

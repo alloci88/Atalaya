@@ -4,11 +4,11 @@ using Atalaya.Domain.Rules;
 namespace Atalaya.Domain.Model;
 
 /// <summary>
-/// A finding — the central entity (§2). Identity is the <see cref="Id"/> (ULID) plus the
-/// <see cref="Fingerprint"/>; <see cref="DisplayId"/> is a mutable presentation alias only.
-/// Findings are never deleted; they move between <see cref="FindingStatus"/> values.
-/// State transitions go through the methods below so the confidence machine and the
-/// audit trail are always enforced together.
+/// A finding — the central entity (§2). Its identity is the <see cref="Id"/> (ULID), y punto
+/// (F4): ya no hay fingerprint ni ninguna otra clave derivada. <see cref="DisplayId"/> es un
+/// alias de presentación mutable. Los hallazgos nunca se borran; se mueven entre valores de
+/// <see cref="FindingStatus"/>. Las transiciones pasan por los métodos de abajo para que la
+/// máquina de confianza y la traza de auditoría se apliquen siempre juntas.
 /// </summary>
 public sealed class Finding
 {
@@ -18,8 +18,6 @@ public sealed class Finding
 
     /// <summary>Human-readable alias (BUG-0042). Assigned only after a successful push (§2).</summary>
     public string? DisplayId { get; set; }
-
-    public required string Fingerprint { get; set; }
 
     public required string RuleId { get; set; }
 
@@ -56,9 +54,6 @@ public sealed class Finding
     /// <summary>Set when a location could not be re-anchored or verify said non-verifiable (§5.4).</summary>
     public bool NeedsReview { get; set; }
 
-    /// <summary>If this finding is a recurrence of a resolved fingerprint, the old ULID (§2).</summary>
-    public Ulid? RecurrenceOf { get; set; }
-
     public string? Assignee { get; set; }
 
     /// <summary>Previous <see cref="DisplayId"/> values, if an alias ever changed (§2).</summary>
@@ -66,28 +61,16 @@ public sealed class Finding
 
     public List<HistoryEntry> History { get; set; } = new();
 
-    /// <summary>
-    /// Fingerprints anteriores de este hallazgo (F3.1 Bloque 1). Se rellena cuando el matching de
-    /// 2ª pasada de la ingestión emparejaba un hallazgo importado del v4 (fingerprint por título)
-    /// con un payload nuevo (fingerprint por ruleId) y MIGRABA el <see cref="Fingerprint"/> al
-    /// esquema nuevo. Preserva la trazabilidad (silencios y auditorías viejas siguen apuntando
-    /// aquí) sin romper la unicidad de la clave activa. Nunca se limpia.
-    /// </summary>
-    public List<string> PreviousFingerprints { get; set; } = new();
-
     /// <summary>Builds a brand-new finding, assigning confidence from the origin mode.</summary>
     public static Finding CreateNew(
         Ulid id,
-        string fingerprint,
         Ingestion.SubmittedFinding submitted,
         AuditMode origin,
-        DetectionStamp stamp,
-        Ulid? recurrenceOf = null)
+        DetectionStamp stamp)
     {
         var finding = new Finding
         {
             Id = id,
-            Fingerprint = fingerprint,
             RuleId = submitted.RuleId,
             Pillar = submitted.Pillar,
             Tag = submitted.Tag,
@@ -103,17 +86,9 @@ public sealed class Finding
             FirstDetected = stamp,
             LastConfirmed = stamp,
             TimesConfirmed = 1,
-            RecurrenceOf = recurrenceOf,
         };
 
-        finding.History.Add(new HistoryEntry(stamp.Utc, FindingEvent.Detected, stamp.By,
-            recurrenceOf is null ? $"detected via {origin}" : $"recurrence of {recurrenceOf}"));
-        if (recurrenceOf is not null)
-        {
-            finding.History.Add(new HistoryEntry(stamp.Utc, FindingEvent.Recurrence, stamp.By,
-                $"reappeared after resolution of {recurrenceOf}"));
-        }
-
+        finding.History.Add(new HistoryEntry(stamp.Utc, FindingEvent.Detected, stamp.By, $"detected via {origin}"));
         return finding;
     }
 

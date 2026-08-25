@@ -33,7 +33,6 @@ public sealed class PortfolioQueryTests : IDisposable
         var f = new Finding
         {
             Id = _ulids.NewUlid(),
-            Fingerprint = "sha256:" + Guid.NewGuid().ToString("N") + new string('a', 32),
             RuleId = "errores.x",
             Pillar = Pillar.Errores,
             Severity = sev,

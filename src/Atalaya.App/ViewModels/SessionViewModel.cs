@@ -3,7 +3,6 @@ using System.Windows;
 using Atalaya.App.Services;
 using Atalaya.Copilot;
 using Atalaya.Domain;
-using Atalaya.Domain.Ingestion;
 using Atalaya.Domain.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -91,8 +90,16 @@ public sealed partial class SessionViewModel : ViewModelBase
         try
         {
             SessionResult result = await Task.Run(() => _coordinator.RunAsync(_request, _cts.Token));
+            // F4: el resumen gana "no verificables" e "incompletas" — pero solo si los hay, y con
+            // la causa implícita en el propio texto. Sin números sin causa.
             StatusMessage = $"Sesión completada. Nuevos {result.Counters.New}, confirmados {result.Counters.Confirmed}, "
                 + $"resueltos {result.Counters.Resolved}, silenciados respetados {result.Counters.SilencedRespected}."
+                + (result.Counters.NoVerificables > 0
+                    ? $" {result.Counters.NoVerificables} no verificables (marcados para revisión)."
+                    : "")
+                + (result.IncompleteUnits > 0
+                    ? $" ⚠ {result.IncompleteUnits} unidad(es) incompleta(s): el auditor dejó hallazgos sin veredicto y no se han modificado."
+                    : "")
                 + (result.ReachedZeroPending ? " Ciclo sin pendientes." : "");
         }
         catch (OperationCanceledException)
@@ -129,7 +136,7 @@ public sealed partial class SessionViewModel : ViewModelBase
         }
     });
 
-    private void OnFinding(Finding f, IngestionKind kind) => OnUi(() =>
+    private void OnFinding(Finding f, string kind) => OnUi(() =>
         Findings.Add($"[{f.Severity}] {f.Title}  ({kind})"));
 
     private void OnText(string t) => OnUi(() =>

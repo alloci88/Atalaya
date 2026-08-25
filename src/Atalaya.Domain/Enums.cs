@@ -82,3 +82,20 @@ public enum Verdict
     Resuelto,
     NoVerificable,
 }
+
+/// <summary>
+/// Veredicto de reconciliación que el auditor emite sobre un hallazgo YA EXISTENTE de la unidad
+/// que está auditando (F4, tool <c>report_verdicts</c>). Es el único mecanismo por el que un
+/// hallazgo cambia de estado durante una sesión de auditoría: no hay resolución implícita.
+/// </summary>
+public enum ReconcileVerdict
+{
+    /// <summary>El problema sigue ahí → reconfirmación (máquina de confianza intacta).</summary>
+    Presente,
+
+    /// <summary>El problema ya no está → resuelto con la evidencia que aporta el auditor.</summary>
+    Arreglado,
+
+    /// <summary>No se puede determinar desde la unidad → <c>needsReview</c>.</summary>
+    NoVerificable,
+}

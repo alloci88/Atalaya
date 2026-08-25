@@ -1,5 +1,4 @@
 using Atalaya.Domain;
-using Atalaya.Domain.Fingerprinting;
 using Atalaya.Domain.Ingestion;
 using Atalaya.Domain.Model;
 using FluentAssertions;
@@ -74,17 +73,22 @@ public class ScannerTests
         f.Severity.Should().Be(Severity.Media);
     }
 
+    /// <summary>
+    /// El título del hallazgo "unidad grande" NO puede llevar el LOC: es lo que el auditor ve en
+    /// la lista de existentes, y si cambiara cada vez que el fichero crece no podría reconocerlo
+    /// como el mismo problema entre sesiones (F4). El LOC vive en la descripción.
+    /// </summary>
     [Fact]
-    public void Large_unit_fingerprint_is_stable_as_loc_grows()
+    public void Large_unit_title_is_stable_as_loc_grows()
     {
         var thresholds = new Thresholds { LargeUnitLoc = 1500 };
         SubmittedFinding a = InventoryScanner.BuildLargeUnitFinding("src/Huge.cs", 2000, thresholds);
         SubmittedFinding b = InventoryScanner.BuildLargeUnitFinding("src/Huge.cs", 5000, thresholds);
 
-        string fpA = Fingerprint.Compute(a.RuleId, a.PrimaryPath, a.Symbol, a.Title);
-        string fpB = Fingerprint.Compute(b.RuleId, b.PrimaryPath, b.Symbol, b.Title);
-
-        fpA.Should().Be(fpB); // LOC lives in the description, not the fingerprint
+        b.Title.Should().Be(a.Title);
+        b.RuleId.Should().Be(a.RuleId);
+        b.PrimaryPath.Should().Be(a.PrimaryPath);
+        b.Description.Should().NotBe(a.Description); // el LOC vive aquí
     }
 
     [Fact]
