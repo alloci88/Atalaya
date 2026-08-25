@@ -15,6 +15,40 @@ public sealed class EditorLauncher
         _machines = machines;
     }
 
+    /// <summary>
+    /// Lo que se espera a que el editor arranque antes de darlo por fallido (F5.5 §6).
+    /// <para>
+    /// <c>Process.Start</c> parece instantáneo y no lo es: resolver <c>devenv</c> por el PATH,
+    /// levantar el shim <c>code.cmd</c> o caer en el manejador del sistema puede bloquear el hilo
+    /// varios segundos —y con una unidad de red desconectada, indefinidamente—. La ficha decía
+    /// «Abriendo en el editor…» y se quedaba ahí para siempre porque nadie ponía un límite. Ahora
+    /// lo hay: o abre, o falla, pero termina.
+    /// </para>
+    /// </summary>
+    public static readonly TimeSpan LaunchTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Abre la ubicación con un tope de tiempo. Devuelve <c>false</c> si el editor no arrancó
+    /// dentro de <see cref="LaunchTimeout"/>: el arranque sigue su curso en segundo plano, pero la
+    /// interfaz deja de esperarlo.
+    /// </summary>
+    public Task<bool> OpenAsync(string slug, string relativePath, int line, CancellationToken ct = default)
+        => WithTimeout(() => Open(slug, relativePath, line), LaunchTimeout, ct);
+
+    /// <summary>
+    /// El tope de tiempo, aislado de todo lo que toca el sistema para poder probarlo: un arranque
+    /// que no vuelve tiene que resolverse en <c>false</c>, no colgar a quien espera.
+    /// </summary>
+    internal static async Task<bool> WithTimeout(Func<bool> launch, TimeSpan timeout, CancellationToken ct = default)
+    {
+        Task<bool> running = Task.Run(launch, CancellationToken.None);
+        Task finished = await Task.WhenAny(running, Task.Delay(timeout, ct)).ConfigureAwait(false);
+
+        // El arranque que se pasó de tiempo sigue su curso en segundo plano —no hay forma de
+        // abortar un Process.Start a medias—, pero la interfaz ya no lo espera.
+        return await running.ConfigureAwait(false);
+    }
+
     public bool Open(string slug, string relativePath, int line)
     {
         string? clone = _machines.Load().ClonePathFor(slug);

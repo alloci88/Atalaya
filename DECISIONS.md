@@ -1620,6 +1620,194 @@ abrir la ficha. Y el combo de severidad no tenía «Todas»: filtrar era un viaj
   F5.2 y F5.3. De V4 solo se toca lo necesario para recibir lo que V3 cede. No se añade nada nuevo
   a la lista (exportar, columnas configurables): esta tanda era legibilidad y filtros.
 
+## F5.5 — Rediseño de la ficha de hallazgo (V4)
+
+Tanda acotada a una sola vista, la que recibió en F5.4 todo lo que V3 cedió. La ficha era una
+columna única de novecientos píxeles de ancho y varias pantallas de alto: para llegar a gobernanza
+o al historial había que hacer un scroll enorme, el estado de las acciones se escribía al fondo
+—donde nadie mira, y donde encima se quedaba pegado— y el snippet era un recorte de siete líneas
+renumeradas desde 1 debajo de un hallazgo que vive en la línea 412.
+
+### §1 — Dos columnas: la ficha deja de ser un pasillo
+
+- **D-187 — Principal al 60 % y lateral al 40 %, cada una con su scroll.** Izquierda: cabecera,
+  descripción/impacto/recomendación, código, historial y comentarios. Derecha: metadatos, acciones
+  y gobernanza. Que la lateral tenga scroll propio es lo que hace que gobernanza siga en pantalla
+  por muy largo que sea el hallazgo — es toda la «adherencia» que hacía falta y no necesita ningún
+  truco de scroll pegajoso. En 1080p las tres tarjetas de la lateral entran sin desplazar nada.
+
+- **D-188 — El colapso a una columna MUEVE el panel, no lo duplica.** Por debajo de 860 px de
+  página la lateral no cabe sin estrangular a la principal, así que baja al final de la primera
+  conservando el orden. La alternativa —dos árboles en el XAML con visibilidades cruzadas— es la
+  manera segura de que uno de los dos se quede sin arreglar la próxima vez que alguien toque la
+  gobernanza. El umbral se fija en un test contra los números de la carcasa: la ventana por
+  defecto (1340) va a dos columnas, el mínimo (900) a una.
+
+- **D-189 — Cada bloque en su tarjeta, con el envoltorio de V3.** Mismo `CardBackgroundFill`,
+  mismo borde, mismo radio que la barra de filtros de V3, para que las dos vistas se lean como la
+  misma aplicación y no como dos productos.
+
+### §2 — La cabecera son chips, y el ruleId baja a metadatos
+
+- **D-190 — Una sola fila de badges: severidad, confianza, estado, disputa y «Por revisar».** El
+  estado lleva color semántico —azul activo, verde resuelto, gris silenciado— con los mismos tres
+  colores que ya usan el indicador de sync y la cola de V5. La confianza se escribe entera
+  («Confianza media»): un chip que pone «Media» al lado de otro que pone «Alta» no dice de qué
+  habla ninguno de los dos.
+
+- **D-191 — El ruleId NO se elimina: se etiqueta.** Es la regla del checklist que motivó el
+  hallazgo y desde F5.4 se puede buscar por ella en V3, así que borrarlo habría cortado el puente
+  entre la lista y la ficha. Lo que se quita es que flote como texto suelto bajo el título: pasa a
+  ser el primer campo de metadatos, con su tooltip, en monoespaciada y junto a displayId,
+  aplicación, unidad, origen, primera detección, última confirmación, veces confirmado y commit
+  anclado.
+
+### §3 — El código que se enseña es el que hay AHORA
+
+- **D-192 — El recorte es el miembro completo, extraído con Roslyn.** Cuatro líneas antes y tres
+  después cortaban la firma por la mitad y dejaban fuera el `using` o el `return` que explicaban el
+  hallazgo. Ahora se enseña el método, el constructor o el accesor entero.
+
+- **D-193 — Parser y no contar llaves, y por eso hay tests de llaves falsas.** Contar llaves se
+  equivoca con las que viven dentro de cadenas, comentarios, literales de carácter, cadenas crudas
+  e interpolaciones anidadas, y ninguno de esos casos es exótico en el código que audita Atalaya.
+  El parser además **tolera ficheros que no compilan**: el árbol sale igual con nodos de error, así
+  que un fichero a medio editar sigue dando su miembro. El coste es una dependencia grande
+  (`Microsoft.CodeAnalysis.CSharp`) en una aplicación de escritorio; se acepta porque la
+  alternativa es una heurística que falla en silencio y enseña el trozo equivocado.
+
+- **D-194 — Números de línea del FICHERO, con un margen propio.** AvalonEdit numera siempre desde 1
+  el documento que le des, así que debajo de un hallazgo de la línea 412 escribía «1..7»: números
+  que no sirven para nada y que contradicen la ubicación que la propia ficha muestra al lado. El
+  margen nuevo pinta `PrimeraLinea + n - 1` y marca en ámbar la línea del hallazgo; la banda de
+  fondo la pinta un *background renderer*, y el marcador del margen existe aparte porque una línea
+  en blanco no tiene banda que resaltar.
+
+- **D-195 — Tres desenlaces del ancla, y se distinguen a propósito.** *Anclado* (la línea sigue
+  diciendo lo mismo), *Movido* (el mismo código apareció en otro sitio: se enseña la posición
+  nueva, no la vieja) y *Cambiado* (no aparece: aviso y «Verificar ahora»). Meterlos en el mismo
+  saco convertía un simple desplazamiento de líneas en una alarma, y un cambio real en un silencio.
+
+- **D-196 — Sin clon no se enseña un snippet guardado, porque no existe.** El prompt pedía mostrar
+  «la copia anclada al commit», pero el modelo **no guarda el snippet**: de la ubicación solo se
+  conserva su `snippetHash`, que es un ancla y no una copia (`Location`, §2). Inventar código
+  plausible sería exactamente lo que §3 prohíbe, y añadir el texto al modelo era ampliar la tanda
+  al almacén. Se dice lo que se sabe: «Sin clon local en esta máquina: no hay código que mostrar.
+  El hallazgo quedó anclado a {ruta}:{línea} en el commit {sha}».
+
+- **D-197 — El panel de código lleva su propia superficie oscura en los dos temas.** Las
+  definiciones de AvalonEdit están pensadas para papel blanco —azul marino, negro, verde oscuro— y
+  Atalaya abre en tema oscuro, así que el coloreado de fábrica dejaba las palabras clave
+  invisibles. En vez de escribir y mantener una definición nueva, se **aclara** la que ya hay:
+  cada color sube de luminosidad conservando su tono. Un bloque de código con fondo propio es una
+  convención que se lee igual de bien en tema claro.
+
+### §4 — Gobernanza: secciones con nombre y controles que se explican
+
+- **D-198 — Cuatro sub-secciones tituladas, cada una con su línea de ayuda.** Silenciar, Severidad,
+  Resolución manual y Disputa. Un `WrapPanel` con seis controles seguidos no dice cuál va con cuál:
+  el campo de notas parecía del silencio o de la asignación según dónde hubiera reflujo.
+
+- **D-199 — La caducidad deja de ser un numérico huérfano.** «Caducidad (días) — 0 = permanente»,
+  con tooltip. Un `PlaceholderText` que decía «Caduca (días)» desaparecía en cuanto se escribía
+  algo, así que el campo con un 30 dentro no decía ni qué eran esos 30 ni qué pasaba con el 0.
+
+- **D-200 — Los motivos de silencio se escriben, no se declaran.** «Falso positivo», no
+  `FalsoPositivo`. Mismo escape del modelo a la interfaz que la severidad en F5.4: el combo volcaba
+  los identificadores de la enumeración de C#.
+
+- **D-201 — La resolución manual llega PLEGADA y con su advertencia.** Es la acción excepcional de
+  la tarjeta —cierra un hallazgo sin que nadie haya mirado el código— y desplegada compite
+  visualmente con silenciar y verificar, que son las del día a día. El expander se abre solo si
+  falta la justificación, que es cuando hay algo que enseñar ahí dentro.
+
+- **D-202 — Lo que no aplica no se pinta.** «Reabrir» solo si está resuelto; «Des-silenciar» solo
+  si está silenciado; «Silenciar» solo si no lo está; «Resolver a mano» solo si no está resuelto; y
+  la sección de disputa **solo si hay disputa**. Un botón siempre presente que falla al pulsarlo
+  enseña la regla a base de errores.
+
+- **D-203 — La asignación sale de la VISTA, no del modelo.** Decisión del usuario: no se usa. El
+  campo sigue en `Finding`, el comando sigue en el view-model y su test sigue verde — lo único que
+  desaparece son los dos controles. Recuperarla es volver a ponerlos, no reescribir la gobernanza.
+  Un test lee el XAML y comprueba que ya no están; otro comprueba que la acción sigue viva.
+
+### §5 — El historial es una línea de tiempo, no un párrafo cortado
+
+- **D-204 — Icono por tipo de evento, fecha, autor y texto COMPLETO con wrap.** Y del más reciente
+  al más antiguo: lo último que le pasó al hallazgo es lo que explica en qué estado está ahora.
+
+- **D-205 — Los eventos hablan castellano.** `FindingEvent` es una enumeración de C#: volcarla con
+  `ToString()` escribía «SeverityChanged» en una interfaz en castellano. Traducir es trabajo de la
+  vista; el modelo se queda como está.
+
+- **D-206 — Plegar no es truncar.** Los textos largos —las justificaciones de disputa— se limitan a
+  dos líneas de ALTURA con un «ver más» que las abre enteras; el texto nunca se recorta en el
+  view-model. Truncarlo escondía justo lo que hay que leer para decidir. Un evento que ya cabía no
+  se pliega: si no, el «ver más» aparecía en entradas de una frase.
+
+### §6 — Toasts, y ningún estado que se quede pegado
+
+- **D-207 — `StatusMessage` desaparece de la ficha.** Ya no existe la propiedad: no hay dónde dejar
+  un mensaje colgado. Toda acción avisa por el `ToastCenter` de F5.3, que caduca solo a los 8 s.
+
+- **D-208 — Abrir el editor tiene tope de tiempo.** `Process.Start` parece instantáneo y no lo es:
+  resolver `devenv` por el PATH, levantar el shim `code.cmd` o caer en el manejador del sistema
+  puede bloquear el hilo varios segundos, y con una unidad de red desconectada, indefinidamente.
+  Ese era el «Abriendo en el editor…» que se quedaba para siempre. Ahora o abre, o falla a los 10
+  segundos, pero termina. El tope vive en una función aparte, con la llamada al sistema inyectada,
+  para poder probarlo sin depender de que haya un editor instalado.
+
+### Cobertura y verificación
+
+- **D-209 — 52 tests nuevos.** 14 del extractor de límites y 38 de la ficha. Los del extractor
+  cubren el método entero, la firma, el método de expresión, la propiedad por su accesor, el
+  constructor, la función local ganando al método que la hospeda, el fichero que no compila, el
+  caso de las llaves falsas (cadena, comentario, carácter y cadena cruda), el fichero que no es C#,
+  la línea fuera de todo miembro, la ventana recortada por los dos lados, la línea fuera del
+  fichero, el método gigantesco y el fichero vacío.
+
+- **D-210 — Los de la ficha prueban el CUÁNDO, no solo el QUÉ.** Visibilidad condicional de las
+  cuatro sub-secciones (disputa, reabrir, silenciar/des-silenciar, resolver a mano), la disputa que
+  se retira sola al cerrarla, las dos validaciones de justificación, el silencio con y sin
+  caducidad, la reclasificación que no escribe una entrada vacía, el historial traducido y del
+  revés, el plegado de un texto largo y el no-plegado de uno corto, y los cinco estados del
+  snippet: anclado, cambiado, movido, sin clon y fichero borrado.
+
+- **D-211 — Lo que no tiene estado observable se lee del XAML.** Igual que en F5.3 (D-181): que la
+  asignación ya no esté, que no quede ningún `StatusMessage`, que el ruleId no flote en la
+  cabecera, que la resolución manual venga dentro de un `Expander` con su advertencia y que la
+  caducidad lleve su etiqueta son propiedades de la PLANTILLA. Instanciar la vista pediría hilo STA
+  y un `Application` vivo; leer el fichero las fija donde viven.
+
+- **D-212 — El maquetado se verificó en el `dist`, NO con el arnés de F5.4.** La vista pintada a
+  dos anchos —el gesto de D-181— se preparó pero **no se llegó a ejecutar**: la tanda se cerró
+  publicando y comprobando la ficha en la aplicación real, con el hallazgo disputado. Lo que sí
+  queda fijado en un test es la aritmética del umbral (la ventana por defecto va a dos columnas, el
+  mínimo a una); que el reflujo no recorte nada a cada ancho concreto sigue siendo, de momento,
+  verificación humana.
+
+- **D-214 — Nada de barridos de mutación: no salen a cuenta.** F5.4 los usó a mano y bien; F5.5
+  intentó automatizarlos —21 mutaciones, cada una recompilando la app entera— y costó **~20 minutos
+  contra los ~30 segundos** de `build` + `test` de la solución completa. Es 40× la suite, y el
+  cuello no es probar sino **recompilar**. Peor: al cancelarlo dejó una mutación inyectada en
+  `SnippetReader` que hubo que revertir a mano y volver a compilar, o sea que la verificación se
+  cobró otra ronda entera. La regla a partir de aquí: build y tests en cada cambio, y si alguna vez
+  hace falta comprobar que un test concreto discrimina, **una** mutación puntual a mano sobre esa
+  línea.
+
+- **D-215 — Un arnés que bloquea un hilo del pool cuelga el testhost, no prueba nada.** El test del
+  tope de tiempo del editor simulaba un arranque que no vuelve con un `TaskCompletionSource` que
+  solo se liberaba en la línea **posterior** a la aserción. Aislado pasaba en milisegundos; en la
+  suite entera dejaba el hilo tomado y `dotnet test` no terminaba nunca —diez minutos y subiendo—.
+  La versión buena libera **siempre** (`ManualResetEventSlim` con `using` y `finally`) y además le
+  pone su propio tope al arnés. Regla: un test que comprueba que algo no se cuelga no puede tener
+  una sola ruta en la que él sí se cuelgue.
+
+- **D-213 — Lo que esta tanda NO toca.** Motor, reconciliación, barrido, sync, guarda de evidencia
+  de cambio, coste, conexión, Ajustes, V3 y V5 quedan como los cerraron F5.1, F5.1b, F5.2, F5.3 y
+  F5.4. De la ficha se rehace la presentación entera; del modelo, nada — ni siquiera la asignación,
+  que solo desaparece de la vista.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

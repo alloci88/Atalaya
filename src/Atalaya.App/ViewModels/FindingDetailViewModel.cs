@@ -14,11 +14,27 @@ namespace Atalaya.App.ViewModels;
 /// V4 Detalle de hallazgo (§8): ficha completa, snippet, historial, comentarios, gobernanza y la
 /// acción "Generar prompt de arreglo" (§5.7).
 /// <para>
-/// <b>F5.4.</b> Aquí vive AHORA el juego completo de acciones de escritura sobre un hallazgo. V3
-/// se quedó sin ninguna: <b>la lista encuentra, el detalle actúa</b>. Lo que bajó de V3 en esta
-/// tanda es <see cref="VerifyCommand"/>, las dos salidas de disputa
+/// <b>F5.4.</b> Aquí vive el juego completo de acciones de escritura sobre un hallazgo. V3 se quedó
+/// sin ninguna: <b>la lista encuentra, el detalle actúa</b>. Lo que bajó de V3 fue
+/// <see cref="VerifyCommand"/>, las dos salidas de disputa
 /// (<see cref="AcceptDisputeCommand"/> / <see cref="DismissDisputeCommand"/>) y
 /// <see cref="OpenInEditorCommand"/>. Silenciar y asignar ya estaban.
+/// </para>
+/// <para>
+/// <b>F5.5.</b> La ficha se reordena en dos columnas y deja de hablar por el pie. Tres cambios de
+/// fondo en este view-model: (1) <b>no hay texto de estado</b> — cada acción avisa por el
+/// <see cref="ToastCenter"/> de F5.3, porque un mensaje incrustado al final de una columna
+/// kilométrica no lo ve nadie y encima se quedaba pegado; (2) la <b>visibilidad condicional</b>
+/// de cada control es una propiedad de aquí (<see cref="ShowDispute"/>, <see cref="CanReopen"/>,
+/// <see cref="CanUnsilence"/>) en vez de botones siempre presentes que fallan al pulsarlos;
+/// (3) el historial y los metadatos se sirven ya <b>traducidos y compuestos</b>, que es la única
+/// forma de que la vista no acabe volcando identificadores de C# en castellano.
+/// </para>
+/// <para>
+/// <b>La asignación sigue aquí a propósito.</b> <see cref="ApplyAssignCommand"/> y
+/// <see cref="Assignee"/> no se han borrado: F5.5 retira los controles de la <i>vista</i> porque
+/// nadie usa la asignación, pero el campo se conserva en el modelo y la acción sigue viva, de modo
+/// que recuperarla es volver a poner dos controles y no reescribir la gobernanza.
 /// </para>
 /// </summary>
 public sealed partial class FindingDetailViewModel : ViewModelBase
@@ -28,28 +44,29 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     private readonly MachineConfigStore _machines;
     private readonly VerifyCoordinator _verify;
     private readonly EditorLauncher _editor;
+    private readonly ToastCenter _toasts;
 
     public FindingDetailViewModel(
         HubContext hub,
         GovernanceService governance,
         MachineConfigStore machines,
         VerifyCoordinator verify,
-        EditorLauncher editor)
+        EditorLauncher editor,
+        ToastCenter toasts)
     {
         _hub = hub;
         _governance = governance;
         _machines = machines;
         _verify = verify;
         _editor = editor;
+        _toasts = toasts;
     }
 
     public override string Title => Finding is null ? "Hallazgo" : $"{Finding.DisplayId ?? Finding.Id.ToString()}";
 
     [ObservableProperty] private string _slug = string.Empty;
     [ObservableProperty] private Finding? _finding;
-    [ObservableProperty] private string _snippet = string.Empty;
     [ObservableProperty] private string _ruleText = string.Empty;
-    [ObservableProperty] private string _statusMessage = string.Empty;
 
     // Governance inputs
     [ObservableProperty] private SilenceReason _silenceReason = SilenceReason.FalsoPositivo;
@@ -60,23 +77,154 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     [ObservableProperty] private string _justification = string.Empty;
     [ObservableProperty] private string _newComment = string.Empty;
 
+    /// <summary>
+    /// La resolución manual llega plegada (F5.5 §4): es la acción excepcional de la tarjeta —cierra
+    /// un hallazgo sin auditoría— y desplegada compite visualmente con silenciar y verificar, que
+    /// son las del día a día.
+    /// </summary>
+    [ObservableProperty] private bool _manualResolutionExpanded;
+
+    // ------------------------------------------------------------------ snippet
+
+    [ObservableProperty] private string _snippet = string.Empty;
+    [ObservableProperty] private int _snippetFirstLine = 1;
+    [ObservableProperty] private int _snippetHighlightLine;
+    [ObservableProperty] private string _snippetCaption = string.Empty;
+    [ObservableProperty] private string _snippetNotice = string.Empty;
+    [ObservableProperty] private string _snippetPath = string.Empty;
+    [ObservableProperty] private SnippetState _snippetState = SnippetState.SinUbicacion;
+
+    /// <summary>Hay código que pintar. Si no, el panel se retira y queda solo el aviso.</summary>
+    public bool HasSnippet => Snippet.Length > 0;
+
+    /// <summary>Hay algo que advertir sobre el código antes de que se lea.</summary>
+    public bool HasSnippetNotice => SnippetNotice.Length > 0;
+
+    /// <summary>El aviso lleva «Verificar ahora» solo cuando verificar arregla lo que avisa.</summary>
+    public bool SnippetNoticeOffersVerify =>
+        SnippetState is SnippetState.Cambiado or SnippetState.Movido or SnippetState.FicheroNoEncontrado;
+
+    // ------------------------------------------------------------------ cabecera
+
     /// <summary>Hay una discrepancia abierta: la ficha ofrece las dos salidas (F5.1b).</summary>
     public bool IsDisputed => Finding is { Disputes.Count: > 0 };
+
+    /// <summary>La sección de disputa solo existe cuando hay disputa (F5.5 §4).</summary>
+    public bool ShowDispute => IsDisputed;
 
     /// <summary>Quién discrepa y por qué, para decidir con la razón delante y no a ciegas.</summary>
     public string DisputeSummary => Finding is null || Finding.Disputes.Count == 0
         ? string.Empty
         : string.Join(" · ", Finding.Disputes.Select(d => $"{d.Model ?? "auditor"}: {d.Justification}"));
 
-    public ObservableCollection<HistoryEntry> History { get; } = new();
-    public ObservableCollection<Comment> Comments { get; } = new();
-    public IReadOnlyList<SilenceReason> Reasons { get; } = Enum.GetValues<SilenceReason>();
+    /// <summary>Lo que se lee en el chip de disputa. Misma marca que la lista de V3.</summary>
+    public string DisputeBadge
+    {
+        get
+        {
+            if (Finding is null || Finding.Disputes.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            int models = Finding.Disputes.Select(d => d.Model ?? "auditor").Distinct().Count();
+            return models > 1 ? $"⚖︎ Disputado ×{models}" : "⚖︎ Disputado";
+        }
+    }
+
+    public Confidence Confidence => Finding?.Confidence ?? Confidence.Media;
+
+    public string ConfidenceLabel => ConfidenceNames.Display(Confidence);
+
+    public string ConfidenceHelp => ConfidenceNames.Help(Confidence);
+
+    public FindingStatus Status => Finding?.Status ?? FindingStatus.Activo;
+
+    public string StatusLabel => FindingStatusNames.Display(Status);
+
+    public string StatusHelp => FindingStatusNames.Help(Status);
+
+    public bool NeedsReview => Finding?.NeedsReview ?? false;
+
+    // ------------------------------------------------------------------ gobernanza
+
+    /// <summary>Solo se des-silencia lo silenciado.</summary>
+    public bool CanUnsilence => Status == FindingStatus.Silenciado;
+
+    /// <summary>Silenciar algo ya silenciado no hace nada: el botón se retira.</summary>
+    public bool CanSilence => Status != FindingStatus.Silenciado;
+
+    /// <summary>«Reabrir» aparece SOLO si está resuelto (F5.5 §4).</summary>
+    public bool CanReopen => Status == FindingStatus.Resuelto;
+
+    /// <summary>Un hallazgo ya resuelto no se vuelve a resolver a mano.</summary>
+    public bool CanResolveManually => Status != FindingStatus.Resuelto;
+
+    /// <summary>El silencio vigente, escrito: motivo, autor y caducidad.</summary>
+    public string SilenceSummary
+    {
+        get
+        {
+            if (Finding is null)
+            {
+                return string.Empty;
+            }
+
+            Silence? silence = _hub.Store.TryReadSilence(Slug, Finding.Id);
+            if (silence is null)
+            {
+                return string.Empty;
+            }
+
+            string expiry = silence.ExpiresUtc is null
+                ? "permanente"
+                : $"caduca el {silence.ExpiresUtc.Value.ToLocalTime():dd/MM/yyyy}";
+            return $"Silenciado por {silence.By} · {SilenceReasonNames.Display(silence.Reason)} · {expiry}";
+        }
+    }
+
+    public bool HasSilence => SilenceSummary.Length > 0;
+
+    public ObservableCollection<HistoryRow> History { get; } = new();
+    public ObservableCollection<CommentRow> Comments { get; } = new();
+    public ObservableCollection<MetaRow> Meta { get; } = new();
+
+    /// <summary>Los motivos de silencio con su texto legible: «Falso positivo», no «FalsoPositivo».</summary>
+    public IReadOnlyList<Labeled<SilenceReason>> ReasonOptions { get; } = Enum.GetValues<SilenceReason>()
+        .Select(r => new Labeled<SilenceReason>(r, SilenceReasonNames.Display(r)))
+        .ToList();
+
     public IReadOnlyList<Severity> Severities { get; } = Enum.GetValues<Severity>();
 
-    partial void OnFindingChanged(Finding? value)
+    partial void OnFindingChanged(Finding? value) => RaiseDerived();
+
+    partial void OnSnippetChanged(string value) => OnPropertyChanged(nameof(HasSnippet));
+
+    partial void OnSnippetNoticeChanged(string value) => OnPropertyChanged(nameof(HasSnippetNotice));
+
+    partial void OnSnippetStateChanged(SnippetState value)
+        => OnPropertyChanged(nameof(SnippetNoticeOffersVerify));
+
+    private void RaiseDerived()
     {
         OnPropertyChanged(nameof(IsDisputed));
+        OnPropertyChanged(nameof(ShowDispute));
         OnPropertyChanged(nameof(DisputeSummary));
+        OnPropertyChanged(nameof(DisputeBadge));
+        OnPropertyChanged(nameof(Confidence));
+        OnPropertyChanged(nameof(ConfidenceLabel));
+        OnPropertyChanged(nameof(ConfidenceHelp));
+        OnPropertyChanged(nameof(Status));
+        OnPropertyChanged(nameof(StatusLabel));
+        OnPropertyChanged(nameof(StatusHelp));
+        OnPropertyChanged(nameof(NeedsReview));
+        OnPropertyChanged(nameof(CanSilence));
+        OnPropertyChanged(nameof(CanUnsilence));
+        OnPropertyChanged(nameof(CanReopen));
+        OnPropertyChanged(nameof(CanResolveManually));
+        OnPropertyChanged(nameof(SilenceSummary));
+        OnPropertyChanged(nameof(HasSilence));
+        OnPropertyChanged(nameof(Title));
     }
 
     public void Load(string slug, Ulid id)
@@ -90,49 +238,122 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         Finding = _hub.Store.TryReadFinding(Slug, id.ToString());
         History.Clear();
         Comments.Clear();
+        Meta.Clear();
         if (Finding is null)
         {
             return;
         }
 
         Severity = Finding.Severity;
-        RuleText = Atalaya.Copilot.RuleCatalog.Find(Finding.RuleId)?.Look ?? "(regla de criterio o sin texto)";
+        RuleText = Atalaya.Copilot.RuleCatalog.Find(Finding.RuleId)?.Look ?? string.Empty;
 
-        foreach (HistoryEntry h in Finding.History)
+        // El historial se lee de lo más reciente a lo más antiguo: lo último que le pasó a este
+        // hallazgo es lo que explica en qué estado está ahora.
+        foreach (HistoryEntry h in Finding.History.OrderByDescending(h => h.Utc))
         {
-            History.Add(h);
+            History.Add(new HistoryRow
+            {
+                Event = h.Event,
+                Utc = h.Utc,
+                By = h.By,
+                Detail = h.Detail ?? string.Empty,
+            });
         }
 
-        foreach (Comment c in _hub.Store.ListComments(Slug, Finding.Id.ToString()).OrderBy(c => c.Utc))
+        foreach (Comment c in _hub.Store.ListComments(Slug, Finding.Id.ToString()).OrderByDescending(c => c.Utc))
         {
-            Comments.Add(c);
+            Comments.Add(new CommentRow
+            {
+                By = c.By,
+                Utc = c.Utc,
+                Kind = c.Kind,
+                Detail = c.Body,
+            });
         }
 
-        Snippet = ReadSnippet(Finding);
+        BuildMeta(Finding);
+        LoadSnippet(Finding);
+        RaiseDerived();
     }
 
-    private string ReadSnippet(Finding f)
+    /// <summary>
+    /// La tarjeta de metadatos (F5.5 §2). El <b>ruleId</b> aterriza aquí: es la regla del checklist
+    /// que motivó el hallazgo y desde V3 se puede buscar por ella, así que no se elimina — deja de
+    /// flotar como texto suelto bajo el título y pasa a ser un campo con nombre.
+    /// </summary>
+    private void BuildMeta(Finding f)
     {
-        string? clone = _machines.Load().ClonePathFor(Slug);
-        if (string.IsNullOrWhiteSpace(clone) || f.Locations.Count == 0)
+        Location? loc = f.Locations.FirstOrDefault();
+        string app = _hub.Store.TryReadApp(Slug)?.Name ?? Slug;
+
+        Meta.Add(new MetaRow(
+            "Regla", f.RuleId,
+            "Regla del checklist que motivó este hallazgo.", Mono: true));
+
+        if (RuleText.Length > 0)
         {
-            return "(sin clon local para mostrar el snippet)";
+            Meta.Add(new MetaRow("Qué busca", RuleText, "El criterio con el que el auditor la aplica."));
         }
 
-        Location loc = f.Locations[0];
-        string abs = Path.Combine(clone, loc.Path.Replace('/', Path.DirectorySeparatorChar));
-        if (!File.Exists(abs))
+        Meta.Add(new MetaRow(
+            "Identificador", f.DisplayId ?? "(sin alias todavía)",
+            "El alias es de presentación; la identidad es el ULID."));
+        Meta.Add(new MetaRow("Aplicación", app));
+
+        if (loc is not null)
         {
-            return $"(no encontrado: {loc.Path})";
+            string extra = f.Locations.Count > 1 ? $"  (+{f.Locations.Count - 1} ubicaciones más)" : string.Empty;
+            Meta.Add(new MetaRow("Unidad", $"{loc.Path}:{loc.Line}{extra}", Mono: true));
         }
 
-        string[] lines = File.ReadAllLines(abs);
-        int from = Math.Max(0, loc.Line - 4);
-        int to = Math.Min(lines.Length, loc.Line + 3);
-        return string.Join('\n', lines[from..to]);
+        Meta.Add(new MetaRow(
+            "Origen", AuditModeNames.Display(f.Origin),
+            "La clase de sesión en la que se detectó."));
+        Meta.Add(new MetaRow("Primera detección", Stamp(f.FirstDetected)));
+        Meta.Add(new MetaRow("Última confirmación", Stamp(f.LastConfirmed)));
+        Meta.Add(new MetaRow(
+            "Veces confirmado", f.TimesConfirmed.ToString(),
+            "Cuántas auditorías han vuelto a verlo. Es lo que sostiene la confianza."));
+        Meta.Add(new MetaRow(
+            "Commit anclado", Short(f.LastConfirmed.Commit),
+            $"El commit en el que se confirmó por última vez: {f.LastConfirmed.Commit}", Mono: true));
+
+        if (f.Resolved is { } resolved)
+        {
+            Meta.Add(new MetaRow(
+                "Resuelto", $"{resolved.Utc.ToLocalTime():dd/MM/yyyy} · {resolved.By} · vía {resolved.Via}",
+                resolved.Justification));
+        }
+    }
+
+    private static string Stamp(DetectionStamp stamp)
+        => $"{stamp.Utc.ToLocalTime():dd/MM/yyyy HH:mm} · {stamp.By}";
+
+    private static string Short(string? sha)
+        => string.IsNullOrWhiteSpace(sha) ? "—" : (sha!.Length <= 8 ? sha : sha[..8]);
+
+    /// <summary>
+    /// Lee el código del clon (F5.5 §3): el miembro completo, con los números de línea del fichero
+    /// y el aviso correspondiente si lo que hay ya no es lo que se auditó.
+    /// </summary>
+    private void LoadSnippet(Finding f)
+    {
+        Location? loc = f.Locations.FirstOrDefault();
+        SnippetPanel panel = SnippetReader.Read(
+            _machines.Load().ClonePathFor(Slug), loc, f.LastConfirmed.Commit);
+
+        SnippetPath = loc?.Path ?? string.Empty;
+        SnippetState = panel.State;
+        SnippetFirstLine = panel.FirstLine;
+        SnippetHighlightLine = panel.HighlightLine;
+        SnippetNotice = panel.Notice;
+        Snippet = panel.Text;
+        SnippetCaption = loc is null ? string.Empty : panel.Caption(loc.Path, panel.HighlightLine);
     }
 
     private Ulid Id => Finding!.Id;
+
+    // ------------------------------------------------------------------ gobernanza
 
     [RelayCommand]
     private void Silence()
@@ -142,62 +363,114 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
             return;
         }
 
+        if (SilenceExpiryDays < 0)
+        {
+            _toasts.Show("La caducidad no puede ser negativa: 0 días es un silencio permanente.");
+            return;
+        }
+
         DateTimeOffset? expiry = SilenceExpiryDays > 0 ? DateTimeOffset.UtcNow.AddDays(SilenceExpiryDays) : null;
         _governance.Silence(Slug, Id, SilenceReason, string.IsNullOrWhiteSpace(SilenceNotes) ? null : SilenceNotes, expiry);
-        StatusMessage = "Silenciado.";
+        _toasts.Show(expiry is null
+            ? "Silenciado de forma permanente."
+            : $"Silenciado hasta el {expiry.Value.ToLocalTime():dd/MM/yyyy}.");
         Reload(Id);
     }
 
     [RelayCommand]
     private void Unsilence()
     {
+        if (Finding is null)
+        {
+            return;
+        }
+
         _governance.Unsilence(Slug, Id);
-        StatusMessage = "Des-silenciado.";
+        _toasts.Show("Des-silenciado: vuelve a contar en informes y auditorías.");
         Reload(Id);
     }
 
+    /// <summary>
+    /// Asignar. F5.5 la retira de la vista pero NO del view-model: el campo sigue en el modelo de
+    /// datos y esta es la costura por la que volvería si algún día se usa.
+    /// </summary>
     [RelayCommand]
     private void ApplyAssign()
     {
+        if (Finding is null)
+        {
+            return;
+        }
+
         _governance.Assign(Slug, Id, string.IsNullOrWhiteSpace(Assignee) ? null : Assignee.Trim());
-        StatusMessage = "Asignación actualizada.";
+        _toasts.Show("Asignación actualizada.");
         Reload(Id);
     }
 
     [RelayCommand]
     private void ApplySeverity()
     {
-        _governance.ChangeSeverity(Slug, Id, Severity);
-        StatusMessage = "Severidad actualizada.";
+        if (Finding is null)
+        {
+            return;
+        }
+
+        if (Severity == Finding.Severity)
+        {
+            _toasts.Show($"El hallazgo ya es de severidad {SeverityNames.Display(Severity)}.");
+            return;
+        }
+
+        Severity target = Severity;
+        _governance.ChangeSeverity(Slug, Id, target);
+        _toasts.Show($"Severidad reclasificada a {SeverityNames.Display(target)}, con tu nombre en el historial.");
         Reload(Id);
     }
 
     [RelayCommand]
     private void ResolveManually()
     {
+        if (Finding is null)
+        {
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(Justification))
         {
-            StatusMessage = "La resolución manual exige justificación.";
+            _toasts.Show("La resolución manual exige justificación: es lo único que queda escrito de por qué se cerró.");
+            ManualResolutionExpanded = true;
             return;
         }
 
         _governance.ResolveManually(Slug, Id, Justification.Trim(), GitInfo.HeadSha(_machines.Load().ClonePathFor(Slug)));
-        StatusMessage = "Resuelto manualmente.";
+        Justification = string.Empty;
+        _toasts.Show("Resuelto manualmente y registrado con tu nombre.");
         Reload(Id);
     }
 
     [RelayCommand]
     private void Reopen()
     {
+        if (Finding is null)
+        {
+            return;
+        }
+
+        if (Status != FindingStatus.Resuelto)
+        {
+            _toasts.Show("Solo se reabre lo que está resuelto.");
+            return;
+        }
+
         _governance.Reopen(Slug, Id, "reabierto manualmente");
-        StatusMessage = "Reabierto.";
+        _toasts.Show("Reabierto: vuelve a estar activo.");
         Reload(Id);
     }
 
     [RelayCommand]
     private void AddComment()
     {
-        if (string.IsNullOrWhiteSpace(NewComment))
+        if (Finding is null || string.IsNullOrWhiteSpace(NewComment))
         {
             return;
         }
@@ -216,13 +489,13 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     {
         if (Finding is null || Finding.Disputes.Count == 0)
         {
-            StatusMessage = "Este hallazgo no tiene ninguna disputa abierta.";
+            _toasts.Show("Este hallazgo no tiene ninguna disputa abierta.");
             return;
         }
 
         _governance.ResolveDisputeAsFalsePositive(
             Slug, Id, string.IsNullOrWhiteSpace(SilenceNotes) ? null : SilenceNotes.Trim());
-        StatusMessage = "Disputa aceptada: silenciado como falso positivo.";
+        _toasts.Show("Disputa aceptada: silenciado como falso positivo.");
         Reload(Id);
     }
 
@@ -232,15 +505,17 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     {
         if (Finding is null || Finding.Disputes.Count == 0)
         {
-            StatusMessage = "Este hallazgo no tiene ninguna disputa abierta.";
+            _toasts.Show("Este hallazgo no tiene ninguna disputa abierta.");
             return;
         }
 
         _governance.DismissDispute(
             Slug, Id, string.IsNullOrWhiteSpace(SilenceNotes) ? null : SilenceNotes.Trim());
-        StatusMessage = "Disputa descartada: sigue siendo un defecto.";
+        _toasts.Show("Disputa descartada: sigue siendo un defecto.");
         Reload(Id);
     }
+
+    // ------------------------------------------------------------------ acciones
 
     /// <summary>
     /// Re-verifica ESTE hallazgo (§5.4). Bajó de V3 en F5.4: un verify masivo sobre una selección
@@ -256,17 +531,17 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
 
         Ulid id = Id;
         IsBusy = true;
-        StatusMessage = "Verificando…";
+        _toasts.Show("Verificando el hallazgo…");
         try
         {
             int applied = await Task.Run(() => _verify.RunAsync(Slug, new[] { id }, CancellationToken.None));
-            StatusMessage = applied > 0
+            _toasts.Show(applied > 0
                 ? "Verificado: el veredicto está aplicado y en el historial."
-                : "El verify no pudo emitir veredicto. Mira el historial.";
+                : "El verify no pudo emitir veredicto. Mira el historial.");
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Error: {ex.Message}";
+            _toasts.Show($"No se pudo verificar: {ex.Message}");
         }
         finally
         {
@@ -275,20 +550,26 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Abre la localización principal en el editor configurado (§8).</summary>
+    /// <summary>
+    /// Abre la ubicación principal en el editor configurado (§8), con tope de tiempo (F5.5 §6).
+    /// El éxito es silencioso: la prueba de que funcionó es el editor abriéndose.
+    /// </summary>
     [RelayCommand]
-    private void OpenInEditor()
+    private async Task OpenInEditor()
     {
         if (Finding is null || Finding.Locations.Count == 0)
         {
-            StatusMessage = "Este hallazgo no tiene una ubicación que abrir.";
+            _toasts.Show("Este hallazgo no tiene una ubicación que abrir.");
             return;
         }
 
         Location loc = Finding.Locations[0];
-        StatusMessage = _editor.Open(Slug, loc.Path, loc.Line)
-            ? "Abriendo en el editor…"
-            : "No se pudo abrir el editor.";
+        _toasts.Show("Abriendo en el editor…");
+        bool opened = await _editor.OpenAsync(Slug, loc.Path, loc.Line);
+        if (!opened)
+        {
+            _toasts.Show("No se pudo abrir el editor. Revisa el editor configurado en Ajustes y la ruta del clon.");
+        }
     }
 
     [RelayCommand]
@@ -300,17 +581,21 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         }
 
         string prompt = FixPromptBuilder.Build(Finding);
+        bool copied = true;
         try
         {
             Clipboard.SetText(prompt);
         }
         catch
         {
-            // Clipboard may be unavailable; the record below still preserves the prompt.
+            // Sin portapapeles el prompt no se pierde: queda guardado como comentario.
+            copied = false;
         }
 
         _governance.AddComment(Slug, Id, prompt, kind: "fix-prompt");
-        StatusMessage = "Prompt de arreglo copiado al portapapeles y guardado en el historial.";
+        _toasts.Show(copied
+            ? "Prompt de arreglo copiado al portapapeles y guardado en los comentarios."
+            : "Prompt de arreglo guardado en los comentarios (el portapapeles no estaba disponible).");
         Reload(Id);
     }
 }

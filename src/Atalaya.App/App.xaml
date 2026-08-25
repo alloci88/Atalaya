@@ -25,6 +25,9 @@
             <local:UnitRunStateToBrushConverter x:Key="UnitRunStateToBrush" />
             <local:SeverityToVisibilityConverter x:Key="SeverityToVisibility" />
             <local:WarningToBrushConverter x:Key="WarningToBrush" />
+            <local:FindingStatusToBrushConverter x:Key="FindingStatusToBrush" />
+            <local:FindingStatusToFillConverter x:Key="FindingStatusToFill" />
+            <local:FindingEventToBrushConverter x:Key="FindingEventToBrush" />
             <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
 
             <!-- VM-first navigation: each page VM renders as its view. -->

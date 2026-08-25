@@ -4,6 +4,7 @@ using System.Windows.Data;
 using System.Windows.Media;
 using Atalaya.App.Services;
 using Atalaya.Domain;
+using Atalaya.Domain.Model;
 using Atalaya.Storage.Sync;
 
 namespace Atalaya.App;
@@ -170,6 +171,60 @@ public sealed class WarningToBrushConverter : IValueConverter
         => value is true
             ? new SolidColorBrush(Color.FromRgb(0xE0, 0xA0, 0x30))
             : new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD));
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>
+/// El color del chip de estado de la ficha (F5.5 §2): azul lo activo, verde lo resuelto, gris lo
+/// silenciado. Va con colores explícitos y no con los del tema porque el estado es semántico —
+/// significa lo mismo en claro que en oscuro— y porque son los mismos tres colores que ya usan el
+/// indicador de sync y la cola de V5.
+/// </summary>
+public sealed class FindingStatusToBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
+    {
+        FindingStatus.Activo => new SolidColorBrush(Color.FromRgb(0x4A, 0x9E, 0xE0)),
+        FindingStatus.Resuelto => new SolidColorBrush(Color.FromRgb(0x3F, 0xB9, 0x50)),
+        _ => new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0xA2)),
+    };
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <inheritdoc cref="FindingStatusToBrushConverter"/>
+/// <remarks>El mismo color al 12 %: el relleno del chip, que nunca compite con el texto.</remarks>
+public sealed class FindingStatusToFillConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
+    {
+        FindingStatus.Activo => new SolidColorBrush(Color.FromArgb(0x20, 0x4A, 0x9E, 0xE0)),
+        FindingStatus.Resuelto => new SolidColorBrush(Color.FromArgb(0x20, 0x3F, 0xB9, 0x50)),
+        _ => new SolidColorBrush(Color.FromArgb(0x20, 0x9A, 0x9A, 0xA2)),
+    };
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>
+/// El color del glifo de un evento del historial (F5.5 §5): la línea de tiempo se recorre con la
+/// vista, y el color hace que «Resuelto» y «Reabierto» se distingan sin leerlos.
+/// </summary>
+public sealed class FindingEventToBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
+    {
+        FindingEvent.Resolved => new SolidColorBrush(Color.FromRgb(0x3F, 0xB9, 0x50)),
+        FindingEvent.Reopened or FindingEvent.Recurrence => new SolidColorBrush(Color.FromRgb(0xE0, 0x7A, 0x2B)),
+        FindingEvent.Disputed or FindingEvent.DisputeCleared => new SolidColorBrush(Color.FromRgb(0xE0, 0xA0, 0x30)),
+        FindingEvent.Detected => new SolidColorBrush(Color.FromRgb(0x4A, 0x9E, 0xE0)),
+        FindingEvent.SeverityChanged => new SolidColorBrush(Color.FromRgb(0xD2, 0xB0, 0x36)),
+        _ => new SolidColorBrush(Color.FromRgb(0x8C, 0x8C, 0x96)),
+    };
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();

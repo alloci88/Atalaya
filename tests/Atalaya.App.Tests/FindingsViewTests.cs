@@ -958,5 +958,6 @@ public sealed class FindingsViewTests : IDisposable
             _governance,
             _machines,
             new VerifyCoordinator(_hub, _machines, _ulids, agent ?? new FakeCopilotAgent()),
-            new EditorLauncher(_settings, _machines));
+            new EditorLauncher(_settings, _machines),
+            new ToastCenter());
 }
