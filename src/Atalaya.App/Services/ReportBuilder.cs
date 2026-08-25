@@ -36,6 +36,13 @@ public static class ReportBuilder
         sb.AppendLine($"- Unidades procesadas: {session.Units.Count}");
         sb.AppendLine($"- Pendientes tras la sesión: {pendingUnits}");
         sb.AppendLine($"- Grandes: {largeUnits}");
+        // Lo que el auditor declara haber revisado, unidad por unidad. Sin esto la cobertura
+        // solo existia dentro del JSON de la sesion y no habia forma de juzgarla de un vistazo.
+        foreach (UnitVerdictRecord u in session.Units.Where(u => !string.IsNullOrWhiteSpace(u.Summary)))
+        {
+            sb.AppendLine($"  - **{u.Unit}** ({u.Verdict}): {u.Summary}");
+        }
+
         sb.AppendLine();
 
         SessionCounters cn = session.Counters;
