@@ -122,6 +122,10 @@ public partial class App : Application
             sp.GetRequiredService<OpenSessionStore>(),
             sp.GetRequiredService<HubContext>()));
         services.AddSingleton<GovernanceService>();
+        // F5.6 §3 (D-228): el reparto de alias legibles, que nunca se había cableado.
+        services.AddSingleton<DisplayIdService>();
+        // F5.6 §2 (D-226): el re-anclaje que se persiste al abrir la ficha.
+        services.AddSingleton<AnchorRepair>();
 
         // F5.3 §4: el hard-reset de una app. El "quién pregunta" se inyecta para que el
         // view-model no dependa de una ventana y los tests puedan ejercitar el flujo entero.

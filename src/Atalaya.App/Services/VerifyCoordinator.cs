@@ -160,15 +160,10 @@ public static class SnippetAnchor
             return (true, line, lines[line - 1]);
         }
 
-        // Moved — search the file for the matching snippet.
-        for (int i = 0; i < lines.Length; i++)
-        {
-            if (CodeAnchor.ComputeSnippetHash(lines[i]) == snippetHash)
-            {
-                return (true, i + 1, lines[i]);
-            }
-        }
-
-        return (false, line, null);
+        // Moved — search the file for the matching snippet. La candidata más cercana a la línea
+        // guardada, no la primera del fichero: desde F5.6 el hash ignora la sangría (D-219) y dos
+        // líneas idénticas con sangrías distintas casan las dos.
+        int moved = LocationAnchor.FindByHash(lines, snippetHash, line);
+        return moved > 0 ? (true, moved, lines[moved - 1]) : (false, line, null);
     }
 }

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using ICSharpCode.AvalonEdit;
 using ICSharpCode.AvalonEdit.Editing;
@@ -143,6 +144,36 @@ public sealed class SnippetView : TextEditor
             Dispatcher.BeginInvoke(new Action(() => ScrollToVerticalOffset(
                 Math.Max(0, (_highlight.DocumentLine - 4) * TextArea.TextView.DefaultLineHeight))));
         }
+    }
+
+    /// <summary>
+    /// La rueda del ratón deja de pelearse con la página (F5.6 §4, D-230).
+    /// <para>
+    /// <c>TextEditor</c> lleva dentro un <see cref="System.Windows.Controls.ScrollViewer"/> que se
+    /// queda SIEMPRE el <c>MouseWheel</c>, esté o no en su tope. Resultado: bajar por la ficha
+    /// pasando el cursor por encima del código era una lotería. Aquí solo se lo queda mientras
+    /// pueda desplazarse en esa dirección; en el tope re-emite el evento hacia el padre, que es lo
+    /// que WPF habría hecho si el interno no lo hubiera marcado como tratado.
+    /// </para>
+    /// </summary>
+    protected override void OnPreviewMouseWheel(MouseWheelEventArgs e)
+    {
+        if (SnippetScroll.ShouldBubble(e.Delta, VerticalOffset, ViewportHeight, ExtentHeight))
+        {
+            e.Handled = true;
+            if (Parent is UIElement parent)
+            {
+                parent.RaiseEvent(new MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta)
+                {
+                    RoutedEvent = MouseWheelEvent,
+                    Source = this,
+                });
+            }
+
+            return;
+        }
+
+        base.OnPreviewMouseWheel(e);
     }
 
     private static Brush Freeze(Brush brush)

@@ -3,7 +3,7 @@ using Atalaya.Domain.Model;
 
 namespace Atalaya.App.Services;
 
-/// <summary>En qué relación está el código del clon con lo que el auditor vio (F5.5 §3).</summary>
+/// <summary>En qué relación está el código del clon con lo que el auditor vio (F5.5 §3, F5.6 §2).</summary>
 public enum SnippetState
 {
     /// <summary>La línea anclada sigue diciendo exactamente lo mismo. Lo que se ve es lo que hay.</summary>
@@ -14,6 +14,17 @@ public enum SnippetState
 
     /// <summary>La línea anclada ya no coincide y no aparece en el fichero: el código cambió.</summary>
     Cambiado,
+
+    /// <summary>
+    /// El código exacto ya no está, pero el <b>miembro</b> que nombra el hallazgo sí: se resalta su
+    /// primera línea de código en vez de un número de línea que ya no significa nada (F5.6, D-222).
+    /// </summary>
+    Reanclado,
+
+    /// <summary>
+    /// Ni el código anclado ni el símbolo aparecen: no se resalta nada y se dice (F5.6, D-225).
+    /// </summary>
+    NoLocalizado,
 
     /// <summary>El fichero ya no existe en el clon.</summary>
     FicheroNoEncontrado,
@@ -47,11 +58,23 @@ public sealed record SnippetPanel(
     /// El aviso lleva un botón «Verificar ahora» solo cuando verificar arregla algo: re-anclar la
     /// ubicación o pedir veredicto. Sin clon, verificar no puede hacer nada desde esta máquina.
     /// </summary>
-    public bool CanVerify => State is SnippetState.Cambiado or SnippetState.Movido or SnippetState.FicheroNoEncontrado;
+    public bool CanVerify => OffersVerify(State);
+
+    /// <summary>
+    /// La misma regla, sin panel delante: la ficha la necesita para decidir si pinta el botón, y
+    /// tenerla escrita dos veces era lo que dejaba los estados nuevos de F5.6 sin su «Verificar».
+    /// </summary>
+    public static bool OffersVerify(SnippetState state)
+        => state is SnippetState.Cambiado or SnippetState.Movido or SnippetState.Reanclado
+            or SnippetState.NoLocalizado or SnippetState.FicheroNoEncontrado;
 
     /// <summary>Título del panel: el miembro cuando se supo derivar, si no la ruta y la línea.</summary>
     public string Caption(string path, int line)
-        => Member is not null ? $"{Member} · {path}:{line}" : $"{path}:{line}";
+    {
+        // Sin línea que resaltar (no localizado) no se escribe un «:0» que no significa nada.
+        string where = line > 0 ? $"{path}:{line}" : path;
+        return Member is not null ? $"{Member} · {where}" : where;
+    }
 }
 
 /// <summary>
@@ -63,16 +86,25 @@ public sealed record SnippetPanel(
 /// de casar la única salida honesta es decirlo y ofrecer verificar, no pintar algo plausible.
 /// </para>
 /// <para>
-/// Tres desenlaces distintos, y se distinguen a propósito: la línea sigue igual
-/// (<see cref="SnippetState.Anclado"/>), el mismo código apareció en otro sitio del fichero
-/// (<see cref="SnippetState.Movido"/> — se enseña la posición nueva, no la vieja) o no aparece
-/// (<see cref="SnippetState.Cambiado"/>). Meterlos en el mismo saco convertía un simple
-/// desplazamiento de líneas en una alarma, y un cambio real en un silencio.
+/// <b>La cadena de anclaje</b> (F5.6, D-222). Por orden de fiabilidad: el hash en la línea
+/// guardada, el hash en cualquier otra línea, el <b>símbolo</b> del hallazgo vía Roslyn y, si nada
+/// aparece, «no localizado» sin resaltar nada. El número de línea guardado nunca manda por sí
+/// solo: lo emite el LLM al reportar y es aproximado —en el hub real se desviaba hasta 25 líneas—,
+/// de modo que anclarse a él a ciegas era lo que hacía resaltar comentarios de documentación.
 /// </para>
 /// </summary>
 public static class SnippetReader
 {
     public static SnippetPanel Read(string? clonePath, Location? loc, string? anchoredCommit)
+        => Read(clonePath, loc, anchoredCommit, Array.Empty<string>());
+
+    /// <inheritdoc cref="Read(string?,Location?,string?)"/>
+    /// <param name="symbols">
+    /// Nombres de miembro que el hallazgo conoce (<see cref="SymbolAnchor.Candidates"/>), para
+    /// re-anclar cuando el hash ya no casa.
+    /// </param>
+    public static SnippetPanel Read(
+        string? clonePath, Location? loc, string? anchoredCommit, IReadOnlyList<string> symbols)
     {
         if (loc is null)
         {
@@ -116,48 +148,73 @@ public static class SnippetReader
                 "El fichero está vacío en el clon: el código ha cambiado desde la última confirmación.");
         }
 
-        (SnippetState state, int line, string notice) = Locate(lines, loc, anchoredCommit);
+        (SnippetState state, int line, string notice) = Locate(lines, loc, symbols, anchoredCommit);
+
+        // Aunque el ancla case letra por letra, si apunta a documentación se baja al código del
+        // miembro (D-224): el auditor a veces señala el `/// <param>` que describe el defecto, y
+        // resaltar ese comentario es lo que hacía dudar del hallazgo entero. No es motivo de aviso
+        // —no ha cambiado nada—, solo de resaltar donde toca.
+        if (state is SnippetState.Anclado or SnippetState.Movido)
+        {
+            line = SymbolAnchor.FirstCodeLine(lines, loc.Path, line);
+        }
 
         CodeSpanLines span = MethodBoundary.ForLine(lines, line, loc.Path);
         string text = string.Join("\n", lines[(span.StartLine - 1)..span.EndLine]);
 
-        return new SnippetPanel(state, text, span.StartLine, line, span.Member, notice);
+        // «No localizado» enseña el contexto pero NO señala ninguna línea: resaltar una al azar es
+        // peor que admitir que se perdió el rastro (D-225).
+        int highlight = state == SnippetState.NoLocalizado ? 0 : line;
+
+        return new SnippetPanel(state, text, span.StartLine, highlight, span.Member, notice);
     }
 
-    /// <summary>Dónde está ahora la línea anclada, y qué hay que avisar si no está donde estaba.</summary>
+    /// <summary>Dónde está ahora el código del hallazgo, y qué hay que avisar si no está donde estaba.</summary>
     private static (SnippetState State, int Line, string Notice) Locate(
-        string[] lines, Location loc, string? anchoredCommit)
+        string[] lines, Location loc, IReadOnlyList<string> symbols, string? anchoredCommit)
     {
         bool inRange = loc.Line >= 1 && loc.Line <= lines.Length;
 
-        if (string.IsNullOrEmpty(loc.SnippetHash))
+        if (!string.IsNullOrEmpty(loc.SnippetHash))
         {
-            // Sin ancla no hay nada que comparar: se muestra la línea guardada y punto.
-            return inRange
-                ? (SnippetState.Anclado, loc.Line, string.Empty)
-                : (SnippetState.Cambiado, lines.Length,
-                    $"La línea {loc.Line} ya no existe: el fichero tiene {lines.Length}. "
-                    + "El código ha cambiado desde la última confirmación.");
-        }
-
-        if (inRange && CodeAnchor.ComputeSnippetHash(lines[loc.Line - 1]) == loc.SnippetHash)
-        {
-            return (SnippetState.Anclado, loc.Line, string.Empty);
-        }
-
-        for (int i = 0; i < lines.Length; i++)
-        {
-            if (CodeAnchor.ComputeSnippetHash(lines[i]) == loc.SnippetHash)
+            if (inRange && CodeAnchor.ComputeSnippetHash(lines[loc.Line - 1]) == loc.SnippetHash)
             {
-                return (SnippetState.Movido, i + 1,
-                    $"El código se ha movido: estaba en la línea {loc.Line} y ahora está en la {i + 1}. "
+                return (SnippetState.Anclado, loc.Line, string.Empty);
+            }
+
+            int moved = LocationAnchor.FindByHash(lines, loc.SnippetHash, loc.Line);
+            if (moved > 0)
+            {
+                return (SnippetState.Movido, moved,
+                    $"El hallazgo se anotó en la línea {loc.Line} y su código está en la {moved}. "
                     + "Se muestra la posición actual.");
             }
         }
+        else if (inRange)
+        {
+            // Sin ancla no hay con qué contrastar: vale la línea guardada, pero nunca un comentario.
+            int code = SymbolAnchor.FirstCodeLine(lines, loc.Path, loc.Line);
+            return code == loc.Line
+                ? (SnippetState.Anclado, loc.Line, string.Empty)
+                : (SnippetState.Reanclado, code,
+                    $"La línea {loc.Line} no es código ejecutable. Se resalta la primera línea de "
+                    + "código del miembro que la contiene.");
+        }
 
-        return (SnippetState.Cambiado, inRange ? loc.Line : lines.Length,
-            $"El código ha cambiado desde la última confirmación (commit {ShortSha(anchoredCommit)}): "
-            + "lo que se ve debajo ya no es lo que se auditó.");
+        // El código exacto no aparece: queda el símbolo.
+        SymbolHit hit = SymbolAnchor.FindMember(lines, loc.Path, symbols);
+        if (hit.Found)
+        {
+            return (SnippetState.Reanclado, hit.Line,
+                $"El código de la línea {loc.Line} ya no es el que se auditó (commit "
+                + $"{ShortSha(anchoredCommit)}). El hallazgo se ha re-anclado a «{hit.Member}», que "
+                + "es el miembro que nombra. Verifica para confirmarlo.");
+        }
+
+        return (SnippetState.NoLocalizado, inRange ? loc.Line : lines.Length,
+            $"No localizado: ni el código anclado en la línea {loc.Line} ni el símbolo del hallazgo "
+            + $"aparecen ya en {loc.Path} (commit anclado {ShortSha(anchoredCommit)}). No se resalta "
+            + "ninguna línea. Verifica para re-anclarlo o cerrarlo.");
     }
 
     private static string ShortSha(string? sha)

@@ -41,6 +41,18 @@ public sealed class Finding
 
     public List<Location> Locations { get; set; } = new();
 
+    /// <summary>
+    /// El miembro afectado tal y como lo declaró el auditor (<c>Clase.Metodo</c>), si lo declaró.
+    /// <para>
+    /// F5.6 (D-223): <c>submit_finding</c> ya recibía este dato y <c>SubmittedFinding</c> lo
+    /// llevaba, pero se tiraba al crear el hallazgo. Es el ancla de reserva cuando el
+    /// <see cref="Location.SnippetHash"/> deja de casar porque el código de dentro cambió y el
+    /// método sigue ahí. Aditivo y opcional: los hallazgos anteriores lo tienen a <c>null</c> y
+    /// se apañan con los identificadores del título.
+    /// </para>
+    /// </summary>
+    public string? Symbol { get; set; }
+
     public AuditMode Origin { get; set; }
 
     public required DetectionStamp FirstDetected { get; set; }
@@ -94,6 +106,7 @@ public sealed class Finding
             Impact = submitted.Impact,
             Recommendation = submitted.Recommendation,
             Locations = submitted.Locations.ToList(),
+            Symbol = submitted.Symbol,
             Origin = origin,
             FirstDetected = stamp,
             LastConfirmed = stamp,

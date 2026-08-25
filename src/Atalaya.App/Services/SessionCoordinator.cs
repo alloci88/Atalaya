@@ -66,12 +66,14 @@ public sealed class SessionCoordinator
     private readonly SettingsService _settings;
     private readonly CycleService? _cycles;
     private readonly StatusExporter? _statusExporter;
+    private readonly DisplayIdService? _aliases;
 
     public SessionCoordinator(
         HubContext hub, FindingIngestionService ingestion, ReconciliationService reconciliation,
         MachineConfigStore machines, IUlidFactory ulids, ICopilotAgent agent,
         SettingsService settings,
-        CycleService? cycles = null, StatusExporter? statusExporter = null)
+        CycleService? cycles = null, StatusExporter? statusExporter = null,
+        DisplayIdService? aliases = null)
     {
         _hub = hub;
         _ingestion = ingestion;
@@ -82,6 +84,7 @@ public sealed class SessionCoordinator
         _settings = settings;
         _cycles = cycles;
         _statusExporter = statusExporter;
+        _aliases = aliases;
     }
 
     public event Action<string, string>? UnitPhaseChanged;   // (path, phase)
@@ -481,6 +484,11 @@ public sealed class SessionCoordinator
             $"session: {request.Mode.ToString().ToLowerInvariant()} {request.Slug} {session.Units.Count} unidades"
             + (interrupted ? " (detenida)" : ""));
 
+        // El alias legible se reparte TRAS el push (§2, D-228): numerar antes de publicar es lo
+        // que hacía colisionar a dos máquinas que auditaban a la vez. Lo que se asigna aquí viaja
+        // en el push de la siguiente acción — el alias no es identidad, así que no urge.
+        AssignAliases(request.Slug);
+
         // Courtesy ESTADO.md export into the audited repo (§7).
         _statusExporter?.ExportIfEnabled(request.Slug);
 
@@ -498,6 +506,22 @@ public sealed class SessionCoordinator
             IncompleteUnits = incompleteUnits,
             Interrupted = interrupted,
         };
+    }
+
+    /// <summary>
+    /// Reparte alias a lo recién detectado. Nunca tumba la sesión: el trabajo ya está publicado y
+    /// un hallazgo sin alias se lee igual por su título — el backfill del arranque lo recogerá.
+    /// </summary>
+    private void AssignAliases(string slug)
+    {
+        try
+        {
+            _aliases?.AssignPending(slug);
+        }
+        catch (Exception)
+        {
+            // Sin alias se sigue trabajando; sin sesión cerrada, no.
+        }
     }
 
     private static List<InventoryUnit> ResolveUnits(SessionRequest request, InventoryCycle inventory)

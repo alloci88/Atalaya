@@ -21,6 +21,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly GitHubAccountService _account;
     private readonly LiveSessionService _live;
     private readonly InterruptedSessionRecovery _recovery;
+    private readonly DisplayIdService _aliases;
     private readonly ToastCenter _toasts;
 
     public MainViewModel(
@@ -30,6 +31,7 @@ public sealed partial class MainViewModel : ObservableObject
         GitHubAccountService account,
         LiveSessionService live,
         InterruptedSessionRecovery recovery,
+        DisplayIdService aliases,
         ToastCenter toasts)
     {
         Navigation = navigation;
@@ -39,6 +41,7 @@ public sealed partial class MainViewModel : ObservableObject
         _account = account;
         _live = live;
         _recovery = recovery;
+        _aliases = aliases;
         _live.Changed += SyncSession;
         _live.Completed += OnSessionCompleted;
         _account.Changed += SyncAccount;
@@ -149,7 +152,31 @@ public sealed partial class MainViewModel : ObservableObject
             IsBusy = false;
         }
 
+        BackfillDisplayIds();
+
         await ShowPortfolio();
+    }
+
+    /// <summary>
+    /// Reparte alias legibles a los hallazgos que se quedaron sin uno (F5.6 §3, D-228). El paso
+    /// post-push del §2 nunca se llegó a cablear, así que todo lo detectado hasta ahora mostraba
+    /// «(sin alias todavía)». Es idempotente: en cuanto todos lo tienen, no hace nada y no escribe.
+    /// Nunca lanza — quedarse sin alias no puede impedir arrancar.
+    /// </summary>
+    private void BackfillDisplayIds()
+    {
+        try
+        {
+            int assigned = _aliases.BackfillAll();
+            if (assigned > 0)
+            {
+                _toasts.Show($"{assigned} hallazgo(s) han recibido su identificador legible.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _toasts.Show($"No se pudieron asignar identificadores legibles: {ex.Message}");
+        }
     }
 
     /// <summary>A pre-F2 setup: a PAT stored on this machine is enough to keep working (D4).</summary>

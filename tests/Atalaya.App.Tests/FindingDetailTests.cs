@@ -151,7 +151,8 @@ public sealed class FindingDetailTests : IDisposable
             _machines,
             new VerifyCoordinator(_hub, _machines, _ulids, agent ?? new FakeCopilotAgent()),
             new EditorLauncher(_settings, _machines),
-            _toasts);
+            _toasts,
+            new AnchorRepair(_hub));
 
     private FindingDetailViewModel Open(Finding f)
     {
@@ -462,11 +463,73 @@ public sealed class FindingDetailTests : IDisposable
     }
 
     /// <summary>
-    /// El código cambió bajo el ancla: se avisa y se ofrece verificar. Nunca se enseña lo viejo
-    /// como si fuera lo actual — que es exactamente lo que hacía el recorte anterior.
+    /// La propiedad que el usuario pidió verificar a mano, fijada en un test: <b>abrir un hallazgo
+    /// sin tocar el código no avisa de nada</b>, aunque la línea que el auditor anotó fuera
+    /// aproximada. El ancla se corrige en silencio (D-226) y el aviso queda libre para lo que sí
+    /// es noticia.
     /// </summary>
     [Fact]
-    public void Si_el_codigo_ya_no_casa_con_el_hash_la_ficha_lo_dice()
+    public void Con_el_codigo_intacto_no_sale_ningun_aviso_aunque_la_linea_guardada_estuviera_mal()
+    {
+        // La línea 9 es la del stream; el hallazgo dice que está en la 6 (una llave), que es el
+        // desfase típico del LLM. El hash, en cambio, es exacto.
+        Finding f = Seed();
+        f.Locations[0].Line = 6;
+        _hub.Store.WriteFinding("alpha", f);
+
+        FindingDetailViewModel vm = Open(f);
+
+        vm.SnippetState.Should().Be(SnippetState.Anclado);
+        vm.SnippetHighlightLine.Should().Be(LineaDelHallazgo);
+        vm.HasSnippetNotice.Should().BeFalse("el código no ha cambiado: no hay nada que avisar");
+
+        _hub.Store.TryReadFinding("alpha", f.Id.ToString())!
+            .Locations[0].Line.Should().Be(LineaDelHallazgo, "la corrección se persiste, no se repinta cada vez");
+    }
+
+    /// <summary>La segunda vez no escribe nada: el arreglo converge en vez de tocar el hub sin parar.</summary>
+    [Fact]
+    public void Corregir_el_ancla_es_idempotente()
+    {
+        Finding f = Seed();
+        f.Locations[0].Line = 6;
+        _hub.Store.WriteFinding("alpha", f);
+        Open(f);
+
+        var repair = new AnchorRepair(_hub);
+        Finding recargado = _hub.Store.TryReadFinding("alpha", f.Id.ToString())!;
+
+        repair.Repair("alpha", recargado, _clone).Should().Be(0);
+    }
+
+    /// <summary>
+    /// La otra mitad de la verificación humana: tocar la línea anclada avisa <b>en ese hallazgo</b>
+    /// y el de al lado, que vive en otro fichero, sigue callado.
+    /// </summary>
+    [Fact]
+    public void Editar_la_linea_anclada_avisa_solo_en_el_hallazgo_que_la_tenia()
+    {
+        Finding tocado = Seed();
+        Finding intacto = Seed(path: "src/Otro.cs");
+
+        Open(tocado);   // deja el ancla corregida, como haría el usuario al abrirlo
+        Open(intacto);
+
+        string abs = Path.Combine(_clone, "src", "Repositorio.cs");
+        File.WriteAllText(abs, Fuente.Replace(
+            "var stream = File.OpenWrite(dato);", "var stream = File.Create(dato);"));
+
+        Open(tocado).HasSnippetNotice.Should().BeTrue("su línea anclada ha cambiado");
+        Open(intacto).HasSnippetNotice.Should().BeFalse("su fichero no se ha tocado");
+    }
+
+    /// <summary>
+    /// El código cambió bajo el ancla y el hallazgo no nombra ningún miembro localizable: no se
+    /// resalta NADA y se dice (F5.6, D-225). Enseñar el contexto es útil; señalar una línea al azar
+    /// dentro de él es fingir precisión.
+    /// </summary>
+    [Fact]
+    public void Si_ni_el_codigo_ni_el_simbolo_aparecen_no_se_resalta_nada_y_se_dice()
     {
         Finding f = Seed();
         string abs = Path.Combine(_clone, "src", "Repositorio.cs");
@@ -475,15 +538,43 @@ public sealed class FindingDetailTests : IDisposable
 
         FindingDetailViewModel vm = Open(f);
 
-        vm.SnippetState.Should().Be(SnippetState.Cambiado);
+        vm.SnippetState.Should().Be(SnippetState.NoLocalizado);
+        vm.SnippetHighlightLine.Should().Be(0, "no localizado no resalta ninguna línea");
         vm.HasSnippetNotice.Should().BeTrue();
-        vm.SnippetNotice.Should().Contain("ha cambiado");
+        vm.SnippetNotice.Should().Contain("No localizado");
         vm.SnippetNoticeOffersVerify.Should().BeTrue("verificar es lo que re-ancla o cierra esto");
     }
 
-    /// <summary>Moverse no es cambiar: se enseña la posición nueva, sin gritar.</summary>
+    /// <summary>
+    /// El código de dentro cambió pero el miembro sigue ahí: se re-ancla a su primera línea de
+    /// código en vez de señalar un número de línea que ya no significa nada (F5.6, D-222).
+    /// </summary>
     [Fact]
-    public void Si_el_codigo_solo_se_movio_la_ficha_lo_sigue()
+    public void Si_el_codigo_cambio_pero_el_simbolo_sigue_se_reancla_al_miembro()
+    {
+        Finding f = Seed();
+        f.Symbol = "Repositorio.Guardar";
+        _hub.Store.WriteFinding("alpha", f);
+
+        string abs = Path.Combine(_clone, "src", "Repositorio.cs");
+        File.WriteAllText(abs, Fuente.Replace(
+            "var stream = File.OpenWrite(dato);", "using var stream = File.OpenWrite(dato);"));
+
+        FindingDetailViewModel vm = Open(f);
+
+        vm.SnippetState.Should().Be(SnippetState.Reanclado);
+        vm.SnippetHighlightLine.Should().Be(9, "la primera línea de código de Guardar");
+        vm.SnippetNotice.Should().Contain("Repositorio.Guardar");
+        vm.SnippetNoticeOffersVerify.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Moverse no es cambiar: la ficha sigue al código a su sitio nuevo <b>sin gritar</b>. Antes de
+    /// F5.6 esto daba un aviso; un desplazamiento de líneas no es una alarma y, si lo fuera, el
+    /// aviso saldría en todos los hallazgos cada vez que alguien añade un `using` (D-226).
+    /// </summary>
+    [Fact]
+    public void Si_el_codigo_solo_se_movio_la_ficha_lo_sigue_en_silencio()
     {
         Finding f = Seed();
         string abs = Path.Combine(_clone, "src", "Repositorio.cs");
@@ -491,10 +582,13 @@ public sealed class FindingDetailTests : IDisposable
 
         FindingDetailViewModel vm = Open(f);
 
-        vm.SnippetState.Should().Be(SnippetState.Movido);
+        vm.SnippetState.Should().Be(SnippetState.Anclado);
         vm.SnippetHighlightLine.Should().Be(LineaDelHallazgo + 1);
-        vm.SnippetNotice.Should().Contain("se ha movido");
+        vm.HasSnippetNotice.Should().BeFalse("moverse no es cambiar");
         vm.Snippet.Should().Contain("File.OpenWrite");
+
+        _hub.Store.TryReadFinding("alpha", f.Id.ToString())!
+            .Locations[0].Line.Should().Be(LineaDelHallazgo + 1, "el ancla sigue al código");
     }
 
     [Fact]
@@ -684,6 +778,33 @@ public sealed class FindingDetailTests : IDisposable
             new VerifyCoordinator(_hub, _machines, _ulids, new FakeCopilotAgent()),
             new EditorLauncher(_settings, _machines), _toasts)
             .ManualResolutionExpanded.Should().BeFalse("plegada por defecto");
+    }
+
+    /// <summary>
+    /// El defecto 5 (F5.6, D-231): `Padding` en un `Expander` NO separa el contenido — la
+    /// plantilla de WPF-UI se lo aplica a la CABECERA, que pierde 8 px por arriba y saca el título
+    /// descolgado contra el borde. Se comprobó renderizando el bloque con y sin el atributo. Este
+    /// test vale para toda la ficha: si alguien vuelve a poner uno, falla.
+    /// </summary>
+    [Fact]
+    public void Ningun_Expander_de_la_ficha_fija_Padding_porque_deforma_su_cabecera()
+        => Regex.Matches(Markup(DetailXaml()), "<Expander[^>]*>", RegexOptions.Singleline)
+            .Select(m => m.Value)
+            .Should().NotContain(v => v.Contains("Padding"), "el Padding de un Expander recorta su cabecera");
+
+    /// <summary>
+    /// Y la cabecera plegada tiene que leerse como expandible, no como el combo de severidad que
+    /// tiene tres píxeles más arriba (D-232): lleva su advertencia y estira a todo el ancho.
+    /// </summary>
+    [Fact]
+    public void La_cabecera_plegada_de_la_resolucion_manual_lleva_su_advertencia()
+    {
+        string xaml = DetailXaml();
+
+        xaml.Should().MatchRegex("<Expander[^>]*HorizontalContentAlignment=\"Stretch\"");
+        xaml.Should().Contain("<Expander.Header>");
+        xaml.Should().Contain("cierra el hallazgo sin auditar");
+        xaml.Should().Contain("SystemFillColorCautionBrush");
     }
 
     /// <summary>

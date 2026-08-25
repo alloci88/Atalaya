@@ -257,8 +257,7 @@ public sealed class SessionToolbox : IAuditToolbox
                 continue; // ya la tenía: no es un fallo, simplemente no aporta
             }
 
-            finding.Locations.Add(new Location(
-                l.Path!, l.Line, l.Snippet is null ? null : CodeAnchor.ComputeSnippetHash(l.Snippet)));
+            finding.Locations.Add(BuildLocation(l.Path!, l.Line, l.Snippet));
             added++;
         }
 
@@ -481,7 +480,7 @@ public sealed class SessionToolbox : IAuditToolbox
         }
 
         var locations = args.Locations
-            .Select(l => new Location(l.Path, l.Line, l.Snippet is null ? null : CodeAnchor.ComputeSnippetHash(l.Snippet)))
+            .Select(l => BuildLocation(l.Path, l.Line, l.Snippet))
             .ToList();
 
         var submitted = new SubmittedFinding(
@@ -502,6 +501,22 @@ public sealed class SessionToolbox : IAuditToolbox
         PassNew++;
         _onFinding?.Invoke(created, "nuevo");
         return new SubmitFindingResult(true);
+    }
+
+    /// <summary>
+    /// Una ubicación reportada, con su ancla ya <b>corregida contra el clon</b> (F5.6, D-226).
+    /// <para>
+    /// Los números de línea los emite el LLM y son aproximados: en el hub real se desviaban de +1 a
+    /// +25 líneas, y el hallazgo que abrió el parte apuntaba a un comentario de documentación. El
+    /// snippet, en cambio, es texto exacto: si aparece en el fichero, esa es la línea que se
+    /// persiste. Sin clon, sin fichero o sin snippet se guarda lo que dijo el auditor, tal cual —
+    /// corregir solo lo que se puede comprobar.
+    /// </para>
+    /// </summary>
+    private Location BuildLocation(string path, int line, string? snippet)
+    {
+        string? hash = snippet is null ? null : CodeAnchor.ComputeSnippetHash(snippet);
+        return new Location(path, LocationAnchor.ResolveOnDisk(_clonePath, path, line, hash), hash);
     }
 
     private SubmitFindingResult Reject(string reason, SubmitFindingArgs? args)

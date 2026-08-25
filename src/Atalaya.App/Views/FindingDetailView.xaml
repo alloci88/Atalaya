@@ -426,11 +426,29 @@
                         <TextBlock Style="{StaticResource Help}"
                                    Text="Cierra este hallazgo por decisión humana, sin auditoría — para código ya corregido o eliminado. Requiere justificación y queda registrado con tu nombre." />
 
+                        <!-- Plegada, la cabecera tiene que verse ENTERA y leerse como expandible
+                             (F5.6 §5). Sin `Padding`: la plantilla de WPF-UI se lo aplica a la
+                             CABECERA, no al contenido, y por eso el título salía descolgado contra
+                             el borde (D-231). El aire del contenido se lo pone el StackPanel de
+                             dentro. Y la advertencia va en la propia cabecera, que es lo que la
+                             distingue del combo de severidad de arriba (D-232). -->
                         <Expander IsExpanded="{Binding ManualResolutionExpanded}"
-                                  Header="Resolver a mano"
-                                  Padding="0,8,0,0"
+                                  HorizontalContentAlignment="Stretch"
+                                  Margin="0,2,0,0"
                                   Visibility="{Binding CanResolveManually, Converter={StaticResource BoolToVisibility}}">
-                            <StackPanel>
+                            <Expander.Header>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                               VerticalAlignment="Center" Margin="0,0,7,0"
+                                               Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                                    <TextBlock Text="Resolver a mano" FontWeight="SemiBold"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Text="— cierra el hallazgo sin auditar" FontSize="11"
+                                               VerticalAlignment="Center" Margin="6,1,0,0"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                </StackPanel>
+                            </Expander.Header>
+                            <StackPanel Margin="0,8,0,0">
                                 <TextBlock Text="Justificación (obligatoria)" Style="{StaticResource FieldLabel}" />
                                 <ui:TextBox Text="{Binding Justification}" HorizontalAlignment="Stretch"
                                             AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"

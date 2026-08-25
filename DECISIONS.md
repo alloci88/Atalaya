@@ -1808,6 +1808,251 @@ renumeradas desde 1 debajo de un hallazgo que vive en la línea 412.
   F5.4. De la ficha se rehace la presentación entera; del modelo, nada — ni siquiera la asignación,
   que solo desaparece de la vista.
 
+## F5.6 — Cinco defectos de la ficha (V4): diagnóstico y arreglo
+
+Tanda de arreglos sobre la ficha entregada en F5.5. **No se rediseña nada**: se arregla lo que
+hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba causa común; son
+**dos causas distintas** y la relación entre ellas está demostrada abajo (D-221).
+
+### El diagnóstico primero (N-2): qué se midió y con qué
+
+- **D-216 — La evidencia salió del hub real, no de un caso inventado.** Se reprodujo el cálculo de
+  `CodeAnchor.ComputeSnippetHash` fuera de la aplicación y se pasó sobre las **56 ubicaciones** de
+  los 25 hallazgos reales de `xblast`, contra el clon en `C:\Users\alcil\MyProjects\X-BLAST`,
+  parado en el mismo commit (`f86a301`) en el que se confirmaron. Es decir: **el código no ha
+  cambiado**, así que el resultado correcto era «cero banners». Lo medido con el código de F5.5:
+
+  | desenlace | ubicaciones |
+  |---|---|
+  | `Anclado` (el hash casa en la línea guardada) | 3 |
+  | `Movido` (casa en otra línea) | 0 |
+  | `Cambiado` (**banner**) | **53** |
+
+  53 de 56 banners sobre código intacto. El defecto 1 queda reproducido y acotado antes de tocar
+  una línea de producción.
+
+### Defecto 1 — el banner de «el código ha cambiado» salía en todos
+
+- **D-217 — Causa raíz: la normalización del hash es ASIMÉTRICA entre ingesta y presentación.**
+  `ComputeSnippetHash` recorta cada línea **solo por la derecha** (`TrimEnd`). Y las dos puntas
+  hashean textos distintos:
+  - **Al ingerir** (`SessionToolbox.SubmitFinding` / `AddLocations`) se hashea `l.Snippet`, la
+    cadena que **manda el LLM**, que llega **sin la sangría** del fichero.
+  - **Al mostrar** (`SnippetReader.Locate`) se hashea `lines[loc.Line - 1]`, la línea **cruda del
+    fichero**, con sus 8 o 12 espacios de sangría delante.
+
+  Como `TrimEnd` no toca la sangría, ninguna línea de dentro de una clase de C# puede casar
+  jamás. La prueba por fuerza bruta lo fija sin ambigüedad: los cuatro hashes auditados
+  reproducen **exactamente** el recorte por los dos lados de una línea concreta del fichero, y de
+  ninguna otra forma (ni línea cruda, ni bloque de varias líneas, ni bloque des-sangrado):
+
+  | hash guardado | reproduce |
+  |---|---|
+  | `sha256:2523e49f…` | línea 172 **recortada** — `return uint.Parse(detId, NumberStyles.HexNumber);` |
+  | `sha256:c7bb63b5…` | línea 183 **recortada** — `return ushort.Parse(seq);` |
+  | `sha256:bfadfcf4…` | línea 80 **recortada** — `public static byte[] StringToByteArray(…)` |
+  | `sha256:20afc325…` | línea 60 **recortada** — `public static List<T> ReadCSV<T>(…)` |
+
+  Las 3 ubicaciones que sí casaban son las que caían en líneas sin sangría. No es «CRLF», no es
+  «el ancla apunta a otra línea»: es que **un lado recorta la sangría y el otro no**.
+
+- **D-218 — Y el mismo fallo tenía tumbado a `verify`.** `SnippetAnchor.TryAnchor`
+  (`VerifyCoordinator`) hashea igual que la ficha, así que devolvía «no anclado» para todo y
+  marcaba `needsReview` en cada hallazgo que se verificara. El defecto 1 no era solo cosmético.
+
+- **D-219 — El arreglo es normalizar por los DOS lados, y no migra nada.** `ComputeSnippetHash`
+  pasa a recortar cada línea entera (`Trim`) y a descartar las líneas en blanco de los extremos.
+  Los hashes ya guardados **siguen siendo válidos**: se calcularon sobre un texto que ya venía sin
+  sangría, y recortar por los dos lados un texto sin sangría da lo mismo que recortar por la
+  derecha. Cero migración, cero reescritura del hub. El precio es que dos líneas idénticas con
+  sangrías distintas colisionan; se paga eligiendo, entre las candidatas, **la más cercana a la
+  línea guardada** en vez de la primera del fichero.
+
+### Defecto 2 — la línea resaltada no era la del hallazgo
+
+- **D-220 — Causa raíz: los números de línea del LLM son aproximados, y nadie los corregiía.** El
+  caso del usuario, medido: el hallazgo «ConvertToDetId/ConvertToSeq propagan excepciones de
+  Parse» guarda L167, que es `/// <param name="detId">…` — un comentario de documentación. El
+  hash de esa misma ubicación reproduce la **L172**, `return uint.Parse(detId, …)`, que es
+  literalmente el código del hallazgo. Sobre las 53 ubicaciones desviadas el desfase va de **+1 a
+  +25 líneas**, casi siempre hacia abajo: el LLM cuenta sobre lo que leyó, no sobre el fichero.
+  Anclar por número de línea crudo es, efectivamente, frágil.
+
+- **D-221 — La relación entre el defecto 1 y el 2, demostrada.** Son **causas independientes** —
+  una es normalización, la otra es el dato que emite el LLM— pero la primera **enmascaraba** el
+  mecanismo que ya existía para arreglar la segunda: la búsqueda de «Movido» de `SnippetReader`
+  recorre el fichero buscando el hash, y habría re-anclado sola. Con el hash simétrico, esa misma
+  búsqueda resuelve **53 de las 56** ubicaciones a la línea correcta, y las 3 restantes ya estaban
+  ancladas. Es decir: **arreglar el 1 arregla el 2 en el 95 % de los casos**, y no por casualidad
+  sino porque el hash *es* el ancla buena. No se asume: se midió antes y después.
+
+- **D-222 — El re-anclaje por símbolo es el plan B, no el plan A.** Se comprobó que es viable con
+  la infraestructura de F5.5 (`MethodBoundary` ya sube por el árbol de Roslyn hasta el miembro que
+  contiene una línea), pero **el hash es mejor ancla que el símbolo**: es exacto, no depende de que
+  el título nombre bien el método y no se confunde con sobrecargas. El orden queda: hash en la
+  línea guardada → hash en otra línea → **símbolo** → no localizado.
+
+- **D-223 — El símbolo se PERSISTE, porque no estaba.** `submit_finding` ya recibía un `symbol` y
+  `SubmittedFinding` lo llevaba, pero `Finding.CreateNew` lo tiraba: el modelo no tenía dónde
+  guardarlo. Se añade `Finding.Symbol` (opcional, aditivo, no rompe el JSON existente). Para los
+  hallazgos ya guardados, que no lo tienen, los candidatos salen del **título**: los
+  identificadores que parecen nombres de miembro. Es peor ancla que el símbolo declarado, y por eso
+  va detrás del hash.
+
+- **D-224 — Nunca se resalta un comentario.** Cuando el ancla sale del símbolo (o de la línea
+  guardada sin hash con el que contrastarla), la línea buena es la **primera línea de código
+  ejecutable** del miembro; si no la hay, su declaración. Un comentario, un atributo, una llave
+  suelta o una línea en blanco nunca son el resaltado. Esto es lo que convertía L167 en un
+  resaltado que el usuario hacía bien en no creerse.
+
+- **D-225 — Si el símbolo no aparece, se dice.** Estado nuevo `NoLocalizado`: se enseña el fichero
+  alrededor de donde estaba, **sin resaltar ninguna línea**, con el aviso «no localizado» y el
+  botón «Verificar ahora». Honestidad antes que precisión fingida: resaltar una línea al azar es
+  peor que admitir que se perdió el rastro.
+
+- **D-226 — El ancla se corrige también al PERSISTIR, no solo al pintar, y por eso el aviso
+  vuelve a significar algo.** Dos sitios:
+  - **Al ingerir.** `SessionToolbox` ya tiene el clon a mano (lo usa `read_signatures`), así que al
+    aceptar un `submit_finding` o un `add_locations` se busca el snippet en el fichero y se guarda
+    la línea **real**. Las detecciones nuevas nacen re-ancladas.
+  - **Al abrir la ficha** (`AnchorRepair`). Y esto no es un adorno: **medido**, con el hash ya
+    arreglado la ficha acertaba la línea pero la anunciaba —«se anotó en la 167 y su código está
+    en la 172»— en **24 de los 25** hallazgos reales. Un aviso que sale siempre no avisa: era el
+    banner del parte con otro texto. Y no había nada que anunciar, porque el código no se había
+    movido — la línea nació torcida. Corrigiéndola en disco, la lectura dice «anclado» y calla.
+
+  **Solo se corrige lo demostrable**, y son dos casos: (1) el hash aparece en otra línea del
+  fichero —mismo texto letra por letra— y (2) la línea anclada no es código ejecutable, y se baja
+  a la primera del miembro que sí lo es. Cuando el hash **no aparece** no se toca nada: eso sí es
+  código cambiado, y ahí el aviso y el «Verificar ahora» son la respuesta. Re-anclar por símbolo
+  en disco silenciaría para siempre el único caso que necesita una persona. Es idempotente: en
+  cuanto la ubicación está bien no escribe, así que abrir la ficha dos veces no toca el hub.
+
+- **D-236 — «Movido» deja de ser un aviso.** Era la mitad buena de D-195 y la mitad mala: separar
+  un desplazamiento de un cambio real estaba bien, pero anunciar el desplazamiento no. Con el ancla
+  corregida en disco, un código que solo se ha movido se sigue **en silencio** — si no, añadir un
+  `using` al principio de un fichero encendería el aviso de todos sus hallazgos a la vez.
+
+### Defecto 3 — «(sin alias todavía)» en todos los hallazgos
+
+- **D-227 — Causa raíz: la asignación de alias NUNCA se llegó a cablear.** `DisplayId.Next` y
+  `Finding.AssignDisplayId` existen, están escritos y no los llama **nadie**: cero llamadas en
+  `src/`, cero en `tests/`. No es que no se persista ni que la ficha lea otro campo — la ficha lee
+  `f.DisplayId`, que es el correcto. Es que el paso post-push del §2 se quedó sin implementar. La
+  prueba directa está en el hub: los 25 hallazgos tienen `"displayId": null` y `app.json` guarda
+  `"displayIdCounters": {}` — el contador nunca avanzó ni una vez.
+
+- **D-228 — Se cablea donde decía la decisión antigua, y además se rellena hacia atrás.**
+  `DisplayIdService` asigna alias a todo hallazgo sin él, en orden de ULID (que es orden de
+  creación, así que la numeración sigue la historia real), avanzando el contador por pilar de
+  `AppConfig.DisplayIdCounters`. Se invoca **tras el push de la sesión** —la regla del §2 contra
+  colisiones concurrentes— y **al arrancar**, como backfill de lo ya existente. Es idempotente por
+  construcción: solo mira los que tienen `DisplayId == null`, así que la segunda pasada asigna 0.
+
+- **D-229 — El alias también entra en los informes.** Estaba en la ficha y en las listas, pero
+  `ReportBuilder` escribía solo el título. Un informe que no nombra el hallazgo por su alias obliga
+  a volver a la aplicación para saber de cuál habla.
+
+### Defecto 4 — la rueda del ratón peleaba entre el snippet y la página
+
+- **D-230 — Causa: `SnippetView` hereda de `TextEditor` (AvalonEdit), que consume SIEMPRE la
+  rueda.** Su `ScrollViewer` interno marca el evento como tratado aunque ya esté en su tope, así
+  que la página de debajo nunca se entera. Arreglo estándar de WPF: el interno solo se queda la
+  rueda **mientras pueda desplazarse en esa dirección**; en el tope re-emite el `MouseWheel` al
+  padre para que burbujee. La decisión de burbujear o no se saca a una función pura
+  (`SnippetScroll.ShouldBubble`) para poder probarla sin hilo STA.
+
+### Defecto 5 — «Resolución manual» se renderizaba cortada
+
+- **D-231 — Causa raíz: `Padding="0,8,0,0"` en el `Expander`.** Se puso pensando en separar el
+  **contenido** de la cabecera, pero la plantilla de `Expander` de WPF-UI 3.0.5 enlaza `Padding`
+  a la **cabecera**, no al contenido. Resultado: la barra plegada pierde 8 px por arriba, el texto
+  se descuelga contra el borde inferior y las esquinas redondeadas de arriba se aplastan — el
+  «título a medias» del informe. Verificado renderizando el bloque fuera de la aplicación
+  (`RenderTargetBitmap` sobre las mismas `ThemesDictionary`/`ControlsDictionary`) con y sin el
+  atributo: quitándolo, la cabecera vuelve a estar centrada y completa. El separador del contenido
+  se mueve al `Margin` del `StackPanel` de dentro, que es donde tenía que haber estado.
+
+- **D-232 — Y la cabecera plegada se confundía con el combo de severidad.** Misma altura, mismo
+  relleno sutil, mismo galón y a 12 px del `ComboBox` de encima: el informe la describe como «un
+  combo suelto», que es exactamente lo que parecía. Se diferencia con lo que D-201 ya pedía y no
+  llegó a estar: la cabecera lleva **su advertencia** («Resolver a mano — cierra el hallazgo sin
+  auditar», con el símbolo de precaución y el color de precaución del tema) y estira a todo el
+  ancho. Sigue siendo el mismo control con el mismo comportamiento; lo que cambia es que ahora se
+  lee como lo que es.
+
+- **D-233 — Los demás expanders están sanos.** Se revisaron los tres que quedan en la aplicación
+  (`InventoryView` y los dos anidados de `SessionView`): ninguno fija `Padding`, así que ninguno
+  tiene el síntoma. Un test lee el XAML y falla si alguien vuelve a poner `Padding` en un
+  `Expander`, que es la forma barata de que esto no vuelva.
+
+### Cobertura y verificación
+
+- **D-239 — La regla de «cuándo se ofrece verificar» estaba escrita dos veces.** `SnippetPanel` y
+  el view-model mantenían cada uno su lista de estados, y al añadir los dos nuevos solo se
+  actualizó una: los avisos de `Reanclado` y `NoLocalizado` salían sin su botón. Ahora la lista
+  vive una sola vez (`SnippetPanel.OffersVerify`) y la ficha la consulta.
+
+- **D-234 — Lo que se prueba, y lo que se verifica a mano.** Con test: el hash estable ante CRLF,
+  ante sangría y ante blancos de los extremos; el re-anclaje por hash a la línea correcta; el caso
+  del usuario (línea en comentario → ancla al miembro, nunca al comentario); el símbolo
+  desaparecido → `NoLocalizado` sin resaltado; el backfill de alias y su idempotencia; el
+  re-anclaje en la ingesta; y la decisión de burbujeo de la rueda en sus cuatro esquinas. Sin test
+  automático, con verificación humana documentada: que la rueda se sienta bien y que el expander
+  se lea como expandible. El render del expander sí queda comparado en imagen (D-231).
+
+- **D-237 — La verificación se hizo sobre el hub real, con el código compilado.** No con una
+  reimplementación del algoritmo: una sonda llama a `SnippetReader`, `SymbolAnchor` y
+  `DisplayIdService` de la aplicación, sobre **copias** del hub (`%LOCALAPPDATA%\Atalaya\hub`) y
+  del clon de X-BLAST — los originales quedaron intactos, comprobado con `diff -r` y
+  `git status`. Resultados:
+
+  | comprobación | antes (F5.5) | después (F5.6) |
+  |---|---|---|
+  | ubicaciones ancladas | 3 / 56 | **56 / 56** |
+  | hallazgos con aviso, código intacto | 24 / 25 | **0 / 25** |
+  | resaltados sobre un comentario | 1 | **0** |
+  | hallazgos con alias | 0 / 25 | **25 / 25** (BUG=15, MEJ=7, OPT=3) |
+  | 2ª pasada del backfill | — | **0 asignados**, contador intacto |
+  | 2ª pasada del re-anclaje | — | **0 correcciones**, cero escrituras |
+
+  Y la prueba que el usuario pidió hacer a mano, hecha sobre los datos reales: editando **una**
+  línea anclada (la 172 de `CommonStatics.cs`), salieron **2 avisos** — exactamente los dos
+  hallazgos anclados a esa línea — y los otros 23 siguieron callados. Las dos mitades del criterio
+  («cero banners sin tocar código» y «banner en ese y solo ese») quedan además fijadas en tests.
+
+- **D-238 — El expander se comparó en imagen, antes y después.** Un arnés de render fuera de la
+  aplicación (`RenderTargetBitmap` sobre las mismas `ThemesDictionary`/`ControlsDictionary`) pinta
+  el bloque de gobernanza a 2,4×. Con `Padding`, la cabecera plegada sale con el texto descolgado
+  contra el borde y las esquinas de arriba aplastadas; sin él, centrada y completa. Un detalle que
+  el arnés enseñó de paso: la expansión **sí está animada** por el tema — las primeras capturas
+  salían a medio camino hasta que se dejó correr el reloj de animaciones del dispatcher en vez de
+  bloquear el hilo de UI. Es el mismo error de arnés que D-215, en otra forma.
+
+- **D-240 — El guión de la verificación humana de los dos de interfaz.** Lo que no tiene estado
+  observable se comprueba a mano, y el guión se escribe para que la próxima vez se repita igual:
+
+  **Rueda (defecto 4).** Abrir un hallazgo cuyo miembro no quepa en los 320 px del panel —por
+  ejemplo `CommonStatics.ReadCSV`— y otro que quepa de sobra. (a) Con el cursor **fuera** del
+  panel, rodar de arriba abajo: la página baja del tirón. (b) Con el cursor **encima** del panel
+  largo, rodar hacia abajo: se desplaza el código hasta su última línea y, **sin levantar el
+  dedo**, sigue bajando la página. (c) Igual hacia arriba. (d) Con el cursor encima del panel
+  **corto**, rodar en las dos direcciones: baja y sube la página, el panel nunca se queda el
+  gesto. Lo que se busca es que no haya que apartar el ratón del código para poder seguir leyendo.
+
+  **Expander (defecto 5).** En la columna de gobernanza, con el hallazgo activo y sin justificación
+  pendiente: la sección «Resolución manual» enseña su título, su línea de ayuda y **una barra
+  completa** con el símbolo de precaución, «Resolver a mano» en negrita, «— cierra el hallazgo sin
+  auditar» y el galón a la derecha. Nada asoma por debajo. Al pulsarla se despliega **con la
+  animación del tema** y aparecen la etiqueta «Justificación (obligatoria)», el campo y el botón
+  rojo. Comprobar en los dos temas.
+
+- **D-235 — Lo que esta tanda NO toca.** Motor de auditoría, reconciliación, barrido y sync quedan
+  como estaban. De `SessionToolbox` se toca **solo** el re-anclaje al persistir (D-226) y de
+  `SessionCoordinator` **solo** la llamada al alias tras el push (D-228), que es donde la decisión
+  antigua decía que vivía. La ficha no se rediseña: cambian el ancla, un atributo del expander y
+  el manejo de la rueda.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

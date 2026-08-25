@@ -197,7 +197,7 @@ public static class ReportBuilder
             foreach (Finding f in newFindings.OrderBy(f => f.Severity))
             {
                 string loc = f.Locations.Count > 0 ? $"{f.Locations[0].Path}:{f.Locations[0].Line}" : "";
-                sb.AppendLine($"### [{f.Severity}] {f.Title}");
+                sb.AppendLine($"### [{f.Severity}] {Alias(f)}{f.Title}");
                 sb.AppendLine($"- `{f.RuleId}` · {f.Pillar} · confianza {f.Confidence} · {loc}");
                 sb.AppendLine($"- {f.Description}");
                 if (!string.IsNullOrWhiteSpace(f.Recommendation))
@@ -211,6 +211,13 @@ public static class ReportBuilder
 
         return sb.ToString();
     }
+
+    /// <summary>
+    /// El alias legible delante del título, cuando lo tiene (F5.6, D-229). Un informe que solo
+    /// escribe el título obliga a volver a la aplicación para saber de qué hallazgo habla.
+    /// </summary>
+    private static string Alias(Finding f)
+        => string.IsNullOrEmpty(f.DisplayId) ? string.Empty : $"{f.DisplayId} · ";
 
     /// <summary>Consolidated cycle-close report (§7): ascended confidences + top-10 priorities.</summary>
     public static string BuildCycleCloseReport(AppConfig app, int closedCycle, int promoted, IReadOnlyList<Finding> findings)
@@ -231,7 +238,7 @@ public static class ReportBuilder
         foreach (Finding f in active.OrderBy(f => f.Severity).ThenBy(f => f.Confidence).Take(10))
         {
             string loc = f.Locations.Count > 0 ? $"{f.Locations[0].Path}:{f.Locations[0].Line}" : "";
-            sb.AppendLine($"- **[{f.Severity}/{f.Confidence}]** {f.Title} — `{f.RuleId}` {loc}");
+            sb.AppendLine($"- **[{f.Severity}/{f.Confidence}]** {Alias(f)}{f.Title} — `{f.RuleId}` {loc}");
         }
 
         return sb.ToString();

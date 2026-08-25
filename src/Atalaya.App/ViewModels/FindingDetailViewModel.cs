@@ -45,6 +45,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     private readonly VerifyCoordinator _verify;
     private readonly EditorLauncher _editor;
     private readonly ToastCenter _toasts;
+    private readonly AnchorRepair? _anchors;
 
     public FindingDetailViewModel(
         HubContext hub,
@@ -52,7 +53,8 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         MachineConfigStore machines,
         VerifyCoordinator verify,
         EditorLauncher editor,
-        ToastCenter toasts)
+        ToastCenter toasts,
+        AnchorRepair? anchors = null)
     {
         _hub = hub;
         _governance = governance;
@@ -60,6 +62,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         _verify = verify;
         _editor = editor;
         _toasts = toasts;
+        _anchors = anchors;
     }
 
     public override string Title => Finding is null ? "Hallazgo" : $"{Finding.DisplayId ?? Finding.Id.ToString()}";
@@ -101,8 +104,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     public bool HasSnippetNotice => SnippetNotice.Length > 0;
 
     /// <summary>El aviso lleva «Verificar ahora» solo cuando verificar arregla lo que avisa.</summary>
-    public bool SnippetNoticeOffersVerify =>
-        SnippetState is SnippetState.Cambiado or SnippetState.Movido or SnippetState.FicheroNoEncontrado;
+    public bool SnippetNoticeOffersVerify => SnippetPanel.OffersVerify(SnippetState);
 
     // ------------------------------------------------------------------ cabecera
 
@@ -247,6 +249,12 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         Severity = Finding.Severity;
         RuleText = Atalaya.Copilot.RuleCatalog.Find(Finding.RuleId)?.Look ?? string.Empty;
 
+        // Antes de pintar nada: dejar las ubicaciones apuntando a donde está el código (D-226).
+        // Sin esto, la ficha acertaba con la línea pero lo anunciaba en 24 de 25 hallazgos, y un
+        // aviso que sale siempre es el banner que había que quitar. Es idempotente: en cuanto la
+        // ubicación está bien no escribe, así que abrir la ficha dos veces no toca el hub.
+        RepairAnchors(Finding);
+
         // El historial se lee de lo más reciente a lo más antiguo: lo último que le pasó a este
         // hallazgo es lo que explica en qué estado está ahora.
         foreach (HistoryEntry h in Finding.History.OrderByDescending(h => h.Utc))
@@ -336,11 +344,25 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     /// Lee el código del clon (F5.5 §3): el miembro completo, con los números de línea del fichero
     /// y el aviso correspondiente si lo que hay ya no es lo que se auditó.
     /// </summary>
+    /// <summary>Nunca tumba la ficha: no poder corregir el ancla no impide leer el hallazgo.</summary>
+    private void RepairAnchors(Finding f)
+    {
+        try
+        {
+            _anchors?.Repair(Slug, f, _machines.Load().ClonePathFor(Slug));
+        }
+        catch (Exception)
+        {
+            // Se pinta con lo que hay; el aviso del panel dirá lo que se sepa.
+        }
+    }
+
     private void LoadSnippet(Finding f)
     {
         Location? loc = f.Locations.FirstOrDefault();
         SnippetPanel panel = SnippetReader.Read(
-            _machines.Load().ClonePathFor(Slug), loc, f.LastConfirmed.Commit);
+            _machines.Load().ClonePathFor(Slug), loc, f.LastConfirmed.Commit,
+            SymbolAnchor.Candidates(f.Symbol, f.Title));
 
         SnippetPath = loc?.Path ?? string.Empty;
         SnippetState = panel.State;
