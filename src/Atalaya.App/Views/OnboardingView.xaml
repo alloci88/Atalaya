@@ -31,8 +31,7 @@
             </StackPanel>
 
             <ui:Button Content="Crear e inventariar" Command="{Binding CreateCommand}" Appearance="Primary" HorizontalAlignment="Left" />
-            <TextBlock Text="{Binding StatusMessage}" Opacity="0.85" TextWrapping="Wrap" Margin="0,12,0,0"
-                       Visibility="{Binding StatusMessage, Converter={StaticResource NotEmptyToVisibility}}" />
+            <!-- F5.7 §4: sin texto de estado al pie. El resultado va por el toast global. -->
         </StackPanel>
     </ScrollViewer>
 </UserControl>

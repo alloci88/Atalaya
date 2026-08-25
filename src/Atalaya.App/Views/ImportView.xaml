@@ -17,10 +17,9 @@
             <ui:TextBox Text="{Binding CodeAuditPath}" Margin="0,0,0,12" />
 
             <ui:Button Content="Importar" Command="{Binding ImportCommand}" Appearance="Primary" HorizontalAlignment="Left" />
-            <TextBlock Text="{Binding StatusMessage}" Opacity="0.85" Margin="0,12,0,8"
-                       Visibility="{Binding StatusMessage, Converter={StaticResource NotEmptyToVisibility}}" />
-
-            <Border Background="#12808080" CornerRadius="6" Padding="10" Margin="0,4,0,0">
+            <!-- F5.7 §4: el resultado de la importación va por toast global. El log de abajo
+                 no es feedback de acción: es la salida de la importación, y se queda. -->
+            <Border Background="#12808080" CornerRadius="6" Padding="10" Margin="0,12,0,0">
                 <ItemsControl ItemsSource="{Binding Log}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>

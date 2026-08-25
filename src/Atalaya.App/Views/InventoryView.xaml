@@ -201,13 +201,8 @@
                 <TextBlock Margin="0,4,0,0"
                            ToolTip="Las unidades que se auditarán al pulsar «Auditar selección»."
                            Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}"><Run Text="Seleccionadas: " /><Run Text="{Binding SelectedCount}" FontWeight="Bold" /></TextBlock>
-                <TextBlock
-                    Text="{Binding StatusMessage}"
-                    TextWrapping="Wrap"
-                    Opacity="0.85"
-                    Margin="0,12,0,0"
-                    ToolTip="El resultado de la última acción sobre esta aplicación."
-                    Visibility="{Binding StatusMessage, Converter={StaticResource NotEmptyToVisibility}}" />
+                <!-- F5.7 §4: el resultado de la última acción va por el toast global, no
+                     incrustado al fondo de este panel, donde se quedaba pegado. -->
             </StackPanel>
         </Border>
     </Grid>

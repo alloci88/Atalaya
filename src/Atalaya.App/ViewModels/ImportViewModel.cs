@@ -11,14 +11,20 @@ public sealed partial class ImportViewModel : ViewModelBase
 {
     private readonly ImportService _import;
 
-    public ImportViewModel(ImportService import) => _import = import;
+    /// <summary>F5.7 §4: el resultado de la importación se cuenta por el toast global.</summary>
+    private readonly ToastCenter _toasts;
+
+    public ImportViewModel(ImportService import, ToastCenter toasts)
+    {
+        _import = import;
+        _toasts = toasts;
+    }
 
     public override string Title => "Importar v4";
 
     [ObservableProperty] private string _appName = string.Empty;
     [ObservableProperty] private string _repoUrl = string.Empty;
     [ObservableProperty] private string _codeAuditPath = string.Empty;
-    [ObservableProperty] private string _statusMessage = string.Empty;
 
     public ObservableCollection<string> Log { get; } = new();
 
@@ -27,12 +33,12 @@ public sealed partial class ImportViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(AppName) || !Directory.Exists(CodeAuditPath))
         {
-            StatusMessage = "Indica el nombre de la app y una ruta CodeAudit/ válida.";
+            _toasts.Show("Indica el nombre de la app y una ruta CodeAudit/ válida.");
             return;
         }
 
         IsBusy = true;
-        StatusMessage = "Importando…";
+        _toasts.Show("Importando…");
         Log.Clear();
         try
         {
@@ -43,11 +49,11 @@ public sealed partial class ImportViewModel : ViewModelBase
                 Log.Add(line);
             }
 
-            StatusMessage = "Importación completada.";
+            _toasts.Show("Importación completada.");
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Error: {ex.Message}";
+            _toasts.Show($"Error: {ex.Message}");
         }
         finally
         {

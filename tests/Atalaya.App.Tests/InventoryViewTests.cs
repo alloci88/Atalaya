@@ -30,6 +30,9 @@ public sealed class InventoryViewTests : IDisposable
     private readonly HubContext _hub;
     private readonly UlidFactory _ulids = new(SystemClock.Instance);
     private readonly RecordingConfirmer _confirmer = new();
+
+    /// <summary>F5.7 §4: lo que antes era `StatusMessage` ahora se lee en la cola de avisos.</summary>
+    private readonly ToastCenter _toasts = new();
     private readonly ServiceProvider _provider;
 
     public InventoryViewTests()
@@ -71,6 +74,7 @@ public sealed class InventoryViewTests : IDisposable
         services.AddSingleton<CostEstimator>();
         services.AddSingleton<GroupExpansionMemory>();
         services.AddSingleton<IAuditLaunchConfirmer>(_confirmer);
+        services.AddSingleton(_toasts);
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
     }
@@ -373,7 +377,7 @@ public sealed class InventoryViewTests : IDisposable
         _confirmer.Asked.Should().ContainSingle();
         _hub.Store.ListSessions("app").Should().BeEmpty();
         vm.SelectedCount.Should().Be(6, "cancelar es volver atrás, no perder el trabajo hecho");
-        vm.StatusMessage.Should().Contain("cancelado");
+        _toasts.Items.Should().Contain(t => t.Text.Contains("cancelado"));
     }
 
     /// <summary>Tres unidades o menos no valen un clic de más: el umbral por defecto es 3.</summary>

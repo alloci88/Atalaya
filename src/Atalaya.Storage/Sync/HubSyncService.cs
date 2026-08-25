@@ -278,6 +278,47 @@ public sealed class HubSyncService : IDisposable
         }
     }
 
+    /// <summary>
+    /// El commit en el que está el clon ahora mismo, o null si el repositorio no tiene historial.
+    /// Es el punto al que <see cref="ResetHardTo"/> sabe volver.
+    /// </summary>
+    public string? HeadCommitSha
+    {
+        get
+        {
+            try
+            {
+                return Repo.Head.Tip?.Sha;
+            }
+            catch (LibGit2SharpException ex)
+            {
+                _log.LogWarning(ex, "Could not read HEAD");
+                return null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Devuelve el clon —rama Y árbol de trabajo— al commit indicado, tirando lo que hubiera
+    /// encima. Es la marcha atrás de una operación que ya escribió y commiteó pero no logró
+    /// publicarse (F5.7 §5): sin ella, un push fallido dejaría el borrado hecho en local y a
+    /// medio camino de todos los demás.
+    /// <para>
+    /// Deliberadamente NO es parte de <see cref="Push"/>: solo quien sabe que su escritura es
+    /// atómica puede pedir que se deshaga.
+    /// </para>
+    /// </summary>
+    public void ResetHardTo(string commitSha)
+    {
+        Commit? target = Repo.Lookup<Commit>(commitSha);
+        if (target is null)
+        {
+            throw new InvalidOperationException($"El commit {commitSha} ya no está en el clon.");
+        }
+
+        Repo.Reset(ResetMode.Hard, target);
+    }
+
     /// <summary>Commit then push in one call — the common "after a user write" path.</summary>
     public bool CommitAndPush(string message)
     {

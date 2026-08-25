@@ -30,6 +30,10 @@ public sealed class ReAuditSelectionTests : IDisposable
     private readonly HubContext _hub;
     private readonly MachineConfigStore _machines;
     private readonly UlidFactory _ulids = new(SystemClock.Instance);
+
+    /// <summary>F5.7 §4: lo que antes era `StatusMessage` ahora se lee en la cola de avisos.</summary>
+    private readonly ToastCenter _toasts = new();
+
     private readonly ServiceProvider _provider;
 
     public ReAuditSelectionTests()
@@ -88,6 +92,7 @@ public sealed class ReAuditSelectionTests : IDisposable
         services.AddSingleton<GroupExpansionMemory>();
         // Aquí se prueba el camino de la selección, no el diálogo: se confirma siempre.
         services.AddSingleton<IAuditLaunchConfirmer>(new AlwaysConfirms());
+        services.AddSingleton(_toasts);
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
     }
@@ -143,7 +148,7 @@ public sealed class ReAuditSelectionTests : IDisposable
         session.Units.Single().Verdict.Should().NotBe("no-localizado");
         _hub.Store.ListFindings("app").Should().ContainSingle(
             "la re-auditoría es una sesión normal: reporta como cualquier otra");
-        vm.StatusMessage.Should().NotContain("Selecciona al menos una unidad");
+        _toasts.Items.Should().NotContain(t => t.Text.Contains("Selecciona al menos una unidad"));
     }
 
     [Fact]
@@ -153,7 +158,7 @@ public sealed class ReAuditSelectionTests : IDisposable
 
         await vm.AuditSelectionCommand.ExecuteAsync(null);
 
-        vm.StatusMessage.Should().Contain("Selecciona al menos una unidad");
+        _toasts.Items.Should().Contain(t => t.Text.Contains("Selecciona al menos una unidad"));
         _hub.Store.ListSessions("app").Should().BeEmpty();
     }
 

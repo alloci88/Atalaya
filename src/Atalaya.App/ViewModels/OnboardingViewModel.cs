@@ -18,18 +18,23 @@ public sealed partial class OnboardingViewModel : ViewModelBase
     private readonly NavigationService _navigation;
     private readonly FindingIngestionService _ingestion;
 
+    /// <summary>F5.7 §4: el resultado del alta se cuenta por el toast global.</summary>
+    private readonly ToastCenter _toasts;
+
     public OnboardingViewModel(
         HubContext hub,
         InventoryScanner scanner,
         MachineConfigStore machines,
         NavigationService navigation,
-        FindingIngestionService ingestion)
+        FindingIngestionService ingestion,
+        ToastCenter toasts)
     {
         _hub = hub;
         _scanner = scanner;
         _machines = machines;
         _navigation = navigation;
         _ingestion = ingestion;
+        _toasts = toasts;
     }
 
     public override string Title => "Nueva aplicación";
@@ -38,19 +43,18 @@ public sealed partial class OnboardingViewModel : ViewModelBase
     [ObservableProperty] private string _repoUrl = string.Empty;
     [ObservableProperty] private string _clonePath = string.Empty;
     [ObservableProperty] private TechStack _detectedStack = TechStack.Unknown;
-    [ObservableProperty] private string _statusMessage = string.Empty;
 
     [RelayCommand]
     private void Detect()
     {
         if (!Directory.Exists(ClonePath))
         {
-            StatusMessage = "La ruta del clon no existe.";
+            _toasts.Show("La ruta del clon no existe.");
             return;
         }
 
         DetectedStack = StackDetector.Detect(ClonePath);
-        StatusMessage = $"Stack detectado: {DetectedStack}.";
+        _toasts.Show($"Stack detectado: {DetectedStack}.");
     }
 
     [RelayCommand]
@@ -58,19 +62,19 @@ public sealed partial class OnboardingViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(Name) || string.IsNullOrWhiteSpace(RepoUrl) || !Directory.Exists(ClonePath))
         {
-            StatusMessage = "Rellena nombre, URL del repo y una ruta de clon válida.";
+            _toasts.Show("Rellena nombre, URL del repo y una ruta de clon válida.");
             return;
         }
 
         if (!_hub.IsConfigured)
         {
-            StatusMessage = "Conecta primero el hub en Ajustes.";
+            _toasts.Show("Conecta primero el hub en Ajustes.");
             return;
         }
 
         string slug = Slugify(Name);
         IsBusy = true;
-        StatusMessage = "Escaneando y registrando…";
+        _toasts.Show("Escaneando y registrando…");
         try
         {
             await Task.Run(() =>
@@ -107,12 +111,12 @@ public sealed partial class OnboardingViewModel : ViewModelBase
                 _hub.Sync?.CommitAndPush($"app: onboard {slug} ({scan.Stack})");
             });
 
-            StatusMessage = "Aplicación registrada.";
+            _toasts.Show("Aplicación registrada.");
             await _navigation.NavigateToAsync<InventoryViewModel>(vm => vm.SetApp(slug));
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Error: {ex.Message}";
+            _toasts.Show($"Error: {ex.Message}");
         }
         finally
         {

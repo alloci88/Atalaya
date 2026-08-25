@@ -310,6 +310,23 @@ public sealed class HubContext
         _builtWithCredential = credentialKey;
     }
 
+    /// <summary>
+    /// Suelta el clon: libera los handles de git y olvida el servicio de sync (F5.7 §5).
+    /// <para>
+    /// Existe por una razón concreta: en Windows no se puede borrar el directorio del clon
+    /// mientras LibGit2Sharp lo tiene abierto. El reset de fábrica necesita borrarlo, así que
+    /// necesita poder cerrarlo antes. La siguiente llamada a <see cref="EnsureSync"/> lo
+    /// reconstruye desde cero, que es exactamente el estado de primer arranque.
+    /// </para>
+    /// </summary>
+    public void CloseSync()
+    {
+        Sync?.Dispose();
+        Sync = null;
+        _builtWithCredential = null;
+        LastSync = null;
+    }
+
     public Task<PullResult> PullAsync() => Task.Run(Pull);
 
     private PullResult Pull()

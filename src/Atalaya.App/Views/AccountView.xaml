@@ -177,6 +177,14 @@
                 </StackPanel>
             </StackPanel>
 
+            <!--
+                EXCEPCIÓN deliberada a la regla de F5.7 §4 (feedback de acción = toast global).
+                Esto no es el resultado de una acción: es el hilo narrado del flujo de dispositivo
+                —«pidiendo código», «introduce el código en github.com», «leyendo tu perfil»— que
+                el usuario tiene que poder leer MIENTRAS se va al navegador y vuelve. Un toast que
+                caduca a los 8 segundos se lo llevaría justo cuando hace falta. Por eso vive aquí,
+                junto a su anillo de progreso, y no en la cola de avisos.
+            -->
             <StackPanel Orientation="Horizontal" Margin="0,16,0,0"
                         Visibility="{Binding StatusMessage, Converter={StaticResource NotEmptyToVisibility}}">
                 <ui:ProgressRing IsIndeterminate="True" Width="16" Height="16" Margin="0,0,10,0"

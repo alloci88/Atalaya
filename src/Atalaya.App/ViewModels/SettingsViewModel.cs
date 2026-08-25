@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Atalaya.App.Services;
+using Atalaya.App.Views;
 using Atalaya.Copilot;
 using Atalaya.Domain.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -28,33 +29,50 @@ public sealed record ModelOption(string Id, string Label)
 }
 
 /// <summary>
-/// Ajustes (§8) — preferences ONLY since F2 (D4): theme, editor, thresholds, polling and feature
-/// flags. Everything about the connection (hub URL, PAT, git identity, "Comprobar Copilot") moved
-/// to the Cuenta page. What remains here of the old world lives collapsed under "Opciones
-/// avanzadas": the PAT fallback for organizations that block OAuth Apps, and a development-only
-/// hub URL override.
+/// Ajustes (§8) — preferencias ÚNICAMENTE desde F2 (D4): todo lo de la conexión vive en «Cuenta».
 /// <para>
-/// F5.1 añade dos: el tope de pasadas del barrido (antes solo en <c>app.json</c>) y el selector de
-/// modelo, poblado con lo que el SDK lista para esta cuenta.
+/// F5.7 la deja en cuatro secciones con un mismo ritmo —General, Auditoría, Sincronización y una
+/// zona peligrosa al final— y retira dos cosas que no eran ajustes de nadie: el interruptor de
+/// «arreglo asistido», que era el <i>feature flag</i> de un H9 que se decidió no construir y no
+/// estaba conectado a nada, y las «Opciones avanzadas» (PAT de respaldo, TLS, override de la URL
+/// del hub). El soporte de PAT sigue en el código —<see cref="SettingsService.GetPat"/> y
+/// <see cref="HubContext"/> lo usan— y el override de <c>hubUrl</c> sigue disponible editando
+/// <c>appsettings.deploy.json</c>, que es exactamente el público de esa opción.
+/// </para>
+/// <para>
+/// Y añade lo único que faltaba para poder empezar de cero: el restablecimiento de fábrica, con la
+/// confirmación fuerte que su alcance exige (§5).
 /// </para>
 /// </summary>
 public sealed partial class SettingsViewModel : ViewModelBase
 {
     private readonly SettingsService _settings;
-    private readonly HubContext _hub;
-    private readonly GitHubAccountService _account;
     private readonly ICopilotAgent _agent;
+    private readonly ToastCenter _toasts;
+    private readonly FactoryResetService _reset;
+    private readonly IFactoryResetConfirmer _confirmer;
+    private readonly HubContext _hub;
+    private readonly NavigationService _navigation;
 
     /// <summary>Plazo para que el SDK conteste con su catálogo antes de rendirse.</summary>
     private static readonly TimeSpan ModelListTimeout = TimeSpan.FromSeconds(30);
 
     public SettingsViewModel(
-        SettingsService settings, HubContext hub, GitHubAccountService account, ICopilotAgent agent)
+        SettingsService settings,
+        ICopilotAgent agent,
+        ToastCenter toasts,
+        FactoryResetService reset,
+        IFactoryResetConfirmer confirmer,
+        HubContext hub,
+        NavigationService navigation)
     {
         _settings = settings;
-        _hub = hub;
-        _account = account;
         _agent = agent;
+        _toasts = toasts;
+        _reset = reset;
+        _confirmer = confirmer;
+        _hub = hub;
+        _navigation = navigation;
         AppSettings s = settings.Current;
         _editor = s.Editor;
         _isLightTheme = string.Equals(s.Theme, "light", StringComparison.OrdinalIgnoreCase);
@@ -62,11 +80,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _largeUnitLoc = s.DefaultThresholds.LargeUnitLoc;
         _freshnessDays = s.DefaultThresholds.FreshnessDays;
         _maxPassesPerUnit = s.MaxPassesPerUnit;
-        _enableAssistedFix = s.EnableAssistedFix;
         _copilotTimeoutMinutes = s.CopilotTimeoutMinutes;
-        _hubUrlOverride = s.HubUrlOverride ?? string.Empty;
-        _hasStoredPat = settings.GetPat() is not null;
-        _requireTlsRevocationCheck = s.RequireTlsRevocationCheck;
         _selectedModelId = s.CopilotModel;
 
         // Hasta que el SDK conteste, el desplegable enseña el modelo configurado: así nunca está
@@ -82,9 +96,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private int _largeUnitLoc;
     [ObservableProperty] private int _freshnessDays;
     [ObservableProperty] private int _maxPassesPerUnit;
-    [ObservableProperty] private bool _enableAssistedFix;
     [ObservableProperty] private int _copilotTimeoutMinutes;
-    [ObservableProperty] private string _statusMessage = string.Empty;
 
     // --- Modelo (F5.1) ---
 
@@ -95,18 +107,6 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     /// <summary>Por qué la lista no es la del SDK (offline, sin credencial, sin asiento).</summary>
     [ObservableProperty] private string _modelsNotice = string.Empty;
-
-    // --- Opciones avanzadas (colapsadas) ---
-    [ObservableProperty] private string _pat = string.Empty;
-    [ObservableProperty] private string _hubUrlOverride;
-    [ObservableProperty] private bool _hasStoredPat;
-    [ObservableProperty] private bool _requireTlsRevocationCheck;
-
-    /// <summary>The hub actually in use — shown read-only under advanced options, for support.</summary>
-    public string EffectiveHubUrl => _hub.HubUrl ?? "(sin configurar)";
-
-    /// <summary>The PAT is ignored while an account is connected (D3).</summary>
-    public bool AccountOverridesPat => _account.IsConnected;
 
     public override Task LoadAsync() => RefreshModels();
 
@@ -174,6 +174,12 @@ public sealed partial class SettingsViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Vuelca a los ajustes SOLO lo que esta página edita. Lo que ya no tiene control —el flag de
+    /// H9, el override de la URL del hub, el TLS estricto y el PAT— se queda como esté en el
+    /// fichero: retirar un control de la interfaz no puede significar borrar el valor de quien lo
+    /// tenía puesto.
+    /// </summary>
     private AppSettings BuildSettings()
     {
         AppSettings s = _settings.Current;
@@ -191,10 +197,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         s.CopilotModel = string.IsNullOrWhiteSpace(SelectedModelId)
             ? s.CopilotModel
             : SelectedModelId.Trim();
-        s.EnableAssistedFix = EnableAssistedFix;
         s.CopilotTimeoutMinutes = Math.Max(1, CopilotTimeoutMinutes);
-        s.HubUrlOverride = string.IsNullOrWhiteSpace(HubUrlOverride) ? null : HubUrlOverride.Trim();
-        s.RequireTlsRevocationCheck = RequireTlsRevocationCheck;
         return s;
     }
 
@@ -202,25 +205,57 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private void Save()
     {
         _settings.Save(BuildSettings());
-        if (!string.IsNullOrEmpty(Pat))
-        {
-            _settings.SetPat(Pat);
-            Pat = string.Empty;
-            HasStoredPat = true;
-        }
 
         MaxPassesPerUnit = _settings.Current.MaxPassesPerUnit;
+        PollingSeconds = _settings.Current.PollingSeconds;
+        CopilotTimeoutMinutes = _settings.Current.CopilotTimeoutMinutes;
         ThemeService.Apply(IsLightTheme ? "light" : "dark");
-        OnPropertyChanged(nameof(EffectiveHubUrl));
-        StatusMessage = "Ajustes guardados.";
+        // Toast global (F5.3): el aviso vivía al fondo de la página y no se veía sin bajar hasta
+        // él — justo debajo del botón que lo provocaba, pero fuera de la pantalla.
+        _toasts.Show("Ajustes guardados.");
     }
 
+    // ---------- Zona peligrosa (F5.7 §5) ----------
+
+    /// <summary>
+    /// Restablecimiento de fábrica. Pregunta con los números delante, exige teclear RESET y solo
+    /// entonces llama al servicio, que es atómico: o se borra el hub Y esta máquina, o no se toca
+    /// nada. El resultado —bueno o malo— se cuenta por toast, y al terminar la app se va a
+    /// «Cuenta», que es la pantalla de primer arranque.
+    /// </summary>
     [RelayCommand]
-    private void ClearPat()
+    private async Task FactoryReset()
     {
-        _settings.SetPat(null);
-        Pat = string.Empty;
-        HasStoredPat = false;
-        StatusMessage = "PAT borrado.";
+        FactoryResetImpact impact = _reset.Describe();
+        var confirmation = new FactoryResetConfirmation(impact);
+        if (!_confirmer.Confirm(confirmation) || !confirmation.CanReset)
+        {
+            // Un «sí» sin la palabra escrita (una vista mal enlazada, un confirmador ajeno) no
+            // abre la puerta: la regla se vuelve a mirar aquí, no solo en el diálogo.
+            return;
+        }
+
+        IsBusy = true;
+        FactoryResetResult result;
+        try
+        {
+            string by = _hub.ResolveIdentity().Name;
+            result = await Task.Run(() => _reset.Reset(by));
+        }
+        catch (Exception ex)
+        {
+            _toasts.Show($"No se pudo restablecer de fábrica: {ex.Message}. No se ha borrado nada.");
+            return;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        _toasts.Show(result.Message);
+        if (result.Done)
+        {
+            await _navigation.NavigateToAsync<AccountViewModel>();
+        }
     }
 }

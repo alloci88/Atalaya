@@ -227,6 +227,12 @@
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,14">
                         <TextBlock Text="Sesión terminada" FontSize="20" FontWeight="SemiBold" />
+                        <!--
+                            EXCEPCIÓN deliberada a la regla de F5.7 §4: no es feedback de una
+                            acción del usuario, es el ESTADO VIVO de la sesión que está corriendo
+                            («Auditando…», «Deteniendo tras la unidad actual…»). Tiene que
+                            permanecer mientras dure, y su sitio es el panel de la sesión.
+                        -->
                         <TextBlock Text="{Binding Live.StatusMessage}" TextWrapping="Wrap" Opacity="0.8" FontSize="12" Margin="0,6,0,0" />
                         <TextBlock Text="Pulsa cualquier línea para ver qué hallazgos la componen y por qué."
                                    Opacity="0.55" FontSize="11" Margin="0,6,0,0" />

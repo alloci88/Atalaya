@@ -22,6 +22,13 @@ public sealed partial class InventoryViewModel : ViewModelBase
     private readonly CostEstimator _costs;
     private readonly IAuditLaunchConfirmer _confirmer;
 
+    /// <summary>
+    /// F5.7 §4: el resultado de una acción se cuenta por el toast global. El texto que vivía al
+    /// fondo del panel del ciclo se quedaba pegado hasta la acción siguiente y, con la ventana
+    /// corta, ni siquiera se veía.
+    /// </summary>
+    private readonly ToastCenter _toasts;
+
     /// <summary>Plegar y desplegar módulos: la MISMA lógica que V3 (F5.6 §1).</summary>
     private readonly GroupCollapse _collapse;
 
@@ -39,7 +46,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
         HubContext hub, InventoryScanner scanner, MachineConfigStore machines,
         IUlidFactory ulids, NavigationService navigation, LiveSessionService live,
         SettingsService settings, CostEstimator costs, IAuditLaunchConfirmer confirmer,
-        GroupExpansionMemory expansion)
+        GroupExpansionMemory expansion, ToastCenter toasts)
     {
         _hub = hub;
         _scanner = scanner;
@@ -50,6 +57,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
         _settings = settings;
         _costs = costs;
         _confirmer = confirmer;
+        _toasts = toasts;
         _collapse = new GroupCollapse(expansion);
         _collapse.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
     }
@@ -81,7 +89,6 @@ public sealed partial class InventoryViewModel : ViewModelBase
     [ObservableProperty] private string _cycleTooltip = string.Empty;
 
     [ObservableProperty] private string _searchText = string.Empty;
-    [ObservableProperty] private string _statusMessage = string.Empty;
     [ObservableProperty] private bool _isEmpty;
 
     /// <summary>
@@ -277,7 +284,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
         var pending = PendingPaths();
         if (pending.Count == 0)
         {
-            StatusMessage = "No queda ninguna unidad pendiente en este ciclo.";
+            _toasts.Show("No queda ninguna unidad pendiente en este ciclo.");
             return;
         }
 
@@ -337,7 +344,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
         string? clonePath = _machines.Load().ClonePathFor(Slug);
         if (string.IsNullOrWhiteSpace(clonePath) || !Directory.Exists(clonePath))
         {
-            StatusMessage = "No hay clon local configurado para esta app en esta máquina.";
+            _toasts.Show("No hay clon local configurado para esta app en esta máquina.");
             return;
         }
 
@@ -350,7 +357,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
         }
 
         IsBusy = true;
-        StatusMessage = "Re-escaneando…";
+        _toasts.Show("Re-escaneando…");
         try
         {
             await Task.Run(() =>
@@ -365,11 +372,11 @@ public sealed partial class InventoryViewModel : ViewModelBase
                 _hub.Sync?.CommitAndPush($"inventory: rescan {Slug} cycle {app.CurrentCycle}");
             });
 
-            StatusMessage = "Inventario actualizado.";
+            _toasts.Show("Inventario actualizado.");
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Error: {ex.Message}";
+            _toasts.Show($"Error: {ex.Message}");
         }
         finally
         {
@@ -426,7 +433,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
                 _hub.Sync?.CommitAndPush($"reset: {Slug} nuevo ciclo {next}");
             });
 
-            StatusMessage = "Ciclo reiniciado. Nada se ha borrado.";
+            _toasts.Show("Ciclo reiniciado. Nada se ha borrado.");
         }
         finally
         {
@@ -445,7 +452,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
 
         if (selected.Count == 0)
         {
-            StatusMessage = "Selecciona al menos una unidad (o usa «Seleccionar pendientes»).";
+            _toasts.Show("Selecciona al menos una unidad (o usa «Seleccionar pendientes»).");
             return Task.CompletedTask;
         }
 
@@ -487,13 +494,13 @@ public sealed partial class InventoryViewModel : ViewModelBase
     {
         if (paths.Count == 0)
         {
-            StatusMessage = "No hay unidades para auditar.";
+            _toasts.Show("No hay unidades para auditar.");
             return;
         }
 
         if (_live.IsRunning)
         {
-            StatusMessage = "Ya hay una sesión en curso. Ábrela desde «Sesión en vivo».";
+            _toasts.Show("Ya hay una sesión en curso. Ábrela desde «Sesión en vivo».");
             await _navigation.NavigateToAsync<SessionViewModel>();
             return;
         }
@@ -503,7 +510,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
             var confirmation = new AuditLaunchConfirmation(AppName, EstimateFor(paths.Count));
             if (!_confirmer.Confirm(confirmation))
             {
-                StatusMessage = "Lanzamiento cancelado. La selección sigue como estaba.";
+                _toasts.Show("Lanzamiento cancelado. La selección sigue como estaba.");
                 return;
             }
         }

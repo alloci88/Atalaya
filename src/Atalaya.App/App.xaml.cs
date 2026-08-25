@@ -137,6 +137,12 @@ public partial class App : Application
         services.AddSingleton<CostEstimator>();
         services.AddSingleton<IAuditLaunchConfirmer, AuditLaunchDialogConfirmer>();
 
+        // F5.7 §5: el reset de fábrica. Mismo patrón que el borrado de app — el servicio hace la
+        // operación ATÓMICA (hub primero, local después, y cualquier fallo aborta entero) y quién
+        // pregunta se inyecta, así que el flujo se prueba sin abrir una ventana.
+        services.AddSingleton<FactoryResetService>();
+        services.AddSingleton<IFactoryResetConfirmer, FactoryResetDialogConfirmer>();
+
         services.AddSingleton<EditorLauncher>();
         // La memoria de plegado es de la SESIÓN, no de la vista: V2 y V3 son transitorias y la
         // comparten (F5.6 §1).

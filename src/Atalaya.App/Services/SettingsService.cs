@@ -140,6 +140,36 @@ public sealed class SettingsService
     }
 
     /// <summary>
+    /// Vuelve a los valores de fábrica: borra <c>settings.json</c> y deja
+    /// <see cref="Current"/> en sus valores por defecto (F5.7 §5).
+    /// <para>
+    /// Las dos mitades importan. Borrar solo el fichero dejaría los ajustes viejos vivos en
+    /// memoria, y el primer <see cref="Save"/> —lo hace hasta la migración de conexión— los
+    /// volvería a escribir; poner solo <see cref="Current"/> a nuevo dejaría el fichero en disco
+    /// para el siguiente arranque. Con el PAT pasa lo mismo: vive DENTRO de este fichero, así que
+    /// borrarlo es también lo que se lleva la credencial de respaldo.
+    /// </para>
+    /// </summary>
+    public void ResetToDefaults()
+    {
+        Current = new AppSettings();
+        try
+        {
+            if (File.Exists(_path))
+            {
+                File.Delete(_path);
+            }
+        }
+        catch (IOException)
+        {
+            // Best-effort: lo que manda es el estado en memoria, que ya es el de fábrica.
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    /// <summary>
     /// One-time, silent migration of pre-F2 settings (D4). Users who already had a hub URL and a
     /// PAT must keep working untouched: their PAT stays (it is now the hidden fallback), and their
     /// hub URL is kept as an advanced override **only when it differs** from the deployment's —

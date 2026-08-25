@@ -2304,9 +2304,167 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   de `Button` sin `BasedOn` no declara su `Foreground`. Comprobado que discrimina con una mutación
   puntual (D-214): quitando el `Setter` de V2, falla ese caso y solo ese.
 
+## F5.7 — Vista Ajustes: limpieza, claridad y reset de fábrica
+
+### §1 — Un solo ritmo de espaciado
+
+- **D-273 — El desorden no era de márgenes, era de que no había regla.** Cada bloque de Ajustes
+  llevaba su `Margin` puesto a ojo (`0,0,0,8`, `0,0,0,16`, `0,4,0,6`…) y las filas de umbrales
+  eran `StackPanel Orientation="Horizontal"` con un `Width="200"` repetido en cada etiqueta. Con
+  eso, cualquier control nuevo nacía descuadrado por defecto. Ahora la página son **cuatro
+  secciones** —General, Auditoría, Sincronización y Zona peligrosa— y **toda** fila
+  etiqueta+control es la MISMA rejilla (columna de 220 · resto) con el MISMO estilo `FieldRow`;
+  la ayuda cuelga bajo el control, alineada con él. Los estilos (`SectionTitle`, `SectionBlock`,
+  `FieldRow`, `FieldLabel`, `FieldHelp`) viven en los recursos de la vista: el margen lo pone el
+  estilo, nunca la fila.
+
+- **D-274 — Y hay un test que lo exige.** Recorre las filas del XAML y falla si alguna no usa la
+  rejilla común, si a alguna le falta su línea de ayuda, o si una etiqueta o una ayuda se pone su
+  propio `Margin` —que es exactamente por donde el espaciado se volvió a torcer la última vez—.
+  Es la misma forma barata de D-265: que el próximo control no pueda nacer mudo ni descuadrado.
+
+### §2 — Las dos retiradas
+
+- **D-275 — «Habilitar arreglo asistido» era un interruptor conectado a nada.** Es el *feature
+  flag* de H9 (arreglo integrado supervisado), que se decidió NO construir. Un control que el
+  usuario puede mover y que no cambia ningún comportamiento es peor que no tenerlo: enseña una
+  capacidad que la aplicación no tiene. **El control se va del UI; el flag `enableAssistedFix` se
+  queda en la configuración** para cuando H9 exista, y `BuildSettings` deja de tocarlo — retirar
+  un control no puede significar borrarle el valor a quien lo tuviera puesto.
+
+- **D-276 — «Opciones avanzadas» tampoco tenía público.** Contenía el PAT de respaldo, el TLS
+  estricto y el override de la URL del hub. El PAT existía para el escenario «la organización
+  bloquea la OAuth App»: **ese escenario ya no existe**, porque la OAuth App es propiedad de la
+  organización. Y el override de `hubUrl` es de desarrollo, así que su público sabe editar
+  `appsettings.deploy.json` —donde sigue disponible— mejor de lo que sabe encontrar un expander.
+  <br>
+  <b>Lo que NO se toca.</b> El soporte de PAT sigue entero en el código: `SettingsService.GetPat`
+  / `SetPat` y la cadena de credenciales de `HubContext` (D3). Se va la interfaz, no la capacidad.
+  Un test lo fija en las dos direcciones: el XAML no puede volver a nombrarlos, y los métodos
+  tienen que seguir existiendo.
+
+### §3 — Que se entienda sin preguntar
+
+- **D-277 — El criterio es el de D-265, aplicado a Ajustes: un compañero que abre la aplicación
+  por primera vez.** Cada control lleva su línea de ayuda, con el mismo estilo y en el mismo
+  sitio. «Frescura» dice a partir de cuántos días un hallazgo se marca como pendiente de revisión;
+  «Editor preferido», qué botón usa ese ajuste; «Timeout de Copilot», qué se da por fallido.
+  «Unidad grande» tenía etiqueta pero no ayuda, y ahora la tiene.
+
+- **D-278 — «Polling» no era una palabra del usuario.** Se llama **«Sincronización del hub
+  (segundos)»** y su ayuda dice lo que de verdad hace: cada cuántos segundos se buscan cambios de
+  tus compañeros. El nombre viejo describía la técnica; el nuevo, la consecuencia.
+
+### §4 — Feedback de acción = toast global (regla)
+
+- **D-279 — La regla, escrita de una vez: el resultado de una acción se cuenta con un toast
+  global (`ToastCenter`, F5.3), NUNCA con un texto incrustado al fondo de un panel.** El patrón
+  había aparecido ya cuatro veces con el mismo defecto doble: no caduca —se queda pegado hasta la
+  acción siguiente— y está donde el usuario no mira. En Ajustes era el caso extremo: «Ajustes
+  guardados» salía justo debajo del botón que lo provocaba, pero **fuera de la pantalla**, así que
+  guardar no daba ninguna señal.
+
+- **D-280 — El barrido, con su lista.** Buscados por toda la aplicación los `StatusMessage`
+  incrustados. Convertidos a toast: **Ajustes** («Ajustes guardados»), **V2 Inventario** (el
+  texto al fondo del panel del ciclo: re-escaneo, reset de ciclo, «lanzamiento cancelado»,
+  errores), **Importar v4** (validación, «Importando…», «Importación completada», errores) y
+  **Nueva aplicación / onboarding** (validación, «Escaneando y registrando…», «Aplicación
+  registrada», errores). Ya estaban convertidos de tandas anteriores V4 (F5.5 §6) y V5.
+
+- **D-281 — Dos excepciones, razonadas y enumeradas en el test.** No todo texto de estado es
+  feedback de acción. **Cuenta** narra el flujo de dispositivo —«pidiendo código», «introduce el
+  código en github.com», «leyendo tu perfil»— y el usuario tiene que poder leerlo *mientras se va
+  al navegador y vuelve*: un toast que caduca a los 8 segundos se lo llevaría justo cuando hace
+  falta. **Sesión** enseña el estado VIVO de la auditoría en curso («Auditando…», «Deteniendo tras
+  la unidad actual…»), que debe permanecer mientras dure. Las dos están comentadas en su XAML y
+  listadas en `EmbeddedStatusSweepTests`, así que son una decisión y no un olvido: el test recorre
+  las diez vistas, exige cero `StatusMessage` en las ocho restantes y **exige que las dos
+  excepciones lo sigan teniendo** —si una deja de necesitarlo, hay que sacarla de la lista.
+
+### §5 — Restablecimiento de fábrica (zona peligrosa)
+
+- **D-282 — La zona peligrosa va al final y se ve que lo es.** Borde y fondo rojos sutiles, título
+  en rojo y el botón en `Appearance="Danger"`. Separada de «Guardar» a propósito: lo último que
+  puede pasar es que alguien busque el botón de guardar y encuentre este.
+
+- **D-283 — La operación es ATÓMICA, y ese es su diseño entero.** Primero el hub, después lo
+  local. El orden no es una preferencia: el peor estado posible no es «no se pudo resetear», es
+  **«tu máquina limpia y el hub lleno»** —sin cuenta, sin ajustes y sin clon, quien lo pulsó ya no
+  puede ni reintentarlo ni explicar qué pasó—. Por eso el borrado de `apps/` se commitea y se
+  **publica** antes de tocar un solo byte local, y cualquier fallo en ese tramo (sin permisos, sin
+  red, sin hub configurado) devuelve el clon a su commit anterior y aborta con el estado intacto y
+  un toast que lo dice. El punto de retorno se toma **después de un pull**, para que sea el estado
+  vigente del equipo y no un pasado que ya no existe.
+
+- **D-284 — La marcha atrás necesitaba una primitiva nueva, deliberadamente aparte de `Push`.**
+  `HubSyncService.HeadCommitSha` y `ResetHardTo(sha)`: devolver rama y árbol de trabajo al commit
+  anterior. No se metió dentro de `Push` a propósito — solo quien sabe que su escritura es atómica
+  puede pedir que se deshaga; para el resto de escrituras del hub, un push fallido que sale con el
+  siguiente «Sincronizar ahora» es el comportamiento correcto (F5.3 §4).
+
+- **D-285 — Qué se borra en local, y qué no.** Se van el clon del hub, `machines.json`,
+  `settings.json` —donde vive también el PAT—, `auth.dat` (la cuenta se desconecta) y la marca de
+  sesión abierta: dejarla huérfana haría que el siguiente arranque intentara «recuperar» una sesión
+  sobre nada. **No** se van los logs de `%LOCALAPPDATA%/Atalaya/logs`, que son justamente lo que
+  hace falta para investigar un reset que salió mal y no reconstruyen ningún estado. Ni, por
+  supuesto, los repositorios auditados ni los clones de código.
+
+- **D-286 — Y hacía falta poder cerrar el clon.** `HubContext.CloseSync()`: en Windows no se puede
+  borrar el directorio del clon mientras LibGit2Sharp lo tiene abierto. Suelta los handles y olvida
+  el servicio; la siguiente llamada a `EnsureSync` lo reconstruye desde cero, que es exactamente el
+  estado de primer arranque. Análogo en ajustes: `SettingsService.ResetToDefaults()` borra el
+  fichero **y** pone `Current` a los valores de fábrica — hacer solo una de las dos cosas deja los
+  ajustes viejos vivos en memoria (y el primer `Save` los reescribe) o el fichero en disco para el
+  arranque siguiente.
+
+- **D-287 — La confirmación es a la altura del daño, y por eso NO es la del borrado de una app.**
+  Allí se escribe el nombre de la app porque hay que confirmar CUÁL; aquí no hay cuál —son todas—,
+  así que lo que se confirma es la naturaleza de la acción y la palabra es **RESET**, en mayúsculas
+  y con comparación exacta. El diálogo enumera los números reales del hub (N aplicaciones, N
+  hallazgos, N sesiones), dice en negrita que **afecta a todo el equipo y que los compañeros lo
+  verán desaparecer en su próxima sincronización**, dice qué se borra en esta máquina, y recuerda
+  lo que NO se pierde (el historial git conserva copia recuperable; el código auditado no se toca).
+  Mismo patrón inyectable que D-260: `IFactoryResetConfirmer`, así que el flujo entero —incluido
+  cancelar— se prueba sin abrir una ventana. Y el view-model **vuelve a mirar la puerta**
+  (`CanReset`) antes de destruir nada: un «sí» sin la palabra escrita no borra.
+
+- **D-288 — Después del reset, primer arranque.** La cuenta queda desconectada y Ajustes navega a
+  «Cuenta», que es la pantalla de bienvenida (D4). No hace falta reiniciar la aplicación.
+
+### Cobertura y verificación
+
+- **D-289 — Lo que queda probado.** Del reset, contra un remoto `--bare` local (N-1, sin red): que
+  vacía `apps/` entero y lo publica; que el commit dice quién lo hizo; que la máquina queda como
+  recién instalada (clon, `machines.json`, `settings.json` y `auth.dat` fuera, cuenta desconectada,
+  ajustes en fábrica); que los logs sobreviven; que un segundo usuario en su propio clon lo ve
+  desaparecer al sincronizar; que un hub ya vacío no es un error; y —el caso que justifica el
+  diseño— que **un push fallido aborta sin tocar nada**, con el clon en su commit de antes y la
+  cuenta todavía conectada. Además: sin hub configurado se niega en vez de vaciar la máquina, la
+  puerta de la palabra RESET en sus cuatro casos, el desglose contado sobre el hub, y el flujo
+  desde Ajustes (cancelar, «sí» sin palabra, y el fallo contado por toast). De la vista: las cuatro
+  secciones y su orden, la rejilla y el margen compartidos, la ayuda por control, el renombrado de
+  «Polling», la ausencia del toggle de H9 y de las opciones avanzadas —con los métodos del PAT
+  todavía en pie—, y la zona peligrosa en rojo con su botón. Y el barrido de §4 en las diez vistas.
+
+- **D-290 — La vista se comprobó cargándola de verdad (arnés de D-268).** Instancia `SettingsView`
+  con las mismas `ThemesDictionary`/`ControlsDictionary` de producción, escucha
+  `PresentationTraceSources.DataBindingSource` y renderiza a PNG en las dos direcciones del tema:
+  **cero avisos de enlace en oscuro y en claro**, y la página se lee entera —secciones, ayudas,
+  «Guardar» y la zona peligrosa al final— sin que nada quede cortado. Un detalle del arnés que se
+  anota para la próxima: `RenderTargetBitmap` **no captura el fondo de la `Window`**, así que el
+  PNG salía transparente y un visor lo enseña blanco — que se lee como «el tema oscuro no se
+  aplicó». El fondo hay que pintarlo en un `Border` dentro de la ventana.
+
+- **D-291 — Lo que se verifica a mano.** (a) Leer Ajustes entero y entender cada control sin
+  preguntar; (b) guardar y ver el toast **sin hacer scroll**; (c) el reset de fábrica sobre un hub
+  de PRUEBA —nunca sobre el del piloto—: la aplicación queda en primer arranque y el repositorio
+  aparece vacío en GitHub.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
-- El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de
-  arreglo (§5.7, vía 4→2) está entregado y probado. El **arreglo integrado supervisado**
-  (rama `fix/{displayId}` + permission handler por-fichero + diff aprobado + sin push)
-  queda como trabajo futuro; el prompt indica que H9 "no bloquea la entrega del resto".
+- El *feature flag* `enableAssistedFix` sigue en la configuración (`settings.json`) y el generador
+  de prompt de arreglo (§5.7, vía 4→2) está entregado y probado. **Desde F5.7 §2 (D-275) el
+  interruptor NO está en Ajustes**: no estaba conectado a nada y enseñaba una capacidad que la
+  aplicación no tiene. El **arreglo integrado supervisado** (rama `fix/{displayId}` + permission
+  handler por-fichero + diff aprobado + sin push) queda como trabajo futuro; cuando se construya,
+  el flag ya está ahí y el control se vuelve a poner.

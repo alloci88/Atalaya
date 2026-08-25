@@ -1,5 +1,6 @@
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
+using Atalaya.App.Views;
 using Atalaya.Copilot;
 using FluentAssertions;
 using Xunit;
@@ -16,6 +17,7 @@ public sealed class SettingsViewModelTests : IDisposable
     private readonly string _root;
     private readonly AppPaths _paths;
     private readonly SettingsService _settings;
+    private readonly ToastCenter _toasts = new();
 
     public SettingsViewModelTests()
     {
@@ -25,9 +27,32 @@ public sealed class SettingsViewModelTests : IDisposable
         _settings.Load();
     }
 
-    private SettingsViewModel NewViewModel(ICopilotAgent? agent = null)
-        => new(_settings, TestFactory.Hub(_paths, _settings), TestFactory.Account(_paths),
-            agent ?? new FakeCopilotAgent());
+    private SettingsViewModel NewViewModel(
+        ICopilotAgent? agent = null, IFactoryResetConfirmer? confirmer = null)
+    {
+        HubContext hub = TestFactory.Hub(_paths, _settings);
+        return new SettingsViewModel(
+            _settings,
+            agent ?? new FakeCopilotAgent(),
+            _toasts,
+            new FactoryResetService(
+                hub, _paths, _settings, TestFactory.Account(_paths), new OpenSessionStore(_paths)),
+            confirmer ?? new NeverConfirms(),
+            hub,
+            new NavigationService(new EmptyServices()));
+    }
+
+    /// <summary>El confirmador que dice que no: el reset de fábrica no se dispara sin querer.</summary>
+    private sealed class NeverConfirms : IFactoryResetConfirmer
+    {
+        public bool Confirm(FactoryResetConfirmation confirmation) => false;
+    }
+
+    /// <summary>La navegación no se ejercita en estos casos; basta con que exista.</summary>
+    private sealed class EmptyServices : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => null;
+    }
 
     // ---------- 1. Tope de pasadas ----------
 
@@ -83,6 +108,23 @@ public sealed class SettingsViewModelTests : IDisposable
         reloaded.DefaultThresholds.MaxTokensPerUnit.Should().Be(123_456,
             "construir un Thresholds nuevo al guardar los devolvía a los valores por defecto");
         reloaded.DefaultThresholds.ClaimTtlMinutes.Should().Be(45);
+    }
+
+    // ---------- 1b. El guardado se ve (F5.7 §4) ----------
+
+    /// <summary>
+    /// El aviso vivía al fondo de la página: aparecía justo debajo del botón que lo provocaba
+    /// pero fuera de la pantalla, así que guardar no daba ninguna señal. Ahora es un toast, que
+    /// se ve sin hacer scroll y caduca solo.
+    /// </summary>
+    [Fact]
+    public void Guardar_avisa_por_toast_y_no_por_un_texto_al_pie()
+    {
+        SettingsViewModel vm = NewViewModel();
+
+        vm.SaveCommand.Execute(null);
+
+        _toasts.Items.Should().Contain(t => t.Text.Contains("Ajustes guardados"));
     }
 
     // ---------- 2. Selector de modelo ----------
