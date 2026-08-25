@@ -176,23 +176,32 @@
             VerticalAlignment="Center"
             Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
 
-        <!-- Cycle summary -->
+        <!-- · Resumen del ciclo · Cada dato lleva una frase que lo explica a quien abre la
+             aplicación por primera vez: el usuario no distinguía ciclo de sesión (F5.6 §5).
+             «Grandes» ya no sale aquí por decisión del usuario — no aporta a este nivel, y el
+             estado sigue visible como badge en la fila de cada unidad, que es donde se actúa. -->
         <Border Grid.Row="1" Grid.Column="1" Grid.RowSpan="3" Margin="14,0,0,0" Padding="14"
                 Background="#18808080" CornerRadius="8" VerticalAlignment="Top">
             <StackPanel>
-                <TextBlock Text="Resumen del ciclo" FontWeight="SemiBold" Margin="0,0,0,10" />
-                <TextBlock><Run Text="Ciclo " /><Run Text="{Binding CycleN}" FontWeight="Bold" /></TextBlock>
-                <TextBlock Margin="0,4,0,0"><Run Text="Unidades: " /><Run Text="{Binding TotalUnits}" FontWeight="Bold" /></TextBlock>
-                <TextBlock Margin="0,4,0,0"><Run Text="Auditadas: " /><Run Text="{Binding AuditedUnits}" FontWeight="Bold" /></TextBlock>
-                <TextBlock Margin="0,4,0,0"><Run Text="Pendientes: " /><Run Text="{Binding PendingUnits}" FontWeight="Bold" /></TextBlock>
-                <TextBlock Margin="0,4,0,0"><Run Text="Grandes: " /><Run Text="{Binding LargeUnits}" FontWeight="Bold" /></TextBlock>
-                <TextBlock Margin="0,4,0,0"><Run Text="Sesiones: " /><Run Text="{Binding SessionCount}" FontWeight="Bold" /></TextBlock>
-                <TextBlock Margin="0,4,0,0" Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}"><Run Text="Seleccionadas: " /><Run Text="{Binding SelectedCount}" FontWeight="Bold" /></TextBlock>
+                <TextBlock Text="Resumen del ciclo" FontWeight="SemiBold" Margin="0,0,0,10"
+                           ToolTip="Lo que hay en la vuelta actual del inventario de esta aplicación." />
+                <!-- SemiBold, no Bold: es la línea que ancla el panel, pero no puede pesar más
+                     que su propio título. -->
+                <TextBlock Text="{Binding CycleLabel}" FontWeight="SemiBold" TextWrapping="Wrap"
+                           ToolTip="{Binding CycleTooltip}" />
+                <TextBlock Margin="0,4,0,0" ToolTip="{Binding UnitsTooltip}"><Run Text="Unidades: " /><Run Text="{Binding TotalUnits}" FontWeight="Bold" /></TextBlock>
+                <TextBlock Margin="0,4,0,0" ToolTip="Ya revisadas en este ciclo. Puedes volver sobre ellas marcándolas a mano."><Run Text="Auditadas: " /><Run Text="{Binding AuditedUnits}" FontWeight="Bold" /></TextBlock>
+                <TextBlock Margin="0,4,0,0" ToolTip="Aún sin revisar en este ciclo. Es lo que queda para que se cierre."><Run Text="Pendientes: " /><Run Text="{Binding PendingUnits}" FontWeight="Bold" /></TextBlock>
+                <TextBlock Margin="0,4,0,0" ToolTip="Cada lanzamiento de auditoría es una sesión. Los cierres de ciclo y los resets no cuentan."><Run Text="Sesiones este ciclo: " /><Run Text="{Binding SessionCount}" FontWeight="Bold" /></TextBlock>
+                <TextBlock Margin="0,4,0,0"
+                           ToolTip="Las unidades que se auditarán al pulsar «Auditar selección»."
+                           Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}"><Run Text="Seleccionadas: " /><Run Text="{Binding SelectedCount}" FontWeight="Bold" /></TextBlock>
                 <TextBlock
                     Text="{Binding StatusMessage}"
                     TextWrapping="Wrap"
                     Opacity="0.85"
                     Margin="0,12,0,0"
+                    ToolTip="El resultado de la última acción sobre esta aplicación."
                     Visibility="{Binding StatusMessage, Converter={StaticResource NotEmptyToVisibility}}" />
             </StackPanel>
         </Border>

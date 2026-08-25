@@ -63,9 +63,23 @@ public sealed partial class InventoryViewModel : ViewModelBase
     [ObservableProperty] private int _cycleN = 1;
     [ObservableProperty] private int _totalUnits;
     [ObservableProperty] private int _auditedUnits;
-    [ObservableProperty] private int _largeUnits;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UnitsTooltip))]
+    private int _largeUnits;
     [ObservableProperty] private int _pendingUnits;
+    /// <summary>
+    /// Cuántas AUDITORÍAS se han lanzado en este ciclo. Antes contaba TODAS las sesiones de la
+    /// aplicación, de todos los ciclos y de todos los tipos: un número que no se podía explicar
+    /// en una frase, y por eso desconcertaba.
+    /// </summary>
     [ObservableProperty] private int _sessionCount;
+
+    /// <summary>El ciclo con su fecha: «Ciclo 5 · iniciado 12 ago 2026» (F5.6 §5).</summary>
+    [ObservableProperty] private string _cycleLabel = "Ciclo 1";
+
+    /// <inheritdoc cref="CycleSummary.Tooltip"/>
+    [ObservableProperty] private string _cycleTooltip = string.Empty;
+
     [ObservableProperty] private string _searchText = string.Empty;
     [ObservableProperty] private string _statusMessage = string.Empty;
     [ObservableProperty] private bool _isEmpty;
@@ -89,6 +103,28 @@ public sealed partial class InventoryViewModel : ViewModelBase
     public string SelectionLabel => SelectedCount == 1
         ? "1 unidad seleccionada"
         : $"{SelectedCount} unidades seleccionadas";
+
+    /// <summary>
+    /// Qué es una unidad y, si las hay, dónde se han metido las «grandes». El recuento de grandes
+    /// salió del panel por decisión del usuario (F5.6 §5) —no aporta a ese nivel—, pero sin
+    /// decirlo en algún sitio el panel deja de cuadrar: auditadas + pendientes no suman el total.
+    /// </summary>
+    public string UnitsTooltip
+    {
+        get
+        {
+            const string What = "Cada fichero que se audita por separado; «Re-escanear» las pone al día.";
+            return LargeUnits switch
+            {
+                0 => What,
+                1 => What + " Una es demasiado grande para auditarla de una vez: sale marcada "
+                          + "«Grande» en la lista, no cuenta como pendiente y no impide cerrar el ciclo.",
+                _ => What + $" {LargeUnits} son demasiado grandes para auditarlas de una vez: salen "
+                          + "marcadas «Grande» en la lista, no cuentan como pendientes y no impiden "
+                          + "cerrar el ciclo.",
+            };
+        }
+    }
 
     public string PendingToggleTooltip => PendingUnits == 1
         ? "Actúa sobre la única unidad pendiente del ciclo, esté o no a la vista."
@@ -138,7 +174,12 @@ public sealed partial class InventoryViewModel : ViewModelBase
         LargeUnits = units.Count(u => u.State == UnitState.Grande);
         PendingUnits = units.Count(u => u.State == UnitState.Pendiente);
         OnPropertyChanged(nameof(PendingToggleTooltip));
-        SessionCount = _hub.Store.ListSessions(Slug).Count;
+
+        var sessions = _hub.Store.ListSessions(Slug);
+        CycleStart start = CycleSummary.StartOf(sessions, CycleN);
+        CycleLabel = CycleSummary.Label(CycleN, start);
+        CycleTooltip = CycleSummary.Tooltip(start);
+        SessionCount = CycleSummary.LaunchesIn(sessions, CycleN);
 
         // Un re-escaneo o un reset pueden hacer desaparecer unidades: lo seleccionado se poda
         // contra el inventario vigente para que el contador nunca cuente fantasmas.

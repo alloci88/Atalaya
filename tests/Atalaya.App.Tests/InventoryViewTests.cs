@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Copilot;
@@ -425,6 +426,128 @@ public sealed class InventoryViewTests : IDisposable
         asked.Provenance.Should().Contain("Sin coste medido");
         asked.Headline.Should().Contain("6 unidades").And.Contain("App");
     }
+
+    // =============================================================== §5 resumen del ciclo
+
+    [Fact]
+    public async Task El_ciclo_dice_desde_cuando_lo_es()
+    {
+        SeedModules(1);
+        _hub.Store.WriteSession(SystemSession(AuditMode.Reset, cycleN: 1));
+
+        InventoryViewModel vm = await Loaded();
+
+        vm.CycleLabel.Should().StartWith("Ciclo 1 · iniciado ");
+        vm.CycleTooltip.Should().Contain("Una vuelta completa al inventario")
+            .And.Contain("los resets abren ciclo nuevo");
+    }
+
+    [Fact]
+    public async Task Sin_traza_de_apertura_el_ciclo_es_solo_su_numero()
+    {
+        SeedModules(1);
+        InventoryViewModel vm = await Loaded();
+
+        vm.CycleLabel.Should().Be("Ciclo 1");
+        vm.CycleTooltip.Should().Contain("no registra cuándo se abrió");
+    }
+
+    /// <summary>
+    /// El contador decía «Sesiones: 7» contando TODAS las de la aplicación, de todos los ciclos y
+    /// de todos los tipos. Ahora la etiqueta promete «este ciclo» y el número lo cumple.
+    /// </summary>
+    [Fact]
+    public async Task Las_sesiones_que_se_cuentan_son_los_lanzamientos_de_este_ciclo()
+    {
+        SeedModules(1);
+        _hub.Store.WriteSession(SystemSession(AuditMode.Lotes, cycleN: 1));
+        _hub.Store.WriteSession(SystemSession(AuditMode.Reset, cycleN: 1));    // no lo lanza nadie
+        _hub.Store.WriteSession(SystemSession(AuditMode.Lotes, cycleN: 2));    // otra vuelta
+
+        InventoryViewModel vm = await Loaded();
+
+        vm.SessionCount.Should().Be(1);
+    }
+
+    /// <summary>
+    /// «Grandes» sale del panel (decisión del usuario), pero el panel tiene que seguir cuadrando:
+    /// sin decirlo en algún sitio, auditadas + pendientes no suman el total y eso desconcierta más
+    /// que el número que se quitó.
+    /// </summary>
+    [Fact]
+    public async Task Lo_que_ya_no_sale_como_fila_se_explica_en_el_tooltip_de_unidades()
+    {
+        SeedInventory(
+            ("M", "a.cs", UnitState.Pendiente),
+            ("M", "b.cs", UnitState.Grande),
+            ("M", "c.cs", UnitState.Grande));
+        InventoryViewModel vm = await Loaded();
+
+        vm.LargeUnits.Should().Be(2);
+        vm.UnitsTooltip.Should().Contain("2 son demasiado grandes")
+            .And.Contain("no cuentan como pendientes")
+            .And.Contain("no impiden cerrar el ciclo");
+    }
+
+    [Fact]
+    public async Task Sin_unidades_grandes_el_tooltip_no_habla_de_ellas()
+    {
+        SeedModules(1);
+        InventoryViewModel vm = await Loaded();
+
+        vm.UnitsTooltip.Should().Contain("Cada fichero que se audita por separado")
+            .And.NotContain("Grande");
+    }
+
+    [Fact]
+    public void El_panel_ya_no_enseña_el_recuento_de_grandes()
+        => PanelMarkup().Should().NotContain("Grandes: ")
+            .And.NotContain("LargeUnits", "el dato vive ahora en el tooltip de «Unidades»");
+
+    [Fact]
+    public void La_etiqueta_de_sesiones_dice_de_que_ciclo_habla()
+        => PanelMarkup().Should().Contain("Sesiones este ciclo: ").And.NotContain("\"Sesiones: \"");
+
+    /// <summary>
+    /// La petición de F5.6 §5: cada dato del panel se explica solo. Un `TextBlock` de datos sin
+    /// `ToolTip` es exactamente el que deja al compañero nuevo adivinando.
+    /// </summary>
+    [Fact]
+    public void Cada_dato_del_panel_lleva_su_frase()
+    {
+        var rows = Regex.Matches(PanelMarkup(), "<TextBlock.*?(/>|</TextBlock>)", RegexOptions.Singleline);
+
+        rows.Should().NotBeEmpty();
+        foreach (Match row in rows)
+        {
+            row.Value.Should().Contain("ToolTip", $"este TextBlock del panel no se explica: {row.Value}");
+        }
+    }
+
+    /// <summary>El bloque del resumen del ciclo, sin comentarios.</summary>
+    private static string PanelMarkup()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Atalaya.sln")))
+        {
+            dir = dir.Parent;
+        }
+
+        string xaml = File.ReadAllText(
+            Path.Combine(dir!.FullName, "src", "Atalaya.App", "Views", "InventoryView.xaml"));
+        string markup = Regex.Replace(xaml, "<!--.*?-->", string.Empty, RegexOptions.Singleline);
+        int start = markup.IndexOf("Resumen del ciclo", StringComparison.Ordinal);
+        start.Should().BeGreaterThan(0, "el panel del resumen tiene que seguir ahí");
+        return markup[start..];
+    }
+
+    private AuditSession SystemSession(AuditMode mode, int cycleN)
+        => new()
+        {
+            Id = _ulids.NewUlid(), AppSlug = "app", Mode = mode, By = "alvaro", Machine = "m",
+            StartedUtc = DateTimeOffset.UtcNow.AddDays(-2), EndedUtc = DateTimeOffset.UtcNow.AddDays(-2),
+            CycleN = cycleN,
+        };
 
     /// <summary>Una sesión pasada con coste medido por unidad, que es de donde sale la estimación.</summary>
     private void SeedCostHistory(int maxPasses, params decimal[] perUnitCosts)

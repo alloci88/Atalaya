@@ -2202,20 +2202,69 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   mismo patrón que el borrado de aplicación (F5.3 §4): `InventoryViewModel` no depende de una
   ventana y los tests ejercitan el flujo entero —incluido «cancelar»— sin interfaz gráfica.
 
+### §5 — El resumen del ciclo se explica solo
+
+- **D-261 — «Grandes» sale del panel, el badge se queda.** Decisión del usuario: a nivel de resumen
+  no aporta. El estado sigue visible como badge en la fila de cada unidad, que es donde de verdad
+  se actúa sobre él. Lo que sí obliga es a tapar el agujero que deja: sin ese número,
+  `Auditadas + Pendientes` ya no suma `Unidades` y el panel deja de cuadrar, que desconcierta más
+  que la fila que se quitó. Así que el dato se muda al tooltip de «Unidades», y solo aparece si
+  hay alguna: «2 son demasiado grandes para auditarlas de una vez: salen marcadas «Grande» en la
+  lista, no cuentan como pendientes y no impiden cerrar el ciclo».
+
+- **D-262 — «Ciclo 5» no significaba nada suelto, y la fecha se DERIVA.** El usuario no distinguía
+  ciclo de sesión, y en el piloto —donde cada reset abrió ciclo nuevo— el número solo desconcertaba.
+  Ahora se lee «Ciclo 5 · iniciado 12 ago 2026», con el tooltip que dice qué es un ciclo: «Una
+  vuelta completa al inventario. Se cierra al auditar todas las unidades; los resets abren ciclo
+  nuevo».
+  <br>
+  <b>De dónde sale la fecha.</b> `InventoryCycle` nunca tuvo fecha de creación, y añadírsela ahora
+  no arreglaría el caso que importa: los ciclos que YA existen seguirían sin ella. Pero el dato
+  está en el hub — tanto el cierre como el reset escriben su sesión con el `CycleN` del ciclo que
+  **abren**, así que esa sesión ES el momento en que empezó. `CycleSummary.StartOf` lo busca ahí.
+
+- **D-263 — Y cuando no se sabe, se dice (N-2, otra vez).** El ciclo 1 no lo abre nadie: nace con
+  el primer escaneo, que no deja sesión. Tres respuestas posibles y tres textos distintos:
+  «iniciado {fecha}» cuando hay evento de apertura; «activo desde {fecha}» cuando solo se puede
+  inferir de la primera sesión registrada en él, y el tooltip añade «pudo abrirse antes»; y «Ciclo
+  1» a secas cuando no hay nada, con «Este ciclo no registra cuándo se abrió». Fingir una fecha
+  —la del fichero de inventario, por ejemplo, que un `pull` reescribe— habría sido peor que no
+  darla.
+
+- **D-264 — «Sesiones: 7» contaba algo que nadie podía explicar.** Contaba TODAS las sesiones de la
+  aplicación: de todos los ciclos y de todos los tipos, cierres y resets incluidos. Ahora la
+  etiqueta promete «Sesiones este ciclo» y el número lo cumple: solo el ciclo en curso, y solo
+  **lanzamientos** — el cierre y el reset dejan sesión pero nadie los lanza, y contarlos rompería
+  la frase que los explica. Las sesiones históricas en modo retirado (F5.6 §2) sí cuentan: fueron
+  lanzamientos. El tooltip es literalmente la definición: «Cada lanzamiento de auditoría es una
+  sesión. Los cierres de ciclo y los resets no cuentan».
+
+- **D-265 — Cada dato del panel lleva una frase, y hay un test que lo exige.** El criterio: que se
+  entienda a un compañero que abre la aplicación por primera vez. «Auditadas» dice que puedes
+  volver sobre ellas a mano; «Pendientes», que es lo que queda para cerrar el ciclo;
+  «Seleccionadas», qué se auditará al pulsar el botón. Un test recorre el bloque del panel en el
+  XAML y falla si algún `TextBlock` de datos se queda sin `ToolTip` — es la forma barata de que el
+  próximo dato que se añada no nazca mudo.
+
+- **D-266 — Verificado en la vista real.** El arnés de D-268 vuelve a cargar `InventoryView` con el
+  panel nuevo: cero avisos de enlace y el bloque se lee entero. De ahí salió un ajuste tipográfico:
+  la línea del ciclo va en **SemiBold**, no en `Bold` — en negrita pesaba más que «Resumen del
+  ciclo», su propio título.
+
 ### Cobertura y verificación
 
-- **D-261 — Lo que queda probado.** Con test: el cálculo del coste en sus tres casos (con
+- **D-267 — Lo que queda probado.** Con test: el cálculo del coste en sus tres casos (con
   historial, sin historial y con factor de pasadas), la preferencia por el tope igual, el
   historial sin tope registrado y el tope absurdo; el plegado de V2 en sus cinco esquinas (lista
   corta, lista larga, botón que alterna, supervivencia a la recarga y clave sin colisión con V3);
   la selección entera (barra y contador, tri-estado en sus tres valores, deseleccionar todo,
   pendientes simétrico, **selección bajo filtro**, selección bajo colapso y poda tras un
   re-escaneo); y el diálogo (se pregunta por encima del umbral, no por debajo, el umbral se baja
-  por app, cancelar no lanza y sin historial se pregunta igual pero sin número). Además, la
+  por app, cancelar no lanza y sin historial se pregunta igual pero sin número); y el panel lateral (la fecha del ciclo en sus tres procedencias, el recuento de lanzamientos del ciclo, el tooltip de «Unidades» con y sin grandes, y el barrido del XAML que exige un `ToolTip` por dato). Además, la
   retirada de modos: fixture de sesión antigua que carga, cuenta en métricas y se redacta; los
   comandos que ya no existen y la barra de acciones que quedó.
 
-- **D-262 — La vista se comprobó cargándola de verdad, no leyendo el XAML.** Un arnés fuera de la
+- **D-268 — La vista se comprobó cargándola de verdad, no leyendo el XAML.** Un arnés fuera de la
   aplicación (el de D-238, ahora referenciando `Atalaya.App`) instancia `InventoryView` y
   `AuditLaunchDialog` con los mismos `ThemesDictionary`/`ControlsDictionary`, escucha
   `PresentationTraceSources.DataBindingSource` y renderiza a PNG. Resultado: **cero avisos de
@@ -2226,7 +2275,7 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   que salió de la imagen: las filas de unidad necesitan margen derecho, porque la barra de
   desplazamiento cortaba el «🔒 alguien» de las reclamadas.
 
-- **D-263 — Lo que se verifica a mano.** (a) Seleccionar un módulo entero con un clic y soltarlo
+- **D-269 — Lo que se verifica a mano.** (a) Seleccionar un módulo entero con un clic y soltarlo
   todo con otro; (b) «Seleccionar pendientes» y su inverso, comprobando que el texto del botón
   cambia; (c) lanzar una selección de más de 3 unidades y leer la estimación antes de confirmar;
   (d) que las sesiones antiguas en modo retirado siguen visibles en Métricas y en sus informes.
