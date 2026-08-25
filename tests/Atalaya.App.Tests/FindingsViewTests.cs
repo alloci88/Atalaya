@@ -38,6 +38,7 @@ public sealed class FindingsViewTests : IDisposable
     private readonly MachineConfigStore _machines;
     private readonly GovernanceService _governance;
     private readonly NavigationService _navigation;
+    private readonly GroupExpansionMemory _expansion = new();
     private readonly UlidFactory _ulids = new(SystemClock.Instance);
 
     public FindingsViewTests()
@@ -130,7 +131,7 @@ public sealed class FindingsViewTests : IDisposable
     }
 
     private FindingsViewModel NewVm()
-        => new(_hub, _navigation, _settings);
+        => new(_hub, _navigation, _settings, _expansion);
 
     private async Task<FindingsViewModel> LoadedVm()
     {
@@ -532,6 +533,166 @@ public sealed class FindingsViewTests : IDisposable
         vm.SelectedApp!.Slug.Should().Be("alpha");
     }
 
+    // ------------------------------------------------- plegar y desplegar
+
+    /// <summary>Siembra <paramref name="n"/> unidades distintas, una por grupo.</summary>
+    private void SeedManyUnits(int n)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            Seed("alpha", $"src/Modulo{i:00}/Servicio{i:00}.cs", $"Hallazgo de la unidad {i}", Severity.Alta);
+        }
+    }
+
+    [Fact]
+    public async Task Con_pocos_grupos_la_lista_abre_desplegada()
+    {
+        SeedPortfolio();   // 3 grupos activos
+        FindingsViewModel vm = await LoadedVm();
+
+        vm.Groups.Should().HaveCount(3).And.OnlyContain(g => g.IsExpanded);
+        vm.AllCollapsed.Should().BeFalse();
+        vm.ToggleAllLabel.Should().Be("Colapsar todo");
+    }
+
+    /// <summary>
+    /// Una lista de treinta unidades abierta de par en par no se lee. Plegada es el resumen: la
+    /// primera impresión tiene que ser legible en los dos tamaños.
+    /// </summary>
+    [Fact]
+    public async Task Con_muchos_grupos_la_lista_abre_plegada()
+    {
+        SeedManyUnits(GroupExpansionMemory.SmallListGroups + 3);
+        FindingsViewModel vm = await LoadedVm();
+
+        vm.Groups.Should().HaveCount(GroupExpansionMemory.SmallListGroups + 3)
+            .And.OnlyContain(g => !g.IsExpanded);
+        vm.Items.Should().HaveCount(vm.Groups.Count, "plegado, cada grupo aporta solo su cabecera");
+        vm.AllCollapsed.Should().BeTrue();
+        vm.ToggleAllLabel.Should().Be("Expandir todo");
+    }
+
+    [Fact]
+    public async Task El_umbral_se_aplica_al_filtrar_no_solo_al_abrir()
+    {
+        SeedManyUnits(GroupExpansionMemory.SmallListGroups + 3);
+        Seed("beta", "app/Api.cs", "Sin validación", Severity.Alta);
+        FindingsViewModel vm = await LoadedVm();
+        vm.Groups.Should().OnlyContain(g => !g.IsExpanded);
+
+        // Al recortar a una sola app quedan pocos grupos: los que nadie tocó vuelven a abrirse.
+        vm.SelectedApp = vm.AppOptions.Single(o => o.Slug == "beta");
+        vm.Groups.Should().ContainSingle().Which.IsExpanded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Con_todo_plegado_la_cabecera_se_sostiene_sola()
+    {
+        SeedManyUnits(GroupExpansionMemory.SmallListGroups + 3);
+        FindingsViewModel vm = await LoadedVm();
+
+        // Lo único que se ve es la cabecera: tiene que decir de qué clase habla y cuánto pesa.
+        foreach (FindingGroupHeader group in vm.Groups)
+        {
+            group.FileName.Should().EndWith(".cs").And.NotBeEmpty();
+            group.Chips.Should().NotBeEmpty();
+            group.Chips.Sum(c => c.Count).Should().Be(group.Rows.Count);
+            group.CountLabel.Should().NotBeEmpty();
+        }
+    }
+
+    [Fact]
+    public async Task Un_solo_boton_alterna_entre_colapsar_todo_y_expandir_todo()
+    {
+        SeedPortfolio();
+        FindingsViewModel vm = await LoadedVm();
+
+        vm.ToggleAllGroupsCommand.Execute(null);
+        vm.Groups.Should().OnlyContain(g => !g.IsExpanded);
+        vm.Items.Should().HaveCount(3);
+        vm.ToggleAllLabel.Should().Be("Expandir todo");
+
+        vm.ToggleAllGroupsCommand.Execute(null);
+        vm.Groups.Should().OnlyContain(g => g.IsExpanded);
+        vm.Items.OfType<FindingRow>().Should().HaveCount(5);
+        vm.ToggleAllLabel.Should().Be("Colapsar todo");
+    }
+
+    /// <summary>
+    /// «Colapsar todo» es una decisión, no un efecto visual: el siguiente tick del polling recarga
+    /// la página y no puede deshacerla.
+    /// </summary>
+    [Fact]
+    public async Task Colapsar_todo_sobrevive_a_la_recarga()
+    {
+        SeedPortfolio();
+        FindingsViewModel vm = await LoadedVm();
+        vm.ToggleAllGroupsCommand.Execute(null);
+
+        await vm.LoadAsync();
+
+        vm.Groups.Should().OnlyContain(g => !g.IsExpanded);
+        vm.ToggleAllLabel.Should().Be("Expandir todo");
+    }
+
+    /// <summary>Con parte abierta y parte cerrada, la acción útil es cerrar: el botón lo ofrece.</summary>
+    [Fact]
+    public async Task Con_los_grupos_a_medias_el_boton_ofrece_colapsar()
+    {
+        SeedPortfolio();
+        FindingsViewModel vm = await LoadedVm();
+        vm.ToggleGroupCommand.Execute(vm.Groups[0]);
+
+        vm.AllCollapsed.Should().BeFalse();
+        vm.ToggleAllLabel.Should().Be("Colapsar todo");
+
+        vm.ToggleAllGroupsCommand.Execute(null);
+        vm.Groups.Should().OnlyContain(g => !g.IsExpanded);
+    }
+
+    [Fact]
+    public async Task Lo_que_decide_el_usuario_gana_a_la_regla_automatica()
+    {
+        SeedPortfolio();
+        FindingsViewModel vm = await LoadedVm();
+        FindingGroupHeader common = vm.Groups.Single(g => g.UnitPath == "src/Common.cs");
+        vm.ToggleGroupCommand.Execute(common);   // plegado a mano, con la lista corta
+
+        // Sigue habiendo pocos grupos, así que la regla lo abriría; la decisión del usuario manda.
+        vm.SelectedApp = vm.AppOptions.Single(o => o.Slug == "alpha");
+        vm.Groups.Single(g => g.UnitPath == "src/Common.cs").IsExpanded.Should().BeFalse();
+        vm.Groups.Single(g => g.UnitPath == "src/Otro.cs").IsExpanded.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// V3 es transitoria: ir al detalle y volver construye un view-model nuevo. Si la memoria
+    /// viviera dentro, el plegado se perdería en cada ida y vuelta — el gesto más frecuente aquí.
+    /// </summary>
+    [Fact]
+    public async Task El_plegado_sobrevive_a_salir_de_la_vista_y_volver()
+    {
+        SeedPortfolio();
+        FindingsViewModel primera = await LoadedVm();
+        primera.ToggleGroupCommand.Execute(primera.Groups.Single(g => g.UnitPath == "src/Common.cs"));
+
+        FindingsViewModel segunda = await LoadedVm();   // misma memoria de sesión, otro view-model
+
+        segunda.Groups.Single(g => g.UnitPath == "src/Common.cs").IsExpanded.Should().BeFalse();
+        segunda.Groups.Single(g => g.UnitPath == "src/Otro.cs").IsExpanded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Sin_grupos_no_hay_nada_que_plegar_y_el_control_se_retira()
+    {
+        SeedPortfolio();
+        FindingsViewModel vm = await LoadedVm();
+        vm.HasGroups.Should().BeTrue();
+
+        vm.SearchText = "no existe";
+        vm.HasGroups.Should().BeFalse();
+        vm.AllCollapsed.Should().BeFalse("sin grupos no se puede afirmar que estén todos plegados");
+    }
+
     // ------------------------------------------------- la interfaz habla castellano
 
     /// <summary>
@@ -612,8 +773,11 @@ public sealed class FindingsViewTests : IDisposable
     [Fact]
     public void V3_no_expone_NINGUNA_accion_de_escritura()
     {
+        // La lista exacta, no «contiene»: si aparece un comando nuevo hay que mirarlo y decidir si
+        // escribe. Los cuatro que hay filtran, pliegan o navegan; ninguno toca el hub.
         CommandNames(typeof(FindingsViewModel))
-            .Should().Equal("ClearFiltersCommand", "OpenDetailCommand", "ToggleGroupCommand");
+            .Should().Equal(
+                "ClearFiltersCommand", "OpenDetailCommand", "ToggleAllGroupsCommand", "ToggleGroupCommand");
     }
 
     [Fact]

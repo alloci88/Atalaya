@@ -230,18 +230,23 @@ public sealed partial class FindingsViewModel : ViewModelBase
     private readonly NavigationService _navigation;
     private readonly SettingsService _settings;
 
-    /// <summary>Grupos plegados a mano. Sobrevive a las recargas del polling.</summary>
-    private readonly HashSet<string> _collapsed = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Lo que el usuario ha plegado o desplegado a mano. Vive fuera del view-model porque V3 se
+    /// reconstruye en cada navegación; ver <see cref="GroupExpansionMemory"/>.
+    /// </summary>
+    private readonly GroupExpansionMemory _expansion;
 
     private string? _pendingAppSlug;
     private bool _hasPendingAppSlug;
     private bool _suspendReload;
 
-    public FindingsViewModel(HubContext hub, NavigationService navigation, SettingsService settings)
+    public FindingsViewModel(
+        HubContext hub, NavigationService navigation, SettingsService settings, GroupExpansionMemory expansion)
     {
         _hub = hub;
         _navigation = navigation;
         _settings = settings;
+        _expansion = expansion;
 
         SeverityOptions = new List<SeverityFilterOption> { AllSeverities }
             .Concat(Enum.GetValues<Severity>().Select(s => new SeverityFilterOption(s, SeverityNames.Display(s))))
@@ -288,6 +293,15 @@ public sealed partial class FindingsViewModel : ViewModelBase
     [ObservableProperty] private int _disputedCount;
     [ObservableProperty] private string _resultsSummary = "0 hallazgos";
     [ObservableProperty] private bool _hasActiveFilters;
+
+    /// <summary>No hay ningún grupo desplegado: el botón de la cabecera ofrece desplegarlos.</summary>
+    [ObservableProperty] private bool _allCollapsed;
+
+    /// <summary>Un solo botón que alterna. Su texto ES su estado, así que no hace falta explicarlo.</summary>
+    [ObservableProperty] private string _toggleAllLabel = "Colapsar todo";
+
+    /// <summary>Sin grupos no hay nada que plegar: el control se retira.</summary>
+    [ObservableProperty] private bool _hasGroups;
 
     partial void OnSelectedAppChanged(AppFilterOption? value) => Reload();
     partial void OnSelectedSeverityChanged(SeverityFilterOption? value) => Reload();
@@ -427,13 +441,21 @@ public sealed partial class FindingsViewModel : ViewModelBase
             }
         }
 
+        var built = BuildGroups(rows, showApp).ToList();
+
+        // Un grupo que el usuario nunca tocó se abre solo si la lista es corta. La regla mira el
+        // total de grupos DE ESTE filtro: al filtrar, lo que era ilegible pasa a ser legible.
+        bool openByDefault = built.Count <= GroupExpansionMemory.SmallListGroups;
+
         Groups.Clear();
-        foreach (FindingGroupHeader group in BuildGroups(rows, showApp))
+        foreach (FindingGroupHeader group in built)
         {
+            group.IsExpanded = _expansion.Remembered(group.Key) ?? openByDefault;
             Groups.Add(group);
         }
 
         Flatten();
+        UpdateExpansionState();
 
         ResultCount = rows.Count;
         DisputedCount = rows.Count(r => r.IsDisputed);
@@ -470,7 +492,6 @@ public sealed partial class FindingsViewModel : ViewModelBase
                         .Select(s => new SeverityChip(s, ordered.Count(r => r.Severity == s)))
                         .Where(c => c.Count > 0)
                         .ToList(),
-                    IsExpanded = !_collapsed.Contains($"{g.Key.Slug} {g.Key.UnitPath}"),
                 };
             })
             .OrderBy(g => g.WorstSeverity)
@@ -543,16 +564,34 @@ public sealed partial class FindingsViewModel : ViewModelBase
         }
 
         group.IsExpanded = !group.IsExpanded;
-        if (group.IsExpanded)
+        _expansion.Remember(group.Key, group.IsExpanded);
+        Flatten();
+        UpdateExpansionState();
+    }
+
+    /// <summary>
+    /// Pliega todo, o lo despliega si ya estaba todo plegado. Un botón, no dos: con la mitad de los
+    /// grupos abiertos, «colapsar todo» es la única acción que cambia algo para todos.
+    /// </summary>
+    [RelayCommand]
+    private void ToggleAllGroups()
+    {
+        bool expand = AllCollapsed;
+        foreach (FindingGroupHeader group in Groups)
         {
-            _collapsed.Remove(group.Key);
-        }
-        else
-        {
-            _collapsed.Add(group.Key);
+            group.IsExpanded = expand;
+            _expansion.Remember(group.Key, expand);
         }
 
         Flatten();
+        UpdateExpansionState();
+    }
+
+    private void UpdateExpansionState()
+    {
+        HasGroups = Groups.Count > 0;
+        AllCollapsed = Groups.Count > 0 && Groups.All(g => !g.IsExpanded);
+        ToggleAllLabel = AllCollapsed ? "Expandir todo" : "Colapsar todo";
     }
 
     /// <summary>La fila entera es el enlace: abrir el detalle es lo ÚNICO que hace esta vista.</summary>

@@ -1509,10 +1509,59 @@ abrir la ficha. Y el combo de severidad no tenía «Todas»: filtrar era un viaj
   deja de casar nada pasaría en verde sin comprobar nada. Con la tilde, 31 tests en V3 y 5
   mutaciones nuevas (las 5 tumban tests).
 
+### §5 — La barra de filtros se reacomoda y los grupos se pliegan en bloque
+
+- **D-174 — La fila de filtros pasa de `Grid` a `DockPanel` + `WrapPanel`.** Un `Grid` de columnas
+  fijas no tiene forma de degradar: cuando el ancho no llega, el último control se RECORTA. Y el
+  ancho no llega en cuanto el rail de navegación se lleva sus ~250 px, que es la situación normal,
+  no la excepción — ensanchar el buscador (D-167) solo movió el problema al vecino de la derecha,
+  el toggle «Disputados». Con `WrapPanel` los filtros bajan de línea cuando no caben y siguen
+  siendo una sola fila cuando sí. «Limpiar filtros» va anclado a la derecha con `DockPanel` para
+  que no se lo lleve el reflujo.
+
+- **D-175 — Un solo botón que alterna, no dos.** «Colapsar todo» / «Expandir todo» junto al
+  contador. Con la mitad de los grupos abiertos, la única acción que cambia algo para todos es
+  colapsar; ofrecer las dos a la vez obliga a leer cuál de ellas hace algo. El texto del botón ES
+  su estado, así que no necesita explicación aparte, y sin grupos se retira.
+
+- **D-176 — Plegado todo, la cabecera de grupo ES el informe.** Nombre de clase, aplicación, ruta y
+  chips de conteo por severidad. No hizo falta añadir nada: los chips ya cargaban el resumen, y un
+  test lo fija comprobando que la suma de los chips es el número de hallazgos del grupo — si la
+  cabecera dejara de cuadrar, la vista plegada estaría mintiendo.
+
+- **D-177 — La memoria de plegado vive FUERA del view-model.** V3 es transitoria en el contenedor:
+  abrir un hallazgo y volver construye un view-model nuevo, y ese es el gesto más frecuente de la
+  vista. Una memoria interna se perdía en cada ida y vuelta. `GroupExpansionMemory` es un singleton
+  de la sesión. No se persiste a disco a propósito: qué clases tenía plegadas anteayer depende del
+  filtro que hubiera puesto entonces, así que resucitarlo sería restaurar un estado que ya no
+  significa nada.
+
+- **D-178 — Lo automático nunca se guarda; lo que decide el usuario, sí.** La memoria distingue
+  tres estados —abierto, cerrado y **nunca tocado**— en vez de un conjunto de plegados. Con un
+  conjunto no se puede separar «el usuario lo cerró» de «se abrió solo», y la regla del umbral
+  acabaría pisando decisiones o volviéndose pegajosa.
+
+- **D-179 — El umbral mira cuántos grupos hay EN ESTE filtro, y se reevalúa al filtrar.** Hasta
+  cinco grupos, lo no decidido se abre; por encima, se pliega. Aplicarlo solo al abrir la vista
+  dejaría treinta grupos plegados después de filtrar a dos, que es justo cuando el usuario quiere
+  ver el contenido. Lo que él haya plegado a mano gana siempre a la regla.
+
+- **D-180 — 10 tests nuevos y 8 mutaciones, las 8 tumban tests.** Quitar el umbral, invertirlo, no
+  consultar la memoria, no guardar el plegado a mano, no guardarlo en «colapsar todo», que el botón
+  deje de alternar, quitar la guarda de lista vacía en `AllCollapsed` y vaciar la memoria entre
+  view-models. Una novena —volver al panel que recortaba— no cuenta: rompe el XAML y lo que falla
+  es la compilación, no un test.
+
+- **D-181 — El reflujo y la vista plegada se comprobaron pintando, no leyendo.** Que un control se
+  recorte es una propiedad del layout a un ancho dado: ningún test lo ve. Se volvió a montar el
+  arnés STA desechable y se volcó V3 a 890 px (el ancho real de la página con el rail) y a 760 px,
+  con los grupos abiertos y plegados. A 890 px baja «Disputados» a la segunda línea; a 760 px bajan
+  los dos toggles juntos; en ninguno se corta nada.
+
 ### Cobertura y verificación
 
 - **D-164 — 29 tests nuevos, verificados por mutación (12 mutaciones, las 12 tumban tests).** Son
-  31 y 17 al cerrar el §4. Cubren
+  41 tests y 25 mutaciones al cerrar los §4 y §5. Cubren
   los valores iniciales de los tres combos, cada filtro por separado, sus combinaciones, la **vuelta
   a «Todas»** en severidad y en aplicación, el recorrido completo del filtro de estado, la búsqueda
   por título/ruleId/ruta, «Limpiar filtros», `HasActiveFilters`, el contador (plural, singular y

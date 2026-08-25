@@ -56,13 +56,24 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- · Cabecera: título y contador de resultados · -->
+        <!-- · Cabecera: título, contador de resultados y plegado de todos los grupos · -->
         <Grid Grid.Row="0" Margin="0,0,0,14">
             <TextBlock Text="Hallazgos" FontSize="24" FontWeight="SemiBold" />
-            <TextBlock Text="{Binding ResultsSummary}"
-                       HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,2,4"
-                       FontSize="12.5"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                        Margin="0,0,0,2">
+                <TextBlock Text="{Binding ResultsSummary}"
+                           VerticalAlignment="Center" Margin="0,0,12,0"
+                           FontSize="12.5"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <!-- Un solo botón que alterna: su texto dice qué va a hacer. -->
+                <ui:Button Content="{Binding ToggleAllLabel}"
+                           Command="{Binding ToggleAllGroupsCommand}"
+                           Appearance="Secondary"
+                           Padding="10,3" FontSize="11.5"
+                           VerticalAlignment="Center"
+                           ToolTip="Con todo plegado, las cabeceras son el resumen: clase y conteo por severidad."
+                           Visibility="{Binding HasGroups, Converter={StaticResource BoolToVisibility}}" />
+            </StackPanel>
         </Grid>
 
         <!-- · Barra de filtros: lo ÚNICO que queda arriba (F5.4) · -->
@@ -70,71 +81,59 @@
                 Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,0,0,12">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" MinWidth="200" MaxWidth="300" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <ui:TextBox Grid.Column="0"
-                            PlaceholderText="Buscar…"
-                            ToolTip="Busca en el título del hallazgo, en la regla que lo detectó y en la ruta del fichero."
-                            Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                            VerticalAlignment="Center" />
-
-                <!-- Aplicación: NUEVO en F5.4. «Todas» es la primera opción y el valor inicial. -->
-                <ComboBox Grid.Column="1"
-                          ItemsSource="{Binding AppOptions}"
-                          SelectedItem="{Binding SelectedApp}"
-                          DisplayMemberPath="Label"
-                          Width="170" Margin="8,0,0,0" VerticalAlignment="Center"
-                          ToolTip="Aplicación" />
-
-                <!-- Severidad: con «Todas», que es de donde no se podía volver. -->
-                <ComboBox Grid.Column="2"
-                          ItemsSource="{Binding SeverityOptions}"
-                          SelectedItem="{Binding SelectedSeverity}"
-                          DisplayMemberPath="Label"
-                          Width="120" Margin="8,0,0,0" VerticalAlignment="Center"
-                          ToolTip="Severidad" />
-
-                <ComboBox Grid.Column="3"
-                          ItemsSource="{Binding ScopeOptions}"
-                          SelectedItem="{Binding SelectedScope}"
-                          DisplayMemberPath="Label"
-                          Width="130" Margin="8,0,0,0" VerticalAlignment="Center"
-                          ToolTip="Estado" />
-
-                <CheckBox Grid.Column="4"
-                          Content="Por revisar"
-                          IsChecked="{Binding OnlyNeedsReview}"
-                          VerticalAlignment="Center" Margin="14,0,0,0"
-                          ToolTip="Hallazgos que la última comprobación no pudo confirmar, o cuya ubicación en el código se perdió." />
-
-                <CheckBox Grid.Column="5"
-                          IsChecked="{Binding OnlyDisputed}"
-                          VerticalAlignment="Center" Margin="10,0,0,0"
-                          ToolTip="Hallazgos que un auditor sostiene que nunca fueron un defecto. Los decide una persona.">
-                    <StackPanel Orientation="Horizontal">
-                        <!-- U+FE0E: presentación de TEXTO. Sin él la balanza sale como emoji a color. -->
-                        <TextBlock Text="⚖︎" Margin="0,0,5,0" />
-                        <TextBlock Text="Disputados" />
-                    </StackPanel>
-                </CheckBox>
-
-                <ui:Button Grid.Column="7"
+            <!-- Una fila mientras quepa. En cuanto no cabe, los filtros bajan de línea en vez de
+                 recortarse: un Grid de columnas fijas cortaba el último control (los toggles) en
+                 cuanto el rail de navegación se llevaba su parte del ancho. -->
+            <DockPanel LastChildFill="True">
+                <ui:Button DockPanel.Dock="Right"
                            Content="Limpiar filtros"
                            Command="{Binding ClearFiltersCommand}"
                            Appearance="Secondary"
-                           Padding="10,4" VerticalAlignment="Center"
+                           Padding="10,4" Margin="12,0,0,0" VerticalAlignment="Center"
                            Visibility="{Binding HasActiveFilters, Converter={StaticResource BoolToVisibility}}" />
-            </Grid>
+
+                <WrapPanel Orientation="Horizontal">
+                    <ui:TextBox PlaceholderText="Buscar…"
+                                ToolTip="Busca en el título del hallazgo, en la regla que lo detectó y en la ruta del fichero."
+                                Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                Width="210" Margin="0,3,8,3" VerticalAlignment="Center" />
+
+                    <!-- Aplicación: NUEVO en F5.4. «Todas» es la primera opción y el valor inicial. -->
+                    <ComboBox ItemsSource="{Binding AppOptions}"
+                              SelectedItem="{Binding SelectedApp}"
+                              DisplayMemberPath="Label"
+                              Width="170" Margin="0,3,8,3" VerticalAlignment="Center"
+                              ToolTip="Aplicación" />
+
+                    <!-- Severidad: con «Todas», que es de donde no se podía volver. -->
+                    <ComboBox ItemsSource="{Binding SeverityOptions}"
+                              SelectedItem="{Binding SelectedSeverity}"
+                              DisplayMemberPath="Label"
+                              Width="120" Margin="0,3,8,3" VerticalAlignment="Center"
+                              ToolTip="Severidad" />
+
+                    <ComboBox ItemsSource="{Binding ScopeOptions}"
+                              SelectedItem="{Binding SelectedScope}"
+                              DisplayMemberPath="Label"
+                              Width="130" Margin="0,3,8,3" VerticalAlignment="Center"
+                              ToolTip="Estado" />
+
+                    <CheckBox Content="Por revisar"
+                              IsChecked="{Binding OnlyNeedsReview}"
+                              VerticalAlignment="Center" Margin="6,3,14,3"
+                              ToolTip="Hallazgos que la última comprobación no pudo confirmar, o cuya ubicación en el código se perdió." />
+
+                    <CheckBox IsChecked="{Binding OnlyDisputed}"
+                              VerticalAlignment="Center" Margin="0,3,0,3"
+                              ToolTip="Hallazgos que un auditor sostiene que nunca fueron un defecto. Los decide una persona.">
+                        <StackPanel Orientation="Horizontal">
+                            <!-- U+FE0E: presentación de TEXTO. Sin él la balanza sale como emoji a color. -->
+                            <TextBlock Text="⚖︎" Margin="0,0,5,0" />
+                            <TextBlock Text="Disputados" />
+                        </StackPanel>
+                    </CheckBox>
+                </WrapPanel>
+            </DockPanel>
         </Border>
 
         <!-- · La lista, agrupada por unidad. Plana por dentro: virtualiza por FILA. · -->

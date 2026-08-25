@@ -129,6 +129,8 @@ public partial class App : Application
         services.AddSingleton<IDeleteAppConfirmer, DeleteAppDialogConfirmer>();
 
         services.AddSingleton<EditorLauncher>();
+        // La memoria de plegado de V3 es de la SESIÓN, no de la vista: V3 es transitoria.
+        services.AddSingleton<GroupExpansionMemory>();
         services.AddSingleton<CycleService>();
         services.AddSingleton<StatusExporter>();
 
