@@ -15,7 +15,33 @@ public sealed record UnitVerdictRecord(
     string? Summary,
     int RejectedPayloads = 0,
     string? DominantRejectionReason = null,
-    int MissingVerdicts = 0);
+    int MissingVerdicts = 0,
+    List<UnitPassRecord>? Passes = null,
+    bool CoverageIncomplete = false);
+
+/// <summary>
+/// Una pasada del barrido de una unidad (F4.1). Las pasadas son internas: para el usuario una
+/// auditoría es una unidad completa. Esto es el desglose que lo hace comprobable.
+/// </summary>
+/// <param name="Dry">
+/// La pasada quedó SECA: 0 hallazgos nuevos y ningún veredicto distinto de «presente». Es la
+/// condición de parada del barrido.
+/// </param>
+/// <param name="Summary">
+/// La declaración de cobertura del auditor en esta pasada. Sabemos que es una afirmación y no
+/// una prueba (2026-08-25: declaró revisar ConvertToDetId/ConvertToSeq y la pasada siguiente
+/// encontró tres defectos ahí). Se conserva porque cuesta cero y, comparada entre pasadas,
+/// enseña qué zonas revisita el modelo.
+/// </param>
+public sealed record UnitPassRecord(
+    int Index,
+    int New,
+    int Confirmed,
+    int Resolved,
+    int NonVerifiable,
+    int Rejected,
+    bool Dry,
+    string? Summary);
 
 /// <summary>Session tallies (§2).</summary>
 public sealed class SessionCounters

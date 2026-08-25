@@ -49,7 +49,11 @@ public sealed class SessionViewModelTests : IDisposable
         File.WriteAllText(Path.Combine(_clone, "A.cs"), "class A { void M() { } }");
         _machines.SetClonePath("app", _clone);
         _hub.Store.WriteHub(new HubInfo { OrganizationName = "Org" });
-        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", Stack = TechStack.DotNet, CurrentCycle = 1 });
+        _hub.Store.WriteApp(new AppConfig
+        {
+            Slug = "app", Name = "App", RepoUrl = "u", Stack = TechStack.DotNet, CurrentCycle = 1,
+            Thresholds = new Thresholds { MaxPassesPerUnit = 1 },   // aqui se prueba el disparo, no el barrido
+        });
         _hub.Store.WriteInventory("app", new InventoryCycle
         {
             CycleN = 1,

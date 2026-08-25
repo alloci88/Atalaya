@@ -38,6 +38,13 @@ public sealed class SessionToolbox : IAuditToolbox
     /// </summary>
     private readonly HashSet<string> _submittedKeys = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Hallazgos creados durante el barrido de la unidad EN CURSO (F4.1). Entre pasadas de un
+    /// mismo barrido el código no cambia, así que un veredicto «arreglado» sobre uno de éstos es
+    /// una contradicción del modelo, no una resolución: se ignora y se registra.
+    /// </summary>
+    private readonly HashSet<string> _createdInSweep = new(StringComparer.Ordinal);
+
     public SessionToolbox(
         string slug, AuditMode mode, DetectionStamp stamp,
         FindingIngestionService ingestion, ReconciliationService reconciliation, string clonePath,
@@ -99,7 +106,16 @@ public sealed class SessionToolbox : IAuditToolbox
     /// Arranca una unidad: fija los hallazgos existentes que se le han mostrado al auditor (los
     /// únicos ULIDs sobre los que puede pronunciarse) y reinicia los contadores por unidad.
     /// </summary>
-    public void BeginUnit(IReadOnlyList<Finding> existing)
+    public void BeginUnit(IReadOnlyList<Finding> existing) => BeginPass(existing);
+
+    /// <summary>Arranca el barrido de una unidad nueva: olvida lo creado en la unidad anterior.</summary>
+    public void BeginUnitSweep() => _createdInSweep.Clear();
+
+    /// <summary>
+    /// Arranca UNA pasada del barrido: fija los hallazgos existentes que se le muestran al auditor
+    /// (los únicos ULIDs sobre los que puede pronunciarse) y pone a cero los contadores de pasada.
+    /// </summary>
+    public void BeginPass(IReadOnlyList<Finding> existing)
     {
         _listed.Clear();
         _verdicted.Clear();
@@ -113,7 +129,30 @@ public sealed class SessionToolbox : IAuditToolbox
         ToolCallLog.Clear();
         RejectedPayloads.Clear();
         RejectionReasons.Clear();
+        LastUnitSummary = null;
+        PassNew = PassConfirmed = PassResolved = PassNonVerifiable = PassRejected = 0;
+        PassHasNonPresentVerdict = false;
     }
+
+    /// <summary>Hallazgos nuevos admitidos en la pasada en curso.</summary>
+    public int PassNew { get; private set; }
+
+    public int PassConfirmed { get; private set; }
+
+    public int PassResolved { get; private set; }
+
+    public int PassNonVerifiable { get; private set; }
+
+    public int PassRejected { get; private set; }
+
+    /// <summary>Algún veredicto de la pasada no fue «presente» (ni silencio respetado).</summary>
+    public bool PassHasNonPresentVerdict { get; private set; }
+
+    /// <summary>
+    /// La pasada queda SECA cuando no aportó nada nuevo y todos sus veredictos fueron «presente».
+    /// Es la condición de parada del barrido (F4.1).
+    /// </summary>
+    public bool PassIsDry => PassNew == 0 && !PassHasNonPresentVerdict;
 
     // ---------- F4 · reconciliación ----------
 
@@ -128,6 +167,7 @@ public sealed class SessionToolbox : IAuditToolbox
             RejectedPayloads.Add(reason);
             RejectionReasons.Add(reason);
             Counters.Rejected++;
+            PassRejected++;
             return new ReportVerdictsResult(new[] { new ReportVerdictResult(false, reason) });
         }
 
@@ -168,12 +208,25 @@ public sealed class SessionToolbox : IAuditToolbox
             return RejectVerdict($"veredicto duplicado sobre {id} en la misma unidad.");
         }
 
+        // Guarda de coherencia (F4.1): el código no cambia entre pasadas del mismo barrido, así
+        // que declarar «arreglado» un hallazgo que el propio barrido acaba de crear es una
+        // contradicción del modelo. Se degrada a «presente» y se deja constancia: «arreglado»
+        // solo tiene sentido entre auditorías distintas, con código cambiado de por medio.
+        if (verdict == ReconcileVerdict.Arreglado && _createdInSweep.Contains(id))
+        {
+            string note = $"veredicto 'arreglado' ignorado sobre {id}: lo reportó este mismo "
+                + "barrido y el código no ha cambiado entre pasadas. Se mantiene presente.";
+            RejectedPayloads.Add(note);
+            RejectionReasons.Add("arreglado incoherente dentro del mismo barrido");
+            verdict = ReconcileVerdict.Presente;
+        }
+
         ReconcileOutcome outcome = _reconciliation.Apply(_slug, finding, verdict, v.Evidence, _mode, _stamp);
         switch (outcome)
         {
-            case ReconcileOutcome.Reconfirmed: Counters.Confirmed++; break;
-            case ReconcileOutcome.Resolved: Counters.Resolved++; break;
-            case ReconcileOutcome.NeedsReview: Counters.NoVerificables++; break;
+            case ReconcileOutcome.Reconfirmed: Counters.Confirmed++; PassConfirmed++; break;
+            case ReconcileOutcome.Resolved: Counters.Resolved++; PassResolved++; PassHasNonPresentVerdict = true; break;
+            case ReconcileOutcome.NeedsReview: Counters.NoVerificables++; PassNonVerifiable++; PassHasNonPresentVerdict = true; break;
             case ReconcileOutcome.SilenceRespected: Counters.SilencedRespected++; break;
         }
 
@@ -186,6 +239,7 @@ public sealed class SessionToolbox : IAuditToolbox
         RejectedPayloads.Add($"veredicto rechazado · {reason}");
         RejectionReasons.Add(reason);
         Counters.Rejected++;
+        PassRejected++;
         return new ReportVerdictResult(false, reason);
     }
 
@@ -214,6 +268,7 @@ public sealed class SessionToolbox : IAuditToolbox
             RejectedPayloads.Add(reason);
             RejectionReasons.Add(reason);
             Counters.Rejected++;
+            PassRejected++;
             return new SubmitFindingsResult(new[]
             {
                 new SubmitFindingResult(false, Error: reason),
@@ -277,7 +332,9 @@ public sealed class SessionToolbox : IAuditToolbox
         }
 
         Finding created = _ingestion.Create(submitted, _slug, _mode, _stamp);
+        _createdInSweep.Add(created.Id.ToString());
         Counters.New++;
+        PassNew++;
         _onFinding?.Invoke(created, "nuevo");
         return new SubmitFindingResult(true);
     }
@@ -288,6 +345,7 @@ public sealed class SessionToolbox : IAuditToolbox
         RejectedPayloads.Add($"{reason} · payload: {title}");
         RejectionReasons.Add(reason);
         Counters.Rejected++;
+        PassRejected++;
         return new SubmitFindingResult(false, Error: reason);
     }
 

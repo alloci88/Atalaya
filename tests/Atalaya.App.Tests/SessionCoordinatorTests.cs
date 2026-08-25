@@ -46,7 +46,7 @@ public sealed class SessionCoordinatorTests : IDisposable
         _machines.SetClonePath("app", _clone);
 
         _hub.Store.WriteHub(new HubInfo { OrganizationName = "Org" });
-        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", Stack = TechStack.DotNet, CurrentCycle = 1 });
+        SetMaxPasses(1);
         _hub.Store.WriteInventory("app", new InventoryCycle
         {
             CycleN = 1,
@@ -57,6 +57,17 @@ public sealed class SessionCoordinatorTests : IDisposable
             },
         });
     }
+
+    /// <summary>
+    /// Fija el tope de pasadas del barrido. Los tests de reconciliación usan 1 para aislar la
+    /// semántica de una pasada; los del barrido suben el tope a propósito.
+    /// </summary>
+    private void SetMaxPasses(int max)
+        => _hub.Store.WriteApp(new AppConfig
+        {
+            Slug = "app", Name = "App", RepoUrl = "u", Stack = TechStack.DotNet, CurrentCycle = 1,
+            Thresholds = new Thresholds { MaxPassesPerUnit = max },
+        });
 
     private static SubmitFindingArgs SampleFinding(string path = "A.cs")
         => new("errores.recursos.no-liberado", "errores", "critica",
@@ -410,6 +421,127 @@ public sealed class SessionCoordinatorTests : IDisposable
         second.IncompleteUnits.Should().Be(1);             // y el fallo es visible
         _hub.Store.ListFindings("app").Should().HaveCount(2)
             .And.OnlyContain(f => f.Status == FindingStatus.Activo);
+    }
+
+    // ---------- F4.1 · barrido hasta agotar ----------
+
+    /// <summary>
+    /// El barrido repite la pasada hasta que una queda SECA (0 nuevos y todos los veredictos
+    /// «presente»). Es lo que convierte "una auditoría" en "una unidad completa" pese a que el
+    /// auditor no cubra la unidad de una sola pasada.
+    /// </summary>
+    [Fact]
+    public async Task Sweep_repeats_until_a_pass_comes_up_dry()
+    {
+        SetMaxPasses(3);
+
+        // Pasada 1: dos hallazgos. Pasada 2: uno más. Pasada 3: nada → seca.
+        int pass = 0;
+        var agent = new FakeCopilotAgent(auditScript: _ =>
+        {
+            pass++;
+            return pass switch
+            {
+                1 => new[] { SampleFinding() with { Title = "Uno" }, SampleFinding() with { Title = "Dos" } },
+                2 => new[] { SampleFinding() with { Title = "Tres" } },
+                _ => Array.Empty<SubmitFindingArgs>(),
+            };
+        });
+
+        SessionResult result = await RunLotes(agent);
+
+        pass.Should().Be(3, "debe parar en cuanto una pasada queda seca, no antes ni después");
+        result.Counters.New.Should().Be(3);
+        result.Counters.Resolved.Should().Be(0);
+        _hub.Store.ListFindings("app").Should().HaveCount(3, "las pasadas reconcilian, no duplican");
+
+        AuditSession session = _hub.Store.ListSessions("app").Single();
+        UnitVerdictRecord unit = session.Units.Single();
+        unit.Verdict.Should().Be("auditada");
+        unit.CoverageIncomplete.Should().BeFalse();
+        unit.Passes.Should().HaveCount(3);
+        unit.Passes![0].New.Should().Be(2);
+        unit.Passes[1].New.Should().Be(1);
+        unit.Passes[2].Dry.Should().BeTrue();
+
+        // Una sola sesión y un solo desglose de tokens: las pasadas son internas.
+        session.UsageBreakdown.Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// Si se agota el tope sin secarse, la unidad se marca «cobertura posiblemente incompleta».
+    /// Visible, nunca silencioso: es exactamente el fallo que motivó el barrido.
+    /// </summary>
+    [Fact]
+    public async Task Sweep_hitting_the_cap_marks_the_unit_as_possibly_incomplete()
+    {
+        SetMaxPasses(2);
+
+        int n = 0;
+        var agent = new FakeCopilotAgent(auditScript: _ =>
+            new[] { SampleFinding() with { Title = $"Hallazgo {++n}" } });   // nunca se seca
+
+        SessionResult result = await RunLotes(agent);
+
+        AuditSession session = _hub.Store.ListSessions("app").Single();
+        UnitVerdictRecord unit = session.Units.Single();
+        unit.Verdict.Should().Be("cobertura posiblemente incompleta");
+        unit.CoverageIncomplete.Should().BeTrue();
+        unit.Passes.Should().HaveCount(2);
+        unit.Summary.Should().Contain("sin llegar a seca");
+        session.Notes.Should().Contain(nn => nn.Contains("Cobertura posiblemente incompleta"));
+
+        string report = File.ReadAllText(_hub.HubPaths.ReportFile("app", result.SessionId.ToString()));
+        report.Should().Contain("cobertura posiblemente incompleta");
+    }
+
+    /// <summary>
+    /// Guarda de coherencia: entre pasadas del mismo barrido el código NO cambia, así que un
+    /// «arreglado» sobre un hallazgo que el propio barrido acaba de crear es una contradicción del
+    /// modelo. Se degrada a «presente» y se registra — nunca resuelve.
+    /// </summary>
+    [Fact]
+    public async Task Fixed_verdict_on_a_finding_from_the_same_sweep_is_ignored()
+    {
+        SetMaxPasses(3);
+
+        int pass = 0;
+        var agent = new FakeCopilotAgent(
+            auditScript: _ =>
+            {
+                pass++;
+                return pass == 1 ? new[] { SampleFinding() with { Title = "Recien nacido" } } : Array.Empty<SubmitFindingArgs>();
+            },
+            // En la pasada 2 el modelo se contradice: dice que lo que acaba de reportar ya está arreglado.
+            reconcileScript: r => r.Existing.Select(e => new VerdictArgs(e.FindingId, "arreglado", "ya no está")));
+
+        SessionResult result = await RunLotes(agent);
+
+        result.Counters.Resolved.Should().Be(0, "el codigo no cambia entre pasadas: no puede arreglarse nada");
+        _hub.Store.ListFindings("app").Should().ContainSingle()
+            .Which.Status.Should().Be(FindingStatus.Activo);
+
+        AuditSession session = _hub.Store.ListSessions("app").Single();
+        session.Notes.Should().Contain(n => n.Contains("'arreglado' ignorado"));
+    }
+
+    /// <summary>
+    /// Y el reverso: un «arreglado» sobre un hallazgo de una sesión ANTERIOR sí resuelve. La
+    /// guarda es solo para el mismo barrido, no para auditorías distintas.
+    /// </summary>
+    [Fact]
+    public async Task Fixed_verdict_on_a_finding_from_a_previous_session_still_resolves()
+    {
+        SetMaxPasses(3);
+        Finding old = SeedExisting("De una sesion anterior");
+
+        var agent = new FakeCopilotAgent(
+            reconcileScript: r => r.Existing.Select(e => new VerdictArgs(e.FindingId, "arreglado", "corregido en el commit X")));
+
+        SessionResult result = await RunLotes(agent);
+
+        result.Counters.Resolved.Should().Be(1);
+        _hub.Store.TryReadFinding("app", old.Id.ToString())!.Status.Should().Be(FindingStatus.Resuelto);
     }
 
     // ---------- F3.1 Bloque 0 — presupuesto y rechazos ----------

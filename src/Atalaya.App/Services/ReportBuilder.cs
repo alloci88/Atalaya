@@ -38,9 +38,29 @@ public static class ReportBuilder
         sb.AppendLine($"- Grandes: {largeUnits}");
         // Lo que el auditor declara haber revisado, unidad por unidad. Sin esto la cobertura
         // solo existia dentro del JSON de la sesion y no habia forma de juzgarla de un vistazo.
-        foreach (UnitVerdictRecord u in session.Units.Where(u => !string.IsNullOrWhiteSpace(u.Summary)))
+        foreach (UnitVerdictRecord u in session.Units.Where(u => !string.IsNullOrWhiteSpace(u.Summary) || u.Passes is { Count: > 0 }))
         {
-            sb.AppendLine($"  - **{u.Unit}** ({u.Verdict}): {u.Summary}");
+            sb.AppendLine($"  - **{u.Unit}** ({u.Verdict})");
+            // Desglose del barrido (F4.1). Las pasadas son internas para el usuario, pero tienen
+            // que ser auditables: son la prueba de si la unidad llego a cubrirse o no.
+            if (u.Passes is { Count: > 0 })
+            {
+                string trace = string.Join(" · ", u.Passes.Select(pp =>
+                    pp.Dry ? $"pasada {pp.Index}: seca" : $"pasada {pp.Index}: {pp.New} nuevos"));
+                sb.AppendLine($"    - Barrido: {trace}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(u.Summary))
+            {
+                sb.AppendLine($"    - {u.Summary}");
+            }
+
+            // La cobertura declarada por pasada: es una afirmacion del modelo, no una prueba
+            // (2026-08-25), pero comparada entre pasadas ensena que zonas revisita.
+            foreach (UnitPassRecord pp in (u.Passes ?? new List<UnitPassRecord>()).Where(pp => !string.IsNullOrWhiteSpace(pp.Summary)))
+            {
+                sb.AppendLine($"    - Pasada {pp.Index}: {pp.Summary}");
+            }
         }
 
         sb.AppendLine();

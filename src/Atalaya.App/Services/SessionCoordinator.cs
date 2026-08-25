@@ -129,6 +129,7 @@ public sealed class SessionCoordinator
         CancellationTokenSource? unitCts = null;
         bool budgetTripped = false;
         long maxTokensPerUnit = Math.Max(0, app.Thresholds.MaxTokensPerUnit);
+        int maxPasses = Math.Max(1, app.Thresholds.MaxPassesPerUnit);
         void OnUsage(UsageSample u)
         {
             session.Usage.Add(u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.Cost);
@@ -194,78 +195,91 @@ public sealed class SessionCoordinator
 
                 string content = await File.ReadAllTextAsync(abs, ct);
 
-                // F4: la lista de hallazgos existentes de la unidad viaja EN EL PROMPT y acota los
-                // ULIDs sobre los que el auditor puede pronunciarse. Es lo que sustituye a toda la
-                // maquinaria de fingerprints: la identidad la decide quien sabe decidirla.
-                IReadOnlyList<Finding> existing = _reconciliation.ExistingForUnit(request.Slug, unit.Path);
-                toolbox.BeginUnit(existing);
-                var listed = existing.Select(ToExisting).ToList();
-                string prompt = PromptComposer.ComposeUnitPrompt(unit.Path, content, brief, request.Mode, listed);
-
-                var breakdown = new UnitUsageBreakdown
-                {
-                    Unit = unit.Path,
-                    PromptTokensEstimate = EstimateTokens(prompt),
-                };
+                var breakdown = new UnitUsageBreakdown { Unit = unit.Path };
                 session.UsageBreakdown.Add(breakdown);
                 currentBreakdown = breakdown;
 
-                budgetTripped = false;
-                unitCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                // F4.1 — BARRIDO HASTA AGOTAR. Una pasada del auditor no cubre la unidad: declara
+                // haberla cubierto y, al repetir, encuentra más (2026-08-25: la pasada 1 dijo haber
+                // revisado ConvertToDetId/ConvertToSeq y la 2 halló tres defectos ahí). Así que la
+                // app repite hasta que una pasada queda SECA. Las pasadas son internas: para el
+                // usuario una auditoría sigue siendo una unidad completa.
+                //
+                // Cada pasada recalcula la lista de existentes, así que la siguiente ve lo que
+                // reportó la anterior y lo reconcilia por ULID en vez de duplicarlo — es la misma
+                // maquinaria de F4, aplicada dentro de la sesión.
+                var passes = new List<UnitPassRecord>();
+                int rejectedInUnit = 0;
+                var reasonsInUnit = new List<string>();
+                string? coverageSummary = null;
                 bool overBudget = false;
-                try
-                {
-                    await _agent.AuditUnitAsync(
-                        new AuditUnitRequest(unit.Path, content, prompt, app.Stack, request.Mode, listed),
-                        toolbox, unitCts.Token);
-                }
-                catch (OperationCanceledException) when (budgetTripped && !ct.IsCancellationRequested)
-                {
-                    overBudget = true;
-                }
-                finally
-                {
-                    breakdown.ToolCalls = toolbox.ToolCallCount;
-                    currentBreakdown = null;
-                    unitCts.Dispose();
-                    unitCts = null;
-                }
+                bool dry = false;
+                IReadOnlyList<Finding> withoutVerdict = Array.Empty<Finding>();
+                toolbox.BeginUnitSweep();
 
-                // Snapshot de rechazos ANTES de volcarlos: la moda alimenta el UnitVerdictRecord
-                // para que el corte sea auto-descriptivo ("Cortada por presupuesto · 25 rechazos:
-                // tag inválido") en informe y UI (F3.1 Bloque 0).
-                int rejectedInUnit = toolbox.RejectedPayloads.Count;
-                string? dominantReason = DominantReason(toolbox.RejectionReasons);
-                session.Counters.Rejected += rejectedInUnit;
-
-                if (rejectedInUnit > 0)
+                for (int pass = 1; pass <= maxPasses && !dry && !overBudget; pass++)
                 {
-                    // Never swallow: surface every rejected payload in the session notes so an
-                    // operator can see why "9 tool calls, 0 findings" happened.
+                    ct.ThrowIfCancellationRequested();
+
+                    IReadOnlyList<Finding> existing = _reconciliation.ExistingForUnit(request.Slug, unit.Path);
+                    toolbox.BeginPass(existing);
+                    var listed = existing.Select(ToExisting).ToList();
+                    string prompt = PromptComposer.ComposeUnitPrompt(unit.Path, content, brief, request.Mode, listed);
+                    breakdown.PromptTokensEstimate += EstimateTokens(prompt);
+
+                    budgetTripped = false;
+                    unitCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    try
+                    {
+                        await _agent.AuditUnitAsync(
+                            new AuditUnitRequest(unit.Path, content, prompt, app.Stack, request.Mode, listed),
+                            toolbox, unitCts.Token);
+                    }
+                    catch (OperationCanceledException) when (budgetTripped && !ct.IsCancellationRequested)
+                    {
+                        overBudget = true;
+                    }
+                    finally
+                    {
+                        breakdown.ToolCalls += toolbox.ToolCallCount;
+                        unitCts.Dispose();
+                        unitCts = null;
+                    }
+
+                    dry = !overBudget && toolbox.PassIsDry;
+                    withoutVerdict = toolbox.PendingVerdicts;
+                    coverageSummary = toolbox.LastUnitSummary ?? coverageSummary;
+                    passes.Add(new UnitPassRecord(
+                        pass, toolbox.PassNew, toolbox.PassConfirmed, toolbox.PassResolved,
+                        toolbox.PassNonVerifiable, toolbox.PassRejected, dry, toolbox.LastUnitSummary));
+
+                    // Nunca se traga un rechazo: cada pasada vuelca los suyos, etiquetados.
+                    rejectedInUnit += toolbox.RejectedPayloads.Count;
+                    reasonsInUnit.AddRange(toolbox.RejectionReasons);
                     foreach (string r in toolbox.RejectedPayloads)
                     {
-                        session.Notes.Add($"{unit.Path}: rechazo · {r}");
+                        session.Notes.Add($"{unit.Path} (pasada {pass}): rechazo · {r}");
+                    }
+
+                    foreach (string entry in toolbox.ToolCallLog)
+                    {
+                        session.Notes.Add($"{unit.Path} (pasada {pass}): tool · {entry}");
+                    }
+
+                    if (toolbox.SubmitInvocations == 0 && toolbox.PassNew == 0 && !dry)
+                    {
+                        session.Notes.Add(
+                            $"{unit.Path} (pasada {pass}): sin invocaciones a submit_finding(s) — el agente terminó sin reportar hallazgos por tool.");
                     }
 
                     toolbox.RejectedPayloads.Clear();
                     toolbox.RejectionReasons.Clear();
+                    toolbox.ToolCallLog.Clear();
                 }
 
-                // Positive trace: log every tool the agent invoked in this unit. This is the
-                // evidence that lets us tell apart "no invocations at all" from "invoked but
-                // rejected" without a debugger.
-                foreach (string entry in toolbox.ToolCallLog)
-                {
-                    session.Notes.Add($"{unit.Path}: tool · {entry}");
-                }
-
-                if (toolbox.SubmitInvocations == 0)
-                {
-                    session.Notes.Add(
-                        $"{unit.Path}: sin invocaciones a submit_finding(s) — el agente terminó sin reportar hallazgos por tool.");
-                }
-
-                toolbox.ToolCallLog.Clear();
+                currentBreakdown = null;
+                string? dominantReason = DominantReason(reasonsInUnit);
+                session.Counters.Rejected += rejectedInUnit;
 
                 if (overBudget)
                 {
@@ -276,7 +290,7 @@ public sealed class SessionCoordinator
                             : "");
                     session.Units.Add(new UnitVerdictRecord(
                         unit.Path, unit.Module, "presupuesto-superado", summary,
-                        rejectedInUnit, dominantReason));
+                        rejectedInUnit, dominantReason, Passes: passes));
                     session.Notes.Add($"{unit.Path}: {summary}");
                     UnitPhaseChanged?.Invoke(unit.Path, "over-budget");
                     continue;
@@ -284,9 +298,21 @@ public sealed class SessionCoordinator
 
                 // F4: sin veredicto no se toca nada. La unidad se marca incompleta y se nombra a
                 // los hallazgos huérfanos — visible, pero no bloquea la sesión.
-                IReadOnlyList<Finding> withoutVerdict = toolbox.PendingVerdicts;
                 string unitVerdict = "auditada";
-                string? unitSummary = toolbox.LastUnitSummary;
+                string? unitSummary = coverageSummary;
+
+                // Tope alcanzado sin secarse: el barrido no garantiza cobertura. Visible, nunca
+                // silencioso — es justo el fallo que nos trajo hasta aquí.
+                bool coverageIncomplete = !dry;
+                if (coverageIncomplete)
+                {
+                    unitVerdict = "cobertura posiblemente incompleta";
+                    unitSummary = $"Cobertura posiblemente incompleta: {passes.Count} pasada(s) sin llegar a seca "
+                        + $"(la última aportó {passes[^1].New} nuevo(s))"
+                        + (unitSummary is null ? "" : $" · {unitSummary}");
+                    session.Notes.Add($"{unit.Path}: {unitSummary}");
+                }
+
                 if (withoutVerdict.Count > 0)
                 {
                     incompleteUnits++;
@@ -302,7 +328,7 @@ public sealed class SessionCoordinator
 
                 session.Units.Add(new UnitVerdictRecord(
                     unit.Path, unit.Module, unitVerdict, unitSummary,
-                    rejectedInUnit, dominantReason, withoutVerdict.Count));
+                    rejectedInUnit, dominantReason, withoutVerdict.Count, passes, coverageIncomplete));
                 auditedPaths.Add(CodeAnchor.NormalizePath(unit.Path));
                 UnitPhaseChanged?.Invoke(unit.Path, withoutVerdict.Count > 0 ? "incomplete" : "done");
             }

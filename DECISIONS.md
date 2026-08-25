@@ -794,6 +794,52 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   comprobables en un comando. La lección de D-072 aplica también al diagnóstico, no solo a las
   decisiones: **verificar antes de afirmar**.
 
+### F4.1 — Barrido hasta agotar (cobertura por construcción)
+
+- **D-086 — La declaración de cobertura del auditor es una afirmación, no una prueba.**
+  Medido sobre `CommonStatics.cs` con baseline limpio: la pasada 1 dio 6 hallazgos y declaró
+  `Revisados: ReadCSV, StringToByteArray, …, ConvertToDetId, ConvertToSeq`; la pasada 2, sin
+  tocar el código, encontró **3 defectos más, los tres en `ConvertToDetId`/`ConvertToSeq`**
+  (dependencia de cultura, excepciones de parseo propagadas, XML doc obsoleta) — justo los
+  miembros que había declarado revisados. Pedirle al modelo que barra a conciencia produce la
+  promesa de haber barrido, no el barrido.
+
+  Dos causas previas, acumuladas: (a) desde D-055 el prompt llevaba presión explícita de coste
+  («cada tool call es un turno adicional y multiplica el coste») sin contrapartida hacia la
+  exhaustividad, y (b) F4 degradó «cubre ÍNTEGRAMENTE la unidad» de primera regla a viñeta
+  secundaria. El prompt reescrito (barrido por miembros, presupuesto declarado como gastable)
+  mejoró la profundidad —de 3 a 6 hallazgos, de 1.943 a 4.037 tokens de salida— pero **no
+  logró convergencia**: la segunda pasada seguía aportando 3.
+
+- **D-087 — Cobertura por construcción, no por promesa: barrido hasta agotar.** El patrón que
+  SÍ funcionó en F4 fue obligar al modelo a pronunciarse ítem por ítem con una tool tipada, sin
+  que nada se cerrara por omisión. Se aplica aquí la misma idea, pero estructuralmente: la app
+  repite la pasada sobre la unidad hasta que una queda **SECA**, y cada pasada recalcula la lista
+  de existentes, así que la siguiente ve lo que reportó la anterior y lo reconcilia por ULID en
+  vez de duplicarlo — la maquinaria de F4 aplicada dentro de la sesión.
+  - **Criterio de parada:** una pasada está seca cuando da **0 nuevos Y todos sus veredictos son
+    «presente»** (`SessionToolbox.PassIsDry`). Un «arreglado» o un «no-verificable» impiden la
+    sequedad: si el modelo aún cambia de opinión, el barrido no ha terminado.
+  - **Tope:** `Thresholds.MaxPassesPerUnit`, por defecto 3. Agotado sin secarse, la unidad se
+    cierra con veredicto **`cobertura posiblemente incompleta`** — visible en veredicto, notas e
+    informe, nunca silencioso.
+  - **Las pasadas son internas.** Para el usuario una auditoría sigue siendo una unidad completa:
+    una sesión, un `UnitVerdictRecord`, un `UnitUsageBreakdown` con los tokens agregados
+    (instrumentación del Hito 1a, sin cambios). El informe publica el desglose:
+    `Barrido: pasada 1: 6 nuevos · pasada 2: 3 nuevos · pasada 3: seca`.
+
+- **D-088 — Guarda de coherencia: «arreglado» dentro del mismo barrido se ignora.** Entre pasadas
+  de un mismo barrido el código no cambia, así que declarar arreglado un hallazgo que el propio
+  barrido acaba de crear es una contradicción del modelo, no una resolución. `SessionToolbox`
+  lleva el conjunto de ULIDs creados en el barrido en curso; un veredicto `arreglado` sobre uno
+  de ellos se degrada a `presente` y se registra en las notas. La guarda es **solo** intra-barrido:
+  `arreglado` sobre un hallazgo de una sesión anterior resuelve con normalidad, que es su
+  significado legítimo (código cambiado de por medio). Ambos lados cubiertos por test.
+
+- **D-089 — La declaración de cobertura se conserva pese a no ser prueba.** Cuesta cero, va en el
+  resumen de `unit_done` (`"Revisados: A, B, C."`) y el informe la publica por pasada. Comparada
+  entre pasadas enseña qué zonas revisita el modelo — que es precisamente cómo se detectó D-086.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de
