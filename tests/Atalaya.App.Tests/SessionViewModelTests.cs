@@ -85,6 +85,57 @@ public sealed class SessionViewModelTests : IDisposable
             (ICopilotAgent?)gate ?? auditor);
     }
 
+    /// <summary>
+    /// F5.1b: el resumen que ve el usuario tiene que nombrar las disputas. La primera sesión con
+    /// una disputa real dijo «nuevos 0, confirmados 20, resueltos 0» y se calló que una de esas
+    /// veinte era una discrepancia de criterio — un número sin causa, que es justo lo que D-060
+    /// prohíbe.
+    /// </summary>
+    [Fact]
+    public async Task The_live_summary_names_disputes_instead_of_hiding_them_among_the_confirmed()
+    {
+        Finding existing = SeedActiveFinding();
+        var auditor = new FakeCopilotAgent(
+            reconcileScript: _ => new[]
+            {
+                new VerdictArgs(existing.Id.ToString(), "no-es-defecto", "nunca fue un defecto"),
+            });
+        var vm = new SessionViewModel(
+            new SessionCoordinator(_hub, _ingestion, _reconciliation, _machines, _ulids, auditor, _settings),
+            auditor);
+        vm.Configure(Request(), new[] { "A.cs" });
+
+        await vm.LoadAsync();
+
+        vm.StatusMessage.Should().Contain("disputado");
+        vm.StatusMessage.Should().Contain("los decides tú");
+    }
+
+    /// <summary>Siembra un hallazgo activo anclado a A.cs.</summary>
+    private Finding SeedActiveFinding()
+    {
+        var stamp = new DetectionStamp(
+            DateTimeOffset.UtcNow.AddDays(-2), AuditMode.Lotes, "viejo", "alvaro", "sha256:viejo", "modelo-anterior");
+        var f = new Finding
+        {
+            Id = _ulids.NewUlid(),
+            RuleId = "errores.recursos.no-liberado",
+            Pillar = Pillar.Errores,
+            Tag = FindingTag.Checklist,
+            Severity = Severity.Media,
+            Confidence = Confidence.Media,
+            Status = FindingStatus.Activo,
+            Title = "Algo que ya estaba",
+            Locations = { new Location("A.cs", 1, null) },
+            Origin = AuditMode.Lotes,
+            FirstDetected = stamp,
+            LastConfirmed = stamp,
+            TimesConfirmed = 1,
+        };
+        _hub.Store.WriteFinding("app", f);
+        return f;
+    }
+
     /// <summary>Agente cuyo <c>CheckAsync</c> espera a una compuerta que abre el test.</summary>
     private sealed class GatedAgent : ICopilotAgent
     {

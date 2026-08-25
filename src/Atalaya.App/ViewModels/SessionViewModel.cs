@@ -124,6 +124,17 @@ public sealed partial class SessionViewModel : ViewModelBase
                 + (result.Counters.NoVerificables > 0
                     ? $" {result.Counters.NoVerificables} no verificables (marcados para revisión)."
                     : "")
+                // F5.1b: lo que la app NO aplicó tal cual tiene que verse AQUÍ, no solo en el
+                // informe. La primera sesión con disputas dijo «confirmados 20» y se calló que
+                // una era una discrepancia de criterio: un número sin causa, otra vez.
+                + (result.Counters.Disputed > 0
+                    ? $" ⚖ {result.Counters.Disputed} disputado(s): el auditor sostiene que nunca fueron defecto; "
+                      + "no se han resuelto, los decides tú en Hallazgos."
+                    : "")
+                + (result.Counters.ResolutionsRefused > 0
+                    ? $" ⚠ {result.Counters.ResolutionsRefused} «arreglado» sin evidencia de cambio, "
+                      + "degradado(s) a presente."
+                    : "")
                 + (result.IncompleteUnits > 0
                     ? $" ⚠ {result.IncompleteUnits} unidad(es) incompleta(s): el auditor dejó hallazgos sin veredicto y no se han modificado."
                     : "")

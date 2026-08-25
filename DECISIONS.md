@@ -1115,6 +1115,24 @@ haber tocado el código. No era una impresión.
   Y cortar el tope por debajo de la convergencia sale MÁS caro por unidad de cobertura, porque se
   pagan varios barridos incompletos en vez de uno que cierra.
 
+- **D-114 — Validado sobre datos reales, y el resumen se callaba la disputa.** Primer barrido con
+  F5.1b sobre `CommonStatics.cs` (`gpt-5.5`, mismo commit `f86a301`, tope 5): **pasada 1 SECA** —
+  0 nuevos, 0 ubicaciones, 20 «presente» y **1 «no-es-defecto»** sobre exactamente el hallazgo
+  revertido en D-111. Cero resueltos, cero degradaciones: el modelo fue directo al cajón correcto,
+  así que la guarda del commit ni tuvo que actuar. El prompt bastó. Coste 22,5 (3 llamadas) frente
+  a los 90 del barrido anterior de tres pasadas.
+
+  Pero el mensaje de V5 dijo «nuevos 0, confirmados 20, resueltos 0» y **no mencionó la disputa**:
+  los contadores nuevos se habían añadido al informe y no a la línea que de verdad lee el usuario.
+  Un número sin causa justo del tipo que D-060 prohíbe, y encontrado por el usuario, no por los
+  tests. `SessionViewModel` nombra ahora disputas y degradaciones; cubierto y verificado por
+  mutación.
+
+  Cabo suelto menor, no arreglado: llamar a `submit_findings` con un array vacío —que es como este
+  modelo dice «no hay nada nuevo»— se contabiliza como payload rechazado, y el informe lo saca con
+  un ⚠. Es ruido cosmético, no un error, pero conviene decidir si un lote vacío es un rechazo o una
+  respuesta legítima.
+
 - **D-112 — Cobertura.** 18 tests nuevos (`VerdictGuardTests`, `StoppedSessionTests`). Verificados
   por mutación: desactivar la guarda entera tumba 3; desactivar solo la capa del `contentHash` tumba
   1; no excluir el centinela `unknown` tumba 1; volver a lanzar en la cancelación tumba 7.
