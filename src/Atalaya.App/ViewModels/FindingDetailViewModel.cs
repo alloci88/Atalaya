@@ -10,19 +10,37 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Atalaya.App.ViewModels;
 
-/// <summary>V4 Detalle de hallazgo (§8): full record, snippet, history, comments, governance and the
-/// "Generar prompt de arreglo" action (§5.7).</summary>
+/// <summary>
+/// V4 Detalle de hallazgo (§8): ficha completa, snippet, historial, comentarios, gobernanza y la
+/// acción "Generar prompt de arreglo" (§5.7).
+/// <para>
+/// <b>F5.4.</b> Aquí vive AHORA el juego completo de acciones de escritura sobre un hallazgo. V3
+/// se quedó sin ninguna: <b>la lista encuentra, el detalle actúa</b>. Lo que bajó de V3 en esta
+/// tanda es <see cref="VerifyCommand"/>, las dos salidas de disputa
+/// (<see cref="AcceptDisputeCommand"/> / <see cref="DismissDisputeCommand"/>) y
+/// <see cref="OpenInEditorCommand"/>. Silenciar y asignar ya estaban.
+/// </para>
+/// </summary>
 public sealed partial class FindingDetailViewModel : ViewModelBase
 {
     private readonly HubContext _hub;
     private readonly GovernanceService _governance;
     private readonly MachineConfigStore _machines;
+    private readonly VerifyCoordinator _verify;
+    private readonly EditorLauncher _editor;
 
-    public FindingDetailViewModel(HubContext hub, GovernanceService governance, MachineConfigStore machines)
+    public FindingDetailViewModel(
+        HubContext hub,
+        GovernanceService governance,
+        MachineConfigStore machines,
+        VerifyCoordinator verify,
+        EditorLauncher editor)
     {
         _hub = hub;
         _governance = governance;
         _machines = machines;
+        _verify = verify;
+        _editor = editor;
     }
 
     public override string Title => Finding is null ? "Hallazgo" : $"{Finding.DisplayId ?? Finding.Id.ToString()}";
@@ -42,10 +60,24 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     [ObservableProperty] private string _justification = string.Empty;
     [ObservableProperty] private string _newComment = string.Empty;
 
+    /// <summary>Hay una discrepancia abierta: la ficha ofrece las dos salidas (F5.1b).</summary>
+    public bool IsDisputed => Finding is { Disputes.Count: > 0 };
+
+    /// <summary>Quién discrepa y por qué, para decidir con la razón delante y no a ciegas.</summary>
+    public string DisputeSummary => Finding is null || Finding.Disputes.Count == 0
+        ? string.Empty
+        : string.Join(" · ", Finding.Disputes.Select(d => $"{d.Model ?? "auditor"}: {d.Justification}"));
+
     public ObservableCollection<HistoryEntry> History { get; } = new();
     public ObservableCollection<Comment> Comments { get; } = new();
     public IReadOnlyList<SilenceReason> Reasons { get; } = Enum.GetValues<SilenceReason>();
     public IReadOnlyList<Severity> Severities { get; } = Enum.GetValues<Severity>();
+
+    partial void OnFindingChanged(Finding? value)
+    {
+        OnPropertyChanged(nameof(IsDisputed));
+        OnPropertyChanged(nameof(DisputeSummary));
+    }
 
     public void Load(string slug, Ulid id)
     {
@@ -173,6 +205,90 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         _governance.AddComment(Slug, Id, NewComment.Trim());
         NewComment = string.Empty;
         Reload(Id);
+    }
+
+    /// <summary>
+    /// Cierra la disputa dando la razón al auditor que discrepó (F5.1b): se silencia como falso
+    /// positivo, con tu nombre. No es una resolución — nunca hubo nada que arreglar.
+    /// </summary>
+    [RelayCommand]
+    private void AcceptDispute()
+    {
+        if (Finding is null || Finding.Disputes.Count == 0)
+        {
+            StatusMessage = "Este hallazgo no tiene ninguna disputa abierta.";
+            return;
+        }
+
+        _governance.ResolveDisputeAsFalsePositive(
+            Slug, Id, string.IsNullOrWhiteSpace(SilenceNotes) ? null : SilenceNotes.Trim());
+        StatusMessage = "Disputa aceptada: silenciado como falso positivo.";
+        Reload(Id);
+    }
+
+    /// <summary>Cierra la disputa dando la razón a quien lo reportó: sigue siendo un defecto.</summary>
+    [RelayCommand]
+    private void DismissDispute()
+    {
+        if (Finding is null || Finding.Disputes.Count == 0)
+        {
+            StatusMessage = "Este hallazgo no tiene ninguna disputa abierta.";
+            return;
+        }
+
+        _governance.DismissDispute(
+            Slug, Id, string.IsNullOrWhiteSpace(SilenceNotes) ? null : SilenceNotes.Trim());
+        StatusMessage = "Disputa descartada: sigue siendo un defecto.";
+        Reload(Id);
+    }
+
+    /// <summary>
+    /// Re-verifica ESTE hallazgo (§5.4). Bajó de V3 en F5.4: un verify masivo sobre una selección
+    /// no dejaba ver qué se le estaba preguntando al agente sobre cada uno.
+    /// </summary>
+    [RelayCommand]
+    private async Task Verify()
+    {
+        if (Finding is null)
+        {
+            return;
+        }
+
+        Ulid id = Id;
+        IsBusy = true;
+        StatusMessage = "Verificando…";
+        try
+        {
+            int applied = await Task.Run(() => _verify.RunAsync(Slug, new[] { id }, CancellationToken.None));
+            StatusMessage = applied > 0
+                ? "Verificado: el veredicto está aplicado y en el historial."
+                : "El verify no pudo emitir veredicto. Mira el historial.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            Reload(id);
+        }
+    }
+
+    /// <summary>Abre la localización principal en el editor configurado (§8).</summary>
+    [RelayCommand]
+    private void OpenInEditor()
+    {
+        if (Finding is null || Finding.Locations.Count == 0)
+        {
+            StatusMessage = "Este hallazgo no tiene una ubicación que abrir.";
+            return;
+        }
+
+        Location loc = Finding.Locations[0];
+        StatusMessage = _editor.Open(Slug, loc.Path, loc.Line)
+            ? "Abriendo en el editor…"
+            : "No se pudo abrir el editor.";
     }
 
     [RelayCommand]

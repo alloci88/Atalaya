@@ -1367,6 +1367,121 @@ hasta ahora no existía: deshacer el alta de una aplicación.
   sesiones interrumpidas quedan como los cerraron F5.1, F5.1b y F5.2. No hay vistas nuevas más allá
   del diálogo de borrado.
 
+## F5.4 — Rediseño de la vista Hallazgos (V3)
+
+Tanda acotada a una sola vista. V3 era una `DataGrid` de diez columnas con una botonera de acciones
+masivas encima: la columna «Título» se recortaba a lo que sobrara y la de «Ubicación» a 200 px, de
+modo que la pregunta más elemental —«¿de qué clase habla este hallazgo?»— no tenía respuesta sin
+abrir la ficha. Y el combo de severidad no tenía «Todas»: filtrar era un viaje sin billete de vuelta.
+
+### §1 — El principio: la lista encuentra, el detalle actúa
+
+- **D-148 — V3 se queda sin NINGUNA acción de escritura.** Fuera el combo de motivo de silencio, el
+  campo de caducidad, «Silenciar sel.», «Asignar a…», «Asignar sel.», «Verify sel.» y las dos
+  salidas de disputa. Una acción de gobernanza necesita **contexto y autor**: silenciar sin leer el
+  snippet, o aceptar una disputa sin leer la justificación de quien discrepó, es firmar a ciegas.
+  V3 pasa a ser buscar, filtrar, ordenar y abrir; V4 es donde se decide.
+
+- **D-149 — Sin acciones masivas no hay selección.** Las checkboxes de la primera columna se van con
+  la botonera. Existían para alimentarla y nada más: mantenerlas habría dejado un gesto que no lleva
+  a ninguna parte. Con ellas se van los atajos `s`/`a` del code-behind, que operaban sobre esa misma
+  selección.
+
+- **D-150 — Ceder no es perder: cada acción retirada se verifica viva en V4.** Silenciar y asignar
+  ya estaban allí. Bajaron en esta tanda `VerifyCommand`, `AcceptDisputeCommand`,
+  `DismissDisputeCommand` y `OpenInEditorCommand`. Las dos salidas de disputa estrenan además un
+  panel propio en la ficha que **enseña quién discrepa y por qué** antes de ofrecer los dos botones
+  — información que en V3 no cabía y que es exactamente la que hace falta para decidir. Un test de
+  reflexión fija las dos mitades de la frontera: V3 expone tres comandos y ninguno escribe; V4
+  contiene los doce.
+
+- **D-151 — Verify pasa a ser de uno en uno.** El verify masivo sobre una selección no dejaba ver
+  qué se le estaba preguntando al agente sobre cada hallazgo, ni qué veredicto caía en cuál. Desde
+  la ficha, la pregunta y su respuesta están a la vista y el historial queda debajo.
+
+### §2 — Los combos: siempre hay «Todas», y es el arranque
+
+- **D-152 — Todo combo de filtro abre con una opción neutra en primera posición.** «Todas» para
+  aplicación y severidad, «Activos» para estado (con «Todos» disponible). El bug de origen no era
+  que faltara una opción: era que el filtro **no tenía estado neutro representable**, así que una
+  vez elegida una severidad la única vuelta era reiniciar la vista. La opción neutra vale `null` y
+  el filtro la interpreta como «no filtres», en vez de codificar la ausencia como un valor especial
+  de la enumeración.
+
+- **D-153 — Filtro de aplicación, nuevo.** Se rellena con las apps del portafolio, por su **nombre**
+  y no por su slug. Solo se reconstruye cuando el conjunto de apps cambia: rehacerlo en cada tick
+  del polling (que recarga la página entera, §3) le habría tirado la selección al usuario en mitad
+  de una búsqueda.
+
+- **D-154 — «Limpiar filtros» solo aparece cuando hay algo que limpiar.** Un botón permanentemente
+  visible que la mitad de las veces no hace nada enseña a ignorarlo. `HasActiveFilters` es también
+  lo que decide si el estado vacío ofrece la salida: «Sin hallazgos con estos filtros» sin un botón
+  al lado es un callejón.
+
+- **D-155 — El contador nombra los disputados en vez de esconderlos.** «87 hallazgos · 3
+  disputados», misma decisión que ya se tomó para el resumen en vivo de V5: un conteo agregado que
+  mete las disputas entre los demás las hace invisibles justo cuando piden una decisión humana.
+
+### §3 — La lista: agrupada por unidad
+
+- **D-156 — Cabecera de grupo por unidad, con el nombre del fichero en grande.** `CommonStatics.cs`
+  a 15,5 px y la ruta completa al lado, en pequeño y atenuada. Es la petición central de la tanda:
+  la unidad es el sujeto de la auditoría (§2 del sistema), así que es lo que ordena la lista. Los
+  chips de conteo por severidad van a la derecha, con la escala de color de siempre.
+
+- **D-157 — Los grupos se ordenan por su hallazgo MÁS grave, no alfabéticamente.** Una unidad con
+  una crítica va antes que otra con doce bajas. El desempate es por cuántos hay de esa severidad y
+  solo después por nombre.
+
+- **D-158 — La fila es de dos líneas y el título va ENTERO.** Línea 1: chip de severidad, título con
+  `TextWrapping="Wrap"` y las marcas (disputado, needsReview) a la derecha. Línea 2, atenuada:
+  displayId · confianza · línea(s) · asignado (avatar de iniciales) · frescura, con un punto ámbar
+  cuando pasa el umbral. Nada se recorta con elipsis, que es de lo que venía la queja.
+
+- **D-159 — El estado solo se escribe cuando NO es «Activo».** Con el filtro en «Todos» conviven
+  activos, resueltos y silenciados; una fila que no lo dijera sería una mentira por omisión. Con el
+  filtro por defecto, escribir «Activo» en las cinco filas sería ruido puro.
+
+- **D-160 — La columna «App» desaparece de las filas.** Con el filtro en una app concreta es
+  redundante; con el filtro en «Todas» sube a la cabecera del grupo, junto a la ruta. Repetirla en
+  cada fila era gastar ancho en decir lo mismo N veces.
+
+- **D-161 — La fila entera es el enlace; no hay botón «Ver».** Un `Button` sin cromo, con hover
+  sutil y foco de teclado. Un botón de 40 px dentro de una fila de 900 convierte en puntería lo que
+  debería ser un clic en cualquier parte.
+
+- **D-162 — La lista se aplana para seguir virtualizando por FILA.** `Items` intercala cabeceras y
+  filas en una sola colección, con dos `DataTemplate` por tipo, en vez de anidar un `ItemsControl`
+  por grupo. Anidar habría dejado la virtualización operando sobre **grupos**: con una app real, un
+  grupo grande materializa entero de todas formas y no se virtualiza nada. Plegar un grupo es
+  simplemente no aportar sus filas al aplanado.
+
+- **D-163 — El pliegue de un grupo sobrevive a las recargas.** El polling llama a `LoadAsync` cada
+  tick; un pliegue hecho a mano que se deshiciera solo cada 60 s sería peor que no poder plegar. Se
+  recuerda por clave `{slug} {ruta}`, no por referencia al grupo, que se reconstruye en cada
+  recarga.
+
+### Cobertura y verificación
+
+- **D-164 — 29 tests nuevos, verificados por mutación (12 mutaciones, las 12 tumban tests).** Cubren
+  los valores iniciales de los tres combos, cada filtro por separado, sus combinaciones, la **vuelta
+  a «Todas»** en severidad y en aplicación, el recorrido completo del filtro de estado, la búsqueda
+  por título/ruleId/ruta, «Limpiar filtros», `HasActiveFilters`, el contador (plural, singular y
+  cola de disputas), la agrupación y su orden, el aplanado, el pliegue y su supervivencia, la
+  preselección de app al entrar desde V2, y la frontera V3/V4 en las dos direcciones.
+
+- **D-165 — El fixture está construido para que el alfabeto y la severidad DISCREPEN.** La primera
+  versión ordenaba `Common.cs` (crítica), `Otro.cs`, `Servicio.cs` — que es también el orden
+  alfabético, así que la mutación «no ordenes por severidad» **sobrevivió**: el test parecía fijar
+  la ordenación y solo fijaba el alfabeto. Renombrada la unidad a `Api.cs`, el orden esperado
+  (`Common.cs`, `Api.cs`, `Otro.cs`) ya no se explica de ninguna otra forma. Un test verde que no
+  distingue la implementación correcta de la incorrecta no cubre nada, y solo la mutación lo dice.
+
+- **D-166 — Lo que esta tanda NO toca.** Motor, reconciliación, barrido, sync, guarda de evidencia
+  de cambio, coste, conexión, Ajustes, V5 y el resto de vistas quedan como las cerraron F5.1, F5.1b,
+  F5.2 y F5.3. De V4 solo se toca lo necesario para recibir lo que V3 cede. No se añade nada nuevo
+  a la lista (exportar, columnas configurables): esta tanda era legibilidad y filtros.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

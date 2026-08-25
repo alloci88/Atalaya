@@ -1,31 +1,12 @@
 using System.Windows.Controls;
-using System.Windows.Input;
-using Atalaya.App.ViewModels;
 
 namespace Atalaya.App.Views;
 
+/// <summary>
+/// V3 Hallazgos. Sin código: los atajos <c>s</c>/<c>a</c> (silenciar/asignar sobre la selección)
+/// se fueron con la botonera en F5.4 — la lista ya no escribe nada, así que no hay nada que atajar.
+/// </summary>
 public partial class FindingsView : UserControl
 {
     public FindingsView() => InitializeComponent();
-
-    // Keyboard shortcuts (§8): j/k navigate, s silence, a assign.
-    private void OnKeyDown(object sender, KeyEventArgs e)
-    {
-        if (DataContext is not FindingsViewModel vm)
-        {
-            return;
-        }
-
-        switch (e.Key)
-        {
-            case Key.S:
-                vm.SilenceSelectedCommand.Execute(null);
-                e.Handled = true;
-                break;
-            case Key.A:
-                vm.AssignSelectedCommand.Execute(null);
-                e.Handled = true;
-                break;
-        }
-    }
 }

@@ -8,10 +8,57 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Atalaya.App.ViewModels;
 
-/// <summary>A finding row in the V3 master table.</summary>
-public sealed partial class FindingRow : ObservableObject
+/// <summary>Qué recorte del ciclo de vida enseña la lista. «Todos» siempre existe (F5.4).</summary>
+public enum FindingsScope
+{
+    Activos,
+    Resueltos,
+    Silenciados,
+    Todos,
+}
+
+/// <summary>
+/// Una opción de un combo de filtro. Todos los combos de V3 siguen el mismo patrón: la primera
+/// opción es «Todas/Todos», vale <c>null</c> (o el valor neutro) y es el arranque. Sin ella,
+/// filtrar era un viaje sin billete de vuelta.
+/// </summary>
+public sealed record AppFilterOption(string? Slug, string Label)
+{
+    public override string ToString() => Label;
+}
+
+/// <inheritdoc cref="AppFilterOption"/>
+public sealed record SeverityFilterOption(Severity? Value, string Label)
+{
+    public override string ToString() => Label;
+}
+
+/// <inheritdoc cref="AppFilterOption"/>
+public sealed record ScopeFilterOption(FindingsScope Value, string Label)
+{
+    public override string ToString() => Label;
+}
+
+/// <summary>Un conteo por severidad, para el resumen de la cabecera de grupo.</summary>
+public sealed record SeverityChip(Severity Severity, int Count)
+{
+    public string Label => $"{Count} {Severity}";
+}
+
+/// <summary>
+/// Elemento de la lista plana de V3: o una cabecera de unidad o un hallazgo. La lista se aplana
+/// para que la virtualización siga siendo por FILA — agrupar con contenedores anidados la habría
+/// convertido en virtualización por grupo, que con una app real no virtualiza nada.
+/// </summary>
+public abstract class FindingsListItem : ObservableObject
+{
+}
+
+/// <summary>Un hallazgo en la lista V3. Solo lectura: la fila entera es un enlace a V4 (F5.4).</summary>
+public sealed class FindingRow : FindingsListItem
 {
     public required string Slug { get; init; }
+    public required string AppName { get; init; }
     public required Ulid Id { get; init; }
     public string? DisplayId { get; init; }
     public required string Title { get; init; }
@@ -20,7 +67,15 @@ public sealed partial class FindingRow : ObservableObject
     public FindingStatus Status { get; init; }
     public Pillar Pillar { get; init; }
     public string? Assignee { get; init; }
-    public required string Location { get; init; }
+
+    /// <summary>La unidad (fichero) que agrupa el hallazgo: la ruta de su primera localización.</summary>
+    public required string UnitPath { get; init; }
+
+    public int Line { get; init; }
+
+    /// <summary>Cuántas localizaciones tiene además de la principal.</summary>
+    public int ExtraLocations { get; init; }
+
     public int DaysSinceConfirmed { get; init; }
     public bool NeedsReview { get; init; }
     public bool IsStale { get; init; }
@@ -33,118 +88,310 @@ public sealed partial class FindingRow : ObservableObject
 
     public bool IsDisputed => DisputeCount > 0;
 
-    /// <summary>Etiqueta de la marca de disputa, para la tabla.</summary>
+    /// <summary>Etiqueta de la marca de disputa.</summary>
     public string DisputeLabel => DisputeCount == 0
         ? string.Empty
         : DisputingModels > 1
-            ? $"⚖ disputado ×{DisputingModels} modelos"
-            : "⚖ disputado";
+            ? $"disputado x{DisputingModels} modelos"
+            : "disputado";
 
-    [ObservableProperty]
-    private bool _isSelected;
+    public string LocationLabel => ExtraLocations > 0
+        ? $"L{Line} +{ExtraLocations} más"
+        : $"L{Line}";
+
+    /// <summary>
+    /// Segunda línea, atenuada. El estado solo aparece cuando NO es «Activo»: con el filtro en
+    /// «Todos», una lista sin estado mezcla resueltos y silenciados sin decirlo.
+    /// </summary>
+    public string Meta
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (Status != FindingStatus.Activo)
+            {
+                parts.Add(Status.ToString());
+            }
+
+            if (!string.IsNullOrWhiteSpace(DisplayId))
+            {
+                parts.Add(DisplayId!);
+            }
+
+            parts.Add($"confianza {Confidence}");
+            parts.Add(LocationLabel);
+            return string.Join(" · ", parts);
+        }
+    }
+
+    public bool HasAssignee => !string.IsNullOrWhiteSpace(Assignee);
+
+    /// <summary>Iniciales para el avatar del asignado.</summary>
+    public string AssigneeInitials
+    {
+        get
+        {
+            string who = Assignee?.Trim() ?? string.Empty;
+            if (who.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            string[] words = who.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return words.Length > 1
+                ? string.Concat(char.ToUpperInvariant(words[0][0]), char.ToUpperInvariant(words[1][0]))
+                : char.ToUpperInvariant(words[0][0]).ToString();
+        }
+    }
+
+    public string FreshnessLabel => DaysSinceConfirmed switch
+    {
+        <= 0 => "hoy",
+        1 => "ayer",
+        _ => $"hace {DaysSinceConfirmed} días",
+    };
 }
 
-/// <summary>V3 Hallazgos (§8): master table across apps, sorted severity×confidence, with filters
-/// and inline/bulk governance (silence with reason+expiry, assign, verify, open in editor).</summary>
+/// <summary>
+/// Cabecera de una unidad. La petición central de F5.4: que se lea claramente de qué clase habla
+/// cada hallazgo, en vez de adivinarlo en una columna «Ubicación» recortada a 15 caracteres.
+/// </summary>
+public sealed partial class FindingGroupHeader : FindingsListItem
+{
+    public required string Slug { get; init; }
+    public required string AppName { get; init; }
+    public required string UnitPath { get; init; }
+    public required IReadOnlyList<FindingRow> Rows { get; init; }
+
+    /// <summary>Con el filtro de aplicación en «Todas», la app va aquí — no en cada fila.</summary>
+    public bool ShowApp { get; init; }
+
+    [ObservableProperty]
+    private bool _isExpanded = true;
+
+    partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(ExpandGlyph));
+
+    /// <summary>Identidad estable del grupo, para recordar los plegados entre recargas.</summary>
+    public string Key => $"{Slug} {UnitPath}";
+
+    public string FileName
+    {
+        get
+        {
+            string name = Path.GetFileName(UnitPath.Replace('\\', '/'));
+            return name.Length > 0 ? name : UnitPath;
+        }
+    }
+
+    /// <summary>Ruta completa (y la app si procede), en pequeño y atenuado junto al nombre.</summary>
+    public string Subtitle => ShowApp ? $"{AppName} · {UnitPath}" : UnitPath;
+
+    public IReadOnlyList<SeverityChip> Chips { get; init; } = Array.Empty<SeverityChip>();
+
+    /// <summary>La severidad más grave del grupo. Ordena los grupos (Critica = 0).</summary>
+    public Severity WorstSeverity => Rows.Count == 0 ? Severity.Baja : Rows.Min(r => r.Severity);
+
+    public int WorstCount => Rows.Count(r => r.Severity == WorstSeverity);
+
+    public int DisputedCount => Rows.Count(r => r.IsDisputed);
+
+    public string ExpandGlyph => IsExpanded ? "▾" : "▸";
+
+    public string CountLabel => Rows.Count == 1 ? "1 hallazgo" : $"{Rows.Count} hallazgos";
+}
+
+/// <summary>
+/// V3 Hallazgos (§8), rediseñada en F5.4. <b>La lista encuentra; el detalle actúa</b>: aquí no hay
+/// NINGUNA acción de escritura — ni silenciar, ni asignar, ni verify, ni resolver disputas. Todo
+/// eso vive en V4 (<see cref="FindingDetailViewModel"/>), donde la acción tiene contexto y autor.
+/// V3 es buscar, filtrar, ordenar y abrir.
+/// </summary>
 public sealed partial class FindingsViewModel : ViewModelBase
 {
+    /// <summary>La opción neutra del combo de aplicación. Es el valor inicial.</summary>
+    public static readonly AppFilterOption AllApps = new(null, "Todas");
+
+    /// <summary>La opción neutra del combo de severidad. Es el valor inicial.</summary>
+    public static readonly SeverityFilterOption AllSeverities = new(null, "Todas");
+
     private readonly HubContext _hub;
-    private readonly GovernanceService _governance;
-    private readonly VerifyCoordinator _verify;
-    private readonly EditorLauncher _editor;
     private readonly NavigationService _navigation;
     private readonly SettingsService _settings;
 
-    public FindingsViewModel(
-        HubContext hub, GovernanceService governance, VerifyCoordinator verify,
-        EditorLauncher editor, NavigationService navigation, SettingsService settings)
+    /// <summary>Grupos plegados a mano. Sobrevive a las recargas del polling.</summary>
+    private readonly HashSet<string> _collapsed = new(StringComparer.Ordinal);
+
+    private string? _pendingAppSlug;
+    private bool _hasPendingAppSlug;
+    private bool _suspendReload;
+
+    public FindingsViewModel(HubContext hub, NavigationService navigation, SettingsService settings)
     {
         _hub = hub;
-        _governance = governance;
-        _verify = verify;
-        _editor = editor;
         _navigation = navigation;
         _settings = settings;
+
+        SeverityOptions = new List<SeverityFilterOption> { AllSeverities }
+            .Concat(Enum.GetValues<Severity>().Select(s => new SeverityFilterOption(s, s.ToString())))
+            .ToList();
+
+        ScopeOptions = new List<ScopeFilterOption>
+        {
+            new(FindingsScope.Activos, "Activos"),
+            new(FindingsScope.Resueltos, "Resueltos"),
+            new(FindingsScope.Silenciados, "Silenciados"),
+            new(FindingsScope.Todos, "Todos"),
+        };
+
+        _suspendReload = true;
+        AppOptions.Add(AllApps);
+        SelectedApp = AllApps;
+        SelectedSeverity = AllSeverities;
+        SelectedScope = ScopeOptions[0];
+        _suspendReload = false;
     }
 
     public override string Title => "Hallazgos";
 
-    public ObservableCollection<FindingRow> Rows { get; } = new();
-    public IReadOnlyList<Severity> Severities { get; } = Enum.GetValues<Severity>();
-    public IReadOnlyList<SilenceReason> Reasons { get; } = Enum.GetValues<SilenceReason>();
+    /// <summary>Lo que pinta la lista: cabeceras y filas intercaladas, ya plegadas.</summary>
+    public ObservableCollection<FindingsListItem> Items { get; } = new();
 
-    [ObservableProperty] private string? _appFilter;
-    [ObservableProperty] private Severity? _severityFilter;
-    [ObservableProperty] private bool _showSilenced;
+    /// <summary>Los grupos, en orden. La lista plana sale de aquí.</summary>
+    public ObservableCollection<FindingGroupHeader> Groups { get; } = new();
+
+    public ObservableCollection<AppFilterOption> AppOptions { get; } = new();
+
+    public IReadOnlyList<SeverityFilterOption> SeverityOptions { get; }
+
+    public IReadOnlyList<ScopeFilterOption> ScopeOptions { get; }
+
+    [ObservableProperty] private AppFilterOption? _selectedApp;
+    [ObservableProperty] private SeverityFilterOption? _selectedSeverity;
+    [ObservableProperty] private ScopeFilterOption? _selectedScope;
     [ObservableProperty] private bool _onlyNeedsReview;
     [ObservableProperty] private bool _onlyDisputed;
     [ObservableProperty] private string _searchText = string.Empty;
-    [ObservableProperty] private SilenceReason _silenceReason = SilenceReason.FalsoPositivo;
-    [ObservableProperty] private string _silenceNotes = string.Empty;
-    [ObservableProperty] private int _silenceExpiryDays;
-    [ObservableProperty] private string _assignee = string.Empty;
-    [ObservableProperty] private string _statusMessage = string.Empty;
     [ObservableProperty] private bool _isEmpty;
+    [ObservableProperty] private int _resultCount;
+    [ObservableProperty] private int _disputedCount;
+    [ObservableProperty] private string _resultsSummary = "0 hallazgos";
+    [ObservableProperty] private bool _hasActiveFilters;
 
-    public void SetApp(string? slug) => AppFilter = slug;
-
-    partial void OnSeverityFilterChanged(Severity? value) => Reload();
-    partial void OnShowSilencedChanged(bool value) => Reload();
+    partial void OnSelectedAppChanged(AppFilterOption? value) => Reload();
+    partial void OnSelectedSeverityChanged(SeverityFilterOption? value) => Reload();
+    partial void OnSelectedScopeChanged(ScopeFilterOption? value) => Reload();
     partial void OnOnlyNeedsReviewChanged(bool value) => Reload();
     partial void OnOnlyDisputedChanged(bool value) => Reload();
     partial void OnSearchTextChanged(string value) => Reload();
-    partial void OnAppFilterChanged(string? value) => Reload();
+
+    /// <summary>
+    /// Pre-selecciona una aplicación al navegar (desde V2). El combo aún no existe cuando esto se
+    /// llama —<c>NavigateToAsync</c> inicializa antes de cargar—, así que se guarda y se aplica en
+    /// <see cref="LoadAsync"/>.
+    /// </summary>
+    public void SetApp(string? slug)
+    {
+        _pendingAppSlug = slug;
+        _hasPendingAppSlug = true;
+    }
 
     public override Task LoadAsync()
     {
+        RefreshAppOptions();
+        ApplyPendingApp();
         Reload();
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// El combo se rellena con las apps del portafolio, precedidas de «Todas». Solo se reconstruye
+    /// si el conjunto cambió: rehacerlo en cada tick del polling tiraría la selección del usuario.
+    /// </summary>
+    private void RefreshAppOptions()
+    {
+        var wanted = new List<AppFilterOption> { AllApps };
+        foreach (string slug in _hub.Store.ListAppSlugs().OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
+        {
+            wanted.Add(new AppFilterOption(slug, _hub.Store.TryReadApp(slug)?.Name ?? slug));
+        }
+
+        if (AppOptions.SequenceEqual(wanted))
+        {
+            return;
+        }
+
+        string? current = SelectedApp?.Slug;
+        bool previous = _suspendReload;
+        _suspendReload = true;
+        AppOptions.Clear();
+        foreach (AppFilterOption option in wanted)
+        {
+            AppOptions.Add(option);
+        }
+
+        SelectedApp = AppOptions.FirstOrDefault(o => o.Slug == current) ?? AllApps;
+        _suspendReload = previous;
+    }
+
+    private void ApplyPendingApp()
+    {
+        if (!_hasPendingAppSlug)
+        {
+            return;
+        }
+
+        _hasPendingAppSlug = false;
+        bool previous = _suspendReload;
+        _suspendReload = true;
+        SelectedApp = AppOptions.FirstOrDefault(o => o.Slug == _pendingAppSlug) ?? AllApps;
+        _suspendReload = previous;
+    }
+
     private void Reload()
     {
-        Rows.Clear();
-        var slugs = AppFilter is { Length: > 0 } ? new[] { AppFilter } : _hub.Store.ListAppSlugs().ToArray();
+        if (_suspendReload)
+        {
+            return;
+        }
+
+        string? appFilter = SelectedApp?.Slug;
+        Severity? severityFilter = SelectedSeverity?.Value;
+        FindingsScope scope = SelectedScope?.Value ?? FindingsScope.Activos;
+        string search = SearchText?.Trim() ?? string.Empty;
+        bool showApp = appFilter is null;
+
         int freshness = _settings.Current.DefaultThresholds.FreshnessDays;
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
-        var all = new List<FindingRow>();
+        string[] slugs = appFilter is { Length: > 0 }
+            ? new[] { appFilter }
+            : _hub.Store.ListAppSlugs().ToArray();
+
+        var rows = new List<FindingRow>();
         foreach (string slug in slugs)
         {
+            string appName = _hub.Store.TryReadApp(slug)?.Name ?? slug;
             foreach (Finding f in _hub.Store.ListFindings(slug))
             {
-                if (!ShowSilenced && f.Status == FindingStatus.Silenciado)
+                if (!MatchesScope(f, scope)
+                    || (OnlyNeedsReview && !f.NeedsReview)
+                    || (OnlyDisputed && f.Disputes.Count == 0)
+                    || (severityFilter is { } sev && f.Severity != sev))
                 {
                     continue;
                 }
 
-                if (OnlyNeedsReview && !f.NeedsReview)
-                {
-                    continue;
-                }
-
-                if (OnlyDisputed && f.Disputes.Count == 0)
-                {
-                    continue;
-                }
-
-                if (SeverityFilter is { } sev && f.Severity != sev)
-                {
-                    continue;
-                }
-
-                if (!string.IsNullOrWhiteSpace(SearchText)
-                    && !f.Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase)
-                    && !f.RuleId.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+                Location loc = f.Locations.Count > 0 ? f.Locations[0] : new Location("(sin ubicación)", 0);
+                if (search.Length > 0 && !Matches(f, loc, search))
                 {
                     continue;
                 }
 
                 int days = (int)(now - f.LastConfirmed.Utc).TotalDays;
-                Location loc = f.Locations.Count > 0 ? f.Locations[0] : new Location("", 0);
-                all.Add(new FindingRow
+                rows.Add(new FindingRow
                 {
                     Slug = slug,
+                    AppName = appName,
                     Id = f.Id,
                     DisplayId = f.DisplayId,
                     Title = f.Title,
@@ -153,7 +400,9 @@ public sealed partial class FindingsViewModel : ViewModelBase
                     Status = f.Status,
                     Pillar = f.Pillar,
                     Assignee = f.Assignee,
-                    Location = $"{loc.Path}:{loc.Line}",
+                    UnitPath = loc.Path,
+                    Line = loc.Line,
+                    ExtraLocations = Math.Max(0, f.Locations.Count - 1),
                     DaysSinceConfirmed = days,
                     NeedsReview = f.NeedsReview,
                     IsStale = days > freshness,
@@ -166,144 +415,138 @@ public sealed partial class FindingsViewModel : ViewModelBase
             }
         }
 
-        foreach (FindingRow row in all.OrderBy(r => r.Severity).ThenBy(r => r.Confidence).ThenByDescending(r => r.DaysSinceConfirmed))
+        Groups.Clear();
+        foreach (FindingGroupHeader group in BuildGroups(rows, showApp))
         {
-            Rows.Add(row);
+            Groups.Add(group);
         }
 
-        IsEmpty = Rows.Count == 0;
+        Flatten();
+
+        ResultCount = rows.Count;
+        DisputedCount = rows.Count(r => r.IsDisputed);
+        ResultsSummary = BuildSummary(ResultCount, DisputedCount);
+        IsEmpty = rows.Count == 0;
+        HasActiveFilters = appFilter is not null
+            || severityFilter is not null
+            || scope != FindingsScope.Activos
+            || OnlyNeedsReview
+            || OnlyDisputed
+            || search.Length > 0;
     }
 
-    private IEnumerable<FindingRow> Selected => Rows.Where(r => r.IsSelected);
-
-    [RelayCommand]
-    private Task OpenDetail(FindingRow? row)
-        => row is null ? Task.CompletedTask
-            : _navigation.NavigateToAsync<FindingDetailViewModel>(vm => vm.Load(row.Slug, row.Id));
-
-    [RelayCommand]
-    private void OpenInEditor(FindingRow? row)
-    {
-        if (row is null)
-        {
-            return;
-        }
-
-        string[] parts = row.Location.Split(':');
-        int line = parts.Length > 1 && int.TryParse(parts[^1], out int l) ? l : 1;
-        StatusMessage = _editor.Open(row.Slug, parts[0], line) ? "Abriendo en el editor…" : "No se pudo abrir el editor.";
-    }
-
-    [RelayCommand]
-    private void SilenceSelected()
-    {
-        var selected = Selected.ToList();
-        if (selected.Count == 0)
-        {
-            StatusMessage = "Selecciona hallazgos para silenciar.";
-            return;
-        }
-
-        DateTimeOffset? expiry = SilenceExpiryDays > 0 ? DateTimeOffset.UtcNow.AddDays(SilenceExpiryDays) : null;
-        foreach (FindingRow row in selected)
-        {
-            _governance.Silence(row.Slug, row.Id, SilenceReason, string.IsNullOrWhiteSpace(SilenceNotes) ? null : SilenceNotes, expiry);
-        }
-
-        StatusMessage = $"{selected.Count} hallazgo(s) silenciado(s).";
-        Reload();
-    }
-
-    [RelayCommand]
-    private void AssignSelected()
-    {
-        var selected = Selected.ToList();
-        string? who = string.IsNullOrWhiteSpace(Assignee) ? null : Assignee.Trim();
-        foreach (FindingRow row in selected)
-        {
-            _governance.Assign(row.Slug, row.Id, who);
-        }
-
-        StatusMessage = $"{selected.Count} hallazgo(s) asignado(s).";
-        Reload();
-    }
-
-    /// <summary>
-    /// Cierra la disputa dando la razón al auditor que discrepó (F5.1b): falso positivo, con autor.
-    /// No es una resolución — nunca hubo nada que arreglar.
-    /// </summary>
-    [RelayCommand]
-    private void AcceptDispute()
-    {
-        var selected = Selected.Where(r => r.IsDisputed).ToList();
-        if (selected.Count == 0)
-        {
-            StatusMessage = "Selecciona hallazgos disputados.";
-            return;
-        }
-
-        foreach (FindingRow row in selected)
-        {
-            _governance.ResolveDisputeAsFalsePositive(
-                row.Slug, row.Id, string.IsNullOrWhiteSpace(SilenceNotes) ? null : SilenceNotes.Trim());
-        }
-
-        StatusMessage = $"{selected.Count} disputa(s) aceptada(s) como falso positivo.";
-        Reload();
-    }
-
-    /// <summary>Cierra la disputa dando la razón a quien lo reportó: sigue siendo un defecto.</summary>
-    [RelayCommand]
-    private void DismissDispute()
-    {
-        var selected = Selected.Where(r => r.IsDisputed).ToList();
-        if (selected.Count == 0)
-        {
-            StatusMessage = "Selecciona hallazgos disputados.";
-            return;
-        }
-
-        foreach (FindingRow row in selected)
-        {
-            _governance.DismissDispute(
-                row.Slug, row.Id, string.IsNullOrWhiteSpace(SilenceNotes) ? null : SilenceNotes.Trim());
-        }
-
-        StatusMessage = $"{selected.Count} disputa(s) descartada(s): siguen siendo defectos.";
-        Reload();
-    }
-
-    [RelayCommand]
-    private async Task VerifySelected()
-    {
-        var selected = Selected.ToList();
-        if (selected.Count == 0)
-        {
-            StatusMessage = "Selecciona hallazgos para verificar.";
-            return;
-        }
-
-        IsBusy = true;
-        StatusMessage = "Verificando…";
-        try
-        {
-            int applied = 0;
-            foreach (var group in selected.GroupBy(r => r.Slug))
+    private IEnumerable<FindingGroupHeader> BuildGroups(IReadOnlyList<FindingRow> rows, bool showApp)
+        => rows
+            .GroupBy(r => (r.Slug, r.UnitPath))
+            .Select(g =>
             {
-                applied += await Task.Run(() =>
-                    _verify.RunAsync(group.Key, group.Select(r => r.Id).ToList(), CancellationToken.None));
+                var ordered = g
+                    .OrderBy(r => r.Severity)
+                    .ThenBy(r => r.Confidence)
+                    .ThenByDescending(r => r.DaysSinceConfirmed)
+                    .ThenBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                return new FindingGroupHeader
+                {
+                    Slug = g.Key.Slug,
+                    AppName = ordered[0].AppName,
+                    UnitPath = g.Key.UnitPath,
+                    Rows = ordered,
+                    ShowApp = showApp,
+                    Chips = Enum.GetValues<Severity>()
+                        .Select(s => new SeverityChip(s, ordered.Count(r => r.Severity == s)))
+                        .Where(c => c.Count > 0)
+                        .ToList(),
+                    IsExpanded = !_collapsed.Contains($"{g.Key.Slug} {g.Key.UnitPath}"),
+                };
+            })
+            .OrderBy(g => g.WorstSeverity)
+            .ThenByDescending(g => g.WorstCount)
+            .ThenBy(g => g.FileName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(g => g.UnitPath, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Aplana grupos y filas en la lista virtualizada; los plegados solo aportan cabecera.</summary>
+    private void Flatten()
+    {
+        Items.Clear();
+        foreach (FindingGroupHeader group in Groups)
+        {
+            Items.Add(group);
+            if (!group.IsExpanded)
+            {
+                continue;
             }
 
-            StatusMessage = $"Verificados {applied} hallazgo(s).";
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Error: {ex.Message}";
-        }
-        finally
-        {
-            IsBusy = false;
-            Reload();
+            foreach (FindingRow row in group.Rows)
+            {
+                Items.Add(row);
+            }
         }
     }
+
+    private static bool MatchesScope(Finding f, FindingsScope scope) => scope switch
+    {
+        FindingsScope.Activos => f.Status == FindingStatus.Activo,
+        FindingsScope.Resueltos => f.Status == FindingStatus.Resuelto,
+        FindingsScope.Silenciados => f.Status == FindingStatus.Silenciado,
+        _ => true,
+    };
+
+    private static bool Matches(Finding f, Location loc, string search)
+        => f.Title.Contains(search, StringComparison.OrdinalIgnoreCase)
+           || f.RuleId.Contains(search, StringComparison.OrdinalIgnoreCase)
+           || loc.Path.Contains(search, StringComparison.OrdinalIgnoreCase)
+           || (f.DisplayId?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false);
+
+    private static string BuildSummary(int total, int disputed)
+    {
+        string head = total == 1 ? "1 hallazgo" : $"{total} hallazgos";
+        return disputed == 0
+            ? head
+            : $"{head} · {(disputed == 1 ? "1 disputado" : $"{disputed} disputados")}";
+    }
+
+    /// <summary>Devuelve todos los combos y los interruptores a su valor inicial.</summary>
+    [RelayCommand]
+    private void ClearFilters()
+    {
+        _suspendReload = true;
+        SearchText = string.Empty;
+        SelectedApp = AppOptions.FirstOrDefault(o => o.Slug is null) ?? AllApps;
+        SelectedSeverity = AllSeverities;
+        SelectedScope = ScopeOptions[0];
+        OnlyNeedsReview = false;
+        OnlyDisputed = false;
+        _suspendReload = false;
+        Reload();
+    }
+
+    [RelayCommand]
+    private void ToggleGroup(FindingGroupHeader? group)
+    {
+        if (group is null)
+        {
+            return;
+        }
+
+        group.IsExpanded = !group.IsExpanded;
+        if (group.IsExpanded)
+        {
+            _collapsed.Remove(group.Key);
+        }
+        else
+        {
+            _collapsed.Add(group.Key);
+        }
+
+        Flatten();
+    }
+
+    /// <summary>La fila entera es el enlace: abrir el detalle es lo ÚNICO que hace esta vista.</summary>
+    [RelayCommand]
+    private Task OpenDetail(FindingRow? row)
+        => row is null
+            ? Task.CompletedTask
+            : _navigation.NavigateToAsync<FindingDetailViewModel>(vm => vm.Load(row.Slug, row.Id));
 }

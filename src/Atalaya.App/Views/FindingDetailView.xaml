@@ -31,7 +31,31 @@
                                        FontSize="12" Height="150" SyntaxHighlighting="C#" ShowLineNumbers="True" />
             </Border>
 
-            <ui:Button Content="Generar prompt de arreglo" Command="{Binding GenerateFixPromptCommand}" Appearance="Primary" HorizontalAlignment="Left" Margin="0,14,0,0" />
+            <WrapPanel Margin="0,14,0,0">
+                <ui:Button Content="Generar prompt de arreglo" Command="{Binding GenerateFixPromptCommand}" Appearance="Primary" Margin="0,0,8,6" />
+                <!-- F5.4: bajaron de V3. Verificar de uno en uno deja ver QUE se le pregunta al agente. -->
+                <ui:Button Content="Verificar ahora" Command="{Binding VerifyCommand}" Margin="0,0,8,6"
+                           ToolTip="Re-ancla la ubicacion y pide veredicto al agente (§5.4)." />
+                <ui:Button Content="Abrir en el editor" Command="{Binding OpenInEditorCommand}" Margin="0,0,8,6" />
+            </WrapPanel>
+
+            <!-- Disputa abierta (F5.1b): las DOS salidas, aqui y solo aqui desde F5.4. -->
+            <Border BorderBrush="#55E0A030" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,16,0,0"
+                    Background="#14E0A030"
+                    Visibility="{Binding IsDisputed, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <TextBlock Text="Disputa abierta" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding DisputeSummary}" TextWrapping="Wrap" FontSize="12" Opacity="0.85" Margin="0,4,0,0" />
+                    <TextBlock TextWrapping="Wrap" FontSize="11" Opacity="0.7" Margin="0,6,0,0"
+                               Text="Un auditor sostiene que esto nunca fue un defecto. Lo decide una persona; las notas de abajo quedan escritas en la decision." />
+                    <WrapPanel Margin="0,10,0,0">
+                        <ui:Button Content="Es falso positivo" Command="{Binding AcceptDisputeCommand}" Margin="0,0,8,0"
+                                   ToolTip="Da la razon al auditor que discrepo: se silencia como falso positivo, con tu nombre. No es una resolucion." />
+                        <ui:Button Content="Sigue siendo defecto" Command="{Binding DismissDisputeCommand}"
+                                   ToolTip="Da la razon a quien lo reporto: se retira la marca y el hallazgo sigue igual." />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
 
             <!-- Gobernanza -->
             <TextBlock Text="Gobernanza" FontWeight="SemiBold" FontSize="16" Margin="0,20,0,8" />

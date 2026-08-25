@@ -3,81 +3,314 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-    Focusable="True"
-    KeyDown="OnKeyDown">
+    xmlns:vm="clr-namespace:Atalaya.App.ViewModels">
+
+    <UserControl.Resources>
+
+        <!-- La fila entera es el enlace al detalle (F5.4): sin botón «Ver», hover sutil. -->
+        <Style x:Key="RowLink" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Padding" Value="12,9" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background"
+                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chrome" Property="Background"
+                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Chip de conteo por severidad, mismo lenguaje visual que V5. -->
+        <DataTemplate x:Key="SeverityChipTemplate">
+            <Border Background="{Binding Severity, Converter={StaticResource SeverityToBrush}}"
+                    CornerRadius="9" Padding="8,1" Margin="5,0,0,0">
+                <TextBlock Text="{Binding Label}" Foreground="White" FontSize="10.5" FontWeight="SemiBold" />
+            </Border>
+        </DataTemplate>
+
+    </UserControl.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Hallazgos" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,12" />
+        <!-- · Cabecera: título y contador de resultados · -->
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <TextBlock Text="Hallazgos" FontSize="24" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding ResultsSummary}"
+                       HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,2,4"
+                       FontSize="12.5"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+        </Grid>
 
-        <!-- Filters -->
-        <WrapPanel Grid.Row="1" Margin="0,0,0,8">
-            <ui:TextBox PlaceholderText="Buscar (título/ruleId)…" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Width="240" Margin="0,0,8,8" />
-            <ComboBox ItemsSource="{Binding Severities}" SelectedItem="{Binding SeverityFilter}" Width="130" Margin="0,0,8,8" />
-            <CheckBox Content="Ver silenciados" IsChecked="{Binding ShowSilenced}" VerticalAlignment="Center" Margin="0,0,12,8" />
-            <CheckBox Content="Solo needsReview" IsChecked="{Binding OnlyNeedsReview}" VerticalAlignment="Center" Margin="0,0,12,8" />
-            <CheckBox Content="Solo disputados" IsChecked="{Binding OnlyDisputed}" VerticalAlignment="Center" Margin="0,0,8,8"
-                      ToolTip="Hallazgos que un auditor sostiene que nunca fueron un defecto. Los decide una persona." />
-        </WrapPanel>
+        <!-- · Barra de filtros: lo ÚNICO que queda arriba (F5.4) · -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MinWidth="160" MaxWidth="280" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-        <!-- Bulk actions -->
-        <WrapPanel Grid.Row="2" Margin="0,0,0,10">
-            <ComboBox ItemsSource="{Binding Reasons}" SelectedItem="{Binding SilenceReason}" Width="170" Margin="0,0,6,6" />
-            <ui:TextBox PlaceholderText="Caduca (días, 0=nunca)" Text="{Binding SilenceExpiryDays}" Width="150" Margin="0,0,6,6" />
-            <ui:Button Content="Silenciar sel." Command="{Binding SilenceSelectedCommand}" Margin="0,0,12,6" />
-            <ui:TextBox PlaceholderText="Asignar a…" Text="{Binding Assignee}" Width="140" Margin="0,0,6,6" />
-            <ui:Button Content="Asignar sel." Command="{Binding AssignSelectedCommand}" Margin="0,0,12,6" />
-            <ui:Button Content="Verify sel." Command="{Binding VerifySelectedCommand}" Appearance="Primary" Margin="0,0,12,6" />
-            <ui:Button Content="Disputa: es falso positivo" Command="{Binding AcceptDisputeCommand}" Margin="0,0,6,6"
-                       ToolTip="Da la razón al auditor que discrepó: se silencia como falso positivo, con tu nombre. No es una resolución." />
-            <ui:Button Content="Disputa: sigue siendo defecto" Command="{Binding DismissDisputeCommand}" Margin="0,0,6,6"
-                       ToolTip="Da la razón a quien lo reportó: se retira la marca y el hallazgo sigue igual." />
-        </WrapPanel>
+                <ui:TextBox Grid.Column="0"
+                            PlaceholderText="Buscar título, ruleId o ruta…"
+                            Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                            VerticalAlignment="Center" />
 
-        <DataGrid
-            Grid.Row="3"
-            ItemsSource="{Binding Rows}"
-            AutoGenerateColumns="False"
-            IsReadOnly="False"
-            CanUserAddRows="False"
-            HeadersVisibility="Column"
-            GridLinesVisibility="Horizontal"
-            SelectionMode="Extended"
-            EnableRowVirtualization="True">
-            <DataGrid.Columns>
-                <DataGridCheckBoxColumn Header="" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="30" />
-                <DataGridTextColumn Header="Sev" Binding="{Binding Severity}" Width="70" />
-                <DataGridTextColumn Header="Conf" Binding="{Binding Confidence}" Width="60" />
-                <DataGridTextColumn Header="Estado" Binding="{Binding Status}" Width="90" />
-                <DataGridTextColumn Header="App" Binding="{Binding Slug}" Width="100" />
-                <DataGridTextColumn Header="Título" Binding="{Binding Title}" Width="*" />
-                <DataGridTextColumn Header="Ubicación" Binding="{Binding Location}" Width="200" />
-                <DataGridTextColumn Header="Días" Binding="{Binding DaysSinceConfirmed}" Width="60" />
-                <DataGridTextColumn Header="Disputa" Binding="{Binding DisputeLabel}" Width="170" />
-                <DataGridTemplateColumn Header="" Width="150">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal">
-                                <ui:Button Content="Ver" Command="{Binding DataContext.OpenDetailCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" CommandParameter="{Binding}" Margin="0,0,4,0" Padding="8,2" />
-                                <ui:Button Content="Editor" Command="{Binding DataContext.OpenInEditorCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" CommandParameter="{Binding}" Padding="8,2" />
+                <!-- Aplicación: NUEVO en F5.4. «Todas» es la primera opción y el valor inicial. -->
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding AppOptions}"
+                          SelectedItem="{Binding SelectedApp}"
+                          DisplayMemberPath="Label"
+                          Width="170" Margin="8,0,0,0" VerticalAlignment="Center"
+                          ToolTip="Aplicación" />
+
+                <!-- Severidad: con «Todas», que es de donde no se podía volver. -->
+                <ComboBox Grid.Column="2"
+                          ItemsSource="{Binding SeverityOptions}"
+                          SelectedItem="{Binding SelectedSeverity}"
+                          DisplayMemberPath="Label"
+                          Width="120" Margin="8,0,0,0" VerticalAlignment="Center"
+                          ToolTip="Severidad" />
+
+                <ComboBox Grid.Column="3"
+                          ItemsSource="{Binding ScopeOptions}"
+                          SelectedItem="{Binding SelectedScope}"
+                          DisplayMemberPath="Label"
+                          Width="130" Margin="8,0,0,0" VerticalAlignment="Center"
+                          ToolTip="Estado" />
+
+                <CheckBox Grid.Column="4"
+                          Content="needsReview"
+                          IsChecked="{Binding OnlyNeedsReview}"
+                          VerticalAlignment="Center" Margin="14,0,0,0"
+                          ToolTip="Hallazgos que verify no pudo comprobar o cuya ubicación se perdió." />
+
+                <CheckBox Grid.Column="5"
+                          IsChecked="{Binding OnlyDisputed}"
+                          VerticalAlignment="Center" Margin="10,0,0,0"
+                          ToolTip="Hallazgos que un auditor sostiene que nunca fueron un defecto. Los decide una persona.">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="⚖" Margin="0,0,4,0" />
+                        <TextBlock Text="disputados" />
+                    </StackPanel>
+                </CheckBox>
+
+                <ui:Button Grid.Column="7"
+                           Content="Limpiar filtros"
+                           Command="{Binding ClearFiltersCommand}"
+                           Appearance="Secondary"
+                           Padding="10,4" VerticalAlignment="Center"
+                           Visibility="{Binding HasActiveFilters, Converter={StaticResource BoolToVisibility}}" />
+            </Grid>
+        </Border>
+
+        <!-- · La lista, agrupada por unidad. Plana por dentro: virtualiza por FILA. · -->
+        <ListBox Grid.Row="2"
+                 ItemsSource="{Binding Items}"
+                 Background="Transparent"
+                 BorderThickness="0"
+                 Padding="0,0,6,0"
+                 HorizontalContentAlignment="Stretch"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 ScrollViewer.CanContentScroll="True"
+                 VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.VirtualizationMode="Recycling"
+                 Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
+
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0" />
+                    <Setter Property="Focusable" Value="False" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ListBoxItem">
+                                <ContentPresenter HorizontalAlignment="Stretch" />
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ListBox.ItemContainerStyle>
+
+            <ListBox.Resources>
+
+                <!-- · Cabecera de grupo: el fichero en grande, la ruta en pequeño, chips a la derecha · -->
+                <DataTemplate DataType="{x:Type vm:FindingGroupHeader}">
+                    <Button Style="{StaticResource RowLink}"
+                            Margin="0,10,0,0"
+                            Command="{Binding DataContext.ToggleGroupCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                            CommandParameter="{Binding}"
+                            ToolTip="{Binding CountLabel}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding ExpandGlyph}"
+                                       Width="18" FontSize="12"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding FileName}"
+                                           FontSize="15.5" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Subtitle}"
+                                           FontSize="11.5" Margin="10,0,8,0"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                             </StackPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-            </DataGrid.Columns>
-        </DataGrid>
 
-        <TextBlock Grid.Row="3" Text="Sin hallazgos con estos filtros." Opacity="0.6"
-                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                   Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
+                            <ItemsControl Grid.Column="2"
+                                          ItemsSource="{Binding Chips}"
+                                          ItemTemplate="{StaticResource SeverityChipTemplate}"
+                                          VerticalAlignment="Center">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </Grid>
+                    </Button>
+                </DataTemplate>
 
-        <TextBlock Grid.Row="4" Text="{Binding StatusMessage}" Opacity="0.85" Margin="0,8,0,0"
-                   Visibility="{Binding StatusMessage, Converter={StaticResource NotEmptyToVisibility}}" />
+                <!-- · Fila de hallazgo: dos líneas, título completo, sin columnas truncadas · -->
+                <DataTemplate DataType="{x:Type vm:FindingRow}">
+                    <Button Style="{StaticResource RowLink}"
+                            Margin="26,1,0,0"
+                            Command="{Binding DataContext.OpenDetailCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                            CommandParameter="{Binding}"
+                            ToolTip="{Binding UnitPath}">
+                        <StackPanel>
+
+                            <!-- Línea 1: severidad · título completo · marcas -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0"
+                                        Background="{Binding Severity, Converter={StaticResource SeverityToBrush}}"
+                                        CornerRadius="9" Padding="8,1" Margin="0,1,10,0"
+                                        VerticalAlignment="Top">
+                                    <TextBlock Text="{Binding Severity}" Foreground="White"
+                                               FontSize="10.5" FontWeight="SemiBold" />
+                                </Border>
+
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding Title}"
+                                           TextWrapping="Wrap"
+                                           FontSize="13.5"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                           VerticalAlignment="Center" />
+
+                                <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                            VerticalAlignment="Top" Margin="10,1,0,0">
+                                    <Border CornerRadius="9" Padding="7,1" Margin="4,0,0,0"
+                                            Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
+                                            ToolTip="{Binding DisputeLabel}"
+                                            Visibility="{Binding IsDisputed, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock Text="⚖" FontSize="11"
+                                                   Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                                    </Border>
+                                    <Border CornerRadius="9" Padding="7,1" Margin="4,0,0,0"
+                                            Background="{DynamicResource SubtleFillColorTertiaryBrush}"
+                                            ToolTip="Verify no pudo comprobarlo, o su ubicación se perdió."
+                                            Visibility="{Binding NeedsReview, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock Text="needsReview" FontSize="10"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Línea 2, atenuada: id · confianza · líneas · asignado · frescura -->
+                            <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                <TextBlock Text="{Binding Meta}" FontSize="11.5" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                            Visibility="{Binding HasAssignee, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="·" Margin="7,0" FontSize="11.5" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                    <Border Width="18" Height="18" CornerRadius="9"
+                                            Background="{DynamicResource ControlFillColorSecondaryBrush}">
+                                        <TextBlock Text="{Binding AssigneeInitials}" FontSize="9"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    </Border>
+                                    <TextBlock Text="{Binding Assignee}" FontSize="11.5" Margin="5,0,0,0"
+                                               VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                </StackPanel>
+
+                                <TextBlock Text="·" Margin="7,0" FontSize="11.5" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                <Ellipse Width="6" Height="6" Margin="0,0,5,0" VerticalAlignment="Center"
+                                         Fill="{DynamicResource SystemFillColorCautionBrush}"
+                                         ToolTip="Sin confirmar por encima del umbral de frescura."
+                                         Visibility="{Binding IsStale, Converter={StaticResource BoolToVisibility}}" />
+                                <TextBlock Text="{Binding FreshnessLabel}" FontSize="11.5" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                            </StackPanel>
+
+                        </StackPanel>
+                    </Button>
+                </DataTemplate>
+
+            </ListBox.Resources>
+        </ListBox>
+
+        <!-- · Estado vacío: dice qué pasa y ofrece la salida · -->
+        <StackPanel Grid.Row="2" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Text="Sin hallazgos con estos filtros."
+                       HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            <ui:Button Content="Limpiar filtros"
+                       Command="{Binding ClearFiltersCommand}"
+                       HorizontalAlignment="Center" Margin="0,12,0,0"
+                       Visibility="{Binding HasActiveFilters, Converter={StaticResource BoolToVisibility}}" />
+        </StackPanel>
+
     </Grid>
 </UserControl>
