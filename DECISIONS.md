@@ -2280,6 +2280,30 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   cambia; (c) lanzar una selección de más de 3 unidades y leer la estimación antes de confirmar;
   (d) que las sesiones antiguas en modo retirado siguen visibles en Métricas y en sus informes.
 
+### Retoque posterior: la cabecera de módulo era texto negro sobre fondo negro
+
+- **D-270 — Causa raíz: un `Style TargetType="Button"` sin `BasedOn` no hereda del implícito de
+  WPF-UI, y su `Foreground` cae al NEGRO de serie de WPF.** El usuario lo vio en la vista: las
+  cabeceras de las que cuelgan las clases «apenas se ven». Medido en el render en vez de
+  suponerlo: el texto de la cabecera salía a **(0,0,0)** sobre un fondo **(32,32,32)** — no es que
+  contrastara poco, es que no había contraste. Las filas de unidad, en cambio, medían (255,255,255)
+  porque cuelgan del `UserControl` y heredan el color del tema; la cabecera cuelga del botón que
+  pliega, y ahí el estilo nuevo cortaba la herencia.
+
+- **D-271 — El arreglo es del ESTILO, no de sus hijos.** `ModuleHeaderLink` declara
+  `Foreground="{DynamicResource TextFillColorPrimaryBrush}"` —recurso del tema, no un blanco fijo,
+  que en tema claro sería el mismo defecto al revés— y el `TextBlock` de la cabecera lo declara
+  también, siguiendo la disciplina de V3. Comprobado en las dos direcciones con el arnés de D-268:
+  la cabecera mide ahora (255,255,255) sobre (32,32,32) en oscuro, y oscura sobre claro en el tema
+  claro, que el arnés renderiza en una segunda pasada.
+
+- **D-272 — El mismo agujero estaba latente en V3.** `RowLink` (`FindingsView`) tampoco declaraba
+  `Foreground`; no se notaba solo porque cada `TextBlock` de dentro se pone su propio color. Un
+  hijo nuevo sin color habría reproducido el defecto exacto. Se le pone el `Setter` —hoy inerte
+  ahí— y la regla se escribe una vez en un test: recorre las diez vistas y falla si algún `Style`
+  de `Button` sin `BasedOn` no declara su `Foreground`. Comprobado que discrimina con una mutación
+  puntual (D-214): quitando el `Setter` de V2, falla ese caso y solo ese.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

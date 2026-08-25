@@ -11,6 +11,10 @@
         <Style x:Key="RowLink" TargetType="Button">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
+            <!-- Aquí no se notaba porque cada TextBlock de dentro se pone su color, pero el agujero
+                 es el mismo que destapó V2: un Style de Button sin BasedOn no hereda del implícito
+                 de WPF-UI y su Foreground cae al NEGRO de serie de WPF. -->
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Padding" Value="12,9" />

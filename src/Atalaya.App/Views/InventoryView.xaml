@@ -9,6 +9,10 @@
         <Style x:Key="ModuleHeaderLink" TargetType="Button">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
+            <!-- OBLIGATORIO en un Style de Button sin BasedOn: al no heredar del implícito de
+                 WPF-UI, el Foreground cae al de serie de WPF, que es NEGRO. Sobre el fondo oscuro
+                 del tema eso es texto invisible (0,0,0 sobre 32,32,32). -->
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Padding" Value="8,6" />
@@ -132,6 +136,7 @@
                                                    Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                                         <TextBlock Text="{Binding Header}"
                                                    FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                    VerticalAlignment="Center" />
                                     </StackPanel>
                                 </Button>
