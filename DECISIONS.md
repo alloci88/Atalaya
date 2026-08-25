@@ -763,6 +763,37 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   app no adivina); lista acotada por unidad; duplicado exacto intra-sesión. La salvaguarda de
   aislamiento `TestFactory.AssertIsolated` (D-062) sigue vigente y sin tocar.
 
+- **D-085 — El bucle de auto-relanzado de la sesión en vivo (bug preexistente, no de F4).**
+  Tras el reset del piloto, el baseline volvió a contaminarse solo: 7 sesiones sobre
+  `CommonStatics.cs` a intervalos de 60 s que nadie lanzó. Causa:
+  `MainViewModel.RefreshAsync` (tick de polling, §3) llama a `Navigation.Current.LoadAsync()`
+  cuando un pull trae cambios, y `SessionViewModel.LoadAsync` **ejecuta una auditoría**. Como
+  una sesión termina haciendo commit+push, el siguiente tick se traía sus PROPIOS cambios y
+  relanzaba: bucle autosostenido mientras la página siguiera abierta. `LoadAsync` significa
+  "recarga la vista" en todas las demás páginas; en ésta ejecutaba trabajo. Ese es el error
+  de diseño.
+
+  Segundo defecto en el mismo camino: `Start()` ponía `IsRunning = true` **después** de
+  `await _agent.CheckAsync(...)`, así que dos disparos casi simultáneos (poll + navegación)
+  pasaban ambos el guardia — de ahí dos sesiones arrancadas en el mismo segundo
+  (`07:35:07.043` y `07:35:07.799`).
+
+  **Arreglo:** `_startedForRequest` se rearma solo en `Configure` (una configuración explícita,
+  una sesión) y el cerrojo se echa antes del primer `await`. No se retira el auto-arranque al
+  navegar: la vista no tiene botón «Iniciar» y esa es la forma prevista de lanzar la sesión.
+
+  **Tests (`SessionViewModelTests`):** verificados por mutación — con el código anterior fallan
+  3 de 4. Recargas del poll no relanzan · las recargas no tocan los hallazgos · una
+  configuración nueva sí permite otra sesión · disparos concurrentes atraviesan el guardia
+  exactamente una vez. Este último **cuenta entradas al agente, no sesiones escritas**: contar
+  sesiones daba verde por accidente (dos ejecuciones concurrentes se estorban entre sí), un
+  falso positivo que habría dejado el cerrojo sin cobertura real.
+
+  **Nota de método:** durante el diagnóstico afirmé dos veces causas equivocadas (un binario
+  antiguo, un merge del hub) antes de leer el log y los propios binarios. Ambas eran
+  comprobables en un comando. La lección de D-072 aplica también al diagnóstico, no solo a las
+  decisiones: **verificar antes de afirmar**.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

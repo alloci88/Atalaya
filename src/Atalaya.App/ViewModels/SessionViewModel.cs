@@ -26,6 +26,12 @@ public sealed partial class SessionViewModel : ViewModelBase
     private CancellationTokenSource? _cts;
     private SessionRequest? _request;
 
+    /// <summary>
+    /// Ya se lanzó la auditoría para el <see cref="_request"/> actual. Se rearma en
+    /// <see cref="Configure"/>, es decir, una sesión por configuración explícita.
+    /// </summary>
+    private bool _startedForRequest;
+
     public SessionViewModel(SessionCoordinator coordinator, ICopilotAgent agent)
     {
         _coordinator = coordinator;
@@ -53,6 +59,7 @@ public sealed partial class SessionViewModel : ViewModelBase
     public void Configure(SessionRequest request, IReadOnlyList<string> displayPaths)
     {
         _request = request;
+        _startedForRequest = false;
         HeaderText = $"{request.Mode} · {request.Slug}";
         Queue.Clear();
         foreach (string p in displayPaths)
@@ -61,9 +68,20 @@ public sealed partial class SessionViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Arranca la sesión al entrar en la página — pero UNA SOLA VEZ por configuración.
+    /// <para>
+    /// <b>Por qué el guardia.</b> <c>LoadAsync</c> es "recarga la vista" para todas las páginas,
+    /// pero en ésta <i>ejecuta trabajo</i>. El tick de polling (§3) llama a
+    /// <c>Navigation.Current.LoadAsync()</c> cada vez que un pull trae cambios, y una sesión
+    /// termina haciendo commit+push: al minuto siguiente el poll se traía sus PROPIOS cambios y
+    /// relanzaba una auditoría entera, en bucle indefinido mientras la página siguiera abierta
+    /// (2026-08-25: 7 sesiones sobre CommonStatics.cs a intervalos de 60 s, baseline contaminado).
+    /// </para>
+    /// </summary>
     public override async Task LoadAsync()
     {
-        if (_request is not null && !IsRunning)
+        if (_request is not null && !IsRunning && !_startedForRequest)
         {
             await Start();
         }
@@ -77,18 +95,24 @@ public sealed partial class SessionViewModel : ViewModelBase
             return;
         }
 
-        AgentReadiness readiness = await _agent.CheckAsync(CancellationToken.None);
-        if (!readiness.Ready)
-        {
-            StatusMessage = readiness.Message;
-            return;
-        }
-
+        // El cerrojo se echa ANTES del primer await. Con el guardia después de
+        // CheckAsync, dos disparos casi simultáneos (poll + navegación) pasaban los dos y
+        // arrancaban dos sesiones en el mismo segundo.
         IsRunning = true;
-        StatusMessage = "Auditando…";
-        _cts = new CancellationTokenSource();
+        _startedForRequest = true;
+        StatusMessage = "Comprobando Copilot…";
+
         try
         {
+            AgentReadiness readiness = await _agent.CheckAsync(CancellationToken.None);
+            if (!readiness.Ready)
+            {
+                StatusMessage = readiness.Message;
+                return;
+            }
+
+            StatusMessage = "Auditando…";
+            _cts = new CancellationTokenSource();
             SessionResult result = await Task.Run(() => _coordinator.RunAsync(_request, _cts.Token));
             // F4: el resumen gana "no verificables" e "incompletas" — pero solo si los hay, y con
             // la causa implícita en el propio texto. Sin números sin causa.
