@@ -748,6 +748,31 @@ public sealed class SessionCoordinatorTests : IDisposable
         report.Should().Contain("Payloads rechazados por validación: 3");
     }
 
+    /// <summary>
+    /// F5.1b: un lote vacío es como el auditor dice «no hay nada nuevo», que es la respuesta normal
+    /// de un barrido que converge. Contarlo como payload rechazado pintaba un ⚠ en el informe donde
+    /// no había ningún problema. La llamada sigue registrada en la traza de tools: no se traga nada.
+    /// </summary>
+    [Fact]
+    public async Task An_empty_batch_means_nothing_new_not_a_rejected_payload()
+    {
+        SetMaxPasses(1);
+
+        // El agente falso se salta la tool cuando no tiene nada que enviar, así que hace falta uno
+        // que la llame de verdad con el array vacío — que es lo que hizo gpt-5.5 el 2026-08-25.
+        SessionResult result = await RunLotes(new SubmitsAnEmptyBatch());
+
+        result.Counters.Rejected.Should().Be(0);
+        result.Counters.New.Should().Be(0);
+
+        AuditSession session = _hub.Store.ListSessions("app").Single();
+        session.Notes.Should().NotContain(n => n.Contains("rechazo"));
+        session.Units.Single().RejectedPayloads.Should().Be(0);
+
+        string report = File.ReadAllText(_hub.HubPaths.ReportFile("app", result.SessionId.ToString()));
+        report.Should().NotContain("Payloads rechazados");
+    }
+
     // ---------- F5.1 — configuración visible en la sesión y en el informe ----------
 
     /// <summary>
@@ -868,6 +893,30 @@ public sealed class SessionCoordinatorTests : IDisposable
         InventoryCycle inv = _hub.Store.TryReadInventory("app", 1)!;
         inv.Units.Single(u => u.Path == path).State = UnitState.Auditada;
         _hub.Store.WriteInventory("app", inv);
+    }
+
+    /// <summary>Agente que invoca <c>submit_findings</c> con un array VACÍO: "no hay nada nuevo".</summary>
+    private sealed class SubmitsAnEmptyBatch : ICopilotAgent
+    {
+        public string? ModelName => "empty-batch";
+        public event Action<string>? TextStreamed { add { } remove { } }
+        public event Action<UsageSample>? UsageReported { add { } remove { } }
+
+        public Task<bool> EnsureReadyAsync(CancellationToken ct) => Task.FromResult(true);
+        public Task<AgentReadiness> CheckAsync(CancellationToken ct)
+            => Task.FromResult(new AgentReadiness(true, "listo"));
+        public Task<IReadOnlyList<AgentModel>> ListModelsAsync(CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<AgentModel>>(Array.Empty<AgentModel>());
+
+        public Task AuditUnitAsync(AuditUnitRequest request, IAuditToolbox toolbox, CancellationToken ct)
+        {
+            toolbox.SubmitFindings(Array.Empty<SubmitFindingArgs>());
+            toolbox.UnitDone(request.UnitPath, "Revisados: todo. Nada nuevo.");
+            return Task.CompletedTask;
+        }
+
+        public Task VerifyAsync(VerifyRequest request, IVerifyToolbox toolbox, CancellationToken ct)
+            => Task.CompletedTask;
     }
 
     /// <summary>Agente de test que emite un <c>UsageSample</c> lo bastante grande para disparar el

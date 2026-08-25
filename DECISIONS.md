@@ -1128,10 +1128,19 @@ haber tocado el código. No era una impresión.
   tests. `SessionViewModel` nombra ahora disputas y degradaciones; cubierto y verificado por
   mutación.
 
-  Cabo suelto menor, no arreglado: llamar a `submit_findings` con un array vacío —que es como este
-  modelo dice «no hay nada nuevo»— se contabiliza como payload rechazado, y el informe lo saca con
-  un ⚠. Es ruido cosmético, no un error, pero conviene decidir si un lote vacío es un rechazo o una
-  respuesta legítima.
+- **D-115 — Un lote vacío es una respuesta, no un rechazo.** `submit_findings([])` es como el
+  auditor dice «no hay nada nuevo en esta unidad»: la respuesta normal de un barrido que converge.
+  Contarlo como payload rechazado inflaba `Counters.Rejected` y pintaba un ⚠ en el informe donde no
+  había ningún problema — el mismo pecado que D-060 pero al revés: una alarma sin causa. La llamada
+  sigue apareciendo en `ToolCallLog` con `items=0`, así que no se traga nada; simplemente deja de
+  ser un error. `report_verdicts` vacío SÍ sigue siendo un rechazo: ahí el auditor tiene la
+  obligación de pronunciarse sobre cada hallazgo listado.
+
+  **Nota de método (segunda vez en esta tanda).** El primer test daba verde con la mutación puesta:
+  `FakeCopilotAgent` se salta la tool cuando no tiene nada que enviar, así que el caso no se
+  ejercitaba. Hizo falta un agente que llamara de verdad con el array vacío, que es lo que hizo
+  `gpt-5.5`. Igual que con el centinela `unknown` (D-106): **un test verde no prueba nada hasta que
+  se le ve fallar**.
 
 - **D-112 — Cobertura.** 18 tests nuevos (`VerdictGuardTests`, `StoppedSessionTests`). Verificados
   por mutación: desactivar la guarda entera tumba 3; desactivar solo la capa del `contentHash` tumba

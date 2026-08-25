@@ -431,17 +431,13 @@ public sealed class SessionToolbox : IAuditToolbox
         SubmitInvocations++;
         int count = findings?.Length ?? 0;
         ToolCallLog.Add($"submit_findings · items={count}");
+        // Un lote VACÍO es como el auditor dice "no hay nada nuevo en esta unidad", que es una
+        // respuesta legítima y frecuente en un barrido que converge. No es un payload rechazado:
+        // contarlo como tal pintaba un ⚠ en el informe donde no había ningún problema. La llamada
+        // sigue en ToolCallLog con items=0, así que no se traga nada (F5.1b).
         if (findings is null || findings.Length == 0)
         {
-            string reason = "submit_findings recibido sin hallazgos (array nulo o vacío).";
-            RejectedPayloads.Add(reason);
-            RejectionReasons.Add(reason);
-            Counters.Rejected++;
-            PassRejected++;
-            return new SubmitFindingsResult(new[]
-            {
-                new SubmitFindingResult(false, Error: reason),
-            });
+            return new SubmitFindingsResult(Array.Empty<SubmitFindingResult>());
         }
 
         var results = new List<SubmitFindingResult>(findings.Length);
