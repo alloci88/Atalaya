@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Windows.Input;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
@@ -386,7 +387,7 @@ public sealed class FindingsViewTests : IDisposable
         first.Subtitle.Should().Contain("src/Common.cs"); // la ruta completa al lado
         first.WorstSeverity.Should().Be(Severity.Critica);
         first.CountLabel.Should().Be("2 hallazgos");
-        first.Chips.Select(c => c.Label).Should().Equal("1 Critica", "1 Media");
+        first.Chips.Select(c => c.Label).Should().Equal("1 Crítica", "1 Media");
     }
 
     [Fact]
@@ -529,6 +530,81 @@ public sealed class FindingsViewTests : IDisposable
 
         vm.AppOptions.Select(o => o.Label).Should().Equal("Todas", "Alpha", "Beta", "Gamma");
         vm.SelectedApp!.Slug.Should().Be("alpha");
+    }
+
+    // ------------------------------------------------- la interfaz habla castellano
+
+    /// <summary>
+    /// Lee las etiquetas del propio XAML, como <see cref="ShellChromeTests"/>: lo que se escribe en
+    /// un <c>Content</c> o un <c>PlaceholderText</c> es una propiedad de la PLANTILLA y no existe
+    /// como estado que un view-model pueda devolver.
+    /// </summary>
+    private static string FindingsViewXaml()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Atalaya.sln")))
+        {
+            dir = dir.Parent;
+        }
+
+        dir.Should().NotBeNull("los tests corren dentro del repositorio");
+        string path = Path.Combine(dir!.FullName, "src", "Atalaya.App", "Views", "FindingsView.xaml");
+        File.Exists(path).Should().BeTrue($"se esperaba la vista en {path}");
+        return File.ReadAllText(path);
+    }
+
+    /// <summary>Todo texto literal que el usuario llega a leer: etiquetas, placeholders y tooltips.</summary>
+    private static IEnumerable<string> VisibleLabels(string xaml)
+    {
+        string markup = Regex.Replace(xaml, "<!--.*?-->", string.Empty, RegexOptions.Singleline);
+        foreach (Match m in Regex.Matches(markup, "(?:Text|Content|PlaceholderText|ToolTip)=\"([^\"]*)\""))
+        {
+            string value = m.Groups[1].Value;
+            if (!value.StartsWith("{", StringComparison.Ordinal) && value.Trim().Length > 0)
+            {
+                yield return value;
+            }
+        }
+    }
+
+    /// <summary>
+    /// «needsReview» era el nombre de un campo del modelo puesto de etiqueta, y el placeholder de
+    /// búsqueda nombraba «ruleId». La interfaz está en castellano; los identificadores se quedan en
+    /// el código y en los ficheros del hub, que es donde significan algo.
+    /// </summary>
+    [Fact]
+    public void Ninguna_etiqueta_visible_escribe_jerga_interna()
+    {
+        string[] jerga = { "needsReview", "ruleId", "displayId", "slug", "ULID", "fingerprint", "isStale" };
+        var labels = VisibleLabels(FindingsViewXaml()).ToList();
+
+        labels.Should().NotBeEmpty("si el barrido no encuentra etiquetas, no está probando nada");
+
+        foreach (string label in labels)
+        {
+            foreach (string term in jerga)
+            {
+                label.Should().NotContainEquivalentOf(
+                    term, $"«{term}» es del modelo de datos, no del usuario (etiqueta: «{label}»)");
+            }
+        }
+    }
+
+    /// <summary>
+    /// El identificador de la enumeración va sin tilde porque C# no las lleva. Volcarlo con
+    /// <c>ToString()</c> escribía «Critica» en una interfaz en castellano.
+    /// </summary>
+    [Fact]
+    public async Task La_severidad_se_escribe_como_se_escribe_en_castellano()
+    {
+        SeedPortfolio();
+        FindingsViewModel vm = await LoadedVm();
+
+        vm.SeverityOptions.Select(o => o.Label)
+            .Should().Equal("Todas", "Crítica", "Alta", "Media", "Baja");
+
+        vm.Groups[0].Chips.Should().Contain(c => c.Label == "1 Crítica");
+        vm.SeverityOptions.Should().NotContain(o => o.Label == "Critica");
     }
 
     // ------------------------------------------------- la frontera V3 / V4

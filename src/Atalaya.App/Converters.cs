@@ -37,6 +37,32 @@ public sealed class SeverityToBrushConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
+/// <summary>
+/// El nombre de una severidad tal y como se ESCRIBE en la interfaz. El identificador de la
+/// enumeración va sin tilde porque C# no las lleva; volcarlo con <c>ToString()</c> en una etiqueta
+/// escribía «Critica» en una interfaz en castellano. La enumeración es del modelo, no del usuario.
+/// </summary>
+public static class SeverityNames
+{
+    public static string Display(Severity severity) => severity switch
+    {
+        Severity.Critica => "Crítica",
+        Severity.Alta => "Alta",
+        Severity.Media => "Media",
+        _ => "Baja",
+    };
+}
+
+/// <inheritdoc cref="SeverityNames"/>
+public sealed class SeverityToLabelConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is Severity s ? SeverityNames.Display(s) : string.Empty;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
 /// <summary>true → Collapsed, false → Visible (for empty-state overlays).</summary>
 public sealed class InverseBoolToVisibilityConverter : IValueConverter
 {

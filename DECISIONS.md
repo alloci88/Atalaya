@@ -1461,9 +1461,58 @@ abrir la ficha. Y el combo de severidad no tenía «Todas»: filtrar era un viaj
   recuerda por clave `{slug} {ruta}`, no por referencia al grupo, que se reconstruye en cada
   recarga.
 
+### §4 — Retoques de lectura sobre V3 (mirando la vista pintada)
+
+- **D-167 — El buscador dice «Buscar…» y explica en el tooltip.** «Buscar título, ruleId o ruta…»
+  no cabía en el hueco que le deja la fila de filtros y se cortaba, que es la peor de las dos
+  opciones: ni informa ni respira. El placeholder se queda con la palabra y el detalle («busca en
+  el título, en la regla que lo detectó y en la ruta del fichero») pasa al tooltip. La columna sube
+  a 200–300 px, que es lo que necesita un cuadro de búsqueda para que se lea lo que se teclea.
+
+- **D-168 — El hueco de la barra de desplazamiento se reserva SIEMPRE.** Los chips de la cabecera
+  de grupo se comían el borde derecho y el último se solapaba con la barra. Se les da 14 px de
+  margen y, sobre todo, la lista pasa a `VerticalScrollBarVisibility="Visible"`. Con `Auto` el
+  ancho útil cambia en el momento en que la barra aparece: al filtrar, la lista se acorta, la barra
+  desaparece y **toda la columna de chips salta** a la derecha. Reservar el hueco cuesta una franja
+  vacía cuando no hace falta y a cambio la cabecera no se mueve nunca.
+
+- **D-169 — «needsReview» era el modelo de datos asomando por la interfaz.** Pasa a «Por revisar»
+  en el filtro y en la marca de la fila; el campo sigue llamándose `NeedsReview` en el código y en
+  los ficheros del hub, que es donde significa algo. El barrido de la misma jerga encontró dos
+  más: `ruleId` en el placeholder (D-167) y —la menos evidente— la severidad, que se escribía
+  volcando el identificador de la enumeración con `ToString()` y ponía **«Critica»**, sin tilde, en
+  una interfaz en castellano. `SeverityNames.Display` da el nombre que se escribe y
+  `SeverityToLabelConverter` lo lleva al XAML.
+
+- **D-170 — La tilde de «Crítica» solo se arregla en V3.** V4 y V5 siguen volcando la enumeración.
+  El converter y el helper quedan disponibles para adoptarlos allí, pero cambiarlos sale del
+  alcance de esta tanda y no se toca lo que no se ha mirado funcionando.
+
+- **D-171 — La marca de disputa dice la palabra, no solo la balanza.** Un ⚖ de 11 px sobre el ámbar
+  del badge se renderizaba como **emoji a color** —Segoe UI Emoji ignora el `Foreground`— y quedaba
+  un borrón dorado sobre fondo dorado. La marca pasa a «⚖ Disputado» (con «×N» si discrepan varios
+  modelos), en el mismo formato que «Por revisar», y el tooltip explica quién discrepa. El selector
+  de presentación de texto U+FE0E está puesto, pero WPF no lo respeta: lo que hace legible la marca
+  es la palabra, no el glifo.
+
+- **D-172 — Los tres retoques se verificaron pintando la vista, no leyéndola.** Un arnés STA
+  desechable montó V3 con datos reales y volcó PNG a 1x y a 2x: la lista corta (para comprobar que
+  el hueco de la barra se reserva también sin desbordar), la larga y un zoom sobre la cabecera. El
+  solape de los chips y el borrón del ⚖ solo se ven mirando; ningún test los habría contado. El
+  arnés se borró después: crear un `Application` en el proceso de tests es justo el aparato que
+  D-146 decidió no meter en la suite.
+
+- **D-173 — La jerga tiene guarda de regresión.** `Ninguna_etiqueta_visible_escribe_jerga_interna`
+  barre los `Text`/`Content`/`PlaceholderText`/`ToolTip` literales del XAML —los `{Binding}` no son
+  texto— y falla si vuelve a aparecer `needsReview`, `ruleId`, `displayId`, `slug`, `ULID`,
+  `fingerprint` o `isStale`. Empieza exigiendo que el barrido encuentre etiquetas: un regex que
+  deja de casar nada pasaría en verde sin comprobar nada. Con la tilde, 31 tests en V3 y 5
+  mutaciones nuevas (las 5 tumban tests).
+
 ### Cobertura y verificación
 
-- **D-164 — 29 tests nuevos, verificados por mutación (12 mutaciones, las 12 tumban tests).** Cubren
+- **D-164 — 29 tests nuevos, verificados por mutación (12 mutaciones, las 12 tumban tests).** Son
+  31 y 17 al cerrar el §4. Cubren
   los valores iniciales de los tres combos, cada filtro por separado, sus combinaciones, la **vuelta
   a «Todas»** en severidad y en aplicación, el recorrido completo del filtro de estado, la búsqueda
   por título/ruleId/ruta, «Limpiar filtros», `HasActiveFilters`, el contador (plural, singular y

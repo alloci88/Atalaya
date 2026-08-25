@@ -42,7 +42,7 @@ public sealed record ScopeFilterOption(FindingsScope Value, string Label)
 /// <summary>Un conteo por severidad, para el resumen de la cabecera de grupo.</summary>
 public sealed record SeverityChip(Severity Severity, int Count)
 {
-    public string Label => $"{Count} {Severity}";
+    public string Label => $"{Count} {SeverityNames.Display(Severity)}";
 }
 
 /// <summary>
@@ -88,12 +88,24 @@ public sealed class FindingRow : FindingsListItem
 
     public bool IsDisputed => DisputeCount > 0;
 
-    /// <summary>Etiqueta de la marca de disputa.</summary>
+    /// <summary>Etiqueta de la marca de disputa, para el tooltip.</summary>
     public string DisputeLabel => DisputeCount == 0
         ? string.Empty
         : DisputingModels > 1
-            ? $"disputado x{DisputingModels} modelos"
-            : "disputado";
+            ? $"Disputado por {DisputingModels} modelos distintos: ninguno cree que sea un defecto."
+            : "Un auditor sostiene que esto nunca fue un defecto.";
+
+    /// <summary>
+    /// Lo que se LEE en la marca. La balanza lleva el selector de presentación de texto (U+FE0E)
+    /// porque en presentación emoji sale como un borrón dorado que ignora el color del texto: sobre
+    /// el ámbar del badge no se distinguía nada. La palabra va al lado porque un icono solo, de
+    /// 11 px y en una esquina, no dice qué pasa.
+    /// </summary>
+    public string DisputeBadge => DisputeCount == 0
+        ? string.Empty
+        : DisputingModels > 1
+            ? $"⚖︎ Disputado ×{DisputingModels}"
+            : "⚖︎ Disputado";
 
     public string LocationLabel => ExtraLocations > 0
         ? $"L{Line} +{ExtraLocations} más"
@@ -232,7 +244,7 @@ public sealed partial class FindingsViewModel : ViewModelBase
         _settings = settings;
 
         SeverityOptions = new List<SeverityFilterOption> { AllSeverities }
-            .Concat(Enum.GetValues<Severity>().Select(s => new SeverityFilterOption(s, s.ToString())))
+            .Concat(Enum.GetValues<Severity>().Select(s => new SeverityFilterOption(s, SeverityNames.Display(s))))
             .ToList();
 
         ScopeOptions = new List<ScopeFilterOption>

@@ -15,6 +15,7 @@
 
             <local:SyncHealthToBrushConverter x:Key="SyncHealthToBrush" />
             <local:SeverityToBrushConverter x:Key="SeverityToBrush" />
+            <local:SeverityToLabelConverter x:Key="SeverityToLabel" />
             <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
             <local:NotEmptyToVisibilityConverter x:Key="NotEmptyToVisibility" />
             <local:ProgressToPercentConverter x:Key="ProgressToPercent" />
