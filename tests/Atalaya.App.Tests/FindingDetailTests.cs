@@ -781,6 +781,26 @@ public sealed class FindingDetailTests : IDisposable
     }
 
     /// <summary>
+    /// Ninguna tarjeta de la ficha se planta a un alto FIJO (F5.6b, D-241): con `Height`, un
+    /// método de cinco líneas dejaba 250 px de panel vacío por debajo. El tope se pone con
+    /// `MaxHeight`, que deja crecer al contenido y solo entonces saca el scroll interno.
+    /// </summary>
+    [Fact]
+    public void Ninguna_tarjeta_de_la_ficha_fija_un_alto_en_vez_de_un_tope()
+        => Regex.Matches(Markup(DetailXaml()), "(?<![A-Za-z])Height=\"[0-9]")
+            .Should().BeEmpty("un alto fijo deja hueco cuando el contenido es corto; el tope es MaxHeight");
+
+    /// <summary>Y el panel de código es el que lo sufría: su tope sigue siendo el de antes.</summary>
+    [Fact]
+    public void El_panel_de_codigo_crece_con_el_metodo_hasta_su_tope()
+    {
+        string xaml = Markup(DetailXaml());
+
+        xaml.Should().MatchRegex("<controls:SnippetView[^>]*MaxHeight=\"320\"");
+        xaml.Should().Contain("VerticalScrollBarVisibility=\"Auto\"", "el scroll solo cuando hace falta");
+    }
+
+    /// <summary>
     /// El defecto 5 (F5.6, D-231): `Padding` en un `Expander` NO separa el contenido — la
     /// plantilla de WPF-UI se lo aplica a la CABECERA, que pierde 8 px por arriba y saca el título
     /// descolgado contra el borde. Se comprobó renderizando el bloque con y sin el atributo. Este

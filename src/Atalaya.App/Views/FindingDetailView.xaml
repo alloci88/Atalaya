@@ -233,8 +233,14 @@
                         <Border CornerRadius="6" ClipToBounds="True"
                                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
                                 Visibility="{Binding HasSnippet, Converter={StaticResource BoolToVisibility}}">
+                            <!-- Alto ADAPTATIVO, no fijo (F5.6b): el panel mide lo que mide el
+                                 miembro y solo se planta al llegar al tope, que es donde aparece
+                                 el scroll interno. Con `Height` un método de cinco líneas dejaba
+                                 250 px de vacío debajo y separaba la tarjeta de la siguiente; el
+                                 comportamiento de un método largo no cambia. Mismo patrón que el
+                                 historial y los comentarios, que ya usaban `MaxHeight`. -->
                             <controls:SnippetView
-                                Height="320"
+                                MaxHeight="320"
                                 Padding="6,6,0,6"
                                 Code="{Binding Snippet}"
                                 FirstLine="{Binding SnippetFirstLine}"

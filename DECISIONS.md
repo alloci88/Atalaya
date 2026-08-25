@@ -2047,6 +2047,30 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   animación del tema** y aparecen la etiqueta «Justificación (obligatoria)», el campo y el botón
   rojo. Comprobar en los dos temas.
 
+### Retoque posterior: el panel de código crece con el método
+
+- **D-241 — `MaxHeight` en vez de `Height` en el panel de código.** Con el ancla ya arreglada se
+  vio el efecto de al lado: `ConvertToDetId` ocupa cinco líneas y el panel medía 320 px fijos, así
+  que dejaba **250 px de superficie vacía** entre el código y el borde, y separaba la tarjeta de
+  «Código» de la de «Historial» con un hueco que no significaba nada. Con un tope en vez de un
+  alto, el panel mide lo que mide el miembro y solo se planta al llegar a 320, que es donde
+  aparece el scroll interno — el comportamiento de un método largo no cambia en nada.
+
+  Se comprobó antes de cambiarlo, porque no era evidente: `SnippetView` hereda de `TextEditor`
+  (AvalonEdit), que lleva su propio `ScrollViewer` dentro, y un control así puede perfectamente
+  medirse a cero o a infinito cuando se le quita la altura. Renderizado fuera de la aplicación con
+  el control **de verdad** (el arnés de D-238, ahora referenciando `Atalaya.App`): mide al
+  contenido, y a partir del tope saca la barra. Probado en los tres casos que importan — método de
+  cinco líneas, método de 28 y el degenerado de **una sola línea**, este último también con una
+  línea más ancha que el panel: la barra horizontal de AvalonEdit se superpone y no aplasta el
+  texto, así que no hace falta un `MinHeight` que reintroduciría el hueco en pequeño.
+
+- **D-242 — El resto de la ficha ya lo hacía bien.** El historial (`MaxHeight=420`) y los
+  comentarios (`MaxHeight=320`) ya usaban tope, y el campo de justificación usa `MinHeight`, que es
+  lo correcto para un campo de escritura. El único alto fijo de la ficha era el del código. Un test
+  lee el XAML y falla si vuelve a aparecer un `Height="..."` numérico en cualquier tarjeta —
+  comprobado con una mutación puntual a mano (D-214) de que discrimina de verdad.
+
 - **D-235 — Lo que esta tanda NO toca.** Motor de auditoría, reconciliación, barrido y sync quedan
   como estaban. De `SessionToolbox` se toca **solo** el re-anclaje al persistir (D-226) y de
   `SessionCoordinator` **solo** la llamada al alias tras el push (D-228), que es donde la decisión
