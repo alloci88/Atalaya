@@ -869,6 +869,30 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   no debería acercarse. La salvaguarda sigue siendo dura: agotada una pasada, la unidad se cierra
   como `presupuesto-superado` y la sesión continúa.
 
+- **D-094 — El barrido no juzga su propia salida, y confirma cada hallazgo una sola vez.** Con el
+  baseline VACÍO, la primera validación de la consolidación mostró al usuario
+  **«nuevos 12, confirmados 16»**: la pasada 2 «confirmaba» lo que había reportado la 1 y la 3 lo
+  de ambas. Para el usuario no existían confirmaciones —no había nada previo que confirmar—: eran
+  contabilidad interna del barrido escapándose a la superficie. Y el daño no era solo cosmético:
+  cada una incrementaba `TimesConfirmed`, de modo que una única sesión inflaba la confianza como
+  si hubiera habido tres auditorías independientes.
+  - Un veredicto sobre un hallazgo **creado por el propio barrido** no toca el hallazgo ni cuenta
+    en los contadores de sesión. Si además no es «presente», se registra como incoherente (D-088
+    generalizado: el código no cambia entre pasadas).
+  - Un hallazgo **previo** se reconcilia **como mucho una vez por barrido**
+    (`_reconciledInSweep`): las pasadas son un mecanismo interno de cobertura, no auditorías
+    separadas. Una auditoría, una confirmación.
+  - Los contadores de pasada (`UnitPassRecord`) siguen registrándolo todo: el desglose interno no
+    se pierde, simplemente no se confunde con el resumen que ve el usuario.
+
+- **D-095 — `MaxPassesPerUnit` por defecto sube de 3 a 5.** Con la consolidación activa el barrido
+  de `CommonStatics.cs` fue **6 → 4 → 2**: convergiendo, pero cortado por el tope antes de secarse
+  (con `add_locations` disponible el modelo consolidó dentro de `submit_findings`: un hallazgo
+  «falta de validación de argumentos nulos» con cinco ubicaciones, donde antes había cinco
+  hallazgos). Como el presupuesto se mide por pasada (D-093), subir el tope no estrecha el de cada
+  una. Extrapolación desde una sola muestra, declarada como tal: si a las 5 no se seca, el
+  problema es otro y no se arregla subiendo el tope.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

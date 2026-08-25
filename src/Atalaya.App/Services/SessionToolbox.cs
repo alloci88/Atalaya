@@ -46,6 +46,13 @@ public sealed class SessionToolbox : IAuditToolbox
     /// </summary>
     private readonly Dictionary<string, Finding> _createdInSweep = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Hallazgos ya reconciliados en el barrido en curso. Un barrido confirma cada hallazgo COMO
+    /// MUCHO UNA VEZ: las pasadas son un mecanismo interno de cobertura, no auditorías separadas,
+    /// así que repetir el veredicto no es evidencia nueva ni debe ascender la confianza.
+    /// </summary>
+    private readonly HashSet<string> _reconciledInSweep = new(StringComparer.Ordinal);
+
     /// <summary>Ruta normalizada de la unidad en curso: acota dónde pueden caer las ubicaciones.</summary>
     private string _unitPath = string.Empty;
 
@@ -117,6 +124,7 @@ public sealed class SessionToolbox : IAuditToolbox
     public void BeginUnitSweep(string unitPath = "")
     {
         _createdInSweep.Clear();
+        _reconciledInSweep.Clear();
         _unitPath = CodeAnchor.NormalizePath(unitPath);
     }
 
@@ -307,17 +315,34 @@ public sealed class SessionToolbox : IAuditToolbox
             return RejectVerdict($"veredicto duplicado sobre {id} en la misma unidad.");
         }
 
-        // Guarda de coherencia (F4.1): el código no cambia entre pasadas del mismo barrido, así
-        // que declarar «arreglado» un hallazgo que el propio barrido acaba de crear es una
-        // contradicción del modelo. Se degrada a «presente» y se deja constancia: «arreglado»
-        // solo tiene sentido entre auditorías distintas, con código cambiado de por medio.
-        if (verdict == ReconcileVerdict.Arreglado && _createdInSweep.ContainsKey(id))
+        // EL BARRIDO NO JUZGA SU PROPIA SALIDA (F4.1). Un veredicto sobre un hallazgo que este
+        // mismo barrido acaba de crear es contabilidad interna, no evidencia:
+        //   · el código no ha cambiado entre pasadas, así que «arreglado» es una contradicción;
+        //   · «presente» no aporta nada — lo acaba de reportar él mismo.
+        // Si se contara, la pasada 2 «confirmaría» lo de la 1 y la 3 lo de las dos: el usuario
+        // vería «nuevos 12, confirmados 16» sobre un baseline VACÍO (confirmados debe ser 0), y
+        // además TimesConfirmed se inflaría tres veces en una sola sesión, ascendiendo la
+        // confianza sin una segunda auditoría de verdad. Se registra y no se toca el hallazgo.
+        if (_createdInSweep.ContainsKey(id))
         {
-            string note = $"veredicto 'arreglado' ignorado sobre {id}: lo reportó este mismo "
-                + "barrido y el código no ha cambiado entre pasadas. Se mantiene presente.";
-            RejectedPayloads.Add(note);
-            RejectionReasons.Add("arreglado incoherente dentro del mismo barrido");
-            verdict = ReconcileVerdict.Presente;
+            if (verdict != ReconcileVerdict.Presente)
+            {
+                string note = $"veredicto '{verdict.ToString().ToLowerInvariant()}' ignorado sobre {id}: "
+                    + "lo reportó este mismo barrido y el código no ha cambiado entre pasadas.";
+                RejectedPayloads.Add(note);
+                RejectionReasons.Add("veredicto incoherente sobre un hallazgo del propio barrido");
+            }
+
+            PassConfirmed++;   // contabilidad de la pasada; NO cuenta como confirmación de sesión
+            return new ReportVerdictResult(true);
+        }
+
+        // Ya reconciliado en una pasada anterior de ESTE barrido: se acepta (el auditor cumple su
+        // obligación de pronunciarse) pero no se vuelve a aplicar. Una auditoría, una confirmación.
+        if (!_reconciledInSweep.Add(id))
+        {
+            PassConfirmed++;
+            return new ReportVerdictResult(true);
         }
 
         ReconcileOutcome outcome = _reconciliation.Apply(_slug, finding, verdict, v.Evidence, _mode, _stamp);

@@ -544,6 +544,60 @@ public sealed class SessionCoordinatorTests : IDisposable
         _hub.Store.TryReadFinding("app", old.Id.ToString())!.Status.Should().Be(FindingStatus.Resuelto);
     }
 
+    /// <summary>
+    /// El barrido no juzga su propia salida: lo que la pasada 2 «confirma» de la pasada 1 es
+    /// contabilidad interna, no evidencia. Con baseline VACÍO el usuario debe ver confirmados 0,
+    /// y <c>TimesConfirmed</c> no puede inflarse tres veces en una sola sesión — eso ascendería la
+    /// confianza sin que haya habido una segunda auditoría de verdad.
+    /// </summary>
+    [Fact]
+    public async Task Intra_sweep_confirmations_are_internal_and_never_reach_the_user()
+    {
+        SetMaxPasses(3);
+
+        int pass = 0;
+        var agent = new FakeCopilotAgent(auditScript: _ =>
+        {
+            pass++;
+            return pass == 1 ? new[] { SampleFinding() } : Array.Empty<SubmitFindingArgs>();
+        });
+
+        SessionResult result = await RunLotes(agent);
+
+        result.Counters.New.Should().Be(1);
+        result.Counters.Confirmed.Should().Be(0, "no habia nada previo que confirmar");
+
+        Finding f = _hub.Store.ListFindings("app").Should().ContainSingle().Subject;
+        f.TimesConfirmed.Should().Be(1, "las pasadas del propio barrido no son evidencia independiente");
+        f.Confidence.Should().Be(Confidence.Media, "lotes nace en media y el barrido no la asciende");
+    }
+
+    /// <summary>
+    /// Y lo previo SÍ cuenta: un hallazgo de una sesión anterior declarado «presente» es una
+    /// confirmación de verdad, y se cuenta una sola vez por muchas pasadas que dé el barrido.
+    /// </summary>
+    [Fact]
+    public async Task Confirmations_of_earlier_findings_count_exactly_once_per_sweep()
+    {
+        SetMaxPasses(3);
+        Finding previous = SeedExisting("De una sesion anterior");
+
+        // Fuerza DOS pasadas: la 1 aporta algo nuevo, la 2 ya no. Sin esto el barrido se seca en
+        // la primera y el test pasaria sin comprobar nada de lo que promete su nombre.
+        int pass = 0;
+        var agent = new FakeCopilotAgent(auditScript: _ =>
+        {
+            pass++;
+            return pass == 1 ? new[] { SampleFinding() with { Title = "Algo nuevo" } } : Array.Empty<SubmitFindingArgs>();
+        });
+
+        SessionResult result = await RunLotes(agent);
+
+        pass.Should().BeGreaterThan(1, "el test necesita mas de una pasada para tener sentido");
+        result.Counters.Confirmed.Should().Be(1, "una auditoria, una confirmacion");
+        _hub.Store.TryReadFinding("app", previous.Id.ToString())!.TimesConfirmed.Should().Be(2);
+    }
+
     // ---------- F4.1 · consolidación por ubicaciones ----------
 
     /// <summary>
