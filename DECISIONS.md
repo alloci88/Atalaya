@@ -1583,6 +1583,16 @@ abrir la ficha. Y el combo de severidad no tenía «Todas»: filtrar era un viaj
   se sale un poco es molesta, una por debajo de su mínimo es inutilizable. Va en una clase aparte
   porque la aritmética se puede probar y la ventana no.
 
+- **D-186 — El contador siempre fue del recorte; ahora está fijado.** Preguntado si «24 hallazgos ·
+  1 disputado» hablaba del hub entero o de lo filtrado, resultó que ya salía de la misma lista que
+  alimenta los grupos, después de los seis filtros — pero solo estaba probado contra el filtro de
+  aplicación. Un contador global junto a una lista filtrada son dos cifras que no cuadran, y la que
+  se cree es la grande, así que la propiedad merece prueba propia: aplicación **y** estado a la
+  vez, la cola de disputas cuando el filtro deja fuera al disputado, y la búsqueda. Tres mutaciones
+  —contar todo el hub, saltarse el filtro de estado y contar las disputas del hub entero— y las
+  tres tumban tests. Cero cambios en producción: la respuesta era «ya lo hace», y lo que faltaba
+  era que siguiera haciéndolo mañana.
+
 - **D-185 — 5 tests nuevos y 3 mutaciones, las 3 tumban tests.** Devolver el ancho a 1180, quitarle
   el suelo del mínimo al recorte y quitarle el recorte entero. El test del ancho lee el XAML y
   compara contra los 1064 medidos más el rail: si alguien encoge la ventana, o si un filtro nuevo
@@ -1591,7 +1601,7 @@ abrir la ficha. Y el combo de severidad no tenía «Todas»: filtrar era un viaj
 ### Cobertura y verificación
 
 - **D-164 — 29 tests nuevos, verificados por mutación (12 mutaciones, las 12 tumban tests).** Son
-  46 tests y 28 mutaciones al cerrar los §4, §5 y §6. Cubren
+  47 tests y 31 mutaciones al cerrar los §4, §5 y §6. Cubren
   los valores iniciales de los tres combos, cada filtro por separado, sus combinaciones, la **vuelta
   a «Todas»** en severidad y en aplicación, el recorrido completo del filtro de estado, la búsqueda
   por título/ruleId/ruta, «Limpiar filtros», `HasActiveFilters`, el contador (plural, singular y

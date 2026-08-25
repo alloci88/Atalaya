@@ -357,6 +357,40 @@ public sealed class FindingsViewTests : IDisposable
         vm.ResultsSummary.Should().Be("1 hallazgo");   // singular, y sin cola de disputas
     }
 
+    /// <summary>
+    /// El contador cuenta LO QUE SE VE, no el total del hub. Con el filtro puesto en una app y en
+    /// un estado, el número de arriba tiene que hablar de ese recorte: un contador global junto a
+    /// una lista filtrada son dos cifras que no cuadran, y la que se cree es la grande.
+    /// </summary>
+    [Fact]
+    public async Task El_contador_cuenta_lo_FILTRADO_y_no_el_total()
+    {
+        SeedPortfolio();   // 7 hallazgos en total, 5 activos, 1 disputado
+        FindingsViewModel vm = await LoadedVm();
+        vm.ResultsSummary.Should().Be("5 hallazgos · 1 disputado");
+
+        // Aplicación + estado a la vez.
+        vm.SelectedApp = vm.AppOptions.Single(o => o.Slug == "beta");
+        vm.SelectedScope = vm.ScopeOptions.Single(o => o.Value == FindingsScope.Resueltos);
+        vm.ResultCount.Should().Be(1);
+        vm.ResultsSummary.Should().Be("1 hallazgo");
+
+        // La cola de disputas también es del recorte, no del hub.
+        vm.SelectedApp = vm.AppOptions.Single(o => o.Slug == "alpha");
+        vm.SelectedScope = vm.ScopeOptions.Single(o => o.Value == FindingsScope.Activos);
+        vm.ResultsSummary.Should().Be("4 hallazgos · 1 disputado");
+
+        // El disputado de alpha es Alta: al filtrar por Baja desaparece del recuento.
+        vm.SelectedSeverity = vm.SeverityOptions.Single(o => o.Value == Severity.Baja);
+        vm.DisputedCount.Should().Be(0);
+        vm.ResultsSummary.Should().Be("1 hallazgo");
+
+        // Y la búsqueda cuenta igual que los combos.
+        vm.ClearFiltersCommand.Execute(null);
+        vm.SearchText = "Consulta N+1";
+        vm.ResultsSummary.Should().Be("1 hallazgo · 1 disputado");
+    }
+
     [Fact]
     public async Task Sin_resultados_el_contador_lo_dice_y_la_vista_se_declara_vacia()
     {
