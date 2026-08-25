@@ -99,7 +99,13 @@ public sealed class SessionCoordinator
             Model = _agent.ModelName,
         };
 
+        // «Detener» solo podia actuar dentro del bucle de unidades: todo lo previo (publicar
+        // claims, que hace commit+push) es incancelable, asi que pulsar Detener durante esa fase
+        // no hacia nada visible. Estos dos cortes hacen que la sesion aborte en cuanto la fase
+        // termina, en vez de seguir y auditar la unidad igualmente.
+        ct.ThrowIfCancellationRequested();
         PublishClaims(request.Slug, units, inventory, by);
+        ct.ThrowIfCancellationRequested();
 
         var newFindings = new List<Finding>();
         void OnFinding(Finding f, string kind)

@@ -190,11 +190,10 @@ public sealed partial class MainViewModel : ObservableObject
 
         if (result.HasChanges && Navigation.Current is { } page)
         {
-            foreach (HubChange change in result.Changes.Take(3))
-            {
-                Toasts.Add($"Cambio: {change.Kind} {change.RelativePath}");
-            }
-
+            // Nada de un aviso por fichero: eran rutas y ULIDs que no le dicen nada a nadie, se
+            // apilaban unos encima de otros y tapaban la barra de estado y el indicador de
+            // conexión. La página se recarga sola, que es la señal útil. Los avisos de verdad
+            // (result.Notifications) sí se muestran, arriba.
             await page.LoadAsync();
         }
 
