@@ -126,15 +126,63 @@ public partial class App : Application
         services.AddTransient<ImportViewModel>();
     }
 
-    protected override async void OnExit(ExitEventArgs e)
+    /// <summary>
+    /// Cierre determinista. Debe ser SÍNCRONO y tolerar fallos.
+    /// <para>
+    /// Antes era <c>async void</c>: WPF no espera a ese método, así que en cuanto se alcanzaba el
+    /// primer <c>await</c> el hilo principal seguía con el apagado y la continuación podía no
+    /// ejecutarse nunca. Resultado: el host no se liberaba y el runtime de Copilot
+    /// (<c>copilot.exe</c>, lanzado por stdio) se quedaba vivo con sus tuberías abiertas,
+    /// manteniendo el proceso <c>Atalaya.exe</c> en pie tras cerrar la ventana.
+    /// </para>
+    /// <para>
+    /// Y aunque llegara a ejecutarse, <c>_host.Dispose()</c> reventaba: el contenedor guarda
+    /// <see cref="RealCopilotAgent"/>, que implementa <c>IAsyncDisposable</c> pero NO
+    /// <c>IDisposable</c>, y el camino síncrono de liberación lanza
+    /// <c>InvalidOperationException</c> en ese caso. Hay que liberar por la vía asíncrona.
+    /// </para>
+    /// <para>
+    /// Un proceso zombi no era solo ruido: seguía corriendo su temporizador de sondeo y lanzando
+    /// auditorías con código antiguo sobre el hub compartido (ver D-085, D-086).
+    /// </para>
+    /// </summary>
+    protected override void OnExit(ExitEventArgs e)
     {
-        if (_host is not null)
+        IHost? host = _host;
+        _host = null;
+        if (host is not null)
         {
-            await _host.StopAsync();
-            _host.Dispose();
+            // Acotado: si algo se atasca al parar, preferimos cerrar igual a colgarnos.
+            Run(() => host.StopAsync(TimeSpan.FromSeconds(5)), "detener el host");
+            // El host genérico implementa IAsyncDisposable; ésa es la vía que sabe liberar
+            // servicios que solo son asíncronamente liberables, como el agente de Copilot.
+            Run(
+                () => host is IAsyncDisposable async
+                    ? async.DisposeAsync().AsTask()
+                    : Task.Run(host.Dispose),
+                "liberar el host");
         }
 
-        await Log.CloseAndFlushAsync();
+        Log.CloseAndFlush();
         base.OnExit(e);
+    }
+
+    /// <summary>
+    /// Ejecuta una tarea de apagado bloqueando, con tope de tiempo, sin dejar escapar excepciones:
+    /// en el camino de cierre nada debe impedir que el proceso termine.
+    /// </summary>
+    private static void Run(Func<Task> operation, string what)
+    {
+        try
+        {
+            if (!operation().Wait(TimeSpan.FromSeconds(10)))
+            {
+                Log.Warning("Cierre: se agotó el tiempo al {What}", what);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Cierre: error al {What}", what);
+        }
     }
 }
