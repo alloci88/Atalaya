@@ -53,6 +53,28 @@ public sealed class HubStore
 
     public void WriteApp(AppConfig app) => WriteJson(_paths.AppJson(app.Slug), app, SchemaValidation.Validate);
 
+    /// <summary>
+    /// Borra la carpeta ENTERA de una app: hallazgos, sesiones, informes, inventario, silencios,
+    /// claims, comentarios y <c>app.json</c> (F5.3 §4). Devuelve false si no estaba.
+    /// <para>
+    /// Borra el directorio en vez de ir fichero a fichero a propósito: enumerar por tipo dejaría
+    /// fuera cualquier cosa que se añada al esquema más adelante, y un hard-reset que se deja
+    /// medio rastro no es un hard-reset. Lo recuperable es el historial de git, no lo que quede
+    /// suelto en el árbol de trabajo.
+    /// </para>
+    /// </summary>
+    public bool DeleteApp(string slug)
+    {
+        string dir = _paths.AppDir(slug);
+        if (!Directory.Exists(dir))
+        {
+            return false;
+        }
+
+        Directory.Delete(dir, recursive: true);
+        return true;
+    }
+
     // --- Inventory ---
 
     public InventoryCycle? TryReadInventory(string slug, int cycleN)
@@ -145,6 +167,16 @@ public sealed class HubStore
             comment, SchemaValidation.Validate);
 
     // --- Reports (immutable markdown) ---
+
+    /// <summary>Los informes publicados de una app: markdown inmutable, uno por sesión.</summary>
+    public IReadOnlyList<string> ListReports(string slug)
+        => Directory.Exists(_paths.ReportsDir(slug))
+            ? Directory.EnumerateFiles(_paths.ReportsDir(slug), "*.md", SearchOption.TopDirectoryOnly)
+                .Select(Path.GetFileNameWithoutExtension)
+                .Select(name => name!)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToList()
+            : Array.Empty<string>();
 
     public void WriteReport(string slug, string sessionUlid, string markdown)
     {

@@ -262,23 +262,71 @@ public sealed class SessionViewModelTests : IDisposable
         entries.Should().Contain(e => e.Kind == ActivityKind.Evento && e.Text.Contains("Pasada"));
     }
 
-    /// <summary>La elipsis va EN MEDIO: en una ruta de código lo que identifica es el final.</summary>
+    /// <summary>
+    /// F5.3 §1: la cola enseña SOLO el nombre del fichero. Ni ruta, ni elipsis — eso vive en el
+    /// tooltip y en la cabecera de actividad, que ya lo muestran. La elipsis en medio de D-122
+    /// resolvía el síntoma equivocado: el problema no era dónde cortar la ruta, sino que la ruta
+    /// no pintaba nada en una columna de 250 px.
+    /// </summary>
     [Theory]
-    [InlineData("XBLASTCommon/Class/CommonStatics.cs", 34)]
-    [InlineData("src/muy/larga/ruta/con/muchos/tramos/Fichero.cs", 30)]
-    public void Long_unit_paths_are_trimmed_in_the_middle(string path, int max)
-    {
-        string display = UnitProgress.MiddleEllipsis(path, max);
+    [InlineData("XBLASTCommon/Class/CommonStatics.cs", "CommonStatics.cs")]
+    [InlineData("src/muy/larga/ruta/con/muchos/tramos/Fichero.cs", "Fichero.cs")]
+    [InlineData("A.cs", "A.cs")]
+    [InlineData(@"src\windows\Ruta.cs", "Ruta.cs")]
+    public void The_queue_shows_only_the_unit_file_name(string path, string expected)
+        => UnitProgress.ShortNames(new[] { path }).Single().Should().Be(expected);
 
-        display.Length.Should().BeLessThanOrEqualTo(max);
-        display.Should().Contain("…");
-        display.Should().EndWith(path[^6..], "el nombre del fichero es lo que identifica la unidad");
-        display.Should().StartWith(path[..3]);
+    /// <summary>
+    /// Y cuando dos unidades del lote comparten nombre, se desambigua con el MÍNIMO necesario:
+    /// un tramo, no la ruta entera. Las que no chocan siguen a nombre pelado.
+    /// </summary>
+    [Fact]
+    public void Only_the_clashing_units_grow_and_only_by_what_they_need()
+    {
+        IReadOnlyList<string> names = UnitProgress.ShortNames(new[]
+        {
+            "XBLASTCommon/Class/EnumContextMenuType.cs",
+            "XBLASTWeb/Enums/EnumContextMenuType.cs",
+            "XBLASTCommon/Class/CommonStatics.cs",
+        });
+
+        names[0].Should().Be("Class/EnumContextMenuType.cs");
+        names[1].Should().Be("Enums/EnumContextMenuType.cs");
+        names[2].Should().Be("CommonStatics.cs", "esta no choca con nadie: no gana ruta");
     }
 
+    /// <summary>
+    /// El caso que obliga a re-agrupar: alargar un tramo puede crear un choque NUEVO entre dos que
+    /// antes eran distintos. Si no se recomprobara, la cola enseñaría dos filas idénticas.
+    /// </summary>
     [Fact]
-    public void Short_paths_are_left_alone()
-        => UnitProgress.MiddleEllipsis("A.cs", 34).Should().Be("A.cs");
+    public void Growing_one_segment_never_leaves_two_rows_reading_the_same()
+    {
+        IReadOnlyList<string> names = UnitProgress.ShortNames(new[]
+        {
+            "Ruta.cs",
+            "a/Ruta.cs",
+            "b/a/Ruta.cs",
+        });
+
+        names.Should().OnlyHaveUniqueItems();
+        names[2].Should().Be("b/a/Ruta.cs");
+    }
+
+    /// <summary>La cola se construye ya con los nombres cortos: no es cosa de la vista.</summary>
+    [Fact]
+    public async Task Starting_a_session_names_the_queue_with_short_names()
+    {
+        LiveSessionService live = NewLive();
+
+        await live.StartAsync(
+            new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs", "B.cs" }),
+            new[] { "dir/A.cs", "otro/B.cs" });
+
+        live.Units.Select(u => u.ShortName).Should().Equal("A.cs", "B.cs");
+        // La ruta completa sigue ahí: es la que alimentan el tooltip y la cabecera de actividad.
+        live.Units.Select(u => u.Path).Should().Equal("dir/A.cs", "otro/B.cs");
+    }
 
     /// <summary>Agente cuyo <c>CheckAsync</c> espera a una compuerta que abre el test.</summary>
     private sealed class GatedAgent : ICopilotAgent

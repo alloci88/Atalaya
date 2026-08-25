@@ -21,6 +21,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly GitHubAccountService _account;
     private readonly LiveSessionService _live;
     private readonly InterruptedSessionRecovery _recovery;
+    private readonly ToastCenter _toasts;
 
     public MainViewModel(
         NavigationService navigation,
@@ -28,9 +29,11 @@ public sealed partial class MainViewModel : ObservableObject
         SettingsService settings,
         GitHubAccountService account,
         LiveSessionService live,
-        InterruptedSessionRecovery recovery)
+        InterruptedSessionRecovery recovery,
+        ToastCenter toasts)
     {
         Navigation = navigation;
+        _toasts = toasts;
         _hub = hub;
         _settings = settings;
         _account = account;
@@ -47,7 +50,15 @@ public sealed partial class MainViewModel : ObservableObject
 
     public NavigationService Navigation { get; }
 
-    public ObservableCollection<string> Toasts { get; } = new();
+    /// <summary>
+    /// Avisos EFÍMEROS (F5.3 §3). No son elementos de la barra de estado: caducan solos y se
+    /// pueden descartar de un clic. La barra inferior se queda con lo estable — sync, cuenta y
+    /// «Auditando…» — y nada más.
+    /// </summary>
+    public ObservableCollection<Toast> Toasts => _toasts.Items;
+
+    /// <summary>Retira lo caducado. Lo llama el temporizador de la ventana (cada segundo).</summary>
+    public void SweepToasts() => _toasts.Sweep();
 
     [ObservableProperty]
     private SyncHealth _syncHealth = SyncHealth.Amber;
@@ -124,14 +135,14 @@ public sealed partial class MainViewModel : ObservableObject
             // here instead of leaving an unexplained amber light.
             if (SyncHealth != SyncHealth.Green)
             {
-                Toasts.Add("No se pudo sincronizar el hub. Revisa «Cuenta».");
+                _toasts.Show("No se pudo sincronizar el hub. Revisa «Cuenta».");
             }
         }
         catch (Exception ex)
         {
             _account.NoteFailure(ex);
             SyncHealth = SyncHealth.Red;
-            Toasts.Add("No se pudo sincronizar el hub. Revisa «Cuenta».");
+            _toasts.Show("No se pudo sincronizar el hub. Revisa «Cuenta».");
         }
         finally
         {
@@ -154,12 +165,12 @@ public sealed partial class MainViewModel : ObservableObject
         {
             if (_recovery.RecoverIfNeeded() is { } recovered)
             {
-                Toasts.Add(recovered.Message);
+                _toasts.Show(recovered.Message);
             }
         }
         catch (Exception ex)
         {
-            Toasts.Add($"No se pudo recuperar una sesión interrumpida: {ex.Message}");
+            _toasts.Show($"No se pudo recuperar una sesión interrumpida: {ex.Message}");
         }
     }
 
@@ -178,10 +189,12 @@ public sealed partial class MainViewModel : ObservableObject
     private void OnSessionCompleted(SessionResult result) => OnUiThread(() =>
     {
         SessionCounters c = result.Counters;
-        Toasts.Add((result.Interrupted ? "Sesión detenida" : "Sesión completada")
+        _toasts.Show(
+            (result.Interrupted ? "Sesión detenida" : "Sesión completada")
             + $": {c.New} nuevos, {c.Confirmed} confirmados, {c.Resolved} resueltos"
             + (c.Disputed > 0 ? $", ⚖ {c.Disputed} disputados" : "")
-            + ". Abre «Última sesión» para el desglose.");
+            + ". Abre «Última sesión» para el desglose.",
+            ToastKind.SessionCompleted);
         SyncSession();
     });
 
@@ -213,6 +226,10 @@ public sealed partial class MainViewModel : ObservableObject
             dispatcher.Invoke(action);
         }
     }
+
+    /// <summary>Un clic en el aviso lo retira sin esperar a que caduque.</summary>
+    [RelayCommand]
+    private void DismissToast(Toast? toast) => _toasts.Dismiss(toast);
 
     [RelayCommand]
     private Task ShowPortfolio() => Navigation.NavigateToAsync<PortfolioViewModel>();
@@ -256,7 +273,7 @@ public sealed partial class MainViewModel : ObservableObject
         {
             if (_account.NoteFailure(ex))
             {
-                Toasts.Add("GitHub rechazó tus credenciales. Vuelve a conectar en «Cuenta».");
+                _toasts.Show("GitHub rechazó tus credenciales. Vuelve a conectar en «Cuenta».");
             }
 
             SyncHealth = SyncHealth.Red;
@@ -267,7 +284,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         foreach (string note in result.Notifications)
         {
-            Toasts.Add(note);
+            _toasts.Show(note);
         }
 
         if (result.HasChanges && Navigation.Current is { } page)
@@ -279,9 +296,5 @@ public sealed partial class MainViewModel : ObservableObject
             await page.LoadAsync();
         }
 
-        while (Toasts.Count > 6)
-        {
-            Toasts.RemoveAt(0);
-        }
     }
 }

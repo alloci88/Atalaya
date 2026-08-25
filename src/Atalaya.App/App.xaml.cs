@@ -2,6 +2,7 @@ using System.Net.Http;
 using System.Windows;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
+using Atalaya.App.Views;
 using Atalaya.Copilot;
 using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Ids;
@@ -121,11 +122,20 @@ public partial class App : Application
             sp.GetRequiredService<OpenSessionStore>(),
             sp.GetRequiredService<HubContext>()));
         services.AddSingleton<GovernanceService>();
+
+        // F5.3 §4: el hard-reset de una app. El "quién pregunta" se inyecta para que el
+        // view-model no dependa de una ventana y los tests puedan ejercitar el flujo entero.
+        services.AddSingleton<AppDeletionService>();
+        services.AddSingleton<IDeleteAppConfirmer, DeleteAppDialogConfirmer>();
+
         services.AddSingleton<EditorLauncher>();
         services.AddSingleton<CycleService>();
         services.AddSingleton<StatusExporter>();
 
         // Shell
+        // F5.3: los avisos son efímeros y hay uno solo de cierre de sesión. Singleton porque la
+        // cola de avisos es de la ventana, no de una página.
+        services.AddSingleton(sp => new ToastCenter());
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<MainWindow>();
 

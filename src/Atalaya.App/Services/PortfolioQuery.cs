@@ -26,6 +26,17 @@ public sealed record AppCard(
 {
     /// <summary>Apps with open critical findings sort first (§8 V1).</summary>
     public int SortKey => Critica > 0 ? 0 : ActiveTotal > 0 ? 1 : 2;
+
+    /// <summary>
+    /// Borrar exige que NADIE esté auditando la app (F5.3 §4). Un hard-reset a mitad de sesión
+    /// dejaría al auditor escribiendo hallazgos en una carpeta recién borrada y los claims vivos
+    /// apuntando a una app que ya no existe.
+    /// </summary>
+    public bool CanDelete => !AuditingNow;
+
+    public string DeleteTooltip => AuditingNow
+        ? "Detén la sesión primero"
+        : $"Eliminar «{Name}» y toda su traza en el hub";
 }
 
 /// <summary>

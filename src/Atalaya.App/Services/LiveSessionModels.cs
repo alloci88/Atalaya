@@ -89,8 +89,17 @@ public sealed partial class UnitProgress : ObservableObject
 {
     public required string Path { get; init; }
 
-    /// <summary>Nombre con elipsis EN MEDIO: la cola es estrecha y lo que identifica es el final.</summary>
-    public string Display => MiddleEllipsis(Path, 34);
+    /// <summary>
+    /// Lo que se lee en la cola (F5.3): SOLO el nombre del fichero. La ruta completa vive en el
+    /// tooltip y en la cabecera de la sección de actividad, así que repetirla —recortada, además—
+    /// en una columna estrecha solo gastaba sitio sin identificar nada.
+    /// <para>
+    /// Lo calcula <see cref="ShortNames"/> sobre el lote entero, porque desambiguar dos ficheros
+    /// que se llaman igual es una propiedad del LOTE, no de una ruta suelta.
+    /// </para>
+    /// </summary>
+    [ObservableProperty]
+    private string _shortName = string.Empty;
 
     public ObservableCollection<PassProgress> Passes { get; } = new();
 
@@ -153,30 +162,62 @@ public sealed partial class UnitProgress : ObservableObject
     partial void OnCurrentPassChanged(int value) => OnPropertyChanged(nameof(StateLabel));
 
     /// <summary>
-    /// Recorta por el MEDIO conservando el principio y el final: en rutas de código lo que
-    /// identifica es el nombre del fichero, y una elipsis al final se lo come justo.
+    /// Nombres de la cola para un lote (F5.3): el del fichero a secas, y para los que chocan, el
+    /// MÍNIMO de tramos de ruta que los separa — <c>Class/EnumContextMenuType.cs</c> solo cuando
+    /// hay otro <c>EnumContextMenuType.cs</c> en el mismo lote.
+    /// <para>
+    /// Crece por grupos y vuelve a agrupar en cada vuelta: alargar unos pocos puede crear un
+    /// choque nuevo con otro que ya era único, y sin recomprobar quedarían dos filas idénticas.
+    /// </para>
     /// </summary>
-    public static string MiddleEllipsis(string path, int max)
+    public static IReadOnlyList<string> ShortNames(IReadOnlyList<string> paths)
     {
-        if (string.IsNullOrEmpty(path) || path.Length <= max)
+        var segments = paths
+            .Select(p => (p ?? string.Empty).Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries))
+            .ToList();
+        var depth = new int[paths.Count];
+        Array.Fill(depth, 1);
+
+        while (true)
         {
-            return path;
+            var clashing = Enumerable.Range(0, paths.Count)
+                .GroupBy(i => Tail(segments[i], depth[i]), StringComparer.Ordinal)
+                .Where(g => g.Select(i => paths[i]).Distinct(StringComparer.Ordinal).Count() > 1)
+                .ToList();
+
+            if (clashing.Count == 0)
+            {
+                break;
+            }
+
+            bool grew = false;
+            foreach (var group in clashing)
+            {
+                foreach (int i in group)
+                {
+                    if (depth[i] < segments[i].Length)
+                    {
+                        depth[i]++;
+                        grew = true;
+                    }
+                }
+            }
+
+            // Ya no queda ruta que añadir: son la misma unidad repetida, no dos que confundir.
+            if (!grew)
+            {
+                break;
+            }
         }
 
-        int tail = Math.Max(max / 2, path.Length - path.LastIndexOf('/') - 1);
-        if (tail > max - 4)
-        {
-            tail = max - 4;
-        }
-
-        int head = max - tail - 1;
-        if (head < 1)
-        {
-            return "…" + path[^Math.Min(tail, path.Length)..];
-        }
-
-        return path[..head] + "…" + path[^tail..];
+        return Enumerable.Range(0, paths.Count).Select(i => Tail(segments[i], depth[i])).ToList();
     }
+
+    /// <summary>Los <paramref name="count"/> últimos tramos de una ruta, con barras normales.</summary>
+    private static string Tail(string[] segments, int count)
+        => segments.Length == 0
+            ? string.Empty
+            : string.Join('/', segments[^Math.Min(count, segments.Length)..]);
 }
 
 /// <summary>

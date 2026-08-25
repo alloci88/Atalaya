@@ -10,6 +10,13 @@ public partial class MainWindow : FluentWindow
 {
     private readonly MainViewModel _viewModel;
     private readonly DispatcherTimer _pollTimer;
+
+    /// <summary>
+    /// Barrido de avisos efímeros (F5.3 §3). Va aparte del sondeo del hub: aquél corre cada 60 s
+    /// como poco, y un aviso que dura 8 s no puede depender de un reloj quince veces más lento.
+    /// </summary>
+    private readonly DispatcherTimer _toastTimer;
+
     private bool _confirmedClose;
 
     public MainWindow(MainViewModel viewModel)
@@ -21,8 +28,19 @@ public partial class MainWindow : FluentWindow
         // Polling loop (§3): pull on a timer, off the UI thread, results marshalled back here.
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(viewModel.PollingSeconds) };
         _pollTimer.Tick += async (_, _) => await _viewModel.RefreshAsync();
-        Loaded += (_, _) => _pollTimer.Start();
-        Closed += (_, _) => _pollTimer.Stop();
+        _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _toastTimer.Tick += (_, _) => _viewModel.SweepToasts();
+
+        Loaded += (_, _) =>
+        {
+            _pollTimer.Start();
+            _toastTimer.Start();
+        };
+        Closed += (_, _) =>
+        {
+            _pollTimer.Stop();
+            _toastTimer.Stop();
+        };
         Closing += OnClosing;
     }
 

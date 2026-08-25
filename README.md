@@ -49,12 +49,20 @@ nuevo, ver el [anexo de la OAuth App](#anexo-registrar-la-oauth-app-administrado
 - **Nueva aplicación**: indica ruta del clon local + URL del repo; Atalaya detecta el stack,
   construye el inventario del primer ciclo y lo publica. La ruta del clon local es **por
   máquina** (`%LOCALAPPDATA%/Atalaya/machines.json`), nunca va al hub.
+- **Eliminar una aplicación**: la papelera de su tarjeta en el Portafolio. Ver
+  [Dar de baja una aplicación](#dar-de-baja-una-aplicación) — es un borrado completo y pide
+  escribir el nombre para confirmarlo.
 - **Cuenta** (rail izquierdo, o clic en tu avatar de la barra de estado) muestra tu perfil,
   el estado de las cuatro comprobaciones —re-ejecutables con **Comprobar conexión**—, la
   fecha del último sync y el botón **Desconectar** (borra tus credenciales; **no** toca el
   clon del hub, así que puedes reconectar con otra cuenta sin perder nada).
 - El indicador **verde/ámbar/rojo** de la barra es la sincronización con git. Junto a él, tu
   avatar; si sale un **⚠ ámbar**, GitHub ha rechazado tus credenciales y hay que reconectar.
+- La **barra inferior es solo para lo estable**: sincronización, cuenta y «Auditando…» mientras
+  haya una sesión viva. Los avisos (sesión terminada, fallo de sync, un claim que perdiste) son
+  **efímeros**: aparecen abajo a la derecha, se van solos a los 8 s y se descartan con un clic.
+  Nunca se apilan ahí: del cierre de sesión solo hay uno, y el resumen que sí se puede consultar
+  vive en el item **«Última sesión»** del rail.
 
 ### Diagnóstico rápido
 
@@ -131,7 +139,8 @@ plano y **puedes navegar libremente**:
   al terminar. Al volver, V5 se reconstruye con el estado real — no depende de haber estado abierta.
 - La barra inferior dice **«Auditando {app} · unidad n/N · pasada p»** desde cualquier página, y
   lleva a V5 de un clic.
-- Si la sesión termina sin la vista abierta, un aviso resume el resultado.
+- Si la sesión termina sin la vista abierta, un aviso efímero resume el resultado y el desglose
+  completo te espera en **«Última sesión»**.
 - Cerrar la aplicación con una sesión viva pregunta antes y, si aceptas, la **detiene
   ordenadamente**: guarda lo auditado con su informe y libera las unidades.
 
@@ -141,10 +150,32 @@ progreso, tiempo, **llamadas y coste** (la métrica que manda), tokens y media p
 terminar aparece una pantalla de cierre donde **cada contador se despliega** para ver qué hallazgos
 lo componen.
 
+En la cola, cada unidad se lee por **el nombre de su fichero** (`CommonStatics.cs`): la ruta
+completa está en el tooltip y en la cabecera de su sección de actividad. Si dos unidades del mismo
+lote se llaman igual, solo esas dos ganan el tramo de ruta que las distingue
+(`Class/EnumContextMenuType.cs` frente a `Enums/EnumContextMenuType.cs`).
+
 **Si la aplicación muere de golpe** (cierre forzado, cuelgue), la siguiente vez que arranque
 detecta la sesión que quedó abierta, escribe su registro marcado como interrumpida, libera las
 unidades que tuviera reclamadas y te lo dice. Los hallazgos ya estaban guardados: la ingesta
 escribe en vivo.
+
+## Dar de baja una aplicación
+
+La papelera de la esquina de cada tarjeta del **Portafolio** hace un *hard-reset*: elimina del hub
+`apps/{slug}/` entera —hallazgos, sesiones, informes, inventario, silencios, claims y `app.json`—
+en un commit explicativo (`app: hard-reset de {slug} por {usuario}`) que se publica en el acto.
+También limpia el rastro local de esa app en esta máquina (su ruta de clon en `machines.json`).
+
+- Antes de borrar pide **escribir el nombre de la aplicación**, y la pantalla dice exactamente qué
+  se pierde: cuántos hallazgos, sesiones, informes y silencios.
+- **No se toca el repositorio auditado** ni tu clon local del código: se borra lo que Atalaya sabe
+  de esa app, no la app.
+- El **historial git del hub conserva una copia** que un administrador puede rescatar; desde
+  Atalaya no hay «restaurar».
+- Los demás usuarios la ven desaparecer con su siguiente sincronización.
+- Con una sesión activa sobre esa app el icono está **deshabilitado**: detén la sesión primero.
+- Volver a auditarla más adelante es un alta normal desde **Nueva aplicación**, empezando de cero.
 
 ## Configuración de despliegue
 

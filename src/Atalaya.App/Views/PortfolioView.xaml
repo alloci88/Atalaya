@@ -52,15 +52,38 @@
                                         <TextBlock Text="{Binding Name}" FontSize="17" FontWeight="SemiBold" />
                                         <TextBlock Text="{Binding Stack}" Opacity="0.6" FontSize="12" />
                                     </StackPanel>
-                                    <Border
-                                        HorizontalAlignment="Right"
-                                        VerticalAlignment="Top"
-                                        Background="#333FB950"
-                                        CornerRadius="10"
-                                        Padding="8,2"
-                                        Visibility="{Binding AuditingNow, Converter={StaticResource BoolToVisibility}}">
-                                        <TextBlock Text="auditando ahora" FontSize="10" Foreground="#5FD97A" />
-                                    </Border>
+                                    <StackPanel Orientation="Horizontal"
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Top">
+                                        <Border
+                                            Background="#333FB950"
+                                            CornerRadius="10"
+                                            Padding="8,2"
+                                            VerticalAlignment="Center"
+                                            Visibility="{Binding AuditingNow, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Text="auditando ahora" FontSize="10" Foreground="#5FD97A" />
+                                        </Border>
+
+                                        <!-- F5.3 §4: hard-reset de la app. Discreto —es una salida,
+                                             no una acción del día a día— y deshabilitado mientras
+                                             alguien la esté auditando. -->
+                                        <Button
+                                            Command="{Binding DataContext.DeleteAppCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}"
+                                            IsEnabled="{Binding CanDelete}"
+                                            ToolTip="{Binding DeleteTooltip}"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Padding="6,2"
+                                            Margin="6,0,0,0"
+                                            Cursor="Hand"
+                                            VerticalAlignment="Center">
+                                            <TextBlock Text="&#xE74D;"
+                                                       FontFamily="Segoe MDL2 Assets"
+                                                       FontSize="13"
+                                                       Opacity="0.45" />
+                                        </Button>
+                                    </StackPanel>
                                 </Grid>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0">

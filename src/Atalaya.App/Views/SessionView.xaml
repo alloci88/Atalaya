@@ -55,11 +55,15 @@
                                                     FontWeight="Bold"
                                                     Width="18"
                                                     VerticalAlignment="Center" />
+                                                <!-- F5.3: SOLO el nombre del fichero. La ruta completa está en el
+                                                     tooltip y en la cabecera de actividad; recortada aquí no
+                                                     identificaba nada y se comía la columna. -->
                                                 <TextBlock
                                                     Grid.Column="1"
-                                                    Text="{Binding Display}"
+                                                    Text="{Binding ShortName}"
                                                     ToolTip="{Binding Path}"
                                                     FontSize="12"
+                                                    TextTrimming="CharacterEllipsis"
                                                     VerticalAlignment="Center" />
                                             </Grid>
                                             <TextBlock
@@ -106,7 +110,7 @@
                                                 <TextBlock Text="{Binding StateGlyph}"
                                                            Foreground="{Binding State, Converter={StaticResource UnitRunStateToBrush}}"
                                                            FontWeight="Bold" Margin="0,0,6,0" />
-                                                <TextBlock Text="{Binding Display}" ToolTip="{Binding Path}" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding Path}" ToolTip="{Binding Path}" FontWeight="SemiBold" />
                                             </StackPanel>
                                         </Expander.Header>
                                         <ItemsControl ItemsSource="{Binding Passes}" Margin="14,4,0,0">

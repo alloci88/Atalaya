@@ -152,9 +152,13 @@ public sealed partial class LiveSessionService : ObservableObject
             Units.Clear();
             Findings.Clear();
             Summary.Clear();
-            foreach (string path in displayPaths)
+
+            // El nombre corto de la cola se calcula sobre el LOTE (F5.3): saber si hace falta
+            // añadir un tramo de ruta exige mirar a las demás unidades, no solo a esta.
+            IReadOnlyList<string> shortNames = UnitProgress.ShortNames(displayPaths);
+            for (int i = 0; i < displayPaths.Count; i++)
             {
-                Units.Add(new UnitProgress { Path = path });
+                Units.Add(new UnitProgress { Path = displayPaths[i], ShortName = shortNames[i] });
             }
         });
 

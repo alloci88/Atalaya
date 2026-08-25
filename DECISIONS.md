@@ -1245,6 +1245,128 @@ que ya calculaba y no alteran ninguna decisión.
   nuevas: es V5, la navegación y el arranque. El tema visual (WPF-UI/Fluent, D-011) tampoco se
   rehace.
 
+## F5.3 — Retoques post-F5.2 (tanda corta)
+
+Cuatro arreglos acotados sobre lo entregado en F5.2, los cuatro nacidos de mirar la aplicación
+funcionando. Tres son de lectura —qué se ve y cuánto estorba— y el cuarto abre una salida que
+hasta ahora no existía: deshacer el alta de una aplicación.
+
+### §1 — La cola de V5 dice el nombre, no la ruta
+
+- **D-130 — La cola muestra SOLO el nombre del fichero.** `EnumContextMenuType.cs`, sin ruta y sin
+  elipsis. La ruta completa sigue estando en el tooltip y pasa a estar en la **cabecera de la
+  sección de actividad**, que antes repetía el mismo recorte que la cola.
+
+- **D-131 — Y con eso se retira D-122.** Aquella elipsis EN MEDIO estaba bien razonada para el
+  problema que creía tener («¿por dónde cortar la ruta?») y resolvía el equivocado: en una columna
+  de 250 px la ruta no identificaba nada que el tooltip no dijera mejor. Cortar por el medio hacía
+  más legible una información que sobraba entera. La decisión no se corrige, se **sustituye**: el
+  criterio ya no es dónde cortar, sino qué merece estar ahí.
+
+- **D-132 — Desambiguar es una propiedad del LOTE, no de una ruta.** Dos unidades del mismo lote
+  pueden llamarse igual, así que `UnitProgress.ShortNames` calcula los nombres mirando la lista
+  entera y añade el **mínimo** de tramos que separa a los que chocan
+  (`Class/EnumContextMenuType.cs` frente a `Enums/EnumContextMenuType.cs`); las que no chocan se
+  quedan a nombre pelado. Crece **por grupos y re-agrupando**: alargar unos pocos puede crear un
+  choque nuevo con otro que ya era único, y sin recomprobar la cola acabaría con dos filas
+  idénticas — que es exactamente el fallo que la desambiguación venía a evitar.
+
+### §2 — Una sola marca en la ventana
+
+- **D-133 — Fuera la cabecera «ATALAYA» del rail de navegación.** La marca salía dos veces en la
+  misma esquina: la etiqueta de la barra de título y, tres centímetros debajo, la cabecera grande
+  del panel. Se queda la de la barra de título —que es la que el sistema operativo también usa— y
+  el rail empieza directamente por los items.
+
+### §3 — La barra de estado no acumula residuos
+
+- **D-134 — El diagnóstico: los avisos no caducaban.** Eran cadenas en una lista de la barra
+  inferior que solo se recortaba —a seis— dentro del **tick de sondeo**. Es decir, no tenían vida
+  propia: se iban cuando otros seis las empujaban. Tras dos auditorías seguidas quedaban dos
+  píldoras «Sesión completada: …» a la vez, fijas, tapando lo único que esa barra debe decir
+  siempre: sincronización, cuenta y «Auditando…».
+
+- **D-135 — `ToastCenter`: efímeros, descartables y uno por clase.** Todo aviso caduca solo a los
+  8 s y se descarta con un clic. De **cierre de sesión hay UNO**: el nuevo sustituye al anterior en
+  vez de apilarse, y hereda vida entera en vez de morir con el reloj del que reemplazó.
+
+- **D-136 — El barrido lo dispara quien llama, no un temporizador interno.** `Sweep(now)` recibe el
+  instante, así que la caducidad se prueba sin esperar ocho segundos de verdad y sin abstraer un
+  temporizador. En la aplicación lo mueve un `DispatcherTimer` de **1 s**, aparte del sondeo del
+  hub: aquél corre cada 60 s como poco, y un aviso que dura 8 s no puede colgar de un reloj quince
+  veces más lento.
+
+- **D-137 — Dónde vive cada cosa.** Los avisos flotan SOBRE la página, abajo a la derecha; la barra
+  de estado se queda con lo estable (sync, cuenta, «Auditando…») y nada más; y el resumen
+  permanente de la última sesión sigue donde se puede volver a leer: el item **«Última sesión»**
+  del rail. Un aviso efímero no es sitio para información que hay que consultar.
+
+### §4 — Eliminar / hard-reset de una aplicación
+
+- **D-138 — Se borra la carpeta ENTERA, no fichero a fichero.** `apps/{slug}/` completa: hallazgos,
+  sesiones, informes, inventario, silencios, claims, comentarios y `app.json`. Enumerar por tipo
+  dejaría fuera cualquier cosa que se añada al esquema más adelante, y un hard-reset que se deja
+  medio rastro no es un hard-reset.
+
+- **D-139 — La confirmación pide escribir el NOMBRE, no un «¿Seguro?».** Un sí/no se pulsa por
+  inercia; teclear el nombre obliga a leer **cuál** se está borrando. La comparación es exacta
+  (solo se toleran espacios de sobra): aceptar mayúsculas distintas devolvería la confirmación a
+  ser un sí/no con pasos extra. La puerta vive en `DeleteAppConfirmation.CanDelete`, fuera del
+  diálogo, y el view-model **la vuelve a mirar** antes de borrar: un botón gris es una cortesía de
+  la vista, no una garantía del modelo.
+
+- **D-140 — La confirmación dice el tamaño real y también lo que NO se pierde.** Los contadores
+  salen del hub (*N* hallazgos, *N* sesiones, *N* informes, *N* silencios) en vez de un «se borrará
+  todo», y la misma pantalla aclara que el **historial git del hub conserva una copia recuperable
+  por un administrador** y que el repositorio auditado y el clon local no se tocan. Sin esa segunda
+  mitad la pantalla miente en las dos direcciones: exagera la destrucción y esconde que queda
+  rastro.
+
+- **D-141 — Commit explicativo y push inmediato.** `app: hard-reset de {slug} por {usuario}` es la
+  única traza que queda de la decisión. Borrar solo en local dejaría la app viva para el resto del
+  equipo y la haría **reaparecer en el siguiente pull**. Si el push falla (sin red, credenciales
+  caídas) el commit se queda pendiente y sale con «Sincronizar ahora» — y el resultado lo **dice**
+  en vez de fingir que se publicó.
+
+- **D-142 — Se limpia también lo local: `machines.json` y la marca de sesión abierta.** La ruta del
+  clon es por máquina (§4) y dejarla apuntaría a una app que ya no existe. La marca de sesión
+  (D-125) se borra si nombra a esa app: una marca huérfana haría que el siguiente arranque
+  intentara «recuperar» una sesión sobre nada.
+
+- **D-143 — Con la app auditándose, el icono está deshabilitado.** La señal es `AuditingNow`, es
+  decir, los claims vivos, que es lo que ve el equipo entero y no solo esta máquina. Se le suma la
+  sesión local en curso porque hay un instante entre lanzarla y publicar sus claims, y es justo la
+  ventana en la que peor sienta pulsar la papelera. Un claim **caducado** no bloquea nada: para eso
+  tiene TTL.
+
+- **D-144 — Volver a auditarla es un alta normal.** No hay «restaurar»: se borró todo, así que el
+  camino de vuelta es **Nueva aplicación** desde cero. Que no exista un deshacer a medias es parte
+  de por qué la confirmación puede permitirse ser tan explícita.
+
+### Cobertura y verificación
+
+- **D-145 — 25 tests nuevos, verificados por mutación (9 mutaciones, las 9 tumban tests).** Una
+  sola vuelta en `ShortNames` sin re-agrupar, 1; que el aviso de cierre deje de sustituir al
+  anterior, 1; que nada caduque, 1; devolver la cabecera «ATALAYA» al rail, 1; borrar sin hacer
+  push, 2; no limpiar `machines.json`, 1; `CanDelete` siempre verdadero, 1; quitar la
+  re-comprobación del nombre escrito en el view-model, 1; y comparar el nombre sin distinguir
+  mayúsculas, 1.
+  El borrado se prueba contra un remoto local `--bare` (norma N-1, sin red), **con segundo clon**:
+  lo que se fija no es «desapareció de mi pantalla», sino que el otro usuario deja de verla al
+  sincronizar.
+
+- **D-146 — Dos invariantes se prueban leyendo el XAML.** «Cuántas veces se lee Atalaya en la
+  ventana» y «qué cuelga de la barra de estado» son propiedades de la **plantilla**, no del
+  view-model: no existen como estado observable que un test pueda interrogar. Instanciar la ventana
+  exigiría hilo STA y un `Application` vivo para resolver los recursos de WPF-UI — mucho aparato
+  para dos invariantes de maquetado. `ShellChromeTests` las fija donde viven, y la mutación
+  confirma que muerden.
+
+- **D-147 — Lo que esta tanda NO toca.** Motor, reconciliación, barrido, guarda de evidencia de
+  cambio, disputas, coste, conexión, Ajustes, la marca de sesión abierta y la recuperación de
+  sesiones interrumpidas quedan como los cerraron F5.1, F5.1b y F5.2. No hay vistas nuevas más allá
+  del diálogo de borrado.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

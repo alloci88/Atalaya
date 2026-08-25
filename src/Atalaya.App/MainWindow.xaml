@@ -30,8 +30,10 @@
 
             <!-- Navigation rail -->
             <Border Grid.Column="0" Background="{DynamicResource ApplicationBackgroundBrush}" Padding="12,16">
+                <!-- F5.3: sin cabecera de marca. «Atalaya» ya está en la barra de título; repetirla
+                     aquí en grande era la MISMA marca dos veces en la misma ventana. El rail
+                     empieza directamente por los items. -->
                 <StackPanel>
-                    <TextBlock Text="ATALAYA" FontWeight="Bold" FontSize="16" Margin="6,0,0,18" Opacity="0.9" />
                     <ui:Button
                         Command="{Binding ShowPortfolioCommand}"
                         Content="Portafolio"
@@ -127,6 +129,39 @@
             <Border Grid.Column="1" Padding="20,12">
                 <ContentControl Content="{Binding Navigation.Current}" />
             </Border>
+
+            <!-- Avisos efímeros (F5.3 §3): flotan SOBRE la página, caducan a los 8 s y se
+                 descartan con un clic. Ya no son elementos de la barra de estado, que es lo que
+                 hacía que dos «Sesión completada» se quedaran ahí para siempre. -->
+            <ItemsControl
+                Grid.Column="0"
+                Grid.ColumnSpan="2"
+                ItemsSource="{Binding Toasts}"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Bottom"
+                Margin="0,0,20,12"
+                IsHitTestVisible="True">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button
+                            Command="{Binding DataContext.DismissToastCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                            CommandParameter="{Binding}"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="0"
+                            Margin="0,4,0,0"
+                            Cursor="Hand"
+                            HorizontalAlignment="Right"
+                            ToolTip="Descartar">
+                            <Border Background="#EE2B2B2B" BorderBrush="#33FFFFFF" BorderThickness="1"
+                                    CornerRadius="10" Padding="12,7" MaxWidth="420">
+                                <TextBlock Text="{Binding Text}" FontSize="11" TextWrapping="Wrap"
+                                           Foreground="#F0F0F0" />
+                            </Border>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </Grid>
 
         <!-- Status bar -->
@@ -185,20 +220,6 @@
                         </StackPanel>
                     </Button>
                 </StackPanel>
-                <ItemsControl ItemsSource="{Binding Toasts}" HorizontalAlignment="Right">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Background="#22808080" CornerRadius="10" Padding="10,3" Margin="4,0">
-                                <TextBlock Text="{Binding}" FontSize="11" />
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
             </Grid>
         </Border>
     </Grid>
