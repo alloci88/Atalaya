@@ -10,6 +10,8 @@ public sealed class FakeCopilotAgent : ICopilotAgent
     private readonly Func<VerifyTarget, string> _verdictScript;
     private readonly Func<AuditUnitRequest, IEnumerable<VerdictArgs>>? _reconcileScript;
     private readonly Func<AuditUnitRequest, IEnumerable<AddLocationsArgs>>? _extendScript;
+    private readonly Func<IReadOnlyList<AgentModel>>? _modelsScript;
+    private readonly string? _modelName;
 
     /// <param name="reconcileScript">
     /// F4: qué veredictos emite el agente sobre los hallazgos existentes de la unidad. Por defecto
@@ -19,19 +21,31 @@ public sealed class FakeCopilotAgent : ICopilotAgent
     /// <param name="extendScript">
     /// F4.1: qué hallazgos existentes extiende el agente con ubicaciones nuevas.
     /// </param>
+    /// <param name="modelsScript">
+    /// F5.1: qué devuelve <see cref="ListModelsAsync"/>. Puede lanzar, para ejercitar el camino
+    /// "no se pudo obtener la lista" de Ajustes sin quedarse sin red de verdad.
+    /// </param>
+    /// <param name="modelName">
+    /// F5.1: el modelo que la sesión registra. Por defecto <c>fake-model</c>; los tests que
+    /// comprueban que el modelo elegido llega al informe pasan el suyo.
+    /// </param>
     public FakeCopilotAgent(
         Func<AuditUnitRequest, IEnumerable<SubmitFindingArgs>>? auditScript = null,
         Func<VerifyTarget, string>? verdictScript = null,
         Func<AuditUnitRequest, IEnumerable<VerdictArgs>>? reconcileScript = null,
-        Func<AuditUnitRequest, IEnumerable<AddLocationsArgs>>? extendScript = null)
+        Func<AuditUnitRequest, IEnumerable<AddLocationsArgs>>? extendScript = null,
+        Func<IReadOnlyList<AgentModel>>? modelsScript = null,
+        string? modelName = null)
     {
         _auditScript = auditScript ?? (_ => Array.Empty<SubmitFindingArgs>());
         _verdictScript = verdictScript ?? (_ => "confirmado");
         _reconcileScript = reconcileScript;
         _extendScript = extendScript;
+        _modelsScript = modelsScript;
+        _modelName = modelName;
     }
 
-    public string? ModelName => "fake-model";
+    public string? ModelName => _modelName ?? "fake-model";
 
     public event Action<string>? TextStreamed;
 
@@ -41,6 +55,11 @@ public sealed class FakeCopilotAgent : ICopilotAgent
 
     public Task<AgentReadiness> CheckAsync(CancellationToken ct)
         => Task.FromResult(new AgentReadiness(true, "Agente falso listo (sin Copilot real)."));
+
+    public Task<IReadOnlyList<AgentModel>> ListModelsAsync(CancellationToken ct)
+        => Task.FromResult(_modelsScript is null
+            ? (IReadOnlyList<AgentModel>)new[] { new AgentModel("fake-model", "Fake model", 1.0) }
+            : _modelsScript());
 
     public Task AuditUnitAsync(AuditUnitRequest request, IAuditToolbox toolbox, CancellationToken ct)
     {

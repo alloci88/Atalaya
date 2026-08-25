@@ -70,6 +70,9 @@ public sealed partial class AccountViewModel : ViewModelBase
     [ObservableProperty] private string _lastSync = "nunca";
     [ObservableProperty] private bool _needsReconnect;
     [ObservableProperty] private string _syncState = string.Empty;
+
+    /// <summary>Qué hizo la última sincronización: qué trajo y qué empujó (F5.1).</summary>
+    [ObservableProperty] private string _syncSummary = string.Empty;
     [ObservableProperty] private string _syncError = string.Empty;
     [ObservableProperty] private string _tlsNotice = string.Empty;
     [ObservableProperty] private string _migrationNotice = string.Empty;
@@ -191,6 +194,15 @@ public sealed partial class AccountViewModel : ViewModelBase
             _account.Connect(token, user);
 
             Mode = AccountMode.Connected;
+
+            // F5.1 — Reconectar RELANZA la sincronización, en las dos direcciones. Antes, tras un
+            // Desconectar → Conectar el servicio de sync seguía siendo el de la credencial vieja y
+            // el piloto arrastraba su estado: hacía falta reiniciar la app para que se refrescara,
+            // y lo que se hubiera quedado sin publicar seguía sin publicarse.
+            _hub.RefreshCredentials();
+            HubSyncReport report = await _hub.SyncNowAsync();
+            SyncSummary = report.Describe();
+
             Sync();
             StatusMessage = string.Empty;
             await CheckConnection();
@@ -302,8 +314,14 @@ public sealed partial class AccountViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Pulls the hub right now, cloning it first if needed. Makes the sync state diagnosable from
-    /// the UI instead of from the log.
+    /// Sincroniza en las DOS direcciones: pull con rebase y después push de lo que siguiera sin
+    /// publicarse, cloneando el hub primero si hace falta.
+    /// <para>
+    /// Hasta F5.1 esto solo hacía pull, así que un commit local pendiente (hecho offline, o con un
+    /// push rechazado) se quedaba esperando a la siguiente escritura del usuario para salir: el
+    /// botón decía «sincronizado» y en GitHub no había nada. El resumen se publica en el panel de
+    /// Hub local, con las dos direcciones siempre nombradas.
+    /// </para>
     /// </summary>
     [RelayCommand]
     private async Task SyncNow()
@@ -317,12 +335,18 @@ public sealed partial class AccountViewModel : ViewModelBase
         StatusMessage = "Sincronizando con el hub…";
         try
         {
-            await Task.Run(_hub.EnsureHub);
+            HubSyncReport report = await _hub.SyncNowAsync();
+            SyncSummary = report.Describe();
             StatusMessage = _hub.Health == SyncHealth.Green
-                ? $"Hub sincronizado ({_hub.LastSync?.ToLocalTime():g})."
+                ? $"Hub sincronizado ({_hub.LastSync?.ToLocalTime():g}). {SyncSummary}."
                 : _hub.LastSyncError is { } error
                     ? $"No se pudo sincronizar: {error}"
                     : "No se pudo sincronizar con el hub.";
+
+            foreach (string note in report.Notifications)
+            {
+                StatusMessage += $" · {note}";
+            }
         }
         catch (Exception ex)
         {
@@ -352,6 +376,10 @@ public sealed partial class AccountViewModel : ViewModelBase
             step.Reset(step.Title);
         }
 
+        // El servicio de sync se reconstruye ya con la credencial nueva (ninguna), así que el
+        // piloto deja de enseñar el verde que ganó la cuenta anterior (F5.1).
+        _hub.RefreshCredentials();
+        SyncSummary = string.Empty;
         Sync();
         StatusMessage = "Cuenta desconectada. El clon local del hub se conserva.";
     }

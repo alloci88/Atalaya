@@ -21,6 +21,38 @@ public enum HubCredentialSource
 }
 
 /// <summary>
+/// Lo que un «Sincronizar ahora» hizo de verdad (F5.1): qué se trajo y qué se publicó. El botón
+/// hacía solo pull, así que los commits locales pendientes se quedaban sin salir hasta la
+/// siguiente escritura del usuario; contar las dos direcciones es lo que hace que el panel de
+/// Hub local pueda decirlo en vez de un «sincronizado» que no distingue ambos casos.
+/// </summary>
+/// <param name="PulledFiles">Ficheros que el pull trajo del remoto.</param>
+/// <param name="Notifications">Avisos del pull (claims que perdiste, etc.).</param>
+/// <param name="PendingCommits">Commits locales que estaban sin publicar antes del push.</param>
+/// <param name="Pushed">
+/// True si lo pendiente llegó al remoto. Cuando no había nada pendiente también es true: no
+/// haber tenido que publicar nada no es un fallo.
+/// </param>
+public sealed record HubSyncReport(
+    int PulledFiles,
+    IReadOnlyList<string> Notifications,
+    int PendingCommits,
+    bool Pushed)
+{
+    public static HubSyncReport None { get; } = new(0, Array.Empty<string>(), 0, true);
+
+    /// <summary>Una línea para el panel de Hub local: siempre dice las dos direcciones.</summary>
+    public string Describe() =>
+        (PulledFiles == 0 ? "No trajo cambios" : $"Trajo {PulledFiles} fichero(s)")
+        + " · "
+        + (PendingCommits == 0
+            ? "nada pendiente de publicar"
+            : Pushed
+                ? $"publicó {PendingCommits} commit(s) local(es)"
+                : $"⚠ no pudo publicar {PendingCommits} commit(s) local(es)");
+}
+
+/// <summary>
 /// Owns the live hub: the <see cref="HubStore"/> and the <see cref="HubSyncService"/>.
 /// <para>
 /// Since F2 the hub URL comes from the deployment configuration (D1) — opaque to the user — and
@@ -114,19 +146,75 @@ public sealed class HubContext
     /// call repeatedly. Never throws for a merely failed pull (offline is a normal state, §3):
     /// inspect <see cref="Health"/> and <see cref="LastSyncError"/> for that.
     /// </summary>
-    public void EnsureHub()
+    public void EnsureHub() => EnsureHubCore();
+
+    /// <summary>
+    /// «Sincronizar ahora» de verdad (F5.1): pull con rebase y DESPUÉS push de todo lo local que
+    /// siga sin publicarse, devolviendo qué pasó en cada dirección.
+    /// <para>
+    /// Es también lo que dispara una reconexión de cuenta: <see cref="EnsureSync"/> reconstruye el
+    /// servicio con la credencial nueva, el pull vuelve a poner el piloto en verde y el push saca
+    /// lo que se hubiera quedado atrás mientras no había cuenta — sin reiniciar la app.
+    /// </para>
+    /// </summary>
+    public HubSyncReport SyncNow()
     {
         if (!IsConfigured)
         {
-            return;
+            return HubSyncReport.None;
+        }
+
+        PullResult pulled = EnsureHubCore();
+        if (Sync is null)
+        {
+            return HubSyncReport.None;
+        }
+
+        // Se cuenta DESPUÉS del pull (y de las migraciones, que pueden commitear por su cuenta),
+        // así que el número significa "pendiente de publicar", no "pendiente desde el fetch".
+        int pending = Sync.PendingCommits;
+        bool pushed = pending == 0 || Sync.Push();
+        SyncStateChanged?.Invoke();
+        return new HubSyncReport(pulled.Changes.Count, pulled.Notifications, pending, pushed);
+    }
+
+    /// <summary>Cuerpo compartido por <see cref="EnsureHub"/> y <see cref="SyncNow"/>.</summary>
+    private PullResult EnsureHubCore()
+    {
+        if (!IsConfigured)
+        {
+            return PullResult.Empty;
         }
 
         EnsureSync();
         Sync!.EnsureCloned(HubUrl!);
-        Pull();
+        PullResult pulled = Pull();
         PublishAfterMigration();
         InitializeIfEmpty();
         MigrateSilencesToUlidKeys();
+        return pulled;
+    }
+
+    /// <summary>Same as <see cref="SyncNow"/>, off the UI thread.</summary>
+    public Task<HubSyncReport> SyncNowAsync() => Task.Run(SyncNow);
+
+    /// <summary>
+    /// La credencial ha cambiado (desconectar / conectar / cambiar de cuenta): reconstruye el
+    /// servicio de sync con ella y avisa a los indicadores (F5.1).
+    /// <para>
+    /// Sin esto, desconectar dejaba el piloto mostrando el verde del servicio anterior —
+    /// contaba lo que pasó con una credencial que ya no existe— hasta que algo volviera a
+    /// sincronizar o se reiniciara la app.
+    /// </para>
+    /// </summary>
+    public void RefreshCredentials()
+    {
+        if (IsConfigured)
+        {
+            EnsureSync();
+        }
+
+        SyncStateChanged?.Invoke();
     }
 
     /// <summary>

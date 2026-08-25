@@ -35,6 +35,33 @@
                 <ui:TextBox Text="{Binding CopilotTimeoutMinutes}" Width="120" />
             </StackPanel>
 
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <TextBlock Text="Pasadas del barrido (tope):" VerticalAlignment="Center" Width="200" />
+                <ui:TextBox Text="{Binding MaxPassesPerUnit}" Width="120" />
+            </StackPanel>
+            <TextBlock
+                Text="Cuantas veces se repite la revision de una unidad hasta que una pasada queda seca. Con 1, cada auditoria es una pasada unica. Si se agota el tope sin secarse, la unidad queda marcada como «cobertura posiblemente incompleta»."
+                TextWrapping="Wrap" Opacity="0.65" FontSize="11" Margin="0,0,0,16" />
+
+            <TextBlock Text="Modelo de Copilot" FontWeight="SemiBold" Margin="0,4,0,6" />
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <ComboBox
+                    ItemsSource="{Binding Models}"
+                    SelectedValue="{Binding SelectedModelId}"
+                    SelectedValuePath="Id"
+                    DisplayMemberPath="Label"
+                    Width="360"
+                    HorizontalAlignment="Left" />
+                <ui:Button Content="Actualizar lista" Command="{Binding RefreshModelsCommand}" Margin="8,0,0,0" />
+            </StackPanel>
+            <TextBlock
+                Text="La lista la publica el SDK de Copilot para tu cuenta; el multiplicador de coste aparece cuando el SDK lo da. El modelo elegido se usa en las sesiones nuevas y queda registrado en el informe."
+                TextWrapping="Wrap" Opacity="0.65" FontSize="11" Margin="0,0,0,4" />
+            <TextBlock
+                Text="{Binding ModelsNotice}"
+                TextWrapping="Wrap" Opacity="0.85" FontSize="12" Foreground="#E0A030" Margin="0,0,0,16"
+                Visibility="{Binding ModelsNotice, Converter={StaticResource NotEmptyToVisibility}}" />
+
             <!-- ============ Opciones avanzadas (colapsadas) ============ -->
             <Expander Header="Opciones avanzadas" Margin="0,8,0,16">
                 <StackPanel Margin="0,10,0,0">

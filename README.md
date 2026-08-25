@@ -86,6 +86,14 @@ normal. Ahí mismo hay un override de la URL del hub, **solo para desarrollo**.
   grandes.
 - `copilotBaseDirectory` (por defecto **vacío**): déjalo vacío. Solo tiene efecto en el
   camino heredado (sin cuenta conectada), donde marca dónde busca el SDK el login del CLI.
+- `maxPassesPerUnit` (por defecto **5**): tope de pasadas del **barrido** sobre una unidad.
+  Editable en **Ajustes → Umbrales**. La app repite la revisión hasta que una pasada queda
+  *seca*; con tope **1** cada auditoría es una pasada única. Si se agota sin secarse, la unidad
+  se cierra como *«cobertura posiblemente incompleta»* — visible en el veredicto y en el informe.
+- `copilotModel` (por defecto **`gpt-5`**): modelo con el que corren las sesiones nuevas.
+  El desplegable de **Ajustes** se puebla con lo que el SDK lista para **tu** cuenta (con su
+  multiplicador de coste cuando lo publica); si no se puede consultar, se muestra el configurado
+  con un aviso. El modelo en uso queda registrado en la sesión y en su informe.
 
 Los secretos **no** están aquí: la cuenta vive cifrada con DPAPI en
 `%LOCALAPPDATA%/Atalaya/auth.dat`, y nunca sale de tu máquina.

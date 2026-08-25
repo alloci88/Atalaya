@@ -42,12 +42,14 @@ public sealed class SessionCoordinator
     private readonly MachineConfigStore _machines;
     private readonly IUlidFactory _ulids;
     private readonly ICopilotAgent _agent;
+    private readonly SettingsService _settings;
     private readonly CycleService? _cycles;
     private readonly StatusExporter? _statusExporter;
 
     public SessionCoordinator(
         HubContext hub, FindingIngestionService ingestion, ReconciliationService reconciliation,
         MachineConfigStore machines, IUlidFactory ulids, ICopilotAgent agent,
+        SettingsService settings,
         CycleService? cycles = null, StatusExporter? statusExporter = null)
     {
         _hub = hub;
@@ -56,6 +58,7 @@ public sealed class SessionCoordinator
         _machines = machines;
         _ulids = ulids;
         _agent = agent;
+        _settings = settings;
         _cycles = cycles;
         _statusExporter = statusExporter;
     }
@@ -97,6 +100,7 @@ public sealed class SessionCoordinator
             Commit = commit,
             CycleN = app.CurrentCycle,
             Model = _agent.ModelName,
+            MaxPassesPerUnit = Math.Max(1, _settings.Current.MaxPassesPerUnit),
         };
 
         // «Detener» solo podia actuar dentro del bucle de unidades: todo lo previo (publicar
@@ -129,7 +133,10 @@ public sealed class SessionCoordinator
         CancellationTokenSource? unitCts = null;
         bool budgetTripped = false;
         long maxTokensPerUnit = Math.Max(0, app.Thresholds.MaxTokensPerUnit);
-        int maxPasses = Math.Max(1, app.Thresholds.MaxPassesPerUnit);
+        // F5.1: el tope del barrido es un ajuste de ESTA máquina (Ajustes), no de app.json — el
+        // barrido gasta los tokens del asiento de quien lanza la sesión. Queda registrado en la
+        // sesión y en el informe para que «cobertura posiblemente incompleta» se lea contra él.
+        int maxPasses = session.MaxPassesPerUnit;
 
         // F4.1 — DECISIÓN: MaxTokensPerUnit se aplica POR PASADA, no al barrido completo.
         // El barrido de 3 pasadas del 2026-08-25 gastó 224,5 k de los 300 k del tope, así que

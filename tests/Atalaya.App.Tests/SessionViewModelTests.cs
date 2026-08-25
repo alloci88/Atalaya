@@ -30,6 +30,7 @@ public sealed class SessionViewModelTests : IDisposable
     private readonly MachineConfigStore _machines;
     private readonly FindingIngestionService _ingestion;
     private readonly ReconciliationService _reconciliation;
+    private readonly SettingsService _settings;
     private readonly UlidFactory _ulids = new(SystemClock.Instance);
 
     public SessionViewModelTests()
@@ -39,9 +40,14 @@ public sealed class SessionViewModelTests : IDisposable
         Directory.CreateDirectory(_clone);
         var paths = new AppPaths(Path.Combine(_root, "local"));
 
-        var settings = new SettingsService(paths);
-        settings.Load();
-        _hub = TestFactory.Hub(paths, settings);
+        _settings = new SettingsService(paths);
+        _settings.Load();
+        // F5.1: el tope del barrido vive en los ajustes de la máquina. Aquí 1, porque lo que se
+        // prueba es el disparo de la sesión, no el barrido.
+        AppSettings s = _settings.Current;
+        s.MaxPassesPerUnit = 1;
+        _settings.Save(s);
+        _hub = TestFactory.Hub(paths, _settings);
         _machines = new MachineConfigStore(paths.MachinesJson);
         _ingestion = new FindingIngestionService(_hub, _ulids);
         _reconciliation = new ReconciliationService(_hub);
@@ -52,7 +58,6 @@ public sealed class SessionViewModelTests : IDisposable
         _hub.Store.WriteApp(new AppConfig
         {
             Slug = "app", Name = "App", RepoUrl = "u", Stack = TechStack.DotNet, CurrentCycle = 1,
-            Thresholds = new Thresholds { MaxPassesPerUnit = 1 },   // aqui se prueba el disparo, no el barrido
         });
         _hub.Store.WriteInventory("app", new InventoryCycle
         {
@@ -76,7 +81,7 @@ public sealed class SessionViewModelTests : IDisposable
     {
         var auditor = new FakeCopilotAgent(_ => new[] { Sample() });
         return new SessionViewModel(
-            new SessionCoordinator(_hub, _ingestion, _reconciliation, _machines, _ulids, auditor),
+            new SessionCoordinator(_hub, _ingestion, _reconciliation, _machines, _ulids, auditor, _settings),
             (ICopilotAgent?)gate ?? auditor);
     }
 
@@ -103,6 +108,7 @@ public sealed class SessionViewModelTests : IDisposable
         }
 
         public async Task<bool> EnsureReadyAsync(CancellationToken ct) => (await CheckAsync(ct)).Ready;
+        public Task<IReadOnlyList<AgentModel>> ListModelsAsync(CancellationToken ct) => _inner.ListModelsAsync(ct);
         public Task AuditUnitAsync(AuditUnitRequest r, IAuditToolbox t, CancellationToken ct) => _inner.AuditUnitAsync(r, t, ct);
         public Task VerifyAsync(VerifyRequest r, IVerifyToolbox t, CancellationToken ct) => _inner.VerifyAsync(r, t, ct);
     }

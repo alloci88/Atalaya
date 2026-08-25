@@ -36,17 +36,6 @@ public sealed class Thresholds
     /// well above a healthy batched run, well below a pathological one.
     /// </summary>
     public long MaxTokensPerUnit { get; set; } = 300_000;
-
-    /// <summary>
-    /// Pasadas máximas del barrido por unidad (F4.1). El auditor no cubre una unidad entera de
-    /// una vez: declara haberla cubierto y luego, al repetir, encuentra más. La app repite la
-    /// pasada hasta que una queda SECA (0 nuevos y todos los veredictos «presente»), con este
-    /// tope. Si se agota sin secarse, la unidad se marca «cobertura posiblemente incompleta».
-    /// Por defecto 5: con 3 el barrido de CommonStatics.cs iba 6 → 4 → 2, convergiendo pero
-    /// cortado antes de secarse. El presupuesto se mide por pasada (D-093), así que subirlo no
-    /// estrecha el de cada una.
-    /// </summary>
-    public int MaxPassesPerUnit { get; set; } = 5;
 }
 
 /// <summary>

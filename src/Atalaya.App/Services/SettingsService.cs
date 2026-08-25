@@ -71,6 +71,28 @@ public sealed class AppSettings
     /// The SDK default is 1 minute, which is too short for a real audit. Default here: 15.
     /// </summary>
     public int CopilotTimeoutMinutes { get; set; } = 15;
+
+    /// <summary>
+    /// Tope de pasadas del barrido por unidad (F4.1), editable en Ajustes desde F5.1.
+    /// <para>
+    /// Vive aquí, en la configuración de la máquina, y NO en <c>app.json</c>: el barrido gasta los
+    /// tokens del asiento de quien lanza la sesión, así que es una preferencia del operador, no una
+    /// propiedad de la app auditada. Un tope de 1 equivale a una pasada única, que es por lo que no
+    /// hace falta ningún selector de «modo» por lanzamiento.
+    /// </para>
+    /// <para>
+    /// Por defecto 5 (D-095). El valor vigente se registra en cada sesión y en su informe, para que
+    /// «cobertura posiblemente incompleta» siempre se pueda leer contra el tope que había.
+    /// </para>
+    /// </summary>
+    public int MaxPassesPerUnit { get; set; } = 5;
+
+    /// <summary>
+    /// Modelo de Copilot con el que se lanzan las sesiones nuevas (<c>SessionConfig.Model</c>).
+    /// La lista de opciones se pide al SDK (<c>ListModelsAsync</c>), nunca se codifica a mano; esto
+    /// solo guarda el id elegido. Vacío = el que el runtime decida por defecto.
+    /// </summary>
+    public string CopilotModel { get; set; } = "gpt-5";
 }
 
 /// <summary>

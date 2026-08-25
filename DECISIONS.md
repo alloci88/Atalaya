@@ -918,6 +918,97 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   necesitar más pasadas o tropezar con el tope, en cuyo caso se marcará
   «cobertura posiblemente incompleta» — visible, que era el requisito.
 
+## F5.1 — Ajustes y cables sueltos (tanda funcional)
+
+Cinco mejoras pequeñas e independientes. **No se toca el motor** (reconciliación, barrido,
+presupuesto): lo único que cambia dentro es de DÓNDE lee el coordinador el tope de pasadas.
+
+- **D-097 — El tope de pasadas es un ajuste de la MÁQUINA, no de la app auditada.**
+  `MaxPassesPerUnit` sale de `Thresholds` (`app.json`, en el hub) y pasa a `AppSettings`
+  (`settings.json`, local), editable en **Ajustes → Umbrales**.
+  - **Por qué ahí y no en `app.json`:** el barrido gasta los tokens del asiento de quien lanza la
+    sesión, así que es una preferencia del operador, no una propiedad de la app. Además `app.json`
+    es compartido: subirlo a 8 desde una máquina se lo impondría a todos los demás.
+  - **Una sola fuente, no un override.** El campo se ELIMINA de `Thresholds` en vez de dejarse
+    "por compatibilidad": un valor que ya nadie lee, guardado junto al que sí, es la invitación a
+    que la siguiente generación de código vuelva a usarlo (misma lógica que D-081). Los `app.json`
+    antiguos que lo traigan se leen sin error — `System.Text.Json` ignora los miembros no
+    mapeados — y el campo se pierde en la siguiente escritura.
+  - **Tope 1 = pasada única.** Por eso NO se añade ningún selector de «modo» por lanzamiento: el
+    caso «una sola pasada» ya está cubierto por el mismo número.
+  - **Queda registrado.** `AuditSession.MaxPassesPerUnit` y una línea en el informe
+    (`Pasadas del barrido (tope): N`). Sin esto, leer una sesión vieja marcada «cobertura
+    posiblemente incompleta» no permitiría distinguir «el modelo no convergió» de «el tope estaba
+    en 1». 0 en sesiones anteriores a F5.1, y entonces la línea no aparece.
+  - De paso: **guardar Ajustes ya no resetea los umbrales que la página no edita.**
+    `BuildSettings` construía un `Thresholds` nuevo, así que cada «Guardar» devolvía
+    `MaxTokensPerUnit` y `ClaimTtlMinutes` a sus valores por defecto. Cubierto por test.
+
+- **D-098 — El catálogo de modelos se pide al SDK; nunca se escribe a mano.**
+  `ICopilotAgent.ListModelsAsync` → `RealCopilotAgent` lo delega en
+  `CopilotClient.ListModelsAsync`. Superficie **verificada por reflexión** contra el paquete
+  instalado (1.0.11): devuelve `Task<IList<GitHub.Copilot.ModelInfo>>`, y `ModelInfo` trae
+  `Id`, `Name`, `Capabilities`, `Policy`, `Billing` y `SupportedReasoningEfforts`;
+  `ModelBilling.Multiplier` es `double?` («billing cost multiplier relative to the base rate»).
+  Eso es lo que se enseña junto a cada modelo — y **solo** cuando el SDK lo trae: un
+  multiplicador inventado sería peor que ninguno.
+  - Una lista fija caduca en cuanto GitHub añade o retira un modelo, y el usuario acabaría
+    eligiendo uno que su asiento no sirve. `ListModelsAsync` resuelve el plan de la cuenta que
+    llama, así que lo que ofrece Ajustes es exactamente lo que ese asiento puede correr.
+  - **Fallo = aviso, no rotura.** Sin red / sin credencial / sin asiento, el desplegable enseña el
+    modelo configurado con la causa escrita al lado. Acotado a 30 s: pedir la lista arranca el
+    runtime de Copilot y una red que traga paquetes dejaría Ajustes girando para siempre.
+  - **Un modelo guardado que desaparece del catálogo se conserva marcado**, no se sustituye en
+    silencio por otro. Cambiar de modelo no es cosa de la app.
+  - Como `CheckAsync` ya llamaba a `ListModelsAsync` para separar «sin asiento» de «no
+    autenticado» (D-030), el SDK ya tiene la respuesta cacheada: el desplegable no añade tráfico.
+
+- **D-099 — «Modelo: n/d» era un cable suelto, no un campo sin datos.**
+  `RealCopilotAgent` aceptaba un `model` por constructor y **nadie se lo pasaba**, así que
+  `SessionConfig.Model` iba nulo y el informe imprimía `n/d` en todas las sesiones. Ahora el
+  modelo llega por `modelProvider` — un `Func<string?>` leído en CADA sesión, igual que el token
+  (D-030) —, de modo que cambiar el modelo en Ajustes surte efecto en la siguiente auditoría sin
+  reiniciar la app. Por defecto `gpt-5`.
+
+- **D-100 — «Sincronizar ahora» es pull Y push.**
+  Hacía solo `EnsureHub` (clone + pull). Un commit local que no hubiera logrado publicarse
+  (offline, push rechazado) se quedaba esperando a la siguiente escritura del usuario: el panel
+  decía «sincronizado» y en GitHub no había nada.
+  - `HubSyncService.PendingCommits` cuenta los commits por delante de `origin/{rama}` (todos, si
+    la rama remota aún no existe). Se mide **después** del pull y de las migraciones que commitean
+    por su cuenta, así que el número significa «pendiente de publicar», no «pendiente desde el
+    último fetch».
+  - `HubContext.SyncNow()` devuelve un `HubSyncReport` con las **dos** direcciones, y el panel de
+    Hub local publica la frase: *«Trajo 3 fichero(s) · publicó 2 commit(s) local(es)»*. Sin nada
+    pendiente lo dice explícitamente en vez de insinuar un push que no hubo.
+  - Tests contra un remoto local `--bare` (norma N-1), sin red.
+
+- **D-101 — Reconectar relanza la sincronización; desconectar deja de mentir.**
+  Tras un Desconectar → Conectar hacía falta reiniciar la app. Dos defectos distintos:
+  - Al **desconectar**, el piloto seguía enseñando el verde que había ganado la credencial
+    anterior, porque nadie reconstruía el `HubSyncService`. `HubContext.RefreshCredentials()` lo
+    reconstruye con la credencial nueva (aunque sea «ninguna») y anuncia `SyncStateChanged`.
+  - Al **conectar**, la verificación encadenada solo hacía pull, así que lo pendiente seguía sin
+    publicarse. Ahora la reconexión dispara el `SyncNow()` completo antes de la verificación.
+  - Test de integración conduciendo la página de Cuenta **entera** —device flow con HTTP
+    guionizado y reloj falso, hub sobre remoto `--bare`— porque el fallo vivía justo en el
+    cableado del view-model, no en los servicios. **Verificado por mutación**: con el código
+    anterior fallan los tres.
+
+- **D-102 — Re-auditar una unidad ya auditada ya funcionaba; ahora está blindado.**
+  Se comprobó antes de tocar nada: ni la casilla de V2 (sin `IsEnabled` por estado), ni
+  `AuditSelection` (no filtra por estado), ni `SessionCoordinator.ResolveUnits` (solo casa rutas)
+  excluían una unidad `auditada`. **No había nada que arreglar**, así que no se cambió código —
+  se añadieron los tests que impiden que un filtro por estado se cuele después: la página de V2
+  conducida de verdad (marcar → «Auditar selección» → sesión escrita sobre esa unidad) y, en el
+  coordinador, los dos desenlaces de una re-auditoría — el hallazgo sigue ahí (confirmado, sin
+  duplicar) o se arregló (resuelto).
+
+- **D-103 — Lo que estos cinco puntos NO tocan.** Motor de auditoría, reconciliación, barrido,
+  presupuesto por pasada y consolidación siguen exactamente como los cerró F4.1 (D-096). Ajustes
+  no gana ninguna opción más allá de las dos de esta tanda, y la conexión sigue viviendo en
+  **Cuenta** (D2). El rediseño de V5 y la navegación de sesión son la tanda siguiente.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

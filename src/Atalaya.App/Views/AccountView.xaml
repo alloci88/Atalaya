@@ -138,6 +138,14 @@
                             Opacity="0.8"
                             ToolTip="Ruta del clon local del hub en esta máquina" />
                         <TextBlock
+                            Text="{Binding SyncSummary}"
+                            TextWrapping="Wrap"
+                            FontSize="12"
+                            Opacity="0.75"
+                            Margin="0,6,0,0"
+                            ToolTip="Qué trajo el pull y qué commits locales se publicaron"
+                            Visibility="{Binding SyncSummary, Converter={StaticResource NotEmptyToVisibility}}" />
+                        <TextBlock
                             Text="{Binding SyncError}"
                             TextWrapping="Wrap"
                             FontSize="12"

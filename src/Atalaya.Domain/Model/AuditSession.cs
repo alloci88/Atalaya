@@ -166,6 +166,14 @@ public sealed class AuditSession
 
     public string? Model { get; set; }
 
+    /// <summary>
+    /// Tope de pasadas del barrido vigente cuando se ejecutó la sesión (F5.1). Es un ajuste de la
+    /// máquina que lanza la auditoría, así que sin registrarlo aquí no habría forma de saber, al
+    /// leer una sesión antigua, si «cobertura posiblemente incompleta» significa «el modelo no
+    /// convergió» o «el tope estaba en 1». 0 en sesiones anteriores a F5.1.
+    /// </summary>
+    public int MaxPassesPerUnit { get; set; }
+
     public int CycleN { get; set; }
 
     public List<UnitVerdictRecord> Units { get; set; } = new();

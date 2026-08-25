@@ -18,6 +18,7 @@ public sealed class CycleServiceTests : IDisposable
     private readonly HubContext _hub;
     private readonly MachineConfigStore _machines;
     private readonly FindingIngestionService _ingestion;
+    private readonly SettingsService _settings;
     private readonly UlidFactory _ulids = new(SystemClock.Instance);
 
     public CycleServiceTests()
@@ -26,9 +27,9 @@ public sealed class CycleServiceTests : IDisposable
         _clone = Path.Combine(_root, "clone");
         Directory.CreateDirectory(_clone);
         var paths = new AppPaths(Path.Combine(_root, "local"));
-        var settings = new SettingsService(paths);
-        settings.Load();
-        _hub = TestFactory.Hub(paths, settings);
+        _settings = new SettingsService(paths);
+        _settings.Load();
+        _hub = TestFactory.Hub(paths, _settings);
         _machines = new MachineConfigStore(paths.MachinesJson);
         _machines.SetClonePath("app", _clone);
         _ingestion = new FindingIngestionService(_hub, _ulids);
@@ -113,7 +114,7 @@ public sealed class CycleServiceTests : IDisposable
 
         var coordinator = new SessionCoordinator(
             _hub, _ingestion, new ReconciliationService(_hub), _machines, _ulids,
-            new FakeCopilotAgent(_ => Array.Empty<SubmitFindingArgs>()),
+            new FakeCopilotAgent(_ => Array.Empty<SubmitFindingArgs>()), _settings,
             new CycleService(_hub, _ulids), new StatusExporter(_hub, _machines));
 
         SessionResult result = await coordinator.RunAsync(

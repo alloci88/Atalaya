@@ -22,6 +22,14 @@ public static class ReportBuilder
         sb.AppendLine($"- **Autor**: {session.By} ({session.Machine})");
         sb.AppendLine($"- **Commit auditado**: {session.Commit}");
         sb.AppendLine($"- **Modelo**: {session.Model ?? "n/d"}");
+        // F5.1: el tope del barrido va en el informe porque sin él «cobertura posiblemente
+        // incompleta» no se puede interpretar: no es lo mismo agotar 5 pasadas que agotar 1.
+        // 0 = sesión anterior a F5.1, donde el tope no se registraba.
+        if (session.MaxPassesPerUnit > 0)
+        {
+            sb.AppendLine($"- **Pasadas del barrido (tope)**: {session.MaxPassesPerUnit} por unidad");
+        }
+
         sb.AppendLine($"- **Ciclo**: {session.CycleN}");
         sb.AppendLine($"- **Tokens**: entrada {session.Usage.InputTokens}, salida {session.Usage.OutputTokens}"
             + (session.Usage.CacheReadTokens > 0 || session.Usage.CacheWriteTokens > 0

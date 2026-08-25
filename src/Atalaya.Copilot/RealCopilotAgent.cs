@@ -26,7 +26,7 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
 {
     private readonly string? _baseDirectory;
     private readonly ILogger _logger;
-    private readonly string? _model;
+    private readonly Func<string?>? _modelProvider;
     private readonly TimeSpan _sendTimeout;
     private readonly Func<string?>? _tokenProvider;
     private readonly Func<string?>? _loginProvider;
@@ -49,24 +49,30 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
     /// not resolve a login of its own (<c>GetAuthStatusAsync</c> reports <c>authType: "token"</c>
     /// with no <c>Login</c>), so the profile we already fetched is the authoritative source.
     /// </param>
+    /// <param name="modelProvider">
+    /// The model id chosen in Ajustes (F5.1). Read on EVERY session so changing the model takes
+    /// effect on the next audit without restarting the app — same reason as
+    /// <paramref name="tokenProvider"/>. Null/blank leaves <c>SessionConfig.Model</c> unset and
+    /// the runtime picks its own default.
+    /// </param>
     public RealCopilotAgent(
         string? baseDirectory = null,
         ILogger? logger = null,
-        string? model = null,
+        Func<string?>? modelProvider = null,
         TimeSpan? sendTimeout = null,
         Func<string?>? tokenProvider = null,
         Func<string?>? loginProvider = null)
     {
         _baseDirectory = string.IsNullOrWhiteSpace(baseDirectory) ? null : baseDirectory;
         _logger = logger ?? NullLogger.Instance;
-        _model = model;
+        _modelProvider = modelProvider;
         // The SDK default (1 min) is too short for auditing a real code unit.
         _sendTimeout = sendTimeout is { TotalSeconds: > 0 } ? sendTimeout.Value : TimeSpan.FromMinutes(15);
         _tokenProvider = tokenProvider;
         _loginProvider = loginProvider;
     }
 
-    public string? ModelName => _model;
+    public string? ModelName => Blank(_modelProvider?.Invoke());
 
     public event Action<string>? TextStreamed;
 
@@ -122,6 +128,24 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
             _logger.LogWarning(ex, "Copilot readiness check failed");
             return Classify(ex, hasToken);
         }
+    }
+
+    /// <summary>
+    /// The models this account may use, straight from the runtime (F5.1). Never a hand-written
+    /// list: <c>ListModelsAsync</c> resolves the caller's Copilot plan, so what Ajustes offers is
+    /// exactly what the seat can run. The SDK caches the answer after the first successful call.
+    /// </summary>
+    public async Task<IReadOnlyList<AgentModel>> ListModelsAsync(CancellationToken ct)
+    {
+        await EnsureStartedAsync(ct);
+        IList<ModelInfo> models = await _client!.ListModelsAsync(ct);
+        return models
+            .Where(m => !string.IsNullOrWhiteSpace(m.Id))
+            .Select(m => new AgentModel(
+                m.Id,
+                Blank(m.Name) ?? m.Id,
+                m.Billing?.Multiplier))
+            .ToList();
     }
 
     public async Task AuditUnitAsync(AuditUnitRequest request, IAuditToolbox toolbox, CancellationToken ct)
@@ -193,7 +217,7 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
         {
             Streaming = true,
             ClientName = "Atalaya",
-            Model = _model,
+            Model = ModelName,
             // Reject EVERYTHING the agent tries beyond our tools (shell, files, network) — §6.2.
             OnPermissionRequest = (_, _) =>
                 Task.FromResult(PermissionDecision.Reject("Atalaya audita en solo lectura; acción no permitida.")),

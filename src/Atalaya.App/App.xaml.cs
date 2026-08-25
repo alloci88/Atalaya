@@ -93,11 +93,15 @@ public partial class App : Application
         // behaviour (UseLoggedInUser = true) so existing machines keep working.
         services.AddSingleton<ICopilotAgent>(sp =>
         {
-            AppSettings s = sp.GetRequiredService<SettingsService>().Current;
+            var settings = sp.GetRequiredService<SettingsService>();
+            AppSettings s = settings.Current;
             var account = sp.GetRequiredService<GitHubAccountService>();
             return new RealCopilotAgent(
                 s.CopilotBaseDirectory,
                 sp.GetRequiredService<ILoggerFactory>().CreateLogger("Copilot"),
+                // F5.1: leído en cada sesión, no capturado aquí — cambiar el modelo en Ajustes
+                // surte efecto en la siguiente auditoría sin reiniciar la app.
+                modelProvider: () => settings.Current.CopilotModel,
                 sendTimeout: TimeSpan.FromMinutes(Math.Max(1, s.CopilotTimeoutMinutes)),
                 tokenProvider: () => account.Token,
                 loginProvider: () => account.Current?.Login);

@@ -234,6 +234,50 @@ public sealed class HubSyncService : IDisposable
         return false;
     }
 
+    /// <summary>
+    /// Commits que van por delante de la rama remota, es decir, los que aún no se han publicado (F5.1).
+    /// <para>
+    /// Hasta F5.1 «Sincronizar ahora» solo hacía pull, así que un commit local que no hubiera
+    /// logrado publicarse (offline, push rechazado) se quedaba esperando a la siguiente escritura
+    /// del usuario para salir. Contarlos es lo que permite empujarlos a propósito y, además,
+    /// decirle al usuario cuántos se publicaron en vez de un "sincronizado" sin contenido.
+    /// </para>
+    /// <para>
+    /// Cuenta contra la referencia de seguimiento local (<c>origin/{rama}</c>), es decir, contra
+    /// lo último que se trajo; llámalo después de un <see cref="Pull"/> para que el número
+    /// signifique "pendientes de publicar" y no "pendientes desde el último fetch".
+    /// </para>
+    /// </summary>
+    public int PendingCommits
+    {
+        get
+        {
+            try
+            {
+                Branch local = Repo.Head;
+                if (local.Tip is null)
+                {
+                    return 0;
+                }
+
+                Branch? remote = Repo.Branches[$"origin/{local.FriendlyName}"];
+                if (remote?.Tip is null)
+                {
+                    // Un hub recién creado: la rama remota aún no existe, así que TODO lo local
+                    // está sin publicar.
+                    return Repo.Commits.Count();
+                }
+
+                return Repo.ObjectDatabase.CalculateHistoryDivergence(local.Tip, remote.Tip).AheadBy ?? 0;
+            }
+            catch (LibGit2SharpException ex)
+            {
+                _log.LogWarning(ex, "Could not count pending commits");
+                return 0;
+            }
+        }
+    }
+
     /// <summary>Commit then push in one call — the common "after a user write" path.</summary>
     public bool CommitAndPush(string message)
     {

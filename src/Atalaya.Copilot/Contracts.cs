@@ -93,6 +93,19 @@ public enum AgentProblem
 public sealed record AgentReadiness(bool Ready, string Message, AgentProblem Problem = AgentProblem.None);
 
 /// <summary>
+/// Un modelo disponible para la cuenta, tal y como lo lista el SDK (F5.1). Se pide siempre al
+/// runtime (<c>CopilotClient.ListModelsAsync</c>): una lista escrita a mano caduca en cuanto
+/// GitHub añade o retira un modelo, y el usuario acabaría eligiendo uno que su asiento no sirve.
+/// </summary>
+/// <param name="Id">Identificador que va a <c>SessionConfig.Model</c> (p. ej. <c>gpt-5</c>).</param>
+/// <param name="Name">Nombre para mostrar; si el SDK no lo trae, cae al <paramref name="Id"/>.</param>
+/// <param name="Multiplier">
+/// Multiplicador de facturación relativo a la tarifa base, cuando el SDK lo publica
+/// (<c>ModelInfo.Billing.Multiplier</c>). Null = el SDK no lo da; no se inventa.
+/// </param>
+public sealed record AgentModel(string Id, string Name, double? Multiplier = null);
+
+/// <summary>
 /// Thrown when a Copilot operation fails because the CLI is not authenticated (§6.1). Carries the
 /// help text so the UI can show "ejecuta `copilot` y autentícate" instead of a raw SDK error.
 /// </summary>
@@ -237,6 +250,13 @@ public interface ICopilotAgent
 
     /// <summary>Detailed readiness check (auth state + reason) for the "Comprobar Copilot" action.</summary>
     Task<AgentReadiness> CheckAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Los modelos que la cuenta puede usar, para poblar el selector de Ajustes (F5.1). Lanza si
+    /// no se puede preguntar al runtime (sin red, sin credencial): Ajustes lo captura y enseña el
+    /// modelo configurado con un aviso, en vez de romperse o de inventar una lista.
+    /// </summary>
+    Task<IReadOnlyList<AgentModel>> ListModelsAsync(CancellationToken ct);
 
     /// <summary>Audits one unit, reporting via <paramref name="toolbox"/> and ending on unit_done.</summary>
     Task AuditUnitAsync(AuditUnitRequest request, IAuditToolbox toolbox, CancellationToken ct);

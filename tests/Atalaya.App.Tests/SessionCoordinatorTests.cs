@@ -20,6 +20,7 @@ public sealed class SessionCoordinatorTests : IDisposable
     private readonly MachineConfigStore _machines;
     private readonly FindingIngestionService _ingestion;
     private readonly ReconciliationService _reconciliation;
+    private readonly SettingsService _settings;
     private readonly UlidFactory _ulids = new(SystemClock.Instance);
 
     public SessionCoordinatorTests()
@@ -29,9 +30,9 @@ public sealed class SessionCoordinatorTests : IDisposable
         Directory.CreateDirectory(_clone);
         _paths = new AppPaths(Path.Combine(_root, "local"));
 
-        var settings = new SettingsService(_paths);
-        settings.Load(); // hub not configured → Sync is null → CommitAndPush is skipped (offline)
-        _hub = TestFactory.Hub(_paths, settings);
+        _settings = new SettingsService(_paths);
+        _settings.Load(); // hub not configured → Sync is null → CommitAndPush is skipped (offline)
+        _hub = TestFactory.Hub(_paths, _settings);
         _machines = new MachineConfigStore(_paths.MachinesJson);
         _ingestion = new FindingIngestionService(_hub, _ulids);
         _reconciliation = new ReconciliationService(_hub);
@@ -61,13 +62,21 @@ public sealed class SessionCoordinatorTests : IDisposable
     /// <summary>
     /// Fija el tope de pasadas del barrido. Los tests de reconciliación usan 1 para aislar la
     /// semántica de una pasada; los del barrido suben el tope a propósito.
+    /// <para>
+    /// F5.1: el tope vive en los ajustes de la máquina, no en <c>app.json</c>, así que aquí se
+    /// escribe donde el coordinador lo lee de verdad.
+    /// </para>
     /// </summary>
     private void SetMaxPasses(int max)
-        => _hub.Store.WriteApp(new AppConfig
+    {
+        _hub.Store.WriteApp(new AppConfig
         {
             Slug = "app", Name = "App", RepoUrl = "u", Stack = TechStack.DotNet, CurrentCycle = 1,
-            Thresholds = new Thresholds { MaxPassesPerUnit = max },
         });
+        AppSettings s = _settings.Current;
+        s.MaxPassesPerUnit = max;
+        _settings.Save(s);
+    }
 
     private static SubmitFindingArgs SampleFinding(string path = "A.cs")
         => new("errores.recursos.no-liberado", "errores", "critica",
@@ -75,7 +84,7 @@ public sealed class SessionCoordinatorTests : IDisposable
             new[] { new SubmitLocation(path, 1, "snippet") }, "A.M");
 
     private SessionCoordinator NewCoordinator(ICopilotAgent agent)
-        => new(_hub, _ingestion, _reconciliation, _machines, _ulids, agent);
+        => new(_hub, _ingestion, _reconciliation, _machines, _ulids, agent, _settings);
 
     private Task<SessionResult> RunLotes(ICopilotAgent agent, params string[] units)
         => NewCoordinator(agent).RunAsync(
@@ -739,6 +748,128 @@ public sealed class SessionCoordinatorTests : IDisposable
         report.Should().Contain("Payloads rechazados por validación: 3");
     }
 
+    // ---------- F5.1 — configuración visible en la sesión y en el informe ----------
+
+    /// <summary>
+    /// El tope de pasadas es un ajuste de la máquina (Ajustes) y se aplica de verdad. Sin
+    /// registrarlo, leer una sesión vieja marcada «cobertura posiblemente incompleta» no permitiría
+    /// distinguir «el modelo no convergió» de «el tope estaba en 1».
+    /// </summary>
+    [Fact]
+    public async Task The_sweep_cap_from_settings_is_applied_recorded_and_reported()
+    {
+        SetMaxPasses(2);
+        // Un agente que siempre reporta algo nuevo: nunca se seca, asi que agota el tope.
+        int n = 0;
+        var agent = new FakeCopilotAgent(_ => new[]
+        {
+            SampleFinding() with { Title = $"Hallazgo {++n}", Symbol = $"A.M{n}" },
+        });
+
+        SessionResult result = await RunLotes(agent);
+
+        AuditSession session = _hub.Store.ListSessions("app").Single();
+        session.MaxPassesPerUnit.Should().Be(2);
+        session.Units.Single().Passes.Should().HaveCount(2, "el tope de Ajustes es el que manda");
+
+        string report = File.ReadAllText(_hub.HubPaths.ReportFile("app", result.SessionId.ToString()));
+        report.Should().Contain("Pasadas del barrido (tope)**: 2");
+    }
+
+    /// <summary>Cambiar el tope en Ajustes cambia el barrido de la siguiente sesión, sin más.</summary>
+    [Fact]
+    public async Task Changing_the_cap_changes_the_next_sweep()
+    {
+        SetMaxPasses(3);
+        int n = 0;
+        SubmitFindingArgs[] Script(AuditUnitRequest _) => new[]
+        {
+            SampleFinding() with { Title = $"Hallazgo {++n}", Symbol = $"A.M{n}" },
+        };
+
+        await RunLotes(new FakeCopilotAgent(Script));
+        _hub.Store.ListSessions("app").Single().Units.Single().Passes.Should().HaveCount(3);
+
+        SetMaxPasses(1);
+        await RunLotes(new FakeCopilotAgent(Script));
+
+        AuditSession second = _hub.Store.ListSessions("app").OrderBy(s => s.StartedUtc).Last();
+        second.MaxPassesPerUnit.Should().Be(1);
+        second.Units.Single().Passes.Should().HaveCount(1);
+    }
+
+    /// <summary>
+    /// El modelo con el que corre el agente queda en la sesión y en el informe. Antes el informe
+    /// decía siempre «Modelo: n/d» porque nadie le pasaba el modelo al agente.
+    /// </summary>
+    [Fact]
+    public async Task The_model_in_use_reaches_the_session_and_the_report()
+    {
+        SetMaxPasses(1);
+        var agent = new FakeCopilotAgent(_ => Array.Empty<SubmitFindingArgs>(), modelName: "claude-sonnet-4.5");
+
+        SessionResult result = await RunLotes(agent);
+
+        _hub.Store.ListSessions("app").Single().Model.Should().Be("claude-sonnet-4.5");
+
+        string report = File.ReadAllText(_hub.HubPaths.ReportFile("app", result.SessionId.ToString()));
+        report.Should().Contain("Modelo**: claude-sonnet-4.5");
+        report.Should().NotContain("n/d");
+    }
+
+    // ---------- F5.1 — re-auditar una unidad ya auditada ----------
+
+    /// <summary>
+    /// Re-auditar es una sesión normal (caso real: volver sobre una unidad tras arreglar sus
+    /// hallazgos). Ni la selección ni el coordinador filtran por estado: la unidad ya auditada se
+    /// audita otra vez y la reconciliación hace el resto.
+    /// </summary>
+    [Fact]
+    public async Task An_already_audited_unit_can_be_audited_again()
+    {
+        SetMaxPasses(1);
+        Finding existing = SeedExisting("Sigue ahi");
+        MarkAudited("A.cs");
+
+        SessionResult result = await RunLotes(new FakeCopilotAgent());
+
+        result.Counters.Confirmed.Should().Be(1, "la re-auditoría reconcilia lo que ya había");
+        result.Counters.New.Should().Be(0);
+        _hub.Store.ListFindings("app").Should().ContainSingle("re-auditar no duplica");
+        _hub.Store.TryReadFinding("app", existing.Id.ToString())!.TimesConfirmed.Should().Be(2);
+        _hub.Store.ListSessions("app").Single().Units.Single().Verdict.Should().Be("auditada");
+    }
+
+    /// <summary>
+    /// Y si el hallazgo se arregló de verdad entre una sesión y la siguiente, la re-auditoría es
+    /// justo la vía por la que se resuelve.
+    /// </summary>
+    [Fact]
+    public async Task Re_auditing_after_a_fix_resolves_the_finding()
+    {
+        SetMaxPasses(1);
+        Finding existing = SeedExisting("Ya arreglado");
+        MarkAudited("A.cs");
+
+        var agent = new FakeCopilotAgent(reconcileScript: _ => new[]
+        {
+            new VerdictArgs(existing.Id.ToString(), "arreglado", "el código ya valida el argumento"),
+        });
+
+        SessionResult result = await RunLotes(agent);
+
+        result.Counters.Resolved.Should().Be(1);
+        _hub.Store.TryReadFinding("app", existing.Id.ToString())!.Status.Should().Be(FindingStatus.Resuelto);
+    }
+
+    /// <summary>Marca una unidad como ya auditada, como la dejaría una sesión anterior.</summary>
+    private void MarkAudited(string path)
+    {
+        InventoryCycle inv = _hub.Store.TryReadInventory("app", 1)!;
+        inv.Units.Single(u => u.Path == path).State = UnitState.Auditada;
+        _hub.Store.WriteInventory("app", inv);
+    }
+
     /// <summary>Agente de test que emite un <c>UsageSample</c> lo bastante grande para disparar el
     /// presupuesto por unidad y, opcionalmente, empuja N payloads inválidos por el toolbox
     /// (<c>severity</c> desconocida) para probar el conteo y la moda de motivo de rechazo.</summary>
@@ -762,6 +893,9 @@ public sealed class SessionCoordinatorTests : IDisposable
         public Task<bool> EnsureReadyAsync(CancellationToken ct) => Task.FromResult(true);
         public Task<AgentReadiness> CheckAsync(CancellationToken ct)
             => Task.FromResult(new AgentReadiness(true, "listo"));
+
+        public Task<IReadOnlyList<AgentModel>> ListModelsAsync(CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<AgentModel>>(new[] { new AgentModel("budget-trip", "budget-trip") });
 
         public Task AuditUnitAsync(AuditUnitRequest request, IAuditToolbox toolbox, CancellationToken ct)
         {
