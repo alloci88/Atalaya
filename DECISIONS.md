@@ -2077,6 +2077,160 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   antigua decía que vivía. La ficha no se rediseña: cambian el ancla, un atributo del expander y
   el manejo de la rueda.
 
+## F5.6 (V2) — Vista Inventario: selección, modos y coste visible
+
+### §1 — Colapsar/expandir todo, compartido con Hallazgos
+
+- **D-243 — La regla de plegado sale de V3 y pasa a ser de las dos vistas.** En F5.4 nació dentro
+  de `FindingsViewModel`: la lista corta abre, la larga pliega, lo que el usuario decide a mano
+  manda, y un solo botón alterna entre «Colapsar todo» y «Expandir todo». V2 necesitaba
+  exactamente eso sobre sus módulos. Copiarla habría dejado **dos** reglas que se separan a la
+  primera corrección —el patrón de D-239, donde una lista duplicada se quedó sin actualizar—, así
+  que vive en `GroupCollapse` (Services) y las dos vistas la consultan. Los grupos implementan
+  `ICollapsibleGroup` (`Key` + `IsExpanded`) y nada más: la lógica no sabe si el grupo es una
+  unidad de V3 o un módulo de V2.
+
+- **D-244 — La memoria de expansión sigue siendo una sola y de la sesión.**
+  `GroupExpansionMemory` ya era singleton porque V3 es transitoria en el contenedor; V2 lo es
+  igual, así que la comparten. Para que un módulo no pueda plegar el grupo homónimo de V3, la
+  clave de V2 lleva prefijo: `inv {slug} {módulo}`. Sigue sin persistirse en disco por la razón
+  de F5.4: qué había plegado anteayer depende del filtro de anteayer.
+
+- **D-245 — Las tres propiedades que lee la cabecera se reenvían, no se duplican.**
+  `AllCollapsed`, `ToggleAllLabel` y `HasGroups` viven en `GroupCollapse`; los dos view-models las
+  exponen como pase directo y reemiten el aviso de cambio (`PropertyChanged` → `OnPropertyChanged`
+  con el mismo nombre). Así el XAML de V3 no cambió ni una línea y los tests de F5.4 siguen
+  midiendo exactamente lo mismo.
+
+### §2 — Integral y Superficial salen del UI, no de los datos
+
+- **D-246 — Por qué se retiran.** El barrido por lotes con reconciliación (F4.1) los dejó sin
+  contenido propio: **Integral** es «seleccionar todo + lotes», y **Superficial** es
+  `maxPassesPerUnit = 1`, que es un ajuste de la máquina (D-095), no un modo de auditoría. Un
+  botón que no aporta una decisión distinta solo aporta una forma más de gastar sin querer.
+
+- **D-247 — Se retira el LANZAMIENTO, no el valor.** Los botones y los comandos
+  (`AuditIntegralCommand`, `AuditSuperficialCommand`) desaparecen; los valores del enum, el mapa
+  JSON (`"integral"` / `"superficial"`), la máquina de confianza, el importador de V4 y las
+  etiquetas en castellano se quedan **intactos**. Las sesiones históricas del hub los referencian
+  y tienen que seguir cargando, contando en métricas y saliendo en informes: un dato que deja de
+  leerse es un dato perdido, y aquí nada se borra (§0, mejora 4). Un test escribe a mano un
+  fichero de sesión como lo escribía la versión antigua —modo retirado, sin `maxPassesPerUnit`,
+  sin `usageBreakdown`— y comprueba las tres cosas: que carga, que suma en `MetricsQuery` y que
+  `ReportBuilder` lo redacta entero.
+
+- **D-248 — Atributo propio en vez de `[Obsolete]`.** `Obsolete` avisa en cada **uso**, y los usos
+  que quedan son justamente los que deben seguir vivos (lectura JSON, confianza, importación). En
+  `Atalaya.Domain` y `Atalaya.Storage` los avisos son errores de compilación (§11), así que
+  marcarlos con `Obsolete` habría obligado a silenciarlo línea por línea — ruido que acaba
+  escondiendo un aviso de verdad. Se declara con `[DeprecatedMode("…")]`, que no genera
+  advertencias y **se puede consultar** (`AuditModes.IsDeprecated`), en vez de con una lista
+  paralela de modos retirados que sería la primera en quedarse sin actualizar (D-239).
+
+- **D-249 — No había prompts de auditor por modo que borrar.** Se comprobó: `Prompts.cs` no tiene
+  recursos separados por modo; solo interpola `MODO: {mode}` en la cabecera del prompt de unidad.
+  Como el UI ya no puede lanzar esos dos, esa interpolación nunca volverá a escribirlos.
+
+- **D-250 — El motor no se toca.** `SessionCoordinator` conserva sus dos ramas de `Integral`
+  (resolver unidades y cerrar ciclo). Ya no son alcanzables desde la interfaz, pero borrarlas
+  entraba en el motor de auditoría, que esta tanda no toca, y no gana nada: una sesión reanudada
+  o reimportada con ese modo sigue resolviéndose igual.
+
+### §3 — Selección a escala (900 unidades)
+
+- **D-251 — La selección deja de vivir en los nodos del árbol.** Era el defecto de fondo: buscar
+  reconstruye `Modules` entero, y con él se iba lo marcado. Ahora la verdad es un conjunto de
+  rutas en el view-model (`_selected`) y los nodos son su reflejo. De ahí salen las tres
+  propiedades que antes no existían: **filtrar no deselecciona**, el contador dice el total del
+  ciclo y no el de lo visible, y colapsar y expandir no tocan nada.
+
+- **D-252 — La barra de selección solo aparece cuando hay algo marcado**, y dice el número.
+  Lanzar auditorías cuesta dinero y con 900 unidades nadie las cuenta a ojo: «N unidades
+  seleccionadas · Deseleccionar todo». El mismo número se repite en el resumen del ciclo.
+
+- **D-253 — Casilla tri-estado por módulo, con `IsThreeState="False"`.** Es deliberado y no una
+  errata: así el clic solo alterna marcar/desmarcar —el gesto que espera una persona—, mientras
+  que un `null` puesto **desde el código** se sigue pintando como indeterminado. Con
+  `IsThreeState="True"` habría que pasar por el estado intermedio en cada vuelta, que no significa
+  nada cuando lo pulsa alguien. La casilla va **fuera** del botón que pliega: dos gestos, dos
+  zonas. Bajo filtro actúa sobre las unidades del módulo que están a la vista, que es lo que se
+  está mirando; la barra sigue diciendo la verdad del total.
+
+- **D-254 — «Seleccionar pendientes» es simétrico y GLOBAL.** Si ya están todas marcadas, el botón
+  pasa a «Deseleccionar pendientes» —el texto es su estado, como el de plegado (D-243)—. Actúa
+  sobre **todas** las pendientes del ciclo, a la vista o no: es la acción global que hace pareja
+  con «Deseleccionar todo», y para recortar a un trozo ya está la casilla del módulo. El tooltip
+  lo dice con el número, para que bajo filtro no sorprenda.
+
+- **D-255 — Lo seleccionado que desaparece del inventario deja de contar.** Un re-escaneo o un
+  reset pueden llevarse una unidad por delante; el conjunto se poda contra el inventario vigente
+  en cada reconstrucción. Un contador que cuenta fantasmas es exactamente el que hace gastar de
+  más.
+
+### §4 — Confirmación de lanzamiento con estimación de coste
+
+- **D-256 — El número sale del gasto ya medido o no existe (N-2 aplicada al dinero).**
+  `CostEstimator` promedia el coste por unidad de `AuditSession.UsageBreakdown` —el desglose que
+  la instrumentación de Hito 1a guarda en cada fichero de sesión— sobre las **5 sesiones más
+  recientes** de esa aplicación. No hay ninguna tabla de precios ni ninguna constante: si el hub
+  no tiene una sola unidad con coste medido, la estimación **no existe** y el diálogo lo dice
+  («Sin coste medido en el historial de esta aplicación»). Con una sola sesión, o con menos de
+  tres unidades medidas, se usa igual pero declarada como «estimación con pocos datos», y el
+  diálogo saca un aviso visible.
+
+- **D-257 — El factor de pasadas se evita antes que se calcula.** Cada sesión registra su tope
+  (F5.1). Se prefieren las sesiones medidas **con el mismo tope que el vigente**: entonces no hay
+  nada que extrapolar y el factor es 1. Solo cuando no hay ninguna se escala por
+  `topeVigente / topeObservado`, y el factor se enseña **en el desglose** (`× 6/2 pasadas`) para
+  que se vea que es extrapolado — con la advertencia de que el escalado lineal sobreestima, porque
+  el barrido se seca antes de agotar el tope. Si el historial no registra tope (sesiones anteriores
+  a F5.1, `maxPassesPerUnit = 0`) no se escala nada y también se dice.
+
+- **D-258 — El cálculo se enseña desglosado, no el total.** «47 unidades × ~18/unidad ≈ 846
+  unidades SDK», con la procedencia debajo («Media de 12 unidades medidas en las últimas 3
+  sesiones»). Un total suelto no se puede contrastar; el desglose sí. La unidad de coste es la que
+  declaró el SDK y quedó guardada en la sesión (`usage.currency`), no una inventada; «unidades
+  SDK» solo aparece cuando el SDK no declaró ninguna, igual que en los informes.
+
+- **D-259 — Informa, no bloquea.** El botón de confirmar nunca se deshabilita por la estimación, ni
+  siquiera cuando no hay número. La confirmación se pide **por encima de 3 unidades**
+  (`Thresholds.ConfirmLaunchUnits`, configurable por app): el coste de un clic de más solo se
+  justifica cuando el gasto es relevante, y una tanda de dos unidades no lo es. Cancelar deja la
+  selección **intacta** — volver atrás no puede costar el trabajo de elegir.
+
+- **D-260 — Quién pregunta se inyecta.** `IAuditLaunchConfirmer` + `AuditLaunchConfirmation`,
+  mismo patrón que el borrado de aplicación (F5.3 §4): `InventoryViewModel` no depende de una
+  ventana y los tests ejercitan el flujo entero —incluido «cancelar»— sin interfaz gráfica.
+
+### Cobertura y verificación
+
+- **D-261 — Lo que queda probado.** Con test: el cálculo del coste en sus tres casos (con
+  historial, sin historial y con factor de pasadas), la preferencia por el tope igual, el
+  historial sin tope registrado y el tope absurdo; el plegado de V2 en sus cinco esquinas (lista
+  corta, lista larga, botón que alterna, supervivencia a la recarga y clave sin colisión con V3);
+  la selección entera (barra y contador, tri-estado en sus tres valores, deseleccionar todo,
+  pendientes simétrico, **selección bajo filtro**, selección bajo colapso y poda tras un
+  re-escaneo); y el diálogo (se pregunta por encima del umbral, no por debajo, el umbral se baja
+  por app, cancelar no lanza y sin historial se pregunta igual pero sin número). Además, la
+  retirada de modos: fixture de sesión antigua que carga, cuenta en métricas y se redacta; los
+  comandos que ya no existen y la barra de acciones que quedó.
+
+- **D-262 — La vista se comprobó cargándola de verdad, no leyendo el XAML.** Un arnés fuera de la
+  aplicación (el de D-238, ahora referenciando `Atalaya.App`) instancia `InventoryView` y
+  `AuditLaunchDialog` con los mismos `ThemesDictionary`/`ControlsDictionary`, escucha
+  `PresentationTraceSources.DataBindingSource` y renderiza a PNG. Resultado: **cero avisos de
+  enlace** en las tres pantallas. El arnés enseñó de paso un detalle que un test de texto no ve:
+  `Run.Text` enlaza **TwoWay por defecto** —está pensado para `RichTextBox`—, así que los `<Run>`
+  del resumen del ciclo exigen una propiedad con `set`; con el view-model real la tienen, pero un
+  doble de solo lectura revienta ahí y no en el enlace que uno estaba mirando. Y una corrección
+  que salió de la imagen: las filas de unidad necesitan margen derecho, porque la barra de
+  desplazamiento cortaba el «🔒 alguien» de las reclamadas.
+
+- **D-263 — Lo que se verifica a mano.** (a) Seleccionar un módulo entero con un clic y soltarlo
+  todo con otro; (b) «Seleccionar pendientes» y su inverso, comprobando que el texto del botón
+  cambia; (c) lanzar una selección de más de 3 unidades y leer la estimación antes de confirmar;
+  (d) que las sesiones antiguas en modo retirado siguen visibles en Métricas y en sus informes.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de

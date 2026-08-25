@@ -168,7 +168,7 @@ public sealed class FindingRow : FindingsListItem
 /// Cabecera de una unidad. La petición central de F5.4: que se lea claramente de qué clase habla
 /// cada hallazgo, en vez de adivinarlo en una columna «Ubicación» recortada a 15 caracteres.
 /// </summary>
-public sealed partial class FindingGroupHeader : FindingsListItem
+public sealed partial class FindingGroupHeader : FindingsListItem, ICollapsibleGroup
 {
     public required string Slug { get; init; }
     public required string AppName { get; init; }
@@ -231,10 +231,11 @@ public sealed partial class FindingsViewModel : ViewModelBase
     private readonly SettingsService _settings;
 
     /// <summary>
-    /// Lo que el usuario ha plegado o desplegado a mano. Vive fuera del view-model porque V3 se
-    /// reconstruye en cada navegación; ver <see cref="GroupExpansionMemory"/>.
+    /// Plegar y desplegar: la MISMA lógica que usa V2 (F5.6 §1). Lo que el usuario decide a mano
+    /// vive fuera del view-model, en <see cref="GroupExpansionMemory"/>, porque V3 se reconstruye
+    /// en cada navegación.
     /// </summary>
-    private readonly GroupExpansionMemory _expansion;
+    private readonly GroupCollapse _collapse;
 
     private string? _pendingAppSlug;
     private bool _hasPendingAppSlug;
@@ -246,7 +247,11 @@ public sealed partial class FindingsViewModel : ViewModelBase
         _hub = hub;
         _navigation = navigation;
         _settings = settings;
-        _expansion = expansion;
+        _collapse = new GroupCollapse(expansion);
+
+        // La cabecera sigue leyendo AllCollapsed/ToggleAllLabel/HasGroups en el view-model: los
+        // nombres coinciden, así que reenviar el aviso basta para que el enlace siga vivo.
+        _collapse.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
 
         SeverityOptions = new List<SeverityFilterOption> { AllSeverities }
             .Concat(Enum.GetValues<Severity>().Select(s => new SeverityFilterOption(s, SeverityNames.Display(s))))
@@ -294,14 +299,14 @@ public sealed partial class FindingsViewModel : ViewModelBase
     [ObservableProperty] private string _resultsSummary = "0 hallazgos";
     [ObservableProperty] private bool _hasActiveFilters;
 
-    /// <summary>No hay ningún grupo desplegado: el botón de la cabecera ofrece desplegarlos.</summary>
-    [ObservableProperty] private bool _allCollapsed;
+    /// <inheritdoc cref="GroupCollapse.AllCollapsed"/>
+    public bool AllCollapsed => _collapse.AllCollapsed;
 
-    /// <summary>Un solo botón que alterna. Su texto ES su estado, así que no hace falta explicarlo.</summary>
-    [ObservableProperty] private string _toggleAllLabel = "Colapsar todo";
+    /// <inheritdoc cref="GroupCollapse.ToggleAllLabel"/>
+    public string ToggleAllLabel => _collapse.ToggleAllLabel;
 
-    /// <summary>Sin grupos no hay nada que plegar: el control se retira.</summary>
-    [ObservableProperty] private bool _hasGroups;
+    /// <inheritdoc cref="GroupCollapse.HasGroups"/>
+    public bool HasGroups => _collapse.HasGroups;
 
     partial void OnSelectedAppChanged(AppFilterOption? value) => Reload();
     partial void OnSelectedSeverityChanged(SeverityFilterOption? value) => Reload();
@@ -442,20 +447,15 @@ public sealed partial class FindingsViewModel : ViewModelBase
         }
 
         var built = BuildGroups(rows, showApp).ToList();
-
-        // Un grupo que el usuario nunca tocó se abre solo si la lista es corta. La regla mira el
-        // total de grupos DE ESTE filtro: al filtrar, lo que era ilegible pasa a ser legible.
-        bool openByDefault = built.Count <= GroupExpansionMemory.SmallListGroups;
+        _collapse.Adopt(built);
 
         Groups.Clear();
         foreach (FindingGroupHeader group in built)
         {
-            group.IsExpanded = _expansion.Remembered(group.Key) ?? openByDefault;
             Groups.Add(group);
         }
 
         Flatten();
-        UpdateExpansionState();
 
         ResultCount = rows.Count;
         DisputedCount = rows.Count(r => r.IsDisputed);
@@ -558,40 +558,16 @@ public sealed partial class FindingsViewModel : ViewModelBase
     [RelayCommand]
     private void ToggleGroup(FindingGroupHeader? group)
     {
-        if (group is null)
-        {
-            return;
-        }
-
-        group.IsExpanded = !group.IsExpanded;
-        _expansion.Remember(group.Key, group.IsExpanded);
+        _collapse.Toggle(group);
         Flatten();
-        UpdateExpansionState();
     }
 
-    /// <summary>
-    /// Pliega todo, o lo despliega si ya estaba todo plegado. Un botón, no dos: con la mitad de los
-    /// grupos abiertos, «colapsar todo» es la única acción que cambia algo para todos.
-    /// </summary>
+    /// <inheritdoc cref="GroupCollapse.ToggleAll"/>
     [RelayCommand]
     private void ToggleAllGroups()
     {
-        bool expand = AllCollapsed;
-        foreach (FindingGroupHeader group in Groups)
-        {
-            group.IsExpanded = expand;
-            _expansion.Remember(group.Key, expand);
-        }
-
+        _collapse.ToggleAll();
         Flatten();
-        UpdateExpansionState();
-    }
-
-    private void UpdateExpansionState()
-    {
-        HasGroups = Groups.Count > 0;
-        AllCollapsed = Groups.Count > 0 && Groups.All(g => !g.IsExpanded);
-        ToggleAllLabel = AllCollapsed ? "Expandir todo" : "Colapsar todo";
     }
 
     /// <summary>La fila entera es el enlace: abrir el detalle es lo ÚNICO que hace esta vista.</summary>

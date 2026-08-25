@@ -84,8 +84,17 @@ public sealed class ReAuditSelectionTests : IDisposable
             sp.GetRequiredService<OpenSessionStore>()));
         services.AddTransient<SessionCoordinator>();
         services.AddTransient<SessionViewModel>();
+        services.AddSingleton<CostEstimator>();
+        services.AddSingleton<GroupExpansionMemory>();
+        // Aquí se prueba el camino de la selección, no el diálogo: se confirma siempre.
+        services.AddSingleton<IAuditLaunchConfirmer>(new AlwaysConfirms());
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
+    }
+
+    private sealed class AlwaysConfirms : IAuditLaunchConfirmer
+    {
+        public bool Confirm(AuditLaunchConfirmation confirmation) => true;
     }
 
     private static SubmitFindingArgs Sample()

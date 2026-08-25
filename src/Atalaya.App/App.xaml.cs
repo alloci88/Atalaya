@@ -132,8 +132,14 @@ public partial class App : Application
         services.AddSingleton<AppDeletionService>();
         services.AddSingleton<IDeleteAppConfirmer, DeleteAppDialogConfirmer>();
 
+        // F5.6 §4: el diálogo previo a gastar. Mismo patrón que el borrado de app — quién
+        // pregunta se inyecta, así que el flujo entero (incluido cancelar) se prueba sin ventana.
+        services.AddSingleton<CostEstimator>();
+        services.AddSingleton<IAuditLaunchConfirmer, AuditLaunchDialogConfirmer>();
+
         services.AddSingleton<EditorLauncher>();
-        // La memoria de plegado de V3 es de la SESIÓN, no de la vista: V3 es transitoria.
+        // La memoria de plegado es de la SESIÓN, no de la vista: V2 y V3 son transitorias y la
+        // comparten (F5.6 §1).
         services.AddSingleton<GroupExpansionMemory>();
         services.AddSingleton<CycleService>();
         services.AddSingleton<StatusExporter>();

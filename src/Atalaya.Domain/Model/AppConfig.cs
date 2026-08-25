@@ -36,6 +36,13 @@ public sealed class Thresholds
     /// well above a healthy batched run, well below a pathological one.
     /// </summary>
     public long MaxTokensPerUnit { get; set; } = 300_000;
+
+    /// <summary>
+    /// A partir de cuántas unidades seleccionadas el lanzamiento pide confirmación (F5.6 §4).
+    /// Por debajo se lanza directo: el coste de un clic de más solo se justifica cuando el gasto
+    /// es relevante, y una tanda de dos unidades no lo es. Por defecto 3.
+    /// </summary>
+    public int ConfirmLaunchUnits { get; set; } = 3;
 }
 
 /// <summary>

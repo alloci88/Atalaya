@@ -41,14 +41,52 @@ public enum FindingTag
 }
 
 /// <summary>
+/// Marca un modo de auditoría RETIRADO (F5.6 §2): ya no se puede lanzar desde la interfaz, pero
+/// el valor sigue existiendo y leyéndose porque las sesiones históricas del hub lo referencian.
+/// <para>
+/// <b>Por qué un atributo propio y no <c>[Obsolete]</c>.</b> <c>Obsolete</c> avisa en cada USO,
+/// y los usos que quedan son precisamente los que tienen que seguir vivos: el mapa JSON que carga
+/// las sesiones antiguas, la máquina de confianza que interpreta su origen y el importador de V4.
+/// En Domain y Storage los avisos son errores (§11), así que marcar con <c>Obsolete</c> obligaría
+/// a silenciarlo en cada línea de lectura — ruido que acabaría escondiendo un aviso de verdad. Lo
+/// que hace falta aquí es una declaración legible por código y por persona, no una advertencia.
+/// </para>
+/// </summary>
+[AttributeUsage(AttributeTargets.Field)]
+public sealed class DeprecatedModeAttribute : Attribute
+{
+    public DeprecatedModeAttribute(string reason) => Reason = reason;
+
+    /// <summary>Qué lo sustituye, en una línea.</summary>
+    public string Reason { get; }
+}
+
+/// <summary>
 /// Modo de una sesión de auditoría. Incluye los modos de auditoría propiamente
 /// dichos (§0) y los eventos de sistema que también generan una sesión (§5).
+/// <para>
+/// Dos de ellos están RETIRADOS desde F5.6: el barrido por lotes con reconciliación los dejó sin
+/// contenido propio. Ninguno se borra — ver <see cref="DeprecatedModeAttribute"/>.
+/// </para>
 /// </summary>
 public enum AuditMode
 {
+    /// <summary>
+    /// RETIRADO (F5.6 §2). Equivale a «seleccionar todo + lotes»: el barrido cubre lo mismo y
+    /// además reconcilia. Se sigue leyendo: las sesiones antiguas del hub lo llevan.
+    /// </summary>
+    [DeprecatedMode("Equivale a seleccionar todas las unidades y auditarlas por lotes.")]
     Integral,
+
     Lotes,
+
+    /// <summary>
+    /// RETIRADO (F5.6 §2). Equivale a un tope de una sola pasada (<c>maxPassesPerUnit = 1</c>),
+    /// que es un ajuste, no un modo. Se sigue leyendo: las sesiones antiguas del hub lo llevan.
+    /// </summary>
+    [DeprecatedMode("Equivale a un tope de una sola pasada por unidad (maxPassesPerUnit = 1).")]
     Superficial,
+
     Verify,
     /// <summary>Cierre de ciclo (§5.1): asciende confianzas y abre el ciclo siguiente.</summary>
     Cierre,
@@ -56,6 +94,25 @@ public enum AuditMode
     Reset,
     /// <summary>Arreglo asistido supervisado (§5.7, H9): registra coste de tokens.</summary>
     Fix,
+}
+
+/// <summary>Lo que se sabe de un <see cref="AuditMode"/> sin tener que recordarlo.</summary>
+public static class AuditModes
+{
+    /// <summary>
+    /// True si el modo está retirado (F5.6 §2). Se lee del atributo, no de una lista paralela:
+    /// una segunda lista es la que se queda sin actualizar (D-239).
+    /// </summary>
+    public static bool IsDeprecated(AuditMode mode) => Deprecation(mode) is not null;
+
+    /// <summary>Por qué se retiró, o <c>null</c> si sigue vigente.</summary>
+    public static string? Deprecation(AuditMode mode)
+        => typeof(AuditMode)
+            .GetField(mode.ToString())?
+            .GetCustomAttributes(typeof(DeprecatedModeAttribute), false)
+            .OfType<DeprecatedModeAttribute>()
+            .FirstOrDefault()?
+            .Reason;
 }
 
 /// <summary>Estado de una unidad dentro del inventario de un ciclo (§2).</summary>
