@@ -42,6 +42,25 @@ public partial class MainWindow : FluentWindow
             _toastTimer.Stop();
         };
         Closing += OnClosing;
+        FitToScreen();
+    }
+
+    /// <summary>
+    /// Recorta el tamaño inicial a lo que de verdad cabe en la pantalla (F5.4 §6).
+    /// <para>
+    /// El ancho por defecto lo fija la barra de filtros de V3, que necesita 1314 px de ventana para
+    /// caber en una línea. Eso pasa de sobra en un monitor normal, pero WPF mide en unidades
+    /// independientes del dispositivo: con la pantalla al 150 %, un 1920 físico son 1280 de
+    /// escritorio, y la ventana abriría más ancha que la pantalla y CENTRADA — es decir, con la
+    /// barra de título a medias y los bordes fuera por los dos lados. Nunca por debajo del mínimo:
+    /// más vale una ventana que se sale un poco que una inutilizable.
+    /// </para>
+    /// </summary>
+    private void FitToScreen()
+    {
+        Rect area = SystemParameters.WorkArea;
+        Width = StartupSize.Clamp(Width, MinWidth, area.Width);
+        Height = StartupSize.Clamp(Height, MinHeight, area.Height);
     }
 
     /// <summary>
@@ -77,4 +96,18 @@ public partial class MainWindow : FluentWindow
         _confirmedClose = true;
         _viewModel.StopSession();
     }
+}
+
+/// <summary>El tamaño inicial que de verdad cabe. Separado de la ventana para poder probarlo.</summary>
+public static class StartupSize
+{
+    /// <summary>Aire que se deja alrededor para que la ventana no toque los bordes del escritorio.</summary>
+    public const double Margin = 40;
+
+    /// <summary>
+    /// El deseado, recortado a lo que queda de pantalla, pero nunca por debajo del mínimo: una
+    /// ventana que se sale un poco es molesta; una por debajo de su mínimo es inutilizable.
+    /// </summary>
+    public static double Clamp(double desired, double minimum, double available)
+        => Math.Max(minimum, Math.Min(desired, available - Margin));
 }

@@ -768,6 +768,46 @@ public sealed class FindingsViewTests : IDisposable
         vm.SeverityOptions.Should().NotContain(o => o.Label == "Critica");
     }
 
+    // ------------------------------------------------- el ancho de la ventana
+
+    /// <summary>
+    /// La barra de filtros de V3 necesita <b>1064 px de página</b> para caber en una línea —medido
+    /// pintándola con «Limpiar filtros» visible, que es el caso ancho—. Sumados el rail (210) y el
+    /// relleno de la página (20 a cada lado), la ventana tiene que abrir con al menos 1314. Abría
+    /// con 1180, y por eso el último filtro caía a una segunda línea nada más arrancar.
+    /// <para>
+    /// Esto NO fija el mínimo de la ventana: por debajo, los filtros se reacomodan y bajan de
+    /// línea, que es el comportamiento correcto. Fija la PRIMERA IMPRESIÓN.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void La_ventana_abre_lo_bastante_ancha_para_que_los_filtros_quepan_en_una_linea()
+    {
+        const double filterBarNeeds = 1064;
+        const double railAndPadding = 210 + 20 + 20;
+
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Atalaya.sln")))
+        {
+            dir = dir.Parent;
+        }
+
+        string xaml = File.ReadAllText(Path.Combine(dir!.FullName, "src", "Atalaya.App", "MainWindow.xaml"));
+        Match width = Regex.Match(xaml, @"\bWidth=""(\d+)""");
+        width.Success.Should().BeTrue("la ventana declara un ancho por defecto");
+
+        double.Parse(width.Groups[1].Value)
+            .Should().BeGreaterThanOrEqualTo(filterBarNeeds + railAndPadding);
+    }
+
+    [Theory]
+    [InlineData(1340, 900, 1920, 1340)]   // cabe de sobra: se respeta lo pedido
+    [InlineData(1340, 900, 1280, 1240)]   // pantalla al 150 %: se recorta al escritorio
+    [InlineData(1340, 900, 800, 900)]     // pantalla diminuta: nunca por debajo del mínimo
+    public void El_tamano_inicial_se_recorta_a_la_pantalla_pero_no_por_debajo_del_minimo(
+        double desired, double minimum, double available, double expected)
+        => StartupSize.Clamp(desired, minimum, available).Should().Be(expected);
+
     // ------------------------------------------------- la frontera V3 / V4
 
     [Fact]

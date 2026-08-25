@@ -1558,10 +1558,40 @@ abrir la ficha. Y el combo de severidad no tenía «Todas»: filtrar era un viaj
   con los grupos abiertos y plegados. A 890 px baja «Disputados» a la segunda línea; a 760 px bajan
   los dos toggles juntos; en ninguno se corta nada.
 
+### §6 — La ventana abre con el ancho que la vista necesita
+
+- **D-182 — El ancho por defecto sale de una medida, no de una estimación.** La barra de filtros de
+  V3 necesita **1064 px de página** para caber en una línea. No es un cálculo sobre el papel: se
+  midió pintando la vista y leyendo la altura del `WrapPanel` a anchos crecientes de dos en dos,
+  con «Limpiar filtros» visible, que es el caso ancho. Sumados el rail (210) y el relleno de la
+  página (20 a cada lado), la ventana necesita **1314**. Abría con 1180 — 134 px corta—, y por eso
+  el último filtro caía a una segunda línea nada más arrancar. Pasa a **1340**, que deja algo de
+  aire y se queda **por debajo de los 1366 px** de los portátiles pequeños, donde 1400 ya no
+  entraría.
+
+- **D-183 — Ensanchar la ventana NO deshace el reflujo de D-174.** Son dos cosas distintas: el
+  ancho por defecto arregla la primera impresión, y el `WrapPanel` sigue siendo lo que hace que la
+  vista aguante cualquier otro ancho. El mínimo de la ventana se queda en 900, donde los filtros
+  ocupan tres líneas y no se recorta nada. El test del ancho lo dice explícitamente para que nadie
+  lo lea como un mínimo.
+
+- **D-184 — Y el tamaño inicial se recorta a la pantalla que hay.** WPF mide en unidades
+  independientes del dispositivo: con el escritorio al 150 %, un monitor de 1920 físicos son 1280
+  de escritorio, y una ventana de 1340 abriría más ancha que la pantalla **y centrada**, o sea con
+  la barra de título a medias y los bordes fuera por los dos lados. `StartupSize.Clamp` la ajusta
+  al área de trabajo dejando 40 px de aire, pero **nunca por debajo del mínimo**: una ventana que
+  se sale un poco es molesta, una por debajo de su mínimo es inutilizable. Va en una clase aparte
+  porque la aritmética se puede probar y la ventana no.
+
+- **D-185 — 5 tests nuevos y 3 mutaciones, las 3 tumban tests.** Devolver el ancho a 1180, quitarle
+  el suelo del mínimo al recorte y quitarle el recorte entero. El test del ancho lee el XAML y
+  compara contra los 1064 medidos más el rail: si alguien encoge la ventana, o si un filtro nuevo
+  ensancha la barra, salta antes de que el usuario lo vea partido.
+
 ### Cobertura y verificación
 
 - **D-164 — 29 tests nuevos, verificados por mutación (12 mutaciones, las 12 tumban tests).** Son
-  41 tests y 25 mutaciones al cerrar los §4 y §5. Cubren
+  46 tests y 28 mutaciones al cerrar los §4, §5 y §6. Cubren
   los valores iniciales de los tres combos, cada filtro por separado, sus combinaciones, la **vuelta
   a «Todas»** en severidad y en aplicación, el recorrido completo del filtro de estado, la búsqueda
   por título/ruleId/ruta, «Limpiar filtros», `HasActiveFilters`, el contador (plural, singular y
