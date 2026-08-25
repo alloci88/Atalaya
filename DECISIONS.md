@@ -893,6 +893,31 @@ prompt no se repiten aquí salvo para anclar un detalle de implementación.
   una. Extrapolación desde una sola muestra, declarada como tal: si a las 5 no se seca, el
   problema es otro y no se arregla subiendo el tope.
 
+- **D-096 — Cierre de la saga: validado sobre datos reales.** `XBLASTCommon/Class/CommonStatics.cs`,
+  baseline vacío, dos barridos consecutivos sin tocar el código:
+
+  | | Barrido 1 | Barrido 2 |
+  |---|---|---|
+  | Nuevos | 13 | **0** |
+  | Confirmados | 0 | **13** |
+  | Resueltos | **0** | **0** |
+  | Pasadas (nuevos) | 5 → 3 → 2 → 3 → 0 (seca) | **1, seca** |
+  | Veredicto de unidad | auditada | auditada |
+
+  Estado final en disco: 13 hallazgos, **todos activos**; `timesConfirmed = 2` en los trece —
+  exactamente una confirmación por auditoría, ni una de más; 6 de 13 con varias ubicaciones,
+  22 en total. Cero duplicados, cero resoluciones falsas, cero unidades incompletas.
+
+  El segundo barrido secándose **a la primera pasada** es la prueba de que la cobertura del
+  primero fue real: no quedaba nada por encontrar. Y las dos sesiones estables consecutivas son la
+  propiedad que nunca se cumplió con los fingerprints — el criterio de cierre de toda la saga
+  (D-064 → D-096).
+
+  Nota de honestidad: una muestra, una unidad de 188 LOC. Lo validado es que el mecanismo converge
+  y no se contradice, no que converja igual en cualquier unidad. Un fichero mucho mayor puede
+  necesitar más pasadas o tropezar con el tope, en cuyo caso se marcará
+  «cobertura posiblemente incompleta» — visible, que era el requisito.
+
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 
 - El *feature flag* `enableAssistedFix` existe en Ajustes y el generador de prompt de
