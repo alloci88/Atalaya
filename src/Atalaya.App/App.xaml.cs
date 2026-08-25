@@ -108,6 +108,18 @@ public partial class App : Application
         });
         services.AddTransient<SessionCoordinator>();
         services.AddTransient<VerifyCoordinator>();
+
+        // F5.2: el estado de la sesión es un SINGLETON que sobrevive a la navegación; V5 es solo
+        // una vista sobre él. El coordinador sigue siendo transient (uno por sesión), así que se
+        // inyecta como fábrica.
+        services.AddSingleton<OpenSessionStore>();
+        services.AddSingleton(sp => new InterruptedSessionRecovery(
+            sp.GetRequiredService<HubContext>(), sp.GetRequiredService<OpenSessionStore>()));
+        services.AddSingleton(sp => new LiveSessionService(
+            sp.GetRequiredService<SessionCoordinator>,
+            sp.GetRequiredService<ICopilotAgent>(),
+            sp.GetRequiredService<OpenSessionStore>(),
+            sp.GetRequiredService<HubContext>()));
         services.AddSingleton<GovernanceService>();
         services.AddSingleton<EditorLauncher>();
         services.AddSingleton<CycleService>();

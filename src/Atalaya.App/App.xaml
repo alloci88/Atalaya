@@ -20,6 +20,10 @@
             <local:ProgressToPercentConverter x:Key="ProgressToPercent" />
             <local:CheckStateToGlyphConverter x:Key="CheckStateToGlyph" />
             <local:CheckStateToBrushConverter x:Key="CheckStateToBrush" />
+            <local:ActivityKindToWeightConverter x:Key="ActivityKindToWeight" />
+            <local:UnitRunStateToBrushConverter x:Key="UnitRunStateToBrush" />
+            <local:SeverityToVisibilityConverter x:Key="SeverityToVisibility" />
+            <local:WarningToBrushConverter x:Key="WarningToBrush" />
             <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
 
             <!-- VM-first navigation: each page VM renders as its view. -->

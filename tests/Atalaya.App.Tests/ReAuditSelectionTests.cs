@@ -76,6 +76,12 @@ public sealed class ReAuditSelectionTests : IDisposable
         services.AddSingleton<ReconciliationService>();
         services.AddSingleton<ICopilotAgent>(new FakeCopilotAgent(_ => new[] { Sample() }));
         services.AddSingleton<NavigationService>();
+        services.AddSingleton(_paths);
+        services.AddSingleton<OpenSessionStore>();
+        services.AddSingleton(sp => new LiveSessionService(
+            sp.GetRequiredService<SessionCoordinator>,
+            sp.GetRequiredService<ICopilotAgent>(),
+            sp.GetRequiredService<OpenSessionStore>()));
         services.AddTransient<SessionCoordinator>();
         services.AddTransient<SessionViewModel>();
         services.AddTransient<InventoryViewModel>();
@@ -117,6 +123,9 @@ public sealed class ReAuditSelectionTests : IDisposable
         vm.Modules.SelectMany(m => m.Units).Single(u => u.Path == "A.cs").IsSelected = true;
         await vm.AuditSelectionCommand.ExecuteAsync(null);
 
+        // F5.2: lanzar es explícito y la sesión corre en el servicio; la navegación solo la enseña.
+        LiveSessionService live = _provider.GetRequiredService<LiveSessionService>();
+        await WaitUntilFinished(live);
         navigation.Current.Should().BeOfType<SessionViewModel>();
         AuditSession session = _hub.Store.ListSessions("app").Should().ContainSingle().Subject;
         session.Units.Should().ContainSingle().Which.Unit.Should().Be("A.cs");
@@ -137,6 +146,17 @@ public sealed class ReAuditSelectionTests : IDisposable
 
         vm.StatusMessage.Should().Contain("Selecciona al menos una unidad");
         _hub.Store.ListSessions("app").Should().BeEmpty();
+    }
+
+    /// <summary>La sesión corre en segundo plano: se espera a que cierre antes de comprobar.</summary>
+    private static async Task WaitUntilFinished(LiveSessionService live)
+    {
+        for (int i = 0; i < 200 && !live.HasFinished; i++)
+        {
+            await Task.Delay(25);
+        }
+
+        live.HasFinished.Should().BeTrue("la sesión debería haber terminado ya");
     }
 
     public void Dispose()

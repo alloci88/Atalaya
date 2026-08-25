@@ -39,6 +39,45 @@
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Left"
                         Margin="0,2" />
+                    <!-- Sesión: solo aparece cuando hay una (en curso o recién terminada). El punto
+                         late mientras corre, que es la señal de que la auditoría sigue viva aunque
+                         estés en otra página (F5.2, Hito 1). -->
+                    <ui:Button
+                        Command="{Binding ShowSessionCommand}"
+                        Appearance="Secondary"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Margin="0,2"
+                        Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="9" Height="9" Margin="0,0,8,0" VerticalAlignment="Center"
+                                     Fill="#3FB950"
+                                     Visibility="{Binding IsSessionRunning, Converter={StaticResource BoolToVisibility}}">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsSessionRunning}" Value="True">
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard Name="Pulse">
+                                                        <Storyboard>
+                                                            <DoubleAnimation
+                                                                Storyboard.TargetProperty="Opacity"
+                                                                From="1.0" To="0.15" Duration="0:0:0.9"
+                                                                AutoReverse="True" RepeatBehavior="Forever" />
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
+                                                <DataTrigger.ExitActions>
+                                                    <StopStoryboard BeginStoryboardName="Pulse" />
+                                                </DataTrigger.ExitActions>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock Text="{Binding SessionNavLabel}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ui:Button>
                     <ui:Button
                         Command="{Binding ShowFindingsCommand}"
                         Content="Hallazgos"
@@ -102,6 +141,23 @@
                         Height="16"
                         Margin="12,0,0,0"
                         Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+
+                    <!-- Progreso de la sesión: clic → V5. Que se vea desde cualquier página es
+                         justo lo que faltaba (F5.2, Hito 1). -->
+                    <Button
+                        Command="{Binding ShowSessionCommand}"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="6,0"
+                        Margin="14,0,0,0"
+                        Cursor="Hand"
+                        ToolTip="Ir a la sesión en vivo"
+                        Visibility="{Binding SessionProgress, Converter={StaticResource NotEmptyToVisibility}}">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,8,0" />
+                            <TextBlock Text="{Binding SessionProgress}" VerticalAlignment="Center" Opacity="0.9" />
+                        </StackPanel>
+                    </Button>
 
                     <!-- Connected account (D4): click goes to Cuenta. -->
                     <Button

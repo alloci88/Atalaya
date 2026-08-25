@@ -1095,7 +1095,7 @@ haber tocado el código. No era una impresión.
     UTC) y estuve a punto de dar por buena una correlación falsa con un arranque del CLI. La lección
     de D-096 otra vez: verificar antes de afirmar, y verificar también las unidades.
 
-- **D-110 — Lo que NO se ha construido, y por qué.** El caso «la app muere de golpe» (cierre
+- **D-110 — Lo que NO se había construido entonces (CERRADO en F5.2, ver D-125..D-127).** El caso «la app muere de golpe» (cierre
   forzado, cuelgue) sigue pudiendo dejar escrituras huérfanas: la parada limpia solo cubre la
   cancelación cooperativa. El arreglo natural es una **marca de sesión abierta** que la siguiente
   ejecución encuentre y cierre como interrumpida. No se hace aquí porque exige un artefacto nuevo en
@@ -1145,6 +1145,105 @@ haber tocado el código. No era una impresión.
 - **D-112 — Cobertura.** 18 tests nuevos (`VerdictGuardTests`, `StoppedSessionTests`). Verificados
   por mutación: desactivar la guarda entera tumba 3; desactivar solo la capa del `contentHash` tumba
   1; no excluir el centinela `unknown` tumba 1; volver a lanzar en la cancelación tumba 7.
+
+## F5.2 — Tanda visual: V5, navegación de sesión y cierre robusto
+
+Experiencia de uso y el remate de robustez que D-110 dejaba pendiente. El motor no se toca: lo
+único que cambia dentro del coordinador son eventos **de observación**, aditivos, que emiten datos
+que ya calculaba y no alteran ninguna decisión.
+
+### Hito 1 — La sesión sobrevive a la navegación
+
+- **D-116 — El estado de la sesión sale del view-model y pasa a un servicio singleton.**
+  El problema no era que la sesión no corriera en segundo plano —sí lo hacía—, sino que su estado
+  vivía en `SessionViewModel`, que es `Transient`: navegar fuera y volver creaba una instancia
+  nueva y la pantalla aparecía vacía aunque la auditoría siguiera. Ahora `LiveSessionService`
+  (singleton) es el dueño del estado y V5 es una **vista** sobre él: al volver, se reconstruye
+  desde el servicio en vez de depender de haber estado abierta.
+
+- **D-117 — Lanzar deja de ser un efecto secundario de navegar, y eso cierra D-085 por diseño.**
+  Antes, `SessionViewModel.LoadAsync` EJECUTABA la auditoría. Como `LoadAsync` significa «recarga
+  la vista» en todas las demás páginas, el tick de polling la llamaba y relanzaba sesiones en
+  bucle. D-085 lo tapó con un `_startedForRequest` y un cerrojo antes del primer `await`; F5.2
+  elimina la clase entera de fallo: **la vista ya no sabe arrancar sesiones**. Se lanza
+  explícitamente desde V2 (`LiveSessionService.StartAsync`) y `LoadAsync` no ejecuta trabajo jamás.
+  Las invariantes de D-085 siguen probadas, pero contra el servicio, que es donde ahora viven:
+  recargar no relanza · las recargas no tocan los hallazgos · lanzar otra vez sí arranca otra
+  sesión · tres disparos concurrentes atraviesan el guardia exactamente una vez.
+
+- **D-118 — La carcasa enseña la sesión desde cualquier página.** Item de navegación con punto
+  pulsante mientras corre («Sesión en vivo») que pasa a «Última sesión» al terminar; línea en la
+  barra inferior («Auditando app · unidad 3/10 · pasada 2») clicable; y toast con el resumen
+  cuando una sesión termina sin la vista abierta — porque el resumen no puede perderse en una
+  línea fugaz de una pantalla que nadie estaba mirando.
+
+- **D-119 — Cerrar la app con sesión viva pregunta, y usa la parada ORDENADA existente.** El
+  diálogo confirma y llama al mismo `Stop()` de F5.1b. No se duplica el camino de parada: un
+  segundo camino sería exactamente el que se olvidaría de escribir el registro, de liberar los
+  claims o de publicar.
+
+### Hito 2 — Rediseño de V5
+
+- **D-120 — La columna de actividad tenía puntos porque el adaptador emitía puntos.** No era un
+  problema de la vista: `RealCopilotAgent.OnSessionEvent` hacía `TextStreamed(".")` para cualquier
+  mensaje del asistente. El SDK 1.0.11 trae el contenido en
+  `AssistantMessageDeltaData.DeltaContent` (streaming) y el mensaje entero en
+  `AssistantMessageData.Content` al cerrar el turno; emitir ambos duplicaría todo el texto, así que
+  el mensaje completo solo se emite si de él no llegó ningún delta.
+  **Y esto SÍ está probado sin asiento**, al contrario que el resto de `RealCopilotAgent` (D-017):
+  los tipos de evento son construibles, así que el mapeo y la deduplicación se ejercitan de verdad.
+  Verificado por mutación: devolver los puntos tumba 3 tests; quitar la deduplicación, 2.
+
+- **D-121 — Si el modelo habla poco, narran los eventos.** La columna intercala el texto real con
+  eventos de una línea («＋ Hallazgo», «⚖ Disputado», «↻ Pasada 2: 3 nuevos», «✓ Pasada 3 seca»,
+  «✂ Cortada por presupuesto»). La regla es que **nunca** haya una columna vacía o de puntos: con
+  un modelo parco, los eventos son la narración mínima.
+  Los deltas llegan en trozos de pocos caracteres y se **acumulan en la última entrada de texto**
+  en vez de crear una fila por trozo, que haría inmanejable la lista.
+
+- **D-122 — Elipsis EN MEDIO en la cola.** `XBLASTCommon/…/CommonStatics.cs`, con la ruta completa
+  en el tooltip. Una elipsis al final se come justo lo que identifica la unidad: el nombre del
+  fichero.
+
+- **D-123 — El pie destaca la métrica que manda: coste = llamadas × multiplicador (D-113).** Los
+  tokens siguen ahí, con caché y media por unidad, pero en segundo plano: no son la palanca.
+
+- **D-124 — Pantalla de cierre persistente, con cada número explicado y desplegable.** Sustituye a
+  la línea fugaz de estado. Cada contador trae su frase («Disputados: el auditor sostiene que nunca
+  fueron un defecto. NO están resueltos: los decides tú») y, al pulsarlo, qué hallazgos lo componen.
+  Es la respuesta directa a D-114: aquel «confirmados 20» que se calló una disputa fue el último
+  aviso de que un número sin causa se escapa en cuanto no se le pone la causa **delante**.
+
+### Hito 3 — Cierre de D-110: marca de sesión abierta
+
+- **D-125 — La parada ordenada no cubre un `taskkill`, y ahí no corre ningún `finally`.** Se escribe
+  una **marca de sesión abierta** al arrancar (ULID, app, modo, commit, unidades reclamadas, PID e
+  instante de arranque del proceso), se actualiza al cerrar cada unidad y se borra al terminar. Vive
+  en `%LOCALAPPDATA%` y **no** en el hub: es un hecho de esta máquina y este proceso; publicarlo
+  haría que la marca de un portátil apagado pareciera una sesión viva para todo el equipo.
+
+- **D-126 — Se compara el PID *y* el instante de arranque.** Los sistemas reciclan PIDs: sin la
+  segunda mitad, un proceso ajeno que heredara el número haría pasar por viva una sesión muerta y
+  la recuperación no ocurriría nunca. Si no hay permiso para inspeccionar el proceso, se asume
+  **vivo**: recuperar una sesión que en realidad sigue corriendo sería peor que no recuperarla.
+
+- **D-127 — Recuperar es cerrar el registro, no reconstruir el trabajo.** Los hallazgos ya están en
+  disco (la ingesta escribe en vivo). Al arrancar, si la marca es huérfana: se escribe el registro
+  de sesión con `Interrupted = true`, se liberan los claims —lo más urgente, porque si no bloquean
+  a los demás hasta el TTL—, se borra la marca, se publica y se avisa con un toast.
+  **Aproximación declarada:** el recuento de hallazgos usa «los de esta app detectados desde que
+  arrancó la sesión», porque un hallazgo no guarda el ULID de la sesión que lo creó. Va escrito en
+  las notas de la propia sesión recuperada, no escondido aquí.
+
+- **D-128 — Cobertura.** 25 tests nuevos. Verificados por mutación: limpiar el estado al terminar
+  tumba 2 (la vista dejaría de reconstruirse); no borrar la marca al cerrar bien, 1 (el siguiente
+  arranque «recuperaría» una sesión sana); devolver los puntos, 3; quitar la deduplicación del
+  streaming, 2.
+
+- **D-129 — Lo que esta tanda NO toca.** Motor, reconciliación, barrido, guarda de evidencia de
+  cambio, disputas, coste, conexión y Ajustes quedan como los cerraron F5.1 y F5.1b. No hay vistas
+  nuevas: es V5, la navegación y el arranque. El tema visual (WPF-UI/Fluent, D-011) tampoco se
+  rehace.
 
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 

@@ -329,16 +329,61 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
         return text.ToString().ToLowerInvariant();
     }
 
-    private void OnSessionEvent(SessionEvent ev)
+    /// <summary>
+    /// Mensajes cuyos deltas ya se han emitido: evita duplicar el texto cuando, al cerrar el turno,
+    /// el SDK manda además el mensaje completo.
+    /// </summary>
+    private readonly HashSet<string> _streamedMessages = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// F5.2: se emite el TEXTO del agente, no un punto por evento.
+    /// <para>
+    /// Hasta aquí esto invocaba <c>TextStreamed(".")</c>, así que la columna de actividad de V5 era
+    /// literalmente una fila de puntos: se veía que el agente seguía vivo y nada más. El SDK trae el
+    /// contenido en <c>AssistantMessageDeltaData.DeltaContent</c> (streaming) y el mensaje entero en
+    /// <c>AssistantMessageData.Content</c> al cerrar; emitir los dos duplicaría el texto, así que el
+    /// mensaje completo solo se emite si de él no llegó ningún delta.
+    /// </para>
+    /// </summary>
+    internal void OnSessionEvent(SessionEvent ev)
     {
         switch (ev)
         {
             case AssistantUsageEvent usage:
                 UsageReported?.Invoke(UsageAdapter.From(usage.Data));
                 break;
-            case AssistantMessageDeltaEvent:
-            case AssistantMessageEvent:
-                TextStreamed?.Invoke(".");
+
+            case AssistantMessageDeltaEvent delta:
+                string? chunk = delta.Data?.DeltaContent;
+                if (!string.IsNullOrEmpty(chunk))
+                {
+                    if (delta.Data?.MessageId is { Length: > 0 } id)
+                    {
+                        lock (_streamedMessages)
+                        {
+                            _streamedMessages.Add(id);
+                        }
+                    }
+
+                    TextStreamed?.Invoke(chunk!);
+                }
+
+                break;
+
+            case AssistantMessageEvent message:
+                string? full = message.Data?.Content;
+                string? messageId = message.Data?.MessageId;
+                bool alreadyStreamed;
+                lock (_streamedMessages)
+                {
+                    alreadyStreamed = messageId is { Length: > 0 } && _streamedMessages.Remove(messageId);
+                }
+
+                if (!alreadyStreamed && !string.IsNullOrEmpty(full))
+                {
+                    TextStreamed?.Invoke(full!);
+                }
+
                 break;
         }
     }

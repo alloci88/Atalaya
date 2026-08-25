@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
-using System.Windows;
+using System.Diagnostics;
+using System.Windows.Threading;
 using Atalaya.App.Services;
-using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -9,201 +9,146 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Atalaya.App.ViewModels;
 
-/// <summary>A unit row in the live session queue (V5).</summary>
-public sealed partial class UnitRow : ObservableObject
-{
-    public required string Path { get; init; }
-
-    [ObservableProperty]
-    private string _phase = "en cola";
-}
-
-/// <summary>V5 Sesión en vivo (§8): queue, streamed agent text, findings entering, tokens/cost.</summary>
+/// <summary>
+/// V5 Sesion en vivo (§8), rediseñada en F5.2.
+/// <para>
+/// Es una VISTA sobre <see cref="LiveSessionService"/>, no la dueña del estado. Antes el estado
+/// vivia aqui y este view-model es <c>Transient</c>: navegar fuera y volver lo perdia todo aunque
+/// la auditoria siguiera corriendo. Y peor, <c>LoadAsync</c> LANZABA la sesion, asi que navegar
+/// ejecutaba trabajo (D-085). Ahora <c>LoadAsync</c> no ejecuta nada: la vista se reconstruye sola
+/// porque el estado esta en el servicio.
+/// </para>
+/// </summary>
 public sealed partial class SessionViewModel : ViewModelBase
 {
-    private readonly SessionCoordinator _coordinator;
-    private readonly ICopilotAgent _agent;
-    private CancellationTokenSource? _cts;
-    private SessionRequest? _request;
+    private readonly LiveSessionService _live;
+    private readonly DispatcherTimer? _clock;
 
-    /// <summary>
-    /// Ya se lanzó la auditoría para el <see cref="_request"/> actual. Se rearma en
-    /// <see cref="Configure"/>, es decir, una sesión por configuración explícita.
-    /// </summary>
-    private bool _startedForRequest;
-
-    public SessionViewModel(SessionCoordinator coordinator, ICopilotAgent agent)
+    public SessionViewModel(LiveSessionService live)
     {
-        _coordinator = coordinator;
-        _agent = agent;
-        _coordinator.UnitPhaseChanged += OnUnitPhase;
-        _coordinator.FindingReported += OnFinding;
-        _coordinator.TextStreamed += OnText;
-        _coordinator.UsageUpdated += OnUsage;
-    }
+        _live = live;
+        _live.Changed += OnLiveChanged;
+        _live.PropertyChanged += (_, _) => OnLiveChanged();
 
-    public override string Title => "Sesión en vivo";
-
-    public ObservableCollection<UnitRow> Queue { get; } = new();
-    public ObservableCollection<string> Findings { get; } = new();
-
-    [ObservableProperty] private string _streamed = string.Empty;
-    [ObservableProperty] private long _inputTokens;
-    [ObservableProperty] private long _outputTokens;
-    [ObservableProperty] private decimal? _cost;
-    [ObservableProperty] private string _costUnit = "(unidad SDK)";
-    [ObservableProperty] private bool _isRunning;
-    [ObservableProperty] private string _statusMessage = string.Empty;
-    [ObservableProperty] private string _headerText = string.Empty;
-
-    public void Configure(SessionRequest request, IReadOnlyList<string> displayPaths)
-    {
-        _request = request;
-        _startedForRequest = false;
-        HeaderText = $"{request.Mode} · {request.Slug}";
-        Queue.Clear();
-        foreach (string p in displayPaths)
+        if (System.Windows.Application.Current is not null)
         {
-            Queue.Add(new UnitRow { Path = p });
+            _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _clock.Tick += (_, _) => OnPropertyChanged(nameof(ElapsedText));
+            _clock.Start();
         }
     }
 
-    /// <summary>
-    /// Arranca la sesión al entrar en la página — pero UNA SOLA VEZ por configuración.
-    /// <para>
-    /// <b>Por qué el guardia.</b> <c>LoadAsync</c> es "recarga la vista" para todas las páginas,
-    /// pero en ésta <i>ejecuta trabajo</i>. El tick de polling (§3) llama a
-    /// <c>Navigation.Current.LoadAsync()</c> cada vez que un pull trae cambios, y una sesión
-    /// termina haciendo commit+push: al minuto siguiente el poll se traía sus PROPIOS cambios y
-    /// relanzaba una auditoría entera, en bucle indefinido mientras la página siguiera abierta
-    /// (2026-08-25: 7 sesiones sobre CommonStatics.cs a intervalos de 60 s, baseline contaminado).
-    /// </para>
-    /// </summary>
-    public override async Task LoadAsync()
+    public override string Title => Live.HasFinished && !Live.IsRunning ? "Ultima sesion" : "Sesion en vivo";
+
+    /// <summary>El estado real, enlazado directamente por la vista.</summary>
+    public LiveSessionService Live => _live;
+
+    public ObservableCollection<UnitProgress> Units => _live.Units;
+
+    public ObservableCollection<Finding> Findings => _live.Findings;
+
+    public ObservableCollection<SummaryLine> Summary => _live.Summary;
+
+    /// <summary>Autoscroll activo. Se apaga solo si el usuario sube a leer.</summary>
+    [ObservableProperty]
+    private bool _autoScroll = true;
+
+    public string ElapsedText
     {
-        if (_request is not null && !IsRunning && !_startedForRequest)
+        get
         {
-            await Start();
+            TimeSpan e = _live.Elapsed;
+            return e.TotalHours >= 1
+                ? $"{(int)e.TotalHours}h {e.Minutes:00}m {e.Seconds:00}s"
+                : $"{e.Minutes:00}:{e.Seconds:00}";
         }
+    }
+
+    public string ProgressText => _live.UnitCount == 0
+        ? "Sin unidades"
+        : $"Unidad {Math.Max(1, _live.UnitIndex)} de {_live.UnitCount}";
+
+    public string CostText => _live.Cost is { } c
+        ? $"{_live.Calls} llamadas · coste {c:0.##} {_live.CostUnit}"
+        : $"{_live.Calls} llamadas · coste no informado por el SDK";
+
+    public string TokensText =>
+        $"tokens {_live.InputTokens:N0} in / {_live.OutputTokens:N0} out"
+        + (_live.CacheReadTokens > 0 ? $" · cache {_live.CacheReadTokens:N0}" : "");
+
+    public string PerUnitText => _live.CostPerUnit is { } c ? $"media {c:0.##}/unidad" : string.Empty;
+
+    public int CriticalCount => Findings.Count(f => f.Severity == Severity.Critica);
+
+    public int HighCount => Findings.Count(f => f.Severity == Severity.Alta);
+
+    public int MediumCount => Findings.Count(f => f.Severity == Severity.Media);
+
+    public int LowCount => Findings.Count(f => f.Severity == Severity.Baja);
+
+    /// <summary>La pantalla de cierre sustituye a la linea fugaz de estado cuando termina.</summary>
+    public bool ShowSummary => !_live.IsRunning && _live.HasFinished && Summary.Count > 0;
+
+    public bool IsRunning => _live.IsRunning;
+
+    /// <summary>
+    /// Navegar NO ejecuta trabajo. La vista se repinta desde el estado del servicio, que es lo que
+    /// hace que volver a V5 a mitad de sesion enseñe la sesion al dia.
+    /// </summary>
+    public override Task LoadAsync()
+    {
+        OnLiveChanged();
+        return Task.CompletedTask;
     }
 
     [RelayCommand]
-    private async Task Start()
+    private void Stop() => _live.Stop();
+
+    [RelayCommand]
+    private void BackToBottom() => AutoScroll = true;
+
+    [RelayCommand]
+    private void ToggleLine(SummaryLine? line)
     {
-        if (_request is null || IsRunning)
+        if (line is { HasDetails: true })
         {
+            line.IsExpanded = !line.IsExpanded;
+        }
+    }
+
+    /// <summary>Abre el informe markdown de la sesion con la aplicacion asociada.</summary>
+    [RelayCommand]
+    private void OpenReport()
+    {
+        if (string.IsNullOrWhiteSpace(_live.ReportPath) || !File.Exists(_live.ReportPath))
+        {
+            _live.StatusMessage = "El informe todavia no esta en disco.";
             return;
         }
 
-        // El cerrojo se echa ANTES del primer await. Con el guardia después de
-        // CheckAsync, dos disparos casi simultáneos (poll + navegación) pasaban los dos y
-        // arrancaban dos sesiones en el mismo segundo.
-        IsRunning = true;
-        _startedForRequest = true;
-        StatusMessage = "Comprobando Copilot…";
-
         try
         {
-            AgentReadiness readiness = await _agent.CheckAsync(CancellationToken.None);
-            if (!readiness.Ready)
-            {
-                StatusMessage = readiness.Message;
-                return;
-            }
-
-            StatusMessage = "Auditando…";
-            _cts = new CancellationTokenSource();
-            SessionResult result = await Task.Run(() => _coordinator.RunAsync(_request, _cts.Token));
-            // F4: el resumen gana "no verificables" e "incompletas" — pero solo si los hay, y con
-            // la causa implícita en el propio texto. Sin números sin causa.
-            // F5.1b: una parada también reporta lo que SÍ se guardó — antes decía solo "detenida"
-            // y el trabajo hecho parecía perdido, cuando estaba en el hub.
-            StatusMessage = (result.Interrupted ? "Sesión detenida; lo auditado queda guardado." : "Sesión completada.")
-                + $" Nuevos {result.Counters.New}, confirmados {result.Counters.Confirmed}, "
-                + $"resueltos {result.Counters.Resolved}, silenciados respetados {result.Counters.SilencedRespected}."
-                + (result.Counters.NoVerificables > 0
-                    ? $" {result.Counters.NoVerificables} no verificables (marcados para revisión)."
-                    : "")
-                // F5.1b: lo que la app NO aplicó tal cual tiene que verse AQUÍ, no solo en el
-                // informe. La primera sesión con disputas dijo «confirmados 20» y se calló que
-                // una era una discrepancia de criterio: un número sin causa, otra vez.
-                + (result.Counters.Disputed > 0
-                    ? $" ⚖ {result.Counters.Disputed} disputado(s): el auditor sostiene que nunca fueron defecto; "
-                      + "no se han resuelto, los decides tú en Hallazgos."
-                    : "")
-                + (result.Counters.ResolutionsRefused > 0
-                    ? $" ⚠ {result.Counters.ResolutionsRefused} «arreglado» sin evidencia de cambio, "
-                      + "degradado(s) a presente."
-                    : "")
-                + (result.IncompleteUnits > 0
-                    ? $" ⚠ {result.IncompleteUnits} unidad(es) incompleta(s): el auditor dejó hallazgos sin veredicto y no se han modificado."
-                    : "")
-                + (result.ReachedZeroPending ? " Ciclo sin pendientes." : "");
-        }
-        catch (OperationCanceledException)
-        {
-            StatusMessage = "Sesión detenida.";
-        }
-        catch (CopilotAuthenticationException authEx)
-        {
-            StatusMessage = authEx.Message; // §6.1 help text instead of a raw SDK error
+            Process.Start(new ProcessStartInfo(_live.ReportPath) { UseShellExecute = true });
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Error: {ex.Message}";
-        }
-        finally
-        {
-            IsRunning = false;
+            _live.StatusMessage = $"No se pudo abrir el informe: {ex.Message}";
         }
     }
 
-    [RelayCommand]
-    private void Stop()
+    private void OnLiveChanged()
     {
-        _cts?.Cancel();
-        StatusMessage = "Deteniendo tras la unidad actual…";
-    }
-
-    private void OnUnitPhase(string path, string phase) => OnUi(() =>
-    {
-        UnitRow? row = Queue.FirstOrDefault(r => r.Path == path);
-        if (row is not null)
-        {
-            row.Phase = phase;
-        }
-    });
-
-    private void OnFinding(Finding f, string kind) => OnUi(() =>
-        Findings.Add($"[{f.Severity}] {f.Title}  ({kind})"));
-
-    private void OnText(string t) => OnUi(() =>
-    {
-        Streamed += t;
-        if (Streamed.Length > 8000)
-        {
-            Streamed = Streamed[^8000..];
-        }
-    });
-
-    private void OnUsage(long input, long output, decimal? cost, string? costUnit) => OnUi(() =>
-    {
-        InputTokens = input;
-        OutputTokens = output;
-        Cost = cost;
-        CostUnit = string.IsNullOrWhiteSpace(costUnit) ? "(unidad SDK)" : costUnit!;
-    });
-
-    private static void OnUi(Action action)
-    {
-        Application? app = Application.Current;
-        if (app is null)
-        {
-            action();
-        }
-        else
-        {
-            app.Dispatcher.Invoke(action);
-        }
+        OnPropertyChanged(nameof(Title));
+        OnPropertyChanged(nameof(ProgressText));
+        OnPropertyChanged(nameof(CostText));
+        OnPropertyChanged(nameof(TokensText));
+        OnPropertyChanged(nameof(PerUnitText));
+        OnPropertyChanged(nameof(ElapsedText));
+        OnPropertyChanged(nameof(ShowSummary));
+        OnPropertyChanged(nameof(IsRunning));
+        OnPropertyChanged(nameof(CriticalCount));
+        OnPropertyChanged(nameof(HighCount));
+        OnPropertyChanged(nameof(MediumCount));
+        OnPropertyChanged(nameof(LowCount));
     }
 }

@@ -16,6 +16,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- El mapeo de eventos del SDK se prueba sin asiento de Copilot: los tipos de evento
+         son construibles, asi que OnSessionEvent es verificable de verdad. -->
+    <InternalsVisibleTo Include="Atalaya.Copilot.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Atalaya.Domain\Atalaya.Domain.csproj" />
   </ItemGroup>
 

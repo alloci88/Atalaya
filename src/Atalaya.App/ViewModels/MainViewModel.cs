@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Threading;
 using Atalaya.App.Services;
+using Atalaya.Domain.Model;
 using Atalaya.Storage.Sync;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -18,17 +19,25 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly HubContext _hub;
     private readonly SettingsService _settings;
     private readonly GitHubAccountService _account;
+    private readonly LiveSessionService _live;
+    private readonly InterruptedSessionRecovery _recovery;
 
     public MainViewModel(
         NavigationService navigation,
         HubContext hub,
         SettingsService settings,
-        GitHubAccountService account)
+        GitHubAccountService account,
+        LiveSessionService live,
+        InterruptedSessionRecovery recovery)
     {
         Navigation = navigation;
         _hub = hub;
         _settings = settings;
         _account = account;
+        _live = live;
+        _recovery = recovery;
+        _live.Changed += SyncSession;
+        _live.Completed += OnSessionCompleted;
         _account.Changed += SyncAccount;
         // Connecting clones and pulls the hub off the UI thread; without this the indicator would
         // stay amber until the next polling tick even though the sync already succeeded.
@@ -56,6 +65,30 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _accountNeedsAttention;
 
+    // ---- Sesión (F5.2, Hito 1) ----
+
+    /// <summary>Hay una auditoría corriendo: el item de navegación late.</summary>
+    [ObservableProperty]
+    private bool _isSessionRunning;
+
+    /// <summary>Hay algo que enseñar en V5: la sesión en curso o el cierre de la última.</summary>
+    [ObservableProperty]
+    private bool _hasSession;
+
+    /// <summary>«Sesión en vivo» mientras corre; «Última sesión» cuando termina.</summary>
+    [ObservableProperty]
+    private string _sessionNavLabel = "Sesión en vivo";
+
+    /// <summary>Línea de la barra inferior: «Auditando app · unidad 3/10 · pasada 2».</summary>
+    [ObservableProperty]
+    private string _sessionProgress = string.Empty;
+
+    /// <summary>La sesión sigue viva: cerrar la app debe preguntar antes (Hito 1).</summary>
+    public bool SessionIsRunning => _live.IsRunning;
+
+    /// <summary>Detiene la sesión por el camino ORDENADO de F5.1b. No hay un segundo camino.</summary>
+    public void StopSession() => _live.Stop();
+
     public int PollingSeconds => Math.Max(15, _settings.Current.PollingSeconds);
 
     /// <summary>
@@ -76,6 +109,10 @@ public sealed partial class MainViewModel : ObservableObject
             await Navigation.NavigateToAsync<AccountViewModel>();
             return;
         }
+
+        // D-110: una sesión que murió con el proceso deja su marca; se cierra ANTES de nada más,
+        // para que sus claims no bloqueen la sesión que el usuario vaya a lanzar ahora.
+        RecoverInterruptedSession();
 
         IsBusy = true;
         try
@@ -106,6 +143,47 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>A pre-F2 setup: a PAT stored on this machine is enough to keep working (D4).</summary>
     private bool HasLegacyCredentials() => _settings.GetPat() is not null;
+
+    /// <summary>
+    /// Cierra la sesión que se quedó abierta por un cierre forzado y lo dice (D-110). Nunca lanza:
+    /// un fallo recuperando no puede impedir arrancar la aplicación.
+    /// </summary>
+    private void RecoverInterruptedSession()
+    {
+        try
+        {
+            if (_recovery.RecoverIfNeeded() is { } recovered)
+            {
+                Toasts.Add(recovered.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Add($"No se pudo recuperar una sesión interrumpida: {ex.Message}");
+        }
+    }
+
+    private void SyncSession() => OnUiThread(() =>
+    {
+        IsSessionRunning = _live.IsRunning;
+        HasSession = _live.HasSession;
+        SessionNavLabel = _live.IsRunning ? "Sesión en vivo" : "Última sesión";
+        SessionProgress = _live.ProgressLine;
+    });
+
+    /// <summary>
+    /// Terminó una sesión que quizá nadie estaba mirando: el resumen no puede perderse en una
+    /// línea fugaz de una vista cerrada (Hito 1).
+    /// </summary>
+    private void OnSessionCompleted(SessionResult result) => OnUiThread(() =>
+    {
+        SessionCounters c = result.Counters;
+        Toasts.Add((result.Interrupted ? "Sesión detenida" : "Sesión completada")
+            + $": {c.New} nuevos, {c.Confirmed} confirmados, {c.Resolved} resueltos"
+            + (c.Disputed > 0 ? $", ⚖ {c.Disputed} disputados" : "")
+            + ". Abre «Última sesión» para el desglose.");
+        SyncSession();
+    });
 
     private void SyncAccount() => OnUiThread(() =>
     {
@@ -150,6 +228,10 @@ public sealed partial class MainViewModel : ObservableObject
 
     [RelayCommand]
     private Task ShowSettings() => Navigation.NavigateToAsync<SettingsViewModel>();
+
+    /// <summary>Abre V5 con el estado al día — la vista se reconstruye desde el servicio.</summary>
+    [RelayCommand]
+    private Task ShowSession() => Navigation.NavigateToAsync<SessionViewModel>();
 
     [RelayCommand]
     private Task ShowAccount() => Navigation.NavigateToAsync<AccountViewModel>();

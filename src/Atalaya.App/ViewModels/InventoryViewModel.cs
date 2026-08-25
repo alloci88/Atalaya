@@ -17,16 +17,18 @@ public sealed partial class InventoryViewModel : ViewModelBase
     private readonly MachineConfigStore _machines;
     private readonly IUlidFactory _ulids;
     private readonly NavigationService _navigation;
+    private readonly LiveSessionService _live;
 
     public InventoryViewModel(
         HubContext hub, InventoryScanner scanner, MachineConfigStore machines,
-        IUlidFactory ulids, NavigationService navigation)
+        IUlidFactory ulids, NavigationService navigation, LiveSessionService live)
     {
         _hub = hub;
         _scanner = scanner;
         _machines = machines;
         _ulids = ulids;
         _navigation = navigation;
+        _live = live;
     }
 
     public override string Title => AppName is { Length: > 0 } ? $"Inventario · {AppName}" : "Inventario";
@@ -268,15 +270,27 @@ public sealed partial class InventoryViewModel : ViewModelBase
     [RelayCommand]
     private Task ShowFindings() => _navigation.NavigateToAsync<FindingsViewModel>(vm => vm.SetApp(Slug));
 
-    private Task LaunchSession(AuditMode mode, IReadOnlyList<string> paths)
+    /// <summary>
+    /// Lanzar es un acto EXPLÍCITO (F5.2): se arranca la sesión en el servicio y luego se navega a
+    /// V5 para verla. Antes se navegaba y la vista arrancaba la sesión en su <c>LoadAsync</c>, de
+    /// modo que cualquier recarga de página ejecutaba una auditoría entera — el bucle de D-085.
+    /// </summary>
+    private async Task LaunchSession(AuditMode mode, IReadOnlyList<string> paths)
     {
         if (paths.Count == 0)
         {
             StatusMessage = "No hay unidades para auditar.";
-            return Task.CompletedTask;
+            return;
         }
 
-        var request = new SessionRequest(Slug, mode, paths);
-        return _navigation.NavigateToAsync<SessionViewModel>(vm => vm.Configure(request, paths));
+        if (_live.IsRunning)
+        {
+            StatusMessage = "Ya hay una sesión en curso. Ábrela desde «Sesión en vivo».";
+            await _navigation.NavigateToAsync<SessionViewModel>();
+            return;
+        }
+
+        _ = _live.StartAsync(new SessionRequest(Slug, mode, paths), paths);
+        await _navigation.NavigateToAsync<SessionViewModel>();
     }
 }

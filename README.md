@@ -122,6 +122,30 @@ de que merece una mirada humana.
 Detener una sesión es un final ordenado: se guarda lo auditado hasta la parada, con su informe, se
 liberan los claims y se publica. Una sesión detenida no cierra ciclo.
 
+## La sesión en vivo
+
+Lanzar una auditoría es un acto explícito desde **Inventario**; a partir de ahí corre en segundo
+plano y **puedes navegar libremente**:
+
+- El item **«Sesión en vivo»** de la barra lateral late mientras corre y pasa a **«Última sesión»**
+  al terminar. Al volver, V5 se reconstruye con el estado real — no depende de haber estado abierta.
+- La barra inferior dice **«Auditando {app} · unidad n/N · pasada p»** desde cualquier página, y
+  lleva a V5 de un clic.
+- Si la sesión termina sin la vista abierta, un aviso resume el resultado.
+- Cerrar la aplicación con una sesión viva pregunta antes y, si aceptas, la **detiene
+  ordenadamente**: guarda lo auditado con su informe y libera las unidades.
+
+V5 tiene tres columnas — cola de unidades con su estado y coste, actividad (el texto real del
+agente intercalado con los eventos de herramienta) y hallazgos por severidad — y un pie con
+progreso, tiempo, **llamadas y coste** (la métrica que manda), tokens y media por unidad. Al
+terminar aparece una pantalla de cierre donde **cada contador se despliega** para ver qué hallazgos
+lo componen.
+
+**Si la aplicación muere de golpe** (cierre forzado, cuelgue), la siguiente vez que arranque
+detecta la sesión que quedó abierta, escribe su registro marcado como interrumpida, libera las
+unidades que tuviera reclamadas y te lo dice. Los hallazgos ya estaban guardados: la ingesta
+escribe en vivo.
+
 ## Configuración de despliegue
 
 Junto al ejecutable viaja **`appsettings.deploy.json`** (también embebido en el binario como

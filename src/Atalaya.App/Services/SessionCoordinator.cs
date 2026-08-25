@@ -11,6 +11,20 @@ namespace Atalaya.App.Services;
 /// <summary>What to audit (§5.1–5.3).</summary>
 public sealed record SessionRequest(string Slug, AuditMode Mode, IReadOnlyList<string> UnitPaths);
 
+/// <summary>
+/// La sesión acaba de arrancar (F5.2). Identidad y unidades que va a tocar: es lo que necesita la
+/// marca de sesión abierta para poder recuperarla si el proceso muere de golpe (D-110).
+/// </summary>
+public sealed record SessionStarted(
+    Ulid Id,
+    string Slug,
+    AuditMode Mode,
+    string Commit,
+    string By,
+    string Machine,
+    DateTimeOffset StartedUtc,
+    IReadOnlyList<string> Units);
+
 /// <summary>Outcome of a session run.</summary>
 public sealed record SessionResult(Ulid SessionId, SessionCounters Counters, bool ReachedZeroPending)
 {
@@ -72,6 +86,23 @@ public sealed class SessionCoordinator
 
     public event Action<string, string>? UnitPhaseChanged;   // (path, phase)
 
+    // ---- Superficie de OBSERVACIÓN (F5.2) ----
+    // Eventos puramente aditivos: emiten datos que el coordinador ya calculaba y no cambian
+    // ninguna decisión. Existen porque V5 necesita narrar el barrido pasada a pasada, y antes
+    // esa información solo llegaba a las notas de la sesión cuando ya había terminado.
+
+    /// <summary>La sesión arranca: identidad y unidades reclamadas. Sirve para la marca de sesión abierta.</summary>
+    public event Action<SessionStarted>? Started;
+
+    /// <summary>(unidad, número de pasada) al empezar cada pasada del barrido.</summary>
+    public event Action<string, int>? PassStarted;
+
+    /// <summary>(unidad, registro de la pasada) al cerrarla, con sus contadores y si quedó seca.</summary>
+    public event Action<string, UnitPassRecord>? PassFinished;
+
+    /// <summary>(unidad, veredicto, consumo) al cerrar una unidad entera.</summary>
+    public event Action<string, UnitVerdictRecord, UnitUsageBreakdown>? UnitFinished;
+
     /// <summary>(hallazgo, qué le pasó: nuevo | reconfirmed | resolved | needsreview | silencerespected).</summary>
     public event Action<Finding, string>? FindingReported;
     public event Action<string>? TextStreamed;
@@ -122,6 +153,10 @@ public sealed class SessionCoordinator
         // sesion detenida dejaba el hub mutado sin ninguna traza de quien lo hizo — justo lo que
         // se vio el 2026-08-25 a las 12:13 local: un hallazgo confirmado sin fichero de sesion.
         // Ahora una parada es un final ordenado: se cierra con lo que se llevara hecho.
+        Started?.Invoke(new SessionStarted(
+            sessionId, request.Slug, request.Mode, commit, by, Environment.MachineName, now,
+            units.Select(u => u.Path).ToList()));
+
         bool stopped = ct.IsCancellationRequested;
         if (!stopped)
         {
@@ -225,8 +260,10 @@ public sealed class SessionCoordinator
                 string abs = Path.Combine(clone!, unit.Path.Replace('/', Path.DirectorySeparatorChar));
                 if (!File.Exists(abs))
                 {
-                    session.Units.Add(new UnitVerdictRecord(unit.Path, unit.Module, "no-localizado", null));
+                    var missing = new UnitVerdictRecord(unit.Path, unit.Module, "no-localizado", null);
+                    session.Units.Add(missing);
                     UnitPhaseChanged?.Invoke(unit.Path, "missing");
+                    UnitFinished?.Invoke(unit.Path, missing, new UnitUsageBreakdown { Unit = unit.Path });
                     continue;
                 }
 
@@ -265,6 +302,7 @@ public sealed class SessionCoordinator
                 {
                     ct.ThrowIfCancellationRequested();
 
+                    PassStarted?.Invoke(unit.Path, pass);
                     IReadOnlyList<Finding> existing = _reconciliation.ExistingForUnit(request.Slug, unit.Path);
                     toolbox.BeginPass(existing);
                     var listed = existing.Select(ToExisting).ToList();
@@ -296,10 +334,12 @@ public sealed class SessionCoordinator
                     withoutVerdict = toolbox.PendingVerdicts;
                     coverageSummary = toolbox.LastUnitSummary ?? coverageSummary;
                     locationsInUnit += toolbox.PassLocationsAdded;
-                    passes.Add(new UnitPassRecord(
+                    var passRecord = new UnitPassRecord(
                         pass, toolbox.PassNew, toolbox.PassConfirmed, toolbox.PassResolved,
                         toolbox.PassNonVerifiable, toolbox.PassRejected, dry, toolbox.LastUnitSummary,
-                        toolbox.PassLocationsAdded));
+                        toolbox.PassLocationsAdded);
+                    passes.Add(passRecord);
+                    PassFinished?.Invoke(unit.Path, passRecord);
 
                     // Nunca se traga un rechazo: cada pasada vuelca los suyos, etiquetados.
                     rejectedInUnit += toolbox.RejectedPayloads.Count;
@@ -345,11 +385,13 @@ public sealed class SessionCoordinator
                         + (rejectedInUnit > 0
                             ? $" · {rejectedInUnit} rechazos" + (dominantReason is null ? "" : $": {dominantReason}")
                             : "");
-                    session.Units.Add(new UnitVerdictRecord(
+                    var overBudgetRecord = new UnitVerdictRecord(
                         unit.Path, unit.Module, "presupuesto-superado", summary,
-                        rejectedInUnit, dominantReason, Passes: passes));
+                        rejectedInUnit, dominantReason, Passes: passes);
+                    session.Units.Add(overBudgetRecord);
                     session.Notes.Add($"{unit.Path}: {summary}");
                     UnitPhaseChanged?.Invoke(unit.Path, "over-budget");
+                    UnitFinished?.Invoke(unit.Path, overBudgetRecord, breakdown);
                     continue;
                 }
 
@@ -383,11 +425,13 @@ public sealed class SessionCoordinator
                     }
                 }
 
-                session.Units.Add(new UnitVerdictRecord(
+                var unitRecord = new UnitVerdictRecord(
                     unit.Path, unit.Module, unitVerdict, unitSummary,
-                    rejectedInUnit, dominantReason, withoutVerdict.Count, passes, coverageIncomplete));
+                    rejectedInUnit, dominantReason, withoutVerdict.Count, passes, coverageIncomplete);
+                session.Units.Add(unitRecord);
                 auditedPaths.Add(CodeAnchor.NormalizePath(unit.Path));
                 UnitPhaseChanged?.Invoke(unit.Path, withoutVerdict.Count > 0 ? "incomplete" : "done");
+                UnitFinished?.Invoke(unit.Path, unitRecord, breakdown);
             }
         }
         catch (OperationCanceledException)
