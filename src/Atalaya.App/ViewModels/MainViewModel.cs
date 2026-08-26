@@ -49,6 +49,12 @@ public sealed partial class MainViewModel : ObservableObject
         // stay amber until the next polling tick even though the sync already succeeded.
         _hub.SyncStateChanged += OnSyncStateChanged;
         SyncAccount();
+        // Y el de la sesión, igual que el de la cuenta (F5.13). El acceso a V5 colgaba SOLO de
+        // cazar un evento: si la carcasa nacía con una sesión ya viva —o se perdía un aviso— no
+        // había item en el rail y no quedaba forma de volver a una auditoría en curso. Un freno de
+        // emergencia no puede depender de haber estado escuchando en el momento justo; se deriva
+        // del estado, que es lo que siempre se puede volver a preguntar.
+        SyncSession();
     }
 
     public NavigationService Navigation { get; }

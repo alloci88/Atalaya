@@ -9,7 +9,39 @@ using Atalaya.Inventory;
 namespace Atalaya.App.Services;
 
 /// <summary>What to audit (§5.1–5.3).</summary>
-public sealed record SessionRequest(string Slug, AuditMode Mode, IReadOnlyList<string> UnitPaths);
+/// <param name="ConfirmedUnits">
+/// Cuántas unidades vio y aceptó el usuario antes de lanzar (F5.13). Null = nadie lo declaró y no
+/// hay nada que comprobar (recuperaciones, tests antiguos, cualquier camino que no venga de la
+/// barra de selección). Con valor, el coordinador se niega a auditar más de eso.
+/// </param>
+public sealed record SessionRequest(
+    string Slug, AuditMode Mode, IReadOnlyList<string> UnitPaths, int? ConfirmedUnits = null);
+
+/// <summary>
+/// La sesión se ha negado a arrancar porque iba a auditar MÁS de lo que el usuario aceptó (F5.13).
+/// <para>
+/// Es la salvaguarda de última línea del incidente del 2026-08-26: una casilla de módulo mal
+/// interpretada convirtió «una clase» en «un módulo entero» y la auditoría salió sin que nadie la
+/// hubiera aceptado. La corrección de fondo es que el contador y la lista de lanzamiento sean el
+/// mismo método; esto es lo que impide que un desajuste futuro se pague en tokens en vez de en un
+/// mensaje de error.
+/// </para>
+/// </summary>
+public sealed class LaunchMismatchException : Exception
+{
+    public LaunchMismatchException(int confirmed, int actual)
+        : base($"Lanzamiento abortado: se confirmaron {confirmed} unidad(es) y la sesión iba a auditar "
+               + $"{actual}. No se ha llamado al modelo ni se ha gastado nada. Vuelve al Inventario y "
+               + "revisa la selección.")
+    {
+        Confirmed = confirmed;
+        Actual = actual;
+    }
+
+    public int Confirmed { get; }
+
+    public int Actual { get; }
+}
 
 /// <summary>
 /// La sesión acaba de arrancar (F5.2). Identidad y unidades que va a tocar: es lo que necesita la
@@ -132,6 +164,14 @@ public sealed class SessionCoordinator
             ?? new InventoryCycle { CycleN = app.CurrentCycle };
 
         var units = ResolveUnits(request, inventory);
+
+        // SALVAGUARDA DE ÚLTIMA LÍNEA (F5.13). Va aquí —antes del sello, antes de publicar claims,
+        // antes de cualquier llamada al agente— porque su única razón de existir es que un
+        // desajuste entre lo confirmado y lo lanzado NO cueste dinero. Se compara contra las dos
+        // listas: la que llegó en la petición y la que de verdad se va a auditar tras resolverla
+        // contra el inventario. Ninguna puede superar lo que el usuario aceptó.
+        GuardAgainstUnconfirmedScope(request, units.Count);
+
         string commit = GitInfo.HeadSha(clone);
         string by = _hub.ResolveIdentity().Name;
         Ulid sessionId = _ulids.NewUlid();
@@ -609,6 +649,26 @@ public sealed class SessionCoordinator
         catch (Exception)
         {
             // Sin alias se sigue trabajando; sin sesión cerrada, no.
+        }
+    }
+
+    /// <summary>
+    /// Se niega a auditar más unidades de las que el usuario aceptó (F5.13). Lanzar es lo correcto
+    /// y no devolver un resultado vacío: no hay sesión que registrar —no ha pasado nada— y quien
+    /// llama tiene que enterarse en voz alta. <see cref="LiveSessionService"/> lo enseña como
+    /// estado de la sesión, que es donde el usuario está mirando cuando ocurre.
+    /// </summary>
+    private static void GuardAgainstUnconfirmedScope(SessionRequest request, int resolvedUnits)
+    {
+        if (request.ConfirmedUnits is not { } confirmed)
+        {
+            return;   // nadie declaró un N: no hay nada contra lo que comparar
+        }
+
+        int actual = Math.Max(request.UnitPaths.Count, resolvedUnits);
+        if (actual > confirmed)
+        {
+            throw new LaunchMismatchException(confirmed, actual);
         }
     }
 

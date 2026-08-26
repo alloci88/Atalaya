@@ -79,34 +79,58 @@ public sealed partial class ModuleNode : ObservableObject, ICollapsibleGroup
     public string ExpandGlyph => IsExpanded ? "▾" : "▸";
 
     /// <summary>
-    /// El tri-estado del módulo: marcado, sin marcar, o indeterminado con selección parcial.
-    /// <para>
-    /// La casilla se declara con <c>IsThreeState="False"</c> a propósito: así el clic solo alterna
-    /// entre marcar y desmarcar —el gesto que se espera—, mientras que un valor <c>null</c> puesto
-    /// desde aquí se sigue PINTANDO como indeterminado. Con <c>IsThreeState="True"</c> el usuario
-    /// tendría que pasar por el estado intermedio en cada vuelta, que no significa nada cuando lo
-    /// pulsa una persona.
-    /// </para>
+    /// El tri-estado del módulo: marcado, sin marcar, o indeterminado con selección parcial. Lo
+    /// escribe SIEMPRE <see cref="RefreshCheckState"/> a partir de las unidades — es un reflejo de
+    /// la selección, nunca su origen.
     /// </summary>
     [ObservableProperty]
     private bool? _isChecked = false;
 
+    /// <summary>
+    /// Quién ejecuta el gesto de la casilla del módulo. El nodo NO toca sus unidades por su cuenta:
+    /// avisa, y el view-model —que es el dueño del conjunto de seleccionadas— aplica el cambio y
+    /// vuelve a refrescar el tri-estado. Un solo dueño de la selección es lo que impide que el
+    /// árbol y el contador digan cosas distintas.
+    /// </summary>
+    /// <remarks>
+    /// El <c>bool</c> es «marcar todas»; false es «limpiar todas».
+    /// </remarks>
+    internal Action<ModuleNode, bool>? SelectionRequested { get; set; }
+
+    /// <summary>
+    /// Un clic del usuario sobre la casilla del módulo.
+    /// <para>
+    /// <b>Desde indeterminado, un clic LIMPIA.</b> Es la corrección del incidente: la casilla se
+    /// declaraba <c>IsThreeState="False"</c> mientras el view-model le empujaba <c>null</c>, y
+    /// <c>ToggleButton.OnToggle</c> de WPF, con tres estados desactivados, manda un clic desde
+    /// indeterminado directo a <b>marcado</b>. Es decir: marcabas una clase, el módulo se pintaba
+    /// como indeterminado —que a ojo se lee «marcado»—, pulsabas para deshacerlo y te llevabas el
+    /// módulo ENTERO a la selección. Un gesto de corrección que multiplicaba el gasto.
+    /// </para>
+    /// <para>
+    /// La regla ahora se lee sola: si hay algo marcado en el módulo, el clic lo quita; si no hay
+    /// nada, lo marca entero. La dirección segura es la de quitar, y además es la que espera quien
+    /// pulsa para deshacer.
+    /// </para>
+    /// </summary>
     partial void OnIsCheckedChanged(bool? value)
     {
-        if (_suspend || value is null)
+        if (_suspend)
         {
-            return;
+            return;   // lo puso RefreshCheckState: reflejar la selección no puede cambiarla
         }
 
-        foreach (UnitNode unit in Units)
-        {
-            unit.IsSelected = value.Value;
-        }
+        SelectionRequested?.Invoke(this, Units.All(u => !u.IsSelected));
     }
 
     /// <summary>
     /// Recalcula el tri-estado a partir de las unidades. Silencioso: refrescar la casilla no puede
     /// volver a marcar ni desmarcar nada, o el módulo entero se seleccionaría solo.
+    /// <para>
+    /// Con selección parcial el estado es <c>null</c> — <b>nunca</b> <c>true</c>. Un grupo marcado
+    /// significa «todas sus unidades están marcadas» y nada más; que lo pareciera con una sola
+    /// hija marcada es lo que hacía creer al usuario que había seleccionado un módulo entero.
+    /// </para>
     /// </summary>
     internal void RefreshCheckState()
     {

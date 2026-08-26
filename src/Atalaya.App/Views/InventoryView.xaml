@@ -143,14 +143,19 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
 
-                                <!-- IsThreeState="False" a propósito: el clic solo marca o desmarca,
-                                     pero un valor nulo se sigue pintando como indeterminado. -->
+                                <!-- IsThreeState="False": el clic solo marca o desmarca, pero un
+                                     valor nulo puesto desde el view-model se sigue pintando como
+                                     indeterminado. QUÉ significa ese clic lo decide ModuleNode, no
+                                     WPF: desde indeterminado WPF lo mandaría a «marcado» y un gesto
+                                     de deshacer se llevaría el módulo entero a la selección
+                                     (incidente del 2026-08-26, F5.13). Ahora desde indeterminado
+                                     LIMPIA. -->
                                 <CheckBox Grid.Column="0"
                                           IsChecked="{Binding IsChecked, Mode=TwoWay}"
                                           IsThreeState="False"
                                           VerticalAlignment="Center"
                                           Margin="0,0,2,0"
-                                          ToolTip="Selecciona o quita todas las unidades de este módulo." />
+                                          ToolTip="Marca el módulo entero si no hay nada marcado; si hay algo marcado, lo quita." />
 
                                 <Button Grid.Column="1"
                                         Style="{StaticResource ModuleHeaderLink}"

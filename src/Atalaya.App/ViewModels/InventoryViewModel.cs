@@ -307,6 +307,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
             }
 
             node.RefreshCheckState();
+            node.SelectionRequested = OnModuleSelectionRequested;
             built.Add(node);
         }
 
@@ -346,12 +347,55 @@ public sealed partial class InventoryViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// El gesto de la casilla del módulo (F5.13). La decisión de marcar o limpiar la toma el nodo;
+    /// aquí se aplica sobre el conjunto de seleccionadas, que es el único dueño de la selección.
+    /// <para>
+    /// Un módulo NO es una unidad: lo que entra en el conjunto son SIEMPRE las rutas de sus hijas.
+    /// El grupo no tiene ruta y no puede llegar nunca a la lista de lanzamiento.
+    /// </para>
+    /// </summary>
+    private void OnModuleSelectionRequested(ModuleNode module, bool select)
+    {
+        foreach (UnitNode unit in module.Units)
+        {
+            if (select)
+            {
+                _selected.Add(unit.Path);
+            }
+            else
+            {
+                _selected.Remove(unit.Path);
+            }
+        }
+
+        SyncVisibleFromSelection();
+    }
+
+    /// <summary>
+    /// <b>LA lista.</b> Las unidades-hoja marcadas, y nada más: ni módulos, ni nodos de grupo, ni
+    /// rutas que ya no estén en el inventario vigente.
+    /// <para>
+    /// Existe porque el incidente del 2026-08-26 enseñó lo que cuesta tener dos expresiones de «lo
+    /// seleccionado»: el contador decía una cosa y lo que se lanzaba podía ser otra, y la diferencia
+    /// se paga en tokens. La consumen los TRES sitios que necesitan saberlo —el contador de la
+    /// barra, el diálogo de confirmación y la petición que va al coordinador—, así que no pueden
+    /// discrepar ni aunque alguien lo intente.
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<string> SelectedUnits()
+        => _allUnits
+            .Where(u => _selected.Contains(u.Path))
+            .Select(u => u.Path)
+            .ToList();
+
+    /// <summary>
     /// Pone al día lo que lee la barra: el contador, su visibilidad y el sentido del botón de
-    /// pendientes. Todo sale de <see cref="_selected"/>, que es el estado real, y no del árbol.
+    /// pendientes. El contador sale de <see cref="SelectedUnits"/> — de la MISMA lista que se va a
+    /// auditar— y no de un recuento paralelo.
     /// </summary>
     private void RefreshSelectionState()
     {
-        SelectedCount = _selected.Count;
+        SelectedCount = SelectedUnits().Count;
         HasSelection = SelectedCount > 0;
 
         var pending = PendingPaths();
@@ -553,10 +597,9 @@ public sealed partial class InventoryViewModel : ViewModelBase
     [RelayCommand]
     private Task AuditSelection()
     {
-        var selected = _allUnits
-            .Where(u => _selected.Contains(u.Path))
-            .Select(u => u.Path)
-            .ToList();
+        // La MISMA lista que cuenta la barra (F5.13). No se vuelve a derivar aquí: derivarla dos
+        // veces es exactamente cómo el contador y el lanzamiento acabaron diciendo cosas distintas.
+        IReadOnlyList<string> selected = SelectedUnits();
 
         if (selected.Count == 0)
         {
@@ -631,7 +674,12 @@ public sealed partial class InventoryViewModel : ViewModelBase
             }
         }
 
-        _ = _live.StartAsync(new SessionRequest(Slug, mode, paths), paths);
+        // El N que el usuario ha visto y aceptado viaja con la petición (F5.13). El coordinador lo
+        // vuelve a comprobar contra lo que de verdad va a auditar: si alguna vez vuelven a
+        // discrepar, la sesión muere antes de la primera llamada al modelo y no antes de la
+        // factura. Es una salvaguarda de última línea, no la corrección — la corrección es que
+        // contador y lista sean el mismo método.
+        _ = _live.StartAsync(new SessionRequest(Slug, mode, paths, paths.Count), paths);
         await _navigation.NavigateToAsync<SessionViewModel>();
     }
 }

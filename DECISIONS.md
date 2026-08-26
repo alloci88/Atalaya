@@ -3209,3 +3209,135 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   comprobar que no aparece como hallazgo y que el informe dice «Suprimidos por patrón: 1» nombrando
   el patrón; abrir «Gestionar» y ver que el contador de trabajo del patrón subió; des-silenciarlo y
   comprobar que en la siguiente auditoría el hallazgo reaparece.
+
+
+## F5.13 — Lanzamiento descontrolado y frenos de emergencia (incidente del 2026-08-26)
+
+### §0 — Qué se buscó, y qué se encontró
+
+- **D-376 — Los tres bugs se reprodujeron ANTES de tocar nada, y dos de ellos no existían.** El
+  parte describía tres fallos combinados: una selección de una clase que auditó un módulo entero,
+  un botón «Detener» ausente y un item de navegación «Sesión en vivo» desaparecido. Antes de
+  cambiar una línea se montó un arnés que ejercita el camino real —marcar en el árbol, lanzar con
+  el agente falso, leer la sesión escrita en el hub— y midió lo siguiente:
+
+  | Qué se midió | Resultado |
+  |---|---|
+  | Casilla del módulo con una hija marcada | `null` (indeterminado), **nunca** `true` |
+  | Contador de la barra | 1 |
+  | Unidades de la sesión escrita en el hub | 1 — exactamente la marcada |
+  | `SessionViewModel.IsRunning` con sesión viva | `true`, y `StopCommand` ejecutable |
+  | `MainViewModel.HasSession` con sesión viva | `true`, y `ShowSessionCommand` navega a V5 |
+
+  Es decir: **el tri-estado no propagaba mal, el lanzamiento no expandía grupos, y los dos frenos
+  estaban en su sitio y funcionando** en la capa de view-model. La hipótesis del parte («el padre se
+  marca al marcar una hija y el lanzamiento lo expande») quedó descartada con evidencia, no por
+  opinión. Lo que sí se encontró está en D-377; lo que no se encontró, en D-380.
+
+### §1 — Bug 1: la causa real estaba en el gesto, no en la contabilidad
+
+- **D-377 — `IsThreeState="False"` sobre una casilla que el view-model lleva a `null` convierte un
+  clic de DESHACER en «seleccionar el módulo entero».** La casilla del módulo se declaraba
+  `IsThreeState="False"` a propósito —para que el clic alternara entre marcar y desmarcar sin pasar
+  por el estado intermedio— mientras `RefreshCheckState` le empujaba `null` en cuanto había
+  selección parcial. Pero `ToggleButton.OnToggle` de WPF, con tres estados desactivados, resuelve un
+  clic **desde indeterminado** como `IsChecked = true`. La secuencia completa, que es exactamente la
+  que describe el parte:
+
+  1. El usuario marca UNA clase. El módulo pasa a indeterminado — que a ojo **se lee «marcado»**, y
+     por eso el parte dice «el nodo padre se marcó también».
+  2. El usuario pulsa la casilla del módulo para deshacer lo que cree haber hecho sin querer.
+  3. WPF manda ese clic a `true` → `OnIsCheckedChanged` seleccionaba **todas** las unidades del
+     módulo.
+  4. «Auditar selección» lanza el módulo entero. El «1 unidad seleccionada» que el usuario recuerda
+     es del paso 1, antes del gesto que lo multiplicó.
+
+  El contador nunca mintió: decía la verdad en cada instante. Lo que fallaba era que **el gesto de
+  corrección hacía lo contrario de corregir**, y en la dirección cara. Ahora la regla la decide
+  `ModuleNode` y no `ToggleButton`: si hay algo marcado en el módulo, el clic lo quita; si no hay
+  nada, lo marca entero. La dirección segura es la de quitar, y además es la que espera quien pulsa
+  para deshacer.
+
+- **D-378 — El nodo de grupo AVISA, no toca la selección.** `ModuleNode.OnIsCheckedChanged` mutaba
+  directamente `unit.IsSelected` de sus hijas y confiaba en que el eco llegara al conjunto del
+  view-model. Funcionaba, pero repartía la propiedad de la selección entre dos sitios. Ahora el nodo
+  publica `SelectionRequested(module, select)` y el dueño del conjunto —el view-model— aplica el
+  cambio y refresca el tri-estado. Un solo dueño es lo que hace estructuralmente imposible que el
+  árbol y el contador digan cosas distintas. Y `IsChecked` queda como lo que siempre debió ser: un
+  **reflejo** de las unidades, escrito solo por `RefreshCheckState`, nunca el origen de nada.
+
+- **D-379 — `SelectedUnits()` es LA lista, y la consumen los tres.** No había una recolección
+  paralela de grupos —eso se descartó midiendo— pero sí **dos expresiones de la misma verdad**: el
+  contador leía `_selected.Count` y `AuditSelection` volvía a derivar la lista desde `_allUnits`.
+  Dos derivaciones que hoy coinciden son dos derivaciones que mañana pueden no coincidir, y la
+  diferencia se paga en tokens. Ahora hay un solo método —unidades-hoja marcadas que siguen en el
+  inventario vigente— y lo consumen el contador de la barra, el diálogo de confirmación y la
+  petición que va al coordinador. Un grupo no tiene ruta: no puede entrar aunque alguien lo intente.
+
+- **D-380 — La salvaguarda de última línea vive en el COORDINADOR, y aborta antes del primer token.**
+  `SessionRequest` lleva ahora `ConfirmedUnits`: cuántas unidades vio y aceptó el usuario.
+  `GuardAgainstUnconfirmedScope` se ejecuta antes del sello, antes de publicar claims y antes de
+  cualquier llamada al agente, y compara contra **las dos** listas —la que llegó y la que de verdad
+  se va a auditar tras resolverla contra el inventario—. Si alguna supera lo confirmado, lanza
+  `LaunchMismatchException` y no hay sesión, ni claims, ni gasto. Null significa «nadie declaró un
+  N» y no comprueba nada, para no romper los caminos que no vienen de la barra de selección.
+  <br>Es deliberadamente **redundante** con D-379: la corrección de fondo es que contador y lista
+  sean el mismo método; esto es lo que garantiza que el próximo desajuste —venga de donde venga— se
+  pague en un mensaje de error y no en una factura.
+
+### §2 — Bugs 2 y 3: no hubo regresión, y eso también hay que escribirlo
+
+- **D-381 — No existe el commit culpable del bug 3, porque no hubo regresión.** El parte pedía
+  identificar qué cambio se llevó por delante el item «Sesión en vivo» de F5.2. Se buscó y **no
+  aparece**: `git log -S 'ShowSessionCommand' -- MainWindow.xaml` devuelve un único commit, el
+  propio `8971961` (F5.2) que lo introdujo, y ningún commit posterior lo ha tocado. De los cuatro
+  commits que han modificado `MainWindow.xaml` desde entonces, el único que borró un item de
+  navegación es `25c8f87`, y lo que borró fue **«Importar v4»** —el vecino de abajo en el rail—, no
+  el de sesión. El botón «Detener» tiene una historia todavía más corta: está en
+  `SessionView.xaml` desde `f0ad0c2` (v1) y ningún commit lo ha quitado ni ocultado; F5.2 y F5.3
+  rediseñaron a su alrededor sin tocarlo.
+  <br>Los tests de D-382 confirman que hoy los dos frenos funcionan: con sesión viva,
+  `MainViewModel.HasSession` es true y `ShowSessionCommand` navega a V5, y `SessionViewModel`
+  ofrece `StopCommand` ejecutable. **Se deja escrito que no se encontró la causa** en vez de
+  inventar una: un parte de regresión sin regresión reproducible es información, y taparlo con un
+  arreglo cosmético habría dejado el problema real —sea cual sea— sin buscar. Las dos hipótesis que
+  quedan vivas y que este repositorio no puede descartar: que la ejecución fuera un binario anterior
+  a F5.2, o que la sesión que el usuario veía la hubiera lanzado una instancia distinta de Atalaya
+  (el estado de sesión es de proceso, no del hub: otra instancia auditando no enciende el rail de
+  ésta). Si el episodio se repite, esa es la primera pregunta que hay que contestar.
+
+- **D-382 — Los dos frenos pasan a ser invariantes testeados, en sus DOS capas.** La lección del
+  episodio no es cuál fue la causa: es que **ningún freno de emergencia tenía un solo test**, así
+  que podían desaparecer en silencio y nadie se enteraría hasta estar delante de una sesión que no
+  se puede parar. Se prueban ahora por partida doble, porque se pueden caer por cualquiera de las
+  dos vías y la que se cae sin ruido es justamente la que no compila: (a) el **estado observable** —
+  con sesión viva el view-model ofrece el acceso y el mando, y `ShowSessionCommand` navega de verdad
+  a V5—; y (b) la **plantilla** — que `MainWindow.xaml` pinta el item enlazado a `HasSession`,
+  `SessionNavLabel` e `IsSessionRunning`, y que la cabecera de `SessionView.xaml` pinta «Detener»
+  atado a `IsRunning`. El aviso de que el freno se activó (`StatusMessage`) también se comprueba: una
+  parada que no se anuncia parece que no ha hecho nada.
+
+- **D-383 — El acceso a V5 se DERIVA del estado, ya no depende de cazar un evento.** `MainViewModel`
+  sincronizaba la cuenta en su constructor pero la sesión no: `HasSession` colgaba únicamente de
+  recibir un `Changed` del servicio. En la práctica funciona —la carcasa nace antes que cualquier
+  sesión— pero es una dependencia temporal innecesaria en algo cuyo trabajo es ser el camino de
+  vuelta cuando algo va mal. Ahora la carcasa se sincroniza también al construirse. No es la causa
+  de nada de lo reportado; es quitarle al freno la única forma que tenía de nacer apagado.
+
+### Cobertura y verificación
+
+- **D-384 — Lo que queda probado.** Del alcance: que una hija marcada deja el grupo en
+  indeterminado y audita esa unidad y solo esa —extremo a extremo, con el agente falso y leyendo la
+  sesión escrita—; que un grupo marcado entrega sus hijas y **nunca** el grupo; que un clic sobre un
+  módulo indeterminado LIMPIA (la regresión de D-377), que sobre uno vacío lo marca entero y que
+  sobre uno lleno lo limpia; que el contador, el diálogo de confirmación y la sesión dicen el mismo
+  número; y que filtrar la vista no cambia la lista de lanzamiento. De la salvaguarda: que el
+  coordinador aborta con `LaunchMismatchException` si la lista supera lo confirmado —sin sesión y
+  sin claims—, que lo confirmado exacto pasa sin estorbo, que sin N declarado no molesta, y que el
+  camino real la arma pasando el N. De los frenos, lo de D-382.
+
+- **D-385 — Lo que se verifica a mano.** Marcar una clase → la barra dice «1 unidad seleccionada» y
+  el módulo se pinta indeterminado; pulsar la casilla del módulo → la selección se **vacía** (no se
+  llena); volver a marcar la clase y lanzar → el diálogo, si aparece, dice 1 y V5 dice «Unidad 1 de
+  1»; navegar a Portafolio y volver por el item pulsante del rail; comprobar que «Detener» está en
+  la cabecera y que al pulsarlo la sesión se cierra con informe parcial y los claims liberados.
