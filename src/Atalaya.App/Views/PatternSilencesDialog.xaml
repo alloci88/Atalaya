@@ -1,11 +1,11 @@
 <ui:FluentWindow
-    x:Class="Atalaya.App.Views.RuleExclusionsDialog"
+    x:Class="Atalaya.App.Views.PatternSilencesDialog"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-    Title="Reglas excluidas"
-    Width="720"
-    Height="540"
+    Title="Patrones silenciados"
+    Width="760"
+    Height="580"
     ShowInTaskbar="False"
     WindowStartupLocation="CenterOwner"
     ExtendsContentIntoTitleBar="True">
@@ -17,14 +17,22 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0" Title="Reglas excluidas" ShowMaximize="False" ShowMinimize="False" />
+        <ui:TitleBar Grid.Row="0" Title="Patrones silenciados" ShowMaximize="False" ShowMinimize="False" />
 
         <StackPanel Grid.Row="1" Margin="22,10,22,0">
             <TextBlock Text="{Binding Title}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" />
             <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" FontSize="12"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       Text="Reglas que no aplican a esta aplicación. Ninguna auditoría suya las reporta mientras la exclusión siga activa. Es por-aplicación: la misma regla puede ser vital en otra." />
-            <TextBlock Text="No hay ninguna regla excluida en esta aplicación."
+                       Text="Tipos de problema que las auditorías de esta aplicación no reportan. Cada patrón es una frase que viaja en el prompt del auditor: quien decide si un hallazgo es de ese tipo es él, mirando el código. Es por-aplicación: el mismo tipo puede ser crítico en otra." />
+            <!-- F5.12 §4: el tope no bloquea nada. Muchos patrones activos no es un problema de
+                 coste —la lista es despreciable frente a la unidad— sino el síntoma de que el
+                 silenciado se está usando como taxonomía. -->
+            <Border CornerRadius="6" Padding="10,7" Margin="0,10,0,0"
+                    Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                    Visibility="{Binding HasCapNotice, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="{Binding CapNotice}" TextWrapping="Wrap" FontSize="12" />
+            </Border>
+            <TextBlock Text="No hay ningún patrón silenciado en esta aplicación."
                        Margin="0,14,0,0" Opacity="0.6" TextWrapping="Wrap"
                        Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
         </StackPanel>
@@ -36,35 +44,48 @@
                         <Border CornerRadius="6" Padding="12,10" Margin="0,0,0,8"
                                 Background="{DynamicResource SubtleFillColorTertiaryBrush}">
                             <StackPanel>
-                                <TextBlock Text="{Binding RuleId}" FontFamily="Consolas" FontWeight="SemiBold"
-                                           TextWrapping="Wrap" />
+                                <TextBlock FontWeight="SemiBold" TextWrapping="Wrap"><Run Text="{Binding ShortId, Mode=OneWay}" FontFamily="Consolas" /><Run Text=" · " /><Run Text="{Binding Exemplar, Mode=OneWay}" /></TextBlock>
                                 <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                                     <Run Text="{Binding Reason, Mode=OneWay}" />
                                     <Run Text=" · por " /><Run Text="{Binding By, Mode=OneWay}" />
+                                    <Run Text=" · " /><Run Text="{Binding Origin, Mode=OneWay}" />
                                     <Run Text=" · " /><Run Text="{Binding Expiry, Mode=OneWay}" />
                                     <Run Text=" · " /><Run Text="{Binding State, Mode=OneWay}" FontWeight="SemiBold" />
                                 </TextBlock>
                                 <TextBlock Text="{Binding Notes}" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                <TextBlock Text="{Binding Effect}" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
+                                <!-- Cuánto trabaja el patrón: el único dato con el que se decide si
+                                     sigue mereciendo la pena o si se puso por un susto puntual. -->
+                                <TextBlock Text="{Binding Work}" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Effect}" Margin="0,2,0,0" FontSize="12" TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
+                                <TextBlock Text="Ejemplar — la frase que lee el auditor" Margin="0,10,0,3" FontSize="12" />
+                                <ui:TextBox Text="{Binding Exemplar, UpdateSourceTrigger=PropertyChanged}"
+                                            HorizontalAlignment="Stretch" TextWrapping="Wrap" AcceptsReturn="False"
+                                            ToolTip="Afinar el alcance es reescribir esta frase. El identificador corto no cambia." />
+
                                 <WrapPanel Margin="0,10,0,0" VerticalAlignment="Center">
+                                    <ui:Button Content="Guardar ejemplar" Margin="0,0,8,6"
+                                               Command="{Binding DataContext.ApplyExemplarCommand,
+                                                          RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                               CommandParameter="{Binding}" />
                                     <TextBlock Text="Caducidad (días) — 0 = permanente" VerticalAlignment="Center"
                                                Margin="0,0,8,6" FontSize="12" />
                                     <ui:TextBox Width="90" Margin="0,0,8,6"
                                                 Text="{Binding ExpiryDays, UpdateSourceTrigger=PropertyChanged}"
-                                                ToolTip="Días desde hoy. 0 deja la exclusión permanente." />
+                                                ToolTip="Días desde hoy. 0 deja el silencio permanente." />
                                     <ui:Button Content="Aplicar caducidad" Margin="0,0,8,6"
                                                Command="{Binding DataContext.ApplyExpiryCommand,
                                                           RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                CommandParameter="{Binding}" />
-                                    <ui:Button Content="Des-excluir" Margin="0,0,0,6"
-                                               Command="{Binding DataContext.UnexcludeCommand,
+                                    <ui:Button Content="Des-silenciar" Margin="0,0,0,6"
+                                               Command="{Binding DataContext.UnsilenceCommand,
                                                           RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                CommandParameter="{Binding}"
-                                               ToolTip="La regla vuelve al brief y sus hallazgos pueden volver a reportarse." />
+                                               ToolTip="El tipo deja de estar silenciado y vuelve a poder reportarse. Los hallazgos ya silenciados siguen silenciados." />
                                 </WrapPanel>
                             </StackPanel>
                         </Border>

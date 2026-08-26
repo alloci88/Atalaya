@@ -126,8 +126,7 @@ public partial class App : Application
         // F5.10 · silencio con alcance: la pregunta de qué hacer con los hallazgos existentes y la
         // gestión de reglas excluidas. Ambas se inyectan para que ni la ficha ni el inventario
         // dependan de que haya una ventana.
-        services.AddSingleton<IExcludeRuleConfirmer, ExcludeRuleDialogConfirmer>();
-        services.AddSingleton<IRuleExclusionsDialog, RuleExclusionsDialogHost>();
+        services.AddSingleton<IPatternSilencesDialog, PatternSilencesDialogHost>();
         // F5.6 §3 (D-228): el reparto de alias legibles, que nunca se había cableado.
         services.AddSingleton<DisplayIdService>();
         // F5.6 §2 (D-226): el re-anclaje que se persiste al abrir la ficha.

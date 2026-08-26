@@ -33,7 +33,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
     private readonly GovernanceService _governance;
 
     /// <summary>F5.10: quién abre esa gestión. Inyectada para poder probar el gesto sin ventana.</summary>
-    private readonly IRuleExclusionsDialog _exclusionsDialog;
+    private readonly IPatternSilencesDialog _patternsDialog;
 
     /// <summary>
     /// F5.7 §4: el resultado de una acción se cuenta por el toast global. El texto que vivía al
@@ -60,10 +60,10 @@ public sealed partial class InventoryViewModel : ViewModelBase
         SettingsService settings, CostEstimator costs, IAuditLaunchConfirmer confirmer,
         GroupExpansionMemory expansion, ToastCenter toasts,
         CloneLinkService links, LinkCloneFlow linkFlow, InventoryRescanService rescan,
-        GovernanceService governance, IRuleExclusionsDialog exclusionsDialog)
+        GovernanceService governance, IPatternSilencesDialog patternsDialog)
     {
         _governance = governance;
-        _exclusionsDialog = exclusionsDialog;
+        _patternsDialog = patternsDialog;
         _hub = hub;
         _ulids = ulids;
         _navigation = navigation;
@@ -100,26 +100,26 @@ public sealed partial class InventoryViewModel : ViewModelBase
     [ObservableProperty] private int _sessionCount;
 
     /// <summary>
-    /// Reglas excluidas VIVAS en esta app (F5.10). Es un dato del panel del ciclo porque decide
-    /// qué se va a mirar y qué no en cada auditoría de esta aplicación: una cobertura del 100 %
-    /// con tres reglas excluidas no significa lo mismo que una del 100 % sin ninguna.
+    /// Patrones silenciados VIVOS en esta app (F5.12). Es un dato del panel del ciclo porque decide
+    /// qué se va a reportar y qué no en cada auditoría de esta aplicación: una cobertura del 100 %
+    /// con tres tipos de problema silenciados no significa lo mismo que una del 100 % sin ninguno.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ExclusionsTooltip))]
-    private int _excludedRules;
+    [NotifyPropertyChangedFor(nameof(PatternsTooltip))]
+    private int _silencedPatterns;
 
-    /// <summary>Las caducadas, que ya no suprimen y esperan que alguien decida (F5.10).</summary>
+    /// <summary>Los caducados, que ya no suprimen y esperan que alguien decida (F5.12).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ExclusionsTooltip))]
-    private int _expiredRuleExclusions;
+    [NotifyPropertyChangedFor(nameof(PatternsTooltip))]
+    private int _expiredPatterns;
 
-    /// <summary>Lo que explica el número, incluido el caso «hay caducadas que revisar».</summary>
-    public string ExclusionsTooltip => ExcludedRules == 0 && ExpiredRuleExclusions == 0
-        ? "Reglas del catálogo que no aplican a esta aplicación. Ninguna auditoría suya las reporta."
-        : $"{ExcludedRules} regla(s) que ninguna auditoría de esta aplicación reporta"
-          + (ExpiredRuleExclusions > 0
-              ? $" · {ExpiredRuleExclusions} caducada(s) que ya no suprimen: revísalas."
-              : ". Es por-aplicación: la misma regla puede ser vital en otra.");
+    /// <summary>Lo que explica el número, incluido el caso «hay caducados que revisar».</summary>
+    public string PatternsTooltip => SilencedPatterns == 0 && ExpiredPatterns == 0
+        ? "Tipos de problema que las auditorías de esta aplicación no reportan. Ninguno por ahora."
+        : $"{SilencedPatterns} tipo(s) de problema que las auditorías de esta aplicación no reportan"
+          + (ExpiredPatterns > 0
+              ? $" · {ExpiredPatterns} caducado(s) que ya no suprimen: revísalos."
+              : ". Es por-aplicación: el mismo tipo puede ser crítico en otra.");
 
     /// <summary>El ciclo con su fecha: «Ciclo 5 · iniciado 12 ago 2026» (F5.6 §5).</summary>
     [ObservableProperty] private string _cycleLabel = "Ciclo 1";
@@ -263,12 +263,12 @@ public sealed partial class InventoryViewModel : ViewModelBase
         PendingUnits = units.Count(u => u.State == UnitState.Pendiente);
         OnPropertyChanged(nameof(PendingToggleTooltip));
 
-        // F5.10: vivas y caducadas se cuentan por separado porque significan cosas distintas —
-        // una viva suprime, una caducada solo pide una decisión.
+        // F5.12: vivos y caducados se cuentan por separado porque significan cosas distintas —
+        // uno vivo suprime, uno caducado solo pide una decisión.
         DateTimeOffset nowUtc = DateTimeOffset.UtcNow;
-        var exclusions = _hub.Store.ListRuleExclusions(Slug);
-        ExcludedRules = exclusions.Count(e => e.IsLiveAt(nowUtc));
-        ExpiredRuleExclusions = exclusions.Count(e => e.IsExpiredAt(nowUtc));
+        var patterns = _hub.Store.ListPatternSilences(Slug);
+        SilencedPatterns = patterns.Count(p => p.IsLiveAt(nowUtc));
+        ExpiredPatterns = patterns.Count(p => p.IsExpiredAt(nowUtc));
 
         var sessions = _hub.Store.ListSessions(Slug);
         CycleStart start = CycleSummary.StartOf(sessions, CycleN);
@@ -427,21 +427,21 @@ public sealed partial class InventoryViewModel : ViewModelBase
     private void ToggleAllGroups() => _collapse.ToggleAll();
 
     /// <summary>
-    /// Abre la gestión de reglas excluidas de esta app (F5.10). No pide clon ni permiso: es
+    /// Abre la gestión de patrones silenciados de esta app (F5.12). No pide clon ni permiso: es
     /// gobernanza, y la gobernanza se lee y se edita sin tener el código delante (F5.8 §3).
     /// Al cerrarla se reconstruye la página, así que el contador refleja lo que se acaba de hacer.
     /// </summary>
     [RelayCommand]
-    private void ManageRuleExclusions()
+    private void ManagePatternSilences()
     {
         if (Slug.Length == 0)
         {
             return;
         }
 
-        var vm = new RuleExclusionsViewModel(_hub, _governance, _toasts);
+        var vm = new PatternSilencesViewModel(_hub, _governance, _toasts);
         vm.Load(Slug);
-        _exclusionsDialog.Show(vm);
+        _patternsDialog.Show(vm);
         Rebuild();
     }
 

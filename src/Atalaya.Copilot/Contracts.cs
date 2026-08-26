@@ -160,13 +160,33 @@ public sealed record ExistingFinding(
     string State);
 
 /// <summary>What the app hands the agent to audit one unit (§5.1.3).</summary>
+/// <param name="Patterns">
+/// Los tipos de problema silenciados en esta app (F5.12), ya escritos en <paramref name="Prompt"/>.
+/// Viajan también aquí porque el agente falso los necesita para poder simular una supresión, que es
+/// como se prueba el circuito entero sin un asiento de Copilot.
+/// </param>
 public sealed record AuditUnitRequest(
     string UnitPath,
     string UnitContent,
     string Prompt,
     TechStack Stack,
     AuditMode Mode,
-    IReadOnlyList<ExistingFinding> Existing);
+    IReadOnlyList<ExistingFinding> Existing,
+    PatternSilenceSet? Patterns = null);
+
+/// <summary>
+/// Lo que el auditor declara haberse callado por un patrón silenciado (F5.12), en
+/// <c>unit_done</c>.
+/// <para>
+/// Es el ÚNICO canal por el que una supresión por patrón entra en los contadores: no hay filtro
+/// programático que la detecte, y no lo habrá (anti-objetivo de F5.12). Si el modelo no lo declara,
+/// la supresión existió pero no se contó — coste asumido y documentado, muy por debajo del de
+/// mantener una taxonomía a mano.
+/// </para>
+/// </summary>
+/// <param name="PatternId">El id corto del patrón tal y como aparece en el prompt (<c>P-2</c>).</param>
+/// <param name="Count">Cuántas detecciones se calló por él en esta unidad.</param>
+public sealed record SuppressedByPatternArgs(string PatternId, int Count);
 
 /// <summary>
 /// Un veredicto de reconciliación tal y como lo entrega el agente (F4, tool
@@ -218,7 +238,12 @@ public interface IAuditToolbox
     /// </summary>
     AddLocationsResult AddLocations(string findingId, SubmitLocation[] locations);
 
-    void UnitDone(string unitPath, string summary);
+    /// <summary>
+    /// Cierra la unidad. <paramref name="suppressedByPattern"/> es lo que el auditor declara
+    /// haberse callado por los patrones silenciados de la app (F5.12); null o vacío significa que
+    /// no se calló nada, que es lo normal cuando la app no tiene patrones.
+    /// </summary>
+    void UnitDone(string unitPath, string summary, SuppressedByPatternArgs[]? suppressedByPattern = null);
 
     string ReadSignatures(string path);
 }

@@ -124,27 +124,27 @@ public sealed class HubStore
         return true;
     }
 
-    // --- Rule exclusions (F5.10) ---
+    // --- Pattern silences (F5.12) ---
 
     /// <summary>
-    /// Las reglas excluidas de esta app, VIVAS Y CADUCADAS. El filtrado por caducidad es de quien
-    /// pregunta (<see cref="Domain.Model.RuleExclusionSet"/>), porque la UI necesita ver las
-    /// caducadas para poder decir «caducada — revisar».
+    /// Los patrones silenciados de esta app, VIVOS Y CADUCADOS. El filtrado por caducidad es de
+    /// quien pregunta (<see cref="Domain.Model.PatternSilenceSet"/>), porque la gestión necesita
+    /// ver los caducados para poder decir «caducado — revisar».
     /// </summary>
-    public IReadOnlyList<RuleExclusion> ListRuleExclusions(string slug)
-        => ReadAll<RuleExclusion>(_paths.RuleExclusionsDir(slug), SchemaValidation.Validate);
+    public IReadOnlyList<PatternSilence> ListPatternSilences(string slug)
+        => ReadAll<PatternSilence>(_paths.PatternSilencesDir(slug), SchemaValidation.Validate);
 
-    public RuleExclusion? TryReadRuleExclusion(string slug, string ruleId)
-        => File.Exists(_paths.RuleExclusionFile(slug, ruleId))
-            ? ReadJson<RuleExclusion>(_paths.RuleExclusionFile(slug, ruleId), SchemaValidation.Validate)
+    public PatternSilence? TryReadPatternSilence(string slug, Ulid patternId)
+        => File.Exists(_paths.PatternSilenceFile(slug, patternId.ToString()))
+            ? ReadJson<PatternSilence>(_paths.PatternSilenceFile(slug, patternId.ToString()), SchemaValidation.Validate)
             : null;
 
-    public void WriteRuleExclusion(string slug, RuleExclusion exclusion)
-        => WriteJson(_paths.RuleExclusionFile(slug, exclusion.RuleId), exclusion, SchemaValidation.Validate);
+    public void WritePatternSilence(string slug, PatternSilence pattern)
+        => WriteJson(_paths.PatternSilenceFile(slug, pattern.Id.ToString()), pattern, SchemaValidation.Validate);
 
-    public bool DeleteRuleExclusion(string slug, string ruleId)
+    public bool DeletePatternSilence(string slug, Ulid patternId)
     {
-        string path = _paths.RuleExclusionFile(slug, ruleId);
+        string path = _paths.PatternSilenceFile(slug, patternId.ToString());
         if (!File.Exists(path))
         {
             return false;

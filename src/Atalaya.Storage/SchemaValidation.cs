@@ -44,12 +44,18 @@ public static class SchemaValidation
         RequireText(s.By, "silence.by");
     }
 
-    public static void Validate(RuleExclusion e)
+    /// <summary>
+    /// F5.12. El <c>exemplar</c> es obligatorio y no vacío porque ES el alcance: un patrón sin
+    /// frase no le dice nada al auditor y se traduciría en supresiones que nadie puede explicar.
+    /// </summary>
+    public static void Validate(PatternSilence p)
     {
-        Require(e.SchemaVersion == CurrentSchemaVersion, "ruleExclusion.schemaVersion must be 1");
-        RequireText(e.RuleId, "ruleExclusion.ruleId");
-        RequireText(e.By, "ruleExclusion.by");
-        HubPaths.RequireSafeRuleId(e.RuleId);
+        Require(p.SchemaVersion == CurrentSchemaVersion, "patternSilence.schemaVersion must be 1");
+        Require(p.Id != Ulid.Empty, "patternSilence.id must be a non-empty ULID");
+        RequireText(p.ShortId, "patternSilence.shortId");
+        RequireText(p.Exemplar, "patternSilence.exemplar");
+        RequireText(p.By, "patternSilence.by");
+        Require(p.Suppressions >= 0, "patternSilence.suppressions must be >= 0");
     }
 
     public static void Validate(Claim c)

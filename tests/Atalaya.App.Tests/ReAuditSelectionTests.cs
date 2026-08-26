@@ -105,7 +105,7 @@ public sealed class ReAuditSelectionTests : IDisposable
         services.AddSingleton<LinkCloneFlow>();
         // F5.10: la gobernanza de reglas excluidas y su gestión, sin ventana.
         services.AddSingleton<GovernanceService>();
-        services.AddSingleton<IRuleExclusionsDialog, TestFactory.NoRuleExclusionsDialog>();
+        services.AddSingleton<IPatternSilencesDialog, TestFactory.NoPatternSilencesDialog>();
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
     }

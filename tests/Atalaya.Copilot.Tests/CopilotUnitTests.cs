@@ -1,5 +1,7 @@
 using Atalaya.Copilot;
 using Atalaya.Domain;
+using Atalaya.Domain.Abstractions;
+using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using FluentAssertions;
 using Xunit;
@@ -49,58 +51,85 @@ public class PromptComposerTests
     }
 
     /// <summary>
-    /// F5.10 §2: una regla excluida en la app se RETIRA del brief. No se pide lo que se va a tirar
-    /// en la ingestión — es más barato y le quita ruido al auditor.
+    /// F5.12: el catálogo vuelve a viajar ENTERO. Lo que la app ha decidido callar ya no se recorta
+    /// del brief —el catálogo dejó de ser gobernanza— sino que se le dice al auditor aparte, con la
+    /// frase que lo describe.
     /// </summary>
     [Fact]
-    public void Una_regla_excluida_no_aparece_en_el_brief()
+    public void El_brief_lleva_el_catalogo_entero()
     {
-        RuleExclusionSet excluded = Live("mejoras.estilo.nomenclatura");
+        string brief = PillarBrief.For(TechStack.DotNet);
 
-        string brief = PillarBrief.For(TechStack.DotNet, excluded);
+        brief.Should().Contain("PILAR ERRORES").And.Contain("PILAR OPTIMIZACION").And.Contain("PILAR MEJORAS");
+        foreach (RuleDef rule in RuleCatalog.Rules)
+        {
+            brief.Should().Contain(rule.RuleId);
+        }
 
-        brief.Should().NotContain("mejoras.estilo.nomenclatura");
-        brief.Should().Contain("errores.recursos.no-liberado", "el resto del catálogo sigue entero");
-        brief.Should().Contain("RÚBRICA DE SEVERIDAD");
-    }
-
-    /// <summary>
-    /// Las áreas de criterio son juicio libre: no se pueden retirar del brief ni excluyéndolas.
-    /// Quitarlas sería decirle al auditor que no piense, que no es lo que pide una exclusión.
-    /// </summary>
-    [Fact]
-    public void Un_criterio_excluido_sigue_en_el_brief()
-    {
-        string brief = PillarBrief.For(TechStack.DotNet, Live("criterio.seguridad"));
-
-        brief.Should().Contain("criterio.seguridad");
         brief.Should().Contain("ÁREAS DE CRITERIO PROFESIONAL");
     }
 
-    /// <summary>Un pilar sin reglas desaparece entero: una cabecera vacía se lee como un fallo.</summary>
+    /// <summary>
+    /// F5.12 §2: el patrón silenciado viaja en el prompt de la unidad, con su id corto y su frase,
+    /// y con la instrucción de declarar en unit_done lo que se calle. Es donde vive la supresión.
+    /// </summary>
     [Fact]
-    public void Un_pilar_sin_reglas_no_deja_una_cabecera_huerfana()
+    public void Un_patron_silenciado_llega_al_prompt_de_la_unidad()
     {
-        RuleExclusionSet all = RuleExclusionSet.From(
-            RuleCatalog.Rules.Where(r => r.Pillar == Pillar.Optimizacion)
-                .Select(r => new RuleExclusion { RuleId = r.RuleId, By = "alvaro" }),
-            DateTimeOffset.UtcNow);
+        string prompt = PromptComposer.ComposeUnitPrompt(
+            "src/A.cs", "class A {}", PillarBrief.For(TechStack.DotNet), AuditMode.Lotes,
+            existing: null, patterns: Patterns(("P-1", "bloques catch vacíos que ocultan excepciones")));
 
-        string brief = PillarBrief.For(TechStack.DotNet, all);
-
-        brief.Should().NotContain("PILAR OPTIMIZACION");
-        brief.Should().Contain("PILAR ERRORES");
+        prompt.Should().Contain("TIPOS DE PROBLEMA SILENCIADOS");
+        prompt.Should().Contain("[P-1] bloques catch vacíos que ocultan excepciones");
+        prompt.Should().Contain("suppressedByPattern");
+        prompt.Should().Contain("NO lo reportes");
     }
 
-    /// <summary>Sin exclusiones, el brief es exactamente el de antes de F5.10.</summary>
+    /// <summary>Un patrón caducado no llega al prompt: caducado = inexistente a efectos de filtrado.</summary>
     [Fact]
-    public void Sin_exclusiones_el_brief_no_cambia()
-        => PillarBrief.For(TechStack.DotNet, RuleExclusionSet.Empty)
-            .Should().Be(PillarBrief.For(TechStack.DotNet));
+    public void Un_patron_caducado_no_llega_al_prompt()
+    {
+        var expired = PatternSilenceSet.From(
+            new[]
+            {
+                new PatternSilence
+                {
+                    Id = new UlidFactory(SystemClock.Instance).NewUlid(),
+                    ShortId = "P-1",
+                    Exemplar = "bloques catch vacíos",
+                    By = "alvaro",
+                    ExpiresUtc = DateTimeOffset.UtcNow.AddDays(-1),
+                },
+            },
+            DateTimeOffset.UtcNow);
 
-    private static RuleExclusionSet Live(params string[] ruleIds)
-        => RuleExclusionSet.From(
-            ruleIds.Select(r => new RuleExclusion { RuleId = r, By = "alvaro" }),
+        string prompt = PromptComposer.ComposeUnitPrompt(
+            "src/A.cs", "class A {}", PillarBrief.For(TechStack.DotNet), AuditMode.Lotes,
+            existing: null, patterns: expired);
+
+        prompt.Should().NotContain("TIPOS DE PROBLEMA SILENCIADOS");
+        prompt.Should().NotContain("bloques catch vacíos");
+    }
+
+    /// <summary>Sin patrones el prompt es exactamente el de antes: un bloque vacío solo gasta tokens.</summary>
+    [Fact]
+    public void Sin_patrones_el_prompt_no_cambia()
+    {
+        string brief = PillarBrief.For(TechStack.DotNet);
+        PromptComposer.ComposeUnitPrompt("src/A.cs", "class A {}", brief, AuditMode.Lotes, null, PatternSilenceSet.Empty)
+            .Should().Be(PromptComposer.ComposeUnitPrompt("src/A.cs", "class A {}", brief, AuditMode.Lotes));
+    }
+
+    private static PatternSilenceSet Patterns(params (string ShortId, string Exemplar)[] patterns)
+        => PatternSilenceSet.From(
+            patterns.Select(p => new PatternSilence
+            {
+                Id = new UlidFactory(SystemClock.Instance).NewUlid(),
+                ShortId = p.ShortId,
+                Exemplar = p.Exemplar,
+                By = "alvaro",
+            }),
             DateTimeOffset.UtcNow);
 }
 
@@ -137,6 +166,26 @@ public class FakeAgentTests
 
         toolbox.Submitted.Should().ContainSingle();
         toolbox.UnitDoneCalled.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// F5.12: el agente falso sabe callarse. Es lo que permite ejercitar el circuito entero de la
+    /// supresión por patrón sin asiento de Copilot y sin depender del juicio de un modelo real.
+    /// </summary>
+    [Fact]
+    public async Task Fake_declares_pattern_suppressions_in_unit_done()
+    {
+        var toolbox = new RecordingToolbox();
+        var fake = new FakeCopilotAgent(
+            suppressScript: _ => new[] { new SuppressedByPatternArgs("P-1", 2) });
+
+        await fake.AuditUnitAsync(
+            new AuditUnitRequest("a.cs", "code", "prompt", TechStack.DotNet, AuditMode.Lotes, Array.Empty<ExistingFinding>()),
+            toolbox, CancellationToken.None);
+
+        toolbox.Submitted.Should().BeEmpty("lo que se calla no se reporta");
+        toolbox.Suppressed.Should().ContainSingle()
+            .Which.Should().Be(new SuppressedByPatternArgs("P-1", 2));
     }
 
     private sealed class RecordingToolbox : IAuditToolbox
@@ -176,7 +225,13 @@ public class FakeAgentTests
             return new AddLocationsResult(true, locations.Length);
         }
 
-        public void UnitDone(string unitPath, string summary) => UnitDoneCalled = true;
+        public List<SuppressedByPatternArgs> Suppressed { get; } = new();
+
+        public void UnitDone(string unitPath, string summary, SuppressedByPatternArgs[]? suppressedByPattern = null)
+        {
+            UnitDoneCalled = true;
+            Suppressed.AddRange(suppressedByPattern ?? Array.Empty<SuppressedByPatternArgs>());
+        }
 
         public string ReadSignatures(string path) => "";
     }

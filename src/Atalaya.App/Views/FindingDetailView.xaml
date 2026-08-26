@@ -394,10 +394,22 @@
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                         </Border>
 
-                        <!-- F5.10 · SELECTOR DE ALCANCE. La consecuencia de cada opción va DEBAJO
+                        <!-- F5.12: si este hallazgo fue el origen de un patrón, lo dice. Sin esto,
+                             un hallazgo silenciado por su propio patrón parece silenciado porque sí. -->
+                        <Border CornerRadius="6" Padding="9,6" Margin="0,0,0,8"
+                                Background="{DynamicResource SubtleFillColorTertiaryBrush}"
+                                Visibility="{Binding HasPatternOrigin, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="{Binding PatternOriginSummary}" TextWrapping="Wrap" FontSize="11"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                        </Border>
+
+                        <!-- F5.12 · SELECTOR DE ALCANCE. La consecuencia de cada opción va DEBAJO
                              de ella, no en un tooltip: la diferencia entre las dos no es un matiz
-                             —una oculta un caso, la otra apaga una regla en toda la aplicación— y
-                             quien las confunde no se entera hasta la auditoría siguiente. -->
+                             —una oculta un caso, la otra calla un tipo entero de problema en toda
+                             la aplicación— y quien las confunde no se entera hasta la auditoría
+                             siguiente. Bajo la segunda va el EJEMPLAR, editable: es literalmente
+                             la frase que el auditor va a leer, así que hay que verla antes de
+                             confirmar y poder pulirla. -->
                         <TextBlock Text="Alcance" Style="{StaticResource FieldLabel}" Margin="0,0,0,3" />
                         <ItemsControl ItemsSource="{Binding ScopeOptions}" Margin="0,0,0,4">
                             <ItemsControl.ItemTemplate>
@@ -409,6 +421,18 @@
                                         <TextBlock Text="{Binding Consequence}" TextWrapping="Wrap"
                                                    FontSize="11" Margin="24,1,0,0"
                                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                        <StackPanel Margin="24,6,0,0"
+                                                    Visibility="{Binding HasExemplar, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Text="Tipo de problema que se silencia (edítalo si no lo describe bien)"
+                                                       FontSize="11" Margin="0,0,0,3"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            <ui:TextBox HorizontalAlignment="Stretch" TextWrapping="Wrap" AcceptsReturn="False"
+                                                        PlaceholderText="p. ej. bloques catch vacíos que ocultan excepciones"
+                                                        ToolTip="Esta frase es lo único que el auditor lee para decidir qué callar."
+                                                        Text="{Binding DataContext.PatternExemplar,
+                                                               RelativeSource={RelativeSource AncestorType=ItemsControl},
+                                                               UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
                                     </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>

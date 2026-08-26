@@ -32,35 +32,28 @@ public sealed class HubPaths
     /// <summary>F4: un silencio se nombra por el ULID del hallazgo que silencia.</summary>
     public string SilenceFile(string slug, string findingUlid) => Path.Combine(SilencesDir(slug), $"{findingUlid}.json");
 
-    /// <summary>F5.10: las reglas que no aplican a ESTA app. Un fichero por regla, merge-friendly.</summary>
-    public string RuleExclusionsDir(string slug) => Path.Combine(AppDir(slug), "rule-exclusions");
+    /// <summary>
+    /// F5.12: los TIPOS de problema silenciados en ESTA app. Un fichero por patrón, merge-friendly.
+    /// <para>
+    /// Carpeta propia y no <c>silences/</c> aunque el patrón sea «un silencio con otro alcance»:
+    /// la clave de un silencio es el ULID del HALLAZGO y la de un patrón es la suya propia, así que
+    /// compartir carpeta obligaría a todo lector de <c>silences/</c> —incluida la migración de F4,
+    /// que enumera todos sus ficheros— a conocer un discriminador para siempre. Un hallazgo puede
+    /// además estar silenciado por sí mismo Y ser el origen de un patrón, y los dos ficheros no
+    /// pueden llamarse igual.
+    /// </para>
+    /// </summary>
+    public string PatternSilencesDir(string slug) => Path.Combine(AppDir(slug), "pattern-silences");
 
     /// <summary>
-    /// <c>apps/{slug}/rule-exclusions/{ruleId}.json</c>. El <c>ruleId</c> se valida antes de
-    /// convertirlo en nombre de fichero: es un identificador del catálogo, pero
-    /// <c>criterio.&lt;área&gt;</c> admite un sufijo libre que viene del modelo, y un sufijo libre
-    /// que acaba en una ruta es como se sale de un directorio sin querer.
+    /// <c>apps/{slug}/pattern-silences/{ulid}.json</c>. La clave es el ULID del patrón, generado
+    /// por la app: no hay aquí ningún texto que venga del modelo, así que no hay ruta que escapar.
     /// </summary>
-    public string RuleExclusionFile(string slug, string ruleId)
-        => Path.Combine(RuleExclusionsDir(slug), $"{RequireSafeRuleId(ruleId)}.json");
+    public string PatternSilenceFile(string slug, string patternUlid)
+        => Path.Combine(PatternSilencesDir(slug), $"{patternUlid}.json");
 
-    /// <summary>
-    /// Un <c>ruleId</c> vale como nombre de fichero si es <c>[A-Za-z0-9._-]+</c> y no es un salto
-    /// de directorio. Cualquier otra cosa se rechaza en voz alta: silenciar el error escribiría el
-    /// fichero en otro sitio y la exclusión no suprimiría nada.
-    /// </summary>
-    public static string RequireSafeRuleId(string ruleId)
-    {
-        if (string.IsNullOrWhiteSpace(ruleId) || ruleId is "." or ".."
-            || !ruleId.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-'))
-        {
-            throw new ArgumentException(
-                $"ruleId no válido como nombre de fichero: '{ruleId}'. Solo letras, dígitos, punto, guion y guion bajo.",
-                nameof(ruleId));
-        }
-
-        return ruleId;
-    }
+    /// <summary>Legado de F5.10, solo para que la migración a patrones sepa dónde mirar.</summary>
+    public string LegacyRuleExclusionsDir(string slug) => Path.Combine(AppDir(slug), "rule-exclusions");
 
     public string ClaimsDir(string slug) => Path.Combine(AppDir(slug), "claims");
 

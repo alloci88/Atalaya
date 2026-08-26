@@ -228,14 +228,15 @@
                 <TextBlock Margin="0,4,0,0"
                            ToolTip="Las unidades que se auditarán al pulsar «Auditar selección»."
                            Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}"><Run Text="Seleccionadas: " /><Run Text="{Binding SelectedCount}" FontWeight="Bold" /></TextBlock>
-                <!-- F5.10: qué se ha decidido NO mirar en esta aplicación. Va en el panel del
+                <!-- F5.12: qué se ha decidido NO ver en esta aplicación. Va en el panel del
                      ciclo porque condiciona la lectura de todo lo demás: la cobertura de un ciclo
-                     con reglas excluidas no significa lo mismo que la de uno sin ninguna. -->
+                     con tipos de problema silenciados no significa lo mismo que la de uno sin
+                     ninguno. -->
                 <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                    <TextBlock VerticalAlignment="Center" ToolTip="{Binding ExclusionsTooltip}"><Run Text="Reglas excluidas: " /><Run Text="{Binding ExcludedRules}" FontWeight="Bold" /><Run Text=" · " /></TextBlock>
+                    <TextBlock VerticalAlignment="Center" ToolTip="{Binding PatternsTooltip}"><Run Text="Patrones silenciados: " /><Run Text="{Binding SilencedPatterns}" FontWeight="Bold" /><Run Text=" · " /></TextBlock>
                     <ui:HyperlinkButton Content="Gestionar" Padding="0" Margin="0" VerticalAlignment="Center"
-                                        Command="{Binding ManageRuleExclusionsCommand}"
-                                        ToolTip="Ver, des-excluir y cambiar la caducidad de las reglas excluidas de esta aplicación." />
+                                        Command="{Binding ManagePatternSilencesCommand}"
+                                        ToolTip="Ver cuánto suprime cada patrón, afinar su ejemplar, des-silenciarlo o cambiar su caducidad." />
                 </StackPanel>
                 <!-- F5.7 §4: el resultado de la última acción va por el toast global, no
                      incrustado al fondo de este panel, donde se quedaba pegado. -->

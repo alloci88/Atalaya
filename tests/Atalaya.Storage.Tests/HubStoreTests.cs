@@ -1,4 +1,6 @@
 using Atalaya.Domain;
+using Atalaya.Domain.Abstractions;
+using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using FluentAssertions;
 using Xunit;
@@ -39,43 +41,50 @@ public sealed class HubStoreTests : IDisposable
     }
 
     /// <summary>
-    /// F5.10: la exclusión de regla es un fichero por regla bajo la app, como todo lo demás del
-    /// hub. La app es parte de la ruta: eso es lo que la hace por-aplicación por construcción.
+    /// F5.12: el patrón silenciado es un fichero por patrón bajo la app, como todo lo demás del
+    /// hub. La app es parte de la ruta: eso es lo que lo hace por-aplicación por construcción.
     /// </summary>
     [Fact]
-    public void Rule_exclusion_roundtrip_is_per_app()
+    public void Pattern_silence_roundtrip_is_per_app()
     {
-        var exclusion = new RuleExclusion
+        var pattern = new PatternSilence
         {
-            RuleId = "mejoras.estilo.nomenclatura",
+            Id = new UlidFactory(SystemClock.Instance).NewUlid(),
+            ShortId = "P-1",
+            Exemplar = "bloques catch vacíos que ocultan excepciones",
             Reason = SilenceReason.DeudaAceptada,
             Notes = "no aplica",
             By = "alvaro",
             Utc = DateTimeOffset.UtcNow,
         };
-        _store.WriteRuleExclusion("webapp", exclusion);
+        _store.WritePatternSilence("webapp", pattern);
 
-        _store.TryReadRuleExclusion("webapp", exclusion.RuleId)!.By.Should().Be("alvaro");
-        _store.ListRuleExclusions("webapp").Should().ContainSingle();
-        _store.ListRuleExclusions("otraapp").Should().BeEmpty("una exclusión nunca es global al hub");
+        _store.TryReadPatternSilence("webapp", pattern.Id)!.Exemplar.Should().Be(pattern.Exemplar);
+        _store.ListPatternSilences("webapp").Should().ContainSingle();
+        _store.ListPatternSilences("otraapp").Should().BeEmpty("un patrón nunca es global al hub");
 
-        _store.DeleteRuleExclusion("webapp", exclusion.RuleId).Should().BeTrue();
-        _store.ListRuleExclusions("webapp").Should().BeEmpty();
-        _store.DeleteRuleExclusion("webapp", exclusion.RuleId).Should().BeFalse();
+        _store.DeletePatternSilence("webapp", pattern.Id).Should().BeTrue();
+        _store.ListPatternSilences("webapp").Should().BeEmpty();
+        _store.DeletePatternSilence("webapp", pattern.Id).Should().BeFalse();
     }
 
-    /// <summary>Un ruleId que no vale como nombre de fichero no llega a escribirse.</summary>
+    /// <summary>
+    /// El ejemplar ES el alcance: un patrón sin frase no le diría nada al auditor y produciría
+    /// supresiones que nadie podría explicar. No llega a escribirse.
+    /// </summary>
     [Fact]
-    public void An_unsafe_rule_id_never_becomes_a_path()
+    public void A_pattern_without_an_exemplar_is_never_written()
     {
-        Action act = () => _store.WriteRuleExclusion("webapp", new RuleExclusion
+        Action act = () => _store.WritePatternSilence("webapp", new PatternSilence
         {
-            RuleId = "../../fuera",
+            Id = new UlidFactory(SystemClock.Instance).NewUlid(),
+            ShortId = "P-1",
+            Exemplar = "   ",
             By = "alvaro",
             Utc = DateTimeOffset.UtcNow,
         });
 
-        act.Should().Throw<ArgumentException>();
+        act.Should().Throw<SchemaValidationException>();
     }
 
     [Fact]

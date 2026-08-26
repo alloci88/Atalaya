@@ -1,3 +1,5 @@
+using Atalaya.Domain.Abstractions;
+using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Storage;
 using Atalaya.Storage.Sync;
@@ -192,6 +194,7 @@ public sealed class HubContext
         PublishAfterMigration();
         InitializeIfEmpty();
         MigrateSilencesToUlidKeys();
+        MigrateRuleExclusionsToPatterns();
         return pulled;
     }
 
@@ -247,6 +250,55 @@ public sealed class HubContext
             Sync.CommitAndPush($"silences: migración F4 a clave por ULID ({moved})");
             SyncStateChanged?.Invoke();
         }
+    }
+
+    /// <summary>
+    /// F5.12: las exclusiones por regla pasan a ser patrones silenciados. La exclusión por regla se
+    /// retiró entera —convertía el silenciado en mantenimiento de taxonomía— pero lo que alguien
+    /// dejara escrito no se tira: se convierte, con la descripción de la regla como ejemplar.
+    /// Idempotente y barata (son pocas y el directorio desaparece al migrarlas), así que corre en
+    /// cada apertura del hub; en cuanto no queda ninguna no hace nada. Se commitea solo si movió
+    /// algo — nunca genera un commit vacío.
+    /// </summary>
+    private void MigrateRuleExclusionsToPatterns()
+    {
+        if (Sync is null || Health != SyncHealth.Green)
+        {
+            return;
+        }
+
+        // La fábrica se crea aquí y no se inyecta: es una migración one-shot que solo necesita
+        // identidades nuevas, y añadirle una dependencia al constructor del hub por esto sería
+        // pagar para siempre por algo que deja de hacer nada en cuanto corre una vez.
+        var ulids = new UlidFactory(SystemClock.Instance);
+        int moved = 0;
+        foreach (string slug in Store.ListAppSlugs())
+        {
+            RuleExclusionMigration.Result result = RuleExclusionMigration.MigrateApp(
+                HubPaths, slug, ulids, DateTimeOffset.UtcNow, DescribeRule);
+            moved += result.Migrated.Count;
+            foreach (string skipped in result.Skipped)
+            {
+                _loggerFactory.CreateLogger<HubContext>()
+                    .LogWarning("Exclusión de regla no migrable en {Slug}: {Detail}", slug, skipped);
+            }
+        }
+
+        if (moved > 0)
+        {
+            Sync.CommitAndPush($"pattern-silences: migración F5.12 de exclusiones por regla ({moved})");
+            SyncStateChanged?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// La frase que describe una regla del catálogo, para usarla de ejemplar al migrar. Es lo único
+    /// que el catálogo aporta a la migración; después de ella deja de tener papel de gobernanza.
+    /// </summary>
+    private static string? DescribeRule(string ruleId)
+    {
+        Copilot.RuleDef? rule = Copilot.RuleCatalog.Find(ruleId);
+        return rule is null ? null : $"{rule.Title}: {rule.Look}";
     }
 
     /// <summary>

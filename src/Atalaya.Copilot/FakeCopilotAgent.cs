@@ -11,6 +11,7 @@ public sealed class FakeCopilotAgent : ICopilotAgent
     private readonly Func<AuditUnitRequest, IEnumerable<VerdictArgs>>? _reconcileScript;
     private readonly Func<AuditUnitRequest, IEnumerable<AddLocationsArgs>>? _extendScript;
     private readonly Func<IReadOnlyList<AgentModel>>? _modelsScript;
+    private readonly Func<AuditUnitRequest, IEnumerable<SuppressedByPatternArgs>>? _suppressScript;
     private readonly string? _modelName;
 
     /// <param name="reconcileScript">
@@ -29,19 +30,27 @@ public sealed class FakeCopilotAgent : ICopilotAgent
     /// F5.1: el modelo que la sesión registra. Por defecto <c>fake-model</c>; los tests que
     /// comprueban que el modelo elegido llega al informe pasan el suyo.
     /// </param>
+    /// <param name="suppressScript">
+    /// F5.12: qué declara el auditor haberse callado por patrón en <c>unit_done</c>. Por defecto no
+    /// declara nada. Es lo que permite ejercitar el circuito entero de la supresión por patrón
+    /// —prompt, contadores, sesión, informe y contador de trabajo del patrón— sin asiento de
+    /// Copilot y sin depender del juicio de un modelo real.
+    /// </param>
     public FakeCopilotAgent(
         Func<AuditUnitRequest, IEnumerable<SubmitFindingArgs>>? auditScript = null,
         Func<VerifyTarget, string>? verdictScript = null,
         Func<AuditUnitRequest, IEnumerable<VerdictArgs>>? reconcileScript = null,
         Func<AuditUnitRequest, IEnumerable<AddLocationsArgs>>? extendScript = null,
         Func<IReadOnlyList<AgentModel>>? modelsScript = null,
-        string? modelName = null)
+        string? modelName = null,
+        Func<AuditUnitRequest, IEnumerable<SuppressedByPatternArgs>>? suppressScript = null)
     {
         _auditScript = auditScript ?? (_ => Array.Empty<SubmitFindingArgs>());
         _verdictScript = verdictScript ?? (_ => "confirmado");
         _reconcileScript = reconcileScript;
         _extendScript = extendScript;
         _modelsScript = modelsScript;
+        _suppressScript = suppressScript;
         _modelName = modelName;
     }
 
@@ -111,7 +120,14 @@ public sealed class FakeCopilotAgent : ICopilotAgent
         long input = Math.Max(1, request.UnitContent.Length / 4);
         UsageReported?.Invoke(new UsageSample(input, input / 3, null, ModelName));
 
-        toolbox.UnitDone(request.UnitPath, "revisión completa (fake)");
+        SuppressedByPatternArgs[] suppressed = (_suppressScript?.Invoke(request)
+                                                ?? Array.Empty<SuppressedByPatternArgs>()).ToArray();
+        foreach (SuppressedByPatternArgs s in suppressed)
+        {
+            TextStreamed?.Invoke($"[fake] {s.Count} deteccion(es) calladas por el patron {s.PatternId}\n");
+        }
+
+        toolbox.UnitDone(request.UnitPath, "revisión completa (fake)", suppressed);
         return Task.CompletedTask;
     }
 

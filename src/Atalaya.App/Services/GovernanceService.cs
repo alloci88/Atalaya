@@ -40,126 +40,160 @@ public sealed class GovernanceService
         Push(slug, $"silence: {f.DisplayId ?? f.Id.ToString()}");
     }
 
-    // ------------------------------------------------------------------ F5.10 · exclusión de regla
+    // ------------------------------------------------------------------ F5.12 · silencio por patrón
 
     /// <summary>
-    /// Qué pasó al excluir una regla: si existía ya, y cuántos hallazgos activos se silenciaron
-    /// de paso. Se devuelve para poder contarlo, no para decidir nada.
+    /// Qué pasó al silenciar un tipo de problema: el patrón creado y si el hallazgo origen se
+    /// silenció de paso. Se devuelve para poder contarlo, no para decidir nada.
     /// </summary>
-    public sealed record RuleExclusionResult(string RuleId, bool Replaced, int SilencedFindings);
+    public sealed record PatternSilenceResult(PatternSilence Pattern, bool SilencedSource);
 
     /// <summary>
-    /// Excluye una regla de UNA aplicación (F5.10). Desde este momento, ninguna auditoría de esta
-    /// app registra hallazgos de <paramref name="ruleId"/>: se retira del brief y se suprime en la
-    /// ingestión si el auditor la reporta igualmente.
+    /// Silencia un TIPO de problema en UNA aplicación (F5.12). Desde este momento el ejemplar viaja
+    /// en el prompt de cada unidad auditada y el auditor deja de reportar lo que corresponda a él.
     /// <para>
-    /// <paramref name="silenceExisting"/> es una decisión SEPARADA y explícita de quien excluye.
-    /// Excluir previene el futuro; qué hacer con los N hallazgos que ya existen es otra pregunta,
-    /// y responderla por defecto en cualquiera de los dos sentidos sería decidir por el usuario:
-    /// silenciarlos siempre borra deuda real de un plumazo, no silenciarlos nunca deja una lista
-    /// que ya nadie va a mirar. Cada hallazgo silenciado así se lleva su propia entrada de
-    /// historial y su propio fichero de silencio, con la regla que lo silenció escrita dentro.
+    /// El hallazgo origen se silencia con el patrón, sin preguntar, y así queda escrito en su
+    /// procedencia. No es una decisión aparte como lo era el silencio en masa de F5.10: aquel
+    /// ofrecía «los N hallazgos de esta regla», una población que solo existía porque existía la
+    /// taxonomía. Sin taxonomía, el único hallazgo del que se sabe con certeza que pertenece al
+    /// patrón es el que acaba de mirarse para crearlo — silenciar el tipo y dejar activo el caso
+    /// que lo motivó sería incoherente. Los demás se silencian uno a uno desde su ficha, o
+    /// desaparecen solos en la siguiente auditoría.
     /// </para>
     /// </summary>
-    public RuleExclusionResult ExcludeRule(
-        string slug, string ruleId, SilenceReason reason, string? notes,
-        DateTimeOffset? expiresUtc, bool silenceExisting)
+    public PatternSilenceResult SilencePattern(
+        string slug, Ulid sourceFindingId, string exemplar, SilenceReason reason, string? notes,
+        DateTimeOffset? expiresUtc)
     {
-        string rule = (ruleId ?? string.Empty).Trim();
-        Storage.HubPaths.RequireSafeRuleId(rule);
+        string phrase = (exemplar ?? string.Empty).Trim();
+        if (phrase.Length == 0)
+        {
+            throw new ArgumentException(
+                "Un patrón sin ejemplar no le dice nada al auditor: la frase ES el alcance.", nameof(exemplar));
+        }
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
-        bool replaced = _hub.Store.TryReadRuleExclusion(slug, rule) is not null;
-        _hub.Store.WriteRuleExclusion(slug, new RuleExclusion
+        var pattern = new PatternSilence
         {
-            RuleId = rule,
+            Id = _ulids.NewUlid(),
+            ShortId = PatternShortId.Next(_hub.Store.ListPatternSilences(slug)),
+            Exemplar = phrase,
+            SourceFindingUlid = sourceFindingId,
             Reason = reason,
             Notes = notes,
             By = Me,
             Utc = now,
             ExpiresUtc = expiresUtc,
-        });
+        };
+        _hub.Store.WritePatternSilence(slug, pattern);
 
-        int silenced = 0;
-        if (silenceExisting)
+        bool silencedSource = false;
+        Finding source = Require(slug, sourceFindingId);
+        if (source.Status != FindingStatus.Silenciado)
         {
-            string detail = $"silenciado por exclusión de la regla {rule}"
-                + (string.IsNullOrWhiteSpace(notes) ? "" : $": {notes!.Trim()}");
-
-            foreach (Finding f in _hub.Store.ListFindings(slug)
-                         .Where(f => f.Status == FindingStatus.Activo)
-                         .Where(f => string.Equals(f.RuleId, rule, StringComparison.Ordinal))
-                         .ToList())
+            _hub.Store.WriteSilence(slug, new Silence
             {
-                _hub.Store.WriteSilence(slug, new Silence
-                {
-                    FindingUlid = f.Id,
-                    Reason = reason,
-                    Notes = notes,
-                    By = Me,
-                    Utc = now,
-                    ExpiresUtc = expiresUtc,
-                    ByRuleExclusion = rule,
-                });
+                FindingUlid = source.Id,
+                Reason = reason,
+                Notes = notes,
+                By = Me,
+                Utc = now,
+                ExpiresUtc = expiresUtc,
+                ByPatternExemplar = phrase,
+            });
 
-                f.MarkSilenced(now, Me, detail);
-                _hub.Store.WriteFinding(slug, f);
-                silenced++;
-            }
+            source.MarkSilenced(now, Me, $"silenciado al silenciar el patrón «{phrase}»"
+                + (string.IsNullOrWhiteSpace(notes) ? "" : $": {notes!.Trim()}"));
+            _hub.Store.WriteFinding(slug, source);
+            silencedSource = true;
         }
 
-        // Un solo push para todo el gesto: excluir y silenciar lo existente son una sola decisión
+        // Un solo push para todo el gesto: silenciar el tipo y su caso origen son una sola decisión
         // del usuario, y partirla en dos commits contaría dos cosas donde hubo una.
-        Push(slug, $"rule-exclusion: {rule} en {slug}"
-            + (silenced > 0 ? $" (+{silenced} silenciados)" : ""));
-        return new RuleExclusionResult(rule, replaced, silenced);
+        Push(slug, $"pattern-silence: {pattern.ShortId} en {slug}");
+        return new PatternSilenceResult(pattern, silencedSource);
     }
 
     /// <summary>
-    /// Retira la exclusión: la regla vuelve al brief y sus hallazgos vuelven a poder reportarse.
+    /// Retira el patrón: el ejemplar deja de viajar en el prompt y el auditor vuelve a reportar
+    /// problemas de ese tipo en la auditoría siguiente.
     /// <para>
-    /// NO des-silencia lo que se silenció en masa. Cada uno de esos silencios fue una decisión
-    /// registrada con su autor y su motivo, y deshacerla en cascada tiraría también los que se
-    /// hubieran revisado uno a uno desde entonces. Se levantan desde su ficha, como cualquier otro.
+    /// NO des-silencia el hallazgo que lo originó ni ningún otro. Cada uno de esos silencios fue
+    /// una decisión registrada con su autor y su motivo; deshacerla en cascada tiraría también las
+    /// que se hubieran revisado a mano desde entonces. Se levantan desde su ficha.
     /// </para>
     /// </summary>
-    public bool UnexcludeRule(string slug, string ruleId)
+    public bool UnsilencePattern(string slug, Ulid patternId)
     {
-        bool removed = _hub.Store.DeleteRuleExclusion(slug, ruleId);
-        if (removed)
-        {
-            Push(slug, $"rule-exclusion: retirada {ruleId} en {slug}");
-        }
-
-        return removed;
-    }
-
-    /// <summary>
-    /// Cambia la caducidad de una exclusión viva o caducada, conservando motivo y notas. Quien la
-    /// toca pasa a ser su autor: es una decisión nueva sobre cuánto más dura, y firmarla con el
-    /// nombre de quien la creó haría que el registro mintiera.
-    /// </summary>
-    public bool SetRuleExclusionExpiry(string slug, string ruleId, DateTimeOffset? expiresUtc)
-    {
-        RuleExclusion? exclusion = _hub.Store.TryReadRuleExclusion(slug, ruleId);
-        if (exclusion is null)
+        PatternSilence? pattern = _hub.Store.TryReadPatternSilence(slug, patternId);
+        if (!_hub.Store.DeletePatternSilence(slug, patternId))
         {
             return false;
         }
 
-        exclusion.ExpiresUtc = expiresUtc;
-        exclusion.By = Me;
-        exclusion.Utc = DateTimeOffset.UtcNow;
-        _hub.Store.WriteRuleExclusion(slug, exclusion);
-        Push(slug, $"rule-exclusion: caducidad de {ruleId} en {slug}");
+        Push(slug, $"pattern-silence: retirado {pattern?.ShortId ?? patternId.ToString()} en {slug}");
         return true;
     }
 
-    /// <summary>Cuántos hallazgos ACTIVOS de esa regla hay en la app: la N de la pregunta del diálogo.</summary>
-    public int CountActiveWithRule(string slug, string ruleId)
-        => _hub.Store.ListFindings(slug)
-            .Count(f => f.Status == FindingStatus.Activo
-                        && string.Equals(f.RuleId, ruleId, StringComparison.Ordinal));
+    /// <summary>
+    /// Reescribe el ejemplar de un patrón vivo o caducado. Es la operación central de la gestión:
+    /// afinar el alcance es editar una frase, no mantener un catálogo. Quien la toca pasa a ser su
+    /// autor —la frase nueva es suya— y el id corto NO cambia, para que un informe viejo siga
+    /// nombrando lo mismo. Las supresiones acumuladas se conservan: siguen siendo el trabajo de
+    /// este patrón.
+    /// </summary>
+    public bool EditPatternExemplar(string slug, Ulid patternId, string exemplar)
+    {
+        string phrase = (exemplar ?? string.Empty).Trim();
+        if (phrase.Length == 0)
+        {
+            return false;
+        }
+
+        PatternSilence? pattern = _hub.Store.TryReadPatternSilence(slug, patternId);
+        if (pattern is null)
+        {
+            return false;
+        }
+
+        pattern.Exemplar = phrase;
+        pattern.By = Me;
+        pattern.Utc = DateTimeOffset.UtcNow;
+        _hub.Store.WritePatternSilence(slug, pattern);
+        Push(slug, $"pattern-silence: ejemplar de {pattern.ShortId} en {slug}");
+        return true;
+    }
+
+    /// <summary>
+    /// Cambia la caducidad de un patrón vivo o caducado, conservando motivo y notas. Quien la toca
+    /// pasa a ser su autor: es una decisión nueva sobre cuánto más dura, y firmarla con el nombre
+    /// de quien lo creó haría que el registro mintiera. Poner 0 días lo devuelve a permanente, que
+    /// es además la forma de revivir uno caducado sin volver a escribirlo todo.
+    /// </summary>
+    public bool SetPatternExpiry(string slug, Ulid patternId, DateTimeOffset? expiresUtc)
+    {
+        PatternSilence? pattern = _hub.Store.TryReadPatternSilence(slug, patternId);
+        if (pattern is null)
+        {
+            return false;
+        }
+
+        pattern.ExpiresUtc = expiresUtc;
+        pattern.By = Me;
+        pattern.Utc = DateTimeOffset.UtcNow;
+        _hub.Store.WritePatternSilence(slug, pattern);
+        Push(slug, $"pattern-silence: caducidad de {pattern.ShortId} en {slug}");
+        return true;
+    }
+
+    /// <summary>
+    /// El patrón que nació de este hallazgo, si alguno sigue vivo o caducado en el hub. Es lo que
+    /// permite que la ficha diga «origen del patrón silenciado …» en vez de dejar al hallazgo sin
+    /// explicar por qué se silenció solo.
+    /// </summary>
+    public PatternSilence? PatternOriginatedBy(string slug, Ulid findingId)
+        => _hub.Store.ListPatternSilences(slug)
+            .FirstOrDefault(p => p.SourceFindingUlid == findingId);
 
     public void Unsilence(string slug, Ulid findingId)
     {

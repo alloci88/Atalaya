@@ -78,16 +78,17 @@ public sealed class SessionCounters
     public int Disputed { get; set; }
 
     /// <summary>
-    /// Detecciones que el auditor reportó y la app NO convirtió en hallazgo porque su
-    /// <c>ruleId</c> está excluido en esta aplicación (F5.10).
+    /// Detecciones que el AUDITOR declaró haber suprimido por corresponder a un patrón silenciado
+    /// de esta aplicación (F5.12), sumadas de lo que reporta en <c>unit_done</c>.
     /// <para>
-    /// No son rechazos: el payload era válido y el auditor hizo su trabajo. Es la app la que
-    /// decide que esa regla no aplica aquí. Van por su propio contador para que el informe pueda
-    /// decir «suprimidos por regla: N» sin pintar el ⚠ de un payload malformado, y para que quien
-    /// lea el informe vea qué le está costando la exclusión.
+    /// No son rechazos ni hallazgos: el auditor hizo su trabajo y se calló lo que la app le pidió
+    /// que se callara. Van por su propio contador para que el informe pueda decir «suprimidos por
+    /// patrón: N» sin pintar el ⚠ de un payload malformado, y para que quien lea el informe vea
+    /// qué le está costando cada patrón. Ninguna supresión es invisible: el detalle por patrón
+    /// vive en <see cref="AuditSession.SuppressionsByPattern"/>.
     /// </para>
     /// </summary>
-    public int SuppressedByRule { get; set; }
+    public int SuppressedByPattern { get; set; }
 
     /// <summary>
     /// Total payloads the toolbox validated and rebotó (F3.1 Bloque 0). Uno visible aquí evita
@@ -96,6 +97,18 @@ public sealed class SessionCounters
     /// </summary>
     public int Rejected { get; set; }
 }
+
+/// <summary>
+/// Cuánto suprimió UN patrón silenciado durante una sesión (F5.12). El ejemplar viaja junto al id
+/// —y no solo el id— porque un informe tiene que seguir explicándose solo cuando el patrón ya se
+/// haya des-silenciado o reescrito.
+/// </summary>
+/// <param name="PatternId">El id corto que el auditor citó (<c>P-3</c>).</param>
+/// <param name="Exemplar">
+/// La frase del patrón, o una nota diciendo que el id no correspondía a ninguno vivo: un id
+/// inventado por el modelo se registra igual, porque un dato que desaparece es un dato sin causa.
+/// </param>
+public sealed record PatternSuppressionTally(string PatternId, string Exemplar, int Count);
 
 /// <summary>Token/cost totals for a session (§6.3).</summary>
 public sealed class UsageTotals
@@ -216,6 +229,13 @@ public sealed class AuditSession
 
     /// <summary>Per-unit token/cost breakdown (Hito 1a). Empty for legacy sessions.</summary>
     public List<UnitUsageBreakdown> UsageBreakdown { get; set; } = new();
+
+    /// <summary>
+    /// Qué patrón silenciado suprimió cuánto en esta sesión (F5.12). Vacía cuando la app no tiene
+    /// patrones o el auditor no citó ninguno. Es lo que convierte «suprimidos por patrón: 7» en un
+    /// número con causa, que es la única forma de decidir si un patrón sigue teniendo sentido.
+    /// </summary>
+    public List<PatternSuppressionTally> SuppressionsByPattern { get; set; } = new();
 
     /// <summary>Free-text notes, e.g. "no signature extractor available for stack Go".</summary>
     public List<string> Notes { get; set; } = new();

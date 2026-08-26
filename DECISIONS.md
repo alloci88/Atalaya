@@ -2995,3 +2995,217 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   eligiendo «toda la aplicación» y marcando silenciar los existentes; auditar esa clase y comprobar
   que el informe trae «Suprimidos por regla» y que ninguno renace; des-excluir desde «Gestionar» y
   comprobar que vuelven a poder reportarse.
+
+
+## F5.12 — Silencio por patrón (sustituye a F5.10-alcance-regla y cancela F5.11)
+
+### §0 — Lo que se cancela, y por qué
+
+- **D-352 — La exclusión por regla y el afinado de catálogo quedan DESCARTADOS.** F5.10 entregó dos
+  alcances de silencio: el hallazgo y la **regla del catálogo**. F5.11 iba a partir las reglas en
+  trozos más finos para que excluir una no apagase de más. Las dos se retiran a la vez porque
+  compartían el mismo error: convertían silenciar en **mantenimiento de taxonomía**. El alcance de
+  una exclusión lo decidía la granularidad del catálogo, la granularidad del catálogo la decidía
+  quien lo escribió, y afinar el alcance obligaba a reescribir el catálogo — un trabajo continuo,
+  sin dueño, que además cambia el significado de las reglas ya escritas en hallazgos antiguos. El
+  sustituto es coherente con la arquitectura que este proyecto ya eligió en F4: **las preguntas
+  semánticas las contesta el LLM en el momento de auditar**, no un diccionario mantenido a mano.
+  «¿Este hallazgo es del mismo tipo que aquel?» es exactamente una de esas preguntas.
+
+- **D-353 — El catálogo de reglas deja de ser superficie de gobernanza.** Queda como **metadato
+  informativo**: búsqueda, métricas y «qué busca» en la ficha. Su granularidad deja de importar
+  porque ya no decide qué se calla, y por eso F5.11 no se ejecuta: no hay nada que partir. El brief
+  vuelve a viajar entero (`PillarBrief.For(stack)` perdió el parámetro de exclusiones), lo que
+  además retira la maquinaria de «un pilar que se queda sin reglas desaparece» — sin exclusiones,
+  ningún pilar se vacía nunca.
+
+- **D-354 — La maquinaria de F5.10 se RECICLA, no se tira.** El commit `a3aaed3` había construido
+  las piezas correctas sobre el concepto equivocado, y casi todas mapean 1:1 al patrón: el selector
+  de alcance con su consecuencia escrita, la disciplina de gobernanza compartida con el silencio
+  (motivo, notas, autor, caducidad), el contador propio en la sesión y su sección en el informe, el
+  panel del ciclo en el Inventario, la regla de que una pasada que solo suprime queda **seca**, y la
+  procedencia escrita en el silencio del hallazgo. Lo único que cambia de sitio es **dónde ocurre la
+  supresión**: antes en la ingestión, ahora en el auditor.
+
+### §1 — El modelo
+
+- **D-355 — El alcance lo define una FRASE, no un identificador.** `PatternSilence` lleva un
+  `exemplar` («bloques catch vacíos que ocultan excepciones»), obligatorio y no vacío, más los
+  mismos campos que un silencio. La frase **es** el alcance: viaja en el prompt de cada unidad y es
+  lo único que el auditor lee para decidir. De ahí que la validación de esquema la exija —un patrón
+  sin frase produciría supresiones que nadie podría explicar— y de ahí que afinar el alcance sea
+  **reescribir una línea de texto** en vez de negociar la granularidad de un catálogo.
+
+- **D-356 — Carpeta propia, `apps/{slug}/pattern-silences/{ulid}.json`, y no dentro de
+  `silences/`.** El prompt planteaba una entrada de tipo patrón dentro de `silences/`, con un
+  `scope`. No se hizo, por tres razones concretas: (a) la clave de un silencio es el ULID del
+  **hallazgo** y la de un patrón es la suya propia, así que compartir carpeta obliga a todo lector
+  de `silences/` —`ListSilences`, `TryReadSilence` y la **migración de F4**, que enumera cada
+  fichero del directorio— a conocer un discriminador para siempre; (b) un hallazgo puede estar
+  silenciado por sí mismo **y** ser el origen de un patrón, y los dos ficheros no pueden llamarse
+  igual; (c) un fichero por patrón bajo la app es lo mismo que hacía `rule-exclusions/`, que es lo
+  que se recicla. El invariante que importaba —**por-aplicación por construcción**, el slug en la
+  ruta— se conserva intacto.
+
+- **D-357 — El id corto (`P-1`) existe para el prompt, y no es identidad histórica.** Un ULID de 26
+  caracteres por patrón en cada prompt es ruido que el modelo copia mal; un `P-3` no. Se reparte
+  como el mayor existente más uno, sobre los patrones vivos **y** caducados, sin contador en
+  `app.json`. Si se borran todos y se crea otro vuelve a ser `P-1` — y nada miente, porque **el
+  informe guarda el ejemplar al lado del id** (`PatternSuppressionTally` lleva los dos). Editar el
+  ejemplar **no** cambia el id: un informe viejo tiene que seguir nombrando lo mismo.
+
+- **D-358 — El ejemplar se propone automáticamente y se edita antes de confirmar.**
+  `ExemplarDraft.Propose` quita del título lo que ata la frase a un sitio concreto: el símbolo del
+  hallazgo, los tokens con punto o guion bajo, los que llevan mayúscula interna, y lo que va entre
+  paréntesis o comillas invertidas; con el conector que los introducía («…en `ReadCSV`» pierde
+  también el «en»). Si el recorte se lo come todo devuelve el título tal cual: una caja vacía es
+  peor punto de partida que una frase demasiado concreta. **No es matching y no pretende serlo** —
+  es un borrador, y el diálogo lo enseña en una caja de texto precisamente porque lo que se espera
+  es que el usuario lo pula. La generalización semántica de verdad («catch vacío en ReadCSV oculta
+  errores de parseo» → «bloques catch vacíos que ocultan excepciones») la hace la persona, en dos
+  segundos, mirando la frase.
+
+### §2 — Dónde vive la supresión
+
+- **D-359 — La supresión ocurre en el AUDITOR, y en la ingestión no queda ningún filtro.** El prompt
+  de cada unidad lleva los patrones vivos («TIPOS DE PROBLEMA SILENCIADOS…»), la instrucción de no
+  reportar lo que corresponda a uno de ellos, y la de declararlo en `unit_done`. `SubmitFindingCore`
+  perdió su guarda: **no hay comparación de textos, ni hashes, ni parecidos calculados**. Es el
+  anti-objetivo central de F5.12 y también el que más tentación da de romper, porque «solo un
+  `Contains`» siempre parece barato — y es exactamente la película de F5.10.
+
+- **D-360 — Coste del fallo asumido y escrito: un hallazgo de más, visible.** La supresión es juicio
+  del modelo y no es determinista. Si un día se le escapa, el hallazgo entra con normalidad y el
+  usuario lo silencia —individualmente, o afinando el ejemplar—. Ese es el peor caso, y es
+  reversible en un clic. El peor caso del camino contrario (una taxonomía que decide en silencio qué
+  no se ve) no lo descubre nadie leyendo un informe.
+
+- **D-361 — `unit_done` gana un argumento estructurado, no un texto que haya que parsear.**
+  `suppressedByPattern: [{patternId, count}]`. Es el ÚNICO canal por el que una supresión entra en
+  los contadores, así que se valida lo justo y **no se tira nada**: un `count` que no suma no se
+  cuenta pero deja su rastro en la traza de tools, y un `patternId` que no corresponde a ningún
+  patrón vivo **se cuenta igual**, marcado como «el auditor citó un patrón que no existe». Tragarse
+  cualquiera de los dos dejaría una supresión invisible, y ningún número de esta aplicación aparece
+  sin causa (D-060). Si el modelo no declara nada, la supresión existió y no se contó: coste
+  asumido, muy por debajo del de mantener una taxonomía.
+
+- **D-362 — Una pasada que solo suprime sigue quedando SECA.** Se conserva tal cual de D-338. Si una
+  supresión declarada contara como aportación, una app con un patrón y un auditor tozudo barrería la
+  unidad hasta agotar el tope de pasadas produciendo cero hallazgos. Lo que se calla no es trabajo
+  pendiente.
+
+- **D-363 — Cada patrón acumula cuánto ha suprimido.** `PatternSilence.Suppressions` y
+  `LastSuppressionUtc` se suman al cerrar la sesión, y la gestión los enseña en una frase («Ha
+  suprimido 12 detección(es), la última el …»). Es el único dato con el que se puede decidir si un
+  patrón sigue mereciendo la pena o si se puso por un susto puntual: un contador a cero tras varios
+  ciclos no es un error, pero es lo primero que hay que mirar. La escritura nunca tumba una sesión
+  ya publicada — el informe conserva el dato aunque el contador falle.
+
+### §3 — Los existentes: la pregunta que ya no existe
+
+- **D-364 — El diálogo de tres salidas de F5.10 desaparece; el hallazgo origen se silencia con el
+  patrón, sin preguntar.** Aquel diálogo ofrecía «los N hallazgos activos de esta regla», una
+  población que **solo existía porque existía la taxonomía**: sin `ruleId` como criterio no hay forma
+  no arbitraria de enumerar «los que son de este tipo», y calcularla con parecidos de texto sería
+  reintroducir por la puerta de atrás justo lo que D-359 prohíbe. Lo que sí se sabe con certeza es
+  que el hallazgo desde el que se crea el patrón **es** de ese tipo: el usuario acaba de mirarlo y
+  decir «esto no lo quiero ver más». Silenciar el tipo y dejar activo el caso que lo motivó sería
+  incoherente, así que se silencia con él, con la procedencia escrita
+  (`Silence.ByPatternExemplar`), y no se pregunta — no es una decisión aparte como lo eran los 40
+  hallazgos de D-341. Los demás se silencian uno a uno desde su ficha, o desaparecen solos en la
+  siguiente auditoría. Sobre un hallazgo **ya** silenciado el patrón no reescribe su silencio: la
+  decisión previa era suya, con su motivo y su autor.
+
+- **D-365 — La procedencia guarda el TEXTO del ejemplar, no el id del patrón.** `ByRuleExclusion`
+  llevaba un `ruleId` que seguía significando algo aunque la exclusión se retirara.
+  `ByPatternExemplar` lleva la frase porque un id colgando de un fichero que ya no existe no explica
+  nada, y la ficha tiene que poder decir «silenciado al silenciar el patrón "…"» un año después de
+  que alguien des-silenciara el patrón.
+
+- **D-366 — Des-silenciar un patrón NO des-silencia en cascada.** Igual que D-343: el ejemplar deja
+  de viajar en el prompt y el auditor vuelve a reportar problemas de ese tipo, pero cada silencio de
+  hallazgo fue una decisión registrada con autor y motivo, y algunos se habrán revisado a mano desde
+  entonces. Se levantan desde su ficha.
+
+- **D-367 — Reconciliación sin cambios en las tools.** Un hallazgo silenciado por un patrón sigue
+  siendo `Silenciado`, así que `ExistingForUnit` se lo enseña al auditor y éste se pronuncia sin
+  re-reportarlo. El prompt lo dice explícitamente: un tipo silenciado **no exime de reconciliar**.
+  No hizo falta tocar `report_verdicts`.
+
+### §4 — La interfaz
+
+- **D-368 — El ejemplar se edita EN la ficha, bajo su opción de alcance; no hay modal.** F5.10
+  abría un diálogo modal porque tenía una pregunta que hacer. Aquí no queda ninguna: la frase se ve
+  y se pule en el mismo formulario donde ya están el motivo, las notas y la caducidad, debajo del
+  radio que la activa (`SilenceScopeOption.HasExemplar`). El botón cambia de nombre con el alcance
+  («Silenciar» / «Silenciar este tipo») y `CanApplySilence` conserva la puerta separada de D-351:
+  silenciar el **tipo** de un hallazgo ya silenciado sí hace algo, y es el camino natural. Se
+  retiran `ExcludeRuleDialog`, `IExcludeRuleConfirmer` y `ExcludeRuleConfirmation`, y con ellos una
+  dependencia del constructor de `FindingDetailViewModel`.
+
+- **D-369 — La consecuencia sigue debajo de cada opción, y nombra al juez.** «Las auditorías de
+  {app} dejarán de reportar problemas de este tipo. **El juicio de similitud lo hace el auditor.**»
+  La segunda frase no es un detalle de implementación: es lo que explica por qué a veces se colará
+  un hallazgo de un tipo silenciado, y sin ella ese caso se leería como un fallo del programa.
+
+- **D-370 — La gestión vive donde vivía, y el contador cuenta lo mismo.** «Patrones silenciados: N ·
+  Gestionar» en el panel del ciclo del Inventario, por la razón de D-346: es un dato de la
+  aplicación y condiciona la lectura de todo lo que tiene al lado. Vivos y caducados se cuentan por
+  separado. La gestión lista ejemplar, origen, autor, caducidad, estado y **supresiones acumuladas**,
+  y ofrece las tres operaciones: reescribir el ejemplar, cambiar la caducidad y des-silenciar.
+  Editar la caducidad o el ejemplar te hace su autor (D-347): las dos son decisiones nuevas.
+
+- **D-371 — La ficha dice si este hallazgo fue el ORIGEN de un patrón.** «Origen del patrón
+  silenciado "…" (P-2, por …)», y si está caducado lo añade. Sin esto, un hallazgo silenciado por su
+  propio patrón parece silenciado porque sí.
+
+- **D-372 — El tope de 50 avisa, no bloquea.** La lista viaja en cada prompt de unidad y con decenas
+  de patrones sigue siendo despreciable frente al contenido de la unidad, así que el tope no es un
+  límite de coste: es el **síntoma** de que el silenciado se está usando como taxonomía, que es lo
+  que F5.12 vino a evitar. La gestión lo dice («considera consolidar…») y se sigue. Sin más
+  ingeniería.
+
+### §5 — Migración y retirada
+
+- **D-373 — `RuleExclusion` se ELIMINA; lo escrito se migra.** No queda deprecado-legible: un modelo
+  sin escritor es un artefacto de taxonomía esperando a confundir a alguien.
+  `RuleExclusionMigration` lee los ficheros legados como JSON crudo —sin necesitar el tipo—, escribe
+  un patrón por cada uno con la **descripción de la regla del catálogo** como ejemplar
+  (`"{Title}: {Look}"`; el `ruleId` si la regla ya no está), conserva motivo, notas, autor, fecha y
+  caducidad, deja la procedencia escrita en las notas, borra el origen solo después de haber escrito
+  el destino y retira el directorio vacío. Es idempotente y corre en cada apertura del hub, como la
+  de D-064; en cuanto no queda ninguna no hace nada. Un fichero ilegible se deja donde está y se
+  reporta — nunca se borra nada en silencio. Los ids cortos respetan los patrones que ya hubiera en
+  la app. Se retiran también `HubPaths.RequireSafeRuleId` y sus rutas: con la clave siendo un ULID
+  generado por la app, no hay texto del modelo que pueda acabar en una ruta.
+
+### Cobertura y verificación
+
+- **D-374 — Lo que queda probado.** Del modelo: que el patrón es un fichero por patrón bajo la app,
+  que sin ejemplar no se escribe, que los ids cortos no se repiten, que uno caducado no filtra pero
+  se sigue viendo, y que el borrador del ejemplar quita los nombres propios y cae al título cuando
+  no queda nada. Del prompt: que el ejemplar y su id llegan a la unidad con la instrucción de
+  declarar lo suprimido, que el catálogo sigue entero, que la caducidad lo retira, que sin patrones
+  el prompt es **exactamente** el de antes, y que des-silenciar lo saca del prompt siguiente. De los
+  contadores: que lo que el auditor declara se cuenta, se nombra en la sesión y sale en el informe
+  con su desglose por patrón, que sin supresiones el informe no habla del asunto, que un id
+  inventado se cuenta y se marca, que un `count` cero no se cuenta pero deja rastro, que una pasada
+  que solo suprime queda seca, y —el que protege D-359— que **un hallazgo reportado pese al patrón
+  entra con normalidad**. Del trabajo: que cada patrón acumula lo suyo entre sesiones. De la
+  gobernanza: que el hallazgo origen se silencia con su procedencia escrita, que sobre uno ya
+  silenciado no se reescribe nada, que des-silenciar no des-silencia en cascada, y que **el silencio
+  individual sigue intacto** (anti-objetivo). De la UI: las dos consecuencias escritas, el ejemplar
+  propuesto y editable, el botón que cambia de nombre, la puerta por alcance, la línea de origen del
+  patrón, y que un silencio normal sigue diciendo lo de siempre. De la gestión: listar con estado y
+  trabajo, reescribir el ejemplar sin cambiar el id y que el cambio llegue al prompt, des-silenciar,
+  caducidad, el aviso de tope, y que una app no ve los patrones de otra. De la migración: la
+  conversión con la descripción de la regla, la caducidad conservada, el `ruleId` como respaldo, el
+  directorio retirado, la idempotencia, los ids sin choque, el fichero ilegible intacto y que migrar
+  una app no toca a la de al lado. Y **el que protege el concepto entero**: silenciar en una
+  aplicación no calla a la de al lado.
+
+- **D-375 — Lo que se verifica a mano.** Silenciar como patrón un `catch` vacío de xblast desde su
+  ficha, puliendo el ejemplar propuesto; auditar una clase distinta que tenga OTRO `catch` vacío y
+  comprobar que no aparece como hallazgo y que el informe dice «Suprimidos por patrón: 1» nombrando
+  el patrón; abrir «Gestionar» y ver que el contador de trabajo del patrón subió; des-silenciarlo y
+  comprobar que en la siguiente auditoría el hallazgo reaparece.

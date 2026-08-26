@@ -101,13 +101,18 @@ public static class ReportBuilder
             sb.AppendLine($"- No verificables (marcados para revisión): {cn.NoVerificables}");
         }
 
-        // F5.10: lo que costó tener reglas excluidas en esta app. No es un aviso —la exclusión es
-        // una decisión tomada a conciencia— pero tiene que verse: un número que no sale es una
-        // decisión que nadie revisa. La sección de abajo dice qué se suprimió exactamente.
-        if (cn.SuppressedByRule > 0)
+        // F5.12: lo que costó tener tipos de problema silenciados en esta app. No es un aviso —el
+        // silencio es una decisión tomada a conciencia— pero tiene que verse: un número que no sale
+        // es una decisión que nadie revisa. El desglose por patrón va en la misma línea, y la
+        // sección de abajo dice qué patrón era cada uno.
+        if (cn.SuppressedByPattern > 0)
         {
-            sb.AppendLine($"- Suprimidos por regla: {cn.SuppressedByRule}"
-                + " (detecciones de reglas excluidas en esta aplicación; no crean hallazgo)");
+            string breakdown = session.SuppressionsByPattern.Count == 0
+                ? string.Empty
+                : " (" + string.Join(", ", session.SuppressionsByPattern
+                    .Select(t => $"patrón {t.PatternId}: {t.Count}")) + ")";
+            sb.AppendLine($"- Suprimidos por patrón: {cn.SuppressedByPattern}{breakdown}"
+                + " — el auditor no los reportó por corresponder a un tipo silenciado");
         }
 
         // F5.1b: los dos números que impiden que un desacuerdo del modelo pase por resolución.
@@ -167,22 +172,35 @@ public static class ReportBuilder
             }
         }
 
-        // F5.10: qué se suprimió, regla por regla. El contador de arriba dice cuánto; esto dice
-        // qué, que es lo único con lo que se puede decidir si la exclusión sigue teniendo sentido.
-        var suprimidos = session.Notes.Where(n => n.Contains(": suprimido por regla · ")).ToList();
-        if (suprimidos.Count > 0)
+        // F5.12: qué se suprimió, patrón por patrón. El contador de arriba dice cuánto; esto dice
+        // qué tipo de problema era, que es lo único con lo que se puede decidir si el patrón sigue
+        // teniendo sentido. El ejemplar se escribe aquí y no solo su id: el informe tiene que
+        // seguir explicándose solo cuando el patrón se des-silencie.
+        if (session.SuppressionsByPattern.Count > 0)
         {
-            sb.AppendLine("## Detecciones suprimidas por exclusión de regla");
+            sb.AppendLine("## Detecciones suprimidas por patrón silenciado");
             sb.AppendLine();
-            sb.AppendLine("El auditor reportó estos problemas y la aplicación no los registró: su regla está");
-            sb.AppendLine("excluida en esta app. No son hallazgos y no reaparecerán mientras la exclusión siga viva.");
+            sb.AppendLine("El auditor encontró estos tipos de problema y NO los reportó, porque el equipo los");
+            sb.AppendLine("silenció para esta aplicación. El juicio de que un hallazgo es «de este tipo» lo hace");
+            sb.AppendLine("el auditor mirando el código: no es un filtro automático, y por eso se cuenta aquí.");
             sb.AppendLine();
-            foreach (string n in suprimidos)
+            foreach (PatternSuppressionTally t in session.SuppressionsByPattern)
             {
-                sb.AppendLine($"- {n.Replace(": suprimido por regla · ", " · ")}");
+                sb.AppendLine($"- **{t.PatternId}** · {t.Exemplar} — {t.Count} detección(es)");
             }
 
             sb.AppendLine();
+            var porUnidad = session.Notes.Where(n => n.Contains(": suprimido por patrón · ")).ToList();
+            if (porUnidad.Count > 0)
+            {
+                sb.AppendLine("### Por unidad");
+                foreach (string n in porUnidad)
+                {
+                    sb.AppendLine($"- {n.Replace(": suprimido por patrón · ", " · ")}");
+                }
+
+                sb.AppendLine();
+            }
         }
 
         // F5.1b: qué veredictos no se aplicaron tal cual y por qué. Las notas los nombran por ULID;

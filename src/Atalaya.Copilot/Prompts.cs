@@ -14,25 +14,17 @@ public static class PillarBrief
         "- media: mantenibilidad, modernización, optimización notable.\n" +
         "- baja: estilo, micro-optimización, DX.\n";
 
-    public static string For(TechStack stack) => For(stack, RuleExclusionSet.Empty);
-
     /// <summary>
-    /// El brief SIN las reglas que esta aplicación ha excluido (F5.10). Retirarlas es más barato y
-    /// menos ruidoso que pedirlas para tirar el resultado: si un hallazgo de esa regla se va a
-    /// suprimir en la ingestión, gastar tokens en buscarlo es gastarlos dos veces.
+    /// El brief del stack, con el catálogo ENTERO.
     /// <para>
-    /// Las <b>áreas de criterio</b> NO se retiran nunca. Son juicio profesional libre, no una lista
-    /// de comprobación: quitarlas del brief sería decirle al auditor que no piense en seguridad, y
-    /// eso no es lo que pidió quien excluyó una regla. Un hallazgo <c>criterio.*</c> de un área
-    /// excluida explícitamente sí se suprime en la ingestión — la exclusión se respeta, pero como
-    /// filtro de entrada y no como venda en los ojos.
-    /// </para>
-    /// <para>
-    /// Un pilar que se queda sin reglas desaparece entero: una cabecera «PILAR MEJORAS» seguida de
-    /// nada se lee como un fallo del programa, no como una decisión.
+    /// F5.12 devolvió el catálogo a su sitio: es metadato informativo (búsqueda, métricas, «qué
+    /// busca» en la ficha) y ya no una superficie de gobernanza. Lo que esta aplicación ha decidido
+    /// no ver no se recorta de aquí sino que se le dice al auditor en el prompt de la unidad, con
+    /// la frase que lo describe — porque «¿esto es del mismo tipo que aquello?» es una pregunta
+    /// semántica, y las semánticas las contesta el modelo, no un diccionario mantenido a mano.
     /// </para>
     /// </summary>
-    public static string For(TechStack stack, RuleExclusionSet excluded)
+    public static string For(TechStack stack)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"BRIEF DE AUDITOR — stack {stack}.");
@@ -42,9 +34,7 @@ public static class PillarBrief
 
         foreach (Pillar pillar in new[] { Pillar.Errores, Pillar.Optimizacion, Pillar.Mejoras })
         {
-            var rules = RuleCatalog.Rules
-                .Where(r => r.Pillar == pillar && !excluded.Excludes(r.RuleId))
-                .ToList();
+            var rules = RuleCatalog.Rules.Where(r => r.Pillar == pillar).ToList();
             if (rules.Count == 0)
             {
                 continue;
@@ -169,23 +159,68 @@ public static class PromptComposer
           reportado en ESTA unidad, y ubicaciones dentro de la unidad que estás auditando.
         - Termina con unit_done. Su resumen DEBE empezar por la lista de miembros que has revisado,
           con el formato: "Revisados: A, B, C." Es la prueba de tu cobertura y queda en el informe.
+          Si la unidad trae PATRONES SILENCIADOS y te has callado algo por uno de ellos, declara
+          cuántos en el argumento suppressedByPattern de unit_done.
         """;
 
     public static string ComposeUnitPrompt(
         string unitPath, string unitContent, string brief, AuditMode mode,
-        IReadOnlyList<ExistingFinding>? existing = null)
+        IReadOnlyList<ExistingFinding>? existing = null,
+        PatternSilenceSet? patterns = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine(AuditorRules);
         sb.AppendLine($"MODO: {mode}. Los hallazgos nuevos nacen con la confianza que la app asigne.");
         sb.AppendLine();
         sb.AppendLine(brief);
+        sb.AppendLine(PatternBlock(patterns));
         sb.AppendLine(ExistingBlock(unitPath, existing));
         sb.AppendLine($"UNIDAD: {unitPath}");
         sb.AppendLine("CONTENIDO ÍNTEGRO DE LA UNIDAD (entre marcadores):");
         sb.AppendLine("<<<UNIT");
         sb.AppendLine(unitContent);
         sb.AppendLine("UNIT>>>");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Los TIPOS de problema que esta aplicación ha silenciado (F5.12). Una línea por patrón, con
+    /// su id corto: con decenas de patrones sigue siendo despreciable frente al contenido de la
+    /// unidad.
+    /// <para>
+    /// Aquí es donde vive la supresión. No hay filtro programático detrás —ni hashes, ni parecidos
+    /// calculados—: el juicio de «esto es de ese tipo» lo hace el auditor mientras mira el código,
+    /// que es el único momento en que se tiene delante el contexto necesario. Se le pide que lo
+    /// DECLARE en <c>unit_done</c> porque una supresión invisible es un dato sin causa, y ningún
+    /// número de esta aplicación aparece sin causa.
+    /// </para>
+    /// <para>
+    /// Cuando no hay patrones no se escribe nada: un bloque vacío solo gasta tokens y sugiere que
+    /// el modelo debería buscarse algo que callar.
+    /// </para>
+    /// </summary>
+    private static string PatternBlock(PatternSilenceSet? patterns)
+    {
+        if (patterns is null || patterns.IsEmpty)
+        {
+            return string.Empty;
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine("TIPOS DE PROBLEMA SILENCIADOS EN ESTA APLICACIÓN (decisión del equipo):");
+        foreach (PatternSilence p in patterns.Patterns)
+        {
+            sb.AppendLine($"  - [{p.ShortId}] {p.Exemplar}");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("Si un hallazgo que ibas a reportar CORRESPONDE a uno de estos tipos, NO lo reportes:");
+        sb.AppendLine("ni con submit_findings ni con add_locations. El juicio de si corresponde es tuyo y lo");
+        sb.AppendLine("haces mirando el código; no busques coincidencias literales de palabras.");
+        sb.AppendLine("Regístralo en unit_done: suppressedByPattern = [{patternId, count}], con el id EXACTO");
+        sb.AppendLine("del patrón (p. ej. P-2) y cuántas detecciones te has callado por él en esta unidad.");
+        sb.AppendLine("Un tipo silenciado NO te exime de reconciliar: si uno de los hallazgos existentes de");
+        sb.AppendLine("la lista de abajo es de ese tipo, sigue necesitando su veredicto en report_verdicts.");
         return sb.ToString();
     }
 

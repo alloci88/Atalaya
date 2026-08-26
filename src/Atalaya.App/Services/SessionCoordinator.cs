@@ -38,6 +38,13 @@ public sealed record SessionResult(Ulid SessionId, SessionCounters Counters, boo
     public int IncompleteUnits { get; init; }
 
     /// <summary>
+    /// Qué patrón silenciado suprimió cuánto (F5.12). Viaja en el resultado —y no solo en la
+    /// sesión guardada— para que la pantalla de cierre pueda nombrarlos sin releer el hub.
+    /// </summary>
+    public IReadOnlyList<PatternSuppressionTally> SuppressionsByPattern { get; init; }
+        = Array.Empty<PatternSuppressionTally>();
+
+    /// <summary>
     /// El usuario pulsó «Detener» (F5.1b). La sesión se cierra igualmente —registro, informe,
     /// claims liberados y push— con lo que se llevara auditado; simplemente no cubrió todo y no
     /// cierra ciclo.
@@ -248,22 +255,25 @@ public sealed class SessionCoordinator
         // nombrar a quién discrepa cuando dos modelos se contradicen sobre el mismo hallazgo.
         var stamp = new DetectionStamp(now, request.Mode, commit, by, Model: _agent.ModelName);
 
-        // Las reglas excluidas de ESTA app (F5.10), congeladas al arrancar. Se leen una vez y
-        // sirven para las dos mitades de la exclusión: retirarlas del brief (no pedir lo que se va
-        // a tirar) y suprimir en la ingestión lo que el auditor reporte igualmente. Que sean las
-        // mismas en las dos mitades no es un detalle: si el brief y la ingestión discreparan, el
-        // auditor gastaría tokens buscando algo que la app tira, o al revés.
-        RuleExclusionSet exclusions = RuleExclusionSet.From(_hub.Store.ListRuleExclusions(request.Slug), now);
+        // Los tipos de problema silenciados en ESTA app (F5.12), congelados al arrancar: los
+        // mismos en el prompt de todas las unidades y en la lectura de lo que el auditor declara.
+        // Uno que caduque a mitad de sesión no cambia las reglas del juego a media partida.
+        PatternSilenceSet patterns = PatternSilenceSet.From(_hub.Store.ListPatternSilences(request.Slug), now);
+
+        // Cuánto ha suprimido cada patrón en ESTA sesión, para el informe y para el contador de
+        // trabajo del propio patrón.
+        var suppressionTotals = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var suppressionExemplars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         var toolbox = new SessionToolbox(
             request.Slug, request.Mode, stamp, _ingestion, _reconciliation, _hub.Store, clone!, OnFinding,
-            exclusions);
+            patterns);
         var auditedPaths = new HashSet<string>(StringComparer.Ordinal);
         int incompleteUnits = 0;
 
         try
         {
-            string brief = PillarBrief.For(app.Stack, exclusions);
+            string brief = PillarBrief.For(app.Stack);
             foreach (InventoryUnit unit in units)
             {
                 ct.ThrowIfCancellationRequested();
@@ -318,7 +328,8 @@ public sealed class SessionCoordinator
                     IReadOnlyList<Finding> existing = _reconciliation.ExistingForUnit(request.Slug, unit.Path);
                     toolbox.BeginPass(existing);
                     var listed = existing.Select(ToExisting).ToList();
-                    string prompt = PromptComposer.ComposeUnitPrompt(unit.Path, content, brief, request.Mode, listed);
+                    string prompt = PromptComposer.ComposeUnitPrompt(
+                        unit.Path, content, brief, request.Mode, listed, patterns);
                     breakdown.PromptTokensEstimate += EstimateTokens(prompt);
 
                     budgetTripped = false;
@@ -328,7 +339,7 @@ public sealed class SessionCoordinator
                     try
                     {
                         await _agent.AuditUnitAsync(
-                            new AuditUnitRequest(unit.Path, content, prompt, app.Stack, request.Mode, listed),
+                            new AuditUnitRequest(unit.Path, content, prompt, app.Stack, request.Mode, listed, patterns),
                             toolbox, unitCts.Token);
                     }
                     catch (OperationCanceledException) when (budgetTripped && !ct.IsCancellationRequested)
@@ -369,13 +380,19 @@ public sealed class SessionCoordinator
                         session.Notes.Add($"{unit.Path} (pasada {pass}): veredicto degradado · {degraded}");
                     }
 
-                    // F5.10: lo que una exclusión de regla tiró, con nombre y apellidos. Una
+                    // F5.12: lo que el auditor declaró haberse callado, con nombre y apellidos. Una
                     // supresión que no se nombra es indistinguible de una unidad limpia, y el
                     // informe acabaría diciendo «0 nuevos» sin causa visible — el mismo agujero
                     // que D-060 cerró para los rechazos.
-                    foreach (string suppressed in toolbox.SuppressedDetections)
+                    foreach (KeyValuePair<string, int> s in toolbox.SuppressedByPattern)
                     {
-                        session.Notes.Add($"{unit.Path} (pasada {pass}): suprimido por regla · {suppressed}");
+                        string exemplar = toolbox.PatternExemplars.TryGetValue(s.Key, out string? e) ? e : s.Key;
+                        session.Notes.Add(
+                            $"{unit.Path} (pasada {pass}): suprimido por patrón · {s.Key} · {exemplar} × {s.Value}");
+                        suppressionTotals[s.Key] = suppressionTotals.TryGetValue(s.Key, out int n)
+                            ? n + s.Value
+                            : s.Value;
+                        suppressionExemplars[s.Key] = exemplar;
                     }
 
                     foreach (string entry in toolbox.ToolCallLog)
@@ -392,7 +409,7 @@ public sealed class SessionCoordinator
                     toolbox.RejectedPayloads.Clear();
                     toolbox.RejectionReasons.Clear();
                     toolbox.DegradedVerdicts.Clear();
-                    toolbox.SuppressedDetections.Clear();
+                    toolbox.SuppressedByPattern.Clear();
                     toolbox.ToolCallLog.Clear();
                 }
 
@@ -483,6 +500,11 @@ public sealed class SessionCoordinator
 
         session.EndedUtc = DateTimeOffset.UtcNow;
         session.Counters = toolbox.Counters;
+        session.SuppressionsByPattern = suppressionTotals
+            .OrderByDescending(kv => kv.Value)
+            .ThenBy(kv => kv.Key, StringComparer.Ordinal)
+            .Select(kv => new PatternSuppressionTally(kv.Key, suppressionExemplars[kv.Key], kv.Value))
+            .ToList();
         session.Interrupted = interrupted;
         if (interrupted)
         {
@@ -493,6 +515,11 @@ public sealed class SessionCoordinator
         }
 
         _hub.Store.WriteSession(session);
+
+        // F5.12: cada patrón acumula lo que ha suprimido. Es «cuánto trabaja este patrón», el
+        // único dato con el que se puede decidir si sigue mereciendo la pena o si se puso por un
+        // susto puntual. Se escribe tras la sesión y nunca la tumba.
+        AccumulatePatternWork(request.Slug, session.SuppressionsByPattern, patterns);
 
         int pending = inventory.Units.Count(u => u.State == UnitState.Pendiente);
         int large = inventory.Units.Count(u => u.State == UnitState.Grande);
@@ -524,7 +551,49 @@ public sealed class SessionCoordinator
             CycleClosed = cycleClosed,
             IncompleteUnits = incompleteUnits,
             Interrupted = interrupted,
+            SuppressionsByPattern = session.SuppressionsByPattern,
         };
+    }
+
+    /// <summary>
+    /// Suma al contador de trabajo de cada patrón lo que suprimió en esta sesión (F5.12). Los ids
+    /// que el auditor se inventó no corresponden a ningún patrón vivo y no se anotan en ninguno:
+    /// quedan en el informe, que es donde se leen.
+    /// </summary>
+    private void AccumulatePatternWork(
+        string slug, IReadOnlyList<PatternSuppressionTally> tallies, PatternSilenceSet patterns)
+    {
+        if (tallies.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            foreach (PatternSuppressionTally t in tallies)
+            {
+                PatternSilence? live = patterns.ByShortId(t.PatternId);
+                if (live is null)
+                {
+                    continue;
+                }
+
+                PatternSilence? stored = _hub.Store.TryReadPatternSilence(slug, live.Id);
+                if (stored is null)
+                {
+                    continue;
+                }
+
+                stored.Suppressions += t.Count;
+                stored.LastSuppressionUtc = DateTimeOffset.UtcNow;
+                _hub.Store.WritePatternSilence(slug, stored);
+            }
+        }
+        catch (Exception)
+        {
+            // Un contador de trabajo que no se pudo escribir no puede tumbar una sesión ya
+            // publicada. El informe conserva el dato.
+        }
     }
 
     /// <summary>

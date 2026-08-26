@@ -534,6 +534,14 @@ public sealed partial class LiveSessionService : ObservableObject
             "Siguen presentes, pero el silencio es una decisión humana y el auditor no la revoca.", _silenced);
         Line("Ubicaciones añadidas", c.LocationsAdded,
             "Un defecto sistémico es UN hallazgo con varias ubicaciones.", new List<string>());
+        // F5.12: nunca supresión invisible. Si el auditor se calló algo por un patrón silenciado,
+        // la pantalla de cierre lo dice y nombra el patrón — sin esto, una sesión con patrones se
+        // leería igual que una unidad limpia.
+        Line("Suprimidos por patrón", c.SuppressedByPattern,
+            "El auditor no los reportó por corresponder a un tipo de problema silenciado en esta aplicación.",
+            result.SuppressionsByPattern
+                .Select(t => $"{t.PatternId} · {t.Exemplar} — {t.Count} detección(es)")
+                .ToList());
         Line("Incidencias por unidad", _incidents.Count,
             "Unidades incompletas, cortadas por presupuesto o con payloads rechazados.", _incidents, warning: true);
 

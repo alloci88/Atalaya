@@ -217,16 +217,17 @@ public static class ConfidenceNames
 }
 
 /// <summary>
-/// Sobre qué recae un silencio (F5.10). Son dos preguntas distintas con la misma disciplina:
-/// «este caso concreto es un falso positivo aquí» y «esta regla no aplica a este proyecto».
+/// Sobre qué recae un silencio (F5.12). Son dos preguntas distintas con la misma disciplina:
+/// «este caso concreto es un falso positivo aquí» y «este TIPO de problema no me interesa en este
+/// proyecto».
 /// </summary>
 public enum SilenceScope
 {
     /// <summary>El comportamiento de siempre: un silencio por ULID de hallazgo.</summary>
     Hallazgo,
 
-    /// <summary>Exclusión de regla, por-aplicación. Nunca global al hub.</summary>
-    Regla,
+    /// <summary>Silencio por patrón, por-aplicación. Nunca global al hub.</summary>
+    Patron,
 }
 
 /// <summary>
@@ -257,6 +258,13 @@ public sealed partial class SilenceScopeOption : ObservableObject
 
     /// <summary>El radio marcado. Elegir avisa al view-model; desmarcar no decide nada.</summary>
     [ObservableProperty] private bool _isSelected;
+
+    /// <summary>
+    /// Si esta opción lleva debajo la caja del ejemplar (F5.12). Solo la del patrón: el alcance por
+    /// patrón se define con una FRASE, y esa frase tiene que verse y poderse pulir antes de
+    /// confirmar — es literalmente lo único que el auditor va a leer.
+    /// </summary>
+    public bool HasExemplar { get; init; }
 
     partial void OnIsSelectedChanged(bool value)
     {

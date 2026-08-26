@@ -167,7 +167,8 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
         AddLocationsResult AddLocations(string findingId, SubmitLocation[] locations)
             => toolbox.AddLocations(findingId, locations ?? Array.Empty<SubmitLocation>());
 
-        void UnitDone(string unitPath, string summary) => toolbox.UnitDone(unitPath, summary);
+        void UnitDone(string unitPath, string summary, SuppressedByPatternArgs[]? suppressedByPattern)
+            => toolbox.UnitDone(unitPath, summary, suppressedByPattern);
 
         string ReadSignatures(string path) => toolbox.ReadSignatures(path);
 
@@ -189,7 +190,12 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
             + "el MISMO defecto aparece en varios sitios: un defecto sistémico es UN hallazgo con N "
             + "ubicaciones, no N hallazgos. findingId debe ser un ULID de la lista de existentes o de uno "
             + "que hayas reportado en esta unidad.");
-        AddTool(config, UnitDone, "unit_done", "Cierra la unidad en curso con un resumen.", terminal: true);
+        AddTool(config, UnitDone, "unit_done",
+            "Cierra la unidad en curso con un resumen. Si el prompt trae TIPOS DE PROBLEMA SILENCIADOS y "
+            + "te has callado alguna detección por uno de ellos, declara cuántas en suppressedByPattern: "
+            + "un array de {patternId (el id EXACTO del prompt, p. ej. P-2), count}. Déjalo vacío si no te "
+            + "has callado nada.",
+            terminal: true);
         AddTool(config, ReadSignatures, "read_signatures",
             "Devuelve las firmas (no cuerpos) de las dependencias directas de la unidad.");
 

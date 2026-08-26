@@ -57,12 +57,6 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
 
     private readonly LinkCloneFlow _linkFlow;
 
-    /// <summary>
-    /// Quién hace la pregunta del alcance «toda la aplicación» (F5.10): qué se hace con los
-    /// hallazgos que ya existen de esa regla. No se puede excluir sin pasar por aquí.
-    /// </summary>
-    private readonly IExcludeRuleConfirmer _excludeConfirmer;
-
     public FindingDetailViewModel(
         HubContext hub,
         GovernanceService governance,
@@ -72,15 +66,13 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         ToastCenter toasts,
         CloneLinkService links,
         LinkCloneFlow linkFlow,
-        IExcludeRuleConfirmer excludeConfirmer,
         AnchorRepair? anchors = null)
     {
         _hub = hub;
-        _excludeConfirmer = excludeConfirmer;
         ScopeOptions = new[]
         {
             new SilenceScopeOption(SilenceScope.Hallazgo, scope => SilenceScope = scope) { IsSelected = true },
-            new SilenceScopeOption(SilenceScope.Regla, scope => SilenceScope = scope),
+            new SilenceScopeOption(SilenceScope.Patron, scope => SilenceScope = scope) { HasExemplar = true },
         };
         RefreshScopeOptions();
         _governance = governance;
@@ -125,9 +117,9 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
 
     // Governance inputs
     /// <summary>
-    /// El alcance del silencio (F5.10). Arranca siempre en «solo este hallazgo»: es el gesto de
-    /// todos los días, y el que no puede equivocarse por inercia. Excluir una regla entera se
-    /// elige a propósito.
+    /// El alcance del silencio (F5.12). Arranca siempre en «solo este hallazgo»: es el gesto de
+    /// todos los días, y el que no puede equivocarse por inercia. Callar un tipo entero de problema
+    /// se elige a propósito.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SilenceActionLabel))]
@@ -228,13 +220,13 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     public bool CanSilence => Status != FindingStatus.Silenciado;
 
     /// <summary>
-    /// Si el botón de la sección hace algo (F5.10). Los dos alcances tienen puertas distintas:
-    /// silenciar un hallazgo ya silenciado no hace nada, pero <b>excluir su regla sí</b> — es el
+    /// Si el botón de la sección hace algo (F5.12). Los dos alcances tienen puertas distintas:
+    /// silenciar un hallazgo ya silenciado no hace nada, pero <b>silenciar su tipo sí</b> — es el
     /// camino natural, de hecho. Alguien silencia un falso positivo, ve que se repite por toda la
-    /// aplicación y vuelve a esa misma ficha a apagar la regla entera; hasta aquí se encontraba con
+    /// aplicación y vuelve a esa misma ficha a callar el tipo entero; hasta aquí se encontraba con
     /// el selector de alcance pintado y ningún botón que pulsar.
     /// </summary>
-    public bool CanApplySilence => SilenceScope == SilenceScope.Regla || CanSilence;
+    public bool CanApplySilence => SilenceScope == SilenceScope.Patron || CanSilence;
 
     /// <summary>«Reabrir» aparece SOLO si está resuelto (F5.5 §4).</summary>
     public bool CanReopen => Status == FindingStatus.Resuelto;
@@ -262,13 +254,13 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
                 ? "permanente"
                 : $"caduca el {silence.ExpiresUtc.Value.ToLocalTime():dd/MM/yyyy}";
 
-            // F5.10: un silencio nacido de una exclusión de regla lo DICE. Sin esto, la ficha
-            // afirmaba que alguien había mirado este caso concreto y decidido sobre él, cuando lo
-            // que hubo fue una decisión sobre la regla entera — y de ahí salen las dos preguntas
-            // que nadie podría contestar: por qué está silenciado y a quién preguntarle.
-            if (!string.IsNullOrEmpty(silence.ByRuleExclusion))
+            // F5.12: un silencio nacido de un patrón lo DICE. Sin esto, la ficha afirmaba que
+            // alguien había mirado este caso concreto y decidido sobre él, cuando lo que hubo fue
+            // una decisión sobre un tipo de problema entero — y de ahí salen las dos preguntas que
+            // nadie podría contestar: por qué está silenciado y a quién preguntarle.
+            if (!string.IsNullOrEmpty(silence.ByPatternExemplar))
             {
-                return $"Silenciado por exclusión de regla ({silence.ByRuleExclusion}, por {silence.By})"
+                return $"Silenciado al silenciar el patrón «{silence.ByPatternExemplar}» (por {silence.By})"
                     + $" · {SilenceReasonNames.Display(silence.Reason)} · {expiry}";
             }
 
@@ -278,7 +270,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
 
     public bool HasSilence => SilenceSummary.Length > 0;
 
-    // ------------------------------------------------------------------ F5.10 · alcance
+    // ------------------------------------------------------------------ F5.12 · alcance
 
     /// <summary>El nombre de la app del hallazgo: lo que se lee en el texto de consecuencia.</summary>
     public string AppName
@@ -290,8 +282,42 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         }
     }
 
-    /// <summary>La regla del hallazgo abierto. Es lo que se excluiría con el alcance ampliado.</summary>
+    /// <summary>La regla del hallazgo abierto. Metadato informativo: ya no es gobernanza (F5.12).</summary>
     public string RuleId => Finding?.RuleId ?? string.Empty;
+
+    /// <summary>
+    /// La frase que definirá el alcance del patrón (F5.12). Se propone desde el título del hallazgo
+    /// —sin los nombres propios del caso— y es EDITABLE antes de confirmar: es lo único que el
+    /// auditor va a leer, así que quien silencia tiene que ver y poder pulir exactamente lo que se
+    /// va a dejar de reportar.
+    /// </summary>
+    [ObservableProperty] private string _patternExemplar = string.Empty;
+
+    /// <summary>
+    /// El patrón que nació de ESTE hallazgo, si lo hay (F5.12). Escrito en la ficha para que un
+    /// hallazgo silenciado por su propio patrón no parezca silenciado porque sí.
+    /// </summary>
+    public string PatternOriginSummary
+    {
+        get
+        {
+            if (Finding is null || Slug.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            PatternSilence? pattern = _governance.PatternOriginatedBy(Slug, Finding.Id);
+            if (pattern is null)
+            {
+                return string.Empty;
+            }
+
+            string state = pattern.IsExpiredAt(DateTimeOffset.UtcNow) ? " — caducado, ya no suprime" : string.Empty;
+            return $"Origen del patrón silenciado «{pattern.Exemplar}» ({pattern.ShortId}, por {pattern.By}){state}";
+        }
+    }
+
+    public bool HasPatternOrigin => PatternOriginSummary.Length > 0;
 
     /// <summary>
     /// Las dos opciones de alcance, cada una con la frase que dice QUÉ PASA si se elige. La
@@ -301,28 +327,32 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     public IReadOnlyList<SilenceScopeOption> ScopeOptions { get; }
 
     /// <summary>
-    /// Re-escribe los textos de las opciones con la regla y la app del hallazgo abierto. Se
-    /// re-escriben en vez de reconstruirse para no perder el radio marcado en cada recarga.
+    /// Re-escribe los textos de las opciones con la app del hallazgo abierto. Se re-escriben en vez
+    /// de reconstruirse para no perder el radio marcado en cada recarga.
     /// </summary>
     private void RefreshScopeOptions()
     {
         SilenceScopeOption solo = ScopeOptions[0];
         solo.Label = "Solo este hallazgo";
-        solo.Consequence = "Este caso concreto deja de contar. La regla sigue vigente: otras "
-            + "auditorías pueden volver a reportarla en otros sitios.";
+        solo.Consequence = "Este caso concreto deja de contar. Otras auditorías pueden volver a "
+            + "reportar problemas parecidos en otros sitios.";
 
-        SilenceScopeOption regla = ScopeOptions[1];
-        regla.Label = RuleId.Length == 0
-            ? "Esta regla en toda la aplicación"
-            : $"Esta regla en toda la aplicación ({RuleId})";
-        regla.Consequence = RuleId.Length == 0
-            ? "Ninguna auditoría de esta aplicación volverá a reportar esta regla."
-            : $"Ninguna auditoría de {AppName} volverá a reportar {RuleId}.";
+        SilenceScopeOption patron = ScopeOptions[1];
+        patron.Label = "Este tipo de problema en toda la aplicación";
+        patron.Consequence = $"Las auditorías de {AppName} dejarán de reportar problemas de este tipo. "
+            + "El juicio de similitud lo hace el auditor.";
     }
+
+    /// <summary>
+    /// El borrador de la frase, generalizado desde el título del hallazgo. Vive aquí y no en el
+    /// XAML porque es lo que hay que poder comprobar sin abrir una ventana.
+    /// </summary>
+    private string ProposeExemplar()
+        => Finding is null ? string.Empty : ExemplarDraft.Propose(Finding.Title, Finding.Symbol);
 
     /// <summary>El botón cambia de nombre con el alcance: no hace lo mismo en los dos.</summary>
     public string SilenceActionLabel
-        => SilenceScope == SilenceScope.Regla ? "Excluir la regla" : "Silenciar";
+        => SilenceScope == SilenceScope.Patron ? "Silenciar este tipo" : "Silenciar";
 
     public ObservableCollection<HistoryRow> History { get; } = new();
     public ObservableCollection<CommentRow> Comments { get; } = new();
@@ -364,9 +394,14 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanResolveManually));
         OnPropertyChanged(nameof(SilenceSummary));
         OnPropertyChanged(nameof(HasSilence));
+        OnPropertyChanged(nameof(PatternOriginSummary));
+        OnPropertyChanged(nameof(HasPatternOrigin));
         OnPropertyChanged(nameof(AppName));
         OnPropertyChanged(nameof(RuleId));
         RefreshScopeOptions();
+        // El borrador del ejemplar se re-propone en cada carga: pertenece al hallazgo abierto, y
+        // arrastrar el de la ficha anterior sería peor que una caja vacía.
+        PatternExemplar = ProposeExemplar();
         OnPropertyChanged(nameof(Title));
     }
 
@@ -539,11 +574,11 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         DateTimeOffset? expiry = SilenceExpiryDays > 0 ? DateTimeOffset.UtcNow.AddDays(SilenceExpiryDays) : null;
         string? notes = string.IsNullOrWhiteSpace(SilenceNotes) ? null : SilenceNotes;
 
-        // F5.10: el mismo formulario, dos alcances. Lo que cambia no es el motivo ni la caducidad
+        // F5.12: el mismo formulario, dos alcances. Lo que cambia no es el motivo ni la caducidad
         // —la disciplina de gobernanza es la misma— sino sobre qué recae la decisión.
-        if (SilenceScope == SilenceScope.Regla)
+        if (SilenceScope == SilenceScope.Patron)
         {
-            ExcludeRule(notes, expiry);
+            SilencePattern(notes, expiry);
             return;
         }
 
@@ -555,36 +590,28 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// El alcance ampliado (F5.10): la regla deja de aplicar a ESTA aplicación. Antes de escribir
-    /// nada se pregunta qué hacer con los hallazgos que ya existen — nunca se decide por omisión.
+    /// El alcance ampliado (F5.12): este TIPO de problema deja de reportarse en ESTA aplicación.
+    /// No hay diálogo de confirmación porque no queda ninguna pregunta que hacer: la frase se ha
+    /// visto y editado aquí mismo, y el hallazgo origen se silencia con el patrón porque es, por
+    /// construcción, del tipo que se acaba de callar.
     /// </summary>
-    private void ExcludeRule(string? notes, DateTimeOffset? expiry)
+    private void SilencePattern(string? notes, DateTimeOffset? expiry)
     {
-        string rule = Finding!.RuleId;
-        int active = _governance.CountActiveWithRule(Slug, rule);
-
-        // Sin hallazgos activos no hay nada que preguntar: la pregunta es qué hacer con ELLOS.
-        // Un diálogo que dice «hay 0 hallazgos, ¿los silencio?» es un clic sin contenido.
-        ExcludeRuleChoice choice = active == 0
-            ? ExcludeRuleChoice.ExcludeOnly
-            : _excludeConfirmer.Ask(new ExcludeRuleConfirmation(rule, AppName, active));
-
-        if (choice == ExcludeRuleChoice.Cancel)
+        string exemplar = PatternExemplar.Trim();
+        if (exemplar.Length == 0)
         {
-            _toasts.Show("Exclusión cancelada: no se ha tocado nada.");
+            _toasts.Show("Escribe la frase que describe el tipo de problema: es lo que leerá el auditor.");
             return;
         }
 
-        GovernanceService.RuleExclusionResult result = _governance.ExcludeRule(
-            Slug, rule, SilenceReason, notes, expiry,
-            silenceExisting: choice == ExcludeRuleChoice.ExcludeAndSilence);
+        GovernanceService.PatternSilenceResult result =
+            _governance.SilencePattern(Slug, Id, exemplar, SilenceReason, notes, expiry);
 
         string until = expiry is null
             ? "de forma permanente"
             : $"hasta el {expiry.Value.ToLocalTime():dd/MM/yyyy}";
-        _toasts.Show(result.SilencedFindings > 0
-            ? $"Regla {rule} excluida en {AppName} {until} · {result.SilencedFindings} hallazgo(s) silenciado(s)."
-            : $"Regla {rule} excluida en {AppName} {until}. Los hallazgos que ya existían siguen activos.");
+        _toasts.Show($"Patrón {result.Pattern.ShortId} silenciado en {AppName} {until}: «{exemplar}»."
+            + (result.SilencedSource ? " Este hallazgo queda silenciado." : ""));
         Reload(Id);
     }
 

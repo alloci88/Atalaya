@@ -31,16 +31,21 @@ public sealed class Silence
     public DateTimeOffset? ExpiresUtc { get; set; }
 
     /// <summary>
-    /// De dónde vino este silencio (F5.10). Null = lo silenció una persona sobre ESTE hallazgo, que
-    /// es la vía de siempre. Con valor = lleva el <c>ruleId</c> de la exclusión de regla que lo
-    /// silenció en masa, para que la ficha pueda decir «silenciado por exclusión de regla» en vez
-    /// de dejar creer que alguien miró este caso concreto y decidió sobre él.
+    /// De dónde vino este silencio (F5.12). Null = lo silenció una persona sobre ESTE hallazgo, que
+    /// es la vía de siempre. Con valor = lleva el <b>ejemplar</b> del patrón que lo silenció de
+    /// paso, para que la ficha pueda decir «silenciado al silenciar el patrón "…"» en vez de dejar
+    /// creer que alguien miró este caso concreto y decidió sobre él.
     /// <para>
-    /// Es procedencia, no semántica: un silencio nacido de una exclusión suprime, caduca y se
-    /// levanta exactamente igual que cualquier otro.
+    /// Guarda el TEXTO del ejemplar y no el id del patrón a propósito: la procedencia tiene que
+    /// seguir siendo legible cuando el patrón se des-silencie o se reescriba, y un id colgando de
+    /// un fichero que ya no existe no explica nada.
+    /// </para>
+    /// <para>
+    /// Es procedencia, no semántica: un silencio nacido de un patrón suprime, caduca y se levanta
+    /// exactamente igual que cualquier otro.
     /// </para>
     /// </summary>
-    public string? ByRuleExclusion { get; set; }
+    public string? ByPatternExemplar { get; set; }
 
     /// <summary>A silence is live (suppresses) until its expiry, if any.</summary>
     public bool IsLiveAt(DateTimeOffset now) => ExpiresUtc is null || ExpiresUtc.Value > now;

@@ -28,11 +28,12 @@ public sealed class SessionToolbox : IAuditToolbox
     private readonly Action<Finding, string>? _onFinding;
 
     /// <summary>
-    /// Las reglas que esta aplicación ha excluido (F5.10), congeladas al arrancar la sesión. Es la
-    /// aplicación ESTRUCTURAL de la exclusión: aunque el auditor reporte un hallazgo de una regla
-    /// excluida, aquí no entra.
+    /// Los tipos de problema silenciados en esta aplicación (F5.12), congelados al arrancar la
+    /// sesión. Aquí NO filtran nada: la supresión ocurre en el auditor, que los ve en el prompt y
+    /// decide. Sirven para lo único que la app puede hacer con ellos sin reinventar el matching
+    /// semántico — entender lo que el auditor declara en <c>unit_done</c> y ponerle nombre.
     /// </summary>
-    private readonly RuleExclusionSet _exclusions;
+    private readonly PatternSilenceSet _patterns;
 
     /// <summary>Hallazgos existentes mostrados al auditor en la unidad en curso, por ULID.</summary>
     private readonly Dictionary<string, Finding> _listed = new(StringComparer.Ordinal);
@@ -74,10 +75,10 @@ public sealed class SessionToolbox : IAuditToolbox
         string slug, AuditMode mode, DetectionStamp stamp,
         FindingIngestionService ingestion, ReconciliationService reconciliation, Storage.HubStore hub,
         string clonePath, Action<Finding, string>? onFinding = null,
-        RuleExclusionSet? exclusions = null)
+        PatternSilenceSet? patterns = null)
     {
         _hub = hub;
-        _exclusions = exclusions ?? RuleExclusionSet.Empty;
+        _patterns = patterns ?? PatternSilenceSet.Empty;
         _slug = slug;
         _mode = mode;
         _stamp = stamp;
@@ -117,12 +118,21 @@ public sealed class SessionToolbox : IAuditToolbox
     public List<string> DegradedVerdicts { get; } = new();
 
     /// <summary>
-    /// Lo que el auditor reportó y una exclusión de regla tiró (F5.10), con su regla y su título.
-    /// Tiene canal propio por la misma razón que <see cref="DegradedVerdicts"/>: el payload era
-    /// bueno, así que no puede contar como rechazo, y desaparecer sin dejar rastro sería peor —
-    /// nadie podría saber qué se está perdiendo por tener la regla excluida.
+    /// Lo que el auditor declara haberse callado por patrón en la pasada en curso (F5.12), por id
+    /// corto citado. Tiene canal propio por la misma razón que <see cref="DegradedVerdicts"/>: no
+    /// es un rechazo —el auditor hizo lo que se le pidió— y desaparecer sin dejar rastro sería
+    /// peor, porque nadie podría saber qué le está costando cada patrón.
+    /// <para>
+    /// La clave es el id que el auditor CITÓ, viva o no: un id inventado por el modelo se registra
+    /// igual y el informe lo dice. Un dato que se traga la app es un dato sin causa.
+    /// </para>
     /// </summary>
-    public List<string> SuppressedDetections { get; } = new();
+    public Dictionary<string, int> SuppressedByPattern { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>La frase del patrón detrás de cada id citado; el aviso cuando el id no existía.</summary>
+    public IReadOnlyDictionary<string, string> PatternExemplars => _exemplars;
+
+    private readonly Dictionary<string, string> _exemplars = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>How many <c>submit_finding(s)</c> invocations landed in this unit (F3 Hito 1c).</summary>
     public int SubmitInvocations { get; private set; }
@@ -187,10 +197,11 @@ public sealed class SessionToolbox : IAuditToolbox
         RejectedPayloads.Clear();
         RejectionReasons.Clear();
         DegradedVerdicts.Clear();
-        SuppressedDetections.Clear();
+        SuppressedByPattern.Clear();
+        _exemplars.Clear();
         LastUnitSummary = null;
         PassNew = PassConfirmed = PassResolved = PassNonVerifiable = PassRejected = 0;
-        PassSuppressedByRule = 0;
+        PassSuppressedByPattern = 0;
         PassLocationsAdded = 0;
         PassHasNonPresentVerdict = false;
     }
@@ -206,8 +217,8 @@ public sealed class SessionToolbox : IAuditToolbox
 
     public int PassRejected { get; private set; }
 
-    /// <summary>Detecciones que la pasada reportó y una exclusión de regla suprimió (F5.10).</summary>
-    public int PassSuppressedByRule { get; private set; }
+    /// <summary>Detecciones que el auditor declaró haberse callado por patrón en la pasada (F5.12).</summary>
+    public int PassSuppressedByPattern { get; private set; }
 
     /// <summary>
     /// Ubicaciones añadidas a hallazgos existentes en la pasada (F4.1). Cuentan como rendimiento:
@@ -483,15 +494,11 @@ public sealed class SessionToolbox : IAuditToolbox
             return Reject($"ruleId desconocido '{args.RuleId}'. Usa el catálogo o criterio.<área>.", args);
         }
 
-        // 2. Regla excluida en ESTA aplicación (F5.10): la detección se registra y no entra.
-        //    Va antes de cualquier otra validación de forma porque el resultado sería el mismo con
-        //    el payload perfecto: preguntarse si el pillar está bien escrito en algo que se va a
-        //    tirar es trabajo para nadie. No es un rechazo — el auditor no hizo nada mal.
-        if (_exclusions.Excludes(args.RuleId))
-        {
-            return SuppressByRule(args);
-        }
-
+        // F5.12: aquí NO se filtra por patrón. Un hallazgo que corresponde a un tipo silenciado
+        // no debería haber llegado —el auditor lo tenía en su prompt y se le pidió callarlo— y si
+        // llega, entra con normalidad y el usuario lo silencia. Reintroducir un filtro programático
+        // significaría decidir por parecido de texto qué es «del mismo tipo», que es exactamente la
+        // película que F5.12 vino a no repetir. Coste del fallo: un hallazgo de más, visible.
         if (!TryParsePillar(args.Pillar, out Pillar pillar))
         {
             return Reject($"pillar inválido '{args.Pillar}'.", args);
@@ -550,27 +557,6 @@ public sealed class SessionToolbox : IAuditToolbox
         return new Location(path, LocationAnchor.ResolveOnDisk(_clonePath, path, line, hash), hash);
     }
 
-    /// <summary>
-    /// Detección suprimida por exclusión de regla (F5.10). No crea ni reactiva hallazgo, no toca
-    /// la confianza de nada y NO cuenta como rechazo. Al auditor se le devuelve el motivo con su
-    /// nombre para que no insista con la misma regla en la pasada siguiente.
-    /// <para>
-    /// Tampoco marca la pasada como no-seca: si lo hiciera, una app con una regla excluida y un
-    /// auditor tozudo barrería la unidad hasta agotar el tope de pasadas sin producir nada. Lo que
-    /// se suprime no es trabajo pendiente.
-    /// </para>
-    /// </summary>
-    private SubmitFindingResult SuppressByRule(SubmitFindingArgs args)
-    {
-        string title = string.IsNullOrWhiteSpace(args.Title) ? "(sin título)" : args.Title;
-        SuppressedDetections.Add($"{args.RuleId} · {Truncate(title, 80)}");
-        Counters.SuppressedByRule++;
-        PassSuppressedByRule++;
-        return new SubmitFindingResult(false, Error:
-            $"regla excluida en esta aplicación: '{args.RuleId}'. No se registran hallazgos de esta regla; "
-            + "no vuelvas a reportarla.");
-    }
-
     private SubmitFindingResult Reject(string reason, SubmitFindingArgs? args)
     {
         string title = args?.Title is { Length: > 0 } t ? t : "(sin título)";
@@ -581,11 +567,55 @@ public sealed class SessionToolbox : IAuditToolbox
         return new SubmitFindingResult(false, Error: reason);
     }
 
-    public void UnitDone(string unitPath, string summary)
+    /// <summary>
+    /// Cierra la pasada y recoge lo que el auditor declara haberse callado por patrón (F5.12).
+    /// <para>
+    /// Es el único canal de la supresión por patrón, así que se valida lo justo y no se tira nada:
+    /// un <c>count</c> que no suma no se cuenta (pero se registra que vino), y un id que no
+    /// corresponde a ningún patrón vivo se cuenta igual, marcado como desconocido. Tragarse
+    /// cualquiera de los dos dejaría un número sin causa, que es lo que esta aplicación no hace.
+    /// </para>
+    /// <para>
+    /// Y NO marca la pasada como no-seca: si una supresión declarada contara como aportación, una
+    /// app con un patrón y un auditor tozudo barrería la unidad hasta agotar el tope de pasadas
+    /// produciendo cero hallazgos. Lo que se calla no es trabajo pendiente.
+    /// </para>
+    /// </summary>
+    public void UnitDone(string unitPath, string summary, SuppressedByPatternArgs[]? suppressedByPattern = null)
     {
         ToolCallCount++;
-        ToolCallLog.Add($"unit_done · unit='{unitPath}' summary='{Truncate(summary, 80)}'");
+        int declared = suppressedByPattern?.Length ?? 0;
+        ToolCallLog.Add($"unit_done · unit='{unitPath}' summary='{Truncate(summary, 80)}'"
+            + (declared > 0 ? $" suprimidos={declared} patrón(es)" : ""));
         LastUnitSummary = summary;
+
+        foreach (SuppressedByPatternArgs s in suppressedByPattern ?? Array.Empty<SuppressedByPatternArgs>())
+        {
+            RecordSuppression(s);
+        }
+    }
+
+    private void RecordSuppression(SuppressedByPatternArgs? s)
+    {
+        string cited = (s?.PatternId ?? string.Empty).Trim();
+        if (cited.Length == 0)
+        {
+            ToolCallLog.Add("unit_done · supresión sin patternId, ignorada");
+            return;
+        }
+
+        if (s!.Count <= 0)
+        {
+            ToolCallLog.Add($"unit_done · supresión de '{cited}' con count={s.Count}, ignorada");
+            return;
+        }
+
+        PatternSilence? pattern = _patterns.ByShortId(cited);
+        string key = pattern?.ShortId ?? cited;
+        SuppressedByPattern[key] = SuppressedByPattern.TryGetValue(key, out int n) ? n + s.Count : s.Count;
+        _exemplars[key] = pattern?.Exemplar ?? "(el auditor citó un patrón que no existe en esta aplicación)";
+        Counters.SuppressedByPattern += s.Count;
+        PassSuppressedByPattern += s.Count;
     }
 
     private static string Truncate(string? s, int max)
