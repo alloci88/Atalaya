@@ -143,19 +143,22 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
 
-                                <!-- IsThreeState="False": el clic solo marca o desmarca, pero un
-                                     valor nulo puesto desde el view-model se sigue pintando como
-                                     indeterminado. QUÉ significa ese clic lo decide ModuleNode, no
-                                     WPF: desde indeterminado WPF lo mandaría a «marcado» y un gesto
-                                     de deshacer se llevaría el módulo entero a la selección
-                                     (incidente del 2026-08-26, F5.13). Ahora desde indeterminado
-                                     LIMPIA. -->
+                                <!-- La casilla es de DOS estados a propósito (F5.13): marcada si y
+                                     solo si TODAS las unidades del módulo lo están. La plantilla de
+                                     WPF-UI pinta el indeterminado con el MISMO relleno de acento
+                                     que el marcado —solo cambia el glifo, un guion en vez de la
+                                     marca—, así que enviarle un nulo hacía que marcar UNA clase
+                                     pareciera marcar el módulo entero. La selección parcial se dice
+                                     con palabras, al lado del nombre. El clic llega por comando
+                                     porque IsChecked ya solo entra, no sale. -->
                                 <CheckBox Grid.Column="0"
-                                          IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                          IsChecked="{Binding IsAllSelected, Mode=OneWay}"
                                           IsThreeState="False"
+                                          Command="{Binding DataContext.ToggleModuleCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                          CommandParameter="{Binding}"
                                           VerticalAlignment="Center"
                                           Margin="0,0,2,0"
-                                          ToolTip="Marca el módulo entero si no hay nada marcado; si hay algo marcado, lo quita." />
+                                          ToolTip="Marca o quita todas las unidades de este módulo." />
 
                                 <Button Grid.Column="1"
                                         Style="{StaticResource ModuleHeaderLink}"
@@ -170,6 +173,14 @@
                                                    FontWeight="SemiBold"
                                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                    VerticalAlignment="Center" />
+                                        <!-- Lo que el guion del tri-estado nunca llegó a decir: cuántas. -->
+                                        <Border CornerRadius="8" Padding="7,1" Margin="8,0,0,0"
+                                                VerticalAlignment="Center"
+                                                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                                Visibility="{Binding HasSelectionNote, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock Text="{Binding SelectionNote}" FontSize="11"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                        </Border>
                                     </StackPanel>
                                 </Button>
                             </Grid>

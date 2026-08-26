@@ -98,19 +98,12 @@ public sealed partial class ModuleNode : ObservableObject, ICollapsibleGroup
     internal Action<ModuleNode, bool>? SelectionRequested { get; set; }
 
     /// <summary>
-    /// Un clic del usuario sobre la casilla del módulo.
+    /// Un clic sobre la casilla del módulo, o el mismo gesto ejecutado desde código.
     /// <para>
-    /// <b>Desde indeterminado, un clic LIMPIA.</b> Es la corrección del incidente: la casilla se
-    /// declaraba <c>IsThreeState="False"</c> mientras el view-model le empujaba <c>null</c>, y
-    /// <c>ToggleButton.OnToggle</c> de WPF, con tres estados desactivados, manda un clic desde
-    /// indeterminado directo a <b>marcado</b>. Es decir: marcabas una clase, el módulo se pintaba
-    /// como indeterminado —que a ojo se lee «marcado»—, pulsabas para deshacerlo y te llevabas el
-    /// módulo ENTERO a la selección. Un gesto de corrección que multiplicaba el gasto.
-    /// </para>
-    /// <para>
-    /// La regla ahora se lee sola: si hay algo marcado en el módulo, el clic lo quita; si no hay
-    /// nada, lo marca entero. La dirección segura es la de quitar, y además es la que espera quien
-    /// pulsa para deshacer.
+    /// La regla es la de cualquier casilla de dos estados: si no está todo marcado, marca el módulo
+    /// entero; si lo está, lo limpia. Puede leerse directamente del dibujo, que es lo que hace que
+    /// no sorprenda — y lo que no ocurría cuando la casilla mentía sobre su estado (ver
+    /// <see cref="IsAllSelected"/>).
     /// </para>
     /// </summary>
     partial void OnIsCheckedChanged(bool? value)
@@ -120,22 +113,68 @@ public sealed partial class ModuleNode : ObservableObject, ICollapsibleGroup
             return;   // lo puso RefreshCheckState: reflejar la selección no puede cambiarla
         }
 
-        SelectionRequested?.Invoke(this, Units.All(u => !u.IsSelected));
+        RequestToggle();
     }
 
+    /// <summary>El gesto, sea cual sea la vía por la que llegue. Una sola regla, un solo sitio.</summary>
+    internal void RequestToggle() => SelectionRequested?.Invoke(this, !IsAllSelected);
+
     /// <summary>
-    /// Recalcula el tri-estado a partir de las unidades. Silencioso: refrescar la casilla no puede
-    /// volver a marcar ni desmarcar nada, o el módulo entero se seleccionaría solo.
+    /// <b>Lo que pinta la casilla del módulo</b>: marcada si y solo si TODAS sus unidades lo están.
     /// <para>
-    /// Con selección parcial el estado es <c>null</c> — <b>nunca</b> <c>true</c>. Un grupo marcado
-    /// significa «todas sus unidades están marcadas» y nada más; que lo pareciera con una sola
-    /// hija marcada es lo que hacía creer al usuario que había seleccionado un módulo entero.
+    /// La casilla NO puede recibir el tri-estado. La plantilla de WPF-UI 3.0.5 resuelve
+    /// <c>IsChecked = null</c> y <c>IsChecked = true</c> con el <b>mismo</b> fondo
+    /// (<c>CheckBoxCheckBackgroundFillChecked</c>, el relleno de acento); lo único que cambia es el
+    /// glifo de dentro — un guion (<c>Subtract16</c>) en vez de la marca (<c>Checkmark48</c>)—. En
+    /// una lista densa eso es una casilla azul maciza idéntica a una marcada, y por eso marcar UNA
+    /// clase parecía marcar el módulo entero. La selección parcial se dice ahora con palabras
+    /// (<see cref="SelectionNote"/>), que no se pueden confundir con un relleno.
+    /// </para>
+    /// </summary>
+    public bool IsAllSelected => Units.Count > 0 && Units.All(u => u.IsSelected);
+
+    /// <summary>Cuántas unidades del módulo están marcadas ahora mismo.</summary>
+    public int SelectedUnits => Units.Count(u => u.IsSelected);
+
+    /// <summary>
+    /// La selección parcial, escrita: «3 de 12 seleccionadas». Vacía cuando no hay nada marcado o
+    /// cuando está todo —ahí la casilla ya lo dice sin ambigüedad—. Es la mitad de información que
+    /// el guion del tri-estado pretendía dar y nunca daba: cuántas.
+    /// </summary>
+    public string SelectionNote
+    {
+        get
+        {
+            int selected = SelectedUnits;
+            return selected == 0 || selected == Units.Count
+                ? string.Empty
+                : $"{selected} de {Units.Count} seleccionadas";
+        }
+    }
+
+    public bool HasSelectionNote => SelectionNote.Length > 0;
+
+    /// <summary>
+    /// Recalcula el estado del módulo a partir de sus unidades. Silencioso: reflejar la selección
+    /// no puede volver a marcar ni desmarcar nada, o el módulo entero se seleccionaría solo.
+    /// <para>
+    /// <see cref="IsChecked"/> conserva el tri-estado porque es la SEMÁNTICA correcta y es lo que
+    /// se puede interrogar; lo que ya no hace es llegar a la casilla, que solo entiende de marcado
+    /// y sin marcar.
     /// </para>
     /// </summary>
     internal void RefreshCheckState()
     {
         int selected = Units.Count(u => u.IsSelected);
         bool? state = selected == 0 ? false : selected == Units.Count ? true : null;
+
+        // Lo derivado se anuncia SIEMPRE, cambie o no el tri-estado: pasar de «1 de 12» a «2 de 12»
+        // deja IsChecked en null las dos veces, y la nota tiene que moverse igualmente.
+        OnPropertyChanged(nameof(IsAllSelected));
+        OnPropertyChanged(nameof(SelectedUnits));
+        OnPropertyChanged(nameof(SelectionNote));
+        OnPropertyChanged(nameof(HasSelectionNote));
+
         if (state == IsChecked)
         {
             return;

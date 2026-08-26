@@ -3324,20 +3324,77 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   vuelta cuando algo va mal. Ahora la carcasa se sincroniza también al construirse. No es la causa
   de nada de lo reportado; es quitarle al freno la única forma que tenía de nacer apagado.
 
+### §3 — Corrección de D-377: el fallo estaba en el DIBUJO, no en el gesto
+
+- **D-386 — D-377 acertó el síntoma y se quedó corto en la causa. La casilla del módulo no
+  «parecía» marcada: se pintaba EXACTAMENTE igual que una marcada.** Tras entregar §1, el usuario
+  volvió con el mismo parte: «cuando checkeo una clase hija se sigue marcando la clase padre». La
+  primera versión razonaba que el indeterminado *se lee* como marcado y arreglaba el gesto que salía
+  de esa confusión; pero no había mirado la plantilla. Al descomprimir el BAML de
+  <c>Wpf.Ui.dll</c> 3.0.5 aparecen dos disparadores sobre <c>IsChecked</c> en el estilo de
+  <c>CheckBox</c>, y **los dos pintan el mismo fondo**:
+
+  | `IsChecked` | Fondo de `ControlBorderIconPresenter` | Glifo de `ControlIcon` |
+  |---|---|---|
+  | `null` | `CheckBoxCheckBackgroundFillChecked` | `Subtract16` (un guion) |
+  | `true` | `CheckBoxCheckBackgroundFillChecked` | `Checkmark48` (la marca) |
+
+  Es decir: en WPF-UI 3.0.5 una casilla indeterminada es **una casilla de acento maciza**, idéntica
+  en color y relleno a una marcada; lo único que la distingue son unos pocos píxeles de glifo
+  dentro. En un árbol denso de módulos eso no es «se lee como marcado»: **es** marcado a todos los
+  efectos de quien mira. El usuario tenía razón las dos veces, y la segunda con más precisión que
+  el primer diagnóstico.
+
+- **D-387 — La casilla del módulo pasa a ser de DOS estados; la selección parcial se dice con
+  palabras.** No se puede corregir el relleno desde fuera —los disparadores de la plantilla lo fijan
+  por <c>TargetName</c>, y eso gana a cualquier estilo derivado—, así que la solución no es pelearse
+  con la plantilla sino **dejar de mandarle un valor que no sabe dibujar**. La casilla se enlaza
+  ahora a <c>ModuleNode.IsAllSelected</c> (<c>true</c> si y solo si TODAS las unidades lo están) en
+  modo OneWay, y el clic llega por <c>ToggleModuleCommand</c>. Lo que el guion pretendía comunicar
+  —y nunca comunicó— se escribe al lado del nombre del módulo: «3 de 12 seleccionadas», visible solo
+  con selección parcial. Es estrictamente más información que un guion, y no se puede confundir con
+  un relleno.
+  <br><c>IsChecked</c> **se conserva** como <c>bool?</c>: es la semántica correcta del grupo y es lo
+  que los tests interrogan. Lo que deja de hacer es viajar a la vista. La distinción es la que vale
+  la pena recordar: *el modelo puede tener tres estados; el control solo sabe dibujar dos.*
+
+- **D-388 — Y con eso la regla del clic vuelve a la estándar, que ahora sí se puede leer del
+  dibujo.** D-377 había hecho que un clic desde indeterminado LIMPIARA, porque con una casilla que
+  mentía sobre su estado la dirección segura era la de quitar. Con la casilla diciendo la verdad esa
+  excepción sobra y estorba: quien pulsa una casilla vacía espera llenarla. La regla es la de
+  cualquier casilla de dos estados —si no está todo marcado, marca el módulo entero; si lo está, lo
+  limpia— y vive en un solo sitio (<c>ModuleNode.RequestToggle</c>), llegue el gesto por el comando
+  de la vista o por escribir <c>IsChecked</c> desde código. La protección del gasto no depende ya de
+  la dirección del gesto: la dan el contador —que lee la misma lista que se lanza (D-379)—, el
+  diálogo de confirmación y la salvaguarda del coordinador (D-380).
+
+- **D-389 — La lección de método, que es la que más cuesta.** El primer diagnóstico se apoyó en un
+  arnés de view-model que medía bien y probaba lo que decía probar — y aun así apuntó al sitio
+  equivocado, porque el fallo vivía una capa más abajo, en una plantilla de terceros que nadie había
+  leído. Un test verde sobre el estado observable **no** dice que la pantalla enseñe ese estado. Lo
+  que cerró el caso no fue razonar mejor: fue abrir el DLL del proveedor y mirar qué pinta cada
+  disparador. Cuando el parte de un usuario contradice un test que pasa, el que se está midiendo mal
+  es el test, no el usuario. Queda como invariante en `LaunchScopeTests` que la vista se enlaza a
+  <c>IsAllSelected</c> y **nunca** a <c>IsChecked</c>, para que nadie vuelva a mandarle a esa casilla
+  un valor que no sabe dibujar.
+
 ### Cobertura y verificación
 
 - **D-384 — Lo que queda probado.** Del alcance: que una hija marcada deja el grupo en
   indeterminado y audita esa unidad y solo esa —extremo a extremo, con el agente falso y leyendo la
-  sesión escrita—; que un grupo marcado entrega sus hijas y **nunca** el grupo; que un clic sobre un
-  módulo indeterminado LIMPIA (la regresión de D-377), que sobre uno vacío lo marca entero y que
-  sobre uno lleno lo limpia; que el contador, el diálogo de confirmación y la sesión dicen el mismo
+  sesión escrita—; que un grupo marcado entrega sus hijas y **nunca** el grupo; que la casilla del
+  módulo **no se pinta marcada** con una hija marcada (D-386) y que la vista se enlaza a
+  `IsAllSelected` y nunca a `IsChecked`; que la selección parcial se dice con palabras y solo cuando
+  es parcial; que el gesto marca el módulo entero o lo limpia, también desde selección parcial; que
+  el contador, el diálogo de confirmación y la sesión dicen el mismo
   número; y que filtrar la vista no cambia la lista de lanzamiento. De la salvaguarda: que el
   coordinador aborta con `LaunchMismatchException` si la lista supera lo confirmado —sin sesión y
   sin claims—, que lo confirmado exacto pasa sin estorbo, que sin N declarado no molesta, y que el
   camino real la arma pasando el N. De los frenos, lo de D-382.
 
-- **D-385 — Lo que se verifica a mano.** Marcar una clase → la barra dice «1 unidad seleccionada» y
-  el módulo se pinta indeterminado; pulsar la casilla del módulo → la selección se **vacía** (no se
-  llena); volver a marcar la clase y lanzar → el diálogo, si aparece, dice 1 y V5 dice «Unidad 1 de
-  1»; navegar a Portafolio y volver por el item pulsante del rail; comprobar que «Detener» está en
-  la cabecera y que al pulsarlo la sesión se cierra con informe parcial y los claims liberados.
+- **D-385 — Lo que se verifica a mano.** Marcar una clase → la barra dice «1 unidad seleccionada»,
+  **la casilla del módulo se queda vacía** y a su derecha aparece «1 de N seleccionadas»; pulsar la
+  casilla del módulo → se marca el módulo entero y la nota desaparece; volver a pulsarla → se vacía;
+  dejar solo la clase y lanzar → el diálogo, si aparece, dice 1 y V5 dice «Unidad 1 de 1»; navegar a
+  Portafolio y volver por el item pulsante del rail; comprobar que «Detener» está en la cabecera y
+  que al pulsarlo la sesión se cierra con informe parcial y los claims liberados.

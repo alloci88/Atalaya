@@ -462,6 +462,15 @@ public sealed partial class InventoryViewModel : ViewModelBase
         RefreshSelectionState();
     }
 
+    /// <summary>
+    /// El clic sobre la casilla del módulo. Existe como comando —y no solo como efecto de escribir
+    /// <c>IsChecked</c>— porque la casilla ya no recibe el tri-estado: pinta
+    /// <see cref="ModuleNode.IsAllSelected"/>, que es de dos estados, así que el gesto tiene que
+    /// llegar por su propia vía en vez de deducirse de un valor que la vista ya no escribe.
+    /// </summary>
+    [RelayCommand]
+    private void ToggleModule(ModuleNode? group) => group?.RequestToggle();
+
     /// <inheritdoc cref="GroupCollapse.Toggle"/>
     [RelayCommand]
     private void ToggleGroup(ModuleNode? group) => _collapse.Toggle(group);

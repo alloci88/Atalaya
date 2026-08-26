@@ -209,51 +209,102 @@ public sealed class LaunchScopeTests : IDisposable
     }
 
     /// <summary>
-    /// <b>La regresión del incidente.</b> Con el módulo indeterminado, un clic en su casilla es un
-    /// gesto de CORRECCIÓN: limpia. Antes, con <c>IsThreeState="False"</c>, WPF mandaba ese clic a
-    /// «marcado» y te llevabas el módulo entero a la selección justo cuando intentabas deshacer.
+    /// <b>El fallo que se veía en pantalla.</b> La casilla del módulo se pinta con
+    /// <see cref="ModuleNode.IsAllSelected"/>, que es de DOS estados: con una hija marcada tiene que
+    /// quedarse en <c>false</c>.
+    /// <para>
+    /// Antes se le enviaba el tri-estado, y la plantilla de WPF-UI 3.0.5 resuelve
+    /// <c>IsChecked = null</c> con el MISMO relleno de acento que <c>true</c> —solo cambia el glifo
+    /// de dentro, un guion en vez de la marca—. En una lista densa eso es una casilla azul maciza
+    /// indistinguible de una marcada: marcar UNA clase parecía marcar el módulo entero.
+    /// </para>
     /// </summary>
     [Fact]
-    public async Task Un_clic_en_el_modulo_indeterminado_limpia_en_vez_de_marcarlo_entero()
+    public async Task La_casilla_del_modulo_no_se_pinta_marcada_con_una_hija_marcada()
+    {
+        InventoryViewModel vm = await Loaded();
+        ModuleNode module = vm.Modules.Single(m => m.Name == "M00");
+
+        Unit(vm, "src/M00/A00.cs").IsSelected = true;
+
+        module.IsAllSelected.Should().BeFalse("es lo ÚNICO que la casilla pinta, y no está todo marcado");
+        module.IsChecked.Should().BeNull("la semántica sigue siendo tri-estado; lo que no viaja a la vista");
+
+        Unit(vm, "src/M00/B00.cs").IsSelected = true;
+        module.IsAllSelected.Should().BeTrue("ahora sí: marcada porque TODAS lo están");
+    }
+
+    /// <summary>
+    /// Y lo que el guion nunca llegó a decir se dice con palabras: cuántas. La nota solo aparece
+    /// con selección parcial — con cero o con todas, la casilla ya lo dice sin ambigüedad.
+    /// </summary>
+    [Fact]
+    public async Task La_seleccion_parcial_se_dice_con_palabras()
+    {
+        InventoryViewModel vm = await Loaded();
+        ModuleNode module = vm.Modules.Single(m => m.Name == "M00");
+
+        module.HasSelectionNote.Should().BeFalse("sin nada marcado no hay nada que matizar");
+
+        Unit(vm, "src/M00/A00.cs").IsSelected = true;
+        module.HasSelectionNote.Should().BeTrue();
+        module.SelectionNote.Should().Be("1 de 2 seleccionadas");
+
+        Unit(vm, "src/M00/B00.cs").IsSelected = true;
+        module.HasSelectionNote.Should().BeFalse("con todas marcadas la casilla ya lo dice");
+    }
+
+    /// <summary>
+    /// El gesto de la casilla, con la regla que ahora se puede leer del dibujo: si no está todo
+    /// marcado, marca el módulo entero; si lo está, lo limpia.
+    /// </summary>
+    [Fact]
+    public async Task La_casilla_del_modulo_marca_todo_o_lo_limpia()
+    {
+        InventoryViewModel vm = await Loaded();
+        ModuleNode module = vm.Modules.Single(m => m.Name == "M00");
+
+        vm.ToggleModuleCommand.Execute(module);
+        vm.SelectedUnits().Should().BeEquivalentTo(new[] { "src/M00/A00.cs", "src/M00/B00.cs" });
+        module.IsAllSelected.Should().BeTrue();
+
+        vm.ToggleModuleCommand.Execute(module);
+        vm.SelectedUnits().Should().BeEmpty();
+        module.IsAllSelected.Should().BeFalse();
+    }
+
+    /// <summary>Desde selección parcial, el mismo gesto completa el módulo: es lo que promete la casilla vacía.</summary>
+    [Fact]
+    public async Task Desde_seleccion_parcial_la_casilla_completa_el_modulo()
     {
         InventoryViewModel vm = await Loaded();
         Unit(vm, "src/M00/A00.cs").IsSelected = true;
         ModuleNode module = vm.Modules.Single(m => m.Name == "M00");
-        module.IsChecked.Should().BeNull();
 
-        // Lo que hace WPF con IsThreeState="False" al pulsar sobre un indeterminado.
-        module.IsChecked = true;
-
-        vm.SelectedUnits().Should().BeEmpty("pulsar para deshacer no puede seleccionar el módulo entero");
-        vm.SelectedCount.Should().Be(0);
-        module.IsChecked.Should().Be(false);
-    }
-
-    /// <summary>Y desde vacío el mismo clic sí marca el módulo entero: es el gesto que se espera.</summary>
-    [Fact]
-    public async Task Un_clic_en_el_modulo_vacio_lo_marca_entero()
-    {
-        InventoryViewModel vm = await Loaded();
-        ModuleNode module = vm.Modules.Single(m => m.Name == "M00");
-
-        module.IsChecked = true;
+        vm.ToggleModuleCommand.Execute(module);
 
         vm.SelectedUnits().Should().BeEquivalentTo(new[] { "src/M00/A00.cs", "src/M00/B00.cs" });
-        module.IsChecked.Should().Be(true);
+        module.IsAllSelected.Should().BeTrue();
     }
 
-    /// <summary>Un módulo lleno se limpia de un clic, como siempre.</summary>
+    /// <summary>La vista NO puede recibir el tri-estado: es lo que hacía mentir a la casilla.</summary>
     [Fact]
-    public async Task Un_clic_en_el_modulo_lleno_lo_limpia()
+    public void La_casilla_del_modulo_se_enlaza_al_estado_de_dos_valores()
     {
-        InventoryViewModel vm = await Loaded();
-        ModuleNode module = vm.Modules.Single(m => m.Name == "M00");
-        module.IsChecked = true;
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Atalaya.sln")))
+        {
+            dir = dir.Parent;
+        }
 
-        module.IsChecked = false;
+        string xaml = File.ReadAllText(Path.Combine(
+            dir!.FullName, "src", "Atalaya.App", "Views", "InventoryView.xaml"));
 
-        vm.SelectedUnits().Should().BeEmpty();
-        module.IsChecked.Should().Be(false);
+        xaml.Should().Contain("IsChecked=\"{Binding IsAllSelected, Mode=OneWay}\"",
+            "el tri-estado se pinta con el relleno del marcado y hace creer que el módulo entero lo está");
+        xaml.Should().NotContain("IsChecked=\"{Binding IsChecked",
+            "IsChecked es la semántica del view-model, no lo que la casilla sabe dibujar");
+        xaml.Should().Contain("ToggleModuleCommand", "el gesto llega por comando, no por el enlace");
     }
 
     /// <summary>
