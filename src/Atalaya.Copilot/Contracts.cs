@@ -86,6 +86,13 @@ public enum AgentProblem
     /// <summary>Could not reach GitHub.</summary>
     Offline,
 
+    /// <summary>
+    /// El modelo configurado no existe o la cuenta no puede usarlo (F5.15). No es un problema de
+    /// credenciales ni de asiento: la sesión no arranca porque se le pidió al runtime un modelo que
+    /// ya no sirve. Tiene remedio de un clic —elegir otro en Ajustes— y por eso se distingue.
+    /// </summary>
+    ModelUnavailable,
+
     Unknown,
 }
 
@@ -114,6 +121,25 @@ public sealed class CopilotAuthenticationException : Exception
     public CopilotAuthenticationException(string message, Exception? inner = null) : base(message, inner) { }
 }
 
+/// <summary>
+/// La sesión no se pudo CREAR porque el modelo pedido no está disponible para esta cuenta (F5.15).
+/// <para>
+/// Nace del parte del 2026-08-26: <c>session.create</c> falló con «Model gpt-5 is not available» y
+/// la aplicación se quedó muda —ni error, ni botón de parar, ni forma de volver a la vista—. Tiene
+/// tipo propio porque tiene REMEDIO propio: elegir otro modelo en Ajustes. Un error genérico no
+/// puede ofrecer ese enlace, y sin el enlace el usuario no sabe que la cura está a dos clics.
+/// </para>
+/// </summary>
+public sealed class CopilotModelUnavailableException : Exception
+{
+    public CopilotModelUnavailableException(string? modelId, Exception? inner = null)
+        : base(CopilotHelp.ModelUnavailable(modelId), inner)
+        => ModelId = modelId;
+
+    /// <summary>El id que se pidió, para poder nombrarlo. Null si no se había configurado ninguno.</summary>
+    public string? ModelId { get; }
+}
+
 /// <summary>Canonical help texts for the not-ready cases (§6.1, F2.3).</summary>
 public static class CopilotHelp
 {
@@ -133,6 +159,17 @@ public static class CopilotHelp
     /// <summary>The credential was rejected (revoked, expirado o SSO caducado).</summary>
     public const string TokenRejected =
         "GitHub ha rechazado tus credenciales (revocadas o caducadas). Ve a Cuenta y vuelve a conectar.";
+
+    /// <summary>
+    /// El modelo configurado no sirve. Dice QUÉ pasó, POR QUÉ no es culpa de la red ni de la cuenta,
+    /// y DÓNDE se arregla — las tres cosas que faltaban cuando el fallo era mudo.
+    /// </summary>
+    public static string ModelUnavailable(string? modelId)
+        => string.IsNullOrWhiteSpace(modelId)
+            ? "No se pudo iniciar la sesión: el runtime rechazó el modelo configurado. "
+              + "Elige otro en Ajustes."
+            : $"No se pudo iniciar: el modelo «{modelId}» no está disponible para tu cuenta. "
+              + "Elige otro en Ajustes.";
 
     /// <summary>
     /// Legacy fallback text: used only when there is no account token and Atalaya falls back to

@@ -24,9 +24,16 @@ public sealed partial class SessionViewModel : ViewModelBase
     private readonly LiveSessionService _live;
     private readonly DispatcherTimer? _clock;
 
-    public SessionViewModel(LiveSessionService live)
+    /// <summary>
+    /// Para el atajo «Elegir modelo» del panel de fallo (F5.15). Opcional: los tests que solo miran
+    /// el estado de V5 no montan la navegacion.
+    /// </summary>
+    private readonly NavigationService? _navigation;
+
+    public SessionViewModel(LiveSessionService live, NavigationService? navigation = null)
     {
         _live = live;
+        _navigation = navigation;
         _live.Changed += OnLiveChanged;
         _live.PropertyChanged += (_, _) => OnLiveChanged();
 
@@ -38,7 +45,9 @@ public sealed partial class SessionViewModel : ViewModelBase
         }
     }
 
-    public override string Title => Live.HasFinished && !Live.IsRunning ? "Ultima sesion" : "Sesion en vivo";
+    public override string Title => Live.HasFailed && !Live.IsRunning
+        ? "Sesion fallida"
+        : Live.HasFinished && !Live.IsRunning ? "Ultima sesion" : "Sesion en vivo";
 
     /// <summary>El estado real, enlazado directamente por la vista.</summary>
     public LiveSessionService Live => _live;
@@ -89,6 +98,19 @@ public sealed partial class SessionViewModel : ViewModelBase
     /// <summary>La pantalla de cierre sustituye a la linea fugaz de estado cuando termina.</summary>
     public bool ShowSummary => !_live.IsRunning && _live.HasFinished && Summary.Count > 0;
 
+    /// <summary>
+    /// El panel de fallo (F5.15). Es el hueco por el que se coló el zombi del 2026-08-26: la unica
+    /// superficie que enseñaba <c>StatusMessage</c> colgaba de <see cref="ShowSummary"/>, o sea de
+    /// <c>HasFinished</c>, que en un fallo de arranque es false. El mensaje existia y no se pintaba
+    /// en ninguna parte.
+    /// </summary>
+    public bool ShowFailure => !_live.IsRunning && _live.HasFailed;
+
+    public string FailureMessage => _live.FailureMessage;
+
+    /// <summary>El fallo se cura eligiendo otro modelo: la vista ofrece el atajo.</summary>
+    public bool FailureOffersModelChange => _live.FailureOffersModelChange;
+
     public bool IsRunning => _live.IsRunning;
 
     /// <summary>
@@ -103,6 +125,19 @@ public sealed partial class SessionViewModel : ViewModelBase
 
     [RelayCommand]
     private void Stop() => _live.Stop();
+
+    /// <summary>
+    /// Lleva a Ajustes, que es donde se elige el modelo. Es la mitad accionable del mensaje de
+    /// fallo: decir «elige otro en Ajustes» sin ofrecer el camino es dejar el trabajo a medias.
+    /// </summary>
+    [RelayCommand]
+    private async Task FixModel()
+    {
+        if (_navigation is not null)
+        {
+            await _navigation.NavigateToAsync<SettingsViewModel>();
+        }
+    }
 
     [RelayCommand]
     private void BackToBottom() => AutoScroll = true;
@@ -145,6 +180,9 @@ public sealed partial class SessionViewModel : ViewModelBase
         OnPropertyChanged(nameof(PerUnitText));
         OnPropertyChanged(nameof(ElapsedText));
         OnPropertyChanged(nameof(ShowSummary));
+        OnPropertyChanged(nameof(ShowFailure));
+        OnPropertyChanged(nameof(FailureMessage));
+        OnPropertyChanged(nameof(FailureOffersModelChange));
         OnPropertyChanged(nameof(IsRunning));
         OnPropertyChanged(nameof(CriticalCount));
         OnPropertyChanged(nameof(HighCount));

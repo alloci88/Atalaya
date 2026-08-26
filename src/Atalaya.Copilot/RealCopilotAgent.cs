@@ -266,15 +266,53 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
                 await session.DisposeAsync();
             }
         }
+        // F5.15: el modelo que ya no existe va PRIMERO, porque su remedio es distinto —y más
+        // barato— que el de un problema de credenciales: elegir otro en Ajustes.
+        catch (Exception ex) when (LooksLikeModelUnavailable(ex))
+        {
+            throw new CopilotModelUnavailableException(ModelName, ex);
+        }
         catch (Exception ex) when (LooksLikeAuthError(ex) || LooksLikeNoSeat(ex))
         {
             throw new CopilotAuthenticationException(Classify(ex, CurrentToken() is not null).Message, ex);
         }
     }
 
+    /// <summary>
+    /// El runtime rechazó el modelo (F5.15). El SDK no tipa este fallo, así que se reconoce por el
+    /// texto: <c>session.create</c> devuelve «Model {id} is not available». Se exige que aparezcan
+    /// las DOS piezas —«model» y la negación de disponibilidad— para no confundirlo con cualquier
+    /// otro mensaje que mencione un modelo de pasada.
+    /// </summary>
+    public static bool LooksLikeModelUnavailable(Exception ex)
+    {
+        for (Exception? e = ex; e is not null; e = e.InnerException)
+        {
+            string m = e.Message ?? string.Empty;
+            bool mentionsModel = m.Contains("model", StringComparison.OrdinalIgnoreCase);
+            bool unavailable =
+                m.Contains("is not available", StringComparison.OrdinalIgnoreCase)
+                || m.Contains("not available", StringComparison.OrdinalIgnoreCase)
+                || m.Contains("unknown model", StringComparison.OrdinalIgnoreCase)
+                || m.Contains("unsupported model", StringComparison.OrdinalIgnoreCase)
+                || m.Contains("model_not_found", StringComparison.OrdinalIgnoreCase);
+            if (mentionsModel && unavailable)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Maps an SDK/transport failure onto a specific, actionable diagnosis (F2.3).</summary>
     private static AgentReadiness Classify(Exception ex, bool hasToken)
     {
+        if (LooksLikeModelUnavailable(ex))
+        {
+            return new AgentReadiness(false, CopilotHelp.ModelUnavailable(null), AgentProblem.ModelUnavailable);
+        }
+
         if (LooksLikeNoSeat(ex))
         {
             return new AgentReadiness(false, CopilotHelp.NoSeat, AgentProblem.NoSeat);
@@ -456,6 +494,15 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Cuánto se espera como MUCHO a que el runtime se libere. El cierre de la aplicación reparte
+    /// 10 s entre todo lo que haya que soltar (<c>App.OnExit</c>), así que el agente no puede
+    /// quedarse con el presupuesto entero: si el CLI no se va en 5 s, se le deja de esperar y el
+    /// proceso sigue cerrando. Un cierre lento es molesto; uno que no termina deja un Atalaya
+    /// zombi sondeando el hub, que es el fallo que D-086 costó descubrir.
+    /// </summary>
+    private static readonly TimeSpan DisposeTimeout = TimeSpan.FromSeconds(5);
+
     private async Task DisposeClientAsync()
     {
         CopilotClient? client = _client;
@@ -468,7 +515,16 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
 
         try
         {
-            await client.DisposeAsync();
+            Task dispose = client.DisposeAsync().AsTask();
+            if (await Task.WhenAny(dispose, Task.Delay(DisposeTimeout)) != dispose)
+            {
+                _logger.LogWarning(
+                    "Copilot: el runtime no se liberó en {Seconds}s; se sigue cerrando sin esperarlo",
+                    DisposeTimeout.TotalSeconds);
+                return;
+            }
+
+            await dispose;
         }
         catch (Exception ex)
         {

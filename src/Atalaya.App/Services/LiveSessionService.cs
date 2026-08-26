@@ -27,6 +27,7 @@ namespace Atalaya.App.Services;
 public sealed partial class LiveSessionService : ObservableObject
 {
     private readonly Func<SessionCoordinator> _coordinatorFactory;
+    private readonly ModelResolver? _models;
     private readonly ICopilotAgent _agent;
     private readonly OpenSessionStore _marker;
     private readonly HubContext? _hub;
@@ -53,15 +54,26 @@ public sealed partial class LiveSessionService : ObservableObject
     /// Solo para resolver la ruta del informe que abre la pantalla de cierre. Opcional: sin él la
     /// sesión funciona igual y el botón avisa de que el informe no está localizable.
     /// </param>
+    /// <param name="models">
+    /// Quién decide el modelo contra la lista real de la cuenta (F5.15). Opcional: sin él la sesión
+    /// usa el ajuste tal cual, que es lo que hacía antes.
+    /// </param>
     public LiveSessionService(
         Func<SessionCoordinator> coordinatorFactory, ICopilotAgent agent, OpenSessionStore marker,
-        HubContext? hub = null)
+        HubContext? hub = null, ModelResolver? models = null)
     {
         _coordinatorFactory = coordinatorFactory;
         _agent = agent;
         _marker = marker;
         _hub = hub;
+        _models = models;
     }
+
+    /// <summary>
+    /// Un aviso que no es un fallo: «se ha cambiado el modelo a X». Va por toast, como el resto de
+    /// lo efímero (F5.3 §3).
+    /// </summary>
+    public event Action<string>? Notice;
 
     /// <summary>Cola de unidades con su estado y su narración. La misma instancia toda la sesión.</summary>
     public ObservableCollection<UnitProgress> Units { get; } = new();
@@ -92,14 +104,48 @@ public sealed partial class LiveSessionService : ObservableObject
     [ObservableProperty] private string _reportPath = string.Empty;
     [ObservableProperty] private bool _hasFinished;
 
-    /// <summary>Se ha ejecutado alguna sesión en esta ejecución de la app (haya terminado o no).</summary>
-    public bool HasSession => IsRunning || HasFinished;
+    /// <summary>
+    /// La sesión NO llegó a completarse: murió al arrancar o reventó a mitad (F5.15).
+    /// <para>
+    /// Es un tercer estado terminal y no un matiz de <see cref="HasFinished"/>. Sin él, un fallo
+    /// dejaba <c>IsRunning=false</c> y <c>HasFinished=false</c>, o sea <c>HasSession=false</c>: el
+    /// item del rail desaparecía, «Detener» desaparecía, la pantalla de cierre no se pintaba —está
+    /// condicionada a <c>HasFinished</c>— y el mensaje de error se quedaba escrito en una propiedad
+    /// que nadie enseñaba. Una sesión zombi con el reloj parado y ni una palabra. Eso es lo que se
+    /// vio el 2026-08-26 a las 12:20:06 cuando <c>session.create</c> rechazó el modelo.
+    /// </para>
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSession))]
+    private bool _hasFailed;
+
+    /// <summary>Qué falló, en una frase que el usuario pueda accionar. Vacío si no ha fallado nada.</summary>
+    [ObservableProperty] private string _failureMessage = string.Empty;
+
+    /// <summary>
+    /// El fallo se arregla eligiendo otro modelo, así que la vista puede ofrecer el atajo a Ajustes.
+    /// </summary>
+    [ObservableProperty] private bool _failureOffersModelChange;
+
+    /// <summary>
+    /// Se ha ejecutado alguna sesión en esta ejecución de la app: corriendo, terminada <b>o
+    /// fallida</b>. Lo que decide si hay algo que enseñar en V5 y, con ello, si el rail ofrece el
+    /// camino de vuelta.
+    /// </summary>
+    public bool HasSession => IsRunning || HasFinished || HasFailed;
 
     /// <summary>Avisa a la carcasa de que hay que repintar el indicador de navegación.</summary>
     public event Action? Changed;
 
     /// <summary>Sesión terminada, con su resultado. Lo usa el toast de la barra de estado.</summary>
     public event Action<SessionResult>? Completed;
+
+    /// <summary>
+    /// La sesión no arrancó o no pudo continuar (F5.15). Lleva la frase accionable. La carcasa la
+    /// saca por toast: quien lanza una auditoría suele irse a otra pantalla, y un error que solo
+    /// vive en la vista de la sesión es un error que nadie lee.
+    /// </summary>
+    public event Action<string>? Failed;
 
     public double Progress => UnitCount == 0 ? 0 : (double)UnitIndex / UnitCount;
 
@@ -135,6 +181,26 @@ public sealed partial class LiveSessionService : ObservableObject
 
         Reset(request, displayPaths);
         return RunAsync(request);
+    }
+
+    /// <summary>
+    /// Cierra la sesión como FALLIDA (F5.15): un estado terminal visible, no la ausencia de estado.
+    /// <para>
+    /// Deja las tres cosas que faltaban aquella noche: la frase accionable donde la vista la pinta,
+    /// <see cref="HasSession"/> en true para que el rail siga ofreciendo el camino de vuelta, y un
+    /// aviso por toast para quien ya se había ido a otra pantalla. El <c>finally</c> de
+    /// <see cref="RunAsync"/> se encarga del resto —marca de sesión abierta, reloj, IsRunning— así
+    /// que un fallo no deja nada colgando.
+    /// </para>
+    /// </summary>
+    private void Fail(string message, bool offersModelChange)
+    {
+        FailureMessage = message;
+        FailureOffersModelChange = offersModelChange;
+        HasFailed = true;
+        StatusMessage = message;
+        Changed?.Invoke();
+        Failed?.Invoke(message);
     }
 
     /// <summary>Detener: la parada ordenada de F5.1b. No hay un segundo camino de parada.</summary>
@@ -186,6 +252,9 @@ public sealed partial class LiveSessionService : ObservableObject
         SessionId = string.Empty;
         ReportPath = string.Empty;
         HasFinished = false;
+        HasFailed = false;
+        FailureMessage = string.Empty;
+        FailureOffersModelChange = false;
         EndedUtc = null;
         StartedUtc = DateTimeOffset.UtcNow;
         StatusMessage = "Comprobando Copilot…";
@@ -201,8 +270,26 @@ public sealed partial class LiveSessionService : ObservableObject
             AgentReadiness readiness = await _agent.CheckAsync(CancellationToken.None);
             if (!readiness.Ready)
             {
-                StatusMessage = readiness.Message;
+                Fail(readiness.Message, readiness.Problem == AgentProblem.ModelUnavailable);
                 return;
+            }
+
+            // F5.15: el modelo se resuelve contra la lista REAL de la cuenta antes de crear nada.
+            // Un id caducado se sustituye y se dice; sin ningún modelo utilizable no se arranca —
+            // dejar que el runtime lo rechace después solo cambia un aviso claro por un fallo feo.
+            if (_models is not null)
+            {
+                ModelResolution resolution = await _models.ResolveAsync(CancellationToken.None);
+                if (resolution.Failed)
+                {
+                    Fail(resolution.Notice ?? CopilotHelp.ModelUnavailable(null), offersModelChange: true);
+                    return;
+                }
+
+                if (resolution.Notice is { Length: > 0 } notice)
+                {
+                    Notice?.Invoke(notice);
+                }
             }
 
             StatusMessage = "Auditando…";
@@ -217,13 +304,18 @@ public sealed partial class LiveSessionService : ObservableObject
             HasFinished = true;
             Completed?.Invoke(result);
         }
+        catch (CopilotModelUnavailableException modelEx)
+        {
+            // F5.15: el fallo con remedio de un clic. Se nombra el modelo y se ofrece Ajustes.
+            Fail(modelEx.Message, offersModelChange: true);
+        }
         catch (CopilotAuthenticationException authEx)
         {
-            StatusMessage = authEx.Message;   // §6.1: texto de ayuda, no el error crudo del SDK
+            Fail(authEx.Message, offersModelChange: false);   // §6.1: ayuda, no el error crudo del SDK
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Error: {ex.Message}";
+            Fail($"La sesión se ha interrumpido por un error: {ex.Message}", offersModelChange: false);
         }
         finally
         {

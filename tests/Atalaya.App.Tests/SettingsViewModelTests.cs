@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
@@ -167,16 +168,78 @@ public sealed class SettingsViewModelTests : IDisposable
         new SettingsService(_paths).Load().CopilotModel.Should().Be("claude-sonnet-4.5");
     }
 
+    /// <summary>
+    /// F5.15: el modelo por defecto NO es un nombre. Aquí ponía <c>"gpt-5"</c> escrito a mano y el
+    /// día que GitHub lo retiró toda máquina con ajustes vírgenes nació rota. Vacío significa
+    /// «pregúntaselo al runtime», y de eso se encarga <c>ModelResolver</c> al lanzar.
+    /// </summary>
     [Fact]
-    public void The_default_model_is_the_one_in_use_today()
+    public void El_modelo_por_defecto_no_es_un_nombre_que_pueda_caducar()
     {
-        _settings.Current.CopilotModel.Should().Be("gpt-5");
-        NewViewModel().SelectedModelId.Should().Be("gpt-5");
+        _settings.Current.CopilotModel.Should().BeEmpty(
+            "un id de modelo es un dato del proveedor con fecha de caducidad, no una constante");
+        NewViewModel().SelectedModelId.Should().BeEmpty();
     }
+
+    /// <summary>
+    /// Y no queda ningún id de modelo escrito en el CÓDIGO de producción: ni como valor por
+    /// defecto, ni como respaldo, ni como «preferido». La lista se pide siempre al runtime.
+    /// <para>
+    /// Se miran las cadenas, no los comentarios: la documentación tiene que poder contar que el
+    /// literal era <c>gpt-5</c> y qué pasó el día que lo retiraron — esa es justamente la memoria
+    /// que evita repetirlo. Lo que no puede volver es una cadena que el programa ejecute.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Ningun_id_de_modelo_vive_escrito_en_el_codigo_de_produccion()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Atalaya.sln")))
+        {
+            dir = dir.Parent;
+        }
+
+        var offenders = new List<string>();
+        foreach (string file in Directory.EnumerateFiles(
+                     Path.Combine(dir!.FullName, "src"), "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            {
+                continue;
+            }
+
+            string code = WithoutComments(File.ReadAllText(file));
+
+            // Familias reales de identificadores de modelo. El punto no es esta lista concreta:
+            // es que ninguna cadena con forma de id de modelo viva en producción.
+            foreach (string needle in new[] { "\"gpt-", "\"claude-", "\"o3", "\"o4-", "\"gemini-" })
+            {
+                if (code.Contains(needle, StringComparison.OrdinalIgnoreCase))
+                {
+                    offenders.Add($"{Path.GetFileName(file)} contiene {needle}\"");
+                }
+            }
+        }
+
+        offenders.Should().BeEmpty(
+            "un id de modelo escrito a mano caduca sin avisar y rompe a quien instale de cero (F5.15)");
+    }
+
+    /// <summary>El fuente sin comentarios de línea ni de bloque. Basta para lo que se vigila aquí.</summary>
+    private static string WithoutComments(string source)
+        => Regex.Replace(
+            Regex.Replace(source, @"/\*.*?\*/", string.Empty, RegexOptions.Singleline),
+            @"//[^\n]*", string.Empty);
 
     [Fact]
     public async Task When_the_list_cannot_be_fetched_settings_still_work_and_say_why()
     {
+        // Con un modelo ya elegido en esta máquina: es el caso en el que hay algo que conservar.
+        AppSettings configured = _settings.Current;
+        configured.CopilotModel = "modelo-elegido";
+        _settings.Save(configured);
+
         var agent = new FakeCopilotAgent(
             modelsScript: () => throw new InvalidOperationException("sin conexión con GitHub"));
         SettingsViewModel vm = NewViewModel(agent);
@@ -184,15 +247,15 @@ public sealed class SettingsViewModelTests : IDisposable
         await vm.LoadAsync();
 
         vm.ModelsNotice.Should().Contain("sin conexión con GitHub");
-        vm.SelectedModelId.Should().Be("gpt-5", "se conserva el modelo configurado");
-        vm.Models.Should().ContainSingle().Which.Id.Should().Be("gpt-5");
+        vm.SelectedModelId.Should().Be("modelo-elegido", "se conserva el modelo configurado");
+        vm.Models.Should().ContainSingle().Which.Id.Should().Be("modelo-elegido");
 
         // Y Ajustes sigue siendo usable: guardar no se rompe ni pierde el modelo.
         vm.MaxPassesPerUnit = 3;
         vm.SaveCommand.Execute(null);
         AppSettings reloaded = new SettingsService(_paths).Load();
         reloaded.MaxPassesPerUnit.Should().Be(3);
-        reloaded.CopilotModel.Should().Be("gpt-5");
+        reloaded.CopilotModel.Should().Be("modelo-elegido");
     }
 
     [Fact]

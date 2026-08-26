@@ -44,6 +44,10 @@ public sealed partial class MainViewModel : ObservableObject
         _aliases = aliases;
         _live.Changed += SyncSession;
         _live.Completed += OnSessionCompleted;
+        // F5.15: un fallo de arranque no puede quedarse dentro de una vista que quiza nadie esta
+        // mirando. Sale por toast, como el resumen de cierre.
+        _live.Failed += OnSessionFailed;
+        _live.Notice += OnSessionNotice;
         _account.Changed += SyncAccount;
         // Connecting clones and pulls the hub off the UI thread; without this the indicator would
         // stay amber until the next polling tick even though the sync already succeeded.
@@ -211,7 +215,9 @@ public sealed partial class MainViewModel : ObservableObject
     {
         IsSessionRunning = _live.IsRunning;
         HasSession = _live.HasSession;
-        SessionNavLabel = _live.IsRunning ? "Sesión en vivo" : "Última sesión";
+        SessionNavLabel = _live.IsRunning
+            ? "Sesión en vivo"
+            : _live.HasFailed ? "Sesión fallida" : "Última sesión";
         SessionProgress = _live.ProgressLine;
     });
 
@@ -230,6 +236,19 @@ public sealed partial class MainViewModel : ObservableObject
             ToastKind.SessionCompleted);
         SyncSession();
     });
+
+    /// <summary>
+    /// La sesión no arrancó o reventó (F5.15). El toast dura y se puede descartar; el detalle vive
+    /// en V5, adonde el item del rail —que ahora SIGUE ahí tras un fallo— lleva de vuelta.
+    /// </summary>
+    private void OnSessionFailed(string message) => OnUiThread(() =>
+    {
+        _toasts.Show(message, ToastKind.SessionCompleted);
+        SyncSession();
+    });
+
+    /// <summary>Un aviso sin fallo: típicamente «se ha cambiado el modelo a X».</summary>
+    private void OnSessionNotice(string message) => OnUiThread(() => _toasts.Show(message));
 
     private void SyncAccount() => OnUiThread(() =>
     {

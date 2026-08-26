@@ -116,11 +116,13 @@ public partial class App : Application
         services.AddSingleton<OpenSessionStore>();
         services.AddSingleton(sp => new InterruptedSessionRecovery(
             sp.GetRequiredService<HubContext>(), sp.GetRequiredService<OpenSessionStore>()));
+        services.AddSingleton<ModelResolver>();
         services.AddSingleton(sp => new LiveSessionService(
             sp.GetRequiredService<SessionCoordinator>,
             sp.GetRequiredService<ICopilotAgent>(),
             sp.GetRequiredService<OpenSessionStore>(),
-            sp.GetRequiredService<HubContext>()));
+            sp.GetRequiredService<HubContext>(),
+            sp.GetRequiredService<ModelResolver>()));
         services.AddSingleton<GovernanceService>();
 
         // F5.10 · silencio con alcance: la pregunta de qué hacer con los hallazgos existentes y la

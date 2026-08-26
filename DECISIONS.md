@@ -3481,3 +3481,112 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   hallazgo entrante lleva ⚖ mientras la sesión corre, y que el cierre dice 0 disputados; repetir la
   auditoría sin tocar el código y comprobar que la pasada seca dice «· veredictos: N presente» en vez
   de solo «unidad completa».
+
+
+## F5.15 — El arranque que murió mudo, y el literal que lo mató
+
+### §1 — Por qué la interfaz se quedó zombi
+
+- **D-398 — Un fallo dejaba la sesión en un estado que la interfaz leía como «no hay nada que
+  enseñar».** `LiveSessionService` solo conocía dos estados terminales: corriendo
+  (`IsRunning`) y terminada (`HasFinished`). Cuando `CreateSessionAsync` reventó con «Model gpt-5 is
+  not available», el `finally` puso `IsRunning = false` y `HasFinished` se quedó en false. De ahí en
+  cascada, todo lo que el parte describe:
+
+  | Superficie | Cuelga de | Con el fallo |
+  |---|---|---|
+  | Item «Sesión en vivo» del rail | `HasSession = IsRunning \|\| HasFinished` | **desaparece** |
+  | Botón «Detener» | `IsRunning` | **desaparece** |
+  | Pantalla de cierre (la ÚNICA que pinta `StatusMessage`) | `ShowSummary`, que exige `HasFinished` | **no se pinta** |
+  | Reloj | `EndedUtc` ya sellado | **congelado en 00:02** |
+
+  El mensaje de error existía —`StatusMessage` se escribía en el `catch`— y **no había ni una
+  superficie que lo enseñara**. No fue un error tragado por un `catch` vacío: fue un error escrito
+  en una propiedad huérfana. Es la peor variante, porque en el código parece que está resuelto.
+
+- **D-399 — Y retro-explica el «bug 3» de F5.13.** El parte anterior decía que el item de navegación
+  había desaparecido y no había forma de volver a la sesión, y la investigación concluyó —con razón—
+  que no había ninguna regresión: el item llevaba sin tocarse desde F5.2 y los tests lo probaban. Lo
+  que faltaba era esto: **el item no desapareció por un cambio, desapareció porque la sesión había
+  fallado**, y una sesión fallida no contaba como sesión. La conclusión «no hay commit culpable» era
+  correcta; la causa estaba un nivel más abajo y hacía falta el log de las 12:20:06 para verla. Se
+  deja escrito porque cierra un cabo que quedó abierto: D-381 no se equivocaba, se quedaba corto.
+
+- **D-400 — «Fallida» es un tercer estado terminal, con su panel y su toast.** `HasFailed`,
+  `FailureMessage` y `FailureOffersModelChange` en el servicio; `HasSession` los incluye, así que el
+  rail sigue ofreciendo el camino de vuelta; V5 gana un panel propio colgado de `ShowFailure`
+  —`!IsRunning && HasFailed`, que no depende de `HasFinished`— con el mensaje, la aclaración de que
+  no se ha gastado nada y el atajo a Ajustes; y un evento `Failed` que la carcasa saca por toast,
+  porque quien lanza una auditoría se va a otra pantalla y un error que solo vive en V5 es un error
+  que nadie lee. Todos los caminos de fallo pasan por un único método `Fail(...)`, así que no puede
+  volver a existir uno que deje el estado a medias.
+
+- **D-401 — El modelo rechazado tiene excepción propia porque tiene REMEDIO propio.**
+  `CopilotModelUnavailableException` frente a la genérica: el mensaje nombra el modelo y la vista
+  ofrece «Elegir modelo en Ajustes». Un error genérico no puede ofrecer ese enlace, y sin el enlace
+  el usuario no sabe que la cura está a dos clics. El SDK no tipa este fallo, así que se reconoce por
+  el texto (`LooksLikeModelUnavailable`), exigiendo las dos piezas —que mencione un modelo **y** que
+  lo declare no disponible— para no confundirlo con cualquier mensaje que nombre un modelo de pasada.
+  Queda cubierto por una tabla de casos, positivos y negativos.
+
+### §2 — El literal que caducó
+
+- **D-402 — Un id de modelo es un dato del proveedor con fecha de caducidad; no puede vivir como
+  constante.** `AppSettings.CopilotModel` nacía con `"gpt-5"` escrito a mano. El día que GitHub lo
+  retiró, **toda máquina con ajustes vírgenes nació rota**: la primera auditoría moría en
+  `session.create`. El valor por defecto pasa a ser **vacío** = «pregúntaselo al runtime».
+
+- **D-403 — `ModelResolver` decide contra la lista real, antes de crear nada.** Al lanzar: si no hay
+  modelo elegido, o el guardado ya no figura entre los de la cuenta, se elige uno disponible, **se
+  guarda** (para no resolverlo dos veces ni obligar a arreglarlo dos veces) y se avisa por toast. Si
+  el guardado sigue vivo, no se toca nada ni se molesta a nadie. Si no se pudo preguntar pero hay un
+  modelo configurado, se sigue con él —puede ser válido y el fallo estar en la red—; si no hay
+  ninguno, la sesión **no arranca** y lo dice: dejar que el runtime la rechace después solo cambia un
+  aviso claro por un fallo feo.
+
+- **D-404 — Elige el PRIMERO que lista el runtime, y no es pereza.** Cualquier preferencia por
+  nombre —«los gpt antes que los claude», «evita los mini»— vuelve a meter literales que envejecen
+  igual que el que causó el parte. El orden de `ListModelsAsync` es el del propio proveedor para esa
+  cuenta: es el único criterio que no caduca. Y como la elección se enseña y se cambia en Ajustes con
+  dos clics, equivocarse cuesta un clic, no una avería.
+
+- **D-405 — Y queda un test que impide la recaída: ningún id de modelo en el código de producción.**
+  Barre `src/` buscando cadenas con forma de id (`"gpt-`, `"claude-`, `"o3`, `"o4-`, `"gemini-`). Mira
+  el **código, no los comentarios**: la documentación tiene que poder contar que el literal era
+  `gpt-5` y qué pasó el día que lo retiraron —esa memoria es justamente lo que evita repetirlo—; lo
+  que no puede volver es una cadena que el programa ejecute. El test viejo se llamaba
+  «El_modelo_por_defecto_es_el_que_se_usa_hoy» y afirmaba `"gpt-5"`: su propio nombre contenía el
+  bug, y estaba en verde mientras la aplicación se rompía.
+
+### §3 — El cierre lento
+
+- **D-406 — El agente ya no puede comerse el presupuesto de cierre, pero NO se ha probado que fuera
+  él.** El parte apuntaba a que «Cierre: se agotó el tiempo al liberar el host» era el mismo zombi.
+  Se revisó el camino de fallo y **no deja nada colgando**: `CreateSessionAsync` lanza antes de crear
+  la sesión, así que no hay sesión que liberar; el `finally` borra la marca de sesión abierta; el
+  `CopilotClient` es uno por proceso y su vida no depende de que una sesión saliera bien. **No hay
+  evidencia de que un arranque fallido cause el cierre lento**, y se deja escrito en vez de declarar
+  arreglado lo que no se ha reproducido. Lo que sí se hace es acotar al agente: `DisposeClientAsync`
+  espera 5 s como mucho al runtime y sigue. `App.OnExit` reparte 10 s entre todo lo que hay que
+  soltar; el agente no puede quedarse con el presupuesto entero. Un cierre lento es molesto; uno que
+  no termina deja un Atalaya zombi sondeando el hub (D-086). Si el aviso persiste, ya no es el
+  agente, y el siguiente sitio donde mirar es el timer de sondeo.
+
+### Cobertura y verificación
+
+- **D-407 — Lo que queda probado.** Del fallo: que un arranque fallido marca la sesión como fallida
+  y la deja VISIBLE —con `HasSession` en true, o sea con camino de vuelta—, con su mensaje nombrando
+  el modelo y ofreciendo Ajustes; que V5 lo pinta y retira «Detener»; que la plantilla declara el
+  panel, su enlace y su atajo; que un fallo que no es de modelo se ve pero no ofrece un remedio que
+  no aplica; que no queda marca de sesión abierta ni reloj corriendo; y que lanzar otra vez limpia el
+  fallo anterior. Del modelo: que sin configurar se elige uno y se guarda; que uno retirado se
+  sustituye nombrando los dos; que uno válido se deja en paz sin avisar; que sin lista y sin modelo
+  se falla diciéndolo y sin inventarse nada; que sin lista pero con modelo se sigue; el circuito
+  entero de una máquina virgen que resuelve y audita; y que sin ningún modelo utilizable no se
+  arranca. Del reconocimiento: siete mensajes, positivos y negativos, y el caso anidado.
+
+- **D-408 — Lo que se verifica a mano.** Poner en Ajustes un modelo inventado, lanzar una auditoría,
+  y comprobar que sale toast, que V5 enseña el panel rojo con el nombre del modelo y el botón a
+  Ajustes, que el item del rail SIGUE ahí para volver, y que no se ha auditado nada. Después, borrar
+  el modelo de los ajustes (dejarlo vacío) y lanzar: debe elegirse uno solo, avisarlo por toast, y
+  auditar con normalidad.

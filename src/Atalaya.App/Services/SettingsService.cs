@@ -90,9 +90,16 @@ public sealed class AppSettings
     /// <summary>
     /// Modelo de Copilot con el que se lanzan las sesiones nuevas (<c>SessionConfig.Model</c>).
     /// La lista de opciones se pide al SDK (<c>ListModelsAsync</c>), nunca se codifica a mano; esto
-    /// solo guarda el id elegido. Vacío = el que el runtime decida por defecto.
+    /// solo guarda el id elegido.
+    /// <para>
+    /// <b>Vacío por defecto, y es importante que lo sea (F5.15).</b> Aquí ponía <c>"gpt-5"</c>
+    /// escrito a mano. El día que GitHub retiró ese modelo, toda máquina con ajustes vírgenes nació
+    /// rota: la primera auditoría moría en <c>session.create</c>. Un nombre de modelo es un dato del
+    /// proveedor con fecha de caducidad y no puede vivir como constante. Vacío significa
+    /// «pregúntaselo al runtime», y de eso se encarga <c>ModelResolver</c> en el primer lanzamiento.
+    /// </para>
     /// </summary>
-    public string CopilotModel { get; set; } = "gpt-5";
+    public string CopilotModel { get; set; } = string.Empty;
 }
 
 /// <summary>
