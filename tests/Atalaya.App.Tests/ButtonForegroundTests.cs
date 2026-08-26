@@ -27,7 +27,6 @@ public sealed class ButtonForegroundTests
         "MetricsView.xaml",
         "SettingsView.xaml",
         "AccountView.xaml",
-        "ImportView.xaml",
         "OnboardingView.xaml",
     };
 

@@ -2,6 +2,7 @@ using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
 using Atalaya.Domain.Abstractions;
+using Atalaya.Domain.Ids;
 using Atalaya.Inventory;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -72,10 +73,78 @@ internal static class TestFactory
         }
     }
 
+    /// <summary>
+    /// El asistente de alta con el importador v4 conectado (F5.9 §1) y sin nada que abra ventanas.
+    /// </summary>
+    public static OnboardingViewModel Onboarding(
+        HubContext hub,
+        AppPaths paths,
+        MachineConfigStore machines,
+        ToastCenter toasts,
+        IUlidFactory ulids,
+        NavigationService navigation,
+        IFolderPicker? picker = null)
+        => new(
+            hub,
+            new InventoryScanner(),
+            machines,
+            navigation,
+            new FindingIngestionService(hub, ulids),
+            toasts,
+            Links(hub, paths),
+            LinkFlow(hub, paths, toasts),
+            new ImportService(hub),
+            picker ?? new NoFolderPicker());
+
+    /// <summary>El panel de métricas (F5.9) sin nada que abra una ventana ni un fichero.</summary>
+    public static MetricsViewModel Metrics(
+        HubContext hub,
+        AppPaths paths,
+        SettingsService settings,
+        NavigationService? navigation = null,
+        IFileOpener? opener = null,
+        ToastCenter? toasts = null)
+        => new(
+            new MetricsQuery(hub),
+            navigation ?? new NavigationService(new EmptyServiceProvider()),
+            settings,
+            hub,
+            opener ?? new RecordingFileOpener(),
+            toasts ?? new ToastCenter());
+
+    /// <summary>Un abridor que no abre nada y anota lo que le pidieron (F5.9 §3, gráfica 4).</summary>
+    public sealed class RecordingFileOpener : IFileOpener
+    {
+        public List<string> Opened { get; } = new();
+
+        /// <summary>Si el fichero existe se cuenta como abierto; si no, falla igual que el real.</summary>
+        public bool Open(string path)
+        {
+            Opened.Add(path);
+            return File.Exists(path);
+        }
+    }
+
+    /// <summary>Un contenedor vacío: la navegación existe y no puede resolver ninguna página.</summary>
+    private sealed class EmptyServiceProvider : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => null;
+    }
+
     /// <summary>Un selector que siempre cancela: ningún test abre el diálogo del sistema.</summary>
     public sealed class NoFolderPicker : IFolderPicker
     {
         public string? Pick(string title, string? initialDirectory = null) => null;
+    }
+
+    /// <summary>Un selector que devuelve siempre la misma carpeta, para el paso opcional de F5.9.</summary>
+    public sealed class FixedFolderPicker : IFolderPicker
+    {
+        private readonly string? _folder;
+
+        public FixedFolderPicker(string? folder) => _folder = folder;
+
+        public string? Pick(string title, string? initialDirectory = null) => _folder;
     }
 
     /// <summary>Un diálogo que no se muestra: devuelve el view-model tal cual lo recibió.</summary>

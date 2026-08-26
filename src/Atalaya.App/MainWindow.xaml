@@ -102,13 +102,6 @@
                         HorizontalContentAlignment="Left"
                         Margin="0,2" />
                     <ui:Button
-                        Command="{Binding ShowImportCommand}"
-                        Content="Importar v4"
-                        Appearance="Secondary"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Margin="0,2" />
-                    <ui:Button
                         Command="{Binding ShowAccountCommand}"
                         Content="Cuenta"
                         Appearance="Secondary"

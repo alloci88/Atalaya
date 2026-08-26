@@ -35,7 +35,6 @@ public sealed class EmbeddedStatusSweepTests
         "MetricsView.xaml",
         "SettingsView.xaml",
         "AccountView.xaml",
-        "ImportView.xaml",
         "OnboardingView.xaml",
     };
 
@@ -89,7 +88,6 @@ public sealed class EmbeddedStatusSweepTests
     [Theory]
     [InlineData("Atalaya.App.ViewModels.SettingsViewModel")]
     [InlineData("Atalaya.App.ViewModels.InventoryViewModel")]
-    [InlineData("Atalaya.App.ViewModels.ImportViewModel")]
     [InlineData("Atalaya.App.ViewModels.OnboardingViewModel")]
     [InlineData("Atalaya.App.ViewModels.FindingDetailViewModel")]
     public void Los_view_models_barridos_ya_no_exponen_StatusMessage(string typeName)

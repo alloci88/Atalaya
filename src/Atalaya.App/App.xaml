@@ -16,6 +16,7 @@
             <local:SyncHealthToBrushConverter x:Key="SyncHealthToBrush" />
             <local:CloneLinkStateToBrushConverter x:Key="CloneLinkStateToBrush" />
             <local:SeverityToBrushConverter x:Key="SeverityToBrush" />
+            <local:DashedToArrayConverter x:Key="DashedToArray" />
             <local:SeverityToLabelConverter x:Key="SeverityToLabel" />
             <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
             <local:NotEmptyToVisibilityConverter x:Key="NotEmptyToVisibility" />
@@ -58,9 +59,6 @@
             </DataTemplate>
             <DataTemplate DataType="{x:Type vm:MetricsViewModel}">
                 <views:MetricsView />
-            </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:ImportViewModel}">
-                <views:ImportView />
             </DataTemplate>
         </ResourceDictionary>
     </Application.Resources>

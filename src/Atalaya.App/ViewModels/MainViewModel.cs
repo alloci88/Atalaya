@@ -268,9 +268,6 @@ public sealed partial class MainViewModel : ObservableObject
     private Task ShowMetrics() => Navigation.NavigateToAsync<MetricsViewModel>();
 
     [RelayCommand]
-    private Task ShowImport() => Navigation.NavigateToAsync<ImportViewModel>();
-
-    [RelayCommand]
     private Task ShowSettings() => Navigation.NavigateToAsync<SettingsViewModel>();
 
     /// <summary>Abre V5 con el estado al día — la vista se reconstruye desde el servicio.</summary>

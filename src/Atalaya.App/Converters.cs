@@ -49,13 +49,9 @@ public sealed class CloneLinkStateToBrushConverter : IValueConverter
 /// <summary>Severity colour for finding badges (rúbrica §0).</summary>
 public sealed class SeverityToBrushConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
-    {
-        Severity.Critica => new SolidColorBrush(Color.FromRgb(0xD1, 0x3A, 0x3A)),
-        Severity.Alta => new SolidColorBrush(Color.FromRgb(0xE0, 0x7A, 0x2B)),
-        Severity.Media => new SolidColorBrush(Color.FromRgb(0xD2, 0xB0, 0x36)),
-        _ => new SolidColorBrush(Color.FromRgb(0x6C, 0x93, 0xC0)),
-    };
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => new SolidColorBrush(
+            (Color)ColorConverter.ConvertFromString(SeverityPalette.Hex(value as Severity? ?? Severity.Baja)));
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
@@ -248,6 +244,19 @@ public sealed class FindingEventToBrushConverter : IValueConverter
         FindingEvent.SeverityChanged => new SolidColorBrush(Color.FromRgb(0xD2, 0xB0, 0x36)),
         _ => new SolidColorBrush(Color.FromRgb(0x8C, 0x8C, 0x96)),
     };
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>
+/// El patron de trazos de una serie agrupada (F5.9 §2). «Otras» va SIEMPRE a trazos, tambien en
+/// la leyenda: el color solo no basta para decir que ahi dentro hay varias aplicaciones.
+/// </summary>
+public sealed class DashedToArrayConverter : IValueConverter
+{
+    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is true ? new DoubleCollection(new double[] { 2, 1.5 }) : null;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();

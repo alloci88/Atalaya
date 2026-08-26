@@ -153,6 +153,8 @@ public partial class App : Application
         services.AddSingleton<LinkCloneFlow>();
 
         services.AddSingleton<EditorLauncher>();
+        // F5.9: abrir el informe de una sesion desde el registro de operaciones.
+        services.AddSingleton<IFileOpener, ShellFileOpener>();
         // La memoria de plegado es de la SESIÓN, no de la vista: V2 y V3 son transitorias y la
         // comparten (F5.6 §1).
         services.AddSingleton<GroupExpansionMemory>();
@@ -176,7 +178,6 @@ public partial class App : Application
         services.AddTransient<FindingsViewModel>();
         services.AddTransient<FindingDetailViewModel>();
         services.AddTransient<MetricsViewModel>();
-        services.AddTransient<ImportViewModel>();
     }
 
     /// <summary>

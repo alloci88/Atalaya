@@ -21,7 +21,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <ui:TextBox Grid.Column="0" Text="{Binding ClonePath}" />
+                <ui:TextBox Grid.Column="0" Text="{Binding ClonePath, UpdateSourceTrigger=PropertyChanged}" />
                 <ui:Button Grid.Column="1" Content="Detectar stack" Command="{Binding DetectCommand}" Margin="8,0,0,0" />
             </Grid>
 
@@ -42,6 +42,53 @@
                                Appearance="Primary"
                                HorizontalAlignment="Left"
                                Margin="0,10,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- F5.9 §1: el importador v4 ya no es un destino del menú. Es un paso OPCIONAL de
+                 esta alta, porque traerse lo que el sistema anterior sabía de la app y dar la app
+                 de alta son el mismo gesto y se hace una sola vez por aplicación. El asistente
+                 busca la carpeta solo; si no está donde debería, se señala a mano. -->
+            <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="12,10"
+                    Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="Baseline del sistema v4 (opcional)" FontWeight="SemiBold" />
+                    <TextBlock Text="Si esta aplicación ya se auditaba con el sistema v4, su carpeta CodeAudit/ se puede importar ahora: hallazgos, silencios, histórico e informes entran con el alta."
+                               Opacity="0.7" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,10" />
+
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox Grid.Column="0" Text="{Binding CodeAuditPath, UpdateSourceTrigger=PropertyChanged}"
+                                    PlaceholderText="Ruta de la carpeta CodeAudit/" />
+                        <ui:Button Grid.Column="1" Content="Elegir carpeta…" Command="{Binding PickBaselineCommand}"
+                                   Margin="8,0,0,0" />
+                    </Grid>
+
+                    <TextBlock Text="{Binding BaselineNotice}" FontSize="12" Opacity="0.8" TextWrapping="Wrap"
+                               Margin="0,0,0,8"
+                               Visibility="{Binding BaselineNotice, Converter={StaticResource NotEmptyToVisibility}}" />
+
+                    <CheckBox Content="Importar el baseline del sistema v4 al crear la aplicación"
+                              IsChecked="{Binding ImportBaseline}"
+                              IsEnabled="{Binding HasBaseline}" />
+
+                    <!-- La salida del importador se queda a la vista: no es el aviso de una
+                         acción (eso va por toast, F5.7 §4) sino lo que no se pudo importar. -->
+                    <ItemsControl ItemsSource="{Binding ImportLog}" Margin="0,10,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="11"
+                                           TextWrapping="Wrap" Margin="0,1" Opacity="0.85" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
             </Border>
 

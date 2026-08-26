@@ -138,22 +138,15 @@ public sealed class LinkCloneFlowTests : IDisposable
         ShellRefresh.ShouldReloadOnActivate(Portfolio(), busy: true)
             .Should().BeFalse("con una operación en curso no se recarga por debajo");
         ShellRefresh.ShouldReloadOnActivate(null, busy: false).Should().BeFalse();
-        ShellRefresh.ShouldReloadOnActivate(new MetricsViewModel(new MetricsQuery(_hub)), busy: false)
+        ShellRefresh.ShouldReloadOnActivate(TestFactory.Metrics(_hub, _paths, _settings), busy: false)
             .Should().BeFalse("Métricas no depende del clon local");
     }
 
     // ================================================================= §2 · la redirección
 
     private OnboardingViewModel Onboarding()
-        => new(
-            _hub,
-            new InventoryScanner(),
-            _machines,
-            new NavigationService(new EmptyServices()),
-            new FindingIngestionService(_hub, _ulids),
-            _toasts,
-            _links,
-            TestFactory.LinkFlow(_hub, _paths, _toasts));
+        => TestFactory.Onboarding(
+            _hub, _paths, _machines, _toasts, _ulids, new NavigationService(new EmptyServices()));
 
     [Fact]
     public void Escribir_la_URL_de_una_app_que_ya_existe_redirige_a_vincular()

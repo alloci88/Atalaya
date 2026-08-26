@@ -95,11 +95,13 @@ public sealed class DeprecatedModesTests : IDisposable
         WriteLegacySession("integral", 100_000);
         WriteLegacySession("superficial", 20_000);
 
-        MetricsSummary m = new MetricsQuery(_hub).Build();
+        // El panel de F5.9 agrega por PERIODO, y estas sesiones son de 2025: solo entran con
+        // «Todo», que es justamente el rango que existe para que nada quede fuera del histórico.
+        MetricsDashboard m = new MetricsQuery(_hub).Build(new MetricsFilter(null, MetricsRange.All));
 
-        m.InputTokens.Should().Be(120_000, "el gasto de una sesión retirada se gastó igual");
-        m.OutputTokens.Should().Be(8_000);
-        m.Cost.Should().Be(25m);
+        m.CostInPeriod.Should().Be(25m, "el gasto de una sesión retirada se gastó igual");
+        m.CostUnit.Should().Be("premium requests", "la unidad la declaró la sesión, no la inventa el panel");
+        m.Sessions.Should().HaveCount(2, "y las dos siguen saliendo en el registro de operaciones");
     }
 
     [Fact]

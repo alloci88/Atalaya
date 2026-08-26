@@ -2613,3 +2613,225 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   aplicación no tiene. El **arreglo integrado supervisado** (rama `fix/{displayId}` + permission
   handler por-fichero + diff aprobado + sin push) queda como trabajo futuro; cuando se construya,
   el flag ya está ahí y el control se vuelve a poner.
+
+## F5.9 — Métricas (V6): de placeholder a panel de mando
+
+### §1 — «Importar v4» sale del menú y entra en el asistente
+
+- **D-310 — Era un problema de SITIO, no de capacidad.** El importador funcionaba; lo que estaba
+  mal es que ocupase un destino permanente de la navegación. Importar el baseline de una app es
+  una acción de **una-vez-por-app** que se hace justo al darla de alta: quien la necesita está,
+  por definición, en «Nueva aplicación», y quien no la necesita —todos los días a partir del
+  segundo— la tenía delante para siempre. Con las demás aplicaciones de la empresa todavía por dar
+  de alta, el gesto va a seguir haciendo falta: por eso no se retira, se **reubica** al camino por
+  el que ya se pasa. El item del rail, la página `ImportView` y su view-model desaparecen;
+  `ImportService` y `V4Importer` se quedan enteros.
+
+- **D-311 — El asistente la busca, pero no la importa solo.** `V4Baseline.Find` mira la raíz del
+  clon elegido (y acepta que el usuario haya señalado directamente la propia `CodeAudit/`, que es
+  el error fácil de cometer cuando se sabe distinguir). Encontrarla **propone**: rellena la ruta y
+  marca la casilla. Importar sigue siendo una decisión que se ve venir, igual que detectar deriva
+  al vincular ofrece re-escanear y no re-escanea solo (D-301). Y si el baseline vive fuera del
+  repo auditado, se señala a mano con el mismo `IFolderPicker` de F5.8. La detección es por
+  contenido —basta uno de `BASELINE.md`, `LOTES.md`, `SILENCIADOS.md`, `HISTORICO.md`—, no por el
+  nombre de la carpeta: una `CodeAudit/` vacía no es un baseline.
+
+- **D-312 — Se importa ANTES de escanear, y el inventario se reconcilia.** Es el orden que
+  importa y el único que conserva las dos mitades. El baseline v4 trae su `app.json` —con el ciclo
+  en el que se quedó el sistema anterior— y su inventario con **qué unidades estaban auditadas**;
+  el escaneo trae **qué ficheros hay hoy en el clon**, con sus hashes de contenido. Importar
+  después habría pisado el escaneo con una lista de ficheros de otra época; escanear y no
+  reconciliar habría tirado justo lo que se venía a rescatar. El inventario final es
+  `Rescanner.Reconcile(importado, escaneado)`, la misma reconciliación del re-escaneo (D-302), no
+  una segunda escrita aparte. Y `ImportService.Import` recibe `push: false`: el alta publica **una
+  vez** al final. Dos commits para un mismo gesto no cuentan dos cosas, cuentan la misma a medias.
+
+### §2 — Las reglas de visualización, y por qué son reglas
+
+- **D-313 — Un solo eje Y por gráfica, sin excepción.** No es una preferencia estética: un eje
+  secundario deja que quien dibuja **elija la escala** con la que se leen dos series, y con eso se
+  puede hacer que cualquier par de líneas se crucen donde uno quiera. `AxisScale` calcula UNA
+  escala por gráfica y la comparten todas sus series. La gráfica del flujo es la que tenía la
+  tentación —barras de nuevos/resueltos y línea de activos acumulados— y no cae en ella: las tres
+  son **conteos de hallazgos**, así que comparten el eje aunque las barras salgan pequeñas al lado
+  de la deuda acumulada. Que salgan pequeñas *es el dato*: dice que la rotación semanal es chica
+  comparada con lo que hay abierto. `ChartPlot` no tiene ninguna propiedad de segundo eje, que es
+  la forma más sólida de no tenerlo. Las marcas van en números redondos (1-2-5 por década): un eje
+  que llega a 137 con marcas cada 34,25 es exacto e ilegible.
+
+- **D-314 — El color de una app sale de un HASH de su slug, no de su posición.** Repartir la
+  paleta por el orden de la lista habría hecho que dar de alta una aplicación nueva —algo que va a
+  pasar con cada app de la empresa— repintase a todas las que van detrás. El índice sale de
+  **FNV-1a**, nunca de `string.GetHashCode`, que está aleatorizado por proceso y habría dado
+  colores distintos en cada arranque: exactamente lo que la regla prohíbe. Las colisiones se
+  resuelven en orden ordinal de slug sobre el **portafolio completo**, así que filtrar el panel no
+  reparte nada — un filtro que oculta apps deja a las demás del color que tenían, y el rosco de
+  xblast, su línea de coste y su punto en el registro de sesiones son del mismo color.
+
+- **D-315 — Seis colores, y la séptima app en adelante es «Otras».** Descontados los cuatro tonos
+  de severidad y los tres de estado (verde/ámbar/rojo), lo que queda libre deja de distinguirse en
+  una línea de 1,6 px mucho antes de la décima serie. En la gráfica de coste se nombran las seis
+  que más consumieron **en el periodo** y el resto se suma en «Otras», que va en gris y **a
+  trazos**: un agregado de varias aplicaciones no puede leerse como una app más solo por tener
+  color. La elección de cuáles se nombran depende del periodo; el color de cada una, no.
+
+- **D-316 — Las severidades son colores de ESTADO y quedan reservadas.** Crítica, alta, media y
+  baja significan lo mismo en toda la aplicación —chips del portafolio, badges de hallazgos,
+  informes—, así que ninguna serie puede usarlos: una app pintada de rojo se lee como «crítica».
+  Para poder **comprobarlo** en vez de dejarlo escrito en un comentario, los cuatro salieron de
+  dentro de `SeverityToBrushConverter` a `SeverityPalette`, que ahora es el único sitio donde
+  viven; el convertidor lee de ahí, así que no pueden divergir. Los roscos de cobertura tampoco
+  los usan: van con el color de la app y dos neutros, porque un rosco de cobertura no habla de
+  gravedad y pintar «pendiente» de rojo diría que lo pendiente es crítico.
+
+- **D-317 — Dos temas son dos PASOS elegidos, no un flip.** Cada color de serie tiene su valor
+  para fondo claro y otro para fondo oscuro. Invertir la luminosidad del mismo color da, sobre
+  negro, un tono lavado que no se distingue del vecino. Los colores de serie se **aclaran** en
+  oscuro (una línea tiene que destacar sobre el fondo) y los rellenos neutros del rosco hacen lo
+  contrario (ahí lo que se busca es un fondo apagado contra el que resalte el tramo auditado): son
+  dos reglas distintas porque son dos trabajos distintos, y el test las comprueba por separado. El
+  tema vigente se lee del ajuste que la propia aplicación usa para aplicarlo; cambiarlo exige ir a
+  Ajustes, y volver a Métricas recarga la página, así que no hace falta escuchar ningún evento.
+
+- **D-318 — Ninguna cifra sin datos detrás.** Un tile que escribe «0,0 días» sobre cero
+  resoluciones, o «0 unidades SDK» sobre cero sesiones, no está diciendo cero: está diciendo una
+  medida que nadie ha tomado. Los agregados que pueden no existir son **nulos**, no cero
+  (`CostInPeriod`, `CostPerAuditedUnit`, `HasCycleData`), y la vista escribe «—» con la frase que
+  dice **cuándo se activarán**. Es la regla N-2 aplicada a un panel: declarar la procedencia, o
+  declarar que no la hay.
+
+### §3 — Qué enseña el panel, y qué dejó de enseñar
+
+- **D-319 — Las tres preguntas mandan sobre el contenido.** ¿Cómo estamos? (activos por severidad,
+  cobertura del ciclo, roscos). ¿Avanzamos? (resueltos con delta, flujo de hallazgos). ¿Cuánto
+  cuesta? (coste del periodo, coste en el tiempo, registro de sesiones). Lo que no responde a
+  ninguna de las tres no está. Cuatro tiles, cuatro gráficas: la sexta gráfica no habría añadido
+  una respuesta, habría repartido la atención entre más sitios.
+
+- **D-320 — «Hallazgos activos» NO se filtra por periodo, y todo lo demás sí.** Es un estado de
+  hoy —cuánta deuda hay abierta— y recortarlo por la ventana temporal daría un número más pequeño
+  que la deuda real, que es la peor clase de error en un panel que alguien mira para decidir. Los
+  resueltos, el coste y las gráficas sí son del periodo, y el delta de resueltos se compara contra
+  el periodo **inmediatamente anterior de la misma longitud**, no contra un mes fijo.
+
+- **D-321 — El burndown reconstruye los activos a la fecha de cada tramo.** Repetir el estado de
+  hoy en todos los cubos habría dado una recta horizontal que no responde a nada. Cada cubo cuenta
+  los hallazgos **creados antes de su cierre y todavía sin resolver en ese momento**, que es lo
+  único que contesta «¿la deuda baja o sube?». La gráfica anterior —una barra por semana, sin
+  acumulado— no lo contestaba.
+
+- **D-322 — La cobertura se mide sobre lo AUDITABLE, no sobre el total.** Las unidades grandes
+  están excluidas por definición: nadie las va a auditar en este ciclo, así que contarlas en el
+  denominador daría una app «al 70 %» que en realidad ya no tiene nada pendiente. Es la misma
+  cuenta que el progreso de la tarjeta del portafolio, y a propósito: la misma aplicación no puede
+  enseñar dos porcentajes distintos en dos pantallas. El rosco sí las **dibuja**, como tercer
+  segmento neutro, porque existir existen y el usuario tiene que saber cuántas son.
+
+- **D-323 — El registro de sesiones era el hueco de verdad.** Quién auditó qué, cuándo, cuántas
+  unidades, con qué saldo de hallazgos y a qué coste no se veía **en ninguna parte** sin ir al hub
+  a leer JSON. Va acotado a 25 líneas —el panel no puede convertirse en otra lista infinita— y
+  cada línea abre el informe markdown de esa sesión, que es su detalle. Si esa sesión no dejó
+  informe, se dice; un clic que no hace nada se lee como un fallo.
+
+- **D-324 — Lo que se retira, y a dónde va.** El **«% criterio»** mide la calidad del AUDITOR —qué
+  proporción de lo que encuentra es criterio y no defecto duro—, no el estado del código: es un
+  diagnóstico que solo se puede interpretar junto a la sesión que lo produjo, y ahí sigue, en el
+  informe de cada una. El **«tiempo medio a resolución»** no vuelve hasta que haya resoluciones
+  reales que promediar; hasta entonces sería el «0,0 días» de D-318. Cuando las haya, vuelve como
+  tile con datos.
+
+- **D-325 — Render WPF propio, no LiveCharts2.** Ambas opciones eran MIT y ninguna se descartó por
+  licencia. Pesaron tres cosas. (a) **Las reglas del §2 son nuestras**: color por identidad,
+  severidades reservadas, un solo eje, dos pasos por tema. Ninguna librería las trae; con
+  cualquiera de ellas habría que imponerlas una a una **sobre** sus valores por defecto, que es
+  más trabajo que dibujarlas y además deja la puerta abierta a que un valor por defecto se cuele.
+  (b) **Tooltips**: el `ToolTip` nativo de WPF ya hereda el tema de la aplicación, la tipografía y
+  el comportamiento del sistema; un lienzo Skia dibuja el suyo y hay que replicar los tokens del
+  tema a mano — que es justamente lo que la regla de «legible en ambos temas» quería evitar. (c)
+  **Coste de integración**: `LiveChartsCore.SkiaSharpView.WPF` arrastra binarios nativos de
+  SkiaSharp a `dist`, y las cuatro formas del panel son geometría trivial (polilínea, barras
+  agrupadas, arcos). `ChartPlot` y `DonutRing` son dos ficheros y cero dependencias nuevas.
+
+- **D-326 — El cursor es una banda invisible por columna, no un adorno.** Cada tramo del eje X
+  lleva un rectángulo transparente que cubre **todo el alto** del área de dibujo. Es lo que
+  permite que el tooltip salga apuntando a cualquier altura de la columna —sin tener que acertarle
+  a una línea de 1,6 px— y lo que permite enseñar **todas las series de ese tramo juntas**, con su
+  color y su valor, en vez del valor suelto de la que se haya acertado. Un tramo sin actividad lo
+  dice: un tooltip en blanco se lee como un fallo del programa.
+
+### §4 — Datos: se calcula todo, se guarda nada
+
+- **D-327 — La caché es de la LECTURA y vive en memoria.** Cada render tocaría todos los
+  hallazgos, todas las sesiones y todos los inventarios de todas las apps, y el panel se re-agrega
+  con cada cambio de filtro, que es un gesto de un clic. Se cachea el volcado de ficheros por
+  aplicación —nunca el agregado en disco—: la norma dice que en el hub solo hay datos primarios,
+  así que un fichero de agregados sería exactamente lo que no se puede añadir. Se invalida con el
+  evento de sync del hub, que es el único momento en que esos ficheros cambian por debajo. El
+  toggle «Acumulado» no re-agrega nada: es una forma de **leer** los mismos datos, y se calcula
+  sobre lo que ya está en memoria. Y la agregación corre fuera del hilo de UI: el panel no puede
+  congelar la ventana mientras cuenta.
+
+### Cobertura y verificación
+
+- **D-328 — Lo que queda probado.** De §1: que el item, la página y su view-model no existen y que
+  el servicio sí; que un clon con `CodeAudit/` lo detecta y lo propone marcado; que el alta trae
+  los hallazgos del baseline **y** deja el inventario con los ficheros del clon; que desmarcar la
+  casilla da de alta sin importar nada; que sin `CodeAudit/` el asistente se comporta exactamente
+  igual que antes; que se puede señalar una carpeta de fuera del repo; y que una carpeta que no es
+  v4 se rechaza diciendo qué le falta. De §2, una por una: que el color de una app no depende del
+  proceso ni del orden de la lista, que filtrar no repinta a nadie, que seis apps reciben seis
+  colores distintos aunque colisionen sus hashes, que **ningún** color de serie es uno de
+  severidad y que el convertidor de severidad lee del sitio único, que cada color tiene dos pasos
+  y en qué dirección va cada familia, que el eje termina en número redondo y no divide por cero,
+  que el flujo son barras y línea sobre un solo eje, que hay leyenda desde la segunda serie, y que
+  sin datos los tiles escriben «—» con su frase de activación. De §3 y §4: el desglose por
+  severidad sin recorte de periodo, el delta contra el periodo anterior, el coste y su media por
+  unidad, la cobertura excluyendo grandes y cuadrando con el rosco, el reparto por tramos, la
+  agrupación en «Otras» sin perder una sola unidad, la reconstrucción de activos a la fecha de
+  cada cubo, el orden y el tope del registro de sesiones, los tres rangos con su grano, «Todo»
+  arrancando en el dato más antiguo y pasando a meses por encima del año, que la caché existe y se
+  puede tirar, y —el que protege la norma— que **agregar no escribe ni un fichero en el hub**,
+  comprobado con una foto del árbol antes y después de recorrer los ocho filtros.
+
+- **D-329 — Las vistas se comprobaron cargándolas de verdad (arnés de D-268/D-290/D-308).**
+  `MetricsView` y `OnboardingView` se instancian con los diccionarios de producción, escuchando
+  `PresentationTraceSources.DataBindingSource`, y se renderizan a PNG en los dos temas: **cero
+  avisos de enlace**. De ahí salieron tres defectos que ninguna aserción sobre el texto del XAML
+  habría detectado. El primero: el `ContentPresenter` de la plantilla por defecto de `Button`
+  **no estira su contenido**, así que la rejilla de columnas de cada fila del registro de sesiones
+  se encogía al ancho de su texto y dejaba de cuadrar con la de la cabecera — el nombre de la app
+  y quién la auditó salían pegados («Nóminamaria»). Se arregla con plantilla propia, y quien
+  redefine la plantilla de un botón se queda con su color (F5.6 §1). El segundo: la barra de
+  desplazamiento de WPF-UI se pinta **encima** del contenido, y el interruptor «Acumulado» quedaba
+  debajo de ella; el `ScrollViewer` le reserva su hueco, el mismo que la cabecera y los filtros
+  para que el panel no tenga dos bordes derechos.
+
+- **D-331 — Un `Style` sin `BasedOn` SUSTITUYE al estilo implícito de WPF-UI, no lo extiende.** El
+  tercer defecto del render, y el que más se veía: `Style x:Key="Block" TargetType="ui:Card"` se
+  puso solo para compartir un margen entre los cuatro bloques de gráficas, y al no llevar
+  `BasedOn` se llevó por delante la plantilla entera de la tarjeta — fondo, borde **y relleno**.
+  El síntoma era que el interruptor «Acumulado» y la última cifra de la fila tocaban la barra de
+  desplazamiento; la causa no era un margen sino que esos bloques habían dejado de ser tarjetas.
+  Es exactamente la misma trampa que F5.6 §1 encontró en los `Button` (un `Style` sin `BasedOn`
+  hereda el `Foreground` negro de serie de WPF) y se cierra igual: `ImplicitStyleTests` barre
+  **todas** las vistas y la carcasa exigiendo `BasedOn` en cualquier `Style` cuyo `TargetType` sea
+  un control de WPF-UI. Quien redefine un estilo hereda la responsabilidad de todo lo que ese
+  estilo traía, no solo de lo que quería cambiar.
+  <br>
+  El barrido, al nacer, encontró **un caso anterior**: `SideAction` en `FindingDetailView.xaml`
+  redefine solo alineación y margen de un `ui:Button` y se lleva la plantilla igual. F5.9 tenía
+  prohibido tocar otras vistas, así que no se arregla aquí: queda en la lista de deuda del propio
+  test, con su motivo escrito, para que se vea en vez de para que se olvide. El test **falla** si
+  alguien arregla ese estilo y no saca la entrada, así que la lista no puede pudrirse.
+
+- **D-332 — «Crít», no «Crítica», en los chips del tile.** Son cuatro chips en el ancho de un
+  cuarto de fila y «Crítica» los parte en dos líneas. La abreviatura no es nueva: es la que ya usa
+  la tarjeta del portafolio, así que el usuario la ha visto antes y el panel no inventa una
+  segunda forma de escribir lo mismo.
+
+- **D-330 — Lo que se verifica a mano.** (a) Cambiar el selector de aplicación y el de periodo y
+  ver reaccionar los cuatro tiles y las cuatro gráficas; (b) pasar el ratón por la gráfica de
+  coste y leer el tooltip con cada app y su valor, y activar «Acumulado» para ver la curva
+  ascendente; (c) pulsar un rosco y comprobar que abre el inventario de ESA aplicación; (d) leer
+  el panel entero en tema claro y en tema oscuro; (e) dárselo a alguien que no lo haya visto y
+  comprobar que lo entiende sin explicación.
