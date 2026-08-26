@@ -131,6 +131,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SilenceActionLabel))]
+    [NotifyPropertyChangedFor(nameof(CanApplySilence))]
     private SilenceScope _silenceScope = SilenceScope.Hallazgo;
 
     /// <summary>El radio sigue al modelo, no solo al revés: fijar el alcance desde código lo marca.</summary>
@@ -225,6 +226,15 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
 
     /// <summary>Silenciar algo ya silenciado no hace nada: el botón se retira.</summary>
     public bool CanSilence => Status != FindingStatus.Silenciado;
+
+    /// <summary>
+    /// Si el botón de la sección hace algo (F5.10). Los dos alcances tienen puertas distintas:
+    /// silenciar un hallazgo ya silenciado no hace nada, pero <b>excluir su regla sí</b> — es el
+    /// camino natural, de hecho. Alguien silencia un falso positivo, ve que se repite por toda la
+    /// aplicación y vuelve a esa misma ficha a apagar la regla entera; hasta aquí se encontraba con
+    /// el selector de alcance pintado y ningún botón que pulsar.
+    /// </summary>
+    public bool CanApplySilence => SilenceScope == SilenceScope.Regla || CanSilence;
 
     /// <summary>«Reabrir» aparece SOLO si está resuelto (F5.5 §4).</summary>
     public bool CanReopen => Status == FindingStatus.Resuelto;
@@ -348,6 +358,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         OnPropertyChanged(nameof(StatusHelp));
         OnPropertyChanged(nameof(NeedsReview));
         OnPropertyChanged(nameof(CanSilence));
+        OnPropertyChanged(nameof(CanApplySilence));
         OnPropertyChanged(nameof(CanUnsilence));
         OnPropertyChanged(nameof(CanReopen));
         OnPropertyChanged(nameof(CanResolveManually));

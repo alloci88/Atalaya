@@ -2982,6 +2982,15 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   el alcance se fija desde código, y las dos vías convergen porque el setter generado no reemite
   cuando el valor no cambia.
 
+- **D-351 — El botón de la sección tiene una puerta por alcance, no una para las dos.** Su
+  visibilidad colgaba de `CanSilence` (`Status != Silenciado`), que es correcto para «solo este
+  hallazgo» y falso para «esta regla en toda la aplicación»: excluir la regla de un hallazgo YA
+  silenciado sí hace algo, y es además el camino natural — alguien silencia un falso positivo, ve
+  que se repite por toda la app y vuelve a esa misma ficha a apagar la regla entera. Con la puerta
+  compartida se encontraba el selector de alcance pintado y **ningún botón que pulsar**, que es
+  peor que no ofrecer la opción. `CanApplySilence` la separa: alcance de regla siempre, alcance de
+  hallazgo solo si no está silenciado.
+
 - **D-350 — Lo que se verifica a mano.** Excluir una regla desde un hallazgo real de xblast
   eligiendo «toda la aplicación» y marcando silenciar los existentes; auditar esa clase y comprobar
   que el informe trae «Suprimidos por regla» y que ninguno renace; des-excluir desde «Gestionar» y

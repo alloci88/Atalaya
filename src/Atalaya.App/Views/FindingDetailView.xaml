@@ -432,7 +432,7 @@
 
                         <WrapPanel Margin="0,10,0,0">
                             <ui:Button Content="{Binding SilenceActionLabel}" Command="{Binding SilenceCommand}" Margin="0,0,6,0"
-                                       Visibility="{Binding CanSilence, Converter={StaticResource BoolToVisibility}}" />
+                                       Visibility="{Binding CanApplySilence, Converter={StaticResource BoolToVisibility}}" />
                             <ui:Button Content="Des-silenciar" Command="{Binding UnsilenceCommand}"
                                        Visibility="{Binding CanUnsilence, Converter={StaticResource BoolToVisibility}}" />
                         </WrapPanel>

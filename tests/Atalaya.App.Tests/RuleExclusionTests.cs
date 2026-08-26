@@ -518,6 +518,44 @@ public sealed class RuleExclusionTests : IDisposable
         _hub.Store.TryReadRuleExclusion("alpha", Rule).Should().NotBeNull();
     }
 
+    /// <summary>
+    /// El camino natural: silencias un falso positivo, ves que se repite por toda la app y vuelves
+    /// a esa misma ficha a apagar la regla. Con el botón atado a <c>CanSilence</c> te encontrabas
+    /// el selector pintado y nada que pulsar.
+    /// </summary>
+    [Fact]
+    public void Sobre_un_hallazgo_ya_silenciado_se_puede_excluir_la_regla()
+    {
+        SeedApp("alpha");
+        Finding f = SeedFinding("alpha");
+        _governance.Silence("alpha", f.Id, SilenceReason.FalsoPositivo, "aquí no", null);
+
+        FindingDetailViewModel vm = Detail(new TestFactory.RecordingExcludeConfirmer());
+        vm.Load("alpha", f.Id);
+
+        vm.CanSilence.Should().BeFalse("silenciar lo ya silenciado no hace nada");
+        vm.CanApplySilence.Should().BeFalse("con el alcance por defecto el botón sigue retirado");
+
+        vm.SilenceScope = SilenceScope.Regla;
+        vm.CanApplySilence.Should().BeTrue("excluir la regla sí hace algo sobre un silenciado");
+
+        vm.SilenceCommand.Execute(null);
+        _hub.Store.TryReadRuleExclusion("alpha", Rule).Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Sobre_un_hallazgo_activo_el_boton_esta_en_los_dos_alcances()
+    {
+        SeedApp("alpha");
+        Finding f = SeedFinding("alpha");
+        FindingDetailViewModel vm = Detail(new TestFactory.RecordingExcludeConfirmer());
+        vm.Load("alpha", f.Id);
+
+        vm.CanApplySilence.Should().BeTrue();
+        vm.SilenceScope = SilenceScope.Regla;
+        vm.CanApplySilence.Should().BeTrue();
+    }
+
     [Fact]
     public void La_ficha_dice_que_el_silencio_vino_de_una_exclusion_de_regla()
     {
