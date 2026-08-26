@@ -94,7 +94,8 @@ internal static class TestFactory
             Links(hub, paths),
             LinkFlow(hub, paths, toasts),
             new ImportService(hub),
-            picker ?? new NoFolderPicker());
+            picker ?? new NoFolderPicker(),
+            new MeasuredFindingService(hub, new FindingIngestionService(hub, ulids), machines));
 
     /// <summary>El panel de métricas (F5.9) sin nada que abra una ventana ni un fichero.</summary>
     public static MetricsViewModel Metrics(

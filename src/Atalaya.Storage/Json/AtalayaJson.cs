@@ -101,7 +101,8 @@ public static class AtalayaJson
             (ResolutionVia.Implicita, "implicita"),
             (ResolutionVia.Auditor, "auditor"),
             (ResolutionVia.Verify, "verify"),
-            (ResolutionVia.Manual, "manual")));
+            (ResolutionVia.Manual, "manual"),
+            (ResolutionVia.Medida, "medida")));
 
         // History event names are camelCase in the schema (§2).
         o.Converters.Add(new EnumJsonConverter<FindingEvent>(

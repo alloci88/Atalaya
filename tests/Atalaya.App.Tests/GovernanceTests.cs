@@ -115,9 +115,9 @@ public sealed class GovernanceTests : IDisposable
         var agent = new FakeCopilotAgent(verdictScript: _ => "resuelto");
         var verify = new VerifyCoordinator(_hub, _machines, _ulids, agent);
 
-        int applied = await verify.RunAsync("app", new[] { f.Id }, CancellationToken.None);
+        VerifyOutcome outcome = await verify.RunAsync("app", new[] { f.Id }, CancellationToken.None);
 
-        applied.Should().Be(1);
+        outcome.Applied.Should().Be(1);
         _hub.Store.TryReadFinding("app", f.Id.ToString())!.Status.Should().Be(FindingStatus.Resuelto);
         _hub.Store.TryReadFinding("app", f.Id.ToString())!.Resolved!.Via.Should().Be(ResolutionVia.Verify);
     }

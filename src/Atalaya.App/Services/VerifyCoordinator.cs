@@ -11,6 +11,14 @@ namespace Atalaya.App.Services;
 /// Runs a verify session (§5.4): re-anchors each finding's location by snippet hash, asks the agent
 /// for a verdict, and applies it — confirmado refreshes, resuelto resolves (via verify), no-verificable
 /// (or a lost anchor) sets needsReview. "No localizado" is NEVER confused with "resuelto".
+/// <para>
+/// <b>F5.16 — cada hallazgo se verifica con el instrumento que lo detectó.</b> Los hallazgos que
+/// MIDE la aplicación (hoy «unidad demasiado grande») no llegan al agente: se vuelven a medir. Pedir
+/// a un LLM que verifique una cuenta de líneas desde un fragmento anclado en la línea 1 es usar el
+/// instrumento equivocado, y responde lo único honrado que puede responder — «no verificable»—,
+/// que además ensucia el hallazgo con <c>needsReview</c>. Es exactamente lo que le pasó dos veces a
+/// MEJ-0037 antes de que su unidad se troceara.
+/// </para>
 /// </summary>
 public sealed class VerifyCoordinator
 {
@@ -18,21 +26,28 @@ public sealed class VerifyCoordinator
     private readonly MachineConfigStore _machines;
     private readonly IUlidFactory _ulids;
     private readonly ICopilotAgent _agent;
+    private readonly MeasuredFindingService? _measured;
 
-    public VerifyCoordinator(HubContext hub, MachineConfigStore machines, IUlidFactory ulids, ICopilotAgent agent)
+    public VerifyCoordinator(
+        HubContext hub, MachineConfigStore machines, IUlidFactory ulids, ICopilotAgent agent,
+        MeasuredFindingService? measured = null)
     {
         _hub = hub;
         _machines = machines;
         _ulids = ulids;
         _agent = agent;
+        _measured = measured;
     }
 
-    public async Task<int> RunAsync(string slug, IReadOnlyList<Ulid> findingIds, CancellationToken ct)
+    public async Task<VerifyOutcome> RunAsync(string slug, IReadOnlyList<Ulid> findingIds, CancellationToken ct)
     {
         string? clone = _machines.Load().ClonePathFor(slug);
         string commit = GitInfo.HeadSha(clone);
         string by = _hub.ResolveIdentity().Name;
         var stamp = new DetectionStamp(DateTimeOffset.UtcNow, AuditMode.Verify, commit, by);
+
+        var messages = new List<string>();
+        int measuredApplied = 0;
 
         var targets = new List<VerifyTarget>();
         foreach (Ulid id in findingIds)
@@ -40,6 +55,19 @@ public sealed class VerifyCoordinator
             Finding? f = _hub.Store.TryReadFinding(slug, id.ToString());
             if (f is null || f.Locations.Count == 0)
             {
+                continue;
+            }
+
+            // El desvío de F5.16: lo medido se mide, y no gasta ni un token.
+            if (_measured is not null && UnitMeasure.IsMeasured(f.RuleId))
+            {
+                MeasuredVerdict verdict = _measured.Verify(slug, f);
+                messages.Add(verdict.Message);
+                if (verdict.Applied)
+                {
+                    measuredApplied++;
+                }
+
                 continue;
             }
 
@@ -59,7 +87,7 @@ public sealed class VerifyCoordinator
 
         if (targets.Count == 0)
         {
-            return 0;
+            return new VerifyOutcome(measuredApplied, messages);
         }
 
         var toolbox = new VerifyToolbox(_hub, slug, stamp);
@@ -80,7 +108,7 @@ public sealed class VerifyCoordinator
             Model = _agent.ModelName,
         });
         _hub.Sync?.CommitAndPush($"verify: {slug} {targets.Count} hallazgos");
-        return toolbox.Applied;
+        return new VerifyOutcome(toolbox.Applied + measuredApplied, messages);
     }
 
     /// <summary>Applies verify verdicts to findings (§5.4). Uses the ULID, never the alias.</summary>
@@ -130,6 +158,19 @@ public sealed class VerifyCoordinator
             Applied++;
         }
     }
+}
+
+/// <summary>
+/// Lo que hizo un «Verificar ahora» (F5.16): cuántos veredictos se aplicaron y qué decir.
+/// </summary>
+/// <param name="Messages">
+/// Las frases con el número, para los hallazgos medidos. Vacía cuando todo fue al auditor: ahí el
+/// veredicto vive en el historial, que es donde siempre ha vivido.
+/// </param>
+public sealed record VerifyOutcome(int Applied, IReadOnlyList<string> Messages)
+{
+    /// <summary>La frase para el usuario, o null si no hay ninguna medida que contar.</summary>
+    public string? Measured => Messages.Count == 0 ? null : string.Join(" · ", Messages);
 }
 
 /// <summary>Re-anchors a stored location by its snippet hash (§5.4).</summary>

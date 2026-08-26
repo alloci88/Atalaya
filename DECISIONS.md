@@ -3590,3 +3590,138 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   Ajustes, que el item del rail SIGUE ahí para volver, y que no se ha auditado nada. Después, borrar
   el modelo de los ajustes (dejarlo vacío) y lanzar: debe elegirse uno solo, avisarlo por toast, y
   auditar con normalidad.
+
+
+## F5.16 — Ciclo de vida de los hallazgos medidos, y el forense del «desaparecido»
+
+### §0 — Forense: no desapareció, y nada lo borró
+
+- **D-409 — Veredicto: el hallazgo estaba entero, activo y marcado «por revisar». No hubo borrado
+  físico.** Se leyó el fichero real del hub
+  (`apps/xblast/findings/01M0YVAJ268VBNCFDKA7ZQ3K8F.json`, alias **MEJ-0037**) y dice, literalmente,
+  `"status": "activo"`, `"resolved": null`, `"needsReview": true`. Su historial es la secuencia
+  completa del incidente:
+
+  | UTC | Evento | Detalle |
+  |---|---|---|
+  | 2026-08-26 10:54:45 | `detected` | detected via Lotes — 2.983 LOC sobre umbral 1500 |
+  | 2026-08-26 10:59:24 | `reopened` | verify: no verificable |
+  | 2026-08-26 11:02:21 | `reopened` | verify: no verificable |
+
+  Y el inventario confirma el resto: en el ciclo 1 la unidad medía **2.983 LOC / grande**; en el
+  ciclo 2, tras el pull y el re-escaneo, mide **978 LOC / pendiente**, y ha aparecido a su lado
+  `ExtensionMethodsNumerics.cs` con 1.703 LOC. O sea: el compañero la troceó, el inventario se
+  enteró y **el hallazgo no**. Al usuario le pareció que había desaparecido porque estaba marcado
+  «por revisar» y porque lo que sí había desaparecido era su motivo. **La DoD contemplaba «si hubo
+  borrado físico, corregir el código que borraba»: no lo hubo, y no hay tal código que corregir.**
+
+- **D-410 — Los dos «no verificable» no fueron un fallo del verificador: fue el instrumento
+  equivocado.** «Verificar ahora» ancla el hallazgo por su fragmento —línea 1 del fichero— y le pide
+  a un LLM que juzgue el enunciado «esta unidad tiene 2.983 LOC, por encima del umbral». Desde una
+  línea no se puede contar un fichero, así que el modelo contestó lo único honrado que podía
+  contestar. El daño no fue el veredicto sino su efecto: `no verificable` marca `needsReview`, y el
+  hallazgo quedó pidiendo una revisión humana que nadie podía resolver mirando código.
+
+- **D-411 — El barrido completo del hub, porque un caso nunca es un caso.** Cruzando los 37
+  hallazgos de tamaño contra el inventario vigente aparecieron **cuatro** activos cuya unidad ya no
+  es grande —MEJ-0005 (556 LOC), MEJ-0024 (968), MEJ-0026 (557) y MEJ-0037 (978)— y **una** unidad
+  grande sin hallazgo ninguno (`ExtensionMethodsNumerics.cs`, 1.703 LOC). No era un hallazgo
+  descolgado: era el ciclo de vida entero que no existía.
+
+- **D-412 — La reparación la hace el mecanismo, no una edición a mano.** El hub es un clon de git
+  compartido con el equipo: editar sus JSON desde fuera de la aplicación es exactamente la clase de
+  escritura silenciosa que este proyecto no admite —sin autor, sin historial, sin commit explicable—.
+  MEJ-0037 se repara **en el primer re-escaneo con esta versión**, por el camino que además impide
+  que vuelva a pasar. Se comprobó en seco contra los datos reales: resolverá los cuatro con su
+  medida, limpiará el `needsReview` de MEJ-0037 y creará el de `ExtensionMethodsNumerics.cs`.
+
+### §1 — La regla
+
+- **D-413 — Cada hallazgo se verifica con el INSTRUMENTO que lo detectó.** Es la regla general que
+  este incidente destapó. Los hallazgos de «unidad demasiado grande» no los encuentra el auditor:
+  los calcula la aplicación comparando LOC y caracteres contra el umbral de la app (§4, mejora 7).
+  Lo que detecta una medida se verifica midiendo, se resuelve midiendo y se reabre midiendo — nunca
+  preguntando a un modelo, nunca por omisión, y siempre con el número escrito en el historial.
+  `UnitMeasure.MeasuredRuleIds` es la lista de reglas medidas; hoy tiene una, y el mecanismo es de la
+  clase y no de la regla, así que añadir la siguiente es añadirla ahí y nada más.
+
+- **D-414 — La condición de «grande» vive en UN sitio.** `UnitMeasure` está junto a
+  `InventoryScanner` y cuenta líneas con `CountLinesOf`, el mismo método que el escáner. Si el
+  instrumento que crea el hallazgo y el que lo resuelve contaran distinto, una unidad podría salir de
+  «Grandes» en el inventario y quedarse con su hallazgo activo — que es literalmente la mitad de este
+  parte. Y el umbral es **LOC o caracteres**: por eso la frase nombra el criterio que de verdad
+  decide, y una unidad de 1.269 líneas pero muy pesada se confirma diciendo «N caracteres ≥ umbral
+  60000 (1269 LOC)» en vez de mentir con un número correcto.
+
+### §2 — El ciclo de vida
+
+- **D-415 — El re-escaneo actualiza el inventario Y sus hallazgos, en el mismo gesto y con un solo
+  push.** `InventoryRescanService` llama a `MeasuredFindingService.Reconcile` sobre **el inventario
+  que acaba de escribir** —no volviendo a leer el disco—, así que las dos listas no pueden discrepar
+  ni por una carrera ni por un umbral leído dos veces. Por debajo del umbral → resuelto con evidencia
+  medida (`re-escaneo {fecha}: N LOC < umbral M, commit del clon X`); por encima y sin hallazgo →
+  creado; por encima y ya resuelto → **reabierto el mismo**, nunca uno nuevo.
+
+- **D-416 — Una unidad que no está en el inventario NO se da por resuelta.** Puede haberse movido,
+  renombrado o excluido, y «no la he medido» no es «ya no es grande». Se deja intacta. Es la misma
+  disciplina que `SnippetAnchor`: «no localizado» nunca se confunde con «resuelto» (§5.4).
+
+- **D-417 — Nace en modo LOTES, y el dominio lo impuso.** El primer intento creó los hallazgos con
+  `AuditMode.Verify` y `ConfidenceMachine.ForNew` lo rechazó en voz alta: «Mode 'Verify' never
+  creates new findings». Tenía razón — verificar comprueba lo que hay, no inventa— y además el modo
+  correcto es el que ya usaba el escaneo inicial, que es lo que da a estos hallazgos su confianza
+  media. Queda anotado porque es un buen ejemplo de una guarda del dominio ganándose el sueldo en el
+  primer test.
+
+- **D-418 — La resolución tiene vía propia: `ResolutionVia.Medida`.** No es `Verify` porque no hubo
+  veredicto de nadie: hubo un número. Quien lea el hallazgo dentro de un año tiene que poder
+  distinguir «un auditor dijo que estaba arreglado» de «la aplicación lo contó».
+
+- **D-419 — Y se NARRA.** El re-escaneo devuelve `RescanOutcome` con el detalle, y el toast lo dice:
+  «2 unidades salieron de Grandes; sus hallazgos se resolvieron». Una resolución silenciosa es
+  indistinguible de un borrado — es literalmente lo que hizo pensar al usuario que su hallazgo había
+  desaparecido. Sin cambios, no se anuncia nada.
+
+### §3 — «Verificar ahora» sobre un hallazgo medido
+
+- **D-420 — Se desvía antes de llegar al agente, y no gasta un token.** `VerifyCoordinator` reparte
+  por clase de hallazgo: lo medido va a `MeasuredFindingService.Verify`, que lee el fichero del clon
+  y responde con el número —«Confirmado: 2000 LOC ≥ umbral 1500» o «Resuelto: 300 LOC < umbral
+  1500»—. **«No verificable» deja de existir para esta clase.** Un confirmado refresca la última
+  confirmación sin tocar la confianza (verify nunca asciende, §0); un resuelto sella la medida.
+  Queda probado con un agente que lanza excepción si alguien lo llama.
+
+- **D-421 — Sin clon se dice, y no se toca nada.** «No se puede medir sin el clon local —
+  vincúlalo». La incertidumbre se declara, como siempre. Y lo importante: **NO marca `needsReview`**.
+  Ensuciar el hallazgo por no poder medirlo sería repetir el error que abrió el parte.
+
+- **D-422 — Una medida limpia el `needsReview` anterior.** La marca significaba «el instrumento
+  equivocado no supo verificar esto»; cuando la medida responde —en cualquiera de los dos sentidos—
+  esa duda ya no existe, y dejarla puesta manda al usuario a revisar a mano algo que la aplicación
+  acaba de contar. El historial conserva las dos entradas: que se dudó y que se midió.
+
+- **D-423 — Y el botón dice lo que hace: «Medir ahora».** Con su línea de ayuda («No consulta al
+  auditor ni gasta tokens»). Llamarlo igual que a una verificación por LLM hace esperar una llamada
+  al modelo y una espera larga donde solo hay una lectura de fichero.
+
+### Cobertura y verificación
+
+- **D-424 — Lo que queda probado.** El caso real, reconstruido entero: un hallazgo de tamaño con dos
+  «no verificable» encima cuya unidad baja a 978 LOC queda **resuelto vía `Medida`**, con
+  «978 LOC < umbral 1500» en la justificación y sin `needsReview`. Del re-escaneo: que resuelve por
+  debajo del umbral y lo narra; que crea el de una unidad nueva que lo supera; que **reabre el mismo**
+  cuando vuelve a crecer, sin duplicar; que sin cambios no anuncia nada; que una unidad ausente del
+  inventario no se da por resuelta; y que no toca los hallazgos del auditor. De la verificación: que
+  confirma con el número, que resuelve con el número, que una unidad grande **por caracteres** se
+  nombra por caracteres, que sin clon dice cómo arreglarlo sin ensuciar nada, que una unidad que ya
+  no está no se da por resuelta, y que un resuelto que volvió a crecer se reabre. Del desvío: que un
+  hallazgo medido **no llega al agente** y que uno del auditor sigue llegando. De la ficha: que la
+  acción se llama «Medir ahora» cuando mide.
+
+- **D-425 — Lo que se verifica a mano.** Abrir xblast y pulsar «Re-escanear». El toast debe decir
+  «4 unidades salieron de Grandes; sus hallazgos se resolvieron · 1 unidad nueva supera el umbral:
+  hallazgo creado». Después: **(a)** MEJ-0037 (`ExtensionMethods.cs`) figura en Resueltos con
+  «978 LOC < umbral 1500» y sin la marca «Por revisar»; **(b)** abrir un hallazgo de una unidad que
+  sigue siendo grande —por ejemplo `UgUtils.cs`, 4.836 LOC— y pulsar «Medir ahora»: responde
+  «Confirmado: 4836 LOC ≥ umbral 1500», nunca «no verificable»; y **(c)**
+  `ExtensionMethodsNumerics.cs` (1.703 LOC) aparece con su hallazgo recién creado.

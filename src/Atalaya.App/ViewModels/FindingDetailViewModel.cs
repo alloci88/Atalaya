@@ -286,6 +286,21 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     public string RuleId => Finding?.RuleId ?? string.Empty;
 
     /// <summary>
+    /// Lo MIDE la aplicación (F5.16), así que «Verificar ahora» lo vuelve a medir en vez de
+    /// preguntarle al auditor. Cambia el texto de los botones y del aviso: quien pulsa tiene que
+    /// saber que va a leer un número, no a gastar tokens.
+    /// </summary>
+    public bool IsMeasured => UnitMeasure.IsMeasured(RuleId);
+
+    /// <summary>El botón dice lo que hace: medir no es lo mismo que preguntar.</summary>
+    public string VerifyActionLabel => IsMeasured ? "Medir ahora" : "Verificar ahora";
+
+    /// <summary>Y la línea de ayuda lo explica sin que haya que pulsarlo para averiguarlo.</summary>
+    public string VerifyHelp => IsMeasured
+        ? "Vuelve a medir la unidad en tu clon y aplica el resultado. No consulta al auditor ni gasta tokens."
+        : "Le pide al auditor un veredicto sobre este hallazgo, anclado en el código de tu clon.";
+
+    /// <summary>
     /// La frase que definirá el alcance del patrón (F5.12). Se propone desde el título del hallazgo
     /// —sin los nombres propios del caso— y es EDITABLE antes de confirmar: es lo único que el
     /// auditor va a leer, así que quien silencia tiene que ver y poder pulir exactamente lo que se
@@ -398,6 +413,9 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasPatternOrigin));
         OnPropertyChanged(nameof(AppName));
         OnPropertyChanged(nameof(RuleId));
+        OnPropertyChanged(nameof(IsMeasured));
+        OnPropertyChanged(nameof(VerifyActionLabel));
+        OnPropertyChanged(nameof(VerifyHelp));
         RefreshScopeOptions();
         // El borrador del ejemplar se re-propone en cada carga: pertenece al hallazgo abierto, y
         // arrastrar el de la ficha anterior sería peor que una caja vacía.
@@ -767,8 +785,8 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
             return;
         }
 
-        // Verificar es una acción de AUDITAR: re-ancla contra los ficheros del clon y le pide
-        // veredicto al agente. Sin clon no hay contra qué anclar (F5.8 §3).
+        // Verificar LEE el clon en los dos caminos: el auditor necesita re-anclar el fragmento y la
+        // re-medición necesita el fichero. Sin clon no hay contra qué comprobar (F5.8 §3).
         if (!CanAudit)
         {
             _toasts.Show(AuditDisabledTooltip);
@@ -777,13 +795,16 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
 
         Ulid id = Id;
         IsBusy = true;
-        _toasts.Show("Verificando el hallazgo…");
+        // F5.16: un hallazgo medido no va al auditor, se vuelve a medir — y eso tarda lo que tarda
+        // leer un fichero, así que el aviso lo dice para que nadie espere una llamada al modelo.
+        _toasts.Show(IsMeasured ? "Midiendo la unidad…" : "Verificando el hallazgo…");
         try
         {
-            int applied = await Task.Run(() => _verify.RunAsync(Slug, new[] { id }, CancellationToken.None));
-            _toasts.Show(applied > 0
-                ? "Verificado: el veredicto está aplicado y en el historial."
-                : "El verify no pudo emitir veredicto. Mira el historial.");
+            VerifyOutcome outcome = await Task.Run(() => _verify.RunAsync(Slug, new[] { id }, CancellationToken.None));
+            _toasts.Show(outcome.Measured
+                ?? (outcome.Applied > 0
+                    ? "Verificado: el veredicto está aplicado y en el historial."
+                    : "El verify no pudo emitir veredicto. Mira el historial."));
         }
         catch (Exception ex)
         {

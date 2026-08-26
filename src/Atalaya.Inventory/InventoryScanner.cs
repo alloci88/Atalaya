@@ -148,6 +148,14 @@ public sealed class InventoryScanner
         }
     }
 
+    /// <summary>
+    /// El LOC de un contenido, tal y como lo cuenta el escáner (D-009). Público porque la
+    /// re-medición de F5.16 tiene que contar EXACTAMENTE igual: si el instrumento que crea el
+    /// hallazgo y el que lo resuelve discreparan, una unidad podría salir de «Grandes» y quedarse
+    /// con su hallazgo activo.
+    /// </summary>
+    public static int CountLinesOf(byte[] bytes) => CountLines(bytes);
+
     private static int CountLines(byte[] bytes)
     {
         if (bytes.Length == 0)

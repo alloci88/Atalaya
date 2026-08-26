@@ -267,9 +267,10 @@ public sealed partial class LinkCloneViewModel : ObservableObject
         try
         {
             string path = LinkedPath;
-            int units = await Task.Run(() => _rescan.Rescan(Slug, path));
+            RescanOutcome outcome = await Task.Run(() => _rescan.Rescan(Slug, path));
             DriftWarning = string.Empty;
-            Outcome = $"Inventario actualizado: {units} unidades.";
+            Outcome = $"Inventario actualizado: {outcome.Units} unidades."
+                + (outcome.Measured.Total > 0 ? $" {outcome.Measured.Summary}." : "");
         }
         catch (Exception ex)
         {

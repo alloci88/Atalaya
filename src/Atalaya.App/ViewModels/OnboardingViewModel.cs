@@ -19,6 +19,7 @@ public sealed partial class OnboardingViewModel : ViewModelBase
     private readonly MachineConfigStore _machines;
     private readonly NavigationService _navigation;
     private readonly FindingIngestionService _ingestion;
+    private readonly MeasuredFindingService _measured;
 
     /// <summary>F5.7 §4: el resultado del alta se cuenta por el toast global.</summary>
     private readonly ToastCenter _toasts;
@@ -52,8 +53,10 @@ public sealed partial class OnboardingViewModel : ViewModelBase
         CloneLinkService links,
         LinkCloneFlow linkFlow,
         ImportService import,
-        IFolderPicker picker)
+        IFolderPicker picker,
+        MeasuredFindingService measured)
     {
+        _measured = measured;
         _hub = hub;
         _scanner = scanner;
         _machines = machines;
@@ -303,13 +306,11 @@ public sealed partial class OnboardingViewModel : ViewModelBase
                     : Rescanner.Reconcile(previous, scan.Inventory).Merged;
                 _hub.Store.WriteInventory(slug, inventory);
 
-                // Auto "unit too large" findings enter through the normal ingestion pipeline.
-                string commit = GitInfo.HeadSha(ClonePath);
-                var stamp = new DetectionStamp(DateTimeOffset.UtcNow, AuditMode.Lotes, commit, _hub.ResolveIdentity().Name);
-                foreach (SubmittedFinding large in scan.LargeUnitFindings)
-                {
-                    _ingestion.Create(large, slug, AuditMode.Lotes, stamp);
-                }
+                // Los hallazgos de «unidad demasiado grande» los pone al día el MISMO servicio que
+                // los mantiene después (F5.16). Antes se creaban aquí con un bucle propio: dos
+                // caminos para el mismo hecho, y el de aquí no sabía resolver los que sobraran al
+                // re-vincular una app que ya existía.
+                _measured.Reconcile(slug, inventory, ClonePath);
 
                 _machines.SetClonePath(slug, ClonePath);
                 _hub.Sync?.CommitAndPush(importing

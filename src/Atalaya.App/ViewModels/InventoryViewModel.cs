@@ -532,8 +532,12 @@ public sealed partial class InventoryViewModel : ViewModelBase
         _toasts.Show("Re-escaneando…");
         try
         {
-            await Task.Run(() => _rescan.Rescan(Slug, clone));
-            _toasts.Show("Inventario actualizado.");
+            RescanOutcome outcome = await Task.Run(() => _rescan.Rescan(Slug, clone));
+            // F5.16: lo que le pasó a los hallazgos medidos se DICE. Un hallazgo que se resuelve en
+            // silencio se lee como un hallazgo que ha desaparecido, y eso costó una investigación.
+            _toasts.Show(outcome.Measured.Total > 0
+                ? $"Inventario actualizado · {outcome.Measured.Summary}."
+                : "Inventario actualizado.");
         }
         catch (Exception ex)
         {

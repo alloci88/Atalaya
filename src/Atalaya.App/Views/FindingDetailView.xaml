@@ -363,10 +363,14 @@
                              F5.8 §3: es una acción de AUDITAR —lee el clon—, así que sin vínculo
                              local queda gris con su motivo y el atajo para arreglarlo al lado. La
                              gobernanza de más abajo NO se toca: no necesita el código. -->
-                        <ui:Button Content="Verificar ahora" Style="{StaticResource SideAction}"
+                        <!-- F5.16: el nombre y la ayuda salen del view-model porque cambian con la
+                             CLASE de hallazgo. Uno medido no se pregunta, se mide: llamarlo igual
+                             que a una verificación por LLM haría esperar tokens y una espera larga
+                             donde solo hay una lectura de fichero. -->
+                        <ui:Button Content="{Binding VerifyActionLabel}" Style="{StaticResource SideAction}"
                                    Command="{Binding VerifyCommand}"
                                    IsEnabled="{Binding CanAudit}"
-                                   ToolTip="Re-ancla la ubicación y pide veredicto al agente (§5.4)." />
+                                   ToolTip="{Binding VerifyHelp}" />
                         <ui:Button Content="{Binding Link.ActionLabel}" Style="{StaticResource SideAction}"
                                    Command="{Binding LinkCloneCommand}"
                                    ToolTip="{Binding Link.Tooltip}"

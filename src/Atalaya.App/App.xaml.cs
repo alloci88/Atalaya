@@ -154,6 +154,7 @@ public partial class App : Application
         // del inventario) y el diálogo que lo apaga. El selector de carpetas y el diálogo se
         // inyectan tras un seam, así que el flujo entero se prueba sin abrir una ventana.
         services.AddSingleton<CloneLinkService>();
+        services.AddSingleton<MeasuredFindingService>();
         services.AddSingleton<InventoryRescanService>();
         services.AddSingleton<IFolderPicker, SystemFolderPicker>();
         services.AddSingleton<ILinkCloneDialog, LinkCloneDialogHost>();

@@ -63,6 +63,14 @@ public enum ResolutionVia
 
     /// <summary>Manual governance action with mandatory justification.</summary>
     Manual,
+
+    /// <summary>
+    /// Lo resolvió una MEDIDA de la aplicación (F5.16): la unidad volvió a medirse y quedó por
+    /// debajo del umbral que la había marcado. Es su propia vía y no <see cref="Verify"/> porque no
+    /// hubo veredicto de nadie — hubo un número. Quien lea el hallazgo dentro de un año tiene que
+    /// poder distinguir «un auditor dijo que estaba arreglado» de «la app lo contó».
+    /// </summary>
+    Medida,
 }
 
 /// <summary>Resolution anchor (§5.7): every resolution pins a commit and an author.</summary>
