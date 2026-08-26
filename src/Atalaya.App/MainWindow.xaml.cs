@@ -42,6 +42,12 @@ public partial class MainWindow : FluentWindow
             _toastTimer.Stop();
         };
         Closing += OnClosing;
+
+        // F5.8 §1: volver al primer plano recalcula el estado de vinculación de la página viva.
+        // Es el momento en que el usuario acaba de venir del explorador de archivos, que es donde
+        // se mueven y se borran las carpetas de las que el piloto habla.
+        Activated += async (_, _) => await _viewModel.OnWindowActivatedAsync();
+
         FitToScreen();
     }
 

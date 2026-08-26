@@ -143,6 +143,15 @@ public partial class App : Application
         services.AddSingleton<FactoryResetService>();
         services.AddSingleton<IFactoryResetConfirmer, FactoryResetDialogConfirmer>();
 
+        // F5.8: el estado de vinculación local (el piloto de las tarjetas y el modo solo-lectura
+        // del inventario) y el diálogo que lo apaga. El selector de carpetas y el diálogo se
+        // inyectan tras un seam, así que el flujo entero se prueba sin abrir una ventana.
+        services.AddSingleton<CloneLinkService>();
+        services.AddSingleton<InventoryRescanService>();
+        services.AddSingleton<IFolderPicker, SystemFolderPicker>();
+        services.AddSingleton<ILinkCloneDialog, LinkCloneDialogHost>();
+        services.AddSingleton<LinkCloneFlow>();
+
         services.AddSingleton<EditorLauncher>();
         // La memoria de plegado es de la SESIÓN, no de la vista: V2 y V3 son transitorias y la
         // comparten (F5.6 §1).

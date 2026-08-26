@@ -47,6 +47,15 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     private readonly ToastCenter _toasts;
     private readonly AnchorRepair? _anchors;
 
+    /// <summary>
+    /// F5.8 §3: la GOBERNANZA no depende del clon —silenciar, cambiar severidad, disputar y
+    /// resolver a mano siguen enteros sin él, y el snippet ya enseña la copia anclada con su
+    /// aviso—. Verificar sí: le pregunta al agente sobre código que tiene que estar delante.
+    /// </summary>
+    private readonly CloneLinkService _links;
+
+    private readonly LinkCloneFlow _linkFlow;
+
     public FindingDetailViewModel(
         HubContext hub,
         GovernanceService governance,
@@ -54,6 +63,8 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         VerifyCoordinator verify,
         EditorLauncher editor,
         ToastCenter toasts,
+        CloneLinkService links,
+        LinkCloneFlow linkFlow,
         AnchorRepair? anchors = null)
     {
         _hub = hub;
@@ -62,7 +73,33 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         _verify = verify;
         _editor = editor;
         _toasts = toasts;
+        _links = links;
+        _linkFlow = linkFlow;
         _anchors = anchors;
+    }
+
+    /// <inheritdoc cref="CloneLink.CanAudit"/>
+    public bool CanAudit => Link.CanAudit;
+
+    /// <inheritdoc cref="CloneLink.DisabledActionTooltip"/>
+    public string AuditDisabledTooltip => Link.DisabledActionTooltip;
+
+    /// <summary>El estado de vinculación de la app del hallazgo (F5.8 §1).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanAudit))]
+    [NotifyPropertyChangedFor(nameof(AuditDisabledTooltip))]
+    private CloneLink _link = CloneLink.Unknown(string.Empty);
+
+    /// <summary>El acceso directo a vincular que acompaña a «Verificar ahora» deshabilitado.</summary>
+    [RelayCommand]
+    private void LinkClone()
+    {
+        if (Slug.Length == 0)
+        {
+            return;
+        }
+
+        Link = _linkFlow.Run(Slug);
     }
 
     public override string Title => Finding is null ? "Hallazgo" : $"{Finding.DisplayId ?? Finding.Id.ToString()}";
@@ -237,6 +274,10 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
 
     private void Reload(Ulid id)
     {
+        // El estado del clon se relee en cada recarga de la ficha (F5.8 §1): entre abrirla y
+        // volver a ella la carpeta ha podido moverse, y «Verificar ahora» no puede quedar
+        // habilitado sobre un clon que ya no está.
+        Link = _links.For(Slug);
         Finding = _hub.Store.TryReadFinding(Slug, id.ToString());
         History.Clear();
         Comments.Clear();
@@ -548,6 +589,14 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     {
         if (Finding is null)
         {
+            return;
+        }
+
+        // Verificar es una acción de AUDITAR: re-ancla contra los ficheros del clon y le pide
+        // veredicto al agente. Sin clon no hay contra qué anclar (F5.8 §3).
+        if (!CanAudit)
+        {
+            _toasts.Show(AuditDisabledTooltip);
             return;
         }
 

@@ -17,6 +17,12 @@ public sealed partial class PortfolioViewModel : ViewModelBase
     private readonly HubContext _hub;
     private readonly ToastCenter _toasts;
 
+    /// <summary>F5.8 §1: si esta máquina puede auditar cada app. El piloto de la tarjeta.</summary>
+    private readonly CloneLinkService _links;
+
+    /// <summary>F5.8 §2: el diálogo que apaga el piloto, compartido con el inventario.</summary>
+    private readonly LinkCloneFlow _linkFlow;
+
     public PortfolioViewModel(
         PortfolioQuery query,
         NavigationService navigation,
@@ -24,7 +30,9 @@ public sealed partial class PortfolioViewModel : ViewModelBase
         IDeleteAppConfirmer confirmer,
         LiveSessionService live,
         HubContext hub,
-        ToastCenter toasts)
+        ToastCenter toasts,
+        CloneLinkService links,
+        LinkCloneFlow linkFlow)
     {
         _query = query;
         _navigation = navigation;
@@ -33,6 +41,8 @@ public sealed partial class PortfolioViewModel : ViewModelBase
         _live = live;
         _hub = hub;
         _toasts = toasts;
+        _links = links;
+        _linkFlow = linkFlow;
     }
 
     public override string Title => "Portafolio";
@@ -47,7 +57,13 @@ public sealed partial class PortfolioViewModel : ViewModelBase
         IsBusy = true;
         try
         {
-            var cards = await Task.Run(_query.BuildAll);
+            // El piloto se recalcula AQUÍ, no se cachea: `LoadAsync` es lo que corre al arrancar,
+            // al sincronizar y al volver la ventana al primer plano (F5.8 §1), que son los tres
+            // momentos en los que la carpeta ha podido moverse a espaldas de la aplicación.
+            var cards = await Task.Run(() => _query.BuildAll()
+                .Select(c => c with { Link = _links.For(c.Slug) })
+                .ToList());
+
             Apps.Clear();
             foreach (AppCard card in cards)
             {
@@ -81,6 +97,27 @@ public sealed partial class PortfolioViewModel : ViewModelBase
 
     [RelayCommand]
     private Task NewApp() => _navigation.NavigateToAsync<OnboardingViewModel>();
+
+    /// <summary>
+    /// «Vincular clon local…» / «Reparar vínculo…» (F5.8 §2). Al volver, la tarjeta se repinta con
+    /// el estado que devuelva el flujo: si quedó vinculada, el piloto pasa a verde en el acto —
+    /// esperar al siguiente sondeo dejaría el botón pidiendo lo que ya está hecho.
+    /// </summary>
+    [RelayCommand]
+    private void LinkClone(AppCard? card)
+    {
+        if (card is null)
+        {
+            return;
+        }
+
+        CloneLink link = _linkFlow.Run(card.Slug);
+        int index = Apps.IndexOf(card);
+        if (index >= 0)
+        {
+            Apps[index] = card with { Link = link };
+        }
+    }
 
     /// <summary>
     /// Hard-reset de una aplicación (F5.3 §4): confirmación fuerte —hay que escribir el nombre— y,

@@ -152,6 +152,8 @@ public sealed class FindingDetailTests : IDisposable
             new VerifyCoordinator(_hub, _machines, _ulids, agent ?? new FakeCopilotAgent()),
             new EditorLauncher(_settings, _machines),
             _toasts,
+            TestFactory.Links(_hub, _paths),
+            TestFactory.LinkFlow(_hub, _paths, _toasts),
             new AnchorRepair(_hub));
 
     private FindingDetailViewModel Open(Finding f)
@@ -776,7 +778,8 @@ public sealed class FindingDetailTests : IDisposable
         new FindingDetailViewModel(
             _hub, _governance, _machines,
             new VerifyCoordinator(_hub, _machines, _ulids, new FakeCopilotAgent()),
-            new EditorLauncher(_settings, _machines), _toasts)
+            new EditorLauncher(_settings, _machines), _toasts,
+            TestFactory.Links(_hub, _paths), TestFactory.LinkFlow(_hub, _paths, _toasts))
             .ManualResolutionExpanded.Should().BeFalse("plegada por defecto");
     }
 

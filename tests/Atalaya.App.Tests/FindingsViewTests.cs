@@ -45,7 +45,9 @@ public sealed class FindingsViewTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "atalaya-v3", Guid.NewGuid().ToString("N"));
         _clone = Path.Combine(_root, "clone");
-        Directory.CreateDirectory(_clone);
+        // Un clon de verdad: desde F5.8, verificar —que es auditar— exige repo git y origin que
+        // coincida con el repo de la app.
+        TestFactory.MakeClone(_clone, "https://example.invalid/org/alpha.git");
         _paths = new AppPaths(Path.Combine(_root, "local"));
         _settings = new SettingsService(_paths);
         _settings.Load();
@@ -57,7 +59,10 @@ public sealed class FindingsViewTests : IDisposable
         _navigation = new NavigationService(new ServiceCollection().BuildServiceProvider());
 
         _hub.Store.WriteHub(new HubInfo { OrganizationName = "Org" });
-        _hub.Store.WriteApp(new AppConfig { Slug = "alpha", Name = "Alpha", RepoUrl = "u", CurrentCycle = 1 });
+        _hub.Store.WriteApp(new AppConfig
+        {
+            Slug = "alpha", Name = "Alpha", RepoUrl = "https://example.invalid/org/alpha.git", CurrentCycle = 1,
+        });
         _hub.Store.WriteApp(new AppConfig { Slug = "beta", Name = "Beta", RepoUrl = "u", CurrentCycle = 1 });
     }
 
@@ -959,5 +964,7 @@ public sealed class FindingsViewTests : IDisposable
             _machines,
             new VerifyCoordinator(_hub, _machines, _ulids, agent ?? new FakeCopilotAgent()),
             new EditorLauncher(_settings, _machines),
-            new ToastCenter());
+            new ToastCenter(),
+            TestFactory.Links(_hub, _paths),
+            TestFactory.LinkFlow(_hub, _paths));
 }

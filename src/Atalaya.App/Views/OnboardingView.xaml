@@ -30,7 +30,23 @@
                 <TextBlock Text="{Binding DetectedStack}" FontWeight="SemiBold" />
             </StackPanel>
 
-            <ui:Button Content="Crear e inventariar" Command="{Binding CreateCommand}" Appearance="Primary" HorizontalAlignment="Left" />
+            <!-- F5.8 §2: el repo elegido ya está en el portafolio. El asistente no crea un
+                 duplicado: redirige al gesto correcto, que es vincular el clon. -->
+            <Border Background="#22D2B036" BorderBrush="#55D2B036" BorderThickness="1"
+                    CornerRadius="6" Padding="12,10" Margin="0,0,0,16"
+                    Visibility="{Binding IsDuplicate, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <TextBlock Text="{Binding DuplicateNotice}" TextWrapping="Wrap" />
+                    <ui:Button Content="{Binding LinkExistingLabel}"
+                               Command="{Binding LinkExistingCommand}"
+                               Appearance="Primary"
+                               HorizontalAlignment="Left"
+                               Margin="0,10,0,0" />
+                </StackPanel>
+            </Border>
+
+            <ui:Button Content="Crear e inventariar" Command="{Binding CreateCommand}" Appearance="Primary"
+                       IsEnabled="{Binding CanCreate}" HorizontalAlignment="Left" />
             <!-- F5.7 §4: sin texto de estado al pie. El resultado va por el toast global. -->
         </StackPanel>
     </ScrollViewer>

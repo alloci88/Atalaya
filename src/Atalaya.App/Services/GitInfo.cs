@@ -23,4 +23,35 @@ public static class GitInfo
             return "unknown";
         }
     }
+
+    /// <summary>
+    /// La URL del remoto <c>origin</c> de un clon, o null si la carpeta no es un repo, no tiene
+    /// <c>origin</c>, o no se puede abrir (F5.8 §1).
+    /// <para>
+    /// Es la EVIDENCIA con la que se decide si un clon local es de verdad el de una aplicación:
+    /// que la ruta exista no prueba nada — una carpeta puede haberse reutilizado para otro repo.
+    /// </para>
+    /// </summary>
+    public static string? OriginUrl(string? clonePath)
+    {
+        if (!IsRepo(clonePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var repo = new Repository(clonePath);
+            string? url = repo.Network.Remotes["origin"]?.Url;
+            return string.IsNullOrWhiteSpace(url) ? null : url;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>True si la carpeta es un repositorio git utilizable.</summary>
+    public static bool IsRepo(string? path)
+        => !string.IsNullOrWhiteSpace(path) && Repository.IsValid(path);
 }

@@ -110,17 +110,11 @@ public sealed class HubSyncService : IDisposable
         RemoteRepointedTo = repoUrl;
     }
 
-    /// <summary>Compares remote URLs ignoring case, a trailing slash and a trailing ".git".</summary>
-    internal static bool SameRemote(string? a, string? b)
-    {
-        static string Normalize(string? url)
-        {
-            string u = (url ?? string.Empty).Trim().TrimEnd('/');
-            return u.EndsWith(".git", StringComparison.OrdinalIgnoreCase) ? u[..^4].TrimEnd('/') : u;
-        }
-
-        return string.Equals(Normalize(a), Normalize(b), StringComparison.OrdinalIgnoreCase);
-    }
+    /// <summary>
+    /// «¿El mismo repositorio?». La regla vive en <see cref="RemoteUrl"/> desde F5.8: vincular un
+    /// clon local hace exactamente esta pregunta, y no puede responderse con otra implementación.
+    /// </summary>
+    internal static bool SameRemote(string? a, string? b) => RemoteUrl.Same(a, b);
 
     /// <summary>Stages every change (including deletions) and commits if there is anything to commit.</summary>
     public bool Commit(string message)

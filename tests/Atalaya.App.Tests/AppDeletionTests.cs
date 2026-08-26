@@ -401,7 +401,9 @@ public sealed class AppDeletionTests : IDisposable
             confirmer,
             live,
             hub,
-            new ToastCenter());
+            new ToastCenter(),
+            TestFactory.Links(hub, _paths),
+            TestFactory.LinkFlow(hub, _paths));
     }
 
     /// <summary>El confirmador de los tests: responde lo que se le diga y guarda lo que le pidieron.</summary>

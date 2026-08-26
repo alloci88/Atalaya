@@ -399,8 +399,14 @@ public sealed class HubContext
     /// The credential handed to LibGit2Sharp. GitHub over HTTPS accepts the user token as the
     /// password with the fixed username <c>x-access-token</c> — the same shape the PAT already
     /// used, so both paths share one code path.
+    /// <para>
+    /// Público desde F5.8: clonar el repo de una app auditada (§2, «Clonarlo ahora») necesita
+    /// exactamente esta credencial y no otra. Duplicar la cadena de resolución del token en el
+    /// servicio de vinculación habría creado un segundo sitio donde acordarse de que la cuenta
+    /// gana al PAT.
+    /// </para>
     /// </summary>
-    private CredentialsHandler? BuildCredentials()
+    public CredentialsHandler? BuildCredentials()
     {
         string? token = ResolveCredentialToken();
         if (string.IsNullOrEmpty(token))

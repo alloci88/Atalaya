@@ -21,13 +21,24 @@ public sealed partial class OnboardingViewModel : ViewModelBase
     /// <summary>F5.7 §4: el resultado del alta se cuenta por el toast global.</summary>
     private readonly ToastCenter _toasts;
 
+    /// <summary>
+    /// F5.8 §2: «Nueva aplicación» es para dar de ALTA apps nuevas. Si el repo elegido ya está en
+    /// el portafolio, lo que hace falta es vincular el clon, no crear un duplicado — que dejaría
+    /// dos apps con los mismos hallazgos y ningún modo de decir cuál es la buena.
+    /// </summary>
+    private readonly CloneLinkService _links;
+
+    private readonly LinkCloneFlow _linkFlow;
+
     public OnboardingViewModel(
         HubContext hub,
         InventoryScanner scanner,
         MachineConfigStore machines,
         NavigationService navigation,
         FindingIngestionService ingestion,
-        ToastCenter toasts)
+        ToastCenter toasts,
+        CloneLinkService links,
+        LinkCloneFlow linkFlow)
     {
         _hub = hub;
         _scanner = scanner;
@@ -35,14 +46,42 @@ public sealed partial class OnboardingViewModel : ViewModelBase
         _navigation = navigation;
         _ingestion = ingestion;
         _toasts = toasts;
+        _links = links;
+        _linkFlow = linkFlow;
     }
 
     public override string Title => "Nueva aplicación";
 
     [ObservableProperty] private string _name = string.Empty;
-    [ObservableProperty] private string _repoUrl = string.Empty;
     [ObservableProperty] private string _clonePath = string.Empty;
     [ObservableProperty] private TechStack _detectedStack = TechStack.Unknown;
+
+    [ObservableProperty] private string _repoUrl = string.Empty;
+
+    /// <summary>Escribir la URL ya basta para saber que la app existe: no hace falta llegar al final.</summary>
+    partial void OnRepoUrlChanged(string value) => DetectExistingApp();
+
+    /// <summary>La app del hub que YA tiene este repo, si la hay.</summary>
+    private AppConfig? _existing;
+
+    /// <summary>
+    /// El aviso de redirección (F5.8 §2). Vive como texto y no como toast porque no es el
+    /// resultado de una acción: es una condición del formulario que dura mientras dure la URL.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDuplicate))]
+    [NotifyPropertyChangedFor(nameof(CanCreate))]
+    private string _duplicateNotice = string.Empty;
+
+    public bool IsDuplicate => DuplicateNotice.Length > 0;
+
+    /// <summary>Dar de alta se apaga mientras el repo elegido sea el de una app que ya existe.</summary>
+    public bool CanCreate => !IsDuplicate;
+
+    /// <summary>El botón del aviso: «Vincular mi clon» con el nombre de la app que ya existe.</summary>
+    public string LinkExistingLabel => _existing is null
+        ? "Vincular mi clon"
+        : $"Vincular mi clon de «{_existing.Name}»";
 
     [RelayCommand]
     private void Detect()
@@ -53,8 +92,47 @@ public sealed partial class OnboardingViewModel : ViewModelBase
             return;
         }
 
+        // La carpeta elegida SABE de qué repo es. Si el usuario no escribió la URL, se toma de
+        // ahí — y con ella se puede responder a la pregunta que importa: ¿esta app ya existe?
+        if (string.IsNullOrWhiteSpace(RepoUrl) && GitInfo.OriginUrl(ClonePath) is { } origin)
+        {
+            RepoUrl = origin;
+        }
+
         DetectedStack = StackDetector.Detect(ClonePath);
+        DetectExistingApp();
         _toasts.Show($"Stack detectado: {DetectedStack}.");
+    }
+
+    /// <summary>
+    /// ¿El repo elegido ya está en el portafolio? La comparación es la misma que usa el vínculo
+    /// (<c>RemoteUrl</c>), así que https y ssh del mismo repo cuentan como el mismo repo.
+    /// </summary>
+    private void DetectExistingApp()
+    {
+        _existing = _links.FindByRepoUrl(RepoUrl);
+        DuplicateNotice = _existing is null
+            ? string.Empty
+            : $"Esta aplicación ya existe en el portafolio como «{_existing.Name}». "
+              + "No hace falta darla de alta otra vez: vincula tu clon y podrás auditarla.";
+        OnPropertyChanged(nameof(LinkExistingLabel));
+    }
+
+    /// <summary>
+    /// La redirección: abre el diálogo de vincular de la app que YA existe y, si queda vinculada,
+    /// lleva a su inventario. Es el mismo diálogo del portafolio — no un segundo camino.
+    /// </summary>
+    [RelayCommand]
+    private async Task LinkExisting()
+    {
+        if (_existing is null)
+        {
+            return;
+        }
+
+        string slug = _existing.Slug;
+        _linkFlow.Run(slug);
+        await _navigation.NavigateToAsync<InventoryViewModel>(vm => vm.SetApp(slug));
     }
 
     [RelayCommand]
@@ -63,6 +141,15 @@ public sealed partial class OnboardingViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(Name) || string.IsNullOrWhiteSpace(RepoUrl) || !Directory.Exists(ClonePath))
         {
             _toasts.Show("Rellena nombre, URL del repo y una ruta de clon válida.");
+            return;
+        }
+
+        // Se vuelve a mirar la puerta aquí y no solo en el XAML: el botón gris es una cortesía de
+        // la vista. Crear el duplicado es lo único que este asistente no puede hacer.
+        DetectExistingApp();
+        if (_existing is not null)
+        {
+            _toasts.Show(DuplicateNotice);
             return;
         }
 

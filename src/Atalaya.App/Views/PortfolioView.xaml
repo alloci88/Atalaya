@@ -86,6 +86,23 @@
                                     </StackPanel>
                                 </Grid>
 
+                                <!-- F5.8 §1: el piloto de vinculación local. Va bajo el nombre y
+                                     ANTES de las cifras: si no se puede auditar, eso es lo primero
+                                     que hay que saber de la tarjeta. Misma forma y mismos tres
+                                     colores que el indicador de sync, y SIEMPRE con su etiqueta
+                                     al lado: el color se ve de lejos, el nombre se lee. -->
+                                <StackPanel Orientation="Horizontal"
+                                            Margin="0,8,0,0"
+                                            ToolTip="{Binding Link.Tooltip}">
+                                    <Ellipse Width="9" Height="9" VerticalAlignment="Center"
+                                             Fill="{Binding Link.State, Converter={StaticResource CloneLinkStateToBrush}}" />
+                                    <TextBlock Text="{Binding Link.Label}"
+                                               FontSize="12"
+                                               Opacity="0.8"
+                                               Margin="7,0,0,0"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+
                                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                                     <TextBlock Text="Ciclo " Opacity="0.6" />
                                     <TextBlock Text="{Binding CurrentCycle}" FontWeight="SemiBold" />
@@ -130,6 +147,20 @@
                                     Appearance="Secondary"
                                     HorizontalAlignment="Stretch"
                                     Margin="0,14,0,0" />
+
+                                <!-- F5.8 §2: la acción que apaga el piloto. Solo existe cuando hay
+                                     algo que vincular o que reparar; su texto lo pone el estado,
+                                     porque reparar un vínculo roto y vincular por primera vez no
+                                     son el mismo gesto ni se buscan con la misma palabra. -->
+                                <ui:Button
+                                    Content="{Binding Link.ActionLabel}"
+                                    Command="{Binding DataContext.LinkCloneCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                    CommandParameter="{Binding}"
+                                    ToolTip="{Binding Link.Tooltip}"
+                                    Appearance="Primary"
+                                    HorizontalAlignment="Stretch"
+                                    Margin="0,8,0,0"
+                                    Visibility="{Binding Link.NeedsAction, Converter={StaticResource BoolToVisibility}}" />
                             </StackPanel>
                         </ui:Card>
                     </DataTemplate>

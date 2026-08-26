@@ -23,6 +23,29 @@ public sealed class SyncHealthToBrushConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
+/// <summary>
+/// El piloto de vinculación local (F5.8 §1): verde, ámbar, rojo. Mismos tres colores y misma
+/// forma —un <c>Ellipse</c>— que el indicador de sync de la barra inferior, porque significan lo
+/// mismo: si esto está en verde, se puede trabajar.
+/// <para>
+/// Va con colores explícitos y no con los del tema por la razón de <c>FindingStatusToBrush</c>:
+/// el estado es semántico y significa lo mismo en claro que en oscuro. Y el color NUNCA va solo —
+/// la etiqueta con el nombre del estado se pinta al lado, para quien no lo distinga.
+/// </para>
+/// </summary>
+public sealed class CloneLinkStateToBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
+    {
+        CloneLinkState.Vinculada => new SolidColorBrush(Color.FromRgb(0x3F, 0xB9, 0x50)),
+        CloneLinkState.Problema => new SolidColorBrush(Color.FromRgb(0xE0, 0xA0, 0x30)),
+        _ => new SolidColorBrush(Color.FromRgb(0xE0, 0x50, 0x50)),
+    };
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
 /// <summary>Severity colour for finding badges (rúbrica §0).</summary>
 public sealed class SeverityToBrushConverter : IValueConverter
 {

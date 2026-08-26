@@ -225,6 +225,8 @@
                                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
                                 <ui:Button Content="Verificar ahora" Command="{Binding VerifyCommand}"
                                            Appearance="Secondary" Padding="10,3" FontSize="11"
+                                           IsEnabled="{Binding CanAudit}"
+                                           ToolTip="{Binding AuditDisabledTooltip}"
                                            Margin="10,0,0,0" VerticalAlignment="Center"
                                            Visibility="{Binding SnippetNoticeOffersVerify, Converter={StaticResource BoolToVisibility}}" />
                             </StackPanel>
@@ -357,10 +359,18 @@
                         <ui:Button Content="Generar prompt de arreglo" Style="{StaticResource SideAction}"
                                    Command="{Binding GenerateFixPromptCommand}" Appearance="Primary"
                                    ToolTip="Compone el encargo para un agente y lo copia al portapapeles." />
-                        <!-- F5.4: bajó de V3. Verificar de uno en uno deja ver QUÉ se le pregunta al agente. -->
+                        <!-- F5.4: bajó de V3. Verificar de uno en uno deja ver QUÉ se le pregunta al agente.
+                             F5.8 §3: es una acción de AUDITAR —lee el clon—, así que sin vínculo
+                             local queda gris con su motivo y el atajo para arreglarlo al lado. La
+                             gobernanza de más abajo NO se toca: no necesita el código. -->
                         <ui:Button Content="Verificar ahora" Style="{StaticResource SideAction}"
                                    Command="{Binding VerifyCommand}"
+                                   IsEnabled="{Binding CanAudit}"
                                    ToolTip="Re-ancla la ubicación y pide veredicto al agente (§5.4)." />
+                        <ui:Button Content="{Binding Link.ActionLabel}" Style="{StaticResource SideAction}"
+                                   Command="{Binding LinkCloneCommand}"
+                                   ToolTip="{Binding Link.Tooltip}"
+                                   Visibility="{Binding Link.NeedsAction, Converter={StaticResource BoolToVisibility}}" />
                         <ui:Button Content="Abrir en el editor" Style="{StaticResource SideAction}"
                                    Command="{Binding OpenInEditorCommand}"
                                    ToolTip="Abre el fichero en la línea del hallazgo con el editor de Ajustes." />

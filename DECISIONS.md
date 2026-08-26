@@ -1,4 +1,4 @@
-# DECISIONS.md — Atalaya
+﻿# DECISIONS.md — Atalaya
 
 Registro de decisiones tomadas en zonas **[LIBERTAD]** o ante ambigüedades no
 bloqueantes del prompt de construcción. Las decisiones **[NO NEGOCIABLE]** del
@@ -2459,6 +2459,151 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   preguntar; (b) guardar y ver el toast **sin hacer scroll**; (c) el reset de fábrica sobre un hub
   de PRUEBA —nunca sobre el del piloto—: la aplicación queda en primer arranque y el repositorio
   aparece vacío en GitHub.
+
+## F5.8 — Portafolio: estado de vinculación local y flujo «Vincular clon»
+
+### §1 — El piloto de las tarjetas
+
+- **D-292 — El hueco era de INFORMACIÓN, no de capacidad.** Las apps del hub salen en el
+  portafolio de todo el mundo tras sincronizar, pero auditarlas exige el clon local en ESTA
+  máquina —la ruta vive en `machines.json`, que es por-máquina (§4)— y eso no lo decía nada. El
+  usuario descubría que no podía participar al intentarlo, y lo único que le ofrecía la aplicación
+  era «Nueva aplicación», que es el gesto de dar de alta una app nueva, no el de unirse a una que
+  ya existe. Cerrar el hueco es decirlo en la tarjeta y ofrecer ahí mismo el gesto correcto.
+
+- **D-293 — Son TRES estados, no dos, y el tercero es el que más se ve.** Entre «lo tengo» y «no
+  lo tengo» está el caso real: la carpeta se movió, se borró, o se reutilizó para otro repo. Se
+  arregla de otra manera —reparar, no vincular— y por eso se dice de otra manera. `CloneLink`
+  resuelve 🟢 *Vinculada*, 🔴 *Sin vincular* y 🟡 *Vinculada con problema*, y los tres llevan
+  tooltip que dice qué pasa **y qué sigue siendo posible**: hallazgos, métricas e informes están
+  accesibles siempre.
+
+- **D-294 — La comprobación llega hasta el REMOTO, y ése es su punto.** El orden de
+  `CloneLinkService.For` es el orden en que fallan de verdad: hay ruta → sigue ahí → es un repo →
+  es el repo CORRECTO. La última es la que nadie mira y la que, sin ella, dejaría auditar el
+  proyecto de al lado publicando sus hallazgos bajo el nombre de éste. Una app declarada sin
+  `repoUrl` en el hub no se puede contrastar contra nada: se acepta el clon, pero no se finge que
+  se ha verificado (N-2) — y no se inventa un problema donde no hay evidencia de uno.
+
+- **D-295 — «¿El mismo repo?» tenía que ser UNA sola regla.** Ya existía dentro de
+  `HubSyncService.SameRemote` para decidir si re-apuntar `origin` cuando el despliegue mueve el
+  hub. Vincular un clon hace exactamente la misma pregunta, y dos implementaciones habrían acabado
+  con una más estricta que la otra. Sale a `Atalaya.Storage.Sync.RemoteUrl` y `SameRemote` delega.
+  <br>
+  Lo que se amplió al sacarla: **la forma de clonar no distingue un repo de otro.**
+  `https://host/org/repo.git`, `git@host:org/repo` y `ssh://git@host/org/repo` son el mismo
+  repositorio, igual que una ruta local escrita con barras normales o invertidas; las credenciales
+  embebidas en la URL son de quien clona, no del repo. Rechazar el clon de un compañero por haber
+  clonado con SSH lo dejaría sin poder auditar por una diferencia de forma.
+
+- **D-296 — El piloto es un `Ellipse` de color con su NOMBRE al lado, no un emoji.** La primera
+  versión pintaba 🟢/🟡/🔴 como texto: medido en el render, WPF resuelve esos emoji por una fuente
+  monocroma y el «piloto» salía gris. Es el patrón que la aplicación ya tenía para el indicador de
+  sync (`SyncHealthToBrush` + `Ellipse`), así que se reutilizan la forma y los tres colores —
+  `CloneLinkStateToBrush`—. Y el color **nunca va solo**: «Vinculada», «Sin vincular» y «Vinculada
+  con problema» se escriben al lado, porque quien no distinga verde de rojo tiene que poder leerlo
+  y porque «vinculada con problema» no se deduce de un ámbar.
+
+- **D-297 — Se recalcula, no se cachea.** El estado sale del `LoadAsync` de la página, que es lo
+  que corre al arrancar, al sincronizar (el tick de sondeo recarga la página viva) y al volver la
+  ventana al primer plano. Ese último momento es el que importa: el usuario acaba de venir del
+  explorador de archivos, que es donde se mueven y se borran las carpetas de las que el piloto
+  habla. La regla de qué se recarga al enfocar vive en `ShellRefresh.ShouldReloadOnActivate` y su
+  parte importante es lo que NO hace: solo Portafolio e Inventario. Recargar cualquier página al
+  enfocar tiraría el comentario a medio escribir de una ficha, o los ajustes sin guardar.
+
+### §2 — El flujo de vincular
+
+- **D-298 — Dos caminos a la vista, no en un menú.** «Ya tengo el repo clonado» y «Clonarlo ahora»
+  se eligen con dos radios visibles: quien no tiene el repo no debe tener que adivinar que la
+  segunda opción existe. El segundo camino solo se ofrece si el hub sabe de qué URL clonar.
+
+- **D-299 — La validación es OBLIGATORIA y su fallo es específico.** Antes de escribir nada en
+  `machines.json` se comprueba que la carpeta exista, sea un repo git y que su `origin` sea el de
+  la app. Cuando no coincide, el error enseña **las dos URLs** —la de la carpeta elegida y la del
+  repo de la aplicación—, porque un «no coincide» a secas no se puede ni discutir ni arreglar
+  (N-2: evidencia, no adivinanza). Y una validación fallida no deja rastro: vincular una carpeta
+  equivocada en silencio es el fallo caro.
+
+- **D-300 — Clonar usa la credencial de la CUENTA, la misma que el hub.**
+  `HubContext.BuildCredentials` pasa a ser público en vez de duplicar la cadena de resolución del
+  token (la cuenta gana al PAT, D3) en un segundo sitio donde acordarse de mantenerla. El destino
+  que se elige es la carpeta CONTENEDORA y el diálogo dice dónde va a quedar el clon **antes** de
+  crearlo; si esa ruta ya existe y no está vacía, se avisa en vez de mezclar.
+
+- **D-301 — La deriva se mide por `contentHash`, no por el commit, y se OFRECE.** Al vincular se
+  compara el inventario vigente contra los ficheros del clon: dos commits distintos con el mismo
+  contenido de fuente no cambian nada de lo auditado, así que el commit sería un falso positivo
+  constante. Si difieren, se dice —«tu clon está en un commit distinto al del último inventario»—
+  con un botón de re-escanear al lado, y **no se re-escanea solo**: el inventario es del equipo, y
+  ponerlo al día es una decisión, no un efecto secundario de vincular.
+
+- **D-302 — El re-escaneo salió de `InventoryViewModel` a `InventoryRescanService`.** El diálogo
+  de vincular lo necesita, y un segundo re-escaneo escrito aparte sería el que se olvidaría de
+  reconciliar —arrastrar el estado auditado— o de publicar.
+
+- **D-303 — «Nueva aplicación» ya no puede crear un duplicado.** Si el repo elegido corresponde a
+  una app que ya está en el hub, el asistente lo detecta —al escribir la URL, y también al pulsar
+  «Detectar stack», que además saca la URL del `origin` de la carpeta— y redirige al diálogo de
+  vincular de la app que ya existe. La puerta se vuelve a mirar en `Create` y **antes** que la del
+  hub: un botón gris es una cortesía de la vista, y «esta app ya existe» le sirve más al usuario
+  que «conecta el hub» cuando las dos cosas son ciertas.
+
+- **D-304 — El diálogo es un view-model, no una ventana.** Mismo reparto que
+  `DeleteAppConfirmation` (D-260): la regla vive en `LinkCloneViewModel` y la vista la enlaza. La
+  diferencia es que aquí la regla no es una puerta sino un flujo, así que se inyectan **dos**
+  seams —`IFolderPicker` y `ILinkCloneDialog`— y el recorrido entero (elegir mal, leer el error,
+  elegir bien, clonar, ver la deriva, re-escanear) se prueba sin abrir nada. El selector real es
+  `Microsoft.Win32.OpenFolderDialog`, que viene con WPF en .NET 8: no hace falta arrastrar WinForms
+  para pedir una carpeta.
+
+### §3 — Solo lectura coherente
+
+- **D-305 — Se deshabilita lo que LANZA o LEE el clon; nada más.** En V2: «Auditar selección» y
+  «Re-escanear», con su motivo en el tooltip y una barra que explica el estado y trae el acceso
+  directo a vincular. Siguen enteros el árbol, los filtros, la selección, «Reset ciclo» —que
+  trabaja sobre el inventario, no sobre el código— y «Ver hallazgos». En la ficha de un hallazgo
+  se deshabilita **solo** «Verificar ahora», que re-ancla contra los ficheros y le pregunta al
+  agente. La **gobernanza no depende del clon**: silenciar, cambiar severidad, disputar, comentar
+  y resolver a mano siguen funcionando, y el snippet ya enseñaba la copia anclada con su aviso
+  cuando no hay código vivo (F5.5 §3).
+
+- **D-306 — Y la puerta está en el MODELO, no solo en el XAML.** `LaunchSession` y `Rescan`
+  comprueban `CanAudit` antes de nada: un botón gris es una cortesía de la vista; auditar sin clon
+  escribiría hallazgos sobre un código que no está. Un test lo fuerza ejecutando el comando a mano.
+
+### Cobertura y verificación
+
+- **D-307 — Lo que queda probado.** Los tres estados uno a uno: sin ruta (🔴), ruta que ya no
+  existe, carpeta que dejó de ser repo, repo sin `origin`, y repo con OTRO remoto (🟡, con las dos
+  URLs en el mensaje), más el clon por SSH del mismo repo, que es 🟢. De la validación: que la
+  carpeta equivocada se rechaza y **no** deja rastro en `machines.json`, y que la correcta lo
+  registra y pone el piloto en verde. Del diálogo: rechazo con error específico y acierto a
+  continuación sin estado pegado; que reparar arranca en la ruta rota; y que «Clonarlo ahora»
+  termina en 🟢 con el código en disco, clonando contra un repo local (N-1, sin red), además del
+  destino ocupado. De la deriva: que avisa cuando los hashes difieren, que calla cuando coinciden,
+  y que re-escanear desde el diálogo deja el inventario con el hash del clon. De la redirección:
+  detección por URL escrita, por forma SSH, por el `origin` de la carpeta al detectar el stack, y
+  que `Create` no da de alta nada. De V2: que el inventario se abre y se recorre sin clon pero no
+  lanza ni re-escanea, que la carpeta movida pide *reparar* y no *vincular*, y que con clon válido
+  no hay barra ninguna. Y en las vistas: que los dos botones de auditar están atados a `CanAudit`
+  **con su motivo**, y que la tarjeta pinta piloto, etiqueta, tooltip y botón condicionado.
+
+- **D-308 — Las vistas se comprobaron cargándolas de verdad (arnés de D-268/D-290).** El diálogo
+  nuevo y las dos páginas se instancian con los diccionarios de producción, escuchando
+  `PresentationTraceSources.DataBindingSource`: **cero avisos de enlace** en los tres estados. De
+  ahí salió D-296 —el emoji gris— que ninguna aserción sobre el texto del XAML habría detectado.
+  <br>
+  Un efecto lateral del piloto: los tests que auditan necesitan ahora un clon que sea un repo git
+  de verdad con su `origin`, no una carpeta suelta. `TestFactory.MakeClone` lo construye, y es lo
+  correcto: un test que audita tiene que partir del mismo estado del que parte un usuario que
+  puede auditar.
+
+- **D-309 — Lo que se verifica a mano.** (a) Renombrar la carpeta del clon de xblast → la tarjeta
+  pasa a 🟡 con «Reparar vínculo…» al volver a la ventana; repararla → 🟢. (b) Con otra app de
+  prueba sin clon: 🔴, inventario en solo lectura y navegable, y «Clonarlo ahora» terminando en 🟢.
+  (c) Abrir «Nueva aplicación» con la URL de una app que ya existe y comprobar que redirige en vez
+  de crear el duplicado.
 
 ## H9 — Arreglo integrado supervisado (opcional, NO entregado)
 

@@ -283,6 +283,21 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private Task NewApp() => Navigation.NavigateToAsync<OnboardingViewModel>();
 
+    /// <summary>
+    /// La ventana ha vuelto al primer plano (F5.8 §1). Mientras Atalaya estaba detrás, el usuario
+    /// ha podido mover, borrar o volver a clonar la carpeta de un repo — es justo cuando pasa—, y
+    /// el piloto de vinculación se quedaría enseñando lo que era verdad hace media hora.
+    /// <para>
+    /// Solo se recarga la página VIVA, y solo si es una de las dos que leen ese estado. Recargar
+    /// cualquier página al enfocar sería una sorpresa: en la ficha de un hallazgo tiraría lo que
+    /// se estuviera escribiendo en un comentario.
+    /// </para>
+    /// </summary>
+    public Task OnWindowActivatedAsync()
+        => ShellRefresh.ShouldReloadOnActivate(Navigation.Current, IsBusy)
+            ? Navigation.Current!.LoadAsync()
+            : Task.CompletedTask;
+
     /// <summary>Polling tick (§3): pull, update the indicator, surface toasts, reload the page.</summary>
     public async Task RefreshAsync()
     {
@@ -324,4 +339,22 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
     }
+}
+
+/// <summary>
+/// Qué se recarga al volver la ventana al primer plano (F5.8 §1). Separado de la carcasa para
+/// poder probarlo: la regla es corta pero su parte importante es lo que NO hace.
+/// </summary>
+public static class ShellRefresh
+{
+    /// <summary>
+    /// Solo las dos páginas que leen el estado de vinculación local, y solo cuando no hay una
+    /// operación en curso.
+    /// <para>
+    /// Recargar cualquier página al enfocar sería una sorpresa: en la ficha de un hallazgo tiraría
+    /// el comentario a medio escribir, y en Ajustes, lo que se estuviera cambiando sin guardar.
+    /// </para>
+    /// </summary>
+    public static bool ShouldReloadOnActivate(ViewModelBase? current, bool busy)
+        => !busy && current is PortfolioViewModel or InventoryViewModel;
 }

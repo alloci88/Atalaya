@@ -24,6 +24,20 @@ public sealed record AppCard(
     bool AuditingNow,
     IReadOnlyList<int> Trend)
 {
+    private readonly CloneLink? _link;
+
+    /// <summary>
+    /// Si esta máquina tiene el clon de la app (F5.8 §1). No sale de la consulta —el hub no sabe
+    /// nada de las rutas locales de nadie, y no debe (§4)—: lo pone el view-model del portafolio
+    /// leyendo <c>machines.json</c>, que es por-máquina. Sin ponerlo, una tarjeta dice lo mismo
+    /// que diría en una máquina recién instalada: sin vincular.
+    /// </summary>
+    public CloneLink Link
+    {
+        get => _link ?? CloneLink.Unknown(Slug);
+        init => _link = value;
+    }
+
     /// <summary>Apps with open critical findings sort first (§8 V1).</summary>
     public int SortKey => Critica > 0 ? 0 : ActiveTotal > 0 ? 1 : 2;
 

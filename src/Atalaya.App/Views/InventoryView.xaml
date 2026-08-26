@@ -51,6 +51,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -75,17 +76,43 @@
                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                 Width="220"
                 Margin="0,0,8,8" />
-            <ui:Button Content="Auditar selección" Command="{Binding AuditSelectionCommand}" Appearance="Primary" Margin="0,0,8,8" />
+            <!-- F5.8 §3: lo que LANZA una auditoría o lee el clon se deshabilita sin vínculo local,
+                 y dice por qué. Lo demás —seleccionar, resetear el ciclo, ver hallazgos— sigue
+                 entero: el inventario se abre siempre. -->
+            <ui:Button Content="Auditar selección" Command="{Binding AuditSelectionCommand}" Appearance="Primary"
+                       IsEnabled="{Binding CanAudit}" ToolTip="{Binding AuditDisabledTooltip}" Margin="0,0,8,8" />
             <ui:Button Content="{Binding PendingToggleLabel}" Command="{Binding SelectPendingCommand}"
                        ToolTip="{Binding PendingToggleTooltip}" Margin="0,0,8,8" />
-            <ui:Button Content="Re-escanear" Command="{Binding RescanCommand}" Margin="0,0,8,8" />
+            <ui:Button Content="Re-escanear" Command="{Binding RescanCommand}"
+                       IsEnabled="{Binding CanAudit}" ToolTip="{Binding AuditDisabledTooltip}" Margin="0,0,8,8" />
             <ui:Button Content="Reset ciclo" Command="{Binding ResetCycleCommand}" Margin="0,0,8,8" />
             <ui:Button Content="Ver hallazgos" Command="{Binding ShowFindingsCommand}" Margin="0,0,8,8" />
         </WrapPanel>
 
+        <!-- · Solo lectura (F5.8 §3): por qué no se puede auditar y el acceso directo a
+             arreglarlo. Va arriba y no al pie: es la explicación de los botones grises que se
+             tienen justo encima. · -->
+        <Border Grid.Row="2" Grid.Column="0"
+                Background="#22D2B036" BorderBrush="#55D2B036"
+                BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,10"
+                Visibility="{Binding IsReadOnly, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel Orientation="Horizontal">
+                <Ellipse Width="9" Height="9" VerticalAlignment="Center"
+                         Fill="{Binding Link.State, Converter={StaticResource CloneLinkStateToBrush}}" />
+                <TextBlock Text="{Binding ReadOnlyNotice}" TextWrapping="Wrap" Margin="8,0,0,0"
+                           VerticalAlignment="Center" MaxWidth="620" />
+                <ui:Button Content="{Binding LinkActionLabel}"
+                           Command="{Binding LinkCloneCommand}"
+                           Appearance="Primary"
+                           Padding="10,3" FontSize="11.5"
+                           Margin="12,0,0,0"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+        </Border>
+
         <!-- · Barra de selección: solo cuando hay algo marcado. El contador es lo que se va a
              gastar, así que se lee antes de pulsar «Auditar selección» (F5.6 §3). · -->
-        <Border Grid.Row="2" Grid.Column="0"
+        <Border Grid.Row="3" Grid.Column="0"
                 Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1" CornerRadius="6" Padding="12,7" Margin="0,0,0,10"
@@ -102,7 +129,7 @@
         </Border>
 
         <!-- · Árbol de módulos · -->
-        <ScrollViewer Grid.Row="3" Grid.Column="0" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Row="4" Grid.Column="0" VerticalScrollBarVisibility="Auto">
             <ItemsControl ItemsSource="{Binding Modules}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -173,9 +200,9 @@
 
         <!-- Empty state -->
         <TextBlock
-            Grid.Row="3"
+            Grid.Row="4"
             Grid.Column="0"
-            Text="Sin inventario. Configura el clon local y pulsa «Re-escanear»."
+            Text="Sin inventario. Vincula tu clon local y pulsa «Re-escanear»."
             Opacity="0.6"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
@@ -185,7 +212,7 @@
              aplicación por primera vez: el usuario no distinguía ciclo de sesión (F5.6 §5).
              «Grandes» ya no sale aquí por decisión del usuario — no aporta a este nivel, y el
              estado sigue visible como badge en la fila de cada unidad, que es donde se actúa. -->
-        <Border Grid.Row="1" Grid.Column="1" Grid.RowSpan="3" Margin="14,0,0,0" Padding="14"
+        <Border Grid.Row="1" Grid.Column="1" Grid.RowSpan="4" Margin="14,0,0,0" Padding="14"
                 Background="#18808080" CornerRadius="8" VerticalAlignment="Top">
             <StackPanel>
                 <TextBlock Text="Resumen del ciclo" FontWeight="SemiBold" Margin="0,0,0,10"

@@ -1,5 +1,6 @@
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
+using Atalaya.App.Views;
 using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
@@ -40,7 +41,8 @@ public sealed class ReAuditSelectionTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "atalaya-reaudit", Guid.NewGuid().ToString("N"));
         _clone = Path.Combine(_root, "clone");
-        Directory.CreateDirectory(_clone);
+        // Un clon de verdad: desde F5.8 auditar exige un repo git cuyo origin sea el de la app.
+        TestFactory.MakeClone(_clone, "https://example.invalid/org/app.git");
         _paths = new AppPaths(Path.Combine(_root, "local"));
         _settings = new SettingsService(_paths);
         _settings.Load();
@@ -57,7 +59,8 @@ public sealed class ReAuditSelectionTests : IDisposable
         _hub.Store.WriteHub(new HubInfo { OrganizationName = "Org" });
         _hub.Store.WriteApp(new AppConfig
         {
-            Slug = "app", Name = "App", RepoUrl = "u", Stack = TechStack.DotNet, CurrentCycle = 1,
+            Slug = "app", Name = "App", RepoUrl = "https://example.invalid/org/app.git",
+            Stack = TechStack.DotNet, CurrentCycle = 1,
         });
         _hub.Store.WriteInventory("app", new InventoryCycle
         {
@@ -93,6 +96,13 @@ public sealed class ReAuditSelectionTests : IDisposable
         // Aquí se prueba el camino de la selección, no el diálogo: se confirma siempre.
         services.AddSingleton<IAuditLaunchConfirmer>(new AlwaysConfirms());
         services.AddSingleton(_toasts);
+        // F5.8: el estado de vinculación y el diálogo que lo apaga. El diálogo y el selector de
+        // carpetas van desactivados — ningún test de V2 abre una ventana.
+        services.AddSingleton<CloneLinkService>();
+        services.AddSingleton<InventoryRescanService>();
+        services.AddSingleton<IFolderPicker, TestFactory.NoFolderPicker>();
+        services.AddSingleton<ILinkCloneDialog, TestFactory.NoLinkCloneDialog>();
+        services.AddSingleton<LinkCloneFlow>();
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
     }

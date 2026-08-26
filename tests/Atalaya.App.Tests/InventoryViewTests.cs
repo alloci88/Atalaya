@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
+using Atalaya.App.Views;
 using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
@@ -35,10 +36,17 @@ public sealed class InventoryViewTests : IDisposable
     private readonly ToastCenter _toasts = new();
     private readonly ServiceProvider _provider;
 
+    /// <summary>El repo de la app de prueba. El clon local tiene que declarar ESTE origin.</summary>
+    private const string RepoUrl = "https://example.invalid/org/app.git";
+
+    private readonly MachineConfigStore _machines;
+    private readonly string _clone;
+
     public InventoryViewTests()
     {
         _root = Path.Combine(Path.GetTempPath(), "atalaya-inventory-v2", Guid.NewGuid().ToString("N"));
         _paths = new AppPaths(Path.Combine(_root, "local"));
+        _machines = new MachineConfigStore(_paths.MachinesJson);
         _settings = new SettingsService(_paths);
         _settings.Load();
         AppSettings s = _settings.Current;
@@ -49,14 +57,20 @@ public sealed class InventoryViewTests : IDisposable
         _hub.Store.WriteHub(new HubInfo { OrganizationName = "Org" });
         _hub.Store.WriteApp(new AppConfig
         {
-            Slug = "app", Name = "App", RepoUrl = "u", Stack = TechStack.DotNet, CurrentCycle = 1,
+            Slug = "app", Name = "App", RepoUrl = RepoUrl, Stack = TechStack.DotNet, CurrentCycle = 1,
         });
+
+        // Esta máquina TIENE el clon: es el estado desde el que se puede auditar (F5.8 §1). Los
+        // tests de solo-lectura lo quitan a propósito con `Desvincular()`.
+        _clone = Path.Combine(_root, "clone");
+        TestFactory.MakeClone(_clone, RepoUrl);
+        _machines.SetClonePath("app", _clone);
 
         var services = new ServiceCollection();
         services.AddSingleton(_hub);
         services.AddSingleton(_paths);
         services.AddSingleton(_settings);
-        services.AddSingleton(new MachineConfigStore(_paths.MachinesJson));
+        services.AddSingleton(_machines);
         services.AddSingleton<IUlidFactory>(_ulids);
         services.AddSingleton<InventoryScanner>();
         services.AddSingleton<FindingIngestionService>();
@@ -75,6 +89,13 @@ public sealed class InventoryViewTests : IDisposable
         services.AddSingleton<GroupExpansionMemory>();
         services.AddSingleton<IAuditLaunchConfirmer>(_confirmer);
         services.AddSingleton(_toasts);
+        // F5.8: el estado de vinculación y el diálogo que lo apaga. El diálogo y el selector de
+        // carpetas van desactivados — ningún test de V2 abre una ventana.
+        services.AddSingleton<CloneLinkService>();
+        services.AddSingleton<InventoryRescanService>();
+        services.AddSingleton<IFolderPicker, TestFactory.NoFolderPicker>();
+        services.AddSingleton<ILinkCloneDialog, TestFactory.NoLinkCloneDialog>();
+        services.AddSingleton<LinkCloneFlow>();
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
     }
@@ -575,6 +596,144 @@ public sealed class InventoryViewTests : IDisposable
         }
 
         _hub.Store.WriteSession(session);
+    }
+
+    // =============================================================== F5.8 §3 solo lectura
+
+    /// <summary>Deja la app sin clon en esta máquina, como la ve un compañero recién llegado.</summary>
+    private void Desvincular()
+    {
+        MachineConfig config = _machines.Load();
+        config.ClonePaths.Remove("app");
+        _machines.Save(config);
+    }
+
+    /// <summary>
+    /// Sin clon, el inventario se ABRE: estados, módulos y resumen del ciclo siguen ahí. Lo único
+    /// que cambia es que no se puede lanzar nada (F5.8 §3).
+    /// </summary>
+    [Fact]
+    public async Task Sin_clon_el_inventario_se_abre_pero_no_se_puede_auditar()
+    {
+        Desvincular();
+        SeedModules(2);
+
+        InventoryViewModel vm = await Loaded();
+
+        vm.Modules.Should().HaveCount(2, "el inventario se lee sin tener el código");
+        vm.TotalUnits.Should().Be(4);
+        vm.CanAudit.Should().BeFalse();
+        vm.IsReadOnly.Should().BeTrue();
+        vm.Link.State.Should().Be(CloneLinkState.SinVincular);
+        vm.LinkActionLabel.Should().Be("Vincular clon local…");
+        vm.AuditDisabledTooltip.Should().Be("Vincula tu clon local para auditar.");
+        vm.ReadOnlyNotice.Should().Contain("hallazgos, métricas e informes");
+    }
+
+    /// <summary>
+    /// Y la puerta está en el MODELO: un botón gris es una cortesía de la vista. Lanzar sin clon
+    /// escribiría hallazgos sobre un código que no está.
+    /// </summary>
+    [Fact]
+    public async Task Sin_clon_lanzar_una_seleccion_no_arranca_nada_y_lo_dice()
+    {
+        Desvincular();
+        SeedModules(1);
+
+        InventoryViewModel vm = await Loaded();
+        Unit(vm, "src/M00/A00.cs").IsSelected = true;
+        await vm.AuditSelectionCommand.ExecuteAsync(null);
+
+        _confirmer.Asked.Should().BeEmpty("ni siquiera se llega a preguntar por el gasto");
+        _toasts.Items.Should().Contain(t => t.Text.Contains("Vincula tu clon local"));
+        _hub.Store.ListSessions("app").Should().BeEmpty();
+    }
+
+    /// <summary>Re-escanear LEE el clon: sin él tampoco corre, y no toca el inventario.</summary>
+    [Fact]
+    public async Task Sin_clon_re_escanear_no_toca_el_inventario()
+    {
+        Desvincular();
+        SeedModules(1);
+
+        InventoryViewModel vm = await Loaded();
+        await vm.RescanCommand.ExecuteAsync(null);
+
+        _hub.Store.TryReadInventory("app", 1)!.Units.Should().HaveCount(2, "no se ha reescrito");
+        _toasts.Items.Should().Contain(t => t.Text.Contains("Vincula tu clon local"));
+    }
+
+    /// <summary>La carpeta movida NO es «sin vincular»: se repara, y se dice así.</summary>
+    [Fact]
+    public async Task Con_el_clon_movido_el_inventario_pide_reparar()
+    {
+        Directory.Move(_clone, Path.Combine(_root, "clone-renombrada"));
+        SeedModules(1);
+
+        InventoryViewModel vm = await Loaded();
+
+        vm.Link.State.Should().Be(CloneLinkState.Problema);
+        vm.LinkActionLabel.Should().Be("Reparar vínculo…");
+        vm.AuditDisabledTooltip.Should().Be("Repara el vínculo con tu clon local para auditar.");
+        vm.ReadOnlyNotice.Should().Contain("Solo lectura");
+    }
+
+    /// <summary>Con el clon en su sitio, nada de esto estorba: el modo normal sigue siendo normal.</summary>
+    [Fact]
+    public async Task Con_clon_valido_no_hay_barra_de_solo_lectura()
+    {
+        SeedModules(1);
+
+        InventoryViewModel vm = await Loaded();
+
+        vm.CanAudit.Should().BeTrue();
+        vm.IsReadOnly.Should().BeFalse();
+        vm.Link.Label.Should().Be("Vinculada");
+    }
+
+    /// <summary>
+    /// Y la vista lo enseña: los dos botones que lanzan o leen el clon van atados a
+    /// <c>CanAudit</c>, con su motivo. Que la regla exista en el modelo no sirve si el XAML no la
+    /// enlaza — es justo el par que se desincroniza en la siguiente tanda.
+    /// </summary>
+    [Fact]
+    public void La_vista_ata_las_acciones_de_auditar_al_estado_del_clon()
+    {
+        string xaml = InventoryXaml();
+
+        foreach (string command in new[] { "AuditSelectionCommand", "RescanCommand" })
+        {
+            string button = ButtonWith(xaml, command);
+            button.Should().Contain("IsEnabled=\"{Binding CanAudit}\"", $"«{command}» lanza o lee el clon");
+            button.Should().Contain("ToolTip=\"{Binding AuditDisabledTooltip}\"",
+                "un botón gris sin motivo es un botón roto");
+        }
+
+        xaml.Should().Contain("{Binding IsReadOnly,", "la barra de solo lectura se enseña sola");
+        xaml.Should().Contain("{Binding LinkActionLabel}", "y trae el acceso directo a vincular");
+        xaml.Should().Contain("{Binding LinkCloneCommand}");
+    }
+
+    /// <summary>El elemento del XAML que lleva ese comando, desde su apertura hasta su cierre.</summary>
+    private static string ButtonWith(string xaml, string command)
+    {
+        int at = xaml.IndexOf($"{{Binding {command}}}", StringComparison.Ordinal);
+        at.Should().BeGreaterThan(0, $"la vista debería usar {command}");
+        int start = xaml.LastIndexOf('<', at);
+        int end = xaml.IndexOf("/>", at, StringComparison.Ordinal);
+        return xaml[start..(end < 0 ? xaml.Length : end)];
+    }
+
+    private static string InventoryXaml()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Atalaya.sln")))
+        {
+            dir = dir.Parent;
+        }
+
+        return File.ReadAllText(
+            Path.Combine(dir!.FullName, "src", "Atalaya.App", "Views", "InventoryView.xaml"));
     }
 
     public void Dispose()

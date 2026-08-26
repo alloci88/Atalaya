@@ -1,5 +1,8 @@
 using Atalaya.App.Services;
+using Atalaya.App.ViewModels;
+using Atalaya.App.Views;
 using Atalaya.Domain.Abstractions;
+using Atalaya.Inventory;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Atalaya.App.Tests;
@@ -17,6 +20,74 @@ internal static class TestFactory
     {
         AssertIsolated(paths);
         return new HubContext(paths, settings, Account(paths), deploy ?? new DeployConfig(), NullLoggerFactory.Instance);
+    }
+
+    /// <inheritdoc cref="CloneLinkService"/>
+    public static CloneLinkService Links(HubContext hub, AppPaths paths)
+        => new(hub, new MachineConfigStore(paths.MachinesJson));
+
+    /// <summary>
+    /// El flujo de vincular con el diálogo y el selector desactivados (F5.8). Los view-models que
+    /// no ejercitan la vinculación lo reciben así: el gesto existe y no abre nada.
+    /// </summary>
+    public static LinkCloneFlow LinkFlow(
+        HubContext hub,
+        AppPaths paths,
+        ToastCenter? toasts = null,
+        IFolderPicker? picker = null,
+        ILinkCloneDialog? dialog = null)
+        => new(
+            hub,
+            Links(hub, paths),
+            new InventoryRescanService(hub, new InventoryScanner()),
+            picker ?? new NoFolderPicker(),
+            dialog ?? new NoLinkCloneDialog(),
+            toasts ?? new ToastCenter());
+
+    /// <summary>
+    /// Convierte una carpeta en un clon creíble: repo git de verdad con un <c>origin</c> que
+    /// apunta a <paramref name="repoUrl"/> (F5.8 §1).
+    /// <para>
+    /// Hace falta porque desde F5.8 «tener el clon» no es «tener una carpeta»: el piloto exige
+    /// que sea un repo y que su remoto sea el de la app. Un test que audita tiene que partir del
+    /// mismo estado del que parte un usuario que puede auditar.
+    /// </para>
+    /// </summary>
+    public static void MakeClone(string folder, string repoUrl)
+    {
+        Directory.CreateDirectory(folder);
+        if (!LibGit2Sharp.Repository.IsValid(folder))
+        {
+            LibGit2Sharp.Repository.Init(folder);
+        }
+
+        using var repo = new LibGit2Sharp.Repository(folder);
+        if (repo.Network.Remotes["origin"] is null)
+        {
+            repo.Network.Remotes.Add("origin", repoUrl);
+        }
+        else
+        {
+            repo.Network.Remotes.Update("origin", r => r.Url = repoUrl);
+        }
+    }
+
+    /// <summary>Un selector que siempre cancela: ningún test abre el diálogo del sistema.</summary>
+    public sealed class NoFolderPicker : IFolderPicker
+    {
+        public string? Pick(string title, string? initialDirectory = null) => null;
+    }
+
+    /// <summary>Un diálogo que no se muestra: devuelve el view-model tal cual lo recibió.</summary>
+    public sealed class NoLinkCloneDialog : ILinkCloneDialog
+    {
+        public List<LinkCloneViewModel> Shown { get; } = new();
+
+        public LinkCloneViewModel Show(LinkCloneViewModel viewModel)
+        {
+            Shown.Add(viewModel);
+            return viewModel;
+        }
     }
 
     /// <summary>

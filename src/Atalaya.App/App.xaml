@@ -14,6 +14,7 @@
             </ResourceDictionary.MergedDictionaries>
 
             <local:SyncHealthToBrushConverter x:Key="SyncHealthToBrush" />
+            <local:CloneLinkStateToBrushConverter x:Key="CloneLinkStateToBrush" />
             <local:SeverityToBrushConverter x:Key="SeverityToBrush" />
             <local:SeverityToLabelConverter x:Key="SeverityToLabel" />
             <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />

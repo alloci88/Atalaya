@@ -3,7 +3,6 @@ using Atalaya.App.Services;
 using Atalaya.Domain;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
-using Atalaya.Inventory;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -13,14 +12,21 @@ namespace Atalaya.App.ViewModels;
 public sealed partial class InventoryViewModel : ViewModelBase
 {
     private readonly HubContext _hub;
-    private readonly InventoryScanner _scanner;
-    private readonly MachineConfigStore _machines;
     private readonly IUlidFactory _ulids;
     private readonly NavigationService _navigation;
     private readonly LiveSessionService _live;
     private readonly SettingsService _settings;
     private readonly CostEstimator _costs;
     private readonly IAuditLaunchConfirmer _confirmer;
+
+    /// <summary>F5.8 §1: si esta máquina tiene el clon. Decide el modo solo-lectura.</summary>
+    private readonly CloneLinkService _links;
+
+    /// <summary>F5.8 §2: el mismo diálogo de vincular que abre el portafolio.</summary>
+    private readonly LinkCloneFlow _linkFlow;
+
+    /// <summary>F5.8 §2: el re-escaneo, ahora compartido con el flujo de vincular.</summary>
+    private readonly InventoryRescanService _rescan;
 
     /// <summary>
     /// F5.7 §4: el resultado de una acción se cuenta por el toast global. El texto que vivía al
@@ -43,14 +49,12 @@ public sealed partial class InventoryViewModel : ViewModelBase
     private IReadOnlyList<InventoryUnit> _allUnits = Array.Empty<InventoryUnit>();
 
     public InventoryViewModel(
-        HubContext hub, InventoryScanner scanner, MachineConfigStore machines,
-        IUlidFactory ulids, NavigationService navigation, LiveSessionService live,
+        HubContext hub, IUlidFactory ulids, NavigationService navigation, LiveSessionService live,
         SettingsService settings, CostEstimator costs, IAuditLaunchConfirmer confirmer,
-        GroupExpansionMemory expansion, ToastCenter toasts)
+        GroupExpansionMemory expansion, ToastCenter toasts,
+        CloneLinkService links, LinkCloneFlow linkFlow, InventoryRescanService rescan)
     {
         _hub = hub;
-        _scanner = scanner;
-        _machines = machines;
         _ulids = ulids;
         _navigation = navigation;
         _live = live;
@@ -58,6 +62,9 @@ public sealed partial class InventoryViewModel : ViewModelBase
         _costs = costs;
         _confirmer = confirmer;
         _toasts = toasts;
+        _links = links;
+        _linkFlow = linkFlow;
+        _rescan = rescan;
         _collapse = new GroupCollapse(expansion);
         _collapse.PropertyChanged += (_, e) => OnPropertyChanged(e.PropertyName);
     }
@@ -90,6 +97,42 @@ public sealed partial class InventoryViewModel : ViewModelBase
 
     [ObservableProperty] private string _searchText = string.Empty;
     [ObservableProperty] private bool _isEmpty;
+
+    /// <summary>
+    /// Si esta máquina tiene el clon de la app (F5.8 §3). El inventario se ABRE siempre —ver
+    /// estados, quién audita y el resumen del ciclo no necesita el código—, pero lo que LANZA
+    /// una auditoría o lee ficheros del clon queda deshabilitado y dice por qué.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanAudit))]
+    [NotifyPropertyChangedFor(nameof(IsReadOnly))]
+    [NotifyPropertyChangedFor(nameof(ReadOnlyNotice))]
+    [NotifyPropertyChangedFor(nameof(LinkActionLabel))]
+    [NotifyPropertyChangedFor(nameof(AuditDisabledTooltip))]
+    private CloneLink _link = CloneLink.Unknown(string.Empty);
+
+    /// <inheritdoc cref="CloneLink.CanAudit"/>
+    public bool CanAudit => Link.CanAudit;
+
+    /// <summary>La barra de solo-lectura solo existe cuando de verdad lo es.</summary>
+    public bool IsReadOnly => !Link.CanAudit;
+
+    /// <summary>Lo que se lee en esa barra: el estado y lo que sigue siendo posible sin clon.</summary>
+    /// <remarks>
+    /// El salto de línea no es cosmético: el diagnóstico del caso ámbar termina en las DOS URLs,
+    /// cada una en su renglón, y pegarle la frase siguiente a continuación la hacía leerse como
+    /// parte de la última URL.
+    /// </remarks>
+    public string ReadOnlyNotice => Link.State == CloneLinkState.Problema
+        ? $"Solo lectura: {Link.Problem}\nHallazgos, métricas e informes siguen accesibles."
+        : "Solo lectura: no tienes un clon local de esta aplicación en esta máquina. "
+          + "Puedes ver estados, quién audita, hallazgos, métricas e informes; para auditar hace falta el código.";
+
+    /// <inheritdoc cref="CloneLink.ActionLabel"/>
+    public string LinkActionLabel => Link.ActionLabel;
+
+    /// <inheritdoc cref="CloneLink.DisabledActionTooltip"/>
+    public string AuditDisabledTooltip => Link.DisabledActionTooltip;
 
     /// <summary>
     /// Cuántas unidades hay marcadas EN TODO EL CICLO. Es el número que no puede mentir: lanzar
@@ -163,12 +206,18 @@ public sealed partial class InventoryViewModel : ViewModelBase
         if (app is null)
         {
             _collapse.Adopt(Array.Empty<ModuleNode>());
+            Link = CloneLink.Unknown(Slug);
             IsEmpty = true;
             return;
         }
 
         AppName = app.Name;
         CycleN = app.CurrentCycle;
+
+        // Se recalcula en cada reconstrucción, que es lo que corre al entrar, al sincronizar y al
+        // volver la ventana al primer plano (F5.8 §1). Un vínculo roto entre dos vistas de la
+        // misma página no puede quedar diciendo que se puede auditar.
+        Link = _links.For(app);
         InventoryCycle? inv = _hub.Store.TryReadInventory(Slug, CycleN);
         var claims = _hub.Store.ListClaims(Slug)
             .Where(c => !c.IsExpiredAt(DateTimeOffset.UtcNow))
@@ -338,40 +387,41 @@ public sealed partial class InventoryViewModel : ViewModelBase
     [RelayCommand]
     private void ToggleAllGroups() => _collapse.ToggleAll();
 
+    /// <summary>
+    /// Abre «Vincular clon local…» / «Reparar vínculo…» sin salir del inventario (F5.8 §3): el
+    /// acceso directo que acompaña a cada acción deshabilitada. Al volver, la página se
+    /// reconstruye, y con ella el modo solo-lectura.
+    /// </summary>
+    [RelayCommand]
+    private void LinkClone()
+    {
+        if (Slug.Length == 0)
+        {
+            return;
+        }
+
+        _linkFlow.Run(Slug);
+        Rebuild();
+    }
+
     [RelayCommand]
     private async Task Rescan()
     {
-        string? clonePath = _machines.Load().ClonePathFor(Slug);
-        if (string.IsNullOrWhiteSpace(clonePath) || !Directory.Exists(clonePath))
+        // Re-escanear LEE el clon: sin él no hay nada que escanear. Se comprueba contra el mismo
+        // estado que pinta el piloto, no con una comprobación propia (F5.8 §1).
+        if (!CanAudit)
         {
-            _toasts.Show("No hay clon local configurado para esta app en esta máquina.");
+            _toasts.Show(AuditDisabledTooltip);
             return;
         }
 
-        string clone = clonePath;
-
-        AppConfig? app = _hub.Store.TryReadApp(Slug);
-        if (app is null)
-        {
-            return;
-        }
+        string clone = Link.Path!;
 
         IsBusy = true;
         _toasts.Show("Re-escaneando…");
         try
         {
-            await Task.Run(() =>
-            {
-                ScanOutput scan = _scanner.Scan(clone, app, app.CurrentCycle);
-                InventoryCycle? previous = _hub.Store.TryReadInventory(Slug, app.CurrentCycle);
-                InventoryCycle merged = previous is null
-                    ? scan.Inventory
-                    : Rescanner.Reconcile(previous, scan.Inventory).Merged;
-
-                _hub.Store.WriteInventory(Slug, merged);
-                _hub.Sync?.CommitAndPush($"inventory: rescan {Slug} cycle {app.CurrentCycle}");
-            });
-
+            await Task.Run(() => _rescan.Rescan(Slug, clone));
             _toasts.Show("Inventario actualizado.");
         }
         catch (Exception ex)
@@ -492,6 +542,14 @@ public sealed partial class InventoryViewModel : ViewModelBase
     /// </summary>
     private async Task LaunchSession(AuditMode mode, IReadOnlyList<string> paths)
     {
+        // La puerta de F5.8 §3, en el MODELO y no solo en el XAML: un botón gris es una cortesía
+        // de la vista; auditar sin clon escribiría hallazgos sobre un código que no está.
+        if (!CanAudit)
+        {
+            _toasts.Show(AuditDisabledTooltip);
+            return;
+        }
+
         if (paths.Count == 0)
         {
             _toasts.Show("No hay unidades para auditar.");
