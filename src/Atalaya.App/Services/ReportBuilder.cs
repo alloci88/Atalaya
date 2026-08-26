@@ -101,6 +101,15 @@ public static class ReportBuilder
             sb.AppendLine($"- No verificables (marcados para revisión): {cn.NoVerificables}");
         }
 
+        // F5.10: lo que costó tener reglas excluidas en esta app. No es un aviso —la exclusión es
+        // una decisión tomada a conciencia— pero tiene que verse: un número que no sale es una
+        // decisión que nadie revisa. La sección de abajo dice qué se suprimió exactamente.
+        if (cn.SuppressedByRule > 0)
+        {
+            sb.AppendLine($"- Suprimidos por regla: {cn.SuppressedByRule}"
+                + " (detecciones de reglas excluidas en esta aplicación; no crean hallazgo)");
+        }
+
         // F5.1b: los dos números que impiden que un desacuerdo del modelo pase por resolución.
         // Nunca aparecen sin la sección que los detalla, más abajo.
         if (cn.ResolutionsRefused > 0)
@@ -156,6 +165,24 @@ public static class ReportBuilder
 
                 sb.AppendLine();
             }
+        }
+
+        // F5.10: qué se suprimió, regla por regla. El contador de arriba dice cuánto; esto dice
+        // qué, que es lo único con lo que se puede decidir si la exclusión sigue teniendo sentido.
+        var suprimidos = session.Notes.Where(n => n.Contains(": suprimido por regla · ")).ToList();
+        if (suprimidos.Count > 0)
+        {
+            sb.AppendLine("## Detecciones suprimidas por exclusión de regla");
+            sb.AppendLine();
+            sb.AppendLine("El auditor reportó estos problemas y la aplicación no los registró: su regla está");
+            sb.AppendLine("excluida en esta app. No son hallazgos y no reaparecerán mientras la exclusión siga viva.");
+            sb.AppendLine();
+            foreach (string n in suprimidos)
+            {
+                sb.AppendLine($"- {n.Replace(": suprimido por regla · ", " · ")}");
+            }
+
+            sb.AppendLine();
         }
 
         // F5.1b: qué veredictos no se aplicaron tal cual y por qué. Las notas los nombran por ULID;

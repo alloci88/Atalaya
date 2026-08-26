@@ -27,6 +27,13 @@ public sealed class SessionToolbox : IAuditToolbox
     private readonly string _clonePath;
     private readonly Action<Finding, string>? _onFinding;
 
+    /// <summary>
+    /// Las reglas que esta aplicación ha excluido (F5.10), congeladas al arrancar la sesión. Es la
+    /// aplicación ESTRUCTURAL de la exclusión: aunque el auditor reporte un hallazgo de una regla
+    /// excluida, aquí no entra.
+    /// </summary>
+    private readonly RuleExclusionSet _exclusions;
+
     /// <summary>Hallazgos existentes mostrados al auditor en la unidad en curso, por ULID.</summary>
     private readonly Dictionary<string, Finding> _listed = new(StringComparer.Ordinal);
 
@@ -66,9 +73,11 @@ public sealed class SessionToolbox : IAuditToolbox
     public SessionToolbox(
         string slug, AuditMode mode, DetectionStamp stamp,
         FindingIngestionService ingestion, ReconciliationService reconciliation, Storage.HubStore hub,
-        string clonePath, Action<Finding, string>? onFinding = null)
+        string clonePath, Action<Finding, string>? onFinding = null,
+        RuleExclusionSet? exclusions = null)
     {
         _hub = hub;
+        _exclusions = exclusions ?? RuleExclusionSet.Empty;
         _slug = slug;
         _mode = mode;
         _stamp = stamp;
@@ -106,6 +115,14 @@ public sealed class SessionToolbox : IAuditToolbox
     /// inflan <c>Counters.Rejected</c>. El coordinador los vuelca en las notas de la sesión.
     /// </summary>
     public List<string> DegradedVerdicts { get; } = new();
+
+    /// <summary>
+    /// Lo que el auditor reportó y una exclusión de regla tiró (F5.10), con su regla y su título.
+    /// Tiene canal propio por la misma razón que <see cref="DegradedVerdicts"/>: el payload era
+    /// bueno, así que no puede contar como rechazo, y desaparecer sin dejar rastro sería peor —
+    /// nadie podría saber qué se está perdiendo por tener la regla excluida.
+    /// </summary>
+    public List<string> SuppressedDetections { get; } = new();
 
     /// <summary>How many <c>submit_finding(s)</c> invocations landed in this unit (F3 Hito 1c).</summary>
     public int SubmitInvocations { get; private set; }
@@ -170,8 +187,10 @@ public sealed class SessionToolbox : IAuditToolbox
         RejectedPayloads.Clear();
         RejectionReasons.Clear();
         DegradedVerdicts.Clear();
+        SuppressedDetections.Clear();
         LastUnitSummary = null;
         PassNew = PassConfirmed = PassResolved = PassNonVerifiable = PassRejected = 0;
+        PassSuppressedByRule = 0;
         PassLocationsAdded = 0;
         PassHasNonPresentVerdict = false;
     }
@@ -186,6 +205,9 @@ public sealed class SessionToolbox : IAuditToolbox
     public int PassNonVerifiable { get; private set; }
 
     public int PassRejected { get; private set; }
+
+    /// <summary>Detecciones que la pasada reportó y una exclusión de regla suprimió (F5.10).</summary>
+    public int PassSuppressedByRule { get; private set; }
 
     /// <summary>
     /// Ubicaciones añadidas a hallazgos existentes en la pasada (F4.1). Cuentan como rendimiento:
@@ -461,6 +483,15 @@ public sealed class SessionToolbox : IAuditToolbox
             return Reject($"ruleId desconocido '{args.RuleId}'. Usa el catálogo o criterio.<área>.", args);
         }
 
+        // 2. Regla excluida en ESTA aplicación (F5.10): la detección se registra y no entra.
+        //    Va antes de cualquier otra validación de forma porque el resultado sería el mismo con
+        //    el payload perfecto: preguntarse si el pillar está bien escrito en algo que se va a
+        //    tirar es trabajo para nadie. No es un rechazo — el auditor no hizo nada mal.
+        if (_exclusions.Excludes(args.RuleId))
+        {
+            return SuppressByRule(args);
+        }
+
         if (!TryParsePillar(args.Pillar, out Pillar pillar))
         {
             return Reject($"pillar inválido '{args.Pillar}'.", args);
@@ -517,6 +548,27 @@ public sealed class SessionToolbox : IAuditToolbox
     {
         string? hash = snippet is null ? null : CodeAnchor.ComputeSnippetHash(snippet);
         return new Location(path, LocationAnchor.ResolveOnDisk(_clonePath, path, line, hash), hash);
+    }
+
+    /// <summary>
+    /// Detección suprimida por exclusión de regla (F5.10). No crea ni reactiva hallazgo, no toca
+    /// la confianza de nada y NO cuenta como rechazo. Al auditor se le devuelve el motivo con su
+    /// nombre para que no insista con la misma regla en la pasada siguiente.
+    /// <para>
+    /// Tampoco marca la pasada como no-seca: si lo hiciera, una app con una regla excluida y un
+    /// auditor tozudo barrería la unidad hasta agotar el tope de pasadas sin producir nada. Lo que
+    /// se suprime no es trabajo pendiente.
+    /// </para>
+    /// </summary>
+    private SubmitFindingResult SuppressByRule(SubmitFindingArgs args)
+    {
+        string title = string.IsNullOrWhiteSpace(args.Title) ? "(sin título)" : args.Title;
+        SuppressedDetections.Add($"{args.RuleId} · {Truncate(title, 80)}");
+        Counters.SuppressedByRule++;
+        PassSuppressedByRule++;
+        return new SubmitFindingResult(false, Error:
+            $"regla excluida en esta aplicación: '{args.RuleId}'. No se registran hallazgos de esta regla; "
+            + "no vuelvas a reportarla.");
     }
 
     private SubmitFindingResult Reject(string reason, SubmitFindingArgs? args)

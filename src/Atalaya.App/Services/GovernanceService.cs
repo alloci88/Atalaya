@@ -40,6 +40,127 @@ public sealed class GovernanceService
         Push(slug, $"silence: {f.DisplayId ?? f.Id.ToString()}");
     }
 
+    // ------------------------------------------------------------------ F5.10 · exclusión de regla
+
+    /// <summary>
+    /// Qué pasó al excluir una regla: si existía ya, y cuántos hallazgos activos se silenciaron
+    /// de paso. Se devuelve para poder contarlo, no para decidir nada.
+    /// </summary>
+    public sealed record RuleExclusionResult(string RuleId, bool Replaced, int SilencedFindings);
+
+    /// <summary>
+    /// Excluye una regla de UNA aplicación (F5.10). Desde este momento, ninguna auditoría de esta
+    /// app registra hallazgos de <paramref name="ruleId"/>: se retira del brief y se suprime en la
+    /// ingestión si el auditor la reporta igualmente.
+    /// <para>
+    /// <paramref name="silenceExisting"/> es una decisión SEPARADA y explícita de quien excluye.
+    /// Excluir previene el futuro; qué hacer con los N hallazgos que ya existen es otra pregunta,
+    /// y responderla por defecto en cualquiera de los dos sentidos sería decidir por el usuario:
+    /// silenciarlos siempre borra deuda real de un plumazo, no silenciarlos nunca deja una lista
+    /// que ya nadie va a mirar. Cada hallazgo silenciado así se lleva su propia entrada de
+    /// historial y su propio fichero de silencio, con la regla que lo silenció escrita dentro.
+    /// </para>
+    /// </summary>
+    public RuleExclusionResult ExcludeRule(
+        string slug, string ruleId, SilenceReason reason, string? notes,
+        DateTimeOffset? expiresUtc, bool silenceExisting)
+    {
+        string rule = (ruleId ?? string.Empty).Trim();
+        Storage.HubPaths.RequireSafeRuleId(rule);
+
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        bool replaced = _hub.Store.TryReadRuleExclusion(slug, rule) is not null;
+        _hub.Store.WriteRuleExclusion(slug, new RuleExclusion
+        {
+            RuleId = rule,
+            Reason = reason,
+            Notes = notes,
+            By = Me,
+            Utc = now,
+            ExpiresUtc = expiresUtc,
+        });
+
+        int silenced = 0;
+        if (silenceExisting)
+        {
+            string detail = $"silenciado por exclusión de la regla {rule}"
+                + (string.IsNullOrWhiteSpace(notes) ? "" : $": {notes!.Trim()}");
+
+            foreach (Finding f in _hub.Store.ListFindings(slug)
+                         .Where(f => f.Status == FindingStatus.Activo)
+                         .Where(f => string.Equals(f.RuleId, rule, StringComparison.Ordinal))
+                         .ToList())
+            {
+                _hub.Store.WriteSilence(slug, new Silence
+                {
+                    FindingUlid = f.Id,
+                    Reason = reason,
+                    Notes = notes,
+                    By = Me,
+                    Utc = now,
+                    ExpiresUtc = expiresUtc,
+                    ByRuleExclusion = rule,
+                });
+
+                f.MarkSilenced(now, Me, detail);
+                _hub.Store.WriteFinding(slug, f);
+                silenced++;
+            }
+        }
+
+        // Un solo push para todo el gesto: excluir y silenciar lo existente son una sola decisión
+        // del usuario, y partirla en dos commits contaría dos cosas donde hubo una.
+        Push(slug, $"rule-exclusion: {rule} en {slug}"
+            + (silenced > 0 ? $" (+{silenced} silenciados)" : ""));
+        return new RuleExclusionResult(rule, replaced, silenced);
+    }
+
+    /// <summary>
+    /// Retira la exclusión: la regla vuelve al brief y sus hallazgos vuelven a poder reportarse.
+    /// <para>
+    /// NO des-silencia lo que se silenció en masa. Cada uno de esos silencios fue una decisión
+    /// registrada con su autor y su motivo, y deshacerla en cascada tiraría también los que se
+    /// hubieran revisado uno a uno desde entonces. Se levantan desde su ficha, como cualquier otro.
+    /// </para>
+    /// </summary>
+    public bool UnexcludeRule(string slug, string ruleId)
+    {
+        bool removed = _hub.Store.DeleteRuleExclusion(slug, ruleId);
+        if (removed)
+        {
+            Push(slug, $"rule-exclusion: retirada {ruleId} en {slug}");
+        }
+
+        return removed;
+    }
+
+    /// <summary>
+    /// Cambia la caducidad de una exclusión viva o caducada, conservando motivo y notas. Quien la
+    /// toca pasa a ser su autor: es una decisión nueva sobre cuánto más dura, y firmarla con el
+    /// nombre de quien la creó haría que el registro mintiera.
+    /// </summary>
+    public bool SetRuleExclusionExpiry(string slug, string ruleId, DateTimeOffset? expiresUtc)
+    {
+        RuleExclusion? exclusion = _hub.Store.TryReadRuleExclusion(slug, ruleId);
+        if (exclusion is null)
+        {
+            return false;
+        }
+
+        exclusion.ExpiresUtc = expiresUtc;
+        exclusion.By = Me;
+        exclusion.Utc = DateTimeOffset.UtcNow;
+        _hub.Store.WriteRuleExclusion(slug, exclusion);
+        Push(slug, $"rule-exclusion: caducidad de {ruleId} en {slug}");
+        return true;
+    }
+
+    /// <summary>Cuántos hallazgos ACTIVOS de esa regla hay en la app: la N de la pregunta del diálogo.</summary>
+    public int CountActiveWithRule(string slug, string ruleId)
+        => _hub.Store.ListFindings(slug)
+            .Count(f => f.Status == FindingStatus.Activo
+                        && string.Equals(f.RuleId, ruleId, StringComparison.Ordinal));
+
     public void Unsilence(string slug, Ulid findingId)
     {
         Finding f = Require(slug, findingId);

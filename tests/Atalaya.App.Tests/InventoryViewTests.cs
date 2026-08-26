@@ -96,6 +96,9 @@ public sealed class InventoryViewTests : IDisposable
         services.AddSingleton<IFolderPicker, TestFactory.NoFolderPicker>();
         services.AddSingleton<ILinkCloneDialog, TestFactory.NoLinkCloneDialog>();
         services.AddSingleton<LinkCloneFlow>();
+        // F5.10: la gobernanza de reglas excluidas y su gestión, sin ventana.
+        services.AddSingleton<GovernanceService>();
+        services.AddSingleton<IRuleExclusionsDialog, TestFactory.NoRuleExclusionsDialog>();
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
     }
@@ -547,6 +550,51 @@ public sealed class InventoryViewTests : IDisposable
         {
             row.Value.Should().Contain("ToolTip", $"este TextBlock del panel no se explica: {row.Value}");
         }
+    }
+
+    // ================================================================ F5.10 · reglas excluidas
+
+    /// <summary>
+    /// F5.10 §3: el panel del ciclo dice cuántas reglas se ha decidido no mirar en esta
+    /// aplicación, y ofrece el camino para gestionarlas. Es un dato del ciclo porque condiciona la
+    /// lectura de todos los demás: una cobertura del 100 % con reglas excluidas no dice lo mismo.
+    /// </summary>
+    [Fact]
+    public void El_panel_ofrece_la_linea_de_reglas_excluidas_con_su_gestion()
+        => PanelMarkup().Should().Contain("Reglas excluidas: ")
+            .And.Contain("ManageRuleExclusionsCommand")
+            .And.Contain("Gestionar");
+
+    [Fact]
+    public async Task El_contador_de_reglas_excluidas_cuenta_las_vivas_y_avisa_de_las_caducadas()
+    {
+        SeedInventory(("M", "a.cs", UnitState.Pendiente));
+        var governance = new GovernanceService(_hub, _ulids);
+        governance.ExcludeRule("app", "mejoras.estilo.nomenclatura", SilenceReason.Otro, null, null, false);
+        governance.ExcludeRule("app", "optimizacion.alloc.excesiva", SilenceReason.Otro, null,
+            DateTimeOffset.UtcNow.AddDays(-1), false);
+
+        InventoryViewModel vm = await Loaded();
+
+        vm.ExcludedRules.Should().Be(1, "una caducada no suprime nada");
+        vm.ExpiredRuleExclusions.Should().Be(1);
+        vm.ExclusionsTooltip.Should().Contain("caducada");
+    }
+
+    [Fact]
+    public async Task Gestionar_abre_la_gestion_de_ESTA_aplicacion()
+    {
+        SeedInventory(("M", "a.cs", UnitState.Pendiente));
+        new GovernanceService(_hub, _ulids)
+            .ExcludeRule("app", "mejoras.estilo.nomenclatura", SilenceReason.Otro, null, null, false);
+
+        InventoryViewModel vm = await Loaded();
+        vm.ManageRuleExclusionsCommand.Execute(null);
+
+        var host = (TestFactory.NoRuleExclusionsDialog)_provider.GetRequiredService<IRuleExclusionsDialog>();
+        host.Shown.Should().ContainSingle();
+        host.Shown[0].Slug.Should().Be("app");
+        host.Shown[0].Rows.Should().ContainSingle();
     }
 
     /// <summary>El bloque del resumen del ciclo, sin comentarios.</summary>

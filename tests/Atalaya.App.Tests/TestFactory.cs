@@ -147,6 +147,40 @@ internal static class TestFactory
         public string? Pick(string title, string? initialDirectory = null) => _folder;
     }
 
+    /// <summary>
+    /// La pregunta de «excluir esta regla» respondida sin ventana (F5.10). Guarda lo que se le
+    /// preguntó —el diálogo real no se puede inspeccionar— y devuelve lo que le digan. Por
+    /// defecto CANCELA: un doble que dice que sí por omisión convertiría cualquier test descuidado
+    /// en una exclusión silenciosa.
+    /// </summary>
+    public sealed class RecordingExcludeConfirmer : IExcludeRuleConfirmer
+    {
+        public RecordingExcludeConfirmer(ExcludeRuleChoice answer = ExcludeRuleChoice.Cancel)
+            => Answer = answer;
+
+        public ExcludeRuleChoice Answer { get; set; }
+
+        public List<ExcludeRuleConfirmation> Asked { get; } = new();
+
+        public ExcludeRuleChoice Ask(ExcludeRuleConfirmation confirmation)
+        {
+            Asked.Add(confirmation);
+            return Answer;
+        }
+    }
+
+    /// <summary>La gestión de reglas excluidas sin ventana: anota que se abrió y con qué app.</summary>
+    public sealed class NoRuleExclusionsDialog : IRuleExclusionsDialog
+    {
+        public List<RuleExclusionsViewModel> Shown { get; } = new();
+
+        public RuleExclusionsViewModel Show(RuleExclusionsViewModel viewModel)
+        {
+            Shown.Add(viewModel);
+            return viewModel;
+        }
+    }
+
     /// <summary>Un diálogo que no se muestra: devuelve el view-model tal cual lo recibió.</summary>
     public sealed class NoLinkCloneDialog : ILinkCloneDialog
     {

@@ -966,5 +966,6 @@ public sealed class FindingsViewTests : IDisposable
             new EditorLauncher(_settings, _machines),
             new ToastCenter(),
             TestFactory.Links(_hub, _paths),
-            TestFactory.LinkFlow(_hub, _paths));
+            TestFactory.LinkFlow(_hub, _paths),
+            new TestFactory.RecordingExcludeConfirmer());
 }

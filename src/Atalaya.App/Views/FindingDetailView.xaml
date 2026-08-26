@@ -394,6 +394,26 @@
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                         </Border>
 
+                        <!-- F5.10 · SELECTOR DE ALCANCE. La consecuencia de cada opción va DEBAJO
+                             de ella, no en un tooltip: la diferencia entre las dos no es un matiz
+                             —una oculta un caso, la otra apaga una regla en toda la aplicación— y
+                             quien las confunde no se entera hasta la auditoría siguiente. -->
+                        <TextBlock Text="Alcance" Style="{StaticResource FieldLabel}" Margin="0,0,0,3" />
+                        <ItemsControl ItemsSource="{Binding ScopeOptions}" Margin="0,0,0,4">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,0,0,6">
+                                        <RadioButton GroupName="SilenceScope"
+                                                     Content="{Binding Label}"
+                                                     IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                                        <TextBlock Text="{Binding Consequence}" TextWrapping="Wrap"
+                                                   FontSize="11" Margin="24,1,0,0"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
                         <TextBlock Text="Motivo" Style="{StaticResource FieldLabel}" Margin="0,0,0,3" />
                         <ComboBox ItemsSource="{Binding ReasonOptions}"
                                   SelectedValue="{Binding SilenceReason}"
@@ -411,7 +431,7 @@
                                     ToolTip="Días que dura el silencio. Pasados, el hallazgo vuelve a aparecer solo. 0 lo deja permanente." />
 
                         <WrapPanel Margin="0,10,0,0">
-                            <ui:Button Content="Silenciar" Command="{Binding SilenceCommand}" Margin="0,0,6,0"
+                            <ui:Button Content="{Binding SilenceActionLabel}" Command="{Binding SilenceCommand}" Margin="0,0,6,0"
                                        Visibility="{Binding CanSilence, Converter={StaticResource BoolToVisibility}}" />
                             <ui:Button Content="Des-silenciar" Command="{Binding UnsilenceCommand}"
                                        Visibility="{Binding CanUnsilence, Converter={StaticResource BoolToVisibility}}" />

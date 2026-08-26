@@ -14,7 +14,25 @@ public static class PillarBrief
         "- media: mantenibilidad, modernización, optimización notable.\n" +
         "- baja: estilo, micro-optimización, DX.\n";
 
-    public static string For(TechStack stack)
+    public static string For(TechStack stack) => For(stack, RuleExclusionSet.Empty);
+
+    /// <summary>
+    /// El brief SIN las reglas que esta aplicación ha excluido (F5.10). Retirarlas es más barato y
+    /// menos ruidoso que pedirlas para tirar el resultado: si un hallazgo de esa regla se va a
+    /// suprimir en la ingestión, gastar tokens en buscarlo es gastarlos dos veces.
+    /// <para>
+    /// Las <b>áreas de criterio</b> NO se retiran nunca. Son juicio profesional libre, no una lista
+    /// de comprobación: quitarlas del brief sería decirle al auditor que no piense en seguridad, y
+    /// eso no es lo que pidió quien excluyó una regla. Un hallazgo <c>criterio.*</c> de un área
+    /// excluida explícitamente sí se suprime en la ingestión — la exclusión se respeta, pero como
+    /// filtro de entrada y no como venda en los ojos.
+    /// </para>
+    /// <para>
+    /// Un pilar que se queda sin reglas desaparece entero: una cabecera «PILAR MEJORAS» seguida de
+    /// nada se lee como un fallo del programa, no como una decisión.
+    /// </para>
+    /// </summary>
+    public static string For(TechStack stack, RuleExclusionSet excluded)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"BRIEF DE AUDITOR — stack {stack}.");
@@ -24,8 +42,16 @@ public static class PillarBrief
 
         foreach (Pillar pillar in new[] { Pillar.Errores, Pillar.Optimizacion, Pillar.Mejoras })
         {
+            var rules = RuleCatalog.Rules
+                .Where(r => r.Pillar == pillar && !excluded.Excludes(r.RuleId))
+                .ToList();
+            if (rules.Count == 0)
+            {
+                continue;
+            }
+
             sb.AppendLine($"PILAR {pillar.ToString().ToUpperInvariant()} — mínimos a revisar:");
-            foreach (RuleDef rule in RuleCatalog.Rules.Where(r => r.Pillar == pillar))
+            foreach (RuleDef rule in rules)
             {
                 sb.AppendLine($"  [{rule.RuleId}] {rule.Title}: {rule.Look}");
             }

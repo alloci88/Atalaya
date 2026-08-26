@@ -124,6 +124,36 @@ public sealed class HubStore
         return true;
     }
 
+    // --- Rule exclusions (F5.10) ---
+
+    /// <summary>
+    /// Las reglas excluidas de esta app, VIVAS Y CADUCADAS. El filtrado por caducidad es de quien
+    /// pregunta (<see cref="Domain.Model.RuleExclusionSet"/>), porque la UI necesita ver las
+    /// caducadas para poder decir «caducada — revisar».
+    /// </summary>
+    public IReadOnlyList<RuleExclusion> ListRuleExclusions(string slug)
+        => ReadAll<RuleExclusion>(_paths.RuleExclusionsDir(slug), SchemaValidation.Validate);
+
+    public RuleExclusion? TryReadRuleExclusion(string slug, string ruleId)
+        => File.Exists(_paths.RuleExclusionFile(slug, ruleId))
+            ? ReadJson<RuleExclusion>(_paths.RuleExclusionFile(slug, ruleId), SchemaValidation.Validate)
+            : null;
+
+    public void WriteRuleExclusion(string slug, RuleExclusion exclusion)
+        => WriteJson(_paths.RuleExclusionFile(slug, exclusion.RuleId), exclusion, SchemaValidation.Validate);
+
+    public bool DeleteRuleExclusion(string slug, string ruleId)
+    {
+        string path = _paths.RuleExclusionFile(slug, ruleId);
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        File.Delete(path);
+        return true;
+    }
+
     // --- Claims (deleted on release, §2) ---
 
     public IReadOnlyList<Claim> ListClaims(string slug)

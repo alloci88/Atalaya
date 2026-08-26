@@ -78,6 +78,18 @@ public sealed class SessionCounters
     public int Disputed { get; set; }
 
     /// <summary>
+    /// Detecciones que el auditor reportó y la app NO convirtió en hallazgo porque su
+    /// <c>ruleId</c> está excluido en esta aplicación (F5.10).
+    /// <para>
+    /// No son rechazos: el payload era válido y el auditor hizo su trabajo. Es la app la que
+    /// decide que esa regla no aplica aquí. Van por su propio contador para que el informe pueda
+    /// decir «suprimidos por regla: N» sin pintar el ⚠ de un payload malformado, y para que quien
+    /// lea el informe vea qué le está costando la exclusión.
+    /// </para>
+    /// </summary>
+    public int SuppressedByRule { get; set; }
+
+    /// <summary>
     /// Total payloads the toolbox validated and rebotó (F3.1 Bloque 0). Uno visible aquí evita
     /// que un "todo a 0" quede sin explicación: si <c>Rejected &gt; 0</c> el operador sabe que la
     /// causa está en los payloads del agente, no en la ausencia de hallazgos.

@@ -32,6 +32,36 @@ public sealed class HubPaths
     /// <summary>F4: un silencio se nombra por el ULID del hallazgo que silencia.</summary>
     public string SilenceFile(string slug, string findingUlid) => Path.Combine(SilencesDir(slug), $"{findingUlid}.json");
 
+    /// <summary>F5.10: las reglas que no aplican a ESTA app. Un fichero por regla, merge-friendly.</summary>
+    public string RuleExclusionsDir(string slug) => Path.Combine(AppDir(slug), "rule-exclusions");
+
+    /// <summary>
+    /// <c>apps/{slug}/rule-exclusions/{ruleId}.json</c>. El <c>ruleId</c> se valida antes de
+    /// convertirlo en nombre de fichero: es un identificador del catálogo, pero
+    /// <c>criterio.&lt;área&gt;</c> admite un sufijo libre que viene del modelo, y un sufijo libre
+    /// que acaba en una ruta es como se sale de un directorio sin querer.
+    /// </summary>
+    public string RuleExclusionFile(string slug, string ruleId)
+        => Path.Combine(RuleExclusionsDir(slug), $"{RequireSafeRuleId(ruleId)}.json");
+
+    /// <summary>
+    /// Un <c>ruleId</c> vale como nombre de fichero si es <c>[A-Za-z0-9._-]+</c> y no es un salto
+    /// de directorio. Cualquier otra cosa se rechaza en voz alta: silenciar el error escribiría el
+    /// fichero en otro sitio y la exclusión no suprimiría nada.
+    /// </summary>
+    public static string RequireSafeRuleId(string ruleId)
+    {
+        if (string.IsNullOrWhiteSpace(ruleId) || ruleId is "." or ".."
+            || !ruleId.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-'))
+        {
+            throw new ArgumentException(
+                $"ruleId no válido como nombre de fichero: '{ruleId}'. Solo letras, dígitos, punto, guion y guion bajo.",
+                nameof(ruleId));
+        }
+
+        return ruleId;
+    }
+
     public string ClaimsDir(string slug) => Path.Combine(AppDir(slug), "claims");
 
     public string ClaimFile(string slug, string unitHash) => Path.Combine(ClaimsDir(slug), $"{HashToFileName(unitHash)}.json");

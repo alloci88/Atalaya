@@ -38,6 +38,46 @@ public sealed class HubStoreTests : IDisposable
         _store.ListFindings("webapp").Should().ContainSingle();
     }
 
+    /// <summary>
+    /// F5.10: la exclusión de regla es un fichero por regla bajo la app, como todo lo demás del
+    /// hub. La app es parte de la ruta: eso es lo que la hace por-aplicación por construcción.
+    /// </summary>
+    [Fact]
+    public void Rule_exclusion_roundtrip_is_per_app()
+    {
+        var exclusion = new RuleExclusion
+        {
+            RuleId = "mejoras.estilo.nomenclatura",
+            Reason = SilenceReason.DeudaAceptada,
+            Notes = "no aplica",
+            By = "alvaro",
+            Utc = DateTimeOffset.UtcNow,
+        };
+        _store.WriteRuleExclusion("webapp", exclusion);
+
+        _store.TryReadRuleExclusion("webapp", exclusion.RuleId)!.By.Should().Be("alvaro");
+        _store.ListRuleExclusions("webapp").Should().ContainSingle();
+        _store.ListRuleExclusions("otraapp").Should().BeEmpty("una exclusión nunca es global al hub");
+
+        _store.DeleteRuleExclusion("webapp", exclusion.RuleId).Should().BeTrue();
+        _store.ListRuleExclusions("webapp").Should().BeEmpty();
+        _store.DeleteRuleExclusion("webapp", exclusion.RuleId).Should().BeFalse();
+    }
+
+    /// <summary>Un ruleId que no vale como nombre de fichero no llega a escribirse.</summary>
+    [Fact]
+    public void An_unsafe_rule_id_never_becomes_a_path()
+    {
+        Action act = () => _store.WriteRuleExclusion("webapp", new RuleExclusion
+        {
+            RuleId = "../../fuera",
+            By = "alvaro",
+            Utc = DateTimeOffset.UtcNow,
+        });
+
+        act.Should().Throw<ArgumentException>();
+    }
+
     [Fact]
     public void Claim_write_and_delete()
     {

@@ -2835,3 +2835,154 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   ascendente; (c) pulsar un rosco y comprobar que abre el inventario de ESA aplicación; (d) leer
   el panel entero en tema claro y en tema oscuro; (e) dárselo a alguien que no lo haya visto y
   comprobar que lo entiende sin explicación.
+
+## F5.10 — Silencio con alcance: hallazgo concreto o regla en toda la app
+
+### §1 — El modelo, y por qué es por-aplicación y no del hub
+
+- **D-333 — Excluir una regla es silenciar con otro alcance, no otra cosa.** `RuleExclusion` lleva
+  exactamente los mismos campos que `Silence` —motivo obligatorio, notas, autor, fecha, caducidad
+  opcional— y comparte hasta el enum de motivos. No se inventó un vocabulario nuevo a propósito:
+  las dos son la misma decisión humana («esto no quiero verlo») tomada sobre objetos de distinto
+  tamaño, y darles disciplinas distintas habría hecho que la barata pareciera la seria. La
+  caducidad se comporta igual que la del silencio, con la misma frase escrita en el mismo sitio:
+  **caducada = inexistente a efectos de filtrado**, y la UI la sigue listando como «caducada —
+  revisar» porque una decisión que venció no es un error, es algo que alguien tiene que volver a
+  mirar.
+
+- **D-334 — Por-aplicación, y por construcción.** La ruta es
+  `apps/{slug}/rule-exclusions/{ruleId}.json`: el slug es parte del camino, así que no existe la
+  forma de escribir una exclusión global aunque alguien quisiera. No es una comodidad de
+  implementación — es el invariante que sostiene el concepto. `mejoras.localizacion.*` sobra en una
+  app sin requisitos de i18n y es contractual en la de al lado, y el coste de equivocarse es
+  asimétrico y silencioso: **lo que no se reporta no se ve**, así que una ceguera global no la
+  descubre nadie leyendo un informe. El grano por-módulo tampoco se hizo (anti-objetivo): si algún
+  día hace falta, se verá con uso real.
+
+- **D-335 — Un `ruleId` se valida ANTES de convertirlo en nombre de fichero.** Las reglas del
+  catálogo son identificadores seguros, pero `criterio.<área>` acepta un sufijo libre que viene del
+  modelo (`RuleCatalog.IsValid` deja pasar cualquier cosa tras `criterio.`), y un sufijo libre que
+  acaba en una ruta es cómo se sale de un directorio sin querer. `HubPaths.RequireSafeRuleId`
+  exige `[A-Za-z0-9._-]+` y lanza en cuanto no lo es — en voz alta, no devolviendo `false`:
+  escribir la exclusión en otro sitio significaría que no suprime nada donde se la busca, que es el
+  peor fallo posible para esta pieza (silencioso y en la dirección insegura).
+
+### §2 — Estructural, no cosmética
+
+- **D-336 — La exclusión actúa en la INGESTIÓN, no en la presentación.** Un hallazgo entrante cuyo
+  `ruleId` esté excluido no crea ni reactiva nada: se cuenta como detección suprimida y se le
+  devuelve al auditor el motivo con nombre y apellidos. Filtrar al pintar habría dejado el hub
+  creciendo con hallazgos que nadie iba a ver nunca — deuda invisible que reaparece en cuanto se
+  levanta el filtro, y que mientras tanto infla el baseline y el coste de cada reconciliación. La
+  guarda va **antes** de validar pilar y severidad: preguntarse si el pillar está bien escrito en
+  algo que se va a tirar es trabajo para nadie.
+
+- **D-337 — Suprimir NO es rechazar, y por eso tiene contador propio.** `Counters.Rejected` significa
+  «el agente mandó un payload malo» y pinta un ⚠ en el informe. Aquí el payload era perfecto y el
+  auditor hizo su trabajo: la app es la que ha decidido que esa regla no aplica. Meterlo en el
+  mismo saco habría acusado al auditor de un fallo que no cometió y, peor, habría hecho que el ⚠
+  del informe dejara de significar algo. `SuppressedByRule` va aparte, con su línea en el resumen y
+  su sección nombrando **qué** se suprimió — porque un contador sin detalle no permite decidir si
+  la exclusión sigue teniendo sentido, que es la única razón para volver a mirarla.
+
+- **D-338 — Una pasada que solo suprime queda SECA.** El barrido de F4.1 repite hasta que una pasada
+  no aporta nada. Si una supresión contara como aportación, una app con una regla excluida y un
+  auditor tozudo barrería la unidad hasta agotar el tope de pasadas produciendo cero hallazgos y
+  gastando el presupuesto entero. Lo que se suprime no es trabajo pendiente.
+
+- **D-339 — La regla excluida se RETIRA del brief; las áreas de criterio, nunca.** Es la mitad
+  barata de la exclusión: no se pide lo que se va a tirar. Pero `criterio.*` no es una lista de
+  comprobación sino juicio profesional libre, y retirarla del brief sería decirle al auditor «no
+  pienses en seguridad», que no es lo que pidió quien excluyó una regla. Un `criterio.*` excluido
+  explícitamente **sí** se suprime en la ingestión: la exclusión se respeta como filtro de entrada,
+  no como venda en los ojos. Las dos mitades leen el MISMO `RuleExclusionSet`, congelado al
+  arrancar la sesión: si el brief y la ingestión pudieran discrepar, el auditor gastaría tokens
+  buscando algo que la app tira, o al revés.
+
+- **D-340 — Un pilar que se queda sin reglas desaparece entero.** Una cabecera «PILAR MEJORAS»
+  seguida de nada se lee como un fallo del programa, no como una decisión.
+
+### §3 — Los existentes: la pregunta que no se puede contestar por omisión
+
+- **D-341 — Silenciar los N hallazgos que ya existen es una decisión SEPARADA, y se pregunta.**
+  Excluir previene el futuro; qué hacer con lo que ya está es otra pregunta, y contestarla por
+  defecto en cualquiera de los dos sentidos sería decidir por el usuario: silenciarlos siempre borra
+  deuda real de un plumazo, no silenciarlos nunca deja una lista que ya nadie va a mirar. El
+  diálogo dice cuántos son y qué pasa con cada respuesta. Son **tres** salidas y no dos porque
+  «cancelar» no es «no silenciarlos»: quien abre la pregunta y descubre que hay 40 hallazgos
+  activos puede querer echarse atrás de la exclusión entera, y con dos botones tendría que excluir
+  para luego des-excluir. Con cero hallazgos activos no se pregunta: un diálogo que dice «hay 0,
+  ¿los silencio?» es un clic sin contenido.
+
+- **D-342 — Cada hallazgo silenciado en masa se lleva su fichero y su entrada de historial.** No hay
+  un «silencio de grupo»: son N silencios normales, cada uno con su motivo, su autor y su fecha,
+  distinguibles uno a uno y levantables uno a uno. Lo único que se añade es la **procedencia**:
+  `Silence.ByRuleExclusion` guarda el `ruleId` que lo originó, y con eso la ficha puede decir
+  «Silenciado por exclusión de regla (`{ruleId}`, por `{autor}`)» en vez de dejar creer que alguien
+  miró ese caso concreto y decidió sobre él. Es procedencia, no semántica: suprime, caduca y se
+  levanta igual que cualquier otro, así que el silencio por hallazgo no cambia (anti-objetivo).
+
+- **D-343 — Des-excluir NO des-silencia en cascada.** La regla vuelve al brief y sus hallazgos
+  vuelven a poder reportarse, pero los que se silenciaron en masa siguen silenciados. Cada uno de
+  esos silencios fue una decisión registrada con autor y motivo, y algunos habrán sido revisados a
+  mano desde entonces; deshacerlos todos de golpe tiraría también esos. Se levantan desde su ficha,
+  como cualquier otro silencio.
+
+- **D-344 — Reconciliación sin cambios en las tools.** Un hallazgo silenciado por exclusión sigue
+  siendo `Silenciado`, así que `ExistingForUnit` ya se lo enseña al auditor y éste se pronuncia sin
+  re-reportarlo. Los suprimidos en ingestión no existen, así que no aparecen. No hizo falta tocar
+  `report_verdicts` ni el resto del vocabulario del agente.
+
+### §4 — La interfaz
+
+- **D-345 — La consecuencia va DEBAJO de cada opción, no en un tooltip.** La diferencia entre los
+  dos alcances no es un matiz —una oculta un caso, la otra apaga una regla en toda la aplicación— y
+  quien las confunde no se entera hasta la auditoría siguiente. Las dos frases viven en el
+  view-model (`SilenceScopeOption.Consequence`), no en el XAML, porque son la parte que hay que
+  poder comprobar. El alcance arranca siempre en «solo este hallazgo», que es el gesto de todos los
+  días y el que no puede equivocarse por inercia; y el botón cambia de nombre («Silenciar» /
+  «Excluir la regla») porque no hace lo mismo en los dos.
+
+- **D-346 — La gestión vive en el panel del ciclo del Inventario.** «Reglas excluidas: N ·
+  Gestionar» va ahí y no en Ajustes porque **es un dato de la aplicación**, no de la máquina, y
+  porque condiciona la lectura de todo lo que tiene al lado: una cobertura del 100 % con tres
+  reglas excluidas no significa lo mismo que una sin ninguna. El contador cuenta las **vivas**; las
+  caducadas se cuentan aparte y el tooltip pide revisarlas, porque significan cosas distintas —una
+  viva suprime, una caducada solo pide una decisión. Se abre sin clon: es gobernanza, y la
+  gobernanza se lee y se edita sin tener el código delante (F5.8 §3).
+
+- **D-347 — Editar la caducidad te hace su autor.** Cambiar cuánto más dura una exclusión es una
+  decisión nueva; firmarla con el nombre de quien la creó haría que el registro mintiera. El motivo
+  y las notas se conservan: lo que se está cambiando es el plazo, no la razón. Poner 0 días la
+  devuelve a permanente, que es además la forma de revivir una caducada sin volver a escribirlo todo.
+
+### Cobertura y verificación
+
+- **D-348 — Lo que queda probado.** Del modelo: que la exclusión es un fichero por regla bajo la
+  app, que un `ruleId` con separadores de ruta no llega a escribirse, y que una caducada no filtra
+  pero se sigue viendo. De la ingestión: que suprime y no crea hallazgo, que el informe lo cuenta y
+  dice cuáles, que lo no excluido sigue entrando en la misma sesión, que la caducidad reactiva la
+  regla, que un `criterio.*` excluido se suprime igual, y que una pasada que solo suprime queda
+  seca. Del brief: que la regla excluida no viaja en el prompt, que el criterio sí, que un pilar
+  vacío no deja cabecera huérfana y que sin exclusiones el brief es **byte a byte** el de antes. De
+  los existentes: que el silencio en masa deja entrada de historial y fichero de silencio por
+  hallazgo —con la regla escrita dentro—, que sin él siguen activos, que un silenciado por regla
+  sigue en la lista del auditor, y que des-excluir devuelve la regla al juego sin des-silenciar. De
+  la UI: las dos consecuencias escritas, las tres salidas del diálogo, que sin activos no se
+  pregunta, que la ficha nombra la exclusión y que un silencio normal sigue diciendo lo de siempre;
+  y de la gestión, listar con estado, des-excluir, editar caducidad y que una app no ve las de
+  otra. Y **el que protege el concepto entero**: excluir en una app no suprime nada en la de al
+  lado, con dos apps auditadas en el mismo test.
+
+- **D-349 — Las vistas se comprobaron cargándolas de verdad (arnés de D-329).** `FindingDetailView`
+  con el selector de alcance, `RuleExclusionsDialog` y `ExcludeRuleDialog` se instancian con el
+  tema y los convertidores de producción escuchando `PresentationTraceSources.DataBindingSource`:
+  **cero avisos de enlace**. El selector es un `ItemsControl` de `RadioButton` con `IsChecked`
+  enlazado a `IsSelected` en dos direcciones; el view-model también empuja hacia los radios cuando
+  el alcance se fija desde código, y las dos vías convergen porque el setter generado no reemite
+  cuando el valor no cambia.
+
+- **D-350 — Lo que se verifica a mano.** Excluir una regla desde un hallazgo real de xblast
+  eligiendo «toda la aplicación» y marcando silenciar los existentes; auditar esa clase y comprobar
+  que el informe trae «Suprimidos por regla» y que ninguno renace; des-excluir desde «Gestionar» y
+  comprobar que vuelven a poder reportarse.

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Atalaya.App.Services;
+using Atalaya.App.Views;
 using Atalaya.Domain;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
@@ -28,6 +29,12 @@ public sealed partial class InventoryViewModel : ViewModelBase
     /// <summary>F5.8 §2: el re-escaneo, ahora compartido con el flujo de vincular.</summary>
     private readonly InventoryRescanService _rescan;
 
+    /// <summary>F5.10: la gestión de reglas excluidas de esta app.</summary>
+    private readonly GovernanceService _governance;
+
+    /// <summary>F5.10: quién abre esa gestión. Inyectada para poder probar el gesto sin ventana.</summary>
+    private readonly IRuleExclusionsDialog _exclusionsDialog;
+
     /// <summary>
     /// F5.7 §4: el resultado de una acción se cuenta por el toast global. El texto que vivía al
     /// fondo del panel del ciclo se quedaba pegado hasta la acción siguiente y, con la ventana
@@ -52,8 +59,11 @@ public sealed partial class InventoryViewModel : ViewModelBase
         HubContext hub, IUlidFactory ulids, NavigationService navigation, LiveSessionService live,
         SettingsService settings, CostEstimator costs, IAuditLaunchConfirmer confirmer,
         GroupExpansionMemory expansion, ToastCenter toasts,
-        CloneLinkService links, LinkCloneFlow linkFlow, InventoryRescanService rescan)
+        CloneLinkService links, LinkCloneFlow linkFlow, InventoryRescanService rescan,
+        GovernanceService governance, IRuleExclusionsDialog exclusionsDialog)
     {
+        _governance = governance;
+        _exclusionsDialog = exclusionsDialog;
         _hub = hub;
         _ulids = ulids;
         _navigation = navigation;
@@ -88,6 +98,28 @@ public sealed partial class InventoryViewModel : ViewModelBase
     /// en una frase, y por eso desconcertaba.
     /// </summary>
     [ObservableProperty] private int _sessionCount;
+
+    /// <summary>
+    /// Reglas excluidas VIVAS en esta app (F5.10). Es un dato del panel del ciclo porque decide
+    /// qué se va a mirar y qué no en cada auditoría de esta aplicación: una cobertura del 100 %
+    /// con tres reglas excluidas no significa lo mismo que una del 100 % sin ninguna.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ExclusionsTooltip))]
+    private int _excludedRules;
+
+    /// <summary>Las caducadas, que ya no suprimen y esperan que alguien decida (F5.10).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ExclusionsTooltip))]
+    private int _expiredRuleExclusions;
+
+    /// <summary>Lo que explica el número, incluido el caso «hay caducadas que revisar».</summary>
+    public string ExclusionsTooltip => ExcludedRules == 0 && ExpiredRuleExclusions == 0
+        ? "Reglas del catálogo que no aplican a esta aplicación. Ninguna auditoría suya las reporta."
+        : $"{ExcludedRules} regla(s) que ninguna auditoría de esta aplicación reporta"
+          + (ExpiredRuleExclusions > 0
+              ? $" · {ExpiredRuleExclusions} caducada(s) que ya no suprimen: revísalas."
+              : ". Es por-aplicación: la misma regla puede ser vital en otra.");
 
     /// <summary>El ciclo con su fecha: «Ciclo 5 · iniciado 12 ago 2026» (F5.6 §5).</summary>
     [ObservableProperty] private string _cycleLabel = "Ciclo 1";
@@ -230,6 +262,13 @@ public sealed partial class InventoryViewModel : ViewModelBase
         LargeUnits = units.Count(u => u.State == UnitState.Grande);
         PendingUnits = units.Count(u => u.State == UnitState.Pendiente);
         OnPropertyChanged(nameof(PendingToggleTooltip));
+
+        // F5.10: vivas y caducadas se cuentan por separado porque significan cosas distintas —
+        // una viva suprime, una caducada solo pide una decisión.
+        DateTimeOffset nowUtc = DateTimeOffset.UtcNow;
+        var exclusions = _hub.Store.ListRuleExclusions(Slug);
+        ExcludedRules = exclusions.Count(e => e.IsLiveAt(nowUtc));
+        ExpiredRuleExclusions = exclusions.Count(e => e.IsExpiredAt(nowUtc));
 
         var sessions = _hub.Store.ListSessions(Slug);
         CycleStart start = CycleSummary.StartOf(sessions, CycleN);
@@ -386,6 +425,25 @@ public sealed partial class InventoryViewModel : ViewModelBase
     /// <inheritdoc cref="GroupCollapse.ToggleAll"/>
     [RelayCommand]
     private void ToggleAllGroups() => _collapse.ToggleAll();
+
+    /// <summary>
+    /// Abre la gestión de reglas excluidas de esta app (F5.10). No pide clon ni permiso: es
+    /// gobernanza, y la gobernanza se lee y se edita sin tener el código delante (F5.8 §3).
+    /// Al cerrarla se reconstruye la página, así que el contador refleja lo que se acaba de hacer.
+    /// </summary>
+    [RelayCommand]
+    private void ManageRuleExclusions()
+    {
+        if (Slug.Length == 0)
+        {
+            return;
+        }
+
+        var vm = new RuleExclusionsViewModel(_hub, _governance, _toasts);
+        vm.Load(Slug);
+        _exclusionsDialog.Show(vm);
+        Rebuild();
+    }
 
     /// <summary>
     /// Abre «Vincular clon local…» / «Reparar vínculo…» sin salir del inventario (F5.8 §3): el

@@ -47,6 +47,61 @@ public class PromptComposerTests
     {
         PillarBrief.For(TechStack.Go).Should().Contain("RÚBRICA DE SEVERIDAD");
     }
+
+    /// <summary>
+    /// F5.10 §2: una regla excluida en la app se RETIRA del brief. No se pide lo que se va a tirar
+    /// en la ingestión — es más barato y le quita ruido al auditor.
+    /// </summary>
+    [Fact]
+    public void Una_regla_excluida_no_aparece_en_el_brief()
+    {
+        RuleExclusionSet excluded = Live("mejoras.estilo.nomenclatura");
+
+        string brief = PillarBrief.For(TechStack.DotNet, excluded);
+
+        brief.Should().NotContain("mejoras.estilo.nomenclatura");
+        brief.Should().Contain("errores.recursos.no-liberado", "el resto del catálogo sigue entero");
+        brief.Should().Contain("RÚBRICA DE SEVERIDAD");
+    }
+
+    /// <summary>
+    /// Las áreas de criterio son juicio libre: no se pueden retirar del brief ni excluyéndolas.
+    /// Quitarlas sería decirle al auditor que no piense, que no es lo que pide una exclusión.
+    /// </summary>
+    [Fact]
+    public void Un_criterio_excluido_sigue_en_el_brief()
+    {
+        string brief = PillarBrief.For(TechStack.DotNet, Live("criterio.seguridad"));
+
+        brief.Should().Contain("criterio.seguridad");
+        brief.Should().Contain("ÁREAS DE CRITERIO PROFESIONAL");
+    }
+
+    /// <summary>Un pilar sin reglas desaparece entero: una cabecera vacía se lee como un fallo.</summary>
+    [Fact]
+    public void Un_pilar_sin_reglas_no_deja_una_cabecera_huerfana()
+    {
+        RuleExclusionSet all = RuleExclusionSet.From(
+            RuleCatalog.Rules.Where(r => r.Pillar == Pillar.Optimizacion)
+                .Select(r => new RuleExclusion { RuleId = r.RuleId, By = "alvaro" }),
+            DateTimeOffset.UtcNow);
+
+        string brief = PillarBrief.For(TechStack.DotNet, all);
+
+        brief.Should().NotContain("PILAR OPTIMIZACION");
+        brief.Should().Contain("PILAR ERRORES");
+    }
+
+    /// <summary>Sin exclusiones, el brief es exactamente el de antes de F5.10.</summary>
+    [Fact]
+    public void Sin_exclusiones_el_brief_no_cambia()
+        => PillarBrief.For(TechStack.DotNet, RuleExclusionSet.Empty)
+            .Should().Be(PillarBrief.For(TechStack.DotNet));
+
+    private static RuleExclusionSet Live(params string[] ruleIds)
+        => RuleExclusionSet.From(
+            ruleIds.Select(r => new RuleExclusion { RuleId = r, By = "alvaro" }),
+            DateTimeOffset.UtcNow);
 }
 
 public class FakeAgentTests

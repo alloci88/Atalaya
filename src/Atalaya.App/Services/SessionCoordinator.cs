@@ -247,14 +247,23 @@ public sealed class SessionCoordinator
         // El modelo va en el sello (F5.1b): es quien hace la observación, y hace falta para poder
         // nombrar a quién discrepa cuando dos modelos se contradicen sobre el mismo hallazgo.
         var stamp = new DetectionStamp(now, request.Mode, commit, by, Model: _agent.ModelName);
+
+        // Las reglas excluidas de ESTA app (F5.10), congeladas al arrancar. Se leen una vez y
+        // sirven para las dos mitades de la exclusión: retirarlas del brief (no pedir lo que se va
+        // a tirar) y suprimir en la ingestión lo que el auditor reporte igualmente. Que sean las
+        // mismas en las dos mitades no es un detalle: si el brief y la ingestión discreparan, el
+        // auditor gastaría tokens buscando algo que la app tira, o al revés.
+        RuleExclusionSet exclusions = RuleExclusionSet.From(_hub.Store.ListRuleExclusions(request.Slug), now);
+
         var toolbox = new SessionToolbox(
-            request.Slug, request.Mode, stamp, _ingestion, _reconciliation, _hub.Store, clone!, OnFinding);
+            request.Slug, request.Mode, stamp, _ingestion, _reconciliation, _hub.Store, clone!, OnFinding,
+            exclusions);
         var auditedPaths = new HashSet<string>(StringComparer.Ordinal);
         int incompleteUnits = 0;
 
         try
         {
-            string brief = PillarBrief.For(app.Stack);
+            string brief = PillarBrief.For(app.Stack, exclusions);
             foreach (InventoryUnit unit in units)
             {
                 ct.ThrowIfCancellationRequested();
@@ -360,6 +369,15 @@ public sealed class SessionCoordinator
                         session.Notes.Add($"{unit.Path} (pasada {pass}): veredicto degradado · {degraded}");
                     }
 
+                    // F5.10: lo que una exclusión de regla tiró, con nombre y apellidos. Una
+                    // supresión que no se nombra es indistinguible de una unidad limpia, y el
+                    // informe acabaría diciendo «0 nuevos» sin causa visible — el mismo agujero
+                    // que D-060 cerró para los rechazos.
+                    foreach (string suppressed in toolbox.SuppressedDetections)
+                    {
+                        session.Notes.Add($"{unit.Path} (pasada {pass}): suprimido por regla · {suppressed}");
+                    }
+
                     foreach (string entry in toolbox.ToolCallLog)
                     {
                         session.Notes.Add($"{unit.Path} (pasada {pass}): tool · {entry}");
@@ -374,6 +392,7 @@ public sealed class SessionCoordinator
                     toolbox.RejectedPayloads.Clear();
                     toolbox.RejectionReasons.Clear();
                     toolbox.DegradedVerdicts.Clear();
+                    toolbox.SuppressedDetections.Clear();
                     toolbox.ToolCallLog.Clear();
                 }
 

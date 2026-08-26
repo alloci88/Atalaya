@@ -215,3 +215,54 @@ public static class ConfidenceNames
         _ => "Detectado una sola vez y en modo superficial: aún sin respaldo.",
     };
 }
+
+/// <summary>
+/// Sobre qué recae un silencio (F5.10). Son dos preguntas distintas con la misma disciplina:
+/// «este caso concreto es un falso positivo aquí» y «esta regla no aplica a este proyecto».
+/// </summary>
+public enum SilenceScope
+{
+    /// <summary>El comportamiento de siempre: un silencio por ULID de hallazgo.</summary>
+    Hallazgo,
+
+    /// <summary>Exclusión de regla, por-aplicación. Nunca global al hub.</summary>
+    Regla,
+}
+
+/// <summary>
+/// Una opción del selector de alcance con su consecuencia escrita. La consecuencia va en el
+/// modelo y no en el XAML porque es la parte que hay que poder comprobar: es lo único que separa
+/// las dos opciones a ojos de quien las lee por primera vez.
+/// <para>
+/// El texto es mutable porque nombra la regla y la aplicación del hallazgo abierto, y la ficha se
+/// recarga sobre el mismo view-model. La lista de opciones, en cambio, se construye UNA vez: si se
+/// reconstruyera en cada recarga, el botón de radio marcado se perdería a media edición.
+/// </para>
+/// </summary>
+public sealed partial class SilenceScopeOption : ObservableObject
+{
+    public SilenceScopeOption(SilenceScope value, Action<SilenceScope> onSelected)
+    {
+        Value = value;
+        _onSelected = onSelected;
+    }
+
+    private readonly Action<SilenceScope> _onSelected;
+
+    public SilenceScope Value { get; }
+
+    [ObservableProperty] private string _label = string.Empty;
+
+    [ObservableProperty] private string _consequence = string.Empty;
+
+    /// <summary>El radio marcado. Elegir avisa al view-model; desmarcar no decide nada.</summary>
+    [ObservableProperty] private bool _isSelected;
+
+    partial void OnIsSelectedChanged(bool value)
+    {
+        if (value)
+        {
+            _onSelected(Value);
+        }
+    }
+}

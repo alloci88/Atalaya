@@ -44,6 +44,14 @@ public static class SchemaValidation
         RequireText(s.By, "silence.by");
     }
 
+    public static void Validate(RuleExclusion e)
+    {
+        Require(e.SchemaVersion == CurrentSchemaVersion, "ruleExclusion.schemaVersion must be 1");
+        RequireText(e.RuleId, "ruleExclusion.ruleId");
+        RequireText(e.By, "ruleExclusion.by");
+        HubPaths.RequireSafeRuleId(e.RuleId);
+    }
+
     public static void Validate(Claim c)
     {
         Require(c.SchemaVersion == CurrentSchemaVersion, "claim.schemaVersion must be 1");

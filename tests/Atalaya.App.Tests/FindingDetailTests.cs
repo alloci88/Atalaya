@@ -144,6 +144,9 @@ public sealed class FindingDetailTests : IDisposable
         return finding;
     }
 
+    /// <summary>La pregunta de F5.10 respondida sin ventana; por defecto, cancelando.</summary>
+    private readonly TestFactory.RecordingExcludeConfirmer _excludeConfirmer = new();
+
     private FindingDetailViewModel NewDetail(ICopilotAgent? agent = null)
         => new(
             _hub,
@@ -154,6 +157,7 @@ public sealed class FindingDetailTests : IDisposable
             _toasts,
             TestFactory.Links(_hub, _paths),
             TestFactory.LinkFlow(_hub, _paths, _toasts),
+            _excludeConfirmer,
             new AnchorRepair(_hub));
 
     private FindingDetailViewModel Open(Finding f)
@@ -779,7 +783,8 @@ public sealed class FindingDetailTests : IDisposable
             _hub, _governance, _machines,
             new VerifyCoordinator(_hub, _machines, _ulids, new FakeCopilotAgent()),
             new EditorLauncher(_settings, _machines), _toasts,
-            TestFactory.Links(_hub, _paths), TestFactory.LinkFlow(_hub, _paths, _toasts))
+            TestFactory.Links(_hub, _paths), TestFactory.LinkFlow(_hub, _paths, _toasts),
+            new TestFactory.RecordingExcludeConfirmer())
             .ManualResolutionExpanded.Should().BeFalse("plegada por defecto");
     }
 

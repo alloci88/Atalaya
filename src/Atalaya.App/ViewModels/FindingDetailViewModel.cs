@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using Atalaya.App.Services;
+using Atalaya.App.Views;
 using Atalaya.Domain;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
@@ -56,6 +57,12 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
 
     private readonly LinkCloneFlow _linkFlow;
 
+    /// <summary>
+    /// Quién hace la pregunta del alcance «toda la aplicación» (F5.10): qué se hace con los
+    /// hallazgos que ya existen de esa regla. No se puede excluir sin pasar por aquí.
+    /// </summary>
+    private readonly IExcludeRuleConfirmer _excludeConfirmer;
+
     public FindingDetailViewModel(
         HubContext hub,
         GovernanceService governance,
@@ -65,9 +72,17 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         ToastCenter toasts,
         CloneLinkService links,
         LinkCloneFlow linkFlow,
+        IExcludeRuleConfirmer excludeConfirmer,
         AnchorRepair? anchors = null)
     {
         _hub = hub;
+        _excludeConfirmer = excludeConfirmer;
+        ScopeOptions = new[]
+        {
+            new SilenceScopeOption(SilenceScope.Hallazgo, scope => SilenceScope = scope) { IsSelected = true },
+            new SilenceScopeOption(SilenceScope.Regla, scope => SilenceScope = scope),
+        };
+        RefreshScopeOptions();
         _governance = governance;
         _machines = machines;
         _verify = verify;
@@ -109,6 +124,24 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     [ObservableProperty] private string _ruleText = string.Empty;
 
     // Governance inputs
+    /// <summary>
+    /// El alcance del silencio (F5.10). Arranca siempre en «solo este hallazgo»: es el gesto de
+    /// todos los días, y el que no puede equivocarse por inercia. Excluir una regla entera se
+    /// elige a propósito.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SilenceActionLabel))]
+    private SilenceScope _silenceScope = SilenceScope.Hallazgo;
+
+    /// <summary>El radio sigue al modelo, no solo al revés: fijar el alcance desde código lo marca.</summary>
+    partial void OnSilenceScopeChanged(SilenceScope value)
+    {
+        foreach (SilenceScopeOption option in ScopeOptions)
+        {
+            option.IsSelected = option.Value == value;
+        }
+    }
+
     [ObservableProperty] private SilenceReason _silenceReason = SilenceReason.FalsoPositivo;
     [ObservableProperty] private int _silenceExpiryDays;
     [ObservableProperty] private string _silenceNotes = string.Empty;
@@ -218,11 +251,68 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
             string expiry = silence.ExpiresUtc is null
                 ? "permanente"
                 : $"caduca el {silence.ExpiresUtc.Value.ToLocalTime():dd/MM/yyyy}";
+
+            // F5.10: un silencio nacido de una exclusión de regla lo DICE. Sin esto, la ficha
+            // afirmaba que alguien había mirado este caso concreto y decidido sobre él, cuando lo
+            // que hubo fue una decisión sobre la regla entera — y de ahí salen las dos preguntas
+            // que nadie podría contestar: por qué está silenciado y a quién preguntarle.
+            if (!string.IsNullOrEmpty(silence.ByRuleExclusion))
+            {
+                return $"Silenciado por exclusión de regla ({silence.ByRuleExclusion}, por {silence.By})"
+                    + $" · {SilenceReasonNames.Display(silence.Reason)} · {expiry}";
+            }
+
             return $"Silenciado por {silence.By} · {SilenceReasonNames.Display(silence.Reason)} · {expiry}";
         }
     }
 
     public bool HasSilence => SilenceSummary.Length > 0;
+
+    // ------------------------------------------------------------------ F5.10 · alcance
+
+    /// <summary>El nombre de la app del hallazgo: lo que se lee en el texto de consecuencia.</summary>
+    public string AppName
+    {
+        get
+        {
+            string? name = Slug.Length == 0 ? null : _hub.Store.TryReadApp(Slug)?.Name;
+            return string.IsNullOrWhiteSpace(name) ? Slug : name!;
+        }
+    }
+
+    /// <summary>La regla del hallazgo abierto. Es lo que se excluiría con el alcance ampliado.</summary>
+    public string RuleId => Finding?.RuleId ?? string.Empty;
+
+    /// <summary>
+    /// Las dos opciones de alcance, cada una con la frase que dice QUÉ PASA si se elige. La
+    /// consecuencia no es un tooltip: es lo que separa «silenciar esto» de «dejar de mirar esto en
+    /// toda la aplicación», y quien las confunde no se entera hasta la auditoría siguiente.
+    /// </summary>
+    public IReadOnlyList<SilenceScopeOption> ScopeOptions { get; }
+
+    /// <summary>
+    /// Re-escribe los textos de las opciones con la regla y la app del hallazgo abierto. Se
+    /// re-escriben en vez de reconstruirse para no perder el radio marcado en cada recarga.
+    /// </summary>
+    private void RefreshScopeOptions()
+    {
+        SilenceScopeOption solo = ScopeOptions[0];
+        solo.Label = "Solo este hallazgo";
+        solo.Consequence = "Este caso concreto deja de contar. La regla sigue vigente: otras "
+            + "auditorías pueden volver a reportarla en otros sitios.";
+
+        SilenceScopeOption regla = ScopeOptions[1];
+        regla.Label = RuleId.Length == 0
+            ? "Esta regla en toda la aplicación"
+            : $"Esta regla en toda la aplicación ({RuleId})";
+        regla.Consequence = RuleId.Length == 0
+            ? "Ninguna auditoría de esta aplicación volverá a reportar esta regla."
+            : $"Ninguna auditoría de {AppName} volverá a reportar {RuleId}.";
+    }
+
+    /// <summary>El botón cambia de nombre con el alcance: no hace lo mismo en los dos.</summary>
+    public string SilenceActionLabel
+        => SilenceScope == SilenceScope.Regla ? "Excluir la regla" : "Silenciar";
 
     public ObservableCollection<HistoryRow> History { get; } = new();
     public ObservableCollection<CommentRow> Comments { get; } = new();
@@ -263,6 +353,9 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanResolveManually));
         OnPropertyChanged(nameof(SilenceSummary));
         OnPropertyChanged(nameof(HasSilence));
+        OnPropertyChanged(nameof(AppName));
+        OnPropertyChanged(nameof(RuleId));
+        RefreshScopeOptions();
         OnPropertyChanged(nameof(Title));
     }
 
@@ -433,10 +526,54 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         }
 
         DateTimeOffset? expiry = SilenceExpiryDays > 0 ? DateTimeOffset.UtcNow.AddDays(SilenceExpiryDays) : null;
-        _governance.Silence(Slug, Id, SilenceReason, string.IsNullOrWhiteSpace(SilenceNotes) ? null : SilenceNotes, expiry);
+        string? notes = string.IsNullOrWhiteSpace(SilenceNotes) ? null : SilenceNotes;
+
+        // F5.10: el mismo formulario, dos alcances. Lo que cambia no es el motivo ni la caducidad
+        // —la disciplina de gobernanza es la misma— sino sobre qué recae la decisión.
+        if (SilenceScope == SilenceScope.Regla)
+        {
+            ExcludeRule(notes, expiry);
+            return;
+        }
+
+        _governance.Silence(Slug, Id, SilenceReason, notes, expiry);
         _toasts.Show(expiry is null
             ? "Silenciado de forma permanente."
             : $"Silenciado hasta el {expiry.Value.ToLocalTime():dd/MM/yyyy}.");
+        Reload(Id);
+    }
+
+    /// <summary>
+    /// El alcance ampliado (F5.10): la regla deja de aplicar a ESTA aplicación. Antes de escribir
+    /// nada se pregunta qué hacer con los hallazgos que ya existen — nunca se decide por omisión.
+    /// </summary>
+    private void ExcludeRule(string? notes, DateTimeOffset? expiry)
+    {
+        string rule = Finding!.RuleId;
+        int active = _governance.CountActiveWithRule(Slug, rule);
+
+        // Sin hallazgos activos no hay nada que preguntar: la pregunta es qué hacer con ELLOS.
+        // Un diálogo que dice «hay 0 hallazgos, ¿los silencio?» es un clic sin contenido.
+        ExcludeRuleChoice choice = active == 0
+            ? ExcludeRuleChoice.ExcludeOnly
+            : _excludeConfirmer.Ask(new ExcludeRuleConfirmation(rule, AppName, active));
+
+        if (choice == ExcludeRuleChoice.Cancel)
+        {
+            _toasts.Show("Exclusión cancelada: no se ha tocado nada.");
+            return;
+        }
+
+        GovernanceService.RuleExclusionResult result = _governance.ExcludeRule(
+            Slug, rule, SilenceReason, notes, expiry,
+            silenceExisting: choice == ExcludeRuleChoice.ExcludeAndSilence);
+
+        string until = expiry is null
+            ? "de forma permanente"
+            : $"hasta el {expiry.Value.ToLocalTime():dd/MM/yyyy}";
+        _toasts.Show(result.SilencedFindings > 0
+            ? $"Regla {rule} excluida en {AppName} {until} · {result.SilencedFindings} hallazgo(s) silenciado(s)."
+            : $"Regla {rule} excluida en {AppName} {until}. Los hallazgos que ya existían siguen activos.");
         Reload(Id);
     }
 

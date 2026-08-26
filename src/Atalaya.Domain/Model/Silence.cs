@@ -30,6 +30,18 @@ public sealed class Silence
     /// <summary>Null = never expires.</summary>
     public DateTimeOffset? ExpiresUtc { get; set; }
 
+    /// <summary>
+    /// De dónde vino este silencio (F5.10). Null = lo silenció una persona sobre ESTE hallazgo, que
+    /// es la vía de siempre. Con valor = lleva el <c>ruleId</c> de la exclusión de regla que lo
+    /// silenció en masa, para que la ficha pueda decir «silenciado por exclusión de regla» en vez
+    /// de dejar creer que alguien miró este caso concreto y decidió sobre él.
+    /// <para>
+    /// Es procedencia, no semántica: un silencio nacido de una exclusión suprime, caduca y se
+    /// levanta exactamente igual que cualquier otro.
+    /// </para>
+    /// </summary>
+    public string? ByRuleExclusion { get; set; }
+
     /// <summary>A silence is live (suppresses) until its expiry, if any.</summary>
     public bool IsLiveAt(DateTimeOffset now) => ExpiresUtc is null || ExpiresUtc.Value > now;
 
