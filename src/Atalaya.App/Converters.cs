@@ -93,12 +93,37 @@ public sealed class InverseBoolToVisibilityConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
-/// <summary>Non-empty string / non-null → Visible, else Collapsed.</summary>
+/// <summary>Non-empty (string, number, collection, bool) → Visible, else Collapsed.</summary>
 public sealed class NotEmptyToVisibilityConverter : IValueConverter
 {
+    /// <summary>
+    /// «Vacío» según lo que sea el valor: una cadena en blanco, un número a cero, una colección sin
+    /// elementos, un <c>false</c> o un nulo.
+    /// <para>
+    /// <b>Por qué la rama de no-cadena es explícita.</b> Antes decía
+    /// <c>value is not null ? Visible : Collapsed</c>, y con eso <b>cualquier</b> valor no nulo
+    /// encendía el control: un <c>Count</c> de 0 incluido. En V5, la insignia ⚖ de disputa colgaba
+    /// de <c>Disputes.Count</c> y por tanto se pintaba en TODOS los hallazgos entrantes, mientras
+    /// el motor y el resumen final decían —con razón— cero disputados (F5.14). Un conversor
+    /// llamado «no vacío» que considera lleno el cero no es un descuido de un sitio: es una mina
+    /// para el siguiente que lo use bien.
+    /// </para>
+    /// </summary>
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => value is string s ? (!string.IsNullOrWhiteSpace(s) ? Visibility.Visible : Visibility.Collapsed)
-            : value is not null ? Visibility.Visible : Visibility.Collapsed;
+        => IsNotEmpty(value) ? Visibility.Visible : Visibility.Collapsed;
+
+    private static bool IsNotEmpty(object? value) => value switch
+    {
+        null => false,
+        string s => !string.IsNullOrWhiteSpace(s),
+        bool b => b,
+        // Los contadores son el caso que abrió el parte: 0 es vacío, no «hay algo».
+        sbyte or byte or short or ushort or int or uint or long or ulong or float or double or decimal
+            => System.Convert.ToDecimal(value, CultureInfo.InvariantCulture) != 0m,
+        System.Collections.ICollection c => c.Count > 0,
+        System.Collections.IEnumerable e => e.GetEnumerator().MoveNext(),
+        _ => true,
+    };
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();

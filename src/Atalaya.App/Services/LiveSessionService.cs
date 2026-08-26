@@ -349,13 +349,19 @@ public sealed partial class LiveSessionService : ObservableObject
             : $"Pasada {record.Index} — {record.New} nuevo(s)"
               + (record.LocationsAdded > 0 ? $", {record.LocationsAdded} ubicación(es)" : "");
 
+        // Los veredictos van en las DOS ramas (F5.14). Estaban solo en la de la pasada con
+        // aportación, así que el caso más común —una pasada seca en la que el auditor confirmó
+        // cinco hallazgos como presentes— se narraba «seca — unidad completa» y nada más: se leía
+        // como «aquí no ha pasado nada» cuando habían pasado cinco reconfirmaciones. «Presente» no
+        // tiene línea propia por unidad a propósito (sería una fila por hallazgo en cada pasada),
+        // pero contarlo agregado es la diferencia entre resumir y callar.
         Add(pass, ActivityEntry.Event(
             record.Dry ? "✓" : "↻",
-            record.Dry
+            (record.Dry
                 ? $"Pasada {record.Index} seca — unidad completa"
                 : $"Pasada {record.Index}: {record.New} nuevo(s)"
-                  + (record.LocationsAdded > 0 ? $", {record.LocationsAdded} ubicación(es) añadida(s)" : "")
-                  + verdicts));
+                  + (record.LocationsAdded > 0 ? $", {record.LocationsAdded} ubicación(es) añadida(s)" : ""))
+            + verdicts));
         _currentText = null;
     });
 

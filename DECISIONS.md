@@ -3398,3 +3398,86 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   dejar solo la clase y lanzar → el diálogo, si aparece, dice 1 y V5 dice «Unidad 1 de 1»; navegar a
   Portafolio y volver por el item pulsante del rail; comprobar que «Detener» está en la cabecera y
   que al pulsarlo la sesión se cierra con informe parcial y los claims liberados.
+
+
+## F5.14 — La narración de V5 marcaba como disputado lo que no lo era
+
+### §1 — La causa: un conversor de cadenas alimentado con un contador
+
+- **D-390 — `NotEmptyToVisibilityConverter` consideraba «lleno» el cero, y la insignia ⚖ colgaba de
+  un `Count`.** El parte: durante la primera pasada la columna de hallazgos de V5 marcaba con ⚖
+  —«disputado»— todo lo que entraba, mientras el resumen final decía 0 disputados y los hallazgos
+  persistidos no tenían ninguna disputa. La sospecha del parte apuntaba a tres sitios; era el
+  segundo. `SessionView.xaml` pintaba la insignia así:
+
+  ```xml
+  Visibility="{Binding Disputes.Count, Converter={StaticResource NotEmptyToVisibility}}"
+  ```
+
+  y el conversor decía:
+
+  ```csharp
+  => value is string s ? (!string.IsNullOrWhiteSpace(s) ? Visible : Collapsed)
+      : value is not null ? Visible : Collapsed;
+  ```
+
+  `Disputes.Count` es un **int**. No es cadena, no es nulo → **Visible, siempre**. Un hallazgo con
+  cero disputas encendía la insignia igual que uno con tres. El motor nunca se equivocó: lo que
+  mentía era una rama de conversor escrita para «cualquier objeto» en un conversor cuyo nombre
+  promete «no vacío».
+
+- **D-391 — Se arregla el CONVERSOR, no el enlace.** Cambiar la vista a otro conversor habría dejado
+  la mina puesta para el siguiente que usara este bien. Ahora «vacío» se decide por lo que el valor
+  ES: cadena en blanco, número a cero, colección sin elementos, `false` o nulo. Los otros trece usos
+  del conversor son todos de cadena y siguen comportándose exactamente igual — la rama que cambia es
+  la que nunca debió existir. El enlace de la insignia se conserva tal cual, y queda fijado en un
+  test: es el enlace correcto, con la semántica correcta detrás.
+
+- **D-392 — El `switch` de la narración está limpio: no había ninguna etiqueta huérfana.** Se
+  revisó, porque el parte lo sospechaba con razón —una rama por defecto graciosa habría explicado el
+  mismo síntoma—. Los ocho tipos que el motor emite (`nuevo`, `ubicaciones`, y los seis
+  `ReconcileOutcome` en minúsculas) tienen su caso, y **no hay `default`**: un tipo desconocido no
+  narra nada en vez de narrar cualquier cosa. Se deja un test que fija el repertorio de glifos, para
+  que añadir un suceso sin su caso se vea como un glifo inesperado y no como una etiqueta mentirosa.
+
+### §2 — Lo que apareció al revisar el resto de la narración
+
+- **D-393 — «Presente» no se narraba en el caso más común: la pasada seca.** El cierre de pasada
+  compone una coletilla con los veredictos («· veredictos: 3 presente») y la añadía **solo** a la
+  rama de la pasada con aportación. Una pasada seca —cero nuevos, todo confirmado como presente, que
+  es el desenlace normal de una unidad ya auditada— se narraba «Pasada 1 seca — unidad completa» y
+  nada más. Tres reconfirmaciones de trabajo real leídas como «aquí no ha pasado nada». No era una
+  etiqueta que mintiera, pero es de la misma familia (D-060): un dato sin causa visible. La coletilla
+  va ahora en las dos ramas. «Presente» sigue sin línea propia por hallazgo —sería una fila por
+  hallazgo y por pasada— y eso es deliberado: se narra **agregado**, que es lo que se puede leer.
+
+- **D-394 — Las ubicaciones añadidas ya se narraban bien**, con su ⊕ y sin contarse como hallazgo
+  nuevo. Queda con test para que siga así.
+
+### §3 — El invariante que faltaba
+
+- **D-395 — La narración en vivo y la sesión escrita son el mismo suceso contado dos veces, así que
+  sus cuentas tienen que cuadrar.** Es la misma lección de F5.13 (D-379) en otra pantalla: dos
+  cálculos paralelos de la misma verdad acaban divergiendo, y el que el usuario ve primero fue el
+  falso. El test corre una sesión de verdad con el agente falso a través de `LiveSessionService` y
+  afirma, sobre la misma ejecución, que **cada glifo aparece tantas veces como dice su contador**
+  (`＋`=New, `⚖`=Disputed, `✔`=Resolved, `⚠`=ResolutionsRefused) y que **cada línea del resumen en
+  vivo coincide con la sesión persistida en el hub**, no con lo que la narración creyó ver.
+  <br>Una excepción, documentada porque si no parece un fallo: la línea «Confirmados» cuenta
+  `Counters.Confirmed`, que suma también los «arreglado» degradados (D-337 bis), mientras su detalle
+  solo nombra las reconfirmaciones — los degradados tienen su propia línea y su propio detalle. Las
+  demás líneas sí cumplen `Count == Details.Count`, y así queda probado.
+
+- **D-396 — Lo que queda probado.** Que una sesión sin disputas no narra ninguna —ni glifo, ni línea
+  de resumen, ni insignia—; que el conversor esconde el cero, la colección vacía, el `false` y el
+  nulo, y sigue tratando las cadenas como siempre; que la vista enlaza la insignia al recuento de
+  disputas del propio hallazgo; que con una disputa real, un «arreglado» degradado y una
+  reconfirmación los glifos cuadran uno a uno con los contadores; que el resumen en vivo cuadra con
+  la sesión escrita; que «presente» se narra agregado en el cierre de pasada también cuando la
+  pasada es seca; que extender ubicaciones no narra un hallazgo nuevo; y que no se pinta ningún
+  glifo fuera del repertorio conocido.
+
+- **D-397 — Lo que se verifica a mano.** Auditar una unidad limpia y comprobar que **ningún**
+  hallazgo entrante lleva ⚖ mientras la sesión corre, y que el cierre dice 0 disputados; repetir la
+  auditoría sin tocar el código y comprobar que la pasada seca dice «· veredictos: N presente» en vez
+  de solo «unidad completa».
