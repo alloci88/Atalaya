@@ -125,9 +125,49 @@ public sealed class IdentityTests : IDisposable
         string shell = Source("src/Atalaya.App/MainWindow.xaml");
         shell.Should().Contain("Icon=\"pack://application:,,,/assets/atalaya.ico\"");
 
-        // El aviso lo firma la aplicación con el MISMO icono, no con otro dibujo.
+        // El mismo icono en los tres sitios de la carcasa, no tres dibujos parecidos: el de la
+        // ventana (barra de tareas y Alt-Tab), el de la barra de título y el del aviso.
         Regex.Matches(shell, Regex.Escape("pack://application:,,,/assets/atalaya.ico")).Count
-            .Should().Be(2, "el de la ventana y el del toast");
+            .Should().Be(3, "la ventana, la barra de título y el toast");
+    }
+
+    /// <summary>
+    /// Un <c>.ico</c> pedido sin <c>DecodePixelWidth</c> se decodifica por su fotograma MÁS
+    /// GRANDE y se encoge — que es exactamente el borrón que la variante de silueta existe para
+    /// evitar. Sin esto, los dos SVG del pipeline no servirían de nada en pantalla: el de 16
+    /// estaría en el fichero y no lo vería nadie.
+    /// </summary>
+    [Fact]
+    public void Cada_uso_del_icono_pide_el_fotograma_de_su_tamano()
+    {
+        var usages = new Dictionary<string, int[]>
+        {
+            ["src/Atalaya.App/MainWindow.xaml"] = new[] { 16, 16 },   // barra de título y toast
+            ["src/Atalaya.App/Views/AboutDialog.xaml"] = new[] { 64 },
+        };
+
+        foreach ((string file, int[] expected) in usages)
+        {
+            string xaml = Source(file);
+
+            // Ningún uso por la vía corta: «Source="pack://…ico"» no puede elegir fotograma. El
+            // «(?<![A-Za-z])» está porque UriSource= TERMINA en Source= y sería un falso positivo.
+            Regex.IsMatch(xaml, "(?<![A-Za-z])Source=\"pack://").Should()
+                .BeFalse($"en {file}, un Source directo se queda con el fotograma de 256");
+
+            Regex.Matches(xaml, "DecodePixelWidth=\"(\\d+)\"")
+                .Select(m => int.Parse(m.Groups[1].Value))
+                .Should().Equal(expected, $"en {file}");
+        }
+
+        // Y los tamaños que se piden son tamaños que el .ico TRAE.
+        byte[] ico = File.ReadAllBytes(Asset("atalaya.ico"));
+        int count = BitConverter.ToUInt16(ico, 4);
+        var available = Enumerable.Range(0, count)
+            .Select(i => ico[6 + (16 * i)] == 0 ? 256 : ico[6 + (16 * i)])
+            .ToHashSet();
+
+        available.Should().Contain(16).And.Contain(64);
     }
 
     /// <summary>
@@ -256,17 +296,18 @@ public sealed class IdentityTests : IDisposable
     // =============================================================== §2 · la contención
 
     /// <summary>
-    /// <b>Dónde NO va la marca.</b> Cuatro emplazamientos y ni uno más: la barra de título, la
-    /// bienvenida, la página Cuenta y el «Acerca de». La aplicación es la herramienta; el logo es
-    /// la firma, no el papel pintado. Este test es el que impide que dentro de seis meses haya un
-    /// logo en el rail, y el que obliga a que ampliar la lista sea una decisión y no un descuido.
+    /// <b>Dónde NO va la marca.</b> Tres emplazamientos y ni uno más: la bienvenida, la página
+    /// Cuenta y el «Acerca de». La aplicación es la herramienta; el logo es la firma, no el papel
+    /// pintado. Este test es el que impide que dentro de seis meses haya un logo en el rail.
+    /// <para>
+    /// La barra de título NO cuenta: lo que va ahí es el icono de la APLICACIÓN, que es de casa.
+    /// </para>
     /// </summary>
     [Fact]
-    public void La_marca_solo_aparece_en_los_cuatro_sitios_acordados()
+    public void La_marca_solo_aparece_en_los_tres_sitios_acordados()
     {
         var placements = new Dictionary<string, int>
         {
-            ["src/Atalaya.App/MainWindow.xaml"] = 1,         // a la izquierda del título
             ["src/Atalaya.App/Views/AccountView.xaml"] = 2,   // bienvenida + organización
             ["src/Atalaya.App/Views/AboutDialog.xaml"] = 1,
         };
@@ -278,6 +319,7 @@ public sealed class IdentityTests : IDisposable
 
         foreach (string forbidden in new[]
                  {
+                     "src/Atalaya.App/MainWindow.xaml",
                      "src/Atalaya.App/Views/SessionView.xaml",
                      "src/Atalaya.App/Views/FindingsView.xaml",
                      "src/Atalaya.App/Views/MetricsView.xaml",

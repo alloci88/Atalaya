@@ -23,10 +23,14 @@
 
             <!-- Identidad de la aplicación: el icono grande y su nombre. -->
             <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
-                <Image Source="pack://application:,,,/assets/atalaya.ico"
-                       Width="64" Height="64"
+                <Image Width="64" Height="64"
                        RenderOptions.BitmapScalingMode="HighQuality"
-                       VerticalAlignment="Center" />
+                       VerticalAlignment="Center">
+                    <Image.Source>
+                        <BitmapImage UriSource="pack://application:,,,/assets/atalaya.ico"
+                                     DecodePixelWidth="64" DecodePixelHeight="64" />
+                    </Image.Source>
+                </Image>
                 <StackPanel VerticalAlignment="Center" Margin="18,0,0,0">
                     <TextBlock Text="Atalaya" FontSize="26" FontWeight="SemiBold" />
                     <TextBlock Text="{Binding VersionLabel}" FontSize="13"

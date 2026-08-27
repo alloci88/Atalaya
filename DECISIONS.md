@@ -4114,18 +4114,27 @@ Tanda de identidad. Casi todo lo que sigue es una decisión sobre **dónde NO** 
   respuesta correcta a un despliegue sin ese fichero, y está probada. Borrarla habría
   cambiado «no se ve» por «un logotipo ilegible el día que alguien despliegue sin el asset».
 
-- **D-475 — Un cuarto emplazamiento: la barra de título, a la izquierda de «Atalaya».**
-  Amplía D-465, que fijaba tres. La barra de título no estaba en la lista de prohibidos —el
-  rail, las cabeceras de vista, los diálogos y la sesión en vivo sí— y es el sitio donde una
-  firma corporativa molesta menos: se ve una vez, arriba del todo, y no compite con ningún
-  dato. La lista sigue siendo CERRADA y el test la cuenta: ampliarla tiene que ser una
-  decisión, no un descuido.
+- **D-475 — A la izquierda de «Atalaya» va el icono de la APLICACIÓN, no el logotipo.**
+  Se pidió «el logo al lado del texto Atalaya» y se entendió mal: se puso ahí el logotipo de
+  Maxam, y lo que se quería era el icono de casa. La lista de emplazamientos de la marca
+  vuelve a ser de TRES —bienvenida, Cuenta, «Acerca de»— y D-465 queda intacta. El icono en
+  la barra de título no es un emplazamiento de marca corporativa: es lo que Windows pone en
+  esa esquina en cualquier ventana.
 
-- **D-476 — En columnas, no superpuesto, y sin capturar el ratón.** `ui:TitleBar` dibuja su
-  propio texto; tapar esa zona con una imagen sería pelearse con su plantilla. El logo va en
-  una columna `Auto` delante, así que sin asset la columna mide cero y la barra empieza donde
-  empezaba. Y va con `IsHitTestVisible="False"`: la franja del logo sigue comportándose como
-  el borde de una ventana en vez de tragarse los clics.
+- **D-476 — Va en el hueco que la barra tiene para él (`ui:TitleBar.Icon`).** El primer
+  intento montó una rejilla de dos columnas para colar una imagen delante, porque un
+  `ui:ImageIcon` parecía no dar la proporción del logotipo. Con el icono de la aplicación
+  —que es cuadrado— el hueco nativo encaja sin pelearse con la plantilla, así que la barra
+  vuelve a ser un solo elemento.
+
+- **D-476b — Y `DecodePixelWidth` NO es decorativo.** Un `.ico` pedido con
+  `Source="pack://…"` a secas se decodifica por su fotograma **más grande** y se encoge: los
+  16 px de la barra de título y del aviso salían del dibujo de 256, que es exactamente el
+  borrón que la variante de silueta existe para evitar (D-452). Sin esto, los dos SVG del
+  pipeline no servían de nada en pantalla — el fotograma de 16 estaba en el fichero y no lo
+  veía nadie. Los tres usos pasan a `<BitmapImage DecodePixelWidth="…">` con el tamaño que
+  van a ocupar, y un test comprueba que ninguno usa la vía corta y que los tamaños pedidos
+  son tamaños que el `.ico` trae.
 
 - **D-477 — La regla «la marca se escribe una vez» se mide por lo VISIBLE.**
   `The_brand_is_written_once` contaba las apariciones de la palabra en el fichero entero, y
