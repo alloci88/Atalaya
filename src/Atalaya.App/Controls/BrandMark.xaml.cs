@@ -39,9 +39,18 @@ public partial class BrandMark : UserControl
     {
         InitializeComponent();
         Logo.Height = LogoHeight;
-        Loaded += (_, _) => Refresh();
+
+        // La suscripción se ata al ciclo de vida del control, no a su construcción: un control
+        // que se descarga y se vuelve a cargar —y el de la barra de título vive tanto como la
+        // ventana— tiene que seguir enterándose del cambio de tema. El «-=» previo evita
+        // suscribirse dos veces si Loaded se dispara más de una vez.
+        Loaded += (_, _) =>
+        {
+            ApplicationThemeManager.Changed -= OnThemeChanged;
+            ApplicationThemeManager.Changed += OnThemeChanged;
+            Refresh();
+        };
         Unloaded += (_, _) => ApplicationThemeManager.Changed -= OnThemeChanged;
-        ApplicationThemeManager.Changed += OnThemeChanged;
         Refresh();
     }
 

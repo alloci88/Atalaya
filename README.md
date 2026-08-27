@@ -276,13 +276,14 @@ Todo lo visual vive en `assets/`. Lo versionado incluye tanto las **fuentes** co
 | `atalaya-icon-small.svg` | El mismo icono como **silueta**, fuente de 16 y 24. A 16 px el halo, el degradado y la tronera son ruido: la variante pequeña los suelta y engorda los rasgos. |
 | `atalaya.ico` | **Generado.** Multi-tamaño (16, 24, 32, 48, 64, 256). Es el icono del ejecutable, de la ventana, del Alt-Tab, de la barra de tareas y del aviso propio de la app. |
 | `maxam-logo-source.png` | El logotipo corporativo tal y como lo entregó comunicación. No se toca. |
-| `maxam-logo.png` | **Generado.** Lo que la aplicación pinta. Hoy es una copia byte a byte de la fuente, que ya viene con transparencia. |
-| `maxam-logo-dark.png` | *Opcional y ausente.* La versión en negativo (letras claras). Si aparece, el tema oscuro la usa sola y deja de pintar la placa clara de soporte. |
+| `maxam-logo.png` | **Generado.** Lo que la aplicación pinta en tema claro. Copia byte a byte de su fuente, que ya viene con transparencia. |
+| `maxam-logo-dark-source.png` | La versión en negativo (letras claras), tal y como la entregó comunicación. |
+| `maxam-logo-dark.png` | **Generado.** Lo que la aplicación pinta en tema oscuro. Es *opcional*: si falta, el logotipo normal se pinta sobre una placa clara de soporte. |
 
 Para regenerar lo generado tras tocar un SVG:
 
 ```powershell
-pwsh scripts/build-assets.ps1            # regenera assets/atalaya.ico y assets/maxam-logo.png
+pwsh scripts/build-assets.ps1            # regenera atalaya.ico y las dos variantes del logo
 pwsh scripts/build-assets.ps1 -Verify    # además falla si lo versionado no coincide con sus fuentes
 ```
 
@@ -292,7 +293,8 @@ bytes—, así que regenerar sin cambios no ensucia el árbol.
 
 > **El logotipo corporativo no se altera.** La única preparación permitida es técnica
 > (dejar el fondo en transparencia). Recolorearlo o redibujarlo no es decisión del equipo
-> de producto; la versión en negativo se pide a comunicación y se deja caer en `assets/`.
+> de producto: la versión en negativo la entrega comunicación, y lo que hace la aplicación
+> es elegir cuál de las dos toca según el tema.
 
 ## Limitaciones conocidas
 

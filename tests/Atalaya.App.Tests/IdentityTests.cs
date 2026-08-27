@@ -234,29 +234,39 @@ public sealed class IdentityTests : IDisposable
         deployed.Should().Equal(source);
     }
 
-    /// <summary>El logotipo viaja junto al ejecutable: sin eso, el hueco se colapsaría siempre.</summary>
+    /// <summary>
+    /// Las DOS variantes viajan junto al ejecutable —sin eso el hueco se colapsaría siempre— y
+    /// las fuentes no: no se despliega lo que no se pinta.
+    /// </summary>
     [Fact]
-    public void El_logotipo_se_despliega_junto_al_ejecutable()
+    public void Las_dos_variantes_se_despliegan_junto_al_ejecutable_y_las_fuentes_no()
     {
-        string beside = Path.Combine(AppContext.BaseDirectory, BrandAssets.FolderName, BrandAssets.LogoFile);
+        string dir = Path.Combine(AppContext.BaseDirectory, BrandAssets.FolderName);
 
-        File.Exists(beside).Should().BeTrue("el csproj lo copia a la salida");
+        File.Exists(Path.Combine(dir, BrandAssets.LogoFile)).Should().BeTrue("el csproj lo copia a la salida");
+        File.Exists(Path.Combine(dir, BrandAssets.DarkLogoFile)).Should()
+            .BeTrue("la versión en negativo llegó y también se despliega");
+
+        Directory.EnumerateFiles(dir, "*-source.png").Should()
+            .BeEmpty("las fuentes se quedan en el repositorio");
         Source("src/Atalaya.App/Atalaya.App.csproj").Should()
-            .Contain("maxam-logo-source.png", "y la FUENTE se queda fuera: no se despliega lo que no se pinta");
+            .Contain("maxam-logo*-source.png", "el comodín excluye las fuentes de las DOS variantes");
     }
 
     // =============================================================== §2 · la contención
 
     /// <summary>
-    /// <b>Dónde NO va la marca.</b> Tres emplazamientos y ni uno más: la bienvenida, la página
-    /// Cuenta y el «Acerca de». La aplicación es la herramienta; el logo es la firma, no el papel
-    /// pintado. Este test es el que impide que dentro de seis meses haya un logo en el rail.
+    /// <b>Dónde NO va la marca.</b> Cuatro emplazamientos y ni uno más: la barra de título, la
+    /// bienvenida, la página Cuenta y el «Acerca de». La aplicación es la herramienta; el logo es
+    /// la firma, no el papel pintado. Este test es el que impide que dentro de seis meses haya un
+    /// logo en el rail, y el que obliga a que ampliar la lista sea una decisión y no un descuido.
     /// </summary>
     [Fact]
-    public void La_marca_solo_aparece_en_los_tres_sitios_acordados()
+    public void La_marca_solo_aparece_en_los_cuatro_sitios_acordados()
     {
         var placements = new Dictionary<string, int>
         {
+            ["src/Atalaya.App/MainWindow.xaml"] = 1,         // a la izquierda del título
             ["src/Atalaya.App/Views/AccountView.xaml"] = 2,   // bienvenida + organización
             ["src/Atalaya.App/Views/AboutDialog.xaml"] = 1,
         };
@@ -268,7 +278,6 @@ public sealed class IdentityTests : IDisposable
 
         foreach (string forbidden in new[]
                  {
-                     "src/Atalaya.App/MainWindow.xaml",
                      "src/Atalaya.App/Views/SessionView.xaml",
                      "src/Atalaya.App/Views/FindingsView.xaml",
                      "src/Atalaya.App/Views/MetricsView.xaml",

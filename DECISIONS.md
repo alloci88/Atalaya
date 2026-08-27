@@ -4099,3 +4099,46 @@ Tanda de identidad. Casi todo lo que sigue es una decisión sobre **dónde NO** 
   el tema oscuro puesto, que el logotipo de Cuenta se lee sobre su placa. El render de
   contraste está hecho y adjuntado; lo que no se puede automatizar es que a alguien le
   parezca bien.
+
+### §4 — Enmiendas de la misma tanda (la negativa llegó, y el logo sube a la barra de título)
+
+- **D-473 — La versión en negativo llegó y no hizo falta tocar ni una línea de lógica.**
+  Era la prueba de D-463: `maxam-logo-dark.png` se deja en `assets/` y el tema oscuro la usa
+  sola. Lo único que se escribió fue el **paso de preparación de su fuente**, idéntico al de
+  la variante normal —`maxam-logo-dark-source.png` → copia byte a byte, porque también viene
+  con canal alfa—, porque que una variante sea opcional no la convierte en un caso aparte.
+
+- **D-474 — La placa clara deja de verse, y su rama se queda.** Con la negativa presente,
+  `Resolve(dark: true)` devuelve `NeedsPlate: false` y la placa no se pinta nunca en este
+  despliegue — que es lo que se pedía. La RAMA sigue en el código porque sigue siendo la
+  respuesta correcta a un despliegue sin ese fichero, y está probada. Borrarla habría
+  cambiado «no se ve» por «un logotipo ilegible el día que alguien despliegue sin el asset».
+
+- **D-475 — Un cuarto emplazamiento: la barra de título, a la izquierda de «Atalaya».**
+  Amplía D-465, que fijaba tres. La barra de título no estaba en la lista de prohibidos —el
+  rail, las cabeceras de vista, los diálogos y la sesión en vivo sí— y es el sitio donde una
+  firma corporativa molesta menos: se ve una vez, arriba del todo, y no compite con ningún
+  dato. La lista sigue siendo CERRADA y el test la cuenta: ampliarla tiene que ser una
+  decisión, no un descuido.
+
+- **D-476 — En columnas, no superpuesto, y sin capturar el ratón.** `ui:TitleBar` dibuja su
+  propio texto; tapar esa zona con una imagen sería pelearse con su plantilla. El logo va en
+  una columna `Auto` delante, así que sin asset la columna mide cero y la barra empieza donde
+  empezaba. Y va con `IsHitTestVisible="False"`: la franja del logo sigue comportándose como
+  el borde de una ventana en vez de tragarse los clics.
+
+- **D-477 — La regla «la marca se escribe una vez» se mide por lo VISIBLE.**
+  `The_brand_is_written_once` contaba las apariciones de la palabra en el fichero entero, y
+  falló dos veces seguidas sin que la regla se hubiera roto: primero por la ruta del icono
+  (`/assets/atalaya.ico`) y luego por el `xmlns` del espacio de nombres de los controles. Ni
+  una ruta de recurso ni una declaración de espacio de nombres las lee nadie en pantalla.
+  Ahora se miran solo los atributos que llevan texto a la pantalla —`Text`, `Content`,
+  `Title`— y se exige que la palabra aparezca exactamente dos veces, las dos como la marca
+  entera. La regla es la misma; lo que se afinó es cómo se mide, y ahora se rompe cuando se
+  rompe la regla y no cuando alguien nombra un fichero.
+
+- **D-478 — La suscripción al cambio de tema se ata al ciclo de vida del control.** Estaba en
+  el constructor y se soltaba en `Unloaded`: un control que se descargue y se vuelva a cargar
+  se quedaba sordo. Con el logo en la barra de título —que vive tanto como la ventana— el
+  fallo habría sido invisible hasta el día en que alguien cambiara el tema con la aplicación
+  abierta. Se suscribe en `Loaded`, con un `-=` previo para no duplicar.

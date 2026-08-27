@@ -3,6 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:controls="clr-namespace:Atalaya.App.Controls"
     Title="Atalaya"
     Icon="pack://application:,,,/assets/atalaya.ico"
     Width="1340"
@@ -18,10 +19,28 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar
-            Grid.Row="0"
-            Title="Atalaya"
-            Grid.ColumnSpan="2" />
+        <!-- La barra de título: el logotipo corporativo a la izquierda y, detrás, la barra de
+             WPF-UI con su etiqueta y sus botones. Van en COLUMNAS y no superpuestos porque la
+             barra dibuja su propio texto y taparlo con una imagen sería pelearse con ella; y el
+             logo no captura el ratón, así que la franja sigue comportándose como el borde de
+             una ventana. Sin asset, la columna mide cero y la barra empieza donde empezaba. -->
+        <Grid Grid.Row="0" Grid.ColumnSpan="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <controls:BrandMark
+                Grid.Column="0"
+                LogoHeight="15"
+                Margin="14,0,2,0"
+                VerticalAlignment="Center"
+                IsHitTestVisible="False" />
+
+            <ui:TitleBar
+                Grid.Column="1"
+                Title="Atalaya" />
+        </Grid>
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>

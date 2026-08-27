@@ -31,13 +31,13 @@
          necesitan siempre y no puede depender de que un fichero siga en su sitio. -->
     <Resource Include="..\..\assets\atalaya.ico" Link="assets\atalaya.ico" />
 
-    <!-- El logotipo corporativo, en cambio, se DESPLIEGA como fichero suelto. La versión en
-         negativo (maxam-logo-dark.png) todavía no existe: compilarla obligaría a tenerla para
-         poder construir, y buscándola en disco basta con dejarla caer el día que llegue. El
-         comodín acepta que no haya ninguna — un despliegue sin marca es legítimo. La fuente
-         (-source) se queda fuera: no se despliega lo que no se pinta. -->
+    <!-- El logotipo corporativo, en cambio, se DESPLIEGA como fichero suelto. Se buscan en
+         DISCO y no como recurso compilado: la versión en negativo (maxam-logo-dark.png) llegó
+         después de la primera entrega, y compilarla habría obligado a tenerla para poder
+         construir. El comodín acepta que falte cualquiera de las dos — un despliegue sin marca
+         es legítimo. Las FUENTES (-source) se quedan fuera: no se despliega lo que no se pinta. -->
     <Content Include="..\..\assets\maxam-logo*.png"
-             Exclude="..\..\assets\maxam-logo-source.png"
+             Exclude="..\..\assets\maxam-logo*-source.png"
              Link="assets\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

@@ -8,9 +8,10 @@ namespace Atalaya.IconGen;
 /// <summary>
 /// Construye los assets de identidad de Atalaya (F6.4) a partir de sus fuentes.
 /// <para>
-/// <b>Qué produce.</b> <c>assets/atalaya.ico</c> multi-tamaño (16, 24, 32, 48, 64, 256) y
-/// <c>assets/maxam-logo.png</c>. Es determinista: mismas fuentes, mismos bytes, así que
-/// regenerar sin cambiar nada no ensucia el árbol de git.
+/// <b>Qué produce.</b> <c>assets/atalaya.ico</c> multi-tamaño (16, 24, 32, 48, 64, 256) y las
+/// dos variantes del logotipo, <c>maxam-logo.png</c> y <c>maxam-logo-dark.png</c>. Es
+/// determinista: mismas fuentes, mismos bytes, así que regenerar sin cambiar nada no ensucia el
+/// árbol de git.
 /// </para>
 /// <para>
 /// <b>Por qué dos SVG.</b> Los tamaños grandes salen de <c>atalaya-icon.svg</c> y los dos
@@ -225,18 +226,30 @@ public static class Program
     /// </summary>
     private static void PrepareLogo(string assets)
     {
-        string source = Path.Combine(assets, "maxam-logo-source.png");
-        string target = Path.Combine(assets, "maxam-logo.png");
+        // Las dos variantes se preparan igual: el logotipo normal (letras gris oscuro) y su
+        // negativo (letras claras), cada uno desde SU fuente. Que el negativo sea opcional no lo
+        // convierte en un caso aparte — si está, pasa por el mismo sitio.
+        Prepare(assets, "maxam-logo-source.png", "maxam-logo.png", required: true);
+        Prepare(assets, "maxam-logo-dark-source.png", "maxam-logo-dark.png", required: false);
+    }
+
+    private static void Prepare(string assets, string sourceFile, string targetFile, bool required)
+    {
+        string source = Path.Combine(assets, sourceFile);
+        string target = Path.Combine(assets, targetFile);
 
         if (!File.Exists(source))
         {
-            Console.WriteLine("AVISO  no hay assets/maxam-logo-source.png: el logo se salta.");
+            Console.WriteLine(required
+                ? $"AVISO  no hay assets/{sourceFile}: el logo se salta."
+                : $"  (sin assets/{sourceFile}: la variante es opcional)");
             return;
         }
 
         using var image = new Bitmap(source);
         if (HasTransparentBackground(image))
         {
+            image.Dispose();
             File.Copy(source, target, overwrite: true);
             Console.WriteLine($"OK  {target}  (la fuente ya venía con transparencia: copia literal)");
             return;
