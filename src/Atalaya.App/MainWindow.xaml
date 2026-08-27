@@ -18,26 +18,15 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- El icono de la aplicación a la izquierda del título, en el hueco que la barra tiene
-             para él — el mismo sitio donde Windows lo pone en cualquier ventana.
-
-             DecodePixelWidth NO es decorativo: sin él, el decodificador de .ico coge el fotograma
-             de 256 y lo encoge, que es exactamente el borrón que la variante de silueta existe
-             para evitar. Con él, se elige el fotograma de 16, que es el dibujado para este
-             tamaño (F6.4 §1). -->
+        <!-- La barra de título va SIN icono al lado del texto. Se probó —el de la aplicación, en
+             el hueco nativo de la barra— y no convenció: en esa esquina el icono no aporta nada
+             que no diga ya la palabra, y la barra se lee mejor limpia. Windows sigue enseñando el
+             icono donde hace falta: barra de tareas, Alt-Tab y Explorador, todos desde
+             Window.Icon y ApplicationIcon (F6.4 §1). -->
         <ui:TitleBar
             Grid.Row="0"
             Title="Atalaya"
-            Grid.ColumnSpan="2">
-            <ui:TitleBar.Icon>
-                <ui:ImageIcon Width="16" Height="16">
-                    <ui:ImageIcon.Source>
-                        <BitmapImage UriSource="pack://application:,,,/assets/atalaya.ico"
-                                     DecodePixelWidth="16" DecodePixelHeight="16" />
-                    </ui:ImageIcon.Source>
-                </ui:ImageIcon>
-            </ui:TitleBar.Icon>
-        </ui:TitleBar>
+            Grid.ColumnSpan="2" />
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>

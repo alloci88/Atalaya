@@ -4121,11 +4121,12 @@ Tanda de identidad. Casi todo lo que sigue es una decisión sobre **dónde NO** 
   la barra de título no es un emplazamiento de marca corporativa: es lo que Windows pone en
   esa esquina en cualquier ventana.
 
-- **D-476 — Va en el hueco que la barra tiene para él (`ui:TitleBar.Icon`).** El primer
-  intento montó una rejilla de dos columnas para colar una imagen delante, porque un
-  `ui:ImageIcon` parecía no dar la proporción del logotipo. Con el icono de la aplicación
-  —que es cuadrado— el hueco nativo encaja sin pelearse con la plantilla, así que la barra
-  vuelve a ser un solo elemento.
+- **D-476 — Y al final, NADA al lado del texto.** Se probó el icono de la aplicación en el
+  hueco nativo de la barra (`ui:TitleBar.Icon`) y no convenció: en esa esquina no aporta nada
+  que no diga ya la palabra, y la barra se lee mejor limpia. Windows lo sigue enseñando donde
+  hace falta —barra de tareas, Alt-Tab y Explorador— desde `Window.Icon` y `ApplicationIcon`,
+  que son los que de verdad lo colocan. Queda anotado porque el hueco es tentador y alguien
+  volverá a proponerlo: se intentó, se miró y se quitó.
 
 - **D-476b — Y `DecodePixelWidth` NO es decorativo.** Un `.ico` pedido con
   `Source="pack://…"` a secas se decodifica por su fotograma **más grande** y se encoge: los
@@ -4134,7 +4135,8 @@ Tanda de identidad. Casi todo lo que sigue es una decisión sobre **dónde NO** 
   pipeline no servían de nada en pantalla — el fotograma de 16 estaba en el fichero y no lo
   veía nadie. Los tres usos pasan a `<BitmapImage DecodePixelWidth="…">` con el tamaño que
   van a ocupar, y un test comprueba que ninguno usa la vía corta y que los tamaños pedidos
-  son tamaños que el `.ico` trae.
+  son tamaños que el `.ico` trae. El hallazgo sobrevive a D-476: el aviso sigue pidiendo 16 px
+  y el «Acerca de» 64, y los dos habrían salido del dibujo de 256.
 
 - **D-477 — La regla «la marca se escribe una vez» se mide por lo VISIBLE.**
   `The_brand_is_written_once` contaba las apariciones de la palabra en el fichero entero, y
