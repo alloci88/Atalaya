@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using Atalaya.App.Services;
 using Atalaya.Domain;
 using Atalaya.Domain.Ids;
@@ -239,6 +239,8 @@ public sealed partial class FindingsViewModel : ViewModelBase
 
     private string? _pendingAppSlug;
     private bool _hasPendingAppSlug;
+    private Severity? _pendingSeverity;
+    private bool _hasPendingSeverity;
     private bool _suspendReload;
 
     public FindingsViewModel(
@@ -326,10 +328,21 @@ public sealed partial class FindingsViewModel : ViewModelBase
         _hasPendingAppSlug = true;
     }
 
+    /// <summary>
+    /// Pre-selecciona una severidad al navegar (desde el rosco de severidad de Métricas, F6.5).
+    /// Mismo mecanismo diferido que <see cref="SetApp"/>: los combos todavía no existen cuando
+    /// esto se llama. <c>null</c> es «todas», que es lo que pide un clic en el centro del rosco.
+    /// </summary>
+    public void SetSeverity(Severity? severity)
+    {
+        _pendingSeverity = severity;
+        _hasPendingSeverity = true;
+    }
+
     public override Task LoadAsync()
     {
         RefreshAppOptions();
-        ApplyPendingApp();
+        ApplyPendingFilters();
         Reload();
         return Task.CompletedTask;
     }
@@ -364,17 +377,28 @@ public sealed partial class FindingsViewModel : ViewModelBase
         _suspendReload = previous;
     }
 
-    private void ApplyPendingApp()
+    private void ApplyPendingFilters()
     {
-        if (!_hasPendingAppSlug)
+        if (!_hasPendingAppSlug && !_hasPendingSeverity)
         {
             return;
         }
 
-        _hasPendingAppSlug = false;
         bool previous = _suspendReload;
         _suspendReload = true;
-        SelectedApp = AppOptions.FirstOrDefault(o => o.Slug == _pendingAppSlug) ?? AllApps;
+
+        if (_hasPendingAppSlug)
+        {
+            _hasPendingAppSlug = false;
+            SelectedApp = AppOptions.FirstOrDefault(o => o.Slug == _pendingAppSlug) ?? AllApps;
+        }
+
+        if (_hasPendingSeverity)
+        {
+            _hasPendingSeverity = false;
+            SelectedSeverity = SeverityOptions.FirstOrDefault(o => o.Value == _pendingSeverity) ?? AllSeverities;
+        }
+
         _suspendReload = previous;
     }
 

@@ -1,6 +1,7 @@
 ﻿using System.Text.RegularExpressions;
 using System.Windows.Media;
 using Atalaya.App.Controls;
+using Atalaya.App.Controls;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Domain;
@@ -278,8 +279,10 @@ public sealed class MetricsPanelTests : IDisposable
         source.Should().Contain("_crosshair", "con su cursor vertical");
         source.Should().Contain("Sin actividad", "un cubo vacío lo dice; un tooltip en blanco parece un fallo");
 
+        // Cada tramo del rosco dice lo que vale. Desde F6.5 el tramo puede traer su propia frase
+        // —el de severidad dice «Alta — 4 hallazgos (33 %)»— y si no la trae, el rosco la compone.
         Source("src/Atalaya.App/Controls/DonutRing.cs")
-            .Should().Contain("ToolTip = Tip(", "cada tramo del rosco dice cuántas unidades es");
+            .Should().Contain("segment.Tooltip ?? Tip(", "con su texto propio o con el de serie");
     }
 
     // ============================================ Ningún número engañoso
@@ -324,7 +327,7 @@ public sealed class MetricsPanelTests : IDisposable
     // ============================================ La vista
 
     [Fact]
-    public void La_vista_trae_los_filtros_los_cuatro_tiles_y_las_cinco_graficas()
+    public void La_vista_trae_los_filtros_los_cuatro_tiles_y_las_seis_graficas()
     {
         string xaml = Markup(Source("src/Atalaya.App/Views/MetricsView.xaml"));
 
@@ -341,7 +344,7 @@ public sealed class MetricsPanelTests : IDisposable
         foreach (string chart in new[]
                  {
                      "Coste en el tiempo", "Resoluciones en el tiempo", "Cobertura por aplicación",
-                     "Flujo de hallazgos", "Actividad de sesiones",
+                     "Severidad por aplicación", "Flujo de hallazgos", "Actividad de sesiones",
                  })
         {
             xaml.Should().Contain(chart);
@@ -356,7 +359,13 @@ public sealed class MetricsPanelTests : IDisposable
         xaml.IndexOf("Resoluciones en el tiempo", StringComparison.Ordinal).Should()
             .BeGreaterThan(xaml.IndexOf("Coste en el tiempo", StringComparison.Ordinal))
             .And.BeLessThan(xaml.IndexOf("Cobertura por aplicación", StringComparison.Ordinal));
-        Regex.Matches(xaml, "controls:DonutRing").Count.Should().Be(1, "los roscos son una plantilla repetida");
+        Regex.Matches(xaml, "controls:DonutRing").Count.Should()
+            .Be(2, "cobertura y severidad; cada fila es UNA plantilla repetida, no un rosco por app");
+
+        // La de severidad va justo debajo de la de cobertura: las dos son roscos y se leen juntas.
+        xaml.IndexOf("Severidad por aplicación", StringComparison.Ordinal).Should()
+            .BeGreaterThan(xaml.IndexOf("Cobertura por aplicación", StringComparison.Ordinal))
+            .And.BeLessThan(xaml.IndexOf("Flujo de hallazgos", StringComparison.Ordinal));
     }
 
     // ============================================ Gestos
@@ -511,6 +520,157 @@ public sealed class MetricsPanelTests : IDisposable
             .Should().Contain("aún no hay resoluciones en este periodo");
     }
 
+    // ============================================ Severidad por aplicación (F6.5)
+
+    /// <summary>
+    /// Los cuatro tramos van en orden fijo desde las 12 en punto —de lo más grave a lo menos— y
+    /// con los colores RESERVADOS de severidad. Es la única gráfica del panel que los usa, y es
+    /// su sitio: aquí la paleta semántica no decora, es el dato (D-316).
+    /// </summary>
+    [Fact]
+    public async Task Los_tramos_van_en_orden_de_gravedad_y_con_los_colores_reservados()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 1 });
+        WriteFinding("app", DateTimeOffset.UtcNow.AddDays(-1), Severity.Baja);
+        WriteFinding("app", DateTimeOffset.UtcNow.AddDays(-1), Severity.Critica);
+        WriteFinding("app", DateTimeOffset.UtcNow.AddDays(-1), Severity.Media);
+        WriteFinding("app", DateTimeOffset.UtcNow.AddDays(-1), Severity.Media);
+
+        MetricsViewModel vm = TestFactory.Metrics(_hub, _paths, _settings);
+        await vm.LoadAsync();
+
+        SeverityCard card = vm.SeverityCards.Single();
+        card.TotalText.Should().Be("4", "el número del centro es el total de activos");
+
+        // Orden fijo, y la Alta no aparece porque no hay ninguna: el orden se conserva entre las
+        // que sí están, no se reordena por tamaño.
+        card.Segments.Select(s => s.Name).Should().Equal("Crítica", "Media", "Baja");
+        Hex(card.Segments[0].Brush).Should().Be(SeverityPalette.Critica.ToUpperInvariant());
+        Hex(card.Segments[1].Brush).Should().Be(SeverityPalette.Media.ToUpperInvariant());
+        Hex(card.Segments[2].Brush).Should().Be(SeverityPalette.Baja.ToUpperInvariant());
+    }
+
+    /// <summary>El tooltip de un tramo dice qué es, cuántos son y qué parte del total.</summary>
+    [Fact]
+    public async Task El_tooltip_de_un_tramo_dice_cuantos_son_y_que_parte_del_total()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 1 });
+        for (int i = 0; i < 3; i++)
+        {
+            WriteFinding("app", DateTimeOffset.UtcNow.AddDays(-1), Severity.Alta);
+        }
+
+        WriteFinding("app", DateTimeOffset.UtcNow.AddDays(-1), Severity.Baja);
+
+        MetricsViewModel vm = TestFactory.Metrics(_hub, _paths, _settings);
+        await vm.LoadAsync();
+
+        IReadOnlyList<DonutSegment> segments = vm.SeverityCards.Single().Segments;
+        segments[0].Tooltip.Should().Be("Alta — 3 hallazgos (75%)");
+        segments[1].Tooltip.Should().Be("Baja — 1 hallazgo (25%)", "uno en singular");
+    }
+
+    /// <summary>Una leyenda para toda la fila, no una por rosco: las cuatro son siempre las mismas.</summary>
+    [Fact]
+    public async Task La_leyenda_es_una_para_la_fila_entera()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "a", Name = "A", RepoUrl = "u", CurrentCycle = 1 });
+        _hub.Store.WriteApp(new AppConfig { Slug = "b", Name = "B", RepoUrl = "u", CurrentCycle = 1 });
+        WriteFinding("a", DateTimeOffset.UtcNow.AddDays(-1), Severity.Alta);
+        WriteFinding("b", DateTimeOffset.UtcNow.AddDays(-1), Severity.Baja);
+
+        MetricsViewModel vm = TestFactory.Metrics(_hub, _paths, _settings);
+        await vm.LoadAsync();
+
+        vm.SeverityCards.Should().HaveCount(2);
+        vm.SeverityLegend.Select(l => l.Name).Should().Equal(
+            new[] { "Crítica", "Alta", "Media", "Baja" },
+            "las cuatro, en el mismo orden que los tramos, y una sola vez");
+
+        string xaml = Markup(Source("src/Atalaya.App/Views/MetricsView.xaml"));
+        xaml.Should().Contain("{Binding SeverityLegend}");
+        Regex.Matches(xaml, Regex.Escape("{Binding SeverityLegend}")).Count.Should()
+            .Be(1, "la leyenda se pinta fuera de la plantilla del rosco: una, no una por app");
+    }
+
+    /// <summary>
+    /// Una app limpia se dibuja vacía, no se omite. Y no escribe un cero suelto en el centro sin
+    /// explicar de qué: la etiqueta «0 activos» va debajo.
+    /// </summary>
+    [Fact]
+    public async Task Una_app_limpia_se_ve_vacia_en_vez_de_desaparecer()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "limpia", Name = "Limpia", RepoUrl = "u", CurrentCycle = 1 });
+
+        MetricsViewModel vm = TestFactory.Metrics(_hub, _paths, _settings);
+        await vm.LoadAsync();
+
+        SeverityCard card = vm.SeverityCards.Single();
+        card.HasData.Should().BeFalse();
+        card.TotalText.Should().Be("0");
+        card.Segments.Should().BeEmpty();
+        card.Detail.Should().Be("Sin hallazgos activos");
+
+        string xaml = Markup(Source("src/Atalaya.App/Views/MetricsView.xaml"));
+        xaml.Should().Contain("0 activos", "el rosco vacío se explica");
+        xaml.Should().Contain("EmptyBrush", "y se dibuja apagado en vez de dejar un hueco");
+    }
+
+    /// <summary>
+    /// La promesa que hace un tramo con el ratón encima: llevar EXACTAMENTE a los hallazgos que
+    /// cuenta — esa app y esa severidad.
+    /// </summary>
+    [Fact]
+    public async Task Un_clic_en_un_tramo_abre_los_hallazgos_de_esa_app_y_esa_severidad()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "xblast", Name = "XBlast", RepoUrl = "u", CurrentCycle = 1 });
+        _hub.Store.WriteApp(new AppConfig { Slug = "otra", Name = "Otra", RepoUrl = "u", CurrentCycle = 1 });
+        WriteFinding("xblast", DateTimeOffset.UtcNow.AddDays(-1), Severity.Critica);
+        WriteFinding("xblast", DateTimeOffset.UtcNow.AddDays(-1), Severity.Baja);
+        WriteFinding("otra", DateTimeOffset.UtcNow.AddDays(-1), Severity.Critica);
+
+        var findings = new FindingsViewModel(
+            _hub, new NavigationService(new NoServices()), _settings, new GroupExpansionMemory());
+        NavigationService navigation = TestFactory.NavigationWith(findings);
+        MetricsViewModel vm = TestFactory.Metrics(_hub, _paths, _settings, navigation);
+        await vm.LoadAsync();
+
+        SeverityCard card = vm.SeverityCards.Single(c => c.Slug == "xblast");
+        var slice = (SeveritySlice)card.Segments[0].Payload!;
+        await vm.OpenSeverityCommand.ExecuteAsync(slice);
+
+        navigation.Current.Should().BeSameAs(findings);
+        findings.SelectedApp!.Slug.Should().Be("xblast");
+        findings.SelectedSeverity!.Value.Should().Be(Severity.Critica);
+        findings.ResultCount.Should().Be(1, "la crítica de xblast, ni la baja ni la de la otra app");
+    }
+
+    /// <summary>Y el centro lleva a esa app entera, que es lo que el número del centro cuenta.</summary>
+    [Fact]
+    public async Task Un_clic_en_el_centro_abre_los_hallazgos_de_esa_app_sin_recortar_por_severidad()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "xblast", Name = "XBlast", RepoUrl = "u", CurrentCycle = 1 });
+        WriteFinding("xblast", DateTimeOffset.UtcNow.AddDays(-1), Severity.Critica);
+        WriteFinding("xblast", DateTimeOffset.UtcNow.AddDays(-1), Severity.Baja);
+
+        var findings = new FindingsViewModel(
+            _hub, new NavigationService(new NoServices()), _settings, new GroupExpansionMemory());
+        NavigationService navigation = TestFactory.NavigationWith(findings);
+        MetricsViewModel vm = TestFactory.Metrics(_hub, _paths, _settings, navigation);
+        await vm.LoadAsync();
+
+        await vm.OpenAppFindingsCommand.ExecuteAsync(vm.SeverityCards.Single());
+
+        findings.SelectedApp!.Slug.Should().Be("xblast");
+        findings.SelectedSeverity!.Value.Should().BeNull("el centro no recorta por severidad");
+        findings.ResultCount.Should().Be(2);
+    }
+
+    private sealed class NoServices : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => null;
+    }
+
     // ============================================ Utilidades
 
     private AuditSession WriteSession(string slug, decimal? cost, int daysAgo = 2)
@@ -531,7 +691,7 @@ public sealed class MetricsPanelTests : IDisposable
         return session;
     }
 
-    private void WriteFinding(string slug, DateTimeOffset detected)
+    private void WriteFinding(string slug, DateTimeOffset detected, Severity severity = Severity.Alta)
     {
         var stamp = new DetectionStamp(detected, AuditMode.Lotes, "abc", "alvaro");
         _hub.Store.WriteFinding(slug, new Finding
@@ -540,7 +700,7 @@ public sealed class MetricsPanelTests : IDisposable
             RuleId = "criterio.x",
             Pillar = Pillar.Errores,
             Tag = FindingTag.Criterio,
-            Severity = Severity.Alta,
+            Severity = severity,
             Confidence = Confidence.Media,
             Status = FindingStatus.Activo,
             Title = "t",

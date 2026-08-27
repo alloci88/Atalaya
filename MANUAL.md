@@ -86,7 +86,7 @@ El panel de mando, filtrable por **aplicación** y **periodo** — y los dos fil
 afectan a todo lo de abajo.
 
 Cuatro cifras arriba: hallazgos activos por severidad, resueltos en el periodo (con su
-delta), coste del periodo y cobertura del ciclo. Debajo, cinco gráficas:
+delta), coste del periodo y cobertura del ciclo. Debajo, seis gráficas:
 
 1. **Coste en el tiempo** — una línea por aplicación, con toggle *Acumulado*.
 2. **Resoluciones en el tiempo** — cuántos hallazgos se dieron por resueltos en cada
@@ -94,8 +94,11 @@ delta), coste del periodo y cobertura del ciclo. Debajo, cinco gráficas:
    manual y medida). Misma forma y **mismo color por aplicación** que la de coste, con
    su propio toggle *Acumulado*.
 3. **Cobertura por aplicación** — un rosco por app; un clic abre su inventario.
-4. **Flujo de hallazgos** — lo que entra, lo que se cierra y cuántos quedan vivos.
-5. **Actividad de sesiones** — el registro del periodo. **Un clic en una línea abre su
+4. **Severidad por aplicación** — un rosco por app con el reparto de su deuda **viva**
+   (hallazgos activos a día de hoy: el periodo no la recorta). Un clic en un tramo abre
+   Hallazgos con esa app y esa severidad; en el centro, esa app entera.
+5. **Flujo de hallazgos** — lo que entra, lo que se cierra y cuántos quedan vivos.
+6. **Actividad de sesiones** — el registro del periodo. **Un clic en una línea abre su
    informe en la vista Informes.**
 
 Donde no hay medida se escribe «—» y qué haría falta para que aparezca. Un cero con

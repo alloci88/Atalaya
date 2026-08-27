@@ -4153,3 +4153,90 @@ Tanda de identidad. Casi todo lo que sigue es una decisión sobre **dónde NO** 
   se quedaba sordo. Con el logo en la barra de título —que vive tanto como la ventana— el
   fallo habría sido invisible hasta el día en que alguien cambiara el tema con la aplicación
   abierta. Se suscribe en `Loaded`, con un `-=` previo para no duplicar.
+
+## F6.5 — Severidad por aplicación: la segunda fila de roscos
+
+Tras la de cobertura, la pregunta que faltaba. Una dice cuánto se ha mirado de cada
+aplicación; la otra, qué se encontró y de qué gravedad.
+
+- **D-479 — Se llama SEVERIDAD, no «criticidad».** Se propuso lo segundo. La aplicación lleva
+  desde el §2 diciendo «severidad» —en los chips de V3, en las insignias de V5, en los
+  informes, en el JSON del hub y en el enum del dominio—, y un panel que la llamara de otra
+  forma obligaría a traducir mentalmente entre dos vistas de la misma ventana. La consistencia
+  de vocabulario no es una preferencia de estilo: es lo que permite buscar una palabra y
+  encontrarla en todas partes.
+
+- **D-480 — Cuenta solo los ACTIVOS, y por eso el rango temporal no manda.** Es la foto de la
+  deuda VIVA: lo resuelto se arregló y de lo silenciado se decidió que no se arregla, así que
+  sumarlos convertiría «lo que queda por hacer» en un histórico de todo lo que hubo. Y como es
+  un estado de hoy —igual que el tile de activos (D-318)—, recortarlo por el periodo daría una
+  deuda más pequeña que la real cada vez que alguien eligiera «4 semanas». El selector de
+  aplicación sí manda, porque ese sí es un filtro de alcance y no de tiempo.
+
+- **D-481 — Y el subtítulo lo DICE.** «Hallazgos activos a día de hoy, sin recortar por el
+  periodo». Sin esa frase, cambiar el rango y ver los mismos números se lee como un fallo del
+  programa en vez de como lo que es. Es la misma disciplina que la etiqueta de periodo de la
+  cabecera: un dato que no obedece a un filtro visible tiene que explicar por qué.
+
+- **D-482 — Aquí SÍ van los colores de severidad, y es la única gráfica del panel que los usa.**
+  D-316 los reservó: significan crítica/alta/media/baja en toda la aplicación, así que ninguna
+  serie puede pintarse de rojo por decoración. Esta fila no los toma prestados — los usa por lo
+  que significan. La paleta semántica no ilustra el dato: **es** el dato. `SeverityPalette`
+  sigue siendo el único sitio donde viven, así que el rojo de este rosco y el del chip de un
+  hallazgo crítico no pueden divergir.
+
+- **D-483 — Orden fijo desde las 12 en punto, de más grave a menos.** No se reordena por
+  tamaño. Un rosco que pusiera primero el tramo más gordo obligaría a leer la leyenda en cada
+  aplicación para saber de qué color es cada cosa; con el orden fijo, la posición ya lo dice y
+  la leyenda es un recordatorio, no un requisito. Las severidades sin hallazgos se saltan, y el
+  orden se conserva entre las que quedan.
+
+- **D-484 — Una aplicación limpia se dibuja VACÍA, no se omite.** Que una app no tenga deuda
+  viva es un dato tan bueno como tenerla. Si desapareciera de la fila sería indistinguible de
+  una que nadie ha auditado nunca, que es exactamente la confusión contraria. Se pinta el aro
+  apagado, un «0» en el centro y «0 activos» debajo — lo apagado dice «aquí no hay nada» sin
+  fingir un tramo.
+
+- **D-485 — El rosco se hizo genérico en vez de duplicarlo, con tres costuras.** `DonutRing`
+  nació para la cobertura y valía casi tal cual; lo que le faltaba era dejar de decidir cosas
+  que no le tocan:
+  - **`DonutSegment.Tooltip`**: el texto exacto lo pone quien llama. La cobertura dice
+    «Auditadas: 4 de 10 (40 %)» y la severidad «Alta — 4 hallazgos (33 %)». Forzar una frase
+    única habría dejado a una de las dos diciendo una rareza.
+  - **`DonutSegment.Payload`**: lo que se entrega al pulsar un tramo. El rosco no sabe qué es
+    —una severidad, un estado, lo que sea—: solo lo devuelve. Sin esto habría que resolver
+    «clic en el tramo rojo» por el NOMBRE del tramo, que es texto de presentación.
+  - **`SegmentGap` y `EmptyBrush`**, los dos con valor por defecto que deja la fila de
+    cobertura exactamente como estaba. El anti-objetivo era no tocar las demás gráficas, y la
+    forma de cumplirlo no es no tocar el control: es que lo nuevo sea opt-in.
+
+- **D-486 — El aire se DESCUENTA del tramo, no se añade.** Si se sumara, la vuelta pasaría de
+  360° y el último tramo saldría desplazado: el anillo no cerraría. Y un tramo minúsculo tiene
+  un mínimo de un grado, que es lo que hace que «1 crítica de 400» siga viéndose en vez de
+  desaparecer bajo su propio hueco.
+
+- **D-487 — Dos gestos sobre la misma figura, y el de dentro gana.** El tramo lleva a esa app
+  con esa severidad; el centro y el nombre, a esa app entera — que es lo que cuenta el número
+  del centro. Conviven porque el manejador del tramo marca el clic como atendido: sin eso, el
+  clic seguiría subiendo hasta el botón que envuelve el rosco y se dispararían LOS DOS,
+  navegando dos veces y ganando la segunda.
+
+- **D-488 — Y V3 aprende a recibir una severidad.** `FindingsViewModel.SetSeverity`, con el
+  mismo mecanismo diferido que `SetApp` (los combos no existen todavía cuando se llama). El
+  método que los aplicaba pasa a llamarse `ApplyPendingFilters` y hace los dos de una vez, bajo
+  la misma suspensión de recarga: aplicarlos por separado habría re-agregado la lista dos veces
+  por navegación.
+
+- **D-489 — Lo que queda probado (11 tests).** Del agregador: que solo cuenta activos —con un
+  resuelto y un silenciado de la misma severidad fuera—; que una app sin activos sale igual
+  pero vacía; que **ningún rango temporal la recorta**, comprobado sobre los cuatro; que el
+  filtro de aplicación sí manda; y que la fila se ordena de más deuda a menos. Del panel: que
+  los tramos van en orden de gravedad con los colores reservados y saltándose las severidades
+  sin hallazgos; que el tooltip dice «Alta — 3 hallazgos (75 %)» y singulariza el uno; que la
+  leyenda se pinta UNA vez para la fila; que la app limpia se explica; y las dos navegaciones
+  —tramo y centro— comprobando además que la lista de destino trae los hallazgos correctos.
+  De la vista: seis gráficas, dos `DonutRing` y la de severidad **entre** cobertura y flujo.
+
+- **D-490 — Un test ajeno que hubo que afinar.** `La_grafica_trae_cursor_y_tooltip_por_columna`
+  exigía `ToolTip = Tip(` en `DonutRing`. Sigue vigilando lo mismo —que cada tramo diga lo que
+  vale— pero ahora contra `segment.Tooltip ?? Tip(`, que es la forma que admite las dos filas.

@@ -76,6 +76,10 @@ public sealed class MetricsQueryTests : IDisposable
             f.Resolve(new ResolutionStamp(
                 resolvedAt ?? detected, ResolutionVia.Manual, AuditMode.Lotes, "c", "alvaro", "fixed"));
         }
+        else if (status == FindingStatus.Silenciado)
+        {
+            f.MarkSilenced(resolvedAt ?? detected, "alvaro", "deuda aceptada");
+        }
 
         return f;
     }
@@ -428,6 +432,104 @@ public sealed class MetricsQueryTests : IDisposable
         _hub.Store.WriteFinding("app", f);
 
         Build().Resolutions.Sum(p => p.Of("app")).Should().Be(1m);
+    }
+
+    // =============================================================== Gráfica 3b
+
+    /// <summary>
+    /// El dato de la fila: los hallazgos ACTIVOS de cada app repartidos por severidad. Es la foto
+    /// de la deuda viva, así que ni los resueltos ni los silenciados cuentan — uno se arregló y
+    /// del otro se decidió que no se arregla; sumarlos convertiría la lista de lo que queda por
+    /// hacer en un histórico de todo lo que hubo.
+    /// </summary>
+    [Fact]
+    public void Los_roscos_de_severidad_solo_cuentan_los_activos()
+    {
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-1), severity: Severity.Critica));
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-1), severity: Severity.Alta));
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-1), severity: Severity.Alta));
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-1), severity: Severity.Baja));
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Resuelto, Now.AddDays(-9), Now.AddDays(-2),
+            severity: Severity.Critica));
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Silenciado, Now.AddDays(-3), severity: Severity.Critica));
+
+        SeverityDonut donut = Build().Severity.Single();
+
+        donut.Slug.Should().Be("app");
+        donut.Name.Should().Be("App");
+        donut.Of(Severity.Critica).Should().Be(1, "el resuelto y el silenciado no son deuda viva");
+        donut.Of(Severity.Alta).Should().Be(2);
+        donut.Of(Severity.Media).Should().Be(0);
+        donut.Of(Severity.Baja).Should().Be(1);
+        donut.Total.Should().Be(4);
+        donut.HasData.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Una aplicación sin activos NO se omite: se dibuja vacía. Que esté limpia es un dato, y
+    /// esconderla la haría indistinguible de una que nadie ha auditado nunca.
+    /// </summary>
+    [Fact]
+    public void Una_app_sin_activos_sale_igual_pero_vacia()
+    {
+        App("limpia", "Limpia");
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-1), severity: Severity.Alta));
+
+        var roscos = Build().Severity.ToDictionary(d => d.Slug);
+
+        roscos.Should().HaveCount(2, "las dos aplicaciones salen en la fila");
+        roscos["limpia"].Total.Should().Be(0);
+        roscos["limpia"].HasData.Should().BeFalse();
+        roscos["app"].HasData.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Los activos son la foto de HOY, igual que el tile de arriba: el rango temporal no los
+    /// recorta. Un hallazgo abierto hace dos años sigue siendo deuda aunque se mire «4 semanas».
+    /// </summary>
+    [Fact]
+    public void El_rango_temporal_no_recorta_los_roscos_de_severidad()
+    {
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-800), severity: Severity.Critica));
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-2), severity: Severity.Media));
+
+        foreach (MetricsRange range in Enum.GetValues<MetricsRange>())
+        {
+            MetricsDashboard d = Build(range: range);
+            d.Severity.Single().Total.Should().Be(2, $"con el rango {range}");
+            d.Severity.Single().Of(Severity.Critica).Should().Be(1, $"con el rango {range}");
+        }
+    }
+
+    /// <summary>El selector de aplicación SÍ manda: es el otro filtro del panel.</summary>
+    [Fact]
+    public void Los_roscos_de_severidad_obedecen_el_filtro_de_aplicacion()
+    {
+        App("otra", "Otra");
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-1), severity: Severity.Alta));
+        _hub.Store.WriteFinding("otra", Finding(FindingStatus.Activo, Now.AddDays(-1), severity: Severity.Critica));
+
+        Build("app").Severity.Should().ContainSingle().Which.Slug.Should().Be("app");
+        Build().Severity.Should().HaveCount(2);
+    }
+
+    /// <summary>
+    /// La fila se ordena como la de cobertura —de más a menos— para que las dos se lean en el
+    /// mismo sentido. Las limpias quedan al final, que es donde estorban menos.
+    /// </summary>
+    [Fact]
+    public void La_fila_va_de_la_app_con_mas_deuda_a_la_que_menos()
+    {
+        App("media", "Media");
+        App("limpia", "Limpia");
+        for (int i = 0; i < 3; i++)
+        {
+            _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-1), severity: Severity.Alta));
+        }
+
+        _hub.Store.WriteFinding("media", Finding(FindingStatus.Activo, Now.AddDays(-1), severity: Severity.Baja));
+
+        Build().Severity.Select(d => d.Slug).Should().Equal("app", "media", "limpia");
     }
 
     // =============================================================== Gráfica 4

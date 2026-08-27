@@ -365,6 +365,85 @@
                         </StackPanel>
                     </ui:Card>
 
+                    <!-- ============ Gráfica 3b: severidad por aplicación ============ -->
+                    <!-- Va JUSTO debajo de cobertura y con el mismo lenguaje de roscos: una dice
+                         cuánto se ha mirado, la otra qué se encontró. Y es la única gráfica del
+                         panel que usa los colores de severidad, porque es la única donde la
+                         paleta semántica ES el dato (F5.9 §2, D-316). -->
+                    <ui:Card Style="{StaticResource Block}">
+                        <StackPanel>
+                            <TextBlock Text="Severidad por aplicación" Style="{StaticResource BlockTitle}" />
+                            <!-- El subtítulo dice que el rango temporal NO manda aquí. Sin esa
+                                 frase, cambiar el periodo y ver los mismos números se lee como un
+                                 fallo del programa en vez de como lo que es. -->
+                            <TextBlock Style="{StaticResource BlockHint}"
+                                       Text="Cómo se reparte la deuda viva de cada aplicación — hallazgos activos a día de hoy, sin recortar por el periodo. Pulsa un tramo para ver esos hallazgos." />
+
+                            <!-- Una leyenda para la fila entera, no una por rosco. -->
+                            <ItemsControl ItemsSource="{Binding SeverityLegend}"
+                                          ItemTemplate="{StaticResource LegendEntry}"
+                                          Margin="0,12,0,0"
+                                          Visibility="{Binding HasSeverity, Converter={StaticResource BoolToVisibility}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+
+                            <ItemsControl ItemsSource="{Binding SeverityCards}" Margin="0,12,0,0"
+                                          Visibility="{Binding HasSeverity, Converter={StaticResource BoolToVisibility}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <!-- El botón cubre el rosco entero: es el gesto «esta app,
+                                             todas las severidades». Los tramos marcan su clic como
+                                             atendido, así que el suyo gana sin que este se dispare
+                                             también. -->
+                                        <Button
+                                            Command="{Binding DataContext.OpenAppFindingsCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Padding="10,6"
+                                            Margin="0,0,10,10"
+                                            Cursor="Hand"
+                                            ToolTip="{Binding Detail}">
+                                            <StackPanel>
+                                                <Grid Width="{Binding DataContext.DonutSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      Height="{Binding DataContext.DonutSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                      HorizontalAlignment="Center">
+                                                    <controls:DonutRing
+                                                        Segments="{Binding Segments}"
+                                                        RingThickness="14"
+                                                        SegmentGap="3"
+                                                        EmptyBrush="{DynamicResource ControlFillColorSecondaryBrush}"
+                                                        SegmentCommand="{Binding DataContext.OpenSeverityCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
+                                                    <TextBlock Text="{Binding TotalText}"
+                                                               FontSize="20" FontWeight="Bold"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                </Grid>
+                                                <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"
+                                                           HorizontalAlignment="Center" Margin="0,8,0,0" />
+                                                <TextBlock Text="0 activos" FontSize="11" Opacity="0.7"
+                                                           HorizontalAlignment="Center"
+                                                           Visibility="{Binding HasData, Converter={StaticResource InverseBoolToVisibility}}" />
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Style="{StaticResource EmptyNote}"
+                                       Text="— · se activará cuando haya alguna aplicación dada de alta."
+                                       Visibility="{Binding HasSeverity, Converter={StaticResource InverseBoolToVisibility}}" />
+                        </StackPanel>
+                    </ui:Card>
+
                     <!-- ============ Gráfica 4: flujo de hallazgos ============ -->
                     <ui:Card Style="{StaticResource Block}">
                         <StackPanel>

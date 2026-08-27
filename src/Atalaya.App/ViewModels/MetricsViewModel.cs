@@ -31,6 +31,28 @@ public sealed record CoverageCard(
     IReadOnlyList<DonutSegment> Segments,
     bool HasData);
 
+/// <summary>
+/// Un rosco de severidad con todo lo que la vista escribe alrededor (F6.5).
+/// </summary>
+/// <param name="TotalText">
+/// El número del centro. Va como TEXTO y no como entero porque el caso vacío no escribe un cero
+/// suelto —que se leería como un dato pendiente de cargar— sino «0».
+/// </param>
+public sealed record SeverityCard(
+    string Slug,
+    string Name,
+    string TotalText,
+    string Detail,
+    IReadOnlyList<DonutSegment> Segments,
+    bool HasData);
+
+/// <summary>
+/// Lo que se entrega al pulsar un tramo del rosco de severidad: la app y la severidad de ese
+/// tramo. Viaja como <c>Payload</c> del segmento porque el rosco no sabe —ni tiene que saber—
+/// qué significan sus tramos.
+/// </summary>
+public sealed record SeveritySlice(string Slug, Severity Severity);
+
 /// <summary>Una línea del registro de operaciones, ya escrita.</summary>
 public sealed record SessionLine(
     string SessionId,
@@ -218,6 +240,15 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
     [ObservableProperty] private bool _hasCoverage;
 
+    // ---------- Gráfica 3b: severidad por aplicación ----------
+
+    public ObservableCollection<SeverityCard> SeverityCards { get; } = new();
+
+    /// <summary>Una leyenda para toda la FILA, no una por rosco: las cuatro son siempre las mismas.</summary>
+    public ObservableCollection<LegendItem> SeverityLegend { get; } = new();
+
+    [ObservableProperty] private bool _hasSeverity;
+
     // ---------- Gráfica 4: flujo de hallazgos ----------
 
     [ObservableProperty] private IReadOnlyList<ChartSeries> _flowSeries = Array.Empty<ChartSeries>();
@@ -257,6 +288,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
             RebuildCostChart();
             RebuildResolutionChart();
             ApplyCoverage(dashboard);
+            ApplySeverity(dashboard);
             ApplyFlow(dashboard);
             ApplySessions(dashboard);
 
@@ -441,6 +473,71 @@ public sealed partial class MetricsViewModel : ViewModelBase
         DonutSize = Coverage.Count == 1 ? 180 : 108;
     }
 
+    /// <summary>
+    /// La fila de roscos de severidad (F6.5). Los cuatro colores son los RESERVADOS de la
+    /// aplicación: aquí la paleta semántica es el dato, así que este es su sitio — el mismo rojo
+    /// que en el chip de un hallazgo crítico y en la insignia de V5.
+    /// </summary>
+    private void ApplySeverity(MetricsDashboard d)
+    {
+        SeverityCards.Clear();
+        foreach (SeverityDonut donut in d.Severity)
+        {
+            var segments = new List<DonutSegment>();
+            foreach (Severity severity in Order)
+            {
+                int count = donut.Of(severity);
+                if (count == 0)
+                {
+                    continue;
+                }
+
+                string label = SeverityNames.Display(severity);
+                segments.Add(new DonutSegment(
+                    label,
+                    count,
+                    Brush(SeverityPalette.Hex(severity)),
+                    $"{label} — {(count == 1 ? "1 hallazgo" : $"{count} hallazgos")} "
+                    + $"({(double)count / donut.Total:0%})",
+                    new SeveritySlice(donut.Slug, severity)));
+            }
+
+            SeverityCards.Add(new SeverityCard(
+                donut.Slug,
+                donut.Name,
+                donut.Total.ToString(CultureInfo.CurrentCulture),
+                donut.HasData
+                    ? string.Join(" · ", segments.Select(s => $"{s.Value:0} {s.Name.ToLowerInvariant()}"))
+                    : "Sin hallazgos activos",
+                segments,
+                donut.HasData));
+        }
+
+        // La leyenda se escribe una vez para la fila entera. Cuatro leyendas idénticas bajo
+        // cuatro roscos serían tres de más.
+        SeverityLegend.Clear();
+        foreach (Severity severity in Order)
+        {
+            SeverityLegend.Add(new LegendItem(
+                SeverityNames.Display(severity), Brush(SeverityPalette.Hex(severity)), false));
+        }
+
+        HasSeverity = SeverityCards.Count > 0;
+    }
+
+    /// <summary>
+    /// El orden de los tramos, de las 12 en punto y en sentido horario: de lo más grave a lo
+    /// menos. Es el mismo orden en que la aplicación enumera severidades en todas partes, y va
+    /// fijo — un rosco que se reordenara por tamaño obligaría a leer la leyenda en cada app.
+    /// </summary>
+    private static readonly Severity[] Order =
+    {
+        Severity.Critica,
+        Severity.Alta,
+        Severity.Media,
+        Severity.Baja,
+    };
+
     private void ApplyFlow(MetricsDashboard d)
     {
         FlowLegend.Clear();
@@ -524,6 +621,34 @@ public sealed partial class MetricsViewModel : ViewModelBase
         => card is null
             ? Task.CompletedTask
             : _navigation.NavigateToAsync<InventoryViewModel>(vm => vm.SetApp(card.Slug));
+
+    /// <summary>
+    /// Un clic en un TRAMO lleva a los hallazgos de esa app con esa severidad: exactamente los
+    /// que el tramo cuenta. Es la promesa que hace un trozo de rosco con el ratón encima.
+    /// </summary>
+    [RelayCommand]
+    private Task OpenSeverity(SeveritySlice? slice)
+        => slice is null
+            ? Task.CompletedTask
+            : _navigation.NavigateToAsync<FindingsViewModel>(vm =>
+            {
+                vm.SetApp(slice.Slug);
+                vm.SetSeverity(slice.Severity);
+            });
+
+    /// <summary>
+    /// Un clic en el CENTRO —o en el nombre— lleva a los hallazgos de esa app sin recortar por
+    /// severidad, que es lo que el número del centro cuenta.
+    /// </summary>
+    [RelayCommand]
+    private Task OpenAppFindings(SeverityCard? card)
+        => card is null
+            ? Task.CompletedTask
+            : _navigation.NavigateToAsync<FindingsViewModel>(vm =>
+            {
+                vm.SetApp(card.Slug);
+                vm.SetSeverity(null);
+            });
 
     /// <summary>
     /// Un clic en una sesión abre su informe, que es el detalle de esa línea. Lo abre en la vista

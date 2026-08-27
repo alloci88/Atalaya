@@ -28,7 +28,40 @@ public sealed record MetricsFilter(string? Slug, MetricsRange Range)
 }
 
 /// <summary>El desglose por severidad de los hallazgos activos (tile 1).</summary>
-public sealed record SeverityChips(int Critica, int Alta, int Media, int Baja);
+public sealed record SeverityChips(int Critica, int Alta, int Media, int Baja)
+{
+    /// <summary>Cuántos hay de esa severidad. Evita el <c>switch</c> repetido en cada consumidor.</summary>
+    public int Of(Severity severity) => severity switch
+    {
+        Severity.Critica => Critica,
+        Severity.Alta => Alta,
+        Severity.Media => Media,
+        _ => Baja,
+    };
+
+    public int Total => Critica + Alta + Media + Baja;
+}
+
+/// <summary>
+/// El rosco de severidad de una aplicación (F6.5): cómo se reparte su deuda VIVA.
+/// <para>
+/// Cuenta solo los hallazgos <b>activos</b>. Los resueltos y los silenciados no son deuda —uno
+/// se arregló y del otro se decidió que no se arregla—, así que sumarlos aquí convertiría la
+/// foto de lo que queda por hacer en un histórico de todo lo que hubo.
+/// </para>
+/// </summary>
+public sealed record SeverityDonut(string Slug, string Name, SeverityChips Active)
+{
+    public int Total => Active.Total;
+
+    /// <summary>
+    /// Una app sin activos NO se omite de la fila: se dibuja vacía. Que una aplicación esté
+    /// limpia es un dato, y esconderla la haría indistinguible de una que nadie ha auditado.
+    /// </summary>
+    public bool HasData => Total > 0;
+
+    public int Of(Severity severity) => Active.Of(severity);
+}
 
 /// <summary>
 /// Un punto del eje X: su etiqueta y lo que aportó cada app en el.
@@ -115,6 +148,7 @@ public sealed record MetricsDashboard(
     bool ResolutionSeriesHasOthers,
     IReadOnlyList<SeriesPoint> Resolutions,
     IReadOnlyList<CoverageDonut> Coverage,
+    IReadOnlyList<SeverityDonut> Severity,
     IReadOnlyList<FlowBucket> Flow,
     IReadOnlyList<SessionRow> Sessions)
 {
@@ -253,8 +287,19 @@ public sealed class MetricsQuery
         int cyclePending = 0;
         int cycleLarge = 0;
         var donuts = new List<CoverageDonut>();
+        var severities = new List<SeverityDonut>();
         foreach (AppData app in scope)
         {
+            // El reparto por severidad NO mira el periodo: los activos son la foto de HOY, igual
+            // que el tile de arriba. Recortarlos por el rango daría una deuda más pequeña que la
+            // real cada vez que alguien eligiera «4 semanas».
+            var live = app.Findings.Where(f => f.Status == FindingStatus.Activo).ToList();
+            severities.Add(new SeverityDonut(app.Slug, app.Name, new SeverityChips(
+                live.Count(f => f.Severity == Severity.Critica),
+                live.Count(f => f.Severity == Severity.Alta),
+                live.Count(f => f.Severity == Severity.Media),
+                live.Count(f => f.Severity == Severity.Baja))));
+
             IReadOnlyList<InventoryUnit> units =
                 app.Inventory?.Units ?? (IReadOnlyList<InventoryUnit>)Array.Empty<InventoryUnit>();
             int audited = units.Count(u => u.State == UnitState.Auditada);
@@ -304,6 +349,7 @@ public sealed class MetricsQuery
                 .SelectMany(ResolutionEvents)
                 .Count(utc => utc >= bFrom && utc < bTo)),
             donuts.OrderByDescending(d => d.Total).ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList(),
+            severities.OrderByDescending(d => d.Total).ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList(),
             FlowBuckets(findings, buckets),
             SessionRows(scope, inPeriod));
     }
