@@ -4365,3 +4365,56 @@ enseñaba el método ya arreglado: el re-anclaje por símbolo funcionaba y el ve
 - **D-506 — Lo que se verifica a mano.** El caso de aceptación con el hallazgo real: abrir
   BUG-0003 en XBLAST, pulsar «Verificar ahora» y ver el aviso con el veredicto, el estado en
   Resuelto, «Por revisar» retirado y una sola línea nueva en el historial con la evidencia.
+## F6.7 — El aviso del snippet se lee según el ESTADO del hallazgo, no solo según el hash
+
+Fleco del parte anterior. Con BUG-0003 ya resuelto, la ficha seguía sacando la franja ámbar «el
+código de la línea X ya no es el que se auditó… Verifica para confirmarlo». Sobre un hallazgo
+resuelto esa frase dice justo lo contrario de lo que ha pasado: el código de la línea ya no es el
+que se auditó **porque se arregló**.
+
+- **D-507 — El anclaje dice QUÉ relación hay; el estado dice si eso es un problema.** Son dos
+  preguntas distintas y el lector del snippet solo contestaba la primera. «El hash ya no casa y el
+  símbolo sigue» es el mismo hecho en los tres estados: sobre un activo es deriva sin verificar
+  —hay que atenderla—, sobre un resuelto es el arreglo, y sobre un silenciado no es nada, porque
+  se decidió no tocarlo. `SnippetReader.ForFinding` es la capa que aplica esa lectura; las
+  sobrecargas de `Read` se quedan siendo el anclaje a secas y siguen sin saber nada del hallazgo.
+
+- **D-508 — El aviso se parte en HECHO y ACCIÓN, y solo el hecho sobrevive fuera de lo activo.**
+  Tres de los nueve avisos llevaban pegada una llamada a la acción («Verifica para re-anclarlo o
+  cerrarlo»), y era ella la que no tenía sentido en un hallazgo que ya no pide nada. Partirlos en
+  origen —`Notice` es lo que se pinta, `Fact` es el hecho sin la petición— evita la alternativa,
+  que era recortar la frase a posteriori buscando dónde empieza el «Verifica». Un texto que se
+  compone bien no hay que descoserlo después.
+
+- **D-509 — Resuelto: la nota del arreglo, y con código delante.** «Resuelto — el código actual
+  incluye el arreglo (verificado en {commit}, {fecha})», con el commit y la fecha de la resolución,
+  no los del último avistamiento: lo que se está sellando es el arreglo. El snippet sigue
+  enseñando el código actual exactamente como hasta ahora — cambia lo que se dice encima, no lo
+  que se ve debajo.
+
+- **D-510 — Sin código que enseñar, la nota positiva sería una afirmación sin respaldo.** Un
+  resuelto cuyo fichero ya no está en el clon no permite decir «el código actual incluye el
+  arreglo»: no hay código actual que mirar. Ahí se escribe el sello —«Resuelto en {commit} el
+  {fecha}»— seguido del hecho, y se acaba. Sin la petición de verificar, que es lo único que
+  sobraba.
+
+- **D-511 — Silenciado: ni aviso ni nota, con una excepción declarada.** Se decidió no arreglarlo,
+  así que la deriva del código no le pide nada a nadie y la franja desaparece. La excepción es el
+  panel VACÍO: cuando no hay código que enseñar —sin clon, sin ubicación, fichero borrado— el
+  hecho se conserva, porque sin él la ficha enseñaría un hueco sin decir por qué. Se retira el
+  aviso, no la explicación.
+
+- **D-512 — Y el tono es parte del mensaje.** La franja llevaba el ámbar de precaución cableado en
+  el XAML, así que aunque el texto cambiara el color seguía diciendo «cuidado». `SnippetTone`
+  —`Aviso` | `Nota`— viaja con el panel y el estilo lo conmuta con un `DataTrigger`: el ámbar se
+  queda intacto para lo que hay que atender, y lo demás se pinta neutro con los tokens del tema.
+  El botón «Verificar ahora» de la franja se retira con el mismo criterio: `CanVerify` nace de la
+  regla del anclaje (`OffersVerify`) y el estado puede retirarlo, nunca añadirlo. El botón de la
+  ficha no se toca — verificar un resuelto sigue siendo legítimo, lo que no es legítimo es que lo
+  pida un aviso.
+
+- **D-513 — Lo que queda probado (4 tests).** La MISMA deriva —hash perdido, símbolo presente—
+  leída desde los tres estados: activo → ámbar, con «ya no es el que se auditó» y su acción, y el
+  botón; resuelto → la nota del arreglo palabra por palabra, tono neutro, sin acción y con el
+  snippet enseñando el código nuevo; silenciado → sin franja, con el código igualmente delante. Y
+  el cuarto, el resuelto sin código: el sello, el hecho, y ni un «Verifica».

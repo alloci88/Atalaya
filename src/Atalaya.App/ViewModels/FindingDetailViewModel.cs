@@ -160,14 +160,24 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     [ObservableProperty] private string _snippetPath = string.Empty;
     [ObservableProperty] private SnippetState _snippetState = SnippetState.SinUbicacion;
 
+    /// <summary>
+    /// Cómo se pinta la franja de encima del código (F6.7): ámbar cuando avisa de algo que hay que
+    /// atender, neutra cuando solo informa. Lo decide el ESTADO del hallazgo, no el anclaje.
+    /// </summary>
+    [ObservableProperty] private SnippetTone _snippetTone = SnippetTone.Aviso;
+
+    /// <summary>
+    /// El aviso lleva «Verificar ahora» solo cuando verificar arregla lo que avisa. Viene del
+    /// panel y ya no se recalcula aquí: sobre un hallazgo resuelto o silenciado no hay nada que
+    /// verificar desde esta franja, y esa decisión es del lector del snippet (F6.7).
+    /// </summary>
+    [ObservableProperty] private bool _snippetNoticeOffersVerify;
+
     /// <summary>Hay código que pintar. Si no, el panel se retira y queda solo el aviso.</summary>
     public bool HasSnippet => Snippet.Length > 0;
 
     /// <summary>Hay algo que advertir sobre el código antes de que se lea.</summary>
     public bool HasSnippetNotice => SnippetNotice.Length > 0;
-
-    /// <summary>El aviso lleva «Verificar ahora» solo cuando verificar arregla lo que avisa.</summary>
-    public bool SnippetNoticeOffersVerify => SnippetPanel.OffersVerify(SnippetState);
 
     // ------------------------------------------------------------------ cabecera
 
@@ -386,9 +396,6 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
 
     partial void OnSnippetNoticeChanged(string value) => OnPropertyChanged(nameof(HasSnippetNotice));
 
-    partial void OnSnippetStateChanged(SnippetState value)
-        => OnPropertyChanged(nameof(SnippetNoticeOffersVerify));
-
     private void RaiseDerived()
     {
         OnPropertyChanged(nameof(IsDisputed));
@@ -558,12 +565,16 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     private void LoadSnippet(Finding f)
     {
         Location? loc = f.Locations.FirstOrDefault();
-        SnippetPanel panel = SnippetReader.Read(
-            _machines.Load().ClonePathFor(Slug), loc, f.LastConfirmed.Commit,
-            SymbolAnchor.Candidates(f.Symbol, f.Title));
+
+        // F6.7: el panel se pide POR HALLAZGO, no por ubicación. El anclaje dice qué relación hay
+        // entre el clon y lo que se auditó; el estado dice si eso es un problema — y sobre un
+        // resuelto no lo es, porque ese cambio en el código es precisamente el arreglo.
+        SnippetPanel panel = SnippetReader.ForFinding(_machines.Load().ClonePathFor(Slug), f);
 
         SnippetPath = loc?.Path ?? string.Empty;
         SnippetState = panel.State;
+        SnippetTone = panel.Tone;
+        SnippetNoticeOffersVerify = panel.CanVerify;
         SnippetFirstLine = panel.FirstLine;
         SnippetHighlightLine = panel.HighlightLine;
         SnippetNotice = panel.Notice;

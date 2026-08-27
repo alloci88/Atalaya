@@ -215,14 +215,41 @@
                         </Grid>
 
                         <!-- Nunca enseñar código viejo como si fuera actual: cuando el ancla no
-                             casa, el aviso va ENCIMA y trae la acción que lo arregla. -->
+                             casa, el aviso va ENCIMA y trae la acción que lo arregla.
+
+                             Y el TONO lo decide el estado del hallazgo (F6.7): ámbar mientras haya
+                             algo que atender, neutro cuando la franja solo informa. Un resuelto
+                             pintado de ámbar decía «cuidado» de un cambio que era el arreglo. -->
                         <Border CornerRadius="6" Padding="10,7" Margin="0,0,0,8"
-                                Background="{DynamicResource SystemFillColorCautionBackgroundBrush}"
                                 Visibility="{Binding HasSnippetNotice, Converter={StaticResource BoolToVisibility}}">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background"
+                                            Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SnippetTone}" Value="Nota">
+                                            <Setter Property="Background"
+                                                    Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="{Binding SnippetNotice}" TextWrapping="Wrap" FontSize="11.5"
-                                           VerticalAlignment="Center"
-                                           Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                                           VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground"
+                                                    Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SnippetTone}" Value="Nota">
+                                                    <Setter Property="Foreground"
+                                                            Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                                 <ui:Button Content="Verificar ahora" Command="{Binding VerifyCommand}"
                                            Appearance="Secondary" Padding="10,3" FontSize="11"
                                            IsEnabled="{Binding CanAudit}"

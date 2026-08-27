@@ -632,6 +632,91 @@ public sealed class FindingDetailTests : IDisposable
         vm.SnippetHighlightLine.Should().Be(LineaDelHallazgo);
     }
 
+    // ------------------------------------------------- F6.7: el aviso depende del ESTADO
+
+    /// <summary>
+    /// La MISMA deriva del código, leída desde los tres estados. El anclaje es idéntico en los
+    /// tres —el hash ya no casa y el símbolo sigue— y lo que cambia es lo que eso SIGNIFICA:
+    /// sobre un hallazgo vivo es deriva sin verificar, sobre uno resuelto es el arreglo, y sobre
+    /// uno silenciado no es nada, porque se decidió no tocarlo.
+    /// </summary>
+    private Finding SeedConDeriva(FindingStatus status)
+    {
+        Finding f = Seed(status: status);
+        f.Symbol = "Repositorio.Guardar";
+        _hub.Store.WriteFinding("alpha", f);
+
+        string abs = Path.Combine(_clone, "src", "Repositorio.cs");
+        File.WriteAllText(abs, Fuente.Replace(
+            "var stream = File.OpenWrite(dato);", "using var stream = File.OpenWrite(dato);"));
+        return f;
+    }
+
+    [Fact]
+    public void Activo_la_deriva_del_codigo_se_avisa_en_ambar_y_con_su_accion()
+    {
+        FindingDetailViewModel vm = Open(SeedConDeriva(FindingStatus.Activo));
+
+        vm.SnippetState.Should().Be(SnippetState.Reanclado);
+        vm.SnippetTone.Should().Be(SnippetTone.Aviso);
+        vm.SnippetNotice.Should().Contain("ya no es el que se auditó");
+        vm.SnippetNotice.Should().Contain("Verifica para confirmarlo");
+        vm.SnippetNoticeOffersVerify.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// El fleco del parte de F6.6: sobre un RESUELTO el aviso ámbar seguía saliendo. Que el código
+    /// de la línea ya no sea el que se auditó es, en este estado, exactamente lo que se esperaba —
+    /// es el arreglo—, así que el aviso se sustituye por la nota del estado y desaparece la acción.
+    /// </summary>
+    [Fact]
+    public void Resuelto_el_aviso_de_deriva_se_sustituye_por_la_nota_del_arreglo()
+    {
+        FindingDetailViewModel vm = Open(SeedConDeriva(FindingStatus.Resuelto));
+
+        vm.SnippetState.Should().Be(SnippetState.Reanclado, "el anclaje es el mismo; lo que cambia es la lectura");
+        vm.Snippet.Should().Contain("using var stream", "el snippet sigue enseñando el código actual");
+
+        vm.SnippetTone.Should().Be(SnippetTone.Nota);
+        vm.SnippetNotice.Should().Be(
+            $"Resuelto — el código actual incluye el arreglo (verificado en abc, "
+            + $"{DateTimeOffset.UtcNow.ToLocalTime():dd/MM/yyyy}).");
+        vm.SnippetNotice.Should().NotContain("ya no es el que se auditó");
+        vm.SnippetNoticeOffersVerify.Should().BeFalse("un resuelto no pide que lo verifiquen desde aquí");
+    }
+
+    [Fact]
+    public void Silenciado_no_se_dice_nada_encima_del_codigo()
+    {
+        FindingDetailViewModel vm = Open(SeedConDeriva(FindingStatus.Silenciado));
+
+        vm.Snippet.Should().Contain("using var stream", "el código se sigue enseñando");
+        vm.HasSnippetNotice.Should().BeFalse("se decidió no arreglarlo: la deriva no le pide nada a nadie");
+        vm.SnippetTone.Should().Be(SnippetTone.Nota);
+        vm.SnippetNoticeOffersVerify.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Sin código delante, la nota positiva sería una afirmación sin respaldo. Se dice qué pasó y
+    /// por qué el panel está vacío — y nunca «Verifica para re-anclar», que es lo que un hallazgo
+    /// resuelto ya no necesita.
+    /// </summary>
+    [Fact]
+    public void Resuelto_sin_codigo_que_ensenar_dice_el_sello_y_el_hecho_sin_pedir_nada()
+    {
+        Finding f = Seed(status: FindingStatus.Resuelto);
+        File.Delete(Path.Combine(_clone, "src", "Repositorio.cs"));
+
+        FindingDetailViewModel vm = Open(f);
+
+        vm.HasSnippet.Should().BeFalse();
+        vm.SnippetNotice.Should().StartWith("Resuelto en abc el ");
+        vm.SnippetNotice.Should().Contain("El fichero ya no está en el clon: src/Repositorio.cs.");
+        vm.SnippetNotice.Should().NotContain("Verifica");
+        vm.SnippetTone.Should().Be(SnippetTone.Nota);
+        vm.SnippetNoticeOffersVerify.Should().BeFalse();
+    }
+
     // =========================================================== §6 toasts y estados pegados
 
     /// <summary>

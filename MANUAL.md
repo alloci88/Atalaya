@@ -77,6 +77,9 @@ asignar, cambiar severidad, resolver a mano con justificación, cerrar una dispu
   última vez que se vio el hallazgo, un «arreglado» se degrada a «presente».
 - El aviso dice siempre **qué ha pasado** — el veredicto, o la causa concreta si no se
   pudo verificar.
+- La franja de encima del código **depende del estado**: en los activos avisa en ámbar
+  de la deriva sin verificar y trae la acción; en los resueltos dice que el arreglo está;
+  en los silenciados no dice nada.
 - En los hallazgos de tamaño el botón dice **Medir ahora**: los cuenta la aplicación
   leyendo el fichero, sin consultar al modelo y sin gastar tokens.
 

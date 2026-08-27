@@ -1,3 +1,4 @@
+using Atalaya.Domain;
 using Atalaya.Domain.Anchoring;
 using Atalaya.Domain.Model;
 
@@ -37,8 +38,25 @@ public enum SnippetState
 }
 
 /// <summary>
-/// Lo que el panel de código enseña y lo que avisa encima. Las líneas son del <b>fichero</b>.
+/// Cómo se lee la franja que va encima del código (F6.7). No es decoración: dice si lo que hay
+/// escrito ahí pide algo o solo informa.
 /// </summary>
+public enum SnippetTone
+{
+    /// <summary>Deriva sin verificar sobre un hallazgo vivo: ámbar, y con la acción que la cierra.</summary>
+    Aviso,
+
+    /// <summary>Información sobre un hallazgo que ya no pide nada. Neutra, y sin botón.</summary>
+    Nota,
+}
+
+/// <summary>
+/// Lo que el panel de código enseña y lo que dice encima. Las líneas son del <b>fichero</b>.
+/// </summary>
+/// <param name="Notice">
+/// El texto tal y como se pinta, ya resuelto para el estado del hallazgo. Ver
+/// <see cref="SnippetReader.ForFinding"/>.
+/// </param>
 public sealed record SnippetPanel(
     SnippetState State,
     string Text,
@@ -50,19 +68,30 @@ public sealed record SnippetPanel(
     public static SnippetPanel Empty(SnippetState state, string notice)
         => new(state, string.Empty, 1, 0, null, notice);
 
+    /// <summary>
+    /// El aviso SIN su llamada a la acción: el hecho a secas. Es lo que queda cuando el hallazgo
+    /// ya no está activo y por tanto no hay nada que pedirle a nadie (F6.7).
+    /// </summary>
+    public string Fact { get; init; } = Notice;
+
+    /// <summary>El tono con el que se pinta la franja. Por defecto, el de un hallazgo vivo.</summary>
+    public SnippetTone Tone { get; init; } = SnippetTone.Aviso;
+
     public bool HasCode => Text.Length > 0;
 
     public bool HasNotice => Notice.Length > 0;
 
     /// <summary>
-    /// El aviso lleva un botón «Verificar ahora» solo cuando verificar arregla algo: re-anclar la
-    /// ubicación o pedir veredicto. Sin clon, verificar no puede hacer nada desde esta máquina.
+    /// El aviso lleva «Verificar ahora» solo cuando verificar arregla algo: re-anclar la ubicación
+    /// o pedir veredicto. Sin clon, verificar no puede hacer nada desde esta máquina — y sobre un
+    /// hallazgo resuelto o silenciado tampoco, que es lo que el estado decide en
+    /// <see cref="SnippetReader.ForFinding"/>.
     /// </summary>
-    public bool CanVerify => OffersVerify(State);
+    public bool CanVerify { get; init; } = OffersVerify(State);
 
     /// <summary>
-    /// La misma regla, sin panel delante: la ficha la necesita para decidir si pinta el botón, y
-    /// tenerla escrita dos veces era lo que dejaba los estados nuevos de F5.6 sin su «Verificar».
+    /// La regla del ANCLAJE, sin panel delante: qué estados del código se arreglan verificando. El
+    /// estado del hallazgo puede retirarla después, nunca añadirla.
     /// </summary>
     public static bool OffersVerify(SnippetState state)
         => state is SnippetState.Cambiado or SnippetState.Movido or SnippetState.Reanclado
@@ -92,11 +121,79 @@ public sealed record SnippetPanel(
 /// solo: lo emite el LLM al reportar y es aproximado —en el hub real se desviaba hasta 25 líneas—,
 /// de modo que anclarse a él a ciegas era lo que hacía resaltar comentarios de documentación.
 /// </para>
+/// <para>
+/// <b>Y el aviso depende del ESTADO, no solo del hash</b> (F6.7). El anclaje dice qué relación hay
+/// entre el clon y lo que se auditó; el estado del hallazgo dice si eso es un problema. «El código
+/// de la línea X ya no es el que se auditó» es un aviso legítimo sobre un hallazgo activo —hay
+/// deriva sin verificar— y un sinsentido sobre uno resuelto, donde ese cambio es justamente el
+/// arreglo. Ver <see cref="ForFinding"/>.
+/// </para>
 /// </summary>
 public static class SnippetReader
 {
     public static SnippetPanel Read(string? clonePath, Location? loc, string? anchoredCommit)
         => Read(clonePath, loc, anchoredCommit, Array.Empty<string>());
+
+    /// <summary>
+    /// El panel de un hallazgo concreto: el anclaje, y encima la lectura que corresponde a su
+    /// ESTADO (F6.7). Es la entrada que usa la ficha; las sobrecargas de <see cref="Read"/> son la
+    /// capa de anclaje a secas y no saben nada del hallazgo.
+    /// </summary>
+    public static SnippetPanel ForFinding(string? clonePath, Finding finding)
+    {
+        Location? loc = finding.Locations.FirstOrDefault();
+        SnippetPanel panel = Read(
+            clonePath, loc, finding.LastConfirmed.Commit,
+            SymbolAnchor.Candidates(finding.Symbol, finding.Title));
+
+        return finding.Status switch
+        {
+            // RESUELTO. Que el código de la línea ya no sea el que se auditó es exactamente lo que
+            // se esperaba: es el arreglo. El aviso de deriva se sustituye por la nota del estado, y
+            // no queda nada que verificar desde esta franja.
+            FindingStatus.Resuelto => panel with
+            {
+                Notice = Resolved(panel, finding, loc),
+                Tone = SnippetTone.Nota,
+                CanVerify = false,
+            },
+
+            // SILENCIADO. Se decidió no arreglarlo: la deriva del código no le pide nada a nadie.
+            // Lo único que sobrevive es la explicación de un panel VACÍO — sin ella la ficha
+            // enseñaría un hueco sin decir por qué.
+            FindingStatus.Silenciado => panel with
+            {
+                Notice = panel.HasCode ? string.Empty : panel.Fact,
+                Tone = SnippetTone.Nota,
+                CanVerify = false,
+            },
+
+            _ => panel,
+        };
+    }
+
+    /// <summary>
+    /// Lo que se lee encima del código de un hallazgo resuelto. Con código delante, la nota del
+    /// arreglo; sin él, el hecho a secas precedido del sello de la resolución — nunca una llamada a
+    /// verificar, que es lo que este estado ya no necesita.
+    /// </summary>
+    private static string Resolved(SnippetPanel panel, Finding finding, Location? loc)
+    {
+        ResolutionStamp? stamp = finding.Resolved;
+        string sha = ShortSha(stamp?.Commit ?? finding.LastConfirmed.Commit);
+        string when = (stamp?.Utc ?? finding.LastConfirmed.Utc).ToLocalTime().ToString("dd/MM/yyyy");
+
+        if (panel.HasCode)
+        {
+            return $"Resuelto — el código actual incluye el arreglo (verificado en {sha}, {when}).";
+        }
+
+        // Sin código que enseñar la nota positiva sería una afirmación sin respaldo: se dice qué
+        // pasó y por qué el panel está vacío, y ahí se acaba.
+        return panel.Fact.Length == 0
+            ? $"Resuelto en {sha} el {when}."
+            : $"Resuelto en {sha} el {when}. {panel.Fact}";
+    }
 
     /// <inheritdoc cref="Read(string?,Location?,string?)"/>
     /// <param name="symbols">
@@ -127,9 +224,10 @@ public static class SnippetReader
         {
             if (!File.Exists(abs))
             {
-                return SnippetPanel.Empty(
-                    SnippetState.FicheroNoEncontrado,
-                    $"El fichero ya no está en el clon: {loc.Path}. Verifica para re-anclar el hallazgo.");
+                return Panel(
+                    SnippetPanel.Empty(SnippetState.FicheroNoEncontrado, string.Empty),
+                    $"El fichero ya no está en el clon: {loc.Path}.",
+                    "Verifica para re-anclar el hallazgo.");
             }
 
             lines = File.ReadAllLines(abs);
@@ -148,7 +246,7 @@ public static class SnippetReader
                 "El fichero está vacío en el clon: el código ha cambiado desde la última confirmación.");
         }
 
-        (SnippetState state, int line, string notice) = Locate(lines, loc, symbols, anchoredCommit);
+        (SnippetState state, int line, string fact, string action) = Locate(lines, loc, symbols, anchoredCommit);
 
         // Aunque el ancla case letra por letra, si apunta a documentación se baja al código del
         // miembro (D-224): el auditor a veces señala el `/// <param>` que describe el defecto, y
@@ -166,11 +264,25 @@ public static class SnippetReader
         // peor que admitir que se perdió el rastro (D-225).
         int highlight = state == SnippetState.NoLocalizado ? 0 : line;
 
-        return new SnippetPanel(state, text, span.StartLine, highlight, span.Member, notice);
+        return Panel(new SnippetPanel(state, text, span.StartLine, highlight, span.Member, string.Empty), fact, action);
     }
 
-    /// <summary>Dónde está ahora el código del hallazgo, y qué hay que avisar si no está donde estaba.</summary>
-    private static (SnippetState State, int Line, string Notice) Locate(
+    /// <summary>
+    /// Junta el hecho y su llamada a la acción en el texto que se pinta, y guarda el hecho aparte
+    /// para quien no pueda pedir nada (F6.7).
+    /// </summary>
+    private static SnippetPanel Panel(SnippetPanel panel, string fact, string action)
+        => panel with
+        {
+            Notice = action.Length == 0 ? fact : $"{fact} {action}",
+            Fact = fact,
+        };
+
+    /// <summary>
+    /// Dónde está ahora el código del hallazgo, qué hay que decir si no está donde estaba, y qué
+    /// se le pide al usuario — separado, porque no a todo hallazgo se le puede pedir algo.
+    /// </summary>
+    private static (SnippetState State, int Line, string Fact, string Action) Locate(
         string[] lines, Location loc, IReadOnlyList<string> symbols, string? anchoredCommit)
     {
         bool inRange = loc.Line >= 1 && loc.Line <= lines.Length;
@@ -179,7 +291,7 @@ public static class SnippetReader
         {
             if (inRange && CodeAnchor.ComputeSnippetHash(lines[loc.Line - 1]) == loc.SnippetHash)
             {
-                return (SnippetState.Anclado, loc.Line, string.Empty);
+                return (SnippetState.Anclado, loc.Line, string.Empty, string.Empty);
             }
 
             int moved = LocationAnchor.FindByHash(lines, loc.SnippetHash, loc.Line);
@@ -187,7 +299,7 @@ public static class SnippetReader
             {
                 return (SnippetState.Movido, moved,
                     $"El hallazgo se anotó en la línea {loc.Line} y su código está en la {moved}. "
-                    + "Se muestra la posición actual.");
+                    + "Se muestra la posición actual.", string.Empty);
             }
         }
         else if (inRange)
@@ -195,10 +307,10 @@ public static class SnippetReader
             // Sin ancla no hay con qué contrastar: vale la línea guardada, pero nunca un comentario.
             int code = SymbolAnchor.FirstCodeLine(lines, loc.Path, loc.Line);
             return code == loc.Line
-                ? (SnippetState.Anclado, loc.Line, string.Empty)
+                ? (SnippetState.Anclado, loc.Line, string.Empty, string.Empty)
                 : (SnippetState.Reanclado, code,
                     $"La línea {loc.Line} no es código ejecutable. Se resalta la primera línea de "
-                    + "código del miembro que la contiene.");
+                    + "código del miembro que la contiene.", string.Empty);
         }
 
         // El código exacto no aparece: queda el símbolo.
@@ -208,13 +320,13 @@ public static class SnippetReader
             return (SnippetState.Reanclado, hit.Line,
                 $"El código de la línea {loc.Line} ya no es el que se auditó (commit "
                 + $"{ShortSha(anchoredCommit)}). El hallazgo se ha re-anclado a «{hit.Member}», que "
-                + "es el miembro que nombra. Verifica para confirmarlo.");
+                + "es el miembro que nombra.", "Verifica para confirmarlo.");
         }
 
         return (SnippetState.NoLocalizado, inRange ? loc.Line : lines.Length,
             $"No localizado: ni el código anclado en la línea {loc.Line} ni el símbolo del hallazgo "
             + $"aparecen ya en {loc.Path} (commit anclado {ShortSha(anchoredCommit)}). No se resalta "
-            + "ninguna línea. Verifica para re-anclarlo o cerrarlo.");
+            + "ninguna línea.", "Verifica para re-anclarlo o cerrarlo.");
     }
 
     private static string ShortSha(string? sha)
