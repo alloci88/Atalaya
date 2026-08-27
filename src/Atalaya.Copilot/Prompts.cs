@@ -255,19 +255,48 @@ public static class PromptComposer
     {
         var sb = new StringBuilder();
         sb.AppendLine("Eres un verificador. Para cada hallazgo, decide su veredicto y llama a submit_verdict(findingUlid, verdict, evidence).");
-        sb.AppendLine("verdict ∈ {confirmado, resuelto, no-verificable}. Usa el ULID exacto que se te da.");
+        sb.AppendLine("verdict ∈ {confirmado, resuelto, no-verificable, no-es-defecto}. Usa el ULID exacto que se te da.");
+        sb.AppendLine();
+
+        // F6.6 — LA REGLA QUE FALTABA. Se juzga el código que hay AHORA; no se busca el de antes.
+        // Que el fragmento auditado haya desaparecido es el aspecto NORMAL de un arreglo, y leerlo
+        // como «no se puede verificar» era justo lo que impedía cerrar un hallazgo ya arreglado.
+        sb.AppendLine("Juzga SIEMPRE el código que se te muestra, que es el que hay ahora en el clon.");
+        sb.AppendLine("Si el fragmento que se auditó ya no aparece, eso NO es motivo de «no-verificable»:");
+        sb.AppendLine("es lo que pasa cuando algo se arregla. Compara el código actual con lo que el");
+        sb.AppendLine("hallazgo describe y con lo que recomendaba, y decide:");
+        sb.AppendLine("  · confirmado     — el defecto sigue en el código que ves.");
+        sb.AppendLine("  · resuelto       — el código que ves ya no tiene el defecto.");
+        sb.AppendLine("  · no-es-defecto  — nunca lo fue.");
+        sb.AppendLine("  · no-verificable — solo si el código que ves no permite decidirlo.");
+        sb.AppendLine("La evidencia es obligatoria: cita lo que ves y por qué te lleva a ese veredicto.");
         sb.AppendLine();
         foreach (VerifyTarget t in targets)
         {
             sb.AppendLine($"- ULID {t.FindingUlid} · {t.Path}:{t.Line} · {t.Title}");
             sb.AppendLine($"    {t.Description}");
+            if (!string.IsNullOrWhiteSpace(t.Recommendation))
+            {
+                sb.AppendLine($"    lo que se recomendó: {t.Recommendation.Trim()}");
+            }
+
             if (!string.IsNullOrEmpty(t.Snippet))
             {
-                sb.AppendLine("    snippet anclado:");
+                sb.AppendLine("    " + BasisCaption(t) + ":");
                 sb.AppendLine("    " + t.Snippet.Replace("\n", "\n    "));
             }
         }
 
         return sb.ToString();
     }
+
+    /// <summary>Qué es el fragmento que va debajo, dicho con todas las letras (F6.6).</summary>
+    private static string BasisCaption(VerifyTarget t) => t.Basis switch
+    {
+        VerifyBasis.Simbolo =>
+            $"el código anclado YA NO ESTÁ; este es el código ACTUAL de «{t.Member ?? "el miembro"}»",
+        VerifyBasis.Unidad =>
+            "ni el código anclado ni el símbolo aparecen ya; esta es la unidad tal y como está AHORA",
+        _ => "snippet anclado (sigue siendo, letra por letra, el que se auditó)",
+    };
 }

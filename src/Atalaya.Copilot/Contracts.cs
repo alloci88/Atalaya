@@ -240,8 +240,43 @@ public sealed record ReportVerdictResult(bool Accepted, string? Error = null);
 /// <summary>Resultado batched de <c>report_verdicts</c>, en el mismo orden que la entrada.</summary>
 public sealed record ReportVerdictsResult(IReadOnlyList<ReportVerdictResult> Results);
 
+/// <summary>De dónde sale el código que se le enseña al verificador (F6.6).</summary>
+public enum VerifyBasis
+{
+    /// <summary>El ancla exacta sigue casando: el fragmento es literalmente el que se auditó.</summary>
+    Anclado,
+
+    /// <summary>
+    /// El ancla exacta ya no está y el fragmento es el <b>código actual del miembro</b> que el
+    /// hallazgo nombra. Es el caso normal de un arreglo, no el de un rastro perdido.
+    /// </summary>
+    Simbolo,
+
+    /// <summary>Ni el ancla ni el símbolo: se juzga sobre la unidad entera, que sí cambió.</summary>
+    Unidad,
+}
+
 /// <summary>A verify target (§5.4): a finding to re-check, re-anchored by snippet.</summary>
-public sealed record VerifyTarget(string FindingUlid, string Path, int Line, string? Snippet, string Title, string Description);
+/// <param name="Basis">
+/// Qué es <paramref name="Snippet"/> (F6.6). Sin este dato el prompt no puede distinguir «este es
+/// el código que se auditó» de «el código que se auditó ya no existe y este es el que hay ahora»,
+/// y son preguntas distintas: la segunda es la que se contesta «arreglado».
+/// </param>
+/// <param name="Member">El miembro al que se re-ancló, cuando se re-ancló. Solo para nombrarlo.</param>
+/// <param name="Recommendation">
+/// Lo que el hallazgo pedía hacer. Es el criterio contra el que se juzga si el código de ahora lo
+/// cumple; sin ella el verificador tiene que adivinar qué contaba como arreglo.
+/// </param>
+public sealed record VerifyTarget(
+    string FindingUlid,
+    string Path,
+    int Line,
+    string? Snippet,
+    string Title,
+    string Description,
+    VerifyBasis Basis = VerifyBasis.Anclado,
+    string? Member = null,
+    string Recommendation = "");
 
 public sealed record VerifyRequest(string Prompt, IReadOnlyList<VerifyTarget> Targets);
 

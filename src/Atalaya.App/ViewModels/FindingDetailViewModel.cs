@@ -801,10 +801,11 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         try
         {
             VerifyOutcome outcome = await Task.Run(() => _verify.RunAsync(Slug, new[] { id }, CancellationToken.None));
-            _toasts.Show(outcome.Measured
-                ?? (outcome.Applied > 0
-                    ? "Verificado: el veredicto está aplicado y en el historial."
-                    : "El verify no pudo emitir veredicto. Mira el historial."));
+
+            // F6.6 — el aviso dice el RESULTADO, no si hubo resultado. «El verify no pudo emitir
+            // veredicto» era literalmente cierto y completamente inútil: no decía qué había pasado
+            // ni qué hacer, y el usuario lo leyó tres veces sin enterarse de nada.
+            _toasts.Show(outcome.Toast);
         }
         catch (Exception ex)
         {

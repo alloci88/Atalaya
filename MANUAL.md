@@ -68,6 +68,15 @@ asignar, cambiar severidad, resolver a mano con justificación, cerrar una dispu
 **generar prompt de arreglo** al portapapeles.
 
 - **Verificar ahora** vuelve a preguntar al auditor si el defecto sigue ahí.
+- Un arreglo se confirma **juzgando el código que hay ahora**, no buscando el código
+  viejo: que el fragmento auditado haya desaparecido es lo que pasa cuando algo se
+  arregla, así que si el método sigue ahí se le enseña al auditor tal y como está hoy.
+  Solo se dice «no localizado» cuando no queda nada que juzgar — ni el fragmento, ni el
+  método, ni una unidad que haya cambiado.
+- Resolver sigue exigiendo **evidencia de cambio**: si la unidad es la misma que la
+  última vez que se vio el hallazgo, un «arreglado» se degrada a «presente».
+- El aviso dice siempre **qué ha pasado** — el veredicto, o la causa concreta si no se
+  pudo verificar.
 - En los hallazgos de tamaño el botón dice **Medir ahora**: los cuenta la aplicación
   leyendo el fichero, sin consultar al modelo y sin gastar tokens.
 

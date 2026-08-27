@@ -219,6 +219,62 @@ public sealed class Finding
         History.Add(new HistoryEntry(utc, FindingEvent.Unsilenced, by, detail));
     }
 
+    /// <summary>
+    /// Anota un evento en el historial <b>sin eco</b> (F6.6): si el anterior es exactamente el
+    /// mismo —mismo evento, mismo autor, mismo detalle— no se añade una línea nueva; se actualiza
+    /// la que ya está con la hora de ahora y se cuenta («×3»).
+    /// <para>
+    /// Nace de pulsar «Verificar ahora» tres veces seguidas sobre el mismo hallazgo: el historial
+    /// se llenó de tres líneas idénticas que decían tres veces lo mismo. Un historial es la lista
+    /// de lo que le ha PASADO al hallazgo, y repetir la misma pregunta no le pasa nada nuevo.
+    /// </para>
+    /// <para>
+    /// Solo colapsa contra el ÚLTIMO evento: en cuanto pasa cualquier otra cosa entremedias, la
+    /// repetición vuelve a ser una línea propia — porque entonces sí es información.
+    /// </para>
+    /// </summary>
+    public void Record(HistoryEntry entry)
+    {
+        HistoryEntry? last = History.Count > 0 ? History[^1] : null;
+        string detail = CoreDetail(entry.Detail);
+
+        if (last is null || last.Event != entry.Event
+            || !string.Equals(last.By, entry.By, StringComparison.Ordinal)
+            || !string.Equals(CoreDetail(last.Detail), detail, StringComparison.Ordinal))
+        {
+            History.Add(entry);
+            return;
+        }
+
+        int times = RepeatCount(last.Detail) + 1;
+        History[^1] = last with { Utc = entry.Utc, Detail = $"{detail} (×{times})" };
+    }
+
+    /// <summary>El detalle sin la marca de repetición, que es lo que se compara.</summary>
+    private static string CoreDetail(string? detail)
+    {
+        string d = (detail ?? string.Empty).TrimEnd();
+        int open = d.LastIndexOf(" (×", StringComparison.Ordinal);
+        if (open < 0 || !d.EndsWith(")", StringComparison.Ordinal))
+        {
+            return d;
+        }
+
+        string inside = d[(open + 3)..^1];
+        return inside.Length > 0 && inside.All(char.IsDigit) ? d[..open] : d;
+    }
+
+    /// <summary>Cuántas veces lleva anotado ese evento. Sin marca, una.</summary>
+    private static int RepeatCount(string? detail)
+    {
+        string d = (detail ?? string.Empty).TrimEnd();
+        int open = d.LastIndexOf(" (×", StringComparison.Ordinal);
+        return open >= 0 && d.EndsWith(")", StringComparison.Ordinal)
+               && int.TryParse(d[(open + 3)..^1], out int n) && n > 0
+            ? n
+            : 1;
+    }
+
     /// <summary>Assigns the presentation alias (post-push), preserving any prior alias (§2).</summary>
     public void AssignDisplayId(string displayId)
     {

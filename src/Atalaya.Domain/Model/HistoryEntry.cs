@@ -25,6 +25,20 @@ public enum FindingEvent
 
     /// <summary>Una persona cerró la disputa por gobernanza (F5.1b).</summary>
     DisputeCleared,
+
+    /// <summary>
+    /// Ni el código anclado ni el símbolo del hallazgo aparecen ya donde estaban (F6.6). NO es una
+    /// reapertura: un hallazgo activo no puede reabrirse, y etiquetar así el rastro perdido hacía
+    /// leer «volvió el defecto» donde solo había código movido.
+    /// </summary>
+    NotLocated,
+
+    /// <summary>
+    /// El ancla exacta se perdió pero el <b>símbolo</b> sigue ahí y el hallazgo se re-ancló a él
+    /// (F6.6). Se anota solo cuando el re-anclaje es lo ÚNICO que pasó: si detrás vino un
+    /// veredicto, el veredicto es el evento y esto sería eco.
+    /// </summary>
+    Reanchored,
 }
 
 /// <summary>One immutable entry in a finding's audit trail.</summary>

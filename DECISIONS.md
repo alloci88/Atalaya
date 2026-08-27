@@ -4240,3 +4240,128 @@ aplicación; la otra, qué se encontró y de qué gravedad.
 - **D-490 — Un test ajeno que hubo que afinar.** `La_grafica_trae_cursor_y_tooltip_por_columna`
   exigía `ToolTip = Tip(` en `DonutRing`. Sigue vigilando lo mismo —que cada tramo diga lo que
   vale— pero ahora contra `segment.Tooltip ?? Tip(`, que es la forma que admite las dos filas.
+## F6.6 — «Verificar ahora» no reconocía un arreglo real (parte del 2026-08-27)
+
+BUG-0003 (`HexStringToByteArray`, `errores.calculo.negocio`, XBLAST) se arregló siguiendo la
+recomendación del propio hallazgo — `ArgumentNullException.ThrowIfNull`, longitud par,
+`Convert.FromHexString` —, con commit y push hechos. Al pulsar «Verificar ahora»: aviso «no se
+pudo verificar» sin causa, «Reabierto — no localizado tras cambios del código» tres veces en el
+historial, y el hallazgo intacto en Activo + Por revisar. El banner de la ficha, mientras tanto,
+enseñaba el método ya arreglado: el re-anclaje por símbolo funcionaba y el verify no lo usaba.
+
+### §1 — El diagnóstico
+
+- **D-491 — El verify se rendía en la fase de ANCLAJE, sin llegar a la de juicio.** Buscaba la
+  línea y el hash originales; no los encontraba —porque el código malo se había borrado, que es
+  literalmente lo que significa arreglar algo— y terminaba ahí con «no localizado». El aspecto
+  normal de un arreglo se estaba leyendo como el fracaso de una búsqueda. El hallazgo no llegaba
+  a pasar por delante del auditor ni una sola vez: no es que el veredicto fuera malo, es que no
+  hubo veredicto.
+
+- **D-492 — Y la ficha ya sabía hacerlo bien.** `SnippetReader` tiene desde F5.6 (D-222) la
+  cadena entera —hash en su línea, hash en otra línea, símbolo vía Roslyn, y solo entonces «no
+  localizado»— y por eso el banner enseñaba el método nuevo. El arreglo no era inventar nada:
+  era que el camino de verificar usara el anclaje que el camino de pintar ya usaba.
+
+### §2 — Dos fases, y el anclaje deja de decidir si se pregunta
+
+- **D-493 — Anclar decide QUÉ código se enseña, nunca SI se pregunta.** Esa es la inversión.
+  `VerifyCoordinator.Aim` devuelve un objetivo con su `VerifyBasis` — el fragmento exacto
+  (`Anclado`), el miembro entero cuando el hash ya no casa pero el símbolo sigue (`Simbolo`), o la
+  unidad completa cuando no queda ni símbolo pero la unidad SÍ cambió (`Unidad`)— y solo cuando
+  las tres se agotan se abandona. Antes, un fallo de anclaje era un veredicto; ahora es una
+  elección de encuadre.
+
+- **D-494 — «No localizado» queda reservado para cuando no hay NADA que juzgar.** Ni ancla, ni
+  símbolo, ni una unidad que haya cambiado desde el último avistamiento. Con esas tres puertas
+  cerradas no hay pregunta honrada que hacerle al auditor, y marcar `needsReview` es lo correcto:
+  hace falta una persona. Lo que ya no puede pasar es que se llegue ahí porque el código se
+  arregló.
+
+- **D-495 — El prompt lo dice con todas las letras.** «Si el fragmento que se auditó ya no
+  aparece, eso NO es motivo de no-verificable: es lo que pasa cuando algo se arregla.» Y cada
+  fragmento va rotulado con lo que es —«el código anclado YA NO ESTÁ; este es el código ACTUAL de
+  Hex.HexStringToByteArray»—, porque enseñar código nuevo sin decir que es nuevo invita al modelo
+  a contestar sobre el viejo. Con el fragmento viaja además la **recomendación** del hallazgo: es
+  el criterio contra el que se juzga si lo que hay ahora cuenta como arreglo, y sin ella el
+  verificador tiene que adivinarlo.
+
+- **D-496 — Y el vocabulario se amplía a `no-es-defecto`.** El verify solo ofrecía {confirmado,
+  resuelto, no-verificable}, así que un auditor que quisiera discrepar tenía que colarlo por
+  «resuelto» — exactamente el agujero que F5.1b cerró en la reconciliación. La disputa ya existía
+  en el dominio; lo que faltaba era la casilla. El traductor acepta también el vocabulario de la
+  reconciliación (presente/arreglado): decir lo mismo con la otra palabra no es incumplir.
+
+- **D-497 — La guarda de evidencia de cambio NO se relaja: se REUTILIZA.**
+  `ReconciliationService.UnchangedSinceLastSighting` se llama tal cual desde el verify, con las
+  dos capas de siempre —mismo commit, mismo `contentHash` de la unidad—. Lo que cambia en F6.6 es
+  que ahora se LLEGA hasta ella. Un «arreglado» sobre una unidad que se puede probar que no ha
+  cambiado se sigue degradando a «presente», y la degradación se sigue escribiendo. El sello del
+  verify pasa a llevar el `unitContentHash` del fichero: sin él, la segunda capa de la guarda
+  estaba en el código pero nunca tenía con qué comparar en este camino.
+
+- **D-498 — Y un hallazgo que se resuelve deja de estar «por revisar», sin evento propio.** La
+  duda que esa marca representaba acaba de contestarse. Se retira en silencio porque el evento
+  del resultado es «Resuelto» y una segunda línea diciendo lo mismo con otras palabras es el eco
+  que este parte vino a quitar.
+
+### §3 — El evento se llamaba mal
+
+- **D-499 — Un hallazgo ACTIVO no puede reabrirse.** «Reabierto» significa que algo cerrado
+  vuelve a abrirse (`Finding.Reopen`, que además mueve el estado). Emitirlo sobre un hallazgo que
+  nunca dejó de estar activo le decía al usuario «ha vuelto el defecto» cuando lo que había
+  pasado era que se había perdido un rastro. Dos eventos nuevos: **`NotLocated` («No localizado»,
+  ◌)** y **`Reanchored` («Re-anclado», ⌖)**. Grises los dos en la línea de tiempo: son
+  contabilidad del anclaje, no alarmas.
+
+- **D-500 — `Reanchored` solo se anota cuando el re-anclaje es lo ÚNICO que pasó.** Si detrás
+  viene un veredicto, el veredicto es el evento; anotar los dos convertiría el caso de aceptación
+  —un evento con la evidencia— en dos líneas donde la primera no informa de nada. Se emite
+  cuando el auditor no llegó a pronunciarse sobre un objetivo re-anclado, que es la única
+  situación en la que el historial se quedaría mudo sobre un trabajo que sí se hizo.
+
+- **D-501 — El historial no necesita eco: `Finding.Record`.** Pulsar «Verificar ahora» tres veces
+  seguidas escribía tres líneas idénticas. Repetir una pregunta no le pasa nada nuevo al
+  hallazgo. `Record` colapsa contra el ÚLTIMO evento —mismo evento, mismo autor, mismo detalle— y
+  lo cuenta: «no localizado (×3)», con la hora de la última vez. Solo contra el último: en cuanto
+  pasa cualquier otra cosa entremedias, la repetición vuelve a ser noticia y se anota aparte.
+
+- **D-502 — Y `Finding.Confirm` se queda como estaba, a propósito.** Tres confirmaciones seguidas
+  también son tres líneas iguales, pero ahí cada una incrementa `timesConfirmed` y alimenta la
+  máquina de confianza: son tres observaciones, no un eco. El colapso se aplica solo a las
+  entradas que el camino de verificar escribe a mano. Lo mismo con el `Reopened` que la
+  re-medición emite al retirar «por revisar» (F5.16): es el camino de los hallazgos medidos, y el
+  anti-objetivo de esta tanda era no mezclarlo con este.
+
+### §4 — El aviso sin causa
+
+- **D-503 — «El verify no pudo emitir veredicto» era cierto e inútil.** No decía qué había
+  pasado, ni por qué, ni qué hacer — y el usuario lo leyó tres veces sin enterarse de nada.
+  `VerifyOutcome.Notes` lleva ahora una frase por hallazgo con lo que REALMENTE pasó: el
+  veredicto con su evidencia, la degradación con su razón, el re-anclaje, o la causa concreta de
+  no haber podido verificar. `Toast` las junta y es lo que la ficha enseña. La regla: nunca «no
+  se pudo» a secas.
+
+### §5 — Cobertura
+
+- **D-504 — Lo que queda probado (7 tests nuevos, 1 reescrito).** El caso real completo: ancla
+  perdida + símbolo presente + unidad cambiada → se PREGUNTA (con `Basis = Simbolo`, el miembro
+  nombrado y el fragmento nuevo, sin rastro del viejo) y se resuelve vía Verify con evidencia,
+  `needsReview` limpio y **un solo** evento en el historial. Que el prompt le dice al auditor que
+  juzgue el código de ahora y le pasa la recomendación. La guarda: símbolo presente y unidad sin
+  cambios → «arreglado» degradado a presente. Símbolo desaparecido con unidad cambiada → juicio
+  sobre la unidad entera. Símbolo desaparecido con unidad sin cambios → «No localizado», con su
+  etiqueta y sin «Reabierto». Y el eco: tres verificaciones idénticas dejan una línea «(×3)», y
+  una cuarta tras otro evento vuelve a anotarse aparte.
+
+- **D-505 — Y el test que había que reescribir.** `Verify_lost_anchor_sets_needsReview_not_resolved`
+  cambiaba de fichero entero y esperaba «no localizado»: bajo la regla nueva eso es una unidad
+  cambiada, y una unidad cambiada SÍ se juzga. Ahora sella el `unitContentHash` del contenido
+  nuevo en `lastConfirmed` —el hallazgo se vio por última vez contra ESE fichero— y comprueba lo
+  que siempre quiso comprobar, que es lo único que no ha cambiado: «no localizado» nunca es
+  «resuelto». El nombre lo dice ahora entero:
+  `Verify_lost_anchor_with_nothing_to_judge_sets_needsReview_not_resolved`.
+
+- **D-506 — Lo que se verifica a mano.** El caso de aceptación con el hallazgo real: abrir
+  BUG-0003 en XBLAST, pulsar «Verificar ahora» y ver el aviso con el veredicto, el estado en
+  Resuelto, «Por revisar» retirado y una sola línea nueva en el historial con la evidencia.

@@ -118,7 +118,9 @@ public static class AtalayaJson
             (FindingEvent.Recurrence, "recurrence"),
             (FindingEvent.FixProposed, "fixProposed"),
             (FindingEvent.Disputed, "disputed"),
-            (FindingEvent.DisputeCleared, "disputeCleared")));
+            (FindingEvent.DisputeCleared, "disputeCleared"),
+            (FindingEvent.NotLocated, "notLocated"),
+            (FindingEvent.Reanchored, "reanchored")));
 
         o.Converters.Add(new EnumJsonConverter<TechStack>(
             (TechStack.Unknown, "unknown"),

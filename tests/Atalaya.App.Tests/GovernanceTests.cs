@@ -3,6 +3,7 @@ using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Anchoring;
+using Atalaya.Domain.Hashing;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Inventory;
@@ -122,12 +123,24 @@ public sealed class GovernanceTests : IDisposable
         _hub.Store.TryReadFinding("app", f.Id.ToString())!.Resolved!.Via.Should().Be(ResolutionVia.Verify);
     }
 
+    /// <summary>
+    /// F6.6: el ancla perdida ya NO termina el verify — pero cuando además no hay símbolo ni la
+    /// unidad ha cambiado desde el último avistamiento, no queda nada que juzgar y sigue siendo
+    /// «no localizado». Lo que nunca puede ser es «resuelto», y eso es lo que este test vigila.
+    /// </summary>
     [Fact]
-    public async Task Verify_lost_anchor_sets_needsReview_not_resolved()
+    public async Task Verify_lost_anchor_with_nothing_to_judge_sets_needsReview_not_resolved()
     {
         Finding f = SeedFinding("var conn = Open();");
-        // Change the file so the snippet no longer matches → anchor lost.
-        File.WriteAllText(Path.Combine(_clone, "A.cs"), "class A {\n// completely different\n}");
+
+        // El fichero es OTRO, y el hallazgo se vio por última vez contra este mismo contenido: no
+        // hay ancla, no hay símbolo («leak» no nombra ningún miembro) y nada ha cambiado desde
+        // entonces, así que no queda ninguna pregunta honrada que hacerle al auditor.
+        string file = Path.Combine(_clone, "A.cs");
+        File.WriteAllText(file, "class A {\n// completely different\n}");
+        f.LastConfirmed = f.LastConfirmed with { UnitContentHash = HashUtil.Sha256Hex(File.ReadAllBytes(file)) };
+        _hub.Store.WriteFinding("app", f);
+
         var agent = new FakeCopilotAgent(verdictScript: _ => "resuelto");
         var verify = new VerifyCoordinator(_hub, _machines, _ulids, agent);
 
@@ -136,6 +149,7 @@ public sealed class GovernanceTests : IDisposable
         Finding after = _hub.Store.TryReadFinding("app", f.Id.ToString())!;
         after.NeedsReview.Should().BeTrue();
         after.Status.Should().Be(FindingStatus.Activo); // "no localizado" ≠ "resuelto"
+        after.History[^1].Event.Should().Be(FindingEvent.NotLocated, "un hallazgo activo no se reabre");
     }
 
     public void Dispose()

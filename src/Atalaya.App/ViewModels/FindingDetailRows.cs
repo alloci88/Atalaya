@@ -119,6 +119,8 @@ public static class FindingEventNames
         FindingEvent.FixProposed => "Arreglo propuesto",
         FindingEvent.Disputed => "Disputado",
         FindingEvent.DisputeCleared => "Disputa cerrada",
+        FindingEvent.NotLocated => "No localizado",
+        FindingEvent.Reanchored => "Re-anclado",
         _ => e.ToString(),
     };
 
@@ -142,6 +144,8 @@ public static class FindingEventNames
         FindingEvent.FixProposed => "⚒",
         FindingEvent.Disputed => "⚖︎",
         FindingEvent.DisputeCleared => "⚖︎",
+        FindingEvent.NotLocated => "◌",
+        FindingEvent.Reanchored => "⌖",
         _ => "•",
     };
 }
