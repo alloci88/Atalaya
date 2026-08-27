@@ -1,4 +1,4 @@
-using Atalaya.Domain;
+﻿using Atalaya.Domain;
 using Atalaya.Domain.Model;
 
 namespace Atalaya.App.Services;
@@ -30,8 +30,16 @@ public sealed record MetricsFilter(string? Slug, MetricsRange Range)
 /// <summary>El desglose por severidad de los hallazgos activos (tile 1).</summary>
 public sealed record SeverityChips(int Critica, int Alta, int Media, int Baja);
 
-/// <summary>Un punto del eje X: su etiqueta y lo que consumió cada app en el.</summary>
-public sealed record CostPoint(DateTimeOffset From, string Label, IReadOnlyDictionary<string, decimal> ByApp)
+/// <summary>
+/// Un punto del eje X: su etiqueta y lo que aportó cada app en el.
+/// <para>
+/// El punto NO sabe qué mide. Nació para el coste y hoy lo comparten la gráfica de coste y la de
+/// resoluciones (F6.1): las dos son «línea por aplicación sobre el mismo eje temporal», y la
+/// única diferencia entre ellas es de dónde sale el número de cada cubo. Duplicar el tipo habría
+/// duplicado también los cubos, el reparto de «Otras» y el acumulado.
+/// </para>
+/// </summary>
+public sealed record SeriesPoint(DateTimeOffset From, string Label, IReadOnlyDictionary<string, decimal> ByApp)
 {
     public decimal Of(string slug) => ByApp.TryGetValue(slug, out decimal v) ? v : 0m;
 }
@@ -102,7 +110,10 @@ public sealed record MetricsDashboard(
     IReadOnlyList<string> CostSeries,
     bool CostSeriesHasOthers,
     IReadOnlyDictionary<string, string> AppNames,
-    IReadOnlyList<CostPoint> Cost,
+    IReadOnlyList<SeriesPoint> Cost,
+    IReadOnlyList<string> ResolutionSeries,
+    bool ResolutionSeriesHasOthers,
+    IReadOnlyList<SeriesPoint> Resolutions,
     IReadOnlyList<CoverageDonut> Coverage,
     IReadOnlyList<FlowBucket> Flow,
     IReadOnlyList<SessionRow> Sessions)
@@ -138,6 +149,14 @@ public sealed record MetricsDashboard(
 
     /// <summary>El delta del tile de resueltos: positivo = mejor que el periodo anterior.</summary>
     public int ResolvedDelta => ResolvedInPeriod - ResolvedPreviousPeriod;
+
+    /// <summary>
+    /// Hubo alguna resolución en el periodo. Sin ninguna, la gráfica no se dibuja vacía: lo dice
+    /// (F6.1). Se mira el DATO agregado y no el tile de resueltos, porque el tile cuenta el estado
+    /// de hoy y la gráfica cuenta eventos: un hallazgo resuelto y luego reabierto no aparece en el
+    /// tile y sí aporta su punto a la gráfica.
+    /// </summary>
+    public bool HasResolutions => ResolutionSeries.Count > 0;
 
     /// <summary>El nombre legible de una serie, incluida la agrupada.</summary>
     public string NameOf(string slug) => slug == OthersSlug
@@ -247,7 +266,13 @@ public sealed class MetricsQuery
             donuts.Add(new CoverageDonut(app.Slug, app.Name, app.CurrentCycle, audited, pending, large));
         }
 
-        (IReadOnlyList<string> series, bool hasOthers) = CostSeries(scope, from, to);
+        (IReadOnlyList<string> series, bool hasOthers) = TopSeries(scope, a => a.Sessions
+            .Where(s => s.StartedUtc >= from && s.StartedUtc < to)
+            .Sum(s => s.Usage.Cost ?? 0m));
+
+        (IReadOnlyList<string> resSeries, bool resHasOthers) = TopSeries(scope, a => a.Findings
+            .SelectMany(ResolutionEvents)
+            .Count(utc => utc >= from && utc < to));
 
         return new MetricsDashboard(
             filter,
@@ -270,7 +295,14 @@ public sealed class MetricsQuery
             series,
             hasOthers,
             all.ToDictionary(a => a.Slug, a => a.Name, StringComparer.OrdinalIgnoreCase),
-            CostPoints(scope, buckets, series, hasOthers),
+            Points(scope, buckets, series, hasOthers, (app, bFrom, bTo) => app.Sessions
+                .Where(s => s.StartedUtc >= bFrom && s.StartedUtc < bTo && s.Usage.Cost is not null)
+                .Sum(s => s.Usage.Cost ?? 0m)),
+            resSeries,
+            resHasOthers,
+            Points(scope, buckets, resSeries, resHasOthers, (app, bFrom, bTo) => app.Findings
+                .SelectMany(ResolutionEvents)
+                .Count(utc => utc >= bFrom && utc < bTo)),
             donuts.OrderByDescending(d => d.Total).ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList(),
             FlowBuckets(findings, buckets),
             SessionRows(scope, inPeriod));
@@ -349,20 +381,24 @@ public sealed class MetricsQuery
         return result;
     }
 
-    // ---------- Gráfica 1: coste en el tiempo ----------
+    // ---------- Gráficas 1 y 2: línea por aplicación sobre el eje temporal ----------
 
     /// <summary>
-    /// Qué aplicaciones se dibujan con nombre propio: las seis que más consumieron en el periodo.
+    /// Qué aplicaciones se dibujan con nombre propio: las seis que más aportaron en el periodo.
     /// El resto se suma en «Otras». La ELECCIÓN depende del periodo, pero el COLOR de cada app no
-    /// (sale del reparto del portafolio), así que ninguna app cambia de color al mover un filtro.
+    /// (sale del reparto del portafolio), así que ninguna app cambia de color al mover un filtro
+    /// — ni al pasar de una gráfica a la otra.
+    /// <para>
+    /// El total de cada app lo aporta quien llama: para el coste es lo consumido, para las
+    /// resoluciones es cuántas hubo. El criterio de «quién sale con nombre» es el mismo, así que
+    /// las dos gráficas no pueden discrepar en cómo agrupan.
+    /// </para>
     /// </summary>
-    private static (IReadOnlyList<string> Series, bool HasOthers) CostSeries(
-        IReadOnlyList<AppData> scope, DateTimeOffset from, DateTimeOffset to)
+    private static (IReadOnlyList<string> Series, bool HasOthers) TopSeries(
+        IReadOnlyList<AppData> scope, Func<AppData, decimal> totalOf)
     {
         var totals = scope
-            .Select(a => (a.Slug, Total: a.Sessions
-                .Where(s => s.StartedUtc >= from && s.StartedUtc < to)
-                .Sum(s => s.Usage.Cost ?? 0m)))
+            .Select(a => (a.Slug, Total: totalOf(a)))
             .Where(t => t.Total > 0)
             .OrderByDescending(t => t.Total)
             .ThenBy(t => t.Slug, StringComparer.Ordinal)
@@ -378,26 +414,30 @@ public sealed class MetricsQuery
         return (named, others);
     }
 
-    private static IReadOnlyList<CostPoint> CostPoints(
+    /// <summary>
+    /// Reparte por cubo y por serie lo que <paramref name="valueOf"/> mida en cada tramo. Es la
+    /// mecánica compartida de las dos gráficas de línea: los cubos, el agrupado en «Otras» y el
+    /// descarte de lo que no cabe en ninguna serie se hacen UNA vez.
+    /// </summary>
+    private static IReadOnlyList<SeriesPoint> Points(
         IReadOnlyList<AppData> scope,
         IReadOnlyList<(DateTimeOffset From, DateTimeOffset To, string Label)> buckets,
         IReadOnlyList<string> series,
-        bool hasOthers)
+        bool hasOthers,
+        Func<AppData, DateTimeOffset, DateTimeOffset, decimal> valueOf)
     {
         var named = series
             .Where(s => s != MetricsDashboard.OthersSlug)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var points = new List<CostPoint>(buckets.Count);
+        var points = new List<SeriesPoint>(buckets.Count);
 
         foreach ((DateTimeOffset bFrom, DateTimeOffset bTo, string label) in buckets)
         {
             var byApp = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
             foreach (AppData app in scope)
             {
-                decimal spent = app.Sessions
-                    .Where(s => s.StartedUtc >= bFrom && s.StartedUtc < bTo && s.Usage.Cost is not null)
-                    .Sum(s => s.Usage.Cost ?? 0m);
-                if (spent == 0m)
+                decimal value = valueOf(app, bFrom, bTo);
+                if (value == 0m)
                 {
                     continue;
                 }
@@ -409,16 +449,47 @@ public sealed class MetricsQuery
                 }
 
                 string key = isNamed ? app.Slug : MetricsDashboard.OthersSlug;
-                byApp[key] = byApp.TryGetValue(key, out decimal had) ? had + spent : spent;
+                byApp[key] = byApp.TryGetValue(key, out decimal had) ? had + value : value;
             }
 
-            points.Add(new CostPoint(bFrom, label, byApp));
+            points.Add(new SeriesPoint(bFrom, label, byApp));
         }
 
         return points;
     }
 
-    // ---------- Gráfica 3: flujo de hallazgos ----------
+    /// <summary>
+    /// Las fechas en que este hallazgo pasó a <c>Resuelto</c>. Pueden ser VARIAS: un hallazgo que
+    /// se resolvió, se reabrió y se volvió a resolver saldó deuda dos veces, y la gráfica de
+    /// resoluciones cuenta eventos, no el neto (el neto ya lo da el burndown del flujo). Por eso
+    /// tampoco se filtra por vía: el veredicto del auditor, la resolución manual y la medida
+    /// cuentan igual — es deuda saldada, venga de donde venga.
+    /// <para>
+    /// La fuente es el HISTORIAL, que es lo único que conserva las resoluciones anteriores a una
+    /// reapertura (<see cref="Finding.Resolved"/> se pone a null al reabrir). El sello se usa solo
+    /// de reserva, para hallazgos importados sin historial: sin esa reserva, un hub traído de V4
+    /// dibujaría una gráfica vacía teniendo resoluciones.
+    /// </para>
+    /// </summary>
+    internal static IEnumerable<DateTimeOffset> ResolutionEvents(Finding finding)
+    {
+        bool any = false;
+        foreach (HistoryEntry entry in finding.History)
+        {
+            if (entry.Event == FindingEvent.Resolved)
+            {
+                any = true;
+                yield return entry.Utc;
+            }
+        }
+
+        if (!any && finding.Resolved is { } stamp)
+        {
+            yield return stamp.Utc;
+        }
+    }
+
+    // ---------- Gráfica 4: flujo de hallazgos ----------
 
     /// <summary>
     /// El burndown de verdad: lo que entró, lo que se cerró, y cuantos quedaban vivos al final de
@@ -446,7 +517,7 @@ public sealed class MetricsQuery
     private static bool ResolvedIn(Finding f, DateTimeOffset from, DateTimeOffset to)
         => f.Resolved is { } r && r.Utc >= from && r.Utc < to;
 
-    // ---------- Gráfica 4: actividad de sesiones ----------
+    // ---------- Gráfica 5: actividad de sesiones ----------
 
     private static IReadOnlyList<SessionRow> SessionRows(
         IReadOnlyList<AppData> scope, IReadOnlyList<AuditSession> inPeriod)

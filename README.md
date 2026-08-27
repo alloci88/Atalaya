@@ -237,6 +237,9 @@ pertenencia) y `read:user` (login, nombre, avatar, email). Nada más.
 - **Gobernanza** (V3/V4): silenciar (motivo + caducidad), asignar, comentar, cambiar
   severidad, resolver manual, y **generar prompt de arreglo** (§5.7) al portapapeles.
 - **Importar v4**: migra una carpeta `CodeAudit/` (tolerante; registra lo no importable).
+- **Métricas** (V6): panel filtrable por aplicación y periodo, con **Coste en el tiempo** y,
+  justo debajo, **Resoluciones en el tiempo** (una línea por aplicación, mismo color en las
+  dos, con toggle *Acumulado*), cobertura del ciclo, flujo de hallazgos y registro de sesiones.
 
 ## Compilar y probar
 

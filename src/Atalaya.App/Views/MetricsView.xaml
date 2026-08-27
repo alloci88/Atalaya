@@ -1,4 +1,4 @@
-<UserControl
+﻿<UserControl
     x:Class="Atalaya.App.Views.MetricsView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -264,7 +264,58 @@
                         </StackPanel>
                     </ui:Card>
 
-                    <!-- ============ Gráfica 2: cobertura por aplicación ============ -->
+                    <!-- ============ Gráfica 2: resoluciones en el tiempo ============ -->
+                    <!-- Misma forma y mismo componente que la de coste, y va JUSTO debajo: se
+                         leen en pareja («esto costó, esto saldó»). Los colores salen del mismo
+                         reparto por identidad, así que una app es del mismo color en las dos. -->
+                    <ui:Card Style="{StaticResource Block}">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                    <TextBlock Text="Resoluciones en el tiempo" Style="{StaticResource BlockTitle}" />
+                                    <TextBlock Style="{StaticResource BlockHint}"
+                                               Text="Cuántos hallazgos se dieron por resueltos en cada tramo, por aplicación. Cuenta todas las vías —veredicto del auditor, resolución manual y medida—: es deuda saldada, venga de donde venga." />
+                                </StackPanel>
+                                <ui:ToggleSwitch Grid.Column="1"
+                                                 Content="Acumulado"
+                                                 IsChecked="{Binding CumulativeResolutions}"
+                                                 VerticalAlignment="Top"
+                                                 ToolTip="Suma tramo a tramo: la curva ascendente de lo saldado hasta cada fecha" />
+                            </Grid>
+
+                            <ItemsControl ItemsSource="{Binding ResolutionLegend}"
+                                          ItemTemplate="{StaticResource LegendEntry}"
+                                          Margin="0,12,0,0"
+                                          Visibility="{Binding ShowResolutionLegend, Converter={StaticResource BoolToVisibility}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+
+                            <controls:ChartPlot
+                                Height="240"
+                                Margin="0,8,0,0"
+                                Series="{Binding ResolutionSeries}"
+                                Labels="{Binding ResolutionLabels}"
+                                ValueFormat="0"
+                                Unit="resoluciones"
+                                AxisBrush="{DynamicResource TextFillColorSecondaryBrush}"
+                                GridBrush="{DynamicResource TextFillColorTertiaryBrush}"
+                                Visibility="{Binding HasResolutions, Converter={StaticResource BoolToVisibility}}" />
+
+                            <TextBlock Style="{StaticResource EmptyNote}"
+                                       Text="— · aún no hay resoluciones en este periodo."
+                                       Visibility="{Binding HasResolutions, Converter={StaticResource InverseBoolToVisibility}}" />
+                        </StackPanel>
+                    </ui:Card>
+
+                    <!-- ============ Gráfica 3: cobertura por aplicación ============ -->
                     <ui:Card Style="{StaticResource Block}">
                         <StackPanel>
                             <TextBlock Text="Cobertura por aplicación" Style="{StaticResource BlockTitle}" />
@@ -314,7 +365,7 @@
                         </StackPanel>
                     </ui:Card>
 
-                    <!-- ============ Gráfica 3: flujo de hallazgos ============ -->
+                    <!-- ============ Gráfica 4: flujo de hallazgos ============ -->
                     <ui:Card Style="{StaticResource Block}">
                         <StackPanel>
                             <TextBlock Text="Flujo de hallazgos" Style="{StaticResource BlockTitle}" />
@@ -349,7 +400,7 @@
                         </StackPanel>
                     </ui:Card>
 
-                    <!-- ============ Gráfica 4: actividad de sesiones ============ -->
+                    <!-- ============ Gráfica 5: actividad de sesiones ============ -->
                     <ui:Card Style="{StaticResource Block}">
                         <StackPanel>
                             <TextBlock Text="Actividad de sesiones" Style="{StaticResource BlockTitle}" />

@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using System.Windows.Media;
 using Atalaya.App.Controls;
 using Atalaya.App.Services;
@@ -323,7 +323,7 @@ public sealed class MetricsPanelTests : IDisposable
     // ============================================ La vista
 
     [Fact]
-    public void La_vista_trae_los_filtros_los_cuatro_tiles_y_las_cuatro_graficas()
+    public void La_vista_trae_los_filtros_los_cuatro_tiles_y_las_cinco_graficas()
     {
         string xaml = Markup(Source("src/Atalaya.App/Views/MetricsView.xaml"));
 
@@ -339,14 +339,22 @@ public sealed class MetricsPanelTests : IDisposable
 
         foreach (string chart in new[]
                  {
-                     "Coste en el tiempo", "Cobertura por aplicación", "Flujo de hallazgos", "Actividad de sesiones",
+                     "Coste en el tiempo", "Resoluciones en el tiempo", "Cobertura por aplicación",
+                     "Flujo de hallazgos", "Actividad de sesiones",
                  })
         {
             xaml.Should().Contain(chart);
         }
 
         xaml.Should().Contain("{Binding Cumulative}", "el toggle «Acumulado» de la gráfica de coste");
-        Regex.Matches(xaml, "controls:ChartPlot").Count.Should().Be(2, "coste y flujo; ni una gráfica de más");
+        xaml.Should().Contain("{Binding CumulativeResolutions}", "y el suyo en la de resoluciones");
+        Regex.Matches(xaml, "controls:ChartPlot").Count.Should()
+            .Be(3, "coste, resoluciones y flujo; ni una gráfica de más");
+
+        // La de resoluciones va JUSTO debajo de la de coste: se leen en pareja.
+        xaml.IndexOf("Resoluciones en el tiempo", StringComparison.Ordinal).Should()
+            .BeGreaterThan(xaml.IndexOf("Coste en el tiempo", StringComparison.Ordinal))
+            .And.BeLessThan(xaml.IndexOf("Cobertura por aplicación", StringComparison.Ordinal));
         Regex.Matches(xaml, "controls:DonutRing").Count.Should().Be(1, "los roscos son una plantilla repetida");
     }
 
@@ -425,6 +433,76 @@ public sealed class MetricsPanelTests : IDisposable
         acumulado[^1].Should().BeApproximately(12, 0.001, "acaba en el total del periodo");
     }
 
+    // ============================================ Gráfica de resoluciones (F6.1)
+
+    /// <summary>
+    /// La regla del §2 aplicada a la gráfica nueva: una aplicación tiene EL MISMO color en las
+    /// dos gráficas. Es lo que permite leerlas en pareja —«esto costó, esto saldó»— sin volver a
+    /// buscar la leyenda al bajar la vista.
+    /// </summary>
+    [Fact]
+    public async Task Una_app_lleva_el_mismo_color_en_la_grafica_de_coste_y_en_la_de_resoluciones()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "xblast", Name = "XBlast", RepoUrl = "u", CurrentCycle = 1 });
+        WriteSession("xblast", cost: 5m);
+        WriteResolved("xblast", daysAgo: 2);
+
+        MetricsViewModel vm = TestFactory.Metrics(_hub, _paths, _settings);
+        await vm.LoadAsync();
+
+        vm.HasResolutions.Should().BeTrue();
+        Hex(vm.ResolutionSeries.Single().Stroke).Should().Be(Hex(vm.CostSeries.Single().Stroke));
+        vm.ResolutionSeries.Single().Kind.Should().Be(ChartSeriesKind.Line, "el mismo tipo de trazo");
+        vm.ResolutionLegend.Single().Name.Should().Be("XBlast", "la leyenda NOMBRA, aquí también");
+    }
+
+    /// <summary>
+    /// El acumulado de la gráfica nueva es SUYO: mueve su curva y deja la de coste donde estaba.
+    /// Dos gráficas en tarjetas distintas no pueden compartir un interruptor.
+    /// </summary>
+    [Fact]
+    public async Task El_acumulado_de_resoluciones_es_propio_y_no_mueve_la_grafica_de_coste()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 1 });
+        WriteSession("app", cost: 5m);
+        WriteResolved("app", daysAgo: 3);
+        WriteResolved("app", daysAgo: 20);
+
+        MetricsViewModel vm = TestFactory.Metrics(_hub, _paths, _settings);
+        await vm.LoadAsync();
+
+        IReadOnlyList<double> crudo = vm.ResolutionSeries.Single().Values;
+        crudo.Sum().Should().BeApproximately(2, 0.001);
+        crudo.Should().NotBeInAscendingOrder("sin acumular hay un punto por tramo, no una escalera");
+
+        IReadOnlyList<double> costeAntes = vm.CostSeries.Single().Values;
+        vm.CumulativeResolutions = true;
+
+        IReadOnlyList<double> acumulado = vm.ResolutionSeries.Single().Values;
+        acumulado.Should().BeInAscendingOrder("la deuda saldada no se desanda");
+        acumulado[^1].Should().BeApproximately(2, 0.001, "acaba en el total del periodo");
+        vm.CostSeries.Single().Values.Should().Equal(costeAntes, "el interruptor de una tarjeta no toca la otra");
+    }
+
+    /// <summary>Sin resoluciones no hay eje mudo: se escribe por qué está en blanco.</summary>
+    [Fact]
+    public async Task Un_periodo_sin_resoluciones_lo_dice_en_vez_de_ensenar_una_grafica_vacia()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 1 });
+        WriteSession("app", cost: 5m);
+        WriteFinding("app", DateTimeOffset.UtcNow.AddDays(-3));
+
+        MetricsViewModel vm = TestFactory.Metrics(_hub, _paths, _settings);
+        await vm.LoadAsync();
+
+        vm.HasResolutions.Should().BeFalse();
+        vm.ResolutionSeries.Should().BeEmpty();
+        vm.ResolutionLegend.Should().BeEmpty();
+
+        Markup(Source("src/Atalaya.App/Views/MetricsView.xaml"))
+            .Should().Contain("aún no hay resoluciones en este periodo");
+    }
+
     // ============================================ Utilidades
 
     private AuditSession WriteSession(string slug, decimal? cost, int daysAgo = 2)
@@ -463,6 +541,31 @@ public sealed class MetricsPanelTests : IDisposable
             FirstDetected = stamp,
             LastConfirmed = stamp,
         });
+    }
+
+    /// <summary>Un hallazgo resuelto hace N días: la resolución queda en el historial.</summary>
+    private void WriteResolved(string slug, int daysAgo)
+    {
+        DateTimeOffset when = DateTimeOffset.UtcNow.AddDays(-daysAgo);
+        var stamp = new DetectionStamp(when.AddDays(-30), AuditMode.Lotes, "abc", "alvaro");
+        var finding = new Finding
+        {
+            Id = _ulids.NewUlid(),
+            RuleId = "criterio.x",
+            Pillar = Pillar.Errores,
+            Tag = FindingTag.Criterio,
+            Severity = Severity.Alta,
+            Confidence = Confidence.Media,
+            Status = FindingStatus.Activo,
+            Title = "t",
+            Locations = { new Location("a.cs", 1) },
+            Origin = AuditMode.Lotes,
+            FirstDetected = stamp,
+            LastConfirmed = stamp,
+        };
+
+        finding.Resolve(new ResolutionStamp(when, ResolutionVia.Auditor, AuditMode.Lotes, "c", "alvaro", "ok"));
+        _hub.Store.WriteFinding(slug, finding);
     }
 
     private static string Hex(Brush brush)

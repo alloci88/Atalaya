@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows.Media;
 using Atalaya.App.Controls;
@@ -45,11 +45,11 @@ public sealed record SessionLine(
     bool HasReport);
 
 /// <summary>
-/// El panel de mando de F5.9: filtros, cuatro cifras grandes y cuatro gráficas.
+/// El panel de mando de F5.9: filtros, cuatro cifras grandes y cinco gráficas.
 /// <para>
 /// <b>Qué responde.</b> Las tres preguntas del equipo y del jefe: cómo estamos (activos y
-/// cobertura), avanzamos (flujo de hallazgos) y cuánto cuesta (coste en el tiempo y registro de
-/// sesiones). Lo que no responde a ninguna de las tres no esta.
+/// cobertura), avanzamos (flujo de hallazgos y resoluciones en el tiempo) y cuánto cuesta (coste
+/// en el tiempo y registro de sesiones). Lo que no responde a ninguna de las tres no esta.
 /// </para>
 /// <para>
 /// <b>Qué se retiró.</b> El «% criterio» —que mide la calidad del AUDITOR, no el estado del
@@ -124,11 +124,20 @@ public sealed partial class MetricsViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty] private bool _cumulative;
 
+    /// <summary>
+    /// El mismo gesto sobre las resoluciones: la deuda saldada hasta cada fecha. Es un interruptor
+    /// PROPIO y no el de coste porque cada gráfica es una tarjeta con su cabecera: un interruptor
+    /// en la tarjeta de arriba que cambiara la gráfica de abajo sería un mando a distancia.
+    /// </summary>
+    [ObservableProperty] private bool _cumulativeResolutions;
+
     partial void OnSelectedAppChanged(AppOption? value) => Reload();
 
     partial void OnSelectedRangeChanged(RangeOption value) => Reload();
 
     partial void OnCumulativeChanged(bool value) => RebuildCostChart();
+
+    partial void OnCumulativeResolutionsChanged(bool value) => RebuildResolutionChart();
 
     private void Reload()
     {
@@ -189,7 +198,21 @@ public sealed partial class MetricsViewModel : ViewModelBase
     /// <summary>Sin una sola sesión con coste declarado no hay gráfica que dibujar, y se dice.</summary>
     [ObservableProperty] private bool _hasCost;
 
-    // ---------- Gráfica 2: cobertura por aplicación ----------
+    // ---------- Gráfica 2: resoluciones en el tiempo ----------
+
+    [ObservableProperty] private IReadOnlyList<ChartSeries> _resolutionSeries = Array.Empty<ChartSeries>();
+
+    [ObservableProperty] private IReadOnlyList<string> _resolutionLabels = Array.Empty<string>();
+
+    public ObservableCollection<LegendItem> ResolutionLegend { get; } = new();
+
+    /// <inheritdoc cref="ShowCostLegend"/>
+    [ObservableProperty] private bool _showResolutionLegend;
+
+    /// <summary>Sin una sola resolución en el periodo no se dibuja un eje mudo: se dice.</summary>
+    [ObservableProperty] private bool _hasResolutions;
+
+    // ---------- Gráfica 3: cobertura por aplicación ----------
 
     public ObservableCollection<CoverageCard> Coverage { get; } = new();
 
@@ -198,7 +221,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
     [ObservableProperty] private bool _hasCoverage;
 
-    // ---------- Gráfica 3: flujo de hallazgos ----------
+    // ---------- Gráfica 4: flujo de hallazgos ----------
 
     [ObservableProperty] private IReadOnlyList<ChartSeries> _flowSeries = Array.Empty<ChartSeries>();
 
@@ -211,7 +234,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
     [ObservableProperty] private bool _hasFlow;
 
-    // ---------- Gráfica 4: actividad de sesiones ----------
+    // ---------- Gráfica 5: actividad de sesiones ----------
 
     public ObservableCollection<SessionLine> Sessions { get; } = new();
 
@@ -235,6 +258,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
             SyncAppOptions(dashboard);
             ApplyTiles(dashboard);
             RebuildCostChart();
+            RebuildResolutionChart();
             ApplyCoverage(dashboard);
             ApplyFlow(dashboard);
             ApplySessions(dashboard);
@@ -315,9 +339,9 @@ public sealed partial class MetricsViewModel : ViewModelBase
     /// </summary>
     private void RebuildCostChart()
     {
-        CostLegend.Clear();
         if (_dashboard is not { } d)
         {
+            CostLegend.Clear();
             CostSeries = Array.Empty<ChartSeries>();
             CostLabels = Array.Empty<string>();
             HasCost = false;
@@ -326,28 +350,69 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
         HasCost = d.HasCost && d.CostSeries.Count > 0;
         CostLabels = d.Cost.Select(p => p.Label).ToList();
+        CostSeries = LineChart(d, d.Cost, d.CostSeries, Cumulative, CostLegend);
+        ShowCostLegend = CostLegend.Count >= 2;
+    }
 
-        var series = new List<ChartSeries>();
-        foreach (string key in d.CostSeries)
+    /// <summary>
+    /// La gráfica de resoluciones (F6.1). Mismo componente, mismos colores por aplicación y mismo
+    /// acumulado que la de coste: lo único que cambia es qué mide cada punto.
+    /// </summary>
+    private void RebuildResolutionChart()
+    {
+        if (_dashboard is not { } d)
+        {
+            ResolutionLegend.Clear();
+            ResolutionSeries = Array.Empty<ChartSeries>();
+            ResolutionLabels = Array.Empty<string>();
+            HasResolutions = false;
+            return;
+        }
+
+        HasResolutions = d.HasResolutions;
+        ResolutionLabels = d.Resolutions.Select(p => p.Label).ToList();
+        ResolutionSeries = LineChart(d, d.Resolutions, d.ResolutionSeries, CumulativeResolutions, ResolutionLegend);
+        ShowResolutionLegend = ResolutionLegend.Count >= 2;
+    }
+
+    /// <summary>
+    /// Una gráfica «tipo bolsa»: una línea por aplicación sobre el eje temporal del panel, con su
+    /// color de identidad, su leyenda que NOMBRA y el acumulado opcional.
+    /// <para>
+    /// Es la misma función para el coste y para las resoluciones a propósito: si cada gráfica
+    /// armara sus series por su cuenta, el día que una app cambiara de color o «Otras» dejara de
+    /// ir a trazos habría que acordarse de arreglarlo dos veces. Y el acumulado se calcula aquí,
+    /// sobre el agregado que ya está en memoria: el interruptor no vuelve a tocar el hub.
+    /// </para>
+    /// </summary>
+    private IReadOnlyList<ChartSeries> LineChart(
+        MetricsDashboard d,
+        IReadOnlyList<SeriesPoint> points,
+        IReadOnlyList<string> keys,
+        bool cumulative,
+        ObservableCollection<LegendItem> legend)
+    {
+        legend.Clear();
+        var series = new List<ChartSeries>(keys.Count);
+        foreach (string key in keys)
         {
             bool others = key == MetricsDashboard.OthersSlug;
             Brush brush = SeriesBrush(key, d);
-            var values = new List<double>(d.Cost.Count);
+            var values = new List<double>(points.Count);
             double running = 0;
-            foreach (CostPoint point in d.Cost)
+            foreach (SeriesPoint point in points)
             {
                 double value = (double)point.Of(key);
                 running += value;
-                values.Add(Cumulative ? running : value);
+                values.Add(cumulative ? running : value);
             }
 
             string name = d.NameOf(key);
             series.Add(new ChartSeries(key, name, brush, values, ChartSeriesKind.Line, others));
-            CostLegend.Add(new LegendItem(name, brush, others));
+            legend.Add(new LegendItem(name, brush, others));
         }
 
-        CostSeries = series;
-        ShowCostLegend = CostLegend.Count >= 2;
+        return series;
     }
 
     private void ApplyCoverage(MetricsDashboard d)

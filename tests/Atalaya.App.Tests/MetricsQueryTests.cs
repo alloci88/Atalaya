@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Ids;
@@ -278,7 +278,159 @@ public sealed class MetricsQueryTests : IDisposable
         d.CostSeries.Should().NotContain(MetricsDashboard.OthersSlug);
     }
 
-    // =============================================================== Gráfica 3
+    // =============================================================== Gráfica 2
+
+    /// <summary>
+    /// El dato de la gráfica: resoluciones por tramo y por aplicación, con el mismo grano que la
+    /// de coste. Dos resoluciones de la misma semana caen en el mismo punto; las de otra app van
+    /// a su propia línea.
+    /// </summary>
+    [Fact]
+    public void Las_resoluciones_se_reparten_por_semana_y_por_aplicacion()
+    {
+        App("otra", "Otra");
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Resuelto, Now.AddDays(-30), Now.AddDays(-1)));
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Resuelto, Now.AddDays(-30), Now.AddDays(-2)));
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Resuelto, Now.AddDays(-30), Now.AddDays(-20)));
+        _hub.Store.WriteFinding("otra", Finding(FindingStatus.Resuelto, Now.AddDays(-30), Now.AddDays(-2)));
+
+        MetricsDashboard d = Build(range: MetricsRange.Weeks8);
+
+        d.Granularity.Should().Be(MetricsGranularity.Semanal);
+        d.HasResolutions.Should().BeTrue();
+        d.ResolutionSeries.Should().BeEquivalentTo(new[] { "app", "otra" });
+        d.Resolutions.Sum(p => p.Of("app")).Should().Be(3m);
+        d.Resolutions.Sum(p => p.Of("otra")).Should().Be(1m);
+        d.Resolutions.Count(p => p.Of("app") > 0).Should().Be(2, "dos semanas distintas");
+        d.Resolutions.Should().ContainSingle(p => p.Of("app") == 2m, "las dos de la misma semana se suman");
+
+        // Y comparte el eje X con la de coste: las dos gráficas se leen una debajo de otra.
+        d.Resolutions.Select(p => p.Label).Should().Equal(d.Cost.Select(p => p.Label));
+    }
+
+    /// <summary>
+    /// La gráfica cuenta EVENTOS de resolución, no el neto. Un hallazgo que se resolvió, se
+    /// reabrió y se volvió a resolver saldó deuda dos veces, y la reapertura no borra el pasado
+    /// —el neto ya lo da el burndown del flujo—. Es además el caso que el campo <c>resolved</c>
+    /// por sí solo no sabría contar: al reabrir se pone a null.
+    /// </summary>
+    [Fact]
+    public void Una_reapertura_no_resta_del_pasado_y_la_segunda_resolucion_cuenta_aparte()
+    {
+        Finding f = Finding(FindingStatus.Resuelto, Now.AddDays(-40), Now.AddDays(-25));
+        f.Reopen(Now.AddDays(-18), "alvaro", "volvió a aparecer");
+        f.Resolve(new ResolutionStamp(
+            Now.AddDays(-3), ResolutionVia.Auditor, AuditMode.Lotes, "c", "alvaro", "arreglado de verdad"));
+        _hub.Store.WriteFinding("app", f);
+
+        MetricsDashboard d = Build(range: MetricsRange.Weeks8);
+
+        d.Resolutions.Sum(p => p.Of("app")).Should().Be(2m, "dos veces se saldó, dos puntos");
+        d.Resolutions.Count(p => p.Of("app") > 0).Should().Be(2, "en tramos distintos");
+
+        // Un hallazgo, dos resoluciones: la gráfica no las colapsa en el estado de hoy.
+        d.ResolvedInPeriod.Should().Be(1, "el tile sigue contando el estado, que es lo suyo");
+    }
+
+    /// <summary>
+    /// Todas las vías cuentan: el veredicto del auditor, la mano de una persona y la medida de la
+    /// aplicación. La gráfica mide deuda saldada, no de quién fue el mérito.
+    /// </summary>
+    [Fact]
+    public void Cuentan_las_tres_vias_de_resolucion()
+    {
+        foreach (ResolutionVia via in new[] { ResolutionVia.Auditor, ResolutionVia.Manual, ResolutionVia.Medida })
+        {
+            Finding f = Finding(FindingStatus.Activo, Now.AddDays(-30));
+            f.Resolve(new ResolutionStamp(Now.AddDays(-2), via, AuditMode.Lotes, "c", "alvaro", "x"));
+            _hub.Store.WriteFinding("app", f);
+        }
+
+        Build().Resolutions.Sum(p => p.Of("app")).Should().Be(3m);
+    }
+
+    [Fact]
+    public void Las_resoluciones_obedecen_el_filtro_de_app_y_el_de_rango()
+    {
+        App("otra", "Otra");
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Resuelto, Now.AddDays(-60), Now.AddDays(-2)));
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Resuelto, Now.AddDays(-90), Now.AddDays(-45)));
+        _hub.Store.WriteFinding("otra", Finding(FindingStatus.Resuelto, Now.AddDays(-60), Now.AddDays(-2)));
+
+        MetricsDashboard solo = Build("app");
+        solo.ResolutionSeries.Should().Equal(new[] { "app" }, "la otra app no pinta línea aquí");
+        solo.Resolutions.Sum(p => p.Of("otra")).Should().Be(0m);
+
+        // Cuatro semanas: la resolución de hace 45 días queda fuera de la ventana.
+        MetricsDashboard corto = Build("app", MetricsRange.Weeks4);
+        corto.Resolutions.Sum(p => p.Of("app")).Should().Be(1m);
+        corto.Resolutions.Should().HaveCount(28, "grano diario, el mismo que la de coste");
+
+        MetricsDashboard largo = Build("app", MetricsRange.Weeks26);
+        largo.Resolutions.Sum(p => p.Of("app")).Should().Be(2m);
+    }
+
+    /// <summary>
+    /// Sin ninguna resolución en el periodo no se dibuja un eje mudo: la vista escribe su nota.
+    /// Y «sin resoluciones» no es «sin datos»: puede haber hallazgos activos y sesiones.
+    /// </summary>
+    [Fact]
+    public void Sin_resoluciones_en_el_periodo_no_hay_grafica_que_dibujar()
+    {
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-3)));
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Resuelto, Now.AddDays(-400), Now.AddDays(-380)));
+
+        MetricsDashboard d = Build(range: MetricsRange.Weeks8);
+
+        d.HasResolutions.Should().BeFalse();
+        d.ResolutionSeries.Should().BeEmpty();
+        d.IsEmpty.Should().BeFalse("hay hallazgos: el panel entero no está vacío");
+    }
+
+    /// <summary>
+    /// Más de seis aplicaciones con resoluciones: solo seis llevan nombre propio y el resto se
+    /// agrupa, con el mismo criterio que la gráfica de coste. Lo agrupado sigue sumando.
+    /// </summary>
+    [Fact]
+    public void Mas_de_seis_apps_resolviendo_se_agrupan_en_otras_sin_perder_ninguna()
+    {
+        for (int i = 0; i < 9; i++)
+        {
+            string slug = $"app{i}";
+            App(slug, $"App {i}");
+
+            // Resoluciones decrecientes: las seis primeras son las que se nombran.
+            for (int k = 0; k <= 9 - i; k++)
+            {
+                _hub.Store.WriteFinding(slug, Finding(FindingStatus.Resuelto, Now.AddDays(-30), Now.AddDays(-2)));
+            }
+        }
+
+        MetricsDashboard d = Build();
+
+        d.ResolutionSeriesHasOthers.Should().BeTrue();
+        d.ResolutionSeries.Should().HaveCount(SeriesPalette.MaxNamedSeries + 1);
+        d.ResolutionSeries.Last().Should().Be(MetricsDashboard.OthersSlug);
+
+        decimal dibujado = d.Resolutions.Sum(p => d.ResolutionSeries.Sum(p.Of));
+        dibujado.Should().Be(54m, "10+9+…+2 resoluciones: «Otras» no es un redondeo");
+    }
+
+    /// <summary>
+    /// Un hallazgo traído de V4 no tiene historial: su única prueba de que se resolvió es el
+    /// sello. Sin esa reserva, un hub importado dibujaría una gráfica vacía teniendo resoluciones.
+    /// </summary>
+    [Fact]
+    public void Un_resuelto_sin_historial_cuenta_por_su_sello()
+    {
+        Finding f = Finding(FindingStatus.Resuelto, Now.AddDays(-30), Now.AddDays(-2));
+        f.History.Clear();
+        _hub.Store.WriteFinding("app", f);
+
+        Build().Resolutions.Sum(p => p.Of("app")).Should().Be(1m);
+    }
+
+    // =============================================================== Gráfica 4
 
     /// <summary>
     /// El burndown de verdad: los activos de cada cubo se RECONSTRUYEN a esa fecha. Repetir el
@@ -300,7 +452,7 @@ public sealed class MetricsQueryTests : IDisposable
         d.Flow.Sum(b => b.Resolved).Should().Be(1);
     }
 
-    // =============================================================== Gráfica 4
+    // =============================================================== Gráfica 5
 
     [Fact]
     public void El_registro_de_sesiones_va_de_la_mas_reciente_a_la_mas_antigua_y_esta_acotado()

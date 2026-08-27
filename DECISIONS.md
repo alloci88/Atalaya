@@ -3725,3 +3725,79 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   sigue siendo grande —por ejemplo `UgUtils.cs`, 4.836 LOC— y pulsar «Medir ahora»: responde
   «Confirmado: 4836 LOC ≥ umbral 1500», nunca «no verificable»; y **(c)**
   `ExtensionMethodsNumerics.cs` (1.703 LOC) aparece con su hallazgo recién creado.
+
+## F6.1 — Resoluciones en el tiempo: la segunda gráfica de línea del panel
+
+Tras la demo, el equipo pidió ver **deuda saldada** con la misma forma con la que ya ve el
+gasto: una línea por aplicación sobre el eje temporal, justo debajo de la de coste, para
+poder leer las dos en pareja («esto costó, esto saldó»).
+
+- **D-426 — La gráfica cuenta EVENTOS de resolución, no el neto.** Un hallazgo que se
+  resolvió, se reabrió y se volvió a resolver saldó deuda **dos veces**, y las dos veces
+  fueron trabajo hecho. Restar del pasado lo que se reabre convertiría esta gráfica en el
+  burndown, que ya existe (la línea «Activos al cierre» de *Flujo de hallazgos*) y responde
+  a otra pregunta. Dos gráficas que respondieran lo mismo con distinto dibujo serían una de
+  más.
+
+- **D-427 — Y por eso la fuente es el HISTORIAL, no el campo `resolved`.** `Finding.Reopen`
+  pone `Resolved` a null: el sello solo conoce la resolución **vigente**, así que contar por
+  él borraría del eje todas las resoluciones que alguna vez se reabrieron — exactamente los
+  casos que D-426 quiere ver. `MetricsQuery.ResolutionEvents` recorre las entradas
+  `FindingEvent.Resolved` del historial, que son inmutables y están todas. El sello queda de
+  **reserva** para hallazgos sin historial (los importados de V4): sin ella, un hub migrado
+  dibujaría una gráfica vacía teniendo resoluciones.
+
+- **D-428 — Cuentan las cuatro vías, sin distinguir.** Veredicto del auditor con evidencia,
+  resolución manual de gobernanza y medida de la aplicación (`ResolutionVia.Medida`, D-418)
+  aportan lo mismo al mismo punto. La gráfica mide deuda saldada, no de quién fue el mérito;
+  quien quiera la vía la tiene en la ficha del hallazgo, que es donde se puede leer con su
+  justificación.
+
+- **D-429 — El tile «Resueltos en el periodo» y la gráfica pueden NO coincidir, y está
+  bien.** El tile cuenta estado de hoy (hallazgos que hoy están resueltos con su sello en el
+  periodo); la gráfica cuenta eventos. Un hallazgo resuelto y reabierto suma 1 punto a la
+  gráfica y 0 al tile. Son dos preguntas distintas —«cuántos están cerrados» y «cuánto se
+  cerró»— y cuadrarlos a la fuerza exigiría mentir en una de las dos. El test lo fija
+  explícitamente para que nadie lo «arregle» dentro de seis meses.
+
+- **D-430 — Se extrajo el genérico en vez de duplicar, en las tres capas.** El encargo decía
+  «reutiliza el componente». `ChartPlot` ya era agnóstico, pero el camino del dato no:
+  - `CostPoint` → **`SeriesPoint`**: un punto del eje X con lo que aportó cada app. El tipo
+    no sabe qué mide.
+  - `CostSeries(...)`/`CostPoints(...)` → **`TopSeries(scope, totalOf)`** y
+    **`Points(scope, buckets, series, hasOthers, valueOf)`**: los cubos, el reparto de las
+    seis con nombre propio y el agrupado en «Otras» se hacen UNA vez, y quien llama solo
+    aporta de dónde sale el número.
+  - En el view-model, `RebuildCostChart` cedió su cuerpo a **`LineChart(...)`**, que arma las
+    series con su color de identidad, su leyenda que nombra y el acumulado opcional.
+  El beneficio es concreto: el día que una app cambie de color, o que «Otras» deje de ir a
+  trazos, no hay dos sitios que acordarse de tocar. Y es lo que hace **gratis** el requisito
+  de que una app tenga el mismo color en las dos gráficas — no se comprueba, se deriva.
+
+- **D-431 — «Acumulado» es un interruptor PROPIO (`CumulativeResolutions`), no el de coste.**
+  Cada gráfica es una tarjeta con su cabecera. Un interruptor en la tarjeta de arriba que
+  cambiara la forma de la de abajo sería un mando a distancia: el usuario que lo pulsa está
+  mirando la gráfica que tiene al lado. Mismo gesto, misma etiqueta, ámbito de su tarjeta.
+
+- **D-432 — Sin resoluciones se escribe por qué, y no es «sin datos».** «— · aún no hay
+  resoluciones en este periodo» aparece en lugar de un eje mudo, y **no** enciende el estado
+  vacío del panel entero: puede haber hallazgos activos y sesiones con coste, y decir que no
+  hay nada que medir sería falso. Es la misma regla que la nota de la gráfica de coste.
+
+- **D-433 — MANUAL.md no existe en este repositorio.** La DoD pedía una línea en su
+  «§ Métricas»; no hay tal fichero ni lo ha habido (`git log` no registra ningún borrado), y
+  la documentación de usuario vive en `README.md`. La línea se ha puesto ahí, en «Flujos»,
+  junto al resto de vistas. Queda anotado para que la próxima tanda no lo busque otra vez —
+  o cree el manual a conciencia, que es una tarea con su propio tamaño y no un renglón.
+
+- **D-434 — Lo que queda probado.** Del agregador: que reparte por semana y por aplicación
+  con el mismo grano y las mismas etiquetas de eje que la de coste; que **una reapertura no
+  resta** y la segunda resolución cuenta aparte (con el tile marcando 1 al lado de los 2
+  puntos, D-429); que cuentan las tres vías vivas; que obedece el filtro de aplicación y el
+  de rango —incluida la resolución que se cae de la ventana de 4 semanas—; que sin
+  resoluciones no hay gráfica pero tampoco panel vacío; que con más de seis apps agrupa en
+  «Otras» sin perder ni una; y que un resuelto **sin historial** cuenta por su sello. Del
+  panel: que una app lleva el **mismo color** en las dos gráficas, que el acumulado de
+  resoluciones sube y **no toca** la serie de coste, y que la nota de vacío está escrita.
+  De la vista: tres `ChartPlot` y ni una más, y la de resoluciones **entre** la de coste y la
+  de cobertura.
