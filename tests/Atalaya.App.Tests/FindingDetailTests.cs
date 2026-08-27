@@ -934,6 +934,79 @@ public sealed class FindingDetailTests : IDisposable
     /// Igual que en F5.3: hay invariantes que son de la PLANTILLA —qué controles existen y cuáles
     /// dejaron de existir— y no tienen estado observable que interrogar. Se leen del fichero.
     /// </summary>
+    // =========================================================== F6.8 · quién usa este código
+
+    /// <summary>El llamador de <c>Repositorio.Guardar</c>: un sitio, en otro miembro y otro fichero.</summary>
+    private const string Llamador = """
+        namespace Demo;
+
+        public sealed class Servicio
+        {
+            public void Registrar(Repositorio repo, string dato)
+            {
+                repo.Guardar(dato);
+            }
+        }
+        """;
+
+    /// <summary>
+    /// F6.8 — el caso de aceptación en pequeño: generar el prompt de un método usado en otro sitio
+    /// mete en el encargo la lista REAL de llamadores, y el aviso dice cuántos son.
+    /// </summary>
+    [Fact]
+    public async Task El_prompt_de_arreglo_viaja_con_la_lista_de_quien_usa_el_codigo()
+    {
+        Finding f = Seed();
+        File.WriteAllText(Path.Combine(_clone, "src", "Servicio.cs"), Llamador);
+        FindingDetailViewModel vm = Open(f);
+
+        await vm.GenerateFixPromptCommand.ExecuteAsync(null);
+
+        string prompt = _hub.Store.ListComments("alpha", f.Id.ToString())
+            .Single(c => c.Kind == "fix-prompt").Body;
+        prompt.Should().Contain("## Quién usa este código");
+        prompt.Should().Contain("src/Servicio.cs:");
+        prompt.Should().Contain("Servicio.Registrar");
+        prompt.Should().Contain("Preserva el contrato observable");
+        LastToast().Should().Contain("1 sitio de uso");
+    }
+
+    /// <summary>
+    /// Y una vez mirado, el radio de impacto está en los metadatos: es gratis y le llega al humano
+    /// ANTES de decidir si arregla.
+    /// </summary>
+    [Fact]
+    public async Task Usado_desde_aparece_en_los_metadatos_una_vez_recolectado()
+    {
+        Finding f = Seed();
+        File.WriteAllText(Path.Combine(_clone, "src", "Servicio.cs"), Llamador);
+        FindingDetailViewModel vm = Open(f);
+
+        vm.Meta.Should().NotContain(
+            m => m.Label == "Usado desde",
+            "abrir una ficha no puede costar un barrido del clon");
+
+        await vm.GenerateFixPromptCommand.ExecuteAsync(null);
+
+        MetaRow? usado = vm.Meta.FirstOrDefault(m => m.Label == "Usado desde");
+        usado.Should().NotBeNull();
+        usado!.Value.Should().Be("1 sitio");
+        usado.Tooltip.Should().Contain("src/Servicio.cs:");
+    }
+
+    /// <summary>
+    /// El botón dice lo que está haciendo mientras busca: la recolección recorre el clon y un botón
+    /// gris que no explica por qué se pulsa otra vez.
+    /// </summary>
+    [Fact]
+    public void El_boton_del_prompt_anuncia_la_busqueda_de_referencias()
+    {
+        DetailXaml().Should().Contain("Content=\"{Binding FixPromptActionLabel}\"");
+
+        FindingDetailViewModel vm = NewDetail();
+        vm.FixPromptActionLabel.Should().Be("Generar prompt de arreglo");
+    }
+
     private static string DetailXaml()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

@@ -57,6 +57,19 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
 
     private readonly LinkCloneFlow _linkFlow;
 
+    /// <summary>
+    /// F6.8: quién usa el código del hallazgo. Se recolecta al generar el prompt de arreglo —no al
+    /// abrir la ficha—: es un barrido del clon y abrir un hallazgo tiene que seguir siendo
+    /// instantáneo.
+    /// </summary>
+    private readonly ReferenceCollector _references;
+
+    /// <summary>
+    /// La última recolección, y de qué hallazgo era. La fila «Usado desde» de los metadatos sale de
+    /// aquí: si ya se ha mirado, decirlo es gratis; lo que no se hace nunca es mirar por si acaso.
+    /// </summary>
+    private (Ulid Finding, ReferenceReport Report)? _lastReferences;
+
     public FindingDetailViewModel(
         HubContext hub,
         GovernanceService governance,
@@ -66,7 +79,8 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         ToastCenter toasts,
         CloneLinkService links,
         LinkCloneFlow linkFlow,
-        AnchorRepair? anchors = null)
+        AnchorRepair? anchors = null,
+        ReferenceCollector? references = null)
     {
         _hub = hub;
         ScopeOptions = new[]
@@ -83,6 +97,10 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         _links = links;
         _linkFlow = linkFlow;
         _anchors = anchors;
+
+        // El recolector no tiene estado propio ni dependencias: si nadie lo inyecta, se construye.
+        // Así el prompt de arreglo lleva sus referencias también en los caminos que no pasan por DI.
+        _references = references ?? new ReferenceCollector();
     }
 
     /// <inheritdoc cref="CloneLink.CanAudit"/>
@@ -537,6 +555,50 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
                 "Resuelto", $"{resolved.Utc.ToLocalTime():dd/MM/yyyy} · {resolved.By} · vía {resolved.Via}",
                 resolved.Justification));
         }
+
+        AddUsageRow(f);
+    }
+
+    /// <summary>
+    /// «Usado desde: N sitios» (F6.8 §4). Solo aparece cuando la recolección YA se hizo —al generar
+    /// el prompt de arreglo—, porque el dato es gratis a partir de ahí y le da al humano el radio de
+    /// impacto sin abrir el prompt. Nunca dispara una recolección: abrir una ficha no puede costar
+    /// un barrido del clon.
+    /// </summary>
+    private void AddUsageRow(Finding f)
+    {
+        if (_lastReferences is not { } memo || memo.Finding != f.Id || !memo.Report.Collected)
+        {
+            return;
+        }
+
+        ReferenceReport refs = memo.Report;
+        string value = refs.Total switch
+        {
+            0 => "sin llamadores en el clon",
+            1 => "1 sitio",
+            _ => $"{refs.Total} sitios",
+        };
+
+        var tip = new System.Text.StringBuilder();
+        tip.Append(refs.Precision == ReferencePrecision.Texto
+            ? "Por búsqueda de texto (aproximado). "
+            : "Llamadores directos en el clon local. ");
+        foreach (ReferenceSite site in refs.Sites.Take(5))
+        {
+            tip.Append($"\n{site.Path}:{site.Line}");
+            if (site.Member is not null)
+            {
+                tip.Append($" — {site.Member}");
+            }
+        }
+
+        if (refs.Total > Math.Min(refs.Sites.Count, 5))
+        {
+            tip.Append($"\n…y {refs.Total - Math.Min(refs.Sites.Count, 5)} más.");
+        }
+
+        Meta.Add(new MetaRow("Usado desde", value, tip.ToString()));
     }
 
     private static string Stamp(DetectionStamp stamp)
@@ -851,15 +913,46 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Lo que dice el botón mientras se busca quién usa el código (F6.8 §3): la recolección
+    /// recorre el clon y en una solución grande eso se nota. Un botón que no responde y no dice
+    /// nada se pulsa otra vez.
+    /// </summary>
+    [ObservableProperty]
+    private string _fixPromptActionLabel = "Generar prompt de arreglo";
+
+    /// <summary>
+    /// El encargo para el agente (§5.7), <b>con sus referencias</b> (F6.8). La recolección va en
+    /// un hilo de fondo y con presupuesto de tiempo: la UI nunca se bloquea y la generación nunca
+    /// tarda minutos. Si la recolección no puede, el prompt sale igual con el aviso de que va sin
+    /// ellas — no generarlo sería peor que generarlo incompleto.
+    /// </summary>
     [RelayCommand]
-    private void GenerateFixPrompt()
+    private async Task GenerateFixPrompt()
     {
         if (Finding is null)
         {
             return;
         }
 
-        string prompt = FixPromptBuilder.Build(Finding);
+        Finding target = Finding;
+        Ulid id = Id;
+        string? clone = _machines.Load().ClonePathFor(Slug);
+
+        ReferenceReport refs;
+        FixPromptActionLabel = "Buscando quién usa este código…";
+        try
+        {
+            refs = await Task.Run(() => _references.Collect(clone, target));
+        }
+        finally
+        {
+            FixPromptActionLabel = "Generar prompt de arreglo";
+        }
+
+        _lastReferences = (id, refs);
+
+        string prompt = FixPromptBuilder.Build(target, refs);
         bool copied = true;
         try
         {
@@ -871,10 +964,31 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
             copied = false;
         }
 
-        _governance.AddComment(Slug, Id, prompt, kind: "fix-prompt");
-        _toasts.Show(copied
+        _governance.AddComment(Slug, id, prompt, kind: "fix-prompt");
+        _toasts.Show((copied
             ? "Prompt de arreglo copiado al portapapeles y guardado en los comentarios."
-            : "Prompt de arreglo guardado en los comentarios (el portapapeles no estaba disponible).");
-        Reload(Id);
+            : "Prompt de arreglo guardado en los comentarios (el portapapeles no estaba disponible).")
+            + " " + ReferenceSummary(refs));
+        Reload(id);
+    }
+
+    /// <summary>La frase del aviso sobre las referencias: qué se encontró, o por qué no se miró.</summary>
+    private static string ReferenceSummary(ReferenceReport refs)
+    {
+        if (!refs.Collected)
+        {
+            return $"Va sin la lista de llamadores: {refs.Unavailable}.";
+        }
+
+        string approximate = refs.Precision == ReferencePrecision.Texto
+            ? " (por búsqueda de texto: aproximadas)"
+            : string.Empty;
+
+        return refs.Total switch
+        {
+            0 => "No se encontraron llamadores en el clon" + approximate + ".",
+            1 => "Incluye 1 sitio de uso" + approximate + ".",
+            _ => $"Incluye {refs.Total} sitios de uso{approximate}.",
+        };
     }
 }

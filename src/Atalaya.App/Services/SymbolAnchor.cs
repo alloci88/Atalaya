@@ -164,6 +164,21 @@ public static partial class SymbolAnchor
         return strong;
     }
 
+    /// <summary>
+    /// El miembro que contiene este nodo, como <c>Clase.Miembro</c>, o <c>null</c> si el nodo vive
+    /// fuera de todo miembro (un <c>using</c>, la cabecera del fichero).
+    /// <para>
+    /// Lo usa <see cref="ReferenceCollector"/> para decir en qué método está cada llamada, y sale
+    /// de aquí a propósito: si el criterio de «miembro» divergiera entre el re-anclaje y la lista
+    /// de llamadores, el mismo código se llamaría de dos maneras distintas en la misma ficha.
+    /// </para>
+    /// </summary>
+    public static string? ContainingMember(SyntaxNode node)
+    {
+        SyntaxNode? member = Enclosing(node);
+        return member is null ? null : MemberLabel(member);
+    }
+
     /// <summary>Del <c>symbol</c> declarado salen sus partes, la más específica primero.</summary>
     private static IEnumerable<string> SplitSymbol(string? symbol)
     {

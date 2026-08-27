@@ -67,6 +67,12 @@ comentarios, y las decisiones de gobernanza — silenciar (con motivo y caducida
 asignar, cambiar severidad, resolver a mano con justificación, cerrar una disputa y
 **generar prompt de arreglo** al portapapeles.
 
+- El **prompt de arreglo** viaja con **quién usa ese código**: los llamadores directos que
+  hay en el clon local —ruta, línea, método que llama y la línea de la llamada—, y las
+  reglas para que el agente no rompa el contrato que esos llamadores esperan. Si no hay
+  clon, o si el símbolo no se puede buscar, el prompt sale igual diciendo que va sin la
+  lista: nunca deja entender que un método no se usa cuando lo que pasa es que no se ha
+  podido mirar. Una vez generado, los metadatos enseñan **Usado desde: N sitios**.
 - **Verificar ahora** vuelve a preguntar al auditor si el defecto sigue ahí.
 - Un arreglo se confirma **juzgando el código que hay ahora**, no buscando el código
   viejo: que el fragmento auditado haya desaparecido es lo que pasa cuando algo se

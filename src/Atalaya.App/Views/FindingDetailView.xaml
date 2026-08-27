@@ -383,9 +383,13 @@
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
                         <TextBlock Text="Acciones" Style="{StaticResource SectionTitle}" />
-                        <ui:Button Content="Generar prompt de arreglo" Style="{StaticResource SideAction}"
+                        <!-- F6.8: el rótulo sale del view-model porque la recolección de
+                             referencias recorre el clon y en una solución grande se nota. El botón
+                             se deshabilita solo mientras corre (AsyncRelayCommand), pero un botón
+                             gris que no dice nada se pulsa otra vez: mientras busca, lo dice. -->
+                        <ui:Button Content="{Binding FixPromptActionLabel}" Style="{StaticResource SideAction}"
                                    Command="{Binding GenerateFixPromptCommand}" Appearance="Primary"
-                                   ToolTip="Compone el encargo para un agente y lo copia al portapapeles." />
+                                   ToolTip="Compone el encargo para un agente —con la lista de quién usa este código— y lo copia al portapapeles." />
                         <!-- F5.4: bajó de V3. Verificar de uno en uno deja ver QUÉ se le pregunta al agente.
                              F5.8 §3: es una acción de AUDITAR —lee el clon—, así que sin vínculo
                              local queda gris con su motivo y el atajo para arreglarlo al lado. La

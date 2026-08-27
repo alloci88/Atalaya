@@ -134,6 +134,9 @@ public partial class App : Application
         services.AddSingleton<DisplayIdService>();
         // F5.6 §2 (D-226): el re-anclaje que se persiste al abrir la ficha.
         services.AddSingleton<AnchorRepair>();
+        // F6.8: quién usa el código de un hallazgo. Alimenta el prompt de arreglo, y el arreglo
+        // integrado (H9) heredará el mismo servicio en vez de recolectar por su cuenta.
+        services.AddSingleton<ReferenceCollector>();
 
         // F5.3 §4: el hard-reset de una app. El "quién pregunta" se inyecta para que el
         // view-model no dependa de una ventana y los tests puedan ejercitar el flujo entero.

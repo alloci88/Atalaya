@@ -4418,3 +4418,152 @@ que se auditó **porque se arregló**.
   botón; resuelto → la nota del arreglo palabra por palabra, tono neutro, sin acción y con el
   snippet enseñando el código nuevo; silenciado → sin franja, con el código igualmente delante. Y
   el cuarto, el resuelto sin código: el sello, el hecho, y ni un «Verifica».
+## F6.8 — El prompt de arreglo viaja con sus referencias
+
+Reportado por el jefe del usuario, del sistema antiguo. Al pedirle a un agente que arregle un
+hallazgo, el agente ve SOLO el método afectado: aplica un arreglo localmente correcto —a menudo
+cosmético: validaciones, excepciones nuevas, cambios de contrato— sin saber quién llama a ese
+método ni qué comportamiento esperan los llamadores, y rompe un proceso más complejo aguas arriba.
+El ejemplo es de esta misma aplicación auditada: añadir `ArgumentException` a un método que antes
+truncaba en silencio rompe a cualquier llamador que dependiera del truncado.
+
+### §1 — Cómo se recolecta
+
+- **D-514 — El árbol sintáctico de Roslyn, no la solución cargada.** Se evaluó `MSBuildWorkspace`
+  + `FindReferences`, que es lo exacto —resuelve tipos y distingue dos miembros del mismo nombre—,
+  y se descartó por una razón que no es de rendimiento sino de **honradez del resultado**: exige
+  cargar y restaurar una solución ajena (docenas de proyectos, a menudo .NET Framework, a menudo
+  sin paquetes restaurados en el clon), y una solución que no compila devuelve símbolos sin
+  resolver, es decir, **cero referencias en silencio**. Ese es el peor resultado posible de los
+  tres, porque «no tiene llamadores» es justo la frase que autoriza a cambiar el contrato. El
+  analizador sintáctico, en cambio, tolera ficheros que no compilan —igual que `MethodBoundary`
+  desde F5.5—, no necesita proyectos ni restauración, y descarta comentarios, documentación XML y
+  cadenas, que es de donde salen los falsos positivos de un `grep`. Lo que no hace —resolver
+  tipos— se DECLARA en el propio prompt. La preferencia del encargo era Roslyn con la solución
+  cargada; esto es Roslyn sin ella, y la diferencia queda escrita aquí y en el prompt, no
+  disimulada.
+
+- **D-515 — Solo cuentan los `SimpleNameSyntax`, y eso resuelve dos cosas de una vez.** La
+  DECLARACIÓN del miembro no es un `SimpleNameSyntax` —su nombre es un token de la declaración—,
+  así que el método afectado no aparece como llamador de sí mismo sin necesidad de excluirlo a
+  mano. Y `DescendantNodes()` no baja a la trivia, de modo que un `<see cref="Foo"/>` y un
+  `// Foo trunca en silencio` quedan fuera solos. El fixture lo comprueba con las tres menciones
+  que no son llamadas.
+
+- **D-516 — El `symbol` declarado MANDA sobre la línea guardada, y se usa UNA sola fuente.**
+  Primero se probó a sumar las fuentes —el `symbol` del auditor más el miembro que contiene cada
+  ubicación en el clon de hoy— y contra el X-BLAST real salió mal: BUG-0002 declara
+  `StringToByteArray`, pero su línea guardada ya no cae dentro de ese método porque el fichero se
+  ha editado desde la auditoría, y la ubicación aportaba `ReadCSV`. La lista traía **nueve
+  llamadores de los cuales ocho eran de otro método completamente distinto**. Una lista de
+  llamadores diluida es peor que una corta: el agente revisa ocho sitios que no le importan y se
+  fía de un conjunto que no es el suyo. Ahora se toma la primera fuente que dé algo: `symbol`, si
+  no el miembro de la ubicación (D-223: es lo único que tienen los hallazgos viejos), si no los
+  identificadores fuertes del título.
+
+- **D-517 — De cada entrada del `symbol` se toma el MIEMBRO, nunca el tipo.**
+  `CommonStatics.StringToByteArray` busca el método; buscar `CommonStatics` devolvería cada línea
+  que menciona la clase y ahogaría a los llamadores del método, que es lo que hay que leer. Y el
+  campo admite varios miembros hermanos (`DateToByteArray,TimeToByteArray`,
+  `StringToByteArray/HexStringToByteArray`), que es como los escriben los auditores: se parte por
+  `, / ; | +` y se busca cada uno.
+
+- **D-518 — El plan B textual es para los stacks que no son C#, y va ETIQUETADO.** Se busca el
+  nombre como **palabra completa** (`parse_hex` no casa dentro de `parse_hexadecimal`) y el prompt
+  dice de dónde salió la lista y sus dos clases de error, positivos y negativos. Media lista
+  encontrada vale más que ninguna, siempre que no se presente como precisa.
+
+- **D-519 — Los tests NO se excluyen del barrido**, al contrario que en el inventario, donde
+  `DefaultExclusions` los quita. Un test que llama al método es exactamente un llamador que hay
+  que mirar antes de cambiarle el contrato — y suele ser el que primero se rompe. Lo que sí se
+  poda es lo compilado (`bin`, `obj`, `packages`, `node_modules`…): una llamada ahí dentro no es
+  un llamador, es una copia.
+
+### §2 — Los topes, y por qué el barrido es rápido
+
+- **D-520 — El filtro barato va sobre el TEXTO, antes de partirlo en líneas.** La primera versión
+  leía cada fichero y lo partía en un array de cadenas antes de buscar el nombre: 9,5 s sobre
+  X-BLAST. Como el nombre no aparece en el 99 % de los ficheros, ese array se construía para nada.
+  Con el `Contains` sobre el texto crudo y el troceado solo en los que sí lo mencionan: **206 ms**.
+  El presupuesto de tiempo (25 s por defecto, configurable) deja de ser la defensa habitual y pasa
+  a ser lo que es, un seguro contra la solución monstruosa.
+
+- **D-521 — Cortar por tiempo no es no haber podido mirar, y son estados distintos.** `TimedOut`
+  recorta la lista y lo anuncia en el prompt; `Unavailable` dice que no hay lista y por qué. La
+  tercera situación —se miró y no hay llamadores— es un RESULTADO. Las tres se dicen con palabras
+  diferentes porque significan cosas diferentes, y confundir la última con la segunda es lo que
+  autoriza a cambiar un contrato a ciegas.
+
+- **D-522 — Tope de 30 sitios y ~9.000 caracteres, y lo que sobra se dice CON SU PROYECTO.**
+  «…y 12 más en Extra, Loader (de 42 en total)». El proyecto sale del `.csproj` más cercano hacia
+  arriba, no del prefijo de la ruta: es el nombre que el humano reconoce. Y los sitios se ordenan
+  por ruta y línea ANTES de recortar, así que dos generaciones del mismo prompt listan lo mismo —
+  si el recorte lo dictara el orden del sistema de ficheros, el prompt no sería reproducible.
+
+- **D-523 — Nada de análisis transitivo, y se dice en una frase.** Solo llamadores directos, un
+  nivel. «Estos llamadores tienen a su vez sus propios consumidores, y ese radio de impacto de
+  segundo orden NO está calculado aquí» es más honrado y muchísimo más barato que calcularlo, que
+  es lo que convierte esto en un barrido de la solución entera.
+
+### §3 — Lo que gana el prompt
+
+- **D-524 — Las dos secciones nuevas van juntas o no van.** «Quién usa este código» sin las reglas
+  es una lista decorativa; «Reglas del arreglo» sin la lista es una regla imposible de cumplir —no
+  se puede «revisar todos los llamadores» sin tenerlos delante—. Las reglas endurecidas son tres:
+  preservar el contrato observable salvo que el defecto SEA el contrato, adaptar a cada llamador
+  en el mismo cambio si el contrato cambia («un arreglo que rompe llamadores no es un arreglo»), y
+  compilar y pasar los tests. Los criterios de §5.7 no se pierden: bajan a los puntos 4-6 de la
+  misma lista, y por eso la sección se llama ahora «Reglas del arreglo» y no «Criterios de
+  aceptación».
+
+- **D-525 — El ejemplo real va DENTRO de la regla.** «Añadir una excepción a un método que antes
+  truncaba en silencio rompe a cualquier llamador que dependiera del truncado» es el defecto que
+  abrió el parte, escrito en el prompt. Una regla abstracta sobre «el contrato observable» se lee
+  y se olvida; el caso concreto es lo que hace que el agente mire la lista.
+
+- **D-526 — Y el prompt le pone límites al AGENTE, no solo la app a sí misma.** Los topes de §2
+  impiden que Atalaya se vuelva loca; nada impedía que se volviera loco el que arregla. «Revisa
+  los llamadores LISTADOS arriba; NO explores el código base más allá de ellos», y si sospecha
+  impacto más profundo —transitivo, otros repos, consumidores externos— **no lo persigue**: lo
+  declara como riesgo pendiente de revisión humana. Un arreglo que se expande por la solución no
+  es un arreglo mejor: es uno que ya no se puede revisar.
+
+- **D-527 — Sin referencias el prompt SALE IGUAL, y la frase que no puede aparecer nunca es «no
+  tiene llamadores».** Anti-objetivo declarado: la recolección no bloquea la generación. Cuando no
+  se pudo mirar, el prompt dice que va sin la lista, dice por qué, y añade «no supongas que el
+  código no se usa en ningún sitio: no se ha podido mirar». Un prompt que simplemente omitiera la
+  sección se leería como un método sin usos.
+
+### §4 — La ficha
+
+- **D-528 — «Usado desde: N sitios» solo aparece si YA se miró.** Sale de la recolección que hizo
+  el botón; abrir una ficha no puede costar un barrido del clon. El tooltip trae los primeros
+  sitios: le da al humano el radio de impacto antes de decidir si arregla, y no cuesta nada extra.
+
+- **D-529 — Y el botón dice lo que está haciendo.** «Buscando quién usa este código…» mientras
+  corre. `AsyncRelayCommand` ya lo deshabilita solo, pero un botón gris que no explica por qué se
+  pulsa otra vez. La recolección va en `Task.Run`: la UI no se bloquea.
+
+### §5 — Cobertura
+
+- **D-530 — Lo que queda probado (25 tests).** Del recolector: un método usado en varios sitios
+  devuelve ruta, línea, miembro contenedor y línea de la llamada; la declaración no cuenta como
+  uso propio; ni documentación, ni comentarios, ni cadenas son llamadas; `bin` no aporta; sin
+  `symbol` el miembro sale de la ubicación y con `symbol` este manda sobre una línea vieja; el
+  campo admite varios miembros; sin llamadores es un resultado y sin clon no lo es; el tope de
+  sitios con «y N más en {proyectos}», el de tamaño y el de tiempo; y el plan B textual etiquetado
+  con la palabra completa. Del prompt: las cuatro formas de la sección (lista, vacía, aproximada,
+  ausente), el recorte, las reglas del contrato, los criterios de siempre y los límites del
+  agente. Y de la ficha: el prompt guardado trae la lista, «Usado desde» no aparece antes de
+  mirar y sí después, y el botón anuncia la búsqueda.
+
+- **D-531 — Y el caso de aceptación se corrió contra el X-BLAST real**, que es lo que encontró
+  D-516 y D-520. `CommonStatics.CombineArrays`: **23 sitios en 129 ms**, contrastados uno a uno
+  contra `grep` — 24 apariciones en el repo menos la declaración de la línea 94.
+  `StringToByteArray`: 1 llamador real en
+  `RiotronicXPlusXml.GetRiotronicXPlusDataMemoryStructure`, en 206 ms.
+
+- **D-532 — Y está diseñado como servicio reutilizable, que era el anti-objetivo de H9.**
+  `ReferenceCollector` no sabe nada del prompt: devuelve un `ReferenceReport` y es `FixPromptBuilder`
+  quien lo redacta. Cuando se construya el arreglo integrado heredará esta misma recolección en vez
+  de hacerse la suya.

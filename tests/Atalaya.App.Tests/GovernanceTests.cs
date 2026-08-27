@@ -101,7 +101,9 @@ public sealed class GovernanceTests : IDisposable
         Finding f = SeedFinding();
         string prompt = FixPromptBuilder.Build(f);
 
-        prompt.Should().Contain("Criterios de aceptación");
+        // F6.8: los criterios de §5.7 pasaron a ser las «reglas del arreglo», endurecidas alrededor
+        // del contrato observable. Lo que exigían sigue exigiéndose.
+        prompt.Should().Contain("Reglas del arreglo");
         prompt.Should().Contain("Arregla SOLO este hallazgo");
         prompt.Should().Contain(f.RuleId);
 
