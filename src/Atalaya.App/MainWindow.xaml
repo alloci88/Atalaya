@@ -95,6 +95,13 @@
                         HorizontalContentAlignment="Left"
                         Margin="0,2" />
                     <ui:Button
+                        Command="{Binding ShowReportsCommand}"
+                        Content="Informes"
+                        Appearance="Secondary"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Margin="0,2" />
+                    <ui:Button
                         Command="{Binding NewAppCommand}"
                         Content="Nueva aplicación"
                         Appearance="Secondary"

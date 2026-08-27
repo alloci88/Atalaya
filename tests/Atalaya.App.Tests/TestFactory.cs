@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
 using Atalaya.Domain.Abstractions;
@@ -103,15 +103,61 @@ internal static class TestFactory
         AppPaths paths,
         SettingsService settings,
         NavigationService? navigation = null,
-        IFileOpener? opener = null,
         ToastCenter? toasts = null)
         => new(
             new MetricsQuery(hub),
             navigation ?? new NavigationService(new EmptyServiceProvider()),
             settings,
             hub,
-            opener ?? new RecordingFileOpener(),
             toasts ?? new ToastCenter());
+
+    /// <summary>La vista Informes (F6.3) sin nada que abra una ventana ni un dialogo del sistema.</summary>
+    public static ReportsViewModel Reports(
+        HubContext hub,
+        NavigationService? navigation = null,
+        IFileSaver? saver = null,
+        ToastCenter? toasts = null)
+        => new(
+            new ReportsQuery(hub),
+            navigation ?? new NavigationService(new EmptyServiceProvider()),
+            saver ?? new RecordingFileSaver(null),
+            toasts ?? new ToastCenter());
+
+    /// <summary>
+    /// Una navegacion que sabe resolver las paginas que se le den. Existe porque los enlaces entre
+    /// vistas —«ver informe» desde Metricas o desde V5— solo se pueden comprobar si el destino se
+    /// puede construir de verdad.
+    /// </summary>
+    public static NavigationService NavigationWith(params object[] pages)
+        => new(new PageServiceProvider(pages));
+
+    /// <summary>Un guardador que no abre dialogo: anota lo que le propusieron y responde lo pactado.</summary>
+    public sealed class RecordingFileSaver : IFileSaver
+    {
+        private readonly string? _answer;
+
+        public RecordingFileSaver(string? answer) => _answer = answer;
+
+        /// <summary>Los nombres por defecto que se le ofrecieron, en orden.</summary>
+        public List<string> Suggested { get; } = new();
+
+        public string? Pick(string title, string suggestedFileName, string filter)
+        {
+            Suggested.Add(suggestedFileName);
+            return _answer;
+        }
+    }
+
+    /// <summary>Resuelve por tipo exacto las paginas que le pasaron; lo demas, null.</summary>
+    private sealed class PageServiceProvider : IServiceProvider
+    {
+        private readonly object[] _pages;
+
+        public PageServiceProvider(object[] pages) => _pages = pages;
+
+        public object? GetService(Type serviceType)
+            => _pages.FirstOrDefault(p => serviceType.IsInstanceOfType(p));
+    }
 
     /// <summary>Un abridor que no abre nada y anota lo que le pidieron (F5.9 §3, gráfica 4).</summary>
     public sealed class RecordingFileOpener : IFileOpener

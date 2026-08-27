@@ -7,6 +7,7 @@ using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
+using CommunityToolkit.Mvvm.Input;
 using FluentAssertions;
 using Xunit;
 
@@ -366,36 +367,43 @@ public sealed class MetricsPanelTests : IDisposable
         _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 1 });
         WriteSession("app", cost: 2m);
 
-        var opener = new TestFactory.RecordingFileOpener();
         var toasts = new ToastCenter();
-        MetricsViewModel vm = TestFactory.Metrics(_hub, _paths, _settings, opener: opener, toasts: toasts);
+        NavigationService navigation = TestFactory.NavigationWith(TestFactory.Reports(_hub));
+        MetricsViewModel vm = TestFactory.Metrics(_hub, _paths, _settings, navigation, toasts);
         await vm.LoadAsync();
 
         SessionLine line = vm.Sessions.Single();
         line.HasReport.Should().BeFalse("esta sesión no dejó markdown");
-        vm.OpenSessionCommand.Execute(line);
+        await ((IAsyncRelayCommand)vm.OpenSessionCommand).ExecuteAsync(line);
 
-        opener.Opened.Single().Should().Be(vm.ReportPathFor(line.Slug, line.SessionId));
         toasts.Items.Should().ContainSingle(t => t.Text.Contains("no dejó informe"));
+        navigation.Current.Should().BeNull("no hay informe que enseñar: no se navega a ninguna parte");
     }
 
+    /// <summary>
+    /// F6.3 §3: el registro de operaciones enlaza al VISOR de informes, no al bloc de notas del
+    /// sistema. En toda la aplicación hay un solo sitio donde se lee un informe.
+    /// </summary>
     [Fact]
-    public async Task Un_clic_en_una_sesion_con_informe_lo_abre()
+    public async Task Un_clic_en_una_sesion_con_informe_lo_abre_en_la_vista_informes()
     {
         _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 1 });
         AuditSession session = WriteSession("app", cost: 2m);
-        _hub.Store.WriteReport("app", session.Id.ToString(), "# Informe");
+        _hub.Store.WriteReport("app", session.Id.ToString(), "# Informe de sesión — App");
 
-        var opener = new TestFactory.RecordingFileOpener();
         var toasts = new ToastCenter();
-        MetricsViewModel vm = TestFactory.Metrics(_hub, _paths, _settings, opener: opener, toasts: toasts);
+        ReportsViewModel reports = TestFactory.Reports(_hub);
+        NavigationService navigation = TestFactory.NavigationWith(reports);
+        MetricsViewModel vm = TestFactory.Metrics(_hub, _paths, _settings, navigation, toasts);
         await vm.LoadAsync();
 
         SessionLine line = vm.Sessions.Single();
         line.HasReport.Should().BeTrue();
-        vm.OpenSessionCommand.Execute(line);
+        await ((IAsyncRelayCommand)vm.OpenSessionCommand).ExecuteAsync(line);
 
-        opener.Opened.Should().ContainSingle();
+        navigation.Current.Should().BeSameAs(reports);
+        reports.IsViewing.Should().BeTrue();
+        reports.OpenReport!.Entry.ReportId.Should().Be(session.Id.ToString(), "el informe de ESA sesión");
         toasts.Items.Should().BeEmpty("abrió: no hay nada que avisar");
     }
 

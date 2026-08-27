@@ -70,7 +70,6 @@ public sealed partial class MetricsViewModel : ViewModelBase
     private readonly NavigationService _navigation;
     private readonly SettingsService _settings;
     private readonly HubContext _hub;
-    private readonly IFileOpener _opener;
     private readonly ToastCenter _toasts;
 
     /// <summary>Lo último agregado. El toggle de acumulado se sirve de aquí sin releer el hub.</summary>
@@ -86,14 +85,12 @@ public sealed partial class MetricsViewModel : ViewModelBase
         NavigationService navigation,
         SettingsService settings,
         HubContext hub,
-        IFileOpener opener,
         ToastCenter toasts)
     {
         _metrics = metrics;
         _navigation = navigation;
         _settings = settings;
         _hub = hub;
-        _opener = opener;
         _toasts = toasts;
 
         RangeOptions = new ObservableCollection<RangeOption>
@@ -528,19 +525,26 @@ public sealed partial class MetricsViewModel : ViewModelBase
             ? Task.CompletedTask
             : _navigation.NavigateToAsync<InventoryViewModel>(vm => vm.SetApp(card.Slug));
 
-    /// <summary>Un clic en una sesión abre su informe, que es el detalle de esa línea.</summary>
+    /// <summary>
+    /// Un clic en una sesión abre su informe, que es el detalle de esa línea. Lo abre en la vista
+    /// Informes (F6.3): en toda la aplicación hay UN sitio donde se lee un informe, y ya no es el
+    /// bloc de notas del sistema.
+    /// </summary>
     [RelayCommand]
-    private void OpenSession(SessionLine? line)
+    private Task OpenSession(SessionLine? line)
     {
         if (line is null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        if (!_opener.Open(ReportPathFor(line.Slug, line.SessionId)))
+        if (!File.Exists(ReportPathFor(line.Slug, line.SessionId)))
         {
             _toasts.Show("Esta sesión no dejó informe en disco.");
+            return Task.CompletedTask;
         }
+
+        return _navigation.NavigateToAsync<ReportsViewModel>(vm => vm.ShowReport(line.Slug, line.SessionId));
     }
 
     /// <summary>Donde vive el informe de una sesión. Publico para poder comprobarlo sin abrir nada.</summary>

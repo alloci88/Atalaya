@@ -1,5 +1,4 @@
-using System.Collections.ObjectModel;
-using System.Diagnostics;
+﻿using System.Collections.ObjectModel;
 using System.Windows.Threading;
 using Atalaya.App.Services;
 using Atalaya.Domain;
@@ -151,24 +150,31 @@ public sealed partial class SessionViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Abre el informe markdown de la sesion con la aplicacion asociada.</summary>
+    /// <summary>
+    /// Abre el informe de esta sesion en la vista Informes (F6.3).
+    /// <para>
+    /// Antes lo lanzaba al bloc de notas del sistema con un <c>Process.Start</c>. Eran dos formas
+    /// distintas de leer lo mismo —una dentro y otra fuera— y la de fuera enseñaba markdown crudo.
+    /// Ahora el informe se lee donde se leen todos, con sus tablas pintadas y con su boton de
+    /// descarga para quien de verdad quiera el fichero.
+    /// </para>
+    /// </summary>
     [RelayCommand]
-    private void OpenReport()
+    private Task OpenReport()
     {
         if (string.IsNullOrWhiteSpace(_live.ReportPath) || !File.Exists(_live.ReportPath))
         {
             _live.StatusMessage = "El informe todavia no esta en disco.";
-            return;
+            return Task.CompletedTask;
         }
 
-        try
+        if (_navigation is null)
         {
-            Process.Start(new ProcessStartInfo(_live.ReportPath) { UseShellExecute = true });
+            return Task.CompletedTask;
         }
-        catch (Exception ex)
-        {
-            _live.StatusMessage = $"No se pudo abrir el informe: {ex.Message}";
-        }
+
+        return _navigation.NavigateToAsync<ReportsViewModel>(
+            vm => vm.ShowReport(_live.AppSlug, _live.SessionId));
     }
 
     private void OnLiveChanged()

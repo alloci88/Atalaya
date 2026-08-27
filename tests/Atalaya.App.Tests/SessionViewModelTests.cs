@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Copilot;
 using Atalaya.Domain;
@@ -326,6 +326,56 @@ public sealed class SessionViewModelTests : IDisposable
         live.Units.Select(u => u.ShortName).Should().Equal("A.cs", "B.cs");
         // La ruta completa sigue ahí: es la que alimentan el tooltip y la cabecera de actividad.
         live.Units.Select(u => u.Path).Should().Equal("dir/A.cs", "otro/B.cs");
+    }
+
+    // ---------- F6.3 §3: «Ver informe» lleva al visor, no al bloc de notas ----------
+
+    /// <summary>
+    /// El informe de la última sesión se lee DENTRO de la aplicación, en la vista Informes, con
+    /// sus tablas pintadas. Antes salía a la aplicación que el sistema asociara al <c>.md</c>:
+    /// era una segunda forma de leer lo mismo, y la peor de las dos.
+    /// </summary>
+    [Fact]
+    public async Task Ver_informe_abre_la_vista_informes_con_el_informe_de_esta_sesion()
+    {
+        // Con el hub conectado: es de donde LiveSessionService saca la ruta del informe.
+        var live = new LiveSessionService(
+            () => new SessionCoordinator(
+                _hub, _ingestion, _reconciliation, _machines, _ulids,
+                new FakeCopilotAgent(_ => new[] { Sample() }), _settings),
+            new FakeCopilotAgent(_ => new[] { Sample() }),
+            new OpenSessionStore(_paths),
+            _hub);
+        await live.StartAsync(Request(), new[] { "A.cs" });
+
+        live.ReportPath.Should().NotBeEmpty();
+        File.Exists(live.ReportPath).Should().BeTrue("la sesión dejó su informe en el hub");
+
+        ReportsViewModel reports = TestFactory.Reports(_hub);
+        NavigationService navigation = TestFactory.NavigationWith(reports);
+        var vm = new SessionViewModel(live, navigation);
+
+        await vm.OpenReportCommand.ExecuteAsync(null);
+
+        navigation.Current.Should().BeSameAs(reports);
+        reports.IsViewing.Should().BeTrue();
+        reports.OpenReport!.Entry.ReportId.Should().Be(live.SessionId);
+        reports.OpenReport.Entry.Slug.Should().Be("app");
+    }
+
+    /// <summary>Sin informe en disco no se navega a ninguna parte: se dice y se queda donde está.</summary>
+    [Fact]
+    public async Task Sin_informe_en_disco_ver_informe_lo_dice_en_vez_de_navegar()
+    {
+        LiveSessionService live = NewLive();
+        ReportsViewModel reports = TestFactory.Reports(_hub);
+        NavigationService navigation = TestFactory.NavigationWith(reports);
+        var vm = new SessionViewModel(live, navigation);
+
+        await vm.OpenReportCommand.ExecuteAsync(null);
+
+        navigation.Current.Should().BeNull();
+        live.StatusMessage.Should().Contain("todavia no esta en disco");
     }
 
     /// <summary>Agente cuyo <c>CheckAsync</c> espera a una compuerta que abre el test.</summary>

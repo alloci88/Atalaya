@@ -60,6 +60,9 @@
             <DataTemplate DataType="{x:Type vm:MetricsViewModel}">
                 <views:MetricsView />
             </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:ReportsViewModel}">
+                <views:ReportsView />
+            </DataTemplate>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -3801,3 +3801,147 @@ poder leer las dos en pareja («esto costó, esto saldó»).
   resoluciones sube y **no toca** la serie de coste, y que la nota de vacío está escrita.
   De la vista: tres `ChartPlot` y ni una más, y la de resoluciones **entre** la de coste y la
   de cobertura.
+
+## F6.3 — Informes (V7): buscar, leer y descargar lo que las auditorías escribieron
+
+Los informes existían desde §7 y no había forma de verlos. El único camino era pulsar
+«Ver informe» en la última sesión, que los lanzaba a la aplicación que el sistema
+asociara al `.md` — es decir, fuera de Atalaya y en markdown crudo. Lo escrito estaba,
+y era ilegible.
+
+### §1 — La lista
+
+- **D-435 — La fuente son los FICHEROS de `reports/`, no la lista de sesiones.** Es la
+  decisión que ordena todo lo demás. Enumerar sesiones habría dado una lista con filas
+  que no llevan a ninguna parte —una sesión que reventó antes de escribir su informe— y
+  sin las que sí llevan: los informes que trae el importador de v4 no tienen sesión
+  ninguna. La sesión se usa para ENRIQUECER lo que se sabe de cada fichero, nunca para
+  decidir si aparece. `ReportsQuery.All()` recorre `ListReports(slug)` y busca la sesión
+  por el nombre del fichero, que es el ULID de la sesión cuando lo hay.
+
+- **D-436 — Sin sesión detrás, lo que se enseña es lo que el informe declara de sí
+  mismo.** `ReportHeader.Parse` lee el `# título` y los campos `- **Fecha**`,
+  `- **Autor**` y `- **Modo**` de las primeras treinta líneas — no el fichero entero,
+  que para una lista de doscientos informes sería leerlos todos para pintar una tabla.
+  Lo que no declare se queda a **null**, y la fila escribe «—». Escribir «0 unidades»
+  sobre un informe que nunca dijo cuántas procesó es inventarse una medida (D-318).
+
+- **D-437 — La fecha dice de dónde sale.** Cuatro procedencias, en este orden: la de su
+  sesión, la que el propio informe escribe, la que lleva dentro el ULID de su nombre y,
+  en último término, la del fichero en este clon. `ReportDateSource` viaja con la fila y
+  el tooltip lo dice. Ordenar una lista por una fecha sin saber cuál de las cuatro es
+  sería ordenarla por algo que el usuario no puede juzgar (N-2).
+
+- **D-438 — Tres tipos, y el que no se sabe NO se hace pasar por sesión.** El cierre de
+  ciclo escribe un **consolidado**; el reset es **operaciones**; lo demás —lotes, verify
+  y los modos retirados que siguen vivos en los informes antiguos— es **sesión**. Un
+  informe sin sesión y sin título reconocible se queda en «operaciones», que es la clase
+  que no afirma nada: llamarlo «sesión» sería decir de él algo que nadie ha dicho.
+
+- **D-439 — La búsqueda mira DENTRO del informe, y sin indexar nada.** Es la razón de
+  ser del cuadro de búsqueda: «busca ReadCSV» tiene que dar con el informe que lo
+  menciona sin saber de qué sesión salió. Son markdowns de decenas de kB en disco local,
+  así que un `contains` normalizado sobre el contenido —cacheado bajo demanda, no al
+  listar— es exactamente la herramienta del tamaño del problema. Montar un índice sería
+  añadir un estado derivado que mantener sincronizado para ahorrar milisegundos que
+  nadie está esperando (anti-objetivo del encargo).
+
+- **D-440 — Y normaliza tildes y mayúsculas (`TextSearch`).** Lo que hay dentro de un
+  informe lo escribió un modelo en español: «duplicación», «sesión», «análisis». Un
+  `Contains` a secas obliga a teclear la tilde exacta de lo que uno tiene delante en la
+  pantalla, que es una forma tonta de no encontrar nada.
+
+### §2 — El visor
+
+- **D-441 — Markdig ANALIZA; el dibujo es nuestro.** El encargo daba libertad y pedía
+  decidir por calidad de tablas y coste de dependencia. Las tres opciones y por qué
+  esta:
+  - **Markdig.Wpf** (0.5.0.1, sin tocar desde hace años) trae su propio diccionario de
+    estilos fijos. No sigue el tema de la aplicación —habría que pelearse con él en cada
+    clave— y las tablas son justo su parte floja. Un tema mal en la mitad de los
+    arranques no es un detalle: es la mitad de los arranques.
+  - **WebView2** significa meter un navegador fuera de proceso, con su runtime que hay
+    que tener instalado, para leer un fichero de texto de 20 kB — y volver a escribir el
+    tema entero en CSS, es decir, mantener dos paletas que tienen que coincidir.
+  - **Markdig + recorrido propio a `FlowDocument`** es lo que se hizo. Analizar markdown
+    a mano sería un error (es un formato con esquinas y Markdig es el analizador de
+    referencia), pero dibujar es trivial y es donde están nuestras reglas: la
+    `System.Windows.Documents.Table` nativa hace reparto REAL de columnas —que es lo que
+    estos informes necesitan— y los pinceles salen del tema por `DynamicResource`, así
+    que claro y oscuro salen bien sin una segunda paleta. De regalo, el texto es
+    seleccionable y el `Ctrl+F` del sistema funciona sobre él.
+
+- **D-442 — Ni un color escrito a mano, y hay un test que lo vigila.** El renderizador
+  pide `TextFillColorPrimaryBrush`, `CardStrokeColorDefaultBrush` y compañía con
+  `SetResourceReference`, así que siguen al tema aunque cambie con la página abierta. El
+  test barre el fuente buscando `#RRGGBB` y no puede haber ninguno — es la misma
+  disciplina de F5.9 §2 y de `ButtonForegroundTests`, aplicada al documento.
+
+- **D-443 — Lista y visor viven en el MISMO view-model.** «Volver» tiene que devolver la
+  lista con sus filtros Y su scroll, y eso solo es gratis si la lista nunca se destruyó:
+  el visor se enseña ENCIMA (la lista se oculta, no se descarga). Dos páginas separadas
+  habrían obligado a serializar el estado del filtro para restaurarlo, que es la clase
+  de código que acaba perdiendo un campo en la sexta iteración.
+
+- **D-444 — Los enlaces del informe salen FUERA.** El renderizador no navega: entrega la
+  URL a quien lo llamó, y el view-model la abre en el navegador del sistema tras
+  comprobar que es `http`/`https`. Atalaya no es un navegador y un informe no es una
+  página web dentro de la ventana. Un esquema raro se dice y no se ejecuta.
+
+- **D-445 — La descarga copia el fichero, no lo vuelve a generar.** `File.Copy` del
+  `.md` tal cual. Reconstruir el markdown para guardarlo abriría la puerta a que lo
+  descargado y lo publicado dejaran de ser el mismo documento — y estos son inmutables
+  por diseño. El nombre por defecto es `atalaya-{app}-{tipo}-{fecha}.md`: dice qué es
+  sin abrirlo y ordena solo en la carpeta de descargas.
+
+### §3 — Un solo camino para ver un informe
+
+- **D-446 — Se retiran los DOS atajos que había.** «Ver informe de sesión» en V5 hacía
+  `Process.Start` sobre el `.md`; el registro de operaciones de Métricas usaba
+  `IFileOpener` para lo mismo. Eran dos formas distintas de leer lo mismo, las dos
+  fuera de la aplicación y las dos en crudo. Ahora los dos navegan a Informes con
+  `ShowReport(slug, id)`. `MetricsViewModel` pierde su dependencia de `IFileOpener`
+  —quedarse con ella sin usarla es cómo se acumulan los atajos— y conserva
+  `ReportPathFor`, que sigue haciendo falta para saber si la fila tiene informe.
+
+- **D-447 — Un enlace a un informe que no está se DICE.** Puede pasar: una sesión que no
+  llegó a escribirlo, o un pull que se llevó el fichero. La vista se queda en la lista y
+  avisa. Quedarse callado es indistinguible de que el botón no funcione, que es
+  exactamente el bug que abrió F5.15.
+
+- **D-448 — «Ver hallazgos de esta sesión» solo en informes de SESIÓN.** Un consolidado
+  de cierre o un reset no hablan de una tanda concreta de hallazgos; el botón lleva a
+  Hallazgos filtrado por la aplicación, que es todo lo que el dato soporta afirmar.
+
+### §4 — Cobertura
+
+- **D-449 — Lo que queda probado (31 tests).** De la lista: que solo salen las sesiones
+  con informe y que las que no lo tienen siguen en el hub; que los metadatos salen de la
+  sesión; el orden; que cierre y reset llevan su insignia y que verify también es
+  sesión; que un informe sin sesión se describe por su cabecera —autor sin la máquina,
+  fecha parseada, tipo por el título— y deja en «—» lo que no declara; y que uno sin
+  título reconocible no se hace pasar por sesión. De los filtros: que se combinan; que
+  el rango recorta por los dos extremos; que la búsqueda encuentra por CONTENIDO, por
+  aplicación y por autor, y que le dan igual las tildes. Del view-model: que arranca sin
+  filtros, que «Limpiar» los devuelve, que el rango a mano incluye el día de su extremo,
+  que el estado vacío distingue un hub vacío de un filtro estrecho, y que un informe
+  publicado por otro aparece al recargar. Del visor: que abre, renderiza, y que
+  **volver conserva el filtro**; que un consolidado no ofrece el enlace a hallazgos; que
+  ese enlace abre V3 filtrado por su app. Del render: que una tabla sale como tabla —con
+  sus tres columnas, su cabecera en negrita y la alineación de los guiones respetada—,
+  que reconoce encabezados, listas y código, que un enlace se entrega a quien lo abre
+  fuera, y que un informe vacío no revienta nada. De la descarga: el nombre por defecto,
+  que copia el markdown byte a byte y lo anuncia, y que cancelar no escribe ni avisa. Y
+  del tema: que no hay un solo color a mano ni en el renderizador ni en la vista.
+
+- **D-450 — Y un test que caza lo que el compilador no.** Un `StaticResource` con una
+  clave inexistente compila y revienta al abrir la página, delante del usuario.
+  `Todas_las_claves_que_pide_la_vista_existen` cruza las claves que usa `ReportsView`
+  contra las declaradas en ella y en `App.xaml`. Es barato y cubre el único fallo de
+  esta vista que los demás tests no verían.
+
+- **D-451 — MANUAL.md, creado.** En F6.1 se anotó que no existía (D-433) y la DoD lo
+  volvió a pedir, ahora con dos secciones. Se escribe entero: qué hace cada vista, en
+  qué orden se usan y qué significa lo que enseñan — con Informes y con el enlace desde
+  Métricas en su sitio. Es documentación de USUARIO y por eso vive aparte del README,
+  que es de instalación y arquitectura.

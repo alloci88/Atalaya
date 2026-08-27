@@ -292,6 +292,10 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private Task ShowMetrics() => Navigation.NavigateToAsync<MetricsViewModel>();
 
+    /// <summary>V7 Informes (F6.3): la lista de todo lo que las auditorías han dejado escrito.</summary>
+    [RelayCommand]
+    private Task ShowReports() => Navigation.NavigateToAsync<ReportsViewModel>();
+
     [RelayCommand]
     private Task ShowSettings() => Navigation.NavigateToAsync<SettingsViewModel>();
 
