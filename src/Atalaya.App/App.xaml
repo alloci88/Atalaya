@@ -30,6 +30,14 @@
             <local:FindingStatusToBrushConverter x:Key="FindingStatusToBrush" />
             <local:FindingStatusToFillConverter x:Key="FindingStatusToFill" />
             <local:FindingEventToBrushConverter x:Key="FindingEventToBrush" />
+            <local:FixVoiceToBrushConverter x:Key="FixVoiceToBrush" />
+            <local:FixVoiceToFillConverter x:Key="FixVoiceToFill" />
+            <local:DiffKindToBrushConverter x:Key="DiffKindToBrush" />
+            <local:DiffKindToFillConverter x:Key="DiffKindToFill" />
+            <local:SelectedTabToFillConverter x:Key="SelectedTabToFill" />
+            <local:QuestionChoicePairConverter x:Key="QuestionChoicePair" />
+            <local:AllTrueToVisibilityConverter x:Key="AllTrueToVisibility" />
+            <local:InverseBoolConverter x:Key="InverseBool" />
             <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
 
             <!-- VM-first navigation: each page VM renders as its view. -->
@@ -62,6 +70,9 @@
             </DataTemplate>
             <DataTemplate DataType="{x:Type vm:ReportsViewModel}">
                 <views:ReportsView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type vm:AssistedFixViewModel}">
+                <views:AssistedFixView />
             </DataTemplate>
         </ResourceDictionary>
     </Application.Resources>

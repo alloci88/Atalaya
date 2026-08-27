@@ -286,3 +286,117 @@ public sealed class DashedToArrayConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
+
+// ====================================================================== F6.9 · Arreglo asistido
+
+/// <summary>
+/// El color del nombre de quien habla en la conversación de arreglo (F6.9 §4). Tres voces, tres
+/// colores: el agente en azul, el usuario en verde, la aplicación en gris. Explícitos y no del
+/// tema por la razón de siempre — significan lo mismo en claro que en oscuro— y nunca van solos:
+/// el nombre («Agente», «Tú», «Atalaya») se escribe al lado.
+/// </summary>
+public sealed class FixVoiceToBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
+    {
+        FixVoice.Agente => new SolidColorBrush(Color.FromRgb(0x6C, 0x93, 0xC0)),
+        FixVoice.Usuario => new SolidColorBrush(Color.FromRgb(0x3F, 0xB9, 0x50)),
+        _ => new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99)),
+    };
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>El fondo de la burbuja: apenas un tinte, para separar sin gritar.</summary>
+public sealed class FixVoiceToFillConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
+    {
+        FixVoice.Usuario => new SolidColorBrush(Color.FromArgb(0x22, 0x3F, 0xB9, 0x50)),
+        FixVoice.Sistema => new SolidColorBrush(Color.FromArgb(0x14, 0x80, 0x80, 0x80)),
+        _ => new SolidColorBrush(Color.FromArgb(0x1A, 0x6C, 0x93, 0xC0)),
+    };
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>
+/// El color del texto de una línea de diff. Verde lo añadido, rojo lo quitado, el color normal el
+/// contexto. El marcador (+ − ⋯) va SIEMPRE delante: el color solo refuerza lo que ya se lee.
+/// </summary>
+public sealed class DiffKindToBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
+    {
+        DiffKind.Anadida => new SolidColorBrush(Color.FromRgb(0x6C, 0xD0, 0x80)),
+        DiffKind.Quitada => new SolidColorBrush(Color.FromRgb(0xE0, 0x80, 0x80)),
+        DiffKind.Salto => new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+        _ => new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+    };
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>El fondo de la línea de diff, muy tenue: el código tiene que seguir leyéndose.</summary>
+public sealed class DiffKindToFillConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
+    {
+        DiffKind.Anadida => new SolidColorBrush(Color.FromArgb(0x22, 0x3F, 0xB9, 0x50)),
+        DiffKind.Quitada => new SolidColorBrush(Color.FromArgb(0x22, 0xD1, 0x3A, 0x3A)),
+        DiffKind.Salto => new SolidColorBrush(Color.FromArgb(0x10, 0x80, 0x80, 0x80)),
+        _ => Brushes.Transparent,
+    };
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>La pestaña del fichero que se está mirando, resaltada.</summary>
+public sealed class SelectedTabToFillConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is true
+            ? new SolidColorBrush(Color.FromArgb(0x33, 0x6C, 0x93, 0xC0))
+            : new SolidColorBrush(Color.FromArgb(0x14, 0x80, 0x80, 0x80));
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>
+/// Empareja la pregunta con la opción pulsada para que el comando reciba las dos. Un botón dentro
+/// de un <c>ItemsControl</c> anidado solo conoce su opción; el comando necesita saber además a qué
+/// tarjeta contesta, y pasar el par es más honrado que buscarlo por el árbol visual.
+/// </summary>
+public sealed class QuestionChoicePairConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+        => values.ToArray();
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>Visible solo si TODAS las condiciones se cumplen.</summary>
+public sealed class AllTrueToVisibilityConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+        => values.All(v => v is true) ? Visibility.Visible : Visibility.Collapsed;
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>Niega un booleano. Lo pide el <c>MultiBinding</c> de «puede pero no debería verse».</summary>
+public sealed class InverseBoolConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is not true;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is not true;
+}

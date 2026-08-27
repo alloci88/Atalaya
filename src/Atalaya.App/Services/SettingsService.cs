@@ -56,8 +56,18 @@ public sealed class AppSettings
 
     public Thresholds DefaultThresholds { get; set; } = new();
 
-    /// <summary>Feature flag for the assisted-fix flow (§5.7, H9).</summary>
-    public bool EnableAssistedFix { get; set; }
+    /// <summary>
+    /// Interruptor del arreglo asistido (§5.7, H9 — entregado en F6.9).
+    /// <para>
+    /// <b>Encendido por defecto.</b> El flujo es supervisado por construcción: el agente narra lo
+    /// que va a hacer antes de hacerlo, pide permiso fichero a fichero fuera del hallazgo, no
+    /// tiene shell ni git ni red, y exige un árbol de trabajo limpio para que descartar devuelva
+    /// el clon byte a byte. Nacer apagado escondería una capacidad segura detrás de un ajuste que
+    /// nadie iba a encontrar. Y como el valor por defecto es <c>true</c>, las máquinas con un
+    /// <c>settings.json</c> anterior a F6.9 —que no traen la clave— lo estrenan encendido.
+    /// </para>
+    /// </summary>
+    public bool EnableAssistedFix { get; set; } = true;
 
     /// <summary>
     /// Optional Copilot SDK BaseDirectory. Leave empty (default): the SDK uses its standard location,

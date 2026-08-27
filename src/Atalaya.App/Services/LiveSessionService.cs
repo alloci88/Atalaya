@@ -31,6 +31,14 @@ public sealed partial class LiveSessionService : ObservableObject
     private readonly ICopilotAgent _agent;
     private readonly OpenSessionStore _marker;
     private readonly HubContext? _hub;
+
+    /// <summary>
+    /// El cerrojo COMPARTIDO de F6.9: auditar y arreglar usan el mismo runtime, el mismo asiento y
+    /// el mismo clon, así que solo puede haber uno. Opcional para no romper a los tests que
+    /// construyen este servicio a mano; sin él se comporta como siempre.
+    /// </summary>
+    private readonly AgentBusyGate _busy;
+
     private readonly object _gate = new();
 
     private CancellationTokenSource? _cts;
@@ -60,13 +68,14 @@ public sealed partial class LiveSessionService : ObservableObject
     /// </param>
     public LiveSessionService(
         Func<SessionCoordinator> coordinatorFactory, ICopilotAgent agent, OpenSessionStore marker,
-        HubContext? hub = null, ModelResolver? models = null)
+        HubContext? hub = null, ModelResolver? models = null, AgentBusyGate? busy = null)
     {
         _coordinatorFactory = coordinatorFactory;
         _agent = agent;
         _marker = marker;
         _hub = hub;
         _models = models;
+        _busy = busy ?? new AgentBusyGate();
     }
 
     /// <summary>
@@ -169,6 +178,7 @@ public sealed partial class LiveSessionService : ObservableObject
     /// </summary>
     public Task StartAsync(SessionRequest request, IReadOnlyList<string> displayPaths)
     {
+        bool blocked;
         lock (_gate)
         {
             if (IsRunning)
@@ -176,10 +186,24 @@ public sealed partial class LiveSessionService : ObservableObject
                 return Task.CompletedTask;
             }
 
-            IsRunning = true;
+            // F6.9: y tampoco si hay un arreglo asistido corriendo. Auditar mientras un agente
+            // escribe en el clon es leer código a medio cambiar y publicar hallazgos sobre un
+            // estado que no existió nunca. El aviso se da FUERA del cerrojo: pintar la UI con un
+            // lock en la mano es cómo se construye un abrazo mortal.
+            blocked = !_busy.TryEnter(AgentWork.Auditoria);
+            if (!blocked)
+            {
+                IsRunning = true;
+            }
         }
 
         Reset(request, displayPaths);
+        if (blocked)
+        {
+            Fail(_busy.BusyMessage, offersModelChange: false);
+            return Task.CompletedTask;
+        }
+
         return RunAsync(request);
     }
 
@@ -328,6 +352,7 @@ public sealed partial class LiveSessionService : ObservableObject
             IsRunning = false;
             _cts?.Dispose();
             _cts = null;
+            _busy.Exit(AgentWork.Auditoria);
             Changed?.Invoke();
         }
     }

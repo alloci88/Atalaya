@@ -71,7 +71,12 @@ public static class FixPromptBuilder
     /// el motivo. La cuarta es la importante: un prompt sin la sección se leería como un método
     /// sin usos, que es justo el permiso para cambiar el contrato a ciegas.
     /// </summary>
-    private static void AppendReferences(StringBuilder sb, ReferenceReport? refs)
+    /// <remarks>
+    /// <b>internal</b> desde F6.9: el arreglo asistido interactivo escribe EXACTAMENTE esta misma
+    /// sección. Duplicarla habría sido garantizar que las dos se separaran — y la que se quedara
+    /// atrás sería la que le miente al agente sobre quién usa el código.
+    /// </remarks>
+    internal static void AppendReferences(StringBuilder sb, ReferenceReport? refs)
     {
         sb.AppendLine("## Quién usa este código");
         sb.AppendLine();

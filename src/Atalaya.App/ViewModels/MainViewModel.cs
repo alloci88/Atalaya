@@ -20,6 +20,10 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly SettingsService _settings;
     private readonly GitHubAccountService _account;
     private readonly LiveSessionService _live;
+
+    /// <summary>F6.9: el arreglo asistido tiene su propio item pulsante, igual que la sesión.</summary>
+    private readonly LiveFixService _fix;
+
     private readonly InterruptedSessionRecovery _recovery;
     private readonly DisplayIdService _aliases;
     private readonly ToastCenter _toasts;
@@ -30,6 +34,7 @@ public sealed partial class MainViewModel : ObservableObject
         SettingsService settings,
         GitHubAccountService account,
         LiveSessionService live,
+        LiveFixService fix,
         InterruptedSessionRecovery recovery,
         DisplayIdService aliases,
         ToastCenter toasts)
@@ -40,6 +45,7 @@ public sealed partial class MainViewModel : ObservableObject
         _settings = settings;
         _account = account;
         _live = live;
+        _fix = fix;
         _recovery = recovery;
         _aliases = aliases;
         _live.Changed += SyncSession;
@@ -48,6 +54,9 @@ public sealed partial class MainViewModel : ObservableObject
         // mirando. Sale por toast, como el resumen de cierre.
         _live.Failed += OnSessionFailed;
         _live.Notice += OnSessionNotice;
+        _fix.Changed += SyncFix;
+        _fix.Notice += OnSessionNotice;
+        _fix.Completed += OnFixCompleted;
         _account.Changed += SyncAccount;
         // Connecting clones and pulls the hub off the UI thread; without this the indicator would
         // stay amber until the next polling tick even though the sync already succeeded.
@@ -59,6 +68,7 @@ public sealed partial class MainViewModel : ObservableObject
         // emergencia no puede depender de haber estado escuchando en el momento justo; se deriva
         // del estado, que es lo que siempre se puede volver a preguntar.
         SyncSession();
+        SyncFix();
     }
 
     public NavigationService Navigation { get; }
@@ -112,6 +122,32 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>Detiene la sesión por el camino ORDENADO de F5.1b. No hay un segundo camino.</summary>
     public void StopSession() => _live.Stop();
+
+    // ---- Arreglo asistido (F6.9) ----
+
+    /// <summary>Hay un arreglo corriendo: el item late.</summary>
+    [ObservableProperty]
+    private bool _isFixRunning;
+
+    /// <summary>Hay algo que enseñar en «Arreglo asistido»: en curso, terminado o con cambios sin cerrar.</summary>
+    [ObservableProperty]
+    private bool _hasFix;
+
+    [ObservableProperty]
+    private string _fixNavLabel = "Arreglo asistido";
+
+    [ObservableProperty]
+    private string _fixProgress = string.Empty;
+
+    /// <summary>
+    /// Un arreglo en curso: cerrar la aplicación pregunta antes, igual que con una auditoría. Y por
+    /// la misma razón, con una diferencia importante que el mensaje dice: los cambios YA ESTÁN en
+    /// el clon y se quedan ahí.
+    /// </summary>
+    public bool FixIsRunning => _fix.IsRunning;
+
+    /// <summary>Parada ordenada del arreglo. Lo aplicado se conserva y queda registrado.</summary>
+    public void StopFix() => _fix.Stop();
 
     public int PollingSeconds => Math.Max(15, _settings.Current.PollingSeconds);
 
@@ -250,6 +286,29 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Un aviso sin fallo: típicamente «se ha cambiado el modelo a X».</summary>
     private void OnSessionNotice(string message) => OnUiThread(() => _toasts.Show(message));
 
+    private void SyncFix() => OnUiThread(() =>
+    {
+        IsFixRunning = _fix.IsRunning;
+        // El item se queda mientras QUEDEN CAMBIOS sin cerrar, aunque la sesión ya terminara: es
+        // el único camino de vuelta al botón de descartar, y perderlo al navegar dejaría al
+        // usuario con cambios del agente en el clon y sin forma de deshacerlos de un clic.
+        HasFix = _fix.HasSession || _fix.HasPendingChanges;
+        FixNavLabel = _fix.IsRunning
+            ? "Arreglo asistido"
+            : _fix.HasFailed ? "Arreglo fallido" : "Último arreglo";
+        FixProgress = _fix.ProgressLine;
+    });
+
+    /// <summary>
+    /// Terminó un arreglo que quizá nadie estaba mirando. El toast dice lo único que no se puede
+    /// perder: que los cambios están en el clon sin commitear.
+    /// </summary>
+    private void OnFixCompleted(string message) => OnUiThread(() =>
+    {
+        _toasts.Show(message, ToastKind.SessionCompleted);
+        SyncFix();
+    });
+
     private void SyncAccount() => OnUiThread(() =>
     {
         GitHubAccount? account = _account.Current;
@@ -302,6 +361,10 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Abre V5 con el estado al día — la vista se reconstruye desde el servicio.</summary>
     [RelayCommand]
     private Task ShowSession() => Navigation.NavigateToAsync<SessionViewModel>();
+
+    /// <summary>Abre V8 con el estado al día — la vista se reconstruye desde el servicio (F6.9).</summary>
+    [RelayCommand]
+    private Task ShowFix() => Navigation.NavigateToAsync<AssistedFixViewModel>();
 
     [RelayCommand]
     private Task ShowAccount() => Navigation.NavigateToAsync<AccountViewModel>();

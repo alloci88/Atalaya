@@ -60,11 +60,32 @@ public sealed class EmergencyBrakeTests : IDisposable
         services.AddSingleton<ICopilotAgent>(new FakeCopilotAgent(_ => Array.Empty<SubmitFindingArgs>()));
         services.AddSingleton<NavigationService>();
         services.AddSingleton<OpenSessionStore>();
+        services.AddSingleton<AgentBusyGate>();
         services.AddSingleton(sp => new LiveSessionService(
             sp.GetRequiredService<SessionCoordinator>,
             sp.GetRequiredService<ICopilotAgent>(),
             sp.GetRequiredService<OpenSessionStore>(),
-            sp.GetRequiredService<HubContext>()));
+            sp.GetRequiredService<HubContext>(),
+            busy: sp.GetRequiredService<AgentBusyGate>()));
+
+        // F6.9: la carcasa tiene ahora un segundo item pulsante (el arreglo asistido), así que
+        // MainViewModel necesita su servicio. Los frenos que estos tests vigilan son los de la
+        // auditoría; el arreglo entra aquí solo para que la carcasa se pueda construir.
+        services.AddSingleton<ReferenceCollector>();
+        services.AddSingleton<FixSnapshotStore>();
+        services.AddSingleton<CloneLinkService>();
+        services.AddSingleton<GovernanceService>();
+        services.AddSingleton<AssistedFixLauncher>();
+        services.AddSingleton(sp => new LiveFixService(
+            sp.GetRequiredService<HubContext>(),
+            sp.GetRequiredService<ICopilotAgent>(),
+            sp.GetRequiredService<MachineConfigStore>(),
+            sp.GetRequiredService<IUlidFactory>(),
+            sp.GetRequiredService<SettingsService>(),
+            sp.GetRequiredService<ReferenceCollector>(),
+            sp.GetRequiredService<FixSnapshotStore>(),
+            sp.GetRequiredService<AssistedFixLauncher>(),
+            sp.GetRequiredService<AgentBusyGate>()));
         services.AddSingleton(sp => new InterruptedSessionRecovery(
             sp.GetRequiredService<HubContext>(), sp.GetRequiredService<OpenSessionStore>()));
         services.AddSingleton<AccountStore>();

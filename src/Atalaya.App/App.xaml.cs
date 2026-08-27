@@ -123,7 +123,8 @@ public partial class App : Application
             sp.GetRequiredService<ICopilotAgent>(),
             sp.GetRequiredService<OpenSessionStore>(),
             sp.GetRequiredService<HubContext>(),
-            sp.GetRequiredService<ModelResolver>()));
+            sp.GetRequiredService<ModelResolver>(),
+            sp.GetRequiredService<AgentBusyGate>()));
         services.AddSingleton<GovernanceService>();
 
         // F5.10 · silencio con alcance: la pregunta de qué hacer con los hallazgos existentes y la
@@ -137,6 +138,27 @@ public partial class App : Application
         // F6.8: quién usa el código de un hallazgo. Alimenta el prompt de arreglo, y el arreglo
         // integrado (H9) heredará el mismo servicio en vez de recolectar por su cuenta.
         services.AddSingleton<ReferenceCollector>();
+
+        // F6.9 · Arreglo asistido. El cerrojo compartido va primero: auditar y arreglar usan el
+        // mismo runtime, el mismo asiento y el mismo clon, así que solo puede correr uno.
+        services.AddSingleton<AgentBusyGate>();
+        services.AddSingleton<FixSnapshotStore>();
+        services.AddSingleton<AssistedFixLauncher>();
+        services.AddSingleton(sp => new BuildRunner(
+            timeout: TimeSpan.FromMinutes(Math.Max(1, sp.GetRequiredService<SettingsService>().Current.CopilotTimeoutMinutes))));
+        services.AddSingleton<IFixDiscardConfirmer, FixDiscardDialogConfirmer>();
+        services.AddSingleton(sp => new LiveFixService(
+            sp.GetRequiredService<HubContext>(),
+            sp.GetRequiredService<ICopilotAgent>(),
+            sp.GetRequiredService<MachineConfigStore>(),
+            sp.GetRequiredService<IUlidFactory>(),
+            sp.GetRequiredService<SettingsService>(),
+            sp.GetRequiredService<ReferenceCollector>(),
+            sp.GetRequiredService<FixSnapshotStore>(),
+            sp.GetRequiredService<AssistedFixLauncher>(),
+            sp.GetRequiredService<AgentBusyGate>(),
+            sp.GetRequiredService<BuildRunner>(),
+            sp.GetRequiredService<ModelResolver>()));
 
         // F5.3 §4: el hard-reset de una app. El "quién pregunta" se inyecta para que el
         // view-model no dependa de una ventana y los tests puedan ejercitar el flujo entero.
@@ -193,6 +215,7 @@ public partial class App : Application
         services.AddTransient<FindingDetailViewModel>();
         services.AddTransient<MetricsViewModel>();
         services.AddTransient<ReportsViewModel>();
+        services.AddTransient<AssistedFixViewModel>();
     }
 
     /// <summary>

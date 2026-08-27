@@ -21,22 +21,66 @@ public sealed class SettingsViewTests
     // ---------- §2. Las retiradas ----------
 
     /// <summary>
-    /// El interruptor de «arreglo asistido» era el <i>feature flag</i> de H9, que se decidió NO
-    /// construir: no estaba conectado a nada. El flag SIGUE en la configuración —para cuando H9
-    /// exista— pero el control desaparece.
+    /// F6.9 — el interruptor de «arreglo asistido» VUELVE al UI, porque ahora hay algo detrás.
+    /// <para>
+    /// F5.7 §2 (D-275) lo retiró por ser un control conectado a nada, no por ser mala idea, y
+    /// dejó el flag en la configuración exactamente para este día. La regla de aquel test no se
+    /// relaja —un interruptor tiene que cambiar un comportamiento—: lo que cambia es que este ya
+    /// lo cambia, y por eso el test se da la vuelta en vez de borrarse.
+    /// </para>
     /// </summary>
     [Fact]
-    public void El_toggle_de_arreglo_asistido_sale_del_UI_pero_el_flag_sigue_en_la_configuracion()
+    public void El_toggle_de_arreglo_asistido_esta_en_el_UI_enlazado_al_flag_que_de_verdad_gobierna()
     {
         string xaml = Markup(SettingsXaml());
 
-        xaml.Should().NotContain("EnableAssistedFix");
-        xaml.Should().NotContain("arreglo asistido");
-        typeof(SettingsViewModel).GetProperty("EnableAssistedFix")
-            .Should().BeNull("el view-model tampoco tiene que exponer un interruptor que no existe");
+        xaml.Should().Contain("{Binding EnableAssistedFix}",
+            "el control tiene que estar enlazado al ajuste, no ser decorativo");
+        xaml.Should().Contain("Arreglo asistido");
 
+        typeof(SettingsViewModel).GetProperty("EnableAssistedFix")
+            .Should().NotBeNull("el view-model expone el interruptor");
         typeof(AppSettings).GetProperty("EnableAssistedFix")
-            .Should().NotBeNull("el flag se conserva en config para cuando H9 se construya");
+            .Should().NotBeNull("y el flag sigue siendo el de siempre, no uno nuevo");
+
+        // Encendido por defecto: es un flujo supervisado por construcción, y nacer apagado
+        // escondería una capacidad segura tras un ajuste que nadie iba a encontrar.
+        new AppSettings().EnableAssistedFix.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Y guardarlo lo guarda de verdad. Es la mitad que D-275 echaba en falta: un interruptor que
+    /// se mueve y no llega a la configuración es el mismo control muerto de antes, con otro nombre.
+    /// </summary>
+    [Fact]
+    public void Guardar_persiste_el_interruptor_del_arreglo_asistido()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "atalaya-settings", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var paths = new AppPaths(root);
+            var settings = new SettingsService(paths);
+            settings.Load();
+
+            settings.Current.EnableAssistedFix.Should().BeTrue("por defecto viene encendido");
+
+            settings.Current.EnableAssistedFix = false;
+            settings.Save(settings.Current);
+
+            var reloaded = new SettingsService(paths);
+            reloaded.Load().EnableAssistedFix.Should().BeFalse();
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch (IOException)
+            {
+                // best effort
+            }
+        }
     }
 
     /// <summary>

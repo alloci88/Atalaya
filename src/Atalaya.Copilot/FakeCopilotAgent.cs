@@ -12,6 +12,8 @@ public sealed class FakeCopilotAgent : ICopilotAgent
     private readonly Func<AuditUnitRequest, IEnumerable<AddLocationsArgs>>? _extendScript;
     private readonly Func<IReadOnlyList<AgentModel>>? _modelsScript;
     private readonly Func<AuditUnitRequest, IEnumerable<SuppressedByPatternArgs>>? _suppressScript;
+    private readonly Func<FixRequest, IEnumerable<FixStep>>? _fixScript;
+    private readonly Action<string, IFixToolbox>? _fixFollowUp;
     private readonly string? _modelName;
 
     /// <param name="reconcileScript">
@@ -36,6 +38,13 @@ public sealed class FakeCopilotAgent : ICopilotAgent
     /// —prompt, contadores, sesión, informe y contador de trabajo del patrón— sin asiento de
     /// Copilot y sin depender del juicio de un modelo real.
     /// </param>
+    /// <param name="fixScript">
+    /// F6.9: los pasos de una sesión de arreglo —narrar, preguntar, leer, editar, compilar y
+    /// cerrar—. Es lo que permite ejercitar el circuito entero del arreglo asistido sin asiento.
+    /// </param>
+    /// <param name="fixFollowUp">
+    /// Qué hace el agente falso con una orden que el usuario encoló para el turno siguiente.
+    /// </param>
     public FakeCopilotAgent(
         Func<AuditUnitRequest, IEnumerable<SubmitFindingArgs>>? auditScript = null,
         Func<VerifyTarget, string>? verdictScript = null,
@@ -43,7 +52,9 @@ public sealed class FakeCopilotAgent : ICopilotAgent
         Func<AuditUnitRequest, IEnumerable<AddLocationsArgs>>? extendScript = null,
         Func<IReadOnlyList<AgentModel>>? modelsScript = null,
         string? modelName = null,
-        Func<AuditUnitRequest, IEnumerable<SuppressedByPatternArgs>>? suppressScript = null)
+        Func<AuditUnitRequest, IEnumerable<SuppressedByPatternArgs>>? suppressScript = null,
+        Func<FixRequest, IEnumerable<FixStep>>? fixScript = null,
+        Action<string, IFixToolbox>? fixFollowUp = null)
     {
         _auditScript = auditScript ?? (_ => Array.Empty<SubmitFindingArgs>());
         _verdictScript = verdictScript ?? (_ => "confirmado");
@@ -51,6 +62,8 @@ public sealed class FakeCopilotAgent : ICopilotAgent
         _extendScript = extendScript;
         _modelsScript = modelsScript;
         _suppressScript = suppressScript;
+        _fixScript = fixScript;
+        _fixFollowUp = fixFollowUp;
         _modelName = modelName;
     }
 
@@ -142,4 +155,104 @@ public sealed class FakeCopilotAgent : ICopilotAgent
         UsageReported?.Invoke(new UsageSample(request.Targets.Count * 50L, request.Targets.Count * 10L, null, ModelName));
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// Una sesión de arreglo guionizada (F6.9). Es lo que permite probar el circuito ENTERO —el
+    /// ámbito de <c>apply_edit</c>, la elicitación, los snapshots, el descarte, el registro de la
+    /// sesión <c>fix</c>— sin asiento de Copilot, igual que <c>AuditUnitAsync</c> hace con el
+    /// barrido.
+    /// </summary>
+    public async Task FixAsync(FixRequest request, FixConversation conversation, CancellationToken ct)
+    {
+        TextStreamed?.Invoke($"[fake] arreglando en {request.CloneRoot}\n");
+        conversation.Ready?.Invoke(new NoSteering());
+
+        FixStep[] steps = (_fixScript?.Invoke(request) ?? Array.Empty<FixStep>()).ToArray();
+        foreach (FixStep step in steps)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            if (step.Narration is { Length: > 0 } says)
+            {
+                TextStreamed?.Invoke(says);
+            }
+
+            if (step.Question is { Length: > 0 } question)
+            {
+                string? answer = await conversation.Questions.AskAsync(
+                    question, step.Choices ?? Array.Empty<string>(), step.AllowFreeform, ct);
+                TextStreamed?.Invoke($"[fake] el usuario respondió: {answer ?? "(nada)"}\n");
+                step.OnAnswer?.Invoke(answer);
+            }
+
+            if (step.Read is { Length: > 0 } read)
+            {
+                ReadFileResult r = conversation.Toolbox.ReadFile(read);
+                TextStreamed?.Invoke(r.Ok
+                    ? $"[fake] leído {read} ({r.Remaining} lecturas restantes)\n"
+                    : $"[fake] no se pudo leer {read}: {r.Error}\n");
+            }
+
+            if (step.Edit is { } edit)
+            {
+                ApplyEditResult r = conversation.Toolbox.ApplyEdit(edit.Path, edit.Reason, edit.Edits);
+                TextStreamed?.Invoke(r.Applied
+                    ? $"[fake] editado {edit.Path}\n"
+                    : $"[fake] edición rechazada en {edit.Path}: {(r.Denied ? "denegada" : r.Error)}\n");
+                step.OnEdit?.Invoke(r);
+            }
+
+            if (step.Build)
+            {
+                BuildAndTestResult r = conversation.Toolbox.RunBuildAndTests();
+                TextStreamed?.Invoke($"[fake] build/tests: {(r.Ok ? "verde" : "rojo")}\n");
+            }
+
+            if (step.Done is { } done)
+            {
+                conversation.Toolbox.FixDone(done);
+            }
+        }
+
+        UsageReported?.Invoke(new UsageSample(1200, 400, null, ModelName));
+
+        // Igual que el agente real: al acabar el turno se pregunta si hay algo más que mandar.
+        // Sin esto, la cola de órdenes del usuario nunca se ejercitaría en los tests.
+        while (conversation.NextTurn is not null
+               && await conversation.NextTurn(ct) is { Length: > 0 } more)
+        {
+            TextStreamed?.Invoke($"[fake] turno extra: {more}\n");
+            _fixFollowUp?.Invoke(more, conversation.Toolbox);
+        }
+    }
+
+    /// <summary>Un mando a distancia inerte: el agente falso no tiene sesión que dirigir.</summary>
+    private sealed class NoSteering : IFixSteering
+    {
+        public Task<bool> SendAsync(string message, CancellationToken ct) => Task.FromResult(false);
+
+        public Task AbortAsync(CancellationToken ct) => Task.CompletedTask;
+    }
 }
+
+/// <summary>Lo que el agente falso hace en un paso de una sesión de arreglo (F6.9).</summary>
+/// <param name="Narration">Texto que emite antes de actuar, como haría el agente real.</param>
+/// <param name="Question">Una pregunta de elicitación, si este paso pregunta.</param>
+/// <param name="Read">Un fichero que lee, si este paso lee.</param>
+/// <param name="Edit">Una edición, si este paso edita.</param>
+/// <param name="Build">Solicita compilar y pasar los tests.</param>
+/// <param name="Done">Cierra la sesión con este resumen.</param>
+public sealed record FixStep(
+    string? Narration = null,
+    string? Question = null,
+    IReadOnlyList<string>? Choices = null,
+    bool AllowFreeform = true,
+    Action<string?>? OnAnswer = null,
+    string? Read = null,
+    FixStepEdit? Edit = null,
+    Action<ApplyEditResult>? OnEdit = null,
+    bool Build = false,
+    FixDoneArgs? Done = null);
+
+/// <summary>La edición de un paso guionizado.</summary>
+public sealed record FixStepEdit(string Path, string Reason, FixEdit[] Edits);

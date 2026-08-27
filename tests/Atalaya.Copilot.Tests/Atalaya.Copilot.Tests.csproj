@@ -4,6 +4,10 @@
     <TargetFramework>net8.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Igual que en el proyecto que prueba: el SDK marca [Experimental] parte de su superficie
+         de permisos, y comprobarla es justamente lo que este proyecto hace. -->
+    <NoWarn>$(NoWarn);GHCP001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

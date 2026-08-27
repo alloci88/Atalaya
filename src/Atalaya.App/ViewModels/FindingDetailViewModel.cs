@@ -65,6 +65,15 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     private readonly ReferenceCollector _references;
 
     /// <summary>
+    /// F6.9 · «Arreglar con agente». Opcionales los dos: la ficha se abre y se gobierna igual sin
+    /// ellos —los tests que solo miran gobernanza no montan una sesión de arreglo— y sin ellos el
+    /// botón simplemente no está. El generador de prompt no depende de esto para nada.
+    /// </summary>
+    private readonly AssistedFixLauncher? _fixLauncher;
+
+    private readonly LiveFixService? _fix;
+
+    /// <summary>
     /// La última recolección, y de qué hallazgo era. La fila «Usado desde» de los metadatos sale de
     /// aquí: si ya se ha mirado, decirlo es gratis; lo que no se hace nunca es mirar por si acaso.
     /// </summary>
@@ -80,7 +89,10 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         CloneLinkService links,
         LinkCloneFlow linkFlow,
         AnchorRepair? anchors = null,
-        ReferenceCollector? references = null)
+        ReferenceCollector? references = null,
+        AssistedFixLauncher? fixLauncher = null,
+        LiveFixService? fix = null,
+        NavigationService? navigation = null)
     {
         _hub = hub;
         ScopeOptions = new[]
@@ -101,7 +113,12 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         // El recolector no tiene estado propio ni dependencias: si nadie lo inyecta, se construye.
         // Así el prompt de arreglo lleva sus referencias también en los caminos que no pasan por DI.
         _references = references ?? new ReferenceCollector();
+        _fixLauncher = fixLauncher;
+        _fix = fix;
+        _navigation = navigation;
     }
+
+    private readonly NavigationService? _navigation;
 
     /// <inheritdoc cref="CloneLink.CanAudit"/>
     public bool CanAudit => Link.CanAudit;
@@ -125,6 +142,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         }
 
         Link = _linkFlow.Run(Slug);
+        RefreshAssistedFix();
     }
 
     public override string Title => Finding is null ? "Hallazgo" : $"{Finding.DisplayId ?? Finding.Id.ToString()}";
@@ -504,6 +522,9 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
 
         BuildMeta(Finding);
         LoadSnippet(Finding);
+        // F6.9: las precondiciones del arreglo asistido se releen aquí por la misma razón que el
+        // vínculo del clon — el árbol de trabajo y la sesión en curso cambian por debajo.
+        RefreshAssistedFix();
         RaiseDerived();
     }
 
@@ -970,6 +991,90 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
             : "Prompt de arreglo guardado en los comentarios (el portapapeles no estaba disponible).")
             + " " + ReferenceSummary(refs));
         Reload(id);
+    }
+
+    // ------------------------------------------------------------------ arreglar con agente (F6.9)
+
+    /// <summary>
+    /// El botón existe cuando la función está activada. Que se pueda PULSAR es otra cosa —clon,
+    /// árbol limpio, nadie más usando el agente— y eso lo dice <see cref="CanStartFix"/>.
+    /// </summary>
+    [ObservableProperty]
+    private bool _showAssistedFix;
+
+    /// <summary>Se puede lanzar ahora mismo.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AssistedFixTooltip))]
+    private bool _canStartFix;
+
+    /// <summary>Qué falta, cuando no se puede. Se escribe bajo el botón gris.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AssistedFixTooltip))]
+    private string _assistedFixBlock = string.Empty;
+
+    /// <summary>
+    /// Qué hace el botón, o qué falta para poder pulsarlo. Un botón gris sin explicación se pulsa
+    /// otra vez y luego se da por roto (misma lección que D-529).
+    /// </summary>
+    public string AssistedFixTooltip => CanStartFix
+        ? "Abre una sesión con el agente: arregla este hallazgo sobre tu clon local explicando lo "
+          + "que hace y preguntándote en las decisiones. No commitea nada."
+        : AssistedFixBlock;
+
+    /// <summary>
+    /// Vuelve a mirar las precondiciones. Se llama al cargar la ficha y tras vincular el clon: el
+    /// estado que gobierna este botón (el árbol de trabajo, la sesión en curso) cambia por debajo
+    /// sin que la ficha se entere.
+    /// </summary>
+    private void RefreshAssistedFix()
+    {
+        if (_fixLauncher is null || _fix is null)
+        {
+            ShowAssistedFix = false;
+            CanStartFix = false;
+            AssistedFixBlock = string.Empty;
+            return;
+        }
+
+        FixLaunchDecision decision = _fixLauncher.Check(Slug, Finding);
+        ShowAssistedFix = decision.Block != FixBlock.Desactivado;
+        CanStartFix = decision.CanStart;
+        AssistedFixBlock = decision.Message;
+    }
+
+    /// <summary>
+    /// Lanza el arreglo asistido y se va a su vista. El generador de prompt de al lado NO se toca:
+    /// son dos caminos, el de siempre y el nuevo, y quien prefiera el suyo lo tiene donde estaba.
+    /// </summary>
+    [RelayCommand]
+    private async Task StartAssistedFix()
+    {
+        if (Finding is null || _fix is null || _fixLauncher is null)
+        {
+            return;
+        }
+
+        // Se vuelve a comprobar aquí, no solo al pintar: entre abrir la ficha y pulsar, el usuario
+        // ha podido editar el clon o lanzar una auditoría.
+        FixLaunchDecision decision = _fixLauncher.Check(Slug, Finding);
+        RefreshAssistedFix();
+        if (!decision.CanStart)
+        {
+            _toasts.Show(decision.Message);
+            return;
+        }
+
+        Ulid id = Id;
+        string slug = Slug;
+
+        // Navegar primero: la sesión narra desde el primer segundo y hay que estar delante para
+        // verlo. Y el arranque NO se espera aquí — la sesión dura minutos.
+        if (_navigation is not null)
+        {
+            await _navigation.NavigateToAsync<AssistedFixViewModel>();
+        }
+
+        _ = _fix.StartAsync(new FixSessionRequest(slug, id));
     }
 
     /// <summary>La frase del aviso sobre las referencias: qué se encontró, o por qué no se miró.</summary>

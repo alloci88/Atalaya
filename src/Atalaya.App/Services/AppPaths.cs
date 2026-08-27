@@ -29,4 +29,10 @@ public sealed class AppPaths
 
     /// <summary>The connected GitHub account, DPAPI-encrypted (D2.2).</summary>
     public string AuthDat => Path.Combine(Root, "auth.dat");
+
+    /// <summary>
+    /// Copias de seguridad de las sesiones de arreglo asistido (F6.9). Fuera del clon a propósito:
+    /// lo que hace posible descartar no puede ser, a su vez, un cambio sin commitear en el clon.
+    /// </summary>
+    public string Fixes => Path.Combine(Root, "fixes");
 }

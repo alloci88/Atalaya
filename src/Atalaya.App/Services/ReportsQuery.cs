@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using Atalaya.Domain;
 using Atalaya.Domain.Ids;
@@ -451,6 +451,7 @@ public sealed class ReportsQuery
     {
         AuditMode.Cierre => $"Cierre de ciclo {session.CycleN - 1} — {appName}",
         AuditMode.Reset => $"Reset de auditoría — {appName}",
+        AuditMode.Fix => $"Arreglo asistido — {appName}",
         _ => $"Informe de sesión — {appName}",
     };
 

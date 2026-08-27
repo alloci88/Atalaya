@@ -67,8 +67,12 @@ comentarios, y las decisiones de gobernanza — silenciar (con motivo y caducida
 asignar, cambiar severidad, resolver a mano con justificación, cerrar una disputa y
 **generar prompt de arreglo** al portapapeles.
 
-- El **prompt de arreglo** viaja con **quién usa ese código**: los llamadores directos que
-  hay en el clon local —ruta, línea, método que llama y la línea de la llamada—, y las
+- **Arreglar con agente** abre una sesión en la que el agente arregla el hallazgo
+  **sobre tu clon local**, explicándote lo que hace y preguntándote en las
+  decisiones. Ver *Arreglar con agente*, más abajo.
+- El **prompt de arreglo** —el camino de siempre, intacto— viaja con **quién usa ese
+  código**: los llamadores directos que hay en el clon local —ruta, línea, método que
+  llama y la línea de la llamada—, y las
   reglas para que el agente no rompa el contrato que esos llamadores esperan. Si no hay
   clon, o si el símbolo no se puede buscar, el prompt sale igual diciendo que va sin la
   lista: nunca deja entender que un método no se usa cuando lo que pasa es que no se ha
@@ -97,6 +101,28 @@ van llegando, el coste y los tokens consumidos, y al terminar el resumen de cier
 
 Si la sesión falló, lo dice con el motivo y el atajo para arreglarlo. **Ver informe de
 sesión** abre el informe en la vista **Informes**.
+
+### Arreglo asistido
+
+Aparece en el menú solo cuando hay un arreglo (en curso, terminado, o con cambios que
+todavía puedes descartar), y el punto late mientras el agente escribe.
+
+Dos paneles: la **conversación** —lo que el agente va explicando, y las preguntas
+como tarjetas con sus opciones— y el **diff**, una pestaña por fichero tocado, que
+compara con lo que había antes de empezar. Abajo: tiempo, coste, ficheros tocados y
+el resultado del último build.
+
+- **Pausar** no congela al agente —eso no se puede prometer— sino lo que importa: no
+  cae ni un cambio más en tu clon ni se compila nada hasta que continúes.
+- **Descartar todo** devuelve cada fichero tocado a como estaba, byte a byte, con
+  confirmación previa.
+- **Detener** para al agente; lo que ya haya aplicado se queda.
+- El campo de entrada de abajo está **siempre** disponible: escribe y pulsa Enter para
+  dirigirle («no toques ese fichero», «prefiero TryParse»). Si está a mitad de un paso,
+  el mensaje se le entrega al empezar el siguiente, y la aplicación te lo dice.
+
+Si cierras Atalaya con un arreglo en curso, se detiene ordenadamente y **los cambios
+se quedan** en tu clon: la próxima vez que abras, esta pantalla te ofrece descartarlos.
 
 ### Métricas
 
@@ -161,13 +187,48 @@ conexión.
 
 ### Ajustes
 
-Umbrales (tamaño de unidad, frescura), modelo de Copilot, tema **claro/oscuro**,
+Umbrales (tamaño de unidad, frescura), modelo de Copilot, el interruptor del
+**arreglo asistido** (encendido por defecto), tema **claro/oscuro**,
 intervalo de sincronización y las acciones destructivas, con su confirmación. Al final,
 **Acerca de Atalaya**: versión, organización y los enlaces al repositorio y a este manual.
 
 ---
 
 ## Cosas que conviene saber
+
+**Arreglar con agente.** Desde la ficha de un hallazgo, junto al generador de prompt.
+El agente arregla el hallazgo directamente sobre tu clon local, y ahí se acaba su
+alcance: **no tiene consola, ni git, ni red**. Solo puede leer ficheros del clon,
+modificarlos por una herramienta que la aplicación controla, y pedir que se compile —
+lo ejecuta Atalaya, no él.
+
+Antes de arrancar se comprueban cuatro cosas, y si falla alguna se dice cuál:
+
+1. Que tengas el **clon vinculado** de esa aplicación.
+2. Que tu **árbol de trabajo esté limpio** — sin cambios sin commitear. Sin excepciones:
+   es lo único que permite después distinguir lo que tocó el agente de lo tuyo, y por
+   tanto lo que hace que «Descartar todo» sea seguro.
+3. Que no haya **otra sesión de Copilot** corriendo (auditoría o arreglo).
+4. Que el **arreglo asistido** esté activado en Ajustes.
+
+Durante la sesión:
+
+- El agente **explica cada paso antes de darlo**.
+- Sobre los ficheros del hallazgo (y sus tests) edita directamente. Para tocar
+  **cualquier otro** —un llamador que hay que adaptar— te pide permiso, fichero a
+  fichero, diciendo por qué. Puedes negarte: el agente tendrá que replantearlo.
+- Si el arreglo exige **cambiar el contrato** del código, no decide: te presenta las
+  opciones con su consecuencia sobre los llamadores y espera tu elección.
+- Cada fichero tocado se guarda antes de tocarlo, fuera del clon. Eso es lo que
+  «Descartar todo» restaura.
+
+Al terminar: el resumen de qué cambió y por qué, los ficheros con su diff, el resultado
+del build, y una **sugerencia de commit** —título y descripción, editables, con botón de
+copiar—. **Atalaya no commitea**: solo te ahorra redactarlo.
+
+**Arreglar no resuelve el hallazgo.** Al terminar sigue activo. La aplicación te sugiere
+**Verificar ahora** cuando des el cambio por bueno, y la resolución llega por la vía de
+siempre: con evidencia.
 
 **La sincronización es automática.** Un indicador permanente abajo dice cómo va:
 verde al día, ámbar sin publicar (trabajas sin conexión y no se pierde nada), rojo con

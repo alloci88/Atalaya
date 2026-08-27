@@ -23,6 +23,7 @@ public sealed class ButtonForegroundTests
         "FindingsView.xaml",
         "FindingDetailView.xaml",
         "SessionView.xaml",
+        "AssistedFixView.xaml",
         "PortfolioView.xaml",
         "MetricsView.xaml",
         "SettingsView.xaml",

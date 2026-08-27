@@ -387,8 +387,27 @@
                              referencias recorre el clon y en una solución grande se nota. El botón
                              se deshabilita solo mientras corre (AsyncRelayCommand), pero un botón
                              gris que no dice nada se pulsa otra vez: mientras busca, lo dice. -->
+                        <!-- F6.9 · El camino nuevo va PRIMERO, y el de siempre se queda justo
+                             debajo: son dos formas de arreglar lo mismo, no una que sustituye a
+                             la otra. Cuando no se puede lanzar, el botón queda gris con el motivo
+                             concreto en el tooltip. -->
+                        <ui:Button Content="Arreglar con agente" Style="{StaticResource SideAction}"
+                                   Command="{Binding StartAssistedFixCommand}" Appearance="Primary"
+                                   IsEnabled="{Binding CanStartFix}"
+                                   ToolTip="{Binding AssistedFixTooltip}"
+                                   Visibility="{Binding ShowAssistedFix, Converter={StaticResource BoolToVisibility}}" />
+                        <TextBlock Text="{Binding AssistedFixBlock}" TextWrapping="Wrap" FontSize="11"
+                                   Margin="0,0,0,8"
+                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}">
+                            <TextBlock.Visibility>
+                                <MultiBinding Converter="{StaticResource AllTrueToVisibility}">
+                                    <Binding Path="ShowAssistedFix" />
+                                    <Binding Path="CanStartFix" Converter="{StaticResource InverseBool}" />
+                                </MultiBinding>
+                            </TextBlock.Visibility>
+                        </TextBlock>
                         <ui:Button Content="{Binding FixPromptActionLabel}" Style="{StaticResource SideAction}"
-                                   Command="{Binding GenerateFixPromptCommand}" Appearance="Primary"
+                                   Command="{Binding GenerateFixPromptCommand}"
                                    ToolTip="Compone el encargo para un agente —con la lista de quién usa este código— y lo copia al portapapeles." />
                         <!-- F5.4: bajó de V3. Verificar de uno en uno deja ver QUÉ se le pregunta al agente.
                              F5.8 §3: es una acción de AUDITAR —lee el clon—, así que sin vínculo

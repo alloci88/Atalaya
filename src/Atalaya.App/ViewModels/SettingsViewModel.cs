@@ -33,11 +33,16 @@ public sealed record ModelOption(string Id, string Label)
 /// <para>
 /// F5.7 la deja en cuatro secciones con un mismo ritmo —General, Auditoría, Sincronización y una
 /// zona peligrosa al final— y retira dos cosas que no eran ajustes de nadie: el interruptor de
-/// «arreglo asistido», que era el <i>feature flag</i> de un H9 que se decidió no construir y no
-/// estaba conectado a nada, y las «Opciones avanzadas» (PAT de respaldo, TLS, override de la URL
-/// del hub). El soporte de PAT sigue en el código —<see cref="SettingsService.GetPat"/> y
+/// «arreglo asistido», que entonces era el <i>feature flag</i> de un H9 sin construir y no estaba
+/// conectado a nada, y las «Opciones avanzadas» (PAT de respaldo, TLS, override de la URL del
+/// hub). El soporte de PAT sigue en el código —<see cref="SettingsService.GetPat"/> y
 /// <see cref="HubContext"/> lo usan— y el override de <c>hubUrl</c> sigue disponible editando
 /// <c>appsettings.deploy.json</c>, que es exactamente el público de esa opción.
+/// </para>
+/// <para>
+/// <b>F6.9 devuelve el interruptor del arreglo asistido</b>, porque ya hay algo al otro lado. La
+/// regla de D-275 no cambia —un control que no cambia ningún comportamiento es peor que no
+/// tenerlo—: lo que cambia es que ahora sí lo cambia.
 /// </para>
 /// <para>
 /// Y añade lo único que faltaba para poder empezar de cero: el restablecimiento de fábrica, con la
@@ -84,6 +89,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _freshnessDays = s.DefaultThresholds.FreshnessDays;
         _maxPassesPerUnit = s.MaxPassesPerUnit;
         _copilotTimeoutMinutes = s.CopilotTimeoutMinutes;
+        _enableAssistedFix = s.EnableAssistedFix;
         _selectedModelId = s.CopilotModel;
 
         // Hasta que el SDK conteste, el desplegable enseña el modelo configurado: así nunca está
@@ -100,6 +106,18 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private int _freshnessDays;
     [ObservableProperty] private int _maxPassesPerUnit;
     [ObservableProperty] private int _copilotTimeoutMinutes;
+
+    /// <summary>
+    /// El interruptor del arreglo asistido (F6.9). Vuelve al UI porque desde F6.9 hay algo detrás:
+    /// F5.7 §2 (D-275) lo retiró por ser un control conectado a nada, no por ser una mala idea, y
+    /// el flag se conservó en la configuración exactamente para este día.
+    /// <para>
+    /// <b>Encendido por defecto</b>: el arreglo es supervisado por diseño —el agente narra, pide
+    /// permiso fichero a fichero fuera del hallazgo y no puede commitear—, así que apagarlo de
+    /// serie escondería una capacidad segura. Quien no la quiera, la apaga aquí.
+    /// </para>
+    /// </summary>
+    [ObservableProperty] private bool _enableAssistedFix;
 
     // --- Modelo (F5.1) ---
 
@@ -201,6 +219,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
             ? s.CopilotModel
             : SelectedModelId.Trim();
         s.CopilotTimeoutMinutes = Math.Max(1, CopilotTimeoutMinutes);
+        s.EnableAssistedFix = EnableAssistedFix;
         return s;
     }
 

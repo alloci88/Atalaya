@@ -216,6 +216,182 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
         await RunAsync(config, request.Prompt, ct);
     }
 
+    /// <summary>
+    /// Una sesión de ARREGLO (F6.9). Se parece poco a auditar o verificar y por eso no reutiliza
+    /// <see cref="RunAsync"/>: aquella manda un prompt, espera y cierra; ésta mantiene la sesión
+    /// viva mientras dure la conversación, contesta a las preguntas del agente y admite que el
+    /// usuario la dirija desde fuera.
+    /// <para>
+    /// <b>Superficie del SDK verificada contra 1.0.11</b> (la lección del F2). La tool
+    /// <c>ask_user</c> del runtime llega por <c>SessionConfig.OnUserInputRequest</c>, que es un
+    /// <c>Func&lt;UserInputRequest, UserInputInvocation, Task&lt;UserInputResponse&gt;&gt;</c> —el
+    /// mismo canal que <c>CopilotSession.RegisterUserInputHandler</c>—. Las convenientes
+    /// <c>session.Ui.ConfirmAsync/SelectAsync/InputAsync</c> también existen, pero van del SDK
+    /// HACIA el host y lanzan si <c>session.Capabilities.Ui?.Elicitation</c> no es true: no son
+    /// este camino. <c>SendAsync</c> encola un mensaje sin esperar al turno, y <c>AbortAsync</c>
+    /// corta el turno dejando la sesión utilizable.
+    /// </para>
+    /// </summary>
+    public async Task FixAsync(FixRequest request, FixConversation conversation, CancellationToken ct)
+    {
+        await EnsureStartedAsync(ct);
+        SessionConfig config = BuildFixSessionConfig(request, conversation, ct);
+
+        AgentReadiness readiness = await CheckAsync(ct);
+        if (!readiness.Ready)
+        {
+            throw new CopilotAuthenticationException(readiness.Message);
+        }
+
+        try
+        {
+            CopilotSession session = await _client!.CreateSessionAsync(config, ct);
+            try
+            {
+                conversation.Ready?.Invoke(new SessionSteering(session, _logger));
+
+                string? next = request.Prompt;
+                while (next is { Length: > 0 })
+                {
+                    await session.SendAndWaitAsync(next, _sendTimeout, ct);
+                    next = conversation.NextTurn is null
+                        ? null
+                        : await conversation.NextTurn(ct);
+                }
+            }
+            finally
+            {
+                await session.DisposeAsync();
+            }
+        }
+        catch (Exception ex) when (LooksLikeModelUnavailable(ex))
+        {
+            throw new CopilotModelUnavailableException(ModelName, ex);
+        }
+        catch (Exception ex) when (LooksLikeAuthError(ex) || LooksLikeNoSeat(ex))
+        {
+            throw new CopilotAuthenticationException(Classify(ex, CurrentToken() is not null).Message, ex);
+        }
+    }
+
+    /// <summary>
+    /// La configuración de una sesión de arreglo: sus CUATRO tools, el handler de <c>ask_user</c>,
+    /// el directorio de trabajo y el permiso que rechaza todo lo demás.
+    /// <para>
+    /// Es <c>internal</c> y no está incrustada en <see cref="FixAsync"/> a propósito: la
+    /// superficie que se le da al agente es la salvaguarda entera de este flujo, y una salvaguarda
+    /// que solo se puede comprobar teniendo un asiento de Copilot delante no se comprueba nunca.
+    /// Así el test puede leer la lista de tools y llamar al permission handler.
+    /// </para>
+    /// </summary>
+    internal SessionConfig BuildFixSessionConfig(
+        FixRequest request, FixConversation conversation, CancellationToken ct)
+    {
+        IFixToolbox toolbox = conversation.Toolbox;
+
+        ReadFileResult ReadFile(string path) => toolbox.ReadFile(path);
+
+        ApplyEditResult ApplyEdit(string path, string reason, FixEdit[] edits)
+            => toolbox.ApplyEdit(path, reason ?? string.Empty, edits ?? Array.Empty<FixEdit>());
+
+        BuildAndTestResult RunBuildAndTests() => toolbox.RunBuildAndTests();
+
+        void FixDone(string summary, string commitTitle, string commitDescription, string? risks)
+            => toolbox.FixDone(new FixDoneArgs(summary, commitTitle, commitDescription, risks));
+
+        var config = NewSessionConfig();
+
+        // El agente vive DENTRO del clon: nada de lo que haga tiene sentido fuera de él, y el
+        // toolbox además rechaza cualquier ruta que se salga.
+        config.WorkingDirectory = request.CloneRoot;
+
+        // La tool ask_user del runtime desemboca aquí. Sin este handler el runtime no tiene a
+        // quién preguntar y la elicitación —que es la mitad del producto— no existiría.
+        config.OnUserInputRequest = async (input, _) =>
+        {
+            IReadOnlyList<string> choices = input?.Choices?.ToList() ?? (IReadOnlyList<string>)Array.Empty<string>();
+            bool free = input?.AllowFreeform ?? true;
+            string? answer = await conversation.Questions
+                .AskAsync(input?.Question ?? string.Empty, choices, free, ct);
+
+            return new UserInputResponse
+            {
+                Answer = answer ?? string.Empty,
+                WasFreeform = answer is not null && !choices.Contains(answer, StringComparer.Ordinal),
+            };
+        };
+
+        AddTool(config, ReadFile, "read_file",
+            "Lee un fichero del clon (ruta relativa a la raíz del repositorio). Tienes un "
+            + "PRESUPUESTO de lecturas y la respuesta te dice cuántas te quedan: no explores, "
+            + "lee lo que necesites para arreglar.");
+        AddTool(config, ApplyEdit, "apply_edit",
+            "La ÚNICA forma de modificar código. path es relativo al clon; reason explica en una "
+            + "frase por qué tocas ESE fichero; edits es un array de {oldText, newText, "
+            + "replaceAll}. oldText debe aparecer EXACTAMENTE una vez (o marca replaceAll). "
+            + "Sobre ficheros del hallazgo y sus tests se aplica directamente; sobre cualquier "
+            + "otro, la aplicación le pedirá permiso al usuario y puede denegarlo.");
+        AddTool(config, RunBuildAndTests, "run_build_and_tests",
+            "Pide a la aplicación que compile y ejecute los tests del clon y te devuelva un "
+            + "resumen. Tú no tienes shell: esto es lo más parecido, y tarda, así que úsalo "
+            + "cuando el cambio esté completo, no después de cada edición.");
+        AddTool(config, FixDone, "fix_done",
+            "Cierra el arreglo. summary: qué cambiaste y por qué, con los ficheros tocados. "
+            + "commitTitle: ≤72 caracteres, imperativo, referenciando el identificador del "
+            + "hallazgo. commitDescription: el qué y el porqué, incluyendo los llamadores "
+            + "adaptados si los hubo. risks: lo que queda pendiente de revisión humana, o vacío.",
+            terminal: true);
+
+        return config;
+    }
+
+    /// <summary>
+    /// El mando a distancia de una sesión viva. Nunca lanza hacia la interfaz: que el runtime no
+    /// acepte un mensaje a mitad de turno es una respuesta —la app lo encola y lo dice—, no un
+    /// error que tumbe la vista.
+    /// </summary>
+    private sealed class SessionSteering : IFixSteering
+    {
+        private readonly CopilotSession _session;
+        private readonly ILogger _logger;
+
+        public SessionSteering(CopilotSession session, ILogger logger)
+        {
+            _session = session;
+            _logger = logger;
+        }
+
+        public async Task<bool> SendAsync(string message, CancellationToken ct)
+        {
+            try
+            {
+                await _session.SendAsync(message, ct);
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogInformation(ex, "Arreglo: el runtime no aceptó el mensaje a mitad de turno");
+                return false;
+            }
+        }
+
+        public async Task AbortAsync(CancellationToken ct)
+        {
+            try
+            {
+                await _session.AbortAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Arreglo: fallo al abortar el turno");
+            }
+        }
+    }
+
     private string? CurrentToken() => Blank(_tokenProvider?.Invoke());
 
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;

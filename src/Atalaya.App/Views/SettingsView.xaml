@@ -173,6 +173,26 @@
                         TextWrapping="Wrap" Opacity="0.85" FontSize="12" Foreground="#E0A030" Margin="0,6,0,0"
                         Visibility="{Binding ModelsNotice, Converter={StaticResource NotEmptyToVisibility}}" />
                 </Grid>
+
+                <!-- F6.9: el interruptor del arreglo asistido vuelve a Ajustes, ahora que hay
+                     algo detrás. Encendido por defecto: es supervisado por diseño. -->
+                <Grid Style="{StaticResource FieldRow}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Arreglo asistido" Style="{StaticResource FieldLabel}" />
+                    <ui:ToggleSwitch Grid.Row="0" Grid.Column="1" IsChecked="{Binding EnableAssistedFix}"
+                                     HorizontalAlignment="Left" />
+                    <TextBlock
+                        Grid.Row="1" Grid.Column="1"
+                        Text="Habilita «Arreglar con agente» en la ficha de un hallazgo: el agente arregla sobre tu clon local explicando lo que hace y pidiéndote permiso para tocar ficheros que no son del hallazgo. Nunca commitea ni publica nada, y exige que no tengas cambios sin commitear. El generador de prompt de arreglo funciona igual con esto apagado."
+                        Style="{StaticResource FieldHelp}" />
+                </Grid>
             </StackPanel>
 
             <!-- =========================== Sincronización =========================== -->

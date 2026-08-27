@@ -1,4 +1,4 @@
-using Atalaya.Domain;
+﻿using Atalaya.Domain;
 using Atalaya.Domain.Model;
 
 namespace Atalaya.Copilot;
@@ -360,4 +360,26 @@ public interface ICopilotAgent
 
     /// <summary>Re-verifies findings, reporting verdicts via <paramref name="toolbox"/>.</summary>
     Task VerifyAsync(VerifyRequest request, IVerifyToolbox toolbox, CancellationToken ct);
+
+    /// <summary>
+    /// Arregla UN hallazgo sobre el clon local, de forma interactiva (F6.9). A diferencia de
+    /// auditar y verificar, aquí la sesión es una CONVERSACIÓN: dura varios turnos, el agente
+    /// pregunta y el usuario puede dirigirla mientras corre.
+    /// <para>
+    /// La sesión se cierra cuando el agente llama a <c>fix_done</c> (tool terminal) o cuando
+    /// <see cref="FixConversation.NextTurn"/> devuelve <c>null</c>. El agente edita SOLO por
+    /// <c>apply_edit</c>: no tiene shell, ni git, ni red.
+    /// </para>
+    /// <para>
+    /// <b>Tiene implementación por defecto, y lanza.</b> Los dos agentes de verdad —el del SDK y
+    /// el falso— la implementan; lo que hay repartido por los tests son dobles minúsculos que
+    /// existen para ejercitar UN camino de auditoría (un agente que revienta, uno que se cuelga,
+    /// uno que agota el presupuesto). Obligarlos a llevar un <c>FixAsync</c> vacío no probaría
+    /// nada y sería siete copias de lo mismo esperando a quedarse desfasadas. Lanzar dice la
+    /// verdad: ese agente no sabe arreglar.
+    /// </para>
+    /// </summary>
+    Task FixAsync(FixRequest request, FixConversation conversation, CancellationToken ct)
+        => throw new NotSupportedException(
+            $"{GetType().Name} no implementa el arreglo asistido.");
 }

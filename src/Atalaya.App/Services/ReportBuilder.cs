@@ -283,6 +283,115 @@ public static class ReportBuilder
     private static string Alias(Finding f)
         => string.IsNullOrEmpty(f.DisplayId) ? string.Empty : $"{f.DisplayId} · ";
 
+    /// <summary>
+    /// El informe de una sesión de ARREGLO asistido (F6.9 §5).
+    /// <para>
+    /// Tiene forma propia porque cuenta otra cosa: no hay unidades auditadas ni veredictos, hay
+    /// ficheros tocados, una compilación y una sugerencia de commit. Lo que comparte con los demás
+    /// es la disciplina — quién, cuándo, con qué modelo, cuánto costó y qué quedó declarado como
+    /// riesgo—, y sobre todo el recordatorio de que <b>nada se ha commiteado</b>: leer este informe
+    /// no puede dejar entender que el arreglo ya está publicado.
+    /// </para>
+    /// </summary>
+    /// <param name="files">Ruta, recuento de líneas y si el fichero era del hallazgo.</param>
+    /// <param name="build">Resumen del último build/tests, o null si no se llegó a pedir.</param>
+    public static string BuildFixReport(
+        AppConfig? app,
+        AuditSession session,
+        Finding finding,
+        IReadOnlyList<(string Path, string Tally, bool InScope)> files,
+        string summary,
+        string? risks,
+        string commitTitle,
+        string commitDescription,
+        string? build,
+        string? organization = null)
+    {
+        string appName = app?.Name ?? session.AppSlug;
+        string alias = finding.DisplayId ?? finding.Id.ToString();
+        var sb = new StringBuilder();
+
+        sb.AppendLine($"# Arreglo asistido — {appName}");
+        sb.AppendLine();
+        sb.AppendLine($"- **Modo**: {session.Mode}");
+        sb.AppendLine($"- **Hallazgo**: {alias} — {finding.Title}");
+        sb.AppendLine($"- **Severidad**: {finding.Severity}");
+        sb.AppendLine($"- **Fecha**: {session.StartedUtc:yyyy-MM-dd HH:mm} UTC");
+        sb.AppendLine($"- **Autor**: {session.By} ({session.Machine})");
+        sb.AppendLine($"- **Commit del clon al empezar**: {session.Commit}");
+        sb.AppendLine($"- **Modelo**: {session.Model ?? "n/d"}");
+        sb.AppendLine($"- **Tokens**: entrada {session.Usage.InputTokens}, salida {session.Usage.OutputTokens}"
+            + (session.Usage.Cost is { } c ? $", coste {c:0.####}" : ""));
+        if (session.Interrupted)
+        {
+            sb.AppendLine("- ⚠ **Sesión detenida por el usuario**: el agente no llegó a cerrar el arreglo.");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("> **Estos cambios NO están commiteados.** El arreglo asistido escribe en el clon "
+            + "local de quien lo lanzó y ahí se queda: revisar, commitear y publicar sigue siendo suyo. "
+            + "Y arreglar no resuelve el hallazgo — la resolución llega verificando, con evidencia.");
+        sb.AppendLine();
+
+        sb.AppendLine("## Qué cambió y por qué");
+        sb.AppendLine();
+        sb.AppendLine(string.IsNullOrWhiteSpace(summary) ? "_(el agente no dejó resumen)_" : summary.Trim());
+        sb.AppendLine();
+
+        sb.AppendLine("## Ficheros tocados");
+        if (files.Count == 0)
+        {
+            sb.AppendLine("- Ninguno.");
+        }
+        else
+        {
+            foreach ((string path, string tally, bool inScope) in files)
+            {
+                sb.AppendLine($"- `{path}` ({tally})"
+                    + (inScope ? string.Empty : " — **fuera del hallazgo**, autorizado por el usuario"));
+            }
+        }
+
+        sb.AppendLine();
+
+        if (!string.IsNullOrWhiteSpace(risks))
+        {
+            sb.AppendLine("## Riesgos declarados");
+            sb.AppendLine();
+            sb.AppendLine(risks!.Trim());
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("## Compilación y tests");
+        sb.AppendLine();
+        if (string.IsNullOrWhiteSpace(build))
+        {
+            sb.AppendLine("No se pidió compilar durante la sesión.");
+        }
+        else
+        {
+            sb.AppendLine("```");
+            sb.AppendLine(build!.TrimEnd());
+            sb.AppendLine("```");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("## Sugerencia de commit");
+        sb.AppendLine();
+        sb.AppendLine("```");
+        sb.AppendLine(commitTitle.Trim());
+        if (!string.IsNullOrWhiteSpace(commitDescription))
+        {
+            sb.AppendLine();
+            sb.AppendLine(commitDescription.Trim());
+        }
+
+        sb.AppendLine("```");
+        sb.AppendLine();
+        Sign(sb, organization);
+        return sb.ToString();
+    }
+
     /// <summary>Consolidated cycle-close report (§7): ascended confidences + top-10 priorities.</summary>
     public static string BuildCycleCloseReport(
         AppConfig app, int closedCycle, int promoted, IReadOnlyList<Finding> findings, string? organization = null)

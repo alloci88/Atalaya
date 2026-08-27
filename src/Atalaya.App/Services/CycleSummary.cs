@@ -1,4 +1,4 @@
-using Atalaya.Domain;
+﻿using Atalaya.Domain;
 using Atalaya.Domain.Model;
 
 namespace Atalaya.App.Services;
@@ -59,7 +59,13 @@ public static class CycleSummary
     public static int LaunchesIn(IReadOnlyList<AuditSession> sessions, int cycleN)
         => sessions.Count(s => s.CycleN == cycleN && !IsSystemEvent(s.Mode));
 
-    private static bool IsSystemEvent(AuditMode mode) => mode is AuditMode.Cierre or AuditMode.Reset;
+    /// <summary>
+    /// Lo que NO es una auditoría lanzada: el cierre y el reset (que nadie «lanza») y, desde F6.9,
+    /// el arreglo asistido — que gasta tokens y deja sesión, pero no audita ni una unidad.
+    /// Contarlo aquí haría que «3 auditorías en este ciclo» dejara de poder explicarse en una frase.
+    /// </summary>
+    private static bool IsSystemEvent(AuditMode mode)
+        => mode is AuditMode.Cierre or AuditMode.Reset or AuditMode.Fix;
 
     /// <summary>«Ciclo 5 · iniciado 12 ago 2026». Sin fecha fiable, solo el número.</summary>
     public static string Label(int cycleN, CycleStart start) => start switch

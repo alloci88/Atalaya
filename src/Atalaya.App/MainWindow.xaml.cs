@@ -79,7 +79,18 @@ public partial class MainWindow : FluentWindow
     /// </summary>
     private void OnClosing(object? sender, CancelEventArgs e)
     {
-        if (_confirmedClose || !_viewModel.SessionIsRunning)
+        if (_confirmedClose)
+        {
+            return;
+        }
+
+        if (_viewModel.FixIsRunning && !ConfirmClosingWithFix())
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        if (!_viewModel.SessionIsRunning)
         {
             return;
         }
@@ -101,6 +112,34 @@ public partial class MainWindow : FluentWindow
 
         _confirmedClose = true;
         _viewModel.StopSession();
+    }
+
+    /// <summary>
+    /// Cerrar con un arreglo asistido en curso (F6.9 §4). El aviso NO puede ser el de la
+    /// auditoría: allí lo que se pierde es cobertura, aquí lo que queda son <b>ficheros ya
+    /// modificados en el clon del usuario</b>. Eso hay que decirlo, y hay que decir también que se
+    /// pueden descartar después — el registro de lo tocado sobrevive al proceso.
+    /// </summary>
+    private bool ConfirmClosingWithFix()
+    {
+        System.Windows.MessageBoxResult answer = System.Windows.MessageBox.Show(
+            "Hay un arreglo asistido en curso.\n\n"
+            + "Si cierras ahora se detendrá ordenadamente, pero los cambios que el agente ya haya "
+            + "aplicado SE QUEDAN en tu clon, sin commitear.\n\n"
+            + "Podrás descartarlos la próxima vez que abras Atalaya, desde «Arreglo asistido».\n\n"
+            + "¿Cerrar Atalaya?",
+            "Arreglo en curso",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning,
+            System.Windows.MessageBoxResult.No);
+
+        if (answer != System.Windows.MessageBoxResult.Yes)
+        {
+            return false;
+        }
+
+        _viewModel.StopFix();
+        return true;
     }
 }
 

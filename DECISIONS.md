@@ -2605,14 +2605,22 @@ hay. Los defectos 1 y 2 se diagnosticaron juntos porque el usuario sospechaba ca
   (c) Abrir «Nueva aplicación» con la URL de una app que ya existe y comprobar que redirige en vez
   de crear el duplicado.
 
-## H9 — Arreglo integrado supervisado (opcional, NO entregado)
+## H9 — Arreglo integrado supervisado — **CONSTRUIDO en F6.9**
 
-- El *feature flag* `enableAssistedFix` sigue en la configuración (`settings.json`) y el generador
-  de prompt de arreglo (§5.7, vía 4→2) está entregado y probado. **Desde F5.7 §2 (D-275) el
-  interruptor NO está en Ajustes**: no estaba conectado a nada y enseñaba una capacidad que la
-  aplicación no tiene. El **arreglo integrado supervisado** (rama `fix/{displayId}` + permission
-  handler por-fichero + diff aprobado + sin push) queda como trabajo futuro; cuando se construya,
-  el flag ya está ahí y el control se vuelve a poner.
+- **Entregado.** Lo que quedaba aquí como trabajo futuro es ahora «Arreglar con agente»: ver
+  **F6.9** al final de este documento. El *feature flag* `enableAssistedFix` volvió a Ajustes
+  encendido por defecto (D-559), y la visión interactiva —el agente arreglando sobre el clon
+  mientras narra y pregunta— era de este apunte.
+
+- **Lo único que se cambió del plan original: la rama.** H9 proponía `fix/{displayId}`. Se
+  construyó **sin rama**, porque una rama parece más segura y no lo es: obliga al agente a tener
+  git y deja una rama que limpiar aunque el arreglo no valiera. La reversibilidad la dan el árbol
+  limpio como precondición, el registro byte a byte de lo tocado y el botón de descartar (D-536).
+  El resto del apunte se cumple: permission handler por fichero, diff aprobado y **sin push**.
+
+- Se construyó cuando se pudo, no antes: la pieza que faltaba era saber **quién usa el código**, y
+  esa llegó con el `ReferenceCollector` de F6.7/F6.8, diseñado explícitamente para que H9 lo
+  heredara (D-532). Un agente que edita el clon sin la lista de llamadores no es una ayuda.
 
 ## F5.9 — Métricas (V6): de placeholder a panel de mando
 
@@ -4567,3 +4575,244 @@ truncaba en silencio rompe a cualquier llamador que dependiera del truncado.
   `ReferenceCollector` no sabe nada del prompt: devuelve un `ReferenceReport` y es `FixPromptBuilder`
   quien lo redacta. Cuando se construya el arreglo integrado heredará esta misma recolección en vez
   de hacerse la suya.
+
+## F6.9 — «Arreglar con agente»: el arreglo asistido interactivo (H9, entregado)
+
+> H9 llevaba desde F5.7 en la lista de lo que no se iba a construir. Se construye ahora porque el
+> ReferenceCollector de F6.7/F6.8 —que se diseñó explícitamente para que H9 lo heredase (D-532)—
+> era la pieza que faltaba: sin saber quién usa el código, un agente que edita el clon no es una
+> ayuda, es un riesgo.
+
+### §0 — Lo primero: verificar el SDK antes de construir encima (la lección del F2)
+
+- **D-533 — La elicitación existe, pero NO por donde la doc del paquete sugiere primero.** Se
+  comprobó contra el ensamblado real de `GitHub.Copilot.SDK 1.0.11` antes de escribir una línea.
+  Hay **dos** superficies y van en direcciones contrarias:
+  <br>
+  `session.Ui.ConfirmAsync/SelectAsync/InputAsync` (y `ElicitAsync`) existen y son lo que la
+  documentación nombra, pero van **del SDK HACIA el host**: son nuestro código pidiéndole algo al
+  runtime, y lanzan si `session.Capabilities.Ui?.Elicitation` no es true. No sirven para que el
+  agente nos pregunte a nosotros.
+  <br>
+  El camino bueno es `SessionConfig.OnUserInputRequest`, un
+  `Func<UserInputRequest, UserInputInvocation, Task<UserInputResponse>>` —el mismo que registra
+  `CopilotSession.RegisterUserInputHandler`—. Ahí desemboca la tool **`ask_user`** del runtime
+  (confirmado: el flag del runtime se llama `askUserDisabled` y su documentación dice «disable the
+  `ask_user` tool»; los eventos de la conversación son `user_input.requested` y
+  `user_input.completed`). `UserInputRequest` trae `Question`, `Choices` y `AllowFreeform`, y se
+  contesta con `UserInputResponse { Answer, WasFreeform }`. Es exactamente la forma de tarjeta que
+  la vista necesitaba, así que no hubo que inventar ningún protocolo por encima.
+  <br>
+  `OnElicitationRequest` también existe y NO se usa: es para servidores MCP, y aquí no hay ninguno.
+
+- **D-534 — Y se fija con un test que no necesita asiento.** `BuildFixSessionConfig` es `internal`
+  y devuelve la `SessionConfig` entera; el test lee la lista de tools, llama al permission handler
+  con **todas** las clases de `PermissionRequest` que el SDK define —por reflexión, no por una
+  lista escrita a mano, para que una versión futura del SDK no meta una forma nueva de pedir
+  permiso sin que nadie se entere— y llama al `OnUserInputRequest` con una pregunta de verdad. Una
+  salvaguarda que solo se puede comprobar con un asiento de Copilot delante no se comprueba nunca
+  (H5).
+
+- **D-535 — Lo que NO se pudo verificar, y qué se hizo con ello.** Si un `SendAsync` a mitad de
+  turno llega al modelo en ese mismo turno o en el siguiente no se puede saber sin un asiento: la
+  documentación solo promete que encola y devuelve el id del mensaje. Así que la aplicación **no lo
+  promete**: lo intenta, y si el runtime no lo acepta lo encola ella y lo dice con esas palabras
+  («el agente está ocupado con este turno: tu mensaje se le entregará en cuanto lo termine»). La
+  cola se vacía por `FixConversation.NextTurn`, que es un turno más de verdad. Prometer inmediatez
+  que no se puede garantizar habría sido exactamente el fallo del F2.
+
+### §1 — Sin rama, y por qué eso es más seguro que una rama
+
+- **D-536 — La seguridad viene del árbol limpio + el registro + el botón, no de una rama.** Una
+  rama `fix/{displayId}` —lo que H9 proponía en su día— parece más segura y no lo es: obliga al
+  agente a tener git, deja al usuario con una rama que limpiar aunque el arreglo no valiera, y no
+  protege de nada que no proteja ya el trío de aquí. Lo que de verdad hace reversible esto es:
+  **(a)** el árbol de trabajo está limpio al empezar, **(b)** de cada fichero se guarda su
+  contenido exacto ANTES de la primera edición, y **(c)** «Descartar todo» está a un clic. El
+  agente edita el árbol de trabajo y no toca git en su vida.
+
+- **D-537 — Árbol sucio = no arranca. Sin excepciones, y esto es lo que sostiene todo lo demás.**
+  Con cambios sin commitear, «revertir lo que tocó el agente» y «pisar lo que estaba escribiendo el
+  usuario» dejan de ser distinguibles, y el botón de descartar pasa de ser una red a ser una
+  trampa. El mensaje nombra los ficheros que estorban. Lo que git IGNORA no cuenta —`bin/`,
+  `obj/`: están en el árbol de cualquiera y no son trabajo de nadie; si contaran, el arreglo no
+  arrancaría jamás en un repo compilado—, pero un fichero **nuevo sin seguir** sí, porque eso sí es
+  trabajo de alguien.
+
+- **D-538 — Los snapshots viven en `%LOCALAPPDATA%`, NUNCA en el clon.** Si el registro de
+  seguridad viviera dentro del repo auditado sería, él mismo, un cambio sin commitear más — y el
+  descarte tendría que empezar por descartarse a sí mismo. Fuera del clon, además, sobrevive al
+  proceso: cerrar Atalaya con un arreglo a medias no puede llevarse el botón de deshacer, así que
+  la vista ofrece los arreglos anteriores sin cerrar con «Descartar» o «Los mantengo».
+
+- **D-539 — La copia se toma UNA vez por fichero, en la primera edición, y en binario.** La segunda
+  edición del mismo fichero ya no es «lo de antes de la sesión». Y se copia el fichero entero, no
+  su texto: el descarte tiene que devolver el fichero **exacto** —codificación, BOM y finales de
+  línea incluidos—, no uno equivalente. El test compara `File.ReadAllBytes` antes y después, no
+  cadenas. Un fichero que el agente CREÓ no se «restaura» a vacío: se borra.
+
+- **D-540 — Un solo cerrojo para las dos clases de sesión.** `AgentBusyGate` lo comparten la
+  auditoría y el arreglo. No es una cortesía de presupuesto: el arreglo **escribe** en el clon que
+  la auditoría está leyendo, así que dejarlos convivir es publicar hallazgos sobre un estado del
+  código que no existió nunca. Con dos banderas independientes cada servicio miraría la del otro y
+  el cerrojo se echaría dos veces o ninguna; con una pieza hay UN sitio donde se decide y UNO que
+  probar. Se toma antes del primer `await`, igual que en D-085.
+
+### §2 — El encargo, que es F6.7 y F6.8 sin descuento
+
+- **D-541 — La sección «Quién usa este código» es la MISMA FUNCIÓN, no una copia.**
+  `FixPromptBuilder.AppendReferences` pasó a `internal` y el prompt interactivo la llama tal cual.
+  Duplicarla habría sido garantizar que las dos se separasen, y la que se quedara atrás sería la
+  que le miente al agente sobre quién usa el código. Igual con el código actual del símbolo: sale
+  de `SnippetReader`, el mismo que pinta la ficha, con su regla de F6.7 de no enseñar nunca código
+  viejo como si fuera actual.
+
+- **D-542 — La regla 2 cambia de verbo, y ahí está el modo entero.** En el generador (F6.8, D-524)
+  decía «adapta cada llamador afectado y lista cuál tocaste». Aquí dice **«NO decidas —
+  PREGUNTA»**, con `ask_user`, presentando las opciones con su consecuencia concreta sobre los
+  llamadores listados: «(A) lanzar excepción y adaptar los N llamadores, (B) comportamiento
+  compatible + aviso, (C) abortar». Cambiar un contrato observable es una decisión de producto, y
+  la diferencia de este medio es que hay una persona delante a quien preguntársela. Todo lo demás
+  de F6.8 se conserva: los límites de exploración, el impacto transitivo declarado y no perseguido,
+  y el arreglo mínimo.
+
+- **D-543 — «Cómo trabajas aquí» va ANTES del hallazgo.** Un agente que lee el defecto antes de
+  saber que no tiene shell empieza a planear con una shell. Las cuatro tools, el presupuesto de
+  lecturas y la frase «no tienes shell, ni git, ni red; no puedes commitear ni empujar nada, y no
+  debes proponerlo» son lo primero del prompt.
+
+- **D-544 — Y el generador old school no se toca.** Es un anti-objetivo declarado y se cumple al
+  pie de la letra: `FixPromptBuilder` sale de esta tanda con un `private` convertido en `internal`
+  y nada más. Son dos encargos para dos situaciones, y fundirlos habría obligado al de siempre a
+  hablar de tools que en su medio no existen. En la ficha, el botón nuevo va encima y el de siempre
+  justo debajo.
+
+### §3 — La superficie del agente: cuatro tools y ni una más
+
+- **D-545 — `apply_edit` es buscar-y-sustituir, no rangos de línea.** Un rango obliga al agente a
+  acertar números que dejan de significar nada en cuanto aplica su primera edición sobre el mismo
+  fichero —y a re-leerlo entre edición y edición, que es justo el bucle de lecturas que el
+  presupuesto quiere evitar—. Un fragmento literal se valida solo: si no aparece, error; si aparece
+  más de una vez sin `replaceAll`, error con el número de apariciones. La ambigüedad se rechaza en
+  vez de resolverse: sustituir «la primera aparición» de algo que sale tres veces es la forma más
+  barata de romper un fichero. Y `oldText` vacío solo vale para CREAR: sobre un fichero que ya
+  existe se rechaza, porque pisar un fichero entero sin querer es el accidente más caro que puede
+  pasar aquí.
+
+- **D-546 — El ámbito lo decide el HALLAZGO, y salir de él cuesta una autorización.** Los ficheros
+  de las ubicaciones se editan directamente. Cualquier otro pasa por una tarjeta con el fichero y
+  el **porqué del agente** —que es lo único con lo que el usuario puede decidir— y se aprueba
+  fichero a fichero. Un «no» se le devuelve como decisión, no como error: «el usuario NO autoriza
+  modificar X. No vuelvas a pedirlo: replantea el arreglo sin tocar ese fichero». Y una vez
+  autorizado, ese fichero entra en el ámbito de la sesión: preguntar dos veces por el mismo
+  convierte el permiso en un peaje.
+
+- **D-547 — El fichero de test del hallazgo entra sin preguntar.** El encargo PIDE añadir la prueba
+  del defecto; exigir una autorización para escribir el test de lo que se acaba de arreglar
+  convertiría la regla en un trámite. Se reconoce por nombre (`X` → `XTests`, `XTest`, `TestX`,
+  `XSpec`) y misma extensión.
+
+- **D-548 — El agente SOLICITA compilar; la aplicación lo ejecuta.** `run_build_and_tests()` no
+  lleva argumentos, no acepta un comando y no puede apuntar a otro sitio: lo que se ejecuta lo
+  decide Atalaya (`dotnet build` y después `dotnet test` sobre la solución del clon), con tope de
+  tiempo y con la salida recortada por el medio —conservando la COLA, que es donde están los
+  errores y el recuento de tests— y diciendo cuántas líneas se ha comido. Si el build falla, los
+  tests no se ejecutan: el resumen ya dice lo único que importa. Y **no poder compilar es un
+  resultado, no una excepción**: un clon sin solución SDK-style devuelve «no se encontró ninguna
+  solución… declara en tu resumen que el cambio NO se ha compilado». Un agente que lee eso declara
+  el riesgo; uno que ve reventar la tool se queda mudo.
+
+- **D-549 — Y las rutas se comprueban en CANÓNICO, no por texto.** `..\..\otra-cosa` y un enlace
+  simbólico se ven iguales una vez normalizados; por texto, no.
+
+### §4 — La vista, y las dos promesas que no se hacen
+
+- **D-550 — «Pausar» pausa lo que se puede pausar, y la interfaz lo dice.** El SDK no sabe congelar
+  a un modelo a mitad de razonamiento, así que prometerlo sería mentir. Lo que la pausa detiene es
+  lo único que importa: que no caiga ni un cambio más en el clon ni se lance una compilación
+  mientras el usuario está leyendo. El agente puede seguir pensando; su siguiente `apply_edit`
+  espera en la puerta. El tooltip lo dice con esas palabras.
+
+- **D-551 — Las preguntas son TARJETAS en la conversación, no diálogos modales.** La decisión se
+  toma leyendo lo que el agente acaba de explicar, y un modal tapa justo eso. Un test comprueba que
+  la vista no tiene ningún `ShowDialog`.
+
+- **D-552 — El diff se hizo en casa, y por qué.** Se evaluó DiffPlex. Atalaya se despliega como una
+  carpeta de DLLs sueltas sobre una red corporativa: cada paquete nuevo es un DLL más que desplegar
+  y un `restore` más que tiene que salir bien ahí. Y lo que el panel necesita es diff de **líneas**
+  entre dos versiones de un fichero de texto — no de palabras, ni de caracteres, ni formato
+  unificado, ni merge a tres bandas—. Eso son cien líneas con tests propios y cero dependencias.
+  AvalonEdit, que ya estaba, se sigue usando para pintar código.
+  <br>
+  Se recorta primero el prefijo y el sufijo comunes —que en un arreglo quirúrgico es casi todo el
+  fichero— y solo el trozo del medio va por LCS: un cambio de 3 líneas en un fichero de 6.000
+  cuesta lo que comparar 3 líneas. Por encima de 2.000 líneas de trozo central se DICE («cambio
+  demasiado grande para casar línea a línea») y se enseña como reemplazo entero, en vez de
+  inventarse correspondencias. Y el marcador (`+`, `−`, `⋯`) va siempre delante: el color solo
+  refuerza lo que ya se lee.
+
+- **D-553 — El diff compara con el ANTES DE LA SESIÓN, no con la última edición.** Es lo que el
+  usuario tiene que revisar antes de commitear. Y por eso `FixToolbox` distingue dos cosas que al
+  principio se confundieron: lo que se EDITA es el fichero de ahora; lo que se guarda como «antes»
+  es el estado previo a la sesión. Confundirlas hacía que la segunda edición de un mismo fichero se
+  aplicara sobre el texto original y fallara al no encontrar lo que la primera acababa de escribir.
+
+- **D-554 — El campo de entrada está SIEMPRE, no solo cuando el agente pregunta.** Interrumpir y
+  dirigir («no toques ese fichero», «prefiero TryParse») es la mitad del producto; que solo se
+  pudiera hablar cuando al agente le apeteciera preguntar lo dejaría en una demo. Enter envía.
+
+- **D-555 — Cerrar la aplicación con un arreglo en curso NO se avisa como una auditoría.** En una
+  auditoría lo que se pierde es cobertura; aquí lo que queda son **ficheros ya modificados en el
+  clon del usuario**. El mensaje lo dice, y dice también que se podrán descartar la próxima vez que
+  abra. Un aviso copiado del otro habría sido tranquilizador y falso.
+
+### §5 — El cierre: lo que la aplicación hace y lo que no
+
+- **D-556 — Atalaya NO commitea, y la sugerencia de commit es exactamente eso: una sugerencia.**
+  Título (≤72, imperativo, con el displayId) y descripción, EDITABLES in situ, con un botón de
+  copiar que deja las dos cosas listas para pegar. No hay ni un botón que insinúe commitear o
+  empujar, y un test lo fija. Lo que se ahorra es redactar; la decisión sigue siendo del humano.
+
+- **D-557 — Arreglar no resuelve. El estado del hallazgo no se toca.** Al terminar sigue Activo, el
+  historial gana un `FixProposed` con el resumen, y la pantalla de cierre **sugiere** «Verificar
+  ahora». La resolución llega por la vía de siempre, con evidencia (F6.6). Auto-resolver habría
+  cerrado hallazgos con la palabra de quien los arregló, que es justo la puerta que cerró F4.
+
+- **D-558 — Se registra como sesión `fix` en el hub, con la misma disciplina que todo.** Quién,
+  cuándo, con qué modelo, cuánto costó, qué ficheros tocó y cuáles iban fuera del hallazgo. El
+  informe lleva un aviso en negrita —«estos cambios NO están commiteados»— porque un informe en el
+  hub lo lee alguien que no estaba delante. Y `CycleSummary.LaunchesIn` deja de contarlo: gasta
+  tokens y deja sesión, pero no audita ni una unidad, y «3 auditorías en este ciclo» tiene que
+  poder explicarse en una frase.
+
+- **D-559 — El interruptor vuelve a Ajustes, encendido por defecto.** D-275 lo retiró por ser un
+  control conectado a nada, no por ser mala idea, y dejó el flag en la configuración exactamente
+  para este día. La regla de aquel test no se relaja: se **da la vuelta** —ahora exige que el
+  control exista y esté enlazado al ajuste— en vez de borrarse. Encendido de serie porque el flujo
+  es supervisado por construcción; y como el valor por defecto es `true`, las máquinas con un
+  `settings.json` anterior lo estrenan encendido sin tocar nada.
+
+### §6 — Cobertura
+
+- **D-560 — Lo que queda probado (39 tests nuevos).** De las precondiciones: árbol sucio con el
+  fichero nombrado, fichero nuevo sin seguir, lo ignorado por git que NO ensucia, ajuste apagado,
+  clon sin vincular y el cerrojo en las dos direcciones. Del toolbox: dentro del hallazgo no se
+  pregunta, fuera exige autorización y un «no» deja el fichero intacto, autorizado una vez no se
+  repregunta, el test del hallazgo entra, fuera del clon no se lee ni se escribe, el presupuesto de
+  lecturas se agota diciendo cuánto queda, y el fragmento ambiguo se rechaza. De los snapshots:
+  restauración **byte a byte** incluyendo el borrado del fichero creado, una sola copia por
+  fichero, y el registro recuperable en otra ejecución. De la delegación de compilar: dos comandos
+  sobre la solución del clon, sin tests si el build falla, y el clon sin solución declarado. De la
+  sesión completa: narración, elicitación respondida, diff en vivo, build, cierre con resumen y
+  commit sugerido, hallazgo que sigue ACTIVO, sesión `fix` e informe en el hub, y cerrojo liberado.
+  Del encargo: código de ahora, llamadores reales del clon y las reglas del modo interactivo. Del
+  SDK: cuatro tools, ninguna de shell/git/red, permission handler que rechaza todas las clases de
+  petición que el SDK define, y `ask_user` de ida y vuelta. Del diff: catorce casos, del fichero
+  idéntico al cambio gigantesco declarado. Y de la vista: los tres frenos, el campo de entrada, las
+  tarjetas no modales, el recordatorio de «sin commitear» y que la ficha conserva el generador de
+  siempre.
+
+- **D-561 — Lo que NO cubren los tests, y se dice.** Ninguno lanza `dotnet build` de verdad
+  (`IProcessRunner` está doblado): lo que se prueba es la delegación, no MSBuild. Y ninguno habla
+  con Copilot: la calidad del arreglo la juzga el humano contra un hallazgo real de xblast, que es
+  la verificación final de esta tanda.
