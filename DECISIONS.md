@@ -3945,3 +3945,157 @@ y era ilegible.
   qué orden se usan y qué significa lo que enseñan — con Informes y con el enlace desde
   Métricas en su sitio. Es documentación de USUARIO y por eso vive aparte del README,
   que es de instalación y arquitectura.
+
+## F6.4 — Identidad visual: el icono de la aplicación y la marca corporativa
+
+Tanda de identidad. Casi todo lo que sigue es una decisión sobre **dónde NO** poner algo.
+
+### §1 — El icono
+
+- **D-452 — Dos SVG, no uno escalado.** Reducir el icono de 256 a 16 px no da un icono
+  pequeño: da una mancha. El halo de la luz —un `radialGradient`— se convierte en suciedad
+  alrededor de la torre, el degradado del fondo se lee como un gris plano y la tronera, que
+  mide 12 unidades de ancho, desaparece. `atalaya-icon-small.svg` es el MISMO icono dicho
+  más alto: silueta, sin halo, sin degradado, sin tronera, con la luz más grande porque es
+  lo que hace que esto sea una atalaya y no una torre cualquiera. Los tamaños 16 y 24 salen
+  de él; 32, 48, 64 y 256 del grande.
+
+- **D-453 — La regla de las unidades, que es lo que hizo falta rehacer.** El primer intento
+  del pequeño «simplificaba» a ojo y salió peor que el grande a 24 px: los merlones se
+  fundían en un bloque con mordiscos. Con el viewBox de 256, a 16 px **un píxel son 16
+  unidades**, así que todo rasgo que deba verse mide 16 como mínimo y 32 cuando es el que da
+  la lectura. De ahí los números del fichero: merlones de 32 (2 px) separados por muescas de
+  16 (1 px), muescas de 28 de profundidad, base de 28 de alto y 26 unidades de aire entre la
+  luz y las almenas — con menos, la luz y la torre se funden en una sola mancha, que es
+  exactamente lo que pasaba.
+
+- **D-454 — El .ico se escribe a mano, y por eso puede ser multi-tamaño.**
+  `System.Drawing.Icon` sabe leer un .ico pero no componer uno de seis imágenes: guardarlo
+  con él habría dado un fichero de UN tamaño, que es justo lo que no se quiere. El
+  contenedor son 6 bytes de cabecera y 16 por entrada, está publicado, y escribirlo permite
+  además elegir la codificación por tamaño: **DIB de 32 bits hasta 64 px** —lo que espera
+  todo el shell, incluidos los diálogos viejos— y **PNG en el de 256**, como se hace desde
+  Vista, que evita que el fichero pese 256 kB de más. La máscara AND va aunque el mapa
+  lleve alfa: hay rutas del shell que la leen y sin ella el icono sale con un rectángulo
+  negro detrás.
+
+- **D-455 — La herramienta de assets vive FUERA de la solución.** `scripts/IconGen/` no
+  está en `Atalaya.sln` y no se despliega: se ejecuta a mano con `scripts/build-assets.ps1`
+  cuando cambia un SVG. Compilar Atalaya no puede depender de tener un renderizador de SVG
+  instalado, y por eso el `.ico` **se versiona** aunque sea un artefacto derivado. Es la
+  excepción razonada a «en el repo solo fuentes»: la alternativa era una dependencia de
+  build para todo el equipo a cambio de 48 kB.
+
+- **D-456 — SVG.NET y no Svg.Skia.** Los dos rasterizan; SVG.NET es puro gestionado y
+  Svg.Skia arrastra binarios nativos por plataforma. Para una herramienta que cualquiera del
+  equipo tiene que poder ejecutar con solo el SDK, «no hay nada que instalar» gana a
+  «renderiza un 2 % mejor». Y el SVG que hay que dibujar son cuatro paths y dos degradados.
+
+- **D-457 — El icono va COMPILADO como recurso, no como fichero suelto.** La ventana, el
+  Alt-Tab y la barra de tareas lo piden siempre; que dependieran de un `.ico` que alguien
+  puede borrar de la carpeta sería regalar un fallo. `ApplicationIcon` cubre el ejecutable
+  —Explorador y accesos directos— y el `<Resource>` cubre la ventana.
+
+- **D-458 — Y la ruta del recurso va en MINÚSCULAS, porque no da igual.** Con
+  `Link="Assets\atalaya.ico"` el recurso se guarda como `Assets/atalaya.ico`, y la
+  resolución de un `pack://` pasa la ruta a minúsculas antes de buscar: `assets/...` no
+  casa con `Assets/...` y la ventana revienta al abrirse. **Lo cazó un test**, que era
+  exactamente para lo que se escribió — un `pack://` roto compila igual de bien que uno
+  correcto.
+
+- **D-459 — El aviso lo firma la aplicación.** Los toasts de Atalaya son NUESTROS (no los
+  del sistema), así que llevan el mismo `.ico` a 16 px: el tamaño para el que existe la
+  variante de silueta. No es marca corporativa — es el icono de quien habla.
+
+### §2 — La marca corporativa, y sobre todo dónde no
+
+- **D-460 — El logotipo no se toca, y hay un test que lo comprueba byte a byte.** Lo único
+  permitido era preparación técnica: dejar el fondo en transparencia. La fuente que entregó
+  comunicación **ya venía con canal alfa**, así que el paso correcto era **no hacer nada**:
+  `maxam-logo.png` es una copia literal de `maxam-logo-source.png`, sin volver a codificar.
+  Volver a guardar un PNG «igual» ya es tocarlo. La herramienta sabe quitar un fondo blanco
+  si algún día llega una fuente que lo tenga, y no sabe hacer nada más.
+
+- **D-461 — El problema del tema oscuro se resuelve por DEBAJO.** Las letras del logotipo
+  son `#51555A` y sobre el fondo oscuro de la aplicación no se leen. Recolorearlas no es
+  decisión de este equipo —los manuales de marca no lo permiten—, así que lo que cambia es
+  el papel: una placa clara (`#F4F5F7`) redondeada y con aire. Se comprobó en render: sin
+  placa, el logotipo sobre oscuro queda a un paso de ser ilegible; con ella, nítido. En
+  tema claro la placa es **transparente** y desaparece.
+
+- **D-462 — La placa lleva un color LITERAL, y es a propósito.** Los tokens del tema se
+  oscurecen en oscuro, que es exactamente lo contrario de lo que esta superficie tiene que
+  hacer. No es «tocar la paleta de la aplicación» (anti-objetivo): es el papel bajo una
+  firma, y su trabajo es no seguir al tema.
+
+- **D-463 — La versión en negativo se resuelve en DISCO, no compilada.**
+  `maxam-logo-dark.png` todavía no existe: compilarla como recurso obligaría a tenerla para
+  poder construir. Buscándola junto al ejecutable, el día que comunicación la entregue basta
+  con dejarla caer en `assets/` y el tema oscuro la usa sola, sin placa, sin recompilar y
+  sin tocar una línea. El comodín del csproj acepta que no haya ninguna.
+
+- **D-464 — Sin asset, el hueco DESAPARECE.** Ni marco vacío, ni interrogante, ni traza de
+  error: un despliegue sin marca es una situación normal. `BrandAssets.Resolve` devuelve
+  null y `BrandMark` se colapsa. Es la diferencia entre un hueco preparado y un hueco roto,
+  y está probada en las cuatro combinaciones de assets presentes.
+
+- **D-465 — Tres emplazamientos, y un test que los cuenta.** La bienvenida (debajo del
+  bloque de conexión: quien abre la aplicación por primera vez viene a conectarse), la
+  página Cuenta (junto a la organización, que es de lo que ahí se habla) y el «Acerca de».
+  El test comprueba las apariciones exactas en esos dos XAML **y que no haya ninguna** en el
+  rail, la sesión en vivo, Hallazgos, Métricas, Informes, Inventario, Portafolio, Ajustes ni
+  el alta. Es el test que impide que dentro de seis meses haya un logo en la barra lateral:
+  la contención no se sostiene sola.
+
+- **D-466 — El pie del informe es una LÍNEA, no un membrete.** `Atalaya · {organización}`
+  tras un separador. En texto, porque el markdown tiene que seguir siendo legible en
+  cualquier visor, incluido un `cat` en una terminal — y porque el visor de F6.3 renderiza a
+  `FlowDocument`, no a HTML, así que no hay dónde meter una imagen sin inventarse un formato.
+  Sin organización se firma solo «Atalaya»: escribir «Atalaya ·» y nada detrás sería enseñar
+  el hueco de un dato que el hub todavía no da. **Los informes ya publicados no se tocan**:
+  son inmutables, y la firma aparece en los que se generen a partir de ahora.
+
+- **D-467 — El nombre de la organización se lee de UN sitio.** `HubContext.OrganizationName`.
+  Lo necesitan la firma del informe y el «Acerca de», y un dato leído de dos sitios distintos
+  acaba diciendo dos cosas distintas. Nunca lanza: sin clon no hay organización, y eso no es
+  un error.
+
+### §3 — «Acerca de»
+
+- **D-468 — La versión sale del ENSAMBLADO, no de una constante.** `AboutInfo.CurrentVersion`
+  prefiere la versión informativa —la que un despliegue puede sellar con un sufijo `+sha`— y
+  se cae a la del fichero y a la del ensamblado. Un número escrito en un XAML es un número
+  que se queda viejo, y el test lo compara contra el ensamblado vivo.
+
+- **D-469 — El diálogo va antes de la zona peligrosa.** Lo último de una página no puede ser
+  algo que no da miedo: la zona peligrosa se queda al final, donde estaba, y «Acerca de» se
+  cuela justo encima.
+
+### Cobertura
+
+- **D-470 — Lo que queda probado (18 tests).** Del icono: que el `.ico` trae los seis tamaños,
+  todos con imagen dentro, a 32 bits y con entradas que apuntan dentro del fichero; que la
+  variante pequeña soltó de verdad halo, degradado y tronera y que la grande los conserva; que
+  las dos son el mismo icono (mismo lienzo, mismos colores de marca); que está declarado en el
+  ejecutable, en la ventana y en el aviso; y que **el recurso existe en el ensamblado con la
+  ruta exacta que se pide**. Del logotipo: las cuatro combinaciones de assets —ninguno, solo
+  el normal, los dos, solo el negativo— con su placa o sin ella; que lo desplegado es byte a
+  byte lo de comunicación; y que viaja junto al ejecutable mientras la fuente se queda fuera.
+  De la contención: los tres emplazamientos contados y los nueve prohibidos comprobados. De la
+  firma: que el informe de sesión y el consolidado la llevan, y que sin organización no queda
+  un separador colgando. Del «Acerca de»: que la versión es la real, que sin organización no
+  se pinta un bloque vacío y que Ajustes lo abre con los datos del hub. Y del pipeline: que el
+  script existe, conoce las dos fuentes y que la herramienta NO está en la solución.
+
+- **D-471 — Y un test ajeno que hubo que ajustar.** `The_brand_is_written_once` contaba las
+  apariciones de la palabra «Atalaya» en `MainWindow.xaml` para vigilar que la marca se
+  escribe una sola vez. Las rutas `pack://…/assets/atalaya.ico` la hacían fallar sin que la
+  regla se hubiera roto: una ruta de recurso no es marca escrita, nadie la lee en pantalla.
+  Se descuentan antes de contar. La regla sigue siendo la misma; lo que se afinó es la forma
+  de medirla.
+
+- **D-472 — Lo que se verifica a mano.** Abrir la aplicación y mirar cuatro sitios: la barra
+  de título, el Alt-Tab, la barra de tareas y el Explorador sobre `dist/Atalaya.exe`. Y con
+  el tema oscuro puesto, que el logotipo de Cuenta se lee sobre su placa. El render de
+  contraste está hecho y adjuntado; lo que no se puede automatizar es que a alguien le
+  parezca bien.

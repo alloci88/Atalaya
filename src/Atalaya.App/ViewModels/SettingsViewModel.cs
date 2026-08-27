@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using Atalaya.App.Services;
 using Atalaya.App.Views;
 using Atalaya.Copilot;
@@ -53,6 +53,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly IFactoryResetConfirmer _confirmer;
     private readonly HubContext _hub;
     private readonly NavigationService _navigation;
+    private readonly IAboutDialog? _about;
 
     /// <summary>Plazo para que el SDK conteste con su catálogo antes de rendirse.</summary>
     private static readonly TimeSpan ModelListTimeout = TimeSpan.FromSeconds(30);
@@ -64,7 +65,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
         FactoryResetService reset,
         IFactoryResetConfirmer confirmer,
         HubContext hub,
-        NavigationService navigation)
+        NavigationService navigation,
+        IAboutDialog? about = null)
     {
         _settings = settings;
         _agent = agent;
@@ -73,6 +75,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _confirmer = confirmer;
         _hub = hub;
         _navigation = navigation;
+        _about = about;
         AppSettings s = settings.Current;
         _editor = s.Editor;
         _isLightTheme = string.Equals(s.Theme, "light", StringComparison.OrdinalIgnoreCase);
@@ -200,6 +203,13 @@ public sealed partial class SettingsViewModel : ViewModelBase
         s.CopilotTimeoutMinutes = Math.Max(1, CopilotTimeoutMinutes);
         return s;
     }
+
+    /// <summary>
+    /// El «Acerca de» (F6.4 §3). Opcional en el constructor porque los tests de ajustes no montan
+    /// ventanas: sin él, el gesto no hace nada en vez de reventar.
+    /// </summary>
+    [RelayCommand]
+    private void ShowAbout() => _about?.Show(AboutInfo.Create(_hub));
 
     [RelayCommand]
     private void Save()

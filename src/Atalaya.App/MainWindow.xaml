@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     Title="Atalaya"
+    Icon="pack://application:,,,/assets/atalaya.ico"
     Width="1340"
     Height="800"
     MinWidth="900"
@@ -155,8 +156,18 @@
                             ToolTip="Descartar">
                             <Border Background="#EE2B2B2B" BorderBrush="#33FFFFFF" BorderThickness="1"
                                     CornerRadius="10" Padding="12,7" MaxWidth="420">
-                                <TextBlock Text="{Binding Text}" FontSize="11" TextWrapping="Wrap"
-                                           Foreground="#F0F0F0" />
+                                <StackPanel Orientation="Horizontal">
+                                    <!-- F6.4: el aviso lo firma la aplicación. Los toasts son
+                                         NUESTROS (no los del sistema), así que el icono es el
+                                         mismo .ico compilado, a 16 px — el tamaño para el que
+                                         existe la variante de silueta. -->
+                                    <Image Source="pack://application:,,,/assets/atalaya.ico"
+                                           Width="16" Height="16" Margin="0,0,9,0"
+                                           VerticalAlignment="Top"
+                                           RenderOptions.BitmapScalingMode="HighQuality" />
+                                    <TextBlock Text="{Binding Text}" FontSize="11" TextWrapping="Wrap"
+                                               Foreground="#F0F0F0" MaxWidth="370" />
+                                </StackPanel>
                             </Border>
                         </Button>
                     </DataTemplate>

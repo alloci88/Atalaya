@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Herramienta de construcción de assets (F6.4). NO forma parte de Atalaya.sln y no se
+    despliega: se ejecuta a mano con scripts/build-assets.ps1 cuando cambia el SVG del
+    icono o el PNG del logo. Por eso puede permitirse System.Drawing y un paquete que la
+    aplicación no lleva.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Atalaya.IconGen</RootNamespace>
+    <UseWindowsForms>false</UseWindowsForms>
+    <!-- System.Drawing en .NET 8 es solo-Windows y este TFM ya lo es. -->
+    <NoWarn>CA1416</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- SVG.NET: renderizador de SVG puro gestionado (sin binarios nativos que instalar),
+         que es la razón de elegirlo frente a Svg.Skia para una herramienta que tiene que
+         poder ejecutarse en cualquier máquina del equipo con solo el SDK. -->
+    <PackageReference Include="Svg" Version="3.4.8" />
+  </ItemGroup>
+
+</Project>

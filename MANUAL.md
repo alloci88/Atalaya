@@ -1,4 +1,4 @@
-# MANUAL — Atalaya
+﻿# MANUAL — Atalaya
 
 Manual de uso. Qué hace cada pantalla, en qué orden se usan y qué significa lo que
 enseñan. Para montar el entorno o compilar, ver `README.md`; para saber **por qué**
@@ -141,7 +141,8 @@ conexión.
 ### Ajustes
 
 Umbrales (tamaño de unidad, frescura), modelo de Copilot, tema **claro/oscuro**,
-intervalo de sincronización y las acciones destructivas, con su confirmación.
+intervalo de sincronización y las acciones destructivas, con su confirmación. Al final,
+**Acerca de Atalaya**: versión, organización y los enlaces al repositorio y a este manual.
 
 ---
 

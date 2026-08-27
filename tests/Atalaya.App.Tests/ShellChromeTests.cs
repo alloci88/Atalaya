@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using FluentAssertions;
 using Xunit;
 
@@ -46,10 +46,16 @@ public sealed class ShellChromeTests
         markup.Should().NotContain("Text=\"ATALAYA\"",
             "la cabecera del rail era la segunda marca; el rail empieza por los items");
 
+        // Las rutas de recurso no son marca ESCRITA: «/assets/atalaya.ico» es el icono de la
+        // ventana y del aviso (F6.4), y nadie lo lee en pantalla. Se descuentan antes de contar,
+        // porque lo que esta regla vigila es cuántas veces se ve la palabra, no cuántas veces
+        // aparece en el fichero.
+        string visible = Regex.Replace(markup, "pack://[^\"]+", string.Empty);
+
         // Las apariciones que quedan son atributos Title: el chrome de la ventana y la etiqueta
         // pequeña de la barra de título, que son la MISMA marca visible.
-        MatchCollection brand = Regex.Matches(markup, "Atalaya", RegexOptions.IgnoreCase);
-        MatchCollection titles = Regex.Matches(markup, "Title=\"Atalaya\"", RegexOptions.IgnoreCase);
+        MatchCollection brand = Regex.Matches(visible, "Atalaya", RegexOptions.IgnoreCase);
+        MatchCollection titles = Regex.Matches(visible, "Title=\"Atalaya\"", RegexOptions.IgnoreCase);
         brand.Count.Should().Be(
             titles.Count + 1,
             "solo debería quedar la marca en los Title, más el x:Class del propio control");

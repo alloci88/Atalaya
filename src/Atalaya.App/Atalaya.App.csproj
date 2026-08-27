@@ -8,7 +8,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Atalaya.App</RootNamespace>
     <AssemblyName>Atalaya</AssemblyName>
-    <ApplicationIcon></ApplicationIcon>
+    <!-- F6.4: el icono del EJECUTABLE (Explorador, accesos directos, Alt-Tab del proceso).
+         El de la ventana y la barra de tareas se pone aparte, como Resource, más abajo. -->
+    <ApplicationIcon>..\..\assets\atalaya.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,6 +24,22 @@
          executable so a corporate deployment can override it without rebuilding. -->
     <EmbeddedResource Include="appsettings.deploy.json" />
     <Content Include="appsettings.deploy.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- F6.4 · Identidad. El icono va COMPILADO como recurso: la ventana y la barra de tareas lo
+         necesitan siempre y no puede depender de que un fichero siga en su sitio. -->
+    <Resource Include="..\..\assets\atalaya.ico" Link="assets\atalaya.ico" />
+
+    <!-- El logotipo corporativo, en cambio, se DESPLIEGA como fichero suelto. La versión en
+         negativo (maxam-logo-dark.png) todavía no existe: compilarla obligaría a tenerla para
+         poder construir, y buscándola en disco basta con dejarla caer el día que llegue. El
+         comodín acepta que no haya ninguna — un despliegue sin marca es legítimo. La fuente
+         (-source) se queda fuera: no se despliega lo que no se pinta. -->
+    <Content Include="..\..\assets\maxam-logo*.png"
+             Exclude="..\..\assets\maxam-logo-source.png"
+             Link="assets\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

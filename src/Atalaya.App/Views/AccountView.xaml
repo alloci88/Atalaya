@@ -2,7 +2,8 @@
     x:Class="Atalaya.App.Views.AccountView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:controls="clr-namespace:Atalaya.App.Controls">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel MaxWidth="680" HorizontalAlignment="Left">
 
@@ -33,6 +34,11 @@
                 <TextBlock
                     Text="No necesitas conocer la URL del hub, crear ningún token ni abrir una consola."
                     Opacity="0.6" FontSize="12" Margin="0,16,0,0" TextWrapping="Wrap" />
+
+                <!-- F6.4 · La firma de la bienvenida. Discreta y DEBAJO del bloque de conexión:
+                     quien abre la aplicación por primera vez viene a conectarse, no a mirar un
+                     logo. Si no hay asset, el hueco se colapsa solo. -->
+                <controls:BrandMark LogoHeight="24" Margin="0,34,0,0" />
             </StackPanel>
 
             <!-- ============ AUTORIZANDO: el código en grande ============ -->
@@ -79,6 +85,12 @@
                                 <Run Text="Organización:" /><Run Text=" " /><Run Text="{Binding OrganizationLogin, Mode=OneWay}" />
                             </TextBlock>
                         </StackPanel>
+
+                        <!-- F6.4 · La firma, junto a la organización a la que pertenece la cuenta.
+                             Es el único sitio de una vista de trabajo donde va, y va aquí porque
+                             es aquí donde se habla de la organización. -->
+                        <controls:BrandMark LogoHeight="22" Margin="20,0,0,0"
+                                            VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
 

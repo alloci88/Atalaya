@@ -1,4 +1,4 @@
-using Atalaya.Copilot;
+﻿using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Anchoring;
 using Atalaya.Domain.Hashing;
@@ -563,7 +563,8 @@ public sealed class SessionCoordinator
 
         int pending = inventory.Units.Count(u => u.State == UnitState.Pendiente);
         int large = inventory.Units.Count(u => u.State == UnitState.Grande);
-        string report = ReportBuilder.BuildSessionReport(app, session, newFindings, pending, large);
+        string report = ReportBuilder.BuildSessionReport(
+            app, session, newFindings, pending, large, _hub.OrganizationName);
         _hub.Store.WriteReport(request.Slug, sessionId.ToString(), report);
 
         _hub.Sync?.CommitAndPush(

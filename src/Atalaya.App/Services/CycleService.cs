@@ -1,4 +1,4 @@
-using Atalaya.Domain;
+﻿using Atalaya.Domain;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 
@@ -87,7 +87,8 @@ public sealed class CycleService
             Counters = new SessionCounters { Confirmed = promoted },
         });
 
-        string report = ReportBuilder.BuildCycleCloseReport(app, expectedCycle, promoted, _hub.Store.ListFindings(slug));
+        string report = ReportBuilder.BuildCycleCloseReport(
+            app, expectedCycle, promoted, _hub.Store.ListFindings(slug), _hub.OrganizationName);
         _hub.Store.WriteReport(slug, sessionId.ToString(), report);
 
         _hub.Sync?.CommitAndPush($"cierre: {slug} ciclo {expectedCycle}→{next}");

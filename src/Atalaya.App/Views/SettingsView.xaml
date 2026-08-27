@@ -221,6 +221,14 @@
                 nadie lo veía sin bajar a buscarlo (F5.7 §4).
             -->
 
+            <!-- F6.4 · «Acerca de»: versión real, organización y enlaces. Va antes de la zona
+                 peligrosa porque lo último de una página no puede ser algo que no da miedo. -->
+            <ui:Button Content="Acerca de Atalaya"
+                       Command="{Binding ShowAboutCommand}"
+                       Appearance="Secondary"
+                       HorizontalAlignment="Left"
+                       Margin="0,26,0,0" />
+
             <!-- ========================== Zona peligrosa ========================== -->
             <Border
                 Background="#18D13A3A"

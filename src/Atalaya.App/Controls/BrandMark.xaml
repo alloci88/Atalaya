@@ -1,0 +1,29 @@
+<UserControl
+    x:Class="Atalaya.App.Controls.BrandMark"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    HorizontalAlignment="Left">
+
+    <!--
+        La firma corporativa (F6.4 §2). Tres sitios y ni uno más: la bienvenida, la página
+        Cuenta y el «Acerca de». La aplicación es la herramienta; el logo es la firma, no el
+        papel pintado.
+
+        La PLACA existe por un problema concreto: el logotipo tiene las letras en gris oscuro
+        y sobre el fondo oscuro de la aplicación no se leen. Recolorearlo no es decisión
+        nuestra —los manuales de marca no lo permiten—, así que lo que se cambia es lo de
+        DEBAJO: una superficie clara con aire alrededor. En tema claro la placa es transparente
+        y desaparece; el día que llegue la versión en negativo, tampoco hará falta en oscuro.
+    -->
+    <Border x:Name="Plate"
+            CornerRadius="8"
+            Padding="16,12"
+            HorizontalAlignment="Left"
+            Background="Transparent">
+        <Image x:Name="Logo"
+               Stretch="Uniform"
+               HorizontalAlignment="Left"
+               RenderOptions.BitmapScalingMode="HighQuality"
+               SnapsToDevicePixels="True" />
+    </Border>
+</UserControl>

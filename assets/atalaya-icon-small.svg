@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!--
+    Icono de Atalaya para tamaños PEQUEÑOS (16 y 24 px).
+
+    No es otro icono: es el mismo, dicho más alto. A 16 px un halo se convierte
+    en suciedad alrededor de la torre, una tronera de 12 unidades desaparece y un
+    degradado se lee como un cuadrado gris. Lo que queda es la SILUETA —almenas,
+    fuste, base— y la luz de vigía, que es lo único que hace que esto sea una
+    atalaya y no una torre cualquiera.
+
+    LA REGLA DE LAS UNIDADES. El viewBox es de 256, así que a 16 px un píxel son
+    16 unidades. Todo rasgo que deba verse mide 16 como mínimo y 32 cuando es el
+    que da la lectura. De ahí los números:
+      · merlones de 32 (2 px) separados por muescas de 16 (1 px), que es el
+        contraste mínimo que sobrevive al remuestreo;
+      · muescas de 28 de profundidad (~1,8 px): más someras se rellenan solas;
+      · base de 28 de alto, para que la torre se apoye en vez de flotar;
+      · 26 unidades de aire entre la luz y las almenas — con menos se funden en
+        una sola mancha, que es lo que le pasaba a la primera versión.
+
+    Y lo que NO está, y por qué:
+      · sin halo: el radialGradient no sobrevive al remuestreo,
+      · sin degradado de fondo: a 16 px es un gris plano y sucio,
+      · sin tronera: un rasgo interior de 1 px es ruido, no información.
+  -->
+
+  <!-- fondo plano: el mismo azul del degradado del grande, a media altura -->
+  <rect x="4" y="4" width="248" height="248" rx="48" fill="#1b2334"/>
+
+  <!-- luz de vigía: crece porque es la marca del icono -->
+  <circle cx="128" cy="58" r="22" fill="#7fb0ff"/>
+
+  <!-- almenas: tres merlones de 32 con dos muescas de 16 -->
+  <path fill="#e8ecf4" d="M64 154 V106 h32 v28 h16 v-28 h32 v28 h16 v-28 h32 v48 Z"/>
+
+  <!-- fuste atalonado -->
+  <path fill="#e8ecf4" d="M84 154 H172 L188 212 H68 Z"/>
+
+  <!-- base -->
+  <path fill="#e8ecf4" d="M56 212 H200 V240 H56 Z"/>
+</svg>

@@ -265,6 +265,35 @@ pwsh scripts/publish.ps1            # framework-dependent
 pwsh scripts/publish.ps1 -SelfContained
 ```
 
+## Assets de identidad
+
+Todo lo visual vive en `assets/`. Lo versionado incluye tanto las **fuentes** como lo
+**generado**, para que compilar Atalaya no dependa de tener un renderizador de SVG:
+
+| Fichero | Qué es |
+|---|---|
+| `atalaya-icon.svg` | El icono. Fuente de los tamaños 32, 48, 64 y 256. |
+| `atalaya-icon-small.svg` | El mismo icono como **silueta**, fuente de 16 y 24. A 16 px el halo, el degradado y la tronera son ruido: la variante pequeña los suelta y engorda los rasgos. |
+| `atalaya.ico` | **Generado.** Multi-tamaño (16, 24, 32, 48, 64, 256). Es el icono del ejecutable, de la ventana, del Alt-Tab, de la barra de tareas y del aviso propio de la app. |
+| `maxam-logo-source.png` | El logotipo corporativo tal y como lo entregó comunicación. No se toca. |
+| `maxam-logo.png` | **Generado.** Lo que la aplicación pinta. Hoy es una copia byte a byte de la fuente, que ya viene con transparencia. |
+| `maxam-logo-dark.png` | *Opcional y ausente.* La versión en negativo (letras claras). Si aparece, el tema oscuro la usa sola y deja de pintar la placa clara de soporte. |
+
+Para regenerar lo generado tras tocar un SVG:
+
+```powershell
+pwsh scripts/build-assets.ps1            # regenera assets/atalaya.ico y assets/maxam-logo.png
+pwsh scripts/build-assets.ps1 -Verify    # además falla si lo versionado no coincide con sus fuentes
+```
+
+Detrás hay una herramienta .NET (`scripts/IconGen/`) **fuera de `Atalaya.sln`**: rasteriza
+los SVG con SVG.NET y escribe el contenedor ICO. Es determinista — mismas fuentes, mismos
+bytes—, así que regenerar sin cambios no ensucia el árbol.
+
+> **El logotipo corporativo no se altera.** La única preparación permitida es técnica
+> (dejar el fondo en transparencia). Recolorearlo o redibujarlo no es decisión del equipo
+> de producto; la versión en negativo se pide a comunicación y se deja caer en `assets/`.
+
 ## Limitaciones conocidas
 
 - El **adaptador real de Copilot** (`RealCopilotAgent`) está compilado y verificado

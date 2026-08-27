@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Atalaya.Domain;
 using Atalaya.Domain.Model;
 
@@ -12,7 +12,8 @@ public static class ReportBuilder
         AuditSession session,
         IReadOnlyList<Finding> newFindings,
         int pendingUnits,
-        int largeUnits)
+        int largeUnits,
+        string? organization = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"# Informe de sesión — {app.Name}");
@@ -254,7 +255,25 @@ public static class ReportBuilder
             }
         }
 
+        Sign(sb, organization);
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// La firma del pie (F6.4 §2): quién generó esto y para quién. Es una LÍNEA, no un membrete —
+    /// un informe de auditoría se lee, no se enmarca— y va en texto porque el markdown tiene que
+    /// seguir siendo legible en cualquier visor, incluido un <c>cat</c> en una terminal.
+    /// <para>
+    /// Sin organización se firma solo con «Atalaya»: escribir «Atalaya ·» y nada detrás sería
+    /// enseñar el hueco de un dato que el hub todavía no da.
+    /// </para>
+    /// </summary>
+    private static void Sign(StringBuilder sb, string? organization)
+    {
+        sb.AppendLine("---");
+        sb.AppendLine(string.IsNullOrWhiteSpace(organization)
+            ? "Atalaya"
+            : $"Atalaya · {organization.Trim()}");
     }
 
     /// <summary>
@@ -265,7 +284,8 @@ public static class ReportBuilder
         => string.IsNullOrEmpty(f.DisplayId) ? string.Empty : $"{f.DisplayId} · ";
 
     /// <summary>Consolidated cycle-close report (§7): ascended confidences + top-10 priorities.</summary>
-    public static string BuildCycleCloseReport(AppConfig app, int closedCycle, int promoted, IReadOnlyList<Finding> findings)
+    public static string BuildCycleCloseReport(
+        AppConfig app, int closedCycle, int promoted, IReadOnlyList<Finding> findings, string? organization = null)
     {
         var active = findings.Where(f => f.Status == FindingStatus.Activo).ToList();
         var sb = new StringBuilder();
@@ -286,6 +306,8 @@ public static class ReportBuilder
             sb.AppendLine($"- **[{f.Severity}/{f.Confidence}]** {Alias(f)}{f.Title} — `{f.RuleId}` {loc}");
         }
 
+        sb.AppendLine();
+        Sign(sb, organization);
         return sb.ToString();
     }
 }

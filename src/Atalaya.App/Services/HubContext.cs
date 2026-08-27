@@ -1,4 +1,4 @@
-using Atalaya.Domain.Abstractions;
+﻿using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Storage;
@@ -89,6 +89,28 @@ public sealed class HubContext
     public HubPaths HubPaths { get; }
 
     public HubStore Store { get; }
+
+    /// <summary>
+    /// El nombre de la organización del hub, o null si el hub todavía no lo dice (F6.4). Vive
+    /// aquí y no en cada quien lo necesita —la firma de los informes, el «Acerca de»— porque un
+    /// dato leído de dos sitios distintos acaba diciendo dos cosas distintas. Nunca lanza: sin
+    /// clon no hay organización, y eso no es un error.
+    /// </summary>
+    public string? OrganizationName
+    {
+        get
+        {
+            try
+            {
+                string? name = Store.TryReadHub()?.OrganizationName;
+                return string.IsNullOrWhiteSpace(name) ? null : name;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+    }
 
     public HubSyncService? Sync { get; private set; }
 
