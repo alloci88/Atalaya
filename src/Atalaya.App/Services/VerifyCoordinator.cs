@@ -1,4 +1,4 @@
-using Atalaya.Copilot;
+﻿using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Anchoring;
 using Atalaya.Domain.Hashing;
@@ -135,7 +135,32 @@ public sealed class VerifyCoordinator
 
         var toolbox = new VerifyToolbox(_hub, slug, stamps);
         string prompt = PromptComposer.ComposeVerifyPrompt(targets);
-        await _agent.VerifyAsync(new VerifyRequest(prompt, targets), toolbox, ct);
+
+        // Lo que la verificación consume se REGISTRA, igual que en una auditoría o en un arreglo.
+        // Hasta aquí no se anotaba: la sesión quedaba escrita con `usage` a cero, así que en las
+        // métricas cada verify parecía gratis y el coste del periodo se quedaba corto por todo lo
+        // que verificar cuesta. La sesión ya se guardaba; lo que faltaba era su factura.
+        var usage = new UsageTotals();
+        void OnUsage(UsageSample sample)
+        {
+            usage.Add(sample.InputTokens, sample.OutputTokens, sample.CacheReadTokens,
+                sample.CacheWriteTokens, sample.Cost);
+            if (sample.CostUnit is not null && string.IsNullOrEmpty(usage.Currency))
+            {
+                usage.Currency = sample.CostUnit;
+            }
+        }
+
+        _agent.UsageReported += OnUsage;
+        try
+        {
+            await _agent.VerifyAsync(new VerifyRequest(prompt, targets), toolbox, ct);
+        }
+        finally
+        {
+            _agent.UsageReported -= OnUsage;
+        }
+
         notes.AddRange(toolbox.Notes);
 
         // Lo que el auditor no contestó no se queda mudo: se anota lo que SÍ se pudo hacer —el
@@ -167,6 +192,7 @@ public sealed class VerifyCoordinator
             Commit = commit,
             CycleN = _hub.Store.TryReadApp(slug)?.CurrentCycle ?? 1,
             Model = _agent.ModelName,
+            Usage = usage,
         });
         Push(slug, written + toolbox.Applied);
         return new VerifyOutcome(toolbox.Applied + measuredApplied, measuredMessages, notes);

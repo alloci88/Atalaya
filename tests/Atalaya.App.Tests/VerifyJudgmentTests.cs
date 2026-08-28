@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Copilot;
 using Atalaya.Domain;
@@ -311,11 +311,43 @@ public sealed class VerifyJudgmentTests : IDisposable
     }
 
     /// <summary>Un agente que además deja mirar el prompt que se le mandó.</summary>
+    /// <summary>
+    /// Verificar CUESTA, y esa factura tiene que quedar escrita en la sesión. No se anotaba: la
+    /// sesión de verify se guardaba con <c>usage</c> a cero, así que en el panel de métricas cada
+    /// verificación parecía gratis y el coste del periodo salía corto por todo lo que verificar
+    /// gasta. Es el complemento del cuadre de Métricas: allí se suma TODA sesión con coste, y aquí
+    /// se garantiza que la verificación traiga el suyo.
+    /// </summary>
+    [Fact]
+    public async Task Una_verificacion_registra_lo_que_gasta_en_su_sesion()
+    {
+        Finding f = Seed(Malo);
+        Rewrite(Arreglado);
+
+        var agent = new ScriptedAgent(
+            _ => "resuelto",
+            new UsageSample(1200, 340, 4.5m, "fake-model", CacheReadTokens: 90, CostUnit: "unidades SDK"));
+
+        await Coordinator(agent).RunAsync("app", new[] { f.Id }, CancellationToken.None);
+
+        AuditSession session = _hub.Store.ListSessions("app").Single(x => x.Mode == AuditMode.Verify);
+        session.Usage.Cost.Should().Be(4.5m);
+        session.Usage.InputTokens.Should().Be(1200);
+        session.Usage.OutputTokens.Should().Be(340);
+        session.Usage.CacheReadTokens.Should().Be(90);
+        session.Usage.Currency.Should().Be("unidades SDK");
+    }
+
     private sealed class ScriptedAgent : ICopilotAgent
     {
         private readonly Func<VerifyRequest, string> _script;
+        private readonly UsageSample _usage;
 
-        public ScriptedAgent(Func<VerifyRequest, string> script) => _script = script;
+        public ScriptedAgent(Func<VerifyRequest, string> script, UsageSample? usage = null)
+        {
+            _script = script;
+            _usage = usage ?? new UsageSample(0, 0, null, "fake-model");
+        }
 
         public string? ModelName => "fake-model";
 
@@ -338,7 +370,7 @@ public sealed class VerifyJudgmentTests : IDisposable
         {
             string verdict = _script(request);
             TextStreamed?.Invoke(string.Empty);
-            UsageReported?.Invoke(new UsageSample(0, 0, null, ModelName));
+            UsageReported?.Invoke(_usage);
             foreach (VerifyTarget t in request.Targets)
             {
                 toolbox.SubmitVerdict(t.FindingUlid, verdict, "el método ahora valida y usa Convert.FromHexString");
