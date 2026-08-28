@@ -42,4 +42,16 @@ public enum FindingEvent
 }
 
 /// <summary>One immutable entry in a finding's audit trail.</summary>
-public sealed record HistoryEntry(DateTimeOffset Utc, FindingEvent Event, string By, string? Detail);
+public sealed record HistoryEntry(DateTimeOffset Utc, FindingEvent Event, string By, string? Detail)
+{
+    /// <summary>
+    /// La sesión que provocó el evento, cuando la hubo (H9.1). Hoy lo escribe el arreglo asistido
+    /// —<see cref="FindingEvent.FixProposed"/>— para que del historial de la ficha se pueda abrir
+    /// el informe de ese arreglo.
+    /// <para>
+    /// Es opcional y va como propiedad, no en la posición: las entradas escritas antes de H9.1 no
+    /// la traen, y todas las llamadas de siempre siguen construyéndose igual.
+    /// </para>
+    /// </summary>
+    public string? SessionId { get; init; }
+}

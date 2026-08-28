@@ -302,6 +302,14 @@
                     </StackPanel>
 
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- H9.1 §1: de un informe de arreglo se vuelve a SU hallazgo. Va primero
+                             porque es el más concreto de los dos caminos. -->
+                        <ui:Button Content="{Binding OpenFindingLabel}"
+                                   Command="{Binding OpenFindingCommand}"
+                                   Appearance="Secondary"
+                                   Padding="10,4" Margin="0,0,8,0"
+                                   ToolTip="Abre la ficha del hallazgo que arregló esta sesión"
+                                   Visibility="{Binding CanOpenFinding, Converter={StaticResource BoolToVisibility}}" />
                         <ui:Button Content="Ver hallazgos de esta sesión"
                                    Command="{Binding OpenFindingsCommand}"
                                    Appearance="Secondary"

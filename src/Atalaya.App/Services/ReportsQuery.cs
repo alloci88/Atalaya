@@ -76,8 +76,17 @@ public sealed record ReportEntry(
     int? Resolved,
     decimal? Cost,
     string CostUnit,
-    bool HasSession)
+    bool HasSession,
+    string? FindingId = null,
+    string? FindingAlias = null)
 {
+    /// <summary>
+    /// Este informe es de un arreglo asistido y se sabe de qué hallazgo (H9.1 §1). Es lo que
+    /// enciende el enlace de vuelta a la ficha: los informes de arreglo anteriores a H9.1 no lo
+    /// traen, y ahí el enlace simplemente no aparece.
+    /// </summary>
+    public bool HasFinding => !string.IsNullOrWhiteSpace(FindingId);
+
     /// <summary>El nombre por defecto de la descarga: descriptivo y ordenable (F6.3 §2).</summary>
     public string DownloadName =>
         $"atalaya-{Slug}-{ReportKinds.Display(Kind).ToLowerInvariant()}-{When.ToLocalTime():yyyy-MM-dd}.md";
@@ -345,7 +354,9 @@ public sealed class ReportsQuery
                 string.IsNullOrWhiteSpace(session.Usage.Currency)
                     ? CostEstimator.DefaultCostUnit
                     : session.Usage.Currency!,
-                HasSession: true);
+                HasSession: true,
+                FindingId: session.FixFindingId,
+                FindingAlias: session.FixFindingAlias);
         }
 
         // Sin sesión: lo único que se sabe es lo que el informe declara de sí mismo. Se lee la

@@ -72,6 +72,16 @@ public sealed partial class HistoryRow : ExpandableRow
 
     /// <summary>Quién y cuándo, en una línea: es la cabecera del evento.</summary>
     public string Header => string.IsNullOrWhiteSpace(By) ? When : $"{When} · {By}";
+
+    /// <summary>
+    /// La sesión que provocó el evento, si la hubo (H9.1 §1). Hoy solo la trae el arreglo
+    /// asistido, y es lo que convierte una línea del historial en un camino: del «arreglo
+    /// propuesto» al informe de ese arreglo.
+    /// </summary>
+    public string? SessionId { get; init; }
+
+    /// <summary>Hay informe al que ir. Los eventos anteriores a H9.1 no lo traen y no enseñan nada.</summary>
+    public bool HasSession => !string.IsNullOrWhiteSpace(SessionId);
 }
 
 /// <summary>Un comentario del hallazgo. El prompt de arreglo también vive aquí, y es largo.</summary>

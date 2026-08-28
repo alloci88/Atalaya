@@ -68,29 +68,8 @@
 
         <!-- «ver más» no es un botón: es una palabra en la que se hace clic. Con la plantilla de
              botón de serie, un control con chrome propio partía el párrafo en dos. -->
-        <Style x:Key="LinkButton" TargetType="Button">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <TextBlock x:Name="Label" Text="{TemplateBinding Content}"
-                                   Margin="{TemplateBinding Padding}"
-                                   FontSize="{TemplateBinding FontSize}"
-                                   Foreground="{TemplateBinding Foreground}" />
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Label" Property="TextDecorations" Value="Underline" />
-                                <Setter TargetName="Label" Property="Foreground"
-                                        Value="{DynamicResource TextFillColorPrimaryBrush}" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        <!-- El estilo de enlace vive en App.xaml desde H9.1: lo usan esta vista y la de
+             arreglo asistido, y una copia por vista es una copia que se desincroniza. -->
 
         <Style x:Key="SideAction" TargetType="ui:Button">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -317,6 +296,17 @@
                                                                     Padding="0,2,0,0" FontSize="11"
                                                                     HorizontalAlignment="Left"
                                                                     Visibility="{Binding IsLong, Converter={StaticResource BoolToVisibility}}" />
+                                                <!-- H9.1 §1: del evento a la sesión que lo provocó.
+                                                     Hoy solo lo trae el arreglo asistido, que es el
+                                                     único evento con informe propio. -->
+                                                <Button Content="Ver el informe de este arreglo"
+                                                        Style="{StaticResource LinkButton}"
+                                                        Command="{Binding DataContext.OpenSessionReportCommand,
+                                                                  RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        Padding="0,2,0,0" FontSize="11"
+                                                        HorizontalAlignment="Left"
+                                                        Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}" />
                                             </StackPanel>
                                         </Grid>
                                     </DataTemplate>

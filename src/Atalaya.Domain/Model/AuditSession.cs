@@ -237,6 +237,16 @@ public sealed class AuditSession
     /// </summary>
     public List<PatternSuppressionTally> SuppressionsByPattern { get; set; } = new();
 
+    /// <summary>
+    /// El hallazgo que arregló una sesión <see cref="AuditMode.Fix"/> (H9.1). Null en todo lo
+    /// demás y en las sesiones fix anteriores a H9.1, que solo lo nombraban dentro del texto.
+    /// Es lo que permite volver del informe de un arreglo a la ficha de su hallazgo.
+    /// </summary>
+    public string? FixFindingId { get; set; }
+
+    /// <summary>El identificador legible del hallazgo arreglado («OPT-0002»). Ver <see cref="FixFindingId"/>.</summary>
+    public string? FixFindingAlias { get; set; }
+
     /// <summary>Free-text notes, e.g. "no signature extractor available for stack Go".</summary>
     public List<string> Notes { get; set; } = new();
 }

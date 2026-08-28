@@ -24,6 +24,41 @@ public class SerializationTests
         back.History.Should().ContainSingle();
     }
 
+    /// <summary>
+    /// H9.1 §1 — el evento de un arreglo apunta a SU sesión, y eso viaja al hub. Es un campo nuevo
+    /// en un fichero que ya está escrito por ahí: lo que no puede pasar es que una entrada
+    /// anterior, sin el campo, deje de leerse.
+    /// </summary>
+    [Fact]
+    public void History_entry_roundtrips_its_session_id()
+    {
+        Finding original = Samples.Finding();
+        original.History.Add(new HistoryEntry(
+            Samples.T0.AddMinutes(5), FindingEvent.FixProposed, "alvaro", "arreglo asistido ejecutado")
+        {
+            SessionId = "01J8ZC3K9Q0000000000000000",
+        });
+
+        string json = AtalayaJson.Serialize(original);
+        Finding back = AtalayaJson.Deserialize<Finding>(json);
+
+        json.Should().Contain("\"sessionId\": \"01J8ZC3K9Q0000000000000000\"");
+        back.History.Should().HaveCount(2);
+        back.History.Last().SessionId.Should().Be("01J8ZC3K9Q0000000000000000");
+        back.History.First().SessionId.Should().BeNull("la entrada de siempre no lo trae y se lee igual");
+    }
+
+    /// <summary>Un historial escrito ANTES de H9.1 —sin la clave— se sigue leyendo sin ruido.</summary>
+    [Fact]
+    public void A_history_entry_written_before_the_session_link_still_loads()
+    {
+        string json = AtalayaJson.Serialize(Samples.Finding()).Replace("\"sessionId\"", "\"ignorado\"");
+
+        Finding back = AtalayaJson.Deserialize<Finding>(json);
+
+        back.History.Should().ContainSingle().Which.SessionId.Should().BeNull();
+    }
+
     [Fact]
     public void Enum_wire_values_match_the_schema()
     {

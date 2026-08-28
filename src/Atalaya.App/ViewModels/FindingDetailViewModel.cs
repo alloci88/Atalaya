@@ -506,6 +506,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
                 Utc = h.Utc,
                 By = h.By,
                 Detail = h.Detail ?? string.Empty,
+                SessionId = h.SessionId,
             });
         }
 
@@ -1076,6 +1077,17 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
 
         _ = _fix.StartAsync(new FixSessionRequest(slug, id));
     }
+
+    /// <summary>
+    /// Del historial al informe del arreglo (H9.1 §1). El evento «arreglo propuesto» dice que
+    /// alguien intentó arreglar esto; sin este camino, saber QUÉ hizo exigía buscar el informe a
+    /// mano en V7 entre todos los de la aplicación.
+    /// </summary>
+    [RelayCommand]
+    private Task OpenSessionReport(HistoryRow? row)
+        => row is { SessionId: { Length: > 0 } sessionId } && _navigation is not null
+            ? _navigation.NavigateToAsync<ReportsViewModel>(vm => vm.ShowReport(Slug, sessionId))
+            : Task.CompletedTask;
 
     /// <summary>La frase del aviso sobre las referencias: qué se encontró, o por qué no se miró.</summary>
     private static string ReferenceSummary(ReferenceReport refs)

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Windows.Documents;
 using Atalaya.App.Services;
+using Atalaya.Domain.Ids;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -226,6 +227,16 @@ public sealed partial class ReportsViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty] private bool _canOpenFindings;
 
+    /// <summary>
+    /// El informe abierto es de un arreglo asistido y se sabe de qué hallazgo (H9.1 §1): hay
+    /// camino de vuelta a su ficha. Un informe de arreglo que nombra el hallazgo pero no deja
+    /// llegar a él obliga a buscarlo a mano en V3, que es exactamente la fricción que se reportó.
+    /// </summary>
+    [ObservableProperty] private bool _canOpenFinding;
+
+    /// <summary>«Ver el hallazgo (OPT-0002)» — el identificador va en el rótulo, no en un tooltip.</summary>
+    [ObservableProperty] private string _openFindingLabel = "Ver el hallazgo";
+
     // ---------- Carga ----------
 
     /// <summary>
@@ -395,6 +406,10 @@ public sealed partial class ReportsViewModel : ViewModelBase
         ViewerSubtitle = string.Join(" · ", new[] { row.When, row.AppName, row.By }
             .Where(s => !string.IsNullOrWhiteSpace(s) && s != Unknown));
         CanOpenFindings = row.Entry.Kind == ReportKind.Sesion;
+        CanOpenFinding = row.Entry.HasFinding;
+        OpenFindingLabel = string.IsNullOrWhiteSpace(row.Entry.FindingAlias)
+            ? "Ver el hallazgo"
+            : $"Ver el hallazgo ({row.Entry.FindingAlias})";
         IsViewing = true;
     }
 
@@ -442,6 +457,16 @@ public sealed partial class ReportsViewModel : ViewModelBase
         => OpenReport is not { } row
             ? Task.CompletedTask
             : _navigation.NavigateToAsync<FindingsViewModel>(vm => vm.SetApp(row.Slug));
+
+    /// <summary>
+    /// La ficha del hallazgo que arregló esta sesión (H9.1 §1). Mismo patrón que «Ver hallazgos de
+    /// esta sesión», un escalón más fino: de un arreglo se vuelve a SU hallazgo, no a la lista.
+    /// </summary>
+    [RelayCommand]
+    private Task OpenFinding()
+        => OpenReport is { Entry.FindingId: { } id } row && Ulid.TryParse(id, out Ulid finding)
+            ? _navigation.NavigateToAsync<FindingDetailViewModel>(vm => vm.Load(row.Slug, finding))
+            : Task.CompletedTask;
 
     /// <summary>Devuelve toda la barra de filtros a su valor inicial.</summary>
     [RelayCommand]
