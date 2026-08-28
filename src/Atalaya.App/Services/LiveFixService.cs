@@ -113,6 +113,13 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
     [ObservableProperty] private string _lastBuild = string.Empty;
     [ObservableProperty] private bool _lastBuildOk;
     [ObservableProperty] private bool _hasBuildResult;
+
+    /// <summary>
+    /// Compilar la solución ENTERA en vez del proyecto de lo tocado (H9.1 §2). Es una decisión del
+    /// usuario y solo suya: él es quien sabe si su cambio puede haber roto a un vecino, y quien
+    /// paga el tiempo de averiguarlo. El agente no puede tocarlo.
+    /// </summary>
+    [ObservableProperty] private bool _buildFullSolution;
     [ObservableProperty] private long _inputTokens;
     [ObservableProperty] private long _outputTokens;
     [ObservableProperty] private long _cacheReadTokens;
@@ -125,6 +132,12 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
 
     /// <summary>El hallazgo que se está arreglando; lo necesita «Verificar ahora» al cerrar.</summary>
     public Ulid FindingId { get; private set; }
+
+    /// <summary>
+    /// El último veredicto de compilación, ya atribuido: qué se compiló, cuántos errores son
+    /// NUEVOS y cuántos ya estaban. Null mientras no se haya compilado nada.
+    /// </summary>
+    public BuildVerdict? LastVerdict { get; private set; }
 
     /// <summary>Hay algo que enseñar en la vista: corriendo, terminado o fallido.</summary>
     public bool HasSession => IsRunning || HasFinished || HasFailed;
@@ -320,7 +333,8 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
                 this,
                 _pause,
                 _builds,
-                _cts.Token);
+                _cts.Token,
+                fullSolution: () => BuildFullSolution);
             _toolbox = toolbox;
             Subscribe(toolbox);
 
@@ -415,6 +429,10 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             CycleN = _app?.CurrentCycle ?? 0,
             Model = _agent.ModelName,
             Interrupted = interrupted,
+            // De qué hallazgo era este arreglo (H9.1 §1). Sin esto, el informe de una sesión fix
+            // nombra el hallazgo en su texto pero nadie puede navegar de vuelta a su ficha.
+            FixFindingId = finding.Id.ToString(),
+            FixFindingAlias = FindingAlias,
         };
         session.Usage.Add(InputTokens, OutputTokens, CacheReadTokens, 0, Cost);
         session.Notes.Add($"Arreglo asistido de {FindingAlias}: {finding.Title}");
@@ -434,7 +452,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             _hub.Store.WriteSession(session);
             string report = ReportBuilder.BuildFixReport(
                 _app, session, finding, Files.Select(f => (f.RelativePath, f.Tally, f.InScope)).ToList(),
-                Summary, Risks, Commit.Title, Commit.Description, HasBuildResult ? LastBuild : null,
+                Summary, Risks, Commit.Title, Commit.Description, HasBuildResult ? LastVerdict : null,
                 _hub.OrganizationName);
             _hub.Store.WriteReport(Slug, SessionId, report);
             ReportPath = _hub.HubPaths.ReportFile(Slug, SessionId);
@@ -443,9 +461,14 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             Finding? stored = _hub.Store.TryReadFinding(Slug, finding.Id.ToString());
             if (stored is not null)
             {
+                // El evento apunta a SU sesión (H9.1 §1): del historial de la ficha se llega al
+                // informe del arreglo, y del informe se vuelve a la ficha. El círculo se cierra.
                 stored.Record(new HistoryEntry(
                     DateTimeOffset.UtcNow, FindingEvent.FixProposed, session.By,
-                    $"arreglo asistido ejecutado ({Files.Count} fichero(s) tocado(s)): {Trim(Summary, 400)}"));
+                    $"arreglo asistido ejecutado ({Files.Count} fichero(s) tocado(s)): {Trim(Summary, 400)}")
+                {
+                    SessionId = SessionId,
+                });
                 _hub.Store.WriteFinding(Slug, stored);
             }
 
@@ -848,16 +871,47 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         Changed?.Invoke();
     }
 
-    private void OnBuildFinished(BuildAndTestResult result)
+    private void OnBuildFinished(BuildVerdict verdict)
     {
         IsBuilding = false;
         HasBuildResult = true;
-        LastBuildOk = result.Ok;
-        LastBuild = result.Summary;
-        Say(FixMessage.System(result.Ok ? "✓" : "✗",
-            result.Ok ? "Compila y los tests pasan." : "La compilación o los tests NO pasan."
-                + (result.TimedOut ? " (se agotó el tiempo)" : "")));
+        LastVerdict = verdict;
+        LastBuildOk = verdict.Ok;
+        LastBuild = verdict.Summary;
+        Say(FixMessage.System(verdict.Ok ? "✓" : "✗", Narrate(verdict)));
         Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Lo que se dice en la conversación cuando termina una compilación. Un rojo solo se canta si
+    /// es del cambio: los errores que ya estaban se nombran, pero no asustan (H9.1 §2).
+    /// </summary>
+    internal static string Narrate(BuildVerdict verdict)
+    {
+        if (verdict.TimedOut)
+        {
+            return "La compilación agotó el tiempo y se abortó.";
+        }
+
+        string what = verdict.TargetLabel.Length > 0 ? $"Compilado {verdict.TargetLabel}. " : string.Empty;
+        string preexisting = verdict.PreexistingErrors > 0
+            ? $" {verdict.PreexistingErrors} error(es) preexistente(s): ya fallaban antes del cambio."
+            : string.Empty;
+        string excluded = verdict.Excluded.Count > 0
+            ? $" {verdict.Excluded.Count} proyecto(s) fuera del alcance de dotnet, sin contar."
+            : string.Empty;
+
+        if (verdict.NewErrors > 0)
+        {
+            return what + $"{verdict.NewErrors} error(es) NUEVO(S) que ha traído este cambio."
+                   + preexisting + excluded;
+        }
+
+        string tests = verdict.TestsRun
+            ? verdict.TestsOk ? " Los tests pasan." : " Los tests NO pasan."
+            : " No hay tests que cubran lo tocado.";
+
+        return what + "0 errores nuevos." + tests + preexisting + excluded;
     }
 
     private void OnDone(FixDoneArgs done)

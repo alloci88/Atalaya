@@ -304,7 +304,7 @@ public static class ReportBuilder
         string? risks,
         string commitTitle,
         string commitDescription,
-        string? build,
+        BuildVerdict? build,
         string? organization = null)
     {
         string appName = app?.Name ?? session.AppSlug;
@@ -362,18 +362,7 @@ public static class ReportBuilder
             sb.AppendLine();
         }
 
-        sb.AppendLine("## Compilación y tests");
-        sb.AppendLine();
-        if (string.IsNullOrWhiteSpace(build))
-        {
-            sb.AppendLine("No se pidió compilar durante la sesión.");
-        }
-        else
-        {
-            sb.AppendLine("```");
-            sb.AppendLine(build!.TrimEnd());
-            sb.AppendLine("```");
-        }
+        AppendBuildSection(sb, build);
 
         sb.AppendLine();
         sb.AppendLine("## Sugerencia de commit");
@@ -390,6 +379,88 @@ public static class ReportBuilder
         sb.AppendLine();
         Sign(sb, organization);
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// La compilación, contada con honestidad (H9.1 §2).
+    /// <para>
+    /// Qué se compiló, cuántos errores son del cambio y cuántos ya estaban. El desglose de lo
+    /// preexistente va aparte y con su nombre: un informe que presenta 18 errores heredados como
+    /// resultado de un arreglo de dos líneas convierte cada sesión en un susto, y a la tercera
+    /// nadie lee la sección.
+    /// </para>
+    /// </summary>
+    internal static void AppendBuildSection(StringBuilder sb, BuildVerdict? build)
+    {
+        sb.AppendLine("## Compilación y tests");
+        sb.AppendLine();
+
+        if (build is null)
+        {
+            sb.AppendLine("No se pidió compilar durante la sesión.");
+            return;
+        }
+
+        sb.AppendLine($"- **Ámbito**: {(build.TargetLabel.Length > 0 ? build.TargetLabel : "n/d")}");
+        sb.AppendLine($"- **Veredicto**: {build.Headline}");
+        sb.AppendLine($"- **Tests**: {(build.TestsRun ? build.TestsOk ? "pasan" : "**NO pasan**" : "no se ejecutaron")}");
+        sb.AppendLine(build.HasBaseline
+            ? $"- **Línea base**: {build.BaselineNote}"
+            : "- **Línea base**: no había ninguna para este commit, así que todo error contado como nuevo "
+              + "podría ser anterior al cambio.");
+        sb.AppendLine();
+
+        if (build.New.Count > 0)
+        {
+            sb.AppendLine($"### Errores nuevos ({build.New.Count}) — los ha traído este cambio");
+            sb.AppendLine();
+            sb.AppendLine("```");
+            foreach (string line in build.New)
+            {
+                sb.AppendLine(line);
+            }
+
+            sb.AppendLine("```");
+            sb.AppendLine();
+        }
+
+        if (build.Preexisting.Count > 0)
+        {
+            sb.AppendLine($"### Preexistentes ({build.Preexisting.Count}) — ya fallaban antes del arreglo");
+            sb.AppendLine();
+            sb.AppendLine("No son del cambio y no cuentan en el veredicto. Se listan porque quien lea "
+                + "este informe verá esos errores al compilar, y tiene derecho a saber que ya estaban.");
+            sb.AppendLine();
+            sb.AppendLine("```");
+            foreach (string line in build.Preexisting)
+            {
+                sb.AppendLine(line);
+            }
+
+            sb.AppendLine("```");
+            sb.AppendLine();
+        }
+
+        if (build.Excluded.Count > 0)
+        {
+            sb.AppendLine("### Fuera del alcance de la comprobación");
+            sb.AppendLine();
+            foreach (string project in build.Excluded)
+            {
+                sb.AppendLine($"- `{project}` requiere el toolset C++ de Visual Studio; "
+                    + "`dotnet build` no puede compilarlo y no se cuenta como fallo.");
+            }
+
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("<details><summary>Salida completa</summary>");
+        sb.AppendLine();
+        sb.AppendLine("```");
+        sb.AppendLine(build.Summary.TrimEnd());
+        sb.AppendLine("```");
+        sb.AppendLine();
+        sb.AppendLine("</details>");
     }
 
     /// <summary>Consolidated cycle-close report (§7): ascended confidences + top-10 priorities.</summary>

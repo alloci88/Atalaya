@@ -150,6 +150,19 @@
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="Arreglo asistido" FontSize="24" FontWeight="SemiBold" />
                 <TextBlock Text="{Binding HeaderText}" Opacity="0.6" VerticalAlignment="Bottom" Margin="12,0,0,4" />
+                <!-- H9.1 §1: el camino de vuelta al hallazgo, disponible mientras haya sesión que
+                     mirar —corriendo, terminada o fallida—, no solo en la pantalla de cierre. -->
+                <Button Content="{Binding BackToFindingLabel}" Command="{Binding BackToFindingCommand}"
+                        Style="{StaticResource LinkButton}" VerticalAlignment="Bottom" Margin="14,0,0,4"
+                        FontSize="12"
+                        ToolTip="Abre la ficha del hallazgo que originó este arreglo">
+                    <Button.Visibility>
+                        <MultiBinding Converter="{StaticResource AllTrueToVisibility}">
+                            <Binding Path="HasSession" />
+                            <Binding Path="CanGoBackToFinding" />
+                        </MultiBinding>
+                    </Button.Visibility>
+                </Button>
             </StackPanel>
             <!-- Barra de acciones: pausar, descartar, detener. -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
@@ -160,6 +173,13 @@
                 <ui:Button Content="Descartar todo" Command="{Binding DiscardAllCommand}"
                            Appearance="Danger" Margin="0,0,8,0"
                            ToolTip="Devuelve cada fichero tocado a como estaba antes de esta sesión." />
+                <!-- H9.1 §2: el ámbito de la compilación es decisión del USUARIO. El agente no
+                     puede tocarlo: él no sabe si este cambio puede haber roto a un vecino, ni paga
+                     el tiempo de averiguarlo. -->
+                <CheckBox Content="Compilar solución completa" IsChecked="{Binding BuildFullSolution}"
+                          VerticalAlignment="Center" Margin="0,0,14,0" FontSize="12"
+                          Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                          ToolTip="Por defecto se compila solo el proyecto de los ficheros tocados y sus tests, que es lo que el veredicto puede atribuir al cambio. Marcando esto se compila la solución entera y los errores se cuentan contra una línea base del mismo commit." />
                 <ui:Button Content="Detener" Command="{Binding StopCommand}" Appearance="Caution"
                            ToolTip="Para al agente. Lo que ya haya aplicado se queda."
                            Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
@@ -417,8 +437,13 @@
 
                             <TextBlock Text="Resultado del último build/tests" Style="{StaticResource SectionTitle}"
                                        Margin="0,16,0,8" />
-                            <TextBlock Text="{Binding BuildText}" FontSize="12" Margin="0,0,0,6"
+                            <TextBlock Text="{Binding BuildText}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,4"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <!-- Qué se compiló, dicho aparte: un veredicto sin ámbito no se puede
+                                 interpretar (H9.1 §2). -->
+                            <TextBlock Text="{Binding BuildScopeText}" TextWrapping="Wrap" FontSize="11" Margin="0,0,0,6"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       Visibility="{Binding BuildScopeText, Converter={StaticResource NotEmptyToVisibility}}" />
                             <Border CornerRadius="6" Padding="10,8" Background="#18000000"
                                     Visibility="{Binding Fix.LastBuild, Converter={StaticResource NotEmptyToVisibility}}">
                                 <!-- El tope de altura solo vale si lo que sobra se puede alcanzar:

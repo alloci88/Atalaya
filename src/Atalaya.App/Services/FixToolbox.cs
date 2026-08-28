@@ -70,6 +70,8 @@ public sealed class FixToolbox : IFixToolbox
     private readonly IFixApprovals _approvals;
     private readonly FixPauseGate _pause;
     private readonly BuildRunner _builds;
+    private readonly Func<bool> _fullSolution;
+    private readonly string? _commit;
     private readonly CancellationToken _ct;
     private readonly object _gate = new();
 
@@ -84,7 +86,8 @@ public sealed class FixToolbox : IFixToolbox
         FixPauseGate pause,
         BuildRunner builds,
         CancellationToken ct,
-        int readBudget = DefaultReadBudget)
+        int readBudget = DefaultReadBudget,
+        Func<bool>? fullSolution = null)
     {
         _cloneRoot = Path.GetFullPath(cloneRoot);
         _inScope = new HashSet<string>(
@@ -94,6 +97,15 @@ public sealed class FixToolbox : IFixToolbox
         _approvals = approvals;
         _pause = pause;
         _builds = builds;
+        // Quién decide el ámbito de la compilación es el USUARIO, no el agente (H9.1 §2): esto se
+        // lee en cada petición porque el interruptor de la vista puede cambiar a mitad de sesión.
+        _fullSolution = fullSolution ?? (() => false);
+        // El commit del clon al empezar. Con el árbol limpio como precondición, es la otra mitad
+        // de la clave de la línea base: lo que la solución hacía ANTES de tocar nada.
+        string head = GitInfo.HeadSha(_cloneRoot);
+        // «unknown» no es un commit: usarlo como clave mezclaría clones distintos en la misma
+        // línea base. Sin commit no hay caché, que es lento pero nunca miente.
+        _commit = head is { Length: > 0 } && head != "unknown" ? head : null;
         _ct = ct;
         _readsLeft = Math.Max(1, readBudget);
     }
@@ -110,7 +122,11 @@ public sealed class FixToolbox : IFixToolbox
     /// <summary>Empieza una compilación por encargo. La vista enseña que está corriendo.</summary>
     public event Action? BuildStarted;
 
-    public event Action<BuildAndTestResult>? BuildFinished;
+    /// <summary>
+    /// El veredicto de la compilación, ya atribuido: cuántos errores son NUEVOS y cuántos ya
+    /// estaban. La vista y el informe leen de aquí; el agente recibe el mismo texto.
+    /// </summary>
+    public event Action<BuildVerdict>? BuildFinished;
 
     /// <summary>El agente cerró con <c>fix_done</c>.</summary>
     public event Action<FixDoneArgs>? Done;
@@ -299,6 +315,15 @@ public sealed class FixToolbox : IFixToolbox
 
     // ------------------------------------------------------------------ run_build_and_tests
 
+    /// <summary>
+    /// Compila lo que corresponde a lo tocado y devuelve un veredicto ATRIBUIBLE (H9.1 §2).
+    /// <para>
+    /// El ámbito sale de los ficheros que el agente lleva tocados, no de una decisión suya: el
+    /// proyecto de esos ficheros, o la solución entera si el usuario lo ha pedido. Y el árbol
+    /// intacto —ninguna edición todavía— es lo que permite medir la línea base contra la que se
+    /// restan los errores que ya estaban.
+    /// </para>
+    /// </summary>
     public BuildAndTestResult RunBuildAndTests()
     {
         try
@@ -311,22 +336,29 @@ public sealed class FixToolbox : IFixToolbox
         }
 
         BuildStarted?.Invoke();
-        BuildAndTestResult result;
+        BuildVerdict verdict;
         try
         {
-            result = _builds.Run(_cloneRoot, _ct);
+            verdict = _builds.Run(
+                new BuildRequest(
+                    _cloneRoot,
+                    _set.Files,
+                    _fullSolution(),
+                    _commit,
+                    PristineTree: _set.Entries.Count == 0),
+                _ct);
         }
         catch (OperationCanceledException)
         {
-            result = new BuildAndTestResult(false, "La compilación se canceló al detener la sesión.");
+            verdict = new BuildVerdict(false, "La compilación se canceló al detener la sesión.");
         }
         catch (Exception ex)
         {
-            result = new BuildAndTestResult(false, $"No se pudo compilar: {ex.Message}");
+            verdict = new BuildVerdict(false, $"No se pudo compilar: {ex.Message}");
         }
 
-        BuildFinished?.Invoke(result);
-        return result;
+        BuildFinished?.Invoke(verdict);
+        return verdict.ToAgentResult();
     }
 
     // ------------------------------------------------------------------ fix_done

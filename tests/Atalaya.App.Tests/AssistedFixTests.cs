@@ -345,6 +345,11 @@ public sealed class AssistedFixTests : IDisposable
     /// <summary>
     /// Compilar es una PETICIÓN del agente que ejecuta la aplicación: no hay comando, ni
     /// argumentos, ni forma de apuntar a otro sitio. Y la salida vuelve recortada.
+    /// <para>
+    /// Sin nada tocado todavía —y sin proyectos en este clon de prueba— el ámbito es la solución,
+    /// que es el que había antes de H9.1. El ámbito por proyecto se prueba en
+    /// <see cref="BuildScopeTests"/>, con un clon que sí tiene proyectos.
+    /// </para>
     /// </summary>
     [Fact]
     public void Compilar_lo_ejecuta_la_aplicacion_sobre_la_solucion_del_clon()
@@ -352,7 +357,7 @@ public sealed class AssistedFixTests : IDisposable
         var runner = new RecordingProcess();
         var builds = new BuildRunner(runner);
 
-        BuildAndTestResult result = builds.Run(_clone, CancellationToken.None);
+        BuildVerdict result = builds.Run(_clone, CancellationToken.None);
 
         result.Ok.Should().BeTrue();
         runner.Calls.Should().HaveCount(2, "primero build, después test");
@@ -360,7 +365,8 @@ public sealed class AssistedFixTests : IDisposable
         runner.Calls[0].Args.Should().StartWith("build").And.Contain("XBlast.sln");
         runner.Calls[1].Args.Should().StartWith("test").And.Contain("--no-build");
         runner.Calls.Should().OnlyContain(c => c.WorkingDirectory == _clone);
-        result.Summary.Should().Contain("BUILD: OK").And.Contain("TESTS: OK");
+        result.Summary.Should().Contain("BUILD: OK").And.Contain("TESTS (XBlast.sln): OK");
+        result.TargetLabel.Should().Contain("solución");
     }
 
     /// <summary>Un clon sin solución no revienta la tool: devuelve un resultado que lo dice.</summary>
@@ -370,10 +376,10 @@ public sealed class AssistedFixTests : IDisposable
         string empty = Path.Combine(_root, "vacio");
         Directory.CreateDirectory(empty);
 
-        BuildAndTestResult result = new BuildRunner(new NoProcess()).Run(empty, CancellationToken.None);
+        BuildVerdict result = new BuildRunner(new NoProcess()).Run(empty, CancellationToken.None);
 
         result.Ok.Should().BeFalse();
-        result.Summary.Should().Contain("No se encontró ninguna solución");
+        result.Summary.Should().Contain("No hay nada que Atalaya pueda compilar");
         result.Summary.Should().Contain("NO se ha compilado", "el agente tiene que declararlo");
     }
 
@@ -383,7 +389,7 @@ public sealed class AssistedFixTests : IDisposable
     {
         var runner = new RecordingProcess { ExitCode = 1 };
 
-        BuildAndTestResult result = new BuildRunner(runner).Run(_clone, CancellationToken.None);
+        BuildVerdict result = new BuildRunner(runner).Run(_clone, CancellationToken.None);
 
         result.Ok.Should().BeFalse();
         runner.Calls.Should().ContainSingle();
@@ -677,6 +683,131 @@ public sealed class AssistedFixTests : IDisposable
         vm.DiscardAllCommand.Execute(null);
         File.ReadAllText(Path.Combine(_clone, UnitPath)).Should().Contain("var bytes");
         fix.Files.Should().BeEmpty();
+    }
+
+    // ================================================================= H9.1 §1 · volver al hallazgo
+
+    /// <summary>
+    /// <b>El círculo se cierra en las dos direcciones (H9.1 §1).</b> Terminada una sesión, del
+    /// hallazgo se llega a su arreglo y del arreglo se vuelve a su hallazgo. Antes no había ninguna
+    /// de las dos: el informe nombraba «OPT-0002» y quien lo leía tenía que ir a buscarlo a mano.
+    /// </summary>
+    [Fact]
+    public async Task El_arreglo_deja_camino_de_vuelta_al_hallazgo_en_las_dos_direcciones()
+    {
+        var agent = new FakeCopilotAgent(fixScript: _ => new[]
+        {
+            new FixStep(Edit: new FixStepEdit(UnitPath, "arregla",
+                new[] { new FixEdit("var bytes", "var octets") })),
+            new FixStep(Done: new FixDoneArgs("hecho", "Arregla (BUG-0003)", "", null)),
+        });
+
+        LiveFixService fix = Service(agent);
+        await fix.StartAsync(new FixSessionRequest(Slug, _findingId));
+
+        // Del informe al hallazgo: la sesión registra de QUÉ hallazgo era.
+        AuditSession session = _hub.Store.ListSessions(Slug).Single();
+        session.FixFindingId.Should().Be(_findingId.ToString());
+        session.FixFindingAlias.Should().Be("BUG-0003");
+
+        // Y la fila de Informes lo lleva, que es lo que enciende el enlace.
+        ReportEntry entry = new ReportsQuery(_hub).Find(Slug, session.Id.ToString())!;
+        entry.HasFinding.Should().BeTrue();
+        entry.FindingId.Should().Be(_findingId.ToString());
+        entry.FindingAlias.Should().Be("BUG-0003");
+
+        // Del hallazgo al informe: el evento del historial apunta a SU sesión.
+        Finding stored = _hub.Store.TryReadFinding(Slug, _findingId.ToString())!;
+        stored.History.Last(h => h.Event == FindingEvent.FixProposed).SessionId
+            .Should().Be(session.Id.ToString());
+
+        // Y la vista ofrece la vuelta con el identificador en el rótulo.
+        var vm = new AssistedFixViewModel(fix, _toasts, new ScriptedDiscard(answer: false));
+        vm.CanGoBackToFinding.Should().BeTrue();
+        vm.BackToFindingLabel.Should().Be("Volver al hallazgo (BUG-0003)");
+    }
+
+    /// <summary>
+    /// Un informe de arreglo anterior a H9.1 no trae el hallazgo, y eso no puede romper nada: el
+    /// enlace simplemente no aparece. Lo viejo del hub sigue leyéndose.
+    /// </summary>
+    [Fact]
+    public void Un_informe_de_arreglo_sin_hallazgo_registrado_no_ofrece_el_enlace()
+    {
+        var session = new AuditSession
+        {
+            Id = _ulids.NewUlid(),
+            AppSlug = Slug,
+            Mode = AuditMode.Fix,
+            By = "alguien",
+            Machine = "PC",
+            StartedUtc = DateTimeOffset.UtcNow.AddDays(-1),
+            EndedUtc = DateTimeOffset.UtcNow.AddDays(-1),
+        };
+        _hub.Store.WriteSession(session);
+        _hub.Store.WriteReport(Slug, session.Id.ToString(), "# Arreglo asistido — X-BLAST\n\nCuerpo.");
+
+        ReportEntry entry = new ReportsQuery(_hub).Find(Slug, session.Id.ToString())!;
+
+        entry.HasFinding.Should().BeFalse();
+        entry.FindingAlias.Should().BeNull();
+    }
+
+    // ================================================================= H9.1 §2 · el ámbito en la sesión
+
+    /// <summary>
+    /// El interruptor de «solución completa» es del usuario y vive en el SERVICIO, no en la vista:
+    /// la vista es transitoria y navegar fuera no puede cambiar en silencio lo que se va a
+    /// compilar. Apagado de serie, que es el ámbito acotado.
+    /// </summary>
+    [Fact]
+    public void El_ambito_de_compilacion_lo_manda_el_usuario_y_sobrevive_a_la_vista()
+    {
+        LiveFixService fix = Service(new FakeCopilotAgent(fixScript: _ => Array.Empty<FixStep>()));
+
+        fix.BuildFullSolution.Should().BeFalse("por defecto se compila solo el proyecto de lo tocado");
+
+        var vm = new AssistedFixViewModel(fix, _toasts, new ScriptedDiscard(answer: false));
+        vm.BuildFullSolution = true;
+
+        fix.BuildFullSolution.Should().BeTrue();
+        new AssistedFixViewModel(fix, _toasts, new ScriptedDiscard(answer: false))
+            .BuildFullSolution.Should().BeTrue("el estado no vive en la vista");
+    }
+
+    /// <summary>
+    /// El informe de una sesión fix separa lo que trajo el cambio de lo que ya estaba (H9.1 §2).
+    /// Presentar 18 errores heredados como resultado de un arreglo de dos líneas es lo que
+    /// convierte cada sesión en un susto.
+    /// </summary>
+    [Fact]
+    public void El_informe_separa_los_errores_nuevos_de_los_preexistentes()
+    {
+        var verdict = new BuildVerdict(
+            true,
+            "salida completa de dotnet",
+            TargetLabel: "la solución XBlast.sln",
+            NewErrors: 0,
+            PreexistingErrors: 2,
+            NewErrorLines: Array.Empty<string>(),
+            PreexistingErrorLines: new[] { "Viejo1.cs(1,5): error CS0246", "Viejo2.cs(2,5): error CS0246" },
+            ExcludedProjects: new[] { "Native/CCCoreWrapper.vcxproj" },
+            BaselineNote: "línea base medida el 28/08/2026 10:00 sobre el commit abc1234",
+            HasBaseline: true,
+            TestsRun: true,
+            TestsOk: true);
+
+        var sb = new System.Text.StringBuilder();
+        ReportBuilder.AppendBuildSection(sb, verdict);
+        string report = sb.ToString();
+
+        report.Should().Contain("**Ámbito**: la solución XBlast.sln");
+        report.Should().Contain("0 error(es) nuevo(s)");
+        report.Should().Contain("Preexistentes (2) — ya fallaban antes del arreglo");
+        report.Should().Contain("No son del cambio y no cuentan en el veredicto");
+        report.Should().Contain("CCCoreWrapper.vcxproj");
+        report.Should().Contain("toolset C++ de Visual Studio");
+        report.Should().Contain("línea base medida");
     }
 
     // ================================================================= utilidades

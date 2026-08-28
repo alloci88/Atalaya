@@ -105,7 +105,11 @@ public static class FixSessionPrompt
             + "el `reason` es lo que él va a leer para decidir: escríbelo para una persona.");
         sb.AppendLine(
             "- `run_build_and_tests()` — pides que se compile y se pasen los tests; lo ejecuta la "
-            + "aplicación y te devuelve un resumen. Tarda: pídelo cuando el cambio esté completo.");
+            + "aplicación y te devuelve un resumen. Tarda: pídelo cuando el cambio esté completo. "
+            + "Se compila el **proyecto** de los ficheros que hayas tocado y sus tests, no la "
+            + "solución entera —eso lo decide el usuario, no tú—, y el resumen te dice cuántos "
+            + "errores son **NUEVOS**: los preexistentes de la solución no son tuyos y no tienes "
+            + "que arreglarlos ni mencionarlos como si lo fueran.");
         sb.AppendLine(
             "- `ask_user(...)` — para preguntar. Úsala en los momentos de decisión, no para pedir "
             + "permiso de cortesía.");
@@ -197,7 +201,9 @@ public static class FixSessionPrompt
         sb.AppendLine(
             "6. **Añade o ajusta un test** que cubra el defecto si el stack lo permite, y "
             + "**compila y pasa los tests** con `run_build_and_tests` antes de cerrar. Si no se "
-            + "puede compilar desde aquí, dilo en el resumen.");
+            + "puede compilar desde aquí, dilo en el resumen. Y si el resumen te devuelve errores "
+            + "**preexistentes**, déjalos: son de la solución, no de tu cambio, y arreglarlos "
+            + "sería exactamente la expansión que el punto 5 prohíbe.");
         sb.AppendLine(
             "7. **Cierra con `fix_done`**: resumen de qué cambió y por qué, ficheros tocados, "
             + "riesgos declarados si los hay, y la sugerencia de commit — título de ≤72 "

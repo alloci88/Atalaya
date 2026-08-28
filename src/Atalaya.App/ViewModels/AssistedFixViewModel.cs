@@ -111,6 +111,35 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
 
     public string SubHeaderText => _fix.FindingTitle;
 
+    /// <summary>
+    /// «Volver al hallazgo (OPT-0002)» (H9.1 §1). Terminada una sesión —o descartada— el hallazgo
+    /// que la originó no tenía camino de vuelta: había que ir a Hallazgos y buscarlo. El alias va
+    /// en el rótulo porque es lo que el usuario tiene en la cabeza.
+    /// </summary>
+    public string BackToFindingLabel => _fix.FindingAlias.Length == 0
+        ? "Volver al hallazgo"
+        : $"Volver al hallazgo ({_fix.FindingAlias})";
+
+    /// <summary>Hay hallazgo al que volver: hace falta la app y el identificador.</summary>
+    public bool CanGoBackToFinding => _fix.Slug.Length > 0 && _fix.FindingId != default;
+
+    /// <summary>
+    /// Compilar la solución entera en vez del proyecto de lo tocado (H9.1 §2). Vive en el servicio
+    /// —no aquí— porque la vista es transitoria y el interruptor tiene que sobrevivir a navegar.
+    /// </summary>
+    public bool BuildFullSolution
+    {
+        get => _fix.BuildFullSolution;
+        set
+        {
+            if (_fix.BuildFullSolution != value)
+            {
+                _fix.BuildFullSolution = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     public bool HasFiles => Files.Count > 0;
 
     public FixFileChange? SelectedFile => Files.FirstOrDefault(f => f.IsSelected) ?? Files.FirstOrDefault();
@@ -132,9 +161,31 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
 
     public string TouchedText => $"ficheros tocados: {Files.Count}";
 
-    public string BuildText => !_fix.HasBuildResult
-        ? "build/tests: no se ha pedido"
-        : _fix.LastBuildOk ? "build/tests: ✓ verde" : "build/tests: ✗ rojo";
+    /// <summary>
+    /// El resultado de compilar, en la barra inferior. Desde H9.1 lleva el DELTA: «✓ verde · 0
+    /// error(es) nuevo(s) · 18 preexistente(s)». Un rojo sin causa atribuible ya no existe, y un
+    /// verde con 18 errores heredados tampoco se calla que están.
+    /// </summary>
+    public string BuildText
+    {
+        get
+        {
+            if (!_fix.HasBuildResult)
+            {
+                return "build/tests: no se ha pedido";
+            }
+
+            string verdict = _fix.LastBuildOk ? "✓ verde" : "✗ rojo";
+            return _fix.LastVerdict is { } v
+                ? $"build/tests: {verdict} · {v.Headline}"
+                : $"build/tests: {verdict}";
+        }
+    }
+
+    /// <summary>Qué se compiló la última vez: «el proyecto Common/Common.csproj».</summary>
+    public string BuildScopeText => _fix.LastVerdict is { TargetLabel.Length: > 0 } v
+        ? $"Se compiló {v.TargetLabel}."
+        : string.Empty;
 
     /// <summary>El recordatorio que no puede faltar en la pantalla de cierre.</summary>
     public const string UncommittedReminder =
@@ -281,6 +332,24 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
         await _navigation.NavigateToAsync<FindingDetailViewModel>(vm => vm.Load(slug, id));
     }
 
+    /// <summary>
+    /// A la ficha del hallazgo que originó este arreglo. Es NAVEGAR, no verificar: lo mismo que
+    /// hace «Verificar ahora» al cerrar, pero disponible también cuando la sesión falló o cuando
+    /// se vuelve al último arreglo desde el rail.
+    /// </summary>
+    [RelayCommand]
+    private async Task BackToFinding()
+    {
+        if (_navigation is null || !CanGoBackToFinding)
+        {
+            return;
+        }
+
+        Ulid id = _fix.FindingId;
+        string slug = _fix.Slug;
+        await _navigation.NavigateToAsync<FindingDetailViewModel>(vm => vm.Load(slug, id));
+    }
+
     [RelayCommand]
     private async Task FixModel()
     {
@@ -375,12 +444,16 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
         OnPropertyChanged(nameof(PauseLabel));
         OnPropertyChanged(nameof(HeaderText));
         OnPropertyChanged(nameof(SubHeaderText));
+        OnPropertyChanged(nameof(BackToFindingLabel));
+        OnPropertyChanged(nameof(CanGoBackToFinding));
+        OnPropertyChanged(nameof(BuildFullSolution));
         OnPropertyChanged(nameof(HasFiles));
         OnPropertyChanged(nameof(SelectedFile));
         OnPropertyChanged(nameof(ElapsedText));
         OnPropertyChanged(nameof(CostText));
         OnPropertyChanged(nameof(TouchedText));
         OnPropertyChanged(nameof(BuildText));
+        OnPropertyChanged(nameof(BuildScopeText));
     }
 }
 

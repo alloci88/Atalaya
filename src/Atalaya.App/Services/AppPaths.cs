@@ -35,4 +35,10 @@ public sealed class AppPaths
     /// lo que hace posible descartar no puede ser, a su vez, un cambio sin commitear en el clon.
     /// </summary>
     public string Fixes => Path.Combine(Root, "fixes");
+
+    /// <summary>
+    /// Líneas base de compilación por (objetivo, commit) (H9.1). Fuera del clon por lo mismo que
+    /// los snapshots: lo que sirve para juzgar el clon no puede vivir dentro de él.
+    /// </summary>
+    public string BuildBaselines => Path.Combine(Root, "builds");
 }

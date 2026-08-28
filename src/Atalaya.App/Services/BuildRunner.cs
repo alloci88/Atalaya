@@ -85,24 +85,105 @@ public sealed class SystemProcessRunner : IProcessRunner
     }
 }
 
+/// <summary>Lo que se le pide a una compilación por encargo (H9.1 §2).</summary>
+/// <param name="CloneRoot">El clon donde se compila. Nunca se sale de ahí.</param>
+/// <param name="TouchedFiles">Lo que el agente lleva tocado, en rutas relativas. Decide el ámbito.</param>
+/// <param name="FullSolution">El usuario ha pedido explícitamente la solución entera.</param>
+/// <param name="Commit">Commit del clon: es la mitad de la clave de la línea base.</param>
+/// <param name="PristineTree">
+/// El árbol sigue como al empezar (ninguna edición aplicada todavía). Solo entonces se puede
+/// MEDIR una línea base nueva: después, lo que se compile ya lleva el cambio dentro.
+/// </param>
+public sealed record BuildRequest(
+    string CloneRoot,
+    IReadOnlyList<string> TouchedFiles,
+    bool FullSolution = false,
+    string? Commit = null,
+    bool PristineTree = false)
+{
+    public static BuildRequest ForClone(string cloneRoot) => new(cloneRoot, Array.Empty<string>());
+}
+
 /// <summary>
-/// Compila y pasa los tests del clon <b>por encargo del agente</b> (F6.9 §3).
+/// El veredicto de una compilación, ya atribuido (H9.1 §2).
+/// <para>
+/// La diferencia con el resumen de antes está en <see cref="NewErrors"/>: los errores que la
+/// compilación de ahora tiene y la línea base NO tenía. Lo demás —lo preexistente y lo que dotnet
+/// ni siquiera puede compilar— se nombra aparte, porque no es del cambio y presentarlo como si lo
+/// fuera es lo que convertía cada arreglo en un rojo inmerecido.
+/// </para>
+/// </summary>
+public sealed record BuildVerdict(
+    bool Ok,
+    string Summary,
+    bool TimedOut = false,
+    string TargetLabel = "",
+    int NewErrors = 0,
+    int PreexistingErrors = 0,
+    IReadOnlyList<string>? NewErrorLines = null,
+    IReadOnlyList<string>? PreexistingErrorLines = null,
+    IReadOnlyList<string>? ExcludedProjects = null,
+    string? BaselineNote = null,
+    bool HasBaseline = false,
+    bool TestsRun = false,
+    bool TestsOk = false)
+{
+    public IReadOnlyList<string> New => NewErrorLines ?? Array.Empty<string>();
+
+    public IReadOnlyList<string> Preexisting => PreexistingErrorLines ?? Array.Empty<string>();
+
+    public IReadOnlyList<string> Excluded => ExcludedProjects ?? Array.Empty<string>();
+
+    /// <summary>Lo que ve el agente. Mismo texto que el usuario lee en la vista y en el informe.</summary>
+    public Atalaya.Copilot.BuildAndTestResult ToAgentResult()
+        => new(Ok, Summary, TimedOut);
+
+    /// <summary>«0 errores nuevos · 18 preexistentes». La línea que resume el veredicto.</summary>
+    public string Headline
+    {
+        get
+        {
+            var parts = new List<string> { $"{NewErrors} error(es) nuevo(s)" };
+            if (PreexistingErrors > 0)
+            {
+                parts.Add($"{PreexistingErrors} preexistente(s)");
+            }
+
+            if (Excluded.Count > 0)
+            {
+                parts.Add($"{Excluded.Count} proyecto(s) fuera del alcance de dotnet");
+            }
+
+            return string.Join(" · ", parts);
+        }
+    }
+}
+
+/// <summary>
+/// Compila y pasa los tests del clon <b>por encargo del agente</b> (F6.9 §3, reescrito en H9.1).
 /// <para>
 /// <b>El agente pide; la aplicación ejecuta.</b> Es la línea que separa este flujo de darle una
 /// shell: <c>run_build_and_tests</c> no lleva argumentos, no acepta un comando y no puede apuntar
-/// a otro sitio. Lo que se ejecuta lo decide Atalaya —<c>dotnet build</c> y <c>dotnet test</c>
-/// sobre la solución del clon—, con tope de tiempo y con la salida recortada antes de volver.
+/// a otro sitio. Lo que se ejecuta lo decide Atalaya, con tope de tiempo y con la salida recortada
+/// antes de volver.
 /// </para>
 /// <para>
-/// <b>Y no poder compilar es un RESULTADO, no una excepción.</b> Un clon sin solución SDK-style
-/// (mucho .NET Framework por ahí) o una máquina sin <c>dotnet</c> devuelven un resumen que lo dice
-/// con todas las letras. Un agente que lee «no hay forma de compilar esto desde aquí» declara el
-/// riesgo; uno que ve reventar la tool se queda mudo.
+/// <b>Y el veredicto tiene que pertenecer al cambio.</b> Se compila el PROYECTO de lo tocado, no
+/// la solución entera; y cuando el ámbito es mayor, lo que se reporta es el DELTA contra una línea
+/// base medida sobre el mismo commit con el árbol limpio. Los proyectos que <c>dotnet</c> no sabe
+/// compilar —C++ y compañía— se nombran, no se cuentan como fallo. Ningún rojo sin causa
+/// atribuible.
+/// </para>
+/// <para>
+/// <b>No poder compilar sigue siendo un RESULTADO, no una excepción.</b> Un clon sin nada
+/// compilable devuelve un resumen que lo dice con todas las letras: un agente que lee «no hay
+/// forma de compilar esto desde aquí» declara el riesgo; uno que ve reventar la tool se queda
+/// mudo.
 /// </para>
 /// </summary>
 public sealed class BuildRunner
 {
-    /// <summary>Cuánto se espera como mucho a cada uno de los dos comandos.</summary>
+    /// <summary>Cuánto se espera como mucho a cada uno de los comandos.</summary>
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(10);
 
     /// <summary>Líneas que se conservan de cada extremo de la salida.</summary>
@@ -111,16 +192,22 @@ public sealed class BuildRunner
     /// <summary>Igual por el final, que es donde están los errores y el recuento de tests.</summary>
     public const int TailLines = 60;
 
+    /// <summary>Cuántos errores se listan en el resumen. El resto se cuenta.</summary>
+    public const int MaxListedErrors = 12;
+
     private readonly IProcessRunner _runner;
     private readonly TimeSpan _timeout;
+    private readonly BuildBaselineStore? _baselines;
 
-    public BuildRunner(IProcessRunner? runner = null, TimeSpan? timeout = null)
+    public BuildRunner(
+        IProcessRunner? runner = null, TimeSpan? timeout = null, BuildBaselineStore? baselines = null)
     {
         _runner = runner ?? new SystemProcessRunner();
         _timeout = timeout is { TotalSeconds: > 0 } ? timeout.Value : DefaultTimeout;
+        _baselines = baselines;
     }
 
-    /// <summary>Qué se compila: la solución del clon, o el motivo por el que no hay nada que compilar.</summary>
+    /// <summary>Qué se compila cuando el ámbito es la solución: la del clon, o nada.</summary>
     public static string? FindSolution(string cloneRoot)
     {
         if (string.IsNullOrWhiteSpace(cloneRoot) || !Directory.Exists(cloneRoot))
@@ -142,55 +229,269 @@ public sealed class BuildRunner
             .FirstOrDefault();
     }
 
-    public Atalaya.Copilot.BuildAndTestResult Run(string cloneRoot, CancellationToken ct)
+    public BuildVerdict Run(BuildRequest request, CancellationToken ct)
     {
-        string? solution = FindSolution(cloneRoot);
-        if (solution is null)
+        BuildPlan plan = BuildScopeResolver.Resolve(
+            request.CloneRoot, request.TouchedFiles, request.FullSolution);
+
+        if (plan.Target.Kind == BuildTargetKind.None)
         {
-            return new Atalaya.Copilot.BuildAndTestResult(
+            return new BuildVerdict(
                 false,
-                "No se encontró ninguna solución (.sln) en el clon, así que Atalaya no puede "
-                + "compilarlo por ti. Declara en tu resumen que el cambio NO se ha compilado.");
+                "No hay nada que Atalaya pueda compilar en este clon"
+                + (plan.Note is null ? " (no se encontró ninguna solución ni proyecto de .NET)" : $": {plan.Note}")
+                + ". Declara en tu resumen que el cambio NO se ha compilado.",
+                ExcludedProjects: plan.ExcludedProjects);
         }
 
-        string relative = Relative(cloneRoot, solution);
+        BuildBaseline? baseline = Baseline(request, plan, ct);
+
         var report = new StringBuilder();
-        report.AppendLine($"Solución: {relative}");
+        report.AppendLine($"Ámbito: {plan.Target.Label}"
+            + (plan.Note is null ? string.Empty : $" — {plan.Note}"));
 
         ProcessOutcome build = _runner.Run(
-            "dotnet", $"build \"{solution}\" --nologo -v minimal", cloneRoot, _timeout, ct);
+            "dotnet", $"build \"{plan.Target.FullPath}\" --nologo -v minimal", request.CloneRoot, _timeout, ct);
+
         if (build.TimedOut)
         {
             report.AppendLine($"BUILD: agotó el tiempo ({_timeout.TotalMinutes:0} min) y se abortó.");
             report.Append(Truncate(build.Output));
-            return new Atalaya.Copilot.BuildAndTestResult(false, report.ToString(), TimedOut: true);
+            return new BuildVerdict(
+                false, report.ToString(), TimedOut: true, TargetLabel: plan.Target.Label,
+                ExcludedProjects: plan.ExcludedProjects);
         }
 
-        report.AppendLine($"BUILD: {(build.ExitCode == 0 ? "OK" : $"FALLÓ (código {build.ExitCode})")}");
-        report.AppendLine(Truncate(build.Output));
+        IReadOnlyList<BuildError> errors = BuildErrorParser.Parse(build.Output, request.CloneRoot);
+        var foreign = errors.Where(e => e.Foreign).ToList();
+        var own = errors.Where(e => !e.Foreign).ToList();
 
-        if (build.ExitCode != 0)
+        HashSet<string> known = baseline is null
+            ? new HashSet<string>(StringComparer.Ordinal)
+            : new HashSet<string>(baseline.Signatures, StringComparer.Ordinal);
+
+        var fresh = own.Where(e => !known.Contains(e.Signature)).ToList();
+        var old = own.Where(e => known.Contains(e.Signature)).ToList();
+
+        bool buildOk = fresh.Count == 0 && (build.ExitCode == 0 || old.Count > 0 || foreign.Count > 0);
+
+        AppendVerdict(report, buildOk, fresh, old, foreign, baseline, plan, build);
+
+        if (!buildOk)
         {
             // Sin build no hay tests: ejecutarlos igualmente solo añade ruido a un resumen que ya
-            // dice lo único que importa — que no compila.
-            report.AppendLine("TESTS: no se ejecutaron porque la compilación falló.");
-            return new Atalaya.Copilot.BuildAndTestResult(false, report.ToString());
+            // dice lo único que importa — que el cambio no compila.
+            report.AppendLine("TESTS: no se ejecutaron porque la compilación falló por el cambio.");
+            return Verdict(false, report, plan, fresh, old, foreign, baseline, testsRun: false, testsOk: false);
         }
 
-        ProcessOutcome test = _runner.Run(
-            "dotnet", $"test \"{solution}\" --nologo -v minimal --no-build", cloneRoot, _timeout, ct);
-        if (test.TimedOut)
+        (bool testsRun, bool testsOk, bool timedOut) = RunTests(plan, request, report, ct);
+        if (timedOut)
         {
-            report.AppendLine($"TESTS: agotaron el tiempo ({_timeout.TotalMinutes:0} min) y se abortaron.");
-            report.Append(Truncate(test.Output));
-            return new Atalaya.Copilot.BuildAndTestResult(false, report.ToString(), TimedOut: true);
+            return new BuildVerdict(
+                false, report.ToString(), TimedOut: true, TargetLabel: plan.Target.Label,
+                NewErrors: fresh.Count, PreexistingErrors: old.Count,
+                ExcludedProjects: plan.ExcludedProjects, HasBaseline: baseline is not null);
         }
 
-        report.AppendLine($"TESTS: {(test.ExitCode == 0 ? "OK" : $"FALLARON (código {test.ExitCode})")}");
-        report.AppendLine(Truncate(test.Output));
-
-        return new Atalaya.Copilot.BuildAndTestResult(test.ExitCode == 0, report.ToString());
+        return Verdict(testsOk || !testsRun, report, plan, fresh, old, foreign, baseline, testsRun, testsOk);
     }
+
+    /// <summary>La firma de antes: compila la solución del clon sin nada tocado. La usan los tests.</summary>
+    public BuildVerdict Run(string cloneRoot, CancellationToken ct)
+        => Run(BuildRequest.ForClone(cloneRoot), ct);
+
+    // ------------------------------------------------------------------ línea base
+
+    /// <summary>
+    /// La línea base de este objetivo sobre este commit: de la caché si ya se midió, y si no —y
+    /// solo si el árbol sigue limpio— midiéndola ahora. Con el árbol ya tocado no se puede medir
+    /// nada: lo que se compilaría llevaría el cambio dentro, que es justo lo que se quiere separar.
+    /// </summary>
+    private BuildBaseline? Baseline(BuildRequest request, BuildPlan plan, CancellationToken ct)
+    {
+        if (_baselines is null || !plan.WantsBaseline || string.IsNullOrWhiteSpace(request.Commit))
+        {
+            return null;
+        }
+
+        BuildBaseline? cached = _baselines.TryGet(plan.Target.Relative, request.Commit);
+        if (cached is not null || !request.PristineTree)
+        {
+            return cached;
+        }
+
+        ProcessOutcome probe = _runner.Run(
+            "dotnet", $"build \"{plan.Target.FullPath}\" --nologo -v minimal", request.CloneRoot, _timeout, ct);
+        if (probe.TimedOut)
+        {
+            return null;
+        }
+
+        IReadOnlyList<BuildError> errors = BuildErrorParser.Parse(probe.Output, request.CloneRoot);
+        var measured = new BuildBaseline(
+            plan.Target.Relative,
+            request.Commit!,
+            DateTimeOffset.UtcNow,
+            probe.ExitCode == 0,
+            errors.Where(e => !e.Foreign).Select(e => e.Signature).ToList());
+        _baselines.Save(measured);
+        return measured;
+    }
+
+    // ------------------------------------------------------------------ tests
+
+    private (bool Run, bool Ok, bool TimedOut) RunTests(
+        BuildPlan plan, BuildRequest request, StringBuilder report, CancellationToken ct)
+    {
+        if (plan.Target.Kind == BuildTargetKind.Solution)
+        {
+            ProcessOutcome all = _runner.Run(
+                "dotnet", $"test \"{plan.Target.FullPath}\" --nologo -v minimal --no-build",
+                request.CloneRoot, _timeout, ct);
+            return Report(all, plan.Target.Relative, report);
+        }
+
+        if (plan.TestProjects.Count == 0)
+        {
+            report.AppendLine(
+                $"TESTS: no se ejecutaron — no hay ningún proyecto de test que cubra {plan.Target.Relative}. "
+                + "Dilo en tu resumen: el cambio compila, pero nadie lo prueba.");
+            return (false, false, false);
+        }
+
+        bool ok = true;
+        foreach (string project in plan.TestProjects)
+        {
+            ProcessOutcome outcome = _runner.Run(
+                "dotnet", $"test \"{project}\" --nologo -v minimal --no-build",
+                request.CloneRoot, _timeout, ct);
+            (bool _, bool thisOk, bool timedOut) = Report(
+                outcome, BuildScopeResolver.Relative(request.CloneRoot, project), report);
+            if (timedOut)
+            {
+                return (true, false, true);
+            }
+
+            ok &= thisOk;
+        }
+
+        return (true, ok, false);
+    }
+
+    private (bool Run, bool Ok, bool TimedOut) Report(
+        ProcessOutcome outcome, string label, StringBuilder report)
+    {
+        if (outcome.TimedOut)
+        {
+            report.AppendLine($"TESTS ({label}): agotaron el tiempo ({_timeout.TotalMinutes:0} min) y se abortaron.");
+            report.Append(Truncate(outcome.Output));
+            return (true, false, true);
+        }
+
+        report.AppendLine($"TESTS ({label}): {(outcome.ExitCode == 0 ? "OK" : $"FALLARON (código {outcome.ExitCode})")}");
+        report.AppendLine(Truncate(outcome.Output));
+        return (true, outcome.ExitCode == 0, false);
+    }
+
+    // ------------------------------------------------------------------ el texto del veredicto
+
+    private static void AppendVerdict(
+        StringBuilder report,
+        bool ok,
+        IReadOnlyList<BuildError> fresh,
+        IReadOnlyList<BuildError> old,
+        IReadOnlyList<BuildError> foreign,
+        BuildBaseline? baseline,
+        BuildPlan plan,
+        ProcessOutcome build)
+    {
+        report.AppendLine($"BUILD: {(ok ? "OK" : "FALLÓ")} — {fresh.Count} error(es) NUEVO(S)"
+            + (old.Count > 0 ? $", {old.Count} preexistente(s)" : string.Empty)
+            + (build.ExitCode == 0 && fresh.Count == 0 && old.Count == 0 ? " (compilación limpia)" : string.Empty));
+
+        if (fresh.Count > 0)
+        {
+            report.AppendLine("Errores NUEVOS (los ha traído este cambio):");
+            foreach (BuildError e in fresh.Take(MaxListedErrors))
+            {
+                report.AppendLine($"  · {e.Line}");
+            }
+
+            if (fresh.Count > MaxListedErrors)
+            {
+                report.AppendLine($"  … y {fresh.Count - MaxListedErrors} más.");
+            }
+        }
+
+        if (old.Count > 0)
+        {
+            report.AppendLine(
+                $"Preexistentes ({old.Count}): ya fallaban en {baseline?.Target ?? plan.Target.Relative} "
+                + "ANTES del cambio. No son tuyos y no se cuentan en el veredicto.");
+            foreach (BuildError e in old.Take(MaxListedErrors))
+            {
+                report.AppendLine($"  · {e.Line}");
+            }
+
+            if (old.Count > MaxListedErrors)
+            {
+                report.AppendLine($"  … y {old.Count - MaxListedErrors} más.");
+            }
+        }
+
+        if (foreign.Count > 0 || plan.ExcludedProjects.Count > 0)
+        {
+            IEnumerable<string> names = plan.ExcludedProjects.Count > 0
+                ? plan.ExcludedProjects
+                : foreign.Select(f => f.Code);
+            report.AppendLine(
+                $"Fuera del alcance de esta comprobación: {string.Join(", ", names.Take(MaxListedErrors))} "
+                + "requieren el toolset C++ de Visual Studio; dotnet no puede compilarlos y no cuentan "
+                + "como fallo.");
+        }
+
+        if (baseline is null && old.Count == 0 && build.ExitCode != 0 && fresh.Count > 0)
+        {
+            report.AppendLine(
+                "Sin línea base para este commit: todos los errores se cuentan como nuevos. Si esta "
+                + "solución ya fallaba antes, dilo en tu resumen en vez de intentar arreglarla.");
+        }
+
+        report.AppendLine(Truncate(build.Output));
+    }
+
+    private static BuildVerdict Verdict(
+        bool ok,
+        StringBuilder report,
+        BuildPlan plan,
+        IReadOnlyList<BuildError> fresh,
+        IReadOnlyList<BuildError> old,
+        IReadOnlyList<BuildError> foreign,
+        BuildBaseline? baseline,
+        bool testsRun,
+        bool testsOk)
+        => new(
+            ok,
+            report.ToString(),
+            TimedOut: false,
+            TargetLabel: plan.Target.Label,
+            NewErrors: fresh.Count,
+            PreexistingErrors: old.Count,
+            NewErrorLines: fresh.Select(e => e.Line).ToList(),
+            PreexistingErrorLines: old.Select(e => e.Line).ToList(),
+            ExcludedProjects: plan.ExcludedProjects.Count > 0
+                ? plan.ExcludedProjects
+                : foreign.Select(f => f.Line).Distinct().ToList(),
+            BaselineNote: baseline is null
+                ? null
+                : $"línea base medida el {baseline.CapturedUtc.ToLocalTime():dd/MM/yyyy HH:mm} "
+                  + $"sobre el commit {Short(baseline.Commit)}",
+            HasBaseline: baseline is not null,
+            TestsRun: testsRun,
+            TestsOk: testsOk);
+
+    private static string Short(string commit) => commit.Length > 8 ? commit[..8] : commit;
 
     /// <summary>
     /// Recorta la salida por el medio, conservando la cabeza y —sobre todo— la COLA, que es donde
@@ -215,17 +516,5 @@ public sealed class BuildRunner
         sb.AppendLine($"… [{lines.Length - HeadLines - TailLines} línea(s) omitida(s)] …");
         sb.AppendJoin(Environment.NewLine, lines.Skip(lines.Length - TailLines));
         return sb.ToString();
-    }
-
-    private static string Relative(string root, string file)
-    {
-        try
-        {
-            return Path.GetRelativePath(root, file).Replace('\\', '/');
-        }
-        catch
-        {
-            return file;
-        }
     }
 }

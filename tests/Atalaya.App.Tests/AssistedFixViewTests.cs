@@ -236,6 +236,61 @@ public sealed class AssistedFixViewTests
         return text[from..to];
     }
 
+    // ==================================================== H9.1 §1: los cuatro caminos de vuelta
+
+    /// <summary>
+    /// La vista del arreglo ofrece la vuelta al hallazgo, y no solo en la pantalla de cierre: el
+    /// enlace vive en la CABECERA, así que también está cuando se vuelve al «último arreglo» desde
+    /// el rail o cuando la sesión falló.
+    /// </summary>
+    [Fact]
+    public void La_vista_del_arreglo_ofrece_volver_al_hallazgo()
+    {
+        string xaml = Markup(ViewXaml());
+
+        xaml.Should().Contain("BackToFindingCommand");
+        xaml.Should().Contain("{Binding BackToFindingLabel}", "el identificador va en el rótulo");
+        xaml.Should().Contain("CanGoBackToFinding");
+    }
+
+    /// <summary>Del informe de un arreglo se vuelve a SU hallazgo, no solo a la lista de la app.</summary>
+    [Fact]
+    public void El_visor_de_informes_lleva_al_hallazgo_del_arreglo()
+    {
+        string xaml = Markup(ReportsXaml());
+
+        xaml.Should().Contain("OpenFindingCommand");
+        xaml.Should().Contain("{Binding OpenFindingLabel}");
+        xaml.Should().Contain("{Binding CanOpenFinding, Converter={StaticResource BoolToVisibility}}");
+        xaml.Should().Contain("OpenFindingsCommand", "el camino de siempre a la lista no se toca");
+    }
+
+    /// <summary>Y del historial de la ficha, al informe del arreglo que lo escribió.</summary>
+    [Fact]
+    public void El_historial_del_hallazgo_lleva_al_informe_del_arreglo()
+    {
+        string xaml = Markup(FindingDetailXaml());
+
+        xaml.Should().Contain("OpenSessionReportCommand");
+        xaml.Should().Contain("{Binding HasSession, Converter={StaticResource BoolToVisibility}}");
+    }
+
+    /// <summary>
+    /// H9.1 §2 — el ámbito de la compilación es del usuario. Tiene que estar en la vista, porque
+    /// el agente no puede pedirlo: no es suya la decisión.
+    /// </summary>
+    [Fact]
+    public void El_ambito_de_compilacion_es_un_interruptor_del_usuario()
+    {
+        string xaml = Markup(ViewXaml());
+
+        xaml.Should().Contain("{Binding BuildFullSolution}");
+        xaml.Should().Contain("Compilar solución completa");
+        xaml.Should().Contain("{Binding BuildScopeText}", "un veredicto sin ámbito no se interpreta");
+    }
+
+    private static string ReportsXaml() => ReadView("ReportsView.xaml");
+
     private static string Markup(string xaml)
         => Regex.Replace(xaml, "<!--.*?-->", string.Empty, RegexOptions.Singleline);
 
