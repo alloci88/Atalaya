@@ -70,6 +70,18 @@ public sealed class AppSettings
     public bool EnableAssistedFix { get; set; } = true;
 
     /// <summary>
+    /// True una vez que la promoción única de <see cref="EnableAssistedFix"/> ya se ha aplicado
+    /// en esta máquina (F6.9 §7). Misma forma que <see cref="ConnectionMigrated"/> y por la misma
+    /// razón: una migración de ajustes tiene que dejar constancia de que corrió, o corre siempre.
+    /// <para>
+    /// Sin esta marca, apagar el interruptor a mano no duraría un reinicio: la promoción volvería
+    /// a encenderlo. Con ella, la promoción ocurre exactamente una vez y a partir de ahí manda lo
+    /// que diga el usuario.
+    /// </para>
+    /// </summary>
+    public bool AssistedFixDefaultApplied { get; set; }
+
+    /// <summary>
     /// Optional Copilot SDK BaseDirectory. Leave empty (default): the SDK uses its standard location,
     /// which is where the `copilot` CLI stores the login, so UseLoggedInUser finds it. Only set this
     /// if you deliberately want the SDK isolated to a custom directory.
@@ -209,6 +221,33 @@ public sealed class SettingsService
 
         Current.HubRepoUrl = null;
         Current.ConnectionMigrated = true;
+        Save(Current);
+    }
+
+    /// <summary>
+    /// Promoción única del interruptor del arreglo asistido (F6.9, D-563).
+    /// <para>
+    /// El flag nació en v1 sin valor por defecto —es decir, <c>false</c>— conectado a nada
+    /// (D-275), y <see cref="Save"/> escribe TODAS las propiedades: cualquier máquina que guardara
+    /// ajustes antes de F6.9 tiene un <c>"enableAssistedFix": false</c> escrito con todas las
+    /// letras. Cambiar el valor por defecto de la propiedad a <c>true</c> no alcanza a esas
+    /// máquinas: el defecto solo se aplica cuando la clave FALTA, y ahí no falta. Por eso el
+    /// botón «Arreglar con agente» no apareció el día de la entrega.
+    /// </para>
+    /// <para>
+    /// Se promociona una sola vez y se deja constancia. A partir de esa vez, apagar el
+    /// interruptor en Ajustes es una decisión del usuario y se respeta para siempre.
+    /// </para>
+    /// </summary>
+    public void MigrateAssistedFixDefault()
+    {
+        if (Current.AssistedFixDefaultApplied)
+        {
+            return;
+        }
+
+        Current.AssistedFixDefaultApplied = true;
+        Current.EnableAssistedFix = true;
         Save(Current);
     }
 

@@ -162,6 +162,41 @@ public sealed class AssistedFixTests : IDisposable
             "el camino old school sigue disponible y hay que decirlo");
     }
 
+    /// <summary>
+    /// <b>D-563 — el botón que no aparecía.</b> Una máquina que ya usaba Atalaya antes de F6.9
+    /// tiene <c>"enableAssistedFix": false</c> escrito en su <c>settings.json</c>, no la clave
+    /// ausente: el nuevo valor por defecto no la alcanza y «Arreglar con agente» no se pinta.
+    /// Tras la promoción del arranque, con el hallazgo activo y el clon vinculado, el botón se
+    /// ofrece —que es exactamente lo que la ficha pregunta para pintarlo.
+    /// </summary>
+    [Fact]
+    public void Un_settings_anterior_a_F6_9_vuelve_a_ofrecer_el_boton_tras_la_promocion()
+    {
+        File.WriteAllText(_paths.SettingsJson, """{"theme":"dark","enableAssistedFix":false}""");
+        var stale = new SettingsService(_paths);
+        stale.Load();
+
+        Launcher(stale).Check(Slug, Finding()).Block
+            .Should().Be(FixBlock.Desactivado, "así lo vivía el usuario");
+
+        stale.MigrateAssistedFixDefault();
+
+        FixLaunchDecision decision = Launcher(stale).Check(Slug, Finding());
+        decision.Block.Should().NotBe(FixBlock.Desactivado);
+        decision.CanStart.Should().BeTrue("hallazgo activo, clon vinculado y árbol limpio");
+    }
+
+    /// <summary>Y el settings que nunca tuvo la clave nace encendido sin ayuda de nadie.</summary>
+    [Fact]
+    public void Un_settings_sin_la_clave_ofrece_el_boton_desde_el_primer_arranque()
+    {
+        File.WriteAllText(_paths.SettingsJson, """{"theme":"dark"}""");
+        var fresh = new SettingsService(_paths);
+        fresh.Load();
+
+        Launcher(fresh).Check(Slug, Finding()).CanStart.Should().BeTrue();
+    }
+
     [Fact]
     public void Sin_clon_vinculado_el_remedio_es_vincular()
     {
@@ -648,8 +683,10 @@ public sealed class AssistedFixTests : IDisposable
 
     private Finding? Finding() => _hub.Store.TryReadFinding(Slug, _findingId.ToString());
 
-    private AssistedFixLauncher Launcher()
-        => new(_settings, new CloneLinkService(_hub, _machines), _machines, _busy);
+    private AssistedFixLauncher Launcher() => Launcher(_settings);
+
+    private AssistedFixLauncher Launcher(SettingsService settings)
+        => new(settings, new CloneLinkService(_hub, _machines), _machines, _busy);
 
     private LiveFixService Service(ICopilotAgent agent)
         => new(

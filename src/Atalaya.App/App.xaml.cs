@@ -52,6 +52,10 @@ public partial class App : Application
         settings.Load();
         // One-time, silent migration of pre-F2 connection settings (D4): existing users keep working.
         settings.MigrateConnection(_host.Services.GetRequiredService<DeployConfig>());
+        // Promoción única del interruptor del arreglo asistido (D-563): las máquinas anteriores a
+        // F6.9 traen un `false` escrito, no una clave ausente, y el nuevo valor por defecto no las
+        // alcanza. Sin esto el botón «Arreglar con agente» no aparece en ninguna de ellas.
+        settings.MigrateAssistedFixDefault();
         ThemeService.Apply(settings.Current.Theme);
 
         var window = _host.Services.GetRequiredService<MainWindow>();
