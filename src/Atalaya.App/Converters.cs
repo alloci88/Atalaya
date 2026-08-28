@@ -391,6 +391,48 @@ public sealed class AllTrueToVisibilityConverter : IMultiValueConverter
         => throw new NotSupportedException();
 }
 
+/// <summary>
+/// Acorta una ruta por el MEDIO: <c>src/…/CommonStatics.cs</c>. La elipsis del final de WPF
+/// (<c>TextTrimming</c>) se come justo lo que identifica un fichero —el nombre— y deja lo que
+/// comparten todas las rutas del repo. El parámetro es el largo máximo en caracteres (por
+/// defecto 44); la ruta entera va siempre en el tooltip, que es donde se lee sin prisa.
+/// </summary>
+public sealed class MiddleEllipsisConverter : IValueConverter
+{
+    public const int DefaultMax = 44;
+
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => Shorten(value as string, Max(parameter));
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+
+    internal static string Shorten(string? path, int max)
+    {
+        string text = (path ?? string.Empty).Trim();
+        if (max < 8 || text.Length <= max)
+        {
+            return text;
+        }
+
+        // El nombre del fichero manda: es lo único que no se recorta mientras quepa.
+        int slash = text.LastIndexOfAny(new[] { '/', '\\' });
+        string name = slash >= 0 ? text[(slash + 1)..] : text;
+        if (name.Length + 2 >= max)
+        {
+            return "\u2026" + text[^(max - 1)..];
+        }
+
+        int head = max - name.Length - 2;
+        return text[..head] + "\u2026" + (slash >= 0 ? text[slash..] : string.Empty);
+    }
+
+    private static int Max(object? parameter)
+        => parameter is not null && int.TryParse(parameter.ToString(), out int n) && n > 0
+            ? n
+            : DefaultMax;
+}
+
 /// <summary>Niega un booleano. Lo pide el <c>MultiBinding</c> de «puede pero no debería verse».</summary>
 public sealed class InverseBoolConverter : IValueConverter
 {

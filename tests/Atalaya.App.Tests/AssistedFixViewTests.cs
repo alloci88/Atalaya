@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Atalaya.App;
 using Atalaya.App.ViewModels;
 using FluentAssertions;
 using Xunit;
@@ -136,6 +137,103 @@ public sealed class AssistedFixViewTests
         xaml.Should().Contain("Arreglar con agente");
         xaml.Should().Contain("{Binding CanStartFix}", "sin precondiciones, el botón queda gris");
         xaml.Should().Contain("{Binding AssistedFixTooltip}");
+    }
+
+    // ==================================================== D-564: lo que no se puede leer, no se elige
+
+    /// <summary>
+    /// <b>El mensaje del agente se lee entero.</b> Un <c>StackPanel</c> horizontal mide a sus hijos
+    /// con ancho INFINITO: dentro de uno, <c>TextWrapping="Wrap"</c> no envuelve nada y el texto
+    /// largo se sale del globo. Por eso el globo es una rejilla, y por eso esto es un test: el
+    /// síntoma solo aparece con un mensaje largo, y los mensajes de prueba son cortos.
+    /// </summary>
+    [Fact]
+    public void El_globo_de_la_conversacion_envuelve_el_texto_en_vez_de_cortarlo()
+    {
+        string globo = Between(Markup(ViewXaml()), "x:Type services:FixMessage", "</DataTemplate>");
+
+        globo.Should().Contain("TextWrapping=\"Wrap\"");
+        globo.Should().NotContain("StackPanel Orientation=\"Horizontal\"",
+            "un StackPanel horizontal da ancho infinito y deja el Wrap sin efecto");
+    }
+
+    /// <summary>
+    /// <b>Las opciones se leen ENTERAS.</b> El usuario no elige «Sí/No»: elige consecuencias
+    /// —«(A) lanzar excepción y adaptar los 7 llamadores»—. Un botón que recorta esa frase le hace
+    /// elegir a ciegas. Ni elipsis, ni <c>Content</c> plano de una sola línea.
+    /// </summary>
+    [Fact]
+    public void Las_opciones_de_elicitacion_se_muestran_enteras()
+    {
+        string pregunta = Between(Markup(ViewXaml()), "x:Type services:FixQuestion", "</UserControl.Resources>");
+
+        pregunta.Should().Contain("<TextBlock Text=\"{Binding Label}\" TextWrapping=\"Wrap\" />",
+            "la etiqueta de la opción va en un TextBlock que envuelve, no como Content de una línea");
+        pregunta.Should().NotContain("TextTrimming",
+            "una consecuencia con elipsis es una consecuencia que no se ha leído");
+        pregunta.Should().NotContain("Width=\"420\"", "un ancho fijo no cabe en una pantalla de 1366");
+    }
+
+    /// <summary>
+    /// La conversación tiene scroll propio y el autoscroll de V5: se queda al final mientras nadie
+    /// la toque, se PAUSA en cuanto alguien sube a leer, y ofrece la vuelta al final.
+    /// </summary>
+    [Fact]
+    public void La_conversacion_tiene_scroll_propio_con_autoscroll_que_se_pausa()
+    {
+        string xaml = Markup(ViewXaml());
+
+        xaml.Should().Contain("ScrollChanged=\"OnConversationScrollChanged\"");
+        xaml.Should().Contain("BackToBottomCommand");
+        xaml.Should().Contain("{Binding AutoScroll, Converter={StaticResource InverseBoolToVisibility}}");
+    }
+
+    /// <summary>
+    /// Rutas largas: elipsis EN MEDIO —el nombre del fichero es lo que identifica la pestaña— con
+    /// la ruta entera en el tooltip. Y lo que tiene tope de altura tiene que poder alcanzarse: un
+    /// <c>MaxHeight</c> sin scroll recorta en silencio.
+    /// </summary>
+    [Fact]
+    public void Las_rutas_largas_se_recortan_por_el_medio_y_lo_alto_tiene_scroll()
+    {
+        string xaml = Markup(ViewXaml());
+
+        xaml.Should().Contain("Converter={StaticResource MiddleEllipsis}");
+        xaml.Should().Contain("ToolTip=\"{Binding RelativePath}\"");
+        xaml.Should().Contain("<ScrollViewer MaxHeight=\"220\" VerticalScrollBarVisibility=\"Auto\">");
+        Regex.Matches(xaml, "MaxHeight=\"[0-9]+\"").Count
+            .Should().Be(1, "el único tope de altura de la vista es el que lleva scroll");
+    }
+
+    /// <summary>La elipsis en medio conserva el nombre del fichero, que es lo que se lee.</summary>
+    [Theory]
+    [InlineData("Common/CommonStatics.cs", 44, "Common/CommonStatics.cs")]
+    [InlineData("src/Modules/Telemetry/Internal/Buffers/RingBufferWriter.cs", 30, "src/Modul…/RingBufferWriter.cs")]
+    [InlineData(@"src\Modules\Telemetry\RingBufferWriter.cs", 30, @"src\Modul…\RingBufferWriter.cs")]
+    public void La_elipsis_en_medio_conserva_el_nombre_del_fichero(string path, int max, string expected)
+        => MiddleEllipsisConverter.Shorten(path, max).Should().Be(expected);
+
+    /// <summary>
+    /// Un nombre que no cabe ni él solo se recorta por delante: el final —la extensión— es lo
+    /// último que se pierde.
+    /// </summary>
+    [Fact]
+    public void Un_nombre_mas_largo_que_el_hueco_conserva_el_final()
+    {
+        string shortened = MiddleEllipsisConverter.Shorten("dir/UnNombreDeFicheroLarguisimo.cs", 20);
+
+        shortened.Should().HaveLength(20);
+        shortened.Should().StartWith("…");
+        shortened.Should().EndWith("Larguisimo.cs");
+    }
+
+    private static string Between(string text, string start, string end)
+    {
+        int from = text.IndexOf(start, StringComparison.Ordinal);
+        from.Should().BeGreaterThan(-1, "la plantilla existe");
+        int to = text.IndexOf(end, from, StringComparison.Ordinal);
+        to.Should().BeGreaterThan(-1, "la plantilla se cierra");
+        return text[from..to];
     }
 
     private static string Markup(string xaml)

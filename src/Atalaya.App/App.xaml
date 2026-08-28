@@ -38,6 +38,7 @@
             <local:QuestionChoicePairConverter x:Key="QuestionChoicePair" />
             <local:AllTrueToVisibilityConverter x:Key="AllTrueToVisibility" />
             <local:InverseBoolConverter x:Key="InverseBool" />
+            <local:MiddleEllipsisConverter x:Key="MiddleEllipsis" />
             <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
 
             <!-- VM-first navigation: each page VM renders as its view. -->
