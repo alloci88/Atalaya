@@ -200,7 +200,7 @@ public sealed class AssistedFixViewTests
 
         xaml.Should().Contain("Converter={StaticResource MiddleEllipsis}");
         xaml.Should().Contain("ToolTip=\"{Binding RelativePath}\"");
-        xaml.Should().Contain("<ScrollViewer MaxHeight=\"220\" VerticalScrollBarVisibility=\"Auto\">");
+        xaml.Should().Contain("<ScrollViewer MaxHeight=\"220\" VerticalScrollBarVisibility=\"Auto\"");
         Regex.Matches(xaml, "MaxHeight=\"[0-9]+\"").Count
             .Should().Be(1, "el único tope de altura de la vista es el que lleva scroll");
     }
@@ -290,6 +290,67 @@ public sealed class AssistedFixViewTests
     }
 
     private static string ReportsXaml() => ReadView("ReportsView.xaml");
+
+    // ==================================================== H9.1 §4: al cerrar, se aterriza
+
+    /// <summary>
+    /// Terminada la sesión, la pantalla de cierre tiene que quedar delante sin que el usuario pelee
+    /// con la rueda. El disparo va por el aviso de visibilidad del panel —que solo se levanta cuando
+    /// la visibilidad CAMBIA— y no por PropertyChanged, que se dispara en cada repintado y movería
+    /// el scroll bajo los dedos del usuario.
+    /// </summary>
+    [Fact]
+    public void La_pantalla_de_cierre_aterriza_sola_al_llegar_fix_done()
+    {
+        string xaml = Markup(ViewXaml());
+
+        xaml.Should().Contain("x:Name=\"ClosingPanel\"");
+        xaml.Should().Contain("IsVisibleChanged=\"OnClosingShown\"");
+        xaml.Should().Contain("x:Name=\"ClosingScroll\"");
+
+        string code = ViewCode();
+        code.Should().Contain("ClosingScroll.ScrollToTop()");
+        code.Should().Contain("ConversationScroll.ScrollToEnd()",
+            "el cierre ignora la pausa del autoscroll a propósito: la sesión ha terminado");
+    }
+
+    /// <summary>
+    /// <b>Un solo scroll manda en cada panel.</b> Los contenedores internos de la pantalla de
+    /// cierre —la salida del build y la descripción del commit— ceden la rueda en su tope con el
+    /// patrón de la casa (<c>SnippetScroll</c>, F5.6). Sin esto, bajar hasta la tarjeta de commit
+    /// era una lotería según por dónde pasara el cursor.
+    /// </summary>
+    [Fact]
+    public void Los_scrolls_internos_ceden_la_rueda_en_su_tope()
+    {
+        string xaml = Markup(ViewXaml());
+
+        Regex.Matches(xaml, "PreviewMouseWheel=\"OnInnerScroll\"").Count
+            .Should().Be(2, "la salida del build y la descripción del commit");
+
+        string code = ViewCode();
+        code.Should().Contain("SnippetScroll.ShouldBubble", "el patrón de la casa, no uno nuevo");
+    }
+
+    /// <summary>
+    /// La conversación sigue teniendo UN solo ScrollViewer: el del flujo. Meter otro dentro —para
+    /// una tarjeta, para un mensaje largo— es volver a la pelea por la rueda.
+    /// </summary>
+    [Fact]
+    public void La_conversacion_tiene_un_unico_scroll()
+    {
+        // El panel de la conversación, desde su borde hasta el separador: Markup() se come los
+        // comentarios, así que el ancla es el propio marcado.
+        string conversation = Between(
+            Markup(ViewXaml()), "Background=\"#0C000000\"", "<GridSplitter");
+
+        Regex.Matches(conversation, "<ScrollViewer").Count
+            .Should().Be(1, "el del flujo de la conversación, y ninguno anidado dentro");
+    }
+
+    private static string ViewCode()
+        => File.ReadAllText(Path.Combine(
+            RepoRoot(), "src", "Atalaya.App", "Views", "AssistedFixView.xaml.cs"));
 
     private static string Markup(string xaml)
         => Regex.Replace(xaml, "<!--.*?-->", string.Empty, RegexOptions.Singleline);

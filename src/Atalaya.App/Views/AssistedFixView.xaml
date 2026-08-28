@@ -378,8 +378,12 @@
             </Border>
 
             <!-- ============================ PANTALLA DE CIERRE ============================ -->
-            <Border Grid.Column="0" Grid.ColumnSpan="3"
+            <!-- H9.1 §4: al llegar fix_done esta pantalla aparece y hay que ATERRIZAR en ella —
+                 arriba del todo, con la rueda funcionando—. El aviso de visibilidad es lo que lo
+                 dispara: se levanta una sola vez, cuando de verdad cambia. -->
+            <Border x:Name="ClosingPanel" Grid.Column="0" Grid.ColumnSpan="3"
                     Background="#F2101010" CornerRadius="8" Padding="22"
+                    IsVisibleChanged="OnClosingShown"
                     Visibility="{Binding ShowClosing, Converter={StaticResource BoolToVisibility}}">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,14">
@@ -400,7 +404,7 @@
                         <ui:Button Content="Me quedo los cambios" Command="{Binding FinishCommand}" Margin="8,0,0,0" />
                     </StackPanel>
 
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer x:Name="ClosingScroll" VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <TextBlock Text="Qué cambió y por qué" Style="{StaticResource SectionTitle}" />
                             <TextBlock Text="{Binding Fix.Summary}" TextWrapping="Wrap" FontSize="12.5"
@@ -448,7 +452,12 @@
                                     Visibility="{Binding Fix.LastBuild, Converter={StaticResource NotEmptyToVisibility}}">
                                 <!-- El tope de altura solo vale si lo que sobra se puede alcanzar:
                                      antes recortaba la salida del build sin decirlo. -->
-                                <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto">
+                                <!-- Cede la rueda al llegar a su tope (patrón de la casa,
+                                     SnippetScroll): si no, bajar por la pantalla de cierre pasando
+                                     el cursor por encima de la salida del build era una lotería, y
+                                     la tarjeta de commit quedaba fuera de alcance. -->
+                                <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto"
+                                              PreviewMouseWheel="OnInnerScroll">
                                     <TextBlock Text="{Binding Fix.LastBuild}" FontFamily="Consolas" FontSize="11"
                                                TextWrapping="Wrap"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -473,7 +482,8 @@
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     <ui:TextBox Text="{Binding Commit.Description, UpdateSourceTrigger=PropertyChanged}"
                                                 AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90"
-                                                VerticalScrollBarVisibility="Auto" />
+                                                VerticalScrollBarVisibility="Auto"
+                                                PreviewMouseWheel="OnInnerScroll" />
                                     <ui:Button Content="Copiar" Command="{Binding CopyCommitCommand}"
                                                Appearance="Primary" HorizontalAlignment="Left" Margin="0,10,0,0" />
                                 </StackPanel>
