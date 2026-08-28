@@ -130,7 +130,14 @@ El panel de mando, filtrable por **aplicación** y **periodo** — y los dos fil
 afectan a todo lo de abajo.
 
 Cuatro cifras arriba: hallazgos activos por severidad, resueltos en el periodo (con su
-delta), coste del periodo y cobertura del ciclo. Debajo, seis gráficas:
+delta), coste del periodo y cobertura del ciclo.
+
+El **coste del periodo** incluye **todas** las sesiones que gastaron: auditorías,
+arreglos asistidos y verificaciones. El «por unidad auditada» que va debajo divide solo
+lo que costó **auditar** entre las unidades auditadas — un arreglo no audita ninguna
+unidad, así que repartir su gasto entre ellas daría un número que no significa nada.
+
+Debajo, seis gráficas:
 
 1. **Coste en el tiempo** — una línea por aplicación, con toggle *Acumulado*.
 2. **Resoluciones en el tiempo** — cuántos hallazgos se dieron por resueltos en cada
@@ -142,8 +149,22 @@ delta), coste del periodo y cobertura del ciclo. Debajo, seis gráficas:
    (hallazgos activos a día de hoy: el periodo no la recorta). Un clic en un tramo abre
    Hallazgos con esa app y esa severidad; en el centro, esa app entera.
 5. **Flujo de hallazgos** — lo que entra, lo que se cierra y cuántos quedan vivos.
-6. **Actividad de sesiones** — el registro del periodo. **Un clic en una línea abre su
-   informe en la vista Informes.**
+6. **Actividad de sesiones** — el registro del periodo, con el **tipo** de cada sesión
+   (auditoría, arreglo asistido, verificación, cierre…) y su coste. **Un clic en una
+   línea abre su informe en la vista Informes.**
+
+**El eje temporal.** Llega **siempre hasta hoy**, aunque el último tramo esté a cero: un
+eje que termina en el pasado afirma que desde entonces no ha pasado nada. Los tramos
+salen del periodo elegido — por día en «4 semanas», por semana en «8» y «26», por mes
+cuando «Todo» pasa del año — y un tramo semanal **se rotula por su último día**: si hoy
+es 28 de agosto, el último dice «28 ago» y cubre del 22 al 28. Pasa el ratón por encima
+y el tooltip escribe el tramo entero («22–28 ago»), para que no haya que adivinarlo. Las
+fechas se guardan en UTC y se enseñan **en tu hora local**, y los tramos se cortan
+también en tu hora: lo que hiciste a las 00:30 aparece en el día en que lo hiciste.
+
+**Cuándo se recalcula.** Con cada sincronización con el hub y **al volver a la vista**.
+Una sesión que acabas de terminar en esta máquina —una auditoría, un arreglo, una
+verificación— aparece sin reiniciar la aplicación.
 
 Donde no hay medida se escribe «—» y qué haría falta para que aparezca. Un cero con
 formato sería una medida que nadie ha tomado.

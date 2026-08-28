@@ -1,10 +1,10 @@
-# Backlog Atalaya
+﻿# Backlog Atalaya
 
 Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo y se mantiene al día
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-28 (H9.1).
+Última revisión: 2026-08-28 (H9.2 — cuadre de Métricas).
 
 ## En vuelo
 
@@ -17,6 +17,15 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   con asiento. En la misma sesión: comprobar que el agente ya no sale a buscar tests (§3) y que la
   pantalla de cierre aterriza sola con la ventana pequeña y mucha conversación (D-588).
 
+- **H9.2 — el caso de aceptación de Métricas, con los ojos del usuario.** El cuadre está hecho y
+  cubierto por tests (D-589…D-598), pero **ningún test renderiza**: falta abrir Métricas y ver (a)
+  el gasto de los arreglos de hoy sumado, (b) las resoluciones de hoy en el día de hoy, (c) el eje
+  llegando a hoy en todas las gráficas. En la misma pasada: el tooltip del cubo semanal en los dos
+  temas y la columna «Tipo» del registro a 1366×768 (D-599).
+- **H9.2 — el huso horario, sin observar en producción.** El corte por día local está probado,
+  pero no hay ni un dato en el hub entre las 00:00 y las 02:00 locales que lo haya ejercitado de
+  verdad (D-599). Se verá solo, con el uso.
+
 ## Despliegue al equipo
 
 - Dar permiso de **write** al equipo en `atalaya-hub`.
@@ -28,7 +37,8 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   lo que separa «no tienes lo último» de «hay un fallo».
 - Acompañar los primeros onboardings y recoger la fricción.
 - Conversión del coste a **euros**: medir ~10 unidades contra el panel de consumo de Copilot antes
-  de poner un número en la interfaz.
+  de poner un número en la interfaz. Ahora que las verificaciones registran su gasto (D-590), la
+  medición tiene que incluirlas: hasta H9.2 el total del panel solo contaba auditorías y arreglos.
 
 ## Aplazado a decisión
 

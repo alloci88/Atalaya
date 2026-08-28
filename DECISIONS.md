@@ -5139,3 +5139,157 @@ Las dos mejoras que salieron del **primer uso real** del arreglo asistido: una s
   lectura: no se ha compilado ese clon desde aquí, para no dejarle al usuario un árbol sucio que
   bloquearía justo el arreglo asistido. La verificación de que una sesión real termina diciendo
   «0 errores nuevos» es del usuario, con su asiento.
+
+## H9.2 — Auditoría de la vista Métricas (el cuadre)
+
+El usuario reportó DOS síntomas sobre la vista Métricas del 28/08/2026. Se revisó la vista
+entera —cada tile y cada gráfica— cuadrando a mano contra los ficheros del hub antes de tocar
+una línea (norma **N-2**).
+
+### D-589 — El cuadre, medido: qué decía la vista y qué dicen los ficheros
+
+Se corrió el agregador real contra una **copia** del hub de esta máquina
+(`%LOCALAPPDATA%/Atalaya/hub`, app `xblast`: 11 sesiones, 56 hallazgos, inventario del ciclo 2),
+con el reloj fijado en 2026-08-28. «Esperado» sale de contar los ficheros con un script; «Mostrado»
+es lo que devolvía `MetricsQuery.Build`.
+
+| Métrica | Esperado (ficheros) | Mostrado (antes) | Veredicto |
+|---|---|---|---|
+| Activos totales | 49 | 49 | ✅ |
+| Activos por severidad | C0 · A4 · M42 · B3 | C0 · A4 · M42 · B3 | ✅ |
+| Resueltos en el periodo | 7 | 7 | ✅ (por casualidad — ver D-591) |
+| Resueltos periodo anterior | 0 | 0 | ✅ |
+| **Coste del periodo** | **262,5** (105 lotes + 22,5 + 67,5 + 67,5 fix) | 262,5 | ✅ **el arreglo YA se sumaba** |
+| **Coste de las verificaciones** | **desconocido: no se registró** | 0 | ❌ **D-590** |
+| **Coste por unidad auditada** | 105 (auditar 1 unidad costó 105) | 262,5 | ❌ **D-592** |
+| Cobertura del ciclo | 1 aud · 890 pend · 34 grandes | idem | ✅ |
+| Rosco de severidad | C0 · A4 · M42 · B3 | idem | ✅ |
+| **Eje: último cubo** | debe contener HOY (28 ago) | rotulado **«22 ago»**; el 28 no aparecía | ❌ **D-593** |
+| Resoluciones del 28/08 (OPT-0002, BUG-0008) | 2, en el cubo de hoy | 2, dibujadas en el cubo «22 ago» | ❌ **D-593** |
+| Burndown · nuevos | 56 | 56 | ✅ |
+| Burndown · resueltos | 7 | 7 | ✅ |
+| **Burndown · activos al cierre** | 49 (la misma deuda que el rosco) | 49 | ⚠️ **frágil — D-594** |
+| Registro: nº de filas | 11 (5 verify, 3 fix, 1 lotes, 1 reset, 1 verify) | 11 | ✅ |
+| **Registro: tipo de sesión** | visible | **no se escribía** | ❌ **D-595** |
+| **Refresco tras sesión local** | la sesión nueva aparece al volver | no aparecía hasta reiniciar | ❌ **D-596** |
+
+**Lo que el usuario sospechaba y NO era.** La gráfica de coste **sí** sumaba las sesiones de tipo
+`fix`: `MetricsQuery` nunca filtró por modo. Los 157,5 de los tres arreglos del 28/08 estaban en
+el total de 262,5. Lo que faltaba era otra cosa —y de verdad faltaba—: las verificaciones no
+registran lo que gastan (D-590). Y la fecha de las resoluciones **también se leía bien**: sale del
+evento `resolved` del historial, que es lo correcto. Lo que engañaba era el rótulo del eje (D-593).
+
+### D-590 — Verificar cuesta, y esa factura no se escribía
+
+`VerifyCoordinator` guardaba su `AuditSession` con `usage` a cero: nunca se suscribía a
+`UsageReported`, que es lo que sí hace `SessionCoordinator` desde siempre. Evidencia: las cinco
+sesiones `verify` del hub tienen `cost: null` e `inputTokens: 0`. En el panel cada verificación
+parecía gratis y el coste del periodo salía corto por todo lo que verificar gasta. Arreglado en
+el productor —la sesión ya se guardaba; lo que faltaba era su factura—, con el mismo patrón que
+la auditoría, unidad de coste incluida.
+
+### D-591 — La misma pregunta tenía tres respuestas
+
+«Cuánto se resolvió en el periodo» se calculaba de tres maneras: el **tile** contaba hallazgos con
+sello `resolved` dentro del rango, la **gráfica** contaba eventos `resolved` del historial, y el
+**burndown** volvía al sello. El sello se pone a `null` al reabrir, así que un hallazgo resuelto →
+reabierto → resuelto salía 1 en el tile y 2 en la gráfica. En este hub coincidían por casualidad
+(ningún hallazgo se resolvió dos veces), y el test que lo tapaba afirmaba la discrepancia como si
+fuera el diseño. Ahora hay **una** función —`ResolutionsIn`, sobre el historial— y la usan las
+tres. Cuenta **eventos**: dos resoluciones del mismo hallazgo saldaron deuda dos veces.
+
+### D-592 — El coste por unidad auditada divide lo que costó AUDITAR
+
+El tile escribía «~262,5 por unidad auditada (1 en el periodo)» dividiendo **todo** el gasto entre
+las unidades auditadas. Auditar esa unidad costó 105; los otros 157,5 fueron arreglos, que no
+auditan ninguna unidad. El numerador es ahora el coste de las sesiones que auditaron unidades. El
+tile de **coste del periodo** sigue sumándolo todo —eso es el gasto—: lo que no se puede es
+repartir entre unidades algo que no las produjo.
+
+### D-593 — Un cubo semanal se rotula por su ÚLTIMO día
+
+**El síntoma del parte.** El usuario resolvió dos hallazgos el 28/08 y la gráfica pintaba
+actividad «el 22», sin que el 28 apareciera en el eje. Ni la fecha ni el rango estaban mal: con
+«8 semanas» los cubos son semanales, el último iba del 22 al 29 —contenía el 28— y se rotulaba
+por su **inicio**. El eje terminaba en «22 ago» y lo hecho hoy se leía como de hace seis días.
+
+**La decisión, y por qué.** El cubo semanal se rotula por su **último día incluido**. Así el
+último cubo dice siempre **hoy**, que es el ancla de quien mira el panel, y el eje termina donde
+termina el tiempo. El **tooltip** escribe el tramo entero («22–28 ago»), de modo que la etiqueta
+corta no tiene que cargar sola con la ambigüedad. El cubo **diario** se rotula por su día y el
+**mensual** por su mes: ahí no hay nada que desambiguar, y un «31 ago» en un eje mensual se leería
+como un día.
+
+**Y el rango sí llegaba a hoy.** El extremo derecho era —y sigue siendo— la medianoche de mañana.
+No se «arregló» lo que no estaba roto: se comprobó y se fijó con un test para las tres gráficas.
+
+**Husos horarios.** Los cubos se cortaban por medianoche **UTC** y se rotulaban en hora **local**:
+en UTC+2 el cubo «28 ago» iba en realidad del 28 a las 02:00 al 29 a las 02:00, y lo hecho entre
+las 00:00 y las 02:00 caía en el día anterior. Ningún dato de este hub cruzaba esa franja, así que
+el defecto era **latente** y así se declara. Los cortes se hacen ahora en día local; el disco
+sigue siendo UTC y así se compara.
+
+### D-594 — El burndown reconstruye el pasado del historial, no del estado de hoy
+
+«Activos al cierre» se calculaba con `resolved is null || resolved.Utc >= corte`. Dos casos
+salían mal: un hallazgo **reabierto** pierde el sello y quedaba «vivo» también durante el tramo en
+que estuvo cerrado, y uno **silenciado** nunca lo tiene, así que engordaba el burndown como deuda
+pendiente mientras el rosco de severidad —que solo cuenta activos— lo daba por fuera: la misma app
+enseñaba dos deudas distintas en la misma pantalla. En este hub no hay silenciados, así que
+tampoco se veía. Ahora se reconstruye del historial (`AliveAt`).
+
+**El desempate, y el dato del hub que lo obligó.** MEJ-0037 tiene `resolved` y `reopened` con el
+**mismo sello** y la ficha guardada como «resuelto»: reconstruyendo a ciegas daba 50 activos
+donde el tile y el rosco dicen 49. Cuando el historial no puede desempatarse solo, **manda el
+estado guardado**, que es el que ya enseña el resto de la aplicación. No se toca el fichero
+(anti-objetivo): se lee con un criterio, y el criterio es no contradecirse sobre la misma ficha.
+Sin historial de estado —hallazgos traídos de V4— se cae al estado de hoy con su sello.
+
+### D-595 — El registro de operaciones escribe el tipo de cada sesión
+
+De las 11 filas del periodo, 6 no auditan nada (5 verificaciones y un reset) y 3 son arreglos.
+Todas se enseñaban igual: «0 unidades», «sin cambios» y, en los arreglos, un coste sin nada que lo
+explicara. La columna **Tipo** usa `AuditModeNames`, el mismo vocabulario que la ficha de un
+hallazgo y la vista de Informes.
+
+### D-596 — La caché no puede sobrevivir a un cambio en el hub
+
+`MetricsQuery` cachea la lectura y solo la tiraba con el evento de sync… que lo levanta un **pull**
+del remoto. Todo lo que escribe esta máquina —una auditoría, un arreglo, una verificación— no pasa
+por ahí, así que el panel seguía enseñando la foto anterior hasta **reiniciar la aplicación**: era
+justo la sesión recién terminada la que faltaba. Ahora la caché se valida contra una **huella
+barata** del hub (cuántos `*.json` hay y cuál es el más reciente); no se abre ningún fichero, así
+que cuesta una fracción de releerlos. Se mira el **disco** y no una lista de escritores porque la
+lista es lo que se queda sin actualizar (D-239): esto funciona igual para el escritor que se añada
+mañana.
+
+### D-597 — La fuente única del coste, por escrito
+
+El tile y la gráfica hacían su propia suma. Daban lo mismo, pero es la tercera vez que este patrón
+nos muerde, así que ahora las dos —y el reparto en series— salen de `CostIn`. Y `CostOf` cuenta
+**toda** sesión: filtrar por modo ahí es lo que dejaría fuera lo que se empiece a gastar mañana.
+Una sesión antigua sin modo reconocible se cuenta igual; la que se saltaría es la única que
+después no se podría explicar.
+
+### D-598 — Cobertura (13 tests nuevos, 1033 en total, todo en verde)
+
+Del coste: las tres clases de sesión suman y el tile cuadra con la gráfica; el ratio por unidad no
+se infla con arreglos ni verificaciones; una verificación registra tokens, coste y unidad en su
+sesión. Del eje: una resolución de **hoy** cae en el cubo de hoy con los tres rangos; el eje llega
+a hoy en las **tres** gráficas y también con el hub vacío; el cubo semanal se rotula por su último
+día y lleva su tramo al tooltip; un cubo diario cubre el **día local** y no el día UTC. Del
+burndown: un silenciado no es deuda viva, y un reabierto no lo era mientras estuvo cerrado. Del
+registro: las sesiones de arreglo y verificación aparecen con su tipo y su coste. De la caché: un
+cambio en el hub sin sync se ve, y con el hub quieto no se relee. Dos tests que afirmaban el
+comportamiento defectuoso (el tile contando estado, la caché tapando un cambio) se reescribieron
+al contrato nuevo.
+
+### D-599 — Lo que NO se ha comprobado, y es del usuario
+
+Nada de esto se ha visto renderizado: los tests miden el agregado, el view-model y la plantilla,
+pero **ninguno pinta un píxel**. Quedan para el asiento humano: que el tooltip del cubo semanal se
+lea bien en los dos temas, que la columna «Tipo» no estreche el registro a 1366×768, y el caso de
+aceptación completo —abrir Métricas y ver el gasto de los arreglos de hoy, las resoluciones de hoy
+en el día de hoy y el eje llegando a hoy en todas las gráficas—. El defecto de huso horario
+(D-593) es **latente**: no hay ningún dato en este hub entre las 00:00 y las 02:00 locales, así
+que está cubierto por test pero no observado en producción.
