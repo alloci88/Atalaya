@@ -5474,3 +5474,138 @@ sus ficheros, los activa, una auditoría de una clase muestra en el informe qué
 y el arreglo asistido respeta sus convenciones. Tampoco se ha medido con una colección de skills
 **real** y grande: el tope de 400 candidatos del escaneo y el `MaxCandidateBytes` de 1 MB son
 números elegidos a priori, no contra un repositorio observado.
+
+## F8 — Distribución por GitHub Releases y aviso de versión en la app
+
+Hasta aquí repartir Atalaya era copiar una carpeta `dist` a mano, y ninguna copia sabía decir cuál
+era. El backlog lo tenía apuntado desde H9: «Acerca de» decía «Versión 1.0.0» en todos los
+binarios, que es justo lo que impide distinguir «no tienes lo último» de «hay un fallo».
+
+### D-616 — La versión, en `Directory.Build.props`, y el tag por encima
+
+`<Version>` en un solo sitio fluye a todos los ensamblados; `AboutInfo.CurrentVersion()` ya leía la
+del ensamblado vivo, así que «Acerca de» quedó conectado sin tocar una línea. Lo importante es lo
+segundo: **el workflow la pisa con la del tag** (`-p:Version=1.2.3`), de modo que el binario
+distribuido no puede mentir sobre el tag que lo produjo. Un desajuste tag↔binario no se evita con
+disciplina —se evita porque no existe el camino para producirlo—, y además el workflow lo
+comprueba y falla si no coincide.
+
+Verificado con un publish local: `-p:Version=1.2.3` deja el ejecutable con `ProductVersion`
+`1.2.3+<sha>` y `FileVersion` `1.2.3.0`.
+
+### D-617 — El check del estampado compara la cadena entera, no un prefijo
+
+El primer borrador usaba `StartsWith`, y con eso un binario `1.2.30` habría pasado por bueno para
+el tag `1.2.3`. Ahora se recortan los metadatos de build por el `+` —SemVer §10: no participan— y
+se compara la cadena completa. Ejercitado en local sobre los cuatro casos antes de darlo por
+bueno, porque un guardián que no salta es peor que no tenerlo: da confianza sin darla.
+
+### D-618 — SemVer propio y no `System.Version`
+
+`System.Version` no entiende de pre-releases: `1.2.0-beta` ni siquiera parsea, y ordena por cuatro
+números sin más. Un `SemanticVersion` de cien líneas compra la regla que de verdad protege aquí —
+**un pre-release es ANTERIOR a su versión final**—, que es lo que impide que un `v2.0.0-rc1`
+etiquetado para probar le salte a todo el equipo como «versión disponible». Tolera además lo que
+de verdad llega: la `v` del tag, el cuarto número que .NET mete en `FileVersion` y el `+sha` que
+el compilador añade a `AssemblyInformationalVersion`.
+
+(El API ya filtra pre-releases por su lado — ver D-620 —, así que son dos defensas para lo mismo.
+Es deliberado: la de arriba depende de que GitHub siga comportándose igual, y la de abajo no.)
+
+### D-619 — El aviso usa el token de cuenta; cero credenciales nuevas
+
+El repositorio es privado y `GitHubAccountService` ya tiene un token que entra. Un token de
+servicio para consultar Releases habría sido un secreto más que repartir, rotar y perder — y el
+anti-objetivo del prompt lo decía. La URL del repositorio de la aplicación va en
+`appsettings.deploy.json` como **`appRepoUrl`**, **aparte del hub**: son dos repositorios con dos
+vidas distintas, y colgar el aviso del `hubUrl` habría hecho que migrar el hub apagara las
+notificaciones de versión sin que nadie se enterara hasta llevar meses desactualizado. Vacío =
+no se comprueba nada, en silencio, que es el estado correcto de un despliegue que aún no publica.
+
+### D-620 — `releases/latest`, que ya excluye borradores y pre-releases
+
+Se pide ese endpoint y no la lista: GitHub ya deja fuera los borradores y los pre-releases, así
+que un `v2.0.0-rc1` de pruebas no puede disparar el aviso. El 404 de ese endpoint significa «este
+repositorio todavía no ha publicado ninguna Release», que **no es un error**: se le dio a
+`GitHubApiProblem` un valor `NotFound` propio para poder distinguirlo del fallo genérico. El
+mapeo de `GetRepositoryAccessAsync` no cambia de comportamiento — su `_` seguía cayendo en
+`NotVisible`, que es lo que ya hacía.
+
+### D-621 — Banner, y no modal ni toast
+
+Un modal interrumpe para dar una noticia que no es urgente. Un toast caduca a los 8 s: si te pilla
+mirando otra cosa te quedaste sin enterarte y no hay forma de recuperarlo. El banner ocupa una
+línea sobre la página, se queda hasta que decides, y **descartar es por versión**: no vuelve con
+la misma, sí con la siguiente. Un interruptor permanente sería más ajuste del que merece un aviso
+que aparece una vez por versión — y apagaría para siempre lo único que avisa de que hay algo nuevo.
+
+La fila del banner tiene alto `Auto` y está oculta salvo que haya algo que decir, así que en el
+99 % de los arranques la ventana se ve exactamente igual que antes.
+
+### D-622 — Fallar en silencio, y qué cuenta como «consulta hecha»
+
+Sin red, sin permisos o con la API caída: log y **nada en la interfaz**. Un chequeo de cortesía
+que explica sus fallos en pantalla es un chequeo que molesta por fallar, que es exactamente lo que
+no puede hacer.
+
+El límite es **una consulta cada 24 h**, y solo se sella tras una que salió bien: quien arrancó sin
+red esta mañana no tiene por qué quedarse un día entero sin enterarse. No puede degenerar en
+machaqueo porque la consulta se hace **una vez por arranque**, no en bucle. «No hay ninguna
+Release» sí sella, porque es una respuesta y no un fallo.
+
+Y mientras el chequeo va throttled, el banner **se mantiene** con la última Release vista
+(`LastSeenReleaseTag` / `LastSeenReleaseUrl`): sin eso, el aviso desaparecería 24 h y volvería
+solo, que es el tipo de intermitencia que hace desconfiar de un aviso.
+
+### D-623 — Ni auto-descarga ni auto-instalación
+
+El aviso lleva al navegador y ahí se acaba. Una aplicación que se reescribe sola mientras alguien
+la usa es un problema, no una comodidad, y el reemplazo manual es honesto: cerrar, descomprimir y
+sustituir una carpeta cuyos datos no viven dentro. Velopack queda en el backlog como **nivel 3**,
+a decidir cuando el equipo haya vivido dos o tres actualizaciones y sepamos si duele — exige
+cambiar la forma del paquete y eso solo compensa contra una molestia observada.
+
+### D-624 — El workflow: idempotente, con tests delante y sin secretos
+
+`contents: write` y el `GITHUB_TOKEN` del propio workflow; ningún secreto nuevo. Los **tests van
+antes del publish**: un paquete no se publica con tests rojos, y ponerlos delante evita gastar la
+compilación de release en algo que no se va a distribuir.
+
+El paso de publicación es **idempotente**: si la Release del tag ya existe —creada a mano desde la
+web, o por un intento anterior que falló más tarde— se le adjunta el zip con `--clobber` en vez de
+fallar. Sin esto, el primer fallo dejaría el tag quemado y habría que inventarse un `v1.2.4` por
+un problema de infraestructura.
+
+El **`workflow_dispatch`** con la versión como input crea el tag desde el propio workflow (y
+tolera que ya exista): es la salida para publicar sin consola a mano. Las notas salen de
+`--generate-notes` — los commits desde el tag anterior, suficiente y sin mantenimiento; pulirlas a
+mano en la web sigue siendo posible.
+
+El zip se guarda **además** como artefacto del run durante 30 días: si la Release se borra o se
+edita mal, el paquete exacto que se construyó sigue estando.
+
+### D-625 — Cobertura (46 tests nuevos, 1171 en total, todo en verde)
+
+De SemVer: lo que de verdad llega (`v1.2.3`, `1.2.3.0`, `+sha`), lo que no es una versión, el
+orden entre versiones y entre pre-releases, y la regla de que una final gana a su `-rc`. Del
+chequeo: hay una más nueva → aviso con su página; igual o más vieja → nada; 401/403/404/500 y sin
+red → nada y sin reventar; sin `appRepoUrl` o sin cuenta → ni una llamada; la petición viaja con
+el token de la cuenta y contra la ruta correcta; descartada no repite pero la siguiente sí; no se
+pregunta dos veces en 24 h, el banner se mantiene mientras tanto, pasadas 24 h se vuelve a
+preguntar, y un fallo no consume el cupo. Y de §1: la versión de «Acerca de» es la del ensamblado,
+es SemVer y coincide con la de `Directory.Build.props`.
+
+Los dos tests de identidad del icono se actualizaron: el banner es un tercer sitio legítimo donde
+la aplicación firma sus avisos con su propio icono, a 16 px como el toast.
+
+### D-626 — Lo que NO se ha comprobado, y es del usuario
+
+**El workflow no se ha ejecutado.** No se puede desde aquí: Actions solo corre en GitHub. Lo que
+sí se hizo es validar su YAML con un parser, ejercitar en local sus dos pasos de decisión —la
+resolución de versión con sus cuatro casos válidos y sus cuatro inválidos, y la comparación del
+estampado— y un publish real con `-p:Version=1.2.3` comprobando el sello del ejecutable. El resto
+—que la Release aparezca, que el zip se adjunte, que la rama idempotente funcione— **está sin
+ejecutar** y es el estreno del usuario.
+
+Tampoco se ha visto el banner renderizado: está probado por su view-model y su plantilla, pero
+ningún test pinta un píxel. Queda para el asiento humano, en los dos temas y a 1366×768.

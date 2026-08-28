@@ -1,4 +1,5 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
 using Atalaya.App.Services;
@@ -28,6 +29,9 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly DisplayIdService _aliases;
     private readonly ToastCenter _toasts;
 
+    /// <summary>F8 §3: el chequeo de cortesía de versión nueva. Opcional — sin él, no hay banner.</summary>
+    private readonly UpdateCheckService? _updates;
+
     public MainViewModel(
         NavigationService navigation,
         HubContext hub,
@@ -37,7 +41,8 @@ public sealed partial class MainViewModel : ObservableObject
         LiveFixService fix,
         InterruptedSessionRecovery recovery,
         DisplayIdService aliases,
-        ToastCenter toasts)
+        ToastCenter toasts,
+        UpdateCheckService? updates = null)
     {
         Navigation = navigation;
         _toasts = toasts;
@@ -48,6 +53,7 @@ public sealed partial class MainViewModel : ObservableObject
         _fix = fix;
         _recovery = recovery;
         _aliases = aliases;
+        _updates = updates;
         _live.Changed += SyncSession;
         _live.Completed += OnSessionCompleted;
         // F5.15: un fallo de arranque no puede quedarse dentro de una vista que quiza nadie esta
@@ -323,6 +329,98 @@ public sealed partial class MainViewModel : ObservableObject
         SyncHealth = _hub.Health;
         AccountNeedsAttention = _account.NeedsReconnect;
     });
+
+
+    // ---- Aviso de versión nueva (F8 §3) ----
+
+    /// <summary>
+    /// Hay una versión más nueva publicada: la carcasa enseña un banner discreto.
+    /// <para>
+    /// Banner y no toast ni modal, a conciencia. Un modal interrumpe para dar una noticia que no
+    /// es urgente. Un toast caduca a los 8 s: si te pilla mirando otra cosa, te has quedado sin
+    /// enterarte y no hay forma de recuperarlo. El banner se queda hasta que decides —lo abres o
+    /// lo descartas— y ocupa una línea.
+    /// </para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _updateAvailable;
+
+    /// <summary>«Atalaya 1.2 disponible». La versión corta: es la que la gente dice en voz alta.</summary>
+    [ObservableProperty]
+    private string _updateLabel = string.Empty;
+
+    /// <summary>La página de la Release. Vacía si GitHub no la dio: entonces no hay adónde llevar.</summary>
+    [ObservableProperty]
+    private string _updateUrl = string.Empty;
+
+    /// <summary>Con url se ofrece «Ver novedades»; sin ella, el banner solo informa.</summary>
+    public bool CanOpenUpdate => UpdateUrl.Length > 0;
+
+    /// <summary>La versión de la que se está avisando, para poder descartarla por su número.</summary>
+    private SemanticVersion? _offeredUpdate;
+
+    /// <summary>
+    /// Pregunta si hay versión nueva, sin bloquear nada y sin poder romper el arranque.
+    /// <para>
+    /// Va DESPUÉS de que la aplicación esté en marcha y en su propia tarea: llega cuando llegue.
+    /// Nada de lo que hace la aplicación depende de esta respuesta, así que nada puede esperarla —
+    /// una comprobación de cortesía que retrasa el arranque ya ha dejado de ser cortés.
+    /// </para>
+    /// </summary>
+    public async Task CheckForUpdatesAsync(CancellationToken ct = default)
+    {
+        if (_updates is null)
+        {
+            return;
+        }
+
+        UpdateAvailability result = await _updates.CheckAsync(ct);
+        OnUiThread(() =>
+        {
+            _offeredUpdate = result.Version;
+            UpdateAvailable = result.HasUpdate;
+            UpdateUrl = result.Url ?? string.Empty;
+            UpdateLabel = result.Version is null ? string.Empty : $"Atalaya {result.Version.Short} disponible";
+            OnPropertyChanged(nameof(CanOpenUpdate));
+        });
+    }
+
+    /// <summary>
+    /// Abre la página de la Release en el navegador. Ahí acaba el trabajo de Atalaya: descargar y
+    /// reemplazar es del usuario, y el banner se retira porque ya ha hecho lo suyo.
+    /// </summary>
+    [RelayCommand]
+    private void OpenUpdate()
+    {
+        string url = UpdateUrl;
+        if (url.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch
+        {
+            // Sin navegador que abrir no hay nada que decir: el banner sigue ahí con su enlace.
+            return;
+        }
+
+        UpdateAvailable = false;
+    }
+
+    /// <summary>
+    /// Descarta el aviso de ESTA versión. No vuelve con la misma; sí con la siguiente, que es lo
+    /// que separa «ya me he enterado» de «no me avises nunca más».
+    /// </summary>
+    [RelayCommand]
+    private void DismissUpdate()
+    {
+        _updates?.Dismiss(_offeredUpdate);
+        UpdateAvailable = false;
+    }
 
     /// <summary>The hub events fire from background pulls; marshal before touching bound state.</summary>
     private static void OnUiThread(Action action)

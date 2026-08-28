@@ -185,6 +185,7 @@ valor de fábrica; el fichero de disco gana):
 ```json
 {
   "hubUrl": "https://github.com/alloci88/atalaya-hub",
+  "appRepoUrl": "https://github.com/alloci88/atalaya",
   "gitHubClientId": "<CLIENT_ID>",
   "organizationLogin": ""
 }
@@ -197,6 +198,11 @@ valor de fábrica; el fichero de disco gana):
   Antes de migrar, comprueba que cada usuario tenga permiso **Write** sobre el repo destino (ser
   miembro de la organización no basta) y, si la organización restringe las OAuth Apps, que
   «Atalaya» esté aprobada para ella.
+- **`appRepoUrl`** — el repositorio de **la propia Atalaya**, de donde salen sus Releases. Es lo
+  que consulta el aviso de versión nueva al arrancar, con el token de la cuenta ya conectada (cero
+  credenciales nuevas). Va aparte del hub a propósito: son dos repositorios con dos vidas
+  distintas, y acoplarlos haría que migrar el hub apagara el aviso sin que nadie se enterara.
+  Vacío = no se comprueba nada y no se avisa de nada, en silencio.
 - **`gitHubClientId`** — el client id de la OAuth App (ver anexo). **No es un secreto**: el
   device flow no usa client secret, por eso puede ir embebido.
 - **`organizationLogin`** — si se rellena, tras el login Atalaya comprueba la pertenencia a
@@ -265,6 +271,59 @@ self-contained) lista para distribuir:
 pwsh scripts/publish.ps1            # framework-dependent
 pwsh scripts/publish.ps1 -SelfContained
 ```
+
+Esto es el camino de **desarrollo**. Lo que se reparte al equipo sale de una Release: ver
+«Publicar una versión», más abajo.
+
+## Publicar una versión
+
+La versión vive en **un solo sitio**: `<Version>` en `Directory.Build.props`. De ahí sale la de
+todos los ensamblados y la que enseña «Acerca de».
+
+El ritual son **dos comandos** (los ejecuta una persona, como todo push):
+
+```bash
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+El workflow `.github/workflows/release.yml` hace el resto en `windows-latest`:
+
+1. **Pasa los tests.** Un paquete no se publica con tests rojos.
+2. **Publica self-contained win-x64** con la versión **del tag** (`-p:Version=1.2.3`), así que el
+   binario distribuido no puede mentir sobre el tag que lo produjo — el propio workflow comprueba
+   el estampado y falla si no coinciden.
+3. **Comprime** `dist/` como `Atalaya-v1.2.3-win-x64.zip`, con su `appsettings.deploy.json`.
+4. **Crea la Release** del tag con el zip adjunto y las notas que GitHub genera a partir de los
+   commits desde el tag anterior (`--generate-notes`). Se pueden pulir a mano en la web después.
+
+No hacen falta secretos: el `GITHUB_TOKEN` del propio workflow basta, y sus permisos son los
+mínimos (`contents: write`).
+
+**Sin consola a mano.** En la pestaña **Actions → Release → Run workflow** se puede lanzar dando
+la versión (`1.2.3` o `v1.2.3`): el workflow crea el tag él mismo.
+
+**Reintentar es seguro.** El paso de publicación es idempotente: si la Release del tag ya existe
+—creada a mano desde la web, o por un intento anterior que falló más tarde— se le adjunta el zip
+en vez de fallar. El primer fallo nunca deja un tag quemado.
+
+`scripts/publish.ps1` sigue siendo el camino de desarrollo y no lo toca nada de esto.
+
+### Numeración
+
+- **Patch** (`1.2.3` → `1.2.4`): arreglos.
+- **Minor** (`1.2` → `1.3`): funcionalidad nueva compatible. Es lo que el banner de aviso enseña
+  («Atalaya 1.3 disponible»).
+- **Major**: cambios que obligan a hacer algo al equipo (migrar el hub, reconectar cuentas).
+
+Sube el `<Version>` de `Directory.Build.props` al mismo número que vas a etiquetar, commitea, y
+entonces etiqueta: así una compilación local de desarrollo se distingue del último publicado.
+
+### Firma de código
+
+Los ejecutables **no están firmados**, así que Windows SmartScreen avisa la primera vez que
+alguien ejecuta un zip recién descargado («Más información» → «Ejecutar de todas formas»). Se
+quita de raíz con un certificado de firma; está apuntado en [`BACKLOG.md`](BACKLOG.md).
 
 ## Assets de identidad
 

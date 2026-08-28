@@ -1,0 +1,164 @@
+# Construye y publica una versión de Atalaya (F8 §2).
+#
+# Dos formas de dispararlo:
+#   · Empujando un tag `vX.Y.Z`  → el ritual normal (ver README, «Publicar una versión»).
+#   · A mano desde la pestaña Actions («Run workflow») dando la versión → el workflow crea el tag
+#     él mismo. Es la salida para quien no tenga la consola a mano.
+#
+# La versión SIEMPRE sale del tag y se inyecta al publish (`-p:Version=`), así que el binario que
+# se distribuye no puede mentir sobre el tag que lo produjo.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versión a publicar (1.2.3 o v1.2.3). Se creará el tag si no existe.'
+        required: true
+        type: string
+
+# Lo mínimo que hace falta: crear el tag, la Release y subirle el zip. Ningún secreto nuevo — el
+# GITHUB_TOKEN que el propio workflow recibe basta dentro de este repositorio.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # El historial completo: `--generate-notes` necesita los commits desde el tag anterior
+          # para poder escribir las notas.
+          fetch-depth: 0
+
+      - name: Configurar .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # La versión se resuelve ANTES de compilar: es la entrada de todo lo demás.
+      - name: Resolver la versión
+        id: version
+        shell: pwsh
+        run: |
+          $raw = if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            '${{ inputs.version }}'
+          } else {
+            '${{ github.ref_name }}'
+          }
+          $version = $raw.Trim().TrimStart('v', 'V')
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+            throw "«$raw» no es una versión SemVer (se esperaba 1.2.3 o v1.2.3)."
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=v$version"    >> $env:GITHUB_OUTPUT
+          Write-Host "Publicando v$version"
+
+      - name: Restaurar
+        run: dotnet restore Atalaya.sln
+
+      # El paquete NO se publica con tests rojos. Va antes del publish para no gastar la
+      # compilación de release en algo que no se va a distribuir.
+      - name: Tests
+        run: dotnet test Atalaya.sln --configuration Release --no-restore --verbosity minimal
+
+      # Self-contained: la máquina destino no necesita tener instalado el runtime .NET 8.
+      # Mismo comando que `scripts/publish.ps1 -SelfContained`, más la versión del tag.
+      - name: Publicar (self-contained win-x64)
+        run: >
+          dotnet publish src/Atalaya.App/Atalaya.App.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --output dist
+          -p:PublishSingleFile=false
+          -p:Version=${{ steps.version.outputs.version }}
+
+      # El fichero de despliegue del repo viaja en el zip: es lo que apunta al hub, a la OAuth App
+      # y al propio repositorio de Releases. El publish ya lo copia, pero se afirma aquí porque un
+      # zip sin él arranca sin hub y el fallo aparecería lejos de su causa.
+      - name: Comprobar el despliegue empaquetado
+        shell: pwsh
+        run: |
+          $deploy = 'dist/appsettings.deploy.json'
+          if (-not (Test-Path $deploy)) {
+            Copy-Item 'src/Atalaya.App/appsettings.deploy.json' $deploy
+          }
+          Get-Content $deploy
+
+      # Y que el binario diga la versión del tag. Si esto falla, el desajuste tag↔binario se ve
+      # aquí y no en la máquina de un compañero tres semanas después.
+      - name: Verificar el estampado de la versión
+        shell: pwsh
+        run: |
+          $expected = '${{ steps.version.outputs.version }}'
+          $stamped = (Get-Item 'dist/Atalaya.exe').VersionInfo.ProductVersion
+          # ProductVersion llega como «1.2.3+<sha>»: los metadatos de build no son parte de la
+          # versión (SemVer §10), así que se recortan antes de comparar. Se compara la cadena
+          # ENTERA y no un prefijo — «1.2.30» empieza por «1.2.3» y habría pasado por bueno.
+          $clean = $stamped.Split('+')[0]
+          Write-Host "Esperada: $expected · estampada: $stamped"
+          if ($clean -ne $expected) {
+            throw "El binario dice «$clean» y el tag dice «$expected»."
+          }
+
+      - name: Comprimir
+        shell: pwsh
+        run: |
+          $zip = "Atalaya-${{ steps.version.outputs.tag }}-win-x64.zip"
+          Compress-Archive -Path 'dist/*' -DestinationPath $zip -Force
+          "ZIP=$zip" >> $env:GITHUB_ENV
+          Write-Host "Paquete: $zip ($([math]::Round((Get-Item $zip).Length / 1MB, 1)) MB)"
+
+      # Solo en el disparo manual: el tag no existe todavía y hay que crearlo. Idempotente — si
+      # alguien ya lo empujó, se usa el que hay en vez de fallar.
+      - name: Crear el tag (disparo manual)
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ steps.version.outputs.tag }}'
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          if (git ls-remote --tags origin "refs/tags/$tag") {
+            Write-Host "El tag $tag ya existe en origin; se publica sobre él."
+          } else {
+            git tag $tag
+            git push origin $tag
+            Write-Host "Tag $tag creado."
+          }
+
+      # IDEMPOTENTE. Si la Release ya existe —creada a mano desde la web, o por un intento
+      # anterior— se le adjunta el zip (--clobber) en vez de fallar. Reintentar una publicación
+      # tiene que ser seguro: si no lo fuera, el primer fallo dejaría el tag quemado.
+      - name: Publicar la Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = '${{ steps.version.outputs.tag }}'
+          gh release view $tag 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "La Release $tag ya existe: se le adjunta el paquete."
+            gh release upload $tag "$env:ZIP" --clobber
+          } else {
+            Write-Host "Creando la Release $tag."
+            gh release create $tag "$env:ZIP" --title $tag --generate-notes
+          }
+          if ($LASTEXITCODE -ne 0) { throw "No se pudo publicar la Release $tag." }
+
+      # El zip también como artefacto del run: si la Release se borrara o se editara mal, el
+      # paquete exacto que se construyó sigue estando aquí durante 30 días.
+      - name: Guardar el paquete como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: Atalaya-${{ steps.version.outputs.tag }}-win-x64
+          path: ${{ env.ZIP }}
+          retention-days: 30

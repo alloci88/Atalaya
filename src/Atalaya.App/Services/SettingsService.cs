@@ -122,6 +122,38 @@ public sealed class AppSettings
     /// </para>
     /// </summary>
     public string CopilotModel { get; set; } = string.Empty;
+
+    // ---- Aviso de versión nueva (F8 §3) ----
+
+    /// <summary>
+    /// Cuándo se preguntó por última vez a GitHub por la última Release. El chequeo es de
+    /// cortesía, así que se limita a uno cada 24 h: no hay ninguna prisa por enterarse.
+    /// <para>
+    /// Solo se sella tras una consulta que SALIÓ BIEN. Si falla —sin red, sin permisos, API
+    /// caída—, no se sella: un usuario que arrancó offline esta mañana no tiene por qué quedarse
+    /// un día entero sin enterarse de nada. Y no puede degenerar en machaqueo porque la consulta
+    /// se hace una vez por arranque, no en bucle.
+    /// </para>
+    /// </summary>
+    public DateTimeOffset? LastUpdateCheckUtc { get; set; }
+
+    /// <summary>
+    /// El tag de la última Release que se llegó a ver (<c>v1.2.3</c>). Se guarda para que el
+    /// banner se pueda pintar en los arranques en los que el chequeo va throttled: sin esto, la
+    /// versión nueva desaparecería de la vista durante 24 h y volvería sola, que es justo el tipo
+    /// de intermitencia que hace desconfiar de un aviso.
+    /// </summary>
+    public string? LastSeenReleaseTag { get; set; }
+
+    /// <summary>La página de esa Release, para que «Ver novedades» funcione sin volver a preguntar.</summary>
+    public string? LastSeenReleaseUrl { get; set; }
+
+    /// <summary>
+    /// La versión que el usuario descartó. No vuelve a molestar con ESA; con la siguiente sí.
+    /// Descartar es «ya me he enterado», no «no me avises nunca más»: un interruptor permanente
+    /// para un aviso que aparece una vez por versión sería más ajuste del que la función merece.
+    /// </summary>
+    public string? DismissedUpdateVersion { get; set; }
 }
 
 /// <summary>

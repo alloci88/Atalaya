@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -22,6 +22,15 @@ public sealed record GitHubUser(long Id, string Login, string? Name, string? Ava
         : Email!;
 }
 
+/// <summary>
+/// Una Release publicada del repositorio de la propia aplicación (F8 §3): su tag, su página y su
+/// título. No se pide nada más — el aviso solo necesita saber QUÉ versión hay y ADÓNDE llevar al
+/// usuario; la descarga la hace él, en el navegador.
+/// </summary>
+/// <param name="TagName">El tag tal cual (<c>v1.2.3</c>). Es la única fuente de la versión.</param>
+/// <param name="HtmlUrl">La página de la Release. Null si GitHub no la devolvió.</param>
+public sealed record GitHubRelease(string TagName, string? HtmlUrl, string? Name);
+
 /// <summary>What went wrong talking to the GitHub API, mapped to an actionable remedy (D2.3).</summary>
 public enum GitHubApiProblem
 {
@@ -38,6 +47,13 @@ public enum GitHubApiProblem
 
     /// <summary>Could not reach github.com.</summary>
     Offline,
+
+    /// <summary>
+    /// 404. En este API significa las dos cosas a la vez —no existe, o existe y no lo puedes ver—,
+    /// así que quien pregunta decide qué quiere decir en su caso. Para el chequeo de versión es
+    /// «este repositorio aún no ha publicado ninguna Release», que no es un error (F8 §3).
+    /// </summary>
+    NotFound,
 
     Unknown,
 }
@@ -169,6 +185,42 @@ public sealed class GitHubApiClient
     }
 
     /// <summary>
+    /// La última Release PUBLICADA del repositorio (F8 §3), o null si no hay ninguna.
+    /// <para>
+    /// Usa <c>GET /repos/{owner}/{repo}/releases/latest</c>, que ya excluye borradores y
+    /// pre-releases: el aviso de versión nueva no puede dispararse con un <c>v2.0.0-rc1</c> que
+    /// alguien subió para probar. El repositorio es privado y el token de la cuenta conectada ya
+    /// tiene acceso — cero credenciales nuevas.
+    /// </para>
+    /// <para>
+    /// Un 404 aquí es normal y no es un error: significa «este repositorio todavía no ha publicado
+    /// ninguna versión». Se devuelve null y quien pregunta se calla.
+    /// </para>
+    /// </summary>
+    public async Task<GitHubRelease?> GetLatestReleaseAsync(
+        string token, string owner, string repo, CancellationToken ct)
+    {
+        JsonDocument doc;
+        try
+        {
+            doc = await GetJsonAsync($"/repos/{owner}/{repo}/releases/latest", token, ct);
+        }
+        catch (GitHubApiException ex) when (ex.Problem == GitHubApiProblem.NotFound)
+        {
+            return null;
+        }
+
+        using (doc)
+        {
+            JsonElement root = doc.RootElement;
+            string? tag = ReadString(root, "tag_name");
+            return string.IsNullOrWhiteSpace(tag)
+                ? null
+                : new GitHubRelease(tag!, ReadString(root, "html_url"), ReadString(root, "name"));
+        }
+    }
+
+    /// <summary>
     /// Splits <c>https://github.com/owner/repo(.git)</c> into its two parts, or null when the URL
     /// is not a GitHub repository we can ask about (a local path, another host…).
     /// </summary>
@@ -251,6 +303,12 @@ public sealed class GitHubApiClient
             return saml
                 ? new GitHubApiException(GitHubApiProblem.SamlRequired, ConnectionHelp.SamlRequired)
                 : new GitHubApiException(GitHubApiProblem.OrgPolicyBlocked, ConnectionHelp.OrgPolicyBlocked);
+        }
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return new GitHubApiException(GitHubApiProblem.NotFound,
+                "GitHub respondió 404: el recurso no existe, o esta cuenta no puede verlo.");
         }
 
         return new GitHubApiException(GitHubApiProblem.Unknown,

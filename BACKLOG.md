@@ -4,7 +4,7 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-28 (F7 — directivas del proyecto).
+Última revisión: 2026-08-28 (F8 — distribución por Releases).
 
 ## En vuelo
 
@@ -39,12 +39,18 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 ## Despliegue al equipo
 
 - Dar permiso de **write** al equipo en `atalaya-hub`.
-- `dist` **self-contained** (`pwsh scripts/publish.ps1 -SelfContained`): hoy se publica
-  framework-dependent y exige el runtime .NET 8 en la máquina destino.
-- **Sellar la versión en el build** (verificado al cerrar H9): ni `Atalaya.App.csproj` ni
-  `Directory.Build.props` fijan versión, así que «Acerca de» dice «Versión 1.0.0» en todos los
-  binarios y no distingue un `dist` de otro. Con varias copias repartidas por el equipo, eso es
-  lo que separa «no tienes lo último» de «hay un fallo».
+- ~~`dist` **self-contained**~~ — resuelto en F8: lo que se reparte es el zip de la Release, que
+  se publica siempre self-contained y no exige runtime en la máquina destino. `publish.ps1` sigue
+  siendo framework-dependent por defecto, que es lo correcto para desarrollo.
+- ~~**Sellar la versión en el build**~~ — resuelto en F8: `Directory.Build.props` fija
+  `<Version>` y el workflow de release la pisa con la del tag, así que cada binario dice de qué
+  tag salió. Además, una copia vieja avisa sola de que hay una nueva.
+- **Firma de código: pedir certificado a IT.** Los ejecutables no van firmados, así que el primer
+  arranque de cada zip descargado enseña el aviso de SmartScreen («Más información → Ejecutar de
+  todas formas»). Se documenta en MANUAL y en README, pero es fricción en cada onboarding y la
+  clase de aviso que enseña a la gente a ignorar avisos. Un certificado de firma de código —EV o
+  estándar con reputación— lo quita de raíz: hay que pedírselo a IT y añadir el paso de firma al
+  workflow de release (D-624).
 - Acompañar los primeros onboardings y recoger la fricción.
 - Conversión del coste a **euros**: medir ~10 unidades contra el panel de consumo de Copilot antes
   de poner un número en la interfaz. Ahora que las verificaciones registran su gasto (D-590), la
@@ -58,6 +64,13 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 ## Aparcado hasta que la realidad lo pida
 
 - **H9 ampliado**: mejoras sobre la sesión interactiva, según lo que pida el uso real.
+- **Actualización asistida (Velopack) — nivel 3.** Hoy el aviso lleva al navegador y el usuario
+  descarga y reemplaza la carpeta (nivel 2). El nivel 3 sería que Atalaya se actualizara ella
+  misma: Velopack sobre las mismas Releases de GitHub, con delta y reinicio. **No se hace todavía
+  a propósito**: exige cambiar la forma del paquete —de carpeta descomprimible a instalador con
+  su propio directorio gestionado—, y eso solo compensa cuando el reemplazo manual moleste de
+  verdad. Se decidirá cuando el equipo haya vivido dos o tres actualizaciones y sepamos si duele
+  (D-623).
 - **Migrar el diff a DiffPlex** si el artesanal falla en los casos finos —cambios intra-línea,
   ficheros grandes, encodings—. Decidido de antemano y sin debate (D-552).
 - **Pasadas con «lentes» por pilar**, solo si los barridos siguen dejando hallazgos.
@@ -77,6 +90,9 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 - **F6.5 · Roscos de severidad por aplicación** en Métricas, en la fila bajo cobertura.
 - **H9 · «Arreglar con agente»** — F6.9: sesión interactiva sobre el clon local con narración,
   elicitación, snapshots y descarte. Cierre y arreglos en F6.10.
+- **F8 · Distribución por GitHub Releases** — versión única en `Directory.Build.props` inyectada
+  desde el tag, workflow de release (tag o disparo manual) con tests, publish self-contained, zip
+  y Release idempotente, y el aviso de versión nueva en la app con el token de cuenta ya existente.
 - **F7 · Directivas del proyecto** — detección por catálogo, panel de gestión con ámbitos,
   prioridad y presupuesto visible, registro merge-friendly en el hub (el contenido se queda en el
   repo de cada app), las directivas informando auditoría, verify y los dos flujos de arreglo con la

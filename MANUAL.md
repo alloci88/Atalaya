@@ -12,14 +12,26 @@ algo está hecho como está, `DECISIONS.md`.
 
 ## Empezar
 
-1. **Cuenta.** La primera vez aterrizas aquí. Pulsa **Conectar con GitHub**, escribe
+1. **Instala.** Descarga el zip de la última versión desde la
+   [página de Releases](https://github.com/Applied-Advanced-Solutions-AAS/Atalaya/releases),
+   descomprímelo donde quieras y ejecuta **`Atalaya.exe`**. No hay instalador ni permisos de
+   administrador: es una carpeta. Y no hace falta tener .NET instalado — el paquete lo lleva
+   dentro.
+
+   > **La primera vez, Windows avisa.** «Windows protegió su PC»: el ejecutable no está firmado
+   > todavía. Pulsa **Más información** → **Ejecutar de todas formas**. Solo pasa la primera vez.
+
+   Para **actualizar**: cierra Atalaya, descarga el zip nuevo y reemplaza la carpeta. Tus datos no
+   están ahí —viven en `%LOCALAPPDATA%\Atalaya` y en el hub—, así que no se pierde nada.
+
+2. **Cuenta.** La primera vez aterrizas aquí. Pulsa **Conectar con GitHub**, escribe
    el código que te muestra en `github.com/login/device` y autoriza. Ese login sirve
    para las tres cosas: acceso git al hub, autenticación de Copilot y autoría de los
    commits. No hay PAT que pegar ni URL que escribir.
-2. **Nueva aplicación.** Da de alta el repositorio que vas a auditar. El asistente
+3. **Nueva aplicación.** Da de alta el repositorio que vas a auditar. El asistente
    escanea el clon, arma el inventario y, si encuentra un baseline v4 (`CodeAudit/`),
    te ofrece importarlo.
-3. **Inventario → Auditar selección.** Elige unidades y lanza. El progreso se sigue
+4. **Inventario → Auditar selección.** Elige unidades y lanza. El progreso se sigue
    en **Sesión en vivo**.
 
 ---
@@ -283,6 +295,21 @@ aplicación**.
 ---
 
 ## Cosas que conviene saber
+
+**Aviso de versión nueva.** Al arrancar, Atalaya pregunta a GitHub si hay una versión más
+reciente que la tuya —como mucho una vez al día, sin retrasar nada y con el token de la cuenta
+que ya tienes conectada—. Si la hay, aparece un **banner discreto** encima de la página:
+
+- **Ver novedades** abre la página de la versión en el navegador, con sus notas y su zip.
+- **Descartar** lo quita. No vuelve a avisar de esa versión; de la siguiente sí.
+
+**Atalaya no se actualiza sola** y no descarga nada por su cuenta: cierras, descargas el zip y
+reemplazas la carpeta. Tus datos no están ahí, así que no se pierde nada.
+
+Si no hay red, si el token ya no vale o si GitHub no contesta, no pasa nada: queda anotado en el
+log y no se enseña nada. Un chequeo de cortesía no puede molestar por fallar.
+
+La versión que tienes está en **Ajustes → Acerca de Atalaya**.
 
 **Arreglar con agente.** Desde la ficha de un hallazgo, junto al generador de prompt.
 El agente arregla el hallazgo directamente sobre tu clon local, y ahí se acaba su
