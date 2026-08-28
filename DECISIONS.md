@@ -5051,7 +5051,7 @@ Las dos mejoras que salieron del **primer uso real** del arreglo asistido: una s
 
 ### Cobertura
 
-- **D-580 — Lo que queda probado (23 tests nuevos).** Del ámbito: proyecto por defecto, sus tests
+- **D-580 — Lo que queda probado (25 tests nuevos).** Del ámbito: proyecto por defecto, sus tests
   por `ProjectReference`, solución cuando el usuario la pide, solución con nota cuando el cambio
   toca dos proyectos, el C++ fuera con su nota, y tocar solo C++ no finge una compilación. Del
   delta: **el caso real reproducido** —18 preexistentes, 0 nuevos, veredicto verde—, un error que
