@@ -26,6 +26,12 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // F8.1 — LO PRIMERO DE TODO. Atalaya escribe sus números y sus fechas en es-ES, no en la
+        // cultura de la máquina: la aplicación es monolingüe en español y sus informes se comparten
+        // entre personas (ver AppCulture). Va antes del log y antes de cualquier ventana porque a
+        // partir de aquí cualquier hilo que nazca la hereda.
+        AppCulture.Apply();
+
         var paths = new AppPaths();
         Directory.CreateDirectory(paths.Logs);
         Log.Logger = new LoggerConfiguration()

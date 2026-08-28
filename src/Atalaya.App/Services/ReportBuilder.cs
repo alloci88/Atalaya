@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Globalization;
+using System.Text;
 using Atalaya.Domain;
 using Atalaya.Domain.Model;
 
@@ -7,6 +8,19 @@ namespace Atalaya.App.Services;
 /// <summary>Builds the immutable per-session markdown report (§7).</summary>
 public static class ReportBuilder
 {
+    /// <summary>
+    /// La cultura de los informes (F8.1). <b>Explícita, no la ambiente.</b>
+    /// <para>
+    /// Un informe se escribe en el hub y lo lee todo el equipo, así que tiene que salir IGUAL
+    /// desde cualquier máquina: con la cultura ambiente, la misma sesión escrita desde un Windows
+    /// en inglés y desde uno en español producía dos textos distintos, y «1,234» significaba
+    /// 1,234 en uno y 1234 en el otro. <c>AppCulture.Apply()</c> ya deja el proceso en es-ES, pero
+    /// eso solo vale dentro de la aplicación: aquí se dice a mano para que un informe generado
+    /// desde un test, un script o un hilo que nadie previó salga exactamente igual.
+    /// </para>
+    /// </summary>
+    private static CultureInfo Culture => AppCulture.Display;
+
     public static string BuildSessionReport(
         AppConfig app,
         AuditSession session,
@@ -19,7 +33,7 @@ public static class ReportBuilder
         sb.AppendLine($"# Informe de sesión — {app.Name}");
         sb.AppendLine();
         sb.AppendLine($"- **Modo**: {session.Mode}");
-        sb.AppendLine($"- **Fecha**: {session.StartedUtc:yyyy-MM-dd HH:mm} UTC");
+        sb.AppendLine(Culture, $"- **Fecha**: {session.StartedUtc:yyyy-MM-dd HH:mm} UTC");
         sb.AppendLine($"- **Autor**: {session.By} ({session.Machine})");
         sb.AppendLine($"- **Commit auditado**: {session.Commit}");
         sb.AppendLine($"- **Modelo**: {session.Model ?? "n/d"}");
@@ -37,7 +51,7 @@ public static class ReportBuilder
                 ? $", caché lectura {session.Usage.CacheReadTokens}, escritura {session.Usage.CacheWriteTokens}"
                 : "")
             + (session.Usage.Cost is { } c
-                ? $", coste {c:0.####} {(string.IsNullOrWhiteSpace(session.Usage.Currency) ? "(unidad SDK)" : session.Usage.Currency)}"
+                ? string.Create(Culture, $", coste {c:0.####} {(string.IsNullOrWhiteSpace(session.Usage.Currency) ? "(unidad SDK)" : session.Usage.Currency)}")
                 : ""));
         sb.AppendLine();
 
@@ -136,7 +150,7 @@ public static class ReportBuilder
             sb.AppendLine($"- ⚠ Unidades incompletas: {incompletas.Count}"
                 + $" ({incompletas.Sum(u => u.MissingVerdicts)} hallazgo(s) sin veredicto del auditor, intactos)");
         }
-        sb.AppendLine($"- % criterio (informativo): {criterioPct:0}%");
+        sb.AppendLine(Culture, $"- % criterio (informativo): {criterioPct:0}%");
         if (cn.Rejected > 0)
         {
             sb.AppendLine($"- ⚠ Payloads rechazados por validación: {cn.Rejected}");
@@ -319,12 +333,12 @@ public static class ReportBuilder
         sb.AppendLine($"- **Modo**: {session.Mode}");
         sb.AppendLine($"- **Hallazgo**: {alias} — {finding.Title}");
         sb.AppendLine($"- **Severidad**: {finding.Severity}");
-        sb.AppendLine($"- **Fecha**: {session.StartedUtc:yyyy-MM-dd HH:mm} UTC");
+        sb.AppendLine(Culture, $"- **Fecha**: {session.StartedUtc:yyyy-MM-dd HH:mm} UTC");
         sb.AppendLine($"- **Autor**: {session.By} ({session.Machine})");
         sb.AppendLine($"- **Commit del clon al empezar**: {session.Commit}");
         sb.AppendLine($"- **Modelo**: {session.Model ?? "n/d"}");
         sb.AppendLine($"- **Tokens**: entrada {session.Usage.InputTokens}, salida {session.Usage.OutputTokens}"
-            + (session.Usage.Cost is { } c ? $", coste {c:0.####}" : ""));
+            + (session.Usage.Cost is { } c ? string.Create(Culture, $", coste {c:0.####}") : ""));
         if (session.Interrupted)
         {
             sb.AppendLine("- ⚠ **Sesión detenida por el usuario**: el agente no llegó a cerrar el arreglo.");

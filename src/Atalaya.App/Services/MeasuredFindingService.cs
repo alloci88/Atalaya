@@ -1,4 +1,4 @@
-using Atalaya.Domain;
+﻿using Atalaya.Domain;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Ingestion;
 using Atalaya.Domain.Model;
@@ -100,7 +100,9 @@ public sealed class MeasuredFindingService
         string commit = GitInfo.HeadSha(clonePath);
         string by = _hub.ResolveIdentity().Name;
         DateTimeOffset now = DateTimeOffset.UtcNow;
-        string when = now.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+        // F8.1: cultura explícita. Esta fecha se escribe en la EVIDENCIA de un hallazgo, que va al
+        // hub y la lee todo el equipo — no puede depender de la máquina que hizo el re-escaneo.
+        string when = now.ToLocalTime().ToString("dd/MM/yyyy HH:mm", AppCulture.Display);
 
         var units = inventory.Units.ToDictionary(u => u.Path, StringComparer.Ordinal);
         var large = new HashSet<string>(

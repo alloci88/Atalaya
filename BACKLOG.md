@@ -4,7 +4,7 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-28 (F8 — distribución por Releases).
+Última revisión: 2026-08-28 (F8.1 — política de formato es-ES).
 
 ## En vuelo
 
@@ -90,6 +90,10 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 - **F6.5 · Roscos de severidad por aplicación** en Métricas, en la fila bajo cobertura.
 - **H9 · «Arreglar con agente»** — F6.9: sesión interactiva sobre el clon local con narración,
   elicitación, snapshots y descarte. Cierre y arreglos en F6.10.
+- **F8.1 · Política de formato** — Atalaya escribe números y fechas en es-ES (la app es
+  monolingüe en español y sus informes se comparten), con la frontera «texto para personas → es-ES,
+  datos para máquinas → invariante» cubierta por tests desde culturas hostiles. Arregla el único
+  test que tumbó el estreno del release.
 - **F8 · Distribución por GitHub Releases** — versión única en `Directory.Build.props` inyectada
   desde el tag, workflow de release (tag o disparo manual) con tests, publish self-contained, zip
   y Release idempotente, y el aviso de versión nueva en la app con el token de cuenta ya existente.

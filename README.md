@@ -262,6 +262,23 @@ dotnet test Atalaya.sln
 
 `Domain` y `Storage` compilan con *warnings-as-errors*.
 
+### Formato de números y fechas
+
+Atalaya escribe **siempre en es-ES**, no en la cultura de la máquina: la aplicación es monolingüe
+en español y sus informes se comparten entre personas (ver D-627 en `DECISIONS.md`). La frontera es:
+
+| | Cultura |
+|---|---|
+| Interfaz, informes markdown, `ESTADO.md`, evidencias de un hallazgo | **es-ES** (`AppCulture.Display`) |
+| JSON del hub, ULID, hashes, alias `BUG-0042`, rutas | **invariante** |
+
+`AppCulture.Apply()` lo fija al arrancar para todos los hilos; los **artefactos compartidos** dicen
+su cultura a mano, porque tienen que salir igual aunque los genere un test o un script.
+
+En los tests, `Atalaya.App.Tests` fija la cultura con un `[ModuleInitializer]` — un test que asuma
+la de la máquina solo falla en el runner, que es tarde. Los demás proyectos de test **no** la
+fijan a propósito: prueban código invariante por diseño, y pinarles es-ES ocultaría un fallo real.
+
 ## Empaquetado
 
 `scripts/publish.ps1` produce una carpeta auto-contenida (framework-dependent o

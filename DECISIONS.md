@@ -5609,3 +5609,125 @@ ejecutar** y es el estreno del usuario.
 
 Tampoco se ha visto el banner renderizado: está probado por su view-model y su plantilla, pero
 ningún test pinta un píxel. Queda para el asiento humano, en los dos temas y a 1366×768.
+
+## F8.1 — Política de formato: Atalaya escribe en es-ES
+
+El estreno del release de F8 falló por **un** test de 1.169:
+`MetricsPanelTests.El_registro_escribe_el_tipo_de_cada_sesion` esperaba un coste «67,5» y en el
+runner de GitHub —cultura invariante— salió «67.5». El test no estaba mal escrito: estaba
+**asumiendo la cultura de la máquina** en vez de fijarla, y eso solo se ve donde la máquina es
+otra. El arreglo barato era tocar el literal; el arreglo correcto era decidir qué formato usa
+Atalaya y que deje de depender de dónde corre.
+
+### D-627 — La app formatea SIEMPRE en es-ES, no en la cultura de la máquina
+
+Se eligió la opción (b) del parte, por dos razones y no por gusto.
+
+**Una: la aplicación es monolingüe en español.** Cada etiqueta, cada tooltip, cada mensaje, cada
+encabezado de informe y cada descripción de regla está en español. El formato numérico es parte
+del idioma, no un ajuste del sistema: un texto español que dice «coste 67.5» sobre un Windows en
+inglés no es «respetar al usuario», es una frase a medio traducir. La combinación coherente es la
+que ya usa el resto de la ventana. (Si Atalaya llegara a estar traducida, esta decisión se
+revisa: entonces sí habría una cultura de usuario que respetar.)
+
+**Dos, y es la decisiva: los informes se comparten.** Se escriben en el hub y los lee todo el
+equipo. Con la cultura ambiente, la misma sesión escrita desde un Windows en inglés y desde uno en
+español producía **dos textos distintos** — y «1,234» significa 1,234 en uno y 1234 en el otro.
+Eso no es un detalle de presentación: es un dato **ambiguo de leer**, y el hub es justo donde no
+puede haber datos ambiguos.
+
+De propina, la opción (b) hace deterministas los tests en cualquier máquina sin que nadie tenga
+que acordarse de nada — pero eso es la consecuencia, no el motivo.
+
+### D-628 — La frontera: texto para personas → es-ES; datos para máquinas → invariante
+
+Es la mitad importante de la decisión, y aplicarla mal habría sido **mucho peor** que el fallo que
+abrió la tanda: un `app.json` con «67,5» dentro no lo puede volver a leer nadie.
+
+- **es-ES**: la interfaz, los informes markdown, `ESTADO.md` y las evidencias que se escriben en
+  el historial de un hallazgo.
+- **Invariante, y sigue igual**: el JSON del hub (System.Text.Json escribe los números invariantes
+  por construcción, sin depender de la cultura del hilo), los ULID, los hashes, los alias legibles
+  (`BUG-0042`) y las rutas.
+
+Hay tests que fijan la frontera por los dos lados: el informe sale en es-ES desde una cultura
+hostil, y el JSON y el alias siguen invariantes desde esa misma cultura hostil.
+
+### D-629 — Dos mecanismos, porque cubren cosas distintas
+
+**`AppCulture.Apply()` al arrancar** fija `DefaultThreadCurrentCulture`/`UICulture`, no
+`Thread.CurrentThread`: media aplicación formatea en hilos de fondo —la sesión en vivo, el arreglo
+asistido, las consultas de métricas— y un hilo del pool nace con la cultura del sistema. Fijar
+solo el hilo de UI habría dejado justo esos textos en la cultura de la máquina. Con esto quedan
+cubiertos de una vez los ~50 sitios de formateo de la interfaz sin tocar 40 ficheros.
+
+**Cultura explícita en los artefactos compartidos** (`ReportBuilder`,
+`MeasuredFindingService`): lo anterior solo vale *dentro* de la aplicación. Un informe generado
+desde un test, un script o un hilo que nadie previó tiene que salir igual, así que ahí la cultura
+se dice a mano. No es redundancia: es que el artefacto compartido no puede depender de que alguien
+haya llamado a `Apply()`.
+
+### D-630 — El fixture de cultura de los tests, y lo que NO autoriza
+
+`CultureFixture` es un `[ModuleInitializer]` y no un fixture de xUnit porque tiene que estar
+puesto **antes** de que corra nada, incluidos los constructores de las clases de test y cualquier
+estático que se inicialice de camino; un `ICollectionFixture` llega tarde y obligaría a que cada
+clase se acordara de pedirlo, que es la disciplina que esto viene a quitar.
+
+**Y tiene una trampa que hay que nombrar**: fijar la cultura en los tests haría pasar un informe
+que se apoyara en la cultura ambiente. Por eso `ReportCultureTests` es el único que **apaga** el
+fixture a propósito y comprueba los informes desde tres culturas hostiles (invariante —la del
+runner—, en-US y de-DE). Es lo que separa «funciona porque el proceso está en español» de
+«funciona porque el informe fija su cultura». Se verificó de las dos formas antes de darlo por
+bueno: con el fixture invertido a invariante, el test de métricas **reproduce** el fallo del runner
+y los 16 de informes **siguen pasando**.
+
+Los demás proyectos de test (Domain, Storage, Copilot, Inventory, ImportV4) **no llevan fixture, a
+propósito**: el código que prueban es invariante por diseño, y pinarles es-ES ocultaría un fallo
+real el día que alguno empezara a formatear con la cultura ambiente. La regla es «el test corre en
+la cultura del código que prueba», no «todos los tests en es-ES».
+
+### D-631 — La pasada preventiva: qué se buscó y qué apareció
+
+El runner ya había dado el mejor dato posible —1.168 de 1.169 en verde—, así que lo único que
+faltaba era saber si había **más** de lo mismo escondido. Se ejecutó la suite entera con el
+fixture invertido a cultura invariante, que es exactamente la condición del runner:
+
+> **Un solo test culturalmente dependiente en toda la suite**, el que el runner ya había
+> encontrado. Ninguno más.
+
+Lo demás que se revisó, y por qué está limpio:
+
+- **Rutas absolutas de Windows** en tests (`C:\Windows\System32\...`, `C:\clon`, `C:\repos\app`):
+  las hay, pero todas son **cadenas de entrada** para probar normalización o rechazo de rutas
+  fuera de ámbito — ninguna toca el disco. Y el runner es `windows-latest`.
+- **Hora local**: los tests que la usan calculan lo esperado con el **mismo** `ToLocalTime()` que
+  el código, así que son independientes del huso. El runner va en UTC y el equipo en UTC+2 y no
+  cambia nada. (El corte por día local del panel de métricas sigue siendo el riesgo latente que
+  ya recogía D-599; esto no lo toca.)
+- **Identidad de git, nombre de máquina, red, `dotnet build` de verdad**: ningún test depende de
+  nada de eso — los builds van contra un lanzador falso (`NoProcess`) y la API de GitHub contra
+  `HttpStub`.
+- **Finales de línea**: los fixtures escriben CRLF explícito y el runner es Windows.
+- **Parseo de números**: todos los `TryParse` del código son de **enteros** y sobre datos que
+  genera la propia Atalaya (ULID, `BUG-0042`, `P-3`, números de línea), así que no hay riesgo de
+  ida y vuelta al cambiar la cultura de escritura. El único que lee datos de fuera es
+  `V4Importer`, y también son enteros de dígitos planos: riesgo teórico, sin síntoma, no se toca.
+
+### D-632 — Lo que se cerró aunque no tuviera síntoma: los `StringFormat` de WPF
+
+WPF **no** usa `CurrentCulture` en los enlaces: usa el `Language` del elemento, que vale
+**en-US** de fábrica y no lo cambia nadie. Hoy no hay ningún `StringFormat` numérico en las
+vistas, así que esto no arreglaba ningún fallo visible — y por eso mismo era el que más miedo
+daba: el primero que alguien escriba habría salido en inglés en medio de una ventana en español,
+sin que ningún test de los que hay lo notara. `AppCulture` lo cierra con un `OverrideMetadata`.
+
+### D-633 — Cobertura (16 tests nuevos, 1185 en total, todo en verde)
+
+`ReportCultureTests`: el coste y la fecha de un informe de sesión y de uno de arreglo se escriben
+en es-ES desde invariante, en-US y de-DE; el mismo informe generado desde tres culturas es el
+**mismo texto**; y la frontera del otro lado — el JSON del hub sigue con punto decimal y el alias
+legible sigue siendo `BUG-0042`— desde esas mismas tres culturas.
+
+El test que falló en el runner **no se tocó**: su expectativa «67,5» ahora es correcta y está
+garantizada por la política, en vez de depender de en qué portátil se ejecute.
