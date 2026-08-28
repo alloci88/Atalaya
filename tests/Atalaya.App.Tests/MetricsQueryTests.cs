@@ -108,6 +108,48 @@ public sealed class MetricsQueryTests : IDisposable
         return session;
     }
 
+    /// <summary>
+    /// Una sesión de un tipo cualquiera —arreglo, verificación, cierre—. Las de arreglo y las de
+    /// verificación no auditan unidades: esa es justamente la diferencia que el panel tenía que
+    /// aprender a contar sin perderles el coste.
+    /// </summary>
+    private AuditSession Session(string slug, DateTimeOffset when, AuditMode mode, decimal? cost, int units = 0)
+    {
+        var session = new AuditSession
+        {
+            Id = _ulids.NewUlid(),
+            AppSlug = slug,
+            Mode = mode,
+            By = "alvaro",
+            Machine = "PC",
+            StartedUtc = when,
+            EndedUtc = when.AddMinutes(20),
+            CycleN = 1,
+        };
+
+        for (int i = 0; i < units; i++)
+        {
+            session.Units.Add(new UnitVerdictRecord($"src/U{i}.cs", "src", "auditada", null));
+        }
+
+        session.Usage.Add(1000, 200, cost);
+        _hub.Store.WriteSession(session);
+        return session;
+    }
+
+    /// <summary>
+    /// El hub que reproduce lo que el usuario tenía delante: una auditoría que costó, dos
+    /// arreglos y una verificación que también costaron, y hallazgos resueltos HOY.
+    /// </summary>
+    private void FixtureDeLosTresTipos()
+    {
+        Session("app", Now.AddDays(-2), cost: 105m, units: 1);
+        Session("app", Now, AuditMode.Fix, cost: 22.5m);
+        Session("app", Now, AuditMode.Fix, cost: 67.5m);
+        Session("app", Now, AuditMode.Verify, cost: 12m);
+        Session("app", Now.AddDays(-1), AuditMode.Cierre, cost: null);
+    }
+
     private void Inventory(string slug, int audited, int pending, int large, int cycle = 1)
     {
         var inv = new InventoryCycle { CycleN = cycle };
@@ -332,8 +374,10 @@ public sealed class MetricsQueryTests : IDisposable
         d.Resolutions.Sum(p => p.Of("app")).Should().Be(2m, "dos veces se saldó, dos puntos");
         d.Resolutions.Count(p => p.Of("app") > 0).Should().Be(2, "en tramos distintos");
 
-        // Un hallazgo, dos resoluciones: la gráfica no las colapsa en el estado de hoy.
-        d.ResolvedInPeriod.Should().Be(1, "el tile sigue contando el estado, que es lo suyo");
+        // Y el TILE dice lo mismo que la gráfica. Contaba el estado de hoy —una sola resolución,
+        // porque el campo `resolved` solo guarda la última—, así que la misma pregunta tenía dos
+        // respuestas en la misma pantalla. Cuenta eventos, como la gráfica y como el burndown.
+        d.ResolvedInPeriod.Should().Be(2, "el tile cuenta los mismos eventos que la gráfica");
     }
 
     /// <summary>
@@ -633,23 +677,46 @@ public sealed class MetricsQueryTests : IDisposable
     // =============================================================== §4 · la caché
 
     /// <summary>
-    /// El agregado se cachea EN MEMORIA. No se comprueba que sea rápido —eso no es una aserción—
-    /// sino lo que de verdad importa: que la caché existe (dos <c>Build</c> seguidos no releen el
-    /// disco) y que se puede tirar, que es lo que hace el evento de sync.
+    /// El agregado se cachea EN MEMORIA, pero la caché NO puede sobrevivir a un cambio en el hub.
+    /// <para>
+    /// Antes solo se tiraba con el evento de sync, y ese evento lo levanta un <b>pull</b> del
+    /// remoto: todo lo que escribe esta máquina —una auditoría, un arreglo, una verificación— no
+    /// pasaba por ahí, así que el panel seguía enseñando la foto anterior hasta reiniciar la
+    /// aplicación. Justo la sesión que el usuario acababa de terminar era la que faltaba.
+    /// </para>
     /// </summary>
     [Fact]
-    public void El_agregado_se_cachea_y_se_tira_a_mano_o_con_el_evento_de_sync()
+    public void La_cache_se_rinde_ante_un_cambio_en_el_hub_aunque_no_haya_habido_sync()
     {
         MetricsQuery query = Query();
         query.Build(MetricsFilter.Default).ActiveTotal.Should().Be(0);
 
+        // Nadie llama a Invalidate y nadie sincroniza: es lo que pasa cuando ESTA máquina escribe.
         _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-1)));
 
         query.Build(MetricsFilter.Default).ActiveTotal
-            .Should().Be(0, "la lectura estaba cacheada: el panel no vuelve a recorrer el hub por render");
+            .Should().Be(1, "lo escrito en el hub aparece al volver a la vista, sin reiniciar");
+    }
+
+    /// <summary>
+    /// Y con el hub quieto la caché sigue ahí: no se relee un solo fichero por render. Se mide por
+    /// lo único observable sin cronómetro —que el objeto devuelto es EL MISMO—, porque «tardó
+    /// menos» no es una aserción.
+    /// </summary>
+    [Fact]
+    public void Con_el_hub_quieto_no_se_vuelve_a_leer_el_disco()
+    {
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-1)));
+        MetricsQuery query = Query();
+
+        MetricsDashboard first = query.Build(MetricsFilter.Default);
+        MetricsDashboard second = query.Build(MetricsFilter.Default);
+
+        first.Sessions.Should().BeEquivalentTo(second.Sessions);
+        second.ActiveTotal.Should().Be(1);
 
         query.Invalidate();
-        query.Build(MetricsFilter.Default).ActiveTotal.Should().Be(1);
+        query.Build(MetricsFilter.Default).ActiveTotal.Should().Be(1, "tirar la caché no cambia el dato");
     }
 
     /// <summary>
@@ -690,5 +757,173 @@ public sealed class MetricsQueryTests : IDisposable
         {
             // El árbol temporal puede quedar tomado por el antivirus; no es parte de lo probado.
         }
+    }
+
+    // ====================================================== El cuadre de la vista Métricas
+    //
+    // Todo lo de aquí sale del parte del 28/08/2026: el gasto de los arreglos de ese día no se
+    // veía en ninguna parte del tile de coste, las resoluciones de ese día se dibujaban seis días
+    // antes, y el día de hoy no aparecía en el eje de ninguna gráfica.
+
+    /// <summary>
+    /// TODA sesión con coste cuenta en el gasto: auditar, arreglar y verificar. Y el tile y la
+    /// gráfica dan el MISMO número porque salen de la misma función, no de dos sumas parecidas.
+    /// </summary>
+    [Fact]
+    public void El_coste_suma_auditorias_arreglos_y_verificaciones_y_el_tile_cuadra_con_la_grafica()
+    {
+        FixtureDeLosTresTipos();
+
+        MetricsDashboard d = Build(range: MetricsRange.Weeks8);
+
+        d.CostInPeriod.Should().Be(207m, "105 de auditar + 22,5 + 67,5 de arreglar + 12 de verificar");
+        d.Cost.Sum(p => p.Of("app")).Should().Be(207m, "la gráfica no puede discrepar del tile");
+    }
+
+    /// <summary>
+    /// El ratio «por unidad auditada» divide lo que costó AUDITAR, no el gasto entero. Un arreglo
+    /// no audita ninguna unidad: metiéndolo en el numerador, el ratio subía sin que hubiera
+    /// cambiado nada de lo auditado.
+    /// </summary>
+    [Fact]
+    public void El_coste_por_unidad_auditada_no_se_infla_con_arreglos_ni_verificaciones()
+    {
+        FixtureDeLosTresTipos();
+
+        MetricsDashboard d = Build(range: MetricsRange.Weeks8);
+
+        d.UnitsAuditedInPeriod.Should().Be(1);
+        d.CostPerAuditedUnit.Should().Be(105m, "auditar esa unidad costó 105, no 207");
+    }
+
+    /// <summary>
+    /// El caso exacto del parte: un hallazgo resuelto HOY se dibuja en el cubo de HOY, y ese cubo
+    /// es el último del eje.
+    /// </summary>
+    [Fact]
+    public void Una_resolucion_de_hoy_cae_en_el_cubo_de_hoy()
+    {
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Resuelto, Now.AddDays(-10), Now));
+
+        foreach (MetricsRange range in new[] { MetricsRange.Weeks4, MetricsRange.Weeks8, MetricsRange.Weeks26 })
+        {
+            MetricsDashboard d = Build(range: range);
+
+            d.ResolvedInPeriod.Should().Be(1);
+            d.Resolutions[^1].Of("app").Should().Be(1m, $"la resolución de hoy va en el último cubo ({range})");
+            d.Resolutions.SkipLast(1).Should().OnlyContain(p => p.Of("app") == 0m);
+        }
+    }
+
+    /// <summary>
+    /// El eje llega SIEMPRE a hoy, en las tres gráficas de eje temporal y con el hub vacío. Un eje
+    /// que termina en el pasado afirma que desde entonces no ha pasado nada.
+    /// </summary>
+    [Fact]
+    public void El_eje_de_todas_las_graficas_llega_hasta_hoy()
+    {
+        FixtureDeLosTresTipos();
+        string hoy = Now.ToLocalTime().ToString("d MMM");
+
+        foreach (MetricsRange range in new[] { MetricsRange.Weeks4, MetricsRange.Weeks8, MetricsRange.All })
+        {
+            MetricsDashboard d = Build(range: range);
+
+            d.Cost[^1].Label.Should().Be(hoy, $"coste ({range})");
+            d.Resolutions[^1].Label.Should().Be(hoy, $"resoluciones ({range})");
+            d.Flow[^1].Label.Should().Be(hoy, $"flujo ({range})");
+            d.To.Should().BeAfter(Now, "el extremo derecho es la medianoche de mañana");
+        }
+    }
+
+    /// <summary>
+    /// Un cubo semanal se rotula por su último día —hoy— y su tooltip dice el tramo entero. Con la
+    /// etiqueta de inicio, lo hecho hoy se leía como actividad de hace seis días: es lo que pasó
+    /// el 28/08/2026, cuando el eje terminaba en «22 ago».
+    /// </summary>
+    [Fact]
+    public void El_cubo_semanal_se_rotula_por_su_ultimo_dia_y_el_tooltip_dice_el_tramo()
+    {
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Resuelto, Now.AddDays(-10), Now));
+
+        MetricsDashboard d = Build(range: MetricsRange.Weeks8);
+
+        d.Granularity.Should().Be(MetricsGranularity.Semanal);
+        d.Resolutions[^1].Label.Should().Be(Now.ToLocalTime().ToString("d MMM"));
+        d.Resolutions[^1].Range.Should().Be(
+            MetricsQuery.RangeText(Now.ToLocalTime().DateTime.Date.AddDays(-6), Now.ToLocalTime().DateTime.Date));
+    }
+
+    /// <summary>
+    /// Un cubo diario cubre el DÍA LOCAL, no el día UTC. Cortando por medianoche UTC, en UTC+2 lo
+    /// hecho entre las 00:00 y las 02:00 se dibujaba en el día anterior.
+    /// </summary>
+    [Fact]
+    public void Un_cubo_diario_cubre_el_dia_local_y_no_el_dia_utc()
+    {
+        // Las 00:30 de HOY en la hora del usuario, sea cual sea su huso.
+        DateTime hoyLocal = Now.ToLocalTime().DateTime.Date;
+        DateTimeOffset madrugada = MetricsQuery.Instant(hoyLocal).AddMinutes(30);
+
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Resuelto, Now.AddDays(-10), madrugada));
+
+        MetricsDashboard d = Build(range: MetricsRange.Weeks4);
+
+        d.Granularity.Should().Be(MetricsGranularity.Diaria);
+        d.Resolutions[^1].Label.Should().Be(hoyLocal.ToString("d MMM"));
+        d.Resolutions[^1].Of("app").Should().Be(1m, "las 00:30 de hoy son hoy");
+    }
+
+    /// <summary>
+    /// El burndown y el rosco de severidad no pueden enseñar dos deudas distintas de la misma app.
+    /// Un hallazgo SILENCIADO no es deuda viva —de él se decidió que no se arregla—, y antes
+    /// engordaba el burndown porque nunca lleva sello <c>resolved</c>.
+    /// </summary>
+    [Fact]
+    public void Un_hallazgo_silenciado_no_cuenta_como_deuda_viva_en_el_burndown()
+    {
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-30)));
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Silenciado, Now.AddDays(-30), Now.AddDays(-20)));
+
+        MetricsDashboard d = Build(range: MetricsRange.Weeks8);
+
+        d.ActiveTotal.Should().Be(1);
+        d.Flow[^1].ActiveAtEnd.Should().Be(1, "el burndown cuenta la misma deuda que el rosco");
+    }
+
+    /// <summary>
+    /// Y el burndown reconstruye el pasado de verdad: mientras estuvo cerrado no era deuda, y al
+    /// reabrirse volvió a serlo. El sello <c>resolved</c> por sí solo no puede contar esto —se
+    /// pone a null al reabrir—, así que declaraba el hallazgo vivo también cuando estaba cerrado.
+    /// </summary>
+    [Fact]
+    public void Un_hallazgo_reabierto_no_es_deuda_viva_mientras_estuvo_cerrado()
+    {
+        Finding f = Finding(FindingStatus.Resuelto, Now.AddDays(-40), Now.AddDays(-30));
+        f.Reopen(Now.AddDays(-5), "alvaro", "volvió a aparecer");
+        _hub.Store.WriteFinding("app", f);
+
+        MetricsQuery.AliveAt(f, Now.AddDays(-35)).Should().BeTrue("todavía no se había resuelto");
+        MetricsQuery.AliveAt(f, Now.AddDays(-20)).Should().BeFalse("estuvo cerrado ese tramo");
+        MetricsQuery.AliveAt(f, Now).Should().BeTrue("se reabrió");
+    }
+
+    /// <summary>
+    /// El registro de operaciones incluye las sesiones que NO auditan —arreglos y verificaciones—
+    /// con su coste y su tipo. Sin el tipo, un arreglo y una auditoría vacía son la misma fila.
+    /// </summary>
+    [Fact]
+    public void El_registro_de_sesiones_incluye_arreglos_y_verificaciones_con_su_tipo_y_su_coste()
+    {
+        FixtureDeLosTresTipos();
+
+        MetricsDashboard d = Build(range: MetricsRange.Weeks8);
+
+        d.Sessions.Should().HaveCount(5);
+        d.Sessions.Should().Contain(r => r.Mode == AuditMode.Fix && r.Cost == 22.5m);
+        d.Sessions.Should().Contain(r => r.Mode == AuditMode.Fix && r.Cost == 67.5m);
+        d.Sessions.Should().Contain(r => r.Mode == AuditMode.Verify && r.Cost == 12m);
+        d.Sessions.Should().Contain(r => r.Mode == AuditMode.Lotes && r.Cost == 105m);
+        d.Sessions.Should().Contain(r => r.Mode == AuditMode.Cierre && r.Cost == null);
     }
 }

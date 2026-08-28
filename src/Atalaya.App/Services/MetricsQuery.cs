@@ -72,7 +72,14 @@ public sealed record SeverityDonut(string Slug, string Name, SeverityChips Activ
 /// duplicado también los cubos, el reparto de «Otras» y el acumulado.
 /// </para>
 /// </summary>
-public sealed record SeriesPoint(DateTimeOffset From, string Label, IReadOnlyDictionary<string, decimal> ByApp)
+/// <param name="Range">
+/// El tramo COMPLETO que resume el punto, escrito («22–28 ago»). El eje no cabe repitiendo esto
+/// en cada marca, así que la etiqueta corta va al eje y el tramo entero al tooltip: sin él, un
+/// cubo semanal etiquetado con un solo día se lee como ese día — que es exactamente lo que pasó
+/// el 28/08/2026, cuando dos resoluciones de ese día se leyeron como actividad del 22.
+/// </param>
+public sealed record SeriesPoint(
+    DateTimeOffset From, string Label, string Range, IReadOnlyDictionary<string, decimal> ByApp)
 {
     public decimal Of(string slug) => ByApp.TryGetValue(slug, out decimal v) ? v : 0m;
 }
@@ -96,7 +103,7 @@ public sealed record CoverageDonut(string Slug, string Name, int Cycle, int Audi
 }
 
 /// <summary>Un cubo del flujo: lo que entró, lo que salió y la deuda viva al cerrarlo.</summary>
-public sealed record FlowBucket(string Label, int New, int Resolved, int ActiveAtEnd);
+public sealed record FlowBucket(string Label, string Range, int New, int Resolved, int ActiveAtEnd);
 
 /// <summary>Una línea del registro de operaciones (gráfica 4).</summary>
 public sealed record SessionRow(
@@ -219,6 +226,9 @@ public sealed class MetricsQuery
     private readonly object _gate = new();
     private IReadOnlyList<AppData>? _cache;
 
+    /// <summary>La huella del hub con la que se leyó <see cref="_cache"/>. Ver <see cref="Fingerprint"/>.</summary>
+    private string? _stamp;
+
     public MetricsQuery(HubContext hub, TimeProvider? time = null)
     {
         _hub = hub;
@@ -242,6 +252,7 @@ public sealed class MetricsQuery
         lock (_gate)
         {
             _cache = null;
+            _stamp = null;
         }
     }
 
@@ -260,9 +271,11 @@ public sealed class MetricsQuery
             : all.ToList();
 
         DateTimeOffset now = _time.GetUtcNow();
-        (DateTimeOffset from, DateTimeOffset to) = Period(filter.Range, scope, now);
+        (DateTime fromLocal, DateTime toLocal) = Period(filter.Range, scope, now);
+        DateTimeOffset from = Instant(fromLocal);
+        DateTimeOffset to = Instant(toLocal);
         MetricsGranularity granularity = GranularityFor(filter.Range, from, to);
-        var buckets = Buckets(from, to, granularity);
+        IReadOnlyList<Bucket> buckets = Buckets(fromLocal, toLocal, granularity);
 
         var findings = scope.SelectMany(a => a.Findings).ToList();
         var sessions = scope.SelectMany(a => a.Sessions).ToList();
@@ -271,14 +284,26 @@ public sealed class MetricsQuery
         var active = findings.Where(f => f.Status == FindingStatus.Activo).ToList();
         int Sev(Severity s) => active.Count(f => f.Severity == s);
 
-        int resolvedNow = findings.Count(f => ResolvedIn(f, from, to));
+        // El tile cuenta EVENTOS de resolución, igual que la gráfica y que el burndown. Antes
+        // leía el sello `resolved` del hallazgo, que se pone a null al reabrir: la misma pregunta
+        // —«cuánto se resolvió en el periodo»— tenía tres respuestas distintas en la misma vista.
+        int resolvedNow = findings.Sum(f => ResolutionsIn(f, from, to));
         TimeSpan span = to - from;
-        int resolvedBefore = findings.Count(f => ResolvedIn(f, from - span, from));
+        int resolvedBefore = findings.Sum(f => ResolutionsIn(f, from - span, from));
 
+        // TODA sesión con coste cuenta: auditoría, arreglo, verificación y lo que venga. El tile
+        // y la gráfica salen de la MISMA función (CostIn), no de dos sumas parecidas.
         decimal? cost = inPeriod.Any(s => s.Usage.Cost is not null)
-            ? inPeriod.Sum(s => s.Usage.Cost ?? 0m)
+            ? scope.Sum(a => CostIn(a.Sessions, from, to))
             : null;
         int unitsAudited = inPeriod.Sum(s => s.Units.Count);
+
+        // El ratio «por unidad auditada» NO divide el gasto entero: divide lo que costó AUDITAR.
+        // Un arreglo o una verificación no auditan ninguna unidad, así que su gasto subía el
+        // ratio sin que cambiara nada de lo auditado (28/08/2026: 262,5 por unidad cuando auditar
+        // esa unidad había costado 105). El tile de coste los sigue sumando —eso es el gasto—;
+        // lo que no se puede es repartirlos entre algo que no produjeron.
+        decimal auditCost = inPeriod.Where(s => s.Units.Count > 0).Sum(CostOf);
         string costUnit = inPeriod
             .Select(s => s.Usage.Currency)
             .FirstOrDefault(c => !string.IsNullOrWhiteSpace(c)) ?? CostEstimator.DefaultCostUnit;
@@ -311,13 +336,10 @@ public sealed class MetricsQuery
             donuts.Add(new CoverageDonut(app.Slug, app.Name, app.CurrentCycle, audited, pending, large));
         }
 
-        (IReadOnlyList<string> series, bool hasOthers) = TopSeries(scope, a => a.Sessions
-            .Where(s => s.StartedUtc >= from && s.StartedUtc < to)
-            .Sum(s => s.Usage.Cost ?? 0m));
+        (IReadOnlyList<string> series, bool hasOthers) = TopSeries(scope, a => CostIn(a.Sessions, from, to));
 
-        (IReadOnlyList<string> resSeries, bool resHasOthers) = TopSeries(scope, a => a.Findings
-            .SelectMany(ResolutionEvents)
-            .Count(utc => utc >= from && utc < to));
+        (IReadOnlyList<string> resSeries, bool resHasOthers) = TopSeries(
+            scope, a => a.Findings.Sum(f => ResolutionsIn(f, from, to)));
 
         return new MetricsDashboard(
             filter,
@@ -332,7 +354,7 @@ public sealed class MetricsQuery
             resolvedBefore,
             cost,
             costUnit,
-            cost is { } c && unitsAudited > 0 ? c / unitsAudited : null,
+            unitsAudited > 0 && auditCost > 0m ? auditCost / unitsAudited : null,
             unitsAudited,
             cycleAudited,
             cyclePending,
@@ -340,14 +362,11 @@ public sealed class MetricsQuery
             series,
             hasOthers,
             all.ToDictionary(a => a.Slug, a => a.Name, StringComparer.OrdinalIgnoreCase),
-            Points(scope, buckets, series, hasOthers, (app, bFrom, bTo) => app.Sessions
-                .Where(s => s.StartedUtc >= bFrom && s.StartedUtc < bTo && s.Usage.Cost is not null)
-                .Sum(s => s.Usage.Cost ?? 0m)),
+            Points(scope, buckets, series, hasOthers, (app, bFrom, bTo) => CostIn(app.Sessions, bFrom, bTo)),
             resSeries,
             resHasOthers,
-            Points(scope, buckets, resSeries, resHasOthers, (app, bFrom, bTo) => app.Findings
-                .SelectMany(ResolutionEvents)
-                .Count(utc => utc >= bFrom && utc < bTo)),
+            Points(scope, buckets, resSeries, resHasOthers,
+                (app, bFrom, bTo) => app.Findings.Sum(f => ResolutionsIn(f, bFrom, bTo))),
             donuts.OrderByDescending(d => d.Total).ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList(),
             severities.OrderByDescending(d => d.Total).ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList(),
             FlowBuckets(findings, buckets),
@@ -357,14 +376,26 @@ public sealed class MetricsQuery
     // ---------- El periodo y sus cubos ----------
 
     /// <summary>
-    /// De cuándo a cuándo. «Todo» empieza en el dato más antiguo que haya, no en una fecha
-    /// inventada; si no hay ninguno se comporta como ocho semanas para no dibujar un eje
+    /// De cuándo a cuándo, en DÍAS LOCALES. «Todo» empieza en el dato más antiguo que haya, no en
+    /// una fecha inventada; si no hay ninguno se comporta como ocho semanas para no dibujar un eje
     /// degenerado.
+    /// <para>
+    /// <b>Por qué locales y no UTC.</b> En disco todo es UTC, y así se compara; pero los cubos y
+    /// sus etiquetas se leen en la hora del usuario. Cortando por medianoche UTC, en UTC+2 el cubo
+    /// rotulado «28 ago» iba en realidad del 28 a las 02:00 al 29 a las 02:00: cualquier cosa
+    /// hecha entre las 00:00 y las 02:00 del 28 caía —y se dibujaba— en el 27. El corte se hace
+    /// donde está escrita la etiqueta.
+    /// </para>
+    /// <para>
+    /// El extremo derecho es SIEMPRE la medianoche de mañana: el eje llega a hoy aunque el último
+    /// cubo esté a cero. Un eje que termina en el pasado dice que no ha pasado nada desde
+    /// entonces, y eso es una afirmación, no una ausencia de dato.
+    /// </para>
     /// </summary>
-    private static (DateTimeOffset From, DateTimeOffset To) Period(
+    private static (DateTime From, DateTime To) Period(
         MetricsRange range, IReadOnlyList<AppData> scope, DateTimeOffset now)
     {
-        DateTimeOffset to = new DateTimeOffset(now.UtcDateTime.Date, TimeSpan.Zero).AddDays(1);
+        DateTime to = Local(now).Date.AddDays(1);
         int weeks = range switch
         {
             MetricsRange.Weeks4 => 4,
@@ -379,13 +410,24 @@ public sealed class MetricsQuery
 
         var stamps = scope
             .SelectMany(a => a.Findings.Select(f => f.FirstDetected.Utc)
+                .Concat(a.Findings.SelectMany(ResolutionEvents))
                 .Concat(a.Sessions.Select(s => s.StartedUtc)))
             .ToList();
 
-        DateTimeOffset start = stamps.Count == 0 ? to.AddDays(-56) : stamps.Min();
-        start = new DateTimeOffset(start.UtcDateTime.Date, TimeSpan.Zero);
+        DateTime start = stamps.Count == 0 ? to.AddDays(-56) : Local(stamps.Min()).Date;
         return (start >= to ? to.AddDays(-56) : start, to);
     }
+
+    /// <summary>La misma fecha, leída en la zona del usuario. Un solo sitio hace la conversión.</summary>
+    private static DateTime Local(DateTimeOffset instant)
+        => TimeZoneInfo.ConvertTime(instant, TimeZoneInfo.Local).DateTime;
+
+    /// <summary>
+    /// El instante en que empieza esa fecha local. Es la frontera con la que se compara contra los
+    /// sellos UTC del disco, para que el cubo cubra exactamente lo que su etiqueta dice.
+    /// </summary>
+    internal static DateTimeOffset Instant(DateTime localDate)
+        => new(localDate, TimeZoneInfo.Local.GetUtcOffset(localDate));
 
     /// <summary>
     /// Rango corto, un punto por día; rango largo, por semana; «todo» de más de un año, por mes.
@@ -401,30 +443,76 @@ public sealed class MetricsQuery
         return (to - from).TotalDays > 371 ? MetricsGranularity.Mensual : MetricsGranularity.Semanal;
     }
 
-    /// <summary>Los cubos del eje X, del más antiguo al más reciente.</summary>
-    internal static IReadOnlyList<(DateTimeOffset From, DateTimeOffset To, string Label)> Buckets(
-        DateTimeOffset from, DateTimeOffset to, MetricsGranularity granularity)
+    /// <summary>
+    /// Un cubo del eje X: el tramo <c>[From, To)</c> que agrega y las dos formas de escribirlo.
+    /// </summary>
+    /// <param name="Label">Lo que cabe en el eje. Corto por obligación.</param>
+    /// <param name="Range">El tramo entero, para el tooltip. Ver <see cref="SeriesPoint.Range"/>.</param>
+    internal sealed record Bucket(DateTimeOffset From, DateTimeOffset To, string Label, string Range);
+
+    /// <summary>
+    /// Los cubos del eje X, del más antiguo al más reciente, sobre fechas LOCALES.
+    /// <para>
+    /// <b>Un cubo semanal se rotula por su ÚLTIMO día, no por el primero.</b> El último va de hoy
+    /// hacia atrás —del 22 al 28 de agosto si hoy es 28—, y rotulándolo por su inicio el eje
+    /// terminaba en «22 ago»: el día de hoy no aparecía por ninguna parte y lo hecho hoy se leía
+    /// como actividad de hace seis días. Rotulado por el final, el último cubo dice «28 ago» —hoy—
+    /// y el eje termina donde termina el tiempo. El tramo completo va en <see cref="Bucket.Range"/>
+    /// para que ni siquiera esa lectura quede a interpretación.
+    /// </para>
+    /// <para>
+    /// El cubo mensual sigue rotulándose por su mes («ago 26»): ahí no hay ambigüedad que
+    /// resolver, y un «31 ago» en el eje se leería como un día.
+    /// </para>
+    /// </summary>
+    internal static IReadOnlyList<Bucket> Buckets(
+        DateTime from, DateTime to, MetricsGranularity granularity)
     {
-        var result = new List<(DateTimeOffset, DateTimeOffset, string)>();
-        DateTimeOffset cursor = from;
+        var result = new List<Bucket>();
+        DateTime cursor = from;
         while (cursor < to && result.Count < 400)
         {
-            DateTimeOffset next = granularity switch
+            DateTime next = granularity switch
             {
                 MetricsGranularity.Diaria => cursor.AddDays(1),
                 MetricsGranularity.Mensual => cursor.AddMonths(1),
                 _ => cursor.AddDays(7),
             };
 
-            string label = granularity == MetricsGranularity.Mensual
-                ? cursor.ToLocalTime().ToString("MMM yy")
-                : cursor.ToLocalTime().ToString("d MMM");
+            DateTime end = next > to ? to : next;
 
-            result.Add((cursor, next > to ? to : next, label));
+            // El último día INCLUIDO en el cubo: el extremo derecho es abierto, así que el 29 a
+            // las 00:00 cierra el cubo del 28. Rotular con el extremo diría un día que no cuenta.
+            DateTime last = end.AddDays(-1);
+            string label = granularity switch
+            {
+                MetricsGranularity.Mensual => cursor.ToString("MMM yy"),
+                MetricsGranularity.Diaria => cursor.ToString("d MMM"),
+                _ => last.ToString("d MMM"),
+            };
+
+            result.Add(new Bucket(Instant(cursor), Instant(end), label, RangeText(cursor, last)));
             cursor = next;
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Cómo se escribe un tramo: «28 ago» si es un día, «22–28 ago» dentro del mismo mes y
+    /// «28 jul–3 ago» cuando lo cruza. Es lo que hace que un cubo semanal no se pueda confundir
+    /// con el día que lo rotula.
+    /// </summary>
+    internal static string RangeText(DateTime first, DateTime last)
+    {
+        if (first.Date >= last.Date)
+        {
+            return first.ToString("d MMM");
+        }
+
+        return first.Year == last.Year && first.Month == last.Month
+            ? $"{first:%d}–{last:d MMM}"
+            : $"{first:d MMM}–{last:d MMM}";
     }
 
     // ---------- Gráficas 1 y 2: línea por aplicación sobre el eje temporal ----------
@@ -467,7 +555,7 @@ public sealed class MetricsQuery
     /// </summary>
     private static IReadOnlyList<SeriesPoint> Points(
         IReadOnlyList<AppData> scope,
-        IReadOnlyList<(DateTimeOffset From, DateTimeOffset To, string Label)> buckets,
+        IReadOnlyList<Bucket> buckets,
         IReadOnlyList<string> series,
         bool hasOthers,
         Func<AppData, DateTimeOffset, DateTimeOffset, decimal> valueOf)
@@ -477,7 +565,7 @@ public sealed class MetricsQuery
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var points = new List<SeriesPoint>(buckets.Count);
 
-        foreach ((DateTimeOffset bFrom, DateTimeOffset bTo, string label) in buckets)
+        foreach ((DateTimeOffset bFrom, DateTimeOffset bTo, string label, string range) in buckets)
         {
             var byApp = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
             foreach (AppData app in scope)
@@ -498,11 +586,43 @@ public sealed class MetricsQuery
                 byApp[key] = byApp.TryGetValue(key, out decimal had) ? had + value : value;
             }
 
-            points.Add(new SeriesPoint(bFrom, label, byApp));
+            points.Add(new SeriesPoint(bFrom, label, range, byApp));
         }
 
         return points;
     }
+
+    // ---------- El coste: una sola función para el tile y para la gráfica ----------
+
+    /// <summary>
+    /// Lo que costó una sesión. <b>Toda</b> sesión cuenta —auditoría, arreglo, verificación y lo
+    /// que venga—: el gasto es el gasto, y filtrar por modo aquí dejaría fuera precisamente lo que
+    /// se ha empezado a gastar después (H9 trajo los arreglos, el verify en dos fases las
+    /// verificaciones). Una sesión sin coste declarado aporta cero, que no es lo mismo que «no se
+    /// sabe» — esa distinción la lleva quien pregunta si HAY coste, no esta suma.
+    /// </summary>
+    internal static decimal CostOf(AuditSession session) => session.Usage.Cost ?? 0m;
+
+    /// <summary>
+    /// El coste de las sesiones que arrancaron dentro del tramo. El tile de «Coste del periodo» y
+    /// cada punto de la gráfica salen de AQUÍ, no de dos sumas parecidas: cuando el tile y la
+    /// gráfica hacen su propia cuenta, tarde o temprano una de las dos se queda sin actualizar
+    /// (nos pasó dos veces). Una sesión sin modo reconocible se cuenta igual: la que se saltaría
+    /// es la única que no se podría explicar.
+    /// </summary>
+    internal static decimal CostIn(
+        IEnumerable<AuditSession> sessions, DateTimeOffset from, DateTimeOffset to)
+        => sessions.Where(s => s.StartedUtc >= from && s.StartedUtc < to).Sum(CostOf);
+
+    // ---------- Las resoluciones ----------
+
+    /// <summary>
+    /// Cuántas veces se resolvió este hallazgo dentro del tramo. Es la ÚNICA cuenta de
+    /// resoluciones de la vista: la usan el tile, la gráfica y el burndown, para que la misma
+    /// pregunta no tenga tres respuestas.
+    /// </summary>
+    internal static int ResolutionsIn(Finding finding, DateTimeOffset from, DateTimeOffset to)
+        => ResolutionEvents(finding).Count(utc => utc >= from && utc < to);
 
     /// <summary>
     /// Las fechas en que este hallazgo pasó a <c>Resuelto</c>. Pueden ser VARIAS: un hallazgo que
@@ -545,23 +665,83 @@ public sealed class MetricsQuery
     /// </summary>
     internal static IReadOnlyList<FlowBucket> FlowBuckets(
         IReadOnlyList<Finding> findings,
-        IReadOnlyList<(DateTimeOffset From, DateTimeOffset To, string Label)> buckets)
+        IReadOnlyList<Bucket> buckets)
     {
         var result = new List<FlowBucket>(buckets.Count);
-        foreach ((DateTimeOffset from, DateTimeOffset to, string label) in buckets)
+        foreach ((DateTimeOffset from, DateTimeOffset to, string label, string range) in buckets)
         {
             int created = findings.Count(f => f.FirstDetected.Utc >= from && f.FirstDetected.Utc < to);
-            int closed = findings.Count(f => ResolvedIn(f, from, to));
-            int alive = findings.Count(f => f.FirstDetected.Utc < to
-                                            && (f.Resolved is null || f.Resolved.Utc >= to));
-            result.Add(new FlowBucket(label, created, closed, alive));
+            int closed = findings.Sum(f => ResolutionsIn(f, from, to));
+            int alive = findings.Count(f => AliveAt(f, to));
+            result.Add(new FlowBucket(label, range, created, closed, alive));
         }
 
         return result;
     }
 
-    private static bool ResolvedIn(Finding f, DateTimeOffset from, DateTimeOffset to)
-        => f.Resolved is { } r && r.Utc >= from && r.Utc < to;
+    /// <summary>
+    /// Si el hallazgo seguía siendo deuda VIVA en ese instante, reconstruido de su historial.
+    /// <para>
+    /// Antes se miraba el sello <c>resolved</c> del hallazgo de hoy, y eso contaba mal dos casos
+    /// que existen de verdad: un hallazgo reabierto pierde el sello —quedaba «vivo» también
+    /// durante el tramo en que estuvo cerrado— y uno SILENCIADO nunca lo tiene, así que engordaba
+    /// el burndown como deuda pendiente mientras el rosco de severidad, que solo cuenta activos,
+    /// lo daba por fuera. La misma app enseñaba dos deudas distintas en la misma pantalla.
+    /// </para>
+    /// <para>
+    /// Sin historial —hallazgos traídos de V4— se cae al estado de hoy con su sello: es lo único
+    /// que hay, y es mejor que declarar viva una deuda que consta cerrada.
+    /// </para>
+    /// </summary>
+    internal static bool AliveAt(Finding finding, DateTimeOffset at)
+    {
+        if (finding.FirstDetected.Utc >= at)
+        {
+            return false;
+        }
+
+        var changes = finding.History
+            .Where(e => e.Utc < at)
+            .Select(e => (e.Utc, State: StateOf(e.Event)))
+            .Where(e => e.State is not null)
+            .ToList();
+
+        if (changes.Count == 0)
+        {
+            return StoredAliveAt(finding, at);
+        }
+
+        DateTimeOffset last = changes.Max(e => e.Utc);
+        var latest = changes.Where(e => e.Utc == last).Select(e => e.State!.Value).Distinct().ToList();
+
+        // Un historial puede traer DOS eventos contradictorios con el mismo sello, y los hay en el
+        // hub: MEJ-0037 se resolvió y se reabrió en el mismo instante, y su ficha quedó guardada
+        // como «resuelto». Cuando el historial no puede desempatarse solo, manda el estado
+        // guardado — que es el que ya enseñan la lista de hallazgos y el rosco de severidad. No se
+        // toca el fichero: se lee con un criterio, y el criterio es no contradecir al resto de la
+        // aplicación sobre la misma ficha.
+        return latest.Count == 1 ? latest[0] : finding.Status == FindingStatus.Activo;
+    }
+
+    /// <summary>Si el evento abre deuda (<c>true</c>), la cierra (<c>false</c>) o no la toca.</summary>
+    private static bool? StateOf(FindingEvent kind) => kind switch
+    {
+        FindingEvent.Resolved or FindingEvent.Silenced => false,
+        FindingEvent.Reopened or FindingEvent.Unsilenced => true,
+        _ => null,
+    };
+
+    /// <summary>
+    /// El respaldo para hallazgos sin historial de estado —los traídos de V4—: su estado de hoy
+    /// con su sello. Es lo único que hay, y es mejor que declarar viva una deuda que consta
+    /// cerrada.
+    /// </summary>
+    private static bool StoredAliveAt(Finding finding, DateTimeOffset at) => finding.Status switch
+    {
+        FindingStatus.Resuelto => finding.Resolved is not { } r || r.Utc >= at,
+        FindingStatus.Silenciado => false,
+        _ => true,
+    };
 
     // ---------- Gráfica 5: actividad de sesiones ----------
 
@@ -600,9 +780,10 @@ public sealed class MetricsQuery
 
     private IReadOnlyList<AppData> Snapshot()
     {
+        string stamp = Fingerprint();
         lock (_gate)
         {
-            if (_cache is not null)
+            if (_cache is not null && _stamp == stamp)
             {
                 return _cache;
             }
@@ -628,8 +809,60 @@ public sealed class MetricsQuery
 
         lock (_gate)
         {
+            _stamp = stamp;
             _cache = read;
             return _cache;
+        }
+    }
+
+    /// <summary>
+    /// La huella barata del hub: cuántos ficheros primarios hay y cuándo se tocó el último. No
+    /// abre ninguno —solo pregunta al directorio—, así que cuesta una fracción de lo que cuesta
+    /// releerlos, y es lo que hace que una sesión recién terminada aparezca al volver a la vista.
+    /// <para>
+    /// La caché se invalidaba SOLO con el evento de sync, y ese evento lo levanta un <b>pull</b>
+    /// del remoto. Todo lo que escribe esta máquina —una auditoría, un arreglo, una verificación—
+    /// no pasa por ahí: el panel seguía enseñando la foto anterior hasta reiniciar la aplicación,
+    /// y era justo la sesión que el usuario acababa de terminar la que faltaba. Se mira el DISCO y
+    /// no una lista de escritores porque la lista es lo que se queda sin actualizar (D-239): esto
+    /// funciona igual para el escritor que se añada mañana.
+    /// </para>
+    /// <para>
+    /// Si el directorio se mueve bajo los pies mientras se recorre, se devuelve una huella nueva:
+    /// releer de más cuesta una carga; servir una foto vieja se ve en pantalla.
+    /// </para>
+    /// </summary>
+    private string Fingerprint()
+    {
+        string apps = _hub.HubPaths.AppsDir;
+        if (!Directory.Exists(apps))
+        {
+            return "vacío";
+        }
+
+        try
+        {
+            long count = 0;
+            long newest = 0;
+            foreach (string file in Directory.EnumerateFiles(apps, "*.json", SearchOption.AllDirectories))
+            {
+                count++;
+                long ticks = File.GetLastWriteTimeUtc(file).Ticks;
+                if (ticks > newest)
+                {
+                    newest = ticks;
+                }
+            }
+
+            return $"{count}:{newest}";
+        }
+        catch (IOException)
+        {
+            return Guid.NewGuid().ToString("N");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Guid.NewGuid().ToString("N");
         }
     }
 }
