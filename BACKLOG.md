@@ -14,7 +14,8 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   temas y a 1366×768 (D-569).
 - **H9.1 — que una sesión fix real sobre XBLAST diga «0 errores nuevos»** con los preexistentes
   aparte (D-581). El resolutor de ámbito ya está medido contra ese clon; falta la sesión entera
-  con asiento.
+  con asiento. En la misma sesión: comprobar que el agente ya no sale a buscar tests (§3) y que la
+  pantalla de cierre aterriza sola con la ventana pequeña y mucha conversación (D-588).
 
 ## Despliegue al equipo
 
@@ -58,4 +59,5 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   elicitación, snapshots y descarte. Cierre y arreglos en F6.10.
 - **H9.1 · Volver al hallazgo y compilación con línea base** — camino de vuelta en los cuatro
   puntos, ámbito de compilación por proyecto, delta contra línea base por commit y proyectos de
-  C++ fuera del veredicto con nota.
+  C++ fuera del veredicto con nota. Más la situación de tests resuelta por la aplicación antes de
+  abrir la sesión, y el aterrizaje en la pantalla de cierre.

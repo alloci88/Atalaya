@@ -5049,9 +5049,70 @@ Las dos mejoras que salieron del **primer uso real** del arreglo asistido: una s
   preexistente(s)». Y el encargo del agente se lo dice también: los preexistentes no son suyos y
   arreglarlos sería la expansión que la regla 5 le prohíbe.
 
+
+### §3 — Los tests los localiza la aplicación
+
+- **D-582 — El agente estuvo buscando algo que la app sabía que no existía.** En la sesión de
+  `OPT-0002` gastó turnos rastreando «las rutas convencionales» de un proyecto de tests, no lo
+  encontró —XBLAST no tiene ninguno: 37 proyectos, cero de test, medido— y acabó declarando la
+  búsqueda infructuosa como **riesgo del arreglo**. Dos cosas mal a la vez: se pagaron tokens por
+  averiguar lo que se resuelve leyendo un `.csproj`, y el informe quedó diciendo que al arreglo le
+  faltaba algo cuando lo que falta es del repositorio.
+
+- **D-583 — La situación de tests se resuelve ANTES de abrir la sesión, y se afirma en el encargo.**
+  `FixTestSituation.Detect` mira el proyecto dueño de las ubicaciones del hallazgo y los proyectos
+  que le apuntan declarándose de test. Con tests, el encargo los **nombra**: «el proyecto afectado
+  tiene tests en X; `run_build_and_tests` los ejecutará». Sin tests, lo dice en imperativo: «no los
+  busques ni los crees salvo que el usuario te lo pida». Y la regla 6 del encargo —«añade o ajusta
+  un test»— **solo aparece cuando hay dónde ponerlo**: pedirle que pruebe donde no hay proyecto de
+  test es exactamente lo que le mandaba a explorar.
+
+- **D-584 — Se reutiliza la detección de `BuildScopeResolver`, no la del inventario.** Las
+  exclusiones del inventario (`tests/`, `*Tests.cs`) son patrones de RUTA para no auditar código de
+  test: sirven para otra cosa y no distinguen un proyecto de un directorio con ese nombre. La
+  detección buena ya existía desde H9.1 §2 —referencia al SDK de test o `<IsTestProject>` en el
+  `.csproj`— y es la misma que decide qué se ejecuta al compilar. Una sola regla, no dos que se
+  contradigan el día que alguien llame `tests` a una carpeta de datos.
+
+- **D-585 — «No hay tests» es un dato neutro en los tres sitios donde se dice.** En la conversación
+  («el agente lo sabe y no los buscará»), en el resumen que recibe el agente («es un hecho del
+  proyecto, no un resultado del cambio: no los busques») y en el informe, donde va como nota del
+  repositorio —«conocido antes de empezar»— y la línea del veredicto distingue **«no hay en este
+  proyecto»** de **«no se ejecutaron»**, que no es lo mismo: lo primero es un hecho, lo segundo una
+  duda sobre lo que pasó.
+
+### §4 — Al cerrar, se aterriza
+
+- **D-586 — La pantalla de cierre se pone delante sola, y la rueda deja de pelearse.** Reportado
+  con la app en la mano: al terminar la sesión costaba llegar a la tarjeta de sugerencia de commit.
+  Dos causas, las dos reales:
+  <br>
+  **Una**, nadie llevaba al usuario allí: la pantalla aparecía donde estuviera el scroll. Ahora, al
+  levantarse la pantalla de cierre, el panel se pone **arriba del todo** y la conversación se va
+  **al final**. Ese segundo gesto ignora a propósito la pausa del autoscroll de V5: esa pausa
+  protege una lectura EN CURSO, y aquí la sesión ha terminado. El disparo va por el aviso de
+  visibilidad del panel —no por `PropertyChanged`—, porque ese evento solo se levanta cuando la
+  visibilidad **cambia**: repintar la vista no puede mover el scroll bajo los dedos de nadie.
+  <br>
+  **Dos**, dentro de la pantalla de cierre había dos contenedores con scroll propio —la salida del
+  build (el `MaxHeight` con `ScrollViewer` que F6.10 añadió) y la descripción del commit— y **los
+  dos se quedaban la rueda estuvieran o no en su tope**. Es el mismo defecto que F5.6 arregló en la
+  ficha, así que se aplica el mismo patrón: `SnippetScroll.ShouldBubble`, que cede el evento al
+  padre cuando el interno ya no puede desplazarse. No se ha escrito una regla nueva.
+
+- **D-587 — La conversación conserva UN solo scroll, y hay un test que lo vigila.** El panel del
+  flujo no tiene ni tendrá scrolls anidados: cada uno que se meta dentro vuelve a la lotería de la
+  rueda. Es una invariante de plantilla, como los tres frenos.
+
+- **D-588 — Lo que NO se ha verificado aquí, y es del usuario.** El aterrizaje y la cesión de la
+  rueda son comportamiento de WPF en tiempo de ejecución: los tests fijan que el disparo, los
+  nombres y el patrón están en su sitio, pero **ningún test renderiza**. La comprobación con una
+  sesión larga —mucha conversación, varias elicitaciones— y la ventana pequeña sigue siendo la del
+  humano, junto con la del §3 en una sesión con asiento real.
+
 ### Cobertura
 
-- **D-580 — Lo que queda probado (25 tests nuevos).** Del ámbito: proyecto por defecto, sus tests
+- **D-580 — Lo que queda probado (36 tests nuevos).** Del ámbito: proyecto por defecto, sus tests
   por `ProjectReference`, solución cuando el usuario la pide, solución con nota cuando el cambio
   toca dos proyectos, el C++ fuera con su nota, y tocar solo C++ no finge una compilación. Del
   delta: **el caso real reproducido** —18 preexistentes, 0 nuevos, veredicto verde—, un error que
@@ -5063,6 +5124,14 @@ Las dos mejoras que salieron del **primer uso real** del arreglo asistido: una s
   interruptor que sobrevive a la vista, el informe con los preexistentes aparte, y el
   `sessionId` yendo y viniendo del hub —incluido un historial anterior a H9.1, que se sigue
   leyendo—. Más los cuatro caminos de vuelta como invariantes de plantilla.
+  <br>
+  De los tests (§3): el proyecto con tests los nombra en el encargo, el clon sin ninguno lo dice y
+  prohíbe buscarlos, el caso intermedio —hay tests en el clon pero no cubren esto— se distingue
+  del anterior, sin clon no se afirma nada, la regla «añade un test» aparece y desaparece con la
+  situación, el informe lo recoge como hecho del repositorio, y la línea del veredicto separa «no
+  hay» de «no se ejecutaron». Del cierre (§4): el disparo por visibilidad, el `ScrollToTop` del
+  panel y el `ScrollToEnd` de la conversación, los dos contenedores internos cediendo la rueda con
+  el patrón de la casa, y la conversación con un único `ScrollViewer`.
 
 - **D-581 — Lo que NO cubren, y se dice.** Sigue sin lanzarse `dotnet build` de verdad en ningún
   test: `IProcessRunner` está doblado y lo que se prueba es la delegación y el delta, no MSBuild.

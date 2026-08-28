@@ -221,6 +221,11 @@ Durante la sesión:
   opciones con su consecuencia sobre los llamadores y espera tu elección.
 - Cada fichero tocado se guarda antes de tocarlo, fuera del clon. Eso es lo que
   «Descartar todo» restaura.
+- **Los tests los busca Atalaya, no el agente.** Antes de arrancar, la aplicación mira si el
+  proyecto afectado tiene proyecto de tests y se lo dice al agente en una línea: dónde están, o
+  que no hay y que no los busque ni los escriba. Muchos proyectos de la casa no tienen tests, y
+  que no los haya es un hecho del repositorio —se dice una vez, en el informe— y no una carencia
+  de tu arreglo.
 - **Compilar mide tu cambio, no la solución entera.** Cuando el agente pide compilar se
   compila el **proyecto** de los ficheros tocados y sus tests: es más rápido y, sobre
   todo, el veredicto pertenece al cambio. Si marcas **«Compilar solución completa»** se
@@ -235,6 +240,10 @@ Al terminar: el resumen de qué cambió y por qué, los ficheros con su diff, el
 del build —con qué se compiló y cuántos errores son nuevos—, y una **sugerencia de
 commit** —título y descripción, editables, con botón de copiar—. **Atalaya no
 commitea**: solo te ahorra redactarlo.
+
+Cuando el agente cierra, la pantalla de cierre **aterriza sola**: no hay que buscarla con la
+rueda, y la tarjeta de sugerencia de commit se alcanza bajando por el panel sin que ningún
+recuadro interior te robe el scroll.
 
 Y hay **camino de vuelta al hallazgo**: desde la propia sesión («Volver al hallazgo»),
 desde el informe del arreglo en Informes, y al revés — en el historial de la ficha, el
