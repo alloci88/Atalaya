@@ -54,12 +54,18 @@ public sealed record SeverityCard(
 public sealed record SeveritySlice(string Slug, Severity Severity);
 
 /// <summary>Una línea del registro de operaciones, ya escrita.</summary>
+/// <param name="Type">
+/// Qué clase de sesión es, escrita («Arreglo asistido», «Verificación»). Sin ella, las sesiones
+/// que no auditan unidades —un arreglo, una verificación— se leían como auditorías vacías: misma
+/// fila, «0 unidades», «sin cambios» y, en el caso del arreglo, un coste sin nada que lo explique.
+/// </param>
 public sealed record SessionLine(
     string SessionId,
     string Slug,
     string AppName,
     Brush AppBrush,
     string When,
+    string Type,
     string By,
     string Units,
     string Findings,
@@ -209,6 +215,9 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
     [ObservableProperty] private IReadOnlyList<string> _costLabels = Array.Empty<string>();
 
+    /// <summary>El tramo completo de cada cubo, para el tooltip. Ver <c>ChartPlot.TooltipLabels</c>.</summary>
+    [ObservableProperty] private IReadOnlyList<string> _costRanges = Array.Empty<string>();
+
     public ObservableCollection<LegendItem> CostLegend { get; } = new();
 
     /// <summary>Leyenda siempre que haya dos series o más (regla del §2). Con una, sobra.</summary>
@@ -222,6 +231,9 @@ public sealed partial class MetricsViewModel : ViewModelBase
     [ObservableProperty] private IReadOnlyList<ChartSeries> _resolutionSeries = Array.Empty<ChartSeries>();
 
     [ObservableProperty] private IReadOnlyList<string> _resolutionLabels = Array.Empty<string>();
+
+    /// <inheritdoc cref="CostRanges"/>
+    [ObservableProperty] private IReadOnlyList<string> _resolutionRanges = Array.Empty<string>();
 
     public ObservableCollection<LegendItem> ResolutionLegend { get; } = new();
 
@@ -254,6 +266,9 @@ public sealed partial class MetricsViewModel : ViewModelBase
     [ObservableProperty] private IReadOnlyList<ChartSeries> _flowSeries = Array.Empty<ChartSeries>();
 
     [ObservableProperty] private IReadOnlyList<string> _flowLabels = Array.Empty<string>();
+
+    /// <inheritdoc cref="CostRanges"/>
+    [ObservableProperty] private IReadOnlyList<string> _flowRanges = Array.Empty<string>();
 
     public ObservableCollection<LegendItem> FlowLegend { get; } = new();
 
@@ -373,12 +388,14 @@ public sealed partial class MetricsViewModel : ViewModelBase
             CostLegend.Clear();
             CostSeries = Array.Empty<ChartSeries>();
             CostLabels = Array.Empty<string>();
+            CostRanges = Array.Empty<string>();
             HasCost = false;
             return;
         }
 
         HasCost = d.HasCost && d.CostSeries.Count > 0;
         CostLabels = d.Cost.Select(p => p.Label).ToList();
+        CostRanges = d.Cost.Select(p => p.Range).ToList();
         CostSeries = LineChart(d, d.Cost, d.CostSeries, Cumulative, CostLegend);
         ShowCostLegend = CostLegend.Count >= 2;
     }
@@ -394,12 +411,14 @@ public sealed partial class MetricsViewModel : ViewModelBase
             ResolutionLegend.Clear();
             ResolutionSeries = Array.Empty<ChartSeries>();
             ResolutionLabels = Array.Empty<string>();
+            ResolutionRanges = Array.Empty<string>();
             HasResolutions = false;
             return;
         }
 
         HasResolutions = d.HasResolutions;
         ResolutionLabels = d.Resolutions.Select(p => p.Label).ToList();
+        ResolutionRanges = d.Resolutions.Select(p => p.Range).ToList();
         ResolutionSeries = LineChart(d, d.Resolutions, d.ResolutionSeries, CumulativeResolutions, ResolutionLegend);
         ShowResolutionLegend = ResolutionLegend.Count >= 2;
     }
@@ -547,6 +566,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
         HasFlow = nuevos.Concat(resueltos).Concat(activos).Any(v => v > 0);
         FlowLabels = d.Flow.Select(b => b.Label).ToList();
+        FlowRanges = d.Flow.Select(b => b.Range).ToList();
 
         // Los tres son CONTEOS de hallazgos: comparten el único eje. Poner los activos en un eje
         // propio dejaría elegir la escala con la que se cruzan las barras y la línea, que es
@@ -585,6 +605,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
                 row.AppName,
                 SeriesBrush(row.Slug, d),
                 row.When.ToLocalTime().ToString("d MMM HH:mm", CultureInfo.CurrentCulture),
+                AuditModeNames.Display(row.Mode),
                 row.By,
                 row.Units == 1 ? "1 unidad" : $"{row.Units} unidades",
                 findings,

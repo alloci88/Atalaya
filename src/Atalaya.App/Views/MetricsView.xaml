@@ -253,6 +253,7 @@
                                 Margin="0,8,0,0"
                                 Series="{Binding CostSeries}"
                                 Labels="{Binding CostLabels}"
+                                TooltipLabels="{Binding CostRanges}"
                                 Unit="{Binding CostUnit}"
                                 AxisBrush="{DynamicResource TextFillColorSecondaryBrush}"
                                 GridBrush="{DynamicResource TextFillColorTertiaryBrush}"
@@ -303,6 +304,7 @@
                                 Margin="0,8,0,0"
                                 Series="{Binding ResolutionSeries}"
                                 Labels="{Binding ResolutionLabels}"
+                                TooltipLabels="{Binding ResolutionRanges}"
                                 ValueFormat="0"
                                 Unit="resoluciones"
                                 AxisBrush="{DynamicResource TextFillColorSecondaryBrush}"
@@ -467,6 +469,7 @@
                                 Margin="0,8,0,0"
                                 Series="{Binding FlowSeries}"
                                 Labels="{Binding FlowLabels}"
+                                TooltipLabels="{Binding FlowRanges}"
                                 ValueFormat="0"
                                 Unit="hallazgos"
                                 AxisBrush="{DynamicResource TextFillColorSecondaryBrush}"
@@ -490,17 +493,19 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="110" />
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="130" />
-                                    <ColumnDefinition Width="110" />
-                                    <ColumnDefinition Width="110" />
-                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="120" />
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="140" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Fecha" FontSize="11" Opacity="0.6" />
                                 <TextBlock Grid.Column="1" Text="Aplicación" FontSize="11" Opacity="0.6" />
-                                <TextBlock Grid.Column="2" Text="Quién" FontSize="11" Opacity="0.6" />
-                                <TextBlock Grid.Column="3" Text="Unidades" FontSize="11" Opacity="0.6" />
-                                <TextBlock Grid.Column="4" Text="Hallazgos" FontSize="11" Opacity="0.6" />
-                                <TextBlock Grid.Column="5" Text="Coste" FontSize="11" Opacity="0.6" />
+                                <TextBlock Grid.Column="2" Text="Tipo" FontSize="11" Opacity="0.6" />
+                                <TextBlock Grid.Column="3" Text="Quién" FontSize="11" Opacity="0.6" />
+                                <TextBlock Grid.Column="4" Text="Unidades" FontSize="11" Opacity="0.6" />
+                                <TextBlock Grid.Column="5" Text="Hallazgos" FontSize="11" Opacity="0.6" />
+                                <TextBlock Grid.Column="6" Text="Coste" FontSize="11" Opacity="0.6" />
                             </Grid>
 
                             <ItemsControl ItemsSource="{Binding Sessions}"
@@ -516,10 +521,11 @@
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="110" />
                                                     <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="130" />
-                                                    <ColumnDefinition Width="110" />
-                                                    <ColumnDefinition Width="110" />
-                                                    <ColumnDefinition Width="150" />
+                                                    <ColumnDefinition Width="140" />
+                                                    <ColumnDefinition Width="120" />
+                                                    <ColumnDefinition Width="90" />
+                                                    <ColumnDefinition Width="100" />
+                                                    <ColumnDefinition Width="140" />
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Grid.Column="0" Text="{Binding When}" FontSize="12" Opacity="0.85" />
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
@@ -527,10 +533,12 @@
                                                                Fill="{Binding AppBrush}" VerticalAlignment="Center" />
                                                     <TextBlock Text="{Binding AppName}" FontSize="12" Margin="7,0,0,0" />
                                                 </StackPanel>
-                                                <TextBlock Grid.Column="2" Text="{Binding By}" FontSize="12" Opacity="0.85" />
-                                                <TextBlock Grid.Column="3" Text="{Binding Units}" FontSize="12" Opacity="0.85" />
-                                                <TextBlock Grid.Column="4" Text="{Binding Findings}" FontSize="12" Opacity="0.85" />
-                                                <TextBlock Grid.Column="5" Text="{Binding Cost}" FontSize="12" Opacity="0.85" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Type}" FontSize="12" Opacity="0.85"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Grid.Column="3" Text="{Binding By}" FontSize="12" Opacity="0.85" />
+                                                <TextBlock Grid.Column="4" Text="{Binding Units}" FontSize="12" Opacity="0.85" />
+                                                <TextBlock Grid.Column="5" Text="{Binding Findings}" FontSize="12" Opacity="0.85" />
+                                                <TextBlock Grid.Column="6" Text="{Binding Cost}" FontSize="12" Opacity="0.85" />
                                             </Grid>
                                         </Button>
                                     </DataTemplate>

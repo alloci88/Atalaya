@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -67,6 +67,10 @@ public sealed class ChartPlot : Canvas
         nameof(Labels), typeof(IReadOnlyList<string>), typeof(ChartPlot),
         new PropertyMetadata(null, OnVisualChanged));
 
+    public static readonly DependencyProperty TooltipLabelsProperty = DependencyProperty.Register(
+        nameof(TooltipLabels), typeof(IReadOnlyList<string>), typeof(ChartPlot),
+        new PropertyMetadata(null, OnVisualChanged));
+
     public static readonly DependencyProperty ValueFormatProperty = DependencyProperty.Register(
         nameof(ValueFormat), typeof(string), typeof(ChartPlot),
         new PropertyMetadata("0.##", OnVisualChanged));
@@ -95,6 +99,17 @@ public sealed class ChartPlot : Canvas
     {
         get => (IReadOnlyList<string>?)GetValue(LabelsProperty);
         set => SetValue(LabelsProperty, value);
+    }
+
+    /// <summary>
+    /// Cómo se llama cada cubo en el TOOLTIP, cuando su nombre en el eje no basta. Un cubo semanal
+    /// cabe en el eje como «28 ago» y en el tooltip se explica entero: «22–28 ago». Vacía, el
+    /// tooltip usa la etiqueta del eje — que es lo correcto cuando el cubo es un solo día.
+    /// </summary>
+    public IReadOnlyList<string>? TooltipLabels
+    {
+        get => (IReadOnlyList<string>?)GetValue(TooltipLabelsProperty);
+        set => SetValue(TooltipLabelsProperty, value);
     }
 
     public string ValueFormat
@@ -354,7 +369,9 @@ public sealed class ChartPlot : Canvas
     private void AddHitColumns(
         IReadOnlyList<ChartSeries> series, int buckets, double slot, double left, double top, double height)
     {
-        var labels = Labels ?? Array.Empty<string>();
+        // El tooltip tiene sitio para el nombre COMPLETO del cubo; el eje, no. Sin esto, un cubo
+        // semanal se explicaba con la etiqueta de un solo día — y así se leía.
+        var labels = TooltipLabels is { Count: > 0 } detailed ? detailed : Labels ?? Array.Empty<string>();
         for (int i = 0; i < buckets; i++)
         {
             int index = i;

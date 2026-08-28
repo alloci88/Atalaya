@@ -1,7 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 using System.Windows.Media;
 using Atalaya.App.Controls;
-using Atalaya.App.Controls;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Domain;
@@ -671,21 +670,84 @@ public sealed class MetricsPanelTests : IDisposable
         public object? GetService(Type serviceType) => null;
     }
 
+    // ============================================ El cuadre de la vista
+
+    /// <summary>
+    /// El registro de operaciones ESCRIBE de qué tipo es cada sesión. Sin esa columna, un arreglo
+    /// asistido y una auditoría que no tocó nada son la misma fila: misma fecha, «0 unidades»,
+    /// «sin cambios» y —en el arreglo— un coste sin nada que lo explique.
+    /// </summary>
+    [Fact]
+    public async Task El_registro_escribe_el_tipo_de_cada_sesion()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 1 });
+        WriteSession("app", cost: 105m);
+        WriteSession("app", cost: 67.5m, mode: AuditMode.Fix, units: 0, daysAgo: 0);
+        WriteSession("app", cost: 12m, mode: AuditMode.Verify, units: 0, daysAgo: 0);
+
+        MetricsViewModel vm = Panel();
+        await vm.LoadAsync();
+
+        vm.Sessions.Should().HaveCount(3);
+        vm.Sessions.Select(l => l.Type).Should().Contain(new[]
+        {
+            "Auditoría por lotes", "Arreglo asistido", "Verificación",
+        });
+
+        // Y el coste del arreglo se escribe en su fila, no se queda en «—».
+        vm.Sessions.Single(l => l.Type == "Arreglo asistido").Cost.Should().Contain("67,5");
+    }
+
+    /// <summary>
+    /// Las tres gráficas de eje temporal llevan el tramo completo de cada cubo al tooltip. En el
+    /// eje no cabe («28 ago»), y sin el tooltip un cubo semanal se lee como el día que lo rotula.
+    /// </summary>
+    [Fact]
+    public async Task Las_graficas_llevan_el_tramo_completo_de_cada_cubo_al_tooltip()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 1 });
+        WriteSession("app", cost: 105m);
+        WriteFinding("app", DateTimeOffset.UtcNow.AddDays(-3));
+
+        MetricsViewModel vm = Panel();
+        await vm.LoadAsync();
+
+        vm.CostRanges.Should().HaveCount(vm.CostLabels.Count);
+        vm.ResolutionRanges.Should().HaveCount(vm.ResolutionLabels.Count);
+        vm.FlowRanges.Should().HaveCount(vm.FlowLabels.Count);
+
+        // Ocho semanas → cubos semanales: el tramo dice más que la etiqueta.
+        vm.CostRanges[^1].Should().Contain("–").And.NotBe(vm.CostLabels[^1]);
+
+        string xaml = Markup(Source("src/Atalaya.App/Views/MetricsView.xaml"));
+        Regex.Matches(xaml, "TooltipLabels=").Count.Should()
+            .Be(3, "coste, resoluciones y flujo: las tres gráficas de eje temporal");
+    }
+
+    private MetricsViewModel Panel()
+        => TestFactory.Metrics(_hub, _paths, _settings, TestFactory.NavigationWith(TestFactory.Reports(_hub)),
+            new ToastCenter());
+
     // ============================================ Utilidades
 
-    private AuditSession WriteSession(string slug, decimal? cost, int daysAgo = 2)
+    private AuditSession WriteSession(
+        string slug, decimal? cost, int daysAgo = 2, AuditMode mode = AuditMode.Lotes, int units = 1)
     {
         var session = new AuditSession
         {
             Id = _ulids.NewUlid(),
             AppSlug = slug,
-            Mode = AuditMode.Lotes,
+            Mode = mode,
             By = "alvaro",
             Machine = "PC",
             StartedUtc = DateTimeOffset.UtcNow.AddDays(-daysAgo),
             CycleN = 1,
         };
-        session.Units.Add(new UnitVerdictRecord("src/A.cs", "src", "auditada", null));
+        for (int i = 0; i < units; i++)
+        {
+            session.Units.Add(new UnitVerdictRecord($"src/A{i}.cs", "src", "auditada", null));
+        }
+
         session.Usage.Add(100, 20, cost);
         _hub.Store.WriteSession(session);
         return session;
