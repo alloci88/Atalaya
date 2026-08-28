@@ -354,9 +354,11 @@ public sealed class BuildRunner
 
         if (plan.TestProjects.Count == 0)
         {
+            // H9.1 §3: dato neutro. No hay tests en este proyecto —como en tantos de la casa— y
+            // eso no es una carencia del arreglo ni una invitación a ponerse a buscarlos.
             report.AppendLine(
-                $"TESTS: no se ejecutaron — no hay ningún proyecto de test que cubra {plan.Target.Relative}. "
-                + "Dilo en tu resumen: el cambio compila, pero nadie lo prueba.");
+                $"TESTS: no hay proyecto de tests para {plan.Target.Relative}. Es un hecho del "
+                + "proyecto, no un resultado del cambio: no los busques.");
             return (false, false, false);
         }
 

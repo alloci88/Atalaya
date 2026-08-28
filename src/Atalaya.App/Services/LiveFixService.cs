@@ -139,6 +139,13 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
     /// </summary>
     public BuildVerdict? LastVerdict { get; private set; }
 
+    /// <summary>
+    /// Si el código afectado tiene tests, resuelto por la aplicación al arrancar (H9.1 §3). Lo lee
+    /// el encargo del agente y lo recoge el informe: que no haya tests es un hecho del proyecto que
+    /// se dice una vez, no una carencia del arreglo.
+    /// </summary>
+    public FixTestSituation TestSituation { get; private set; } = FixTestSituation.Unknown;
+
     /// <summary>Hay algo que enseñar en la vista: corriendo, terminado o fallido.</summary>
     public bool HasSession => IsRunning || HasFinished || HasFailed;
 
@@ -322,7 +329,14 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             Say(FixMessage.System("⌕", ReferenceLine(refs)));
 
             IReadOnlyList<FixCodeExcerpt> code = ReadCode(finding);
-            string prompt = FixSessionPrompt.Build(finding, refs, code, AppName);
+
+            // H9.1 §3: la situación de tests la resuelve la APLICACIÓN, leyendo el clon, antes de
+            // que el agente gaste un solo turno buscando lo que ya se puede saber.
+            TestSituation = FixTestSituation.Detect(_clonePath, finding.Locations.Select(l => l.Path));
+            Say(FixMessage.System("⚗", TestSituation.Narration));
+
+            string prompt = FixSessionPrompt.Build(
+                finding, refs, code, AppName, FixToolbox.DefaultReadBudget, TestSituation);
 
             _cts = new CancellationTokenSource();
             var toolbox = new FixToolbox(
@@ -453,7 +467,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             string report = ReportBuilder.BuildFixReport(
                 _app, session, finding, Files.Select(f => (f.RelativePath, f.Tally, f.InScope)).ToList(),
                 Summary, Risks, Commit.Title, Commit.Description, HasBuildResult ? LastVerdict : null,
-                _hub.OrganizationName);
+                _hub.OrganizationName, TestSituation);
             _hub.Store.WriteReport(Slug, SessionId, report);
             ReportPath = _hub.HubPaths.ReportFile(Slug, SessionId);
 

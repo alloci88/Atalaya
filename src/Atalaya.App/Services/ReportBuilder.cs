@@ -305,7 +305,8 @@ public static class ReportBuilder
         string commitTitle,
         string commitDescription,
         BuildVerdict? build,
-        string? organization = null)
+        string? organization = null,
+        FixTestSituation? tests = null)
     {
         string appName = app?.Name ?? session.AppSlug;
         string alias = finding.DisplayId ?? finding.Id.ToString();
@@ -362,7 +363,7 @@ public static class ReportBuilder
             sb.AppendLine();
         }
 
-        AppendBuildSection(sb, build);
+        AppendBuildSection(sb, build, tests);
 
         sb.AppendLine();
         sb.AppendLine("## Sugerencia de commit");
@@ -390,10 +391,23 @@ public static class ReportBuilder
     /// nadie lee la sección.
     /// </para>
     /// </summary>
-    internal static void AppendBuildSection(StringBuilder sb, BuildVerdict? build)
+    internal static void AppendBuildSection(
+        StringBuilder sb, BuildVerdict? build, FixTestSituation? tests = null)
     {
         sb.AppendLine("## Compilación y tests");
         sb.AppendLine();
+
+        // H9.1 §3: si el proyecto no tiene tests se dice UNA vez, como hecho del proyecto. No es
+        // un riesgo del arreglo ni el resultado de una búsqueda infructuosa.
+        if (tests is { HasTests: false })
+        {
+            sb.AppendLine(tests.AnyInClone
+                ? $"> El proyecto afectado (`{tests.Project ?? "n/d"}`) **no tiene proyecto de tests** "
+                  + "que lo cubra. Es un hecho del repositorio, conocido antes de empezar."
+                : "> Esta solución **no tiene proyectos de tests**. Es un hecho del repositorio, "
+                  + "conocido antes de empezar: el arreglo se verifica compilando y leyendo el código.");
+            sb.AppendLine();
+        }
 
         if (build is null)
         {
@@ -403,7 +417,7 @@ public static class ReportBuilder
 
         sb.AppendLine($"- **Ámbito**: {(build.TargetLabel.Length > 0 ? build.TargetLabel : "n/d")}");
         sb.AppendLine($"- **Veredicto**: {build.Headline}");
-        sb.AppendLine($"- **Tests**: {(build.TestsRun ? build.TestsOk ? "pasan" : "**NO pasan**" : "no se ejecutaron")}");
+        sb.AppendLine($"- **Tests**: {TestsLine(build, tests)}");
         sb.AppendLine(build.HasBaseline
             ? $"- **Línea base**: {build.BaselineNote}"
             : "- **Línea base**: no había ninguna para este commit, así que todo error contado como nuevo "
@@ -461,6 +475,17 @@ public static class ReportBuilder
         sb.AppendLine("```");
         sb.AppendLine();
         sb.AppendLine("</details>");
+    }
+
+    /// <summary>Lo que se dice de los tests: pasan, no pasan, o no hay — que no es lo mismo.</summary>
+    private static string TestsLine(BuildVerdict build, FixTestSituation? tests)
+    {
+        if (build.TestsRun)
+        {
+            return build.TestsOk ? "pasan" : "**NO pasan**";
+        }
+
+        return tests is { HasTests: false } ? "no hay en este proyecto" : "no se ejecutaron";
     }
 
     /// <summary>Consolidated cycle-close report (§7): ascended confidences + top-10 priorities.</summary>

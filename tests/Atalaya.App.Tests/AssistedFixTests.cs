@@ -810,6 +810,119 @@ public sealed class AssistedFixTests : IDisposable
         report.Should().Contain("línea base medida");
     }
 
+    // ================================================================= H9.1 §3 · los tests
+
+    /// <summary>
+    /// <b>El encargo declara la situación de tests, y el clon de prueba no tiene ninguno</b> —igual
+    /// que XBLAST—. En el primer uso real el agente gastó turnos buscando un proyecto de tests
+    /// inexistente y acabó declarando la búsqueda infructuosa como riesgo. Ahora se lo dicen antes
+    /// de empezar, en imperativo, y la regla de «añade un test» desaparece del encargo: pedirle que
+    /// pruebe donde no hay dónde es lo que le hacía salir a buscar.
+    /// </summary>
+    [Fact]
+    public async Task El_encargo_dice_que_no_hay_tests_y_prohibe_buscarlos()
+    {
+        string? prompt = null;
+        var agent = new FakeCopilotAgent(fixScript: request =>
+        {
+            prompt = request.Prompt;
+            return Array.Empty<FixStep>();
+        });
+
+        LiveFixService fix = Service(agent);
+        await fix.StartAsync(new FixSessionRequest(Slug, _findingId));
+
+        prompt.Should().NotBeNull();
+        prompt!.Should().Contain("no tiene proyectos de tests");
+        prompt.Should().Contain("No los busques ni los crees");
+        prompt.Should().NotContain("Añade o ajusta un test",
+            "sin tests, pedirle que escriba uno es lo que le manda a explorar");
+        prompt.Should().Contain("no lo declares como riesgo",
+            "que no haya tests es un hecho del proyecto, no una carencia del arreglo");
+
+        // Y se dice en la conversación, una vez y sin drama.
+        fix.TestSituation.HasTests.Should().BeFalse();
+        fix.Conversation.OfType<FixMessage>().Should()
+            .Contain(m => m.IsSystem && m.Text.Contains("no tiene proyectos de tests"));
+    }
+
+    /// <summary>
+    /// Con tests, el encargo los NOMBRA y vuelve a pedir el test que cubra el defecto. La regla no
+    /// se ha perdido: se ha condicionado a que exista dónde ponerlo.
+    /// </summary>
+    [Fact]
+    public async Task Con_un_proyecto_de_tests_el_encargo_lo_nombra_y_vuelve_a_pedir_el_test()
+    {
+        Directory.CreateDirectory(Path.Combine(_clone, "Common"));
+        File.WriteAllText(Path.Combine(_clone, "Common", "Common.csproj"),
+            "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        Directory.CreateDirectory(Path.Combine(_clone, "Common.Tests"));
+        File.WriteAllText(Path.Combine(_clone, "Common.Tests", "Common.Tests.csproj"),
+            "<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup>"
+            + "<PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.11.1\" />"
+            + "<ProjectReference Include=\"..\\Common\\Common.csproj\" /></ItemGroup></Project>");
+        Commit();
+
+        string? prompt = null;
+        var agent = new FakeCopilotAgent(fixScript: request =>
+        {
+            prompt = request.Prompt;
+            return Array.Empty<FixStep>();
+        });
+
+        await Service(agent).StartAsync(new FixSessionRequest(Slug, _findingId));
+
+        prompt.Should().NotBeNull();
+        prompt!.Should().Contain("Common.Tests/Common.Tests.csproj");
+        prompt.Should().Contain("los ejecutará");
+        prompt.Should().Contain("Añade o ajusta un test");
+        prompt.Should().NotContain("No los busques ni los crees");
+    }
+
+    /// <summary>
+    /// El informe dice que no hay tests como HECHO del repositorio, una vez. No como resultado de
+    /// una búsqueda, que es lo que acabó escrito en el informe del primer uso real.
+    /// </summary>
+    [Fact]
+    public async Task El_informe_dice_que_no_hay_tests_como_hecho_del_repositorio()
+    {
+        var agent = new FakeCopilotAgent(fixScript: _ => new[]
+        {
+            new FixStep(Edit: new FixStepEdit(UnitPath, "arregla",
+                new[] { new FixEdit("var bytes", "var octets") })),
+            new FixStep(Build: true),
+            new FixStep(Done: new FixDoneArgs("hecho", "Arregla (BUG-0003)", "", null)),
+        });
+
+        await Service(agent).StartAsync(new FixSessionRequest(Slug, _findingId));
+
+        AuditSession session = _hub.Store.ListSessions(Slug).Single();
+        string report = File.ReadAllText(_hub.HubPaths.ReportFile(Slug, session.Id.ToString()));
+
+        report.Should().Contain("no tiene proyectos de tests");
+        report.Should().Contain("hecho del repositorio, conocido antes de empezar");
+        report.Should().Contain("**Ámbito**", "un veredicto sin ámbito no se puede interpretar");
+    }
+
+    /// <summary>
+    /// Y en la línea de tests del veredicto, «no hay» no es «no se ejecutaron»: lo primero es un
+    /// hecho del proyecto y lo segundo, una duda sobre lo que pasó.
+    /// </summary>
+    [Fact]
+    public void La_linea_de_tests_distingue_no_haber_de_no_haberse_ejecutado()
+    {
+        var build = new BuildVerdict(true, "…", TargetLabel: "el proyecto Common/Common.csproj");
+
+        var sinTests = new System.Text.StringBuilder();
+        ReportBuilder.AppendBuildSection(
+            sinTests, build, new FixTestSituation("Common/Common.csproj", Array.Empty<string>(), AnyInClone: true));
+        sinTests.ToString().Should().Contain("**Tests**: no hay en este proyecto");
+
+        var desconocido = new System.Text.StringBuilder();
+        ReportBuilder.AppendBuildSection(desconocido, build, tests: null);
+        desconocido.ToString().Should().Contain("**Tests**: no se ejecutaron");
+    }
+
     // ================================================================= utilidades
 
     private Finding? Finding() => _hub.Store.TryReadFinding(Slug, _findingId.ToString());

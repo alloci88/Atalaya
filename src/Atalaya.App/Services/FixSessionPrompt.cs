@@ -36,7 +36,8 @@ public static class FixSessionPrompt
         ReferenceReport? refs,
         IReadOnlyList<FixCodeExcerpt> code,
         string appName,
-        int readBudget = FixToolbox.DefaultReadBudget)
+        int readBudget = FixToolbox.DefaultReadBudget,
+        FixTestSituation? tests = null)
     {
         RuleDef? rule = RuleCatalog.Find(finding.RuleId);
         string alias = finding.DisplayId ?? finding.Id.ToString();
@@ -50,7 +51,7 @@ public static class FixSessionPrompt
             + "usuario revisará y commiteará él mismo cuando esté conforme.");
         sb.AppendLine();
 
-        AppendHowYouWork(sb, readBudget);
+        AppendHowYouWork(sb, readBudget, tests ?? FixTestSituation.Unknown);
 
         sb.AppendLine($"## El hallazgo — {alias}");
         sb.AppendLine();
@@ -81,7 +82,7 @@ public static class FixSessionPrompt
         sb.AppendLine();
         AppendCode(sb, code);
         FixPromptBuilder.AppendReferences(sb, refs);
-        AppendRules(sb);
+        AppendRules(sb, tests ?? FixTestSituation.Unknown);
         return sb.ToString();
     }
 
@@ -91,7 +92,7 @@ public static class FixSessionPrompt
     /// Las herramientas y sus límites, ANTES del hallazgo. Va primero a propósito: un agente que
     /// lee el defecto antes de saber que no tiene shell empieza a planear con una shell.
     /// </summary>
-    private static void AppendHowYouWork(StringBuilder sb, int readBudget)
+    private static void AppendHowYouWork(StringBuilder sb, int readBudget, FixTestSituation tests)
     {
         sb.AppendLine("## Cómo trabajas aquí");
         sb.AppendLine();
@@ -119,6 +120,10 @@ public static class FixSessionPrompt
         sb.AppendLine(
             "**No tienes shell, ni git, ni red.** No puedes commitear ni empujar nada, y no debes "
             + "proponerlo: de eso se encarga el usuario después.");
+        sb.AppendLine();
+        // H9.1 §3: la situación de tests la ha resuelto la aplicación leyendo el clon. Va aquí,
+        // arriba y afirmada, para que no se gaste ni un turno en averiguar lo que ya se sabe.
+        sb.AppendLine(tests.PromptLine);
         sb.AppendLine();
     }
 
@@ -170,7 +175,7 @@ public static class FixSessionPrompt
     /// consecuencia sobre los llamadores listados—. Es la razón de ser de este modo: un cambio de
     /// contrato es una decisión de producto, y hay una persona delante a la que preguntársela.
     /// </summary>
-    private static void AppendRules(StringBuilder sb)
+    private static void AppendRules(StringBuilder sb, FixTestSituation tests)
     {
         sb.AppendLine("## Reglas del arreglo (obligatorias)");
         sb.AppendLine(
@@ -198,12 +203,18 @@ public static class FixSessionPrompt
             "5. **Arregla SOLO este hallazgo.** Nada de limpiezas de paso, renombrados ni mejoras "
             + "de camino: un arreglo que se expande por la solución es uno que ya no se puede "
             + "revisar.");
-        sb.AppendLine(
-            "6. **Añade o ajusta un test** que cubra el defecto si el stack lo permite, y "
-            + "**compila y pasa los tests** con `run_build_and_tests` antes de cerrar. Si no se "
-            + "puede compilar desde aquí, dilo en el resumen. Y si el resumen te devuelve errores "
-            + "**preexistentes**, déjalos: son de la solución, no de tu cambio, y arreglarlos "
-            + "sería exactamente la expansión que el punto 5 prohíbe.");
+        sb.AppendLine(tests.HasTests
+            ? "6. **Añade o ajusta un test** que cubra el defecto —el proyecto tiene tests— y "
+              + "**compila y pásalos** con `run_build_and_tests` antes de cerrar. Si no se puede "
+              + "compilar desde aquí, dilo en el resumen. Y si el resumen te devuelve errores "
+              + "**preexistentes**, déjalos: son de la solución, no de tu cambio, y arreglarlos "
+              + "sería exactamente la expansión que el punto 5 prohíbe."
+            : "6. **Compila con `run_build_and_tests` antes de cerrar.** Aquí no hay tests y ya "
+              + "está dicho arriba: no los busques ni los escribas, y **no lo declares como "
+              + "riesgo** —es un hecho del proyecto, no una carencia de tu arreglo, y el informe "
+              + "ya lo recoge—. Si no se puede compilar desde aquí, dilo en el resumen. Y si el "
+              + "resumen te devuelve errores **preexistentes**, déjalos: son de la solución, no de "
+              + "tu cambio, y arreglarlos sería exactamente la expansión que el punto 5 prohíbe.");
         sb.AppendLine(
             "7. **Cierra con `fix_done`**: resumen de qué cambió y por qué, ficheros tocados, "
             + "riesgos declarados si los hay, y la sugerencia de commit — título de ≤72 "

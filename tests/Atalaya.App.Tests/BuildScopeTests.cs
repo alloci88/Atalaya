@@ -280,11 +280,12 @@ public sealed class BuildScopeTests : IDisposable
     }
 
     /// <summary>
-    /// Un proyecto sin tests no se maquilla: compila, pero nadie lo prueba, y el agente tiene que
-    /// decirlo en su resumen.
+    /// Un proyecto sin tests no se maquilla, pero tampoco se dramatiza (H9.1 §3): que no haya
+    /// tests es un hecho del proyecto —la mitad de los de la casa no tienen—, no una carencia del
+    /// arreglo ni una invitación a que el agente se ponga a buscarlos.
     /// </summary>
     [Fact]
-    public void Un_proyecto_sin_tests_lo_dice_en_vez_de_fingir_que_pasan()
+    public void Un_proyecto_sin_tests_lo_dice_como_hecho_neutro()
     {
         Directory.Delete(Path.Combine(_clone, "Tests"), recursive: true);
         var runner = new ScriptedProcess().Then(0, "Compilación correcta.");
@@ -293,8 +294,71 @@ public sealed class BuildScopeTests : IDisposable
 
         verdict.Ok.Should().BeTrue();
         verdict.TestsRun.Should().BeFalse();
-        verdict.Summary.Should().Contain("no hay ningún proyecto de test");
+        verdict.Summary.Should().Contain("no hay proyecto de tests");
+        verdict.Summary.Should().Contain("hecho del proyecto");
+        verdict.Summary.Should().Contain("no los busques");
     }
+
+    // ================================================================= H9.1 §3 · la app los localiza
+
+    /// <summary>
+    /// Con tests, la aplicación los NOMBRA en el encargo: el agente no tiene que salir a buscar lo
+    /// que se resuelve leyendo dos ficheros de proyecto.
+    /// </summary>
+    [Fact]
+    public void La_app_localiza_los_tests_del_proyecto_afectado()
+    {
+        FixTestSituation situation = FixTestSituation.Detect(_clone, new[] { Touched });
+
+        situation.HasTests.Should().BeTrue();
+        situation.Project.Should().Be("Common/Common.csproj");
+        situation.TestProjects.Should().ContainSingle().Which.Should().Contain("Common.Tests.csproj");
+        situation.PromptLine.Should().Contain("tiene tests en");
+        situation.PromptLine.Should().Contain("run_build_and_tests` los ejecutará");
+    }
+
+    /// <summary>
+    /// <b>Y sin tests lo dice de entrada, en imperativo.</b> Es el caso de XBLAST y el del primer
+    /// uso real: el agente gastó turnos buscando un proyecto de tests que no existe y acabó
+    /// declarándolo como riesgo. Ahora se lo dicen antes de empezar.
+    /// </summary>
+    [Fact]
+    public void Sin_ningun_proyecto_de_tests_el_encargo_lo_dice_y_prohibe_buscarlos()
+    {
+        Directory.Delete(Path.Combine(_clone, "Tests"), recursive: true);
+
+        FixTestSituation situation = FixTestSituation.Detect(_clone, new[] { Touched });
+
+        situation.HasTests.Should().BeFalse();
+        situation.AnyInClone.Should().BeFalse();
+        situation.PromptLine.Should().Contain("no tiene proyectos de tests");
+        situation.PromptLine.Should().Contain("No los busques ni los crees");
+        situation.Narration.Should().Contain("no los buscará");
+    }
+
+    /// <summary>
+    /// Hay tests en el clon pero ninguno cubre lo tocado: se dice eso exactamente, que no es lo
+    /// mismo que «esta solución no tiene tests».
+    /// </summary>
+    [Fact]
+    public void Con_tests_en_el_clon_pero_no_para_este_proyecto_se_distingue()
+    {
+        Write("Otro/Otro.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        Write("Otro/Cosa.cs", "// x");
+
+        FixTestSituation situation = FixTestSituation.Detect(_clone, new[] { "Otro/Cosa.cs" });
+
+        situation.HasTests.Should().BeFalse();
+        situation.AnyInClone.Should().BeTrue("Common.Tests sigue ahí, pero no cubre a Otro");
+        situation.PromptLine.Should().Contain("no tiene proyecto de tests que lo cubra");
+        situation.PromptLine.Should().Contain("No lo busques ni lo crees");
+    }
+
+    /// <summary>Sin clon no se afirma nada: ni que hay tests ni que no los hay.</summary>
+    [Fact]
+    public void Sin_clon_la_situacion_de_tests_es_desconocida()
+        => FixTestSituation.Detect(null, Array.Empty<string>())
+            .Should().Be(FixTestSituation.Unknown);
 
     // ================================================================= la narración
 
