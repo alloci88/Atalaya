@@ -4,7 +4,7 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-28 (cierre de H9, F6.10).
+Última revisión: 2026-08-28 (H9.1).
 
 ## En vuelo
 
@@ -12,6 +12,9 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   usuario con una sesión de verdad; falta cerrar el circuito con el **descarte** (que el clon
   vuelva byte a byte) y la revisión visual de la vista de arreglo con textos largos, en los dos
   temas y a 1366×768 (D-569).
+- **H9.1 — que una sesión fix real sobre XBLAST diga «0 errores nuevos»** con los preexistentes
+  aparte (D-581). El resolutor de ámbito ya está medido contra ese clon; falta la sesión entera
+  con asiento.
 
 ## Despliegue al equipo
 
@@ -53,3 +56,6 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 - **F6.5 · Roscos de severidad por aplicación** en Métricas, en la fila bajo cobertura.
 - **H9 · «Arreglar con agente»** — F6.9: sesión interactiva sobre el clon local con narración,
   elicitación, snapshots y descarte. Cierre y arreglos en F6.10.
+- **H9.1 · Volver al hallazgo y compilación con línea base** — camino de vuelta en los cuatro
+  puntos, ámbito de compilación por proyecto, delta contra línea base por commit y proyectos de
+  C++ fuera del veredicto con nota.

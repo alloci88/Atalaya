@@ -221,10 +221,24 @@ Durante la sesión:
   opciones con su consecuencia sobre los llamadores y espera tu elección.
 - Cada fichero tocado se guarda antes de tocarlo, fuera del clon. Eso es lo que
   «Descartar todo» restaura.
+- **Compilar mide tu cambio, no la solución entera.** Cuando el agente pide compilar se
+  compila el **proyecto** de los ficheros tocados y sus tests: es más rápido y, sobre
+  todo, el veredicto pertenece al cambio. Si marcas **«Compilar solución completa»** se
+  compila todo, y entonces los errores se cuentan contra una **línea base** del mismo
+  commit sin tocar: el resultado se lee como «0 errores nuevos · 18 preexistentes», con
+  los heredados listados aparte. Los proyectos que `dotnet` no puede compilar —C++ y
+  compañía— se nombran y quedan fuera del veredicto, en vez de contarse como fallo. En
+  una solución legacy que ya no compilaba, esto es la diferencia entre un rojo prestado y
+  un veredicto que se puede creer.
 
 Al terminar: el resumen de qué cambió y por qué, los ficheros con su diff, el resultado
-del build, y una **sugerencia de commit** —título y descripción, editables, con botón de
-copiar—. **Atalaya no commitea**: solo te ahorra redactarlo.
+del build —con qué se compiló y cuántos errores son nuevos—, y una **sugerencia de
+commit** —título y descripción, editables, con botón de copiar—. **Atalaya no
+commitea**: solo te ahorra redactarlo.
+
+Y hay **camino de vuelta al hallazgo**: desde la propia sesión («Volver al hallazgo»),
+desde el informe del arreglo en Informes, y al revés — en el historial de la ficha, el
+evento «arreglo propuesto» abre el informe de ese arreglo.
 
 **Arreglar no resuelve el hallazgo.** Al terminar sigue activo. La aplicación te sugiere
 **Verificar ahora** cuando des el cambio por bueno, y la resolución llega por la vía de

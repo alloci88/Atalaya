@@ -4945,3 +4945,128 @@ condición de salida de D-552 escrita, y el backlog trasladado al repo (N-4).
   textos largos de verdad, en los dos temas y a 1366×768. Lo que sí se puede afirmar sin verla: no
   se ha introducido ni un color nuevo —los cambios son de disposición y usan los pinceles
   `DynamicResource` que ya estaban—, así que el tema no es una variable de este arreglo.
+
+## H9.1 — Volver al hallazgo, y compilar lo que es del cambio
+
+Las dos mejoras que salieron del **primer uso real** del arreglo asistido: una sesión sobre
+`OPT-0002` en XBLAST, el 2026-08-28. El flujo funcionó; lo que falló fue lo de alrededor.
+
+### §1 — El camino de vuelta
+
+- **D-570 — Un arreglo terminado dejaba al usuario en una vía muerta.** La sesión nombra el
+  hallazgo en la cabecera, el informe lo nombra en su primera línea y el historial de la ficha
+  registra un `fixProposed`… y desde ninguno de esos tres sitios se podía llegar a los otros dos.
+  Para ver qué hizo un arreglo había que ir a Informes y buscar el fichero entre todos los de la
+  aplicación; para volver al hallazgo, a Hallazgos y buscarlo por su alias. Ahora el círculo se
+  cierra en las dos direcciones: **de la sesión al hallazgo** (enlace en la cabecera de V8, no solo
+  en la pantalla de cierre: también está cuando la sesión falló y cuando se vuelve al «último
+  arreglo» desde el rail), **del informe al hallazgo** (V7, junto a «Ver hallazgos de esta
+  sesión», un escalón más fino que él) y **del hallazgo al informe** (el evento del historial abre
+  el informe de ESE arreglo).
+
+- **D-571 — El enlace exige un dato, y el dato se escribe: la sesión dice de qué hallazgo era.**
+  `AuditSession` gana `FixFindingId` y `FixFindingAlias`; `HistoryEntry` gana `SessionId`. Los dos
+  son opcionales y van como propiedad, no en la posición del record: las sesiones y los eventos
+  escritos antes de H9.1 no los traen, se siguen leyendo igual y ahí el enlace simplemente no
+  aparece. Deducirlo del texto del informe habría sido adivinar; un enlace se construye sobre un
+  identificador o no se construye.
+
+- **D-572 — «Última sesión» de un arreglo es «Último arreglo», y ya existía.** V5 no muestra
+  sesiones `fix` —es la vista de la auditoría, sobre `LiveSessionService`— y su equivalente es el
+  item «Último arreglo» del rail, que enseña V8 con la sesión terminada. Por eso el enlace se puso
+  en la CABECERA de V8 y no dentro de la pantalla de cierre: así los dos casos que pedía el
+  informe de uso —cierre y última sesión— quedan cubiertos por un solo camino, en vez de por dos
+  que se desincronizan.
+
+### §2 — El diagnóstico primero (N-2): qué pasó de verdad con la compilación
+
+- **D-573 — 18 errores, ninguno del cambio.** El arreglo fue `+2 −2` en un fichero de
+  `XBLASTCommon`. `run_build_and_tests` compilaba `XBLAST.sln` **entera** y devolvía «BUILD: FALLÓ
+  — 18 errores»: un `.vcxproj` de C++ que `dotnet build` no puede abrir (MSB4019, le falta
+  `Microsoft.Cpp.Default.props`, que solo trae el toolset de Visual Studio), un recurso del
+  instalador que no está versionado (`OP.zip`) y referencias de MonoGame que no restauran en esa
+  máquina. **La solución ya fallaba antes del arreglo**, pero la aplicación no lo sabía y presentó
+  lo heredado como resultado del agente. En código legacy —que es el que Atalaya audita— eso no es
+  un caso raro: es el caso normal, y a la tercera sesión nadie vuelve a leer la sección de
+  compilación.
+
+- **D-574 — Medido sobre el clon real, no sobre un supuesto.** Con el resolutor nuevo, tocar
+  `XBLASTCommon/Class/CommonStatics.cs` en `C:\Users\alcil\MyProjects\X-BLAST` resuelve a:
+
+  | dato | valor |
+  |---|---|
+  | objetivo | `XBLASTCommon/XBLASTCommon.csproj` (proyecto, no la solución de 37 proyectos) |
+  | proyectos de test que lo cubren | 0 — XBLAST no tiene ninguno, y se dice |
+  | proyectos fuera del alcance de dotnet | 14 `.vcxproj`, nombrados uno a uno |
+  | con «solución completa» marcado | `XBLAST.sln` |
+
+  Es decir: el veredicto pasa de hablar de 37 proyectos a hablar del único que se ha tocado.
+
+### §2 — El arreglo, en tres piezas
+
+- **D-575 — El ámbito por defecto es el PROYECTO de lo tocado.** El `.csproj` más cercano subiendo
+  desde cada fichero editado —la misma regla que usa MSBuild para saber de quién es un fichero— y
+  los proyectos de test que le apuntan con un `ProjectReference`. Más rápido y más barato, sí, pero
+  la razón es otra: **el veredicto pertenece al cambio**. Si lo tocado cae en dos proyectos, o no
+  cae en ninguno, se amplía a la solución **y se dice por qué**. Y un proyecto sin tests no se
+  maquilla: «compila, pero nadie lo prueba, dilo en tu resumen».
+
+- **D-576 — Ampliar el ámbito es decisión del USUARIO, nunca del agente.** «Compilar solución
+  completa» es una casilla de la vista, no una tool. El agente no sabe si este cambio puede haber
+  roto a un vecino, y no es él quien paga el tiempo de averiguarlo. El interruptor vive en
+  `LiveFixService`, no en el view-model: la vista es transitoria y navegar fuera no puede cambiar
+  en silencio lo que se va a compilar.
+
+- **D-577 — Línea base y delta: los errores que ya estaban no son del cambio.** Antes de la primera
+  edición —con el árbol limpio garantizado por la precondición de F6.9— se mide la misma
+  compilación y se guardan las **firmas** de sus errores. El resultado final se presenta como
+  delta: «0 errores nuevos · 18 preexistentes». La firma es la línea del error sin la ruta del
+  clon, sin la columna y sin el proyecto entre corchetes, porque dos ejecuciones del MISMO error
+  tienen que producir la misma cadena o el delta contaría como nuevo lo que ya estaba.
+  <br>
+  Se cachea por **(objetivo, commit)** en `%LOCALAPPDATA%\Atalaya\builds`, fuera del clon: medir el
+  clon no puede ensuciarlo. La caché es correcta justamente por la precondición del árbol limpio —
+  sobre el mismo commit, lo que la solución hacía antes de tocarla es lo mismo para todos—, así que
+  la segunda sesión sobre el mismo commit no vuelve a pagarla.
+  <br>
+  Y con el árbol **ya tocado** no se inventa nada: si no hay línea base en caché, se cuentan todos
+  los errores como nuevos y el resumen lo declara con todas las letras. Una base medida sobre un
+  árbol sucio no sería una base.
+
+- **D-578 — Lo que dotnet no puede compilar se NOMBRA, no se cuenta.** `.vcxproj` y compañía
+  (`.wixproj`, `.sqlproj`, `.njsproj`…) se detectan por extensión, y los errores `MSB4019` o los
+  que citen uno de esos ficheros salen del veredicto con su nota: «requiere el toolset C++ de
+  Visual Studio; dotnet no puede compilarlo y no cuenta como fallo». **No se trae MSBuild ni el
+  toolset de VS como dependencia**: la honestidad sale más barata que la cobertura, y contar como
+  fallo del agente algo que ninguna herramienta de aquí puede compilar era la peor de las dos
+  opciones.
+
+- **D-579 — El informe y la barra cuentan lo mismo que el agente lee.** La sección «Compilación y
+  tests» del informe `fix` lleva ámbito, veredicto, tests, línea base, los errores nuevos, los
+  preexistentes **en su propio apartado** —«no son del cambio y no cuentan en el veredicto», porque
+  quien lea el informe los verá al compilar y tiene derecho a saber que ya estaban— y la salida
+  completa plegada. La barra inferior de V8 dice «build/tests: ✓ verde · 0 error(es) nuevo(s) · 18
+  preexistente(s)». Y el encargo del agente se lo dice también: los preexistentes no son suyos y
+  arreglarlos sería la expansión que la regla 5 le prohíbe.
+
+### Cobertura
+
+- **D-580 — Lo que queda probado (23 tests nuevos).** Del ámbito: proyecto por defecto, sus tests
+  por `ProjectReference`, solución cuando el usuario la pide, solución con nota cuando el cambio
+  toca dos proyectos, el C++ fuera con su nota, y tocar solo C++ no finge una compilación. Del
+  delta: **el caso real reproducido** —18 preexistentes, 0 nuevos, veredicto verde—, un error que
+  sí trae el cambio marcado como nuevo y tumbando el veredicto, el `MSB4019` sin contar, la línea
+  base medida una vez y reutilizada por commit, invalidada al cambiar de commit, y no inventada
+  con el árbol sucio. De lo que se ejecuta: proyecto + sus tests, y el proyecto sin tests
+  diciéndolo. De la navegación: la sesión registra su hallazgo, la fila de Informes lo lleva, el
+  evento del historial apunta a su sesión, el rótulo «Volver al hallazgo (BUG-0003)», el
+  interruptor que sobrevive a la vista, el informe con los preexistentes aparte, y el
+  `sessionId` yendo y viniendo del hub —incluido un historial anterior a H9.1, que se sigue
+  leyendo—. Más los cuatro caminos de vuelta como invariantes de plantilla.
+
+- **D-581 — Lo que NO cubren, y se dice.** Sigue sin lanzarse `dotnet build` de verdad en ningún
+  test: `IProcessRunner` está doblado y lo que se prueba es la delegación y el delta, no MSBuild.
+  El resolutor de ámbito SÍ se ha ejercitado contra el clon real de XBLAST (D-574), pero en
+  lectura: no se ha compilado ese clon desde aquí, para no dejarle al usuario un árbol sucio que
+  bloquearía justo el arreglo asistido. La verificación de que una sesión real termina diciendo
+  «0 errores nuevos» es del usuario, con su asiento.
