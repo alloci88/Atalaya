@@ -244,7 +244,8 @@ pertenencia) y `read:user` (login, nombre, avatar, email). Nada más.
   búsqueda por contenido, visor markdown renderizado dentro de la app (tablas incluidas) y
   descarga del `.md`. Es el único sitio desde el que se lee un informe.
 
-El manual de uso, pantalla a pantalla, está en [`MANUAL.md`](MANUAL.md).
+El manual de uso, pantalla a pantalla, está en [`MANUAL.md`](MANUAL.md). Lo que queda por hacer
+y lo que se decidió aplazar, en [`BACKLOG.md`](BACKLOG.md).
 
 ## Compilar y probar
 

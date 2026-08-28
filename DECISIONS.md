@@ -4,6 +4,24 @@ Registro de decisiones tomadas en zonas **[LIBERTAD]** o ante ambigüedades no
 bloqueantes del prompt de construcción. Las decisiones **[NO NEGOCIABLE]** del
 prompt no se repiten aquí salvo para anclar un detalle de implementación.
 
+## Normas de la casa (N-1…N-4)
+
+Se citan por su número a lo largo de este fichero. Las tres primeras vienen de los prompts de
+construcción; la cuarta se establece en F6.10.
+
+- **N-1 — Lo que toca el sync se prueba de verdad.** Cambio en la sincronización con el hub →
+  tests de integración contra un remoto local `--bare`, sin red.
+- **N-2 — Diagnóstico con evidencia, o incertidumbre declarada.** Nunca se adivina una causa: se
+  mide, se enseña lo medido, y lo que no se ha comprobado se dice que no se ha comprobado.
+- **N-3 — Nada se da por cerrado con commits sin publicar.** En esta máquina el `git push` es
+  **exclusivamente del usuario**: el agente commitea y, al cerrar, lista los commits locales
+  pendientes con sus hashes para que el usuario los publique. Un agente que pushea aquí se salta
+  la única revisión que hay.
+- **N-4 — El backlog es del equipo, y vive en el repo.** `BACKLOG.md` se mantiene al día igual que
+  `MANUAL.md` y `DECISIONS.md`: cada fase mueve lo que entrega a «Cerrado» y apunta lo que deja
+  pendiente. Un backlog que solo ve una persona no es un backlog del equipo, es una nota suya —y
+  desaparece con ella.
+
 ## Toolchain / entorno
 
 - **D-000 — .NET 8 SDK ausente en la máquina de build.** Al arrancar solo estaba
@@ -4750,6 +4768,12 @@ truncaba en silencio rompe a cualquier llamador que dependiera del truncado.
   demasiado grande para casar línea a línea») y se enseña como reemplazo entero, en vez de
   inventarse correspondencias. Y el marcador (`+`, `−`, `⋯`) va siempre delante: el color solo
   refuerza lo que ya se lee.
+  <br>
+  **Condición de la revisión (aprobada, F6.10).** El diff artesanal se queda, con una salida
+  escrita de antemano: si con uso real falla en los casos finos —cambios **intra-línea**, ficheros
+  **grandes**, **encodings**— se migra a DiffPlex **sin debate**. La decisión de hoy es «esto
+  basta», no «esto es mejor»; el día que aparezca el caso que no basta, ya está decidido qué se
+  hace y no hay que volver a discutirlo.
 
 - **D-553 — El diff compara con el ANTES DE LA SESIÓN, no con la última edición.** Es lo que el
   usuario tiene que revisar antes de commitear. Y por eso `FixToolbox` distingue dos cosas que al
@@ -4791,6 +4815,10 @@ truncaba en silencio rompe a cualquier llamador que dependiera del truncado.
   control exista y esté enlazado al ajuste— en vez de borrarse. Encendido de serie porque el flujo
   es supervisado por construcción; y como el valor por defecto es `true`, las máquinas con un
   `settings.json` anterior lo estrenan encendido sin tocar nada.
+  <br>
+  **Corregido en F6.10 (D-562): la última frase era falsa.** Esas máquinas no traen la clave
+  ausente, traen un `false` escrito, y el valor por defecto no las alcanza. El botón no apareció en
+  ninguna de ellas hasta la promoción única de D-563.
 
 ### §6 — Cobertura
 
@@ -4816,3 +4844,104 @@ truncaba en silencio rompe a cualquier llamador que dependiera del truncado.
   (`IProcessRunner` está doblado): lo que se prueba es la delegación, no MSBuild. Y ninguno habla
   con Copilot: la calidad del arreglo la juzga el humano contra un hallazgo real de xblast, que es
   la verificación final de esta tanda.
+
+## F6.10 — El botón que no aparecía, y los textos que se cortaban (cierre de H9)
+
+Cierre de la revisión de H9. Dos defectos reportados por el usuario con la app en la mano, la
+condición de salida de D-552 escrita, y el backlog trasladado al repo (N-4).
+
+### El diagnóstico primero (N-2): qué se midió y con qué
+
+- **D-562 — El interruptor no nacía apagado por «clave ausente»: nacía apagado porque el `false`
+  estaba ESCRITO.** La hipótesis de partida era la de siempre —una clave nueva que falta en un
+  `settings.json` viejo y se deserializa a `false`—, y es **falsa** en esta base de código.
+  Medido:
+  - `System.Text.Json` respeta el inicializador de la propiedad cuando la clave falta. Un
+    `settings.json` sin `enableAssistedFix` carga a `true`. Test:
+    `Un_settings_sin_la_clave_estrena_el_arreglo_asistido_encendido`.
+  - `git show f0ad0c2:src/Atalaya.App/Services/SettingsService.cs` (v1, 2026-08-21) declara
+    `public bool EnableAssistedFix { get; set; }` — **sin inicializador**, es decir `false`. El
+    flag existía desde v1 conectado a nada (D-275), esperando a H9.
+  - `Save` serializa **todas** las propiedades (solo ignora los `null`). Cualquier máquina que
+    guardara ajustes alguna vez entre v1 y F6.9 —y la migración de conexión de D4 guarda sola en
+    el primer arranque, así que son todas— tiene `"enableAssistedFix": false` escrito con todas
+    las letras.
+  - En ese fichero la clave **no falta**: vale `false`. Cambiar el valor por defecto de la
+    propiedad a `true` (D-559) no alcanza a ninguna máquina existente. Por eso la frase de D-559
+    —«las máquinas con un `settings.json` anterior lo estrenan encendido»— **era falsa**, y por
+    eso el botón «Arreglar con agente» no apareció el día de la entrega.
+  - Evidencia del caso concreto: el `settings.json` de la máquina del usuario
+    (`%LOCALAPPDATA%\Atalaya\settings.json`) trae hoy `"enableAssistedFix": true` porque el
+    usuario lo activó a mano en Ajustes, que es exactamente lo que le hizo aparecer el botón.
+  - Lo que se descartó con evidencia: **no** era un `dist` viejo. El publish de `dist/` está
+    fechado el 2026-08-27 22:34 y el commit de H9 (`a0a7cca`) es de las 22:32 del mismo día: el
+    binario que ejecutaba el usuario sí llevaba H9 dentro.
+
+### El arreglo
+
+- **D-563 — Una promoción única, con constancia de que corrió.** En el arranque, junto a la
+  migración de conexión de D4 y con su misma forma: `MigrateAssistedFixDefault()` enciende
+  `EnableAssistedFix` una sola vez y marca `AssistedFixDefaultApplied`. La marca no es adorno: sin
+  ella la promoción correría en cada arranque y apagar el interruptor a mano no sobreviviría a
+  cerrar la aplicación —que es otra forma de tener el ajuste roto, la contraria—. A partir de esa
+  vez manda el usuario y no se le vuelve a tocar. Se acepta a sabiendas el único efecto colateral:
+  a quien apagara el flag antes de F6.9 se le enciende una vez; entonces el interruptor no estaba
+  conectado a nada, así que aquel «apagado» no era una decisión sobre nada.
+
+- **D-564 — La familia se revisó entera, y solo tenía otro miembro: está sano.** Comparadas
+  propiedad a propiedad las `AppSettings` de v1 (`f0ad0c2`) con las de hoy, el patrón «el valor
+  por defecto cambió después de que las máquinas ya lo hubieran escrito» solo se da dos veces:
+  `EnableAssistedFix` (arreglado arriba) y `CopilotModel`, que pasó de `"gpt-5"` escrito a mano
+  (F5.1, `6896269`) a cadena vacía (F5.15). El segundo **no necesita migración** porque ya se cura
+  en caliente: `ModelResolver` pregunta la lista de modelos de la cuenta, y un modelo guardado que
+  la cuenta no ofrece se sustituye por uno válido y se guarda. Todas las demás propiedades con
+  valor por defecto nacieron después de v1: en las máquinas viejas su clave **sí** falta, y ahí el
+  inicializador funciona. Se deja escrito para no volver a auditarlo de memoria.
+
+### Los textos cortados (V8)
+
+- **D-565 — El culpable no era el `Wrap`, era el panel que lo medía.** El globo de cada mensaje
+  ponía `TextWrapping="Wrap"` dentro de un `StackPanel Orientation="Horizontal"`, y un StackPanel
+  horizontal mide a sus hijos con **ancho infinito**: con ancho infinito no hay dónde envolver,
+  así que el texto crecía en línea recta y lo que sobraba quedaba fuera del globo. Ahora es una
+  `Grid` de `Auto` + `*` y el texto recibe el ancho que queda. El mismo error de bulto estaba en
+  las opciones de elicitación, que además llegaban como `Content` plano de un botón —una línea,
+  sin envolver— dentro de un `WrapPanel`.
+
+- **D-566 — Una opción de elicitación se muestra ENTERA o no se muestra.** Las etiquetas no son
+  «Sí/No»: son consecuencias —«(A) lanzar excepción y adaptar los 7 llamadores»—. Quien elige está
+  aceptando lo que dice la etiqueta, así que recortarla con elipsis es hacerle firmar a ciegas.
+  Cada opción ocupa ahora una línea propia, a todo el ancho, con el texto envuelto y el botón
+  creciendo con él. Ni `TextTrimming` ni alturas fijas en toda la conversación; el único
+  `MaxHeight` que queda en la vista —la salida del build— lleva su `ScrollViewer`, porque un tope
+  de altura sin scroll recorta en silencio, que es la misma familia de defecto. El autoscroll que
+  se pausa al subir ya reutilizaba el patrón de V5 desde H9: se comprobó y se deja fijado con un
+  test, no se ha vuelto a escribir.
+
+- **D-567 — Elipsis EN MEDIO para las rutas, y la ruta entera en el tooltip.** `TextTrimming` de
+  WPF solo recorta por el final, que es justo donde vive lo que identifica un fichero: su nombre y
+  su extensión. `MiddleEllipsisConverter` conserva el nombre y se come el tronco de la ruta
+  (`src/Modul…/RingBufferWriter.cs`). No existía nada así en la casa —se buscó— así que esto lo
+  estrena, en las pestañas del diff, en la cabecera del fichero seleccionado y en la lista de
+  ficheros tocados de la pantalla de cierre. El pie de la sesión pasa a `WrapPanel`: en 1366×768
+  sus seis trozos no caben en una fila y el último se perdía por el borde.
+
+### Cobertura
+
+- **D-568 — Lo que queda probado (12 tests nuevos).** Del ajuste: la clave ausente carga a `true`,
+  el `false` heredado se promociona y se persiste, apagarlo a mano después sobrevive al reinicio,
+  y el modelo guardado se lee tal cual. Del botón, extremo a extremo sobre el clon de prueba: un
+  `settings.json` anterior a F6.9 devuelve `FixBlock.Desactivado` —el síntoma que vivió el
+  usuario—, y tras la promoción el lanzador dice que sí con el hallazgo activo, el clon vinculado
+  y el árbol limpio, que es exactamente lo que la ficha pregunta para pintar el botón. De la
+  vista, como invariantes de plantilla: que el globo no vuelva a ser un StackPanel horizontal, que
+  la etiqueta de la opción vaya en un `TextBlock` que envuelve y sin `TextTrimming`, que la
+  conversación conserve el autoscroll que se pausa, que el único `MaxHeight` sea el que lleva
+  scroll, y el recorte por el medio con sus casos.
+
+- **D-569 — Lo que NO cubren los tests, y se dice.** Ningún test **renderiza**: la casa comprueba
+  las plantillas como texto (`ButtonForegroundTests`, `ImplicitStyleTests`) y esta tanda no cambia
+  esa forma. Queda para la verificación humana pendiente de H9 mirar la sesión de arreglo con
+  textos largos de verdad, en los dos temas y a 1366×768. Lo que sí se puede afirmar sin verla: no
+  se ha introducido ni un color nuevo —los cambios son de disposición y usan los pinceles
+  `DynamicResource` que ya estaban—, así que el tema no es una variable de este arreglo.
