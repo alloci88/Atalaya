@@ -204,6 +204,8 @@ public static class ReportBuilder
             }
         }
 
+        AppendDirectives(sb, session);
+
         // F5.1b: qué veredictos no se aplicaron tal cual y por qué. Las notas los nombran por ULID;
         // sin esta sección, «1 degradado» sería otro número sin causa (D-060).
         var degradados = session.Notes.Where(n => n.Contains(": veredicto degradado · ")).ToList();
@@ -333,6 +335,8 @@ public static class ReportBuilder
             + "local de quien lo lanzó y ahí se queda: revisar, commitear y publicar sigue siendo suyo. "
             + "Y arreglar no resuelve el hallazgo — la resolución llega verificando, con evidencia.");
         sb.AppendLine();
+
+        AppendDirectives(sb, session);
 
         sb.AppendLine("## Qué cambió y por qué");
         sb.AppendLine();
@@ -514,5 +518,41 @@ public static class ReportBuilder
         sb.AppendLine();
         Sign(sb, organization);
         return sb.ToString();
+    }
+
+    // ------------------------------------------------------------------ F7 · directivas
+
+    /// <summary>
+    /// Con qué convenciones del proyecto se hizo esta sesión (F7 §3).
+    /// <para>
+    /// Va con el hash del contenido íntegro porque las directivas viven en el repo de la
+    /// aplicación y cambian con él: sin el hash, un informe de hace dos meses diría que hubo
+    /// convenciones pero no cuáles, y volver al fichero de aquel día sería imposible. Se nombran
+    /// también las truncadas y las omitidas por presupuesto — que es justo lo que explicaría por
+    /// qué el auditor no vio algo.
+    /// </para>
+    /// </summary>
+    private static void AppendDirectives(StringBuilder sb, AuditSession session)
+    {
+        if (session.Directives.Count == 0)
+        {
+            return;
+        }
+
+        sb.AppendLine("## Directivas del proyecto que viajaron");
+        sb.AppendLine();
+        sb.AppendLine("Las convenciones intencionales que el equipo mantiene en el repositorio de la");
+        sb.AppendLine("aplicación y que se le enseñaron al modelo en esta sesión. Informan el criterio;");
+        sb.AppendLine("nunca cambian las reglas de operación de Atalaya.");
+        sb.AppendLine();
+        foreach (DirectiveRecord d in session.Directives)
+        {
+            string state = d.Omitted
+                ? " — **omitida por presupuesto** (no viajó)"
+                : d.Truncated ? " — **truncada**: solo viajó su principio" : string.Empty;
+            sb.AppendLine($"- `{d.Path}` · {d.ContentHash}{state}");
+        }
+
+        sb.AppendLine();
     }
 }

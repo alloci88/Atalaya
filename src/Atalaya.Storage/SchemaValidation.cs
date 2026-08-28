@@ -58,6 +58,20 @@ public static class SchemaValidation
         Require(p.Suppressions >= 0, "patternSilence.suppressions must be >= 0");
     }
 
+    /// <summary>
+    /// F7. La <c>path</c> es obligatoria porque ES la directiva: sin ella la entrada no apunta a
+    /// nada del repo. El ámbito no se valida —<c>Ninguno</c> es un estado legítimo: el candidato
+    /// que alguien miró y decidió no activar—.
+    /// </summary>
+    public static void Validate(ProjectDirective d)
+    {
+        Require(d.SchemaVersion == CurrentSchemaVersion, "directive.schemaVersion must be 1");
+        Require(d.Id != Ulid.Empty, "directive.id must be a non-empty ULID");
+        RequireText(d.Path, "directive.path");
+        RequireText(d.Kind, "directive.kind");
+        RequireText(d.By, "directive.by");
+    }
+
     public static void Validate(Claim c)
     {
         Require(c.SchemaVersion == CurrentSchemaVersion, "claim.schemaVersion must be 1");

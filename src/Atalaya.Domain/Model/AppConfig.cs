@@ -43,6 +43,22 @@ public sealed class Thresholds
     /// es relevante, y una tanda de dos unidades no lo es. Por defecto 3.
     /// </summary>
     public int ConfirmLaunchUnits { get; set; } = 3;
+
+    /// <summary>
+    /// Tope de tokens que las directivas del proyecto pueden ocupar en UN prompt (F7 §2).
+    /// <para>
+    /// Sin techo no hay funcionalidad: una colección de skills puede pesar más que el código que
+    /// se está auditando, y un prompt que crece sin límite no falla con un error — falla gastando.
+    /// Por defecto 8.000, que da de sobra para un AGENTS.md, un puñado de ADRs y las reglas de la
+    /// casa, y sigue siendo pequeño frente al presupuesto por unidad
+    /// (<see cref="MaxTokensPerUnit"/>).
+    /// </para>
+    /// <para>
+    /// <b>0 apaga las directivas</b> en esta aplicación: no viaja ninguna y no se escribe la
+    /// sección. Es el interruptor de quien no las quiera sin tener que desactivarlas una a una.
+    /// </para>
+    /// </summary>
+    public int DirectiveTokenBudget { get; set; } = 8_000;
 }
 
 /// <summary>

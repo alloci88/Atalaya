@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using Atalaya.App.Services;
 using Atalaya.App.Views;
 using Atalaya.Domain;
@@ -35,6 +35,12 @@ public sealed partial class InventoryViewModel : ViewModelBase
     /// <summary>F5.10: quién abre esa gestión. Inyectada para poder probar el gesto sin ventana.</summary>
     private readonly IPatternSilencesDialog _patternsDialog;
 
+    /// <summary>F7: el registro de directivas del proyecto de esta app.</summary>
+    private readonly DirectiveService _directives;
+
+    /// <summary>F7: quién abre su gestión. Inyectada por lo mismo que la de patrones.</summary>
+    private readonly IDirectivesDialog _directivesDialog;
+
     /// <summary>
     /// F5.7 §4: el resultado de una acción se cuenta por el toast global. El texto que vivía al
     /// fondo del panel del ciclo se quedaba pegado hasta la acción siguiente y, con la ventana
@@ -60,10 +66,13 @@ public sealed partial class InventoryViewModel : ViewModelBase
         SettingsService settings, CostEstimator costs, IAuditLaunchConfirmer confirmer,
         GroupExpansionMemory expansion, ToastCenter toasts,
         CloneLinkService links, LinkCloneFlow linkFlow, InventoryRescanService rescan,
-        GovernanceService governance, IPatternSilencesDialog patternsDialog)
+        GovernanceService governance, IPatternSilencesDialog patternsDialog,
+        DirectiveService directives, IDirectivesDialog directivesDialog)
     {
         _governance = governance;
         _patternsDialog = patternsDialog;
+        _directives = directives;
+        _directivesDialog = directivesDialog;
         _hub = hub;
         _ulids = ulids;
         _navigation = navigation;
@@ -120,6 +129,29 @@ public sealed partial class InventoryViewModel : ViewModelBase
           + (ExpiredPatterns > 0
               ? $" · {ExpiredPatterns} caducado(s) que ya no suprimen: revísalos."
               : ". Es por-aplicación: el mismo tipo puede ser crítico en otra.");
+
+    /// <summary>
+    /// Directivas ACTIVAS del proyecto (F7). Va en el panel del ciclo, junto a los patrones
+    /// silenciados, por la misma razón que ellos: condiciona la lectura de todo lo demás. Una
+    /// auditoría que conoce las convenciones deliberadas del proyecto no reporta lo mismo que una
+    /// que las ignora, y quien lea la cobertura tiene que saber cuál de las dos está viendo.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DirectivesTooltip))]
+    private int _activeDirectives;
+
+    /// <summary>Candidatos detectados en el clon que nadie ha curado todavía (F7 §1).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DirectivesTooltip))]
+    private int _newDirectiveCandidates;
+
+    public string DirectivesTooltip => ActiveDirectives == 0 && NewDirectiveCandidates == 0
+        ? "Los ficheros de convenciones del proyecto —AGENTS.md, ADRs, specs, skills— que informan al "
+          + "auditor y al arreglo. Ninguno activo por ahora."
+        : $"{ActiveDirectives} directiva(s) activa(s) informando al auditor y al arreglo"
+          + (NewDirectiveCandidates > 0
+              ? $" · {NewDirectiveCandidates} candidato(s) detectado(s) sin activar: decídelos tú."
+              : ". Su contenido se lee del clon en cada uso: siempre viaja la versión vigente.");
 
     /// <summary>El ciclo con su fecha: «Ciclo 5 · iniciado 12 ago 2026» (F5.6 §5).</summary>
     [ObservableProperty] private string _cycleLabel = "Ciclo 1";
@@ -269,6 +301,13 @@ public sealed partial class InventoryViewModel : ViewModelBase
         var patterns = _hub.Store.ListPatternSilences(Slug);
         SilencedPatterns = patterns.Count(p => p.IsLiveAt(nowUtc));
         ExpiredPatterns = patterns.Count(p => p.IsExpiredAt(nowUtc));
+
+        // F7: activas y candidatos-sin-curar se cuentan por separado. Un candidato NO cuenta como
+        // directiva: detectar no es activar, y el panel tiene que decir cuántas decisiones esperan
+        // a alguien sin sugerir que ya se han tomado.
+        var directives = _hub.Store.ListDirectives(Slug);
+        ActiveDirectives = directives.Count(d => d.IsActive);
+        NewDirectiveCandidates = _directives.NewCandidates(Slug, Link.Path).Count;
 
         var sessions = _hub.Store.ListSessions(Slug);
         CycleStart start = CycleSummary.StartOf(sessions, CycleN);
@@ -499,6 +538,26 @@ public sealed partial class InventoryViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Abre la gestión de directivas del proyecto de esta app (F7 §1). A diferencia de la de
+    /// patrones, esta SÍ quiere el clon —el catálogo busca en el repositorio y la vista previa lee
+    /// el fichero—, pero se abre igualmente sin él: lo ya registrado se puede leer y desactivar sin
+    /// tener el código delante, y el panel dice con todas las letras que no se ha podido mirar.
+    /// </summary>
+    [RelayCommand]
+    private void ManageDirectives()
+    {
+        if (Slug.Length == 0)
+        {
+            return;
+        }
+
+        var vm = new DirectivesViewModel(_directives, _hub, _toasts);
+        vm.Load(Slug, Link.Path);
+        _directivesDialog.Show(vm);
+        Rebuild();
+    }
+
+    /// <summary>
     /// Abre «Vincular clon local…» / «Reparar vínculo…» sin salir del inventario (F5.8 §3): el
     /// acceso directo que acompaña a cada acción deshabilitada. Al volver, la página se
     /// reconstruye, y con ella el modo solo-lectura.
@@ -535,9 +594,17 @@ public sealed partial class InventoryViewModel : ViewModelBase
             RescanOutcome outcome = await Task.Run(() => _rescan.Rescan(Slug, clone));
             // F5.16: lo que le pasó a los hallazgos medidos se DICE. Un hallazgo que se resuelve en
             // silencio se lee como un hallazgo que ha desaparecido, y eso costó una investigación.
-            _toasts.Show(outcome.Measured.Total > 0
-                ? $"Inventario actualizado · {outcome.Measured.Summary}."
-                : "Inventario actualizado.");
+            // F7 §1: los candidatos nuevos se ANUNCIAN, no se activan. El aviso es informativo a
+            // propósito — «se han detectado» y no «se han añadido»— porque quien lo lee tiene que
+            // entender que todavía no ha pasado nada y que la decisión sigue siendo suya.
+            string directives = outcome.Candidates.Count == 0
+                ? string.Empty
+                : $" · {outcome.Candidates.Count} fichero(s) de directivas detectado(s), sin activar: "
+                  + "revísalos en «Directivas · Gestionar»";
+
+            _toasts.Show((outcome.Measured.Total > 0
+                ? $"Inventario actualizado · {outcome.Measured.Summary}"
+                : "Inventario actualizado") + directives + ".");
         }
         catch (Exception ex)
         {

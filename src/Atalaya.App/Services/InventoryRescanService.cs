@@ -1,4 +1,4 @@
-using Atalaya.Domain.Model;
+﻿using Atalaya.Domain.Model;
 using Atalaya.Inventory;
 
 namespace Atalaya.App.Services;
@@ -17,18 +17,25 @@ public sealed class InventoryRescanService
     private readonly HubContext _hub;
     private readonly InventoryScanner _scanner;
     private readonly MeasuredFindingService? _measured;
+    private readonly DirectiveService? _directives;
 
     /// <param name="measured">
     /// Quien pone al día los hallazgos que la app MIDE (F5.16). Opcional para no romper a quien
     /// construya el servicio a mano; en la aplicación va siempre puesto — sin él, re-escanear
     /// vuelve a dejar hallazgos de tamaño describiendo un tamaño que ya no existe.
     /// </param>
+    /// <param name="directives">
+    /// Quien sabe qué ficheros de convenciones propone el catálogo (F7 §1). Opcional igual que
+    /// <paramref name="measured"/>; sin él, un re-escaneo simplemente no anuncia candidatos.
+    /// </param>
     public InventoryRescanService(
-        HubContext hub, InventoryScanner scanner, MeasuredFindingService? measured = null)
+        HubContext hub, InventoryScanner scanner, MeasuredFindingService? measured = null,
+        DirectiveService? directives = null)
     {
         _hub = hub;
         _scanner = scanner;
         _measured = measured;
+        _directives = directives;
     }
 
     /// <summary>
@@ -61,7 +68,13 @@ public sealed class InventoryRescanService
         _hub.Sync?.CommitAndPush($"inventory: rescan {slug} cycle {app.CurrentCycle}"
             + (measured.Total > 0 ? $" (+{measured.Total} hallazgo(s) medidos)" : ""));
 
-        return new RescanOutcome(merged.Units.Count, measured);
+        // F7 §1: el re-escaneo PROPONE directivas nuevas y no activa ninguna. Se cuentan aquí,
+        // dentro del mismo gesto, porque el fichero de convenciones que alguien acaba de añadir al
+        // repositorio llega al clon por el mismo camino que el código.
+        IReadOnlyList<string> newDirectives =
+            _directives?.NewCandidates(slug, clonePath) ?? Array.Empty<string>();
+
+        return new RescanOutcome(merged.Units.Count, measured, newDirectives);
     }
 }
 
@@ -70,8 +83,20 @@ public sealed class InventoryRescanService
 /// (F5.16). El segundo dato no es decoración — una resolución que no se narra es indistinguible de
 /// un borrado, y ese fue el susto que abrió esta tanda.
 /// </summary>
-public sealed record RescanOutcome(int Units, MeasuredReconciliation Measured)
+/// <param name="NewDirectives">
+/// Rutas de ficheros de convenciones que el catálogo propone y que nadie ha curado todavía (F7).
+/// Se anuncian; <b>no se activan</b>. Que una directiva empiece a informar al auditor sin que nadie
+/// lo haya decidido sería cambiar el criterio de la auditoría en silencio, que es exactamente lo
+/// contrario de para lo que existe esta funcionalidad.
+/// </param>
+public sealed record RescanOutcome(
+    int Units,
+    MeasuredReconciliation Measured,
+    IReadOnlyList<string>? NewDirectives = null)
 {
+    /// <summary>Los candidatos nuevos, nunca null: el aviso los cuenta sin comprobar nada antes.</summary>
+    public IReadOnlyList<string> Candidates => NewDirectives ?? Array.Empty<string>();
+
     /// <summary>Permite seguir leyendo el resultado como el número de unidades de siempre.</summary>
     public static implicit operator int(RescanOutcome outcome) => outcome.Units;
 }

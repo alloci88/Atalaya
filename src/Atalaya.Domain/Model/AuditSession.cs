@@ -238,6 +238,19 @@ public sealed class AuditSession
     public List<PatternSuppressionTally> SuppressionsByPattern { get; set; } = new();
 
     /// <summary>
+    /// Qué directivas del proyecto viajaron en los prompts de esta sesión, con el hash de su
+    /// contenido (F7 §3). Vacía cuando la app no tiene ninguna activada.
+    /// <para>
+    /// Es la trazabilidad de CON QUÉ CRITERIO se auditó. Las directivas viven en el repo de la
+    /// aplicación y cambian con él, así que sin el hash una sesión de hace dos meses sería
+    /// imposible de releer: se sabría que hubo convenciones, no cuáles. Incluye las truncadas y
+    /// las omitidas por presupuesto, marcadas como tales — un informe que solo nombre lo que entró
+    /// deja fuera justo lo que explicaría por qué el auditor no vio algo.
+    /// </para>
+    /// </summary>
+    public List<DirectiveRecord> Directives { get; set; } = new();
+
+    /// <summary>
     /// El hallazgo que arregló una sesión <see cref="AuditMode.Fix"/> (H9.1). Null en todo lo
     /// demás y en las sesiones fix anteriores a H9.1, que solo lo nombraban dentro del texto.
     /// Es lo que permite volver del informe de un arreglo a la ficha de su hallazgo.

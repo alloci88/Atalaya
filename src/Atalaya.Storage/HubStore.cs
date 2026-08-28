@@ -154,6 +154,36 @@ public sealed class HubStore
         return true;
     }
 
+    // --- Project directives (F7) ---
+
+    /// <summary>
+    /// El registro de directivas de esta app: rutas, ámbitos y quién las marcó. Incluye las
+    /// entradas con ámbito <c>Ninguno</c> —candidatos vistos y descartados—, porque el panel
+    /// necesita distinguir «esto no lo ha mirado nadie» de «esto se miró y se dejó fuera».
+    /// </summary>
+    public IReadOnlyList<ProjectDirective> ListDirectives(string slug)
+        => ReadAll<ProjectDirective>(_paths.DirectivesDir(slug), SchemaValidation.Validate);
+
+    public ProjectDirective? TryReadDirective(string slug, Ulid id)
+        => File.Exists(_paths.DirectiveFile(slug, id.ToString()))
+            ? ReadJson<ProjectDirective>(_paths.DirectiveFile(slug, id.ToString()), SchemaValidation.Validate)
+            : null;
+
+    public void WriteDirective(string slug, ProjectDirective directive)
+        => WriteJson(_paths.DirectiveFile(slug, directive.Id.ToString()), directive, SchemaValidation.Validate);
+
+    public bool DeleteDirective(string slug, Ulid id)
+    {
+        string path = _paths.DirectiveFile(slug, id.ToString());
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        File.Delete(path);
+        return true;
+    }
+
     // --- Claims (deleted on release, §2) ---
 
     public IReadOnlyList<Claim> ListClaims(string slug)

@@ -163,16 +163,24 @@ public static class PromptComposer
           cuántos en el argumento suppressedByPattern de unit_done.
         """;
 
+    /// <param name="directives">
+    /// Las convenciones intencionales del proyecto, ya recortadas al presupuesto (F7). Van
+    /// DESPUÉS del brief y antes de todo lo demás: el brief dice qué se busca, y las directivas
+    /// dicen qué de lo que se busca ya está decidido en esta casa. Null o vacío = no se escribe
+    /// nada.
+    /// </param>
     public static string ComposeUnitPrompt(
         string unitPath, string unitContent, string brief, AuditMode mode,
         IReadOnlyList<ExistingFinding>? existing = null,
-        PatternSilenceSet? patterns = null)
+        PatternSilenceSet? patterns = null,
+        DirectiveBundle? directives = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine(AuditorRules);
         sb.AppendLine($"MODO: {mode}. Los hallazgos nuevos nacen con la confianza que la app asigne.");
         sb.AppendLine();
         sb.AppendLine(brief);
+        sb.AppendLine(DirectiveSection.Render(directives ?? DirectiveBundle.Empty, DirectivePurpose.Auditoria));
         sb.AppendLine(PatternBlock(patterns));
         sb.AppendLine(ExistingBlock(unitPath, existing));
         sb.AppendLine($"UNIDAD: {unitPath}");
@@ -251,12 +259,19 @@ public static class PromptComposer
         return sb.ToString();
     }
 
-    public static string ComposeVerifyPrompt(IReadOnlyList<VerifyTarget> targets)
+    /// <param name="directives">
+    /// Las mismas directivas de ámbito Auditoría que vio el auditor (F7 §3). El verificador juzga
+    /// el mismo código con el mismo criterio: sin ellas confirmaría como defecto justo lo que la
+    /// auditoría había aprendido a no reportar.
+    /// </param>
+    public static string ComposeVerifyPrompt(
+        IReadOnlyList<VerifyTarget> targets, DirectiveBundle? directives = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Eres un verificador. Para cada hallazgo, decide su veredicto y llama a submit_verdict(findingUlid, verdict, evidence).");
         sb.AppendLine("verdict ∈ {confirmado, resuelto, no-verificable, no-es-defecto}. Usa el ULID exacto que se te da.");
         sb.AppendLine();
+        sb.Append(DirectiveSection.Render(directives ?? DirectiveBundle.Empty, DirectivePurpose.Verificacion));
 
         // F6.6 — LA REGLA QUE FALTABA. Se juzga el código que hay AHORA; no se busca el de antes.
         // Que el fragmento auditado haya desaparecido es el aspecto NORMAL de un arreglo, y leerlo

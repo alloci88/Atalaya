@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
@@ -1055,5 +1055,115 @@ public sealed class SessionCoordinatorTests : IDisposable
         findings.Should().HaveCount(2);
         findings.Single(f => f.RuleId == "errores.recursos.no-liberado").Tag.Should().Be(FindingTag.Checklist);
         findings.Single(f => f.RuleId == "criterio.recursos").Tag.Should().Be(FindingTag.Criterio);
+    }
+
+    // ---------------------------------------------------------------- F7 · directivas
+
+    /// <summary>
+    /// F7: el área de criterio con la que se reporta que el código CONTRADICE una convención del
+    /// propio proyecto. Tiene que atravesar la validación de payloads igual que cualquier otra —si
+    /// el auditor la lee en el prompt y la app se la rechaza, la regla (b) de la sección de
+    /// directivas sería una instrucción imposible de cumplir— y salir etiquetada como criterio.
+    /// </summary>
+    [Fact]
+    public async Task Criterio_directivas_se_acepta_y_se_etiqueta_como_criterio()
+    {
+        SubmitFindingArgs contradiction = SampleFinding("A.cs") with
+        {
+            RuleId = "criterio.directivas",
+            Symbol = "A.M",
+            Title = "Usa una clase mutable donde AGENTS.md manda records",
+        };
+
+        SessionResult result = await RunLotes(new FakeCopilotAgent(_ => new[] { contradiction }));
+
+        result.Counters.New.Should().Be(1);
+        Finding stored = _hub.Store.ListFindings("app").Single();
+        stored.RuleId.Should().Be("criterio.directivas");
+        stored.Tag.Should().Be(FindingTag.Criterio);
+    }
+
+    /// <summary>El coordinador con las directivas del proyecto conectadas (F7).</summary>
+    private SessionCoordinator CoordinatorWithDirectives(ICopilotAgent agent, out DirectiveService directives)
+    {
+        directives = new DirectiveService(_hub, new DirectiveScanner(), _ulids);
+        return new SessionCoordinator(
+            _hub, _ingestion, _reconciliation, _machines, _ulids, agent, _settings,
+            directives: directives);
+    }
+
+    [Fact]
+    public async Task Las_directivas_activas_viajan_en_el_prompt_del_auditor_y_quedan_en_la_sesion()
+    {
+        File.WriteAllText(Path.Combine(_clone, "AGENTS.md"), "En este proyecto usamos records.");
+
+        var prompts = new List<string>();
+        var agent = new FakeCopilotAgent(r =>
+        {
+            prompts.Add(r.Prompt);
+            return Array.Empty<SubmitFindingArgs>();
+        });
+
+        SessionCoordinator coordinator = CoordinatorWithDirectives(agent, out DirectiveService directives);
+        directives.SetScope("app", "AGENTS.md", "agents", DirectiveScope.Auditoria);
+
+        await coordinator.RunAsync(
+            new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
+
+        prompts.Should().ContainSingle();
+        prompts[0].Should().Contain("DIRECTIVAS DEL PROYECTO");
+        prompts[0].Should().Contain("En este proyecto usamos records.");
+        prompts[0].Should().Contain("MÉTODO DE BARRIDO", "las reglas de operación siguen mandando");
+
+        AuditSession session = _hub.Store.ListSessions("app").Single();
+        session.Directives.Should().ContainSingle()
+            .Which.Path.Should().Be("AGENTS.md");
+        session.Directives[0].ContentHash.Should().StartWith("sha256:");
+    }
+
+    /// <summary>
+    /// Una directiva de ámbito Arreglo NO informa al auditor. El ámbito es lo único que decide en
+    /// qué prompt viaja cada fichero: si aquí se colara, «Arreglo» no significaría nada.
+    /// </summary>
+    [Fact]
+    public async Task Una_directiva_de_ambito_arreglo_no_viaja_en_la_auditoria()
+    {
+        File.WriteAllText(Path.Combine(_clone, "AGENTS.md"), "solo-para-el-arreglo");
+
+        var prompts = new List<string>();
+        var agent = new FakeCopilotAgent(r =>
+        {
+            prompts.Add(r.Prompt);
+            return Array.Empty<SubmitFindingArgs>();
+        });
+
+        SessionCoordinator coordinator = CoordinatorWithDirectives(agent, out DirectiveService directives);
+        directives.SetScope("app", "AGENTS.md", "agents", DirectiveScope.Arreglo);
+
+        await coordinator.RunAsync(
+            new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
+
+        prompts[0].Should().NotContain("solo-para-el-arreglo");
+        _hub.Store.ListSessions("app").Single().Directives.Should().BeEmpty();
+    }
+
+    /// <summary>Un candidato detectado y NO curado no informa a nadie: detectar no es activar.</summary>
+    [Fact]
+    public async Task Un_candidato_sin_activar_no_viaja_en_ningun_prompt()
+    {
+        File.WriteAllText(Path.Combine(_clone, "AGENTS.md"), "todavia-nadie-lo-ha-decidido");
+
+        var prompts = new List<string>();
+        var agent = new FakeCopilotAgent(r =>
+        {
+            prompts.Add(r.Prompt);
+            return Array.Empty<SubmitFindingArgs>();
+        });
+
+        await CoordinatorWithDirectives(agent, out _).RunAsync(
+            new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
+
+        prompts[0].Should().NotContain("todavia-nadie-lo-ha-decidido");
+        prompts[0].Should().NotContain("DIRECTIVAS DEL PROYECTO");
     }
 }

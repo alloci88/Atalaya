@@ -27,7 +27,12 @@ public static class FixPromptBuilder
     /// </summary>
     public static string Build(Finding f) => Build(f, refs: null);
 
-    public static string Build(Finding f, ReferenceReport? refs)
+    /// <param name="directives">
+    /// Las convenciones del proyecto de ámbito Arreglo, ya recortadas al presupuesto (F7).
+    /// Opcional por la misma razón que las referencias: si no se pueden leer, el prompt sale igual
+    /// —sin la sección— en vez de no salir.
+    /// </param>
+    public static string Build(Finding f, ReferenceReport? refs, DirectiveBundle? directives = null)
     {
         RuleDef? rule = RuleCatalog.Find(f.RuleId);
         var sb = new StringBuilder();
@@ -59,7 +64,9 @@ public static class FixPromptBuilder
 
         sb.AppendLine();
         AppendReferences(sb, refs);
-        AppendRules(sb);
+        sb.Append(DirectiveSection.Render(
+            directives ?? DirectiveBundle.Empty, DirectivePurpose.ArregloPrompt));
+        AppendRules(sb, directives ?? DirectiveBundle.Empty);
         return sb.ToString();
     }
 
@@ -167,7 +174,7 @@ public static class FixPromptBuilder
     /// que se expande por la solución no es un arreglo mejor: es uno que ya no se puede revisar.
     /// </para>
     /// </summary>
-    private static void AppendRules(StringBuilder sb)
+    private static void AppendRules(StringBuilder sb, DirectiveBundle directives)
     {
         sb.AppendLine("## Reglas del arreglo (obligatorias)");
         sb.AppendLine(
@@ -187,6 +194,19 @@ public static class FixPromptBuilder
         sb.AppendLine("4. Arregla SOLO este hallazgo; no toques nada más.");
         sb.AppendLine("5. Añade o ajusta un test que cubra el defecto si el stack lo permite.");
         sb.AppendLine("6. Lista al final los ficheros tocados.");
+
+        // F7: aquí no hay a quién preguntar —este prompt se pega en otro sitio—, así que el
+        // conflicto con una convención se DECLARA como riesgo. Es la misma regla del modo
+        // interactivo con la única salida que tiene este medio.
+        if (!directives.IsEmpty)
+        {
+            sb.AppendLine(
+                "7. **Respeta las convenciones del proyecto** de la sección de arriba. Si el "
+                + "arreglo correcto contradice una, aplica lo que manda la convención y declara "
+                + "el conflicto como riesgo al final: qué directiva es, qué manda y qué habrías "
+                + "hecho si no existiera. No la atropelles en silencio.");
+        }
+
         sb.AppendLine();
         sb.AppendLine("### Límites de la exploración");
         sb.AppendLine(

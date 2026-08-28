@@ -1,4 +1,4 @@
-using System.Net.Http;
+﻿using System.Net.Http;
 using System.Windows;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
@@ -85,6 +85,9 @@ public partial class App : Application
         services.AddSingleton<NavigationService>();
         services.AddSingleton(sp => new MachineConfigStore(paths.MachinesJson));
         services.AddSingleton<InventoryScanner>();
+        // F7: el escaneo de directivas es un recorrido distinto del árbol, con su propio catálogo.
+        services.AddSingleton<DirectiveScanner>();
+        services.AddSingleton<DirectiveService>();
         services.AddSingleton<FindingIngestionService>();
         services.AddSingleton<ReconciliationService>();
         services.AddSingleton(sp => new PortfolioQuery(sp.GetRequiredService<HubContext>().Store));
@@ -135,6 +138,8 @@ public partial class App : Application
         // gestión de reglas excluidas. Ambas se inyectan para que ni la ficha ni el inventario
         // dependan de que haya una ventana.
         services.AddSingleton<IPatternSilencesDialog, PatternSilencesDialogHost>();
+        // F7: la gestión de directivas del proyecto, inyectada por lo mismo que la de patrones.
+        services.AddSingleton<IDirectivesDialog, DirectivesDialogHost>();
         // F5.6 §3 (D-228): el reparto de alias legibles, que nunca se había cableado.
         services.AddSingleton<DisplayIdService>();
         // F5.6 §2 (D-226): el re-anclaje que se persiste al abrir la ficha.
@@ -162,7 +167,8 @@ public partial class App : Application
             sp.GetRequiredService<AssistedFixLauncher>(),
             sp.GetRequiredService<AgentBusyGate>(),
             sp.GetRequiredService<BuildRunner>(),
-            sp.GetRequiredService<ModelResolver>()));
+            sp.GetRequiredService<ModelResolver>(),
+            sp.GetRequiredService<DirectiveService>()));
 
         // F5.3 §4: el hard-reset de una app. El "quién pregunta" se inyecta para que el
         // view-model no dependa de una ventana y los tests puedan ejercitar el flujo entero.

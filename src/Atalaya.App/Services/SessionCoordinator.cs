@@ -106,13 +106,19 @@ public sealed class SessionCoordinator
     private readonly CycleService? _cycles;
     private readonly StatusExporter? _statusExporter;
     private readonly DisplayIdService? _aliases;
+    private readonly DirectiveService? _directives;
 
+    /// <param name="directives">
+    /// Quien lee las convenciones del proyecto del clon (F7). Opcional para no romper a quien
+    /// construya el coordinador a mano; en la aplicación va siempre puesto. Sin él, la auditoría
+    /// se comporta exactamente como antes de F7: sin sección de directivas.
+    /// </param>
     public SessionCoordinator(
         HubContext hub, FindingIngestionService ingestion, ReconciliationService reconciliation,
         MachineConfigStore machines, IUlidFactory ulids, ICopilotAgent agent,
         SettingsService settings,
         CycleService? cycles = null, StatusExporter? statusExporter = null,
-        DisplayIdService? aliases = null)
+        DisplayIdService? aliases = null, DirectiveService? directives = null)
     {
         _hub = hub;
         _ingestion = ingestion;
@@ -124,6 +130,7 @@ public sealed class SessionCoordinator
         _cycles = cycles;
         _statusExporter = statusExporter;
         _aliases = aliases;
+        _directives = directives;
     }
 
     public event Action<string, string>? UnitPhaseChanged;   // (path, phase)
@@ -300,6 +307,14 @@ public sealed class SessionCoordinator
         // Uno que caduque a mitad de sesión no cambia las reglas del juego a media partida.
         PatternSilenceSet patterns = PatternSilenceSet.From(_hub.Store.ListPatternSilences(request.Slug), now);
 
+        // F7 — las convenciones intencionales del proyecto, leídas del clon AHORA y congeladas
+        // para toda la sesión, por la misma razón que los patrones: las mismas reglas en todas las
+        // unidades. El contenido va al prompt; el hash va al informe, que es lo que permite releer
+        // dentro de un año con qué criterio se auditó esto.
+        DirectiveBundle directives = _directives?.Bundle(request.Slug, clone, DirectiveScope.Auditoria)
+                                     ?? DirectiveBundle.Empty;
+        session.Directives = directives.Records.ToList();
+
         // Cuánto ha suprimido cada patrón en ESTA sesión, para el informe y para el contador de
         // trabajo del propio patrón.
         var suppressionTotals = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -369,7 +384,7 @@ public sealed class SessionCoordinator
                     toolbox.BeginPass(existing);
                     var listed = existing.Select(ToExisting).ToList();
                     string prompt = PromptComposer.ComposeUnitPrompt(
-                        unit.Path, content, brief, request.Mode, listed, patterns);
+                        unit.Path, content, brief, request.Mode, listed, patterns, directives);
                     breakdown.PromptTokensEstimate += EstimateTokens(prompt);
 
                     budgetTripped = false;
@@ -738,9 +753,13 @@ public sealed class SessionCoordinator
     /// Rough token estimate for the initial prompt (Hito 1a). ~4 chars per token is the same
     /// heuristic OpenAI/Anthropic docs quote for English/code; good enough to spot a bloated brief
     /// against actual SDK <c>InputTokens</c> without adding a tokenizer dependency.
+    /// <para>
+    /// Delega en <see cref="PromptTokens"/> desde F7: el presupuesto de directivas se enseña en el
+    /// panel y se declara en el prompt, y dos reglas distintas para el mismo número harían que el
+    /// panel dijera una cosa y el prompt otra sobre lo mismo.
+    /// </para>
     /// </summary>
-    private static int EstimateTokens(string text)
-        => string.IsNullOrEmpty(text) ? 0 : (text.Length + 3) / 4;
+    private static int EstimateTokens(string text) => PromptTokens.Estimate(text);
 
     /// <summary>
     /// SHA-256 de los bytes de la unidad, con el mismo algoritmo y prefijo que usa el inventario

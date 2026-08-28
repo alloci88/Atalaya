@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Threading;
 using Atalaya.Copilot;
@@ -42,6 +42,14 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
     private readonly AgentBusyGate _busy;
     private readonly BuildRunner _builds;
     private readonly ModelResolver? _models;
+    private readonly DirectiveService? _directives;
+
+    /// <summary>
+    /// Las convenciones del proyecto que viajaron en el encargo (F7). Se guarda para que el cierre
+    /// pueda escribirlas en la sesión: sin la traza, «el arreglo respeta las convenciones» sería
+    /// una afirmación sin forma de comprobarla.
+    /// </summary>
+    private DirectiveBundle _directiveBundle = DirectiveBundle.Empty;
     private readonly object _gate = new();
 
     private readonly Dictionary<FixQuestion, TaskCompletionSource<string?>> _pending = new();
@@ -69,7 +77,8 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         AssistedFixLauncher launcher,
         AgentBusyGate busy,
         BuildRunner? builds = null,
-        ModelResolver? models = null)
+        ModelResolver? models = null,
+        DirectiveService? directives = null)
     {
         _hub = hub;
         _agent = agent;
@@ -82,6 +91,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         _busy = busy;
         _builds = builds ?? new BuildRunner();
         _models = models;
+        _directives = directives;
     }
 
     // ------------------------------------------------------------------ estado observable
@@ -335,8 +345,19 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             TestSituation = FixTestSituation.Detect(_clonePath, finding.Locations.Select(l => l.Path));
             Say(FixMessage.System("⚗", TestSituation.Narration));
 
+            // F7: el estilo de la casa, leído del clon en este momento. Va al prompt para que el
+            // arreglo se parezca al proyecto, y su traza va a la sesión para que el informe pueda
+            // decir con qué convenciones se arregló.
+            _directiveBundle = _directives?.Bundle(request.Slug, _clonePath, DirectiveScope.Arreglo)
+                               ?? DirectiveBundle.Empty;
+            if (!_directiveBundle.IsEmpty)
+            {
+                Say(FixMessage.System("§", DirectiveLine(_directiveBundle)));
+            }
+
             string prompt = FixSessionPrompt.Build(
-                finding, refs, code, AppName, FixToolbox.DefaultReadBudget, TestSituation);
+                finding, refs, code, AppName, FixToolbox.DefaultReadBudget, TestSituation,
+                _directiveBundle);
 
             _cts = new CancellationTokenSource();
             var toolbox = new FixToolbox(
@@ -447,6 +468,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             // nombra el hallazgo en su texto pero nadie puede navegar de vuelta a su ficha.
             FixFindingId = finding.Id.ToString(),
             FixFindingAlias = FindingAlias,
+            Directives = _directiveBundle.Records.ToList(),
         };
         session.Usage.Add(InputTokens, OutputTokens, CacheReadTokens, 0, Cost);
         session.Notes.Add($"Arreglo asistido de {FindingAlias}: {finding.Title}");
@@ -990,6 +1012,29 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         }
 
         return excerpts;
+    }
+
+    /// <summary>
+    /// Qué convenciones del proyecto le han llegado al agente, en una frase (F7). Se narra por lo
+    /// mismo que se narran las referencias y la situación de tests: el usuario está decidiendo si
+    /// se fía de este arreglo, y con qué criterio se le encargó es parte de esa decisión.
+    /// </summary>
+    private static string DirectiveLine(DirectiveBundle bundle)
+    {
+        string what = bundle.Included.Count == 0
+            ? "Ninguna directiva cupo en el presupuesto"
+            : $"El encargo lleva {bundle.Included.Count} directiva(s) del proyecto: "
+              + string.Join(", ", bundle.Included.Select(d => d.Path));
+
+        string budget = $" ({bundle.Tokens} de {bundle.Budget} tokens de presupuesto)";
+        string omitted = bundle.Omitted.Count == 0
+            ? string.Empty
+            : $" Omitidas por presupuesto: {string.Join(", ", bundle.Omitted)} — el agente lo sabe.";
+        string truncated = bundle.HasTruncation
+            ? " Alguna viaja recortada por su principio, y el prompt lo dice."
+            : string.Empty;
+
+        return what + budget + "." + truncated + omitted;
     }
 
     private static string ReferenceLine(ReferenceReport refs)

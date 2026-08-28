@@ -206,6 +206,18 @@ internal static class TestFactory
         }
     }
 
+    /// <summary>La gestión de directivas sin ventana: anota que se abrió y con qué app (F7).</summary>
+    public sealed class NoDirectivesDialog : IDirectivesDialog
+    {
+        public List<DirectivesViewModel> Shown { get; } = new();
+
+        public DirectivesViewModel Show(DirectivesViewModel viewModel)
+        {
+            Shown.Add(viewModel);
+            return viewModel;
+        }
+    }
+
     /// <summary>Un diálogo que no se muestra: devuelve el view-model tal cual lo recibió.</summary>
     public sealed class NoLinkCloneDialog : ILinkCloneDialog
     {

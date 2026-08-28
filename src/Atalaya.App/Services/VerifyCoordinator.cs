@@ -45,16 +45,22 @@ public sealed class VerifyCoordinator
     private readonly IUlidFactory _ulids;
     private readonly ICopilotAgent _agent;
     private readonly MeasuredFindingService? _measured;
+    private readonly DirectiveService? _directives;
 
+    /// <param name="directives">
+    /// Las convenciones del proyecto (F7). Opcional igual que <paramref name="measured"/>; sin
+    /// ella el verify se comporta como antes de F7.
+    /// </param>
     public VerifyCoordinator(
         HubContext hub, MachineConfigStore machines, IUlidFactory ulids, ICopilotAgent agent,
-        MeasuredFindingService? measured = null)
+        MeasuredFindingService? measured = null, DirectiveService? directives = null)
     {
         _hub = hub;
         _machines = machines;
         _ulids = ulids;
         _agent = agent;
         _measured = measured;
+        _directives = directives;
     }
 
     public async Task<VerifyOutcome> RunAsync(string slug, IReadOnlyList<Ulid> findingIds, CancellationToken ct)
@@ -134,7 +140,13 @@ public sealed class VerifyCoordinator
         }
 
         var toolbox = new VerifyToolbox(_hub, slug, stamps);
-        string prompt = PromptComposer.ComposeVerifyPrompt(targets);
+
+        // F7 §3: el verificador juzga el mismo código que el auditor y necesita el mismo criterio.
+        // Sin las directivas de ámbito Auditoría confirmaría como defecto justo lo que la auditoría
+        // había aprendido a no reportar, y el hallazgo iría y vendría entre las dos.
+        DirectiveBundle directives = _directives?.Bundle(slug, clone, DirectiveScope.Auditoria)
+                                     ?? DirectiveBundle.Empty;
+        string prompt = PromptComposer.ComposeVerifyPrompt(targets, directives);
 
         // Lo que la verificación consume se REGISTRA, igual que en una auditoría o en un arreglo.
         // Hasta aquí no se anotaba: la sesión quedaba escrita con `usage` a cero, así que en las
@@ -193,6 +205,7 @@ public sealed class VerifyCoordinator
             CycleN = _hub.Store.TryReadApp(slug)?.CurrentCycle ?? 1,
             Model = _agent.ModelName,
             Usage = usage,
+            Directives = directives.Records.ToList(),
         });
         Push(slug, written + toolbox.Applied);
         return new VerifyOutcome(toolbox.Applied + measuredApplied, measuredMessages, notes);

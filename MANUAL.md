@@ -45,6 +45,9 @@ Las unidades de la aplicación en el ciclo vigente, por módulos, con su estado
 - **Re-escanear** vuelve a medir el clon: actualiza el inventario **y** los hallazgos
   medidos en el mismo gesto, y cuenta en un aviso qué cambió.
 - **Reiniciar ciclo** abre uno nuevo sin borrar nada.
+- El panel del ciclo lleva **Patrones silenciados** y **Directivas** con su
+  «Gestionar» al lado: las dos cosas que condicionan qué se reporta en esta
+  aplicación (ver «Directivas del proyecto», más abajo).
 
 ### Hallazgos
 
@@ -212,6 +215,70 @@ Umbrales (tamaño de unidad, frescura), modelo de Copilot, el interruptor del
 **arreglo asistido** (encendido por defecto), tema **claro/oscuro**,
 intervalo de sincronización y las acciones destructivas, con su confirmación. Al final,
 **Acerca de Atalaya**: versión, organización y los enlaces al repositorio y a este manual.
+
+---
+
+## Directivas del proyecto
+
+Los proyectos desarrollados con IA traen sus propias **convenciones escritas**:
+`AGENTS.md`, `CLAUDE.md`, instrucciones de Copilot o de Cursor, ADRs, specs, PRDs,
+colecciones de skills. Eso es lo que el equipo ha decidido a conciencia, y sin leerlo
+una auditoría reporta como defecto lo que era una decisión, y un arreglo sale correcto
+pero escrito con un estilo que no es el de la casa.
+
+**Las directivas viven en el repositorio de cada aplicación**, versionadas con su
+código, que es su sitio. Atalaya solo registra **cuáles son**; su contenido se lee de
+tu clon local cada vez que se usa, así que siempre viaja la versión vigente. No hay
+copia en el hub, y por tanto no hay nada que sincronizar ni nada que se quede viejo.
+
+### Cómo marcarlas
+
+En **Inventario**, panel del ciclo: **Directivas · Gestionar**.
+
+- Al escanear o re-escanear se buscan los sitios donde estos ficheros suelen vivir y
+  se **proponen** como candidatos. **Nunca se activan solos**: los marcas tú. Un
+  re-escaneo que encuentra ficheros nuevos te lo dice en un aviso, y ahí se queda.
+- Cada directiva activa tiene un **ámbito**:
+  - **Auditoría** — informa el criterio del auditor y del verificador.
+  - **Arreglo** — informa el estilo del arreglo (el prompt y la sesión con agente).
+  - **Ambos** — un ADR de arquitectura suele ser esto.
+  - Una skill de «cómo escribir specs» quizá no sea ninguno: por eso se decide a mano.
+- **Vista previa** enseña el fichero y lo que ocupa en tokens.
+- **Añadir a mano** registra cualquier fichero del repositorio por su ruta, aunque
+  Atalaya no conozca ese formato.
+- Si el fichero desaparece del repositorio, la entrada queda **«no encontrada»**: no
+  rompe nada y no viaja. Decide tú si actualizar la ruta o **Retirar** la entrada.
+
+### Qué efecto tienen
+
+- **Auditando**: un patrón que las directivas *mandan* deja de ser un hallazgo aunque
+  el checklist lo sugiera. Y el código que **contradice** una directiva sí se reporta,
+  con la regla `criterio.directivas` y citando cuál incumple.
+- **Arreglando**: el arreglo respeta el estilo. Si el arreglo correcto contradijera una
+  convención, el agente **no la atropella**: te lo pregunta en la sesión interactiva, o
+  lo declara como riesgo en el prompt que copias al portapapeles.
+- **Nunca cambian las reglas de Atalaya.** Informan el criterio; no amplían el ámbito
+  de un arreglo, ni las herramientas del agente, ni la guarda de evidencia. Las
+  instrucciones de un repositorio dirigidas al modelo no son el encargo, y el prompt se
+  lo dice con todas las letras.
+- **Atalaya no ejecuta nada.** Una skill es texto que se le enseña al modelo, jamás
+  código que se corre.
+- El **informe** de cada sesión lista qué directivas viajaron, con el hash de su
+  contenido: así se puede saber, meses después, con qué criterio se auditó aquello.
+
+### El presupuesto
+
+Una colección de skills puede pesar más que el código que se está auditando, así que
+hay un techo. En el mismo panel: **Presupuesto (tokens)**, por defecto 8.000 y **por
+aplicación**.
+
+- El panel enseña lo que consume lo activado, separado por auditoría y por arreglo
+  (son prompts distintos).
+- Si te pasas, entran por **prioridad** —el número de orden, menor primero— y el
+  prompt **declara** las que quedaron fuera. Nada se incluye a medias en silencio.
+- Un fichero enorme viaja por su principio, y el prompt dice que está recortado. Lo
+  sano es recortarlo en el repositorio.
+- **0 apaga las directivas** en esa aplicación.
 
 ---
 

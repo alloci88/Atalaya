@@ -52,6 +52,26 @@ public sealed class HubPaths
     public string PatternSilenceFile(string slug, string patternUlid)
         => Path.Combine(PatternSilencesDir(slug), $"{patternUlid}.json");
 
+    /// <summary>
+    /// F7: el REGISTRO de qué ficheros del repo de esta app son directivas del proyecto. Un
+    /// fichero por directiva, merge-friendly como todo lo demás.
+    /// <para>
+    /// Aquí no hay contenido de ninguna directiva y no lo habrá nunca: las directivas viven
+    /// versionadas en el repo de la aplicación, y el hub solo registra cuáles son. Sincronizar el
+    /// texto sería crear una segunda verdad que empieza a envejecer el mismo día que se escribe.
+    /// </para>
+    /// </summary>
+    public string DirectivesDir(string slug) => Path.Combine(AppDir(slug), "directives");
+
+    /// <summary>
+    /// <c>apps/{slug}/directives/{ulid}.json</c>. La clave es el ULID de la entrada y no la ruta
+    /// del fichero: una ruta lleva barras, puntos y mayúsculas: convertirla en nombre de fichero
+    /// obligaría a escapar, y renombrar el fichero en el repo de la app obligaría a mover un
+    /// fichero del hub, perdiendo de paso quién y cuándo lo marcó.
+    /// </summary>
+    public string DirectiveFile(string slug, string ulid)
+        => Path.Combine(DirectivesDir(slug), $"{ulid}.json");
+
     /// <summary>Legado de F5.10, solo para que la migración a patrones sepa dónde mirar.</summary>
     public string LegacyRuleExclusionsDir(string slug) => Path.Combine(AppDir(slug), "rule-exclusions");
 

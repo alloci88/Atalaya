@@ -1,7 +1,8 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Windows;
 using Atalaya.App.Services;
 using Atalaya.App.Views;
+using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
@@ -74,6 +75,12 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     private readonly LiveFixService? _fix;
 
     /// <summary>
+    /// F7: las convenciones del proyecto que el prompt de arreglo tiene que llevar. Opcional como
+    /// el resto: sin ella el prompt sale igual, sin la sección.
+    /// </summary>
+    private readonly DirectiveService? _directives;
+
+    /// <summary>
     /// La última recolección, y de qué hallazgo era. La fila «Usado desde» de los metadatos sale de
     /// aquí: si ya se ha mirado, decirlo es gratis; lo que no se hace nunca es mirar por si acaso.
     /// </summary>
@@ -92,7 +99,8 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         ReferenceCollector? references = null,
         AssistedFixLauncher? fixLauncher = null,
         LiveFixService? fix = null,
-        NavigationService? navigation = null)
+        NavigationService? navigation = null,
+        DirectiveService? directives = null)
     {
         _hub = hub;
         ScopeOptions = new[]
@@ -116,6 +124,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         _fixLauncher = fixLauncher;
         _fix = fix;
         _navigation = navigation;
+        _directives = directives;
     }
 
     private readonly NavigationService? _navigation;
@@ -974,7 +983,12 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
 
         _lastReferences = (id, refs);
 
-        string prompt = FixPromptBuilder.Build(target, refs);
+        // F7: el prompt old school viaja con las convenciones de la casa, igual que la sesión
+        // interactiva. Lo que cambia es la salida del conflicto: aquí no hay a quien preguntar, así
+        // que se declara como riesgo (FixPromptBuilder, regla 7).
+        DirectiveBundle directives = _directives?.Bundle(Slug, clone, DirectiveScope.Arreglo)
+                                     ?? DirectiveBundle.Empty;
+        string prompt = FixPromptBuilder.Build(target, refs, directives);
         bool copied = true;
         try
         {

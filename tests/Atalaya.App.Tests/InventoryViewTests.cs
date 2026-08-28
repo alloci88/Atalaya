@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
@@ -99,6 +99,10 @@ public sealed class InventoryViewTests : IDisposable
         // F5.10: la gobernanza de reglas excluidas y su gestión, sin ventana.
         services.AddSingleton<GovernanceService>();
         services.AddSingleton<IPatternSilencesDialog, TestFactory.NoPatternSilencesDialog>();
+        // F7: el escaneo de directivas y su gestión, sin ventana.
+        services.AddSingleton<DirectiveScanner>();
+        services.AddSingleton<DirectiveService>();
+        services.AddSingleton<IDirectivesDialog, TestFactory.NoDirectivesDialog>();
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
     }

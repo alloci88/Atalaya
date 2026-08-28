@@ -62,6 +62,11 @@ public static class RuleCatalog
     {
         "criterio.arquitectura", "criterio.seguridad", "criterio.rendimiento",
         "criterio.testabilidad", "criterio.dominio", "criterio.observabilidad",
+        // F7: el código contradice una convención que el propio proyecto ha escrito en su repo.
+        // No es un juicio de la herramienta sobre el estilo —eso sería ruido— sino la distancia
+        // entre lo que el equipo dijo que hacía y lo que el código hace, que es de las cosas más
+        // caras de descubrir tarde.
+        "criterio.directivas",
     };
 
     private static readonly HashSet<string> Ids =

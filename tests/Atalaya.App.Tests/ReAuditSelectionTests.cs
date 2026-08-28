@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
 using Atalaya.Copilot;
@@ -106,6 +106,10 @@ public sealed class ReAuditSelectionTests : IDisposable
         // F5.10: la gobernanza de reglas excluidas y su gestión, sin ventana.
         services.AddSingleton<GovernanceService>();
         services.AddSingleton<IPatternSilencesDialog, TestFactory.NoPatternSilencesDialog>();
+        // F7: el escaneo de directivas y su gestión, sin ventana.
+        services.AddSingleton<DirectiveScanner>();
+        services.AddSingleton<DirectiveService>();
+        services.AddSingleton<IDirectivesDialog, TestFactory.NoDirectivesDialog>();
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
     }

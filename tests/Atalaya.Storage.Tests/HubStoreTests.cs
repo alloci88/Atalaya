@@ -1,4 +1,4 @@
-using Atalaya.Domain;
+﻿using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
@@ -66,6 +66,65 @@ public sealed class HubStoreTests : IDisposable
         _store.DeletePatternSilence("webapp", pattern.Id).Should().BeTrue();
         _store.ListPatternSilences("webapp").Should().BeEmpty();
         _store.DeletePatternSilence("webapp", pattern.Id).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// F7: el registro de directivas es un fichero por directiva bajo la app, merge-friendly como
+    /// todo lo demás. La app es parte de la ruta —una convención de una aplicación no es la de la de
+    /// al lado— y lo que se persiste es la RUTA: el contenido vive en el repo de la app.
+    /// </summary>
+    [Fact]
+    public void Directive_roundtrip_is_per_app_and_stores_only_the_path()
+    {
+        var directive = new ProjectDirective
+        {
+            Id = new UlidFactory(SystemClock.Instance).NewUlid(),
+            Path = "docs/adr/0001-usamos-postgres.md",
+            Kind = "adr",
+            Scope = DirectiveScope.Ambos,
+            Order = 3,
+            By = "alvaro",
+            Utc = DateTimeOffset.UtcNow,
+        };
+        _store.WriteDirective("webapp", directive);
+
+        ProjectDirective? read = _store.TryReadDirective("webapp", directive.Id);
+        read!.Path.Should().Be(directive.Path);
+        read.Scope.Should().Be(DirectiveScope.Ambos);
+        read.Order.Should().Be(3);
+        read.AppliesToAudit.Should().BeTrue();
+        read.AppliesToFix.Should().BeTrue();
+
+        _store.ListDirectives("webapp").Should().ContainSingle();
+        _store.ListDirectives("otraapp").Should().BeEmpty("una directiva nunca es global al hub");
+
+        _store.DeleteDirective("webapp", directive.Id).Should().BeTrue();
+        _store.ListDirectives("webapp").Should().BeEmpty();
+        _store.DeleteDirective("webapp", directive.Id).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Un candidato visto y descartado se guarda con ámbito «Ninguno». Es un estado con dueño
+    /// humano, no la ausencia de decisión: sin él, el re-escaneo siguiente lo volvería a anunciar.
+    /// </summary>
+    [Fact]
+    public void Directive_with_no_scope_is_a_decision_and_persists()
+    {
+        var directive = new ProjectDirective
+        {
+            Id = new UlidFactory(SystemClock.Instance).NewUlid(),
+            Path = "specs/viejo.md",
+            Kind = "spec",
+            Scope = DirectiveScope.Ninguno,
+            By = "alvaro",
+            Utc = DateTimeOffset.UtcNow,
+        };
+        _store.WriteDirective("webapp", directive);
+
+        ProjectDirective? read = _store.TryReadDirective("webapp", directive.Id);
+        read!.IsActive.Should().BeFalse();
+        read.AppliesToAudit.Should().BeFalse();
+        read.AppliesToFix.Should().BeFalse();
     }
 
     /// <summary>

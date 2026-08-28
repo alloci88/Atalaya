@@ -37,7 +37,8 @@ public static class FixSessionPrompt
         IReadOnlyList<FixCodeExcerpt> code,
         string appName,
         int readBudget = FixToolbox.DefaultReadBudget,
-        FixTestSituation? tests = null)
+        FixTestSituation? tests = null,
+        DirectiveBundle? directives = null)
     {
         RuleDef? rule = RuleCatalog.Find(finding.RuleId);
         string alias = finding.DisplayId ?? finding.Id.ToString();
@@ -82,7 +83,14 @@ public static class FixSessionPrompt
         sb.AppendLine();
         AppendCode(sb, code);
         FixPromptBuilder.AppendReferences(sb, refs);
-        AppendRules(sb, tests ?? FixTestSituation.Unknown);
+
+        // F7: las convenciones de la casa, antes de las reglas del arreglo. El orden importa: la
+        // regla 8 le dice al agente que las respete, y una regla que apunta a algo que todavía no
+        // ha leído es una regla que se cumple de memoria.
+        sb.Append(DirectiveSection.Render(
+            directives ?? DirectiveBundle.Empty, DirectivePurpose.ArregloInteractivo));
+
+        AppendRules(sb, tests ?? FixTestSituation.Unknown, directives ?? DirectiveBundle.Empty);
         return sb.ToString();
     }
 
@@ -175,7 +183,7 @@ public static class FixSessionPrompt
     /// consecuencia sobre los llamadores listados—. Es la razón de ser de este modo: un cambio de
     /// contrato es una decisión de producto, y hay una persona delante a la que preguntársela.
     /// </summary>
-    private static void AppendRules(StringBuilder sb, FixTestSituation tests)
+    private static void AppendRules(StringBuilder sb, FixTestSituation tests, DirectiveBundle directives)
     {
         sb.AppendLine("## Reglas del arreglo (obligatorias)");
         sb.AppendLine(
@@ -221,6 +229,19 @@ public static class FixSessionPrompt
             + "caracteres, en imperativo y citando el identificador del hallazgo (por ejemplo "
             + "«Valida longitud par en HexStringToByteArray (BUG-0003)»), y descripción con el "
             + "qué y el porqué, incluyendo los llamadores adaptados si los hubo.");
+
+        // F7: solo cuando hay convenciones que respetar. Una regla que remite a una sección que no
+        // existe manda al agente a buscar un fichero que nadie le ha dado.
+        if (!directives.IsEmpty)
+        {
+            sb.AppendLine(
+                "8. **Respeta las convenciones del proyecto** de la sección de arriba: estilo, "
+                + "patrones y librerías preferidas. Si el arreglo correcto contradice una, no la "
+                + "atropelles — pregunta con `ask_user` (punto 2). Y si la contradicción está en "
+                + "el código que estás mirando y no en tu arreglo, dilo en el resumen: es un "
+                + "hallazgo, no algo que arreglar de paso.");
+        }
+
         sb.AppendLine();
         sb.AppendLine(
             "El usuario puede interrumpirte en cualquier momento para dirigirte («no toques ese "
