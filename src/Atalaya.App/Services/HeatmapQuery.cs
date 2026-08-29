@@ -82,10 +82,27 @@ public sealed record HeatModule(
     int AuditedDebt,
     double? Density)
 {
+    private SeverityChips? _severities;
+
     public int UnitCount => Units.Count;
 
     /// <summary>Unidades auditadas sobre el total. 0 no es «limpio», es «sin mirar».</summary>
     public double Coverage => UnitCount == 0 ? 0 : (double)AuditedUnits / UnitCount;
+
+    /// <summary>
+    /// Cobertura por LÍNEAS, que es otra pregunta: auditar la clase de 5.000 líneas y auditar un
+    /// enum de 40 cuentan lo mismo por unidades y no cuentan lo mismo por código mirado. La usa la
+    /// confianza del orden «Atención» (F10.2 §1); la barra de la tarjeta sigue contando unidades,
+    /// que es la cobertura que enseña el resto de la aplicación.
+    /// </summary>
+    public double CoverageLoc => Loc == 0 ? 0 : (double)AuditedLoc / Loc;
+
+    /// <summary>Los hallazgos activos del módulo, por severidad. Se calcula una vez.</summary>
+    public SeverityChips Severities => _severities ??= new SeverityChips(
+        Units.Sum(u => u.Findings.Critica),
+        Units.Sum(u => u.Findings.Alta),
+        Units.Sum(u => u.Findings.Media),
+        Units.Sum(u => u.Findings.Baja));
 
     /// <summary>Ninguna unidad auditada: el módulo entero es desconocido.</summary>
     public bool IsMeasured => AuditedUnits > 0 && Density is not null;
