@@ -187,6 +187,17 @@ public sealed partial class HeatmapViewModel : ViewModelBase
     /// <summary>El aviso de cobertura: cuánto del mapa es, literalmente, desconocido.</summary>
     [ObservableProperty] private string _coverageWarning = string.Empty;
 
+    /// <summary>
+    /// «Módulos de XBLAST*»: qué prefijo se está omitiendo en las bandas del mapa (F10.1b). Vacío
+    /// cuando no se omite nada. <b>Se declara una vez y en la cabecera</b>, no en cada banda:
+    /// omitir sin decirlo obligaría a adivinar qué falta, y decirlo veintidós veces sería el mismo
+    /// ruido que se está quitando.
+    /// </summary>
+    [ObservableProperty] private string _prefixNotice = string.Empty;
+
+    /// <summary>El prefijo vigente. Vacío en la vista ampliada: ahí el sitio no escasea.</summary>
+    private string _prefix = string.Empty;
+
     [ObservableProperty] private bool _isEmpty = true;
 
     [ObservableProperty] private string _emptyReason = string.Empty;
@@ -287,6 +298,20 @@ public sealed partial class HeatmapViewModel : ViewModelBase
             : $"«{_view.AppName}» no tiene inventario en el ciclo {_view.CycleN}. Escanea el clon desde Inventario.";
 
         var modules = _zoom is null ? _view.Modules : new List<HeatModule> { _zoom };
+
+        // El prefijo se calcula sobre TODOS los módulos de la aplicación —no sobre los que se
+        // estén viendo— y solo se aplica en la vista completa: ampliado hay una sola banda a lo
+        // ancho de la ventana, así que el sitio no escasea y no hay nada que omitir. Es cálculo
+        // de vista: no se guarda ni toca el hub.
+        _prefix = _zoom is null
+            ? ModulePrefix.Common(_view.Modules.Select(m => m.Name))
+            : string.Empty;
+
+        PrefixNotice = _prefix.Length == 0
+            ? string.Empty
+            : $"Módulos de {_prefix}* · en el mapa se omite el prefijo común; "
+              + "el nombre entero está en el tooltip y en la tabla.";
+
         Groups = modules.Select(m => Group(m, metric)).ToList();
         ClusterFactory = tiny => Cluster(tiny, metric);
 
@@ -328,7 +353,8 @@ public sealed partial class HeatmapViewModel : ViewModelBase
             module.IsQualified,
             ModuleTip(module),
             module,
-            module.Units.Select(u => Cell(u, metric)).ToList());
+            module.Units.Select(u => Cell(u, metric)).ToList(),
+            ShortName: _prefix.Length == 0 ? null : ModulePrefix.Elide(module.Name, _prefix));
 
     private HeatCell Cell(HeatUnit unit, HeatMetric metric)
         => new(
@@ -564,6 +590,7 @@ public sealed partial class HeatmapViewModel : ViewModelBase
 
     private string ModuleTip(HeatModule module)
     {
+        // Siempre el nombre COMPLETO: el tooltip es lo que deshace la omisión de la banda.
         var lines = new List<string>
         {
             module.Name,

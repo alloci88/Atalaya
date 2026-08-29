@@ -84,6 +84,10 @@ public static class HeatmapImage
         var map = new Treemap
         {
             Groups = request.Groups,
+
+            // La lámina escribe los nombres ENTEROS: aquí el sitio sobra y quien la recibe por
+            // correo no ha visto la declaración del prefijo que sí lleva la cabecera de la vista.
+            AllowShortNames = false,
             Margin = new Thickness(40, 0, 40, 0),
             SurfaceBrush = paper,
             StrokeBrush = hairline,

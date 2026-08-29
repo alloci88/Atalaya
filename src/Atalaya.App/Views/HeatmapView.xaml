@@ -204,6 +204,11 @@
                             </StackPanel>
                             <TextBlock Text="{Binding ScaleCaption}" Style="{StaticResource BlockHint}" />
                             <TextBlock Text="{Binding Summary}" Style="{StaticResource BlockHint}" />
+                            <!-- Qué prefijo se está omitiendo en las bandas. Una vez, aquí: en cada
+                                 banda sería el mismo ruido que se está quitando, y sin decirlo en
+                                 ninguna parte habría que adivinar qué falta. -->
+                            <TextBlock Text="{Binding PrefixNotice}" Style="{StaticResource BlockHint}"
+                                       Visibility="{Binding PrefixNotice, Converter={StaticResource NotEmptyToVisibility}}" />
                         </StackPanel>
                         <TextBlock Grid.Column="1" Style="{StaticResource BlockHint}" MaxWidth="230"
                                    Text="Un clic amplía el módulo; ampliado, un clic abre los hallazgos de la unidad y un doble clic la lleva a auditar." />

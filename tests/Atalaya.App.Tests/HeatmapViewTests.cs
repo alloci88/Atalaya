@@ -138,6 +138,26 @@ public sealed class HeatmapViewTests : IDisposable
         }
     }
 
+    /// <summary>Una app cuyos módulos comparten prefijo; con «Documents», ya no lo comparten todos.</summary>
+    private void Prefixed(bool withOutsider = false)
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "XBLAST", RepoUrl = "u/app", CurrentCycle = 1 });
+
+        var units = new List<InventoryUnit>
+        {
+            Unit("XBLASTCore/A.cs", "XBLASTCore", 3000, UnitState.Auditada),
+            Unit("XBLASTUtils/B.cs", "XBLASTUtils", 2000),
+            Unit("XBLASTDataBase/C.cs", "XBLASTDataBase", 1000),
+        };
+
+        if (withOutsider)
+        {
+            units.Add(Unit("Documents/D.cs", "Documents", 500));
+        }
+
+        _hub.Store.WriteInventory("app", new InventoryCycle { CycleN = 1, Units = units });
+    }
+
     private static string Hex(Brush? brush)
         => brush is SolidColorBrush solid ? solid.Color.ToString().ToUpperInvariant() : string.Empty;
 
@@ -1007,6 +1027,113 @@ public sealed class HeatmapViewTests : IDisposable
 
         Hex(untouched.DensityBrush).Should().Be(Hex(HeatBrushes.Solid(DensityScale.Unknown.Dark)));
         untouched.DensityTooltip.Should().Contain("DESCONOCIDA");
+    }
+
+    // ============================================ El prefijo común de los módulos
+
+    /// <summary>
+    /// Con un prefijo que comparten todos, las bandas del mapa lo omiten y la cabecera declara
+    /// cuál es. Omitir sin decirlo obligaría a adivinar qué falta.
+    /// </summary>
+    [Fact]
+    public async Task Las_bandas_omiten_el_prefijo_comun_y_la_cabecera_lo_declara()
+    {
+        Prefixed();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+
+        vm.Groups.Select(g => g.ShortName).Should().BeEquivalentTo(new[] { "Core", "Utils", "DataBase" });
+        vm.PrefixNotice.Should().Contain("XBLAST*");
+        vm.PrefixNotice.Should().Contain("tooltip");
+    }
+
+    /// <summary>
+    /// <b>El nombre completo se conserva en todo lo demás</b>: tooltip, tabla y migas. La omisión
+    /// es una convención de la banda, no un cambio del dato — el hub sigue diciendo lo que decía.
+    /// </summary>
+    [Fact]
+    public async Task El_nombre_completo_sobrevive_en_el_tooltip_en_la_tabla_y_en_el_dato()
+    {
+        Prefixed();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+
+        HeatGroup core = vm.Groups.Single(g => g.ShortName == "Core");
+        core.Name.Should().Be("XBLASTCore", "el grupo sigue llamándose como se llama");
+        core.Tooltip.Should().StartWith("XBLASTCore", "el tooltip es lo que deshace la omisión");
+
+        vm.Rows.Select(r => r.Module).Should().OnlyContain(m => m.StartsWith("XBLAST"));
+
+        // Y el inventario del hub no se ha tocado: el módulo se sigue llamando igual en disco.
+        _hub.Store.TryReadInventory("app", 1)!.Units
+            .Should().OnlyContain(u => u.Module.StartsWith("XBLAST"));
+    }
+
+    /// <summary>Ampliado no se omite nada: hay una banda a lo ancho de la ventana.</summary>
+    [Fact]
+    public async Task Ampliado_a_un_modulo_no_se_omite_el_prefijo()
+    {
+        Prefixed();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+
+        await vm.TileCommand.ExecuteAsync(vm.Groups.Single(g => g.ShortName == "Core").Payload);
+
+        vm.Groups.Should().ContainSingle().Which.ShortName.Should().BeNull();
+        vm.PrefixNotice.Should().BeEmpty("no se declara lo que no se está haciendo");
+        vm.ZoomedModule.Should().Be("XBLASTCore");
+    }
+
+    /// <summary>
+    /// El caso real de xblast: veintiún módulos comparten «XBLAST» y el vigesimosegundo se llama
+    /// «Documents». No se omite en ninguno, y no se declara nada.
+    /// </summary>
+    [Fact]
+    public async Task Si_un_solo_modulo_no_comparte_el_prefijo_los_nombres_quedan_intactos()
+    {
+        Prefixed(withOutsider: true);
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+
+        vm.Groups.Should().OnlyContain(g => g.ShortName == null);
+        vm.PrefixNotice.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// <b>La lámina exportada escribe los nombres enteros.</b> Quien la recibe por correo no ha
+    /// visto la declaración de la cabecera, y un «Core» suelto en una diapositiva no es el módulo
+    /// de nadie.
+    /// </summary>
+    [Fact]
+    public async Task La_lamina_exportada_no_omite_el_prefijo()
+    {
+        Prefixed();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+        HeatmapImageRequest request = vm.ImageRequest(DateTimeOffset.Now);
+
+        StaRunner.Run(() =>
+        {
+            FrameworkElement page = HeatmapImage.Compose(request);
+            var map = Descendants(page).OfType<Treemap>().Single();
+
+            map.AllowShortNames.Should().BeFalse();
+            map.Groups!.Select(g => g.Name).Should().OnlyContain(n => n.StartsWith("XBLAST"));
+        });
+    }
+
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+    {
+        int count = VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
+        {
+            DependencyObject child = VisualTreeHelper.GetChild(root, i);
+            yield return child;
+            foreach (DependencyObject deeper in Descendants(child))
+            {
+                yield return deeper;
+            }
+        }
     }
 
     // ============================================ El XAML

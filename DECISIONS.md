@@ -6173,3 +6173,71 @@ y el scroll único están fijados por tests sobre el árbol del XAML y por el re
 humano, a 1366×768 y en los dos temas: que la tabla se lea como una tabla, que la rueda y el
 teclado (Inicio/Fin, RePág/AvPág) hagan lo esperado con una sola barra, y que los cinco pasos de la
 rampa se distingan en la pantalla real y no solo en el PNG.
+
+## F10.1b — El prefijo común de los módulos, omitido donde el sitio escasea
+
+Cierra D-653, que quedó apuntado y sin hacer: los módulos estrechos salían como «XB…r» o
+«XBLA…ity» porque los 22 de XBLAST empiezan por «XBLAST».
+
+### D-656 — Convención de presentación, no cirugía sobre el dato
+
+Se calcula el prefijo común más largo de los nombres de módulo de **esa** aplicación y se omite
+**solo en las bandas del treemap en pantalla**, que es donde el sitio escasea. El nombre completo
+se conserva en el **tooltip**, en la **tabla**, en el **inventario**, en las **migas** y en el
+**PNG exportado**.
+
+**Nada se persiste.** Es cálculo de vista, por aplicación, en tiempo de render: el hub sigue
+teniendo los nombres tal y como salen del clon, y hay test que lo comprueba leyendo el inventario
+después de renderizar. Es la diferencia entre una convención de etiquetado y renombrar carpetas.
+
+**Y la lámina exportada NO omite.** `Treemap.AllowShortNames` va a false en `HeatmapImage`: allí
+el sitio sobra y, sobre todo, quien recibe el PNG por correo no ha visto la declaración de la
+cabecera — un «Core» suelto en una diapositiva no es el módulo de nadie. Ampliado a un módulo
+tampoco se omite: hay una sola banda a lo ancho de la ventana.
+
+### D-657 — Todo o nada, y la declaración escrita una vez
+
+**Solo si lo comparten TODOS**, y con al menos 3 caracteres. Con un prefijo que compartiera solo
+una parte, el mapa mezclaría nombres recortados con nombres enteros sin forma de saber cuáles son
+cuáles, y la declaración de la cabecera —que se escribe **una vez**— no podría valer para todas las
+bandas. Por la misma razón, si a algún módulo le quedaran menos de dos caracteres al quitarle el
+prefijo, no se omite en ninguno.
+
+**El prefijo no parte una palabra.** El prefijo común literal de `XBLASTCore` y `XBLASTCommon` es
+`XBLASTCo`, y omitirlo dejaría «re» y «mmon», que no son nombres de nada. Se retrocede hasta que
+ningún resto empiece por minúscula: queda `XBLAST`, que es la palabra que sobra.
+
+**La declaración va en la cabecera del mapa**, no en cada banda: «Módulos de XBLAST* · en el mapa
+se omite el prefijo común; el nombre entero está en el tooltip y en la tabla». Repetirla veintidós
+veces sería el mismo ruido que se está quitando; no ponerla obligaría a adivinar qué falta.
+
+### D-658 — Lo medido: en XBLAST esto NO cambia nada, y por qué
+
+Contra el clon real (norma **N-2**): xblast tiene **22 módulos, y 21 empiezan por «XBLAST»**. El
+vigesimosegundo se llama **`Documents`** (1 unidad, 84 líneas), así que el prefijo común de *todos*
+es la cadena vacía y **el mapa de xblast sale exactamente igual que antes**: sin omitir y sin
+declarar nada. Comprobado ejecutando la vista contra una copia del hub.
+
+Para ver la regla funcionando se renderizó además una copia **sintética** del mismo hub con
+`Documents` renombrado a `XBLASTDocuments`. Ahí sí: las bandas pasan de «XB…r», «XBLA…ity»,
+«XBL…ab» a **«Log», «Density», «MatLab», «QuickUtils», «DataBase», «OpenPit», «Types»,
+«Common»** — casi todas enteras. La copia sintética se usó para mirar y se borró; no se ha tocado
+el hub de esta máquina.
+
+Es decir: la regla está entregada y probada, y en la aplicación que motivó el encargo no se activa
+por un solo módulo. Relajarla («lo comparten 21 de 22») es otra decisión —tiene el coste de mezclar
+en el mapa nombres omitidos con nombres enteros— y no se toma por cuenta propia: queda en el
+backlog.
+
+### D-659 — Cobertura (16 tests nuevos, 1298 en total, todo en verde)
+
+`ModulePrefixTests`: se detecta el prefijo que comparten todos; **basta uno que no lo comparta**
+—el caso literal de `Documents`— para que no se omita nada; el prefijo no parte una palabra por la
+mitad; menos de tres caracteres no se omite; si algún módulo se quedara sin nombre no se omite en
+ninguno; con un solo módulo no hay prefijo común; sin nada en común los nombres salen intactos; la
+comparación es ordinal; y los repetidos no alteran el cálculo.
+
+En `HeatmapViewTests`: las bandas omiten y la cabecera lo declara; el nombre completo sobrevive en
+el tooltip, en la tabla y **en el inventario del hub tras renderizar**; ampliado no se omite ni se
+declara; con un módulo fuera del prefijo los nombres quedan intactos; y la lámina exportada lleva
+`AllowShortNames` en false y escribe los nombres enteros.

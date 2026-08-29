@@ -41,6 +41,12 @@ public sealed record HeatCell(
     string? ShortLabel = null);
 
 /// <summary>Un grupo del mapa: un módulo, con su banda de cabecera y sus celdas.</summary>
+/// <param name="ShortName">
+/// El nombre sin el prefijo que comparten todos los módulos de la aplicación (F10.1b), para las
+/// bandas de la pantalla, donde el sitio escasea. Null cuando no hay prefijo común o cuando no
+/// procede omitirlo. <see cref="Name"/> —el completo— es el que va al tooltip, a la tabla y a la
+/// lámina exportada.
+/// </param>
 public sealed record HeatGroup(
     string Name,
     string Detail,
@@ -50,7 +56,8 @@ public sealed record HeatGroup(
     bool Qualified,
     string Tooltip,
     object? Payload,
-    IReadOnlyList<HeatCell> Cells);
+    IReadOnlyList<HeatCell> Cells,
+    string? ShortName = null);
 
 /// <summary>
 /// El treemap de dos niveles del mapa de calor (F10 §2). <b>El área es el tamaño (LOC) y el color
@@ -144,6 +151,10 @@ public sealed class Treemap : FrameworkElement
         nameof(ClusterFactory), typeof(Func<IReadOnlyList<HeatCell>, HeatCell>), typeof(Treemap),
         new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
 
+    public static readonly DependencyProperty AllowShortNamesProperty = DependencyProperty.Register(
+        nameof(AllowShortNames), typeof(bool), typeof(Treemap),
+        new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender));
+
     /// <summary>Los módulos y sus unidades. Con uno solo, el mapa está ampliado a ese módulo.</summary>
     public IReadOnlyList<HeatGroup>? Groups
     {
@@ -207,6 +218,21 @@ public sealed class Treemap : FrameworkElement
     {
         get => (Func<IReadOnlyList<HeatCell>, HeatCell>?)GetValue(ClusterFactoryProperty);
         set => SetValue(ClusterFactoryProperty, value);
+    }
+
+    /// <summary>
+    /// Si las bandas pueden escribir el nombre corto del módulo (<see cref="HeatGroup.ShortName"/>).
+    /// <para>
+    /// Cierto en pantalla, donde una banda mide dos centímetros y la cabecera del mapa declara qué
+    /// prefijo se está omitiendo. <b>Falso en la lámina exportada</b>: allí el sitio sobra y, sobre
+    /// todo, quien la recibe por correo no ha visto esa declaración — un «Core» suelto en una
+    /// diapositiva no es un módulo de nadie.
+    /// </para>
+    /// </summary>
+    public bool AllowShortNames
+    {
+        get => (bool)GetValue(AllowShortNamesProperty);
+        set => SetValue(AllowShortNamesProperty, value);
     }
 
     public Treemap()
@@ -322,10 +348,15 @@ public sealed class Treemap : FrameworkElement
         double room = band.Width - 2 * LabelPadX;
         double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
 
+        // En pantalla, el nombre sin el prefijo común; en la lámina, el completo. No es «el corto
+        // si no cabe el largo»: o todas las bandas omiten el prefijo o ninguna, porque la
+        // declaración de la cabecera se escribe una sola vez y tiene que valer para todas.
+        string name = AllowShortNames && group.ShortName is { Length: > 0 } brief ? brief : group.Name;
+
         // ¿Cabe nombre + detalle? Se mide la pareja entera antes de decidir; si no cabe, el
         // detalle no se dibuja y el nombre se queda con todo el ancho.
         const double gap = 8;
-        double nameWidth = TextFit.Width(group.Name, Bold, 12, dpi);
+        double nameWidth = TextFit.Width(name, Bold, 12, dpi);
         bool withDetail = group.Detail.Length > 0
                           && nameWidth + gap + TextFit.Width(group.Detail, Regular, 11, dpi) <= room;
 
@@ -335,24 +366,24 @@ public sealed class Treemap : FrameworkElement
         // 10,5 px se lee mucho mejor que «XBLASTQ…kUtils» a 12. Solo cuando tampoco así cabe se
         // recorta —con retención 0, porque el nombre de un módulo no puede desaparecer—.
         double headerSize = 12;
-        string? name = null;
+        string? written = null;
         foreach (double size in new[] { 12, 11, 10.5 })
         {
-            if (band.Height >= size * 1.3 && TextFit.Width(group.Name, Bold, size, dpi) <= nameRoom)
+            if (band.Height >= size * 1.3 && TextFit.Width(name, Bold, size, dpi) <= nameRoom)
             {
                 headerSize = size;
-                name = group.Name;
+                written = name;
                 break;
             }
         }
 
-        name ??= TextFit.Fit(group.Name, Bold, headerSize, dpi, nameRoom, retention: 0);
-        if (name is null)
+        written ??= TextFit.Fit(name, Bold, headerSize, dpi, nameRoom, retention: 0);
+        if (written is null)
         {
             return;
         }
 
-        double used = Write(dc, name, band, ink, headerSize, Bold, dpi);
+        double used = Write(dc, written, band, ink, headerSize, Bold, dpi);
         if (withDetail)
         {
             // El detalle va en la MISMA tinta atenuada, no en el gris del tema: sobre la banda

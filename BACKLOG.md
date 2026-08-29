@@ -4,7 +4,7 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-29 (F10.1 — rampa, textos y tabla del mapa de calor).
+Última revisión: 2026-08-29 (F10.1b — prefijo común de los módulos).
 
 ## En vuelo
 
@@ -16,11 +16,13 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   (D-655): que la tabla se lea como una tabla con sus 925 filas, que la rueda y el teclado
   (Inicio/Fin, RePág/AvPág) funcionen con una sola barra, y que los cinco pasos de la rampa se
   distingan en la pantalla real a 1366×768 y no solo en el PNG.
-- **F10.1 — los nombres de módulo estrechos.** Los 22 módulos de XBLAST empiezan por «XBLAST», un
-  prefijo que dentro del mapa no aporta nada, y en las bandas estrechas eso deja «XB…r» o
-  «XBLA…ity» (D-653). Cumplen la regla —nunca hay un corte en seco y el tooltip da el nombre
-  entero—, pero se leerían mucho mejor sin el prefijo común. Quitarlo es cirugía sobre el dato, no
-  maquetado: se decide con el usuario antes de tocarlo.
+- **F10.1b — el prefijo común, con 21 de 22.** La omisión del prefijo está entregada y probada
+  (D-656…D-659), pero en xblast **no se activa**: 21 módulos empiezan por «XBLAST» y el
+  vigesimosegundo se llama `Documents`, así que la regla «solo si lo comparten todos» da prefijo
+  vacío y el mapa sale igual que antes. Relajarla a «lo comparte la inmensa mayoría» se leería
+  mejor en este clon, y tiene un coste: el mapa mezclaría bandas con el prefijo omitido y bandas
+  con el nombre entero, sin forma de saber cuáles son cuáles leyendo. Es una decisión del usuario
+  (D-658).
 - **F10 — los umbrales, contra más de una aplicación.** Los cinco pasos (5 · 15 · 40 · 100 por
   KLOC) están anclados en un razonamiento y comprobados contra un solo clon, donde la única unidad
   medida da 206. Se revisarán cuando haya dos o tres aplicaciones con cobertura de verdad y se
@@ -101,6 +103,10 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## Cerrado
 
+- **F10.1b · Prefijo común de los módulos** — cálculo de vista por aplicación (solo si lo comparten
+  todos, ≥3 caracteres y sin partir una palabra) omitido únicamente en las bandas del treemap en
+  pantalla, declarado una vez en la cabecera, y con el nombre completo intacto en tooltip, tabla,
+  inventario, migas, PNG exportado y hub.
 - **F10.1 · Rampa, textos y tabla del mapa** — rampa magma (violeta→ámbar) de claridad monótona
   en un único recurso compartido por treemap, leyenda, tabla e inventario, con la tinta verificada
   por paso; cero textos cortados en seco (se mide, se acorta por el medio o no se escribe) y
