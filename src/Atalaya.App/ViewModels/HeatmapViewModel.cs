@@ -34,6 +34,7 @@ public sealed record HeatRow(
     int Debt,
     double? Density,
     string State,
+    string StateDetail,
     Brush Stripe,
     HeatUnit Source)
 {
@@ -52,6 +53,22 @@ public sealed record HeatRow(
 /// gesto tiene que saber que lo pulsado NO es una unidad.
 /// </summary>
 public sealed record HeatCluster(string Module, IReadOnlyList<HeatUnit> Units);
+
+/// <summary>Cómo se ordenan las tarjetas de módulo (F10.2 §1).</summary>
+public enum ModuleSort
+{
+    /// <summary>¿Por dónde miro ahora? Lo medido y lo ignorado, juntos. Ver <see cref="AttentionScore"/>.</summary>
+    Atencion,
+
+    Deuda,
+    Densidad,
+    Tamano,
+    Cobertura,
+    Nombre,
+}
+
+/// <summary>Una opción del selector de orden, con lo que responde escrito.</summary>
+public sealed record ModuleSortOption(ModuleSort Sort, string Label, string Hint);
 
 /// <summary>Por qué columna se ordena la tabla.</summary>
 public enum HeatSort
@@ -120,9 +137,30 @@ public sealed partial class HeatmapViewModel : ViewModelBase
             new(HeatMetric.Deuda, "Deuda absoluta", "Deuda total sin normalizar: dónde HAY más problemas."),
         };
         _selectedMetric = MetricOptions[0];
+
+        SortOptions = new ObservableCollection<ModuleSortOption>
+        {
+            new(ModuleSort.Atencion, "Atención",
+                "¿Por dónde miro ahora? Junta lo que se ha medido que arde con lo que nadie ha "
+                + "mirado: un módulo grande sin auditar sube, porque la ignorancia es riesgo."),
+            new(ModuleSort.Deuda, "Deuda", "Puntos de deuda conocida, sin normalizar por tamaño."),
+            new(ModuleSort.Densidad, "Densidad",
+                "Deuda por KLOC de lo auditado. Los módulos sin auditar van al final: no tienen densidad."),
+            new(ModuleSort.Tamano, "Tamaño", "Líneas de código, lo mire quien lo mire."),
+            new(ModuleSort.Cobertura, "Cobertura", "De menos auditado a más: qué queda por mirar."),
+            new(ModuleSort.Nombre, "Nombre", "Alfabético, para buscar uno concreto."),
+        };
+        _selectedSort = SortOptions[0];
     }
 
     public override string Title => "Mapa de calor";
+
+    /// <summary>
+    /// Si la única animación de la vista —la entrada al ampliar un módulo— debe correr. Sale del
+    /// ajuste del SISTEMA: quien ha apagado las animaciones de Windows ya ha dicho que no quiere
+    /// movimiento, y no tiene por qué volver a decirlo aquí.
+    /// </summary>
+    public static bool AnimationsEnabled => System.Windows.SystemParameters.ClientAreaAnimation;
 
     // ---------- Filtros ----------
 
@@ -142,6 +180,29 @@ public sealed partial class HeatmapViewModel : ViewModelBase
     /// <summary>La alternativa accesible: las mismas columnas, en texto y ordenables.</summary>
     [ObservableProperty] private bool _tableMode;
 
+    public ObservableCollection<ModuleSortOption> SortOptions { get; }
+
+    /// <summary>
+    /// Por defecto, <see cref="ModuleSort.Atencion"/>. Es la única que contesta algo útil cuando
+    /// la cobertura es baja: ordenar por deuda con el 0,2 % auditado ordena por los dos ficheros
+    /// que alguien miró.
+    /// </summary>
+    [ObservableProperty] private ModuleSortOption _selectedSort;
+
+    /// <summary>
+    /// Esconde lo que nadie ha auditado (F10.2 §4). Con cobertura baja es la única forma de que el
+    /// mapa de densidad enseñe algo: deja a la vista SOLO lo que se sabe.
+    /// <para>
+    /// No es una forma de esconder el problema — el termómetro de arriba sigue contando la
+    /// aplicación entera, con filtro y sin él.
+    /// </para>
+    /// </summary>
+    [ObservableProperty] private bool _onlyAudited;
+
+    partial void OnSelectedSortChanged(ModuleSortOption value) => Render();
+
+    partial void OnOnlyAuditedChanged(bool value) => Render();
+
     partial void OnSelectedAppChanged(AppOption? value)
     {
         if (!_binding)
@@ -151,7 +212,11 @@ public sealed partial class HeatmapViewModel : ViewModelBase
         }
     }
 
-    partial void OnSelectedMetricChanged(HeatMetricOption value) => Render();
+    partial void OnSelectedMetricChanged(HeatMetricOption value)
+    {
+        _groups.Clear();
+        Render();
+    }
 
     /// <summary>Preselecciona la aplicación al navegar (desde el portafolio o el inventario).</summary>
     public void SetApp(string? slug) => _pendingSlug = slug;
@@ -169,7 +234,37 @@ public sealed partial class HeatmapViewModel : ViewModelBase
 
     // ---------- Lo que la vista pinta ----------
 
-    [ObservableProperty] private IReadOnlyList<HeatGroup> _groups = Array.Empty<HeatGroup>();
+    /// <summary>
+    /// Las celdas del nivel 2. <b>Vacío en el nivel 1</b>: ahí no hay treemap, hay tarjetas — el
+    /// treemap de 925 hojas de una vez no vuelve.
+    /// </summary>
+    [ObservableProperty] private IReadOnlyList<HeatGroup> _mapGroups = Array.Empty<HeatGroup>();
+
+    /// <summary>Las tarjetas del nivel 1, ya ordenadas.</summary>
+    public ObservableCollection<ModuleCard> Cards { get; } = new();
+
+    /// <summary>
+    /// El termómetro de la cabecera (F10.2 §3): la aplicación entera repartida por paso de la
+    /// rampa, más lo que nadie ha mirado. Es la leyenda aplicada al total — y lo que mejor
+    /// funciona en una diapositiva, porque se entiende sin explicarlo.
+    /// <para>
+    /// Cuenta SIEMPRE la aplicación entera, con «solo auditadas» puesto o no: es el ancla de
+    /// honestidad de la vista, y un ancla que se mueve con el filtro no ancla nada.
+    /// </para>
+    /// </summary>
+    public ObservableCollection<HeatSegment> Thermometer { get; } = new();
+
+    /// <summary>«925 unidades · 2 auditadas · 107 de deuda conocida».</summary>
+    [ObservableProperty] private string _thermometerCaption = string.Empty;
+
+    /// <summary>Qué mide el orden elegido, para el tooltip de «por qué este módulo está arriba».</summary>
+    [ObservableProperty] private string _sortHint = string.Empty;
+
+    /// <summary>
+    /// El layout compuesto de cada módulo, por (módulo, métrica, filtro). Componer las celdas de un
+    /// módulo es barato, pero se hace en cada ida y vuelta del zoom y no cambia entre ellas.
+    /// </summary>
+    private readonly Dictionary<string, HeatGroup> _groups = new(StringComparer.Ordinal);
 
     /// <inheritdoc cref="Treemap.ClusterFactory"/>
     [ObservableProperty] private Func<IReadOnlyList<HeatCell>, HeatCell>? _clusterFactory;
@@ -214,6 +309,9 @@ public sealed partial class HeatmapViewModel : ViewModelBase
 
     [ObservableProperty] private Brush _unknownFill = Brushes.Gainsboro;
 
+    /// <inheritdoc cref="ApplyTheme"/>
+    [ObservableProperty] private Brush _legendHatch = Brushes.Gainsboro;
+
     [ObservableProperty] private Brush _surfaceBrush = Brushes.Transparent;
 
     [ObservableProperty] private Brush _strokeBrush = Brushes.Gray;
@@ -247,6 +345,7 @@ public sealed partial class HeatmapViewModel : ViewModelBase
             }
 
             _view = view;
+            _groups.Clear();
             BindOptions(view);
             _zoom = _zoom is null ? null : view.Modules.FirstOrDefault(m => m.Name == _zoom.Name);
             ZoomedModule = _zoom?.Name;
@@ -282,7 +381,11 @@ public sealed partial class HeatmapViewModel : ViewModelBase
 
     private void ApplyTheme()
     {
-        UnknownFill = HeatBrushes.Hatch(
+        // Gris PLANO para las celdas (F10.2 §5). Novecientos rectángulos rayados son textura, no
+        // información: el rayado se leía como ruido de fondo y tapaba las dos celdas con dato. La
+        // trama se queda donde sí distingue algo — la muestra de la leyenda, que está una vez.
+        UnknownFill = HeatBrushes.Solid(DensityScale.Unknown.For(_dark));
+        LegendHatch = HeatBrushes.Hatch(
             (Color)ColorConverter.ConvertFromString(DensityScale.Unknown.For(_dark)),
             (Color)ColorConverter.ConvertFromString(DensityScale.UnknownHatch.For(_dark)));
         SurfaceBrush = HeatBrushes.Solid(DensityScale.Surface.For(_dark));
@@ -301,33 +404,239 @@ public sealed partial class HeatmapViewModel : ViewModelBase
             ? "Elige una aplicación para ver su mapa."
             : $"«{_view.AppName}» no tiene inventario en el ciclo {_view.CycleN}. Escanea el clon desde Inventario.";
 
-        var modules = _zoom is null ? _view.Modules : new List<HeatModule> { _zoom };
-
         // El rótulo se calcula sobre TODOS los módulos de la aplicación —no sobre los que se estén
-        // viendo, porque la colisión que hay que evitar es entre cualesquiera dos— y solo se
-        // aplica en la vista completa: ampliado hay una sola banda a lo ancho de la ventana, así
-        // que el sitio no escasea y no hay nada que omitir. Es cálculo de vista: no se guarda ni
-        // toca el hub.
-        _shortNames = _zoom is null
-            ? ModulePrefix.DisplayNames(_view.AppName, _view.Slug, _view.Modules.Select(m => m.Name))
-            : new Dictionary<string, string?>(StringComparer.Ordinal);
+        // viendo, porque la colisión que hay que evitar es entre cualesquiera dos—. Es cálculo de
+        // vista: no se guarda ni toca el hub.
+        _shortNames = ModulePrefix.DisplayNames(
+            _view.AppName, _view.Slug, _view.Modules.Select(m => m.Name));
+        PrefixNotice = _zoom is null ? Notice() : string.Empty;
 
-        PrefixNotice = Notice();
-
-        Groups = modules.Select(m => Group(m, metric)).ToList();
-        ClusterFactory = tiny => Cluster(tiny, metric);
-
+        BuildThermometer();
         BuildLegend(metric);
-        BuildRows(modules);
+
+        if (_zoom is null)
+        {
+            BuildCards(metric);
+            MapGroups = Array.Empty<HeatGroup>();
+        }
+        else
+        {
+            Cards.Clear();
+            MapGroups = new[] { GroupOf(_zoom, metric) };
+        }
+
+        ClusterFactory = tiny => Cluster(tiny, metric);
+        BuildRows(Scope());
 
         ScaleCaption = metric == HeatMetric.Deuda
             ? "El área es el tamaño (LOC); el color, la deuda total de la unidad."
             : "El área es el tamaño (LOC); el color, la deuda por cada mil líneas.";
 
+        BuildSummary();
+    }
+
+    /// <summary>Los módulos que la vista está mirando: la app entera, o el módulo ampliado.</summary>
+    private IReadOnlyList<HeatModule> Scope()
+        => _zoom is null ? _view.Modules : new List<HeatModule> { _zoom };
+
+    // ---------- Nivel 1: las tarjetas ----------
+
+    /// <summary>
+    /// Una tarjeta por módulo, ordenadas. Son ~22 elementos en vez de las 925 celdas del treemap
+    /// de hojas: es de donde sale la diferencia de tiempo de carga (F10.2 §5).
+    /// </summary>
+    private void BuildCards(HeatMetric metric)
+    {
+        var cards = _view.Modules
+            .Where(m => !OnlyAudited || m.AuditedUnits > 0)
+            .Select(m => Card(m, metric))
+            .ToList();
+
+        Cards.Clear();
+        foreach (ModuleCard card in Sorted(cards))
+        {
+            Cards.Add(card);
+        }
+
+        SortHint = SelectedSort.Hint;
+    }
+
+    private ModuleCard Card(HeatModule module, HeatMetric metric)
+    {
+        Attention attention = AttentionScore.Of(module, _view.TotalLoc);
+        double? value = module.Value(metric);
+        SeverityChips chips = module.Severities;
+
+        return new ModuleCard(
+            _shortNames.TryGetValue(module.Name, out string? brief) && brief is not null
+                ? brief
+                : module.Name,
+            module.Name,
+            $"{Num(module.UnitCount)} u · {Kloc(module.Loc)} KLOC",
+            module.Coverage,
+            CoverageBar(module),
+            $"{module.Coverage:P0} auditado · {Num(module.AuditedUnits)} de {Num(module.UnitCount)}",
+            Fill(value, metric),
+            Fill(value, metric) ?? UnknownFill,
+            value is { } v ? v.ToString("0.#", AppCulture.Display) : HeatRow.Unknown,
+            module.IsMeasured
+                ? metric == HeatMetric.Deuda ? "deuda auditada" : "por KLOC auditada"
+                : "densidad desconocida",
+            SeverityBars(chips),
+            chips.Total == 0 ? "Sin hallazgos activos" : $"{Num(chips.Total)} activos",
+            attention.Score,
+            attention.Score.ToString("0.00", AppCulture.Display),
+            ModuleTip(module, attention),
+            module);
+    }
+
+    /// <summary>
+    /// Los dos tramos de la cobertura. El de «sin auditar» lleva el mismo gris que el mapa, así
+    /// que la tarjeta y las celdas dicen lo mismo con el mismo color.
+    /// </summary>
+    private IReadOnlyList<HeatSegment> CoverageBar(HeatModule module)
+    {
+        int pending = module.UnitCount - module.AuditedUnits;
+        return new[]
+        {
+            new HeatSegment(
+                "auditadas",
+                module.AuditedUnits,
+                module.Coverage,
+                MutedBrush,
+                $"{Num(module.AuditedUnits)} unidades auditadas"),
+            new HeatSegment(
+                "sin auditar",
+                pending,
+                1 - module.Coverage,
+                UnknownFill,
+                $"{Num(pending)} unidades sin auditar — densidad DESCONOCIDA, que no es cero."),
+        };
+    }
+
+    /// <summary>La mini barra apilada C/A/M/B, con los colores de estado de siempre.</summary>
+    private static IReadOnlyList<HeatSegment> SeverityBars(SeverityChips chips)
+    {
+        int total = Math.Max(1, chips.Total);
+        return Enum.GetValues<Severity>()
+            .Select(sev => new HeatSegment(
+                SeverityNames.Display(sev),
+                chips.Of(sev),
+                (double)chips.Of(sev) / total,
+                HeatBrushes.Solid(SeverityPalette.Hex(sev)),
+                $"{SeverityNames.Display(sev)}: {chips.Of(sev)}"))
+            .Where(seg => seg.Count > 0)
+            .ToList();
+    }
+
+    /// <summary>
+    /// El orden de las tarjetas. «Atención» primero por defecto; las demás responden preguntas
+    /// concretas y se eligen cuando se tiene una.
+    /// </summary>
+    private IEnumerable<ModuleCard> Sorted(IReadOnlyList<ModuleCard> cards)
+    {
+        var byName = cards.ToDictionary(c => c.FullName, c => c, StringComparer.Ordinal);
+        HeatModule Module(ModuleCard c) => (HeatModule)c.Payload!;
+        _ = byName;
+
+        IOrderedEnumerable<ModuleCard> ordered = SelectedSort.Sort switch
+        {
+            ModuleSort.Deuda => cards.OrderByDescending(c => Module(c).KnownDebt),
+
+            // Sin densidad medida no se puede ordenar por densidad: van al final, no arriba con un
+            // cero que fingiría que están limpios.
+            ModuleSort.Densidad => cards
+                .OrderBy(c => Module(c).Density is null)
+                .ThenByDescending(c => Module(c).Density ?? 0),
+
+            ModuleSort.Tamano => cards.OrderByDescending(c => Module(c).Loc),
+            ModuleSort.Cobertura => cards.OrderBy(c => Module(c).Coverage),
+            ModuleSort.Nombre => cards.OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase),
+            _ => cards.OrderByDescending(c => c.Attention),
+        };
+
+        return ordered.ThenBy(c => c.FullName, StringComparer.OrdinalIgnoreCase);
+    }
+
+    // ---------- El termómetro ----------
+
+    /// <summary>
+    /// La aplicación entera en una barra: cada paso de la rampa con sus unidades auditadas, y al
+    /// final lo que nadie ha mirado. Es la leyenda aplicada al total, así que no hay vocabulario
+    /// nuevo que aprender.
+    /// </summary>
+    private void BuildThermometer()
+    {
+        Thermometer.Clear();
+        var units = _view.Units.ToList();
+        if (units.Count == 0)
+        {
+            ThermometerCaption = string.Empty;
+            return;
+        }
+
+        HeatMetric metric = SelectedMetric.Metric;
+        foreach (HeatStep step in DensityScale.For(metric))
+        {
+            int count = units.Count(u => u.IsMeasured && DensityScale.StepOf(u.Value(metric), metric) == step);
+            if (count == 0)
+            {
+                continue;
+            }
+
+            string label = step.Index == 0 ? "auditadas sin deuda" : $"auditadas · {DensityScale.RangeLabel(step)}";
+            Thermometer.Add(new HeatSegment(
+                label,
+                count,
+                (double)count / units.Count,
+                HeatBrushes.Solid(step.For(_dark)),
+                $"{Num(count)} unidades {label} ({(double)count / units.Count:P1})"));
+        }
+
+        int unknown = units.Count(u => !u.IsMeasured);
+        if (unknown > 0)
+        {
+            Thermometer.Add(new HeatSegment(
+                "sin auditar",
+                unknown,
+                (double)unknown / units.Count,
+                UnknownFill,
+                $"{Num(unknown)} unidades sin auditar ({(double)unknown / units.Count:P1}) — "
+                + "densidad DESCONOCIDA, que no es cero."));
+        }
+
+        ThermometerCaption =
+            $"{Num(_view.TotalUnits)} unidades · {Num(_view.AuditedUnits)} auditadas ({_view.Coverage:P0}) · "
+            + $"{Num(_view.KnownDebt)} de deuda conocida";
+    }
+
+    // ---------- Nivel 2: el treemap del módulo ----------
+
+    /// <summary>
+    /// Las celdas de un módulo, cacheadas por (módulo, métrica, filtro): entrar y salir del zoom
+    /// no vuelve a componerlas. La caché se tira entera en cada <see cref="LoadAsync"/>, que es
+    /// cuando el hub puede haber cambiado.
+    /// </summary>
+    private HeatGroup GroupOf(HeatModule module, HeatMetric metric)
+    {
+        string key = $"{module.Name}|{metric}|{OnlyAudited}|{_dark}";
+        if (_groups.TryGetValue(key, out HeatGroup? cached))
+        {
+            return cached;
+        }
+
+        HeatGroup group = Group(module, metric);
+        _groups[key] = group;
+        return group;
+    }
+
+    private void BuildSummary()
+    {
         // El resumen describe lo que SE ESTÁ VIENDO, no siempre la aplicación entera: ampliado a
         // un módulo, las cifras de toda la app debajo de un mapa que solo enseña ese módulo son
         // una nota al pie que contradice la figura — y en la imagen exportada, un pie de foto
         // falso.
+        var modules = Scope();
         int units = modules.Sum(m => m.UnitCount);
         int audited = modules.Sum(m => m.AuditedUnits);
         int loc = modules.Sum(m => m.Loc);
@@ -339,7 +648,7 @@ public sealed partial class HeatmapViewModel : ViewModelBase
             : $"{Num(units)} unidades · {Num(loc)} líneas · "
               + $"{Num(audited)} auditadas ({coverage:P0}) · deuda conocida {Num(debt)}";
 
-        CoverageWarning = _view.IsEmpty || audited == units
+        CoverageWarning = _view.IsEmpty || audited == units || OnlyAudited
             ? string.Empty
             : $"{Num(units - audited)} de {Num(units)} unidades están en gris: "
               + "nadie las ha auditado, así que su densidad es DESCONOCIDA, no cero.";
@@ -378,8 +687,17 @@ public sealed partial class HeatmapViewModel : ViewModelBase
             module.IsQualified,
             ModuleTip(module),
             module,
-            module.Units.Select(u => Cell(u, metric)).ToList(),
-            ShortName: _shortNames.TryGetValue(module.Name, out string? brief) ? brief : null);
+            Units(module).Select(u => Cell(u, metric)).ToList(),
+            // El nivel 2 escribe el nombre ENTERO: hay una banda a lo ancho de la ventana, así que
+            // no hay sitio que ahorrar — y las migas de encima ya dicen de qué módulo se trata.
+            ShortName: null);
+
+    /// <summary>
+    /// Las unidades que se pintan de un módulo. Con «solo auditadas», las que se sabe medir: es lo
+    /// que convierte el mapa de densidad en algo legible mientras la cobertura sea baja.
+    /// </summary>
+    private IEnumerable<HeatUnit> Units(HeatModule module)
+        => OnlyAudited ? module.Units.Where(u => u.IsMeasured) : module.Units;
 
     private HeatCell Cell(HeatUnit unit, HeatMetric metric)
         => new(
@@ -502,7 +820,7 @@ public sealed partial class HeatmapViewModel : ViewModelBase
 
         Legend.Add(new HeatLegendItem(
             "No auditada · densidad DESCONOCIDA (no es cero)",
-            UnknownFill,
+            LegendHatch,
             Dotted: false,
             Tooltip: "Nadie ha barrido esta unidad. Lo que no se ha mirado no se puede llamar limpio."));
 
@@ -523,7 +841,7 @@ public sealed partial class HeatmapViewModel : ViewModelBase
     private void BuildRows(IReadOnlyList<HeatModule> modules)
     {
         var rows = modules
-            .SelectMany(m => m.Units.Select(u => new HeatRow(
+            .SelectMany(m => Units(m).Select(u => new HeatRow(
                 m.Name,
                 u.FileName,
                 u.Path,
@@ -535,6 +853,7 @@ public sealed partial class HeatmapViewModel : ViewModelBase
                 u.KnownDebt,
                 u.Density,
                 StateText(u),
+                StateDetail(u),
                 Fill(u.Value(SelectedMetric.Metric), SelectedMetric.Metric) ?? UnknownFill,
                 u)))
             .ToList();
@@ -580,12 +899,27 @@ public sealed partial class HeatmapViewModel : ViewModelBase
 
     // ---------- Los textos que explican una celda ----------
 
+    /// <summary>
+    /// El estado, corto. Las frases largas —«No auditada · excluida por tamaño»— no cabían en su
+    /// columna y salían cortadas; acortar el TEXTO es mejor que ensanchar la columna a costa del
+    /// nombre del fichero, que es lo que se busca leyendo. El detalle entero sigue en el tooltip
+    /// de la celda del mapa.
+    /// </summary>
     private static string StateText(HeatUnit unit) => unit.Knowledge switch
     {
         HeatKnowledge.Auditada => "Auditada",
-        HeatKnowledge.Cambiada => "Auditada · el código cambió después",
-        _ when unit.State == UnitState.Grande => "No auditada · excluida por tamaño",
+        HeatKnowledge.Cambiada => "Auditada (cambió)",
+        _ when unit.State == UnitState.Grande => "No auditada (grande)",
         _ => "No auditada",
+    };
+
+    /// <summary>Y la frase entera, para el tooltip de esa celda.</summary>
+    private static string StateDetail(HeatUnit unit) => unit.Knowledge switch
+    {
+        HeatKnowledge.Auditada => "Auditada",
+        HeatKnowledge.Cambiada => "Auditada · el código ha cambiado desde entonces",
+        _ when unit.State == UnitState.Grande => "No auditada · excluida del ciclo por su tamaño",
+        _ => "No auditada · nadie la ha barrido todavía",
     };
 
     private string UnitTip(HeatUnit unit)
@@ -593,7 +927,7 @@ public sealed partial class HeatmapViewModel : ViewModelBase
         var lines = new List<string>
         {
             unit.Path,
-            $"{Num(unit.Loc)} líneas · {StateText(unit)}",
+            $"{Num(unit.Loc)} líneas · {StateDetail(unit)}",
             Severities(unit.Findings),
             $"Deuda conocida: {Num(unit.KnownDebt)}",
             unit.Density is { } d
@@ -613,7 +947,7 @@ public sealed partial class HeatmapViewModel : ViewModelBase
         return string.Join(Environment.NewLine, lines);
     }
 
-    private string ModuleTip(HeatModule module)
+    private string ModuleTip(HeatModule module, Attention? attention = null)
     {
         // Siempre el nombre COMPLETO: el tooltip es lo que deshace la omisión de la banda.
         var lines = new List<string>
@@ -625,6 +959,7 @@ public sealed partial class HeatmapViewModel : ViewModelBase
             module.Density is { } d
                 ? $"Densidad (sobre lo auditado): {d.ToString("0.#", AppCulture.Display)} por KLOC"
                 : "Densidad: DESCONOCIDA — ninguna unidad de este módulo se ha auditado",
+            Severities(module.Severities),
         };
 
         if (module.UnauditedDebt > 0)
@@ -632,8 +967,37 @@ public sealed partial class HeatmapViewModel : ViewModelBase
             lines.Add($"De esa deuda, {Num(module.UnauditedDebt)} está en unidades sin auditar.");
         }
 
+        if (attention is { } score)
+        {
+            lines.Add(string.Empty);
+            lines.Add(Why(module, score));
+        }
+
         return string.Join(Environment.NewLine, lines);
     }
+
+    /// <summary>
+    /// Por qué este módulo está donde está en el orden «Atención». Con la fórmula desglosada: un
+    /// ranking que no se puede explicar no se sigue, y este ordena por algo que no se ve.
+    /// </summary>
+    private static string Why(HeatModule module, Attention score)
+    {
+        string risk = module.Density is { } d
+            ? $"riesgo medido {score.Risk.ToString("0.00", AppCulture.Display)} "
+              + $"(densidad {d.ToString("0.#", AppCulture.Display)} por KLOC, "
+              + $"con {score.Confidence:P0} de confianza sobre el {module.CoverageLoc:P0} del código mirado)"
+            : "riesgo medido 0 (nadie ha auditado nada de este módulo)";
+
+        return $"Atención {score.Score.ToString("0.00", AppCulture.Display)} = "
+               + $"{AttentionScore.RiskWeight.ToString("0.#", AppCulture.Display)} × {risk} + "
+               + $"{AttentionScore.IgnoranceWeight.ToString("0.#", AppCulture.Display)} × "
+               + $"ignorancia {score.Ignorance.ToString("0.00", AppCulture.Display)} "
+               + $"({Num(module.Loc - module.AuditedLoc)} líneas sin auditar, "
+               + $"{score.Ignorance:P0} del código de la aplicación).";
+    }
+
+    /// <summary>Miles de líneas, que es como se lee el tamaño de un módulo.</summary>
+    private static string Kloc(int loc) => (loc / 1000.0).ToString("0.#", AppCulture.Display);
 
     private static string Severities(SeverityChips chips)
         => chips.Total == 0
@@ -689,6 +1053,18 @@ public sealed partial class HeatmapViewModel : ViewModelBase
     [RelayCommand]
     private Task Activate(object? payload)
         => payload is HeatUnit unit ? Audit(unit) : Task.CompletedTask;
+
+    /// <summary>Una tarjeta del nivel 1: amplía a su treemap de unidades.</summary>
+    [RelayCommand]
+    private void OpenModule(ModuleCard? card)
+    {
+        if (card?.Payload is HeatModule module)
+        {
+            _zoom = module;
+            ZoomedModule = module.Name;
+            Render();
+        }
+    }
 
     /// <summary>Vuelve del módulo ampliado a la aplicación entera. Es la miga.</summary>
     [RelayCommand]
@@ -838,8 +1214,10 @@ public sealed partial class HeatmapViewModel : ViewModelBase
             $"{_view.AppName}{scope} · mapa de calor · {when:d MMMM yyyy}",
             $"{ScaleCaption} {Summary}",
             $"Atalaya · {org}",
-            Groups,
+            MapGroups,
             Legend.ToList(),
-            _dark);
+            _dark,
+            Cards.ToList(),
+            Thermometer.ToList());
     }
 }

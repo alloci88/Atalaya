@@ -167,6 +167,43 @@ public sealed class HeatmapViewTests : IDisposable
         _hub.Store.WriteInventory("xblast", new InventoryCycle { CycleN = 1, Units = units });
     }
 
+    /// <summary>
+    /// Amplía al módulo indicado y devuelve su grupo del nivel 2. Desde F10.2 el treemap solo
+    /// existe DENTRO de un módulo: el nivel 1 son tarjetas.
+    /// </summary>
+    private static HeatGroup Zoom(HeatmapViewModel vm, string module)
+    {
+        vm.ZoomOutCommand.Execute(null);
+        ModuleCard card = vm.Cards.Single(c => c.FullName == module);
+        vm.OpenModuleCommand.Execute(card);
+        return vm.MapGroups.Single();
+    }
+
+    /// <summary>Tres módulos que separan los tres casos del orden «Atención».</summary>
+    private void Ranked()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u/app", CurrentCycle = 1 });
+
+        var units = new List<InventoryUnit>
+        {
+            // Grande y sin abrir: la ignorancia es riesgo.
+            Unit("Enorme/A.cs", "Enorme", 240_000),
+
+            // Pequeño, auditado entero y podrido: un hecho comprobado.
+            Unit("Sucio/B.cs", "Sucio", 1_000, UnitState.Auditada),
+
+            // Grande, auditado entero y limpio: nada que hacer aquí.
+            Unit("Limpio/C.cs", "Limpio", 70_000, UnitState.Auditada),
+        };
+
+        _hub.Store.WriteInventory("app", new InventoryCycle { CycleN = 1, Units = units });
+
+        for (int i = 0; i < 20; i++)
+        {
+            Finding("app", "Sucio/B.cs", Severity.Critica);
+        }
+    }
+
     private static string Hex(Brush? brush)
         => brush is SolidColorBrush solid ? solid.Color.ToString().ToUpperInvariant() : string.Empty;
 
@@ -384,7 +421,9 @@ public sealed class HeatmapViewTests : IDisposable
         labels.Should().Contain(l => l.Contains("Crítica 10") && l.Contains("Baja 1"));
 
         // Y la entrada del gris lleva el pincel tramado, que es el otro canal.
-        vm.Legend.Single(l => l.Label.Contains("DESCONOCIDA")).Fill.Should().BeOfType<DrawingBrush>();
+        vm.Legend.Single(l => l.Label.Contains("DESCONOCIDA")).Fill.Should().BeOfType<DrawingBrush>(
+            "la trama se queda en la MUESTRA, que está una vez; en 900 celdas era textura");
+        vm.UnknownFill.Should().BeOfType<SolidColorBrush>("y las celdas van en gris plano");
     }
 
     /// <summary>Al cambiar de métrica cambian los umbrales de la leyenda, no solo el rótulo.</summary>
@@ -414,7 +453,7 @@ public sealed class HeatmapViewTests : IDisposable
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
 
-        HeatGroup core = vm.Groups.Single(g => g.Name == "Core");
+        HeatGroup core = Zoom(vm, "Core");
         HeatCell dirty = core.Cells.Single(c => c.Label == "Sucia.cs");
         HeatCell untouched = core.Cells.Single(c => c.Label == "Virgen.cs");
 
@@ -423,7 +462,7 @@ public sealed class HeatmapViewTests : IDisposable
         untouched.Fill.Should().BeNull("sin color: el control pinta el gris tramado");
         untouched.Qualified.Should().BeFalse();
 
-        HeatCell mole = vm.Groups.Single(g => g.Name == "Utils").Cells.Single();
+        HeatCell mole = Zoom(vm, "Utils").Cells.Single();
         mole.Fill.Should().BeNull("excluida por tamaño sigue siendo no auditada");
         mole.Qualified.Should().BeTrue("gris con deuda conocida: el relleno no lo cuenta todo");
     }
@@ -436,7 +475,7 @@ public sealed class HeatmapViewTests : IDisposable
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
 
-        HeatGroup core = vm.Groups.Single(g => g.Name == "Core");
+        HeatGroup core = Zoom(vm, "Core");
         core.Weight.Should().Be(4000, "200 + 800 + 3000");
         core.Cells.Single(c => c.Label == "Sucia.cs").Weight.Should().Be(200);
     }
@@ -449,7 +488,7 @@ public sealed class HeatmapViewTests : IDisposable
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
 
-        var core = vm.Groups.Single(g => g.Name == "Core");
+        HeatGroup core = Zoom(vm, "Core");
         string dirty = core.Cells.Single(c => c.Label == "Sucia.cs").Tooltip;
 
         dirty.Should().Contain("Core/Sucia.cs");
@@ -464,8 +503,8 @@ public sealed class HeatmapViewTests : IDisposable
         untouched.Should().Contain("DESCONOCIDA");
         untouched.Should().NotContain("Densidad: 0");
 
-        string mole = vm.Groups.Single(g => g.Name == "Utils").Cells.Single().Tooltip;
-        mole.Should().Contain("excluida por tamaño");
+        string mole = Zoom(vm, "Utils").Cells.Single().Tooltip;
+        mole.Should().Contain("excluida del ciclo por su tamaño");
         mole.Should().Contain("cota inferior");
     }
 
@@ -477,7 +516,7 @@ public sealed class HeatmapViewTests : IDisposable
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
 
-        string core = vm.Groups.Single(g => g.Name == "Core").Tooltip;
+        string core = vm.Cards.Single(c => c.FullName == "Core").Tooltip;
 
         core.Should().Contain("Cobertura: 2 auditadas de 3");
         core.Should().Contain("Densidad (sobre lo auditado)");
@@ -519,37 +558,60 @@ public sealed class HeatmapViewTests : IDisposable
         await vm.LoadAsync();
 
         vm.IsZoomed.Should().BeFalse();
-        vm.Groups.Should().HaveCount(2);
+        vm.Cards.Should().HaveCount(2, "el nivel 1 son tarjetas de módulo, no celdas");
+        vm.MapGroups.Should().BeEmpty("el treemap de 925 hojas de una vez no vuelve");
 
-        await vm.TileCommand.ExecuteAsync(vm.Groups.Single(g => g.Name == "Core").Payload);
+        Zoom(vm, "Core");
 
         vm.IsZoomed.Should().BeTrue();
         vm.ZoomedModule.Should().Be("Core");
-        vm.Groups.Should().ContainSingle().Which.Name.Should().Be("Core");
+        vm.MapGroups.Should().ContainSingle().Which.Name.Should().Be("Core");
+        vm.Cards.Should().BeEmpty("ampliado no hay tarjetas: hay un treemap");
         vm.Rows.Should().OnlyContain(r => r.Module == "Core", "la tabla acompaña al zoom");
 
         vm.ZoomOutCommand.Execute(null);
 
         vm.IsZoomed.Should().BeFalse();
-        vm.Groups.Should().HaveCount(2);
+        vm.Cards.Should().HaveCount(2);
+        vm.MapGroups.Should().BeEmpty();
     }
 
     /// <summary>
-    /// En la vista completa, un clic en una celda de dos píxeles amplía su módulo: pedirle a
-    /// alguien que acierte una celda diminuta para llegar a sus hallazgos sería un gesto que no se
-    /// puede ejecutar.
+    /// El nivel 1 <b>no</b> es un treemap de hojas: es una tarjeta por módulo. Con 925 unidades de
+    /// las que 923 estaban sin auditar, el treemap dibujaba 923 rectángulos grises idénticos donde
+    /// no cabía una etiqueta — y las dos celdas con dato se perdían dentro.
     /// </summary>
     [Fact]
-    public async Task En_la_vista_completa_un_clic_en_una_celda_amplia_su_modulo()
+    public async Task El_nivel_1_son_tarjetas_de_modulo_y_no_celdas()
     {
         Seed();
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
 
-        object? cell = vm.Groups.Single(g => g.Name == "Utils").Cells.Single().Payload;
-        await vm.TileCommand.ExecuteAsync(cell);
+        vm.MapGroups.Should().BeEmpty();
+        vm.Cards.Should().HaveCount(2);
+        vm.Cards.Should().OnlyContain(c => c.Payload is HeatModule);
+
+        ModuleCard core = vm.Cards.Single(c => c.FullName == "Core");
+        core.Size.Should().Be("3 u · 4 KLOC");
+        core.CoverageText.Should().Be("67 % auditado · 2 de 3");
+        core.DensityText.Should().Be("15", "12 puntos auditados sobre 0,8 KLOC auditadas");
+        core.SeverityText.Should().Be("2 activos");
+        core.Severities.Sum(seg => seg.Count).Should().Be(2);
+    }
+
+    /// <summary>Un clic en una tarjeta amplía a su treemap, que es el nivel 2.</summary>
+    [Fact]
+    public async Task Un_clic_en_una_tarjeta_amplia_su_modulo()
+    {
+        Seed();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+
+        vm.OpenModuleCommand.Execute(vm.Cards.Single(c => c.FullName == "Utils"));
 
         vm.ZoomedModule.Should().Be("Utils");
+        vm.MapGroups.Should().ContainSingle().Which.Name.Should().Be("Utils");
     }
 
     /// <summary>El zoom sobrevive a una recarga: sincronizar no puede devolverte a la portada.</summary>
@@ -559,11 +621,12 @@ public sealed class HeatmapViewTests : IDisposable
         Seed();
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
-        await vm.TileCommand.ExecuteAsync(vm.Groups.Single(g => g.Name == "Core").Payload);
+        Zoom(vm, "Core");
 
         await vm.LoadAsync();
 
         vm.ZoomedModule.Should().Be("Core");
+        vm.MapGroups.Should().ContainSingle();
     }
 
     // ============================================ La tabla equivalente
@@ -645,8 +708,7 @@ public sealed class HeatmapViewTests : IDisposable
         HeatmapViewModel vm = Vm(navigation);
         await vm.LoadAsync();
 
-        await vm.TileCommand.ExecuteAsync(vm.Groups.Single(g => g.Name == "Core").Payload);
-        object? cell = vm.Groups.Single().Cells.Single(c => c.Label == "Sucia.cs").Payload;
+        object? cell = Zoom(vm, "Core").Cells.Single(c => c.Label == "Sucia.cs").Payload;
         await vm.TileCommand.ExecuteAsync(cell);
 
         navigation.Current.Should().BeSameAs(findings);
@@ -668,7 +730,7 @@ public sealed class HeatmapViewTests : IDisposable
         HeatmapViewModel vm = Vm(navigation);
         await vm.LoadAsync();
 
-        object? cell = vm.Groups.Single(g => g.Name == "Core").Cells.Single(c => c.Label == "Sucia.cs").Payload;
+        object? cell = Zoom(vm, "Core").Cells.Single(c => c.Label == "Sucia.cs").Payload;
         await vm.ActivateCommand.ExecuteAsync(cell);
 
         navigation.Current.Should().BeSameAs(inventory);
@@ -703,7 +765,9 @@ public sealed class HeatmapViewTests : IDisposable
         request.Subtitle.Should().Contain("el color, la deuda por cada mil líneas");
         request.Subtitle.Should().Contain("2 auditadas");
         request.Legend.Should().HaveCount(DensityScale.StepCount + 3);
-        request.Groups.Should().HaveCount(2);
+        request.IsOverview.Should().BeTrue("el nivel 1 se exporta como tarjetas, igual que se ve");
+        request.Cards.Should().HaveCount(2);
+        request.Thermometer.Should().NotBeEmpty("la lámina lleva el termómetro de la aplicación");
     }
 
     /// <summary>
@@ -719,9 +783,10 @@ public sealed class HeatmapViewTests : IDisposable
         await vm.LoadAsync();
         vm.Summary.Should().Contain("4 unidades");
 
-        await vm.TileCommand.ExecuteAsync(vm.Groups.Single(g => g.Name == "Core").Payload);
+        Zoom(vm, "Core");
 
         HeatmapImageRequest request = vm.ImageRequest(new DateTimeOffset(2026, 8, 29, 10, 0, 0, TimeSpan.Zero));
+        request.IsOverview.Should().BeFalse("ampliado, la lámina es el treemap del módulo");
         request.Title.Should().StartWith("XBLAST · Core · mapa de calor");
         request.Subtitle.Should().Contain("3 unidades", "las de Core, no las cuatro de la app");
         request.Subtitle.Should().Contain("4.000 líneas");
@@ -779,7 +844,8 @@ public sealed class HeatmapViewTests : IDisposable
         Seed();
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
-        IReadOnlyList<HeatGroup> groups = vm.Groups;
+        Zoom(vm, "Core");
+        IReadOnlyList<HeatGroup> groups = vm.MapGroups;
 
         StaRunner.Run(() =>
         {
@@ -792,7 +858,7 @@ public sealed class HeatmapViewTests : IDisposable
             placed.Should().NotBeEmpty("el control tiene que haber dibujado algo");
 
             var cells = placed.Where(p => !p.IsGroup).ToList();
-            cells.Should().HaveCount(4, "las cuatro unidades");
+            cells.Should().HaveCount(3, "las tres unidades de Core");
 
             for (int i = 0; i < cells.Count; i++)
             {
@@ -826,7 +892,8 @@ public sealed class HeatmapViewTests : IDisposable
         Crumbs();
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
-        IReadOnlyList<HeatGroup> groups = vm.Groups;
+        Zoom(vm, "M");
+        IReadOnlyList<HeatGroup> groups = vm.MapGroups;
         Func<IReadOnlyList<HeatCell>, HeatCell>? factory = vm.ClusterFactory;
 
         StaRunner.Run(() =>
@@ -856,7 +923,8 @@ public sealed class HeatmapViewTests : IDisposable
         Crumbs();
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
-        IReadOnlyList<HeatGroup> groups = vm.Groups;
+        Zoom(vm, "M");
+        IReadOnlyList<HeatGroup> groups = vm.MapGroups;
         Func<IReadOnlyList<HeatCell>, HeatCell>? factory = vm.ClusterFactory;
 
         StaRunner.Run(() =>
@@ -883,7 +951,7 @@ public sealed class HeatmapViewTests : IDisposable
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
 
-        var tiny = vm.Groups.Single().Cells.Where(c => c.Label != "Gorda.cs").ToList();
+        var tiny = Zoom(vm, "M").Cells.Where(c => c.Label != "Gorda.cs").ToList();
         HeatCell cluster = vm.ClusterFactory!(tiny);
 
         cluster.Label.Should().Be($"+{tiny.Count} unidades");
@@ -904,7 +972,7 @@ public sealed class HeatmapViewTests : IDisposable
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
 
-        HeatCell cluster = vm.ClusterFactory!(vm.Groups.Single().Cells);
+        HeatCell cluster = vm.ClusterFactory!(Zoom(vm, "M").Cells);
 
         cluster.Fill.Should().BeNull("gris tramado: la honestidad no cambia por agrupar");
         cluster.Tooltip.Should().Contain("Ninguna está auditada");
@@ -924,15 +992,14 @@ public sealed class HeatmapViewTests : IDisposable
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
 
-        HeatCell dirty = vm.Groups.Single(g => g.Name == "Core").Cells.Single(c => c.Label == "Sucia.cs");
+        HeatCell dirty = Zoom(vm, "Core").Cells.Single(c => c.Label == "Sucia.cs");
 
         // 15 puntos sobre 0,2 KLOC = 75 → paso 4, que en tema oscuro es coral con tinta NEGRA.
         Hex(dirty.Fill).Should().Be(Hex(HeatBrushes.Solid(DensityScale.Density[3].Dark)));
         Hex(dirty.Ink).Should().Be(Hex(HeatBrushes.Solid(DensityScale.Density[3].DarkInk)));
 
         // La celda gris no trae tinta: usa la del tema, que es la que contrasta con el tramado.
-        vm.Groups.Single(g => g.Name == "Core").Cells.Single(c => c.Label == "Virgen.cs")
-            .Ink.Should().BeNull();
+        vm.MapGroups.Single().Cells.Single(c => c.Label == "Virgen.cs").Ink.Should().BeNull();
     }
 
     // ============================================ La tabla
@@ -953,7 +1020,8 @@ public sealed class HeatmapViewTests : IDisposable
         HeatRow untouched = vm.Rows.Single(r => r.Unit == "Virgen.cs");
 
         Hex(dirty.Stripe).Should().Be(Hex(HeatBrushes.Solid(DensityScale.Density[3].Dark)));
-        untouched.Stripe.Should().BeOfType<DrawingBrush>("sin auditar, la franja va tramada como la leyenda");
+        Hex(untouched.Stripe).Should().Be(Hex(HeatBrushes.Solid(DensityScale.Unknown.Dark)),
+            "sin auditar, el mismo gris PLANO que el mapa: la trama se quedó en la leyenda");
     }
 
     /// <summary>La franja acompaña a la métrica: cambiar de pregunta repinta también la tabla.</summary>
@@ -1051,7 +1119,7 @@ public sealed class HeatmapViewTests : IDisposable
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
 
-        vm.Groups.Select(g => g.ShortName).Should().BeEquivalentTo(new[] { "Core", "Utils", "DataBase" });
+        vm.Cards.Select(c => c.Name).Should().BeEquivalentTo(new[] { "Core", "Utils", "DataBase" });
         vm.PrefixNotice.Should().Contain("sin el nombre de la aplicación");
         vm.PrefixNotice.Should().Contain("XBLASTCore → Core");
         vm.PrefixNotice.Should().Contain("tooltip");
@@ -1069,8 +1137,8 @@ public sealed class HeatmapViewTests : IDisposable
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
 
-        vm.Groups.Single(g => g.Name == "Documents").ShortName.Should().BeNull();
-        vm.Groups.Single(g => g.Name == "XBLASTCore").ShortName.Should().Be("Core");
+        vm.Cards.Single(c => c.FullName == "Documents").Name.Should().Be("Documents");
+        vm.Cards.Single(c => c.FullName == "XBLASTCore").Name.Should().Be("Core");
         vm.PrefixNotice.Should().Contain("Los que no lo llevan salen enteros.");
     }
 
@@ -1085,9 +1153,9 @@ public sealed class HeatmapViewTests : IDisposable
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
 
-        vm.Groups.Single(g => g.Name == "XBLASTCore").ShortName.Should().BeNull();
-        vm.Groups.Single(g => g.Name == "Core").ShortName.Should().BeNull();
-        vm.Groups.Single(g => g.Name == "XBLASTUtils").ShortName.Should().Be("Utils");
+        vm.Cards.Single(c => c.FullName == "XBLASTCore").Name.Should().Be("XBLASTCore");
+        vm.Cards.Single(c => c.FullName == "Core").Name.Should().Be("Core");
+        vm.Cards.Single(c => c.FullName == "XBLASTUtils").Name.Should().Be("Utils");
     }
 
     /// <summary>
@@ -1101,8 +1169,8 @@ public sealed class HeatmapViewTests : IDisposable
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
 
-        HeatGroup core = vm.Groups.Single(g => g.ShortName == "Core");
-        core.Name.Should().Be("XBLASTCore", "el grupo sigue llamándose como se llama");
+        ModuleCard core = vm.Cards.Single(c => c.Name == "Core");
+        core.FullName.Should().Be("XBLASTCore", "la tarjeta sigue sabiendo cómo se llama");
         core.Tooltip.Should().StartWith("XBLASTCore", "el tooltip es lo que deshace la omisión");
 
         vm.Rows.Select(r => r.Module).Should().OnlyContain(m => m.StartsWith("XBLAST"));
@@ -1120,9 +1188,9 @@ public sealed class HeatmapViewTests : IDisposable
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
 
-        await vm.TileCommand.ExecuteAsync(vm.Groups.Single(g => g.ShortName == "Core").Payload);
+        Zoom(vm, "XBLASTCore");
 
-        vm.Groups.Should().ContainSingle().Which.ShortName.Should().BeNull();
+        vm.MapGroups.Should().ContainSingle().Which.ShortName.Should().BeNull();
         vm.PrefixNotice.Should().BeEmpty("no se declara lo que no se está haciendo");
         vm.ZoomedModule.Should().Be("XBLASTCore");
     }
@@ -1138,6 +1206,7 @@ public sealed class HeatmapViewTests : IDisposable
         Prefixed();
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
+        Zoom(vm, "XBLASTCore");
         HeatmapImageRequest request = vm.ImageRequest(DateTimeOffset.Now);
 
         StaRunner.Run(() =>
@@ -1162,6 +1231,190 @@ public sealed class HeatmapViewTests : IDisposable
                 yield return deeper;
             }
         }
+    }
+
+    // ============================================ El orden de las tarjetas
+
+    /// <summary>
+    /// Por defecto se ordena por <b>Atención</b>, y arriba salen los dos que hay que mirar: el
+    /// medido y sucio, y el grande que nadie ha abierto. El limpio y auditado, al fondo.
+    /// </summary>
+    [Fact]
+    public async Task Por_defecto_las_tarjetas_se_ordenan_por_atencion()
+    {
+        Ranked();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+
+        vm.SelectedSort.Sort.Should().Be(ModuleSort.Atencion);
+
+        // Primero el medido y podrido —auditado entero, 20 críticas en 1 KLOC: un hecho, no una
+        // sospecha—, y justo detrás el enorme que nadie ha abierto. Los dos, muy por encima del
+        // limpio: esa es la lista de «por dónde empiezo».
+        vm.Cards.Select(c => c.FullName).Should().Equal("Sucio", "Enorme", "Limpio");
+        vm.Cards[0].Attention.Should().BeGreaterThan(vm.Cards[1].Attention);
+        vm.Cards[1].Attention.Should().BeGreaterThan(0.25, "240 KLOC sin abrir pesan de verdad");
+        vm.Cards[2].Attention.Should().Be(0, "auditado del todo y sin deuda");
+    }
+
+    /// <summary>Y el tooltip explica POR QUÉ está arriba: un ranking que no se explica no se sigue.</summary>
+    [Fact]
+    public async Task El_tooltip_de_una_tarjeta_explica_su_puntuacion()
+    {
+        Ranked();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+
+        string tip = vm.Cards.Single(c => c.FullName == "Enorme").Tooltip;
+
+        tip.Should().Contain("Atención");
+        tip.Should().Contain("ignorancia");
+        tip.Should().Contain("líneas sin auditar");
+        vm.SortHint.Should().Contain("la ignorancia es riesgo");
+    }
+
+    /// <summary>
+    /// Los demás órdenes contestan preguntas concretas. Por densidad, los módulos sin auditar van
+    /// al FINAL: no tienen densidad, y colarlos arriba con un cero diría que están limpios.
+    /// </summary>
+    [Fact]
+    public async Task Los_otros_ordenes_contestan_su_pregunta()
+    {
+        Ranked();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+
+        vm.SelectedSort = vm.SortOptions.Single(o => o.Sort == ModuleSort.Tamano);
+        vm.Cards.Select(c => c.FullName).Should().Equal("Enorme", "Limpio", "Sucio");
+
+        vm.SelectedSort = vm.SortOptions.Single(o => o.Sort == ModuleSort.Densidad);
+        vm.Cards.Select(c => c.FullName).Should().Equal("Sucio", "Limpio", "Enorme");
+
+        vm.SelectedSort = vm.SortOptions.Single(o => o.Sort == ModuleSort.Nombre);
+        vm.Cards.Select(c => c.FullName).Should().Equal("Enorme", "Limpio", "Sucio");
+
+        vm.SelectedSort = vm.SortOptions.Single(o => o.Sort == ModuleSort.Cobertura);
+        vm.Cards.First().FullName.Should().Be("Enorme", "de menos auditado a más");
+    }
+
+    // ============================================ La tarjeta
+
+    /// <summary>
+    /// La cobertura va como DATO medido —barra y porcentaje— y no como textura. Es donde vive la
+    /// honestidad del «no auditado» sin invadir la vista entera.
+    /// </summary>
+    [Fact]
+    public async Task La_tarjeta_enseña_la_cobertura_como_dato()
+    {
+        Seed();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+
+        ModuleCard core = vm.Cards.Single(c => c.FullName == "Core");
+
+        core.Coverage.Should().BeApproximately(2 / 3.0, 1e-9);
+        core.CoverageBar.Should().HaveCount(2);
+        core.CoverageBar[0].Share.Should().BeApproximately(2 / 3.0, 1e-9);
+        core.CoverageBar[1].Share.Should().BeApproximately(1 / 3.0, 1e-9);
+        Hex(core.CoverageBar[1].Brush).Should().Be(Hex(HeatBrushes.Solid(DensityScale.Unknown.Dark)));
+    }
+
+    /// <summary>
+    /// Un módulo sin nada auditado lleva la franja GRIS, no el paso más frío de la rampa: la regla
+    /// de honestidad no cambia porque cambie el nivel de la vista.
+    /// </summary>
+    [Fact]
+    public async Task Un_modulo_sin_auditar_lleva_la_franja_gris()
+    {
+        Seed();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+
+        ModuleCard utils = vm.Cards.Single(c => c.FullName == "Utils");
+
+        utils.Density.Should().BeNull();
+        utils.DensityText.Should().Be("—");
+        utils.DensityCaption.Should().Contain("desconocida");
+        Hex(utils.Stripe).Should().Be(Hex(HeatBrushes.Solid(DensityScale.Unknown.Dark)));
+    }
+
+    // ============================================ El termómetro
+
+    /// <summary>
+    /// La aplicación entera en una barra: cada paso de la rampa con sus unidades, y al final lo
+    /// que nadie ha mirado. Es la leyenda aplicada al total.
+    /// </summary>
+    [Fact]
+    public async Task El_termometro_reparte_la_aplicacion_entera()
+    {
+        Seed();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+
+        vm.Thermometer.Sum(seg => seg.Count).Should().Be(4, "las cuatro unidades de la app");
+        vm.Thermometer.Sum(seg => seg.Share).Should().BeApproximately(1, 1e-9);
+        vm.Thermometer.Last().Label.Should().Be("sin auditar");
+        vm.Thermometer.Last().Count.Should().Be(2);
+        vm.ThermometerCaption.Should().Contain("4 unidades");
+        vm.ThermometerCaption.Should().Contain("2 auditadas");
+        vm.ThermometerCaption.Should().Contain("de deuda conocida");
+    }
+
+    /// <summary>
+    /// Y NO se mueve con «solo auditadas»: es el ancla de honestidad de la vista, y un ancla que
+    /// se mueve con el filtro no ancla nada.
+    /// </summary>
+    [Fact]
+    public async Task El_termometro_no_se_mueve_con_el_filtro()
+    {
+        Seed();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+        int total = vm.Thermometer.Sum(seg => seg.Count);
+
+        vm.OnlyAudited = true;
+
+        vm.Thermometer.Sum(seg => seg.Count).Should().Be(total);
+        vm.Thermometer.Should().Contain(seg => seg.Label == "sin auditar");
+    }
+
+    // ============================================ «Solo auditadas»
+
+    /// <summary>
+    /// El filtro esconde lo desconocido y deja ver el mapa de lo que se sabe. Con cobertura baja es
+    /// la única forma de que el mapa de densidad cuente algo.
+    /// </summary>
+    [Fact]
+    public async Task Solo_auditadas_esconde_lo_que_nadie_ha_mirado()
+    {
+        Seed();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+        vm.Cards.Should().HaveCount(2);
+        vm.Rows.Should().HaveCount(4);
+
+        vm.OnlyAudited = true;
+
+        vm.Cards.Should().ContainSingle().Which.FullName.Should().Be("Core",
+            "Utils no tiene ni una unidad auditada");
+        vm.Rows.Should().OnlyContain(r => r.Density != null);
+        vm.Rows.Should().HaveCount(2);
+        vm.CoverageWarning.Should().BeEmpty("no hay gris del que avisar mientras el filtro está puesto");
+    }
+
+    /// <summary>Y ampliado filtra las celdas del treemap, que es donde se nota.</summary>
+    [Fact]
+    public async Task Solo_auditadas_filtra_tambien_las_celdas_del_modulo()
+    {
+        Seed();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+        Zoom(vm, "Core").Cells.Should().HaveCount(3);
+
+        vm.OnlyAudited = true;
+
+        vm.MapGroups.Single().Cells.Should().HaveCount(2);
+        vm.MapGroups.Single().Cells.Should().OnlyContain(c => c.Fill != null);
     }
 
     // ============================================ El XAML
@@ -1264,10 +1517,70 @@ public sealed class HeatmapViewTests : IDisposable
         fitted.Should().Contain("{Binding Unit}");
         fitted.Should().Contain("{Binding State}");
 
-        // Y ninguna celda de la tabla se queda con el recorte trasero de serie de WPF.
-        root.Descendants()
+        // Y ninguna celda de la TABLA se queda con el recorte trasero de serie de WPF. (El
+        // nombre de una tarjeta sí lo usa: ahí el texto es un título de una línea con su tooltip,
+        // no una columna donde el final distingue dos ficheros.)
+        XElement table = root.Descendants()
+            .Single(e => e.Name.LocalName == "ItemsControl"
+                         && (string?)e.Attribute("ItemsSource") == "{Binding Rows}");
+
+        table.Descendants()
             .Where(e => e.Name.LocalName == "TextBlock")
             .Should().NotContain(e => (string?)e.Attribute("TextTrimming") == "CharacterEllipsis");
+    }
+
+    /// <summary>
+    /// <b>El contenido llena la ventana.</b> La fila del contenido es ESTRELLA y el treemap del
+    /// nivel 2 no tiene alto fijo: el hueco entre los filtros y el mapa al maximizar salía de un
+    /// treemap de 520 px dentro de una tarjeta que no crecía con la fila.
+    /// </summary>
+    [Fact]
+    public void El_contenido_ocupa_el_alto_disponible()
+    {
+        XElement root = XDocument.Load(Path.Combine(ViewsDir(), "HeatmapView.xaml")).Root!;
+
+        // Las del Grid raíz, que es el que reparte la ventana.
+        var rows = root.Elements()
+            .Single(e => e.Name.LocalName == "Grid")
+            .Elements()
+            .Single(e => e.Name.LocalName == "Grid.RowDefinitions")
+            .Elements()
+            .Select(e => (string?)e.Attribute("Height"))
+            .ToList();
+
+        rows.Should().Equal("Auto", "Auto", "Auto", "*");
+
+        XElement map = root.Descendants().Single(e => e.Name.LocalName == "Treemap");
+        map.Attribute("Height").Should().BeNull("un alto fijo es lo que dejaba el hueco al maximizar");
+        ((string?)map.Attribute("Grid.Row")).Should().Be("2", "la fila estrella de su contenedor");
+
+        // Y todo lo que se enseña vive en la fila del contenido, no apilado bajo los filtros.
+        root.Elements().Single(e => e.Name.LocalName == "Grid")
+            .Elements()
+            .Where(e => e.Attribute("Grid.Row") is not null)
+            .Select(e => (string?)e.Attribute("Grid.Row"))
+            .Should().OnlyContain(r => r == "0" || r == "1" || r == "2" || r == "3");
+    }
+
+    /// <summary>
+    /// El nivel 1 son tarjetas y el nivel 2 un treemap, y no coinciden nunca: el treemap de 925
+    /// hojas de una vez no vuelve, ni como opción.
+    /// </summary>
+    [Fact]
+    public void La_vista_tiene_dos_niveles_y_no_se_solapan()
+    {
+        string markup = File.ReadAllText(Path.Combine(ViewsDir(), "HeatmapView.xaml"));
+
+        markup.Should().Contain("OpenModuleCommand", "la tarjeta entra al módulo");
+        markup.Should().Contain("{Binding Cards}");
+        markup.Should().Contain("{Binding MapGroups}");
+        markup.Should().Contain("{Binding Thermometer}");
+        markup.Should().Contain("Solo auditadas");
+        markup.Should().Contain("{Binding SortOptions}");
+
+        // La única animación, y apagable desde el sistema.
+        markup.Should().Contain("AnimationsEnabled");
+        Regex.Matches(markup, "<BeginStoryboard").Should().HaveCount(1, "nada de animaciones decorativas");
     }
 
     /// <summary>Los pares (propiedad, valor) que fija un estilo del XAML, por su clave.</summary>

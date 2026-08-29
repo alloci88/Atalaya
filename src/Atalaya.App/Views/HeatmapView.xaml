@@ -83,6 +83,48 @@
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
 
+        <!-- La tarjeta de un módulo: un botón, porque el gesto es entrar en él. Con BasedOn no,
+             porque redefine la plantilla entera; por eso fija su Foreground a mano, que es la
+             trampa que ButtonForegroundTests vigila. -->
+        <Style x:Key="CardButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Margin" Value="0,0,12,12" />
+            <Setter Property="Width" Value="248" />
+            <!-- Alto uniforme: sin él, las tarjetas sin hallazgos son más bajas y las filas del
+                 WrapPanel salen dentadas. -->
+            <Setter Property="MinHeight" Value="152" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background"
+                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                <Setter TargetName="Chrome" Property="BorderBrush"
+                                        Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush"
+                                        Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <DataTemplate x:Key="LegendEntry">
             <StackPanel Orientation="Horizontal" Margin="0,0,16,6" ToolTip="{Binding Tooltip}">
                 <Rectangle Width="22" Height="13" RadiusX="2" RadiusY="2"
@@ -101,6 +143,10 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <!-- La fila ESTRELLA: el contenido ocupa lo que queda a cualquier tamaño de ventana.
+                 El hueco que aparecía al maximizar salía de un treemap de alto fijo dentro de una
+                 tarjeta que no crecía con la fila (F10.2 §5). -->
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -142,12 +188,27 @@
                               DisplayMemberPath="Label"
                               ToolTip="{Binding SelectedMetric.Hint}" />
 
+                    <TextBlock Text="Orden" VerticalAlignment="Center"
+                               FontSize="12" Opacity="0.7" Margin="20,0,8,0"
+                               Visibility="{Binding IsZoomed, Converter={StaticResource InverseBoolToVisibility}}" />
+                    <ComboBox MinWidth="130"
+                              ItemsSource="{Binding SortOptions}"
+                              SelectedItem="{Binding SelectedSort}"
+                              DisplayMemberPath="Label"
+                              ToolTip="{Binding SelectedSort.Hint}"
+                              Visibility="{Binding IsZoomed, Converter={StaticResource InverseBoolToVisibility}}" />
+
                     <ui:ProgressRing IsIndeterminate="True" Width="16" Height="16" Margin="18,0,0,0"
                                      VerticalAlignment="Center"
                                      Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <ui:ToggleSwitch Content="Solo auditadas"
+                                     IsChecked="{Binding OnlyAudited}"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,14,0"
+                                     ToolTip="Esconde lo que nadie ha mirado y deja ver el mapa de lo que sí se sabe. El termómetro de arriba sigue contando la aplicación entera." />
                     <ui:ToggleSwitch Content="Ver como tabla"
                                      IsChecked="{Binding TableMode}"
                                      VerticalAlignment="Center"
@@ -161,8 +222,30 @@
             </Grid>
         </Border>
 
+        <!-- Termómetro: la aplicación entera en una barra. Cuenta SIEMPRE el total, con «solo
+             auditadas» puesto o no — un ancla que se mueve con el filtro no ancla nada. -->
+        <StackPanel Grid.Row="2" Margin="0,0,18,14"
+                    Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
+            <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1" CornerRadius="5" Height="24" ClipToBounds="True">
+                <ItemsControl ItemsSource="{Binding Thermometer}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <controls:ShareBar />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{Binding Brush}" ToolTip="{Binding Tooltip}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+            <TextBlock Text="{Binding ThermometerCaption}" Style="{StaticResource BlockHint}" />
+        </StackPanel>
+
         <!-- Sin inventario no se dibuja un lienzo vacío: se dice qué falta. -->
-        <ui:Card Grid.Row="2" Style="{StaticResource Block}" VerticalAlignment="Top" Margin="0,0,18,14"
+        <ui:Card Grid.Row="3" Style="{StaticResource Block}" VerticalAlignment="Top" Margin="0,0,18,14"
                  Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
             <StackPanel>
                 <TextBlock Text="Todavía no hay mapa" Style="{StaticResource BlockTitle}" />
@@ -170,86 +253,222 @@
             </StackPanel>
         </ui:Card>
 
-        <!-- ==================== El mapa ====================
-             El mapa sí desplaza la página: es alto fijo más leyenda, y en una ventana baja hay
-             que poder llegar a la leyenda. La tabla, en cambio, NO va aquí dentro (ver abajo). -->
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,18,0">
+        <!-- ============ NIVEL 1: las tarjetas de módulo ============
+             Veintidós tarjetas en vez de 925 celdas. Ocupa la fila estrella y desplaza ella sola:
+             el hueco entre los filtros y el mapa al maximizar salía de un treemap de alto fijo
+             dentro de una tarjeta que no crecía. -->
+        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled" Padding="0,0,18,0">
             <ScrollViewer.Visibility>
                 <MultiBinding Converter="{StaticResource AllTrueToVisibility}">
                     <Binding Path="IsEmpty" Converter="{StaticResource InverseBool}" />
                     <Binding Path="TableMode" Converter="{StaticResource InverseBool}" />
+                    <Binding Path="IsZoomed" Converter="{StaticResource InverseBool}" />
                 </MultiBinding>
             </ScrollViewer.Visibility>
-            <ui:Card Style="{StaticResource Block}">
-                <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                            <!-- Migas: dónde se está y cómo se vuelve. -->
-                            <StackPanel Orientation="Horizontal">
-                                <Button Style="{StaticResource LinkButton}"
-                                        Command="{Binding ZoomOutCommand}"
-                                        Content="{Binding SelectedApp.Name}"
-                                        Visibility="{Binding IsZoomed, Converter={StaticResource BoolToVisibility}}"
-                                        ToolTip="Volver a la aplicación entera" />
-                                <TextBlock Text=" › " FontSize="15" VerticalAlignment="Center" Opacity="0.6"
-                                           Visibility="{Binding IsZoomed, Converter={StaticResource BoolToVisibility}}" />
-                                <TextBlock Text="{Binding ZoomedModule}" Style="{StaticResource BlockTitle}"
-                                           Visibility="{Binding IsZoomed, Converter={StaticResource BoolToVisibility}}" />
-                                <TextBlock Text="Módulos y unidades" Style="{StaticResource BlockTitle}"
-                                           Visibility="{Binding IsZoomed, Converter={StaticResource InverseBoolToVisibility}}" />
-                            </StackPanel>
-                            <TextBlock Text="{Binding ScaleCaption}" Style="{StaticResource BlockHint}" />
-                            <TextBlock Text="{Binding Summary}" Style="{StaticResource BlockHint}" />
-                            <!-- Qué prefijo se está omitiendo en las bandas. Una vez, aquí: en cada
-                                 banda sería el mismo ruido que se está quitando, y sin decirlo en
-                                 ninguna parte habría que adivinar qué falta. -->
-                            <TextBlock Text="{Binding PrefixNotice}" Style="{StaticResource BlockHint}"
-                                       Visibility="{Binding PrefixNotice, Converter={StaticResource NotEmptyToVisibility}}" />
-                        </StackPanel>
-                        <TextBlock Grid.Column="1" Style="{StaticResource BlockHint}" MaxWidth="230"
-                                   Text="Un clic amplía el módulo; ampliado, un clic abre los hallazgos de la unidad y un doble clic la lleva a auditar." />
-                    </Grid>
+            <StackPanel>
+                <TextBlock Text="{Binding PrefixNotice}" Style="{StaticResource BlockHint}"
+                           Margin="0,0,0,8"
+                           Visibility="{Binding PrefixNotice, Converter={StaticResource NotEmptyToVisibility}}" />
+                <ItemsControl ItemsSource="{Binding Cards}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Style="{StaticResource CardButton}"
+                                    ToolTip="{Binding Tooltip}"
+                                    Command="{Binding DataContext.OpenModuleCommand,
+                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    CommandParameter="{Binding}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
 
-                    <Border Style="{StaticResource Warning}"
-                            Visibility="{Binding CoverageWarning, Converter={StaticResource NotEmptyToVisibility}}">
-                        <TextBlock Text="{Binding CoverageWarning}" FontSize="12" TextWrapping="Wrap" />
-                    </Border>
+                                    <!-- La densidad va al BORDE, no de fondo: teñir la tarjeta
+                                         entera haría competir el color con todo lo que dice. -->
+                                    <Border Grid.Column="0" Width="5" CornerRadius="3,0,0,3"
+                                            Background="{Binding Stripe}" />
 
-                    <!-- Alto fijo: el treemap reparte el área que se le da, y dentro de un
-                         StackPanel sin alto pedido se quedaría en cero. -->
-                    <controls:Treemap Height="520" Margin="0,12,0,0"
-                                      Groups="{Binding Groups}"
-                                      ClusterFactory="{Binding ClusterFactory}"
-                                      UnknownFill="{Binding UnknownFill}"
-                                      SurfaceBrush="{Binding SurfaceBrush}"
-                                      StrokeBrush="{Binding StrokeBrush}"
-                                      LabelBrush="{Binding LabelBrush}"
-                                      MutedBrush="{Binding MutedBrush}"
-                                      TileCommand="{Binding TileCommand}"
-                                      ActivateCommand="{Binding ActivateCommand}" />
+                                    <StackPanel Grid.Column="1" Margin="11,9,11,10">
+                                        <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold"
+                                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Size}" FontSize="11.5" Opacity="0.7"
+                                                   Margin="0,3,0,0" />
 
-                    <ItemsControl ItemsSource="{Binding Legend}" Margin="0,12,0,0"
-                                  ItemTemplate="{StaticResource LegendEntry}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
-                </StackPanel>
-            </ui:Card>
+                                        <!-- Cobertura: aquí vive la honestidad del «no auditado»,
+                                             como DATO medido y no como textura que invade el mapa. -->
+                                        <Border Margin="0,9,0,0" Height="8" CornerRadius="4" ClipToBounds="True"
+                                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1">
+                                            <ItemsControl ItemsSource="{Binding CoverageBar}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <controls:ShareBar />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{Binding Brush}" ToolTip="{Binding Tooltip}" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Border>
+                                        <TextBlock Text="{Binding CoverageText}" FontSize="11" Opacity="0.7"
+                                                   Margin="0,5,0,0" />
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+                                            <TextBlock Text="{Binding DensityText}" FontSize="15" FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding DensityCaption}" FontSize="11" Opacity="0.7"
+                                                       VerticalAlignment="Bottom" Margin="6,0,0,2" />
+                                        </StackPanel>
+
+                                        <!-- Tira de severidades: los colores de estado de siempre,
+                                             que aquí no compiten con la rampa porque están en otra
+                                             forma y en otro sitio. -->
+                                        <Border Margin="0,8,0,0" Height="6" CornerRadius="3" ClipToBounds="True"
+                                                Visibility="{Binding HasFindings, Converter={StaticResource BoolToVisibility}}">
+                                            <ItemsControl ItemsSource="{Binding Severities}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <controls:ShareBar />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="{Binding Brush}" ToolTip="{Binding Tooltip}" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Border>
+                                        <TextBlock Text="{Binding SeverityText}" FontSize="11" Opacity="0.7"
+                                                   Margin="0,4,0,0" />
+                                    </StackPanel>
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <ItemsControl ItemsSource="{Binding Legend}" Margin="0,14,0,0"
+                              ItemTemplate="{StaticResource LegendEntry}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </StackPanel>
         </ScrollViewer>
+
+        <!-- ============ NIVEL 2: el treemap del módulo ============
+             Fila estrella: el treemap ocupa el alto que queda, a cualquier tamaño de ventana. -->
+        <Grid Grid.Row="3" Margin="0,0,18,0">
+            <Grid.Visibility>
+                <MultiBinding Converter="{StaticResource AllTrueToVisibility}">
+                    <Binding Path="IsEmpty" Converter="{StaticResource InverseBool}" />
+                    <Binding Path="TableMode" Converter="{StaticResource InverseBool}" />
+                    <Binding Path="IsZoomed" />
+                </MultiBinding>
+            </Grid.Visibility>
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Style.Triggers>
+                        <!-- La única animación de la vista: 220 ms de entrada al ampliar, para no
+                             perder el contexto espacial. Se apaga con las animaciones del sistema
+                             (SystemParameters.ClientAreaAnimation), que es donde el usuario dice
+                             que no quiere movimiento. -->
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsZoomed}" Value="True" />
+                                <Condition Binding="{Binding AnimationsEnabled}" Value="True" />
+                            </MultiDataTrigger.Conditions>
+                            <MultiDataTrigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                         From="0" To="1" Duration="0:0:0.22" />
+                                        <DoubleAnimation
+                                            Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                            From="0.97" To="1" Duration="0:0:0.22" />
+                                        <DoubleAnimation
+                                            Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                            From="0.97" To="1" Duration="0:0:0.22" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </MultiDataTrigger.EnterActions>
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+            <Grid.RenderTransform>
+                <ScaleTransform ScaleX="1" ScaleY="1" CenterX="0.5" CenterY="0.5" />
+            </Grid.RenderTransform>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                    <StackPanel Orientation="Horizontal">
+                        <Button Style="{StaticResource LinkButton}"
+                                Command="{Binding ZoomOutCommand}"
+                                Content="{Binding SelectedApp.Name}"
+                                ToolTip="Volver a los módulos" />
+                        <TextBlock Text=" › " FontSize="15" VerticalAlignment="Center" Opacity="0.6" />
+                        <TextBlock Text="{Binding ZoomedModule}" Style="{StaticResource BlockTitle}" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding ScaleCaption}" Style="{StaticResource BlockHint}" />
+                    <TextBlock Text="{Binding Summary}" Style="{StaticResource BlockHint}" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" Style="{StaticResource BlockHint}" MaxWidth="230"
+                           Text="Un clic en una unidad abre sus hallazgos; un doble clic la lleva a auditar." />
+            </Grid>
+
+            <Border Grid.Row="1" Style="{StaticResource Warning}"
+                    Visibility="{Binding CoverageWarning, Converter={StaticResource NotEmptyToVisibility}}">
+                <TextBlock Text="{Binding CoverageWarning}" FontSize="12" TextWrapping="Wrap" />
+            </Border>
+
+            <controls:Treemap Grid.Row="2" Margin="0,12,0,0" MinHeight="220"
+                              Groups="{Binding MapGroups}"
+                              ClusterFactory="{Binding ClusterFactory}"
+                              UnknownFill="{Binding UnknownFill}"
+                              SurfaceBrush="{Binding SurfaceBrush}"
+                              StrokeBrush="{Binding StrokeBrush}"
+                              LabelBrush="{Binding LabelBrush}"
+                              MutedBrush="{Binding MutedBrush}"
+                              TileCommand="{Binding TileCommand}"
+                              ActivateCommand="{Binding ActivateCommand}" />
+
+            <ItemsControl Grid.Row="3" ItemsSource="{Binding Legend}" Margin="0,12,0,10"
+                          ItemTemplate="{StaticResource LegendEntry}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+        </Grid>
+
 
         <!-- ==================== La tabla equivalente ====================
              UN SOLO SCROLL. La tabla NO vive dentro del ScrollViewer de la página: ocupa el alto
              que queda, y desplaza ella sola. Anidada, salían dos barras solapadas y la rueda no
              sabía a quién obedecer — el patrón de «el hijo cede al padre al llegar al tope» doma
              el síntoma pero no lo quita, así que aquí se quita el anidamiento. -->
-        <ui:Card Grid.Row="2" Margin="0,0,18,14" Padding="14,12">
+        <ui:Card Grid.Row="3" Margin="0,0,18,14" Padding="14,12">
             <ui:Card.Visibility>
                 <MultiBinding Converter="{StaticResource AllTrueToVisibility}">
                     <Binding Path="IsEmpty" Converter="{StaticResource InverseBool}" />
