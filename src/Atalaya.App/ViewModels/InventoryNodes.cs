@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows.Media;
 using Atalaya.App.Services;
 using Atalaya.Domain;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -44,6 +45,19 @@ public sealed partial class UnitNode : ObservableObject
         UnitState.Grande => "Grande",
         _ => "Pendiente",
     };
+
+    /// <summary>
+    /// La franja de densidad de deuda, con la MISMA rampa que el mapa de calor (F10.1 §1). El
+    /// inventario es donde se decide qué auditar, así que es donde más falta hace saber cuánto
+    /// arde ya lo que hay — y traer aquí un color propio habría dado dos escalas para el mismo
+    /// dato en dos pantallas que se visitan seguidas.
+    /// </summary>
+    [ObservableProperty]
+    private Brush? _densityBrush;
+
+    /// <summary>Qué dice esa franja, escrito. El color nunca es el único canal.</summary>
+    [ObservableProperty]
+    private string _densityTooltip = string.Empty;
 }
 
 /// <summary>

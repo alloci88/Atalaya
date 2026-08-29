@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using Atalaya.App.Controls;
 using Atalaya.App.Services;
 using Atalaya.App.Views;
 using Atalaya.Domain;
@@ -61,14 +62,18 @@ public sealed partial class InventoryViewModel : ViewModelBase
     /// <summary>El ciclo entero, sin filtrar: contra esto se cuentan pendientes y seleccionadas.</summary>
     private IReadOnlyList<InventoryUnit> _allUnits = Array.Empty<InventoryUnit>();
 
+    private readonly HeatmapQuery _heat;
+
     public InventoryViewModel(
         HubContext hub, IUlidFactory ulids, NavigationService navigation, LiveSessionService live,
         SettingsService settings, CostEstimator costs, IAuditLaunchConfirmer confirmer,
         GroupExpansionMemory expansion, ToastCenter toasts,
         CloneLinkService links, LinkCloneFlow linkFlow, InventoryRescanService rescan,
         GovernanceService governance, IPatternSilencesDialog patternsDialog,
-        DirectiveService directives, IDirectivesDialog directivesDialog)
+        DirectiveService directives, IDirectivesDialog directivesDialog,
+        HeatmapQuery heat)
     {
+        _heat = heat;
         _governance = governance;
         _patternsDialog = patternsDialog;
         _directives = directives;
@@ -338,6 +343,11 @@ public sealed partial class InventoryViewModel : ViewModelBase
         // contra el inventario vigente para que el contador nunca cuente fantasmas.
         _selected.IntersectWith(units.Select(u => u.Path));
 
+        // La misma consulta que alimenta el mapa de calor: el color de una unidad no puede
+        // depender de en qué vista se mire (F10.1 §1).
+        bool dark = !string.Equals(_settings.Current.Theme, "light", StringComparison.OrdinalIgnoreCase);
+        IReadOnlyDictionary<string, HeatUnit> heat = _heat.ByUnit(Slug);
+
         string search = SearchText.Trim();
         IEnumerable<InventoryUnit> filtered = string.IsNullOrEmpty(search)
             ? units
@@ -357,6 +367,17 @@ public sealed partial class InventoryViewModel : ViewModelBase
                     State = u.State,
                     ClaimedBy = claims.TryGetValue(u.UnitHash, out string? by) ? by : null,
                 };
+
+                if (heat.TryGetValue(u.Path, out HeatUnit? measured))
+                {
+                    unit.DensityBrush = measured.Density is { } d
+                        ? HeatBrushes.Solid(DensityScale.StepOf(d, HeatMetric.Densidad)!.For(dark))
+                        : HeatBrushes.Solid(DensityScale.Unknown.For(dark));
+                    unit.DensityTooltip = measured.Density is { } density
+                        ? $"Densidad de deuda: {density.ToString("0.#", AppCulture.Display)} por KLOC "
+                          + $"({measured.KnownDebt} de deuda en {measured.Loc} líneas)"
+                        : "Densidad DESCONOCIDA: nadie ha auditado esta unidad todavía.";
+                }
 
                 // Se restaura antes de enganchar el aviso: reconstruir la vista no es seleccionar.
                 unit.SetSelectedQuietly(_selected.Contains(u.Path));

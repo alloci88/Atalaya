@@ -62,7 +62,9 @@ public static class HeatmapImage
     /// <summary>Compone el lienzo. Público para poder medirlo y renderizarlo en un test.</summary>
     public static FrameworkElement Compose(HeatmapImageRequest request)
     {
-        Brush paper = HeatBrushes.Solid(request.Dark ? "#1B1B1F" : "#FFFFFF");
+        // La MISMA superficie que la vista (DensityScale.Surface): es contra ese fondo contra el
+        // que se verificó el contraste de la rampa, así que la lámina no puede tener otro.
+        Brush paper = HeatBrushes.Solid(DensityScale.Surface.For(request.Dark));
         Brush ink = HeatBrushes.Solid(request.Dark ? "#F2F2F4" : "#1A1A1D");
         Brush muted = HeatBrushes.Solid(request.Dark ? "#9DA2AA" : "#65696F");
         Brush hairline = HeatBrushes.Solid(request.Dark ? "#3A3F47" : "#D6D8DC");

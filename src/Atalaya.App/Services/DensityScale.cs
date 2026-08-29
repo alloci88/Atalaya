@@ -16,32 +16,49 @@ public enum HeatMetric
 /// </summary>
 /// <param name="From">Umbral inferior, inclusivo. El primer paso empieza en 0.</param>
 /// <param name="To">Umbral superior, exclusivo. <c>null</c> en el último paso.</param>
-public sealed record HeatStep(int Index, double From, double? To, string Light, string Dark)
+/// <param name="LightInk">
+/// Con qué color se escribe ENCIMA de este paso en tema claro. Va por paso y no por una regla de
+/// luminancia calculada al vuelo: la heurística daba blanco sobre #F1605D, que es un coral claro
+/// donde lo legible es el negro. El contraste de cada pareja está verificado; una fórmula lo
+/// vuelve a decidir en cada render y se equivoca justo en el borde.
+/// </param>
+public sealed record HeatStep(
+    int Index, double From, double? To, string Light, string LightInk, string Dark, string DarkInk)
 {
     public string For(bool dark) => dark ? Dark : Light;
+
+    /// <summary>La tinta que se lee sobre este paso, en ese tema.</summary>
+    public string InkFor(bool dark) => dark ? DarkInk : LightInk;
 
     /// <summary>true si <paramref name="value"/> cae en este paso.</summary>
     public bool Contains(double value) => value >= From && (To is null || value < To);
 }
 
 /// <summary>
-/// La escala de color del mapa de calor (F10 §2): <b>un solo tono</b>, del claro al oscuro, en
-/// cinco pasos con umbrales fijos.
+/// La escala de color del mapa de calor (F10 §2, rampa de F10.1 §1): una <b>rampa secuencial
+/// de la familia magma</b>, violeta → magenta → coral → ámbar, en cinco pasos con umbrales fijos.
+/// <b>Es el único sitio donde vive la rampa</b>: la comparten el treemap, la leyenda, la tabla y
+/// el inventario.
 /// <para>
-/// <b>Por qué un tono y no un arcoíris ni un semáforo.</b> La densidad de deuda es una magnitud
-/// continua, y un arcoíris la convierte en categorías con fronteras inventadas (¿por qué el verde
-/// acaba justo ahí?) además de no tener orden perceptual: nadie sabe si el cian va antes o después
-/// del amarillo. Un solo tono del claro al oscuro se ordena solo, y funciona igual para quien no
-/// distingue rojo de verde.
+/// <b>Multi-tono, y sigue siendo secuencial.</b> Lo que ordena una escala secuencial no es tener
+/// un solo tono: es que la <b>claridad sea monótona</b>. Magma la recorre entera de oscuro a
+/// brillante mientras gira el matiz, así que se ordena sola, se distingue paso a paso de un
+/// vistazo y sobrevive a una copia en blanco y negro y a cualquier daltonismo. Los cinco morados
+/// de la primera entrega cumplían la regla y no la lectura: la diferencia entre el paso 2 y el 3
+/// no se veía desde un metro, que es la distancia a la que se mira una diapositiva.
 /// </para>
 /// <para>
-/// <b>Por qué violeta y no un tono cálido, que sería lo obvio para «calor».</b> Los cuatro colores
-/// cálidos ya están tomados: rojo, naranja, amarillo y azul acero significan crítica, alta, media
-/// y baja en toda la aplicación (<see cref="SeverityPalette"/>). Una rampa amarillo→naranja→rojo
-/// sería letra por letra el vocabulario de severidad, y una celda granate se leería «aquí hay una
-/// crítica» cuando lo que dice es «aquí la deuda está concentrada» — dos cosas distintas que
-/// pueden no coincidir. El violeta es la familia del acento de la aplicación y no significa nada
-/// más en ningún sitio, así que puede significar magnitud sin pisar a nadie.
+/// <b>Sigue sin ser un arcoíris ni un semáforo.</b> Un arcoíris no tiene orden perceptual —nadie
+/// sabe si el cian va antes o después del amarillo— y un semáforo convierte una magnitud continua
+/// en tres categorías con fronteras inventadas. Aquí la claridad crece sin volver atrás en ningún
+/// paso, que es exactamente lo que un arcoíris no hace.
+/// </para>
+/// <para>
+/// <b>Y los colores de severidad siguen reservados.</b> La rampa toca tonos cálidos, así que la
+/// separación ya no es de paleta sino de <b>forma y sitio</b>: la severidad se escribe en píldoras
+/// con texto (C/A/M/B) en los chips y en el detalle, y la rampa es solo <b>relleno</b> de celda
+/// con su leyenda de cinco pasos al lado. Un degradado de cinco casillas y una píldora con una
+/// letra dentro no se confunden ni puestos uno al lado del otro.
 /// </para>
 /// <para>
 /// <b>Por qué los umbrales son FIJOS y no cuantiles de los datos.</b> Con cuantiles, cada mapa
@@ -52,21 +69,37 @@ public sealed record HeatStep(int Index, double From, double? To, string Light, 
 /// </summary>
 public static class DensityScale
 {
+    /// <summary>La tinta oscura de la rampa. Sobre los pasos claros es lo único que se lee.</summary>
+    private const string Black = "#101014";
+
+    /// <inheritdoc cref="Black"/>
+    private const string White = "#FFFFFF";
+
     /// <summary>
-    /// Los cinco tonos, del más claro al más oscuro en tema claro; y al revés en tema oscuro, del
-    /// más apagado al más brillante. <b>No es una inversión automática del mismo color</b>: son dos
-    /// rampas elegidas para su fondo (misma razón que <see cref="SeriesColor"/>). Invertir la
-    /// luminosidad de una rampa pensada para papel deja, sobre negro, cinco grises malvas que no se
-    /// distinguen entre sí.
+    /// Los cinco pasos, de menor a mayor densidad, con la tinta que se lee encima de cada uno.
+    /// <para>
+    /// <b>Dos rampas, no una invertida.</b> En tema claro la rampa va de ámbar pálido a violeta
+    /// profundo (de claro a oscuro sobre papel); en oscuro, de violeta profundo a ámbar brillante.
+    /// Cada una está elegida y verificada contra <b>su</b> superficie
+    /// (<see cref="Surface"/>): invertir por código la del otro tema es lo que produce medias
+    /// tintas que no contrastan con ningún fondo.
+    /// </para>
     /// </summary>
-    private static readonly (string Light, string Dark)[] Tones =
+    private static readonly (string Light, string LightInk, string Dark, string DarkInk)[] Tones =
     {
-        ("#EFECFB", "#2F2A47"),
-        ("#D2C8F1", "#453B78"),
-        ("#AC99E4", "#5E4EAE"),
-        ("#7F63D2", "#8069DC"),
-        ("#4A2FA3", "#B3A2FF"),
+        ("#FEC98D", Black, "#5B2A78", White),
+        ("#F1605D", Black, "#8C2981", White),
+        ("#C43C75", White, "#C43C75", White),
+        ("#8C2981", White, "#F1605D", Black),
+        ("#4B1D6F", White, "#FEA772", Black),
     };
+
+    /// <summary>
+    /// La superficie sobre la que se dibuja el mapa, y contra la que se verificó el contraste de
+    /// la rampa. La usan la vista y la lámina exportada: cambiarla en un sitio y no en el otro
+    /// dejaría la exportación con una rampa comprobada contra un fondo que no es el suyo.
+    /// </summary>
+    public static SeriesColor Surface { get; } = new("superficie", "#F6F7FA", "#12151D");
 
     /// <summary>
     /// Los umbrales de <b>densidad</b> (deuda por KLOC), y de dónde salen.
@@ -132,7 +165,8 @@ public static class DensityScale
         {
             double from = i == 0 ? 0 : cuts[i - 1];
             double? to = i < cuts.Length ? cuts[i] : null;
-            steps.Add(new HeatStep(i, from, to, Tones[i].Light, Tones[i].Dark));
+            steps.Add(new HeatStep(
+                i, from, to, Tones[i].Light, Tones[i].LightInk, Tones[i].Dark, Tones[i].DarkInk));
         }
 
         return steps;

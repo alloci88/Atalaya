@@ -159,6 +159,14 @@ public sealed class HeatmapQuery
             .ToList();
 
     /// <summary>
+    /// La densidad de cada unidad, indexada por su ruta (F10.1 §1). La usa el <b>inventario</b>
+    /// para pintar la misma franja de color que el mapa: es el mismo dato, así que tiene que salir
+    /// del mismo sitio — dos cálculos parecidos en dos vistas es cómo acaban discrepando.
+    /// </summary>
+    public IReadOnlyDictionary<string, HeatUnit> ByUnit(string? slug)
+        => Build(slug).Units.ToDictionary(u => u.Path, u => u, StringComparer.Ordinal);
+
+    /// <summary>
     /// El mapa de una aplicación. Devuelve <see cref="HeatmapView.Empty"/> con el selector puesto
     /// cuando la app no existe o no tiene inventario: la vista dice qué falta, no se cae.
     /// </summary>
