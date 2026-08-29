@@ -12,13 +12,22 @@ namespace Atalaya.App.Controls;
 /// <param name="Title">«{App} · mapa de calor · {fecha}».</param>
 /// <param name="Subtitle">Qué mide el color y sobre cuánto: la frase sin la cual el mapa no se lee.</param>
 /// <param name="Footer">«Atalaya · {organización}», discreto.</param>
+/// <param name="Groups">Las celdas del treemap. Vacío en el nivel 1, que se dibuja con tarjetas.</param>
+/// <param name="Cards">Las tarjetas de módulo del nivel 1. Vacío cuando lo exportado es un módulo.</param>
+/// <param name="Thermometer">La barra de la cabecera: el reparto de la aplicación entera.</param>
 public sealed record HeatmapImageRequest(
     string Title,
     string Subtitle,
     string Footer,
     IReadOnlyList<HeatGroup> Groups,
     IReadOnlyList<HeatLegendItem> Legend,
-    bool Dark);
+    bool Dark,
+    IReadOnlyList<ModuleCard>? Cards = null,
+    IReadOnlyList<HeatSegment>? Thermometer = null)
+{
+    /// <summary>La lámina del nivel 1: tarjetas de módulo en vez del treemap de un módulo.</summary>
+    public bool IsOverview => Groups.Count == 0 && Cards is { Count: > 0 };
+}
 
 /// <summary>
 /// Compone y guarda el PNG del mapa (F10 §3): la diapositiva.
@@ -78,27 +87,34 @@ public static class HeatmapImage
         var head = new StackPanel { Margin = new Thickness(40, 34, 40, 18) };
         head.Children.Add(Text(request.Title, 30, FontWeights.SemiBold, ink));
         head.Children.Add(Text(request.Subtitle, 14, FontWeights.Normal, muted, new Thickness(0, 8, 0, 0)));
+
+        if (request.Thermometer is { Count: > 0 } segments)
+        {
+            head.Children.Add(Bar(segments, 26, new Thickness(0, 14, 0, 0), hairline));
+        }
+
         Grid.SetRow(head, 0);
         root.Children.Add(head);
 
-        var map = new Treemap
-        {
-            Groups = request.Groups,
+        UIElement body = request.IsOverview
+            ? Overview(request, ink, muted, hairline)
+            : new Treemap
+            {
+                Groups = request.Groups,
 
-            // La lámina escribe los nombres ENTEROS: aquí el sitio sobra y quien la recibe por
-            // correo no ha visto la declaración del prefijo que sí lleva la cabecera de la vista.
-            AllowShortNames = false,
-            Margin = new Thickness(40, 0, 40, 0),
-            SurfaceBrush = paper,
-            StrokeBrush = hairline,
-            LabelBrush = ink,
-            MutedBrush = muted,
-            UnknownFill = HeatBrushes.Hatch(
-                Color(DensityScale.Unknown.For(request.Dark)),
-                Color(DensityScale.UnknownHatch.For(request.Dark))),
-        };
-        Grid.SetRow(map, 1);
-        root.Children.Add(map);
+                // La lámina escribe los nombres ENTEROS: aquí el sitio sobra y quien la recibe por
+                // correo no ha visto la declaración del prefijo que sí lleva la cabecera de la vista.
+                AllowShortNames = false,
+                Margin = new Thickness(40, 0, 40, 0),
+                SurfaceBrush = paper,
+                StrokeBrush = hairline,
+                LabelBrush = ink,
+                MutedBrush = muted,
+                UnknownFill = HeatBrushes.Solid(DensityScale.Unknown.For(request.Dark)),
+            };
+
+        Grid.SetRow(body, 1);
+        root.Children.Add(body);
 
         var legend = new WrapPanel { Margin = new Thickness(40, 20, 40, 0) };
         foreach (HeatLegendItem item in request.Legend)
@@ -136,6 +152,114 @@ public static class HeatmapImage
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using FileStream file = File.Create(path);
         encoder.Save(file);
+    }
+
+    /// <summary>
+    /// La lámina del nivel 1: las tarjetas de módulo en una rejilla. Es lo que se ve en pantalla,
+    /// no un treemap distinto — una diapositiva que no se parece a la vista de la que salió obliga
+    /// a explicar dos cosas en vez de una.
+    /// </summary>
+    private static UIElement Overview(
+        HeatmapImageRequest request, Brush ink, Brush muted, Brush hairline)
+    {
+        var panel = new WrapPanel { Margin = new Thickness(32, 0, 32, 0) };
+        foreach (ModuleCard card in request.Cards!)
+        {
+            panel.Children.Add(Card(card, ink, muted, hairline, request.Dark));
+        }
+
+        return panel;
+    }
+
+    private static UIElement Card(
+        ModuleCard card, Brush ink, Brush muted, Brush hairline, bool dark)
+    {
+        var body = new StackPanel { Margin = new Thickness(12, 9, 12, 10) };
+
+        // El título NO se parte en dos líneas: «XBLASTCustomRibbonContro / l» descuadra la tarjeta
+        // y no se lee mejor que recortado.
+        TextBlock title = Text(card.FullName, 15, FontWeights.SemiBold, ink);
+        title.TextWrapping = TextWrapping.NoWrap;
+        title.TextTrimming = TextTrimming.CharacterEllipsis;
+        body.Children.Add(title);
+        body.Children.Add(Text(card.Size, 11.5, FontWeights.Normal, muted, new Thickness(0, 3, 0, 0)));
+
+        body.Children.Add(Bar(
+            new[]
+            {
+                new HeatSegment("auditado", 0, card.Audited, card.Density ?? ink, string.Empty),
+                new HeatSegment("sin auditar", 0, card.Pending,
+                    HeatBrushes.Solid(DensityScale.Unknown.For(dark)), string.Empty),
+            },
+            8,
+            new Thickness(0, 9, 0, 0),
+            hairline));
+
+        body.Children.Add(Text(card.CoverageText, 11, FontWeights.Normal, muted, new Thickness(0, 5, 0, 0)));
+        body.Children.Add(Text(
+            $"{card.DensityText} · {card.DensityCaption}", 11.5, FontWeights.Normal, ink,
+            new Thickness(0, 6, 0, 0)));
+
+        if (card.HasFindings)
+        {
+            body.Children.Add(Bar(card.Severities, 6, new Thickness(0, 7, 0, 0), hairline));
+            body.Children.Add(Text(card.SeverityText, 11, FontWeights.Normal, muted, new Thickness(0, 4, 0, 0)));
+        }
+
+        var frame = new Grid { Width = 232, MinHeight = 150, Margin = new Thickness(8) };
+        frame.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        frame.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        // La franja de densidad va al borde, no de fondo: el relleno completo teñiría el texto y
+        // haría competir la densidad con todo lo demás de la tarjeta.
+        var stripe = new Border
+        {
+            Width = 5,
+            Background = card.Density ?? HeatBrushes.Solid(DensityScale.Unknown.For(dark)),
+            CornerRadius = new CornerRadius(3, 0, 0, 3),
+        };
+        Grid.SetColumn(stripe, 0);
+        frame.Children.Add(stripe);
+
+        var chrome = new Border
+        {
+            BorderBrush = hairline,
+            BorderThickness = new Thickness(0, 1, 1, 1),
+            CornerRadius = new CornerRadius(0, 3, 3, 0),
+            Child = body,
+        };
+        Grid.SetColumn(chrome, 1);
+        frame.Children.Add(chrome);
+        return frame;
+    }
+
+    /// <summary>Una barra apilada: el termómetro, la cobertura de una tarjeta y su tira C/A/M/B.</summary>
+    private static UIElement Bar(
+        IReadOnlyList<HeatSegment> segments, double height, Thickness margin, Brush hairline)
+    {
+        var grid = new Grid { Height = height };
+        var visible = segments.Where(seg => seg.Share > 0).ToList();
+
+        for (int i = 0; i < visible.Count; i++)
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition
+            {
+                Width = new GridLength(visible[i].Share, GridUnitType.Star),
+            });
+
+            var piece = new Border { Background = visible[i].Brush };
+            Grid.SetColumn(piece, i);
+            grid.Children.Add(piece);
+        }
+
+        return new Border
+        {
+            BorderBrush = hairline,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
+            Child = grid,
+            Margin = margin,
+        };
     }
 
     private static Color Color(string hex) => (Color)ColorConverter.ConvertFromString(hex);
