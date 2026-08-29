@@ -4,16 +4,23 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-29 (F10 — mapa de calor del código).
+Última revisión: 2026-08-29 (F10.1 — rampa, textos y tabla del mapa de calor).
 
 ## En vuelo
 
 - **F10 — el caso de aceptación del mapa de calor, con los ojos del usuario.** La vista está
-  entera y cubierta por tests (D-634…D-646) y las láminas exportadas sí se han mirado, pero
-  **ningún test abre la ventana**: falta abrir el mapa de xblast dentro de la aplicación, ver que
-  XBLASTCommon se reconoce de un vistazo, ampliarlo, llegar desde `CommonStatics.cs` a sus 15
-  hallazgos, probar el doble clic con un ratón de verdad y comprobar la exportación. En la misma
-  pasada: los dos temas, el tooltip y la tabla de once columnas a 1366×768 (D-647).
+  entera y cubierta por tests (D-634…D-646, D-654) y el treemap y las láminas se han renderizado y
+  mirado en los dos temas, pero **nadie ha abierto la ventana**: falta abrir el mapa de xblast
+  dentro de la aplicación, ampliarlo, llegar desde `CommonStatics.cs` a sus 15 hallazgos, probar
+  el doble clic con un ratón de verdad y comprobar la exportación. En la misma pasada, lo de F10.1
+  (D-655): que la tabla se lea como una tabla con sus 925 filas, que la rueda y el teclado
+  (Inicio/Fin, RePág/AvPág) funcionen con una sola barra, y que los cinco pasos de la rampa se
+  distingan en la pantalla real a 1366×768 y no solo en el PNG.
+- **F10.1 — los nombres de módulo estrechos.** Los 22 módulos de XBLAST empiezan por «XBLAST», un
+  prefijo que dentro del mapa no aporta nada, y en las bandas estrechas eso deja «XB…r» o
+  «XBLA…ity» (D-653). Cumplen la regla —nunca hay un corte en seco y el tooltip da el nombre
+  entero—, pero se leerían mucho mejor sin el prefijo común. Quitarlo es cirugía sobre el dato, no
+  maquetado: se decide con el usuario antes de tocarlo.
 - **F10 — los umbrales, contra más de una aplicación.** Los cinco pasos (5 · 15 · 40 · 100 por
   KLOC) están anclados en un razonamiento y comprobados contra un solo clon, donde la única unidad
   medida da 206. Se revisarán cuando haya dos o tres aplicaciones con cobertura de verdad y se
@@ -94,6 +101,11 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## Cerrado
 
+- **F10.1 · Rampa, textos y tabla del mapa** — rampa magma (violeta→ámbar) de claridad monótona
+  en un único recurso compartido por treemap, leyenda, tabla e inventario, con la tinta verificada
+  por paso; cero textos cortados en seco (se mide, se acorta por el medio o no se escribe) y
+  agregados «+N unidades» que no esconden ni tranquilizan; y una tabla con las cabeceras alineadas
+  como sus columnas, cifras tabulares, franja de densidad por fila y **un solo scroll**.
 - **F10 · Mapa de calor (V9)** — treemap de dos niveles con el área por LOC y el color por densidad
   de deuda ponderada (Crítica 10 · Alta 5 · Media 2 · Baja 1, en `DebtWeights`), escala secuencial
   de un solo tono con umbrales fijos en la leyenda, tratamiento propio e irrenunciable para lo **no

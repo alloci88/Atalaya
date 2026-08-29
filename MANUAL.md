@@ -51,6 +51,9 @@ vinculado, ámbar con avisos, rojo sin clon. Sin clon no se puede auditar ni med
 Las unidades de la aplicación en el ciclo vigente, por módulos, con su estado
 —**pendiente**, **auditada** o **grande**— y el panel lateral del ciclo.
 
+- Cada unidad lleva a su izquierda una **franja de densidad de deuda**, con la misma
+  rampa que el **Mapa de calor**: aquí es donde se decide qué auditar, así que se ve de
+  un vistazo cuánto arde ya cada fichero. Gris = nadie la ha auditado todavía.
 - **Grande** significa que la unidad supera el umbral de tamaño (LOC o caracteres):
   queda excluida del ciclo y genera su propio hallazgo.
 - **Auditar selección** lanza una sesión sobre lo marcado.
@@ -203,14 +206,21 @@ normaliza a propósito: sin dividir por el tamaño, la clase de 5.000 líneas sa
 siempre la peor por el mero hecho de ser grande —y eso no es información, es un mapa
 del tamaño del código, que ya lo da el área—.
 
-**Cómo se lee la escala.** Cinco pasos de un solo tono, del claro al oscuro, con sus
-umbrales escritos en la leyenda: **< 5**, **5–15**, **15–40**, **40–100** y **≥ 100**
-por KLOC. Los umbrales son **fijos**, no salen de los datos de cada app: así «paso 4»
-significa lo mismo en todas las aplicaciones y también dentro de tres meses. No hay
-arcoíris ni semáforo, porque la densidad es una magnitud continua y no una categoría;
-y no se usa la rampa cálida (amarillo→naranja→rojo) porque esos son los colores
-**reservados** de las severidades en el resto de la aplicación, y una celda granate se
-leería «aquí hay una crítica» cuando lo que dice es «aquí la deuda está concentrada».
+**Cómo se lee la escala.** Cinco pasos con sus umbrales escritos en la leyenda:
+**< 5**, **5–15**, **15–40**, **40–100** y **≥ 100** por KLOC. Los umbrales son
+**fijos**, no salen de los datos de cada app: así «paso 4» significa lo mismo en todas
+las aplicaciones y también dentro de tres meses.
+
+La rampa va de **violeta a ámbar** pasando por magenta y coral. No es un arcoíris: lo
+que ordena una escala es que la **claridad** crezca sin volver atrás, y aquí lo hace
+paso a paso — por eso se distingue de un vistazo y sigue funcionando en una fotocopia
+en blanco y negro. Cada tema tiene su propia rampa: en oscuro va de violeta profundo a
+ámbar brillante, y en claro al revés, de ámbar pálido a violeta profundo. En los dos,
+**cuanto más lejos del fondo, más deuda**.
+
+Los colores de **severidad** (crítica, alta, media, baja) siguen siendo suyos y no se
+mezclan con esto: la severidad se escribe siempre en píldoras con texto, y la rampa es
+solo el relleno de las celdas.
 
 > **Gris = NO auditado, no limpio.** Una unidad que nadie ha barrido **no tiene
 > densidad 0: tiene densidad desconocida**, y se pinta con un **gris tramado** que
@@ -241,8 +251,21 @@ pegada al número, en la banda y en el tooltip.
   El mapa dice **dónde**; lanzar y confirmar el gasto sigue siendo del Inventario.
 - El **tooltip** de cada celda trae unidad, líneas, hallazgos por severidad, deuda,
   densidad y estado.
+- **Las etiquetas caben o no están.** El nombre de una unidad se escribe entero; si no
+  cabe, acortado **por el medio** (`Controller…ration.cs`), que es como se distinguen
+  dos ficheros que empiezan igual; y si tampoco cabe así, no se escribe — el tooltip lo
+  dice. Nunca verás media palabra. El nombre de un **módulo** no desaparece nunca: lo
+  primero que se retira de su cabecera es el detalle, no el nombre.
+- **«+N unidades»**: cuando hay muchas unidades pequeñas, las que no llegarían a verse
+  se funden en una sola celda con su cuenta. Un clic la amplía. Toma el color de **la
+  peor** que contiene —agrupar no puede esconder un problema—, y si le queda alguna sin
+  auditar va en **gris**: un grupo del que falta por mirar la mayoría no se pinta de
+  limpio.
 - **Ver como tabla** enseña exactamente lo mismo en columnas ordenables (módulo,
   unidad, LOC, C/A/M/B, deuda, densidad, estado). El color **nunca** es el único canal.
+  Cada fila lleva a su izquierda la **misma franja de color** que su celda del mapa, los
+  números van alineados a la derecha y lo que no cabe se acorta por el medio con su
+  tooltip. La tabla desplaza **ella sola**, con la cabecera fija: no hay dos barras.
 - **Color por: Densidad / Deuda absoluta** son dos preguntas distintas —«dónde están
   más concentrados los problemas» y «dónde hay más»—. Por defecto, densidad.
 - **Exportar imagen** guarda un PNG con el mapa, su leyenda, el título

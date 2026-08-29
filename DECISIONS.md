@@ -6002,3 +6002,174 @@ Quedan para el asiento humano: el mapa **dentro** de la aplicación en los dos t
 clic con un ratón de verdad. Y el caso de aceptación completo: abrir el mapa de xblast, reconocer
 XBLASTCommon de un vistazo, ampliarlo, llegar desde `CommonStatics.cs` a sus 15 hallazgos y
 exportar la lámina.
+
+## F10.1 — Mapa de calor: rampa, textos y tabla
+
+Tres retoques salidos del primer uso real del mapa. La idea gustó; falló la ejecución visual.
+Nada de esto toca la métrica ni los pesos: es presentación.
+
+### D-648 — De cinco morados a una rampa magma, y por qué eso NO es un arcoíris
+
+La rampa entregada en F10 cumplía la regla y no la lectura: cinco tonos del mismo violeta, y la
+diferencia entre el paso 2 y el 3 no se veía desde un metro — que es la distancia a la que se mira
+una diapositiva. La sustituye una rampa **magma**: violeta → magenta → coral → ámbar.
+
+**Multi-tono y secuencial no se contradicen.** Lo que ordena una escala secuencial no es tener un
+solo matiz: es que la **claridad sea monótona**. Magma la recorre entera de oscuro a brillante
+mientras gira el matiz, así que se ordena sola, se distingue paso a paso y sobrevive a una copia
+en blanco y negro. Un arcoíris no cumple eso —el cian y el amarillo tienen claridades parecidas y
+nadie sabe cuál va antes—, y un semáforo convierte una magnitud continua en tres categorías. La
+monotonía está fijada con un test que mide la luminancia relativa de los cinco pasos, en los dos
+temas.
+
+**Dos rampas, no una invertida.** En tema claro va de ámbar pálido a violeta profundo; en oscuro,
+de violeta profundo a ámbar brillante. Cada una está verificada contra **su** superficie
+(`DensityScale.Surface`: `#F6F7FA` y `#12151D`), y la superficie es ahora la misma en la vista y en
+la lámina exportada — tenerlas distintas dejaba la exportación con una rampa comprobada contra un
+fondo que no era el suyo.
+
+**Los colores de severidad siguen reservados**, pero la separación ya no puede ser de paleta: la
+rampa toca tonos cálidos. Es de **forma y sitio**: la severidad se escribe en píldoras con texto
+(C/A/M/B) en chips y detalle; la rampa es solo relleno de celda, con su leyenda de cinco casillas
+al lado. Un degradado de cinco pasos y una píldora con una letra dentro no se confunden ni puestos
+uno junto al otro.
+
+**Y vive en un solo sitio.** `DensityScale` la comparten el treemap, la leyenda, la tabla y —nuevo
+en esta tanda— el **inventario**, que pinta una franja de densidad por unidad con la misma consulta
+(`HeatmapQuery.ByUnit`). El inventario es donde se decide qué auditar: es donde más falta hace ver
+cuánto arde ya lo que hay, y traer allí un color propio habría dado dos escalas para el mismo dato
+en dos pantallas que se visitan seguidas.
+
+### D-649 — La tinta va por PASO, no por una fórmula de luminancia
+
+El control elegía blanco o negro calculando la luminancia del relleno con un umbral. Sobre el
+coral del paso 4 (`#F1605D`) devolvía **blanco**, que da 3,2 de contraste; el negro da 5,9. Es
+decir, la fórmula se equivocaba justo en la celda más caliente del mapa — la que más importa leer.
+
+Ahora cada paso declara su tinta (`HeatStep.InkFor`), verificada por pareja. Hay test de que cada
+combinación pasa el mínimo AA (4,5) **y** de que gana a la alternativa: si alguien invierte una,
+el test lo dice. Una celda sin paso —el gris de «no auditada»— no trae tinta y usa la del tema.
+
+### D-650 — Ni un texto cortado en seco: se mide, y hay tres salidas
+
+El usuario mandó capturas con nombres partidos a media palabra. La causa era estimar en vez de
+medir. `TextFit` mide el texto renderizado y decide entre tres cosas:
+
+1. **Cabe entero** → se escribe.
+2. **Cabe acortado por el medio** conservando al menos el 70 % → se escribe así.
+3. **Ni eso** → no se escribe nada, y el tooltip dice el nombre entero.
+
+**Por el medio y no por el final.** Es la decisión importante y no es estética: en este código los
+nombres se distinguen por los dos extremos. `ControllerConfiguration.cs` y `ControllerMain.cs`
+comparten los **diez** primeros caracteres, así que el recorte trasero de serie de WPF
+(`TextTrimming`) los deja idénticos y encima se lleva la extensión. Hay test de las dos cosas.
+
+**La cabecera de un módulo no puede desaparecer**, así que su orden de caída es otro: primero se
+retira el detalle («598 u · 0 % auditado»), después se prueba un **cuerpo de letra menor** —10,5 px
+en vez de 12— y solo al final se acorta el nombre, con retención 0. Bajar el cuerpo fue el cambio
+que más ganó al verlo: «XBLASTQuickUtils» entero a 10,5 se lee mucho mejor que «XBLASTQ…kUtils» a
+12.
+
+**Lo que tiene forma breve propia no se recorta.** Una celda puede traer un `ShortLabel`: «+60
+u…ades» no es una versión corta de «+60 unidades», es una versión estropeada — para eso está
+«+60». O cabe el nombre entero, o se escribe la forma breve.
+
+### D-651 — «+N unidades»: agrupar sin esconder, y sin tranquilizar
+
+Con ~900 unidades hay celdas de tres píxeles: cuarenta rectángulos con borde que no son cuarenta
+datos. El control funde la cola en una sola celda `+N unidades`, clicable (amplía el módulo; ya
+ampliado, abre la tabla, que es donde sí caben).
+
+**El reparto de responsabilidades.** El control decide **cuáles** se funden —es el único que conoce
+la geometría, y por eso el umbral se calcula sobre la escala real del hueco: la misma unidad se
+agrupa en la vista completa y se dibuja al ampliar—. El view-model decide **qué significan** a
+través de una fábrica (`Treemap.ClusterFactory`). El área del agregado es la suma exacta de lo que
+absorbe: fundir no puede falsear el tamaño.
+
+**El color del agregado tapa dos mentiras distintas, y hicieron falta las dos:**
+
+- **La peor manda, no la media.** Con la media, una clase de 40 líneas en el paso 5 desaparecería
+  dentro de treinta y nueve tranquilas. Con la peor, agrupar solo puede exagerar — y exagerar en
+  una celda que dice «+N unidades» invita a ampliar, que es lo que hay que hacer con ella.
+- **Si queda algo sin auditar, el agregado no dice «limpio».** Esto se vio en el mapa real y no se
+  había previsto: las sesenta unidades pequeñas de XBLASTCommon son cincuenta y nueve sin auditar
+  y **una** auditada y limpia, y el agregado salía del paso 1 —tranquilizador— por la única que
+  alguien había mirado. Ahora va en gris. La excepción es la que no engaña a nadie: una medida
+  **por encima del paso 1** sigue mandando aunque el resto esté sin auditar, porque «aquí dentro
+  hay algo caliente» es un hecho comprobado, no una extrapolación.
+
+El agregado va siempre con contorno punteado: el relleno de cuarenta unidades nunca cuenta toda la
+verdad.
+
+### D-652 — La tabla: un solo scroll, y cada cabecera alineada como su columna
+
+Tres defectos del parte, tres causas distintas.
+
+**El descuadre no era de anchos.** Las columnas estaban bien puestas; lo que fallaba es que la
+cabecera de una columna numérica se alineaba a la izquierda y sus cifras a la derecha. Ahora hay
+dos estilos de cabecera —`SortHeader` y `SortHeaderRight`— y cada columna usa el que le toca, con
+test de que las siete numéricas usan el derecho. Los números van además con **cifras tabulares**
+(`Typography.NumeralAlignment`): con las proporcionales de serie, «1.234» y «9.999» ocupan distinto
+y la columna baila fila a fila aunque esté perfectamente alineada.
+
+**«No auditada · excluida por ta…»** era el recorte trasero de un `TextBlock`. Módulo, unidad y
+estado usan ahora `MiddleEllipsisText`, que acorta por el medio midiendo el ancho real de su
+columna y pone su tooltip **solo cuando hay algo que aclarar** — un tooltip que repite lo que ya se
+lee entero es ruido, y enseña a ignorarlos.
+
+**Los dos scrolls.** La tabla vivía dentro del `ScrollViewer` de la página: dos barras solapadas y
+una rueda que no sabía a quién obedecer. Se ha **quitado el anidamiento**, no domado: en modo tabla
+la tarjeta ocupa el alto que queda, el título y la cabecera van fuera del scroll —así la cabecera
+queda fija por construcción, sin sticky que mantener— y solo la lista de filas desplaza. El mapa
+conserva su scroll de página porque es alto fijo más leyenda. Hay test que carga el XAML como
+**árbol** y afirma que ningún `ScrollViewer` tiene otro por ancestro; con una búsqueda de texto no
+se puede afirmar eso, porque el anidamiento es una relación entre elementos.
+
+**Y una franja de densidad por fila**, con el mismo color que su celda del mapa (o el gris tramado
+si nadie la ha auditado). Sin ella, distinguir una fila auditada de una que no lo está exigía
+leerse la columna «Estado» palabra por palabra, novecientas veces.
+
+### D-653 — Lo que se vio al renderizar, y lo que se decidió NO arreglar
+
+Los seis PNG del clon real (los dos temas, a 1366×768 y ampliados, más las dos láminas) se han
+mirado uno a uno, y de ahí salieron tres correcciones que ningún test habría pedido: el agregado
+tranquilizador de D-651, la caída de cuerpo de letra de D-650 y la forma breve «+60».
+
+Queda una cosa vista y **no** arreglada, por escrito para que se decida con el usuario: los módulos
+estrechos de XBLAST salen como «XBL…nd», «XBLA…ity», «XB…r». Cumplen la regla —nunca hay un corte
+en seco, y el tooltip da el nombre entero— pero «XB…r» no identifica gran cosa. La causa es que los
+22 módulos empiezan por «XBLAST», un prefijo que dentro de este mapa no aporta nada. Quitarlo se
+leería mucho mejor, y es **cirugía sobre el dato**, no maquetado: no se hace sin decidirlo. Va al
+backlog.
+
+### D-654 — Cobertura (33 tests nuevos, 1282 en total, todo en verde)
+
+- **`TextFitTests`** (nuevo): el recorte conserva cabeza y cola; dos nombres con el mismo prefijo
+  se siguen distinguiendo mientras que por el final no; ocho caracteres no son un ancho; lo que
+  devuelve cabe siempre; con retención por defecto se conserva la mayor parte o no se escribe; con
+  retención 0 —un módulo— se escribe aunque queden cuatro letras; con retención 1 es entero o
+  nada; y a más sitio, más nombre.
+- **De la rampa**: claridad monótona en los dos temas; los valores exactos, fijados; la tinta de
+  cada paso cumple AA **y** gana a la alternativa; cada paso se despega de su superficie; el gris
+  de «no auditada» sigue fuera de la rampa.
+- **Del agregado**: se funde con poco sitio y no se funde con mucho; el área es la suma; se pinta
+  con la peor y no con la media; y un grupo con unidades sin auditar no se pinta de limpio.
+- **De la tabla**: cada fila lleva su franja y sigue a la métrica elegida; el texto estrecho se
+  acorta por el medio y avisa; con sitio de sobra va entero y sin tooltip.
+- **Del XAML, como árbol**: ningún scroll dentro de otro y la lista de 925 filas dentro de uno; las
+  cabeceras numéricas alineadas a la derecha y con cifras tabulares; los tres textos largos con el
+  control de elipsis media y ningún `TextTrimming` trasero suelto.
+- **Del inventario**: su franja sale de la misma rampa y de la misma consulta que el mapa.
+
+Un test de F10 se reescribió: el que afirmaba «un solo tono» (azul por encima de verde en los cinco
+pasos) medía la implementación anterior, no la propiedad. Lo sustituye el de claridad monótona, que
+es la propiedad de verdad.
+
+### D-655 — Lo que sigue sin comprobarse, y es del usuario
+
+Se ha renderizado el **treemap** y la **lámina**, no la página: la tabla, sus cabeceras ordenables
+y el scroll único están fijados por tests sobre el árbol del XAML y por el render aislado de
+`MiddleEllipsisText`, pero **nadie ha pasado la rueda por 925 filas**. Queda para el asiento
+humano, a 1366×768 y en los dos temas: que la tabla se lea como una tabla, que la rueda y el
+teclado (Inicio/Fin, RePág/AvPág) hagan lo esperado con una sola barra, y que los cinco pasos de la
+rampa se distingan en la pantalla real y no solo en el PNG.

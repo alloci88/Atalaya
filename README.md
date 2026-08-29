@@ -250,8 +250,8 @@ pertenencia) y `read:user` (login, nombre, avatar, email). Nada más.
   búsqueda por contenido, visor markdown renderizado dentro de la app (tablas incluidas) y
   descarga del `.md`. Es el único sitio desde el que se lee un informe.
 - **Mapa de calor** (V9): treemap de dos niveles (módulo → unidad) donde el **área** es el tamaño
-  en líneas y el **color** la **densidad de deuda** (peso por severidad ÷ KLOC), con escala
-  secuencial de un solo tono y umbrales fijos en la leyenda. Lo **no auditado** va en gris tramado
+  en líneas y el **color** la **densidad de deuda** (peso por severidad ÷ KLOC), con una rampa
+  secuencial magma —violeta→ámbar, claridad monótona— y umbrales fijos en la leyenda. Lo **no auditado** va en gris tramado
   —densidad *desconocida*, que no es cero—, nunca con el color frío de la escala. Zoom con migas,
   tabla equivalente ordenable y exportación a PNG con título, leyenda y pie.
 
