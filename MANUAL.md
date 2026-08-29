@@ -189,101 +189,108 @@ formato sería una medida que nadie ha tomado.
 
 ### Mapa de calor
 
-La estructura de una aplicación —módulos y, dentro, sus unidades— en un **treemap**
-de dos niveles. Dos canales, dos datos distintos:
+Dos niveles. El de arriba contesta **¿por dónde miro ahora?**; el de dentro, **qué
+tiene ese módulo**.
 
-- El **área** de cada celda es su **tamaño en líneas**.
-- El **color** es la **densidad de deuda**.
+**El termómetro.** Sobre todo lo demás, una barra con la aplicación entera repartida:
+cada tramo es un paso de la escala de densidad y el último, gris, es lo que **nadie ha
+auditado todavía**. Al lado, las cifras («925 unidades · 2 auditadas (0 %) · 107 de
+deuda conocida»). Cuenta siempre el total, tengas puesto el filtro o no.
 
-Así se distingue de un vistazo el módulo grande y sucio del pequeño y sucio, que es
-lo que una lista ordenada no puede enseñar.
+#### Nivel 1 · las tarjetas de módulo
 
-**Qué mide.** Cada hallazgo **activo** pesa según su severidad —**Crítica 10 · Alta 5
-· Media 2 · Baja 1**— y la **deuda** de una unidad es la suma de esos pesos. Los
-hallazgos resueltos y los silenciados **no cuentan**: uno se arregló y del otro se
-decidió que no se arregla. La **densidad** es esa deuda por cada **mil líneas**. Se
-normaliza a propósito: sin dividir por el tamaño, la clase de 5.000 líneas saldría
-siempre la peor por el mero hecho de ser grande —y eso no es información, es un mapa
-del tamaño del código, que ya lo da el área—.
+Una tarjeta por módulo. Cada una lleva:
 
-**Cómo se lee la escala.** Cinco pasos con sus umbrales escritos en la leyenda:
-**< 5**, **5–15**, **15–40**, **40–100** y **≥ 100** por KLOC. Los umbrales son
-**fijos**, no salen de los datos de cada app: así «paso 4» significa lo mismo en todas
-las aplicaciones y también dentro de tres meses.
+- El **nombre**, sin el nombre de la aplicación (`XBLASTCore` se rotula `Core`; los que
+  no lo llevan salen enteros).
+- El **tamaño**: unidades y miles de líneas.
+- Una **barra de cobertura** con su porcentaje: cuánto se ha auditado y cuánto no. Aquí
+  es donde se ve lo que falta por mirar, con un número, sin que invada el resto.
+- La **densidad de lo auditado**, en la franja de color del borde izquierdo. Gris si de
+  ese módulo no se ha auditado nada: **desconocida no es cero**.
+- Una **tira de severidades** C/A/M/B con sus colores de siempre y el total.
 
-La rampa va de **violeta a ámbar** pasando por magenta y coral. No es un arcoíris: lo
-que ordena una escala es que la **claridad** crezca sin volver atrás, y aquí lo hace
-paso a paso — por eso se distingue de un vistazo y sigue funcionando en una fotocopia
-en blanco y negro. Cada tema tiene su propia rampa: en oscuro va de violeta profundo a
-ámbar brillante, y en claro al revés, de ámbar pálido a violeta profundo. En los dos,
-**cuanto más lejos del fondo, más deuda**.
+Un clic entra al módulo. El tooltip lo cuenta todo, incluido **por qué está donde está**
+en el orden.
 
-Los colores de **severidad** (crítica, alta, media, baja) siguen siendo suyos y no se
-mezclan con esto: la severidad se escribe siempre en píldoras con texto, y la rampa es
-solo el relleno de las celdas.
+**El orden — «Atención», que es el de por defecto.** Junta lo que se ha medido que arde
+con lo que nadie ha mirado:
 
-> **Gris = NO auditado, no limpio.** Una unidad que nadie ha barrido **no tiene
-> densidad 0: tiene densidad desconocida**, y se pinta con un **gris tramado** que
-> nunca es el color frío de la escala. Confundir «no lo he mirado» con «está limpio»
+> `atención = 0,6 × riesgo + 0,4 × ignorancia`, donde el **riesgo** es la densidad medida
+> (saturada en 100 por KLOC) rebajada por la **confianza** —que va de la mitad, si solo
+> se ha mirado una esquina, al total, si el módulo está auditado entero— y la
+> **ignorancia** es la parte del código de la aplicación que ese módulo esconde sin
+> auditar.
+
+En corto: **un módulo grande que nadie ha abierto sube**, porque no saber es un riesgo; y
+**un módulo pequeño y comprobadamente podrido también**, porque eso es un hecho. Un
+módulo auditado del todo y limpio se va al fondo, que es donde tiene que estar.
+
+Los otros órdenes están para cuando ya tienes una pregunta: **Deuda**, **Densidad** (los
+módulos sin auditar van al final: no tienen densidad), **Tamaño**, **Cobertura** y
+**Nombre**.
+
+#### Nivel 2 · el treemap del módulo
+
+Dentro de un módulo, sus unidades como treemap: el **área** es el tamaño en líneas y el
+**color**, la densidad de deuda. Las migas de arriba devuelven a las tarjetas.
+
+- Las unidades sin auditar van en **gris liso** — la trama se queda en la leyenda, que es
+  donde distingue algo; novecientas celdas rayadas son textura, no información.
+- **Las etiquetas caben o no están.** El nombre se escribe entero; si no cabe, acortado
+  por el medio (`Controller…ration.cs`); y si tampoco, no se escribe y lo dice el
+  tooltip. Nunca verás media palabra.
+- **«+N unidades»**: las que no llegarían a verse se funden en una celda con su cuenta.
+  Toma el color de **la peor** que contiene, y si le queda alguna sin auditar va en
+  **gris**: un grupo del que falta por mirar la mayoría no se pinta de limpio.
+- **Un clic** en una unidad abre sus hallazgos; un **doble clic** (o el botón «Auditar»
+  de la tabla) abre el Inventario con esa unidad marcada. El mapa dice **dónde**; lanzar
+  y confirmar el gasto sigue siendo del Inventario.
+
+#### Lo demás
+
+- **Solo auditadas** esconde lo que nadie ha mirado y deja ver el mapa de lo que se sabe.
+  Con poca cobertura es la única forma de que la densidad cuente algo. El termómetro
+  sigue contando la aplicación entera.
+- **Color por: Densidad / Deuda absoluta** son dos preguntas distintas —«dónde están más
+  concentrados los problemas» y «dónde hay más»—. Por defecto, densidad.
+- **Ver como tabla** enseña lo mismo en columnas ordenables (módulo, unidad, LOC,
+  C/A/M/B, deuda, densidad, estado). El color **nunca** es el único canal. Cada fila lleva
+  a su izquierda la misma franja que el mapa, los números van a la derecha y lo que no
+  cabe se acorta por el medio con su tooltip. La tabla desplaza ella sola, con la cabecera
+  fija.
+- **Exportar imagen** guarda un PNG de lo que estés viendo: las tarjetas si estás en el
+  nivel 1, el treemap del módulo si has entrado en uno. Con su termómetro, su leyenda, el
+  título («{App} · mapa de calor · {fecha}») y el pie «Atalaya · {organización}». En la
+  lámina los módulos salen con su **nombre completo**: quien la reciba no ha visto la
+  nota de la cabecera.
+
+**Cómo se lee la escala.** Cinco pasos con sus umbrales en la leyenda: **< 5**, **5–15**,
+**15–40**, **40–100** y **≥ 100** por KLOC. Son **fijos**, no salen de los datos de cada
+app: así «paso 4» significa lo mismo en todas partes y también dentro de tres meses.
+
+La rampa va de **violeta a ámbar** pasando por magenta y coral. No es un arcoíris: lo que
+ordena una escala es que la **claridad** crezca sin volver atrás, y aquí lo hace paso a
+paso — por eso se distingue de un vistazo y sigue funcionando en una fotocopia en blanco
+y negro. Cada tema tiene su rampa; en los dos, **cuanto más lejos del fondo, más deuda**.
+Los colores de **severidad** siguen siendo suyos: se escriben en píldoras con texto, y la
+rampa es solo relleno.
+
+> **Gris = NO auditado, no limpio.** Una unidad que nadie ha barrido **no tiene densidad
+> 0: tiene densidad desconocida**. Confundir «no lo he mirado» con «está limpio»
 > convertiría este mapa en una mentira tranquilizadora — y es justo lo que más se va a
-> mirar en una aplicación recién dada de alta, donde casi todo está sin auditar.
-> «Excluida por tamaño» (**grande**) también es gris: estar excluida es un motivo para
-> **no** auditarla, no una forma de haberla auditado.
+> mirar en una aplicación recién dada de alta. «Excluida por tamaño» también es gris:
+> estar excluida es un motivo para **no** auditarla, no una forma de haberla auditado.
 
-Un **contorno punteado** avisa de que el relleno no lo cuenta todo: o es una celda gris
-con hallazgos ya conocidos —lo que se le sabe es una **cota inferior**—, o es una
-unidad auditada cuyo código **ha cambiado desde entonces**, de modo que la medida es de
-otro código. El tooltip dice cuál de las dos.
+**Qué mide.** Cada hallazgo **activo** pesa según su severidad —**Crítica 10 · Alta 5 ·
+Media 2 · Baja 1**— y la **deuda** de una unidad es la suma de esos pesos. Los resueltos
+y los silenciados no cuentan. La **densidad** es esa deuda por cada **mil líneas**: sin
+normalizar, la clase de 5.000 líneas saldría siempre la peor por ser grande, y eso ya lo
+dice el área. Un módulo divide **solo lo auditado entre lo auditado** —meter lo que nadie
+ha mirado en el denominador dejaría «casi limpio» a un módulo con una unidad podrida y
+noventa sin tocar—, y por eso la cobertura va siempre pegada al número.
 
-**Los módulos.** La banda de cabecera lleva el nombre, el número de unidades y el
-**porcentaje auditado**, y se pinta con la densidad del módulo. Esa densidad divide
-**solo lo auditado entre lo auditado**: meter en el denominador lo que nadie ha mirado
-diluiría el número en proporción a lo poco que se ha mirado, y un módulo con una unidad
-podrida y noventa sin auditar saldría «casi limpio». Por eso la cobertura va siempre
-pegada al número, en la banda y en el tooltip.
-
-**Qué se puede hacer.**
-
-- **Un clic en un módulo** amplía a sus unidades; las **migas** de arriba devuelven a
-  la aplicación entera.
-- Ya ampliado, **un clic en una unidad** abre sus hallazgos en Hallazgos, y un **doble
-  clic** (o el botón «Auditar» de la tabla) abre el Inventario con esa unidad marcada.
-  El mapa dice **dónde**; lanzar y confirmar el gasto sigue siendo del Inventario.
-- El **tooltip** de cada celda trae unidad, líneas, hallazgos por severidad, deuda,
-  densidad y estado.
-- **Los módulos se muestran sin el nombre de la aplicación.** Un módulo de XBLAST que
-  se llama `XBLASTCore` se rotula `Core` en el mapa: el nombre de la app ya está en el
-  título y lo que distingue al módulo es el resto. Los que **no** lo llevan salen
-  enteros —`Documents` sigue siendo `Documents`—, y la cabecera lo explica para que
-  nadie crea que a esa banda le falta algo. Si dos módulos acabaran rotulados igual, no
-  se acorta ninguno de los dos.
-
-  El nombre completo sigue estando en el tooltip, en la tabla, en el Inventario y en la
-  imagen exportada — y en el hub no se cambia nada: es solo cómo se rotula la banda.
-- **Las etiquetas caben o no están.** El nombre de una unidad se escribe entero; si no
-  cabe, acortado **por el medio** (`Controller…ration.cs`), que es como se distinguen
-  dos ficheros que empiezan igual; y si tampoco cabe así, no se escribe — el tooltip lo
-  dice. Nunca verás media palabra. El nombre de un **módulo** no desaparece nunca: lo
-  primero que se retira de su cabecera es el detalle, no el nombre.
-- **«+N unidades»**: cuando hay muchas unidades pequeñas, las que no llegarían a verse
-  se funden en una sola celda con su cuenta. Un clic la amplía. Toma el color de **la
-  peor** que contiene —agrupar no puede esconder un problema—, y si le queda alguna sin
-  auditar va en **gris**: un grupo del que falta por mirar la mayoría no se pinta de
-  limpio.
-- **Ver como tabla** enseña exactamente lo mismo en columnas ordenables (módulo,
-  unidad, LOC, C/A/M/B, deuda, densidad, estado). El color **nunca** es el único canal.
-  Cada fila lleva a su izquierda la **misma franja de color** que su celda del mapa, los
-  números van alineados a la derecha y lo que no cabe se acorta por el medio con su
-  tooltip. La tabla desplaza **ella sola**, con la cabecera fija: no hay dos barras.
-- **Color por: Densidad / Deuda absoluta** son dos preguntas distintas —«dónde están
-  más concentrados los problemas» y «dónde hay más»—. Por defecto, densidad.
-- **Exportar imagen** guarda un PNG con el mapa, su leyenda, el título
-  («{App} · mapa de calor · {fecha}») y el pie «Atalaya · {organización}»: la
-  diapositiva, sin recortes de pantalla. Ampliado a un módulo, el título y el pie de
-  foto hablan de **ese** módulo, no de la aplicación entera.
-
-El mapa es de **una** aplicación cada vez: mezclar dos repartiría el área entre códigos
-que no se comparan.
+El mapa es de **una** aplicación cada vez.
 
 ### Informes
 

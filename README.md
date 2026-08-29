@@ -249,11 +249,14 @@ pertenencia) y `read:user` (login, nombre, avatar, email). Nada más.
 - **Informes** (V7): la lista de todo lo que las auditorías dejaron escrito, con filtros y
   búsqueda por contenido, visor markdown renderizado dentro de la app (tablas incluidas) y
   descarga del `.md`. Es el único sitio desde el que se lee un informe.
-- **Mapa de calor** (V9): treemap de dos niveles (módulo → unidad) donde el **área** es el tamaño
-  en líneas y el **color** la **densidad de deuda** (peso por severidad ÷ KLOC), con una rampa
-  secuencial magma —violeta→ámbar, claridad monótona— y umbrales fijos en la leyenda. Lo **no auditado** va en gris tramado
-  —densidad *desconocida*, que no es cero—, nunca con el color frío de la escala. Zoom con migas,
-  tabla equivalente ordenable y exportación a PNG con título, leyenda y pie.
+- **Mapa de calor** (V9): dos niveles. Arriba, **una tarjeta por módulo** con su cobertura, su
+  densidad y sus severidades, ordenadas por **Atención** —`0,6 × riesgo medido + 0,4 × ignorancia`,
+  que es lo que contesta «¿por dónde miro ahora?» cuando la cobertura es baja—. Dentro de un
+  módulo, **treemap** de sus unidades: **área** = líneas, **color** = densidad de deuda (peso por
+  severidad ÷ KLOC), con rampa secuencial magma y umbrales fijos. Lo **no auditado** va en gris
+  —densidad *desconocida*, que no es cero—, nunca con el color frío de la escala. Termómetro de la
+  aplicación, filtro «solo auditadas», tabla equivalente ordenable y exportación a PNG de
+  cualquiera de los dos niveles.
 
 El manual de uso, pantalla a pantalla, está en [`MANUAL.md`](MANUAL.md). Lo que queda por hacer
 y lo que se decidió aplazar, en [`BACKLOG.md`](BACKLOG.md).

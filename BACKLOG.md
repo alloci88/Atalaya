@@ -4,10 +4,17 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-29 (F10.1c — los módulos sin el nombre de su aplicación).
+Última revisión: 2026-08-29 (F10.2 — el mapa de calor, a módulos primero).
 
 ## En vuelo
 
+- **F10.2 — el caso de aceptación del rediseño, con los ojos del usuario.** El nivel 1 de tarjetas,
+  el termómetro, el orden «Atención» y el zoom están entregados y medidos (D-664…D-672), y la
+  lámina del nivel 1 se ha renderizado y mirado — pero **nadie ha abierto la ventana**. Falta, a
+  1366×768 y en los dos temas: responder «¿por dónde empiezo?» en tres segundos con el mapa de
+  xblast, comprobar que al maximizar no queda hueco, la transición de zoom, la rueda sobre las 925
+  filas de la tabla, y que la tira de severidades y la barra de cobertura se distingan en pantalla
+  (D-673).
 - **F10 — el caso de aceptación del mapa de calor, con los ojos del usuario.** La vista está
   entera y cubierta por tests (D-634…D-646, D-654) y el treemap y las láminas se han renderizado y
   mirado en los dos temas, pero **nadie ha abierto la ventana**: falta abrir el mapa de xblast
@@ -96,6 +103,12 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## Cerrado
 
+- **F10.2 · Módulos primero** — el nivel 1 pasa de 925 celdas grises a ~22 tarjetas de módulo con
+  cobertura, densidad y severidades, ordenadas por **Atención** (`0,6 × riesgo + 0,4 × ignorancia`,
+  documentada y explicada en el tooltip de cada tarjeta); el treemap se queda dentro de un módulo,
+  con gris plano; termómetro de la aplicación en la cabecera, filtro «solo auditadas», layout en
+  fila estrella sin huecos al maximizar y exportación PNG del nivel 1. Cargar la vista baja de
+  27-31 ms a **14,8 ms**; ampliar a un módulo de 598 unidades, 2,7 ms (0,3 cacheado).
 - **F10.1c · Los módulos, sin el nombre de su aplicación** — `XBLASTCore` se rotula `Core` en las
   bandas del mapa y `Documents` sale entero, con la regla explicada en una frase en la cabecera.
   Cálculo de vista por aplicación (nombre o slug, sin distinguir mayúsculas, ≥3 caracteres, sin

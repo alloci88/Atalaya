@@ -6321,3 +6321,167 @@ En `HeatmapViewTests`: las bandas se rotulan sin el nombre y la cabecera lo expl
 el módulo que no lo lleva sale entero y se dice; dos que chocarían se quedan los dos con su nombre;
 el nombre completo sobrevive en tooltip, tabla y **en el inventario del hub tras renderizar**;
 ampliado no se omite ni se declara; y la lámina exportada escribe los nombres enteros.
+
+## F10.2 — Módulos primero: el mapa contesta «¿por dónde miro ahora?»
+
+El mapa de F10 pintaba 925 celdas de las que **923 eran «no auditada»**. Medido en pantalla: no
+cabía una etiqueta, el rayado repetido 923 veces tapaba la vista, la carga tardaba y las dos celdas
+con dato real se perdían. El problema no era la rampa —está validada y no se toca—: era la
+**granularidad**, y con ella la pregunta que la vista contestaba.
+
+### D-664 — El reencuadre: con cobertura baja, la pregunta es otra
+
+«¿Dónde está la deuda?» solo se puede contestar donde se ha mirado. Con el 0,2 % auditado —el
+estado normal de una aplicación durante meses— esa pregunta tiene dos respuestas y 923 silencios.
+La que sí se puede contestar es **¿dónde miro AHORA?**, y esa junta dos cosas: lo que se ha medido
+que arde y lo que no se ha mirado.
+
+De ahí sale todo lo demás. El nivel 1 pasa a ser **una tarjeta por módulo** (~22 en xblast) con la
+cobertura como **dato medido** —barra y porcentaje— en vez de como textura; el treemap se queda
+donde sí funciona, **dentro de un módulo** (30-90 celdas con sitio para etiquetas); y aparece un
+orden nuevo que responde la pregunta.
+
+**El treemap de 925 hojas de una vez no vuelve, ni como opción.** No es una preferencia de estilo:
+es que a esa granularidad la figura no puede decir nada.
+
+### D-665 — «Atención»: la fórmula, y por qué cada mitad
+
+```
+atención = 0,6 · riesgo + 0,4 · ignorancia
+riesgo     = min(1, densidad / 100) · confianza      (0 si la densidad es desconocida)
+confianza  = 0,5 + 0,5 · (LOC auditadas / LOC del módulo)
+ignorancia = LOC sin auditar del módulo / LOC de la aplicación
+```
+
+**Gana lo medido (60/40), pero no por mucho.** Un problema comprobado es mejor motivo para ir a un
+sitio que la sospecha de que pueda haberlo. Pero con cobertura baja «lo medido» son cuatro ficheros
+y lo ignorado es el resto de la aplicación, así que la ignorancia no puede ser un detalle.
+
+**La ignorancia es riesgo, y por eso pesa.** Un módulo de 240 KLOC que nadie ha abierto no es un
+módulo limpio: es un módulo del que no se sabe nada. Sin ese sumando, el orden mandaría siempre a
+los dos ficheros que alguien miró.
+
+**La confianza no puede enterrar un hecho.** Una densidad medida sobre el 2 % del módulo cuenta la
+mitad que la misma medida sobre el módulo entero — pero cuenta: el suelo es 0,5. Descontarla del
+todo enterraría el dato más accionable que tiene la herramienta, que es un fichero comprobadamente
+podrido; darle el peso completo sería extrapolar de una muestra del 2 %.
+
+**Los dos sumandos están ANCLADOS, no normalizados contra el máximo del día.** El riesgo se mide
+contra el techo de la rampa (100 por KLOC, que ya es una constante documentada: el umbral del
+último paso) y la ignorancia contra el tamaño de la aplicación. Así la puntuación de un módulo no
+cambia porque se dé de alta otro, y el orden de ayer se puede comparar con el de hoy. Con una
+normalización por el máximo, cada día tendría su propia escala.
+
+**Y se explica en el tooltip de la tarjeta**, con el desglose entero: un ranking que ordena por
+algo que no se ve y no se puede explicar, no se sigue.
+
+Los otros cinco órdenes —deuda, densidad, tamaño, cobertura, nombre— siguen ahí para cuando se
+tiene una pregunta concreta. En «densidad», los módulos sin auditar van al **final**: no tienen
+densidad, y colarlos arriba con un cero diría que están limpios.
+
+### D-666 — Lo que enseña una tarjeta, y en qué canal
+
+- **Nombre** grande, sin el nombre de la aplicación (F10.1c), y siempre legible.
+- **Tamaño**: unidades y KLOC, en texto.
+- **Cobertura**: barra de dos tramos y su porcentaje escrito. **Aquí vive la honestidad del "no
+  auditado"** — como dato medido, no como un rayado que invade la vista.
+- **Densidad de lo auditado**: en la **franja del borde izquierdo**, con la rampa de siempre; gris
+  si no hay nada auditado. Al borde y no de fondo: teñir la tarjeta entera haría competir el color
+  con todo lo que la tarjeta dice.
+- **Severidades**: mini barra apilada C/A/M/B con los colores de estado. No compiten con la rampa
+  porque están en otra forma y en otro sitio.
+
+### D-667 — El termómetro, y por qué no se mueve con el filtro
+
+Una barra de la aplicación entera repartida por **paso de la rampa** más lo que nadie ha mirado: la
+leyenda aplicada al total, así que no hay vocabulario nuevo. Al lado, las cifras («925 unidades ·
+2 auditadas (0 %) · 107 de deuda conocida»).
+
+**Cuenta siempre el total, con «solo auditadas» puesto o no.** Es el ancla de honestidad de la
+vista, y un ancla que se mueve con el filtro no ancla nada.
+
+Un tramo que existe no puede desaparecer por ser pequeño: las dos unidades auditadas de xblast son
+el 0,2 % de la barra —medio píxel— y `ShareBar` les da un mínimo de 3 px, quitándoselo a los que
+tienen de sobra. Es la misma regla que el grado mínimo de un tramo del rosco (F6.5): lo que existe
+se ve. Si la barra es tan estrecha que no hay de dónde quitarlo, se deja como está — mejor
+imprecisa que rota.
+
+### D-668 — «Solo auditadas»: el filtro que faltaba
+
+Esconde lo desconocido y deja ver el mapa de lo que se sabe. Con cobertura baja es la única forma
+de que el mapa de densidad cuente algo; cuando la cobertura suba dejará de hacer falta y no
+estorbará. Filtra las tarjetas (fuera los módulos sin nada auditado), las celdas del nivel 2 y las
+filas de la tabla. El termómetro y el aviso de cobertura, no: uno porque es el ancla, y el otro
+porque avisar del gris mientras el gris está escondido no tiene sentido.
+
+### D-669 — Gris PLANO en las celdas; la trama, solo en la leyenda
+
+Novecientos rectángulos rayados son **textura, no información**: el rayado se leía como ruido de
+fondo y tapaba lo poco que había que ver. Las celdas van ahora en gris liso. La trama se queda en
+la **muestra de la leyenda**, que está una vez y es donde de verdad distingue «no auditada» del
+paso más frío de la rampa. La franja de la tabla y la del inventario siguen al mapa: gris plano.
+
+### D-670 — El hueco al maximizar era un alto fijo
+
+El treemap tenía `Height="520"` dentro de una tarjeta dentro del scroll de la página: al maximizar,
+la tarjeta medía 520 px y debajo quedaba ventana vacía. La vista tiene ahora cuatro filas
+—cabecera, filtros, termómetro y **contenido en estrella**— y el treemap del nivel 2 ocupa el alto
+que queda. Hay test sobre el árbol del XAML de que la fila es estrella y de que el treemap no
+declara alto.
+
+### D-671 — Lo medido, antes y después (clon real, 925 unidades)
+
+| | Antes (F10.1) | Ahora (F10.2) |
+|---|---|---|
+| Cargar la vista | 27-31 ms | **14,8 ms** |
+| Elementos del nivel 1 | 925 celdas + 22 bandas | **22 tarjetas** |
+| Primer render del nivel 1 | 136 ms (947 celdas) | rejilla de 22 tarjetas |
+| Ampliar a un módulo de 598 unidades | — | **2,7 ms** (0,3 ms cacheado) |
+| Poner «solo auditadas» | — | **0,3 ms** |
+| Exportar el PNG | 243 ms | 262 ms |
+
+La caché del nivel 2 va por (módulo, métrica, filtro, tema) y se tira entera en cada carga, que es
+cuando el hub puede haber cambiado. Se declara lo que de verdad ahorra: **2,7 → 0,3 ms**. Componer
+las celdas de un módulo nunca fue el cuello de botella; el cuello era componer las 925 de una vez,
+y eso ya no pasa.
+
+**Y lo que el orden contesta en el clon real.** Las dos primeras tarjetas son:
+
+| | Atención | Qué dice |
+|---|---|---|
+| XBLASTCommon | **0,321** | 89 u · 11,2 KLOC · 2 % auditado · densidad **159,8** por KLOC |
+| XBLASTCore | **0,304** | 598 u · 238,8 KLOC · **0 % auditado** · densidad desconocida |
+| XBLASTDataBase | 0,024 | 70 u · 18,5 KLOC · 0 % auditado |
+
+Es exactamente la respuesta que se buscaba: arriba el módulo con fuego comprobado y, pegado, el que
+esconde el 76 % del código sin que nadie lo haya abierto. El resto, por lo que ocultan.
+
+### D-672 — Cobertura (24 tests nuevos, 1322 en total, todo en verde)
+
+`AttentionScoreTests`: los tres casos del encargo —el grande sin auditar sube, el pequeño y muy
+sucio también, el limpio y auditado se va al fondo con puntuación **0**—; la confianza baja el peso
+de una medida sobre el 2 % pero no la anula; la puntuación de un módulo **no depende de los demás**
+y el techo es el umbral de la rampa, no un número nuevo; está acotada en 0..1 y no divide entre
+cero con una aplicación vacía.
+
+En `HeatmapViewTests`: el nivel 1 son tarjetas y no celdas, con sus cifras cuadradas; un clic
+amplía; el orden por defecto es Atención y su tooltip explica la puntuación; los otros cinco
+órdenes contestan lo suyo y los sin-densidad van al final; la tarjeta enseña la cobertura como dato
+y la franja gris cuando no hay nada auditado; el termómetro reparte la app entera y **no se mueve
+con el filtro**; «solo auditadas» esconde módulos, celdas y filas; la fila del contenido es
+estrella y el treemap no tiene alto fijo; y hay **una sola** animación en toda la vista.
+
+Se reescribieron los tests de F10/F10.1 que daban por hecho un treemap en el nivel 1: ahora amplían
+primero. Uno cambió de contrato a propósito —la franja de la tabla ya no es la trama sino el gris
+plano— y se dice en el propio test.
+
+### D-673 — Lo que sigue sin comprobarse, y es del usuario
+
+Se han renderizado la **lámina del nivel 1** (y de ahí salieron cuatro correcciones: el doble borde
+del termómetro, los títulos partidos en dos líneas, las tarjetas de altura desigual y los tramos
+que desaparecían) y las medidas de tiempo contra el clon real. **Nadie ha abierto la ventana.**
+
+Queda para el asiento humano, a 1366×768 y en los dos temas: que el nivel 1 conteste «¿por dónde
+empiezo?» en tres segundos, que al maximizar no quede hueco, la transición de zoom, la rueda sobre
+las 925 filas de la tabla, y que la tira de severidades y la barra de cobertura se distingan en
+pantalla y no solo en el PNG.
