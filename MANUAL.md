@@ -192,6 +192,11 @@ formato sería una medida que nadie ha tomado.
 Dos niveles. El de arriba contesta **¿por dónde miro ahora?**; el de dentro, **qué
 tiene ese módulo**.
 
+**La barra de arriba** agrupa los mandos por lo que configuran: **qué aplicación** se mira ·
+**cómo se lee** (color por densidad o por deuda, y en qué orden salen las tarjetas) ·
+**qué se enseña** (solo auditadas, o la tabla) · y **exportar**. Si la ventana es
+estrecha, la barra pasa a dos o tres líneas — nunca recorta un texto.
+
 **El termómetro.** Sobre todo lo demás, una barra con la aplicación entera repartida:
 cada tramo es un paso de la escala de densidad y el último, gris, es lo que **nadie ha
 auditado todavía**. Al lado, las cifras («925 unidades · 2 auditadas (0 %) · 107 de

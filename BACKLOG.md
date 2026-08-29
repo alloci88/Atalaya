@@ -4,10 +4,14 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-29 (F10.2 — el mapa de calor, a módulos primero).
+Última revisión: 2026-08-29 (F10.2b — la barra de mandos del mapa).
 
 ## En vuelo
 
+- **F10.2b — el separador huérfano al envolver.** La barra envuelve por grupos y está medida en seis
+  anchos sin un solo recorte, pero el `WrapPanel` coloca los separadores como a un elemento más: al
+  pasar a dos líneas, una línea puede empezar con el pelo de separación. A 1 px se nota poco y no se
+  ha visto en pantalla. Si molesta, un panel propio que los oculte al principio de línea (D-679).
 - **F10.2 — el caso de aceptación del rediseño, con los ojos del usuario.** El nivel 1 de tarjetas,
   el termómetro, el orden «Atención» y el zoom están entregados y medidos (D-664…D-672), y la
   lámina del nivel 1 se ha renderizado y mirado — pero **nadie ha abierto la ventana**. Falta, a
@@ -103,6 +107,9 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## Cerrado
 
+- **F10.2b · La barra de mandos** — envuelve por grupos en vez de recortar (la columna estrella era
+  el defecto, no los anchos), cuatro grupos separados por función, anchos medidos contra el control
+  real, y la frase de la cabecera describiendo el nivel que se está viendo.
 - **F10.2 · Módulos primero** — el nivel 1 pasa de 925 celdas grises a ~22 tarjetas de módulo con
   cobertura, densidad y severidades, ordenadas por **Atención** (`0,6 × riesgo + 0,4 × ignorancia`,
   documentada y explicada en el tooltip de cada tarjeta); el treemap se queda dentro de un módulo,

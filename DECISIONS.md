@@ -6485,3 +6485,91 @@ Queda para el asiento humano, a 1366×768 y en los dos temas: que el nivel 1 con
 empiezo?» en tres segundos, que al maximizar no quede hueco, la transición de zoom, la rueda sobre
 las 925 filas de la tabla, y que la tira de severidades y la barra de cobertura se distingan en
 pantalla y no solo en el PNG.
+
+## F10.2b — La barra de mandos, y la frase que ya no era cierta
+
+### D-674 — «Atención» no salía cortado por estrecho: salía cortado por recortado
+
+El diagnóstico obvio —«los combos necesitan más ancho»— era falso. El combo de orden declaraba
+`MinWidth="130"` y su opción más larga, «Cobertura», mide **62 px**: cabía de sobra. Lo que fallaba
+era el contenedor: la mitad izquierda de la barra vivía en una `ColumnDefinition Width="*"` de un
+`Grid` y, al no caber la fila entera, **la columna recortaba**. Ningún `MinWidth` puede evitar eso,
+porque el control mide bien y lo que falta es el hueco.
+
+La barra es ahora un `WrapPanel`: cuando un grupo no cabe entero, **pasa a la línea siguiente**. Es
+la única respuesta aceptable a «no cabe» — un texto cortado no es una versión pequeña de la
+interfaz, es una interfaz rota.
+
+**Medido** con los controles de verdad (plantillas de WPF-UI, los `MinWidth` declarados): el ancho
+natural de la barra es **1143 px**, así que a 1600 va en una línea, **a 1130 —el ancho útil a
+1366×768— en dos**, y por debajo de 700 en tres. En ninguno de los seis anchos probados (1600, 1130,
+900, 700, 480, 360) se recorta un solo grupo.
+
+### D-675 — Cuatro grupos, porque configuran cuatro cosas distintas
+
+`[Aplicación] · [Color por · Orden] · [Solo auditadas · Ver como tabla] · [Exportar]`.
+
+Antes todo pesaba lo mismo y no se distinguía qué configuraba qué. Ahora cada grupo es lo que
+responde a una pregunta —qué se mira, cómo se lee, qué se enseña, qué se saca de aquí— y lo que
+agrupa de verdad es el **aire** entre ellos; el pelo de separación solo lo confirma. Los dos
+interruptores van juntos y **solos** en su grupo, con su etiqueta dentro del control y no como un
+`TextBlock` suelto al lado.
+
+Y como los grupos son los que envuelven, un grupo nunca se parte por la mitad: al pasar a dos
+líneas, «Color por» y «Orden» siguen juntos.
+
+### D-676 — Los anchos, medidos y no estimados
+
+Los dos combos de opciones fijas declaran sitio para su texto más largo, y hay test que lo
+comprueba **construyendo el control de verdad** con la plantilla de WPF-UI y midiendo lo que pide:
+
+| Combo | Más largo | Declarado |
+|---|---|---|
+| Color por | «Deuda absoluta» (97 px de texto) | 165 |
+| Orden | «Cobertura» (62 px de texto) | 130 |
+
+El de **aplicación** es distinto y por eso se trata distinto: su contenido es **dato** —el nombre lo
+escribe quien da de alta la app— y puede ser tan largo como quiera. Lleva suelo (200) para que los
+nombres normales no lo estrechen y **techo (320)** para que uno kilométrico no empuje la barra
+entera; la lista desplegada sigue enseñando el nombre completo.
+
+### D-677 — La frase de la cabecera describía una pantalla que ya no existe
+
+Decía «el área de cada celda es su tamaño en líneas y el color, la densidad de deuda. El gris es lo
+que nadie ha auditado». En el nivel 1 **no hay celdas ni áreas**: hay tarjetas. Una cabecera que
+describe otra pantalla es peor que no tener cabecera.
+
+`ViewCaption` cambia con lo que se está viendo, y explica el gris **en los términos de ese nivel** —
+en las tarjetas es la parte sin auditar de una barra de cobertura; en el treemap, una celda entera:
+
+- **Nivel 1**: «Los módulos de XBLAST, ordenados por atención. La barra de cada tarjeta dice cuánto
+  se ha auditado; el color, la deuda por cada mil líneas de lo auditado. Gris = nadie lo ha mirado
+  todavía, que no es lo mismo que limpio.»
+- **Nivel 2**: «Las unidades de XBLASTCommon: el área es su tamaño en líneas y el color, la deuda
+  por cada mil líneas. Las celdas grises son las que nadie ha auditado.»
+- **Tabla**: «Las unidades de XBLAST, en columnas ordenables. La franja de cada fila es…»
+
+Sigue al **orden** y a la **métrica** elegidos, porque los dos cambian lo que se está viendo. Y es
+la frase que va al subtítulo de la lámina exportada: antes la del nivel 1 hablaba de áreas de
+celdas debajo de una rejilla de tarjetas.
+
+El nivel 2 dejó de repetirla en su bloque: la cabecera ya la dice, y con el nombre del módulo.
+
+### D-678 — Cobertura (10 tests nuevos, 1332 en total, todo en verde)
+
+`HeatmapBarTests` (nuevo): la barra es un `WrapPanel` y **no tiene ni una `ColumnDefinition** —la
+columna estrella era el defecto—; cuatro grupos con tres pelos, intercalados; los dos interruptores
+juntos, solos y con su etiqueta dentro del control; cada combo de opciones fijas cabe su opción más
+larga, **midiendo el control real**; y el de aplicación lleva suelo y techo porque su texto es dato.
+
+En `HeatmapViewTests`: la cabecera describe el nivel que se está viendo y no menciona áreas en el
+nivel 1; sigue al orden y a la métrica; y el gris se explica en los términos de cada nivel.
+
+### D-679 — Lo que sigue sin comprobarse, y es del usuario
+
+La barra se ha **medido** —controles reales, plantillas reales, seis anchos— pero no se ha visto en
+la ventana. Queda el vistazo a 1366×768 y con la ventana a la mitad, en los dos temas: que las dos
+líneas de la barra respiren, que el pelo entre grupos se vea sin pesar, y que al envolver ninguna
+línea empiece con un separador huérfano — el `WrapPanel` los coloca como a un elemento más, y a
+1 px de una tinta al 100 % de opacidad puede notarse. Si molesta, se arregla con un panel propio
+que los oculte al principio de línea.

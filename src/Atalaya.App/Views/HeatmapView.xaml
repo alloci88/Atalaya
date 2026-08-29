@@ -83,6 +83,30 @@
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
 
+        <!-- Un grupo de la barra: lo que configura lo mismo va junto y viaja junto al envolver.
+             El margen vertical es el aire entre líneas cuando la barra usa dos. -->
+        <Style x:Key="BarGroup" TargetType="StackPanel">
+            <Setter Property="Orientation" Value="Horizontal" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,3,0,3" />
+        </Style>
+
+        <Style x:Key="BarLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Opacity" Value="0.7" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+        </Style>
+
+        <!-- El separador entre grupos: un pelo, no una regla. Lo que de verdad agrupa es el aire
+             de sus márgenes; la línea solo lo confirma. -->
+        <Style x:Key="BarSeparator" TargetType="Border">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Margin" Value="16,7" />
+            <Setter Property="Background" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+        </Style>
+
         <!-- La tarjeta de un módulo: un botón, porque el gesto es entrar en él. Con BasedOn no,
              porque redefine la plantilla entera; por eso fija su Foreground a mano, que es la
              trampa que ButtonForegroundTests vigila. -->
@@ -153,73 +177,90 @@
         <!-- Cabecera -->
         <StackPanel Grid.Row="0" Margin="0,0,18,12">
             <TextBlock Text="Mapa de calor" FontSize="24" FontWeight="SemiBold" />
-            <TextBlock Style="{StaticResource BlockHint}"
-                       Text="La estructura de la aplicación: el área de cada celda es su tamaño en líneas y el color, la densidad de deuda. El gris es lo que nadie ha auditado." />
+            <TextBlock Style="{StaticResource BlockHint}" Text="{Binding ViewCaption}" />
         </StackPanel>
 
-        <!-- Barra de mandos: cambian el significado de todo lo de abajo, así que van arriba. -->
+        <!-- Barra de mandos: cambian el significado de todo lo de abajo, así que van arriba.
+             ENVUELVE, no comprime. Antes era un Grid con la parte izquierda en una columna
+             estrella: al no caber, la columna RECORTABA —«Atención» salía cortado— y ningún
+             MinWidth podía evitarlo, porque el control medía bien y lo que fallaba era el hueco.
+             Un WrapPanel pasa a la línea siguiente en cuanto un grupo no cabe entero, que es lo
+             único aceptable: un texto cortado no es una versión pequeña de la interfaz, es una
+             interfaz rota. A 1366×768 la barra ya usa dos líneas, y eso está bien. -->
         <Border Grid.Row="1"
                 Background="{DynamicResource SubtleFillColorSecondaryBrush}"
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
-                Padding="12,10"
+                Padding="12,8"
                 Margin="0,0,18,14">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+            <WrapPanel Orientation="Horizontal">
 
-                <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <TextBlock Text="Aplicación" VerticalAlignment="Center"
-                               FontSize="12" Opacity="0.7" Margin="0,0,8,0" />
-                    <ComboBox MinWidth="200"
+                <!-- Qué se está mirando -->
+                <StackPanel Style="{StaticResource BarGroup}">
+                    <TextBlock Text="Aplicación" Style="{StaticResource BarLabel}" />
+                    <!-- El nombre de una aplicación es DATO: lo escribe quien la da de alta y
+                         puede ser tan largo como quiera. De ahí el suelo y el techo — sin techo,
+                         un nombre kilométrico empujaría la barra entera; con él, el combo se
+                         queda en su sitio y la lista desplegada enseña el nombre completo. -->
+                    <ComboBox MinWidth="200" MaxWidth="320"
                               ItemsSource="{Binding AppOptions}"
                               SelectedItem="{Binding SelectedApp}"
                               DisplayMemberPath="Name"
                               ToolTip="El mapa es de UNA aplicación: mezclar dos repartiría el área entre códigos que no se comparan" />
+                </StackPanel>
 
-                    <TextBlock Text="Color por" VerticalAlignment="Center"
-                               FontSize="12" Opacity="0.7" Margin="20,0,8,0" />
-                    <ComboBox MinWidth="150"
+                <Border Style="{StaticResource BarSeparator}" />
+
+                <!-- Cómo se lee: los dos mandos que cambian lo que significa el mapa. -->
+                <StackPanel Style="{StaticResource BarGroup}">
+                    <TextBlock Text="Color por" Style="{StaticResource BarLabel}" />
+                    <!-- 165 = «Deuda absoluta» (97 px medidos) + relleno y galón del combo. -->
+                    <ComboBox MinWidth="165"
                               ItemsSource="{Binding MetricOptions}"
                               SelectedItem="{Binding SelectedMetric}"
                               DisplayMemberPath="Label"
                               ToolTip="{Binding SelectedMetric.Hint}" />
 
-                    <TextBlock Text="Orden" VerticalAlignment="Center"
-                               FontSize="12" Opacity="0.7" Margin="20,0,8,0"
+                    <TextBlock Text="Orden" Style="{StaticResource BarLabel}" Margin="18,0,8,0"
                                Visibility="{Binding IsZoomed, Converter={StaticResource InverseBoolToVisibility}}" />
+                    <!-- 130 = «Cobertura» (62 px), el más largo de los seis, con su holgura. -->
                     <ComboBox MinWidth="130"
                               ItemsSource="{Binding SortOptions}"
                               SelectedItem="{Binding SelectedSort}"
                               DisplayMemberPath="Label"
                               ToolTip="{Binding SelectedSort.Hint}"
                               Visibility="{Binding IsZoomed, Converter={StaticResource InverseBoolToVisibility}}" />
-
-                    <ui:ProgressRing IsIndeterminate="True" Width="16" Height="16" Margin="18,0,0,0"
-                                     VerticalAlignment="Center"
-                                     Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
 
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Border Style="{StaticResource BarSeparator}" />
+
+                <!-- Qué se enseña: los dos interruptores, juntos y con su etiqueta pegada. -->
+                <StackPanel Style="{StaticResource BarGroup}">
                     <ui:ToggleSwitch Content="Solo auditadas"
                                      IsChecked="{Binding OnlyAudited}"
                                      VerticalAlignment="Center"
-                                     Margin="0,0,14,0"
+                                     Margin="0,0,16,0"
                                      ToolTip="Esconde lo que nadie ha mirado y deja ver el mapa de lo que sí se sabe. El termómetro de arriba sigue contando la aplicación entera." />
                     <ui:ToggleSwitch Content="Ver como tabla"
                                      IsChecked="{Binding TableMode}"
                                      VerticalAlignment="Center"
-                                     Margin="0,0,14,0"
                                      ToolTip="Los mismos datos en columnas ordenables. El color nunca es el único canal." />
+                </StackPanel>
+
+                <Border Style="{StaticResource BarSeparator}" />
+
+                <!-- Qué se saca de aquí -->
+                <StackPanel Style="{StaticResource BarGroup}">
                     <ui:Button Content="Exportar imagen"
                                Appearance="Secondary"
                                Command="{Binding ExportImageCommand}"
-                               ToolTip="Guarda un PNG del mapa con su título, su leyenda y su pie: la diapositiva" />
+                               ToolTip="Guarda un PNG de lo que estás viendo, con su termómetro, su leyenda y su pie: la diapositiva" />
+                    <ui:ProgressRing IsIndeterminate="True" Width="16" Height="16" Margin="14,0,2,0"
+                                     VerticalAlignment="Center"
+                                     Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
-            </Grid>
+            </WrapPanel>
         </Border>
 
         <!-- Termómetro: la aplicación entera en una barra. Cuenta SIEMPRE el total, con «solo
@@ -429,7 +470,6 @@
                         <TextBlock Text=" › " FontSize="15" VerticalAlignment="Center" Opacity="0.6" />
                         <TextBlock Text="{Binding ZoomedModule}" Style="{StaticResource BlockTitle}" />
                     </StackPanel>
-                    <TextBlock Text="{Binding ScaleCaption}" Style="{StaticResource BlockHint}" />
                     <TextBlock Text="{Binding Summary}" Style="{StaticResource BlockHint}" />
                 </StackPanel>
                 <TextBlock Grid.Column="1" Style="{StaticResource BlockHint}" MaxWidth="230"

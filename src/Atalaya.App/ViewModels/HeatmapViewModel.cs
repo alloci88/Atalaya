@@ -201,6 +201,8 @@ public sealed partial class HeatmapViewModel : ViewModelBase
 
     partial void OnSelectedSortChanged(ModuleSortOption value) => Render();
 
+    partial void OnTableModeChanged(bool value) => ViewCaption = Caption(SelectedMetric.Metric);
+
     partial void OnOnlyAuditedChanged(bool value) => Render();
 
     partial void OnSelectedAppChanged(AppOption? value)
@@ -275,6 +277,14 @@ public sealed partial class HeatmapViewModel : ViewModelBase
 
     /// <summary>Qué mide el color, escrito. Un mapa sin esta frase no se puede leer.</summary>
     [ObservableProperty] private string _scaleCaption = string.Empty;
+
+    /// <summary>
+    /// La frase de la cabecera: <b>qué se está viendo AHORA</b>. Cambia con el nivel porque lo que
+    /// hay debajo cambia con el nivel — la frase de F10 («el área de cada celda es su tamaño»)
+    /// describía un treemap de hojas que en el nivel 1 ya no existe, y una cabecera que describe
+    /// otra pantalla es peor que no tener cabecera.
+    /// </summary>
+    [ObservableProperty] private string _viewCaption = string.Empty;
 
     /// <summary>«925 unidades · 314 382 líneas · 2 auditadas (0 %)».</summary>
     [ObservableProperty] private string _summary = string.Empty;
@@ -432,8 +442,37 @@ public sealed partial class HeatmapViewModel : ViewModelBase
             ? "El área es el tamaño (LOC); el color, la deuda total de la unidad."
             : "El área es el tamaño (LOC); el color, la deuda por cada mil líneas.";
 
+        ViewCaption = Caption(metric);
+
         BuildSummary();
     }
+
+    /// <summary>
+    /// Qué se está viendo, en una frase, y con el gris explicado en los términos de ESE nivel: en
+    /// las tarjetas el gris es la parte sin auditar de una barra de cobertura; en el treemap es
+    /// una celda entera. Es el mismo dato dicho donde toca.
+    /// </summary>
+    private string Caption(HeatMetric metric)
+    {
+        string color = metric == HeatMetric.Deuda ? "la deuda conocida" : "la deuda por cada mil líneas";
+
+        if (TableMode)
+        {
+            return $"Las unidades {Where()}, en columnas ordenables. La franja de cada fila es "
+                   + $"{color} de lo auditado; gris, lo que nadie ha mirado.";
+        }
+
+        return _zoom is null
+            ? $"Los módulos de {Name()}, ordenados por {SelectedSort.Label.ToLowerInvariant()}. La barra "
+              + $"de cada tarjeta dice cuánto se ha auditado; el color, {color} de lo auditado. "
+              + "Gris = nadie lo ha mirado todavía, que no es lo mismo que limpio."
+            : $"Las unidades de {_zoom.Name}: el área es su tamaño en líneas y el color, {color}. "
+              + "Las celdas grises son las que nadie ha auditado.";
+    }
+
+    private string Name() => _view.AppName is { Length: > 0 } name ? name : "la aplicación";
+
+    private string Where() => _zoom is null ? $"de {Name()}" : $"de {_zoom.Name}";
 
     /// <summary>Los módulos que la vista está mirando: la app entera, o el módulo ampliado.</summary>
     private IReadOnlyList<HeatModule> Scope()
@@ -1212,7 +1251,7 @@ public sealed partial class HeatmapViewModel : ViewModelBase
 
         return new HeatmapImageRequest(
             $"{_view.AppName}{scope} · mapa de calor · {when:d MMMM yyyy}",
-            $"{ScaleCaption} {Summary}",
+            $"{ViewCaption} {Summary}",
             $"Atalaya · {org}",
             MapGroups,
             Legend.ToList(),

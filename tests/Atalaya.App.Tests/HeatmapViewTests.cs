@@ -1417,6 +1417,65 @@ public sealed class HeatmapViewTests : IDisposable
         vm.MapGroups.Single().Cells.Should().OnlyContain(c => c.Fill != null);
     }
 
+    // ============================================ La frase de la cabecera
+
+    /// <summary>
+    /// La cabecera describe <b>lo que se está viendo</b>, y eso cambia con el nivel. La frase de
+    /// F10 —«el área de cada celda es su tamaño»— describía un treemap de hojas que en el nivel 1
+    /// ya no existe: una cabecera que describe otra pantalla es peor que no tener cabecera.
+    /// </summary>
+    [Fact]
+    public async Task La_cabecera_describe_el_nivel_que_se_esta_viendo()
+    {
+        Seed();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+
+        vm.ViewCaption.Should().StartWith("Los módulos de XBLAST");
+        vm.ViewCaption.Should().Contain("ordenados por atención");
+        vm.ViewCaption.Should().Contain("La barra de cada tarjeta dice cuánto se ha auditado");
+        vm.ViewCaption.Should().NotContain("el área", "en el nivel 1 no hay áreas: hay tarjetas");
+
+        Zoom(vm, "Core");
+
+        vm.ViewCaption.Should().StartWith("Las unidades de Core");
+        vm.ViewCaption.Should().Contain("el área es su tamaño en líneas");
+
+        vm.ZoomOutCommand.Execute(null);
+        vm.TableMode = true;
+
+        vm.ViewCaption.Should().Contain("en columnas ordenables");
+        vm.ViewCaption.Should().NotContain("tarjeta");
+    }
+
+    /// <summary>Y la frase acompaña al orden y a la métrica elegidos: es lo que se está viendo.</summary>
+    [Fact]
+    public async Task La_cabecera_sigue_al_orden_y_a_la_metrica()
+    {
+        Seed();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+
+        vm.SelectedSort = vm.SortOptions.Single(o => o.Sort == ModuleSort.Cobertura);
+        vm.ViewCaption.Should().Contain("ordenados por cobertura");
+
+        vm.SelectedMetric = vm.MetricOptions.Single(o => o.Metric == HeatMetric.Deuda);
+        vm.ViewCaption.Should().Contain("la deuda conocida");
+    }
+
+    /// <summary>Y el gris se explica en los términos del nivel: una barra abajo, una celda arriba.</summary>
+    [Fact]
+    public async Task El_gris_se_explica_en_los_terminos_de_cada_nivel()
+    {
+        Seed();
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+        vm.ViewCaption.Should().Contain("Gris = nadie lo ha mirado todavía, que no es lo mismo que limpio");
+
+        Zoom(vm, "Core");
+        vm.ViewCaption.Should().Contain("Las celdas grises son las que nadie ha auditado");
+    }
+
     // ============================================ El XAML
 
     /// <summary>
