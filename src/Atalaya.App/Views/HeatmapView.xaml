@@ -32,21 +32,55 @@
             <Setter Property="Margin" Value="0,10,0,0" />
         </Style>
 
+        <!-- El ancho de la franja de densidad, en la cabecera y en la fila: un solo valor, para
+             que las dos rejillas no puedan descuadrarse por un píxel. -->
+        <GridLength x:Key="StripeWidth">11</GridLength>
+
         <!-- La cabecera ordenable de la tabla. Con BasedOn: quien redefine un estilo hereda la
              responsabilidad de todo lo que ese estilo traía (ImplicitStyleTests). -->
         <Style x:Key="SortHeader" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="Padding" Value="6,2" />
             <Setter Property="FontSize" Value="11" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
         </Style>
 
-        <Style x:Key="Cell" TargetType="TextBlock">
+        <!-- La cabecera de una columna NUMÉRICA se alinea como sus números: a la derecha. Ese
+             desajuste —cabecera a la izquierda, cifra a la derecha— es lo que hacía que la tabla
+             pareciera descuadrada aunque las columnas estuvieran perfectamente puestas. -->
+        <Style x:Key="SortHeaderRight" TargetType="Button" BasedOn="{StaticResource SortHeader}">
+            <Setter Property="HorizontalContentAlignment" Value="Right" />
+            <Setter Property="Padding" Value="2,2,6,2" />
+        </Style>
+
+        <Style x:Key="ColumnHead" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Opacity" Value="0.7" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="10,0,0,0" />
+        </Style>
+
+        <!-- Números: a la derecha y con cifras de ancho FIJO (tabular). Con las cifras
+             proporcionales de serie, «1.234» y «9.999» ocupan distinto y la columna baila fila a
+             fila aunque esté alineada. -->
+        <Style x:Key="Number" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12" />
             <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
+        </Style>
+
+        <!-- El nombre de la unidad es un enlace, pero tiene que ocupar su columna entera para que
+             el recorte por el medio sepa cuánto sitio hay. -->
+        <Style x:Key="RowLink" TargetType="Button" BasedOn="{StaticResource LinkButton}">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
 
         <DataTemplate x:Key="LegendEntry">
@@ -127,207 +161,251 @@
             </Grid>
         </Border>
 
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,18,0">
+        <!-- Sin inventario no se dibuja un lienzo vacío: se dice qué falta. -->
+        <ui:Card Grid.Row="2" Style="{StaticResource Block}" VerticalAlignment="Top" Margin="0,0,18,14"
+                 Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
             <StackPanel>
-
-                <!-- Sin inventario no se dibuja un lienzo vacío: se dice qué falta. -->
-                <ui:Card Style="{StaticResource Block}"
-                         Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
-                    <StackPanel>
-                        <TextBlock Text="Todavía no hay mapa" Style="{StaticResource BlockTitle}" />
-                        <TextBlock Text="{Binding EmptyReason}" Style="{StaticResource BlockHint}" />
-                    </StackPanel>
-                </ui:Card>
-
-                <StackPanel Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
-
-                    <!-- ==================== El mapa ==================== -->
-                    <ui:Card Style="{StaticResource Block}"
-                             Visibility="{Binding TableMode, Converter={StaticResource InverseBoolToVisibility}}">
-                        <StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                                    <!-- Migas: dónde se está y cómo se vuelve. -->
-                                    <StackPanel Orientation="Horizontal">
-                                        <Button Style="{StaticResource LinkButton}"
-                                                Command="{Binding ZoomOutCommand}"
-                                                Content="{Binding SelectedApp.Name}"
-                                                Visibility="{Binding IsZoomed, Converter={StaticResource BoolToVisibility}}"
-                                                ToolTip="Volver a la aplicación entera" />
-                                        <TextBlock Text=" › " FontSize="15" VerticalAlignment="Center" Opacity="0.6"
-                                                   Visibility="{Binding IsZoomed, Converter={StaticResource BoolToVisibility}}" />
-                                        <TextBlock Text="{Binding ZoomedModule}" Style="{StaticResource BlockTitle}"
-                                                   Visibility="{Binding IsZoomed, Converter={StaticResource BoolToVisibility}}" />
-                                        <TextBlock Text="Módulos y unidades" Style="{StaticResource BlockTitle}"
-                                                   Visibility="{Binding IsZoomed, Converter={StaticResource InverseBoolToVisibility}}" />
-                                    </StackPanel>
-                                    <TextBlock Text="{Binding ScaleCaption}" Style="{StaticResource BlockHint}" />
-                                    <TextBlock Text="{Binding Summary}" Style="{StaticResource BlockHint}" />
-                                </StackPanel>
-                                <TextBlock Grid.Column="1" Style="{StaticResource BlockHint}" MaxWidth="230"
-                                           Text="Un clic amplía el módulo; ampliado, un clic abre los hallazgos de la unidad y un doble clic la lleva a auditar." />
-                            </Grid>
-
-                            <Border Style="{StaticResource Warning}"
-                                    Visibility="{Binding CoverageWarning, Converter={StaticResource NotEmptyToVisibility}}">
-                                <TextBlock Text="{Binding CoverageWarning}" FontSize="12" TextWrapping="Wrap" />
-                            </Border>
-
-                            <!-- Alto fijo: el treemap reparte el área que se le da, y dentro de un
-                                 StackPanel sin alto pedido se quedaría en cero. -->
-                            <controls:Treemap Height="520" Margin="0,12,0,0"
-                                              Groups="{Binding Groups}"
-                                              UnknownFill="{Binding UnknownFill}"
-                                              SurfaceBrush="{Binding SurfaceBrush}"
-                                              StrokeBrush="{Binding StrokeBrush}"
-                                              LabelBrush="{Binding LabelBrush}"
-                                              MutedBrush="{Binding MutedBrush}"
-                                              TileCommand="{Binding TileCommand}"
-                                              ActivateCommand="{Binding ActivateCommand}" />
-
-                            <ItemsControl ItemsSource="{Binding Legend}" Margin="0,12,0,0"
-                                          ItemTemplate="{StaticResource LegendEntry}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                            </ItemsControl>
-                        </StackPanel>
-                    </ui:Card>
-
-                    <!-- ==================== La tabla equivalente ==================== -->
-                    <ui:Card Style="{StaticResource Block}"
-                             Visibility="{Binding TableMode, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel>
-                            <TextBlock Text="Las mismas unidades, en columnas" Style="{StaticResource BlockTitle}" />
-                            <TextBlock Style="{StaticResource BlockHint}"
-                                       Text="Pulsa una cabecera para ordenar; púlsala otra vez para invertir. Un clic en una fila abre sus hallazgos." />
-                            <TextBlock Text="{Binding Summary}" Style="{StaticResource BlockHint}" />
-
-                            <Grid Margin="0,12,0,4">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="1.4*" />
-                                    <ColumnDefinition Width="2.2*" />
-                                    <ColumnDefinition Width="70" />
-                                    <ColumnDefinition Width="42" />
-                                    <ColumnDefinition Width="42" />
-                                    <ColumnDefinition Width="42" />
-                                    <ColumnDefinition Width="42" />
-                                    <ColumnDefinition Width="70" />
-                                    <ColumnDefinition Width="86" />
-                                    <ColumnDefinition Width="1.6*" />
-                                    <ColumnDefinition Width="86" />
-                                </Grid.ColumnDefinitions>
-                                <Button Grid.Column="0" Style="{StaticResource SortHeader}" Content="{Binding HeaderModule}"
-                                        Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Module}" />
-                                <Button Grid.Column="1" Style="{StaticResource SortHeader}" Content="{Binding HeaderUnit}"
-                                        Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Unit}" />
-                                <Button Grid.Column="2" Style="{StaticResource SortHeader}" Content="{Binding HeaderLoc}"
-                                        Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Loc}" />
-                                <Button Grid.Column="3" Style="{StaticResource SortHeader}" Content="{Binding HeaderCritica}"
-                                        ToolTip="Críticas activas"
-                                        Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Critica}" />
-                                <Button Grid.Column="4" Style="{StaticResource SortHeader}" Content="{Binding HeaderAlta}"
-                                        ToolTip="Altas activas"
-                                        Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Alta}" />
-                                <Button Grid.Column="5" Style="{StaticResource SortHeader}" Content="{Binding HeaderMedia}"
-                                        ToolTip="Medias activas"
-                                        Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Media}" />
-                                <Button Grid.Column="6" Style="{StaticResource SortHeader}" Content="{Binding HeaderBaja}"
-                                        ToolTip="Bajas activas"
-                                        Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Baja}" />
-                                <Button Grid.Column="7" Style="{StaticResource SortHeader}" Content="{Binding HeaderDebt}"
-                                        ToolTip="Suma de pesos de los hallazgos activos"
-                                        Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Debt}" />
-                                <Button Grid.Column="8" Style="{StaticResource SortHeader}" Content="{Binding HeaderDensity}"
-                                        ToolTip="Deuda por cada mil líneas. «—» es desconocida, no cero."
-                                        Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Density}" />
-                                <TextBlock Grid.Column="9" Text="Estado" FontSize="11" Opacity="0.7"
-                                           VerticalAlignment="Center" Margin="4,0,0,0" />
-                                <TextBlock Grid.Column="10" Text="Acción" FontSize="11" Opacity="0.7"
-                                           VerticalAlignment="Center" Margin="4,0,0,0" />
-                            </Grid>
-
-                            <Border Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}" />
-
-                            <ItemsControl ItemsSource="{Binding Rows}" MaxHeight="560">
-                                <ItemsControl.Template>
-                                    <ControlTemplate TargetType="ItemsControl">
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                                      CanContentScroll="True">
-                                            <ItemsPresenter />
-                                        </ScrollViewer>
-                                    </ControlTemplate>
-                                </ItemsControl.Template>
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <VirtualizingStackPanel />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="0,3">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="1.4*" />
-                                                <ColumnDefinition Width="2.2*" />
-                                                <ColumnDefinition Width="70" />
-                                                <ColumnDefinition Width="42" />
-                                                <ColumnDefinition Width="42" />
-                                                <ColumnDefinition Width="42" />
-                                                <ColumnDefinition Width="42" />
-                                                <ColumnDefinition Width="70" />
-                                                <ColumnDefinition Width="86" />
-                                                <ColumnDefinition Width="1.6*" />
-                                                <ColumnDefinition Width="86" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="{Binding Module}" Style="{StaticResource Cell}"
-                                                       Margin="4,0,6,0" />
-                                            <Button Grid.Column="1" Style="{StaticResource LinkButton}"
-                                                    HorizontalContentAlignment="Left"
-                                                    Content="{Binding Unit}"
-                                                    ToolTip="{Binding Path}"
-                                                    Command="{Binding DataContext.ShowFindingsForCommand,
-                                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding Source}" />
-                                            <TextBlock Grid.Column="2" Text="{Binding LocText}" Style="{StaticResource Cell}" />
-                                            <TextBlock Grid.Column="3" Text="{Binding Critica}" Style="{StaticResource Cell}" />
-                                            <TextBlock Grid.Column="4" Text="{Binding Alta}" Style="{StaticResource Cell}" />
-                                            <TextBlock Grid.Column="5" Text="{Binding Media}" Style="{StaticResource Cell}" />
-                                            <TextBlock Grid.Column="6" Text="{Binding Baja}" Style="{StaticResource Cell}" />
-                                            <TextBlock Grid.Column="7" Text="{Binding Debt}" Style="{StaticResource Cell}"
-                                                       FontWeight="SemiBold" />
-                                            <TextBlock Grid.Column="8" Text="{Binding DensityText}" Style="{StaticResource Cell}" />
-                                            <TextBlock Grid.Column="9" Text="{Binding State}" Style="{StaticResource Cell}"
-                                                       Margin="4,0,0,0" Opacity="0.8" />
-                                            <Button Grid.Column="10" Style="{StaticResource LinkButton}"
-                                                    HorizontalContentAlignment="Left"
-                                                    Content="Auditar"
-                                                    ToolTip="Abre el inventario con esta unidad marcada"
-                                                    Command="{Binding DataContext.AuditCommand,
-                                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding Source}" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-
-                            <ItemsControl ItemsSource="{Binding Legend}" Margin="0,12,0,0"
-                                          ItemTemplate="{StaticResource LegendEntry}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                            </ItemsControl>
-                        </StackPanel>
-                    </ui:Card>
-                </StackPanel>
+                <TextBlock Text="Todavía no hay mapa" Style="{StaticResource BlockTitle}" />
+                <TextBlock Text="{Binding EmptyReason}" Style="{StaticResource BlockHint}" />
             </StackPanel>
+        </ui:Card>
+
+        <!-- ==================== El mapa ====================
+             El mapa sí desplaza la página: es alto fijo más leyenda, y en una ventana baja hay
+             que poder llegar a la leyenda. La tabla, en cambio, NO va aquí dentro (ver abajo). -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,18,0">
+            <ScrollViewer.Visibility>
+                <MultiBinding Converter="{StaticResource AllTrueToVisibility}">
+                    <Binding Path="IsEmpty" Converter="{StaticResource InverseBool}" />
+                    <Binding Path="TableMode" Converter="{StaticResource InverseBool}" />
+                </MultiBinding>
+            </ScrollViewer.Visibility>
+            <ui:Card Style="{StaticResource Block}">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                            <!-- Migas: dónde se está y cómo se vuelve. -->
+                            <StackPanel Orientation="Horizontal">
+                                <Button Style="{StaticResource LinkButton}"
+                                        Command="{Binding ZoomOutCommand}"
+                                        Content="{Binding SelectedApp.Name}"
+                                        Visibility="{Binding IsZoomed, Converter={StaticResource BoolToVisibility}}"
+                                        ToolTip="Volver a la aplicación entera" />
+                                <TextBlock Text=" › " FontSize="15" VerticalAlignment="Center" Opacity="0.6"
+                                           Visibility="{Binding IsZoomed, Converter={StaticResource BoolToVisibility}}" />
+                                <TextBlock Text="{Binding ZoomedModule}" Style="{StaticResource BlockTitle}"
+                                           Visibility="{Binding IsZoomed, Converter={StaticResource BoolToVisibility}}" />
+                                <TextBlock Text="Módulos y unidades" Style="{StaticResource BlockTitle}"
+                                           Visibility="{Binding IsZoomed, Converter={StaticResource InverseBoolToVisibility}}" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding ScaleCaption}" Style="{StaticResource BlockHint}" />
+                            <TextBlock Text="{Binding Summary}" Style="{StaticResource BlockHint}" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Style="{StaticResource BlockHint}" MaxWidth="230"
+                                   Text="Un clic amplía el módulo; ampliado, un clic abre los hallazgos de la unidad y un doble clic la lleva a auditar." />
+                    </Grid>
+
+                    <Border Style="{StaticResource Warning}"
+                            Visibility="{Binding CoverageWarning, Converter={StaticResource NotEmptyToVisibility}}">
+                        <TextBlock Text="{Binding CoverageWarning}" FontSize="12" TextWrapping="Wrap" />
+                    </Border>
+
+                    <!-- Alto fijo: el treemap reparte el área que se le da, y dentro de un
+                         StackPanel sin alto pedido se quedaría en cero. -->
+                    <controls:Treemap Height="520" Margin="0,12,0,0"
+                                      Groups="{Binding Groups}"
+                                      ClusterFactory="{Binding ClusterFactory}"
+                                      UnknownFill="{Binding UnknownFill}"
+                                      SurfaceBrush="{Binding SurfaceBrush}"
+                                      StrokeBrush="{Binding StrokeBrush}"
+                                      LabelBrush="{Binding LabelBrush}"
+                                      MutedBrush="{Binding MutedBrush}"
+                                      TileCommand="{Binding TileCommand}"
+                                      ActivateCommand="{Binding ActivateCommand}" />
+
+                    <ItemsControl ItemsSource="{Binding Legend}" Margin="0,12,0,0"
+                                  ItemTemplate="{StaticResource LegendEntry}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </StackPanel>
+            </ui:Card>
         </ScrollViewer>
+
+        <!-- ==================== La tabla equivalente ====================
+             UN SOLO SCROLL. La tabla NO vive dentro del ScrollViewer de la página: ocupa el alto
+             que queda, y desplaza ella sola. Anidada, salían dos barras solapadas y la rueda no
+             sabía a quién obedecer — el patrón de «el hijo cede al padre al llegar al tope» doma
+             el síntoma pero no lo quita, así que aquí se quita el anidamiento. -->
+        <ui:Card Grid.Row="2" Margin="0,0,18,14" Padding="14,12">
+            <ui:Card.Visibility>
+                <MultiBinding Converter="{StaticResource AllTrueToVisibility}">
+                    <Binding Path="IsEmpty" Converter="{StaticResource InverseBool}" />
+                    <Binding Path="TableMode" />
+                </MultiBinding>
+            </ui:Card.Visibility>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0">
+                    <TextBlock Text="Las mismas unidades, en columnas" Style="{StaticResource BlockTitle}" />
+                    <TextBlock Style="{StaticResource BlockHint}"
+                               Text="Pulsa una cabecera para ordenar; púlsala otra vez para invertir. Un clic en el nombre abre sus hallazgos." />
+                    <TextBlock Text="{Binding Summary}" Style="{StaticResource BlockHint}" />
+                </StackPanel>
+
+                <!-- Cabecera fija: está FUERA del scroll, así que no hace falta domarla con un
+                     sticky. Cada columna se alinea como sus celdas — el desajuste entre una
+                     cabecera a la izquierda y un número a la derecha es lo que hacía que la tabla
+                     no pareciera una tabla. -->
+                <Grid Grid.Row="1" Margin="0,12,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="{StaticResource StripeWidth}" />
+                        <ColumnDefinition Width="1.3*" MinWidth="90" />
+                        <ColumnDefinition Width="2*" MinWidth="120" />
+                        <ColumnDefinition Width="72" />
+                        <ColumnDefinition Width="38" />
+                        <ColumnDefinition Width="38" />
+                        <ColumnDefinition Width="38" />
+                        <ColumnDefinition Width="38" />
+                        <ColumnDefinition Width="66" />
+                        <ColumnDefinition Width="82" />
+                        <ColumnDefinition Width="1.7*" MinWidth="130" />
+                        <ColumnDefinition Width="78" />
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="1" Style="{StaticResource SortHeader}" Content="{Binding HeaderModule}"
+                            Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Module}" />
+                    <Button Grid.Column="2" Style="{StaticResource SortHeader}" Content="{Binding HeaderUnit}"
+                            Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Unit}" />
+                    <Button Grid.Column="3" Style="{StaticResource SortHeaderRight}" Content="{Binding HeaderLoc}"
+                            ToolTip="Líneas de código de la unidad"
+                            Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Loc}" />
+                    <Button Grid.Column="4" Style="{StaticResource SortHeaderRight}" Content="{Binding HeaderCritica}"
+                            ToolTip="Críticas activas"
+                            Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Critica}" />
+                    <Button Grid.Column="5" Style="{StaticResource SortHeaderRight}" Content="{Binding HeaderAlta}"
+                            ToolTip="Altas activas"
+                            Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Alta}" />
+                    <Button Grid.Column="6" Style="{StaticResource SortHeaderRight}" Content="{Binding HeaderMedia}"
+                            ToolTip="Medias activas"
+                            Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Media}" />
+                    <Button Grid.Column="7" Style="{StaticResource SortHeaderRight}" Content="{Binding HeaderBaja}"
+                            ToolTip="Bajas activas"
+                            Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Baja}" />
+                    <Button Grid.Column="8" Style="{StaticResource SortHeaderRight}" Content="{Binding HeaderDebt}"
+                            ToolTip="Suma de pesos de los hallazgos activos: Crítica 10 · Alta 5 · Media 2 · Baja 1"
+                            Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Debt}" />
+                    <Button Grid.Column="9" Style="{StaticResource SortHeaderRight}" Content="{Binding HeaderDensity}"
+                            ToolTip="Deuda por cada mil líneas. «—» es desconocida, no cero."
+                            Command="{Binding SortByCommand}" CommandParameter="{x:Static vm:HeatSort.Density}" />
+                    <TextBlock Grid.Column="10" Text="Estado" Style="{StaticResource ColumnHead}" />
+                    <TextBlock Grid.Column="11" Text="Acción" Style="{StaticResource ColumnHead}" />
+                </Grid>
+
+                <Border Grid.Row="2" Height="1" Background="{DynamicResource CardStrokeColorDefaultBrush}" />
+
+                <!-- El ÚNICO scroll de la vista en este modo. Virtualizado: 925 filas. -->
+                <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              CanContentScroll="True"
+                              KeyboardNavigation.DirectionalNavigation="Contained">
+                    <ItemsControl ItemsSource="{Binding Rows}"
+                                  VirtualizingStackPanel.IsVirtualizing="True"
+                                  VirtualizingStackPanel.VirtualizationMode="Recycling">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Height="26">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="{StaticResource StripeWidth}" />
+                                        <ColumnDefinition Width="1.3*" MinWidth="90" />
+                                        <ColumnDefinition Width="2*" MinWidth="120" />
+                                        <ColumnDefinition Width="72" />
+                                        <ColumnDefinition Width="38" />
+                                        <ColumnDefinition Width="38" />
+                                        <ColumnDefinition Width="38" />
+                                        <ColumnDefinition Width="38" />
+                                        <ColumnDefinition Width="66" />
+                                        <ColumnDefinition Width="82" />
+                                        <ColumnDefinition Width="1.7*" MinWidth="130" />
+                                        <ColumnDefinition Width="78" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- La franja de densidad: el mismo color que su celda en el
+                                         mapa, o el gris tramado si nadie la ha auditado. -->
+                                    <Rectangle Grid.Column="0" Width="5" RadiusX="2.5" RadiusY="2.5"
+                                               HorizontalAlignment="Left" Margin="0,3"
+                                               Fill="{Binding Stripe}"
+                                               ToolTip="{Binding State}" />
+
+                                    <controls:MiddleEllipsisText Grid.Column="1" Text="{Binding Module}"
+                                                                 Margin="6,0,8,0" FontSize="12"
+                                                                 VerticalAlignment="Center"
+                                                                 Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <Button Grid.Column="2" Style="{StaticResource RowLink}"
+                                            Command="{Binding DataContext.ShowFindingsForCommand,
+                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding Source}">
+                                        <controls:MiddleEllipsisText Text="{Binding Unit}"
+                                                                     FullText="{Binding Path}"
+                                                                     FontSize="12"
+                                                                     VerticalAlignment="Center"
+                                                                     Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                    </Button>
+
+                                    <TextBlock Grid.Column="3" Text="{Binding LocText}" Style="{StaticResource Number}" />
+                                    <TextBlock Grid.Column="4" Text="{Binding Critica}" Style="{StaticResource Number}" />
+                                    <TextBlock Grid.Column="5" Text="{Binding Alta}" Style="{StaticResource Number}" />
+                                    <TextBlock Grid.Column="6" Text="{Binding Media}" Style="{StaticResource Number}" />
+                                    <TextBlock Grid.Column="7" Text="{Binding Baja}" Style="{StaticResource Number}" />
+                                    <TextBlock Grid.Column="8" Text="{Binding Debt}" Style="{StaticResource Number}"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Grid.Column="9" Text="{Binding DensityText}" Style="{StaticResource Number}" />
+
+                                    <controls:MiddleEllipsisText Grid.Column="10" Text="{Binding State}"
+                                                                 Margin="10,0,8,0" FontSize="12"
+                                                                 VerticalAlignment="Center"
+                                                                 Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                                    <Button Grid.Column="11" Style="{StaticResource LinkButton}"
+                                            HorizontalContentAlignment="Left"
+                                            Content="Auditar"
+                                            ToolTip="Abre el inventario con esta unidad marcada"
+                                            Command="{Binding DataContext.AuditCommand,
+                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding Source}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <ItemsControl Grid.Row="4" ItemsSource="{Binding Legend}" Margin="0,12,0,0"
+                              ItemTemplate="{StaticResource LegendEntry}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </Grid>
+        </ui:Card>
     </Grid>
 </UserControl>
