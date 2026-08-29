@@ -451,7 +451,8 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>
     /// V9 Mapa de calor (F10): dónde arde el código, con el área por tamaño y el color por
-    /// densidad de deuda.
+    /// densidad de deuda. <b>Sin botón en la barra</b> ahora mismo: el comando se queda puesto
+    /// para que volver a enseñar la vista sea descomentar el botón de <c>MainWindow.xaml</c>.
     /// </summary>
     [RelayCommand]
     private Task ShowHeatmap() => Navigation.NavigateToAsync<HeatmapViewModel>();

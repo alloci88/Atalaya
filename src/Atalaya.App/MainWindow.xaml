@@ -139,13 +139,9 @@
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Left"
                         Margin="0,2" />
-                    <ui:Button
-                        Command="{Binding ShowHeatmapCommand}"
-                        Content="Mapa de calor"
-                        Appearance="Secondary"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Margin="0,2" />
+                    <!-- V9 Mapa de calor (F10): oculto de la navegación. La vista, su modelo y
+                         la consulta siguen en el código intactos; lo único que se quita es la
+                         puerta de entrada, así que volver a enseñarlo es descomentar este botón. -->
                     <ui:Button
                         Command="{Binding ShowReportsCommand}"
                         Content="Informes"
