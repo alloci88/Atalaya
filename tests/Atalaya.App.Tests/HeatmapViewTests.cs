@@ -138,10 +138,14 @@ public sealed class HeatmapViewTests : IDisposable
         }
     }
 
-    /// <summary>Una app cuyos módulos comparten prefijo; con «Documents», ya no lo comparten todos.</summary>
-    private void Prefixed(bool withOutsider = false)
+    /// <summary>
+    /// Una app llamada XBLAST cuyos módulos llevan su nombre. Con <paramref name="withOutsider"/>
+    /// se añade el que NO lo lleva —el <c>Documents</c> real del hub— y con
+    /// <paramref name="withClash"/>, uno que al acortarse chocaría con otro.
+    /// </summary>
+    private void Prefixed(bool withOutsider = false, bool withClash = false)
     {
-        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "XBLAST", RepoUrl = "u/app", CurrentCycle = 1 });
+        _hub.Store.WriteApp(new AppConfig { Slug = "xblast", Name = "XBLAST", RepoUrl = "u/x", CurrentCycle = 1 });
 
         var units = new List<InventoryUnit>
         {
@@ -155,7 +159,12 @@ public sealed class HeatmapViewTests : IDisposable
             units.Add(Unit("Documents/D.cs", "Documents", 500));
         }
 
-        _hub.Store.WriteInventory("app", new InventoryCycle { CycleN = 1, Units = units });
+        if (withClash)
+        {
+            units.Add(Unit("Core/E.cs", "Core", 400));
+        }
+
+        _hub.Store.WriteInventory("xblast", new InventoryCycle { CycleN = 1, Units = units });
     }
 
     private static string Hex(Brush? brush)
@@ -1029,22 +1038,56 @@ public sealed class HeatmapViewTests : IDisposable
         untouched.DensityTooltip.Should().Contain("DESCONOCIDA");
     }
 
-    // ============================================ El prefijo común de los módulos
+    // ============================================ El nombre de la app, fuera de las bandas
 
     /// <summary>
-    /// Con un prefijo que comparten todos, las bandas del mapa lo omiten y la cabecera declara
-    /// cuál es. Omitir sin decirlo obligaría a adivinar qué falta.
+    /// Las bandas se rotulan sin el nombre de la aplicación, y la cabecera lo explica con un
+    /// ejemplo de la propia app. Omitir sin decirlo obligaría a adivinar qué falta.
     /// </summary>
     [Fact]
-    public async Task Las_bandas_omiten_el_prefijo_comun_y_la_cabecera_lo_declara()
+    public async Task Las_bandas_se_rotulan_sin_el_nombre_de_la_aplicacion()
     {
         Prefixed();
         HeatmapViewModel vm = Vm();
         await vm.LoadAsync();
 
         vm.Groups.Select(g => g.ShortName).Should().BeEquivalentTo(new[] { "Core", "Utils", "DataBase" });
-        vm.PrefixNotice.Should().Contain("XBLAST*");
+        vm.PrefixNotice.Should().Contain("sin el nombre de la aplicación");
+        vm.PrefixNotice.Should().Contain("XBLASTCore → Core");
         vm.PrefixNotice.Should().Contain("tooltip");
+    }
+
+    /// <summary>
+    /// <b>El caso real de xblast.</b> Los que llevan el nombre se acortan y <c>Documents</c> sale
+    /// entero — y la cabecera lo dice, para que nadie lea «Documents» y crea que le falta algo.
+    /// Este es el caso que el criterio anterior (prefijo común a todos) perdía por completo.
+    /// </summary>
+    [Fact]
+    public async Task El_modulo_que_no_lleva_el_nombre_sale_entero_y_se_dice()
+    {
+        Prefixed(withOutsider: true);
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+
+        vm.Groups.Single(g => g.Name == "Documents").ShortName.Should().BeNull();
+        vm.Groups.Single(g => g.Name == "XBLASTCore").ShortName.Should().Be("Core");
+        vm.PrefixNotice.Should().Contain("Los que no lo llevan salen enteros.");
+    }
+
+    /// <summary>
+    /// Si dos módulos acabaran rotulados igual, ninguno de los dos se acorta: dos bandas
+    /// indistinguibles son peores que un nombre largo.
+    /// </summary>
+    [Fact]
+    public async Task Dos_modulos_que_chocarian_se_quedan_los_dos_con_su_nombre()
+    {
+        Prefixed(withClash: true);
+        HeatmapViewModel vm = Vm();
+        await vm.LoadAsync();
+
+        vm.Groups.Single(g => g.Name == "XBLASTCore").ShortName.Should().BeNull();
+        vm.Groups.Single(g => g.Name == "Core").ShortName.Should().BeNull();
+        vm.Groups.Single(g => g.Name == "XBLASTUtils").ShortName.Should().Be("Utils");
     }
 
     /// <summary>
@@ -1065,13 +1108,13 @@ public sealed class HeatmapViewTests : IDisposable
         vm.Rows.Select(r => r.Module).Should().OnlyContain(m => m.StartsWith("XBLAST"));
 
         // Y el inventario del hub no se ha tocado: el módulo se sigue llamando igual en disco.
-        _hub.Store.TryReadInventory("app", 1)!.Units
+        _hub.Store.TryReadInventory("xblast", 1)!.Units
             .Should().OnlyContain(u => u.Module.StartsWith("XBLAST"));
     }
 
     /// <summary>Ampliado no se omite nada: hay una banda a lo ancho de la ventana.</summary>
     [Fact]
-    public async Task Ampliado_a_un_modulo_no_se_omite_el_prefijo()
+    public async Task Ampliado_a_un_modulo_no_se_omite_el_nombre_de_la_aplicacion()
     {
         Prefixed();
         HeatmapViewModel vm = Vm();
@@ -1085,27 +1128,12 @@ public sealed class HeatmapViewTests : IDisposable
     }
 
     /// <summary>
-    /// El caso real de xblast: veintiún módulos comparten «XBLAST» y el vigesimosegundo se llama
-    /// «Documents». No se omite en ninguno, y no se declara nada.
-    /// </summary>
-    [Fact]
-    public async Task Si_un_solo_modulo_no_comparte_el_prefijo_los_nombres_quedan_intactos()
-    {
-        Prefixed(withOutsider: true);
-        HeatmapViewModel vm = Vm();
-        await vm.LoadAsync();
-
-        vm.Groups.Should().OnlyContain(g => g.ShortName == null);
-        vm.PrefixNotice.Should().BeEmpty();
-    }
-
-    /// <summary>
     /// <b>La lámina exportada escribe los nombres enteros.</b> Quien la recibe por correo no ha
     /// visto la declaración de la cabecera, y un «Core» suelto en una diapositiva no es el módulo
     /// de nadie.
     /// </summary>
     [Fact]
-    public async Task La_lamina_exportada_no_omite_el_prefijo()
+    public async Task La_lamina_exportada_no_omite_el_nombre_de_la_aplicacion()
     {
         Prefixed();
         HeatmapViewModel vm = Vm();

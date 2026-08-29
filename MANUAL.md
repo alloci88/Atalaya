@@ -251,12 +251,15 @@ pegada al número, en la banda y en el tooltip.
   El mapa dice **dónde**; lanzar y confirmar el gasto sigue siendo del Inventario.
 - El **tooltip** de cada celda trae unidad, líneas, hallazgos por severidad, deuda,
   densidad y estado.
-- **Nombres de módulo cortos.** Si **todos** los módulos de la aplicación empiezan por lo
-  mismo (`XBLASTCore`, `XBLASTUtils`…), el mapa omite ese prefijo en las bandas para
-  que quepan, y lo dice arriba: «Módulos de XBLAST*». Basta que **uno solo** no lo
-  comparta para que no se omita en ninguno. El nombre completo sigue estando en el
-  tooltip, en la tabla, en el Inventario y en la imagen exportada — y en el hub no se
-  cambia nada: es solo cómo se rotula la banda.
+- **Los módulos se muestran sin el nombre de la aplicación.** Un módulo de XBLAST que
+  se llama `XBLASTCore` se rotula `Core` en el mapa: el nombre de la app ya está en el
+  título y lo que distingue al módulo es el resto. Los que **no** lo llevan salen
+  enteros —`Documents` sigue siendo `Documents`—, y la cabecera lo explica para que
+  nadie crea que a esa banda le falta algo. Si dos módulos acabaran rotulados igual, no
+  se acorta ninguno de los dos.
+
+  El nombre completo sigue estando en el tooltip, en la tabla, en el Inventario y en la
+  imagen exportada — y en el hub no se cambia nada: es solo cómo se rotula la banda.
 - **Las etiquetas caben o no están.** El nombre de una unidad se escribe entero; si no
   cabe, acortado **por el medio** (`Controller…ration.cs`), que es como se distinguen
   dos ficheros que empiezan igual; y si tampoco cabe así, no se escribe — el tooltip lo

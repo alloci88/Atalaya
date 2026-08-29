@@ -188,15 +188,19 @@ public sealed partial class HeatmapViewModel : ViewModelBase
     [ObservableProperty] private string _coverageWarning = string.Empty;
 
     /// <summary>
-    /// «Módulos de XBLAST*»: qué prefijo se está omitiendo en las bandas del mapa (F10.1b). Vacío
-    /// cuando no se omite nada. <b>Se declara una vez y en la cabecera</b>, no en cada banda:
-    /// omitir sin decirlo obligaría a adivinar qué falta, y decirlo veintidós veces sería el mismo
-    /// ruido que se está quitando.
+    /// Qué se está omitiendo en las bandas del mapa (F10.1c), con un ejemplo real de esta
+    /// aplicación. Vacío cuando no se omite nada. <b>Se declara una vez y en la cabecera</b>, no en
+    /// cada banda: omitir sin decirlo obligaría a adivinar qué falta, y decirlo veintidós veces
+    /// sería el mismo ruido que se está quitando.
     /// </summary>
     [ObservableProperty] private string _prefixNotice = string.Empty;
 
-    /// <summary>El prefijo vigente. Vacío en la vista ampliada: ahí el sitio no escasea.</summary>
-    private string _prefix = string.Empty;
+    /// <summary>
+    /// Cómo se rotula cada módulo en la banda: su nombre corto, o ausente si va entero. Vacío en la
+    /// vista ampliada, donde el sitio no escasea.
+    /// </summary>
+    private IReadOnlyDictionary<string, string?> _shortNames =
+        new Dictionary<string, string?>(StringComparer.Ordinal);
 
     [ObservableProperty] private bool _isEmpty = true;
 
@@ -299,18 +303,16 @@ public sealed partial class HeatmapViewModel : ViewModelBase
 
         var modules = _zoom is null ? _view.Modules : new List<HeatModule> { _zoom };
 
-        // El prefijo se calcula sobre TODOS los módulos de la aplicación —no sobre los que se
-        // estén viendo— y solo se aplica en la vista completa: ampliado hay una sola banda a lo
-        // ancho de la ventana, así que el sitio no escasea y no hay nada que omitir. Es cálculo
-        // de vista: no se guarda ni toca el hub.
-        _prefix = _zoom is null
-            ? ModulePrefix.Common(_view.Modules.Select(m => m.Name))
-            : string.Empty;
+        // El rótulo se calcula sobre TODOS los módulos de la aplicación —no sobre los que se estén
+        // viendo, porque la colisión que hay que evitar es entre cualesquiera dos— y solo se
+        // aplica en la vista completa: ampliado hay una sola banda a lo ancho de la ventana, así
+        // que el sitio no escasea y no hay nada que omitir. Es cálculo de vista: no se guarda ni
+        // toca el hub.
+        _shortNames = _zoom is null
+            ? ModulePrefix.DisplayNames(_view.AppName, _view.Slug, _view.Modules.Select(m => m.Name))
+            : new Dictionary<string, string?>(StringComparer.Ordinal);
 
-        PrefixNotice = _prefix.Length == 0
-            ? string.Empty
-            : $"Módulos de {_prefix}* · en el mapa se omite el prefijo común; "
-              + "el nombre entero está en el tooltip y en la tabla.";
+        PrefixNotice = Notice();
 
         Groups = modules.Select(m => Group(m, metric)).ToList();
         ClusterFactory = tiny => Cluster(tiny, metric);
@@ -343,6 +345,29 @@ public sealed partial class HeatmapViewModel : ViewModelBase
               + "nadie las ha auditado, así que su densidad es DESCONOCIDA, no cero.";
     }
 
+    /// <summary>
+    /// La frase que explica la omisión, con un ejemplo <b>de esta aplicación</b> en vez de una
+    /// regla abstracta: «XBLASTCore → Core» se entiende sin releerla. Y dice lo que pasa con los
+    /// que no la llevan, que es lo que evita que alguien lea «Documents» y crea que le falta algo.
+    /// </summary>
+    private string Notice()
+    {
+        var elided = _shortNames.Where(p => p.Value is not null).ToList();
+        if (elided.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        KeyValuePair<string, string?> sample = elided[0];
+        string rest = _shortNames.Count - elided.Count == 0
+            ? string.Empty
+            : " Los que no lo llevan salen enteros.";
+
+        return $"Los módulos se muestran sin el nombre de la aplicación ({sample.Key} → {sample.Value})."
+               + rest
+               + " El nombre completo está en el tooltip y en la tabla.";
+    }
+
     private HeatGroup Group(HeatModule module, HeatMetric metric)
         => new(
             module.Name,
@@ -354,7 +379,7 @@ public sealed partial class HeatmapViewModel : ViewModelBase
             ModuleTip(module),
             module,
             module.Units.Select(u => Cell(u, metric)).ToList(),
-            ShortName: _prefix.Length == 0 ? null : ModulePrefix.Elide(module.Name, _prefix));
+            ShortName: _shortNames.TryGetValue(module.Name, out string? brief) ? brief : null);
 
     private HeatCell Cell(HeatUnit unit, HeatMetric metric)
         => new(

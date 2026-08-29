@@ -6241,3 +6241,83 @@ En `HeatmapViewTests`: las bandas omiten y la cabecera lo declara; el nombre com
 el tooltip, en la tabla y **en el inventario del hub tras renderizar**; ampliado no se omite ni se
 declara; con un módulo fuera del prefijo los nombres quedan intactos; y la lámina exportada lleva
 `AllowShortNames` en false y escribe los nombres enteros.
+
+## F10.1c — Lo que se omite es el nombre de la aplicación
+
+Sustituye el criterio de F10.1b (prefijo común a todos los módulos), que en XBLAST no llegaba a
+activarse nunca. **D-656 y D-657 quedan superadas por lo que sigue**; D-658 se cierra aquí.
+
+### D-660 — El nombre de la app, y por qué es mejor criterio que el prefijo común
+
+Se omite en las bandas el **nombre de la aplicación** cuando el módulo empieza por él
+(`XBLASTCore` → `Core`), y los que no lo llevan salen enteros (`Documents` sigue siendo
+`Documents`). Se comparan el `Name` y el `Slug` de la app, sin distinguir mayúsculas; gana el que
+encabece más módulos, que casi siempre son la misma palabra.
+
+**Las tres razones, y son distintas.**
+
+1. **Es semánticamente cierto.** Un módulo de XBLAST llamado `XBLASTCore` está repitiendo el
+   nombre de su aplicación en cada banda de un mapa que ya se titula «XBLAST»; lo que lo distingue
+   de sus hermanos es `Core`. El prefijo común, en cambio, era una coincidencia de cadenas: podía
+   dar `XBLASTCo` y había que defenderse de ello con una guarda.
+2. **Se explica en una frase.** «Los módulos se muestran sin el nombre de la aplicación». La del
+   prefijo común («se omite la parte inicial que todos comparten») obliga a pensar antes de
+   entenderla, y no dice qué pasaría si uno no la compartiera.
+3. **Resuelve el caso mixto sin ambigüedad estadística**, que era el que bloqueaba F10.1b. Quien
+   lee `Documents` entiende que ese módulo **no lleva el nombre de la app**, no que le falte algo.
+   Con «lo comparten 21 de 22» esa misma banda habría sido indistinguible de un nombre acortado.
+
+Se conservan todas las guardas: el nombre a omitir tiene que medir ≥3 caracteres, el resto ≥2, y
+no se corta a mitad de palabra —`XBLASTern` no es un módulo llamado «ern»—. Ampliado a un módulo
+no se omite (una banda a lo ancho de la ventana), y la lámina exportada tampoco
+(`AllowShortNames = false`): quien la recibe por correo no ha visto la declaración.
+
+**Y sigue sin tocar el dato.** Cálculo de vista, por aplicación, en tiempo de render; el nombre
+completo se conserva en el tooltip, la tabla, el inventario, las migas y el PNG. Hay test que lee
+el inventario del hub después de renderizar para afirmarlo.
+
+### D-661 — Dos bandas no pueden acabar rotuladas igual
+
+Guarda nueva, y es la que hace seguro el criterio: una app «XBLAST» con los módulos `XBLASTCore` y
+`Core` dejaría **dos bandas «Core»**, y dos módulos indistinguibles son peores que un nombre largo.
+Cuando dos rótulos coinciden —sin distinguir mayúsculas— **los dos vuelven a su nombre entero**; el
+resto se queda acortado.
+
+Se comprueba contra los rótulos finales y no solo entre los acortados, porque la colisión puede ser
+con un módulo que no se toca (`Core` a secas). Y se repite hasta que nada cambia: un nombre que
+vuelve a ser largo podría, en teoría, chocar con el corto de un tercero. Termina siempre, porque
+cada vuelta solo convierte cortos en largos.
+
+### D-662 — Lo medido contra el clon real: ahora sí se activa
+
+Ejecutando la vista contra una copia del hub (norma **N-2**): **22 módulos, 21 acortados**.
+
+| | |
+|---|---|
+| Acortados | `XBLASTCore`→`Core`, `XBLASTQuickUtils`→`QuickUtils`, `XBLASTCustomRibbonControl`→`CustomRibbonControl`, `XBLASTInstallerBuilder`→`InstallerBuilder`… |
+| Entero | `Documents` — no lleva el nombre de la aplicación |
+| Aviso | «Los módulos se muestran sin el nombre de la aplicación (XBLASTCore → Core). Los que no lo llevan salen enteros. El nombre completo está en el tooltip y en la tabla.» |
+| Tabla y hub | `XBLASTCore` y compañía, intactos |
+
+Renderizado a 1090×420 (el ancho del mapa a 1366×768), las bandas que antes decían «XB…r»,
+«XBLA…ity», «XBL…ab» ahora dicen **Core, DataBase, QuickUtils, Common, OpenPit, Types, Utils,
+Density, MatLab, Log** — enteras. Siguen acortándose las cuatro o cinco más estrechas
+(«Und…nd», «Lo…on»), que son bandas de sesenta píxeles y no hay nombre que quepa ahí.
+
+La frase del aviso lleva un ejemplo **de la propia aplicación** y no una regla abstracta: se
+entiende sin releerla, y sale del primer módulo acortado, así que siempre es cierto.
+
+### D-663 — Cobertura (18 tests, 1302 en total, todo en verde)
+
+`ModulePrefixTests` reescrito al criterio nuevo: el caso real de xblast con los 22 módulos
+literales (21 acortados + `Documents` intacto); la caja no importa; entre nombre y slug gana el que
+reconoce más módulos; las tres guardas heredadas (≥3, mitad de palabra, resto ≥2); **la colisión,
+en sus tres formas** —acortado contra entero, acortado contra acortado, y sin distinguir
+mayúsculas—; sin ningún módulo que lleve el nombre no se toca nada; sin nombre ni slug no se cae; y
+con un solo módulo SÍ se acorta, que es la diferencia con el criterio anterior — llevar el nombre
+de la app es un hecho de ese módulo, no una propiedad del conjunto.
+
+En `HeatmapViewTests`: las bandas se rotulan sin el nombre y la cabecera lo explica con su ejemplo;
+el módulo que no lo lleva sale entero y se dice; dos que chocarían se quedan los dos con su nombre;
+el nombre completo sobrevive en tooltip, tabla y **en el inventario del hub tras renderizar**;
+ampliado no se omite ni se declara; y la lámina exportada escribe los nombres enteros.

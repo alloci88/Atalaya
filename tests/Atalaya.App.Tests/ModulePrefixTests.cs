@@ -5,121 +5,184 @@ using Xunit;
 namespace Atalaya.App.Tests;
 
 /// <summary>
-/// F10.1b — el prefijo común de los módulos, que el mapa omite en sus bandas.
+/// F10.1c — el nombre de la aplicación, omitido en las bandas del mapa.
 /// <para>
-/// Lo que estos tests protegen no es el ahorro de seis letras: es que la omisión sea
-/// <b>todo-o-nada</b>. Un mapa donde unas bandas dicen «Core» y otras «Documents» sin que se sepa
-/// cuáles llevan prefijo omitido es peor que no omitir nada, porque no hay forma de deshacerlo
-/// leyendo.
+/// Lo que protegen estos tests no es el ahorro de seis letras: es que lo omitido sea siempre un
+/// <b>hecho</b> —ese módulo lleva el nombre de su app— y no una estadística. Por eso el caso mixto
+/// funciona: quien lee «Documents» entiende que ese módulo no lleva el nombre de la aplicación, no
+/// que le falte algo.
 /// </para>
 /// </summary>
 public sealed class ModulePrefixTests
 {
-    /// <summary>El caso para el que existe: veintiuna carpetas que empiezan igual.</summary>
+    private static IReadOnlyDictionary<string, string?> Names(
+        string app, string slug, params string[] modules)
+        => ModulePrefix.DisplayNames(app, slug, modules);
+
+    // ============================================ El caso real
+
+    /// <summary>
+    /// XBLAST, tal y como está en el hub: veintiún módulos que llevan el nombre de la aplicación y
+    /// <c>Documents</c>, que no. Los veintiuno se acortan; <c>Documents</c> sale entero. Es
+    /// exactamente el caso que el criterio anterior —prefijo común a todos— perdía por completo.
+    /// </summary>
     [Fact]
-    public void Un_prefijo_que_comparten_todos_se_detecta()
+    public void El_caso_de_xblast_acorta_los_que_llevan_el_nombre_y_deja_el_otro_entero()
     {
-        var modules = new[] { "XBLASTCore", "XBLASTCommon", "XBLASTDataBase", "XBLASTUtils" };
+        var modules = new[]
+        {
+            "Documents", "XBLASTCommon", "XBLASTCore", "XBLASTCustomRibbonControl", "XBLASTDataBase",
+            "XBLASTDensity", "XBLASTInstaller", "XBLASTInstallerBuilder", "XBLASTLocalization",
+            "XBLASTLog", "XBLASTLogCaller", "XBLASTLogViewer", "XBLASTMatLab", "XBLASTOpenPit",
+            "XBLASTQuickUtils", "XBLASTRecovery", "XBLASTSolver", "XBLASTTypes", "XBLASTUnderground",
+            "XBLASTUpdater", "XBLASTUtils", "XBLASTVersioner",
+        };
 
-        string prefix = ModulePrefix.Common(modules);
+        var display = Names("XBLAST", "xblast", modules);
 
-        prefix.Should().Be("XBLAST");
-        ModulePrefix.Elide("XBLASTCore", prefix).Should().Be("Core");
-        ModulePrefix.Elide("XBLASTDataBase", prefix).Should().Be("DataBase");
+        display.Count(p => p.Value is not null).Should().Be(21);
+        display["Documents"].Should().BeNull("no lleva el nombre de la aplicación: sale entero");
+        display["XBLASTCore"].Should().Be("Core");
+        display["XBLASTQuickUtils"].Should().Be("QuickUtils");
+        display["XBLASTLogViewer"].Should().Be("LogViewer");
+        display["XBLASTVersioner"].Should().Be("Versioner");
+    }
+
+    /// <summary>La caja da igual: la carpeta se llama como la nombró quien la creó.</summary>
+    [Fact]
+    public void No_se_distinguen_mayusculas_al_reconocer_el_nombre()
+    {
+        Names("Nomina", "nomina", "NOMINACore")["NOMINACore"].Should().Be("Core");
+        Names("Nomina", "nomina", "nominaCore")["nominaCore"].Should().Be("Core");
+        Names("Nomina", "nomina", "NominaCore")["NominaCore"].Should().Be("Core");
     }
 
     /// <summary>
-    /// <b>Basta uno que no lo comparta.</b> Es el caso REAL de xblast: veintiún módulos empiezan
-    /// por «XBLAST» y el vigesimosegundo se llama «Documents», así que no se omite nada. Omitir en
-    /// veintiuno y dejar el otro entero haría el mapa ilegible justo donde se quería aclarar.
+    /// Se prueban el nombre y el slug, y gana el que encabece más módulos. Una app llamada «Nómina
+    /// Web» con slug «nomina» tiene carpetas <c>nominaCore</c>: el nombre no casa con ninguna y el
+    /// slug con todas.
     /// </summary>
     [Fact]
-    public void Basta_un_modulo_que_no_lo_comparta_para_que_no_haya_prefijo()
+    public void Entre_el_nombre_y_el_slug_gana_el_que_reconoce_mas_modulos()
     {
-        var modules = new[] { "XBLASTCore", "XBLASTCommon", "XBLASTUtils", "Documents" };
+        var display = Names("Nómina Web", "nomina", "nominaCore", "nominaUtils", "Informes");
 
-        ModulePrefix.Common(modules).Should().BeEmpty();
+        display["nominaCore"].Should().Be("Core");
+        display["nominaUtils"].Should().Be("Utils");
+        display["Informes"].Should().BeNull();
     }
 
-    /// <summary>
-    /// El prefijo se recorta hasta donde acaba una PALABRA. El prefijo común literal de
-    /// <c>XBLASTCore</c> y <c>XBLASTCommon</c> es <c>XBLASTCo</c>, y omitirlo dejaría «re» y
-    /// «mmon», que no son nombres de nada.
-    /// </summary>
+    // ============================================ Las guardas
+
+    /// <summary>Un nombre de aplicación corto no estorba: no hay nada que quitar.</summary>
     [Fact]
-    public void El_prefijo_no_parte_una_palabra_por_la_mitad()
+    public void Un_nombre_de_aplicacion_de_menos_de_tres_caracteres_no_se_omite()
     {
-        var modules = new[] { "XBLASTCore", "XBLASTCommon" };
-
-        string prefix = ModulePrefix.Common(modules);
-
-        prefix.Should().Be("XBLAST", "«XBLASTCo» dejaría «re» y «mmon»");
-        modules.Select(m => ModulePrefix.Elide(m, prefix)).Should().Equal("Core", "Common");
-    }
-
-    /// <summary>Con un prefijo corto no se gana nada y se pierde contexto.</summary>
-    [Fact]
-    public void Un_prefijo_de_menos_de_tres_caracteres_no_se_omite()
-    {
-        ModulePrefix.Common(new[] { "AbCore", "AbUtils" }).Should().BeEmpty();
+        Names("Ax", "ax", "AxCore", "AxUtils").Values.Should().OnlyContain(v => v == null);
         ModulePrefix.MinLength.Should().Be(3);
     }
 
     /// <summary>
-    /// Si a algún módulo no le quedara nada —o casi— después de quitarle el prefijo, no se omite en
-    /// NINGUNO. O vale para todos, o no vale.
+    /// No se parte una palabra: «XBLASTern» no es un módulo llamado «ern», es un nombre que da la
+    /// casualidad de empezar igual.
     /// </summary>
     [Fact]
-    public void Si_algun_modulo_se_quedara_sin_nombre_no_se_omite_en_ninguno()
+    public void No_se_corta_a_mitad_de_palabra()
     {
-        // «Core» se quedaría en cadena vacía.
-        ModulePrefix.Common(new[] { "Core", "CoreUtils", "CoreDataBase" }).Should().BeEmpty();
+        var display = Names("XBLAST", "xblast", "XBLASTern", "XBLASTCore");
 
-        // Y aquí en una sola letra.
-        ModulePrefix.Common(new[] { "DatosA", "DatosBCD", "DatosEFG" }).Should().BeEmpty();
+        display["XBLASTern"].Should().BeNull();
+        display["XBLASTCore"].Should().Be("Core", "el de al lado sí se acorta: la guarda es por módulo");
+    }
+
+    /// <summary>Y al que se quedaría sin nombre —o casi— se le deja el suyo.</summary>
+    [Fact]
+    public void Al_que_se_quedaria_sin_nombre_se_le_deja_entero()
+    {
+        var display = Names("XBLAST", "xblast", "XBLAST", "XBLASTX", "XBLASTCore");
+
+        display["XBLAST"].Should().BeNull("se quedaría en nada");
+        display["XBLASTX"].Should().BeNull("se quedaría en una letra");
+        display["XBLASTCore"].Should().Be("Core");
+    }
+
+    // ============================================ La colisión
+
+    /// <summary>
+    /// <b>Dos bandas no pueden acabar rotuladas igual.</b> Acortar <c>XBLASTCore</c> dejaría dos
+    /// «Core» en el mapa, y dos módulos indistinguibles son peores que un nombre largo: vuelven
+    /// los DOS a su nombre entero.
+    /// </summary>
+    [Fact]
+    public void Si_dos_modulos_quedaran_con_el_mismo_nombre_no_se_acorta_ninguno_de_los_dos()
+    {
+        var display = Names("XBLAST", "xblast", "XBLASTCore", "Core", "XBLASTUtils");
+
+        display["XBLASTCore"].Should().BeNull("chocaría con el módulo «Core»");
+        display["Core"].Should().BeNull();
+        display["XBLASTUtils"].Should().Be("Utils", "el que no choca se queda acortado");
+    }
+
+    /// <summary>La colisión tampoco distingue mayúsculas: dos bandas casi iguales son un problema.</summary>
+    [Fact]
+    public void La_colision_no_distingue_mayusculas()
+    {
+        var display = Names("App", "app", "AppCore", "core");
+
+        display["AppCore"].Should().BeNull();
+        display["core"].Should().BeNull();
     }
 
     /// <summary>
-    /// Con un solo módulo, «el prefijo común» sería su nombre entero y la banda se quedaría en
-    /// blanco. Hace falta una pareja para que la palabra «común» signifique algo.
+    /// Y una colisión entre dos acortados. <c>XBLASTCore</c> y <c>xblastCore</c> son dos carpetas
+    /// distintas en el hub —el disco distingue— y las dos darían «Core».
     /// </summary>
     [Fact]
-    public void Con_un_solo_modulo_no_hay_prefijo_comun()
+    public void Dos_acortados_que_coinciden_vuelven_los_dos_a_su_nombre()
     {
-        ModulePrefix.Common(new[] { "XBLASTCore" }).Should().BeEmpty();
-        ModulePrefix.Common(Array.Empty<string>()).Should().BeEmpty();
+        var display = Names("XBLAST", "xblast", "XBLASTCore", "xblastCore", "XBLASTLog");
+
+        display["XBLASTCore"].Should().BeNull();
+        display["xblastCore"].Should().BeNull();
+        display["XBLASTLog"].Should().Be("Log");
     }
 
-    /// <summary>Sin nada en común, los nombres salen intactos.</summary>
+    // ============================================ Nada que hacer
+
+    /// <summary>Si ningún módulo lleva el nombre de la aplicación, no se toca nada.</summary>
     [Fact]
-    public void Sin_nada_en_comun_no_se_toca_nada()
+    public void Sin_ningun_modulo_que_lleve_el_nombre_no_se_omite_nada()
     {
-        var modules = new[] { "Dominio", "Almacen", "Interfaz" };
+        var display = Names("Atalaya", "atalaya", "Dominio", "Almacen", "Interfaz");
 
-        string prefix = ModulePrefix.Common(modules);
+        display.Values.Should().OnlyContain(v => v == null);
+    }
 
-        prefix.Should().BeEmpty();
-        modules.Select(m => ModulePrefix.Elide(m, prefix)).Should().Equal(modules);
+    /// <summary>Sin nombre ni slug tampoco hay nada que quitar, y no se cae.</summary>
+    [Fact]
+    public void Sin_nombre_de_aplicacion_no_pasa_nada()
+    {
+        ModulePrefix.DisplayNames(null, null, new[] { "Core", "Utils" })
+            .Values.Should().OnlyContain(v => v == null);
+
+        ModulePrefix.DisplayNames(string.Empty, string.Empty, Array.Empty<string>())
+            .Should().BeEmpty();
     }
 
     /// <summary>
-    /// Ordinal y sensible a mayúsculas: son nombres de carpeta. «xblastCore» y «XBLASTCore» no
-    /// comparten prefijo, y decir que sí sería inventarse una equivalencia que el disco no tiene.
+    /// Con un solo módulo sí se acorta: llevar el nombre de la app es un hecho de ESE módulo, no
+    /// una propiedad del conjunto. Es la diferencia con el criterio de prefijo común, que
+    /// necesitaba al menos dos nombres para que la palabra «común» significara algo.
     /// </summary>
     [Fact]
-    public void La_comparacion_es_ordinal()
-        => ModulePrefix.Common(new[] { "xblastCore", "XBLASTCommon" }).Should().BeEmpty();
+    public void Con_un_solo_modulo_tambien_se_acorta()
+        => Names("XBLAST", "xblast", "XBLASTCore")["XBLASTCore"].Should().Be("Core");
 
-    /// <summary>Un nombre repetido no cambia el resultado: se compara el conjunto.</summary>
+    /// <summary>Y acortar un nombre que no lleva el token devuelve null, no una excepción.</summary>
     [Fact]
-    public void Los_nombres_repetidos_no_alteran_el_calculo()
-        => ModulePrefix.Common(new[] { "AppCore", "AppCore", "AppUtils" }).Should().Be("App");
-
-    /// <summary>Y quitar un prefijo que no está no hace nada.</summary>
-    [Fact]
-    public void Elidir_un_prefijo_que_no_esta_devuelve_el_nombre_intacto()
+    public void Acortar_un_nombre_que_no_lleva_el_token_no_hace_nada()
     {
-        ModulePrefix.Elide("Documents", "XBLAST").Should().Be("Documents");
-        ModulePrefix.Elide("XBLASTCore", string.Empty).Should().Be("XBLASTCore");
+        ModulePrefix.Shorten("Documents", "XBLAST").Should().BeNull();
+        ModulePrefix.Shorten("XBLASTCore", "XBLAST").Should().Be("Core");
     }
 }
