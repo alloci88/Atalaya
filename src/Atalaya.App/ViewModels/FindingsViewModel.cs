@@ -241,6 +241,7 @@ public sealed partial class FindingsViewModel : ViewModelBase
     private bool _hasPendingAppSlug;
     private Severity? _pendingSeverity;
     private bool _hasPendingSeverity;
+    private string? _pendingSearch;
     private bool _suspendReload;
 
     public FindingsViewModel(
@@ -339,6 +340,21 @@ public sealed partial class FindingsViewModel : ViewModelBase
         _hasPendingSeverity = true;
     }
 
+    /// <summary>
+    /// Pre-escribe la búsqueda al navegar (desde el mapa de calor, F10 §2): una ruta de unidad
+    /// deja la lista con los hallazgos de ESA unidad, agrupados como siempre.
+    /// <para>
+    /// Se reutiliza la búsqueda —que ya mira la ruta de la ubicación— en vez de añadir un filtro
+    /// de unidad propio: el usuario ve en la caja POR QUÉ está viendo lo que ve, y puede
+    /// ensancharlo borrando una carpeta del camino. Un filtro invisible que solo pone quien navega
+    /// deja la lista recortada sin decir por quién.
+    /// </para>
+    /// </summary>
+    public void SetSearch(string? text)
+    {
+        _pendingSearch = text;
+    }
+
     public override Task LoadAsync()
     {
         RefreshAppOptions();
@@ -379,13 +395,19 @@ public sealed partial class FindingsViewModel : ViewModelBase
 
     private void ApplyPendingFilters()
     {
-        if (!_hasPendingAppSlug && !_hasPendingSeverity)
+        if (!_hasPendingAppSlug && !_hasPendingSeverity && _pendingSearch is null)
         {
             return;
         }
 
         bool previous = _suspendReload;
         _suspendReload = true;
+
+        if (_pendingSearch is { } search)
+        {
+            _pendingSearch = null;
+            SearchText = search;
+        }
 
         if (_hasPendingAppSlug)
         {

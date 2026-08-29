@@ -449,6 +449,13 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private Task ShowMetrics() => Navigation.NavigateToAsync<MetricsViewModel>();
 
+    /// <summary>
+    /// V9 Mapa de calor (F10): dónde arde el código, con el área por tamaño y el color por
+    /// densidad de deuda.
+    /// </summary>
+    [RelayCommand]
+    private Task ShowHeatmap() => Navigation.NavigateToAsync<HeatmapViewModel>();
+
     /// <summary>V7 Informes (F6.3): la lista de todo lo que las auditorías han dejado escrito.</summary>
     [RelayCommand]
     private Task ShowReports() => Navigation.NavigateToAsync<ReportsViewModel>();

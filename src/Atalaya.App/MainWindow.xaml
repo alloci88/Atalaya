@@ -140,6 +140,13 @@
                         HorizontalContentAlignment="Left"
                         Margin="0,2" />
                     <ui:Button
+                        Command="{Binding ShowHeatmapCommand}"
+                        Content="Mapa de calor"
+                        Appearance="Secondary"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Margin="0,2" />
+                    <ui:Button
                         Command="{Binding ShowReportsCommand}"
                         Content="Informes"
                         Appearance="Secondary"

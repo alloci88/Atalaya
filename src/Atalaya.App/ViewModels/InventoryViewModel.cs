@@ -255,6 +255,25 @@ public sealed partial class InventoryViewModel : ViewModelBase
 
     public void SetApp(string slug) => Slug = slug;
 
+    /// <summary>
+    /// Deja UNA unidad marcada y buscada al entrar (desde el mapa de calor, F10 §2). No lanza
+    /// nada: el gasto se confirma donde siempre, en «Auditar selección».
+    /// <para>
+    /// Marca <b>solo esa</b> —limpia lo que hubiera— porque venir del mapa es venir a por una
+    /// unidad concreta, y heredar una selección anterior invisible es exactamente cómo se lanza y
+    /// se paga una auditoría que nadie pidió (F5.13).
+    /// </para>
+    /// </summary>
+    public void Preselect(string path)
+    {
+        _selected.Clear();
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            _selected.Add(path);
+            SearchText = path;
+        }
+    }
+
     partial void OnSearchTextChanged(string value) => Rebuild();
 
     public override Task LoadAsync()
