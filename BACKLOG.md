@@ -4,9 +4,20 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-28 (F8.1 — política de formato es-ES).
+Última revisión: 2026-08-29 (F10 — mapa de calor del código).
 
 ## En vuelo
+
+- **F10 — el caso de aceptación del mapa de calor, con los ojos del usuario.** La vista está
+  entera y cubierta por tests (D-634…D-646) y las láminas exportadas sí se han mirado, pero
+  **ningún test abre la ventana**: falta abrir el mapa de xblast dentro de la aplicación, ver que
+  XBLASTCommon se reconoce de un vistazo, ampliarlo, llegar desde `CommonStatics.cs` a sus 15
+  hallazgos, probar el doble clic con un ratón de verdad y comprobar la exportación. En la misma
+  pasada: los dos temas, el tooltip y la tabla de once columnas a 1366×768 (D-647).
+- **F10 — los umbrales, contra más de una aplicación.** Los cinco pasos (5 · 15 · 40 · 100 por
+  KLOC) están anclados en un razonamiento y comprobados contra un solo clon, donde la única unidad
+  medida da 206. Se revisarán cuando haya dos o tres aplicaciones con cobertura de verdad y se
+  pueda ver si los pasos 2 y 3 llegan a usarse (D-639).
 
 - **H9 — verificación humana con asiento real.** El flujo interactivo está verificado por el
   usuario con una sesión de verdad; falta cerrar el circuito con el **descarte** (que el clon
@@ -83,6 +94,13 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## Cerrado
 
+- **F10 · Mapa de calor (V9)** — treemap de dos niveles con el área por LOC y el color por densidad
+  de deuda ponderada (Crítica 10 · Alta 5 · Media 2 · Baja 1, en `DebtWeights`), escala secuencial
+  de un solo tono con umbrales fijos en la leyenda, tratamiento propio e irrenunciable para lo **no
+  auditado** (gris tramado = densidad desconocida, nunca el paso frío), tooltips, zoom con migas,
+  navegación a hallazgos y a auditar, tabla equivalente ordenable y exportación PNG con título,
+  leyenda y pie. Medido contra el clon real de xblast (925 unidades): agregar 18–24 ms, cargar la
+  vista 27–31 ms, repintar 23 ms.
 - **Banner del snippet según el estado del hallazgo** — F6.7: un hallazgo resuelto ya no enseña el
   aviso ámbar de código cambiado.
 - **F6.4 · Identidad visual** — icono `.ico` de la aplicación, logotipo Maxam (claro y negativo) en

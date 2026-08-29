@@ -184,6 +184,75 @@ verificación— aparece sin reiniciar la aplicación.
 Donde no hay medida se escribe «—» y qué haría falta para que aparezca. Un cero con
 formato sería una medida que nadie ha tomado.
 
+### Mapa de calor
+
+La estructura de una aplicación —módulos y, dentro, sus unidades— en un **treemap**
+de dos niveles. Dos canales, dos datos distintos:
+
+- El **área** de cada celda es su **tamaño en líneas**.
+- El **color** es la **densidad de deuda**.
+
+Así se distingue de un vistazo el módulo grande y sucio del pequeño y sucio, que es
+lo que una lista ordenada no puede enseñar.
+
+**Qué mide.** Cada hallazgo **activo** pesa según su severidad —**Crítica 10 · Alta 5
+· Media 2 · Baja 1**— y la **deuda** de una unidad es la suma de esos pesos. Los
+hallazgos resueltos y los silenciados **no cuentan**: uno se arregló y del otro se
+decidió que no se arregla. La **densidad** es esa deuda por cada **mil líneas**. Se
+normaliza a propósito: sin dividir por el tamaño, la clase de 5.000 líneas saldría
+siempre la peor por el mero hecho de ser grande —y eso no es información, es un mapa
+del tamaño del código, que ya lo da el área—.
+
+**Cómo se lee la escala.** Cinco pasos de un solo tono, del claro al oscuro, con sus
+umbrales escritos en la leyenda: **< 5**, **5–15**, **15–40**, **40–100** y **≥ 100**
+por KLOC. Los umbrales son **fijos**, no salen de los datos de cada app: así «paso 4»
+significa lo mismo en todas las aplicaciones y también dentro de tres meses. No hay
+arcoíris ni semáforo, porque la densidad es una magnitud continua y no una categoría;
+y no se usa la rampa cálida (amarillo→naranja→rojo) porque esos son los colores
+**reservados** de las severidades en el resto de la aplicación, y una celda granate se
+leería «aquí hay una crítica» cuando lo que dice es «aquí la deuda está concentrada».
+
+> **Gris = NO auditado, no limpio.** Una unidad que nadie ha barrido **no tiene
+> densidad 0: tiene densidad desconocida**, y se pinta con un **gris tramado** que
+> nunca es el color frío de la escala. Confundir «no lo he mirado» con «está limpio»
+> convertiría este mapa en una mentira tranquilizadora — y es justo lo que más se va a
+> mirar en una aplicación recién dada de alta, donde casi todo está sin auditar.
+> «Excluida por tamaño» (**grande**) también es gris: estar excluida es un motivo para
+> **no** auditarla, no una forma de haberla auditado.
+
+Un **contorno punteado** avisa de que el relleno no lo cuenta todo: o es una celda gris
+con hallazgos ya conocidos —lo que se le sabe es una **cota inferior**—, o es una
+unidad auditada cuyo código **ha cambiado desde entonces**, de modo que la medida es de
+otro código. El tooltip dice cuál de las dos.
+
+**Los módulos.** La banda de cabecera lleva el nombre, el número de unidades y el
+**porcentaje auditado**, y se pinta con la densidad del módulo. Esa densidad divide
+**solo lo auditado entre lo auditado**: meter en el denominador lo que nadie ha mirado
+diluiría el número en proporción a lo poco que se ha mirado, y un módulo con una unidad
+podrida y noventa sin auditar saldría «casi limpio». Por eso la cobertura va siempre
+pegada al número, en la banda y en el tooltip.
+
+**Qué se puede hacer.**
+
+- **Un clic en un módulo** amplía a sus unidades; las **migas** de arriba devuelven a
+  la aplicación entera.
+- Ya ampliado, **un clic en una unidad** abre sus hallazgos en Hallazgos, y un **doble
+  clic** (o el botón «Auditar» de la tabla) abre el Inventario con esa unidad marcada.
+  El mapa dice **dónde**; lanzar y confirmar el gasto sigue siendo del Inventario.
+- El **tooltip** de cada celda trae unidad, líneas, hallazgos por severidad, deuda,
+  densidad y estado.
+- **Ver como tabla** enseña exactamente lo mismo en columnas ordenables (módulo,
+  unidad, LOC, C/A/M/B, deuda, densidad, estado). El color **nunca** es el único canal.
+- **Color por: Densidad / Deuda absoluta** son dos preguntas distintas —«dónde están
+  más concentrados los problemas» y «dónde hay más»—. Por defecto, densidad.
+- **Exportar imagen** guarda un PNG con el mapa, su leyenda, el título
+  («{App} · mapa de calor · {fecha}») y el pie «Atalaya · {organización}»: la
+  diapositiva, sin recortes de pantalla. Ampliado a un módulo, el título y el pie de
+  foto hablan de **ese** módulo, no de la aplicación entera.
+
+El mapa es de **una** aplicación cada vez: mezclar dos repartiría el área entre códigos
+que no se comparan.
+
 ### Informes
 
 Todo lo que las auditorías han dejado escrito: los informes de sesión, los

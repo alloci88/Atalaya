@@ -5731,3 +5731,274 @@ legible sigue siendo `BUG-0042`— desde esas mismas tres culturas.
 
 El test que falló en el runner **no se tocó**: su expectativa «67,5» ahora es correcta y está
 garantizada por la política, en vez de depender de en qué portátil se ejecute.
+
+## F10 — Mapa de calor del código (V9)
+
+Una vista nueva que enseña la estructura de una aplicación —módulos → unidades— coloreada por
+densidad de deuda. Es a la vez herramienta («¿por dónde ataco?») y diapositiva («esto es lo que
+tenemos»). Lo que sigue son las decisiones que no venían dadas por el prompt.
+
+### D-634 — Los pesos: 10 · 5 · 2 · 1, y por qué son constantes
+
+`DebtWeights` (en `Atalaya.Domain/Rules`, junto a `ConfidenceMachine`) es la **única** definición
+de deuda que hay en el producto: Crítica 10, Alta 5, Media 2, Baja 1.
+
+**Por qué geométricos y no 4·3·2·1.** Una escala lineal dice que diez hallazgos de severidad baja
+son un problema mayor que dos críticos, y eso es falso en el único sentido que le importa a esta
+vista: el orden en que hay que atacar el código. Con estos pesos hacen falta **diez bajas, cinco
+medias o dos altas** para igualar una crítica, que es la lectura que ya se usa al priorizar —nadie
+deja una crítica abierta para cerrar cinco medias—. Está fijado con un test que lo dice así («una
+crítica no se diluye en un montón de bajas»), no con una tabla de valores.
+
+**Por qué constantes y no un ajuste.** Un peso configurable convierte el mapa de dos máquinas en
+dos mapas distintos del mismo código, y la comparación entre aplicaciones —que es para lo que
+sirve la vista— dejaría de significar nada. Si algún día se cambian, se cambian para el portafolio
+entero y a la vez.
+
+**Y por qué en Domain.** Es una regla del dominio, no de la presentación: la misma que un informe
+o un futuro export tendrían que usar. `SeverityPalette` (color) se queda en App; el peso no.
+
+### D-635 — Densidad por KLOC, y qué pasa con las unidades diminutas
+
+Densidad = deuda × 1000 / LOC. Sin normalizar, el mapa sería un mapa del **tamaño** del código: la
+clase de 5.000 líneas saldría siempre la peor por ser grande. Medido en el clon real: la clase de
+5.539 líneas tiene una media (deuda 2, densidad 0,4) y `CommonStatics.cs` —189 líneas— tiene 15
+hallazgos activos (deuda 39, **densidad 206,3**). Sin dividir, la grande parecería el problema.
+
+El efecto colateral conocido es el contrario: una unidad de 40 líneas con una baja da 25 por KLOC.
+**No se corrige con un mínimo de LOC** —sería un umbral inventado— sino con la geometría: el
+**área** de la celda es su tamaño, así que una unidad diminuta ocupa una celda diminuta y no puede
+dominar el mapa por muy oscura que salga. Los dos canales se corrigen el uno al otro; ese es medio
+argumento del treemap.
+
+`DebtWeights.Density` devuelve `null` con 0 líneas. Cero diría «está limpia» de algo que no se ha
+podido medir, que es el mismo error que pintar de frío lo no auditado.
+
+### D-636 — El estado de conocimiento: auditada / cambiada / no auditada
+
+**[NO NEGOCIABLE del prompt, implementado así.]** `HeatKnowledge` sale del inventario y no de los
+hallazgos:
+
+- **Auditada** — `UnitState.Auditada`. Su densidad es una medida.
+- **Cambiada** — auditada, pero su `contentHash` de hoy no es el que esa ruta tenía en el
+  inventario del **ciclo en que se auditó** (`AuditedInSession` → sesión → `CycleN`). La medida
+  existe y es de otro código. Sale de lo que Atalaya ya guarda: no se abre un solo fichero del
+  clon. Cuando el dato no está —sin sesión registrada, sin inventario de aquel ciclo, sin hash, o
+  auditada en el ciclo vigente— **no se marca**: «cambiada» es una afirmación, y la norma **N-2**
+  dice que las afirmaciones se hacen con el dato delante.
+- **No auditada** — todo lo demás, con densidad **`null`**.
+
+**«Grande» NO es «auditada».** Es el caso que más se ve y el que más fácil sería equivocar: en el
+clon real, **34 de las 40 unidades con hallazgos** son `grande`, y su hallazgo es el automático de
+«unidad grande» (D-009). Estar excluida por tamaño es un motivo para **no** auditarla, no una
+forma de haberla auditado; pintarlas con la escala habría dado un mapa donde las 34 clases más
+gordas del sistema salen «a 0,8 por KLOC», es decir, prácticamente limpias.
+
+### D-637 — El gris tramado, y la marca de «el relleno no lo dice todo»
+
+El gris de «no auditada» es **neutro** (no es el tono de la escala) y va con **trama diagonal**.
+La trama no es decoración: es un canal distinto del color, así que sobrevive a una impresión en
+blanco y negro, a un proyector malo y a cualquier daltonismo. Un gris liso se podría confundir con
+el paso 1 —que significa «limpio»— y esa es exactamente la confusión que la vista existe para no
+tener. Hay test de que el gris no coincide con ningún paso de la escala, en los dos temas.
+
+Queda un caso que el gris solo no cuenta: una unidad **sin auditar que sí tiene hallazgos
+conocidos** (los 34 `grande`, más lo importado de V4). Pintarla gris a secas esconde deuda real;
+pintarla con la escala afirma una densidad que nadie ha medido. Se resuelve con un **tercer canal
+que no es color**: contorno **punteado**, que también lleva la unidad auditada cuyo código cambió
+después. Tiene su entrada en la leyenda («el relleno no lo dice todo») y el tooltip dice cuál de
+las dos cosas es.
+
+**Ajustado tras verlo renderizado.** A plena tinta (1,4 px, opaco) las 34 unidades grandes de
+XBLAST convertían el mapa en una rejilla de rectángulos discontinuos que tapaba lo único que había
+que ver de un vistazo. Se bajó a 1 px con 40 % de opacidad y guiones más cortos: se sigue viendo
+al mirar la celda, y ya no compite con el dato.
+
+### D-638 — Violeta y no una rampa cálida, que era lo obvio para «calor»
+
+El prompt dejaba elegir entre el acento de la app y un tono cálido. Se descartó el cálido: los
+cuatro colores de severidad (**#D13A3A · #E07A2B · #D2B036 · #6C93C0**) son rojo, naranja, amarillo
+y azul acero, así que una rampa amarillo→naranja→rojo sería **letra por letra** el vocabulario de
+severidad del resto de la aplicación, y una celda granate se leería «aquí hay una crítica» cuando
+lo que dice es «aquí la deuda está concentrada» — dos cosas que pueden no coincidir. El violeta es
+la familia del acento y no significa nada más en ningún sitio.
+
+**Dos rampas, no una invertida.** Cinco tonos para claro y cinco para oscuro, elegidos cada uno
+para su fondo (misma razón que `SeriesColor`, F5.9). Hay test de que cada rampa se **ordena por
+luminancia** en su tema y de que ningún paso usa un color de severidad.
+
+**No hay colisión práctica con `SeriesPalette`** aunque el violeta sea también el primer color de
+serie: en esta vista no hay ni una serie ni un color por identidad de aplicación —el mapa es de
+una sola app—, así que el violeta solo puede significar magnitud.
+
+### D-639 — Umbrales fijos, y de dónde salen los números
+
+Densidad: **< 5 · 5–15 · 15–40 · 40–100 · ≥ 100** por KLOC. Deuda absoluta: **< 2 · 2–5 · 5–15 ·
+15–40 · ≥ 40**. El ancla del primero es el caso corriente —una media (peso 2) en una unidad de 400
+líneas da 5, el borde entre el paso 1 y el 2—; de ahí cada escalón multiplica por entre 2,5 y 3,
+igual que los pesos, de modo que subir un paso significa siempre lo mismo.
+
+**Fijos y no cuantiles de los datos.** Con cuantiles, el paso 5 de una aplicación limpia y el de
+una podrida serían el mismo color diciendo cosas opuestas, y el mapa de hoy no se podría comparar
+con el de la semana que viene. Con umbrales fijos, «paso 4» significa lo mismo en todas partes y
+siempre — que es lo que pedía el prompt al exigir que el usuario pueda decir «esto es un módulo
+del paso 4».
+
+La **deuda absoluta** lleva sus propios umbrales: es otra pregunta, y reutilizar los de densidad
+convertiría «40 puntos de deuda» en «40 por KLOC» sin avisar. Y el modo absoluto **respeta la
+misma honestidad**: una unidad sin auditar sigue sin valor, porque lo que se le conoce es una cota
+inferior y no su total.
+
+### D-640 — El módulo tiene DOS denominadores, y los dos van con la cobertura pegada
+
+`HeatModule.KnownDebt` suma **toda** la deuda conocida del módulo; `HeatModule.Density` divide
+**solo lo auditado entre lo auditado**. Meter las unidades sin auditar en el denominador diluiría
+la densidad en proporción a lo poco que se ha mirado: un módulo con una unidad podrida y noventa
+sin auditar saldría «casi limpio», que es exactamente al revés de lo que hay que enseñar.
+
+La contrapartida honesta es que la densidad de un módulo puede salir de una muestra pequeña
+—XBLASTCommon: 2 unidades de 89, el 2 %—, así que **el porcentaje auditado va escrito en la propia
+banda de cabecera** y otra vez en el tooltip, junto a cuánta de esa deuda vive en unidades sin
+auditar. No se apaga el color por debajo de un umbral de cobertura: sería otro número inventado, y
+además las celdas grises de dentro ya dicen a gritos que el módulo está sin mirar.
+
+**Cobertura y deuda nunca comparten canal** (anti-objetivo): la cobertura es el tratamiento gris y
+un dato de texto, jamás un segundo gradiente.
+
+### D-641 — Treemap squarified propio, dibujado en `OnRender`
+
+`TreemapLayout.Squarify` es el algoritmo de Bruls, Huizing y van Wijk (2000), como función pura
+sobre un `TreemapRect` propio —nada de `System.Windows.Rect`— para poder probarlo sin arrastrar
+WPF. Frente al reparto ingenuo por rebanadas, que también da áreas exactas pero en tiras de un
+píxel: squarified conserva que **el área ES el dato** y además hace que se pueda estimar a ojo.
+Probado con las dos invariantes que lo hacen honesto —áreas proporcionales al valor y **cero
+solapes**—, incluidas 925 celdas del tamaño del clon real.
+
+El control `Treemap` dibuja en `OnRender` en vez de con hijos de un `Canvas`: 900 `Rectangle` con
+su `ToolTip` y sus manejadores son 900 elementos vivos en el árbol visual, con su medida y su
+disposición en cada cambio de tamaño. El impacto se resuelve contra la lista de rectángulos: una
+comparación por celda, y solo cuando el ratón se mueve. Misma razón que `ChartPlot` (F5.9): la
+geometría es trivial y las reglas son nuestras.
+
+**Etiquetas.** El nombre del módulo, siempre, en su banda. El de la unidad, **solo si cabe entero**
+—se mide antes de escribir—: un «Contro…» no identifica nada y ensucia la celda de al lado.
+
+### D-642 — Los gestos: el clic amplía, el doble clic lleva a auditar (y no lanza)
+
+En la vista completa, un clic **en cualquier sitio de un módulo** —banda o celda— lo amplía. No se
+abre la ficha de una unidad desde ahí porque a ese nivel las celdas son de dos píxeles, y pedirle a
+alguien que acierte una es un gesto que no se puede ejecutar. Ya ampliado, un clic en una unidad
+abre **V3 filtrada por su ruta** y un doble clic (o el botón de la tabla) abre el **Inventario con
+esa unidad marcada**.
+
+**Auditar desde el mapa NO lanza la sesión.** Marca la unidad y navega; lanzar y confirmar el gasto
+sigue estando en un solo sitio (F5.13, el incidente del 2026-08-26). Y `Preselect` **limpia** la
+selección anterior: heredar una selección invisible es exactamente cómo se paga una auditoría que
+nadie pidió.
+
+Para el filtro de V3 se reutiliza la **búsqueda** (`SetSearch`), que ya mira la ruta de la
+ubicación, en vez de añadir un filtro de unidad propio: así el usuario ve en la caja **por qué**
+está viendo lo que ve y puede ensancharlo borrando una carpeta del camino. Un filtro invisible que
+solo pone quien navega deja la lista recortada sin decir por quién.
+
+### D-643 — La imagen se compone aparte; nunca es una captura de la pantalla
+
+`HeatmapImage.Compose` monta un lienzo **fijo** de 1600×1000 (se renderiza a ×2: 3200×2000) con su
+título, su subtítulo, su leyenda y su pie, y se mide y dispone **fuera de la ventana**. Lo que se
+ve en pantalla depende de cuánto se haya estirado, de dónde esté el scroll y de qué tapen las
+barras: fotografiarlo es hacer un recorte de pantalla con otro nombre.
+
+**Sin un solo control de WPF-UI y con todos los colores resueltos.** Fuera del árbol de la ventana
+no hay diccionario de temas: un `DynamicResource` ahí no falla, se queda en su valor por defecto
+—negro sobre negro— y el PNG sale mal sin que nada avise. Como efecto secundario útil, la
+composición se puede **renderizar en un test** (un hilo STA y nada más), y lo hace: se comprueba
+que el fichero existe, que empieza por la firma PNG y que no es un lienzo vacío.
+
+**Ampliado, la lámina habla del módulo.** El título dice «{App} · {Módulo} · mapa de calor ·
+{fecha}» y el pie de foto cuenta las unidades **de ese módulo**. Se corrigió al mirar el PNG: el
+subtítulo decía «925 unidades · 314.382 líneas» debajo de un mapa que solo enseñaba XBLASTCommon —
+un pie que contradice la figura.
+
+### D-644 — Lo medido contra el clon real (925 unidades)
+
+Sobre una **copia** del hub de esta máquina (app `xblast`: 925 unidades, 22 módulos, 314.382 LOC,
+57 hallazgos de los que 49 activos), norma **N-2**:
+
+| Qué | Medido |
+|---|---|
+| Agregar el mapa (leer inventario + hallazgos, componer módulos) | **18–24 ms** |
+| Cargar la vista entera (agregar + grupos + 925 filas de tabla) | **27–31 ms** |
+| Primer render de 947 celdas a 1400×520 (medir + disponer + rasterizar) | **136 ms** |
+| Repintado medio (cambio de tamaño, de métrica o de zoom) | **23 ms** |
+| Exportar el PNG de 3200×2000 | **243 ms** · 763 KB |
+
+Los tiempos de render **incluyen `RenderTargetBitmap`**, que rasteriza por software; en pantalla
+WPF compone en GPU, así que el interactivo real es igual o mejor. Se declara así porque es lo que
+se ha medido, no lo que se supone.
+
+**El repintado bajó de 34,7 a 22,8 ms** con dos cambios encontrados al perfilar: descartar la
+etiqueta **antes** de construir su `FormattedText` (en un clon real casi todas las celdas son
+demasiado pequeñas para una etiqueta, y construir novecientos objetos para tirarlos era la mitad
+del coste de la pasada) y reutilizar `Typeface` y el pincel punteado por pasada en vez de por
+celda.
+
+**Y lo que el mapa dice de XBLAST**, que es el cuadre de la métrica contra los ficheros:
+
+| | Ficheros (script) | Mapa |
+|---|---|---|
+| Unidades · módulos · LOC | 925 · 22 · 314.382 | idem |
+| Auditadas | 2 | 2 (0 %) |
+| Deuda conocida (activos) | 107 | 107 |
+| `CommonStatics.cs` (189 LOC, C0·A4·M8·B3) | deuda 39 · **206,3**/KLOC | idem → paso 5 |
+| XBLASTCommon (89 u, 2 auditadas) | deuda 41 · densidad 159,8 | idem |
+| XBLASTCore (598 u, 0 auditadas) | deuda 54 · densidad **desconocida** | idem, en gris |
+
+### D-645 — Lo que el mapa de XBLAST enseña, y por qué eso está bien
+
+El mapa de xblast sale **casi todo gris**: 2 unidades auditadas de 925. Es incómodo y es la verdad
+—y es exactamente el caso para el que se escribió la regla del gris—. Lo que sí salta a la vista es
+la banda violeta de **XBLASTCommon** entre 21 módulos grises, y dentro, ampliando, el bloque oscuro
+de `CommonStatics.cs` junto a un `EnumLanguage.cs` **casi blanco** (auditado y limpio, paso 1) que
+no se confunde con ningún gris: los dos extremos de la escala y el «no mirado» se distinguen los
+tres.
+
+Conviene decir la otra mitad: por **deuda absoluta** el módulo mayor no es XBLASTCommon (41) sino
+**XBLASTCore** (54), y su densidad es desconocida porque no se ha auditado ni una de sus 598
+unidades. El mapa no lo esconde —va gris, con contorno punteado y su deuda en el tooltip—, pero
+quien busque «dónde hay más problemas» tiene que leer el tooltip o la tabla. Es la consecuencia
+directa de no inventar una densidad para lo que no se ha medido, y se declara aquí para que quien
+enseñe la lámina lo sepa.
+
+### D-646 — Cobertura (55 tests nuevos en App + 11 en Domain, 1250 en total, todo en verde)
+
+- **`DebtWeightsTests`** (Domain): los cuatro pesos; que una crítica no se diluya en nueve bajas ni
+  en cuatro medias, y que el empate esté exactamente en diez/cinco/dos; densidad por KLOC; sin
+  líneas no hay densidad; y **cero deuda sobre líneas medidas SÍ es densidad cero**, que no es lo
+  mismo que desconocida.
+- **`HeatmapQueryTests`**: pesos y densidad de una unidad; que la clase enorme tenga más deuda y
+  menos densidad; resueltos y silenciados fuera; un hallazgo con varias ubicaciones pesa una vez en
+  cada unidad y **nunca dos en la misma**; **sin auditar → `null` en las dos métricas**; `grande`
+  sigue siendo no auditada y lleva la marca; agregación del módulo con sus dos denominadores;
+  módulo sin nada auditado; «cambiada» con el inventario del ciclo anterior y **sin afirmarla** sin
+  ese dato; el mapa es de una sola app; sin inventario, vacío pero con nombre.
+- **`TreemapLayoutTests`**: áreas proporcionales contra la escala global (detecta también el
+  reparto que conserva proporciones dejándose medio lienzo), sin solapes, dentro del contenedor,
+  relación de aspecto por debajo de 12:1, determinismo, y el reparto de 925 celdas.
+- **`HeatmapViewTests`**: la escala se ordena por luminancia en los dos temas y es de un solo tono;
+  ningún paso usa un color de severidad; el gris no es el paso frío; los umbrales cubren la recta
+  sin huecos ni solapes; la leyenda escribe umbrales, pesos y la advertencia del gris; celda sin
+  auditar sin color; el peso de la celda son sus líneas; tooltips de unidad y de módulo; el aviso
+  de cobertura aparece y desaparece; zoom, migas y que el zoom sobreviva a una recarga; la tabla
+  con todas sus columnas, ordenable, y **lo desconocido al final en los dos sentidos**; navegación
+  a V3 filtrada y al inventario con la unidad marcada **sin lanzar nada**; nombre, título, pie y
+  leyenda de la imagen; y el PNG escrito de verdad en un hilo STA.
+
+### D-647 — Lo que NO se ha comprobado, y es del usuario
+
+Ningún test abre la ventana: lo renderizado que hay son las láminas exportadas (que sí se han
+mirado, y de ahí salieron los ajustes de D-637 y D-643) y el `Treemap` medido fuera de pantalla.
+Quedan para el asiento humano: el mapa **dentro** de la aplicación en los dos temas, el tooltip a
+1366×768, que la tabla no se estreche con sus once columnas a esa resolución, y el gesto de doble
+clic con un ratón de verdad. Y el caso de aceptación completo: abrir el mapa de xblast, reconocer
+XBLASTCommon de un vistazo, ampliarlo, llegar desde `CommonStatics.cs` a sus 15 hallazgos y
+exportar la lámina.
