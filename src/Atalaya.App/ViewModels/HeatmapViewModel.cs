@@ -17,6 +17,11 @@ public sealed record HeatMetricOption(HeatMetric Metric, string Label, string Hi
 /// Una fila de la tabla equivalente (F10 §2). <b>Las mismas columnas que el mapa</b>, en texto y
 /// ordenables: el color no puede ser nunca el único canal.
 /// </summary>
+/// <param name="Stripe">
+/// La franja de densidad de la izquierda: el MISMO color de la celda del mapa, o el gris tramado
+/// cuando no se ha auditado. Sin ella, distinguir una fila auditada de una que no lo está dependía
+/// de leerse la columna «Estado» entera, palabra por palabra, novecientas veces (F10.1 §3).
+/// </param>
 public sealed record HeatRow(
     string Module,
     string Unit,
@@ -29,6 +34,7 @@ public sealed record HeatRow(
     int Debt,
     double? Density,
     string State,
+    Brush Stripe,
     HeatUnit Source)
 {
     /// <summary>«—» y no «0,0»: una densidad desconocida no es una densidad medida.</summary>
@@ -39,6 +45,13 @@ public sealed record HeatRow(
     /// <inheritdoc cref="MetricsViewModel.Unknown"/>
     public const string Unknown = "—";
 }
+
+/// <summary>
+/// El puñado de unidades que el mapa funde en una sola celda por no llegar a verse (F10.1 §2).
+/// Existe como tipo propio —y no como una lista suelta— porque es lo que viaja al pulsar: el
+/// gesto tiene que saber que lo pulsado NO es una unidad.
+/// </summary>
+public sealed record HeatCluster(string Module, IReadOnlyList<HeatUnit> Units);
 
 /// <summary>Por qué columna se ordena la tabla.</summary>
 public enum HeatSort
@@ -158,6 +171,9 @@ public sealed partial class HeatmapViewModel : ViewModelBase
 
     [ObservableProperty] private IReadOnlyList<HeatGroup> _groups = Array.Empty<HeatGroup>();
 
+    /// <inheritdoc cref="Treemap.ClusterFactory"/>
+    [ObservableProperty] private Func<IReadOnlyList<HeatCell>, HeatCell>? _clusterFactory;
+
     public ObservableCollection<HeatLegendItem> Legend { get; } = new();
 
     public ObservableCollection<HeatRow> Rows { get; } = new();
@@ -254,7 +270,7 @@ public sealed partial class HeatmapViewModel : ViewModelBase
         UnknownFill = HeatBrushes.Hatch(
             (Color)ColorConverter.ConvertFromString(DensityScale.Unknown.For(_dark)),
             (Color)ColorConverter.ConvertFromString(DensityScale.UnknownHatch.For(_dark)));
-        SurfaceBrush = HeatBrushes.Solid(_dark ? "#202024" : "#FAFAFB");
+        SurfaceBrush = HeatBrushes.Solid(DensityScale.Surface.For(_dark));
         StrokeBrush = HeatBrushes.Solid(_dark ? "#33383F" : "#DDDFE3");
         LabelBrush = HeatBrushes.Solid(_dark ? "#F2F2F4" : "#1A1A1D");
         MutedBrush = HeatBrushes.Solid(_dark ? "#9DA2AA" : "#65696F");
@@ -272,6 +288,7 @@ public sealed partial class HeatmapViewModel : ViewModelBase
 
         var modules = _zoom is null ? _view.Modules : new List<HeatModule> { _zoom };
         Groups = modules.Select(m => Group(m, metric)).ToList();
+        ClusterFactory = tiny => Cluster(tiny, metric);
 
         BuildLegend(metric);
         BuildRows(modules);
@@ -307,16 +324,21 @@ public sealed partial class HeatmapViewModel : ViewModelBase
             $"{Num(module.UnitCount)} u · {module.Coverage:P0} auditado",
             module.Loc,
             Fill(module.Value(metric), metric),
+            InkOf(module.Value(metric), metric),
             module.IsQualified,
             ModuleTip(module),
             module,
-            module.Units.Select(u => new HeatCell(
-                u.FileName,
-                u.Loc,
-                Fill(u.Value(metric), metric),
-                u.IsQualified,
-                UnitTip(u),
-                u)).ToList());
+            module.Units.Select(u => Cell(u, metric)).ToList());
+
+    private HeatCell Cell(HeatUnit unit, HeatMetric metric)
+        => new(
+            unit.FileName,
+            unit.Loc,
+            Fill(unit.Value(metric), metric),
+            InkOf(unit.Value(metric), metric),
+            unit.IsQualified,
+            UnitTip(unit),
+            unit);
 
     /// <summary>
     /// El color de un valor. <c>null</c> —desconocido— devuelve <c>null</c>, que es lo que hace
@@ -324,6 +346,95 @@ public sealed partial class HeatmapViewModel : ViewModelBase
     /// </summary>
     private Brush? Fill(double? value, HeatMetric metric)
         => DensityScale.StepOf(value, metric) is { } step ? HeatBrushes.Solid(step.For(_dark)) : null;
+
+    /// <summary>
+    /// Con qué se escribe encima de ese relleno. Sale del PASO, no de una fórmula de luminancia
+    /// aplicada al color: la fórmula devolvía blanco sobre el coral del paso 4 de la rampa oscura,
+    /// donde lo que se lee es el negro. El contraste de cada pareja está verificado por diseño;
+    /// recalcularlo en cada render solo sirve para volver a equivocarse en el mismo borde.
+    /// </summary>
+    private Brush? InkOf(double? value, HeatMetric metric)
+        => DensityScale.StepOf(value, metric) is { } step ? HeatBrushes.Solid(step.InkFor(_dark)) : null;
+
+    /// <summary>
+    /// Cómo se resume la cola de celdas que no llegan a verse (F10.1 §2). El control decide cuáles
+    /// —conoce la geometría—; aquí se decide qué dicen.
+    /// <para>
+    /// <b>Nunca la media, y nunca «limpio» por defecto.</b> El color del agregado sale de dos
+    /// reglas, y cada una tapa una forma distinta de mentir:
+    /// </para>
+    /// <list type="number">
+    /// <item>
+    /// <b>La peor manda.</b> Con la media, una clase de 40 líneas en el paso 5 desaparecería dentro
+    /// de treinta y nueve tranquilas — el agregado escondería justo lo que el mapa existe para
+    /// enseñar. Con la peor, agrupar solo puede exagerar, y exagerar en una celda que dice «+N
+    /// unidades» invita a ampliar, que es lo que hay que hacer con ella.
+    /// </item>
+    /// <item>
+    /// <b>Si queda algo sin auditar, el agregado no puede decir «limpio».</b> Se vio en el mapa
+    /// real: sesenta unidades de XBLASTCommon, cincuenta y nueve sin auditar y una auditada y
+    /// limpia — y el agregado salía del paso 1, o sea tranquilizador, por la única que alguien
+    /// había mirado. Ahora eso va en gris. La excepción es la que no engaña a nadie: una medida
+    /// <b>por encima del paso 1</b> sigue mandando aunque el resto esté sin auditar, porque «aquí
+    /// dentro hay algo caliente» es un hecho comprobado, no una extrapolación.
+    /// </item>
+    /// </list>
+    /// <para>
+    /// Y va siempre con contorno punteado: el relleno de cuarenta unidades nunca cuenta toda la
+    /// verdad.
+    /// </para>
+    /// </summary>
+    private HeatCell Cluster(IReadOnlyList<HeatCell> tiny, HeatMetric metric)
+    {
+        var units = tiny.Select(c => c.Payload).OfType<HeatUnit>().ToList();
+        var measured = units.Select(u => u.Value(metric)).Where(v => v is not null).ToList();
+
+        double? worst = measured.Count == 0 ? null : measured.Max();
+        bool everyoneMeasured = measured.Count == units.Count && units.Count > 0;
+        bool warns = DensityScale.StepOf(worst, metric) is { Index: > 0 };
+
+        if (!everyoneMeasured && !warns)
+        {
+            worst = null;
+        }
+
+        int loc = units.Sum(u => u.Loc);
+        int debt = units.Sum(u => u.KnownDebt);
+        int audited = units.Count(u => u.IsMeasured);
+
+        var lines = new List<string>
+        {
+            $"+{Num(units.Count)} unidades pequeñas",
+            $"{Num(loc)} líneas · {Num(audited)} auditadas de {Num(units.Count)}",
+            $"Deuda conocida: {Num(debt)}",
+        };
+
+        HeatUnit? peak = units
+            .Where(u => u.Density is not null)
+            .OrderByDescending(u => u.Density)
+            .FirstOrDefault();
+
+        lines.Add(peak is null
+            ? "Ninguna está auditada: el color no puede decir nada de ellas."
+            : worst is null
+                ? $"La peor auditada: {peak.FileName} ({peak.Density:0.#} por KLOC), pero quedan "
+                  + "unidades sin auditar: el gris es lo único que se puede afirmar del grupo."
+                : $"La peor: {peak.FileName} ({peak.Density:0.#} por KLOC). El color es el suyo.");
+
+        lines.Add(IsZoomed
+            ? "Demasiado pequeñas para dibujarlas. Pulsa para verlas en la tabla."
+            : "Demasiado pequeñas para dibujarlas. Pulsa para ampliar el módulo.");
+
+        return new HeatCell(
+            $"+{units.Count} unidades",
+            tiny.Sum(c => c.Weight),
+            Fill(worst, metric),
+            InkOf(worst, metric),
+            Qualified: true,
+            string.Join(Environment.NewLine, lines),
+            units.Count > 0 ? new HeatCluster(units[0].Module, units) : null,
+            ShortLabel: $"+{units.Count}");
+    }
 
     private void BuildLegend(HeatMetric metric)
     {
@@ -373,6 +484,7 @@ public sealed partial class HeatmapViewModel : ViewModelBase
                 u.KnownDebt,
                 u.Density,
                 StateText(u),
+                Fill(u.Value(SelectedMetric.Metric), SelectedMetric.Metric) ?? UnknownFill,
                 u)))
             .ToList();
 
@@ -499,6 +611,18 @@ public sealed partial class HeatmapViewModel : ViewModelBase
                 _zoom = _view.Modules.FirstOrDefault(m => m.Name == unit.Module);
                 ZoomedModule = _zoom?.Name;
                 Render();
+                return Task.CompletedTask;
+
+            case HeatCluster cluster when _zoom is null:
+                _zoom = _view.Modules.FirstOrDefault(m => m.Name == cluster.Module);
+                ZoomedModule = _zoom?.Name;
+                Render();
+                return Task.CompletedTask;
+
+            // Ya ampliado no hay un nivel más al que bajar: lo honesto con cuarenta unidades que
+            // no caben es enseñarlas donde sí caben, que es la tabla.
+            case HeatCluster:
+                TableMode = true;
                 return Task.CompletedTask;
 
             case HeatUnit unit:

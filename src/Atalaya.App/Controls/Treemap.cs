@@ -20,8 +20,25 @@ namespace Atalaya.App.Controls;
 /// El relleno no cuenta toda la verdad: gris con deuda conocida, o medida de un código que ya
 /// cambió. El control lo marca con contorno punteado; el tooltip dice cuál de las dos.
 /// </param>
+/// <param name="Ink">
+/// Con qué se escribe encima. Sale del paso de la escala (<c>HeatStep.InkFor</c>), no de una
+/// fórmula de luminancia: la fórmula daba blanco sobre el coral del paso 4, donde lo legible es
+/// el negro. <c>null</c> —celda gris— usa la tinta del tema.
+/// </param>
+/// <param name="ShortLabel">
+/// Cómo se llama esta celda cuando el nombre largo no cabe. No es un recorte —eso lo hace el
+/// control midiendo— sino <b>otra forma de decir lo mismo</b>: «+60 unidades» acortado por el
+/// medio da «+60 u…ades», que no es más corto, es peor. Null cuando no hay forma breve.
+/// </param>
 public sealed record HeatCell(
-    string Label, double Weight, Brush? Fill, bool Qualified, string Tooltip, object? Payload);
+    string Label,
+    double Weight,
+    Brush? Fill,
+    Brush? Ink,
+    bool Qualified,
+    string Tooltip,
+    object? Payload,
+    string? ShortLabel = null);
 
 /// <summary>Un grupo del mapa: un módulo, con su banda de cabecera y sus celdas.</summary>
 public sealed record HeatGroup(
@@ -29,6 +46,7 @@ public sealed record HeatGroup(
     string Detail,
     double Weight,
     Brush? Fill,
+    Brush? Ink,
     bool Qualified,
     string Tooltip,
     object? Payload,
@@ -56,6 +74,19 @@ public sealed class Treemap : FrameworkElement
     private const double HeaderHeight = 22;
     private const double LabelPadX = 5;
     private const double LabelPadY = 3;
+
+    /// <summary>
+    /// Por debajo de esta área una celda no es una celda: es un punto con borde. Se funden en una
+    /// sola («+N unidades») en vez de dibujar cuarenta ilegibles — el equivalente honesto de lo
+    /// que ya hace la leyenda de las gráficas con «Otras».
+    /// </summary>
+    private const double MinCellArea = 90;
+
+    /// <summary>Y por debajo de este lado, tampoco: 40x2 px tiene área de sobra y no se ve.</summary>
+    private const double MinCellSide = 7;
+
+    /// <summary>Agrupar dos celdas no ahorra nada; a partir de tres empieza a limpiar.</summary>
+    private const int MinClusterSize = 3;
 
     /// <summary>Un rectángulo ya colocado, con lo que hay que decir y hacer si se pulsa.</summary>
     private sealed record Hit(TreemapRect Rect, string Tooltip, object? Payload, bool IsGroup);
@@ -109,6 +140,10 @@ public sealed class Treemap : FrameworkElement
     public static readonly DependencyProperty ActivateCommandProperty = DependencyProperty.Register(
         nameof(ActivateCommand), typeof(ICommand), typeof(Treemap), new PropertyMetadata(null));
 
+    public static readonly DependencyProperty ClusterFactoryProperty = DependencyProperty.Register(
+        nameof(ClusterFactory), typeof(Func<IReadOnlyList<HeatCell>, HeatCell>), typeof(Treemap),
+        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+
     /// <summary>Los módulos y sus unidades. Con uno solo, el mapa está ampliado a ese módulo.</summary>
     public IReadOnlyList<HeatGroup>? Groups
     {
@@ -160,6 +195,18 @@ public sealed class Treemap : FrameworkElement
     {
         get => (ICommand?)GetValue(ActivateCommandProperty);
         set => SetValue(ActivateCommandProperty, value);
+    }
+
+    /// <summary>
+    /// Cómo se resume un puñado de celdas demasiado pequeñas para dibujarse (F10.1 §2). El control
+    /// decide <b>cuáles</b> —es el único que conoce la geometría— y quien la pone decide <b>qué
+    /// significa</b> la celda que las sustituye: su color, su texto y su tooltip. Sin fábrica no
+    /// se agrupa nada y se dibujan todas, por diminutas que salgan.
+    /// </summary>
+    public Func<IReadOnlyList<HeatCell>, HeatCell>? ClusterFactory
+    {
+        get => (Func<IReadOnlyList<HeatCell>, HeatCell>?)GetValue(ClusterFactoryProperty);
+        set => SetValue(ClusterFactoryProperty, value);
     }
 
     public Treemap()
@@ -223,28 +270,14 @@ public sealed class Treemap : FrameworkElement
         Fill(dc, band, group.Fill, pen, group.Qualified);
         _hits.Add(new Hit(band, group.Tooltip, group.Payload, IsGroup: true));
 
-        Brush ink = Contrast(group.Fill);
-        double used = DrawText(dc, group.Name, band, ink, 12, bold: true);
-        if (used > 0 && group.Detail.Length > 0)
-        {
-            // El detalle va en la MISMA tinta atenuada, no en el gris del tema: sobre la banda
-            // clara de un módulo del paso 5, un gris fijo se vuelve ilegible justo en el módulo
-            // que más importa leer.
-            DrawText(
-                dc,
-                group.Detail,
-                new TreemapRect(band.X + used + 8, band.Y, band.Width - used - 8, band.Height),
-                Faded(ink),
-                11,
-                bold: false);
-        }
+        DrawHeader(dc, group, band);
 
         if (inner.Height <= 1)
         {
             return;
         }
 
-        foreach (TreemapTile<HeatCell> tile in TreemapLayout.Squarify(group.Cells, c => c.Weight, inner))
+        foreach (TreemapTile<HeatCell> tile in TreemapLayout.Squarify(Cells(group, inner), c => c.Weight, inner))
         {
             TreemapRect cell = Deflate(tile.Rect, CellGap / 2);
             if (cell.Width <= 0.5 || cell.Height <= 0.5)
@@ -255,10 +288,175 @@ public sealed class Treemap : FrameworkElement
             Fill(dc, cell, tile.Item.Fill, pen, tile.Item.Qualified);
             _hits.Add(new Hit(cell, tile.Item.Tooltip, tile.Item.Payload, IsGroup: false));
 
-            // La etiqueta de la unidad SOLO si cabe entera. Un nombre recortado a «Contro…» no
-            // identifica nada y ensucia la celda de al lado.
-            DrawText(dc, tile.Item.Label, cell, Contrast(tile.Item.Fill), 11, bold: false, onlyIfItFits: true);
+            // Una celda con forma breve NO se recorta: o cabe su nombre entero, o se escribe la
+            // forma corta. «+60 u…ades» tiene los mismos caracteres que «+60 unidades» menos tres
+            // y dice bastante menos que «+60»: recortar ahí no ahorra sitio, estropea el texto.
+            Brush ink = Ink(tile.Item.Ink);
+            if (tile.Item.ShortLabel is { Length: > 0 } brief)
+            {
+                if (!DrawLabel(dc, tile.Item.Label, cell, ink, 11, bold: false, retention: 1))
+                {
+                    DrawLabel(dc, brief, cell, ink, 11, bold: false, retention: 1);
+                }
+            }
+            else
+            {
+                DrawLabel(dc, tile.Item.Label, cell, ink, 11, bold: false);
+            }
         }
+    }
+
+    /// <summary>
+    /// La cabecera del módulo. <b>El nombre es lo último que cae</b>: primero se retira el detalle
+    /// («598 u · 0 % auditado») y solo después el nombre se acorta por el medio. Un módulo cuya
+    /// banda dice «0 % auditado» pero no dice de quién no sirve para nada.
+    /// </summary>
+    private void DrawHeader(DrawingContext dc, HeatGroup group, TreemapRect band)
+    {
+        if (band.Width <= 2 * LabelPadX || band.Height <= 2 * LabelPadY)
+        {
+            return;
+        }
+
+        Brush ink = Ink(group.Ink);
+        double room = band.Width - 2 * LabelPadX;
+        double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+
+        // ¿Cabe nombre + detalle? Se mide la pareja entera antes de decidir; si no cabe, el
+        // detalle no se dibuja y el nombre se queda con todo el ancho.
+        const double gap = 8;
+        double nameWidth = TextFit.Width(group.Name, Bold, 12, dpi);
+        bool withDetail = group.Detail.Length > 0
+                          && nameWidth + gap + TextFit.Width(group.Detail, Regular, 11, dpi) <= room;
+
+        double nameRoom = withDetail ? nameWidth : room;
+
+        // Antes de mutilar el nombre se prueba un cuerpo más pequeño: «XBLASTQuickUtils» entero a
+        // 10,5 px se lee mucho mejor que «XBLASTQ…kUtils» a 12. Solo cuando tampoco así cabe se
+        // recorta —con retención 0, porque el nombre de un módulo no puede desaparecer—.
+        double headerSize = 12;
+        string? name = null;
+        foreach (double size in new[] { 12, 11, 10.5 })
+        {
+            if (band.Height >= size * 1.3 && TextFit.Width(group.Name, Bold, size, dpi) <= nameRoom)
+            {
+                headerSize = size;
+                name = group.Name;
+                break;
+            }
+        }
+
+        name ??= TextFit.Fit(group.Name, Bold, headerSize, dpi, nameRoom, retention: 0);
+        if (name is null)
+        {
+            return;
+        }
+
+        double used = Write(dc, name, band, ink, headerSize, Bold, dpi);
+        if (withDetail)
+        {
+            // El detalle va en la MISMA tinta atenuada, no en el gris del tema: sobre la banda
+            // clara de un módulo del paso 5, un gris fijo se vuelve ilegible justo en el módulo
+            // que más importa leer.
+            var rest = new TreemapRect(
+                band.X + used + gap, band.Y, band.Width - used - gap, band.Height);
+            DrawLabel(dc, group.Detail, rest, Faded(ink), 11, bold: false, retention: 0);
+        }
+    }
+
+    /// <summary>
+    /// Escribe la etiqueta de una celda si cabe entera; si no, acortada por el medio mientras siga
+    /// identificando algo; y si tampoco, <b>nada</b>. Media palabra no informa: ensucia la celda de
+    /// al lado y el tooltip ya dice el nombre entero.
+    /// </summary>
+    /// <returns>true si llegó a escribir algo.</returns>
+    private bool DrawLabel(
+        DrawingContext dc,
+        string text,
+        TreemapRect rect,
+        Brush ink,
+        double size,
+        bool bold,
+        double retention = TextFit.DefaultRetention)
+    {
+        double room = rect.Width - 2 * LabelPadX;
+        if (string.IsNullOrEmpty(text) || room <= 0 || rect.Height < size * 1.3 + 2 * LabelPadY)
+        {
+            return false;
+        }
+
+        Typeface face = bold ? Bold : Regular;
+        double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        if (TextFit.Fit(text, face, size, dpi, room, retention) is not { } fitted)
+        {
+            return false;
+        }
+
+        Write(dc, fitted, rect, ink, size, face, dpi);
+        return true;
+    }
+
+    /// <summary>Pinta un texto YA encajado y devuelve lo que ocupó.</summary>
+    private static double Write(
+        DrawingContext dc, string text, TreemapRect rect, Brush ink, double size, Typeface face, double dpi)
+    {
+        FormattedText formatted = TextFit.Format(text, face, size, dpi, ink);
+        dc.DrawText(
+            formatted,
+            new Point(rect.X + LabelPadX, rect.Y + (rect.Height - formatted.Height) / 2));
+        return formatted.Width + LabelPadX;
+    }
+
+    /// <summary>
+    /// Las celdas que se van a dibujar: las del módulo, con la cola de las que no llegarían a
+    /// verse fundida en una sola (F10.1 §2). El umbral se calcula sobre la escala REAL del hueco,
+    /// así que la misma unidad se agrupa en la vista completa y se dibuja al ampliar el módulo,
+    /// que es justo la razón de que el agregado sea clicable.
+    /// </summary>
+    private IReadOnlyList<HeatCell> Cells(HeatGroup group, TreemapRect inner)
+    {
+        var cells = group.Cells;
+        if (ClusterFactory is not { } factory || cells.Count < MinClusterSize)
+        {
+            return cells;
+        }
+
+        double total = cells.Sum(c => c.Weight);
+        if (total <= 0 || inner.Area <= 0)
+        {
+            return cells;
+        }
+
+        double scale = inner.Area / total;
+        double cut = Math.Max(MinCellArea, MinCellSide * MinCellSide);
+        var tiny = cells.Where(c => c.Weight * scale < cut).ToList();
+        if (tiny.Count < MinClusterSize)
+        {
+            return cells;
+        }
+
+        var kept = cells.Where(c => c.Weight * scale >= cut).ToList();
+        kept.Add(factory(tiny));
+        return kept;
+    }
+
+    /// <summary>La tinta de una celda, o la del tema cuando la celda no la trae (celda gris).</summary>
+    private Brush Ink(Brush? ink) => ink ?? LabelBrush;
+
+    /// <summary>La misma tinta, a media voz. Para lo que acompaña sin competir.</summary>
+    private static Brush Faded(Brush ink) => Fade(ink, 0xB4);
+
+    private static Brush Fade(Brush brush, byte alpha)
+    {
+        if (brush is not SolidColorBrush solid)
+        {
+            return brush;
+        }
+
+        Color c = solid.Color;
+        var faded = new SolidColorBrush(Color.FromArgb(alpha, c.R, c.G, c.B));
+        faded.Freeze();
+        return faded;
     }
 
     /// <summary>
@@ -276,84 +474,6 @@ public sealed class Treemap : FrameworkElement
         }
 
         dc.DrawRectangle(null, _dotted, Rect.Inflate(r, -1, -1));
-    }
-
-    /// <summary>
-    /// Escribe si cabe, y devuelve cuánto ocupó (0 si no escribió nada). El texto se mide antes:
-    /// una etiqueta recortada es ruido, no información.
-    /// </summary>
-    private double DrawText(
-        DrawingContext dc,
-        string text,
-        TreemapRect rect,
-        Brush ink,
-        double size,
-        bool bold,
-        bool muted = false,
-        bool onlyIfItFits = false)
-    {
-        double room = rect.Width - 2 * LabelPadX;
-
-        // Se descarta ANTES de medir: en un clon real casi todas las celdas son demasiado
-        // pequeñas para una etiqueta, y construir un FormattedText para cada una de las 900 que
-        // se van a descartar es la mitad del coste de la pasada. La altura mínima de una línea de
-        // `size` puntos es `size` * 1,3 largo; con menos que eso no cabe nada.
-        if (string.IsNullOrEmpty(text) || room < size || rect.Height < size * 1.3 + 2 * LabelPadY)
-        {
-            return 0;
-        }
-
-        var formatted = new FormattedText(
-            text,
-            AppCulture.Display,
-            FlowDirection.LeftToRight,
-            bold ? Bold : Regular,
-            size,
-            muted ? MutedBrush : ink,
-            VisualTreeHelper.GetDpi(this).PixelsPerDip);
-        if (formatted.Height + 2 * LabelPadY > rect.Height || (onlyIfItFits && formatted.Width > room))
-        {
-            return 0;
-        }
-
-        formatted.MaxTextWidth = Math.Max(1, room);
-        formatted.MaxLineCount = 1;
-        formatted.Trimming = TextTrimming.CharacterEllipsis;
-        dc.DrawText(formatted, new Point(rect.X + LabelPadX, rect.Y + (rect.Height - formatted.Height) / 2));
-        return Math.Min(formatted.Width, room) + LabelPadX;
-    }
-
-    /// <summary>
-    /// Tinta que se lee sobre ese relleno. Se decide por la luminancia del color y no por el tema:
-    /// el paso 5 es oscuro en tema claro y claro en tema oscuro, así que un color de texto fijo
-    /// dejaría ilegible justo la celda más importante del mapa.
-    /// </summary>
-    private Brush Contrast(Brush? fill)
-    {
-        if (fill is not SolidColorBrush solid)
-        {
-            return LabelBrush;
-        }
-
-        Color c = solid.Color;
-        double luminance = (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255.0;
-        return luminance < 0.55 ? Brushes.White : Brushes.Black;
-    }
-
-    /// <summary>La misma tinta, a media voz. Para lo que acompaña sin competir.</summary>
-    private static Brush Faded(Brush ink) => Fade(ink, 0xB4);
-
-    private static Brush Fade(Brush brush, byte alpha)
-    {
-        if (brush is not SolidColorBrush solid)
-        {
-            return brush;
-        }
-
-        Color c = solid.Color;
-        var faded = new SolidColorBrush(Color.FromArgb(alpha, c.R, c.G, c.B));
-        faded.Freeze();
-        return faded;
     }
 
     private static TreemapRect Deflate(TreemapRect rect, double by)
