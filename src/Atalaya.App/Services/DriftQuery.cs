@@ -151,9 +151,11 @@ public sealed class DriftQuery
                 return AppDrift.Unavailable(slug, "El clon no tiene ningún commit todavía.");
             }
 
-            var context = new Context(repo, head, inventory, commitOfSession, _hub.Store.ListFixes(slug));
+            var findings = _hub.Store.ListFindings(slug);
+            var context = new Context(
+                repo, head, inventory, commitOfSession, _hub.Store.ListFixes(slug), findings);
             List<UnitDrift> units = Classify(context);
-            List<OrphanFinding> orphans = FindOrphans(repo, head, _hub.Store.ListFindings(slug));
+            List<OrphanFinding> orphans = FindOrphans(repo, head, findings);
 
             WorkingTreeState tree = WorkingTree.Inspect(clonePath);
             string branch = repo.Head.FriendlyName;
@@ -184,7 +186,8 @@ public sealed class DriftQuery
         Commit Head,
         InventoryCycle Inventory,
         IReadOnlyDictionary<Ulid, string> CommitOfSession,
-        IReadOnlyList<FixRecord> Fixes);
+        IReadOnlyList<FixRecord> Fixes,
+        IReadOnlyList<Finding> Findings);
 
     /// <summary>
     /// Un grupo de unidades que comparten commit de auditoría, ya anclado contra el historial. El
@@ -386,8 +389,25 @@ public sealed class DriftQuery
         }
     }
 
-    /// <summary>Un commit tocó una unidad, y era un arreglo nuestro o no lo era.</summary>
-    private readonly record struct Touch(string UnitPath, bool Ours, DateTimeOffset When);
+    /// <summary>De quién era el cambio que un commit trajo a una unidad (F9 §2, F9.1 §1).</summary>
+    private enum TouchKind
+    {
+        /// <summary>De otro. Es deriva: código tocado sin auditoría detrás.</summary>
+        Ajeno,
+
+        /// <summary>Un arreglo nuestro que todavía nadie ha comprobado.</summary>
+        ArregloPendiente,
+
+        /// <summary>
+        /// Un arreglo nuestro cuyo hallazgo ya quedó resuelto por el instrumento que lo detectó.
+        /// Deja de contar como deriva: la evidencia ya se dio, y volver a pedirla sería cobrar dos
+        /// veces por lo mismo.
+        /// </summary>
+        ArregloCubierto,
+    }
+
+    /// <summary>Un commit tocó una unidad, y con qué título lo hizo.</summary>
+    private readonly record struct Touch(string UnitPath, TouchKind Kind, DateTimeOffset When);
 
     /// <summary>
     /// El ÚNICO sitio donde se difea. Se recorre la unión de los rangos de todos los grupos, una
@@ -416,7 +436,7 @@ public sealed class DriftQuery
             return result;
         }
 
-        Dictionary<string, HashSet<string>> fixHashes = FixHashesByPath(ctx.Fixes);
+        Dictionary<string, Dictionary<string, bool>> fixHashes = FixHashesByPath(ctx);
 
         // Del más VIEJO al más nuevo: así, cuando un commit renombra un fichero, lo aprendido vale
         // para todos los commits que vienen después, que son los que usan el nombre nuevo.
@@ -456,7 +476,7 @@ public sealed class DriftQuery
 
                     touches ??= new List<Touch>();
                     touches.Add(new Touch(
-                        unit, IsOurFix(commit, change.Path, fixHashes), commit.Committer.When));
+                        unit, KindOf(commit, change.Path, fixHashes), commit.Committer.When));
                 }
 
                 if (touches is not null)
@@ -494,13 +514,11 @@ public sealed class DriftQuery
                     tally[touch.UnitPath] = t = new UnitTally();
                 }
 
-                if (touch.Ours)
+                switch (touch.Kind)
                 {
-                    t.Own++;
-                }
-                else
-                {
-                    t.Foreign++;
+                    case TouchKind.ArregloPendiente: t.OwnPending++; break;
+                    case TouchKind.ArregloCubierto: t.OwnCovered++; break;
+                    default: t.Foreign++; break;
                 }
 
                 if (t.Last is null || touch.When > t.Last)
@@ -515,7 +533,8 @@ public sealed class DriftQuery
             string path = Normalize(u.Path);
             tally.TryGetValue(path, out UnitTally? t);
             int foreign = t?.Foreign ?? 0;
-            int own = t?.Own ?? 0;
+            int pending = t?.OwnPending ?? 0;
+            int covered = t?.OwnCovered ?? 0;
 
             // Dónde ha ido a parar: puede seguir donde estaba, haberse movido, o ya no estar. Se
             // pregunta SIEMPRE, incluso cuando ningún commit del rango la tocó: un fichero que
@@ -524,7 +543,8 @@ public sealed class DriftQuery
             string? livePath = tracked.AliasesOf(path).FirstOrDefault(p => ctx.Head[p] is not null);
             if (livePath is null)
             {
-                yield return new UnitDrift(u.Path, DriftState.Borrada, foreign + own, t?.Last, own);
+                yield return new UnitDrift(
+                    u.Path, DriftState.Borrada, foreign + pending + covered, t?.Last, pending, covered);
                 continue;
             }
 
@@ -536,46 +556,88 @@ public sealed class DriftQuery
 
             string? moved = livePath == path ? null : livePath;
 
-            // El guardarraíl anti-bucle (F9 §2): si lo único que la ha tocado son arreglos de la
-            // propia aplicación, esto no es deriva — es trabajo pendiente de VERIFICAR.
-            bool onlyOurs = foreign == 0 && own > 0;
-            DriftState state = onlyOurs && own < DriftRules.MaxOwnFixesBeforeReaudit
-                ? DriftState.ArregladaPendienteDeVerificar
-                : DriftState.Modificada;
+            // El guardarraíl anti-bucle, y su cierre (F9 §2 y F9.1 §1).
+            //
+            // Un commit AJENO manda siempre: código tocado sin auditoría detrás es candidato, y da
+            // igual cuántos arreglos verificados haya alrededor.
+            //
+            // Si no lo hay, lo que decide es cuántos arreglos quedan PENDIENTES. Los cubiertos —los
+            // que ya pasaron por una verificación en verde— no cuentan ni para el estado ni para el
+            // umbral: la verificación es el instrumento que valida un arreglo, y exigir además una
+            // re-auditoría para limpiar el indicador sería cobrar dos veces por la misma evidencia.
+            // Tres arreglos verificados uno a uno no disparan nada; tres sin verificar, sí.
+            DriftState state = foreign > 0 || pending >= DriftRules.MaxOwnFixesBeforeReaudit
+                ? DriftState.Modificada
+                : pending > 0
+                    ? DriftState.ArregladaPendienteDeVerificar
+                    : DriftState.SinCambios;
+
+            if (state == DriftState.SinCambios)
+            {
+                // Todo lo que la tocó son arreglos ya verificados: el ciclo se cerró. Se conserva
+                // cuántos fueron para que el detalle pueda decirlo en vez de callarlo.
+                yield return new UnitDrift(u.Path, state, 0, t.Last, 0, covered, moved);
+                continue;
+            }
 
             // Cuando la unidad pasa a «cambiada» por acumulación, lo que la ha tocado son esos
             // arreglos: el número que se enseña tiene que ser el de commits que la tocaron, o la
             // etiqueta diría «0 commits».
-            int shown = state == DriftState.Modificada && foreign == 0 ? own : foreign;
-            yield return new UnitDrift(u.Path, state, shown, t.Last, own, moved);
+            int shown = state == DriftState.Modificada && foreign == 0 ? pending : foreign;
+            yield return new UnitDrift(u.Path, state, shown, t.Last, pending, covered, moved);
         }
     }
 
     private sealed class UnitTally
     {
         public int Foreign;
-        public int Own;
+        public int OwnPending;
+        public int OwnCovered;
         public DateTimeOffset? Last;
     }
 
     /// <summary>
-    /// Las huellas que dejó cada arreglo, por ruta. Una ruta puede acumular varias: tres arreglos
-    /// sobre el mismo fichero dejan tres contenidos distintos, y los tres son nuestros.
+    /// Las huellas que dejó cada arreglo, por ruta, y si ese arreglo ya está CUBIERTO (F9.1 §1).
+    /// Una ruta puede acumular varias: tres arreglos sobre el mismo fichero dejan tres contenidos
+    /// distintos, los tres son nuestros, y cada uno puede estar cubierto o no por separado.
+    /// <para>
+    /// <b>La cobertura se DERIVA, no se guarda.</b> Sale de cruzar dos hechos que ya viven en el
+    /// hub: la huella dice qué hallazgo arreglaba, y el hallazgo dice cómo se resolvió. No hace
+    /// falta ningún estado nuevo, y por eso no puede quedarse obsoleto ni discrepar entre máquinas.
+    /// </para>
     /// </summary>
-    private static Dictionary<string, HashSet<string>> FixHashesByPath(IReadOnlyList<FixRecord> fixes)
+    private static Dictionary<string, Dictionary<string, bool>> FixHashesByPath(Context ctx)
     {
-        var map = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        foreach (FixRecord record in fixes)
+        var covered = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Finding f in ctx.Findings)
         {
+            if (f.Status == FindingStatus.Resuelto && f.Resolved is { } stamp && ClosesTheLoop(stamp.Via))
+            {
+                covered.Add(f.Id.ToString());
+            }
+        }
+
+        var map = new Dictionary<string, Dictionary<string, bool>>(StringComparer.Ordinal);
+        foreach (FixRecord record in ctx.Fixes)
+        {
+            // Migración tolerante: una huella sin hallazgo referenciado —las que escribió una
+            // versión anterior— no puede estar cubierta, así que cuenta como pendiente. Es la
+            // dirección segura: pedir una verificación de más, nunca darla por hecha.
+            bool isCovered = record.FindingId is { Length: > 0 } id && covered.Contains(id);
+
             foreach (FixFileStamp file in record.Files)
             {
                 string path = Normalize(file.Path);
-                if (!map.TryGetValue(path, out HashSet<string>? set))
+                if (!map.TryGetValue(path, out Dictionary<string, bool>? set))
                 {
-                    map[path] = set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    map[path] = set = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
                 }
 
-                set.Add(file.ContentHash);
+                // Si dos arreglos dejaron el MISMO contenido, basta con que uno esté cubierto: es
+                // el mismo código publicado, y no hay forma —ni sentido— de distinguirlos.
+                set[file.ContentHash] = set.TryGetValue(file.ContentHash, out bool already)
+                    ? already || isCovered
+                    : isCovered;
             }
         }
 
@@ -583,8 +645,28 @@ public sealed class DriftQuery
     }
 
     /// <summary>
-    /// ¿Este commit recogió un arreglo NUESTRO de este fichero? Se responde comparando el contenido
-    /// del fichero EN ese commit con la huella que el arreglo dejó registrada (F9 §2).
+    /// Qué vías de resolución CIERRAN el ciclo de un arreglo (F9.1 §1).
+    /// <para>
+    /// Las dos que son «el instrumento que lo detectó dice que ya no está»: una verificación en
+    /// verde, y una MEDIDA de la aplicación para los hallazgos que mide ella (F5.16). Las dos
+    /// aportan evidencia sobre el código; exigir además una re-auditoría para limpiar el indicador
+    /// convertiría el guardarraíl en burocracia.
+    /// </para>
+    /// <para>
+    /// <b>Y las que no.</b> Una resolución <see cref="ResolutionVia.Manual"/> es un juicio de una
+    /// persona sin que nadie haya vuelto a mirar el código, y
+    /// <see cref="ResolutionVia.CodigoEliminado"/> resuelve porque el fichero ya no está —una
+    /// unidad borrada no vuelve a «sin cambios»—. <see cref="ResolutionVia.Auditor"/> se queda
+    /// fuera porque no hace falta: llega dentro de una auditoría, y auditar mueve el commit de
+    /// anclaje, con lo que todo el rango se reinicia solo.
+    /// </para>
+    /// </summary>
+    private static bool ClosesTheLoop(ResolutionVia via)
+        => via is ResolutionVia.Verify or ResolutionVia.Medida;
+
+    /// <summary>
+    /// ¿De quién fue el cambio que este commit trajo a este fichero? Se responde comparando el
+    /// contenido del fichero EN ese commit con la huella que el arreglo dejó registrada (F9 §2).
     /// <para>
     /// Es una prueba, no una aproximación: si el contenido casa, ese commit publicó exactamente lo
     /// que escribió el agente. Y degrada en la dirección segura — si el usuario enmienda, aplasta o
@@ -592,17 +674,18 @@ public sealed class DriftQuery
     /// re-auditar de más, nunca de menos.
     /// </para>
     /// </summary>
-    private static bool IsOurFix(
-        Commit commit, string path, Dictionary<string, HashSet<string>> fixHashes)
+    private static TouchKind KindOf(
+        Commit commit, string path, Dictionary<string, Dictionary<string, bool>> fixHashes)
     {
-        if (fixHashes.Count == 0 || !fixHashes.TryGetValue(Normalize(path), out HashSet<string>? expected))
+        if (fixHashes.Count == 0
+            || !fixHashes.TryGetValue(Normalize(path), out Dictionary<string, bool>? expected))
         {
-            return false;
+            return TouchKind.Ajeno;
         }
 
         if (commit[path]?.Target is not Blob blob)
         {
-            return false;
+            return TouchKind.Ajeno;
         }
 
         try
@@ -610,11 +693,13 @@ public sealed class DriftQuery
             using Stream content = blob.GetContentStream();
             using var buffer = new MemoryStream();
             content.CopyTo(buffer);
-            return expected.Contains(HashUtil.NormalizedContentHash(buffer.ToArray()));
+            return expected.TryGetValue(HashUtil.NormalizedContentHash(buffer.ToArray()), out bool covered)
+                ? covered ? TouchKind.ArregloCubierto : TouchKind.ArregloPendiente
+                : TouchKind.Ajeno;
         }
         catch (LibGit2SharpException)
         {
-            return false;
+            return TouchKind.Ajeno;
         }
     }
 

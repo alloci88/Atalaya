@@ -44,9 +44,14 @@ public enum DriftState
 /// </param>
 /// <param name="LastChangeUtc">Fecha del committer del último commit que la tocó.</param>
 /// <param name="OwnFixes">
-/// Arreglos de la propia aplicación reconocidos desde la auditoría. A partir de
+/// Arreglos de la propia aplicación PENDIENTES de comprobar. A partir de
 /// <see cref="DriftRules.MaxOwnFixesBeforeReaudit"/> la unidad pasa a «cambiada» aunque todos sean
-/// propios.
+/// propios. Los ya verificados no entran aquí: ver <paramref name="CoveredFixes"/>.
+/// </param>
+/// <param name="CoveredFixes">
+/// Arreglos propios cuyo hallazgo ya quedó resuelto por el instrumento que lo detectó (F9.1 §1).
+/// No cuentan como deriva ni para el umbral: la evidencia ya se dio. Se conservan para poder
+/// decirlo en el detalle en vez de callarlo.
 /// </param>
 /// <param name="RenamedFrom">De dónde venía, cuando el cambio fue un renombrado o un movimiento.</param>
 /// <param name="Note">Por qué no se sabe, cuando no se sabe. Vacío en los casos normales.</param>
@@ -56,6 +61,7 @@ public sealed record UnitDrift(
     int Commits = 0,
     DateTimeOffset? LastChangeUtc = null,
     int OwnFixes = 0,
+    int CoveredFixes = 0,
     string? RenamedFrom = null,
     string? Note = null)
 {
@@ -86,6 +92,10 @@ public sealed record UnitDrift(
 
             return State switch
             {
+                DriftState.SinCambios when CoveredFixes > 0 =>
+                    $"Lo único que la ha tocado son {CoveredFixes} arreglo(s) de Atalaya ya "
+                    + $"verificados{when}. El ciclo del arreglo está cerrado: no hay nada "
+                    + "que re-auditar por eso.",
                 DriftState.SinCambios => "El código no ha cambiado desde que se auditó.",
                 DriftState.Modificada => Label + when + from
                     + (OwnFixes > 0

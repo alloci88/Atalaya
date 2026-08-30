@@ -230,6 +230,8 @@ deriva inventada.
   hechos desde Atalaya. **No** es deriva: es trabajo a medio cerrar, y se cierra
   **verificando**, que es el instrumento que detectó el hallazgo. No entra en
   «Seleccionar cambiadas»: gastarle una auditoría entera sería pagar de más.
+  **Verificar cierra el ciclo**: en cuanto la verificación sale en verde, esos
+  commits dejan de contar y la clase vuelve a «sin cambios» sin re-auditar nada.
 - **Historial no disponible** — no se puede saber, y se dice cuál de los tres
   casos es: el commit de su auditoría no está en tu clon (clon superficial o
   recién hecho), el historial se reescribió (rebase o force-push), o auditaron en
@@ -262,7 +264,21 @@ arreglo. Entonces:
   es candidato.
 - **Tres arreglos** sobre la misma clase sin volver a auditarla → **cambiada**
   aunque todos sean propios. Tanto retoque junto merece una mirada fresca. El
-  contador se pone a cero solo al re-auditar.
+  umbral cuenta **solo los que están sin verificar**: tres arreglos verificados
+  uno a uno no disparan nada; tres sin verificar, sí. Verificar y re-auditar
+  ponen el contador a cero, cada uno a su manera.
+
+**El circuito completo, entonces, es este**: arreglar con el agente → commitear →
+la clase sale como «arreglada, pendiente de verificar» → **Verificar** → si sale
+en verde, el hallazgo queda resuelto con su evidencia y la clase vuelve a «sin
+cambios». Si la verificación falla, el hallazgo sigue vivo y la clase sigue
+pendiente: no se cubre nada sin evidencia.
+
+> **Nota de migración.** Los arreglos hechos **antes** de que existiera esta
+> funcionalidad no dejaron huella registrada, así que sus commits salen como
+> ajenos y la clase aparece como «cambiada» aunque en su día se verificara. No es
+> un fallo: es que no hay nada que reconocer. Ocurre una sola vez y se limpia al
+> re-auditar esas clases.
 
 > **Si enmiendas, aplastas o rebasas un commit de arreglo antes de publicarlo**,
 > su contenido deja de casar y la clase saldrá como «cambiada». Es a propósito:

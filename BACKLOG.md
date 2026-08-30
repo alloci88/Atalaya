@@ -4,17 +4,18 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-30 (F9 — auditar lo que ha cambiado).
+Última revisión: 2026-08-30 (F9.1 — la verificación cierra el ciclo).
 
 ## En vuelo
 
-- **F9 — el caso de aceptación de la deriva, con los ojos del usuario.** La detección está entera y
-  cubierta por 64 tests contra repositorios git reales (D-683…D-693), y el rendimiento está medido
-  sobre el clon de xblast, pero **nadie ha abierto la ventana**. Falta el circuito completo: tras un
-  pull con cambios reales, que la tarjeta diga N, «Seleccionar cambiadas», auditar y ver los
-  hallazgos nuevos; y el inverso del bucle — arreglar con el agente, commitear, comprobar que sale
-  «arreglada — pendiente de verificar» y no «cambiada», y que verificar la deja limpia. En la misma
-  pasada: la fila del inventario con sus dos indicadores a 1366×768 y en los dos temas (D-694).
+- **F9 — el caso de aceptación de la deriva, con los ojos del usuario.** El panel del ciclo ya se ha
+  visto en la ventana, en los dos temas y a dos anchos (D-698), y el inventario de XBLAST enseña sus
+  2 cambiadas de verdad. Lo que falta es el **circuito con datos reales**: tras un pull con cambios,
+  «Seleccionar cambiadas», auditar y ver los hallazgos nuevos; y el inverso del bucle — arreglar con
+  el agente, commitear, comprobar que sale «arreglada, pendiente de verificar» y no «cambiada», y
+  que verificar la devuelve a «sin cambios» (D-694, D-695). No hay todavía ningún arreglo con huella
+  en el hub, así que ese medio circuito no ha podido ejercitarse fuera de los tests. En la misma
+  pasada: la fila del inventario con sus dos indicadores a 1366×768 y en los dos temas.
 - **F9 — el umbral de tres arreglos, sin datos detrás.** `MaxOwnFixesBeforeReaudit` está razonado,
   no medido: uno sería no dejar arreglar nada y diez sería no mirar nunca (D-686). Se revisará
   cuando haya uso real y se sepa cuál de las dos molesta.
@@ -97,6 +98,14 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## Cerrado
 
+- **F9.1 · La verificación cierra el ciclo, y el panel se ordena** — un arreglo propio cuyo hallazgo
+  queda resuelto por verificación (o por medida) pasa a estar **cubierto**: sus commits dejan de
+  contar y la unidad vuelve a «sin cambios» sin re-auditar. El umbral de tres cuenta solo los no
+  cubiertos. Todo DERIVADO de hechos que ya vivían en el hub —la huella dice qué hallazgo arreglaba,
+  el hallazgo dice cómo se resolvió—, sin un solo campo nuevo (D-695, D-696). Y el panel del ciclo
+  pasa de lista corrida a tres bloques —Ciclo · Deriva · Gobernanza— con la rama como subtítulo del
+  suyo y colapso a una línea cuando no hay deriva; visto en la ventana, en los dos temas y a dos
+  anchos (D-697, D-698).
 - **F9 · Auditar lo que ha cambiado** — la deriva, derivada del historial local y nunca persistida:
   qué clases han cambiado desde que se auditaron, con su conteo de commits y su fecha, y los cinco
   estados honestos cuando el historial no coopera (commit ausente, reescrito, clon por detrás, rama

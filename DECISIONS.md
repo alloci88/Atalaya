@@ -6836,3 +6836,90 @@ los hallazgos nuevos; y el inverso del bucle: arreglar un hallazgo con el agente
 comprobar que la unidad sale como «arreglada — pendiente de verificar» y no como cambiada, y que
 verificar la deja limpia. También queda mirar a 1366×768, en los dos temas, que la fila del
 inventario con sus **dos** indicadores no se estreche de más.
+
+## F9.1 — La verificación cierra el ciclo, y el panel se ordena
+
+Dos retoques salidos del primer uso real de F9.
+
+### D-695 — Verificar CIERRA el ciclo del arreglo, y por qué eso no es aflojar el guardarraíl
+
+F9 dejaba el contador de arreglos reseteándose solo al **re-auditar**. Eso dejaba coja la mitad
+buena del guardarraíl: el flujo completo es arreglar → commitear → «arreglada, pendiente de
+verificar» → **Verificar**, y ahí tenía que cerrarse. Si tras una verificación en verde la unidad
+seguía marcada, la aplicación estaba cobrando **dos veces por la misma evidencia** — la verificación
+es el instrumento que valida un arreglo (regla de la casa), y pedir además una re-auditoría para
+limpiar el indicador convierte el guardarraíl en burocracia.
+
+Ahora un arreglo propio cuyo hallazgo quedó resuelto está **cubierto**: sus commits dejan de contar
+como deriva y la unidad, si no tiene nada más, vuelve a «sin cambios».
+
+**Sin estado nuevo.** La cobertura se DERIVA de dos hechos que ya vivían en el hub: la huella del
+arreglo dice qué hallazgo arreglaba (`fixes/{ulid}.json` ya llevaba `findingId` desde F9), y el
+hallazgo dice cómo se resolvió y con qué evidencia. Cruzarlos basta. No hay ningún campo nuevo que
+pueda quedarse obsoleto ni discrepar entre máquinas — que es el principio rector de toda la
+funcionalidad.
+
+**El umbral cuenta solo lo NO cubierto.** Tres arreglos verificados uno a uno no disparan nada;
+tres sin verificar, sí. Y una verificación que FALLA no cubre nada: el hallazgo sigue vivo y la
+unidad sigue pendiente. Un commit **ajeno** manda siempre, haya lo que haya alrededor: código tocado
+sin auditoría detrás sigue siendo candidato.
+
+### D-696 — Qué vías de resolución cierran el ciclo, y cuáles no
+
+Cubren `verify` y `medida`. Las dos son lo mismo dicho de dos formas: **el instrumento que detectó
+el hallazgo dice que ya no está**. `medida` entra aunque el prompt hablara solo de verificación,
+porque los hallazgos que MIDE la aplicación se verifican midiendo (F5.16, D-479): dejarla fuera
+habría condenado a un arreglo que trocea una clase grande a quedarse «pendiente de verificar» para
+siempre, sin gesto posible que lo limpiara — exactamente la burocracia que este parte venía a
+quitar.
+
+No cubren:
+
+- **`manual`** — un juicio de una persona sin que nadie haya vuelto a mirar el código. La cobertura
+  exige evidencia del instrumento, no una decisión.
+- **`codigo-eliminado`** — una unidad borrada no vuelve a «sin cambios»; sale por su propia puerta.
+- **`auditor`** — no hace falta: llega dentro de una auditoría, y auditar mueve el commit de
+  anclaje, con lo que el rango entero se reinicia solo.
+
+**Migración tolerante.** Una huella sin hallazgo referenciado —las que escribiera una versión
+anterior— no rompe nada: cuenta como no cubierta. Y los arreglos hechos ANTES de F9 no tienen huella
+en absoluto, así que sus commits salen como ajenos y su unidad como «cambiada» aunque en su día se
+verificara. No es un fallo, es que no hay nada que reconocer; ocurre una vez y se limpia al
+re-auditar. Queda dicho en el manual, que es donde lo va a leer quien se lo encuentre.
+
+### D-697 — El panel del ciclo, en tres bloques
+
+En la lista corrida todo colgaba seguido: «Deriva respecto a «main»» quedaba como una línea perdida
+en el medio, y «Patrones silenciados» y «Directivas» parecían parte de la deriva cuando no tienen
+nada que ver con ella.
+
+Tres grupos, separados por un pelo y un microtítulo: **Ciclo** (dónde va la vuelta actual),
+**Deriva** (qué ha cambiado desde que se auditó) y **Gobernanza** (lo que condiciona QUÉ se
+reporta). Lo que agrupa de verdad es el **aire**; el pelo solo lo confirma — es el mismo criterio
+que D-675 y el mismo recurso de un píxel que ya usaba la ficha de hallazgo.
+
+**La rama pasa a ser el SUBTÍTULO del grupo**, en 11 px y bajo el título: es el alcance de los tres
+números que vienen debajo, no un dato más de la lista. Y si los tres son cero, el grupo **se colapsa
+a una línea** — «Sin deriva respecto a «main»» —: tres ceros seguidos ocupan lo mismo que tres datos
+y no dicen más que una frase.
+
+Los dos microtítulos se pintan idénticos —mismo tamaño, mismo peso, mismo color secundario— y hay
+test que lo fija: si uno pesara más que el otro, el panel volvería a parecer que tiene un grupo
+principal y dos apéndices.
+
+### D-698 — Cobertura y verificación visual (16 tests nuevos, 1.265 en total)
+
+`DriftVerificationTests`: el arreglo verificado que devuelve la unidad a «sin cambios» sin
+re-auditar; la verificación fallida que no cubre nada; tres verificados que no disparan el umbral
+frente a tres sin verificar que sí; dos cubiertos y uno pendiente; el commit ajeno posterior que
+manda; la resolución manual que no cubre; la huella sin hallazgo referenciado; que cubrir una unidad
+no contagia a la de al lado ni a la que rozó el commit; y el hallazgo medido que también cierra.
+En `DriftSurfaceTests`, los cuatro del panel: tres bloques con sus dos pelos, la rama como subtítulo,
+el colapso a una línea y la jerarquía tipográfica compartida.
+
+**Y esta vez sí se ha mirado la ventana.** El panel se ha conducido con automatización de interfaz
+sobre el clon real de XBLAST y capturado en los dos temas y a dos anchos (1366×768 y 900×700). Los
+tres bloques se leen separados, los dos pelos se ven sin pesar, la rama se lee como subtítulo y
+nada se corta ni envuelve mal. Lo que sigue sin verse con ojos humanos es el circuito completo de
+arreglar→verificar sobre datos reales — no hay ningún arreglo con huella en el hub todavía—, y eso
+sigue en el backlog.

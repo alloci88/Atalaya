@@ -96,6 +96,65 @@ public sealed class DriftSurfaceTests
     }
 
     [Fact]
+    public void El_panel_va_en_tres_bloques_separados_y_no_en_una_lista_corrida()
+    {
+        // F9.1 §2: en la lista corrida, «deriva» quedaba como una línea perdida en el medio y los
+        // patrones y las directivas parecían parte de ella. Tres grupos, con su pelo y su título.
+        string xaml = Source("src/Atalaya.App/Views/InventoryView.xaml");
+        string panel = xaml[xaml.IndexOf("Resumen del ciclo", StringComparison.Ordinal)..];
+
+        int ciclo = panel.IndexOf("{Binding CycleLabel}", StringComparison.Ordinal);
+        int deriva = panel.IndexOf("Text=\"Deriva\"", StringComparison.Ordinal);
+        int gobernanza = panel.IndexOf("Text=\"Gobernanza\"", StringComparison.Ordinal);
+
+        ciclo.Should().BeGreaterThan(0);
+        deriva.Should().BeGreaterThan(ciclo, "la deriva va después del ciclo");
+        gobernanza.Should().BeGreaterThan(deriva, "y la gobernanza, al final");
+
+        Regex.Matches(panel, "PanelDivider").Count
+            .Should().Be(2, "dos pelos para tres bloques");
+        xaml.Should().Contain("x:Key=\"PanelDivider\"");
+    }
+
+    [Fact]
+    public void La_rama_es_el_subtitulo_del_grupo_y_no_una_linea_suelta()
+    {
+        string xaml = Source("src/Atalaya.App/Views/InventoryView.xaml");
+        string panel = xaml[xaml.IndexOf("Resumen del ciclo", StringComparison.Ordinal)..];
+
+        int titulo = panel.IndexOf("Text=\"Deriva\"", StringComparison.Ordinal);
+        int rama = panel.IndexOf("{Binding DriftBranchLabel}", StringComparison.Ordinal);
+        int cambiadas = panel.IndexOf("{Binding ChangedUnits}", StringComparison.Ordinal);
+
+        rama.Should().BeGreaterThan(titulo, "va pegada al título del grupo");
+        cambiadas.Should().BeGreaterThan(rama, "y por delante de los números que acota");
+        panel[rama..(rama + 200)].Should().Contain("FontSize=\"11\"",
+            "es un subtítulo, no un dato: pesa menos que las líneas de abajo");
+    }
+
+    [Fact]
+    public void Sin_deriva_el_grupo_se_colapsa_a_una_linea()
+    {
+        string xaml = Source("src/Atalaya.App/Views/InventoryView.xaml");
+
+        xaml.Should().Contain("{Binding NoDriftLabel}");
+        xaml.Should().Contain("{Binding HasNoDrift, Converter={StaticResource BoolToVisibility}}",
+            "tres ceros seguidos no dicen más que una frase");
+    }
+
+    [Fact]
+    public void Los_tres_bloques_comparten_jerarquia_tipografica()
+    {
+        // Los dos microtítulos se pintan igual: si uno pesara más que el otro, el panel volvería a
+        // parecer que tiene un grupo principal y dos apéndices.
+        string xaml = Source("src/Atalaya.App/Views/InventoryView.xaml");
+        var titles = Regex.Matches(xaml, @"<TextBlock Text=""(Deriva|Gobernanza)"" ([^>]*?)FontSize=""(?<size>[\d.]+)""");
+
+        titles.Should().HaveCount(2);
+        titles.Select(m => m.Groups["size"].Value).Distinct().Should().ContainSingle();
+    }
+
+    [Fact]
     public void La_re_auditoria_no_estrena_camino_de_lanzamiento()
     {
         // Anti-objetivo declarado: «Seleccionar cambiadas» solo MARCA. Lanzar sigue siendo el

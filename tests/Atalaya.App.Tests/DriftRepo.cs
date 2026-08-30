@@ -144,24 +144,81 @@ internal sealed class DriftRepo : IDisposable
         Hub.Store.WriteInventory(Slug, inv);
     }
 
-    /// <summary>Registra un arreglo de la aplicación sobre el contenido que tienen esos ficheros AHORA.</summary>
+    /// <summary>
+    /// Registra un arreglo de la aplicación sobre el contenido que tienen esos ficheros AHORA, con
+    /// su hallazgo detrás —que es lo que permite saber más tarde si ese arreglo quedó verificado—.
+    /// Devuelve el ULID del hallazgo.
+    /// </summary>
     public Ulid RecordFix(params string[] paths)
     {
-        Ulid id = _ulids.NewUlid();
-        Hub.Store.WriteFix(new FixRecord
+        Ulid finding = SeedFinding(paths[0]);
+        WriteFix(finding.ToString(), paths);
+        return finding;
+    }
+
+    /// <summary>
+    /// Un arreglo SIN hallazgo referenciado: los que escribió una versión anterior a F9.1. Sirve
+    /// para probar que la migración es tolerante y cuenta como no cubierto.
+    /// </summary>
+    public void RecordLegacyFix(params string[] paths) => WriteFix(null, paths);
+
+    private void WriteFix(string? findingId, string[] paths)
+        => Hub.Store.WriteFix(new FixRecord
         {
-            Id = id,
+            Id = _ulids.NewUlid(),
             AppSlug = Slug,
             By = "tester",
             Utc = DateTimeOffset.UtcNow,
-            FindingId = id.ToString(),
+            FindingId = findingId,
             Files = paths.Select(p => new FixFileStamp(
                 p,
                 Domain.Hashing.HashUtil.NormalizedContentHash(File.ReadAllBytes(
                     Path.Combine(Clone, p.Replace('/', Path.DirectorySeparatorChar)))))).ToList(),
         });
 
+    /// <summary>Un hallazgo activo sobre esa unidad, como el que arreglaría una sesión fix.</summary>
+    public Ulid SeedFinding(string path)
+    {
+        Ulid id = _ulids.NewUlid();
+        var stamp = new DetectionStamp(DateTimeOffset.UtcNow, AuditMode.Lotes, Head, "tester");
+        Hub.Store.WriteFinding(Slug, new Finding
+        {
+            Id = id,
+            RuleId = "R-1",
+            Title = $"hallazgo de {path}",
+            Severity = Severity.Media,
+            Confidence = Confidence.Media,
+            Locations = { new Location(path, 1) },
+            FirstDetected = stamp,
+            LastConfirmed = stamp,
+        });
+
         return id;
+    }
+
+    /// <summary>
+    /// La verificación sale en VERDE: el hallazgo queda resuelto por la vía <c>verify</c>, con su
+    /// evidencia. Es exactamente lo que escribe <c>VerifyCoordinator</c>.
+    /// </summary>
+    public void VerifyGreen(Ulid findingId)
+    {
+        Finding f = Hub.Store.TryReadFinding(Slug, findingId.ToString())!;
+        f.Resolve(new ResolutionStamp(
+            DateTimeOffset.UtcNow, ResolutionVia.Verify, AuditMode.Verify, Head, "tester",
+            "el defecto ya no está en el código"));
+        Hub.Store.WriteFinding(Slug, f);
+    }
+
+    /// <summary>
+    /// La verificación FALLA: el hallazgo sigue ahí, reconfirmado. No cubre nada — y esa es
+    /// justamente la mitad del guardarraíl que no puede aflojarse.
+    /// </summary>
+    public void VerifyRed(Ulid findingId)
+    {
+        Finding f = Hub.Store.TryReadFinding(Slug, findingId.ToString())!;
+        f.Confirm(AuditMode.Verify, new DetectionStamp(
+            DateTimeOffset.UtcNow, AuditMode.Verify, Head, "tester"));
+        Hub.Store.WriteFinding(Slug, f);
     }
 
     public AppDrift Drift() => new DriftQuery(Hub).Compute(Slug, Clone);

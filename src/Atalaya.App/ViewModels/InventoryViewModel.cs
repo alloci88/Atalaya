@@ -306,7 +306,27 @@ public sealed partial class InventoryViewModel : ViewModelBase
     /// <summary>Hay algo de deriva que contar. Sin esto el panel no estrena líneas vacías.</summary>
     public bool HasDrift => ChangedUnits > 0 || FixedPendingVerify > 0 || NoHistoryUnits > 0;
 
-    /// <summary>Contra qué se ha medido: «deriva respecto a develop». El panel lo DICE (F9 §1.1).</summary>
+    /// <summary>
+    /// La deriva se ha podido calcular. Es distinto de que HAYA deriva: sin esto no se podría
+    /// decir «sin deriva» con conocimiento de causa, que es justo lo que hay que poder decir.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasNoDrift))]
+    private bool _driftIsKnown;
+
+    /// <summary>
+    /// Se ha mirado y no hay nada (F9.1 §2). El grupo se colapsa a una línea: tres ceros seguidos
+    /// ocupan lo mismo que un dato y no dicen más que una frase.
+    /// </summary>
+    public bool HasNoDrift => DriftIsKnown && !HasDrift;
+
+    /// <summary>Lo que se lee cuando no hay deriva: «Sin deriva respecto a «main»».</summary>
+    [ObservableProperty] private string _noDriftLabel = string.Empty;
+
+    /// <summary>
+    /// Contra qué se ha medido, como SUBTÍTULO del grupo y no como línea suelta (F9.1 §2):
+    /// «respecto a «main» (d996732)». El panel lo DICE (F9 §1.1).
+    /// </summary>
     [ObservableProperty] private string _driftBranchLabel = string.Empty;
 
     /// <summary>Los avisos honestos: rama no por defecto, clon atrasado, cambios sin commitear.</summary>
@@ -398,6 +418,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
             // se leería como «no hay nada que re-auditar», que es la mentira tranquilizadora.
             _driftResult = null;
             _drift = new Dictionary<string, UnitDrift>(StringComparer.Ordinal);
+            DriftIsKnown = false;
             DriftProblem = $"No se pudo calcular la deriva: {ex.Message}";
         }
         finally
@@ -412,9 +433,10 @@ public sealed partial class InventoryViewModel : ViewModelBase
         _driftResult = drift;
         _drift = drift.Units.ToDictionary(u => u.Path, StringComparer.Ordinal);
         DriftProblem = drift.Problem ?? string.Empty;
-        DriftBranchLabel = drift.Problem is null && drift.Branch.Length > 0
-            ? $"Deriva respecto a «{drift.Branch}» ({drift.Head})"
-            : string.Empty;
+        DriftIsKnown = drift.Problem is null;
+        string against = drift.Branch.Length > 0 ? $"«{drift.Branch}»" : "tu clon";
+        DriftBranchLabel = DriftIsKnown ? $"respecto a {against} ({drift.Head})" : string.Empty;
+        NoDriftLabel = $"Sin deriva respecto a {against}";
 
         DriftWarnings.Clear();
         foreach (string warning in drift.Warnings)
@@ -488,6 +510,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
         NoHistoryUnits = _drift.Values.Count(d => d.State == DriftState.HistorialNoDisponible);
         OrphanFindings = _driftResult?.Orphans.Count ?? 0;
         OnPropertyChanged(nameof(ChangedToggleTooltip));
+        OnPropertyChanged(nameof(HasNoDrift));
 
         string search = SearchText.Trim();
         IEnumerable<InventoryUnit> filtered = string.IsNullOrEmpty(search)
