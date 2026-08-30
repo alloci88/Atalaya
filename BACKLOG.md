@@ -105,7 +105,8 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   el hallazgo dice cómo se resolvió—, sin un solo campo nuevo (D-695, D-696). Y el panel del ciclo
   pasa de lista corrida a tres bloques —Ciclo · Deriva · Gobernanza— con la rama como subtítulo del
   suyo y colapso a una línea cuando no hay deriva; visto en la ventana, en los dos temas y a dos
-  anchos (D-697, D-698).
+  anchos (D-697, D-699). El manual cuenta UN solo flujo —auditas, arreglas, verificas— y deja la
+  deriva donde está: como anotación del inventario, no como paso (D-698).
 - **F9 · Auditar lo que ha cambiado** — la deriva, derivada del historial local y nunca persistida:
   qué clases han cambiado desde que se auditaron, con su conteo de commits y su fecha, y los cinco
   estados honestos cuando el historial no coopera (commit ausente, reescrito, clon por detrás, rama

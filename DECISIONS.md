@@ -6907,7 +6907,28 @@ Los dos microtítulos se pintan idénticos —mismo tamaño, mismo peso, mismo c
 test que lo fija: si uno pesara más que el otro, el panel volvería a parecer que tiene un grupo
 principal y dos apéndices.
 
-### D-698 — Cobertura y verificación visual (16 tests nuevos, 1.265 en total)
+### D-698 — Un solo flujo en el manual: la deriva no estrena circuito
+
+Al escribir el manual salió el riesgo de fondo de esta funcionalidad: contarla como si arreglar con
+el agente tuviera un circuito propio —«arreglar → commitear → pendiente de verificar → verificar»—
+frente a otro para el prompt manual. Eso es falso y además caro: sugiere que quien arregla a mano
+tiene que re-auditar a propósito, o verificar dos veces, para limpiar un indicador.
+
+El ciclo de un hallazgo es **siempre el mismo**: auditas → arreglas → verificas, y lo cierra
+**Verificar** con evidencia, venga el arreglo del agente o de un prompt pegado fuera. La deriva no
+es un paso: es una **anotación del inventario sobre la unidad**, y la recoge la operación rutinaria
+del sprint —«Seleccionar cambiadas» → auditar—, no una acción extra.
+
+Lo que sí cambia entre los dos caminos es un **bonus silencioso**, no una obligación: como la
+aplicación sabe qué escribió su propio agente, al verificar en verde la unidad ni siquiera queda
+marcada. Con el prompt manual el commit lo escribió otro y no hay nada que reconocer, así que la
+marca se queda — **y es verdad**: ese código lo tocó alguien y nadie lo ha vuelto a barrer entero.
+No urge, y el manual lo dice con esas palabras en vez de convertirlo en una tarea.
+
+Misma lectura para la nota de migración: los arreglos anteriores a F9 dejan la marca, no piden nada,
+y se van con la siguiente pasada rutinaria.
+
+### D-699 — Cobertura y verificación visual (16 tests nuevos, 1.265 en total)
 
 `DriftVerificationTests`: el arreglo verificado que devuelve la unidad a «sin cambios» sin
 re-auditar; la verificación fallida que no cubre nada; tres verificados que no disparan el umbral

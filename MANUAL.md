@@ -220,6 +220,13 @@ Y siempre **entre commits**, nunca contra tu carpeta de trabajo: un fichero a
 medio editar o un `core.autocrlf` distinto convertirían medio repositorio en
 deriva inventada.
 
+> **Esto no añade pasos a nada.** El ciclo de un hallazgo es siempre el mismo —
+> **auditas → arreglas → verificas**—, lo arregles con el agente o con un prompt
+> manual: en los dos casos lo cierra **Verificar**, con evidencia. La deriva es
+> otra cosa: una **anotación del inventario sobre la unidad** («cambió desde que
+> se auditó») que no te pide nada en el momento. La recoge la operación rutinaria
+> del sprint: «Seleccionar cambiadas» → auditar.
+
 #### Qué significa cada estado
 
 - **Cambiada desde la auditoría (N commits)** — el código ha cambiado por mano
@@ -227,11 +234,11 @@ deriva inventada.
   Dice cuántos commits la tocaron y la fecha del último; los merges no cuentan
   (contarían otra vez lo que ya traen dentro).
 - **Arreglada — pendiente de verificar** — lo único que la ha tocado son arreglos
-  hechos desde Atalaya. **No** es deriva: es trabajo a medio cerrar, y se cierra
-  **verificando**, que es el instrumento que detectó el hallazgo. No entra en
-  «Seleccionar cambiadas»: gastarle una auditoría entera sería pagar de más.
-  **Verificar cierra el ciclo**: en cuanto la verificación sale en verde, esos
-  commits dejan de contar y la clase vuelve a «sin cambios» sin re-auditar nada.
+  hechos desde Atalaya. **No** es deriva: es la anotación de que ese cambio ya
+  tiene dueño conocido y todavía no se ha confirmado. No te pide nada nuevo —
+  ibas a verificar de todas formas—, y por eso no entra en «Seleccionar
+  cambiadas»: auditar entera una clase que solo espera un verify sería pagar de
+  más. En cuanto la verificación sale en verde, la anotación desaparece sola.
 - **Historial no disponible** — no se puede saber, y se dice cuál de los tres
   casos es: el commit de su auditoría no está en tu clon (clon superficial o
   recién hecho), el historial se reescribió (rebase o force-push), o auditaron en
@@ -268,17 +275,26 @@ arreglo. Entonces:
   uno a uno no disparan nada; tres sin verificar, sí. Verificar y re-auditar
   ponen el contador a cero, cada uno a su manera.
 
-**El circuito completo, entonces, es este**: arreglar con el agente → commitear →
-la clase sale como «arreglada, pendiente de verificar» → **Verificar** → si sale
-en verde, el hallazgo queda resuelto con su evidencia y la clase vuelve a «sin
-cambios». Si la verificación falla, el hallazgo sigue vivo y la clase sigue
-pendiente: no se cubre nada sin evidencia.
+**El bonus del arreglo con agente.** El flujo no cambia —arreglas, commiteas y
+**Verificar** cierra el hallazgo—, pero como Atalaya sí sabe qué escribió, al
+verificar en verde la clase **ni siquiera queda marcada** como cambiada: la
+huella le dice que ese commit era suyo y ya está comprobado. Si la verificación
+falla, el hallazgo sigue vivo y la marca también: no se da por bueno nada sin
+evidencia.
+
+Con el **prompt de arreglo** el hallazgo se cierra igual —lo cierra Verificar, con
+la misma evidencia—, pero el commit lo escribió otro y Atalaya no tiene nada que
+reconocer, así que la clase se queda marcada como **cambiada**. Eso es verdad y
+no urge: la unidad tocó código que nadie ha vuelto a barrer entero, y quien la
+recoge es la pasada rutinaria del sprint cuando toque. **No hace falta verificar
+dos veces ni re-auditar a propósito para quitar la marca.**
 
 > **Nota de migración.** Los arreglos hechos **antes** de que existiera esta
 > funcionalidad no dejaron huella registrada, así que sus commits salen como
 > ajenos y la clase aparece como «cambiada» aunque en su día se verificara. No es
-> un fallo: es que no hay nada que reconocer. Ocurre una sola vez y se limpia al
-> re-auditar esas clases.
+> un fallo: es que no hay nada que reconocer, y la marca dice la verdad sobre el
+> inventario. Se va sola en la siguiente pasada de «Seleccionar cambiadas»;
+> ocurre una vez y no pide ninguna acción extra.
 
 > **Si enmiendas, aplastas o rebasas un commit de arreglo antes de publicarlo**,
 > su contenido deja de casar y la clase saldrá como «cambiada». Es a propósito:
