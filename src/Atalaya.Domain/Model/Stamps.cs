@@ -65,6 +65,18 @@ public enum ResolutionVia
     Manual,
 
     /// <summary>
+    /// El código que lo contenía YA NO EXISTE (F9 §4): una persona ha comprobado que la unidad se
+    /// borró del repositorio y ha resuelto el hallazgo con el commit del borrado como evidencia.
+    /// <para>
+    /// Es su propia vía y no <see cref="Manual"/> porque quien lea el hallazgo dentro de un año
+    /// tiene que poder distinguir «alguien decidió cerrarlo» de «el código desapareció»: lo primero
+    /// es un juicio y lo segundo es un hecho verificable en el historial. Nunca es automática —un
+    /// fichero que no está puede haberse movido, y «no está donde estaba» no es «ya no existe».
+    /// </para>
+    /// </summary>
+    CodigoEliminado,
+
+    /// <summary>
     /// Lo resolvió una MEDIDA de la aplicación (F5.16): la unidad volvió a medirse y quedó por
     /// debajo del umbral que la había marcado. Es su propia vía y no <see cref="Verify"/> porque no
     /// hubo veredicto de nadie — hubo un número. Quien lea el hallazgo dentro de un año tiene que

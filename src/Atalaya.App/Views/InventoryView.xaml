@@ -52,6 +52,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -83,6 +84,21 @@
                        IsEnabled="{Binding CanAudit}" ToolTip="{Binding AuditDisabledTooltip}" Margin="0,0,8,8" />
             <ui:Button Content="{Binding PendingToggleLabel}" Command="{Binding SelectPendingCommand}"
                        ToolTip="{Binding PendingToggleTooltip}" Margin="0,0,8,8" />
+            <!-- F9 §3: hace pareja con «Seleccionar pendientes» y desemboca en el MISMO flujo —
+                 mismo diálogo, misma estimación de coste, mismo barrido, misma reconciliación. La
+                 re-auditoría no estrena ningún camino nuevo de resolución. -->
+            <ui:Button Content="{Binding ChangedToggleLabel}" Command="{Binding SelectChangedCommand}"
+                       ToolTip="{Binding ChangedToggleTooltip}" Margin="0,0,8,8" />
+            <!-- El filtro de deriva es PROPIO y aparte del estado de auditoría: son dos dimensiones
+                 distintas, y una unidad puede estar «auditada» y «cambiada» a la vez. -->
+            <ComboBox SelectedIndex="{Binding DriftFilter}" Width="210" Margin="0,0,8,8"
+                      VerticalAlignment="Center"
+                      ToolTip="Filtra por lo que le ha pasado al código desde que se auditó. Es una dimensión aparte del estado de auditoría.">
+                <ComboBoxItem Content="Deriva: todas" />
+                <ComboBoxItem Content="Solo cambiadas" />
+                <ComboBoxItem Content="Solo arregladas sin verificar" />
+                <ComboBoxItem Content="Solo sin historial" />
+            </ComboBox>
             <ui:Button Content="Re-escanear" Command="{Binding RescanCommand}"
                        IsEnabled="{Binding CanAudit}" ToolTip="{Binding AuditDisabledTooltip}" Margin="0,0,8,8" />
             <ui:Button Content="Reset ciclo" Command="{Binding ResetCycleCommand}" Margin="0,0,8,8" />
@@ -110,9 +126,24 @@
             </StackPanel>
         </Border>
 
+        <!-- · Deriva: contra qué se ha medido y qué NO ve este análisis (F9 §1.1). Va arriba
+             porque condiciona la lectura de todos los indicadores de abajo. · -->
+        <ItemsControl Grid.Row="2" Grid.Column="0" ItemsSource="{Binding DriftWarnings}"
+                      Margin="0,0,0,10"
+                      Visibility="{Binding HasDriftWarnings, Converter={StaticResource BoolToVisibility}}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Background="#18808080" CornerRadius="6" Padding="12,7" Margin="0,0,0,6">
+                        <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
         <!-- · Barra de selección: solo cuando hay algo marcado. El contador es lo que se va a
              gastar, así que se lee antes de pulsar «Auditar selección» (F5.6 §3). · -->
-        <Border Grid.Row="3" Grid.Column="0"
+        <Border Grid.Row="4" Grid.Column="0"
                 Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1" CornerRadius="6" Padding="12,7" Margin="0,0,0,10"
@@ -129,7 +160,7 @@
         </Border>
 
         <!-- · Árbol de módulos · -->
-        <ScrollViewer Grid.Row="4" Grid.Column="0" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Row="5" Grid.Column="0" VerticalScrollBarVisibility="Auto">
             <ItemsControl ItemsSource="{Binding Modules}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -197,13 +228,29 @@
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}" VerticalAlignment="Center" />
                                             <TextBlock Grid.Column="1" Text="{Binding FileName}" VerticalAlignment="Center" Margin="6,0,0,0" />
                                             <Border Grid.Column="2" Background="#22808080" CornerRadius="8" Padding="8,2" Margin="6,0">
                                                 <TextBlock Text="{Binding StateLabel}" FontSize="11" />
                                             </Border>
-                                            <TextBlock Grid.Column="3" Text="{Binding ClaimedBy, StringFormat='🔒 {0}'}" FontSize="11" Opacity="0.7" VerticalAlignment="Center" Margin="6,0,0,0" />
+                                            <!-- F9 §3: la deriva es una dimensión APARTE del estado
+                                                 de auditoría, así que lleva su propio indicador al
+                                                 lado del otro y no lo sustituye: una unidad puede
+                                                 estar «Auditada» y «Cambiada» a la vez. El color
+                                                 nunca es el único canal — el texto va siempre. -->
+                                            <Border Grid.Column="3" CornerRadius="8" Padding="8,2" Margin="0,0,6,0"
+                                                    Background="#18808080"
+                                                    ToolTip="{Binding DriftTooltip}"
+                                                    Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                                                             Fill="{Binding DriftInk}" Margin="0,0,6,0" />
+                                                    <TextBlock Text="{Binding DriftLabel}" FontSize="11" />
+                                                </StackPanel>
+                                            </Border>
+                                            <TextBlock Grid.Column="4" Text="{Binding ClaimedBy, StringFormat='🔒 {0}'}" FontSize="11" Opacity="0.7" VerticalAlignment="Center" Margin="6,0,0,0" />
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -216,7 +263,7 @@
 
         <!-- Empty state -->
         <TextBlock
-            Grid.Row="4"
+            Grid.Row="5"
             Grid.Column="0"
             Text="Sin inventario. Vincula tu clon local y pulsa «Re-escanear»."
             Opacity="0.6"
@@ -228,7 +275,7 @@
              aplicación por primera vez: el usuario no distinguía ciclo de sesión (F5.6 §5).
              «Grandes» ya no sale aquí por decisión del usuario — no aporta a este nivel, y el
              estado sigue visible como badge en la fila de cada unidad, que es donde se actúa. -->
-        <Border Grid.Row="1" Grid.Column="1" Grid.RowSpan="4" Margin="14,0,0,0" Padding="14"
+        <Border Grid.Row="1" Grid.Column="1" Grid.RowSpan="5" Margin="14,0,0,0" Padding="14"
                 Background="#18808080" CornerRadius="8" VerticalAlignment="Top">
             <StackPanel>
                 <TextBlock Text="Resumen del ciclo" FontWeight="SemiBold" Margin="0,0,0,10"
@@ -244,6 +291,40 @@
                 <TextBlock Margin="0,4,0,0"
                            ToolTip="Las unidades que se auditarán al pulsar «Auditar selección»."
                            Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}"><Run Text="Seleccionadas: " /><Run Text="{Binding SelectedCount}" FontWeight="Bold" /></TextBlock>
+                <!-- F9 §3: la deriva, con sus líneas propias y SEPARADAS. «Cambiadas» y
+                     «arregladas pendientes de verificar» no se suman nunca: son dos acciones
+                     distintas —auditar y verificar—, y juntarlas propondría pagar una auditoría
+                     entera por algo que se comprueba con un verify. -->
+                <TextBlock Margin="0,10,0,0" FontSize="11.5" Opacity="0.75" TextWrapping="Wrap"
+                           Text="{Binding DriftBranchLabel}"
+                           ToolTip="Contra qué se ha medido la deriva: la rama en la que está tu clon y su HEAD. Medir contra otra rama es legítimo, pero lo que veas será la deriva de esa rama."
+                           Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Margin="0,4,0,0" Text="Calculando la deriva…" FontSize="11.5" Opacity="0.6"
+                           ToolTip="Se está comparando el commit de cada auditoría con HEAD de tu clon. Va fuera del hilo de la interfaz: puedes seguir usando la vista."
+                           Visibility="{Binding IsDriftLoading, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Margin="0,4,0,0" TextWrapping="Wrap" FontSize="11.5" Opacity="0.75"
+                           Text="{Binding DriftProblem}"
+                           ToolTip="Por qué no hay deriva que enseñar. No saber no es lo mismo que saber que no ha cambiado nada, así que en vez de un cero se dice qué falta."
+                           Visibility="{Binding HasDriftProblem, Converter={StaticResource BoolToVisibility}}" />
+                <TextBlock Margin="0,4,0,0"
+                           ToolTip="Auditadas cuyo código ha cambiado por mano ajena desde su auditoría. Son las candidatas de «Seleccionar cambiadas»."
+                           Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"><Run Text="Cambiadas: " /><Run Text="{Binding ChangedUnits}" FontWeight="Bold" /></TextBlock>
+                <TextBlock Margin="0,4,0,0"
+                           ToolTip="Lo único que las ha tocado son arreglos hechos desde Atalaya. No se re-auditan: se verifican, que es el instrumento que detectó el hallazgo."
+                           Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"><Run Text="Arregladas sin verificar: " /><Run Text="{Binding FixedPendingVerify}" FontWeight="Bold" /></TextBlock>
+                <TextBlock Margin="0,4,0,0"
+                           ToolTip="Auditadas cuyo historial no se puede comparar: el commit de su auditoría no está en este clon, se reescribió la historia, o tu clon va por detrás. Ni «sin cambios» ni «cambiada» serían ciertas."
+                           Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"><Run Text="Sin historial: " /><Run Text="{Binding NoHistoryUnits}" FontWeight="Bold" /></TextBlock>
+                <!-- F9 §4: los hallazgos que se quedaron sin código. Nada se resuelve solo. -->
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0"
+                            Visibility="{Binding HasOrphans, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock VerticalAlignment="Center"
+                               ToolTip="Hallazgos activos cuyo fichero ya no está en el repositorio. No se verifican ni se resuelven solos."><Run Text="Sin código: " /><Run Text="{Binding OrphanFindings}" FontWeight="Bold" /><Run Text=" · " /></TextBlock>
+                    <ui:HyperlinkButton Content="Revisar" Padding="0" Margin="0" VerticalAlignment="Center"
+                                        Command="{Binding ShowDeletedUnitsCommand}"
+                                        ToolTip="Ver esos hallazgos, con el commit que borró cada fichero, y resolverlos por código eliminado si procede. La decisión es tuya." />
+                </StackPanel>
+
                 <!-- F5.12: qué se ha decidido NO ver en esta aplicación. Va en el panel del
                      ciclo porque condiciona la lectura de todo lo demás: la cobertura de un ciclo
                      con tipos de problema silenciados no significa lo mismo que la de uno sin

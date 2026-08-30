@@ -1,4 +1,5 @@
 using Atalaya.Domain;
+using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Storage.Json;
 using FluentAssertions;
@@ -125,5 +126,48 @@ public class SerializationTests
 
         json.Should().NotContain("\r\n");
         json.Should().EndWith("\n");
+    }
+    /// <summary>
+    /// F9 §2. El registro de arreglo es un HECHO del hub: viaja como todo lo demás y valida como
+    /// todo lo demás. Sin ficheros con huella no reconocería ningún commit, así que no es válido.
+    /// </summary>
+    [Fact]
+    public void El_registro_de_arreglo_va_y_vuelve_intacto()
+    {
+        var record = new FixRecord
+        {
+            Id = Ulid.Parse("01J0000000000000000000000A"),
+            AppSlug = "app",
+            FindingId = "01J0000000000000000000000B",
+            FindingAlias = "BUG-0003",
+            Utc = new DateTimeOffset(2026, 8, 30, 10, 0, 0, TimeSpan.Zero),
+            By = "quien",
+            BaseCommit = "abc1234",
+            Files = { new FixFileStamp("src/A.cs", "sha256:deadbeef") },
+        };
+
+        string json = AtalayaJson.Serialize(record);
+        FixRecord back = AtalayaJson.Deserialize<FixRecord>(json);
+
+        back.Id.Should().Be(record.Id);
+        back.AppSlug.Should().Be("app");
+        back.FindingAlias.Should().Be("BUG-0003");
+        back.BaseCommit.Should().Be("abc1234");
+        back.Files.Should().ContainSingle().Which.Should().Be(record.Files[0]);
+    }
+
+    [Fact]
+    public void Un_registro_de_arreglo_sin_ficheros_no_pasa_el_esquema()
+    {
+        var record = new FixRecord
+        {
+            Id = Ulid.Parse("01J0000000000000000000000A"),
+            AppSlug = "app",
+            By = "quien",
+        };
+
+        Action act = () => SchemaValidation.Validate(record);
+
+        act.Should().Throw<SchemaValidationException>().WithMessage("*files*");
     }
 }

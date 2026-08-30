@@ -685,6 +685,60 @@ public sealed class AssistedFixTests : IDisposable
         fix.Files.Should().BeEmpty();
     }
 
+    // ================================================================= F9 §2 · la huella del arreglo
+
+    /// <summary>
+    /// <b>El arreglo deja su huella para no morderse la cola (F9 §2).</b> Sin esto, el commit con el
+    /// que el usuario publique este arreglo haría que la unidad apareciera «cambiada desde su
+    /// auditoría» —por culpa de la propia auditoría—, y cada arreglo realimentaría la lista de
+    /// candidatas para siempre.
+    /// <para>
+    /// Se guarda el CONTENIDO que quedó escrito, no un hash de commit: Atalaya no commitea (D-556),
+    /// así que al cerrar el arreglo el commit que lo recogerá todavía no existe.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task El_arreglo_registra_que_ficheros_dejo_escritos_y_con_que_contenido()
+    {
+        var agent = new FakeCopilotAgent(fixScript: _ => new[]
+        {
+            new FixStep(Edit: new FixStepEdit(UnitPath, "arregla",
+                new[] { new FixEdit("var bytes", "var octets") })),
+            new FixStep(Done: new FixDoneArgs("hecho", "Arregla (BUG-0003)", "", null)),
+        });
+
+        LiveFixService fix = Service(agent);
+        await fix.StartAsync(new FixSessionRequest(Slug, _findingId));
+
+        FixRecord record = _hub.Store.ListFixes(Slug).Should().ContainSingle().Subject;
+
+        record.Id.ToString().Should().Be(fix.SessionId, "un arreglo, un registro, con el ULID de su sesión");
+        record.FindingId.Should().Be(_findingId.ToString());
+        record.FindingAlias.Should().Be("BUG-0003");
+        record.By.Should().NotBeNullOrWhiteSpace("la huella lleva quién la dejó");
+
+        FixFileStamp stamp = record.Files.Should().ContainSingle().Subject;
+        stamp.Path.Should().Be(UnitPath);
+        stamp.ContentHash.Should().Be(
+            Atalaya.Domain.Hashing.HashUtil.NormalizedContentHash(
+                File.ReadAllBytes(Path.Combine(_clone, UnitPath))),
+            "es la huella de lo que el agente dejó en el clon, tal cual");
+    }
+
+    /// <summary>Sin ficheros tocados no hay nada que reconocer, y no se escribe un registro vacío.</summary>
+    [Fact]
+    public async Task Un_arreglo_que_no_toca_nada_no_deja_huella()
+    {
+        var agent = new FakeCopilotAgent(fixScript: _ => new[]
+        {
+            new FixStep(Done: new FixDoneArgs("no había nada que tocar", "Nada (BUG-0003)", "", null)),
+        });
+
+        await Service(agent).StartAsync(new FixSessionRequest(Slug, _findingId));
+
+        _hub.Store.ListFixes(Slug).Should().BeEmpty();
+    }
+
     // ================================================================= H9.1 §1 · volver al hallazgo
 
     /// <summary>

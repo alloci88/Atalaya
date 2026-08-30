@@ -110,6 +110,9 @@ public sealed class ReAuditSelectionTests : IDisposable
         services.AddSingleton<DirectiveScanner>();
         services.AddSingleton<DirectiveService>();
         services.AddSingleton<IDirectivesDialog, TestFactory.NoDirectivesDialog>();
+        // F9: la deriva y la lista de hallazgos sin código, que el inventario pide.
+        services.AddSingleton(sp => new DriftQuery(sp.GetRequiredService<HubContext>()));
+        services.AddSingleton<IDeletedUnitsDialog, TestFactory.NoDeletedUnitsDialog>();
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
     }

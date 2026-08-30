@@ -403,7 +403,8 @@ public sealed class AppDeletionTests : IDisposable
             hub,
             new ToastCenter(),
             TestFactory.Links(hub, _paths),
-            TestFactory.LinkFlow(hub, _paths));
+            TestFactory.LinkFlow(hub, _paths),
+            new DriftQuery(hub));
     }
 
     /// <summary>El confirmador de los tests: responde lo que se le diga y guarda lo que le pidieron.</summary>

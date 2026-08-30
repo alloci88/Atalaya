@@ -111,6 +111,7 @@ public partial class App : Application
         services.AddSingleton(sp => new PortfolioQuery(sp.GetRequiredService<HubContext>().Store));
         services.AddSingleton(sp => new MetricsQuery(sp.GetRequiredService<HubContext>()));
         services.AddSingleton(sp => new ReportsQuery(sp.GetRequiredService<HubContext>()));
+        services.AddSingleton(sp => new DriftQuery(sp.GetRequiredService<HubContext>()));
         services.AddSingleton<ImportService>();
 
         // Copilot: the real SDK agent, authenticated with the account token (D3) and always
@@ -158,6 +159,8 @@ public partial class App : Application
         services.AddSingleton<IPatternSilencesDialog, PatternSilencesDialogHost>();
         // F7: la gestión de directivas del proyecto, inyectada por lo mismo que la de patrones.
         services.AddSingleton<IDirectivesDialog, DirectivesDialogHost>();
+        // F9 §4: quién abre la lista de hallazgos sin código.
+        services.AddSingleton<IDeletedUnitsDialog, DeletedUnitsDialogHost>();
         // F5.6 §3 (D-228): el reparto de alias legibles, que nunca se había cableado.
         services.AddSingleton<DisplayIdService>();
         // F5.6 §2 (D-226): el re-anclaje que se persiste al abrir la ficha.

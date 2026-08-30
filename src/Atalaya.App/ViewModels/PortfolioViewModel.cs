@@ -23,6 +23,9 @@ public sealed partial class PortfolioViewModel : ViewModelBase
     /// <summary>F5.8 §2: el diálogo que apaga el piloto, compartido con el inventario.</summary>
     private readonly LinkCloneFlow _linkFlow;
 
+    /// <summary>F9 §5: cuánta deuda nueva puede haber entrado desde la última auditoría.</summary>
+    private readonly DriftQuery _drift;
+
     public PortfolioViewModel(
         PortfolioQuery query,
         NavigationService navigation,
@@ -32,8 +35,10 @@ public sealed partial class PortfolioViewModel : ViewModelBase
         HubContext hub,
         ToastCenter toasts,
         CloneLinkService links,
-        LinkCloneFlow linkFlow)
+        LinkCloneFlow linkFlow,
+        DriftQuery drift)
     {
+        _drift = drift;
         _query = query;
         _navigation = navigation;
         _deletion = deletion;
@@ -76,6 +81,41 @@ public sealed partial class PortfolioViewModel : ViewModelBase
         {
             IsBusy = false;
         }
+
+        // La deriva llega DESPUÉS y sin bloquear (F9 §5): las tarjetas se pintan enteras con lo que
+        // sale del hub, y el indicador aparece cuando el historial del clon lo permite. Esperarla
+        // dejaría el portafolio en blanco por un dato que es un extra, no la vista.
+        await RefreshDriftAsync();
+    }
+
+    /// <summary>
+    /// Rellena el indicador de deriva de cada tarjeta. Una app sin clon vinculado en esta máquina
+    /// se queda con <c>null</c> y lo DICE: «vincula tu clon para ver la deriva», nunca un cero.
+    /// </summary>
+    private async Task RefreshDriftAsync()
+    {
+        var cards = Apps.ToList();
+        foreach (AppCard card in cards)
+        {
+            if (!card.Link.CanAudit)
+            {
+                continue;
+            }
+
+            string slug = card.Slug;
+            string? clone = card.Link.Path;
+            AppDrift drift = await Task.Run(() => _drift.For(slug, clone));
+
+            int index = Apps.IndexOf(card);
+            if (index >= 0 && drift.Problem is null)
+            {
+                Apps[index] = Apps[index] with
+                {
+                    ChangedUnits = drift.Changed,
+                    FixedPendingVerify = drift.FixedPendingVerify,
+                };
+            }
+        }
     }
 
     /// <summary>
@@ -94,6 +134,21 @@ public sealed partial class PortfolioViewModel : ViewModelBase
         => card is null
             ? Task.CompletedTask
             : _navigation.NavigateToAsync<InventoryViewModel>(vm => vm.SetApp(card.Slug));
+
+    /// <summary>
+    /// El indicador de deriva es CLICABLE y lleva al Inventario con el filtro ya puesto (F9 §5). Es
+    /// lo que convierte el número en un gesto: se ve «12 clases cambiadas» y se está a un clic de
+    /// verlas, en vez de a un clic y una búsqueda.
+    /// </summary>
+    [RelayCommand]
+    private Task ShowDrift(AppCard? card)
+        => card is null || !card.DriftIsActionable
+            ? Task.CompletedTask
+            : _navigation.NavigateToAsync<InventoryViewModel>(vm =>
+            {
+                vm.SetApp(card.Slug);
+                vm.DriftFilter = card.ChangedUnits is > 0 ? 1 : 2;
+            });
 
     [RelayCommand]
     private Task NewApp() => _navigation.NavigateToAsync<OnboardingViewModel>();

@@ -14,8 +14,14 @@ namespace Atalaya.App.Services;
 /// hay nada que comprobar (recuperaciones, tests antiguos, cualquier camino que no venga de la
 /// barra de selección). Con valor, el coordinador se niega a auditar más de eso.
 /// </param>
+/// <param name="Trigger">
+/// Qué provocó el lanzamiento (F9 §6). Solo se GUARDA: no cambia nada de cómo se audita, y sirve
+/// para que Métricas pueda algún día distinguir la cobertura inicial del mantenimiento sin tener
+/// que reinterpretar sesiones antiguas.
+/// </param>
 public sealed record SessionRequest(
-    string Slug, AuditMode Mode, IReadOnlyList<string> UnitPaths, int? ConfirmedUnits = null);
+    string Slug, AuditMode Mode, IReadOnlyList<string> UnitPaths, int? ConfirmedUnits = null,
+    SessionTrigger Trigger = SessionTrigger.Manual);
 
 /// <summary>
 /// La sesión se ha negado a arrancar porque iba a auditar MÁS de lo que el usuario aceptó (F5.13).
@@ -189,6 +195,7 @@ public sealed class SessionCoordinator
             Id = sessionId,
             AppSlug = request.Slug,
             Mode = request.Mode,
+            Trigger = request.Trigger,
             By = by,
             Machine = Environment.MachineName,
             StartedUtc = now,

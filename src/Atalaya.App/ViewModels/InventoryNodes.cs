@@ -44,6 +44,33 @@ public sealed partial class UnitNode : ObservableObject
         UnitState.Grande => "Grande",
         _ => "Pendiente",
     };
+
+    /// <summary>
+    /// Qué le ha pasado al código desde que se auditó (F9 §3). Es ORTOGONAL a
+    /// <see cref="State"/> y por eso viaja aparte: una unidad puede estar «Auditada» Y «Cambiada»
+    /// a la vez, y las dos cosas hacen falta para decidir qué mirar. <c>null</c> mientras el
+    /// cálculo no ha llegado, o cuando la unidad nunca se auditó — que es cobertura, no deriva.
+    /// </summary>
+    public UnitDrift? Drift { get; init; }
+
+    public bool HasDrift => Drift is not null && Drift.State != DriftState.SinCambios;
+
+    public string DriftLabel => Drift?.Label ?? string.Empty;
+
+    public string DriftTooltip => Drift?.Tooltip ?? string.Empty;
+
+    /// <summary>
+    /// El color del indicador de deriva. Ámbar lo que pide re-auditar, azul lo que pide verificar,
+    /// gris lo que no se ha podido saber. Nunca es el único canal: al lado va siempre el texto.
+    /// </summary>
+    public string DriftInk => Drift?.State switch
+    {
+        DriftState.Modificada => "#D2B036",
+        DriftState.ArregladaPendienteDeVerificar => "#4C8DD8",
+        DriftState.Borrada => "#C4564E",
+        DriftState.HistorialNoDisponible => "#8A8A8A",
+        _ => "#00000000",
+    };
 }
 
 /// <summary>

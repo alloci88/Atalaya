@@ -75,6 +75,10 @@ public static class AtalayaJson
             (AuditMode.Reset, "reset"),
             (AuditMode.Fix, "fix")));
 
+        o.Converters.Add(new EnumJsonConverter<SessionTrigger>(
+            (SessionTrigger.Manual, "manual"),
+            (SessionTrigger.Deriva, "deriva")));
+
         o.Converters.Add(new EnumJsonConverter<UnitState>(
             (UnitState.Pendiente, "pendiente"),
             (UnitState.Auditada, "auditada"),
@@ -102,6 +106,7 @@ public static class AtalayaJson
             (ResolutionVia.Auditor, "auditor"),
             (ResolutionVia.Verify, "verify"),
             (ResolutionVia.Manual, "manual"),
+            (ResolutionVia.CodigoEliminado, "codigo-eliminado"),
             (ResolutionVia.Medida, "medida")));
 
         // History event names are camelCase in the schema (§2).

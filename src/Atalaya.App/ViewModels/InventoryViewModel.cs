@@ -41,6 +41,15 @@ public sealed partial class InventoryViewModel : ViewModelBase
     /// <summary>F7: quién abre su gestión. Inyectada por lo mismo que la de patrones.</summary>
     private readonly IDirectivesDialog _directivesDialog;
 
+    /// <summary>F9: qué ha cambiado desde que se auditó. Se deriva del clon, no se persiste.</summary>
+    private readonly DriftQuery _driftQuery;
+
+    /// <summary>F9 §4: quién abre la lista de hallazgos sin código. Inyectada como las demás.</summary>
+    private readonly IDeletedUnitsDialog _deletedDialog;
+
+    /// <summary>La gobernanza, que es quien ejecuta la resolución por código eliminado (F9 §4).</summary>
+    private readonly GovernanceService _governanceForDeleted;
+
     /// <summary>
     /// F5.7 §4: el resultado de una acción se cuenta por el toast global. El texto que vivía al
     /// fondo del panel del ciclo se quedaba pegado hasta la acción siguiente y, con la ventana
@@ -61,14 +70,36 @@ public sealed partial class InventoryViewModel : ViewModelBase
     /// <summary>El ciclo entero, sin filtrar: contra esto se cuentan pendientes y seleccionadas.</summary>
     private IReadOnlyList<InventoryUnit> _allUnits = Array.Empty<InventoryUnit>();
 
+    /// <summary>
+    /// La deriva vigente, por ruta. <c>null</c> mientras no se ha calculado: el inventario se abre
+    /// SIN esperarla —leer estados y lanzar una auditoría no la necesitan— y las columnas aparecen
+    /// cuando llega. Nunca se persiste (F9, principio rector).
+    /// </summary>
+    private IReadOnlyDictionary<string, UnitDrift> _drift =
+        new Dictionary<string, UnitDrift>(StringComparer.Ordinal);
+
+    /// <summary>El resultado entero, con sus avisos. <c>null</c> hasta el primer cálculo.</summary>
+    private AppDrift? _driftResult;
+
+    /// <summary>
+    /// La selección actual salió de «Seleccionar cambiadas» (F9 §6). Es lo que decide el
+    /// <c>trigger</c> de la sesión: cualquier otro gesto sobre la selección lo apaga, porque a
+    /// partir de ahí ya no es la lista que propuso la deriva.
+    /// </summary>
+    private bool _selectionFromDrift;
+
     public InventoryViewModel(
         HubContext hub, IUlidFactory ulids, NavigationService navigation, LiveSessionService live,
         SettingsService settings, CostEstimator costs, IAuditLaunchConfirmer confirmer,
         GroupExpansionMemory expansion, ToastCenter toasts,
         CloneLinkService links, LinkCloneFlow linkFlow, InventoryRescanService rescan,
         GovernanceService governance, IPatternSilencesDialog patternsDialog,
-        DirectiveService directives, IDirectivesDialog directivesDialog)
+        DirectiveService directives, IDirectivesDialog directivesDialog,
+        DriftQuery driftQuery, IDeletedUnitsDialog deletedDialog)
     {
+        _driftQuery = driftQuery;
+        _deletedDialog = deletedDialog;
+        _governanceForDeleted = governance;
         _governance = governance;
         _patternsDialog = patternsDialog;
         _directives = directives;
@@ -240,6 +271,74 @@ public sealed partial class InventoryViewModel : ViewModelBase
         }
     }
 
+    // ---- Deriva (F9) ----
+
+    /// <summary>Se está calculando la deriva. El cálculo va fuera del hilo de UI (F9 §1.2).</summary>
+    [ObservableProperty] private bool _isDriftLoading;
+
+    /// <summary>Unidades auditadas cuyo código ha cambiado por mano ajena. Candidatas a re-auditar.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDrift))]
+    [NotifyPropertyChangedFor(nameof(ChangedToggleTooltip))]
+    private int _changedUnits;
+
+    /// <summary>
+    /// Arregladas desde Atalaya y todavía sin verificar (F9 §2). Va SEPARADA de las cambiadas y no
+    /// se suma con ellas: son dos acciones distintas —auditar y verificar— y sumarlas propondría
+    /// gastar una auditoría en algo que se comprueba con un verify.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDrift))]
+    private int _fixedPendingVerify;
+
+    /// <summary>Auditadas cuyo historial no se puede comparar (F9 §1.1).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDrift))]
+    private int _noHistoryUnits;
+
+    /// <summary>Hallazgos activos cuyo código ya no existe (F9 §4).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasOrphans))]
+    private int _orphanFindings;
+
+    public bool HasOrphans => OrphanFindings > 0;
+
+    /// <summary>Hay algo de deriva que contar. Sin esto el panel no estrena líneas vacías.</summary>
+    public bool HasDrift => ChangedUnits > 0 || FixedPendingVerify > 0 || NoHistoryUnits > 0;
+
+    /// <summary>Contra qué se ha medido: «deriva respecto a develop». El panel lo DICE (F9 §1.1).</summary>
+    [ObservableProperty] private string _driftBranchLabel = string.Empty;
+
+    /// <summary>Los avisos honestos: rama no por defecto, clon atrasado, cambios sin commitear.</summary>
+    public ObservableCollection<string> DriftWarnings { get; } = new();
+
+    public bool HasDriftWarnings => DriftWarnings.Count > 0;
+
+    /// <summary>Por qué no hay deriva que enseñar (sin clon, no es un repo…). Vacío si la hay.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDriftProblem))]
+    private string _driftProblem = string.Empty;
+
+    public bool HasDriftProblem => DriftProblem.Length > 0;
+
+    /// <summary>
+    /// El filtro de deriva, propio y aparte del de estado: 0 todas · 1 cambiadas · 2 arregladas
+    /// pendientes de verificar · 3 sin historial. Es una dimensión distinta, así que no puede
+    /// compartir control con el estado de auditoría.
+    /// </summary>
+    [ObservableProperty] private int _driftFilter;
+
+    partial void OnDriftFilterChanged(int value) => Rebuild();
+
+    /// <summary>Simétrico, como el de pendientes: si ya están todas marcadas, lo útil es lo contrario.</summary>
+    [ObservableProperty] private string _changedToggleLabel = "Seleccionar cambiadas";
+
+    public string ChangedToggleTooltip => ChangedUnits == 0
+        ? "No hay ninguna unidad auditada cuyo código haya cambiado desde su auditoría."
+        : ChangedUnits == 1
+            ? "Actúa sobre la única unidad cambiada del ciclo, esté o no a la vista."
+            : $"Actúa sobre las {ChangedUnits} unidades cambiadas del ciclo, estén o no a la vista.";
+
     public string PendingToggleTooltip => PendingUnits == 1
         ? "Actúa sobre la única unidad pendiente del ciclo, esté o no a la vista."
         : $"Actúa sobre las {PendingUnits} unidades pendientes del ciclo, estén o no a la vista.";
@@ -260,7 +359,70 @@ public sealed partial class InventoryViewModel : ViewModelBase
     public override Task LoadAsync()
     {
         Rebuild();
-        return Task.CompletedTask;
+
+        // La deriva NO bloquea la entrada (F9 §1.2): mirar estados, buscar o lanzar una auditoría
+        // no la necesitan, y con 900 unidades cuesta décimas de segundo que no hay por qué esperar
+        // mirando una pantalla vacía. Llega cuando llega y la vista se reconstruye.
+        return RefreshDriftAsync();
+    }
+
+    /// <summary>
+    /// Calcula la deriva en segundo plano y reconstruye. Se llama al entrar, tras re-escanear y
+    /// tras vincular el clon: los tres gestos que pueden cambiar la respuesta.
+    /// </summary>
+    private async Task RefreshDriftAsync()
+    {
+        if (Slug.Length == 0)
+        {
+            return;
+        }
+
+        string slug = Slug;
+        string? clone = Link.Path;
+        IsDriftLoading = true;
+        try
+        {
+            AppDrift drift = await Task.Run(() => _driftQuery.For(slug, clone));
+            if (slug != Slug)
+            {
+                // La vista cambió de aplicación mientras se calculaba: lo que llega ya no es de
+                // esta pantalla y pintarlo sería enseñar la deriva de otra app.
+                return;
+            }
+
+            ApplyDrift(drift);
+        }
+        catch (Exception ex)
+        {
+            // N-2: un fallo se DICE. Sin esto, la deriva desaparecería sin explicación y el panel
+            // se leería como «no hay nada que re-auditar», que es la mentira tranquilizadora.
+            _driftResult = null;
+            _drift = new Dictionary<string, UnitDrift>(StringComparer.Ordinal);
+            DriftProblem = $"No se pudo calcular la deriva: {ex.Message}";
+        }
+        finally
+        {
+            IsDriftLoading = false;
+            Rebuild();
+        }
+    }
+
+    private void ApplyDrift(AppDrift drift)
+    {
+        _driftResult = drift;
+        _drift = drift.Units.ToDictionary(u => u.Path, StringComparer.Ordinal);
+        DriftProblem = drift.Problem ?? string.Empty;
+        DriftBranchLabel = drift.Problem is null && drift.Branch.Length > 0
+            ? $"Deriva respecto a «{drift.Branch}» ({drift.Head})"
+            : string.Empty;
+
+        DriftWarnings.Clear();
+        foreach (string warning in drift.Warnings)
+        {
+            DriftWarnings.Add(warning);
+        }
+
+        OnPropertyChanged(nameof(HasDriftWarnings));
     }
 
     private void Rebuild()
@@ -319,16 +481,49 @@ public sealed partial class InventoryViewModel : ViewModelBase
         // contra el inventario vigente para que el contador nunca cuente fantasmas.
         _selected.IntersectWith(units.Select(u => u.Path));
 
+        // F9 §3: los contadores de deriva se cuentan sobre el CICLO entero, no sobre lo filtrado.
+        // Son un dato del ciclo, igual que «pendientes»: buscar no puede cambiarlos.
+        ChangedUnits = _drift.Values.Count(d => d.State == DriftState.Modificada);
+        FixedPendingVerify = _drift.Values.Count(d => d.State == DriftState.ArregladaPendienteDeVerificar);
+        NoHistoryUnits = _drift.Values.Count(d => d.State == DriftState.HistorialNoDisponible);
+        OrphanFindings = _driftResult?.Orphans.Count ?? 0;
+        OnPropertyChanged(nameof(ChangedToggleTooltip));
+
         string search = SearchText.Trim();
         IEnumerable<InventoryUnit> filtered = string.IsNullOrEmpty(search)
             ? units
             : units.Where(u => u.Path.Contains(search, StringComparison.OrdinalIgnoreCase));
 
+        filtered = DriftFilter switch
+        {
+            1 => filtered.Where(u => DriftOf(u) is { State: DriftState.Modificada }),
+            2 => filtered.Where(u => DriftOf(u) is { State: DriftState.ArregladaPendienteDeVerificar }),
+            3 => filtered.Where(u => DriftOf(u) is { State: DriftState.HistorialNoDisponible }),
+            _ => filtered,
+        };
+
+        // Con el filtro de cambiadas puesto, el orden por defecto es el que contesta la pregunta:
+        // más toqueteada, antes (F9 §3). El desempate por ruta lo hace estable — dos listas iguales
+        // tienen que salir iguales, o parece que algo se ha movido solo.
+        bool byCommits = DriftFilter == 1;
         var built = new List<ModuleNode>();
-        foreach (var group in filtered.GroupBy(u => u.Module).OrderBy(g => g.Key, StringComparer.Ordinal))
+        var groups = filtered.GroupBy(u => u.Module).ToList();
+        IEnumerable<IGrouping<string, InventoryUnit>> ordered = byCommits
+            ? groups
+                .OrderByDescending(g => g.Max(u => DriftOf(u)?.Commits ?? 0))
+                .ThenBy(g => g.Key, StringComparer.Ordinal)
+            : groups.OrderBy(g => g.Key, StringComparer.Ordinal);
+
+        foreach (var group in ordered)
         {
             var node = new ModuleNode { Name = group.Key, Slug = Slug };
-            foreach (InventoryUnit u in group.OrderBy(u => u.Path, StringComparer.Ordinal))
+            IEnumerable<InventoryUnit> rows = byCommits
+                ? group
+                    .OrderByDescending(u => DriftOf(u)?.Commits ?? 0)
+                    .ThenBy(u => u.Path, StringComparer.Ordinal)
+                : group.OrderBy(u => u.Path, StringComparer.Ordinal);
+
+            foreach (InventoryUnit u in rows)
             {
                 var unit = new UnitNode
                 {
@@ -337,6 +532,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
                     Loc = u.Loc,
                     State = u.State,
                     ClaimedBy = claims.TryGetValue(u.UnitHash, out string? by) ? by : null,
+                    Drift = DriftOf(u),
                 };
 
                 // Se restaura antes de enganchar el aviso: reconstruir la vista no es seleccionar.
@@ -365,6 +561,8 @@ public sealed partial class InventoryViewModel : ViewModelBase
 
     private void OnUnitSelectionChanged(UnitNode unit)
     {
+        // Tocar la selección a mano deja de ser «lo que propuso la deriva» (F9 §6).
+        _selectionFromDrift = false;
         if (unit.IsSelected)
         {
             _selected.Add(unit.Path);
@@ -395,6 +593,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
     /// </summary>
     private void OnModuleSelectionRequested(ModuleNode module, bool select)
     {
+        _selectionFromDrift = false;
         foreach (UnitNode unit in module.Units)
         {
             if (select)
@@ -440,10 +639,74 @@ public sealed partial class InventoryViewModel : ViewModelBase
         var pending = PendingPaths();
         bool allPendingSelected = pending.Count > 0 && pending.All(_selected.Contains);
         PendingToggleLabel = allPendingSelected ? "Deseleccionar pendientes" : "Seleccionar pendientes";
+
+        var changed = ChangedPaths();
+        bool allChangedSelected = changed.Count > 0 && changed.All(_selected.Contains);
+        ChangedToggleLabel = allChangedSelected ? "Deseleccionar cambiadas" : "Seleccionar cambiadas";
     }
 
     private List<string> PendingPaths()
         => _allUnits.Where(u => u.State == UnitState.Pendiente).Select(u => u.Path).ToList();
+
+    /// <summary>La deriva de una unidad, o null si no se ha calculado o nunca se auditó.</summary>
+    private UnitDrift? DriftOf(InventoryUnit unit)
+        => _drift.TryGetValue(unit.Path, out UnitDrift? d) ? d : null;
+
+    /// <summary>
+    /// Las cambiadas, en el orden que contesta la pregunta: más toqueteada, antes (F9 §3). Es la
+    /// lista que marca «Seleccionar cambiadas» y la que se lanza.
+    /// </summary>
+    private List<string> ChangedPaths()
+        => _allUnits
+            .Select(u => (Unit: u, Drift: DriftOf(u)))
+            .Where(x => x.Drift is { State: DriftState.Modificada })
+            .OrderByDescending(x => x.Drift!.Commits)
+            .ThenBy(x => x.Unit.Path, StringComparer.Ordinal)
+            .Select(x => x.Unit.Path)
+            .ToList();
+
+    /// <summary>
+    /// Marca o desmarca TODAS las unidades cambiadas del ciclo (F9 §3). Hace pareja con
+    /// «Seleccionar pendientes» y desemboca en el MISMO flujo: mismo diálogo, misma estimación de
+    /// coste, mismo barrido, misma reconciliación. La re-auditoría no estrena ningún camino nuevo.
+    /// <para>
+    /// Las «arregladas — pendientes de verificar» NO entran: se comprueban verificando, que es el
+    /// instrumento que las detectó, y gastarles una auditoría entera sería pagar de más por menos.
+    /// </para>
+    /// </summary>
+    [RelayCommand]
+    private void SelectChanged()
+    {
+        var changed = ChangedPaths();
+        if (changed.Count == 0)
+        {
+            _toasts.Show(_driftResult is null
+                ? "La deriva todavía se está calculando."
+                : FixedPendingVerify > 0
+                    ? $"Ninguna unidad ha cambiado por mano ajena. Hay {FixedPendingVerify} arreglada(s) "
+                      + "pendiente(s) de verificar: eso se comprueba con «Verificar», no re-auditando."
+                    : "Ninguna unidad auditada ha cambiado desde su auditoría.");
+            return;
+        }
+
+        bool select = !changed.All(_selected.Contains);
+        foreach (string path in changed)
+        {
+            if (select)
+            {
+                _selected.Add(path);
+            }
+            else
+            {
+                _selected.Remove(path);
+            }
+        }
+
+        // El trigger de la sesión sale de AQUÍ y no de adivinar por la forma de la lista (F9 §6):
+        // una selección manual que por casualidad coincida con las cambiadas no es mantenimiento.
+        _selectionFromDrift = select;
+        SyncVisibleFromSelection();
+    }
 
     /// <summary>
     /// Marca o desmarca TODAS las pendientes del ciclo, a la vista o no. Es la acción global que
@@ -452,6 +715,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
     [RelayCommand]
     private void SelectPending()
     {
+        _selectionFromDrift = false;
         var pending = PendingPaths();
         if (pending.Count == 0)
         {
@@ -478,6 +742,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
     [RelayCommand]
     private void ClearSelection()
     {
+        _selectionFromDrift = false;
         _selected.Clear();
         SyncVisibleFromSelection();
     }
@@ -572,6 +837,10 @@ public sealed partial class InventoryViewModel : ViewModelBase
 
         _linkFlow.Run(Slug);
         Rebuild();
+
+        // Vincular es justo lo que convierte «no se puede saber» en una respuesta: sin el clon no
+        // había historial que comparar, y ahora lo hay.
+        _ = RefreshDriftAsync();
     }
 
     [RelayCommand]
@@ -614,6 +883,10 @@ public sealed partial class InventoryViewModel : ViewModelBase
         {
             IsBusy = false;
             Rebuild();
+
+            // Un re-escaneo mueve el inventario —altas, bajas, renombrados—, así que la foto de la
+            // deriva anterior ya no describe estas unidades.
+            _ = RefreshDriftAsync();
         }
     }
 
@@ -694,6 +967,27 @@ public sealed partial class InventoryViewModel : ViewModelBase
     private Task ShowFindings() => _navigation.NavigateToAsync<FindingsViewModel>(vm => vm.SetApp(Slug));
 
     /// <summary>
+    /// Abre la lista de hallazgos cuyo código ya no existe (F9 §4). No resuelve nada por su cuenta:
+    /// enseña qué hay, con qué evidencia, y deja la acción a una persona.
+    /// </summary>
+    [RelayCommand]
+    private void ShowDeletedUnits()
+    {
+        if (Slug.Length == 0 || _driftResult is null)
+        {
+            return;
+        }
+
+        var vm = new DeletedUnitsViewModel(_governanceForDeleted, _driftQuery, _toasts);
+        vm.Load(Slug, AppName, Link.Path, _driftResult.Orphans);
+        _deletedDialog.Show(vm);
+
+        // Resolver hallazgos cambia lo que queda huérfano, así que la foto se vuelve a pedir.
+        _driftQuery.Invalidate();
+        _ = RefreshDriftAsync();
+    }
+
+    /// <summary>
     /// El tope de pasadas vigente, que es lo que multiplica el gasto. Vive en los ajustes de la
     /// máquina (D-095), no en la app auditada.
     /// </summary>
@@ -759,7 +1053,11 @@ public sealed partial class InventoryViewModel : ViewModelBase
         // discrepar, la sesión muere antes de la primera llamada al modelo y no antes de la
         // factura. Es una salvaguarda de última línea, no la corrección — la corrección es que
         // contador y lista sean el mismo método.
-        _ = _live.StartAsync(new SessionRequest(Slug, mode, paths, paths.Count), paths);
+        // F9 §6: solo se GUARDA. No cambia nada de cómo se audita — mismo diálogo, misma
+        // estimación, mismo barrido, misma reconciliación—; sirve para que Métricas pueda algún día
+        // separar la cobertura inicial del mantenimiento sin reinterpretar sesiones antiguas.
+        SessionTrigger trigger = _selectionFromDrift ? SessionTrigger.Deriva : SessionTrigger.Manual;
+        _ = _live.StartAsync(new SessionRequest(Slug, mode, paths, paths.Count, trigger), paths);
         await _navigation.NavigateToAsync<SessionViewModel>();
     }
 }

@@ -135,6 +135,19 @@
                                     </Border>
                                 </StackPanel>
 
+                                <!-- F9 §5: cuánta deuda nueva puede haber entrado desde la última
+                                     auditoría. Es lo que convierte la funcionalidad en un hábito:
+                                     lo dice la tarjeta cada mañana, sin que nadie lo busque. Y es
+                                     un ENLACE — lleva al inventario con el filtro ya puesto. -->
+                                <ui:HyperlinkButton
+                                    Content="{Binding DriftLabel}"
+                                    Command="{Binding DataContext.ShowDriftCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                    CommandParameter="{Binding}"
+                                    IsEnabled="{Binding DriftIsActionable}"
+                                    ToolTip="{Binding DriftTooltip}"
+                                    HorizontalAlignment="Left"
+                                    Padding="0" Margin="0,12,0,0" FontSize="12" />
+
                                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                                     <TextBlock Text="Última sesión: " Opacity="0.6" FontSize="12" />
                                     <TextBlock Text="{Binding LastSessionBy}" FontSize="12" />

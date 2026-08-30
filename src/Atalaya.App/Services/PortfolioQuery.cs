@@ -38,6 +38,47 @@ public sealed record AppCard(
         init => _link = value;
     }
 
+    /// <summary>
+    /// Cuántas unidades auditadas han cambiado desde su auditoría (F9 §5). No sale de la consulta
+    /// —la deriva se deriva del clon LOCAL, y el hub no sabe nada de las rutas de nadie—: lo pone el
+    /// view-model del portafolio, igual que <see cref="Link"/>. <c>null</c> mientras no se ha
+    /// calculado o cuando no se puede: un cero ahí sería la mentira tranquilizadora.
+    /// </summary>
+    public int? ChangedUnits { get; init; }
+
+    /// <summary>Arregladas desde Atalaya y sin verificar (F9 §2). Va SEPARADO: es otra acción.</summary>
+    public int? FixedPendingVerify { get; init; }
+
+    /// <summary>
+    /// Lo que se lee en la tarjeta. Es la frase que convierte esto en un hábito: cada mañana dice
+    /// cuánta deuda nueva puede haber entrado sin que nadie lo busque.
+    /// </summary>
+    public string DriftLabel => ChangedUnits switch
+    {
+        null when !Link.CanAudit => "Vincula tu clon para ver la deriva",
+        null => "Calculando la deriva…",
+        0 when FixedPendingVerify is > 0 => FixedPendingVerify == 1
+            ? "1 arreglada pendiente de verificar"
+            : $"{FixedPendingVerify} arregladas pendientes de verificar",
+        0 => "Nada ha cambiado desde su auditoría",
+        1 => "1 clase cambiada desde su auditoría",
+        _ => $"{ChangedUnits} clases cambiadas desde su auditoría",
+    };
+
+    /// <summary>El indicador solo LLEVA a algún sitio cuando hay algo que mirar.</summary>
+    public bool DriftIsActionable => ChangedUnits is > 0 || FixedPendingVerify is > 0;
+
+    public string DriftTooltip => ChangedUnits is null
+        ? Link.CanAudit
+            ? "La deriva se calcula del historial de tu clon local; todavía no ha terminado."
+            : "La deriva se deriva del historial del clon local. Sin clon en esta máquina no hay "
+              + "historial que comparar, y un cero aquí sería mentira."
+        : $"{ChangedUnits} unidad(es) auditada(s) con cambios ajenos desde su auditoría"
+          + (FixedPendingVerify is > 0
+              ? $" · {FixedPendingVerify} arreglada(s) desde Atalaya, pendiente(s) de verificar (eso se verifica, no se re-audita)"
+              : string.Empty)
+          + ". Un clic abre el Inventario con el filtro puesto.";
+
     /// <summary>Apps with open critical findings sort first (§8 V1).</summary>
     public int SortKey => Critica > 0 ? 0 : ActiveTotal > 0 ? 1 : 2;
 

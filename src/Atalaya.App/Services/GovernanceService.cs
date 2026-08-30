@@ -229,6 +229,36 @@ public sealed class GovernanceService
     }
 
     /// <summary>
+    /// Resuelve un hallazgo porque el CÓDIGO QUE LO CONTENÍA YA NO EXISTE (F9 §4).
+    /// <para>
+    /// La ejecuta una persona, siempre, y nunca la aplicación: un fichero que no está donde estaba
+    /// puede haberse movido, y «no está» no es «ya no existe». Lo que la aplicación aporta es la
+    /// EVIDENCIA —el commit que borró el fichero, buscado en el historial— y la atribución de quien
+    /// decide. Sin esta salida, los hallazgos de código borrado se quedan zombis para siempre:
+    /// activos, incontables e imposibles de verificar, porque no hay nada que mirar.
+    /// </para>
+    /// </summary>
+    /// <param name="deletedCommit">
+    /// El commit del borrado, o <c>null</c> si no se localizó. Se registra lo que hay: una
+    /// resolución sin evidencia de commit lo DICE, en vez de inventarse una.
+    /// </param>
+    public void ResolveAsDeletedCode(string slug, Ulid findingId, string unitPath, string? deletedCommit)
+    {
+        Finding f = Require(slug, findingId);
+        string evidence = deletedCommit is { Length: > 0 }
+            ? $"«{unitPath}» ya no existe en el repositorio: la borró el commit {deletedCommit}."
+            : $"«{unitPath}» ya no existe en el repositorio; no se ha podido localizar el commit "
+              + "que la borró, así que esta resolución se apoya solo en que hoy no está.";
+
+        f.Resolve(new ResolutionStamp(
+            DateTimeOffset.UtcNow, ResolutionVia.CodigoEliminado, AuditMode.Verify,
+            deletedCommit ?? "unknown", Me, evidence));
+
+        _hub.Store.WriteFinding(slug, f);
+        Push(slug, $"resolve (código eliminado): {f.DisplayId ?? f.Id.ToString()}");
+    }
+
+    /// <summary>
     /// Cierra una disputa dando la razón al auditor que discrepó (F5.1b): el hallazgo NO se
     /// resuelve —nunca hubo nada que arreglar— sino que se silencia con motivo
     /// <see cref="SilenceReason.FalsoPositivo"/>, que es el cajón que §2 ya tenía para esto, con

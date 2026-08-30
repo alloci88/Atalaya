@@ -184,6 +184,18 @@ public sealed class HubStore
         return true;
     }
 
+    // --- Fix records (F9 §2) ---
+
+    /// <summary>
+    /// Lo que los arreglos de esta app dejaron escrito. Es lo que impide que un arreglo se cuente
+    /// como deriva ajena y realimente la lista de unidades cambiadas.
+    /// </summary>
+    public IReadOnlyList<FixRecord> ListFixes(string slug)
+        => ReadAll<FixRecord>(_paths.FixesDir(slug), SchemaValidation.Validate);
+
+    public void WriteFix(FixRecord record)
+        => WriteJson(_paths.FixFile(record.AppSlug, record.Id.ToString()), record, SchemaValidation.Validate);
+
     // --- Claims (deleted on release, §2) ---
 
     public IReadOnlyList<Claim> ListClaims(string slug)

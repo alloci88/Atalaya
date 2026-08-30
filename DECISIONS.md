@@ -6641,3 +6641,198 @@ mismo fichero, que son historia y no se reescriben.
 `TreemapLayoutTests`, `AttentionScoreTests`, `ModulePrefixTests`, `TextFitTests`, `DebtWeightsTests`
 y los ayudantes `TestBar` y `StaRunner`, que no tenían otro cliente). Quedan **1.185**, todos en
 verde, y el proyecto compila sin un solo aviso nuevo.
+
+## F9 — Auditar lo que ha cambiado (deriva)
+
+La operación de cada sprint: en vez de repetir un ciclo entero, auditar lo que ha cambiado desde
+que se auditó. Cada unidad ya guardaba el commit de su auditoría y el clon local tiene el
+historial; lo que faltaba era juntar las dos cosas y contestar sin inventarse nada.
+
+### D-683 — La deriva es DERIVADA y ORTOGONAL, y las dos mitades tienen consecuencias
+
+**Derivada: no se persiste nunca.** Se calcula del historial del clon local en cada consulta. En el
+hub solo entran hechos —el commit de cada auditoría, que ya estaba, y la huella de lo que dejó cada
+arreglo, que es nueva—. Un «cambiada: sí» guardado sería un dato que envejece solo: se queda
+obsoleto en cuanto alguien commitea, dos máquinas pueden contradecirse, y nadie sabría cuándo
+invalidarlo. Lo que sí hay es **caché en memoria**, con clave autoinvalidante (HEAD + el mapa
+unidad→commit-de-auditoría + cuántos arreglos hay registrados): si cambia cualquiera de los tres, la
+clave deja de casar sola y no hay que acordarse de nada.
+
+**Ortogonal: no es un valor más de `UnitState`.** Una unidad puede estar «auditada» Y «cambiada» a
+la vez, y las dos cosas hacen falta para decidir. Meterla en el enum de siempre habría obligado a
+elegir cuál de las dos se cuenta —y a reescribir todo lo que hoy pregunta «¿está auditada?»—. Va en
+su propia dimensión, con su propio indicador en la fila, su propio filtro y sus propias líneas en el
+panel; nunca sustituye al estado, se pone al lado.
+
+### D-684 — Commit contra commit, y lo que no se ve se dice
+
+El diff es siempre **entre dos commits**, jamás contra el árbol de trabajo. Un fichero a medio
+editar o un `core.autocrlf` distinto convertirían medio repositorio en deriva inventada. Lo que hay
+sin commitear no desaparece del relato: sale como **aviso** —«hay N ficheros sin commitear que este
+análisis no ve»—, que es la diferencia entre una foto incompleta y una foto que miente.
+
+El mapeo de rutas a unidades lo hace el **inventario**, no una convención: el diff da rutas, y una
+ruta que no es unidad —un `.csproj`, un recurso, un `README`— se ignora porque no se audita.
+
+**Y merge-base ANTES de difear** (F9 §1.1). El commit de auditoría puede existir y no ser antecesor
+de HEAD, y entonces un diff daría cambios fantasma. Los tres casos se separan por dónde cae la base:
+si es el propio commit de auditoría, hay rango normal; si es HEAD, el clon va **por detrás** de la
+máquina que auditó y lo que toca es un pull; si no es ninguno de los dos, el **historial se
+reescribió**. Cada uno con su frase, y ninguno con un cero.
+
+### D-685 — Los arreglos propios se reconocen por el CONTENIDO, no por el hash del commit
+
+El prompt daba por hecho que «el arreglo interactivo registra el hash en `fix_done`». No lo hace, y
+no puede: **Atalaya no commitea** (D-556). Al cerrar un arreglo los cambios están en el clon del
+usuario sin commitear, y el hash del commit que los recoja todavía no existe. Lo único que la
+aplicación sabe con certeza en ese momento es **qué dejó escrito**, así que eso es lo que guarda:
+`apps/{slug}/fixes/{ulid}.json` con la ruta de cada fichero tocado y la huella de su contenido.
+
+Más tarde, al mirar el historial, un commit cuyo contenido para esa ruta case con la huella es —con
+certeza y no por aproximación— el que publicó ese arreglo. **Es una prueba, no una heurística.** Y
+la huella normaliza CRLF a LF a propósito: el fichero del árbol puede tener CRLF por `autocrlf`
+mientras el blob guardado tiene LF, y son el mismo contenido; sin normalizar, cada máquina con una
+configuración distinta dejaría de reconocer sus propios arreglos.
+
+**La degradación es la asumida y va en la dirección segura.** Si el usuario enmienda, aplasta o
+rebasa antes de publicar, el contenido deja de casar y la unidad sale como «cambiada»: re-auditar de
+más, nunca de menos. No se intenta rastrear reescrituras — perseguir un commit que ya no existe es
+inventar, y lo que se gana no compensa lo que se arriesga.
+
+Un matiz honesto: **las resoluciones por prompt no dejan commit propio que reconocer.** El prompt de
+arreglo se pega fuera de Atalaya y el commit lo hace el usuario con su herramienta; atribuirse un
+commit que la aplicación no ha producido sería exactamente el tipo de dato inventado que el resto de
+esta funcionalidad evita. Esos cambios salen como ajenos, que es lo que son desde aquí.
+
+### D-686 — Tres arreglos, y por qué un número y no una regla
+
+Un arreglo pendiente de verificar es trabajo a medio cerrar, y la respuesta es verificarlo, no
+gastarle una auditoría entera. Pero **tres arreglos encadenados** sobre la misma unidad sin que
+nadie la haya vuelto a mirar ya no son tres retoques: es una unidad que se está reescribiendo a
+trozos, y el riesgo deja de ser el del hallazgo que se arreglaba.
+
+El número no sale de una medida —no hay datos todavía— y se dice: sale de que uno sería no dejar
+arreglar nada y diez sería no mirar nunca. Vive en una constante documentada
+(`DriftRules.MaxOwnFixesBeforeReaudit`) y se sube o se baja cuando el uso diga cuál de las dos
+molesta. El contador **no se mantiene**: se cuenta siempre desde el commit de la última auditoría,
+así que re-auditar lo pone a cero sin que haya nada que pueda desincronizarse.
+
+### D-687 — Los conteos van separados, y por qué eso no es una preferencia de estilo
+
+«N cambiadas · M arregladas pendientes de verificar», nunca una suma. No es cosmética: **piden
+acciones distintas** —auditar y verificar—, con coste distinto y con instrumento distinto. Sumarlas
+propondría gastar una auditoría entera en algo que se comprueba con un verify, que es exactamente el
+error que F5.16 documentó al revés (verificar con un LLM algo que mide la aplicación).
+
+Por eso «Seleccionar cambiadas» tampoco arrastra las arregladas: marca lo que se re-audita, y nada
+más. Y desemboca en el **mismo** flujo de siempre —mismo diálogo, misma estimación de coste, mismo
+barrido, misma reconciliación—: la re-auditoría no estrena ni un camino nuevo de resolución.
+
+### D-688 — El rendimiento: se midió, y la primera arquitectura era la lenta
+
+El presupuesto era «con ~900 unidades, segundos, no minutos». Medido sobre el clon real de xblast
+(925 unidades, 3.621 commits), la primera implementación —un diff de árbol a árbol por grupo, más un
+recorrido del rango— tardaba **79 s** en el peor caso.
+
+Medido en vez de supuesto (N-2), el culpable no era lo que parecía. Los números crudos:
+
+| Profundidad | Diff árbol↔árbol | Recorrido del rango difeando cada commit |
+|---|---|---|
+| 25 commits | 149 ms | 116 ms |
+| 500 commits | 282 ms | 510 ms |
+| 1.500 commits | **9.810 ms** | **1.282 ms** |
+
+Un diff entre dos árboles separados por año y medio de historia cuesta **ocho veces más** que
+recorrer todos los commits que hay entre medias difeando cada uno contra su padre: los diffs entre
+commits contiguos son diminutos. Y la detección de renombrados, que era la sospechosa obvia, resultó
+**gratis** (138 ms frente a 149 ms) — la hipótesis se probó, salió falsa y se descartó.
+
+Así que el diff de árbol a árbol **se eliminó entero**: la clasificación, el conteo de commits, la
+fecha del último y la atribución de los arreglos propios salen todos de **una sola pasada** por la
+unión de los rangos de todos los grupos. Resultado sobre el mismo clon:
+
+| Caso | Antes | Ahora |
+|---|---|---|
+| Auditado hace 25 commits, una sesión | 781 ms | **311 ms** |
+| Auditado hace 100 commits, ocho sesiones | 4.032 ms | **397 ms** |
+| Auditado hace 500 commits, ocho sesiones | 8.605 ms | **940 ms** |
+| Auditado hace 1.500+ commits, ocho sesiones | 78.581 ms | **6.367 ms** |
+
+El caso realista —auditado hace unas decenas de commits— está en **tres décimas de segundo**. El
+cálculo va fuera del hilo de UI y el inventario se abre sin esperarlo.
+
+### D-689 — Los renombrados se siguen hacia delante, y el límite se declara
+
+El seguimiento de renombrados se aprende **durante la pasada**, de viejo a nuevo: cuando un commit
+mueve un fichero, lo aprendido vale para todos los commits posteriores, que son los que usan el
+nombre nuevo. Se aprende en las dos direcciones porque los dos casos son reales: el inventario puede
+llevar todavía la ruta vieja (nadie ha re-escaneado) o ya la nueva (el re-escaneo arrastró el estado
+auditado por `contentHash`, D-010).
+
+Lo que **no** se hace es reconstruir cadenas de renombrados anteriores al commit de auditoría: fuera
+del rango no se mira, y no hace falta — la pregunta es qué ha pasado desde que se auditó.
+
+### D-690 — «Resolver por código eliminado» es una vía propia, y siempre humana
+
+`ResolutionVia.CodigoEliminado`, y no `Manual`. Quien lea el hallazgo dentro de un año tiene que
+poder distinguir «alguien decidió cerrarlo» de «el código desapareció»: lo primero es un juicio y lo
+segundo un hecho verificable en el historial. La evidencia es **el commit que borró el fichero**,
+buscado en el historial; si no se localiza, la justificación lo dice en vez de inventarse una.
+
+Nunca es automática. Un fichero que no está donde estaba puede haberse movido, y la detección de
+renombrados caza una parte pero no todas —un fichero **troceado** sale como borrado más unidades
+nuevas—. Se presenta tal cual y decide una persona, que es la regla de la casa.
+
+El commit del borrado se busca **bajo demanda**, al abrir la lista, y no durante el cálculo de la
+deriva: cuesta un recorrido del historial por ruta y solo hace falta cuando alguien va a decidir.
+
+### D-691 — Los huérfanos se calculan sobre los HALLAZGOS, no sobre el inventario
+
+Un re-escaneo saca del inventario la unidad borrada, y a partir de ese momento el único rastro del
+código que ya no está son sus hallazgos activos. Mirando solo el inventario, esos hallazgos se
+quedarían zombis para siempre en cuanto alguien pulsara «Re-escanear» — que es justo lo que se hace
+después de un borrado.
+
+### D-692 — El `trigger` solo se guarda
+
+`SessionTrigger.Manual` | `Deriva` en la sesión (F9 §6). No cambia nada de cómo se audita y no
+estrena ninguna gráfica: es el dato que le permitirá a Métricas separar algún día la cobertura
+inicial del mantenimiento sin tener que reinterpretar sesiones antiguas. Sale de que la selección
+venga de «Seleccionar cambiadas», y **cualquier otro gesto sobre la selección lo apaga**: una
+selección manual que por casualidad coincida con las cambiadas no es mantenimiento, y deducirlo por
+la forma de la lista sería adivinar.
+
+### D-693 — Cobertura (64 tests nuevos, 1.249 en total, todo en verde)
+
+Los tests de F9 construyen **repositorios git de verdad** en un temporal (`DriftRepo`): commits,
+merge-base, renombrados, ramas huérfanas, resets. La deriva se calcula hablando con git, y un doble
+solo probaría el doble.
+
+- `DriftDetectionTests` — sin cambios, modificada con su conteo y su fecha, movida, borrada, nunca
+  auditada (que no se mezcla), rutas que no son unidades, clase parcial, agrupación por commit de
+  auditoría, árbol sucio, caché y su invalidación, y que un renombrado no pierde los commits
+  anteriores al movimiento.
+- `DriftHistoryTests` — commit ausente, auditoría sin commit registrado, historial reescrito, clon
+  por detrás, la rama que se dice, la rama que no es la por defecto y su matiz, sin clon, y una
+  carpeta que no es repo.
+- `DriftLoopGuardTests` — solo propios, un ajeno, el arreglo multi-fichero (propio para el suyo,
+  ajeno para las rozadas), el umbral de tres y el de dos, el reset al re-auditar, el arreglo
+  enmendado que deja de reconocerse, los finales de línea y los conteos separados.
+- `DeletedUnitFindingsTests` — el huérfano que aparece, el resuelto que no vuelve, el commit del
+  borrado, la resolución con atribución y evidencia, la que no localiza commit y lo dice, y que
+  abrir la lista no resuelve nada.
+- `DriftInventoryFlowTests` — la página entera con un clon real: contadores, «Seleccionar
+  cambiadas» (que no arrastra las arregladas), el filtro con su orden, el indicador ortogonal en la
+  fila y el caso sin clon.
+- `DriftSurfaceTests` y `DriftTriggerTests` — que el color nunca es el único canal, que hay un solo
+  sitio desde el que se lanza una sesión, la tarjeta del portafolio, y el trigger de punta a punta.
+- En `AssistedFixTests`, la huella del arreglo; en `SerializationTests`, el registro de ida y vuelta.
+
+### D-694 — Lo que sigue sin comprobarse, y es del usuario
+
+Nada de esto se ha visto en la ventana. Queda el caso de aceptación completo: tras un pull con
+cambios reales, que la tarjeta diga N, que «Seleccionar cambiadas» marque esas N, auditarlas y ver
+los hallazgos nuevos; y el inverso del bucle: arreglar un hallazgo con el agente, commitear, y
+comprobar que la unidad sale como «arreglada — pendiente de verificar» y no como cambiada, y que
+verificar la deja limpia. También queda mirar a 1366×768, en los dos temas, que la fila del
+inventario con sus **dos** indicadores no se estreche de más.

@@ -207,6 +207,18 @@ internal static class TestFactory
     }
 
     /// <summary>La gestión de directivas sin ventana: anota que se abrió y con qué app (F7).</summary>
+    /// <summary>F9 §4: la lista de hallazgos sin código, sin ventana. Guarda lo que se le pidió.</summary>
+    public sealed class NoDeletedUnitsDialog : IDeletedUnitsDialog
+    {
+        public List<DeletedUnitsViewModel> Shown { get; } = new();
+
+        public DeletedUnitsViewModel Show(DeletedUnitsViewModel viewModel)
+        {
+            Shown.Add(viewModel);
+            return viewModel;
+        }
+    }
+
     public sealed class NoDirectivesDialog : IDirectivesDialog
     {
         public List<DirectivesViewModel> Shown { get; } = new();

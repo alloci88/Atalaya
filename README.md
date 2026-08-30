@@ -249,6 +249,15 @@ pertenencia) y `read:user` (login, nombre, avatar, email). Nada más.
 - **Informes** (V7): la lista de todo lo que las auditorías dejaron escrito, con filtros y
   búsqueda por contenido, visor markdown renderizado dentro de la app (tablas incluidas) y
   descarga del `.md`. Es el único sitio desde el que se lee un informe.
+- **Auditar lo que ha cambiado** (F9): la operación de cada sprint. Compara el commit de la
+  auditoría de cada unidad con HEAD del clon local —commit contra commit, con LibGit2Sharp— y dice
+  qué clases han cambiado desde entonces, con cuántos commits y cuándo. La deriva es **derivada**
+  (se calcula del historial cada vez, no se persiste) y **ortogonal** al estado de auditoría: una
+  clase puede estar «auditada» y «cambiada» a la vez. Guardarraíl anti-bucle: los arreglos hechos
+  desde Atalaya se reconocen por la huella del contenido que dejaron y salen como «arreglada —
+  pendiente de verificar», no como deuda nueva. Cuando el historial no coopera —commit ausente,
+  reescrito, clon por detrás— lo dice, en vez de un cero. «Seleccionar cambiadas» en el Inventario
+  e indicador clicable en el Portafolio.
 
 El manual de uso, pantalla a pantalla, está en [`MANUAL.md`](MANUAL.md). Lo que queda por hacer
 y lo que se decidió aplazar, en [`BACKLOG.md`](BACKLOG.md).

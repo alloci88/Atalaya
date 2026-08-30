@@ -46,6 +46,14 @@ activos por severidad y el estado de su clon local. Un clic entra al inventario.
 El piloto de vinculación dice si el clon de esa app está donde debería: verde
 vinculado, ámbar con avisos, rojo sin clon. Sin clon no se puede auditar ni medir.
 
+Cada tarjeta dice además **cuántas clases han cambiado desde que se auditaron**
+—«12 clases cambiadas desde su auditoría»—, y es un enlace: lleva al inventario
+con el filtro puesto. Es lo que convierte esto en un hábito: la deuda nueva que
+puede haber entrado sale sola cada mañana, sin que nadie la busque. Sin clon en
+esta máquina pone «vincula tu clon para ver la deriva» y no un cero: la deriva se
+calcula del historial local, y no tenerlo no es lo mismo que no haber cambiado
+nada. Ver «Auditar lo que ha cambiado», más abajo.
+
 ### Inventario
 
 Las unidades de la aplicación en el ciclo vigente, por módulos, con su estado
@@ -54,12 +62,23 @@ Las unidades de la aplicación en el ciclo vigente, por módulos, con su estado
 - **Grande** significa que la unidad supera el umbral de tamaño (LOC o caracteres):
   queda excluida del ciclo y genera su propio hallazgo.
 - **Auditar selección** lanza una sesión sobre lo marcado.
+- **Seleccionar cambiadas** marca las unidades cuyo código ha cambiado desde que
+  se auditaron. Es el gesto de cada sprint; a partir de ahí, el flujo es el de
+  siempre. Al lado, el **filtro de deriva** recorta la lista por lo que le ha
+  pasado al código, que es una dimensión aparte del estado de auditoría.
 - **Re-escanear** vuelve a medir el clon: actualiza el inventario **y** los hallazgos
   medidos en el mismo gesto, y cuenta en un aviso qué cambió.
 - **Reiniciar ciclo** abre uno nuevo sin borrar nada.
 - El panel del ciclo lleva **Patrones silenciados** y **Directivas** con su
   «Gestionar» al lado: las dos cosas que condicionan qué se reporta en esta
   aplicación (ver «Directivas del proyecto», más abajo).
+- Y las líneas de **deriva**: cambiadas, arregladas sin verificar y sin historial,
+  cada una por su lado. No se suman nunca: piden acciones distintas.
+
+Cada unidad lleva **dos** indicadores, no uno: su estado de auditoría
+(pendiente / auditada / grande) y, si la tiene, su **deriva**. Son ortogonales —
+una clase puede estar «Auditada» y «Cambiada» a la vez, y eso es justamente lo
+que hay que saber para decidir.
 
 ### Hallazgos
 
@@ -183,6 +202,100 @@ verificación— aparece sin reiniciar la aplicación.
 
 Donde no hay medida se escribe «—» y qué haría falta para que aparezca. Un cero con
 formato sería una medida que nadie ha tomado.
+
+### Auditar lo que ha cambiado
+
+Un ciclo completo sobre una aplicación grande cuesta caro y se hace una vez. Lo
+sostenible es **auditar lo que ha cambiado desde que se auditó**: barato,
+frecuente, y coge las regresiones recién nacidas. Es la operación de cada sprint.
+
+Cada unidad guarda el commit en el que se auditó, y tu clon tiene el historial:
+con esas dos cosas Atalaya puede decir exactamente qué clases han cambiado desde
+entonces. **No se guarda nada**: la deriva se calcula del historial local cada
+vez que se mira. En el hub solo viven hechos —el commit de cada auditoría, la
+huella de lo que dejó cada arreglo—, porque un «cambiada: sí» guardado sería un
+dato que envejece solo y que dos máquinas podrían contradecir.
+
+Y siempre **entre commits**, nunca contra tu carpeta de trabajo: un fichero a
+medio editar o un `core.autocrlf` distinto convertirían medio repositorio en
+deriva inventada.
+
+#### Qué significa cada estado
+
+- **Cambiada desde la auditoría (N commits)** — el código ha cambiado por mano
+  ajena. Es candidata a re-auditar, y es lo que marca «Seleccionar cambiadas».
+  Dice cuántos commits la tocaron y la fecha del último; los merges no cuentan
+  (contarían otra vez lo que ya traen dentro).
+- **Arreglada — pendiente de verificar** — lo único que la ha tocado son arreglos
+  hechos desde Atalaya. **No** es deriva: es trabajo a medio cerrar, y se cierra
+  **verificando**, que es el instrumento que detectó el hallazgo. No entra en
+  «Seleccionar cambiadas»: gastarle una auditoría entera sería pagar de más.
+- **Historial no disponible** — no se puede saber, y se dice cuál de los tres
+  casos es: el commit de su auditoría no está en tu clon (clon superficial o
+  recién hecho), el historial se reescribió (rebase o force-push), o auditaron en
+  otra máquina en un commit que tú aún no tienes («haz pull»). Ni «sin cambios»
+  ni «cambiada» serían ciertas.
+- **Ya no existe** — el fichero desapareció del repositorio. Sus hallazgos
+  activos salen en «Sin código» (más abajo).
+- Lo **nunca auditado** no aparece aquí. Eso es cobertura inicial, otra pregunta.
+
+Una clase **movida o renombrada** cuenta como modificada, y el detalle dice a
+dónde fue a parar. Cualquier cambio de contenido cuenta, aunque sea un comentario:
+re-auditar una clase por un cambio trivial cuesta poco; pasar por alto uno real,
+mucho.
+
+#### El guardarraíl: los arreglos no se cuentan como deuda nueva
+
+Cuidado con el bucle: si arreglas un hallazgo con el agente y commiteas, esa
+clase «ha cambiado desde su auditoría»… por culpa de la propia auditoría. Sin
+freno, cada arreglo realimentaría la lista y el ciclo no convergería nunca.
+
+Atalaya reconoce **sus propios arreglos**: al terminar uno, guarda la huella del
+contenido que dejó escrito en cada fichero. Cuando después mira el historial, un
+commit cuyo contenido case con esa huella es, con certeza, el que publicó ese
+arreglo. Entonces:
+
+- Solo arreglos propios → **arreglada, pendiente de verificar**.
+- Al menos un commit ajeno → **cambiada**, como siempre. Esto incluye el caso del
+  arreglo que de paso tocó otros ficheros: para la clase de su hallazgo es propio;
+  para las demás es ajeno, y es lo correcto — código tocado sin auditoría detrás
+  es candidato.
+- **Tres arreglos** sobre la misma clase sin volver a auditarla → **cambiada**
+  aunque todos sean propios. Tanto retoque junto merece una mirada fresca. El
+  contador se pone a cero solo al re-auditar.
+
+> **Si enmiendas, aplastas o rebasas un commit de arreglo antes de publicarlo**,
+> su contenido deja de casar y la clase saldrá como «cambiada». Es a propósito:
+> el error se comete hacia re-auditar de más, nunca de menos.
+
+#### Sin código: hallazgos de clases que ya no existen
+
+Cuando un fichero desaparece del repositorio, sus hallazgos activos se quedan sin
+nada que mirar: no se pueden verificar y no se resuelven solos. El panel del ciclo
+los cuenta en **«Sin código»**, con un «Revisar» que abre la lista: cada hallazgo,
+dónde vivía y **el commit que borró ese fichero**.
+
+Ahí puedes marcarlos y usar **«Resolver por código eliminado»**: se resuelven con
+tu nombre y ese commit como evidencia. Nunca lo hace la aplicación sola — un
+fichero que no está donde estaba puede haberse movido, y «no está» no es «ya no
+existe». Ojo con el fichero **troceado**: sale como borrado más clases nuevas, y
+Atalaya lo presenta tal cual en vez de coserlo a ojo.
+
+#### Lo que este análisis no ve, y lo dice
+
+Arriba del inventario aparecen los avisos que condicionan la lectura:
+
+- La **rama**: la deriva se mide contra la rama en la que esté tu clon, y el panel
+  lo dice. Si no es la rama por defecto del repositorio, lo matiza — medir contra
+  una rama de trabajo es legítimo, pero hay que saberlo.
+- **Clon atrasado**: si tu HEAD va por detrás del remoto, haz pull; lo que veas
+  puede estar incompleto.
+- **Cambios sin commitear**: no son deriva (no hay commit que comparar), y se
+  avisa de cuántos ficheros son.
+
+El cálculo va **fuera del hilo de la interfaz**: el inventario se abre en el acto
+y la deriva aparece cuando llega. Sobre un clon de ~900 clases tarda **décimas de
+segundo** en el caso normal.
 
 ### Informes
 

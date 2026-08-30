@@ -126,6 +126,9 @@ public sealed class LaunchScopeTests : IDisposable
         services.AddSingleton<DirectiveScanner>();
         services.AddSingleton<DirectiveService>();
         services.AddSingleton<IDirectivesDialog, TestFactory.NoDirectivesDialog>();
+        // F9: la deriva y la lista de hallazgos sin código, que el inventario pide.
+        services.AddSingleton(sp => new DriftQuery(sp.GetRequiredService<HubContext>()));
+        services.AddSingleton<IDeletedUnitsDialog, TestFactory.NoDeletedUnitsDialog>();
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
     }
@@ -416,8 +419,11 @@ public sealed class LaunchScopeTests : IDisposable
         string source = File.ReadAllText(Path.Combine(
             dir!.FullName, "src", "Atalaya.App", "ViewModels", "InventoryViewModel.cs"));
 
+        // El N confirmado tiene que seguir viajando. Desde F9 §6 la petición lleva además el
+        // trigger, así que se ancla el prefijo y no la llamada entera: lo que no puede perderse es
+        // `paths.Count`, no que sea el último argumento.
         source.Should().Contain(
-            "new SessionRequest(Slug, mode, paths, paths.Count)",
+            "new SessionRequest(Slug, mode, paths, paths.Count,",
             "sin el N confirmado la salvaguarda del coordinador queda desarmada");
     }
 }

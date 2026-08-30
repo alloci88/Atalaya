@@ -75,6 +75,21 @@ public sealed class HubPaths
     /// <summary>Legado de F5.10, solo para que la migración a patrones sepa dónde mirar.</summary>
     public string LegacyRuleExclusionsDir(string slug) => Path.Combine(AppDir(slug), "rule-exclusions");
 
+    /// <summary>
+    /// F9 §2: lo que los arreglos de la propia aplicación dejaron escrito en el clon. Un fichero por
+    /// arreglo, nombrado por el ULID de su sesión <c>fix</c>, merge-friendly como todo lo demás.
+    /// <para>
+    /// Carpeta propia y no dentro de <c>sessions/</c> porque una sesión es un registro INMUTABLE de
+    /// lo que pasó y esto es una huella que se CONSULTA en cada cálculo de deriva: mezclarlos
+    /// obligaría a leer y validar todas las sesiones de la app para responder una pregunta sobre
+    /// arreglos, que son un puñado.
+    /// </para>
+    /// </summary>
+    public string FixesDir(string slug) => Path.Combine(AppDir(slug), "fixes");
+
+    /// <summary><c>apps/{slug}/fixes/{ulid}.json</c>, con el ULID de la sesión de arreglo.</summary>
+    public string FixFile(string slug, string sessionUlid) => Path.Combine(FixesDir(slug), $"{sessionUlid}.json");
+
     public string ClaimsDir(string slug) => Path.Combine(AppDir(slug), "claims");
 
     public string ClaimFile(string slug, string unitHash) => Path.Combine(ClaimsDir(slug), $"{HashToFileName(unitHash)}.json");

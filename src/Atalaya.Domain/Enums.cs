@@ -115,6 +115,20 @@ public static class AuditModes
             .Reason;
 }
 
+/// <summary>
+/// Qué provocó una sesión de auditoría (F9 §6). No cambia nada de cómo se audita: distingue la
+/// cobertura inicial del MANTENIMIENTO, que es la operación de cada sprint, para que Métricas pueda
+/// separarlas algún día sin tener que reinterpretar sesiones antiguas.
+/// </summary>
+public enum SessionTrigger
+{
+    /// <summary>Alguien eligió las unidades a mano. Es el valor de todas las sesiones anteriores a F9.</summary>
+    Manual,
+
+    /// <summary>Salió de «Seleccionar cambiadas»: se audita lo que ha cambiado desde su auditoría.</summary>
+    Deriva,
+}
+
 /// <summary>Estado de una unidad dentro del inventario de un ciclo (§2).</summary>
 public enum UnitState
 {

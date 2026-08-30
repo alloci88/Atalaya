@@ -72,6 +72,24 @@ public static class SchemaValidation
         RequireText(d.By, "directive.by");
     }
 
+    /// <summary>
+    /// F9 §2. Los ficheros con su huella son OBLIGATORIOS y no vacíos: un registro de arreglo sin
+    /// ellos no puede reconocer ningún commit, así que no sería un hecho, sería ruido.
+    /// </summary>
+    public static void Validate(FixRecord r)
+    {
+        Require(r.SchemaVersion == CurrentSchemaVersion, "fix.schemaVersion must be 1");
+        Require(r.Id != Ulid.Empty, "fix.id must be a non-empty ULID");
+        RequireText(r.AppSlug, "fix.appSlug");
+        RequireText(r.By, "fix.by");
+        Require(r.Files.Count > 0, "fix.files must have at least one entry");
+        foreach (FixFileStamp f in r.Files)
+        {
+            RequireText(f.Path, "fix.files[].path");
+            RequireText(f.ContentHash, "fix.files[].contentHash");
+        }
+    }
+
     public static void Validate(Claim c)
     {
         Require(c.SchemaVersion == CurrentSchemaVersion, "claim.schemaVersion must be 1");

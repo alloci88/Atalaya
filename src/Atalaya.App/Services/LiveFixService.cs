@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Threading;
 using Atalaya.Copilot;
 using Atalaya.Domain;
+using Atalaya.Domain.Hashing;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Inventory;
@@ -508,6 +509,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
                 _hub.Store.WriteFinding(Slug, stored);
             }
 
+            WriteFixRecord(sessionId, finding, session.By, session.Commit);
             _hub.Sync?.CommitAndPush($"fix: {FindingAlias} en {Slug} ({Files.Count} fichero(s))");
         }
         catch (Exception ex)
@@ -523,6 +525,66 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         Completed?.Invoke(
             $"Arreglo asistido de {FindingAlias}: {Files.Count} fichero(s) tocado(s). "
             + "Los cambios están en tu clon sin commitear.");
+    }
+
+    /// <summary>
+    /// Deja escrito QUÉ dejó escrito este arreglo (F9 §2): la ruta de cada fichero tocado y la
+    /// huella de su contenido tal y como quedó.
+    /// <para>
+    /// Es lo que impide que el ciclo se muerda la cola. Sin esto, el commit con el que el usuario
+    /// publique este arreglo haría que la unidad apareciera «cambiada desde su auditoría» — por
+    /// culpa de la propia auditoría—, y cada arreglo realimentaría la lista de candidatas para
+    /// siempre.
+    /// </para>
+    /// <para>
+    /// <b>Se guarda el contenido y no un hash de commit porque el commit todavía no existe</b>
+    /// (D-556: Atalaya no commitea). Cuando más tarde se busque quién publicó esto, se reconocerá
+    /// por el contenido, que es lo único que la aplicación sabe con certeza ahora mismo.
+    /// </para>
+    /// </summary>
+    private void WriteFixRecord(Ulid sessionId, Finding finding, string by, string? baseCommit)
+    {
+        if (Files.Count == 0 || string.IsNullOrWhiteSpace(_clonePath))
+        {
+            return;
+        }
+
+        var stamps = new List<FixFileStamp>();
+        foreach (FixFileChange file in Files)
+        {
+            string abs = Path.Combine(
+                _clonePath, file.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            try
+            {
+                if (File.Exists(abs))
+                {
+                    stamps.Add(new FixFileStamp(
+                        file.RelativePath, HashUtil.NormalizedContentHash(File.ReadAllBytes(abs))));
+                }
+            }
+            catch (IOException)
+            {
+                // Un fichero que no se puede releer se queda sin huella y su unidad saldrá como
+                // «cambiada»: re-auditar de más, que es la dirección segura.
+            }
+        }
+
+        if (stamps.Count == 0)
+        {
+            return;
+        }
+
+        _hub.Store.WriteFix(new FixRecord
+        {
+            Id = sessionId,
+            AppSlug = Slug,
+            FindingId = finding.Id.ToString(),
+            FindingAlias = FindingAlias,
+            Utc = DateTimeOffset.UtcNow,
+            By = by,
+            BaseCommit = baseCommit,
+            Files = stamps,
+        });
     }
 
     private static string DefaultCommitTitle(Finding finding)

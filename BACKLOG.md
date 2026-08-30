@@ -4,9 +4,23 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-30 (F10.3 — la retirada del mapa de calor).
+Última revisión: 2026-08-30 (F9 — auditar lo que ha cambiado).
 
 ## En vuelo
+
+- **F9 — el caso de aceptación de la deriva, con los ojos del usuario.** La detección está entera y
+  cubierta por 64 tests contra repositorios git reales (D-683…D-693), y el rendimiento está medido
+  sobre el clon de xblast, pero **nadie ha abierto la ventana**. Falta el circuito completo: tras un
+  pull con cambios reales, que la tarjeta diga N, «Seleccionar cambiadas», auditar y ver los
+  hallazgos nuevos; y el inverso del bucle — arreglar con el agente, commitear, comprobar que sale
+  «arreglada — pendiente de verificar» y no «cambiada», y que verificar la deja limpia. En la misma
+  pasada: la fila del inventario con sus dos indicadores a 1366×768 y en los dos temas (D-694).
+- **F9 — el umbral de tres arreglos, sin datos detrás.** `MaxOwnFixesBeforeReaudit` está razonado,
+  no medido: uno sería no dejar arreglar nada y diez sería no mirar nunca (D-686). Se revisará
+  cuando haya uso real y se sepa cuál de las dos molesta.
+- **F9 — la deriva de un clon muy atrasado.** Auditado hace más de 1.500 commits y con ocho sesiones
+  distintas, el cálculo tarda ~6,4 s sobre xblast (D-688). Va fuera del hilo de UI y se cachea, así
+  que no bloquea, pero si alguien vive en ese caso habrá que acotar el recorrido y decirlo.
 
 - **H9 — verificación humana con asiento real.** El flujo interactivo está verificado por el
   usuario con una sesión de verdad; falta cerrar el circuito con el **descarte** (que el clon
@@ -82,6 +96,18 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **F9 · Auditar lo que ha cambiado** — la deriva, derivada del historial local y nunca persistida:
+  qué clases han cambiado desde que se auditaron, con su conteo de commits y su fecha, y los cinco
+  estados honestos cuando el historial no coopera (commit ausente, reescrito, clon por detrás, rama
+  no por defecto, árbol sucio). Guardarraíl anti-bucle que reconoce los arreglos de la propia
+  aplicación **por el contenido que dejaron** —Atalaya no commitea (D-556), así que no hay hash de
+  commit que guardar— y los aparta como «arreglada — pendiente de verificar» hasta tres. Indicador
+  ortogonal, filtro propio y «Seleccionar cambiadas» en el Inventario; indicador clicable en el
+  Portafolio; «Resolver por código eliminado» con atribución y el commit del borrado como evidencia;
+  y `trigger: deriva` en la sesión, solo guardado. Medido sobre xblast (925 unidades, 3.621
+  commits): **311 ms** en el caso normal, tras eliminar el diff de árbol a árbol que costaba 9,8 s
+  por grupo (D-688).
 
 - **F10.3 · Retirada del Mapa de calor** — la vista, su modelo, su agregador, la rampa magma, el
   treemap, las tarjetas, la fórmula de «Atención», los pesos de severidad y la franja de densidad

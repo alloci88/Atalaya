@@ -191,6 +191,12 @@ public sealed class AuditSession
 
     public AuditMode Mode { get; set; }
 
+    /// <summary>
+    /// Qué provocó la sesión (F9 §6). <see cref="SessionTrigger.Manual"/> en todo lo anterior a F9 y
+    /// en todo lo que se elige a mano: el dato se guarda, no se interpreta todavía.
+    /// </summary>
+    public SessionTrigger Trigger { get; set; } = SessionTrigger.Manual;
+
     public required string By { get; set; }
 
     public required string Machine { get; set; }
