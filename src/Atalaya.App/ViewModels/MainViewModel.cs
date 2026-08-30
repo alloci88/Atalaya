@@ -449,14 +449,6 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private Task ShowMetrics() => Navigation.NavigateToAsync<MetricsViewModel>();
 
-    /// <summary>
-    /// V9 Mapa de calor (F10): dónde arde el código, con el área por tamaño y el color por
-    /// densidad de deuda. <b>Sin botón en la barra</b> ahora mismo: el comando se queda puesto
-    /// para que volver a enseñar la vista sea descomentar el botón de <c>MainWindow.xaml</c>.
-    /// </summary>
-    [RelayCommand]
-    private Task ShowHeatmap() => Navigation.NavigateToAsync<HeatmapViewModel>();
-
     /// <summary>V7 Informes (F6.3): la lista de todo lo que las auditorías han dejado escrito.</summary>
     [RelayCommand]
     private Task ShowReports() => Navigation.NavigateToAsync<ReportsViewModel>();

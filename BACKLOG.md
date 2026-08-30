@@ -4,33 +4,9 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-29 (F10.2b — la barra de mandos del mapa).
+Última revisión: 2026-08-30 (F10.3 — la retirada del mapa de calor).
 
 ## En vuelo
-
-- **F10.2b — el separador huérfano al envolver.** La barra envuelve por grupos y está medida en seis
-  anchos sin un solo recorte, pero el `WrapPanel` coloca los separadores como a un elemento más: al
-  pasar a dos líneas, una línea puede empezar con el pelo de separación. A 1 px se nota poco y no se
-  ha visto en pantalla. Si molesta, un panel propio que los oculte al principio de línea (D-679).
-- **F10.2 — el caso de aceptación del rediseño, con los ojos del usuario.** El nivel 1 de tarjetas,
-  el termómetro, el orden «Atención» y el zoom están entregados y medidos (D-664…D-672), y la
-  lámina del nivel 1 se ha renderizado y mirado — pero **nadie ha abierto la ventana**. Falta, a
-  1366×768 y en los dos temas: responder «¿por dónde empiezo?» en tres segundos con el mapa de
-  xblast, comprobar que al maximizar no queda hueco, la transición de zoom, la rueda sobre las 925
-  filas de la tabla, y que la tira de severidades y la barra de cobertura se distingan en pantalla
-  (D-673).
-- **F10 — el caso de aceptación del mapa de calor, con los ojos del usuario.** La vista está
-  entera y cubierta por tests (D-634…D-646, D-654) y el treemap y las láminas se han renderizado y
-  mirado en los dos temas, pero **nadie ha abierto la ventana**: falta abrir el mapa de xblast
-  dentro de la aplicación, ampliarlo, llegar desde `CommonStatics.cs` a sus 15 hallazgos, probar
-  el doble clic con un ratón de verdad y comprobar la exportación. En la misma pasada, lo de F10.1
-  (D-655): que la tabla se lea como una tabla con sus 925 filas, que la rueda y el teclado
-  (Inicio/Fin, RePág/AvPág) funcionen con una sola barra, y que los cinco pasos de la rampa se
-  distingan en la pantalla real a 1366×768 y no solo en el PNG.
-- **F10 — los umbrales, contra más de una aplicación.** Los cinco pasos (5 · 15 · 40 · 100 por
-  KLOC) están anclados en un razonamiento y comprobados contra un solo clon, donde la única unidad
-  medida da 206. Se revisarán cuando haya dos o tres aplicaciones con cobertura de verdad y se
-  pueda ver si los pasos 2 y 3 llegan a usarse (D-639).
 
 - **H9 — verificación humana con asiento real.** El flujo interactivo está verificado por el
   usuario con una sesión de verdad; falta cerrar el circuito con el **descarte** (que el clon
@@ -106,6 +82,13 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **F10.3 · Retirada del Mapa de calor** — la vista, su modelo, su agregador, la rampa magma, el
+  treemap, las tarjetas, la fórmula de «Atención», los pesos de severidad y la franja de densidad
+  que el mapa había puesto en el inventario salen del producto: con cobertura baja no informaba, y
+  el problema de legibilidad reaparecía en módulos grandes y en aplicaciones sin jerarquía
+  (D-680…D-682). Se retiran con ella las tres entradas en vuelo que pedían aceptarla y la de los
+  umbrales. Lo entregado en F10…F10.2b se queda escrito aquí abajo y en DECISIONS: es historia.
 
 - **F10.2b · La barra de mandos** — envuelve por grupos en vez de recortar (la columna estrella era
   el defecto, no los anchos), cuatro grupos separados por función, anchos medidos contra el control

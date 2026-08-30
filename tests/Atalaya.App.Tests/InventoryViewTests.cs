@@ -103,8 +103,6 @@ public sealed class InventoryViewTests : IDisposable
         services.AddSingleton<DirectiveScanner>();
         services.AddSingleton<DirectiveService>();
         services.AddSingleton<IDirectivesDialog, TestFactory.NoDirectivesDialog>();
-        // F10.1 §1: el inventario pinta la franja de densidad con la MISMA consulta que el mapa.
-        services.AddSingleton(sp => new HeatmapQuery(sp.GetRequiredService<HubContext>()));
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
     }

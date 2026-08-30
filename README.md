@@ -17,7 +17,7 @@ Solución en capas; las flechas indican dependencias
 | `src/Atalaya.Inventory` | Escaneo de clones: stack, módulos, unidades, LOC, hashes, re-escaneo con renombres. | `net8.0` |
 | `src/Atalaya.Copilot` | Integración `GitHub.Copilot.SDK` (adaptador real, autenticado con el token de cuenta y usando siempre el CLI embebido del paquete) + `ICopilotAgent` con fake inyectable; tools, permisos, coste, prompts/brief. | `net8.0` |
 | `src/Atalaya.ImportV4` | Importador tolerante del formato markdown v4. | `net8.0` |
-| `src/Atalaya.App` | WPF + MVVM (CommunityToolkit.Mvvm), Generic Host (DI), tema Fluent (WPF-UI), vistas V1–V9 + Cuenta; device flow de GitHub y el `GitHubAccountService` que sirve el token a git, a Copilot y a la identidad de commits. | `net8.0-windows` |
+| `src/Atalaya.App` | WPF + MVVM (CommunityToolkit.Mvvm), Generic Host (DI), tema Fluent (WPF-UI), vistas V1–V8 + Cuenta; device flow de GitHub y el `GitHubAccountService` que sirve el token a git, a Copilot y a la identidad de commits. | `net8.0-windows` |
 | `tests/*` | xUnit + FluentAssertions, un proyecto por `src`. | |
 
 **Principios**: el agente de IA nunca escribe estado — entrega hallazgos por una tool
@@ -249,14 +249,6 @@ pertenencia) y `read:user` (login, nombre, avatar, email). Nada más.
 - **Informes** (V7): la lista de todo lo que las auditorías dejaron escrito, con filtros y
   búsqueda por contenido, visor markdown renderizado dentro de la app (tablas incluidas) y
   descarga del `.md`. Es el único sitio desde el que se lee un informe.
-- **Mapa de calor** (V9): dos niveles. Arriba, **una tarjeta por módulo** con su cobertura, su
-  densidad y sus severidades, ordenadas por **Atención** —`0,6 × riesgo medido + 0,4 × ignorancia`,
-  que es lo que contesta «¿por dónde miro ahora?» cuando la cobertura es baja—. Dentro de un
-  módulo, **treemap** de sus unidades: **área** = líneas, **color** = densidad de deuda (peso por
-  severidad ÷ KLOC), con rampa secuencial magma y umbrales fijos. Lo **no auditado** va en gris
-  —densidad *desconocida*, que no es cero—, nunca con el color frío de la escala. Termómetro de la
-  aplicación, filtro «solo auditadas», tabla equivalente ordenable y exportación a PNG de
-  cualquiera de los dos niveles.
 
 El manual de uso, pantalla a pantalla, está en [`MANUAL.md`](MANUAL.md). Lo que queda por hacer
 y lo que se decidió aplazar, en [`BACKLOG.md`](BACKLOG.md).

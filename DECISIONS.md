@@ -6573,3 +6573,71 @@ líneas de la barra respiren, que el pelo entre grupos se vea sin pesar, y que a
 línea empiece con un separador huérfano — el `WrapPanel` los coloca como a un elemento más, y a
 1 px de una tinta al 100 % de opacidad puede notarse. Si molesta, se arregla con un panel propio
 que los oculte al principio de línea.
+
+## F10.3 — Retirada del Mapa de calor
+
+La vista se retira entera. No es una pausa ni un «volver a ello»: el código, sus tests y su sitio en
+el menú salen del producto, y el manual y el README quedan como si nunca hubiera existido. Las
+decisiones de F10, F10.1, F10.1b, F10.1c, F10.2 y F10.2b se quedan escritas arriba tal cual —son
+historia, y explican por qué se llegó hasta aquí—.
+
+### D-680 — Por qué se retira en vez de seguir iterando
+
+**Con cobertura baja no informa.** Es el diagnóstico de D-664 y sigue siendo cierto después de
+arreglarlo: con el 0,2 % auditado, lo único que el mapa puede pintar de verdad es la ignorancia. El
+rediseño de F10.2 lo hizo legible —tarjetas, cobertura medida, orden por «Atención»— pero legible no
+es informativo: la respuesta seguía siendo «mira donde no has mirado», que es lo que ya dice el
+inventario sin pintar nada.
+
+**Y el problema de escala reaparece en cada nivel.** El salto a módulos no resolvió la
+granularidad, la aplazó un nivel. En un módulo grande el treemap del nivel 2 vuelve a tener el
+mismo defecto que tenía el nivel 1 con 925 hojas; y en una aplicación **sin jerarquía de módulos**
+—ficheros colgando de la raíz— no hay nivel 1 que valga: el primer nivel ya es el que no cabe.
+Arreglarlo pediría un tercer reencuadre, y dos ya fueron suficientes para saber que la figura no es
+el instrumento.
+
+**Lo que quedaba pendiente era caro y no se había pagado.** F10, F10.2 y F10.2b dejaron tres casos
+de aceptación sin hacer —nadie había abierto la ventana— y los umbrales seguían validados contra un
+solo clon (D-639). Retirar cuesta menos que verificar lo que no vamos a usar.
+
+### D-681 — Dónde se puso la frontera
+
+Se borra lo del mapa y **solo** lo del mapa. Lo que decidió cada caso dudoso fue **quién lo
+consume**, comprobado con una búsqueda, no supuesto:
+
+- **Se va con el mapa** porque nadie más lo usaba: `HeatmapQuery` (el agregador), `AttentionScore`,
+  `DensityScale` (la rampa magma de los dos temas), `TreemapLayout`, `ModulePrefix`, y los controles
+  `Treemap`, `ModuleCard`, `HeatmapImage`, `HeatBrushes`, `ShareBar`, `MiddleEllipsisText` y
+  `TextFit`. Los estilos y plantillas del mapa vivían dentro de `HeatmapView.xaml` y se fueron con
+  el fichero; no había ni un recurso del mapa en `App.xaml` aparte de su `DataTemplate`.
+- **`ModulePrefix` también se va**, aunque F10.1c lo escribió como utilidad reutilizable: la
+  elisión del nombre de la aplicación solo la llamaba el mapa. El inventario y la tabla de hallazgos
+  siempre han rotulado el módulo entero.
+- **`DebtWeights` se va, y con él D-634 deja de tener código detrás.** Era «la única definición de
+  deuda del producto», pero el único que la consumía era el mapa: ni los informes, ni Métricas, ni el
+  portafolio ponderan por severidad —cuentan hallazgos—. Un peso que nadie aplica no es una regla
+  del dominio, es una constante huérfana. Si algún día hace falta ponderar, D-634 explica por qué
+  10 · 5 · 2 · 1 y no 4 · 3 · 2 · 1.
+- **La franja de densidad del inventario se va también.** La puso F10.1 §1 para que el color de una
+  unidad no dependiera de en qué vista se mirara, y era el mapa asomándose al inventario: no existía
+  antes de F10 y su color salía entero de la rampa del mapa. Dejarla habría obligado a conservar el
+  agregador, la escala y los pinceles —la vista retirada, viva por dentro para pintar una tira de
+  5 px—. El inventario vuelve a la fila que tenía: casilla, nombre, estado, reserva.
+- **Se queda todo lo demás**, incluido lo que se le parece: los colores de severidad de chips y
+  ficha (`SeverityToBrushConverter`, de siempre), la medición de LOC del inventario (previa a F10),
+  `MiddleEllipsisConverter` —que comparte nombre con el control borrado pero es otra cosa y lo usa
+  Arreglo asistido—, y los controles de Métricas (`ChartPlot`, `DonutRing`, `SeriesPalette`,
+  `AxisScale`).
+
+### D-682 — Lo que queda después de barrer
+
+Ni un `HeatMap`, `Treemap`, «densidad de deuda» ni un hex de la rampa magma en código, XAML,
+recursos o `.csproj`. Lo único que sobrevive a la búsqueda es la palabra **«atención»** en su
+sentido corriente —las líneas del resumen en vivo que piden mirarlas, y una instrucción del prompt
+del auditor—, que no tiene nada que ver con la fórmula de D-665, y las decisiones de F10.x en este
+mismo fichero, que son historia y no se reescriben.
+
+145 tests se fueron con la vista (`HeatmapViewTests`, `HeatmapQueryTests`, `HeatmapBarTests`,
+`TreemapLayoutTests`, `AttentionScoreTests`, `ModulePrefixTests`, `TextFitTests`, `DebtWeightsTests`
+y los ayudantes `TestBar` y `StaRunner`, que no tenían otro cliente). Quedan **1.185**, todos en
+verde, y el proyecto compila sin un solo aviso nuevo.

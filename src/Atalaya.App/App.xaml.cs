@@ -111,7 +111,6 @@ public partial class App : Application
         services.AddSingleton(sp => new PortfolioQuery(sp.GetRequiredService<HubContext>().Store));
         services.AddSingleton(sp => new MetricsQuery(sp.GetRequiredService<HubContext>()));
         services.AddSingleton(sp => new ReportsQuery(sp.GetRequiredService<HubContext>()));
-        services.AddSingleton(sp => new HeatmapQuery(sp.GetRequiredService<HubContext>()));
         services.AddSingleton<ImportService>();
 
         // Copilot: the real SDK agent, authenticated with the account token (D3) and always
@@ -243,7 +242,6 @@ public partial class App : Application
         services.AddTransient<FindingsViewModel>();
         services.AddTransient<FindingDetailViewModel>();
         services.AddTransient<MetricsViewModel>();
-        services.AddTransient<HeatmapViewModel>();
         services.AddTransient<ReportsViewModel>();
         services.AddTransient<AssistedFixViewModel>();
     }

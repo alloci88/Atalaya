@@ -93,9 +93,6 @@
             <DataTemplate DataType="{x:Type vm:MetricsViewModel}">
                 <views:MetricsView />
             </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:HeatmapViewModel}">
-                <views:HeatmapView />
-            </DataTemplate>
             <DataTemplate DataType="{x:Type vm:ReportsViewModel}">
                 <views:ReportsView />
             </DataTemplate>
