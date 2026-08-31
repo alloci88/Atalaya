@@ -4,10 +4,15 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-31 (BUGFIX-REDONDEO — el redondeo no crea extremos falsos).
+Última revisión: 2026-08-31 (BUGFIX-VERSION — la versión dice de dónde sale el binario).
 
 ## En vuelo
 
+- **BUGFIX-VERSION — el zip publicado de la 1.0.3, con ojos.** El camino de release está verificado
+  reproduciéndolo en local y el workflow se vigila a sí mismo, pero el token de `gh` de esta máquina
+  no ve el repositorio y no se ha podido descargar el artefacto real. Una línea:
+  `gh release download v1.0.3 --repo Applied-Advanced-Solutions-AAS/Atalaya` y mirar el
+  `ProductVersion` del exe (D-730).
 - **BUGFIX-REDONDEO — verlo en la ventana.** Los porcentajes están verificados contra los datos
   reales por consulta (0,2 % en Métricas y en las dos tarjetas); falta abrir la aplicación y verlo,
   y comprobar de paso que el sliver de los roscos se distingue a los dos tamaños (D-726).
@@ -118,6 +123,13 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## Cerrado
 
+- **BUGFIX-VERSION · «Acerca de» decía 1.0.0 y enlazaba a un 404** — un build local se estampa ahora
+  desde `git describe` como `1.0.3-dev+<sha>` y se lee como «build local», así que no puede
+  confundirse con una release; el workflow sigue siendo el único que produce un número limpio
+  (D-727). Los dos enlaces salen de `appRepoUrl` —el manual derivado de él— y sin ese ajuste no se
+  enseña ninguno, con su explicación (D-728). El chequeo de versión NO estaba roto: estaba dentro
+  de su ventana de 24 h, y el log lo demuestra; lo que se ha definido es que un build local compare
+  con su versión BASE (D-729). El camino de release, verificado reproduciéndolo (D-730).
 - **BUGFIX-REDONDEO · El redondeo no puede inventarse un 0 % ni un 100 %** — 3 unidades de 1.335 se
   enseñaban como «0 %»: un número que miente por redondeo y que borra el trabajo hecho. Ahora hay UN
   formateador (`PercentText`) con la regla «el redondeo nunca crea un extremo falso», precisión

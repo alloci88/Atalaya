@@ -5,35 +5,65 @@ using Atalaya.App.Services;
 namespace Atalaya.App.ViewModels;
 
 /// <summary>
-/// Lo que dice el «Acerca de» (F6.4 §3): quién es la aplicación, qué versión es ESTA y de qué
-/// organización.
+/// Lo que dice el «Acerca de» (F6.4 §3): quién es la aplicación, qué versión es ESTA, de dónde
+/// sale ese binario y de qué organización.
 /// <para>
-/// Es una clase aparte del diálogo por la razón de siempre: la versión y el nombre de la
-/// organización son datos que se pueden equivocar, y un dato que solo existe dentro de una
-/// ventana no se puede comprobar.
+/// Es una clase aparte del diálogo por la razón de siempre: la versión y los enlaces son datos que
+/// se pueden equivocar, y un dato que solo existe dentro de una ventana no se puede comprobar.
 /// </para>
 /// </summary>
 public sealed class AboutInfo
 {
-    /// <summary>Dónde vive el código. Es el enlace del diálogo.</summary>
-    public const string RepositoryUrl = "https://github.com/maxam/atalaya";
+    /// <summary>
+    /// El sufijo que marca un build local (BUGFIX-VERSION). Lo estampa
+    /// <c>Directory.Build.targets</c> cuando la versión NO viene del workflow de release.
+    /// </summary>
+    public const string DevelopmentSuffix = "-dev";
 
-    /// <summary>El manual de usuario, dentro del propio repositorio.</summary>
-    public const string ManualUrl = "https://github.com/maxam/atalaya/blob/main/MANUAL.md";
+    /// <summary>Dónde vive el manual dentro del repositorio, desde su raíz.</summary>
+    public const string ManualPath = "blob/main/MANUAL.md";
 
-    public AboutInfo(string? organization, string version)
+    public AboutInfo(string? organization, string version, string? repositoryUrl)
     {
         Organization = string.IsNullOrWhiteSpace(organization) ? null : organization.Trim();
         Version = version;
+        Repository = Normalize(repositoryUrl);
     }
 
     /// <summary>La organización del hub, o null si el hub todavía no dice cuál es.</summary>
     public string? Organization { get; }
 
-    /// <summary>«1.0.0». La del ensamblado que se está ejecutando, no una constante escrita aquí.</summary>
+    /// <summary>
+    /// La versión informativa CRUDA del ensamblado: «1.0.3» en una release, «1.0.3-dev+0f920d9»
+    /// en un build local.
+    /// </summary>
     public string Version { get; }
 
-    public string VersionLabel => $"Versión {Version}";
+    /// <summary>
+    /// El repositorio, tal y como lo declara el despliegue. Null cuando no está configurado — y
+    /// entonces no hay enlace, que es mejor que un enlace roto.
+    /// </summary>
+    public string? Repository { get; }
+
+    /// <summary>
+    /// El manual, DERIVADO del repositorio (BUGFIX-VERSION). No se escribe a mano en ninguna
+    /// parte: dos URLs escritas por separado es como una de las dos acabó apuntando a un 404.
+    /// </summary>
+    public string? Manual => Repository is null ? null : $"{Repository}/{ManualPath}";
+
+    public bool HasRepository => Repository is not null;
+
+    public bool HasManual => Manual is not null;
+
+    /// <summary>
+    /// Qué se dice cuando no hay enlaces. Un hueco sin explicación se lee como un fallo de la
+    /// aplicación; esto dice que falta un ajuste y cuál (N-2).
+    /// </summary>
+    public string NoLinksNotice =>
+        $"Este despliegue no declara «appRepoUrl» en {DeployConfig.FileName}, así que no hay "
+        + "adónde enlazar. Pídeselo a quien preparó la instalación.";
+
+    public bool HasNoLinks => !HasRepository;
 
     /// <summary>Sin organización no se escribe una línea vacía: el bloque no aparece.</summary>
     public bool HasOrganization => Organization is not null;
@@ -41,20 +71,25 @@ public sealed class AboutInfo
     /// <summary>«Atalaya · Maxam», o solo «Atalaya». Es la misma firma que va al pie del informe.</summary>
     public string Signature => HasOrganization ? $"Atalaya · {Organization}" : "Atalaya";
 
-    /// <inheritdoc cref="RepositoryUrl"/>
-    public string Repository => RepositoryUrl;
+    /// <summary>Este binario NO viene del workflow de release.</summary>
+    public bool IsDevelopmentBuild => LooksLikeDevelopment(Version);
 
-    /// <inheritdoc cref="ManualUrl"/>
-    public string Manual => ManualUrl;
+    /// <summary><inheritdoc cref="Describe" path="/summary"/></summary>
+    public string VersionLabel => $"Versión {Describe(Version)}";
 
-    /// <summary>Lo construye desde el hub y desde el ensamblado vivo.</summary>
-    public static AboutInfo Create(HubContext hub)
-        => new(hub.OrganizationName, CurrentVersion());
+    /// <summary>Lo construye desde el hub, el despliegue y el ensamblado vivo.</summary>
+    public static AboutInfo Create(HubContext hub, DeployConfig? deploy = null)
+        => new(hub.OrganizationName, CurrentVersion(), deploy?.AppRepoUrl);
 
     /// <summary>
-    /// La versión REAL del binario. Se prefiere la informativa —la que puede llevar sufijos como
-    /// <c>+sha</c>— y se recorta al número: es la que un despliegue puede sellar sin que aquí haya
-    /// que tocar nada.
+    /// La versión REAL del binario, cruda.
+    /// <para>
+    /// Se lee de <see cref="AssemblyInformationalVersionAttribute"/> y NO de
+    /// <c>Assembly.GetName().Version</c>: la segunda es numérica de cuatro campos y se queda en
+    /// <c>1.0.0.0</c> con muchísima facilidad, mientras que la informativa es la que lleva la
+    /// SemVer completa con sus sufijos — que es justo donde vive la señal de «esto es un build
+    /// local».
+    /// </para>
     /// </summary>
     public static string CurrentVersion()
     {
@@ -64,12 +99,105 @@ public sealed class AboutInfo
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
         if (!string.IsNullOrWhiteSpace(informational))
         {
-            int plus = informational.IndexOf('+');
-            return plus > 0 ? informational[..plus] : informational;
+            return informational!.Trim();
         }
 
         string? file = FileVersionInfo.GetVersionInfo(assembly.Location).FileVersion;
         return string.IsNullOrWhiteSpace(file) ? assembly.GetName().Version?.ToString() ?? "—" : file;
     }
 
+    /// <summary>
+    /// El número SIN la marca de desarrollo ni los metadatos: «1.0.3» tanto en la release como en
+    /// un «1.0.3-dev+0f920d9».
+    /// <para>
+    /// Es con lo que compara el chequeo de versión (BUGFIX-VERSION): un build local de 1.0.3-dev va
+    /// por delante de la release 1.0.3, no por detrás, así que anunciarle que «existe la 1.0.3»
+    /// sería mandarle a descargar lo que ya tiene. Pero cuando salga la 1.0.4, sí debe avisar.
+    /// </para>
+    /// </summary>
+    public static string BaseVersion(string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return string.Empty;
+        }
+
+        string text = version!.Trim();
+        int plus = text.IndexOf('+');
+        if (plus >= 0)
+        {
+            text = text[..plus];
+        }
+
+        int dash = text.IndexOf('-');
+        return dash >= 0 ? text[..dash] : text;
+    }
+
+    /// <summary>
+    /// Cómo se LEE la versión: «1.0.3» si viene del workflow, «1.0.3-dev · build local (0f920d9)»
+    /// si no.
+    /// <para>
+    /// La diferencia tiene que verse de un vistazo y decir POR QUÉ es distinta. El commit va
+    /// entre paréntesis porque es lo que hace falta para reproducir un fallo reportado desde un
+    /// build sin publicar — que es exactamente el caso que este parte vino a arreglar.
+    /// </para>
+    /// </summary>
+    public static string Describe(string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return "—";
+        }
+
+        string text = version!.Trim();
+        if (!LooksLikeDevelopment(text))
+        {
+            // Release: los metadatos de build (+sha) estorban a la lectura y no son parte de la
+            // versión (SemVer §10), así que se recortan.
+            int plus = text.IndexOf('+');
+            return plus > 0 ? text[..plus] : text;
+        }
+
+        int metadata = text.IndexOf('+');
+        string number = metadata > 0 ? text[..metadata] : text;
+        string commit = metadata > 0 ? text[(metadata + 1)..] : string.Empty;
+
+        return commit.Length > 0
+            ? $"{number} · build local ({commit})"
+            : $"{number} · build local";
+    }
+
+    /// <summary>
+    /// Un pre-release marcado como desarrollo. Se mira el identificador COMPLETO tras el guion y
+    /// no un «contiene»: un futuro <c>1.1.0-rc.1</c> es un pre-release de verdad, publicado por el
+    /// workflow, y no puede leerse como un build de alguien en su portátil.
+    /// </summary>
+    private static bool LooksLikeDevelopment(string? version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            return false;
+        }
+
+        string text = version!.Trim();
+        int plus = text.IndexOf('+');
+        if (plus >= 0)
+        {
+            text = text[..plus];
+        }
+
+        int dash = text.IndexOf('-');
+        if (dash < 0)
+        {
+            return false;
+        }
+
+        string prerelease = text[(dash + 1)..];
+        return prerelease.Equals("dev", StringComparison.OrdinalIgnoreCase)
+            || prerelease.StartsWith("dev.", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>La URL del despliegue, sin barra final y solo si de verdad hay algo.</summary>
+    private static string? Normalize(string? url)
+        => string.IsNullOrWhiteSpace(url) ? null : url!.Trim().TrimEnd('/');
 }

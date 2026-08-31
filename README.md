@@ -184,12 +184,17 @@ valor de fábrica; el fichero de disco gana):
 
 ```json
 {
-  "hubUrl": "https://github.com/alloci88/atalaya-hub",
-  "appRepoUrl": "https://github.com/alloci88/atalaya",
+  "hubUrl": "https://github.com/Applied-Advanced-Solutions-AAS/atalaya-hub",
+  "appRepoUrl": "https://github.com/Applied-Advanced-Solutions-AAS/Atalaya",
   "gitHubClientId": "<CLIENT_ID>",
   "organizationLogin": ""
 }
 ```
+
+> El ejemplo son los valores REALES del despliegue actual, copiados de
+> `src/Atalaya.App/appsettings.deploy.json`. Se escriben aquí una vez y se leen de ahí: los enlaces
+> del «Acerca de» y el chequeo de versión salen de `appRepoUrl`, nunca de una URL escrita en el
+> código (BUGFIX-VERSION).
 
 - **`hubUrl`** — el repositorio audit-hub. El usuario nunca lo ve ni lo escribe. **Migrar el
   hub al repo de la organización = cambiar esta línea en el despliegue**, cero acciones de

@@ -1,6 +1,7 @@
 ﻿using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Resources;
+using System.Reflection;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
@@ -377,8 +378,13 @@ public sealed class IdentityTests : IDisposable
     // =============================================================== §3 · Acerca de
 
     /// <summary>
-    /// La versión es la del ENSAMBLADO, no una constante escrita a mano que se queda vieja. Se
-    /// comprueba contra el ensamblado vivo, que es la única fuente que no puede mentir.
+    /// La versión es la del ENSAMBLADO, no una constante escrita a mano que se queda vieja.
+    /// <para>
+    /// BUGFIX-VERSION: se compara contra <see cref="AssemblyInformationalVersionAttribute"/> y ya
+    /// NO contra <c>Assembly.GetName().Version</c>. La segunda es numérica de cuatro campos —se
+    /// queda en 1.0.0.0 con facilidad— y este test la daba por buena: fijaba justo la fuente que
+    /// hacía que un build local dijera «1.0.0».
+    /// </para>
     /// </summary>
     [Fact]
     public void La_version_del_acerca_de_es_la_real_del_ensamblado()
@@ -388,8 +394,9 @@ public sealed class IdentityTests : IDisposable
         version.Should().NotBeNullOrWhiteSpace().And.NotBe("—");
         version.Should().MatchRegex(@"^\d+\.\d+", "es un número de versión, no un texto");
         version.Should().Be(
-            typeof(MetricsViewModel).Assembly.GetName().Version!.ToString(3),
-            "la del binario que se está ejecutando");
+            typeof(MetricsViewModel).Assembly
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion.Trim(),
+            "la informativa del binario que se está ejecutando, con sus sufijos");
 
         Source("src/Atalaya.App/Views/AboutDialog.xaml").Should()
             .Contain("{Binding VersionLabel}")
@@ -399,12 +406,12 @@ public sealed class IdentityTests : IDisposable
     [Fact]
     public void Sin_organizacion_el_acerca_de_no_ensena_un_bloque_vacio()
     {
-        var sin = new AboutInfo(null, "1.2.3");
+        var sin = new AboutInfo(null, "1.2.3", "https://github.com/org/repo");
         sin.HasOrganization.Should().BeFalse();
         sin.Signature.Should().Be("Atalaya");
         sin.VersionLabel.Should().Be("Versión 1.2.3");
 
-        var con = new AboutInfo("  Maxam  ", "1.2.3");
+        var con = new AboutInfo("  Maxam  ", "1.2.3", "https://github.com/org/repo");
         con.HasOrganization.Should().BeTrue();
         con.Organization.Should().Be("Maxam", "se recorta el espacio sobrante");
         con.Signature.Should().Be("Atalaya · Maxam", "la misma firma que va al pie del informe");

@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Atalaya.App.Services;
@@ -96,10 +96,17 @@ public sealed class UpdateCheckService
 
     private async Task<UpdateAvailability> CheckCoreAsync(CancellationToken ct, bool force)
     {
-        SemanticVersion? mine = SemanticVersion.TryParse(_currentVersion());
+        // BUGFIX-VERSION: se compara con la versión BASE, sin la marca de desarrollo.
+        //
+        // Un build local se estampa «1.0.3-dev+sha», y en SemVer un pre-release es ANTERIOR a su
+        // versión final: sin recortarlo, a quien va por delante de la 1.0.3 se le anunciaría que
+        // «existe la 1.0.3» y se le mandaría a descargar lo que ya tiene. Con la base, un
+        // 1.0.3-dev calla ante la 1.0.3 y avisa en cuanto salga la 1.0.4, que es lo que se quiere.
+        string raw = _currentVersion();
+        SemanticVersion? mine = SemanticVersion.TryParse(ViewModels.AboutInfo.BaseVersion(raw));
         if (mine is null)
         {
-            return Log(UpdateAvailability.None("la versión propia no se puede interpretar"));
+            return Log(UpdateAvailability.None($"la versión propia no se puede interpretar: «{raw}»"));
         }
 
         if (!_deploy.ChecksForUpdates)

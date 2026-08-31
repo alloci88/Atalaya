@@ -7,10 +7,31 @@
 
          El workflow de release la PISA con la del tag (`-p:Version=1.2.3`), así que el binario
          que se distribuye siempre dice la verdad sobre el tag que lo produjo: un desajuste
-         tag↔binario es imposible por construcción. Este número es el de las compilaciones
-         locales y el punto de partida del siguiente tag; súbelo cuando quieras que un `dotnet
-         build` de desarrollo se distinga del último publicado. -->
-    <Version>1.0.0</Version>
+         tag↔binario es imposible por construcción. -->
+
+    <!-- BUGFIX-VERSION — QUIÉN construyó esto, no solo qué número lleva.
+
+         `Version` llega como propiedad GLOBAL únicamente desde el workflow (`-p:Version=`), y una
+         propiedad global no se puede redefinir aquí. Así que estar vacía en este punto significa,
+         sin ambigüedad, «esto NO es un build de release»: es un publish local o un F5 del IDE.
+         Es la única señal fiable — la posición en git no vale, porque un publish local sobre el
+         commit exacto del tag sigue sin ser el artefacto que se distribuye.
+
+         Lo que se hace con esa señal está en Directory.Build.targets: un build local se estampa
+         con `-dev` y su commit, para que jamás pueda leerse como «la release 1.0.0». -->
+    <AtalayaReleaseBuild Condition="'$(Version)' != ''">true</AtalayaReleaseBuild>
+    <AtalayaReleaseBuild Condition="'$(AtalayaReleaseBuild)' == ''">false</AtalayaReleaseBuild>
+
+    <!-- El suelo: lo que se estampa cuando no hay git con el que preguntar (un zip del código
+         sin `.git`, una imagen de CI recortada). Ya no hay que acordarse de subirlo en cada
+         release —el tag es el único ritual—, pero sigue siendo el número del que se parte. -->
+    <AtalayaFallbackVersion>1.0.0</AtalayaFallbackVersion>
+
+    <!-- AssemblyVersion y FileVersion son NUMÉRICAS: no admiten sufijos. Se quedan en el número
+         base, y toda la verdad sobre el origen del binario viaja en InformationalVersion, que es
+         lo que «Acerca de» lee (y lo que SemVer permite adornar). -->
+    <Version Condition="'$(Version)' == ''">$(AtalayaFallbackVersion)</Version>
+
     <LangVersion>12</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

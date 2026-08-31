@@ -7493,3 +7493,121 @@ MÉTRICAS
 ```
 
 Queda para el asiento humano verlo en la ventana, que es donde se vio el 0 %.
+
+## BUGFIX-VERSION — «Acerca de» decía 1.0.0 y enlazaba a un 404
+
+Dos cosas independientes en la misma ventana: la versión inducía a error y los dos enlaces llevaban
+a un repositorio que no existe.
+
+### D-727 — Un build local no puede hacerse pasar por una release
+
+El diálogo decía «Versión 1.0.0» sobre un `dist` publicado en local desde un árbol que ya iba por
+la 1.0.3. **No mentía sobre lo que compiló** —`Directory.Build.props` decía 1.0.0 y el binario
+llevaba 1.0.0— pero sí inducía a error, y el error es caro: «1.0.0» se lee como «la release 1.0.0»,
+así que alguien podía reportar un fallo *de una versión publicada* que en realidad venía de un build
+sin publicar. Perseguirlo en el código de la 1.0.0 sería perseguir un fantasma.
+
+La regla: **la versión mostrada dice siempre de dónde sale el binario.**
+
+| De dónde sale | Se estampa | «Acerca de» dice |
+|---|---|---|
+| Workflow de release (`-p:Version=` desde el tag) | `1.0.3+<sha>` | **Versión 1.0.3** |
+| `publish.ps1`, `dotnet build`, F5 del IDE | `1.0.3-dev+0f920d9` | **Versión 1.0.3-dev · build local (0f920d9)** |
+| Igual, con cambios sin commitear | `1.0.3-dev+0f920d9.dirty` | …`(0f920d9.dirty)` |
+| Igual, sin git con el que preguntar | `1.0.0-dev` | **Versión 1.0.0-dev · build local** |
+
+**Cómo se sabe cuál es cuál, sin ritual nuevo.** `Version` llega como propiedad **global**
+únicamente desde el workflow, y una propiedad global no se puede redefinir en un `.props`. Así que
+estar vacía al leer `Directory.Build.props` significa, sin ambigüedad, «esto no es un build de
+release». Es la única señal fiable: **la posición en git no vale**, porque un publish local sobre el
+commit exacto del tag sigue sin ser el artefacto que se distribuye — y hoy mismo es el caso, con
+`v1.0.3` apuntando a HEAD.
+
+**Y el número sale de git, no de un contador a mano.** `git describe` con conteo largo da las tres
+piezas de una vez —último tag, commits por encima y hash corto— y de ahí sale
+`{base}-dev[.{commits}]+{sha}`. El `<Version>` del props deja de ser un número que hay que acordarse
+de subir y pasa a ser el **suelo** para cuando no hay git (un zip del código sin `.git`, una imagen
+de CI recortada); ahí se estampa igualmente con la marca de desarrollo, porque no saber de qué
+commit sale un binario no lo convierte en una release — al contrario.
+
+**El formato es SemVer legal a propósito.** El guion lo marca como pre-release, así que ordena por
+debajo de su versión final y nunca puede confundirse con ella; el `+sha` son metadatos, que SemVer
+excluye de la comparación — el hash identifica, no ordena.
+
+**Se lee de `AssemblyInformationalVersionAttribute`**, que es la que lleva la SemVer completa con
+sufijos, y **no** de `Assembly.GetName().Version`, numérica de cuatro campos y que se queda en
+`1.0.0.0` con facilidad. `AssemblyVersion` y `FileVersion` no admiten sufijos y se quedan donde
+estaban: toda la verdad sobre el origen viaja en la informativa. Los metadatos se recortan **solo
+para leer una release**; en un build local el hash es justo lo que hace falta.
+
+**Y había un test fijando la fuente equivocada.** `IdentityTests` comparaba `CurrentVersion()`
+contra `Assembly.GetName().Version.ToString(3)` — o sea, daba por buena precisamente la fuente que
+producía el 1.0.0. Ahora compara contra la informativa.
+
+### D-728 — Los enlaces salen del despliegue, y sin él no hay enlace
+
+`AboutInfo` llevaba dos constantes escritas a mano apuntando a `github.com/maxam/atalaya`, que no
+existe. El repositorio real ya estaba declarado —y bien— en `appsettings.deploy.json` como
+`appRepoUrl`, que es de donde lo lee el chequeo de versión desde F8.
+
+Ahora los dos enlaces salen de ahí: **Repositorio** es `appRepoUrl` tal cual, y **Manual** se
+**deriva** (`{appRepoUrl}/blob/main/MANUAL.md`). Derivado y no escrito aparte: dos URLs mantenidas
+por separado es exactamente cómo una de las dos acabó apuntando a un 404.
+
+**Sin `appRepoUrl`, no hay enlaces.** No se enseña uno roto: el bloque desaparece y en su sitio se
+dice qué falta y dónde (`appsettings.deploy.json`). Un enlace que lleva a un 404 es peor que ningún
+enlace — el primero hace perder el tiempo y parece un fallo del programa.
+
+**El barrido.** Las únicas URLs de repositorio escritas a mano estaban en `AboutInfo` (las dos, ya
+retiradas) y en el ejemplo del README, que mostraba un `alloci88/atalaya` personal y ya obsoleto;
+ahora el ejemplo son los valores reales del despliegue, con una nota de que se leen de ahí. Hay un
+test que recorre `src/` y falla si vuelve a aparecer un literal `"https://github.com/…"` que no sea
+de documentación o de servicio (`docs.`, `api.`, `/login`, `/settings`).
+
+### D-729 — El chequeo de versión NO estaba roto: estaba limitado, y se miró el log
+
+La sospecha era que apuntase al repo equivocado. **El log dice que no.** `settings.json` guarda
+`lastSeenReleaseUrl` = `…/Applied-Advanced-Solutions-AAS/Atalaya/releases/tag/v1.0.1`, o sea que la
+consulta llegó al repositorio correcto y devolvió una Release de verdad.
+
+Lo que pasó es más simple: el último chequeo real fue el **2026-08-30 a las 18:53 UTC**, vio la
+**v1.0.1** y el usuario la **descartó**. Desde entonces cada arranque escribe
+«Chequeo de versión: 1.0.1 descartada por el usuario» — la respuesta **cacheada**, porque el límite
+de 24 h todavía no había vencido (21,9 h en el momento de mirar). No hay defecto que arreglar ahí.
+
+**Lo que sí había que definir es el build local**, que es el caso de uso real del equipo. Con el
+estampado nuevo, `1.0.3-dev` es en SemVer un **pre-release de 1.0.3**, o sea *anterior*: sin tocar
+nada, el chequeo le habría anunciado «existe la 1.0.3» a quien ya va por delante de ella, mandándole
+a descargar lo que tiene. Así que la comparación se hace con la **versión base**
+(`AboutInfo.BaseVersion`): un `1.0.3-dev` calla ante la 1.0.3 y avisa en cuanto salga la 1.0.4.
+
+### D-730 — El camino de release está sano, y así se comprobó
+
+No se ha podido descargar el zip publicado de la 1.0.3: el token del `gh` de esta máquina no ve ese
+repositorio (404 sin desafío de SSO), aunque el de la aplicación sí — es él quien leyó la v1.0.1. Se
+dice en vez de darlo por bueno.
+
+Lo que sí se ha comprobado, y es el mismo camino:
+
+- **Reproduciendo el publish del workflow** con su comando exacto y `-p:Version=1.0.3`: el exe sale
+  con `ProductVersion = 1.0.3+<sha>` y `FileVersion = 1.0.3.0`, y «Acerca de» lo lee como
+  **«Versión 1.0.3»**, limpio.
+- **El propio workflow ya se vigila**: tras publicar compara `ProductVersion` (recortando metadatos)
+  con la versión del tag y **lanza** si no cuadran, comparando la cadena entera y no un prefijo. Un
+  desajuste tag↔binario habría reventado la release, no llegado al zip.
+
+Queda para el usuario, en una línea, si quiere el último clavo:
+`gh release download v1.0.3 --repo Applied-Advanced-Solutions-AAS/Atalaya` y mirar
+`(Get-Item Atalaya.exe).VersionInfo.ProductVersion`.
+
+### D-731 — Cobertura (36 tests nuevos, 1.422 en total, todo en verde)
+
+`AboutVersionTests` — cómo se lee cada estampado (release limpia, build local con y sin commits, sin
+git); que un pre-release publicado de verdad (`1.1.0-rc.1`) **no** se lee como build local, que es
+por lo que se mira el identificador completo y no un «contiene dev»; la versión base; que
+`CurrentVersion` sale de la informativa; **que el ensamblado de los tests se declara build local**
+—el test que habría cazado el parte—; los enlaces derivados, la barra final que no duplica, el caso
+sin `appRepoUrl` y el diálogo que de verdad los esconde; y el barrido de URLs a mano.
+
+En `UpdateCheckTests`, los cuatro casos del build local: no anuncia la release de su propio tag, ni
+con commits por encima, sí avisa de la siguiente, y una release instalada se comporta como siempre.

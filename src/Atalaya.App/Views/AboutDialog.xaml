@@ -56,12 +56,20 @@
                 </StackPanel>
             </Border>
 
-            <StackPanel Orientation="Horizontal">
+            <!-- BUGFIX-VERSION: los dos enlaces salen de «appRepoUrl» del despliegue, y si no
+                 está configurado NO se enseñan. Un enlace que lleva a un 404 es peor que ningún
+                 enlace: el hueco se explica debajo. -->
+            <StackPanel Orientation="Horizontal"
+                        Visibility="{Binding HasRepository, Converter={StaticResource BoolToVisibility}}">
                 <ui:HyperlinkButton Content="Repositorio" NavigateUri="{Binding Repository}"
                                     Padding="0,4" Margin="0,0,18,0" />
                 <ui:HyperlinkButton Content="Manual" NavigateUri="{Binding Manual}"
                                     Padding="0,4" />
             </StackPanel>
+
+            <TextBlock Text="{Binding NoLinksNotice}" TextWrapping="Wrap" FontSize="11.5"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Visibility="{Binding HasNoLinks, Converter={StaticResource BoolToVisibility}}" />
 
             <ui:Button Content="Cerrar" Click="OnClose" Appearance="Secondary"
                        HorizontalAlignment="Right" Padding="18,6" Margin="0,18,0,0" />

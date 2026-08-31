@@ -288,9 +288,8 @@ public sealed class UpdateCheckTests : IDisposable
     // ---------------------------------------------------------------- la versión propia
 
     /// <summary>
-    /// F8 §1: «Acerca de» enseña la versión del ENSAMBLADO, que es la que sella
-    /// <c>Directory.Build.props</c> —y la que el workflow pisa con la del tag—. Si esto dejara de
-    /// ser una versión legible, el chequeo no podría comparar nada.
+    /// F8 §1: «Acerca de» enseña la versión del ENSAMBLADO. Si esto dejara de ser una versión
+    /// legible, el chequeo no podría comparar nada.
     /// </summary>
     [Fact]
     public void La_version_de_Acerca_de_es_la_del_ensamblado_y_es_SemVer()
@@ -298,18 +297,78 @@ public sealed class UpdateCheckTests : IDisposable
         string version = AboutInfo.CurrentVersion();
 
         version.Should().NotBeNullOrWhiteSpace().And.NotBe("—");
-        version.Should().NotContain("+", "los metadatos de build se recortan");
         SemanticVersion.TryParse(version).Should().NotBeNull();
+        SemanticVersion.TryParse(AboutInfo.BaseVersion(version)).Should().NotBeNull(
+            "es la que compara el chequeo");
     }
 
     [Fact]
-    public void El_ensamblado_lleva_la_version_de_Directory_Build_props()
+    public void El_ensamblado_lleva_la_version_informativa_cruda()
     {
         string informational = typeof(AboutInfo).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!
             .InformationalVersion;
 
-        // El compilador le añade «+<sha>»; lo que «Acerca de» enseña es la parte de delante.
-        informational.Split('+')[0].Should().Be(AboutInfo.CurrentVersion());
+        // BUGFIX-VERSION: se lee ENTERA, con sufijos y metadatos. Recortar el «+sha» antes de
+        // tiempo era perder justo la pieza que identifica de qué build viene un fallo.
+        AboutInfo.CurrentVersion().Should().Be(informational.Trim());
     }
+
+    // ================================================================ BUGFIX-VERSION · build local
+
+    /// <summary>
+    /// Un build local va POR DELANTE de la release cuyo tag lleva de base, no por detrás. Sin
+    /// comparar con la base, SemVer haría de «1.0.3-dev» un pre-release de 1.0.3 y le anunciaría
+    /// al usuario que descargue lo que ya tiene.
+    /// </summary>
+    [Fact]
+    public async Task Un_build_local_no_anuncia_la_release_de_su_propio_tag()
+    {
+        var stub = new HttpStub().Json(ReleaseJson("v1.0.3"));
+
+        UpdateAvailability result = await Service(stub, mine: "1.0.3-dev+0f920d9")
+            .CheckAsync(CancellationToken.None);
+
+        result.HasUpdate.Should().BeFalse("ya la tiene y va por delante");
+        result.Reason.Should().Contain("al día");
+    }
+
+    /// <summary>Y con más commits encima, lo mismo.</summary>
+    [Fact]
+    public async Task Tampoco_con_commits_por_encima_del_tag()
+    {
+        var stub = new HttpStub().Json(ReleaseJson("v1.0.3"));
+
+        UpdateAvailability result = await Service(stub, mine: "1.0.3-dev.4+abc1234")
+            .CheckAsync(CancellationToken.None);
+
+        result.HasUpdate.Should().BeFalse();
+    }
+
+    /// <summary>Pero cuando salga la siguiente, sí avisa: la marca de desarrollo no calla el aviso.</summary>
+    [Fact]
+    public async Task Un_build_local_si_avisa_de_la_version_siguiente()
+    {
+        var stub = new HttpStub().Json(ReleaseJson("v1.0.4"));
+
+        UpdateAvailability result = await Service(stub, mine: "1.0.3-dev+0f920d9")
+            .CheckAsync(CancellationToken.None);
+
+        result.HasUpdate.Should().BeTrue("la 1.0.4 no la tiene");
+        result.Version!.ToString().Should().Be("1.0.4");
+    }
+
+    /// <summary>Y una release instalada sigue comparándose como siempre: avisa de la siguiente…</summary>
+    [Fact]
+    public async Task Una_release_instalada_avisa_de_la_siguiente()
+        => (await Service(new HttpStub().Json(ReleaseJson("v1.0.4")), mine: "1.0.3")
+                .CheckAsync(CancellationToken.None))
+            .HasUpdate.Should().BeTrue();
+
+    /// <summary>…y calla cuando ya tiene la última.</summary>
+    [Fact]
+    public async Task Una_release_instalada_calla_con_la_ultima()
+        => (await Service(new HttpStub().Json(ReleaseJson("v1.0.3")), mine: "1.0.3")
+                .CheckAsync(CancellationToken.None))
+            .HasUpdate.Should().BeFalse();
 }

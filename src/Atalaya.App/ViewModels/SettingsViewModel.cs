@@ -58,6 +58,12 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly IFactoryResetConfirmer _confirmer;
     private readonly HubContext _hub;
     private readonly NavigationService _navigation;
+
+    /// <summary>
+    /// De dónde salen los enlaces del «Acerca de» (BUGFIX-VERSION). Opcional por lo mismo que el
+    /// diálogo: sin él no hay enlaces, y el diálogo lo dice — nunca uno roto.
+    /// </summary>
+    private readonly DeployConfig? _deploy;
     private readonly IAboutDialog? _about;
 
     /// <summary>Plazo para que el SDK conteste con su catálogo antes de rendirse.</summary>
@@ -71,7 +77,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
         IFactoryResetConfirmer confirmer,
         HubContext hub,
         NavigationService navigation,
-        IAboutDialog? about = null)
+        IAboutDialog? about = null,
+        DeployConfig? deploy = null)
     {
         _settings = settings;
         _agent = agent;
@@ -81,6 +88,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _hub = hub;
         _navigation = navigation;
         _about = about;
+        _deploy = deploy;
         AppSettings s = settings.Current;
         _editor = s.Editor;
         _isLightTheme = string.Equals(s.Theme, "light", StringComparison.OrdinalIgnoreCase);
@@ -228,7 +236,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// ventanas: sin él, el gesto no hace nada en vez de reventar.
     /// </summary>
     [RelayCommand]
-    private void ShowAbout() => _about?.Show(AboutInfo.Create(_hub));
+    private void ShowAbout() => _about?.Show(AboutInfo.Create(_hub, _deploy));
 
     [RelayCommand]
     private void Save()

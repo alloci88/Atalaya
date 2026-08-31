@@ -1,0 +1,86 @@
+<Project>
+
+  <!-- BUGFIX-VERSION — un build local no puede hacerse pasar por una release.
+
+       El parte: «Acerca de» decía «Versión 1.0.0» sobre un binario publicado en local desde un
+       árbol que iba por delante de la 1.0.3. No mentía sobre lo que compiló —el props decía
+       1.0.0— pero SÍ inducía a error: «1.0.0» se lee como «la release 1.0.0», y alguien podía
+       reportar un fallo de una versión publicada que en realidad venía de un build sin publicar.
+
+       La regla: la versión mostrada dice siempre de dónde sale el binario. La release, limpia;
+       cualquier otra cosa, marcada.
+
+       De dónde sale el número sin ritual nuevo: de `git describe` con tags y conteo largo, que da las tres
+       piezas de una vez — el último tag, cuántos commits van por encima y el hash corto. El tag
+       sigue siendo el ÚNICO ritual de publicación; aquí solo se lee.
+  -->
+  <Target Name="AtalayaStampDevelopmentVersion"
+          BeforeTargets="GetAssemblyAttributes"
+          Condition="'$(AtalayaReleaseBuild)' != 'true' AND '$(GenerateAssemblyInfo)' != 'false'">
+
+    <!-- `ContinueOnError` y `IgnoreExitCode`: sin git, sin tags o fuera de un repo, esto falla —y
+         no puede tumbar una compilación. El fallback de abajo cubre ese caso. -->
+    <Exec Command="git describe --tags --long --dirty --abbrev=7"
+          ConsoleToMSBuild="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low"
+          EchoOff="true"
+          IgnoreExitCode="true"
+          ContinueOnError="true"
+          WorkingDirectory="$(MSBuildThisFileDirectory)">
+      <Output TaskParameter="ConsoleOutput" PropertyName="AtalayaGitDescribe" />
+      <Output TaskParameter="ExitCode" PropertyName="AtalayaGitExitCode" />
+    </Exec>
+
+    <PropertyGroup Condition="'$(AtalayaGitExitCode)' != '0'">
+      <AtalayaGitDescribe></AtalayaGitDescribe>
+    </PropertyGroup>
+
+    <!-- `v1.0.3-4-gabc1234[-dirty]` se descompone en sus tres piezas. Se hace con funciones de
+         cadena de MSBuild y no con una regex para que un formato inesperado degrade a vacío en vez
+         de reventar el build: estampar de menos es un aviso, reventar es un día perdido. -->
+    <PropertyGroup Condition="'$(AtalayaGitDescribe)' != ''">
+      <_AtalayaDirty Condition="$(AtalayaGitDescribe.EndsWith('-dirty'))">true</_AtalayaDirty>
+      <_AtalayaClean Condition="'$(_AtalayaDirty)' == 'true'">$(AtalayaGitDescribe.Substring(0, $([MSBuild]::Subtract($(AtalayaGitDescribe.Length), 6))))</_AtalayaClean>
+      <_AtalayaClean Condition="'$(_AtalayaDirty)' != 'true'">$(AtalayaGitDescribe)</_AtalayaClean>
+
+      <!-- De derecha a izquierda: `-g<sha>`, luego `-<commits>`, y lo que queda es el tag. -->
+      <_AtalayaShaAt>$(_AtalayaClean.LastIndexOf('-g'))</_AtalayaShaAt>
+      <AtalayaCommitSha Condition="'$(_AtalayaShaAt)' != '-1'">$(_AtalayaClean.Substring($([MSBuild]::Add($(_AtalayaShaAt), 2))))</AtalayaCommitSha>
+      <_AtalayaHead Condition="'$(_AtalayaShaAt)' != '-1'">$(_AtalayaClean.Substring(0, $(_AtalayaShaAt)))</_AtalayaHead>
+
+      <_AtalayaCountAt Condition="'$(_AtalayaHead)' != ''">$(_AtalayaHead.LastIndexOf('-'))</_AtalayaCountAt>
+      <AtalayaCommitsSinceTag Condition="'$(_AtalayaCountAt)' != '' AND '$(_AtalayaCountAt)' != '-1'">$(_AtalayaHead.Substring($([MSBuild]::Add($(_AtalayaCountAt), 1))))</AtalayaCommitsSinceTag>
+      <_AtalayaTag Condition="'$(_AtalayaCountAt)' != '' AND '$(_AtalayaCountAt)' != '-1'">$(_AtalayaHead.Substring(0, $(_AtalayaCountAt)))</_AtalayaTag>
+
+      <!-- La `v` del tag no es parte de la versión. -->
+      <AtalayaBaseVersion Condition="'$(_AtalayaTag)' != '' AND $(_AtalayaTag.StartsWith('v'))">$(_AtalayaTag.Substring(1))</AtalayaBaseVersion>
+      <AtalayaBaseVersion Condition="'$(AtalayaBaseVersion)' == '' AND '$(_AtalayaTag)' != ''">$(_AtalayaTag)</AtalayaBaseVersion>
+    </PropertyGroup>
+
+    <!-- Sin git, sin tags o con un describe que no se ha podido descomponer: el suelo del props,
+         y la marca de desarrollo IGUALMENTE. Que no sepamos de qué commit sale no lo convierte en
+         una release — al contrario. -->
+    <PropertyGroup>
+      <AtalayaBaseVersion Condition="'$(AtalayaBaseVersion)' == ''">$(AtalayaFallbackVersion)</AtalayaBaseVersion>
+
+      <!-- `1.0.3-dev.4+abc1234` — SemVer legal, y con las tres piezas dentro:
+             · el guion lo marca como PRE-RELEASE, así que ordena por debajo de su versión final
+               y nunca puede confundirse con ella;
+             · `.4` son los commits por encima del tag (se omite cuando es 0);
+             · `+abc1234` son metadatos de build, que SemVer excluye de la comparación — que es
+               justo lo que se quiere: el hash identifica, no ordena. -->
+      <_AtalayaDevSuffix>-dev</_AtalayaDevSuffix>
+      <_AtalayaDevSuffix Condition="'$(AtalayaCommitsSinceTag)' != '' AND '$(AtalayaCommitsSinceTag)' != '0'">-dev.$(AtalayaCommitsSinceTag)</_AtalayaDevSuffix>
+
+      <_AtalayaMetadata Condition="'$(AtalayaCommitSha)' != ''">+$(AtalayaCommitSha)</_AtalayaMetadata>
+      <_AtalayaMetadata Condition="'$(AtalayaCommitSha)' != '' AND '$(_AtalayaDirty)' == 'true'">+$(AtalayaCommitSha).dirty</_AtalayaMetadata>
+
+      <InformationalVersion>$(AtalayaBaseVersion)$(_AtalayaDevSuffix)$(_AtalayaMetadata)</InformationalVersion>
+    </PropertyGroup>
+
+    <Message Importance="normal"
+             Text="Atalaya: build local estampado como $(InformationalVersion) (describe: '$(AtalayaGitDescribe)')" />
+  </Target>
+
+</Project>
