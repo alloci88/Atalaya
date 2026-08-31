@@ -82,6 +82,39 @@ public sealed class FailureBannerLayoutTests
             "envuelven el mensaje y el crudo, los dos");
     }
 
+    // ================================================================ y la pantalla de cierre
+
+    /// <summary>
+    /// La segunda superposición, y la que se veía de verdad: la pantalla de cierre era un panel
+    /// <c>#F2101010</c> puesto ENCIMA de las tres columnas, en sus mismas celdas. Al 95 % de
+    /// opacidad traslucía la cola de unidades, la actividad y los hallazgos, y el texto del resumen
+    /// —incluida la línea que explica por qué se cortó la sesión— chocaba con rutas y chips
+    /// fantasma. Ahora las columnas se RETIRAN y la pantalla ocupa el hueco.
+    /// </summary>
+    [Fact]
+    public void Las_tres_columnas_se_retiran_cuando_esta_la_pantalla_de_cierre()
+    {
+        string xaml = Xaml();
+        const string hide =
+            "Visibility=\"{Binding ShowSummary, Converter={StaticResource InverseBoolToVisibility}}\"";
+
+        Regex.Matches(xaml, Regex.Escape(hide)).Count.Should().Be(3,
+            "cola, actividad y hallazgos: las tres, o la que quede sigue traslucieńdose");
+    }
+
+    /// <summary>
+    /// Y deja de ser negra a secas: con un fondo fijo casi negro, la pantalla de cierre era un
+    /// agujero oscuro en el tema claro. Sigue el tema, como todo lo demás.
+    /// </summary>
+    [Fact]
+    public void La_pantalla_de_cierre_sigue_el_tema_y_no_es_una_capa_translucida()
+    {
+        string xaml = Xaml();
+
+        xaml.Should().NotContain("#F2101010", "un fondo casi negro fijo no vale para el tema claro");
+        xaml.Should().Contain("Background=\"{DynamicResource CardBackgroundFillColorDefaultBrush}\"");
+    }
+
     // ================================================================ y medido de verdad
 
     /// <summary>

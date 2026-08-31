@@ -7171,6 +7171,35 @@ Con él, lo que faltaba para poder usar el error:
   de `MaxHeight` 120. Así la longitud del error del proveedor **no decide el layout**.
 - Icono y color de error de la casa, y las brochas del tema para el texto: legible en los dos.
 
+### D-710b — Y la superposición de verdad estaba en la PANTALLA DE CIERRE
+
+Con el banner ya en su fila, el usuario seguía viendo solape — y tenía razón. La primera medición se
+hizo sobre una copia *desnuda* del XAML (sin bindings ni recursos), y ahí no se veía: hacía falta
+montar la vista REAL, con su view-model en estado fallido, y mirarla.
+
+Lo que aparece entonces es otra superposición, esta de F5.x y anterior a este parte: la **pantalla de
+cierre** es un `Border` con `Grid.Column="0" Grid.ColumnSpan="3"` sobre **las mismas celdas** que las
+tres columnas, con fondo casi negro al **95 %** de opacidad. Ese 5 % restante deja traslucir la cola
+de unidades, la columna de actividad y los chips de hallazgos, y el texto del resumen —incluida la
+línea que explica por qué se cortó la sesión— **choca con rutas y chips fantasma**. En el tema claro
+es peor por partida doble: además de traslucir, el panel es un agujero negro en una pantalla clara.
+
+Se corrige de raíz, no subiendo la opacidad: **las tres columnas se retiran** (`ShowSummary` invertido)
+y la pantalla de cierre ocupa el hueco con el **fondo del tema**. Nada que traslucir, y correcto en
+los dos temas. Sube el listón del parte de «el aviso de error no se deja tapar» a lo que de verdad
+hacía falta: **en esta vista no hay dos cosas pintándose en la misma celda**.
+
+**De paso, el color que solo valía para un tema.** `WarningToBrushConverter` devolvía un `#DDDDDD`
+fijo para las líneas normales del resumen — elegido cuando el panel era casi negro—. Con la pantalla
+siguiendo el tema, ese gris claro se volvía invisible sobre fondo claro. Ahora devuelve
+`UnsetValue` y hereda el color del tema; el ámbar de las líneas que avisan sigue explícito, porque
+eso sí es semántico y significa lo mismo en los dos temas.
+
+**La lección de método, que es la que importa:** medir una copia recortada del XAML prueba la
+geometría de las filas y **nada más**. Lo que el usuario ve solo se ve montando la vista real con
+datos reales. Ahora el arnés de captura hace eso: `SessionView` de verdad, `SessionViewModel` de
+verdad y una sesión llevada al estado fallido, renderizada a PNG en los dos temas.
+
 ### D-711 — Y la lista de modelos vacía deja de culpar al asiento
 
 De la misma familia y encontrado por el camino: cuando `ListModelsAsync` devolvía vacío, el aviso
@@ -7196,7 +7225,9 @@ mensaje sin la palabra «asiento», el detalle plegado que se despliega, y el re
 Más el límite: sin ninguna unidad cubierta no se registra una sesión vacía.
 
 `FailureBannerLayoutTests` (App) — la estructura (nadie comparte fila, cuatro filas, sin el parche
-del anclaje) y, sobre todo, **la geometría medida de verdad**: se carga el XAML real en un hilo STA,
+del anclaje), que **las tres columnas se retiran** cuando está la pantalla de cierre y que ésta ya no
+es una capa translúcida negra sino el fondo del tema, y, sobre todo, **la geometría medida de
+verdad**: se carga el XAML real en un hilo STA,
 se mide a 1366×768, 900×700 y 700×520, y se comprueba que el rectángulo del banner no se cruza con
 el del cuerpo ni con el del pie, que el cuerpo empieza donde acaba el banner, que sin fallo la fila
 mide cero, y que un crudo cuarenta veces más largo que el real sigue sin empujar nada. El andamiaje
@@ -7204,12 +7235,12 @@ STA son seis líneas: no se ha traído ningún paquete nuevo al proyecto de test
 
 ### D-713 — Lo visto y lo que queda
 
-El banner se ha **renderizado** con los textos reales —el mensaje de cuota y el crudo del log— en
-los dos temas, a 1366×768 y 900×700, plegado y desplegado. Se lee entero, envuelve bien, el crudo
-sale en monoespaciada dentro de su caja acotada, y no toca el cuerpo en ningún caso.
+La vista se ha **renderizado entera y de verdad** —`SessionView` con su `SessionViewModel` llevado
+al estado fallido por una sesión que se corta por cuota— en los dos temas y a 1366×768, 1024×700 y
+900×700, en los dos casos que importan: sin nada auditado y con resumen. El mensaje se lee entero y
+envuelve, el crudo sale en monoespaciada dentro de su caja acotada, y **nada se pinta encima de nada**.
 
-Queda para el asiento humano: verlo **dentro de la aplicación viva** con una sesión real —el render
-monta la plantilla fuera de la ventana— y, cuando vuelva a haber cuota, comprobar el circuito
-entero de punta a punta. Lo que ninguna prueba puede dar es el caso que no hemos visto: si el
+Queda para el asiento humano: verlo **dentro de la ventana viva** —el render monta la vista fuera de
+ella— y, cuando vuelva a haber cuota, comprobar el circuito entero de punta a punta. Lo que ninguna prueba puede dar es el caso que no hemos visto: si el
 proveedor devuelve un texto nuevo, saldrá como desconocido **con su crudo delante**, que es
 exactamente para lo que está esa fila.

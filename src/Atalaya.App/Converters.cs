@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media;
@@ -208,13 +208,23 @@ public sealed class SeverityToVisibilityConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
-/// <summary>Resalta en ámbar las líneas del resumen que piden atención.</summary>
+/// <summary>
+/// Resalta en ámbar las líneas del resumen que piden atención.
+/// <para>
+/// El ámbar es explícito porque es semántico: significa lo mismo en claro que en oscuro. Lo que NO
+/// se decide aquí es el color de las demás — se devuelve <see cref="DependencyProperty.UnsetValue"/>
+/// para que hereden el del tema. Antes era un <c>#DDDDDD</c> fijo, elegido cuando la pantalla de
+/// cierre era un panel casi negro; al pasar ésta a seguir el tema, ese gris claro se volvía
+/// invisible sobre fondo claro. Un color de texto que solo vale para un tema no es un color: es una
+/// suposición sobre el fondo.
+/// </para>
+/// </summary>
 public sealed class WarningToBrushConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         => value is true
             ? new SolidColorBrush(Color.FromRgb(0xE0, 0xA0, 0x30))
-            : new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD));
+            : DependencyProperty.UnsetValue;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();

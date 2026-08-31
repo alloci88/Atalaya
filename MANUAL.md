@@ -491,7 +491,7 @@ aplicación**.
 
 Cuando Copilot rechaza una sesión, Atalaya la deja en un estado terminal **visible** —con
 su causa, el reloj parado y sin nada corriendo por detrás— y enseña un aviso en su propia
-franja, encima del cuerpo de la sesión. El texto se puede **seleccionar y copiar**, y
+franja, encima del cuerpo de la sesión y sin taparlo. El texto se puede **seleccionar y copiar**, y
 **Copiar error** se lleva al portapapeles el mensaje junto con el error crudo del
 proveedor, que es lo que hay que pegar en un correo a quien administre la organización.
 

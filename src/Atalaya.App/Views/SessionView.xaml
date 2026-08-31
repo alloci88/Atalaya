@@ -51,7 +51,7 @@
 
                 <!-- Seleccionable: es un TextBox de solo lectura sin chrome, no un TextBlock. -->
                 <TextBox Text="{Binding FailureMessage, Mode=OneWay}" IsReadOnly="True" IsTabStop="False"
-                         TextWrapping="Wrap" BorderThickness="0" Background="Transparent" Padding="0"
+                         TextWrapping="Wrap" BorderThickness="0" BorderBrush="Transparent" Background="Transparent" Padding="0"
                          Margin="0,8,0,0" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
                 <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
@@ -71,7 +71,7 @@
                         Visibility="{Binding IsFailureDetailExpanded, Converter={StaticResource BoolToVisibility}}">
                     <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
                         <TextBox Text="{Binding FailureDetail, Mode=OneWay}" IsReadOnly="True" IsTabStop="False"
-                                 TextWrapping="Wrap" BorderThickness="0" Background="Transparent" Padding="0"
+                                 TextWrapping="Wrap" BorderThickness="0" BorderBrush="Transparent" Background="Transparent" Padding="0"
                                  FontFamily="Consolas" FontSize="11"
                                  Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </ScrollViewer>
@@ -88,7 +88,8 @@
             </Grid.ColumnDefinitions>
 
             <!-- · Col. 1 · Cola · -->
-            <Border Grid.Column="0" Background="#14808080" CornerRadius="8" Padding="10" Margin="0,0,10,0">
+            <Border Grid.Column="0" Background="#14808080" CornerRadius="8" Padding="10" Margin="0,0,10,0"
+                    Visibility="{Binding ShowSummary, Converter={StaticResource InverseBoolToVisibility}}">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                         <TextBlock Text="{Binding ProgressText}" FontWeight="SemiBold" />
@@ -146,7 +147,8 @@
             </Border>
 
             <!-- · Col. 2 · Actividad (la protagonista) · -->
-            <Border Grid.Column="1" Background="#0C000000" CornerRadius="8" Padding="4" Margin="0,0,10,0">
+            <Border Grid.Column="1" Background="#0C000000" CornerRadius="8" Padding="4" Margin="0,0,10,0"
+                    Visibility="{Binding ShowSummary, Converter={StaticResource InverseBoolToVisibility}}">
                 <DockPanel>
                     <Grid DockPanel.Dock="Bottom" Margin="8,4,8,4">
                         <ui:Button
@@ -225,7 +227,8 @@
             </Border>
 
             <!-- · Col. 3 · Hallazgos · -->
-            <Border Grid.Column="2" Background="#14808080" CornerRadius="8" Padding="10">
+            <Border Grid.Column="2" Background="#14808080" CornerRadius="8" Padding="10"
+                    Visibility="{Binding ShowSummary, Converter={StaticResource InverseBoolToVisibility}}">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                         <TextBlock Text="Hallazgos" FontWeight="SemiBold" />
@@ -277,9 +280,18 @@
                 </DockPanel>
             </Border>
 
-            <!-- · Pantalla de cierre (sustituye a la línea fugaz) · -->
+            <!-- · Pantalla de cierre · SUSTITUYE a las tres columnas, no las tapa ·
+
+                 Era un panel casi negro, opaco al 95 %, puesto ENCIMA de las tres columnas.
+                 Dos problemas a la vez: el 95 % de opacidad dejaba traslucir la cola de unidades,
+                 la actividad y los hallazgos —el texto del resumen chocaba con rutas y chips
+                 fantasma—, y el negro fijo era un agujero oscuro en el tema claro. Ahora las
+                 columnas se RETIRAN (arriba, `InverseBoolToVisibility`) y esto ocupa el hueco con
+                 el fondo del tema: nada que traslucir, y correcto en los dos temas. -->
             <Border Grid.Column="0" Grid.ColumnSpan="3"
-                    Background="#F2101010" CornerRadius="8" Padding="22"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="8" Padding="22"
                     Visibility="{Binding ShowSummary, Converter={StaticResource BoolToVisibility}}">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,14">
