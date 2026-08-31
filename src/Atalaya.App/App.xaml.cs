@@ -225,7 +225,15 @@ public partial class App : Application
         // La memoria de plegado es de la SESIÓN, no de la vista: V2 y V3 son transitorias y la
         // comparten (F5.6 §1).
         services.AddSingleton<GroupExpansionMemory>();
-        services.AddSingleton<CycleService>();
+        // El cierre siembra el ciclo siguiente con la deriva del que termina (F9.2 §1), así que
+        // necesita el historial del clon de ESTA máquina. Se inyecta explícito: con el constructor
+        // opcional, una resolución que se quedara corta cerraría ciclos sembrando todo pendiente y
+        // nadie se enteraría.
+        services.AddSingleton(sp => new CycleService(
+            sp.GetRequiredService<HubContext>(),
+            sp.GetRequiredService<IUlidFactory>(),
+            sp.GetRequiredService<DriftQuery>(),
+            sp.GetRequiredService<MachineConfigStore>()));
         services.AddSingleton<StatusExporter>();
 
         // Shell

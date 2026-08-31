@@ -507,13 +507,29 @@ public static class ReportBuilder
     }
 
     /// <summary>Consolidated cycle-close report (§7): ascended confidences + top-10 priorities.</summary>
+    /// <param name="aging">
+    /// Lo que quedaba envejecido al cerrar (F9.2 §2). Cerrar no maquilla: si el código se movió
+    /// mientras duraba el ciclo, el informe lo dice — es lo que el ciclo siguiente hereda.
+    /// </param>
     public static string BuildCycleCloseReport(
-        AppConfig app, int closedCycle, int promoted, IReadOnlyList<Finding> findings, string? organization = null)
+        AppConfig app, int closedCycle, int promoted, IReadOnlyList<Finding> findings,
+        string? organization = null, CycleAging? aging = null)
     {
         var active = findings.Where(f => f.Status == FindingStatus.Activo).ToList();
         var sb = new StringBuilder();
         sb.AppendLine($"# Cierre de ciclo {closedCycle} — {app.Name}");
         sb.AppendLine();
+
+        // A cero no se dice nada: una frase que informa de que no hay nada que informar es ruido.
+        if (aging?.Sentence is { } aged)
+        {
+            sb.AppendLine(aged);
+            sb.AppendLine();
+            sb.AppendLine("Las cambiadas las hereda el ciclo siguiente como **pendientes**; las arregladas");
+            sb.AppendLine("conservan su estado y su acción **Verificar**, que es su cierre correcto.");
+            sb.AppendLine();
+        }
+
         sb.AppendLine($"- Confianzas ascendidas media→alta: {promoted}");
         sb.AppendLine($"- Hallazgos activos: {active.Count}");
         foreach (Severity sev in Enum.GetValues<Severity>())

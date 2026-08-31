@@ -70,6 +70,12 @@ public sealed record SessionResult(Ulid SessionId, SessionCounters Counters, boo
     public bool CycleClosed { get; init; }
 
     /// <summary>
+    /// Lo que quedaba envejecido en el momento del cierre (F9.2 §2). Solo tiene contenido cuando
+    /// esta sesión cerró el ciclo; la pantalla de cierre lo dice tal cual.
+    /// </summary>
+    public CycleAging CycleAging { get; init; } = CycleAging.None;
+
+    /// <summary>
     /// Unidades en las que el auditor dejó hallazgos existentes sin veredicto (F4). No bloquea la
     /// sesión, pero es visible: esos hallazgos no se han tocado y hay que volver sobre ellos.
     /// </summary>
@@ -603,15 +609,16 @@ public sealed class SessionCoordinator
 
         // If the cycle is now empty, attempt the close (only one user actually closes it).
         // Una sesion detenida NO cierra ciclo: no ha cubierto lo que decia cubrir.
-        bool cycleClosed = false;
+        CycleCloseResult close = CycleCloseResult.NotClosed;
         if (!interrupted && pending == 0 && request.Mode is AuditMode.Lotes or AuditMode.Integral)
         {
-            cycleClosed = _cycles?.TryCloseCycle(request.Slug, app.CurrentCycle) ?? false;
+            close = _cycles?.TryCloseCycle(request.Slug, app.CurrentCycle) ?? CycleCloseResult.NotClosed;
         }
 
         return new SessionResult(sessionId, session.Counters, ReachedZeroPending: pending == 0)
         {
-            CycleClosed = cycleClosed,
+            CycleClosed = close.Closed,
+            CycleAging = close.Aging,
             IncompleteUnits = incompleteUnits,
             Interrupted = interrupted,
             SuppressionsByPattern = session.SuppressionsByPattern,

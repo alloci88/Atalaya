@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Threading;
 using Atalaya.Copilot;
@@ -703,7 +703,10 @@ public sealed partial class LiveSessionService : ObservableObject
             + (result.IncompleteUnits > 0
                 ? $" ⚠ {result.IncompleteUnits} unidad(es) incompleta(s): el auditor dejó hallazgos sin veredicto."
                 : "")
-            + (result.ReachedZeroPending ? " Ciclo sin pendientes." : "");
+            + (result.ReachedZeroPending ? " Ciclo sin pendientes." : "")
+            // F9.2 §2: cerrar no maquilla. Si el codigo se movio mientras duraba el ciclo, la
+            // pantalla de cierre lo dice — es lo que el ciclo siguiente hereda como pendiente.
+            + (result.CycleClosed && result.CycleAging.Sentence is { } aged ? " " + aged : "");
     }
 
     /// <summary>Los eventos del coordinador llegan de un hilo de fondo; hay que marshalear.</summary>

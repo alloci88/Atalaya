@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
@@ -69,9 +69,9 @@ public sealed class CycleServiceTests : IDisposable
         Finding f = SeedMediaFinding();
         var cycles = new CycleService(_hub, _ulids);
 
-        bool closed = cycles.TryCloseCycle("app", 1);
+        CycleCloseResult closed = cycles.TryCloseCycle("app", 1);
 
-        closed.Should().BeTrue();
+        closed.Closed.Should().BeTrue();
         _hub.Store.TryReadFinding("app", f.Id.ToString())!.Confidence.Should().Be(Confidence.Alta);
         _hub.Store.TryReadApp("app")!.CurrentCycle.Should().Be(2);
         InventoryCycle next = _hub.Store.TryReadInventory("app", 2)!;
@@ -84,10 +84,10 @@ public sealed class CycleServiceTests : IDisposable
     {
         SeedMediaFinding();
         var cycles = new CycleService(_hub, _ulids);
-        cycles.TryCloseCycle("app", 1).Should().BeTrue();
+        cycles.TryCloseCycle("app", 1).Closed.Should().BeTrue();
 
         // A second attempt to close cycle 1 must desist (already at cycle 2).
-        cycles.TryCloseCycle("app", 1).Should().BeFalse();
+        cycles.TryCloseCycle("app", 1).Closed.Should().BeFalse();
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public sealed class CycleServiceTests : IDisposable
             Units = { new InventoryUnit { Path = "A.cs", Module = "M", State = UnitState.Pendiente } },
         });
 
-        new CycleService(_hub, _ulids).TryCloseCycle("app", 1).Should().BeFalse();
+        new CycleService(_hub, _ulids).TryCloseCycle("app", 1).Closed.Should().BeFalse();
     }
 
     [Fact]
