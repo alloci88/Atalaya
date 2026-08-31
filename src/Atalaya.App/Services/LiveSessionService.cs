@@ -137,6 +137,18 @@ public sealed partial class LiveSessionService : ObservableObject
     [ObservableProperty] private bool _failureOffersModelChange;
 
     /// <summary>
+    /// El error del proveedor tal cual, para copiarlo (BUGFIX-CUOTA). Va aparte del mensaje: la
+    /// frase dice qué hacer, y esto —tipo, texto y Request ID— es lo que se le pega a quien
+    /// administra la organización para que pueda buscar la petición concreta. La vista lo esconde
+    /// tras «Ver detalle»: es largo, y desbordado tapaba el resto de la pantalla.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFailureDetail))]
+    private string _failureDetail = string.Empty;
+
+    public bool HasFailureDetail => FailureDetail.Length > 0;
+
+    /// <summary>
     /// Se ha ejecutado alguna sesión en esta ejecución de la app: corriendo, terminada <b>o
     /// fallida</b>. Lo que decide si hay algo que enseñar en V5 y, con ello, si el rail ofrece el
     /// camino de vuelta.
@@ -217,12 +229,23 @@ public sealed partial class LiveSessionService : ObservableObject
     /// que un fallo no deja nada colgando.
     /// </para>
     /// </summary>
-    private void Fail(string message, bool offersModelChange)
+    /// <param name="keepStatusMessage">
+    /// La sesión llegó a terminar y tiene pantalla de cierre propia (BUGFIX-CUOTA). Ahí el estado ya
+    /// dice «cortada por el proveedor» con sus contadores, y el banner de arriba lleva el mensaje
+    /// entero: pisar uno con el otro es escribir el mismo párrafo dos veces en la misma pantalla.
+    /// </param>
+    private void Fail(string message, bool offersModelChange, string? detail = null,
+        bool keepStatusMessage = false)
     {
         FailureMessage = message;
         FailureOffersModelChange = offersModelChange;
+        FailureDetail = detail ?? string.Empty;
         HasFailed = true;
-        StatusMessage = message;
+        if (!keepStatusMessage)
+        {
+            StatusMessage = message;
+        }
+
         Changed?.Invoke();
         Failed?.Invoke(message);
     }
@@ -279,6 +302,7 @@ public sealed partial class LiveSessionService : ObservableObject
         HasFailed = false;
         FailureMessage = string.Empty;
         FailureOffersModelChange = false;
+        FailureDetail = string.Empty;
         EndedUtc = null;
         StartedUtc = DateTimeOffset.UtcNow;
         StatusMessage = "Comprobando Copilot…";
@@ -294,7 +318,8 @@ public sealed partial class LiveSessionService : ObservableObject
             AgentReadiness readiness = await _agent.CheckAsync(CancellationToken.None);
             if (!readiness.Ready)
             {
-                Fail(readiness.Message, readiness.Problem == AgentProblem.ModelUnavailable);
+                Fail(readiness.Message, readiness.Problem == AgentProblem.ModelUnavailable,
+                    readiness.Detail);
                 return;
             }
 
@@ -326,20 +351,37 @@ public sealed partial class LiveSessionService : ObservableObject
             BuildSummary(result);
             StatusMessage = Describe(result);
             HasFinished = true;
+
+            // BUGFIX-CUOTA: la sesión que el proveedor cortó a mitad es las DOS cosas a la vez —
+            // terminada (hay trabajo guardado que resumir) y fallida (no cubrió lo que decía). Se
+            // marcan las dos: el banner dice por qué se paró, y debajo sigue el resumen de lo que
+            // sí se auditó. Enseñar solo el banner tiraría a la basura la única prueba de que ese
+            // trabajo existe.
+            if (result.Failure is { } failed)
+            {
+                Fail($"{failed.Message} {failed.Summary}", offersModelChange: false, failed.Detail,
+                    keepStatusMessage: true);
+            }
+
             Completed?.Invoke(result);
         }
         catch (CopilotModelUnavailableException modelEx)
         {
             // F5.15: el fallo con remedio de un clic. Se nombra el modelo y se ofrece Ajustes.
-            Fail(modelEx.Message, offersModelChange: true);
+            Fail(modelEx.Message, offersModelChange: true, modelEx.Detail);
         }
-        catch (CopilotAuthenticationException authEx)
+        catch (CopilotProviderException providerEx)
         {
-            Fail(authEx.Message, offersModelChange: false);   // §6.1: ayuda, no el error crudo del SDK
+            // BUGFIX-CUOTA: cuota, asiento, credenciales, red o desconocido — cada uno ya trae su
+            // frase y su remedio desde el clasificador. Aquí no se vuelve a diagnosticar nada: dos
+            // sitios decidiendo la causa es como «quota» acabó significando «sin asiento».
+            Fail(providerEx.Message, offersModelChange: false, providerEx.Detail);
         }
         catch (Exception ex)
         {
-            Fail($"La sesión se ha interrumpido por un error: {ex.Message}", offersModelChange: false);
+            // Ni siquiera es del proveedor. Se enseña el crudo: inventar una causa es peor.
+            Fail($"La sesión se ha interrumpido por un error: {ex.Message}",
+                offersModelChange: false, CopilotFailure.Raw(ex));
         }
         finally
         {
@@ -668,7 +710,26 @@ public sealed partial class LiveSessionService : ObservableObject
         Line("Incidencias por unidad", _incidents.Count,
             "Unidades incompletas, cortadas por presupuesto o con payloads rechazados.", _incidents, warning: true);
 
-        if (result.Interrupted)
+        // BUGFIX-CUOTA: la línea que explica por qué el barrido no llegó al final. Va con las
+        // unidades que se quedaron sin mirar, que es el número que le falta a quien lo lee.
+        if (result.Failure is { } failed)
+        {
+            Summary.Add(new SummaryLine
+            {
+                Label = "Cortada por el proveedor",
+                Count = failed.UnitsTotal - failed.UnitsDone,
+                Explanation = failed.Message + " " + failed.Summary,
+                Details = Units.Where(u => u.State == UnitRunState.Pendiente).Select(u => u.Path).ToList(),
+                IsWarning = true,
+            });
+
+            foreach (UnitProgress pending in Units.Where(u => u.State == UnitRunState.Pendiente))
+            {
+                pending.State = UnitRunState.Detenida;
+            }
+        }
+
+        if (result.Interrupted && result.Failure is null)
         {
             Summary.Add(new SummaryLine
             {
@@ -689,7 +750,9 @@ public sealed partial class LiveSessionService : ObservableObject
     private string Describe(SessionResult result)
     {
         SessionCounters c = result.Counters;
-        return (result.Interrupted ? "Sesión detenida; lo auditado queda guardado." : "Sesión completada.")
+        return (result.Failure is not null
+                ? "Sesión cortada por el proveedor; lo auditado queda guardado."
+                : result.Interrupted ? "Sesión detenida; lo auditado queda guardado." : "Sesión completada.")
             + $" Nuevos {c.New}, confirmados {c.Confirmed}, resueltos {c.Resolved}, "
             + $"silenciados respetados {c.SilencedRespected}."
             + (c.NoVerificables > 0 ? $" {c.NoVerificables} no verificables (marcados para revisión)." : "")

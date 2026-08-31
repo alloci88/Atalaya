@@ -63,11 +63,42 @@ public sealed record SessionStarted(
     DateTimeOffset StartedUtc,
     IReadOnlyList<string> Units);
 
+/// <summary>
+/// Por qué murió una sesión que ya había empezado a auditar (BUGFIX-CUOTA).
+/// <para>
+/// Va en el resultado y no como excepción a propósito: una excepción que sube desde el barrido se
+/// lleva por delante el cierre ordenado —el registro de la sesión, las marcas del inventario, la
+/// liberación de los claims y el informe—, y eso fue exactamente lo que pasó al agotarse la cuota:
+/// tres unidades auditadas y pagadas, y ni una línea escrita en el hub.
+/// </para>
+/// </summary>
+/// <param name="Problem">La clasificación del proveedor, para que la vista ofrezca el remedio que toca.</param>
+/// <param name="Message">La frase accionable.</param>
+/// <param name="Detail">El error crudo del proveedor, copiable. Vacío si no lo hubo.</param>
+/// <param name="UnitsDone">Cuántas unidades se llegaron a auditar antes del corte.</param>
+/// <param name="UnitsTotal">Cuántas pedía la sesión.</param>
+public sealed record SessionFailure(
+    AgentProblem Problem, string Message, string? Detail, int UnitsDone, int UnitsTotal)
+{
+    /// <summary>Lo que se lee en el resumen: qué se salvó y qué no.</summary>
+    public string Summary => UnitsDone == 0
+        ? "No se auditó ninguna unidad."
+        : $"Se auditaron {UnitsDone} de {UnitsTotal} unidad(es) antes del corte, y lo hecho hasta "
+          + "ahí está guardado: los hallazgos remitidos siguen en el hub.";
+}
+
 /// <summary>Outcome of a session run.</summary>
 public sealed record SessionResult(Ulid SessionId, SessionCounters Counters, bool ReachedZeroPending)
 {
     /// <summary>True when this session actually triggered the cycle close (§5.1).</summary>
     public bool CycleClosed { get; init; }
+
+    /// <summary>
+    /// El proveedor tumbó la sesión a mitad del barrido (BUGFIX-CUOTA). No null significa que la
+    /// sesión NO cubrió lo que decía cubrir — pero lo que llegó a auditarse está guardado y se
+    /// resume igual: descartar trabajo ya pagado porque el último tramo falló sería tirar dinero.
+    /// </summary>
+    public SessionFailure? Failure { get; init; }
 
     /// <summary>
     /// Lo que quedaba envejecido en el momento del cierre (F9.2 §2). Solo tiene contenido cuando
@@ -228,6 +259,7 @@ public sealed class SessionCoordinator
             units.Select(u => u.Path).ToList()));
 
         bool stopped = ct.IsCancellationRequested;
+        SessionFailure? providerFailure = null;
         if (!stopped)
         {
             PublishClaims(request.Slug, units, inventory, by);
@@ -547,6 +579,22 @@ public sealed class SessionCoordinator
             // ya esta en el hub. Se sigue al cierre ordenado en vez de dejarlo huerfano.
             stopped = true;
         }
+        catch (CopilotProviderException ex) when (session.Units.Count > 0)
+        {
+            // BUGFIX-CUOTA. El proveedor ha cerrado el grifo a mitad del barrido. Se trata IGUAL
+            // que una parada: se corta aqui —no se prueba la unidad siguiente, que seria tirar
+            // llamadas contra una cuota agotada— y se baja al cierre ordenado. Antes esta excepcion
+            // subia entera y se llevaba por delante el registro de la sesion, las marcas del
+            // inventario, la liberacion de los claims y el informe: trabajo ya pagado, tirado.
+            //
+            // El guardia del `when` es el limite: si el fallo llega ANTES de cerrar la primera
+            // unidad no hay nada que salvar, y entonces sube tal cual — que es el comportamiento
+            // que F5.15 dejo probado y que sigue siendo el correcto (sin sesion en el hub, sin
+            // informe y sin una fila que registre que no se hizo nada).
+            stopped = true;
+            providerFailure = new SessionFailure(
+                ex.Problem, ex.Message, ex.Detail, session.Units.Count, units.Count);
+        }
         finally
         {
             _agent.TextStreamed -= OnText;
@@ -574,12 +622,22 @@ public sealed class SessionCoordinator
             .Select(kv => new PatternSuppressionTally(kv.Key, suppressionExemplars[kv.Key], kv.Value))
             .ToList();
         session.Interrupted = interrupted;
-        if (interrupted)
+        if (interrupted && providerFailure is null)
         {
             int pendientes = units.Count - session.Units.Count;
             session.Notes.Add(
                 $"Sesión detenida por el usuario: {session.Units.Count} de {units.Count} unidad(es) "
                 + $"procesadas, {pendientes} sin auditar. Lo hecho hasta aquí queda registrado.");
+        }
+
+        // La causa queda ESCRITA en la sesión, no solo en la pantalla: dentro de un mes, quien mire
+        // por qué esta sesión cubrió tres unidades de cuarenta necesita leerlo en el hub.
+        if (providerFailure is { } failed)
+        {
+            session.Notes.Add(
+                $"Sesión cortada por el proveedor ({failed.Problem}): {failed.Message} "
+                + failed.Summary
+                + (string.IsNullOrWhiteSpace(failed.Detail) ? string.Empty : $" [{failed.Detail}]"));
         }
 
         _hub.Store.WriteSession(session);
@@ -610,7 +668,8 @@ public sealed class SessionCoordinator
         // If the cycle is now empty, attempt the close (only one user actually closes it).
         // Una sesion detenida NO cierra ciclo: no ha cubierto lo que decia cubrir.
         CycleCloseResult close = CycleCloseResult.NotClosed;
-        if (!interrupted && pending == 0 && request.Mode is AuditMode.Lotes or AuditMode.Integral)
+        if (!interrupted && providerFailure is null && pending == 0
+            && request.Mode is AuditMode.Lotes or AuditMode.Integral)
         {
             close = _cycles?.TryCloseCycle(request.Slug, app.CurrentCycle) ?? CycleCloseResult.NotClosed;
         }
@@ -619,6 +678,7 @@ public sealed class SessionCoordinator
         {
             CycleClosed = close.Closed,
             CycleAging = close.Aging,
+            Failure = providerFailure,
             IncompleteUnits = incompleteUnits,
             Interrupted = interrupted,
             SuppressionsByPattern = session.SuppressionsByPattern,

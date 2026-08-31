@@ -411,7 +411,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         {
             Fail(modelEx.Message, offersModelChange: true);
         }
-        catch (CopilotAuthenticationException authEx)
+        catch (CopilotProviderException authEx)
         {
             Fail(authEx.Message, offersModelChange: false);
         }
