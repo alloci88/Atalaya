@@ -168,6 +168,14 @@ afectan a todo lo de abajo.
 Cuatro cifras arriba: hallazgos activos por severidad, resueltos en el periodo (con su
 delta), coste del periodo y cobertura del ciclo.
 
+**Los porcentajes no redondean hacia una mentira.** Si hay una sola unidad auditada, la
+cobertura nunca se enseña como 0 % —3 de 1.335 son «0,2 %», no «0 %»—, y si queda una sola
+sin auditar nunca se enseña como 100 %: eso se lee como «aquí ya no hay nada que mirar» y
+cierra la pregunta. Cuando el número es tan pequeño (o tan grande) que ni un decimal lo
+salva, se dice **«< 0,1 %»** o **«> 99,9 %»**. El 0 % y el 100 % exactos sí aparecen: son
+verdad y significan algo. Los decimales solo salen cuando hacen falta — «42 %» se lee de un
+vistazo y «42,0 %» no dice nada más.
+
 El **coste del periodo** incluye **todas** las sesiones que gastaron: auditorías,
 arreglos asistidos y verificaciones. El «por unidad auditada» que va debajo divide solo
 lo que costó **auditar** entre las unidades auditadas — un arreglo no audita ninguna
@@ -180,7 +188,9 @@ Debajo, seis gráficas:
    tramo, por aplicación, contando todas las vías (veredicto del auditor, resolución
    manual y medida). Misma forma y **mismo color por aplicación** que la de coste, con
    su propio toggle *Acumulado*.
-3. **Cobertura por aplicación** — un rosco por app; un clic abre su inventario.
+3. **Cobertura por aplicación** — un rosco por app; un clic abre su inventario. Un tramo
+   diminuto pero real se dibuja igualmente: un rosco con 3 de 1.335 no puede parecerse a uno
+   vacío, que significa lo contrario.
 4. **Severidad por aplicación** — un rosco por app con el reparto de su deuda **viva**
    (hallazgos activos a día de hoy: el periodo no la recorta). Un clic en un tramo abre
    Hallazgos con esa app y esa severidad; en el centro, esa app entera.

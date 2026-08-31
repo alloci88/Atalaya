@@ -7396,3 +7396,100 @@ Abrir la aplicación con el estado colgado que hay ahora mismo y ver las dos cos
 XBLAST deja de decir «auditando ahora» sola, con su aviso, y que «Sesión fallida» y «Arreglo
 fallido» se cierran y se van del rail. La lógica está verificada contra una copia del hub real; lo
 que falta es verlo en la ventana.
+
+## BUGFIX-REDONDEO — El redondeo no puede inventarse un 0 % ni un 100 %
+
+Con 3 unidades auditadas de 1.335, la cobertura salía como **0 %** en la tarjeta de Métricas, en los
+roscos de «Cobertura por aplicación» y en las tarjetas del Portafolio. El dato real es 0,2 %.
+
+### D-721 — Los extremos SIGNIFICAN algo, así que solo se escriben cuando son verdad
+
+«0 %» no es un número pequeño: es una afirmación —«aquí no ha mirado nadie»— y borra el trabajo
+hecho justo cuando más cuesta empezar. Su espejo es peor: **«100 %» cierra la pregunta**. Nadie
+vuelve a mirar una aplicación que dice estar al cien por cien, así que un 100 % nacido de redondear
+99,96 % esconde para siempre lo que falte.
+
+De ahí la regla, en una línea: **el redondeo nunca crea un extremo falso.**
+
+- Si hay **al menos una** unidad auditada, jamás se escribe 0 %.
+- Si queda **al menos una** sin auditar, jamás se escribe 100 %.
+- El 0 % y el 100 % **exactos** siguen escribiéndose tal cual: son verdad, y son la información.
+
+### D-722 — La precisión es la mínima que no miente, y el hueco tiene su propia palabra
+
+Decimales por todas partes es ruido: «42 %» se lee de un vistazo y «42,0 %» no dice nada más. Así
+que la precisión se adapta al tamaño del número, que es donde está la información:
+
+| Valor | Se escribe | Por qué |
+|---|---|---|
+| ≥ 10 % | `42 %` | el decimal ya no aporta |
+| 1 – 10 % | `4,3 %` | a esa escala, 4 y 4,3 no son lo mismo |
+| < 1 % | `0,2 %` | es el caso del parte |
+| lo que aún redondearía a 0,0 | `< 0,1 %` | «0,0 %» sería la misma mentira con una coma dentro |
+| entre 99,9 % y 100 % sin completar | `> 99,9 %` | su espejo, y el que de verdad importa |
+
+**Los extremos se deciden con los ENTEROS, no con la división.** `PercentText.Of(part, whole)` es la
+forma preferida por eso: `1334/1335` en coma flotante es 0,99925…, y preguntarle a un `double` si
+eso «es uno» es exactamente cómo nacen los 100 % falsos. La pregunta correcta es otra —¿queda alguna
+sin auditar?—, y si queda una, no es 100 %.
+
+**Sin denominador se dice «—», no 0 %.** Una app sin nada auditable no está al cero por ciento: es
+que no hay proporción que calcular, y un cero ahí sería un dato inventado (N-2).
+
+**La cultura es la de la aplicación, siempre.** `AppCulture.Display`, no la del hilo: media
+aplicación formatea en hilos de fondo, y F8.1 (D-522) ya dejó esa frontera dicha. Los tests lo
+comprueban desde culturas hostiles y **comparan contra el separador de la aplicación**, nunca contra
+un literal «0,2 %» — ese literal ya rompió la CI una vez.
+
+### D-723 — Un solo formateador, y un test que impide que vuelvan a nacer sueltos
+
+`PercentText` es el único sitio donde una proporción se convierte en texto. Lo usan la tarjeta
+«Cobertura del ciclo», el número del centro de los roscos, sus tooltips, la tarjeta del Portafolio,
+el reparto por severidad, el `% criterio` de los informes y hasta el progreso de descarga del clon —
+que tenía el mismo defecto con división entera y a nadie le había llamado la atención.
+
+**La tarjeta del Portafolio pasa a exponer texto y no un `double`.** `AppCard.ProgressText` se
+calcula con `AuditedUnits` y `TotalUnits - LargeUnits`, así que la vista ya no puede volver a
+formatearlo a su manera. `Progress` sigue existiendo para la barra de progreso, que es lo que un
+`double` sí sabe hacer.
+
+Y hay un test que recorre `src/` buscando `:0%`, `"P0"` y compañía: si alguien vuelve a escribir un
+formateo suelto, el defecto volvería solo a ese sitio y nadie se enteraría hasta que un usuario lo
+viera — que es exactamente como llegó éste.
+
+### D-724 — Un tramo que existe se DIBUJA: dos grados de suelo
+
+El rosco ya tenía un mínimo de un grado, heredado de «que una crítica de 400 siga viéndose». Se
+sube a **dos** (`DonutRing.MinimumSweepDegrees`) y se le pone nombre: 3 de 1.335 son **0,78°**, y a
+108 px —el tamaño pequeño de la fila— eso es indistinguible de un rosco vacío, que significa lo
+contrario.
+
+El coste es una distorsión de grado y medio en el tramo más pequeño, y se acepta: el rosco está para
+decir «hay algo» de un vistazo, y el número exacto vive en el centro y en el tooltip. Vale para las
+**dos** filas —cobertura y severidad— porque el problema es el mismo.
+
+### D-725 — Cobertura (28 tests nuevos, 1.387 en total, todo en verde)
+
+`PercentTextTests` — la tabla del parte entera (3/1335, 1/100000, 0/1335, 1335/1335, 1334/1335,
+423/1000, 43/1000); los dos extremos barridos en bucle (**con una auditada nunca sale 0 %; con una
+pendiente nunca sale 100 %**, para todos los denominadores de 2 a 5.000); el 99,96 % que no es cien
+y el 99,9 % exacto que sí se escribe; el denominador ausente que dice «—»; la variante con fracción;
+las culturas hostiles (`en-US`, `de-DE`, `tr-TR`); el formato sin espacios raros; y el test que
+vigila que no vuelva a aparecer un formateo suelto en `src/`.
+
+### D-726 — Verificado con los datos reales de hoy
+
+Sobre una copia del hub del usuario, preguntando a las MISMAS consultas que alimentan las vistas:
+
+```
+PORTAFOLIO
+  Xblast lite  Ciclo 1 · 0,2 % auditado   [1 auditada / 444]
+  XBLAST       Ciclo 2 · 0,2 % auditado   [2 auditadas / 925 · 34 grandes]
+
+MÉTRICAS
+  Cobertura del ciclo : 0,2 %   [3 de 1.335 auditables]
+  Roscos: XBLAST 0,2 % (arco real 0,78° → dibujado 2,00°)
+          Xblast lite 0,2 % (arco real 0,81° → dibujado 2,00°)
+```
+
+Queda para el asiento humano verlo en la ventana, que es donde se vio el 0 %.

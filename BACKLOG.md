@@ -4,10 +4,13 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-31 (BUGFIX-CIERRE — cerrar lo fallido y el estado de actividad).
+Última revisión: 2026-08-31 (BUGFIX-REDONDEO — el redondeo no crea extremos falsos).
 
 ## En vuelo
 
+- **BUGFIX-REDONDEO — verlo en la ventana.** Los porcentajes están verificados contra los datos
+  reales por consulta (0,2 % en Métricas y en las dos tarjetas); falta abrir la aplicación y verlo,
+  y comprobar de paso que el sliver de los roscos se distingue a los dos tamaños (D-726).
 - **BUGFIX-CIERRE — la limpieza vista en la ventana.** La autocuración está verificada contra una
   COPIA del hub real (dos claims sueltos liberados, XBLAST dejando de decir «auditando ahora»);
   falta abrir la aplicación con el estado colgado y ver que se limpia sola con su aviso, y que las
@@ -115,6 +118,14 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## Cerrado
 
+- **BUGFIX-REDONDEO · El redondeo no puede inventarse un 0 % ni un 100 %** — 3 unidades de 1.335 se
+  enseñaban como «0 %»: un número que miente por redondeo y que borra el trabajo hecho. Ahora hay UN
+  formateador (`PercentText`) con la regla «el redondeo nunca crea un extremo falso», precisión
+  adaptativa y `< 0,1 %` / `> 99,9 %` para los huecos, con los extremos decididos por los enteros y
+  no por la división (D-721, D-722). Lo usan Métricas, los roscos y sus tooltips, el Portafolio, los
+  informes y hasta el progreso de clonado, y un test impide que vuelvan a nacer formateos sueltos
+  (D-723). El rosco dibuja dos grados de suelo para que un tramo real no se confunda con uno vacío
+  (D-724). Verificado con los datos reales: 0,2 % donde antes decía 0 % (D-726).
 - **BUGFIX-CIERRE · Cerrar lo fallido, y que el Portafolio deje de mentir** — los claims son la
   fuente de «auditando ahora» y solo los soltaba el cierre ordenado, así que un fallo dejaba la
   tarjeta mintiendo y el fichero del claim en el hub para siempre; ahora hay un solo liberador al
