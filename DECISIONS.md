@@ -7200,6 +7200,31 @@ geometría de las filas y **nada más**. Lo que el usuario ve solo se ve montand
 datos reales. Ahora el arnés de captura hace eso: `SessionView` de verdad, `SessionViewModel` de
 verdad y una sesión llevada al estado fallido, renderizada a PNG en los dos temas.
 
+### D-710c — Y estaba en las DOS vistas: el arreglo asistido tenía el mismo defecto
+
+Con la sesión de auditoría ya arreglada, el usuario seguía viendo el solape — y mandó la captura.
+La pantalla no era la de auditoría: era **Arreglo asistido**, con «No se pudo arreglar» pintado
+encima de la conversación del agente y de «Cambios en tu clon», texto sobre texto.
+
+Es el mismo defecto, copiado: `AssistedFixView` tenía el aviso en `Grid.Row="1"` **compartiendo fila
+con dos elementos** —el estado vacío y el cuerpo de la sesión—, con el mismo parche
+`VerticalAlignment="Top"`, y su pantalla de cierre era la misma capa casi negra sobre las columnas.
+Y ahí el solape es **seguro**, no ocasional: `HasSession` se deriva de
+`IsRunning || HasFinished || HasFailed`, así que en cuanto hay fallo el cuerpo está visible por
+definición, justo debajo del aviso.
+
+Se aplica exactamente el mismo arreglo —fila propia, columnas que se retiran, fondo del tema— y el
+aviso gana lo mismo que el otro: texto seleccionable, «Copiar error» y el crudo plegable acotado.
+
+**Y una frase que era mentira a veces.** El aviso decía siempre «Tu clon no se ha tocado». Si el
+agente ya había escrito antes del corte, eso es falso justo cuando importa saberlo: ahora dice
+cuántos ficheros tocó y remite a «Descartar todo».
+
+**La lección de proceso.** Dos vistas con el mismo defecto y solo una arreglada es no haber
+arreglado nada: el usuario entra por la que quede. Los tests de layout pasan a recorrer **las dos**
+(`FailureBannerLayoutTests.Views`), y miden todos los elementos de la fila del cuerpo, no solo el
+primero — que es lo que habría hecho falta para cazar esto a la primera.
+
 ### D-711 — Y la lista de modelos vacía deja de culpar al asiento
 
 De la misma familia y encontrado por el camino: cuando `ListModelsAsync` devolvía vacío, el aviso
@@ -7235,9 +7260,10 @@ STA son seis líneas: no se ha traído ningún paquete nuevo al proyecto de test
 
 ### D-713 — Lo visto y lo que queda
 
-La vista se ha **renderizado entera y de verdad** —`SessionView` con su `SessionViewModel` llevado
-al estado fallido por una sesión que se corta por cuota— en los dos temas y a 1366×768, 1024×700 y
-900×700, en los dos casos que importan: sin nada auditado y con resumen. El mensaje se lee entero y
+Las **dos** vistas se han renderizado enteras y de verdad —`SessionView` con su `SessionViewModel`
+llevado al estado fallido por una sesión que se corta por cuota, y `AssistedFixView` con su
+`LiveFixService` en el mismo estado terminal— en los dos temas y a 1366×768, 1024×700 y 900×700; la
+de auditoría además en los dos casos que importan: sin nada auditado y con resumen. El mensaje se lee entero y
 envuelve, el crudo sale en monoespaciada dentro de su caja acotada, y **nada se pinta encima de nada**.
 
 Queda para el asiento humano: verlo **dentro de la ventana viva** —el render monta la vista fuera de

@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Atalaya.App;
 using Atalaya.App.ViewModels;
 using FluentAssertions;
@@ -201,8 +201,14 @@ public sealed class AssistedFixViewTests
         xaml.Should().Contain("Converter={StaticResource MiddleEllipsis}");
         xaml.Should().Contain("ToolTip=\"{Binding RelativePath}\"");
         xaml.Should().Contain("<ScrollViewer MaxHeight=\"220\" VerticalScrollBarVisibility=\"Auto\"");
-        Regex.Matches(xaml, "MaxHeight=\"[0-9]+\"").Count
-            .Should().Be(1, "el único tope de altura de la vista es el que lleva scroll");
+
+        // La regla no es «hay un solo tope de altura», que envejece en cuanto la vista crece: es que
+        // TODO tope de altura vaya en un ScrollViewer. Un MaxHeight sin scroll recorta en silencio.
+        foreach (Match m in Regex.Matches(xaml, @"<(\w+)[^>]*?MaxHeight=""[0-9]+"""))
+        {
+            m.Groups[1].Value.Should().Be("ScrollViewer",
+                $"el tope de altura de <{m.Groups[1].Value}> no se puede alcanzar sin scroll");
+        }
     }
 
     /// <summary>La elipsis en medio conserva el nombre del fichero, que es lo que se lee.</summary>

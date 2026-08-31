@@ -139,7 +139,13 @@
     </UserControl.Resources>
 
     <Grid>
+        <!-- BUGFIX-CUOTA: el aviso de error tiene FILA PROPIA. Compartia la fila 1 con el cuerpo
+             de la sesion Y con el estado vacio: tres elementos en la misma celda, que en un Grid
+             no reparten espacio sino que se superponen. El resultado, con el clon de XBLAST
+             delante: «No se pudo arreglar» pintado encima de la conversacion del agente y de
+             «Cambios en tu clon», texto sobre texto. -->
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
@@ -187,7 +193,7 @@
         </Grid>
 
         <!-- ================================ SIN SESIÓN ================================ -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
                       Visibility="{Binding ShowEmpty, Converter={StaticResource BoolToVisibility}}">
             <StackPanel>
                 <Border Style="{StaticResource Card}">
@@ -241,23 +247,59 @@
         </ScrollViewer>
 
         <!-- ================================ EL FALLO ================================ -->
-        <Border Grid.Row="1" VerticalAlignment="Top" CornerRadius="8" Padding="16" Margin="0,0,0,12"
+        <!-- Mismo aviso que en la sesion de auditoria, y por las mismas razones: en su fila, con
+             el texto seleccionable (TextBox de solo lectura, no TextBlock), con boton de copiar y
+             con el error crudo del proveedor plegado tras «Ver detalle» dentro de un ScrollViewer
+             acotado, para que su longitud no decida el layout. -->
+        <Border Grid.Row="1" CornerRadius="8" Padding="16" Margin="0,0,0,12"
                 Background="#22C04040" BorderBrush="#66C04040" BorderThickness="1"
                 Visibility="{Binding ShowFailure, Converter={StaticResource BoolToVisibility}}">
             <StackPanel>
-                <TextBlock Text="No se pudo arreglar" FontSize="16" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding FailureMessage}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE783;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                               Foreground="#E06C6C" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock Text="No se pudo arreglar" FontSize="16" FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
+                <TextBox Text="{Binding FailureMessage, Mode=OneWay}" IsReadOnly="True" IsTabStop="False"
+                         TextWrapping="Wrap" BorderThickness="0" BorderBrush="Transparent"
+                         Background="Transparent" Padding="0" Margin="0,8,0,0"
+                         Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                <!-- Lo que le ha pasado a SU clon, que no es una frase fija: si el agente ya habia
+                     escrito antes del corte, decir «no se ha tocado» seria mentir justo cuando
+                     importa saberlo. -->
                 <TextBlock Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Text="Tu clon no se ha tocado. El generador de prompt de arreglo de la ficha sigue disponible." />
-                <ui:Button Content="Elegir modelo en Ajustes" Margin="0,12,0,0" Appearance="Primary"
-                           Command="{Binding FixModelCommand}"
-                           Visibility="{Binding FailureOffersModelChange, Converter={StaticResource BoolToVisibility}}" />
+                           Text="{Binding FailureCloneNote}" />
+
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <ui:Button Content="{Binding DetailToggleLabel}" Appearance="Secondary" FontSize="11"
+                               Command="{Binding ToggleFailureDetailCommand}"
+                               Visibility="{Binding HasFailureDetail, Converter={StaticResource BoolToVisibility}}" />
+                    <ui:Button Content="Copiar error" Appearance="Secondary" FontSize="11" Margin="8,0,0,0"
+                               Command="{Binding CopyFailureCommand}" />
+                    <ui:Button Content="Elegir modelo en Ajustes" Appearance="Primary" Margin="8,0,0,0"
+                               Command="{Binding FixModelCommand}"
+                               Visibility="{Binding FailureOffersModelChange, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+
+                <Border Margin="0,10,0,0" CornerRadius="6" Padding="10" Background="#18000000"
+                        Visibility="{Binding IsFailureDetailExpanded, Converter={StaticResource BoolToVisibility}}">
+                    <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
+                        <TextBox Text="{Binding FailureDetail, Mode=OneWay}" IsReadOnly="True" IsTabStop="False"
+                                 TextWrapping="Wrap" BorderThickness="0" BorderBrush="Transparent"
+                                 Background="Transparent" Padding="0"
+                                 FontFamily="Consolas" FontSize="11"
+                                 Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </ScrollViewer>
+                </Border>
             </StackPanel>
         </Border>
 
         <!-- ================================ CUERPO ================================ -->
-        <Grid Grid.Row="1" Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}">
+        <Grid Grid.Row="2" Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" MinWidth="380" />
                 <ColumnDefinition Width="Auto" />
@@ -265,7 +307,8 @@
             </Grid.ColumnDefinitions>
 
             <!-- · Conversación (la protagonista) · -->
-            <Border Grid.Column="0" Background="#0C000000" CornerRadius="8" Padding="4">
+            <Border Grid.Column="0" Background="#0C000000" CornerRadius="8" Padding="4"
+                    Visibility="{Binding ShowClosing, Converter={StaticResource InverseBoolToVisibility}}">
                 <DockPanel>
                     <!-- Campo de entrada SIEMPRE disponible: interrumpir y dirigir es la mitad
                          del producto (F6.9 §4). -->
@@ -294,10 +337,12 @@
                 </DockPanel>
             </Border>
 
-            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" Background="Transparent" />
+            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" Background="Transparent"
+                          Visibility="{Binding ShowClosing, Converter={StaticResource InverseBoolToVisibility}}" />
 
             <!-- · Diff · -->
-            <Border Grid.Column="2" Background="#14808080" CornerRadius="8" Padding="10">
+            <Border Grid.Column="2" Background="#14808080" CornerRadius="8" Padding="10"
+                    Visibility="{Binding ShowClosing, Converter={StaticResource InverseBoolToVisibility}}">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                         <TextBlock Text="Cambios en tu clon" Style="{StaticResource SectionTitle}" />
@@ -382,7 +427,9 @@
                  arriba del todo, con la rueda funcionando—. El aviso de visibilidad es lo que lo
                  dispara: se levanta una sola vez, cuando de verdad cambia. -->
             <Border x:Name="ClosingPanel" Grid.Column="0" Grid.ColumnSpan="3"
-                    Background="#F2101010" CornerRadius="8" Padding="22"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="8" Padding="22"
                     IsVisibleChanged="OnClosingShown"
                     Visibility="{Binding ShowClosing, Converter={StaticResource BoolToVisibility}}">
                 <DockPanel>
@@ -495,7 +542,7 @@
         </Grid>
 
         <!-- ================================ PIE ================================ -->
-        <Border Grid.Row="2" Background="#14808080" CornerRadius="8" Padding="12,7" Margin="0,10,0,0"
+        <Border Grid.Row="3" Background="#14808080" CornerRadius="8" Padding="12,7" Margin="0,10,0,0"
                 Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}">
             <!-- WrapPanel: en 1366×768 estos seis trozos no caben en una fila y el último
                  —el resultado del build— se perdía por el borde. Aquí bajan de línea. -->

@@ -114,6 +114,17 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
     [ObservableProperty] private string _statusMessage = string.Empty;
     [ObservableProperty] private string _failureMessage = string.Empty;
     [ObservableProperty] private bool _failureOffersModelChange;
+
+    /// <summary>
+    /// El error del proveedor tal cual, para copiarlo (BUGFIX-CUOTA). Mismo criterio que en la
+    /// sesión de auditoría: la frase dice qué hacer, y esto —tipo, texto y Request ID— es lo que se
+    /// le pega a quien administre la organización.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFailureDetail))]
+    private string _failureDetail = string.Empty;
+
+    public bool HasFailureDetail => FailureDetail.Length > 0;
     [ObservableProperty] private string _slug = string.Empty;
     [ObservableProperty] private string _appName = string.Empty;
     [ObservableProperty] private string _findingAlias = string.Empty;
@@ -263,6 +274,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         HasFailed = false;
         FailureMessage = string.Empty;
         FailureOffersModelChange = false;
+        FailureDetail = string.Empty;
         Commit.Title = string.Empty;
         Commit.Description = string.Empty;
         InputTokens = OutputTokens = CacheReadTokens = 0;
@@ -307,7 +319,8 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             AgentReadiness readiness = await _agent.CheckAsync(CancellationToken.None);
             if (!readiness.Ready)
             {
-                Fail(readiness.Message, readiness.Problem == AgentProblem.ModelUnavailable);
+                Fail(readiness.Message, readiness.Problem == AgentProblem.ModelUnavailable,
+                    readiness.Detail);
                 return;
             }
 
@@ -409,15 +422,18 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         }
         catch (CopilotModelUnavailableException modelEx)
         {
-            Fail(modelEx.Message, offersModelChange: true);
+            Fail(modelEx.Message, offersModelChange: true, modelEx.Detail);
         }
         catch (CopilotProviderException authEx)
         {
-            Fail(authEx.Message, offersModelChange: false);
+            // BUGFIX-CUOTA: cuota, asiento, credenciales o red, cada uno con su frase ya
+            // decidida por el clasificador. Aquí no se vuelve a diagnosticar nada.
+            Fail(authEx.Message, offersModelChange: false, authEx.Detail);
         }
         catch (Exception ex)
         {
-            Fail($"El arreglo se ha interrumpido por un error: {ex.Message}", offersModelChange: false);
+            Fail($"El arreglo se ha interrumpido por un error: {ex.Message}",
+                offersModelChange: false, CopilotFailure.Raw(ex));
         }
         finally
         {
@@ -596,10 +612,11 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             : title[..(CommitSuggestion.MaxTitleLength - 1)] + "…";
     }
 
-    private void Fail(string message, bool offersModelChange)
+    private void Fail(string message, bool offersModelChange, string? detail = null)
     {
         FailureMessage = message;
         FailureOffersModelChange = offersModelChange;
+        FailureDetail = detail ?? string.Empty;
         HasFailed = true;
         StatusMessage = message;
         IsRunning = false;

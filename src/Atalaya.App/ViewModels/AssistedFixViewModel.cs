@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Threading;
 using Atalaya.App.Services;
@@ -102,6 +102,28 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
     public string FailureMessage => _fix.FailureMessage;
 
     public bool FailureOffersModelChange => _fix.FailureOffersModelChange;
+
+    /// <summary>El error del proveedor tal cual (BUGFIX-CUOTA). Copiable, y plegado por defecto.</summary>
+    public string FailureDetail => _fix.FailureDetail;
+
+    public bool HasFailureDetail => _fix.HasFailureDetail;
+
+    /// <summary>Plegado de salida: un error largo del proveedor no puede empujar la vista.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DetailToggleLabel))]
+    private bool _isFailureDetailExpanded;
+
+    public string DetailToggleLabel => IsFailureDetailExpanded ? "Ocultar detalle" : "Ver detalle";
+
+    /// <summary>
+    /// Lo que se le dice al usuario sobre su clon cuando el arreglo falla. NO es una frase fija:
+    /// si el agente ya había escrito antes del corte, decir «tu clon no se ha tocado» sería mentir
+    /// justo cuando importa saberlo.
+    /// </summary>
+    public string FailureCloneNote => Files.Count == 0
+        ? "Tu clon no se ha tocado. El generador de prompt de arreglo de la ficha sigue disponible."
+        : $"El agente ya había modificado {Files.Count} fichero(s) antes del corte: revísalos en "
+          + "«Cambios en tu clon» y usa «Descartar todo» si quieres dejarlo como estaba.";
 
     public string PauseLabel => _fix.IsPaused ? "Continuar" : "Pausar";
 
@@ -284,6 +306,32 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void ToggleFailureDetail() => IsFailureDetailExpanded = !IsFailureDetailExpanded;
+
+    /// <summary>
+    /// El error al portapapeles, que es a donde va: a un correo para quien administre la
+    /// organización. Seleccionar a mano varias líneas dentro de un banner es el gesto que nadie
+    /// hace, así que hay botón — el mismo que en la sesión de auditoría.
+    /// </summary>
+    [RelayCommand]
+    private void CopyFailure()
+    {
+        string text = string.IsNullOrWhiteSpace(FailureDetail)
+            ? FailureMessage
+            : FailureMessage + Environment.NewLine + Environment.NewLine + FailureDetail;
+
+        try
+        {
+            Clipboard.SetText(text);
+            _toasts.Show("Error copiado al portapapeles.");
+        }
+        catch
+        {
+            _toasts.Show("El portapapeles no estaba disponible. El texto sigue aquí para copiarlo a mano.");
+        }
+    }
+
+    [RelayCommand]
     private void CopyCommit()
     {
         try
@@ -441,6 +489,9 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowEmpty));
         OnPropertyChanged(nameof(FailureMessage));
         OnPropertyChanged(nameof(FailureOffersModelChange));
+        OnPropertyChanged(nameof(FailureDetail));
+        OnPropertyChanged(nameof(HasFailureDetail));
+        OnPropertyChanged(nameof(FailureCloneNote));
         OnPropertyChanged(nameof(PauseLabel));
         OnPropertyChanged(nameof(HeaderText));
         OnPropertyChanged(nameof(SubHeaderText));
