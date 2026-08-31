@@ -80,6 +80,33 @@ jobs:
           -p:PublishSingleFile=false
           -p:Version=${{ steps.version.outputs.version }}
 
+      # F11 — El relevo que sustituye la carpeta, junto al ejecutable.
+      #
+      # Se publica APARTE y self-contained en un solo fichero (~12 MB) por una razón concreta: para
+      # sustituir la carpeta hay que correr desde FUERA de ella, así que Atalaya se copia este exe
+      # a %LOCALAPPDATA% y lo lanza desde allí. Copiado solo, tiene que bastarse — un ejecutable
+      # que dependiera del runtime de la carpeta que está reemplazando no serviría para nada.
+      - name: Publicar el relevo de actualización
+        run: >
+          dotnet publish src/Atalaya.Updater/Atalaya.Updater.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          --output dist
+          -p:PublishSingleFile=true
+          -p:PublishTrimmed=true
+          -p:Version=${{ steps.version.outputs.version }}
+
+      # Y que de verdad esté: sin él, el botón «Actualizar» no aparece en esta versión y nadie
+      # sabría por qué.
+      - name: Comprobar que el relevo viaja en el paquete
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'dist/AtalayaUpdater.exe')) {
+            throw 'Falta dist/AtalayaUpdater.exe: este paquete no podría actualizarse solo.'
+          }
+          '{0:n1} MB' -f ((Get-Item 'dist/AtalayaUpdater.exe').Length / 1MB)
+
       # El fichero de despliegue del repo viaja en el zip: es lo que apunta al hub, a la OAuth App
       # y al propio repositorio de Releases. El publish ya lo copia, pero se afirma aquí porque un
       # zip sin él arranca sin hub y el fallo aparecería lejos de su causa.
@@ -116,6 +143,24 @@ jobs:
           "ZIP=$zip" >> $env:GITHUB_ENV
           Write-Host "Paquete: $zip ($([math]::Round((Get-Item $zip).Length / 1MB, 1)) MB)"
 
+      # F11 — El checksum, junto al zip. Es lo que permite que la actualización desde la app
+      # verifique lo descargado ANTES de tocar la instalación: sin este fichero, Atalaya se niega
+      # a instalar el paquete y manda al camino manual, que es la respuesta correcta a «no puedo
+      # comprobar que esto es lo que dice ser».
+      #
+      # Formato `sha256sum`: «<hash>  <fichero>». Así vale tanto para la app como para quien
+      # quiera comprobarlo a mano con `Get-FileHash` o `sha256sum -c`.
+      - name: Calcular el checksum SHA-256
+        shell: pwsh
+        run: |
+          $zip = $env:ZIP
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          $sum = "$zip.sha256"
+          # Sin BOM y con salto Unix: lo van a leer un parser, PowerShell y `sha256sum`.
+          [IO.File]::WriteAllText((Join-Path $PWD $sum), "$hash  $zip`n", (New-Object Text.UTF8Encoding $false))
+          "SUM=$sum" >> $env:GITHUB_ENV
+          Write-Host "SHA-256: $hash"
+
       # Solo en el disparo manual: el tag no existe todavía y hay que crearlo. Idempotente — si
       # alguien ya lo empujó, se usa el que hay en vez de fallar.
       - name: Crear el tag (disparo manual)
@@ -147,10 +192,10 @@ jobs:
           gh release view $tag 2>$null | Out-Null
           if ($LASTEXITCODE -eq 0) {
             Write-Host "La Release $tag ya existe: se le adjunta el paquete."
-            gh release upload $tag "$env:ZIP" --clobber
+            gh release upload $tag "$env:ZIP" "$env:SUM" --clobber
           } else {
             Write-Host "Creando la Release $tag."
-            gh release create $tag "$env:ZIP" --title $tag --generate-notes
+            gh release create $tag "$env:ZIP" "$env:SUM" --title $tag --generate-notes
           }
           if ($LASTEXITCODE -ne 0) { throw "No se pudo publicar la Release $tag." }
 
@@ -160,5 +205,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Atalaya-${{ steps.version.outputs.tag }}-win-x64
-          path: ${{ env.ZIP }}
+          path: |
+            ${{ env.ZIP }}
+            ${{ env.SUM }}
           retention-days: 30
