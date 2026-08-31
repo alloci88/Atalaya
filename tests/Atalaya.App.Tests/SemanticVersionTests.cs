@@ -96,12 +96,26 @@ public sealed class SemanticVersionTests
             .IsNewerThan(SemanticVersion.TryParse("1.2.3+zzz"))
             .Should().BeFalse();
 
+    /// <summary>
+    /// Una versión se escribe ENTERA, siempre y en un solo sitio (BUGFIX-AVISO).
+    /// <para>
+    /// Aquí vivía la regla contraria: un <c>Short</c> que dejaba la 1.2.3 en «1.2» para que el
+    /// banner dijera el número «que la gente dice en voz alta». Este test la daba por buena, y
+    /// por eso el defecto sobrevivió a una release entera — el aviso anunciaba la 1.0.4 como
+    /// «1.0», que no es ninguna versión que exista y que además se lee como 1.0.0, o sea más
+    /// vieja que la que ya tenías.
+    /// </para>
+    /// </summary>
     [Fact]
-    public void Lo_que_se_ensena_en_el_banner_es_el_numero_corto()
+    public void Una_version_se_escribe_entera_y_el_parche_nunca_se_oculta()
     {
-        SemanticVersion.TryParse("v1.2.0")!.Short.Should().Be("1.2");
-        SemanticVersion.TryParse("v1.2.3")!.Short.Should().Be("1.2");
-        // En un pre-release se dice entero: «Atalaya 1.2» ocultaría justo lo que lo distingue.
-        SemanticVersion.TryParse("v1.2.0-rc.1")!.Short.Should().Be("1.2.0-rc.1");
+        SemanticVersion.TryParse("v1.2.0")!.ToString().Should().Be("1.2.0");
+        SemanticVersion.TryParse("v1.2.3")!.ToString().Should().Be("1.2.3");
+        SemanticVersion.TryParse("v1.0.4")!.ToString().Should().Be("1.0.4");
+        SemanticVersion.TryParse("v1.2.0-rc.1")!.ToString().Should().Be("1.2.0-rc.1");
+        // Lo que sí se recorta son los metadatos de build: identifican, no versionan (SemVer §10).
+        SemanticVersion.TryParse("1.2.3+abc1234")!.ToString().Should().Be("1.2.3");
+        // Y el cuarto número que mete .NET, que en SemVer no existe.
+        SemanticVersion.TryParse("1.2.3.0")!.ToString().Should().Be("1.2.3");
     }
 }

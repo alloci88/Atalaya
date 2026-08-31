@@ -347,6 +347,14 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>
     /// Hay una versión más nueva publicada: la carcasa enseña un banner discreto.
     /// <para>
+    /// <b>También en un build local</b>, donde es informativo y sin botón (BUGFIX-AVISO). Se
+    /// eligió eso frente a esconderlo porque quien corre un `dist` de desarrollo es justo quien
+    /// necesita enterarse de que salió una release —es como se descubrió este defecto—, y porque
+    /// un banner que aparece o no según el origen del binario es una regla más que explicar. Lo
+    /// que no puede pasar es que se ofrezca una acción que luego no está: el botón se decide en
+    /// <see cref="SelfUpdateService.CanOffer"/> y su ausencia se explica en el propio banner.
+    /// </para>
+    /// <para>
     /// Banner y no toast ni modal, a conciencia. Un modal interrumpe para dar una noticia que no
     /// es urgente. Un toast caduca a los 8 s: si te pilla mirando otra cosa, te has quedado sin
     /// enterarte y no hay forma de recuperarlo. El banner se queda hasta que decides —lo abres o
@@ -434,7 +442,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         UpdateReadiness readiness = _selfUpdate.CanOffer();
         CanInstallUpdate = readiness.CanUpdate;
-        InstallUpdateLabel = $"Actualizar a {_offeredUpdate.Short}";
+        InstallUpdateLabel = $"Actualizar a {_offeredUpdate}";
         UpdateNotice = readiness.CanUpdate ? readiness.Warning ?? string.Empty : readiness.Reason;
     }
 
@@ -527,7 +535,10 @@ public sealed partial class MainViewModel : ObservableObject
             _offeredTag = result.Tag ?? string.Empty;
             UpdateAvailable = result.HasUpdate;
             UpdateUrl = result.Url ?? string.Empty;
-            UpdateLabel = result.Version is null ? string.Empty : $"Atalaya {result.Version.Short} disponible";
+            // El texto lo redacta el RESULTADO del chequeo (BUGFIX-AVISO). Aquí no se calcula ni
+            // se formatea ninguna versión: hacerlo era lo que permitía que el aviso dijera un
+            // número que la decisión nunca había usado.
+            UpdateLabel = result.Headline;
             OnPropertyChanged(nameof(CanOpenUpdate));
             RefreshUpdateOffer();
         });

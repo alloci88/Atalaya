@@ -38,12 +38,19 @@ public sealed class SemanticVersion : IComparable<SemanticVersion>
 
     public bool IsPrerelease => Prerelease.Length > 0;
 
-    /// <summary>«1.2.3» o «1.2.3-rc.1». Sin la «v» del tag y sin metadatos de build.</summary>
+    /// <summary>
+    /// «1.2.3» o «1.2.3-rc.1». Sin la «v» del tag y sin metadatos de build.
+    /// <para>
+    /// <b>Es la ÚNICA forma de escribir una versión.</b> Hubo un segundo formateador —un `Short`
+    /// que se quedaba en «1.2»— para que el banner dijera el número «que la gente dice en voz
+    /// alta» (D-621). Con releases de parche eso pasó de abreviar a mentir: la 1.0.4 se anunciaba
+    /// como «1.0», que no es ninguna versión existente y que además se lee como 1.0.0 — o sea,
+    /// más VIEJA que la que ya tenías. Un formato que oculta el dígito que cambia no abrevia
+    /// nada (BUGFIX-AVISO).
+    /// </para>
+    /// </summary>
     public override string ToString()
         => IsPrerelease ? $"{Major}.{Minor}.{Patch}-{Prerelease}" : $"{Major}.{Minor}.{Patch}";
-
-    /// <summary>«1.2» — lo que se enseña en el banner: el número que la gente dice en voz alta.</summary>
-    public string Short => IsPrerelease ? ToString() : $"{Major}.{Minor}";
 
     /// <summary>
     /// Parsea una versión tolerando lo que de verdad llega: la <c>v</c> del tag de git, el cuarto

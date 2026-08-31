@@ -14,17 +14,47 @@ namespace Atalaya.App.Services;
 /// fallos en pantalla es un chequeo que molesta por fallar, que es exactamente lo que no puede
 /// hacer.
 /// </param>
+/// <param name="Current">
+/// La versión que se está ejecutando, <b>la misma con la que se comparó</b>. Viaja con el
+/// resultado y no se vuelve a leer del ensamblado en la interfaz: si el aviso preguntara por su
+/// cuenta, el número que enseña y el que usó la decisión podrían no ser el mismo — que es
+/// exactamente la avería que trajo aquí (BUGFIX-AVISO).
+/// </param>
 /// <param name="Tag">
 /// El tag EXACTO de la Release, tal y como lo escribió GitHub. La versión parseada sirve para
 /// comparar y para enseñar; para volver a pedirle a GitHub esa misma Release hace falta la
 /// cadena literal, que puede llevar «v» o no llevarla (F11).
 /// </param>
 public sealed record UpdateAvailability(
-    SemanticVersion? Version, string? Url, string Reason, string? Tag = null)
+    SemanticVersion? Version,
+    string? Url,
+    string Reason,
+    string? Tag = null,
+    SemanticVersion? Current = null)
 {
     public static UpdateAvailability None(string reason) => new(null, null, reason);
 
     public bool HasUpdate => Version is not null;
+
+    /// <summary>
+    /// La frase del aviso, con <b>las dos</b> versiones (BUGFIX-AVISO).
+    /// <para>
+    /// Antes decía solo una —«Atalaya 1.0 disponible»— y eso es lo que hizo invisible el defecto
+    /// durante una release entera: un único número, sin nada con lo que contrastarlo, se lee como
+    /// verdadero. Con las dos delante, cualquier incoherencia salta a la vista sin tener que
+    /// abrir «Acerca de».
+    /// </para>
+    /// <para>
+    /// <b>Y la construye el resultado del chequeo, no la interfaz.</b> El banner no vuelve a
+    /// calcular ni a formatear nada: enseña esto. Que quien decide sea quien redacta es lo que
+    /// impide que el texto y la decisión puedan discrepar.
+    /// </para>
+    /// </summary>
+    public string Headline => Version is null
+        ? string.Empty
+        : Current is null
+            ? $"Disponible la {Version}"
+            : $"Tienes la {Current} · disponible la {Version}";
 }
 
 /// <summary>
@@ -182,7 +212,8 @@ public sealed class UpdateCheckService
             return UpdateAvailability.None($"{theirs} descartada por el usuario");
         }
 
-        return new UpdateAvailability(theirs, url, $"hay versión nueva: {theirs} (tienes {mine})", tag);
+        return new UpdateAvailability(
+            theirs, url, $"hay versión nueva: {theirs} (tienes {mine})", tag, mine);
     }
 
     /// <summary>¿Toca preguntar? Sin sello previo, siempre — es el primer arranque.</summary>
