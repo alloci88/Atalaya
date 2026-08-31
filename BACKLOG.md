@@ -123,6 +123,17 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## Cerrado
 
+- **BUGFIX-AVISO · El aviso anunciaba una versión que no existe** — el banner decía «Atalaya 1.0
+  disponible» con la v1.0.4 publicada. No era una recaída de BUGFIX-VERSION: el chequeo leyó bien
+  el tag y decidió bien —el log lo demuestra—, y lo que fallaba era un **segundo formateador**
+  (`SemanticVersion.Short`) que dejaba la 1.0.4 en «1.0», un número inexistente que además se lee
+  como 1.0.0 (D-745). Se retira: una versión se escribe entera y en un solo sitio, con un barrido
+  que impide que nazca otro camino, igual que el de las URLs de D-728 (D-746). El aviso dice ahora
+  **las dos** versiones —«Tienes la 1.0.3 · disponible la 1.0.4»—, porque un número solo, sin nada
+  con lo que contrastarlo, se lee como verdadero: eso es lo que dejó pasar el defecto durante una
+  release entera (D-747). Y en un build local el aviso sale, informativo y sin botón, con el motivo
+  escrito (D-748). Verificado a ojo contra la v1.0.4 real (D-749).
+
 - **F11 · Actualizar desde la propia app** — el aviso de versión gana un botón **«Actualizar a
   X.Y.Z»**: descarga el zip de la Release con el token de cuenta que ya hay, verifica su
   **SHA-256** (que el workflow publica junto al paquete), lo descomprime aparte y solo entonces

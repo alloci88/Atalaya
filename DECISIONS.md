@@ -7885,3 +7885,132 @@ De la tubería de publicación (5): que el workflow siga calculando y adjuntando
 sufijo sea el mismo en los dos lados, que empaquete el relevo self-contained y compruebe que viaja,
 que `publish.ps1` produzca la misma forma de carpeta, y que el banner ofrezca el botón con su
 progreso y su explicación.
+
+## BUGFIX-AVISO — El aviso anunciaba una versión que no existe
+
+El parte: corriendo un `dist` local por delante de la 1.0.3, el banner anunciaba **la 1.0.0** —ni
+la que corría ni la publicada (v1.0.4)—, y justo el número que salía antes del arreglo de
+BUGFIX-VERSION. Todo apuntaba a una recaída de aquello.
+
+### D-745 — No era una recaída: el chequeo estaba bien, y el log lo demuestra
+
+Antes de tocar nada (N-2), la línea que cierra el diagnóstico:
+
+```
+2026-08-31 23:57:05.333 +02:00 [INF] Chequeo de versión: hay versión nueva: 1.0.4 (tienes 1.0.3).
+```
+
+Y lo que el chequeo había guardado, coherente con ella:
+
+```json
+"lastSeenReleaseTag": "v1.0.4",
+"lastSeenReleaseUrl": ".../Atalaya/releases/tag/v1.0.4"
+```
+
+O sea: **la API leyó bien el tag `v1.0.4`**, la versión propia se leyó bien (1.0.3, la base del
+build local, D-729) y la decisión fue la correcta. Las tres sospechas del parte se descartan con
+esto y con un barrido:
+
+- **¿El banner tiene su propio camino de versión (`Assembly.GetName().Version`)?** No. El único
+  `GetName().Version` de `src/` es el último recurso de `AboutInfo.CurrentVersion()`, al que solo
+  se llega si faltan la informativa *y* la `FileVersion`. El banner no toca el ensamblado: pinta
+  lo que le da el chequeo.
+- **¿Versiones intercambiadas?** No. El texto solo enseñaba **una**, y era la disponible.
+- **¿Caché vieja?** No. `lastSeenReleaseTag` era `v1.0.4`, del mismo momento que el log.
+
+**La causa está en el formateo.** `SemanticVersion` tenía un segundo formateador, `Short`, que
+dejaba la versión en `Major.Minor`: la **1.0.4 se escribía «1.0»**. El banner decía «Atalaya 1.0
+disponible», que se lee como 1.0.0 — un número que no existe y que además parece *más viejo* que el
+que ya tienes. La coincidencia con el 1.0.0 de `Directory.Build.props` es un espejismo, y de los
+buenos: es exactamente el síntoma que el parte anterior había arreglado.
+
+`Short` venía de D-621, y era una decisión razonada: «el número que la gente dice en voz alta»,
+pensada para releases de minor («Atalaya 1.3 disponible»). Con releases de parche dejó de abreviar
+y pasó a mentir. **Un formato que oculta justo el dígito que cambia no abrevia nada.**
+
+Y había un test dándolo por bueno — `Short` de `v1.2.3` debía ser `"1.2"` —, que es por lo que el
+defecto sobrevivió una release entera: no había nada rojo que mirar.
+
+### D-746 — Una sola fuente, y una sola forma de escribirla
+
+Dos reglas, y un barrido que impide que vuelvan a nacer excepciones (como el de D-728 con las URLs):
+
+1. **La versión en ejecución se lee en un solo fichero**, `AboutInfo`. Un test recorre `src/` y
+   falla si `GetName().Version`, `AssemblyInformationalVersionAttribute` o
+   `FileVersionInfo.GetVersionInfo` aparecen fuera de ahí.
+2. **Una versión se escribe entera y en un solo sitio**: `SemanticVersion.ToString()`. `Short` se
+   retira; el test comprueba que no vuelve, y que nadie compone una versión a mano a partir de
+   `Major`/`Minor`/`Patch` fuera de su propia definición.
+
+**Quien decide es quien redacta.** La frase del aviso la construye ahora `UpdateAvailability`, que
+es el resultado del chequeo, y el banner se limita a enseñarla. La interfaz ya no calcula ni
+formatea versiones — lo comprueba un test sobre el propio `MainViewModel`. Que el texto y la
+decisión salgan de la misma pieza es lo que hace imposible que discrepen; mientras fueron dos
+cosas, discreparon.
+
+Por eso `UpdateAvailability` lleva también la versión **en ejecución** (`Current`): es la misma con
+la que se comparó, y viaja con el resultado en vez de volver a leerse en la interfaz.
+
+### D-747 — El aviso dice las DOS versiones
+
+«Tienes la 1.0.3 · disponible la 1.0.4», en lugar de «Atalaya 1.0 disponible».
+
+No es solo cortesía. **Un número solo, sin nada con lo que contrastarlo, se lee como verdadero**:
+eso es lo que dejó pasar este defecto durante una release. Con las dos delante, cualquier
+incoherencia salta a la vista sin abrir «Acerca de» — y además contesta la pregunta que el usuario
+tiene de verdad, que no es «¿qué hay?» sino «¿cuánto me falta?».
+
+Y se prueba lo que no debe estar tanto como lo que sí: que el parche aparezca, que no se cuele un
+«1.0.0», y que las dos versiones **no estén intercambiadas** —se comprueba el orden, no solo que
+ambas salgan—, porque «contiene 1.0.4» lo habría pasado un texto que dijera las cosas al revés.
+
+### D-748 — En un build local el aviso sale, informativo y sin acción
+
+F11 decidió que un build local no se actualiza solo (D-737), pero el banner sí aparecía y eso
+quedó sin decidir. Se elige **que salga**, con su explicación y sin botón:
+
+- Quien corre un `dist` de desarrollo es justo quien necesita enterarse de que salió una release.
+  Así se encontró este defecto; con el banner escondido, no se habría visto.
+- Un aviso que aparece o no según el origen del binario es una regla más que explicar, y una menos
+  que se puede comprobar de un vistazo.
+- Lo que no puede pasar —y era la queja legítima del parte— es **ofrecer una acción que luego no
+  está**. El botón lo decide `SelfUpdateService.CanOffer()`, y su ausencia se explica en el propio
+  banner: «Esto es un build local: se actualiza recompilando, no descargando».
+
+La versión que enseña es la **base** (1.0.3 para un `1.0.3-dev.5+ffc63d8`), que es con la que se
+comparó: el banner enseña los números que usó la decisión, y la línea de abajo dice el resto.
+Meter el descriptor completo del build local convertiría un aviso de una línea en tres.
+
+### D-749 — Verificado a ojo, con la release real
+
+El `dist` del día ya no sirve para verlo: el usuario etiquetó **v1.0.4** sobre el último commit, así
+que un build local de ese árbol está *al día* y —correctamente— no enseña banner. Para ver el aviso
+arreglado se reprodujo el escenario exacto del parte: un publish desde una copia del árbol **sin
+`.git`** con el suelo en 1.0.3, que se estampa `1.0.3-dev`, contra la **v1.0.4 publicada de verdad**.
+
+Lo que se ve en pantalla:
+
+> **Tienes la 1.0.3 · disponible la 1.0.4**  ·  Ver novedades  ·  Descartar
+> Esto es un build local: se actualiza recompilando, no descargando.
+
+Las dos versiones enteras y correctas, sin botón, y con el motivo escrito. El mecanismo del chequeo
+no se tocó: ni la API, ni el límite de 24 h, ni el fallo silencioso.
+
+### D-750 — Cobertura (16 tests nuevos, 1.483 en total, todo en verde)
+
+Del aviso (11): la frase con las dos versiones en el caso exacto del parte; que el parche de la
+publicada **no** se oculta y que no aparece un «1.0.0»; que las dos **no están intercambiadas**,
+comprobando el orden; que el texto sale de las mismas versiones que decidieron; que una release
+igual o anterior no produce ni aviso ni frase; que un build local con release posterior sí avisa
+—con las dos versiones— pero **no recibe el botón**, y que uno por delante sigue callando; que un
+fallo sigue sin producir frase; y que la respuesta **cacheada** dice exactamente lo mismo que la
+recién consultada, sin volver a preguntar (la tercera sospecha, descartada con un test y no con una
+lectura).
+
+De la fuente única (4): solo `AboutInfo` lee la versión del ensamblado; no hay un segundo
+formateador ni versiones compuestas a mano; el banner no redacta su propio texto; y «Acerca de» y
+el chequeo hablan del mismo binario.
+
+Y el test de `SemanticVersion` que **daba por buena la truncación** se sustituye por el que fija la
+regla contraria: una versión se escribe entera, incluida la 1.0.4, y lo único que se recorta son
+los metadatos de build y el cuarto número de .NET.

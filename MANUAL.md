@@ -569,7 +569,8 @@ tarjeta no puede estar mintiéndole al equipo el resto del día. Mejor no decir 
 
 **Actualizar Atalaya.** Al arrancar, Atalaya pregunta a GitHub si hay una versión más reciente
 que la tuya —como mucho una vez al día, sin retrasar nada y con el token de la cuenta que ya
-tienes conectada—. Si la hay, aparece un **banner discreto** encima de la página con tres cosas:
+tienes conectada—. Si la hay, aparece un **banner discreto** encima de la página que dice las dos
+versiones —«**Tienes la 1.0.3 · disponible la 1.0.4**»— y ofrece tres cosas:
 
 - **Actualizar a X.Y.Z** — descarga la versión nueva, comprueba que llegó entera, sustituye la
   carpeta y vuelve a abrir Atalaya ya actualizada. Ves la descarga avanzar mientras pasa.
@@ -601,7 +602,8 @@ esa carpeta es la vuelta atrás: devuelve su contenido a la carpeta principal.
 - **Hay una sesión en curso**: auditoría, verificación o arreglo asistido. Actualizar la cortaría,
   y eso tira trabajo ya pagado a Copilot. Termina o detén la sesión y el botón vuelve.
 - **Es un build local**, de los que en «Acerca de» aparecen como `· build local`. Ésos se
-  actualizan recompilando.
+  actualizan recompilando. El aviso **sí sale** —es útil saber que hubo release— pero es
+  informativo: enseña las dos versiones y dice por qué no hay botón.
 - **No hay cuenta conectada**, o el despliegue no declara `appRepoUrl`.
 - **Falta `AtalayaUpdater.exe`** en tu carpeta: un paquete incompleto no puede sustituirse solo.
 

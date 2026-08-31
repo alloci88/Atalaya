@@ -354,8 +354,7 @@ Velopack y se descartó; el veredicto y lo que se probó están en `DECISIONS.md
 ### Numeración
 
 - **Patch** (`1.2.3` → `1.2.4`): arreglos.
-- **Minor** (`1.2` → `1.3`): funcionalidad nueva compatible. Es lo que el banner de aviso enseña
-  («Atalaya 1.3 disponible»).
+- **Minor** (`1.2` → `1.3`): funcionalidad nueva compatible.
 - **Major**: cambios que obligan a hacer algo al equipo (migrar el hub, reconectar cuentas).
 
 **El tag es el único ritual**: no hay que subir ningún número a mano. Desde BUGFIX-VERSION, un
