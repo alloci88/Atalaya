@@ -189,28 +189,60 @@
                         BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                         BorderThickness="1"
                         Visibility="{Binding UpdateAvailable, Converter={StaticResource BoolToVisibility}}">
-                    <StackPanel Orientation="Horizontal">
-                        <Image Width="16" Height="16" Margin="0,0,10,0"
-                               VerticalAlignment="Center"
-                               RenderOptions.BitmapScalingMode="HighQuality">
-                            <Image.Source>
-                                <BitmapImage UriSource="pack://application:,,,/assets/atalaya.ico"
-                                             DecodePixelWidth="16" DecodePixelHeight="16" />
-                            </Image.Source>
-                        </Image>
-                        <TextBlock Text="{Binding UpdateLabel}" VerticalAlignment="Center"
-                                   FontWeight="SemiBold" />
-                        <ui:HyperlinkButton Content="Ver novedades"
-                                            Command="{Binding OpenUpdateCommand}"
-                                            Margin="12,0,0,0" Padding="0"
-                                            VerticalAlignment="Center"
-                                            ToolTip="Abre la página de la versión en el navegador. Atalaya no se actualiza sola: descarga el zip y reemplaza tu carpeta."
-                                            Visibility="{Binding CanOpenUpdate, Converter={StaticResource BoolToVisibility}}" />
-                        <ui:HyperlinkButton Content="Descartar"
-                                            Command="{Binding DismissUpdateCommand}"
-                                            Margin="14,0,0,0" Padding="0"
-                                            VerticalAlignment="Center"
-                                            ToolTip="No vuelve a avisar de esta versión. De la siguiente sí." />
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Image Width="16" Height="16" Margin="0,0,10,0"
+                                   VerticalAlignment="Center"
+                                   RenderOptions.BitmapScalingMode="HighQuality">
+                                <Image.Source>
+                                    <BitmapImage UriSource="pack://application:,,,/assets/atalaya.ico"
+                                                 DecodePixelWidth="16" DecodePixelHeight="16" />
+                                </Image.Source>
+                            </Image>
+                            <TextBlock Text="{Binding UpdateLabel}" VerticalAlignment="Center"
+                                       FontWeight="SemiBold" />
+
+                            <!-- F11 — Actualizar es una DECISIÓN, y por eso es un botón y no un
+                                 automatismo. Mientras dura, el banner deja de ofrecer y pasa a
+                                 contar: quien pulsó tiene derecho a ver qué está pasando. -->
+                            <ui:Button Content="{Binding InstallUpdateLabel}"
+                                       Command="{Binding InstallUpdateCommand}"
+                                       Appearance="Primary"
+                                       Margin="14,0,0,0" Padding="12,3"
+                                       VerticalAlignment="Center"
+                                       ToolTip="Descarga la versión nueva, comprueba su checksum, sustituye la carpeta y vuelve a abrir Atalaya. Tus ajustes, tu cuenta y tus clones no se tocan."
+                                       Visibility="{Binding CanInstallUpdate, Converter={StaticResource BoolToVisibility}}" />
+
+                            <ui:HyperlinkButton Content="Ver novedades"
+                                                Command="{Binding OpenUpdateCommand}"
+                                                Margin="12,0,0,0" Padding="0"
+                                                VerticalAlignment="Center"
+                                                ToolTip="Abre la página de la versión en el navegador, con sus notas y su zip."
+                                                Visibility="{Binding CanOpenUpdate, Converter={StaticResource BoolToVisibility}}" />
+                            <ui:HyperlinkButton Content="Descartar"
+                                                Command="{Binding DismissUpdateCommand}"
+                                                Margin="14,0,0,0" Padding="0"
+                                                VerticalAlignment="Center"
+                                                ToolTip="No vuelve a avisar de esta versión. De la siguiente sí." />
+                        </StackPanel>
+
+                        <!-- Por qué NO se puede actualizar (una sesión en curso, un build local,
+                             sin permisos), o qué tener en cuenta si sí (un arreglo abierto). Un
+                             botón que falta sin explicación se lee como un fallo del programa. -->
+                        <TextBlock Text="{Binding UpdateNotice}"
+                                   Margin="26,6,0,0"
+                                   TextWrapping="Wrap"
+                                   Opacity="0.75"
+                                   Visibility="{Binding HasUpdateNotice, Converter={StaticResource BoolToVisibility}}" />
+
+                        <StackPanel Margin="26,8,0,0"
+                                    Visibility="{Binding UpdateInProgress, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="{Binding UpdateProgressText}" TextWrapping="Wrap" />
+                            <ProgressBar Height="4" Margin="0,6,0,0"
+                                         Minimum="0" Maximum="100"
+                                         Value="{Binding UpdateProgressPercent, Mode=OneWay, FallbackValue=0, TargetNullValue=0}"
+                                         IsIndeterminate="{Binding UpdateProgressIndeterminate}" />
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 

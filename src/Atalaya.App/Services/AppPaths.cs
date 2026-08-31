@@ -41,4 +41,20 @@ public sealed class AppPaths
     /// los snapshots: lo que sirve para juzgar el clon no puede vivir dentro de él.
     /// </summary>
     public string BuildBaselines => Path.Combine(Root, "builds");
+
+    /// <summary>
+    /// El taller de la actualización (F11): el zip descargado, el relevo copiado fuera de la
+    /// carpeta que se va a sustituir y el parte que deja al terminar.
+    /// <para>
+    /// Vive aquí y no dentro de la instalación por lo mismo que todo lo demás: es lo único que
+    /// sobrevive al cambio de carpeta y puede contar qué pasó cuando la versión nueva arranca.
+    /// </para>
+    /// </summary>
+    public string Update => Path.Combine(Root, "update");
+
+    /// <summary>El parte que deja el relevo, y que lee la versión que arranca después.</summary>
+    public string UpdateResultJson => Path.Combine(Update, "result.json");
+
+    /// <summary>Registro de cada intento de actualización, una línea por intento (F11).</summary>
+    public string UpdatesLog => Path.Combine(Root, "updates.jsonl");
 }

@@ -70,6 +70,10 @@ public partial class App : Application
         MainViewModel main = _host.Services.GetRequiredService<MainViewModel>();
         await main.InitializeAsync();
 
+        // F11: ¿venimos de una actualización? Lo cuenta la versión NUEVA, ya arrancada — que es
+        // justo la prueba que faltaba para poder borrar la copia de la anterior.
+        main.ReportUpdateAftermath();
+
         // F8 §3: el chequeo de versión va DESPUÉS de que todo esté en marcha y sin await. Nada de
         // lo que hace la aplicación depende de su respuesta, así que nada puede esperarla: una
         // comprobación de cortesía que retrasa el arranque ya ha dejado de ser cortés.
@@ -98,6 +102,19 @@ public partial class App : Application
             sp.GetRequiredService<GitHubApiClient>(),
             sp.GetRequiredService<SettingsService>(),
             sp.GetRequiredService<ILogger<UpdateCheckService>>()));
+        // F11: y actualizarse de verdad, con el MISMO token y contra la MISMA Release. El registro
+        // de intentos es una pieza suya porque una actualización cruza dos procesos y dos
+        // versiones: ninguna de las dos puede ser la dueña del registro.
+        services.AddSingleton<UpdateJournal>();
+        services.AddSingleton(sp => new SelfUpdateService(
+            paths,
+            sp.GetRequiredService<DeployConfig>(),
+            sp.GetRequiredService<GitHubAccountService>(),
+            sp.GetRequiredService<GitHubApiClient>(),
+            sp.GetRequiredService<AgentBusyGate>(),
+            sp.GetRequiredService<FixSnapshotStore>(),
+            sp.GetRequiredService<UpdateJournal>(),
+            sp.GetRequiredService<ILogger<SelfUpdateService>>()));
 
         services.AddSingleton<HubContext>();
         services.AddSingleton<NavigationService>();

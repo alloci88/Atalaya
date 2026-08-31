@@ -42,6 +42,20 @@ internal sealed class HttpStub : HttpMessageHandler
         return this;
     }
 
+    /// <summary>Un adjunto de una Release: bytes crudos, como los entrega la API (F11).</summary>
+    public HttpStub Bytes(byte[] payload)
+    {
+        _responses.Enqueue(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(payload),
+        });
+        return this;
+    }
+
+    /// <summary>Texto plano — el fichero <c>.sha256</c> que acompaña al zip.</summary>
+    public HttpStub Text(string body)
+        => Bytes(System.Text.Encoding.UTF8.GetBytes(body));
+
     public HttpStub Throws(Exception ex)
     {
         _responses.Enqueue(_ => throw ex);

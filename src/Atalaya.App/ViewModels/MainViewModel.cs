@@ -32,6 +32,9 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>F8 §3: el chequeo de cortesía de versión nueva. Opcional — sin él, no hay banner.</summary>
     private readonly UpdateCheckService? _updates;
 
+    /// <summary>F11: actualizarse de verdad. Opcional — sin él, el banner solo lleva al navegador.</summary>
+    private readonly SelfUpdateService? _selfUpdate;
+
     public MainViewModel(
         NavigationService navigation,
         HubContext hub,
@@ -42,8 +45,10 @@ public sealed partial class MainViewModel : ObservableObject
         InterruptedSessionRecovery recovery,
         DisplayIdService aliases,
         ToastCenter toasts,
-        UpdateCheckService? updates = null)
+        UpdateCheckService? updates = null,
+        SelfUpdateService? selfUpdate = null)
     {
+        _selfUpdate = selfUpdate;
         Navigation = navigation;
         _toasts = toasts;
         _hub = hub;
@@ -262,6 +267,10 @@ public sealed partial class MainViewModel : ObservableObject
             ? "Sesión en vivo"
             : _live.HasFailed ? "Sesión fallida" : "Última sesión";
         SessionProgress = _live.ProgressLine;
+        // F11: una sesión que arranca retira el botón de actualizar, y una que termina lo
+        // devuelve. Colgarlo del mismo evento que ya mueve el rail evita que el botón se quede
+        // puesto para que alguien lo pulse a mitad de una auditoría pagada.
+        RefreshUpdateOffer();
     });
 
     /// <summary>
@@ -304,6 +313,7 @@ public sealed partial class MainViewModel : ObservableObject
             ? "Arreglo asistido"
             : _fix.HasFailed ? "Arreglo fallido" : "Último arreglo";
         FixProgress = _fix.ProgressLine;
+        RefreshUpdateOffer();
     });
 
     /// <summary>
@@ -360,6 +370,141 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>La versión de la que se está avisando, para poder descartarla por su número.</summary>
     private SemanticVersion? _offeredUpdate;
 
+    /// <summary>El tag de esa Release: es lo que se le pide a GitHub al pulsar «Actualizar».</summary>
+    private string _offeredTag = string.Empty;
+
+    // ---- Actualizar desde la propia app (F11) ----
+
+    /// <summary>
+    /// «Actualizar a 1.0.4» se ofrece. Falso en un build local, sin cuenta, sin despliegue que
+    /// declare el repositorio, y —sobre todo— mientras haya una sesión en curso.
+    /// </summary>
+    [ObservableProperty]
+    private bool _canInstallUpdate;
+
+    /// <summary>«Actualizar a 1.0.4».</summary>
+    [ObservableProperty]
+    private string _installUpdateLabel = string.Empty;
+
+    /// <summary>
+    /// Por qué NO se ofrece, o qué hay que tener en cuenta si se ofrece. Se enseña: un botón que
+    /// no está y no dice por qué se lee como un fallo del programa.
+    /// </summary>
+    [ObservableProperty]
+    private string _updateNotice = string.Empty;
+
+    public bool HasUpdateNotice => UpdateNotice.Length > 0;
+
+    /// <summary>La actualización está en marcha: el banner deja de ofrecer y pasa a contar.</summary>
+    [ObservableProperty]
+    private bool _updateInProgress;
+
+    /// <summary>«Descargando 84 de 216 MB…»</summary>
+    [ObservableProperty]
+    private string _updateProgressText = string.Empty;
+
+    /// <summary>0–100 durante la descarga; null en las fases que no tienen porcentaje.</summary>
+    [ObservableProperty]
+    private double? _updateProgressPercent;
+
+    /// <summary>
+    /// Descomprimir y sustituir no tienen porcentaje que dar —no se sabe cuánto queda—, y una
+    /// barra parada al 0 % durante ese rato se lee como «se ha colgado». Indeterminada dice la
+    /// verdad: está pasando algo y no sabemos cuánto falta.
+    /// </summary>
+    public bool UpdateProgressIndeterminate => UpdateProgressPercent is null;
+
+    partial void OnUpdateNoticeChanged(string value) => OnPropertyChanged(nameof(HasUpdateNotice));
+
+    partial void OnUpdateProgressPercentChanged(double? value)
+        => OnPropertyChanged(nameof(UpdateProgressIndeterminate));
+
+    /// <summary>
+    /// Vuelve a mirar si se puede ofrecer «Actualizar». Se llama al recibir el aviso y en cada
+    /// refresco: una auditoría que arranca tiene que hacer desaparecer el botón, no dejarlo
+    /// puesto para que alguien lo pulse y tire una sesión pagada.
+    /// </summary>
+    private void RefreshUpdateOffer()
+    {
+        if (_selfUpdate is null || !UpdateAvailable || _offeredUpdate is null || UpdateInProgress)
+        {
+            CanInstallUpdate = false;
+            return;
+        }
+
+        UpdateReadiness readiness = _selfUpdate.CanOffer();
+        CanInstallUpdate = readiness.CanUpdate;
+        InstallUpdateLabel = $"Actualizar a {_offeredUpdate.Short}";
+        UpdateNotice = readiness.CanUpdate ? readiness.Warning ?? string.Empty : readiness.Reason;
+    }
+
+    /// <summary>
+    /// Descarga, verifica y sustituye. Lo dispara una persona; nunca se llama solo.
+    /// <para>
+    /// Si sale bien, esto NO vuelve: el relevo está esperando a que este proceso muera para poder
+    /// sustituir la carpeta, así que lo último que hace la aplicación es cerrarse.
+    /// </para>
+    /// </summary>
+    [RelayCommand]
+    private async Task InstallUpdateAsync()
+    {
+        if (_selfUpdate is null || _offeredTag.Length == 0 || UpdateInProgress)
+        {
+            return;
+        }
+
+        UpdateInProgress = true;
+        CanInstallUpdate = false;
+        UpdateNotice = string.Empty;
+        UpdateProgressText = "Preparando…";
+        UpdateProgressPercent = null;
+
+        var progress = new Progress<UpdateProgress>(p => OnUiThread(() =>
+        {
+            UpdateProgressText = p.Text;
+            UpdateProgressPercent = p.Percent;
+        }));
+
+        UpdateStart result = await _selfUpdate.UpdateAsync(
+            _offeredTag, UpdateUrl.Length > 0 ? UpdateUrl : null, progress, CancellationToken.None);
+
+        if (result.HandedOff)
+        {
+            // El relevo ya está esperando. Cerrar es el último paso de la actualización, no una
+            // consecuencia de ella: mientras este proceso viva, la carpeta no se puede tocar.
+            UpdateProgressText = result.Message;
+            OnUiThread(() => Application.Current?.Shutdown());
+            return;
+        }
+
+        UpdateInProgress = false;
+        UpdateProgressText = string.Empty;
+        UpdateProgressPercent = null;
+        UpdateNotice = result.Message;
+        RefreshUpdateOffer();
+        // El camino manual de siempre sigue estando: el banner conserva «Ver novedades».
+        if (result.ReleaseUrl is { Length: > 0 })
+        {
+            UpdateUrl = result.ReleaseUrl;
+            OnPropertyChanged(nameof(CanOpenUpdate));
+        }
+    }
+
+    /// <summary>
+    /// Cuenta cómo acabó la actualización anterior, si la hubo. Se llama una vez al arrancar: es
+    /// la versión NUEVA quien confirma que arrancó bien, y por eso también es quien borra la copia
+    /// de la anterior.
+    /// </summary>
+    public void ReportUpdateAftermath()
+    {
+        if (_selfUpdate?.TakeAftermath() is not { } aftermath)
+        {
+            return;
+        }
+
+        OnUiThread(() => _toasts.Show(aftermath.Message));
+    }
+
     /// <summary>
     /// Pregunta si hay versión nueva, sin bloquear nada y sin poder romper el arranque.
     /// <para>
@@ -379,10 +524,12 @@ public sealed partial class MainViewModel : ObservableObject
         OnUiThread(() =>
         {
             _offeredUpdate = result.Version;
+            _offeredTag = result.Tag ?? string.Empty;
             UpdateAvailable = result.HasUpdate;
             UpdateUrl = result.Url ?? string.Empty;
             UpdateLabel = result.Version is null ? string.Empty : $"Atalaya {result.Version.Short} disponible";
             OnPropertyChanged(nameof(CanOpenUpdate));
+            RefreshUpdateOffer();
         });
     }
 

@@ -14,7 +14,13 @@ namespace Atalaya.App.Services;
 /// fallos en pantalla es un chequeo que molesta por fallar, que es exactamente lo que no puede
 /// hacer.
 /// </param>
-public sealed record UpdateAvailability(SemanticVersion? Version, string? Url, string Reason)
+/// <param name="Tag">
+/// El tag EXACTO de la Release, tal y como lo escribió GitHub. La versión parseada sirve para
+/// comparar y para enseñar; para volver a pedirle a GitHub esa misma Release hace falta la
+/// cadena literal, que puede llevar «v» o no llevarla (F11).
+/// </param>
+public sealed record UpdateAvailability(
+    SemanticVersion? Version, string? Url, string Reason, string? Tag = null)
 {
     public static UpdateAvailability None(string reason) => new(null, null, reason);
 
@@ -29,10 +35,10 @@ public sealed record UpdateAvailability(SemanticVersion? Version, string? Url, s
 /// esto habría sido un secreto más que repartir, rotar y perder.
 /// </para>
 /// <para>
-/// <b>Y no descarga nada.</b> El aviso lleva al navegador y ahí se acaba su trabajo: el usuario
-/// descarga el zip y reemplaza su carpeta. Sin auto-instalación ni descargas en segundo plano —
-/// una aplicación que se reescribe sola mientras alguien la usa es un problema, no una comodidad.
-/// La actualización asistida (Velopack) está en el backlog como nivel 3.
+/// <b>Y aquí no se descarga nada.</b> Este servicio solo MIRA. Quien descarga y sustituye es
+/// <see cref="SelfUpdateService"/>, y solo cuando alguien pulsa el botón (F11): ni al arrancar, ni
+/// al cerrar, ni en segundo plano. Una aplicación que se reescribe sola mientras alguien la usa
+/// es un problema, no una comodidad.
 /// </para>
 /// </summary>
 public sealed class UpdateCheckService
@@ -176,7 +182,7 @@ public sealed class UpdateCheckService
             return UpdateAvailability.None($"{theirs} descartada por el usuario");
         }
 
-        return new UpdateAvailability(theirs, url, $"hay versión nueva: {theirs} (tienes {mine})");
+        return new UpdateAvailability(theirs, url, $"hay versión nueva: {theirs} (tienes {mine})", tag);
     }
 
     /// <summary>¿Toca preguntar? Sin sello previo, siempre — es el primer arranque.</summary>

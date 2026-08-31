@@ -29,7 +29,27 @@ public sealed record GitHubUser(long Id, string Login, string? Name, string? Ava
 /// </summary>
 /// <param name="TagName">El tag tal cual (<c>v1.2.3</c>). Es la única fuente de la versión.</param>
 /// <param name="HtmlUrl">La página de la Release. Null si GitHub no la devolvió.</param>
-public sealed record GitHubRelease(string TagName, string? HtmlUrl, string? Name);
+/// <param name="Assets">
+/// Los ficheros adjuntos (F11): el zip y su checksum. Vacío para quien solo mira el tag — el
+/// aviso de versión de F8 no los necesita y no cambia de comportamiento por tenerlos.
+/// </param>
+public sealed record GitHubRelease(
+    string TagName, string? HtmlUrl, string? Name, IReadOnlyList<GitHubReleaseAsset>? Assets = null)
+{
+    public IReadOnlyList<GitHubReleaseAsset> Files => Assets ?? Array.Empty<GitHubReleaseAsset>();
+
+    /// <summary>El primer adjunto cuyo nombre acaba en <paramref name="suffix"/>, o null.</summary>
+    public GitHubReleaseAsset? Find(string suffix)
+        => Files.FirstOrDefault(a => a.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+}
+
+/// <summary>
+/// Un fichero adjunto a una Release (F11). Se identifica por su <b>id</b> y no por su
+/// <c>browser_download_url</c>: en un repositorio privado esa URL devuelve 404 aunque se mande el
+/// token, mientras que <c>/releases/assets/{id}</c> con <c>Accept: application/octet-stream</c> sí
+/// entrega el fichero. Comprobado contra un repositorio privado real antes de construir sobre ello.
+/// </summary>
+public sealed record GitHubReleaseAsset(long Id, string Name, long Size);
 
 /// <summary>What went wrong talking to the GitHub API, mapped to an actionable remedy (D2.3).</summary>
 public enum GitHubApiProblem
@@ -212,11 +232,119 @@ public sealed class GitHubApiClient
 
         using (doc)
         {
-            JsonElement root = doc.RootElement;
-            string? tag = ReadString(root, "tag_name");
-            return string.IsNullOrWhiteSpace(tag)
-                ? null
-                : new GitHubRelease(tag!, ReadString(root, "html_url"), ReadString(root, "name"));
+            return ReadRelease(doc.RootElement);
+        }
+    }
+
+    /// <summary>
+    /// La Release de un tag concreto (F11). El aviso guarda el tag que vio; cuando el usuario
+    /// pulsa «Actualizar» se pide ESA, y no «la última»: entre el aviso y el clic puede haber
+    /// salido otra, y descargar algo distinto de lo que el botón prometía sería una sorpresa.
+    /// </summary>
+    public async Task<GitHubRelease?> GetReleaseByTagAsync(
+        string token, string owner, string repo, string tag, CancellationToken ct)
+    {
+        JsonDocument doc;
+        try
+        {
+            doc = await GetJsonAsync($"/repos/{owner}/{repo}/releases/tags/{Uri.EscapeDataString(tag)}", token, ct);
+        }
+        catch (GitHubApiException ex) when (ex.Problem == GitHubApiProblem.NotFound)
+        {
+            return null;
+        }
+
+        using (doc)
+        {
+            return ReadRelease(doc.RootElement);
+        }
+    }
+
+    private static GitHubRelease? ReadRelease(JsonElement root)
+    {
+        string? tag = ReadString(root, "tag_name");
+        if (string.IsNullOrWhiteSpace(tag))
+        {
+            return null;
+        }
+
+        var assets = new List<GitHubReleaseAsset>();
+        if (root.TryGetProperty("assets", out JsonElement list) && list.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement item in list.EnumerateArray())
+            {
+                string? name = ReadString(item, "name");
+                if (!string.IsNullOrWhiteSpace(name)
+                    && item.TryGetProperty("id", out JsonElement id)
+                    && id.TryGetInt64(out long assetId))
+                {
+                    long size = item.TryGetProperty("size", out JsonElement s) && s.TryGetInt64(out long bytes)
+                        ? bytes
+                        : 0;
+                    assets.Add(new GitHubReleaseAsset(assetId, name!, size));
+                }
+            }
+        }
+
+        return new GitHubRelease(tag!, ReadString(root, "html_url"), ReadString(root, "name"), assets);
+    }
+
+    /// <summary>
+    /// Baja un adjunto a disco, avisando de cuántos bytes van (F11).
+    /// <para>
+    /// Se escribe EN STREAMING y no en memoria: el paquete de Atalaya pasa de los 200 MB y
+    /// cargarlo entero en el proceso para luego volcarlo es duplicar el pico de memoria a cambio
+    /// de nada.
+    /// </para>
+    /// </summary>
+    public async Task DownloadAssetAsync(
+        string token,
+        string owner,
+        string repo,
+        long assetId,
+        string destination,
+        IProgress<long>? bytesRead,
+        CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get, $"{_baseUrl}/repos/{owner}/{repo}/releases/assets/{assetId}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        // El Accept es lo que distingue «dame el fichero» de «dame su ficha en JSON».
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/octet-stream"));
+        request.Headers.UserAgent.ParseAdd("Atalaya");
+        request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new GitHubApiException(GitHubApiProblem.Offline,
+                "No hay conexión con github.com. Comprueba la red o el proxy y reintenta.", ex);
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                throw Translate(response, string.Empty);
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            await using FileStream file = File.Create(destination);
+            await using Stream stream = await response.Content.ReadAsStreamAsync(ct);
+
+            byte[] buffer = new byte[81920];
+            long total = 0;
+            int read;
+            while ((read = await stream.ReadAsync(buffer, ct)) > 0)
+            {
+                await file.WriteAsync(buffer.AsMemory(0, read), ct);
+                total += read;
+                bytesRead?.Report(total);
+            }
         }
     }
 
