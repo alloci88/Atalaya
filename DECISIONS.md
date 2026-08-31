@@ -7611,3 +7611,277 @@ sin `appRepoUrl` y el diálogo que de verdad los esconde; y el barrido de URLs a
 
 En `UpdateCheckTests`, los cuatro casos del build local: no anuncia la release de su propio tag, ni
 con commits por encima, sí avisa de la siguiente, y una release instalada se comporta como siempre.
+
+## F11 — Actualizar desde la propia app
+
+Hasta aquí el aviso de versión nueva llevaba al navegador y ahí acababa: descargar, descomprimir y
+reemplazar la carpeta era del usuario. Ahora el aviso tiene un botón, y Atalaya se sustituye a sí
+misma.
+
+### D-735 — Dónde viven los datos del usuario: ya estaban fuera, y se comprobó mirando
+
+El trabajo bloqueante del prompt era averiguar si algo del usuario vive DENTRO de la carpeta de la
+aplicación, porque reemplazarla lo destruiría. **No hay nada que migrar**, y no por suposición:
+
+| Qué | Dónde | Quién lo escribe |
+|---|---|---|
+| Ajustes (tema, umbrales, sondeo) | `%LOCALAPPDATA%\Atalaya\settings.json` | `SettingsService` |
+| Token de cuenta (DPAPI) | `%LOCALAPPDATA%\Atalaya\auth.dat` | `AccountStore` |
+| Clones vinculados por app | `%LOCALAPPDATA%\Atalaya\machines.json` | `MachineConfigStore` |
+| Clon del hub | `%LOCALAPPDATA%\Atalaya\hub\` | `HubSyncService` |
+| Logs | `%LOCALAPPDATA%\Atalaya\logs\` | Serilog |
+| Copias del arreglo asistido | `%LOCALAPPDATA%\Atalaya\fixes\` | `FixSnapshotStore` |
+| Líneas base de compilación | `%LOCALAPPDATA%\Atalaya\builds\` | `BuildScope` |
+| Marca de sesión abierta | `%LOCALAPPDATA%\Atalaya\open-session.json` | `OpenSessionStore` |
+
+Cómo se comprobó, y no solo se leyó: un barrido de **todos** los `File.Write*` y
+`Directory.CreateDirectory` de `src/` —todos cuelgan de `AppPaths`, del clon del hub o del clon de
+la app auditada— y después la carpeta real de esta máquina, que contiene exactamente eso y nada
+más. Los tres usos de `AppContext.BaseDirectory` que quedan (`BrandAssets`, `DeployConfig`,
+`CopilotCliLocator`) **solo leen**.
+
+**Pero hay una excepción, y es la que importa.** `appsettings.deploy.json` vive junto al ejecutable
+y es *el fichero que un despliegue corporativo edita a mano* (D1): el hub, el client id y
+`appRepoUrl`. No es dato de usuario, pero sí es estado local dentro de la carpeta, y sustituirla lo
+borraría en silencio — con el fallo apareciendo semanas después como «Atalaya ya no encuentra el
+hub». Se conserva: ver D-740.
+
+### D-736 — Velopack: se probó de verdad, pasa dos de tres, y se descarta por la tercera
+
+El prompt pedía tres verificaciones **antes** de adoptarlo, y probarlo de verdad en vez de fiarse
+de su documentación. Se hizo en un proyecto de usar y tirar (`VpDemo`, Velopack 1.2.0) contra un
+**repositorio privado real** creado para esto, con cuatro Releases y cuatro actualizaciones
+encadenadas.
+
+**(a) Releases de repositorio privado con el token de cuenta — PASA.** Comprobado de punta a punta:
+`GithubSource(repo, token)` bajó, aplicó y relanzó `1.0.0 → 1.0.1 → 1.0.2`. No es lectura de
+documentación: es una aplicación que cambió de versión sola.
+
+**(c) Binario sin firmar — PASA.** `vpk pack` avisa («5 file(s) will not be signed») y sigue. El
+paquete se produce y funciona igual.
+
+**(b) Qué le hace a la distribución — NO PASA**, y es lo que decide. Cuatro cosas medidas:
+
+1. **No obliga a un instalador**, al contrario de lo que suponía D-623: el `Portable.zip` es una
+   salida de primera clase y **sí se auto-actualiza**. Pero la forma del zip cambia — deja de ser
+   la aplicación suelta y pasa a `Update.exe` + un lanzador + `current/` con todo dentro.
+2. **Sí obliga a otro formato de Release**: además del zip hay que publicar `releases.win.json` y
+   los `.nupkg` (full y delta), y `Compress-Archive` se sustituye por `vpk`, una herramienta
+   global más en CI.
+3. **Obliga a tocar el arranque**: `vpk pack` **se niega a empaquetar** («Unable to verify
+   VelopackApp is called») hasta que `VelopackApp.Build().Run()` sea lo primero del `Main`. En una
+   app WPF eso significa un `Main` propio. Se intentó sobre el publish real de Atalaya y falló ahí.
+4. **Y borra el fichero del despliegue.** Éste es el que cierra la puerta. Se plantó un
+   `appsettings.deploy.json` editado dentro de `current/` y se actualizó: **desaparece**. Velopack
+   reemplaza `current/` entero, así que cada actualización revertiría en silencio la configuración
+   de una instalación corporativa — exactamente la pérdida que D-735 vino a evitar.
+
+A eso se suma un **segundo origen de la versión** (`sq.version` junto a la informativa del
+ensamblado), que es la clase de duplicidad que BUGFIX-VERSION acaba de quitar de en medio.
+
+Lo que Velopack hace mejor, dicho sin rebajarlo: **verifica el SHA-256 y aborta intacto** —se
+publicó un `.nupkg` corrupto a propósito y lo rechazó con `ChecksumFailedException`— y sus
+**deltas** son una ventaja real contra un paquete de 221 MB. Por eso las descargas diferenciales
+quedan en BACKLOG con su medición hecha, en vez de darse por descartadas.
+
+**Veredicto: opción B.** Conserva el formato de distribución, no toca el arranque, no añade
+dependencias en el binario ni herramientas en CI, y los mensajes de fallo son nuestros y en
+español. Lo que cuesta son unas 600 líneas propias y la descarga completa en cada versión.
+
+*(El repositorio de la prueba —`alloci88/atalaya-velopack-probe`, privado— sigue ahí con las
+Releases que sirvieron de evidencia. Es de usar y tirar: bórralo cuando quieras.)*
+
+### D-737 — Actualizar es una decisión humana, y el momento importa
+
+Ni descargas en segundo plano, ni instalación al arrancar, ni «se actualizará al cerrar». El aviso
+de F8 gana un botón **«Actualizar a X.Y.Z»** y no pasa nada hasta que alguien lo pulsa.
+
+**Con una sesión en curso el botón no aparece.** No avisa, no pregunta, no espera: no se ofrece.
+Interrumpir una auditoría, una verificación o un arreglo tira trabajo **ya pagado** a Copilot, y
+ninguna comodidad vale eso. El cerrojo ya existía —`AgentBusyGate`, de F6.9— así que no hay una
+segunda definición de «ocupado» que pueda desincronizarse de la primera.
+
+Y se mira **dos veces**: al pintar el aviso y otra vez al pulsar. Entre lo uno y lo otro puede
+haber arrancado una sesión, y lo que decide es el estado del momento en que se va a actuar. El
+botón además se recalcula con el mismo evento que ya mueve el rail de navegación, así que una
+sesión que arranca lo retira sin esperar a ningún sondeo.
+
+**Un arreglo abierto sí deja actualizar, pero se dice.** Sus cambios están en el clon, fuera de la
+carpeta de la aplicación, y nadie los toca. Callarlo sería dejar que alguien lo descubriera después
+y se preguntara si se los hemos comido.
+
+**Y por qué NO se puede se enseña siempre.** Un botón que falta sin explicación se lee como un
+fallo del programa; el banner dice cuál de las razones es —sesión en curso, build local, sin
+cuenta, sin `appRepoUrl`, sin relevo—.
+
+### D-738 — El orden de los pasos ES la seguridad
+
+Comprobar que se puede escribir → descargar → **verificar el SHA-256** → descomprimir aparte → y
+solo entonces ceder el relevo. **Nada de la instalación se toca** hasta el último paso: una
+descarga corrupta o cortada se queda en un fichero que se borra, nunca en una aplicación a medio
+sustituir.
+
+**El checksum es obligatorio, no opcional.** El workflow publica `<zip>.sha256` junto al paquete y
+la app lo verifica antes de descomprimir. Si una Release **no** lo trae —las anteriores a F11 no lo
+traen— Atalaya **se niega a instalarla** y manda al camino manual. Instalar «confiando» es
+exactamente lo que este trabajo vino a impedir, y el sufijo que escribe el workflow y el que busca
+la app están atados por un test: es la clase de acuerdo que se rompe en silencio, con la Release
+saliendo bien y el botón dejando de funcionar sin que nada falle.
+
+**El permiso de escritura se comprueba lo primero**, y **escribiendo**: se crea una carpeta y un
+fichero de sonda y se borran. Leer los ACL dice lo que el sistema cree; escribir dice lo que de
+verdad pasa, antivirus incluido. Va delante de todo porque descubrir que no hay permiso *después*
+de bajar 221 MB sería una tomadura de pelo — y el caso es real, cualquiera con Atalaya bajo
+«Archivos de programa».
+
+**Se pide la Release DEL TAG**, no «la última». Entre el aviso y el clic puede haber salido otra
+versión, y bajar algo distinto de lo que el botón prometía es una sorpresa. Por eso
+`UpdateAvailability` lleva ahora el tag literal: la versión parseada sirve para comparar, pero para
+volver a pedirle a GitHub *esa* Release hace falta la cadena tal cual la escribió.
+
+**El adjunto se baja por su id, no por su `browser_download_url`.** Medido contra el repositorio
+privado de la prueba: la URL de navegador devuelve **404 aunque se mande el token**, mientras que
+`/releases/assets/{id}` con `Accept: application/octet-stream` entrega el fichero y el redirect
+automático de `HttpClient` lo resuelve bien. Es la diferencia entre funcionar y no funcionar en un
+repositorio privado, y no se habría visto leyendo la documentación.
+
+### D-739 — El relevo: por qué un ejecutable aparte, y por qué diminuto
+
+Nadie puede reemplazar el ejecutable desde el que se está ejecutando. Así que Atalaya prepara la
+carpeta nueva, **se copia `AtalayaUpdater.exe` a `%LOCALAPPDATA%`** —fuera de lo que se va a
+sustituir—, lo lanza con su propio pid y se cierra. El relevo espera a que el proceso muera, hace
+el cambio y vuelve a abrirla.
+
+**Self-contained en un solo fichero (~12 MB), y no un proyecto referenciado.** Se probó lo
+evidente primero —una `ProjectReference` desde la App— y **no sirve**: el `AtalayaUpdater.exe` que
+sale de ahí necesita su dll, su `runtimeconfig.json` y el runtime… que vive en la carpeta que está
+a punto de reemplazar. Copiado solo, no arranca. Un único fichero self-contained se basta, que es
+el requisito real. El precio son 12 MB sobre un paquete de 221.
+
+**Y no comparte constantes con la aplicación.** Los nombres de las carpetas de trabajo se deciden
+en `SelfUpdateService` y **viajan como argumentos**. Hacerle compartir una constante sería atarlo
+a la versión que lo lanza, y él existe precisamente para cuando esa versión ya no está.
+
+**Enseña una consola a propósito.** Sustituir la carpeta tarda un momento, y en ese momento la
+aplicación no está: sin ventana, el usuario ve Atalaya desaparecer y no volver durante unos
+segundos, que es indistinguible de un cuelgue.
+
+**Espera, no mata.** Hasta 90 s a que el proceso termine, y después hasta 20 s más a que el
+ejecutable se pueda abrir en escritura — Windows suelta los ficheros un instante *después* de que
+el proceso muera, y sin esa segunda espera el primer renombrado falla por «en uso» en una máquina
+lenta. Si pasado el tiempo sigue vivo, **no toca nada** y lo dice.
+
+### D-740 — La sustitución son renombrados, y sabe deshacerse
+
+**Todo son renombrados dentro del mismo volumen, nunca copias.** La carpeta nueva se descomprime
+DENTRO de la instalación (`.atalaya-nuevo`) justamente para eso: mover 460 MB entre volúmenes tarda
+minutos y puede quedarse a medias, mientras que un renombrado en el mismo volumen es instantáneo y
+o pasa o no pasa. Cuanto más corta es la ventana en la que la instalación no está entera, menos
+probable es el desastre.
+
+El cambio son tres pasos: apartar lo viejo a `.atalaya-anterior`, meter lo nuevo, y devolver a su
+sitio el `appsettings.deploy.json` del despliegue (D-735). **Si cualquiera falla, se deshace**:
+primero se retira lo nuevo que se hubiera llegado a poner y después vuelve lo viejo — al revés
+chocarían por el nombre. Los tres finales posibles son *Actualizada*, *Restaurada* e *Intacta*, y
+no hay un cuarto.
+
+Y una vuelta atrás que también falla se **dice**, no se calla: es lo único peor que el fallo
+original.
+
+**Lo viejo no lo borra el relevo.** Se queda en `.atalaya-anterior` y lo borra **la versión nueva,
+en su primer arranque con éxito**. «Se conserva hasta que la nueva arranca bien» solo significa
+algo si quien la borra es la nueva, ya arrancada.
+
+**Lo que esto NO cubre, y se dice (N-2):** si la versión nueva se instala bien pero *no arranca*,
+nada la restaura automáticamente — no hay nadie corriendo que pueda hacerlo. Lo que queda es la
+carpeta `.atalaya-anterior` intacta y una línea en el MANUAL explicando que devolver su contenido
+es la vuelta atrás. Automatizarlo exigiría un vigilante permanente, que es mucho programa para un
+caso que el checksum y la comprobación del ejecutable ya hacen improbable.
+
+### D-741 — El registro vive fuera de las dos versiones
+
+Una actualización cruza **dos procesos y dos versiones distintas**: el intento lo apunta la vieja y
+el desenlace lo apunta la nueva. Así que el registro no puede vivir dentro de ninguna de las dos —
+va a `%LOCALAPPDATA%\Atalaya\updates.jsonl`, una línea de JSON por intento, con versión de origen,
+de destino, resultado y causa del fallo.
+
+JSONL y no un JSON con una lista: añadir es abrir y escribir al final, sin releer ni reescribir,
+así que un corte a mitad pierde como mucho la última línea en vez del registro entero.
+
+Los estados son cuatro, y **`Iniciada` es deliberado**: es la última línea que puede escribir la
+versión vieja. Una `Iniciada` sin desenlace detrás es, por sí sola, el diagnóstico de que el relevo
+nunca llegó a correr — que si no sería un silencio sin explicación.
+
+### D-742 — Los fallos se cuentan en una frase, con su camino de salida
+
+Sin red, sin permisos, antivirus, disco lleno, checksum que no cuadra, Release borrada entre el
+aviso y el clic: cada uno tiene su frase, dice **qué pasó**, dice **que no se ha modificado nada**
+y deja el camino manual de siempre (el enlace a la Release sigue en el banner). Nada de
+`UnauthorizedAccessException` en pantalla.
+
+Y un detalle que salió de la prueba real y no de pensarlo: el progreso de descarga avisaba **14.021
+veces** —una por cada trozo de 80 KB del paquete de 221 MB—, cada una saltando al hilo de la
+interfaz para mover una barra que no se movía. Ahora avisa **por punto porcentual**: 100 avisos.
+Es la clase de defecto que solo aparece cuando se ejecuta con datos de verdad.
+
+### D-743 — La prueba de punta a punta, con Releases privadas de verdad
+
+**El repositorio real no se ve desde esta consola** — ni `gh` con ninguna de sus dos cuentas, ni
+`git ls-remote`: «Repository not found». Es la misma limitación de D-730. Así que la prueba se hizo
+contra un **repositorio privado propio**, con el **mismo mecanismo** de punta a punta:
+
+1. Se compilaron **dos paquetes reales de Atalaya** con el comando exacto del workflow: la 1.0.4 y
+   la 1.0.5, self-contained, estampadas `1.0.4+ec602dc` y `1.0.5+ec602dc` — releases limpias, no
+   builds locales, que es lo que hace que el botón exista.
+2. Se publicó la **1.0.5 como Release privada de verdad** (221,4 MB) con su `.sha256`.
+3. Se instaló la **1.0.4** en una carpeta, con su `appsettings.deploy.json` **editado a mano** con
+   una marca, como haría un despliegue corporativo.
+4. Se **arrancó esa Atalaya de verdad** (proceso 43564, con su ventana abierta) y se disparó la
+   actualización por el camino real: `SelfUpdateService` contra la API de GitHub con un token real.
+5. Descargó los 221 MB, verificó el SHA-256, descomprimió, cedió el relevo, la aplicación se cerró,
+   el relevo sustituyó la carpeta y **la volvió a abrir**.
+
+Lo que quedó, comprobado después:
+
+| Qué se comprobó | Resultado |
+|---|---|
+| Versión instalada | `1.0.4+ec602dc` → **`1.0.5+ec602dc`** |
+| Atalaya corriendo desde la misma carpeta | sí, proceso nuevo |
+| Marca del despliegue en `appsettings.deploy.json` | **conservada** |
+| `auth.dat` (el token) | **byte a byte idéntico** |
+| `machines.json` (los clones vinculados) | **byte a byte idéntico** |
+| `settings.json` (los ajustes) | **byte a byte idéntico** |
+| Clon del hub | 122 ficheros, sin cambios |
+| `.atalaya-anterior` | creada, y **borrada por la 1.0.5 al arrancar** |
+| `.atalaya-nuevo` y `result.json` | retirados |
+| `updates.jsonl` | `Iniciada 1.0.4→1.0.5` y `Completada 1.0.4→1.0.5` |
+
+**Lo que NO se ha ejecutado, y es del usuario.** El workflow, como siempre: Actions solo corre en
+GitHub. Lo que sí se hizo es validar su YAML con un parser, publicar el relevo con su comando
+exacto (12 MB, sin avisos de recorte) y comprobar que arranca copiado solo, y calcular el checksum
+con el mismo `Get-FileHash`. Tampoco se ha visto el botón **pintado**: está probado por su
+view-model y por la plantilla, pero ningún test pinta un píxel — queda para el asiento humano, en
+los dos temas.
+
+### D-744 — Cobertura (45 tests nuevos, 1.467 en total, todo en verde)
+
+De `FolderSwap` (11): la carpeta acaba con la versión nueva; el fichero del despliegue sobrevive;
+la copia de lo anterior se conserva; las carpetas de trabajo no se mueven a sí mismas; un paquete
+sin ejecutable no toca nada; **un fallo inyectado a mitad restaura la instalación entera** —en los
+dos puntos, con lo nuevo a medio poner y con lo nuevo ya puesto—; una instalación restaurada puede
+reintentar; y una copia de un intento anterior no se confunde con la buena.
+
+De `SelfUpdateService` (29): build local, pre-release publicado que **no** es build local, sesión de
+auditoría y de arreglo en curso, sesión terminada, sin cuenta, sin `appRepoUrl`, sin relevo, y
+arreglo abierto que avisa sin impedir. El camino bueno con un zip y un SHA-256 **de verdad**, el
+relevo lanzado desde fuera de la carpeta y con el pid correcto, y el registro con origen y destino.
+Y las negativas: checksum que no cuadra → aborta con la instalación intacta, sin dejar el zip y sin
+ceder el relevo; Release sin checksum; Release sin zip; **sin permiso de escritura, con una ACL de
+denegación real** sobre la carpeta —y no una ruta imposible, porque simularlo probaría otra cosa—;
+sin red; Release borrada entre el aviso y el clic; sesión que arranca después de pintar el botón; y
+el progreso que no inunda la interfaz.
+
+De la tubería de publicación (5): que el workflow siga calculando y adjuntando el checksum, que el
+sufijo sea el mismo en los dos lados, que empaquete el relevo self-contained y compruebe que viaja,
+que `publish.ps1` produzca la misma forma de carpeta, y que el banner ofrezca el botón con su
+progreso y su explicación.

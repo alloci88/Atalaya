@@ -324,8 +324,15 @@ El workflow `.github/workflows/release.yml` hace el resto en `windows-latest`:
 2. **Publica self-contained win-x64** con la versión **del tag** (`-p:Version=1.2.3`), así que el
    binario distribuido no puede mentir sobre el tag que lo produjo — el propio workflow comprueba
    el estampado y falla si no coinciden.
-3. **Comprime** `dist/` como `Atalaya-v1.2.3-win-x64.zip`, con su `appsettings.deploy.json`.
-4. **Crea la Release** del tag con el zip adjunto y las notas que GitHub genera a partir de los
+3. **Añade el relevo de actualización** (`AtalayaUpdater.exe`), publicado aparte como un único
+   fichero self-contained. Es lo que sustituye la carpeta cuando alguien pulsa «Actualizar»: se
+   copia a `%LOCALAPPDATA%` y corre desde fuera de lo que va a reemplazar, así que tiene que
+   bastarse solo. El workflow **falla** si no acaba en `dist/`.
+4. **Comprime** `dist/` como `Atalaya-v1.2.3-win-x64.zip`, con su `appsettings.deploy.json`, y
+   calcula su **`Atalaya-v1.2.3-win-x64.zip.sha256`**. Los dos se adjuntan a la Release: la app
+   verifica el checksum antes de tocar la instalación, y **sin ese fichero se niega a instalar** y
+   manda al camino manual.
+5. **Crea la Release** del tag con los dos adjuntos y las notas que GitHub genera a partir de los
    commits desde el tag anterior (`--generate-notes`). Se pueden pulir a mano en la web después.
 
 No hacen falta secretos: el `GITHUB_TOKEN` del propio workflow basta, y sus permisos son los
@@ -335,8 +342,12 @@ mínimos (`contents: write`).
 la versión (`1.2.3` o `v1.2.3`): el workflow crea el tag él mismo.
 
 **Reintentar es seguro.** El paso de publicación es idempotente: si la Release del tag ya existe
-—creada a mano desde la web, o por un intento anterior que falló más tarde— se le adjunta el zip
-en vez de fallar. El primer fallo nunca deja un tag quemado.
+—creada a mano desde la web, o por un intento anterior que falló más tarde— se le adjuntan el zip
+y su checksum en vez de fallar. El primer fallo nunca deja un tag quemado.
+
+**El formato del paquete no cambia**: sigue siendo «descarga el zip y descomprime donde quieras».
+La actualización desde la app (F11) se construyó sobre ese formato a propósito — se evaluó
+Velopack y se descartó; el veredicto y lo que se probó están en `DECISIONS.md`.
 
 `scripts/publish.ps1` sigue siendo el camino de desarrollo y no lo toca nada de esto.
 
@@ -347,8 +358,10 @@ en vez de fallar. El primer fallo nunca deja un tag quemado.
   («Atalaya 1.3 disponible»).
 - **Major**: cambios que obligan a hacer algo al equipo (migrar el hub, reconectar cuentas).
 
-Sube el `<Version>` de `Directory.Build.props` al mismo número que vas a etiquetar, commitea, y
-entonces etiqueta: así una compilación local de desarrollo se distingue del último publicado.
+**El tag es el único ritual**: no hay que subir ningún número a mano. Desde BUGFIX-VERSION, un
+build local se estampa a partir de `git describe` (`1.2.3-dev.4+abc1234`) y el `<Version>` de
+`Directory.Build.props` es solo el suelo para cuando no hay git con el que preguntar. La versión
+que se distribuye la pone el workflow desde el tag.
 
 ### Firma de código
 

@@ -104,13 +104,13 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 ## Aparcado hasta que la realidad lo pida
 
 - **H9 ampliado**: mejoras sobre la sesión interactiva, según lo que pida el uso real.
-- **Actualización asistida (Velopack) — nivel 3.** Hoy el aviso lleva al navegador y el usuario
-  descarga y reemplaza la carpeta (nivel 2). El nivel 3 sería que Atalaya se actualizara ella
-  misma: Velopack sobre las mismas Releases de GitHub, con delta y reinicio. **No se hace todavía
-  a propósito**: exige cambiar la forma del paquete —de carpeta descomprimible a instalador con
-  su propio directorio gestionado—, y eso solo compensa cuando el reemplazo manual moleste de
-  verdad. Se decidirá cuando el equipo haya vivido dos o tres actualizaciones y sepamos si duele
-  (D-623).
+- **Descargas diferenciales**, si los 221 MB por versión molestan. Hoy cada actualización baja el
+  paquete entero, que es lo mismo que ya se bajaba a mano. La medición está hecha: 221 MB por
+  Release, y de una versión a la siguiente cambian unos pocos MB. Velopack lo resolvería —sus
+  deltas funcionan, se probaron— pero traía consigo cambiar el formato del paquete, un segundo
+  origen de la versión y borrar el `appsettings.deploy.json` del despliegue en cada actualización
+  (F11, D-736). **Se decide cuando alguien se queje del tiempo de descarga**, y no antes.
+
 - **Migrar el diff a DiffPlex** si el artesanal falla en los casos finos —cambios intra-línea,
   ficheros grandes, encodings—. Decidido de antemano y sin debate (D-552).
 - **Pasadas con «lentes» por pilar**, solo si los barridos siguen dejando hallazgos.
@@ -122,6 +122,20 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **F11 · Actualizar desde la propia app** — el aviso de versión gana un botón **«Actualizar a
+  X.Y.Z»**: descarga el zip de la Release con el token de cuenta que ya hay, verifica su
+  **SHA-256** (que el workflow publica junto al paquete), lo descomprime aparte y solo entonces
+  cede el relevo a un ejecutable auxiliar que sustituye la carpeta y relanza Atalaya. Nada
+  automático: no descarga en segundo plano, no instala al arrancar, no se ofrece con una sesión en
+  curso ni en un build local (D-737, D-738). **Velopack se evaluó de verdad** —contra una Release
+  privada real, no sobre la documentación— y se descartó por lo que le hacía al paquete, no por lo
+  que no sabía hacer (D-736). Los datos del usuario ya estaban fuera de la carpeta desde el primer
+  día, así que no hubo nada que migrar; lo que sí vive dentro y ahora se conserva es el
+  `appsettings.deploy.json` del despliegue (D-735, D-739). La sustitución son renombrados en el
+  mismo volumen, con vuelta atrás automática si falla a mitad y la versión anterior guardada hasta
+  que la nueva arranca (D-740). Probado de punta a punta con dos paquetes reales y una Release
+  privada de verdad (D-743).
 
 - **BUGFIX-VERSION · «Acerca de» decía 1.0.0 y enlazaba a un 404** — un build local se estampa ahora
   desde `git describe` como `1.0.3-dev+<sha>` y se lee como «build local», así que no puede

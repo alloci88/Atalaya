@@ -21,8 +21,9 @@ algo está hecho como está, `DECISIONS.md`.
    > **La primera vez, Windows avisa.** «Windows protegió su PC»: el ejecutable no está firmado
    > todavía. Pulsa **Más información** → **Ejecutar de todas formas**. Solo pasa la primera vez.
 
-   Para **actualizar**: cierra Atalaya, descarga el zip nuevo y reemplaza la carpeta. Tus datos no
-   están ahí —viven en `%LOCALAPPDATA%\Atalaya` y en el hub—, así que no se pierde nada.
+   Para **actualizar** no hace falta nada de esto: cuando salga una versión nueva, Atalaya te
+   avisa y se actualiza sola con un botón (ver «Actualizar Atalaya», más abajo). El reemplazo a
+   mano sigue funcionando, y es la salida cuando el botón no puede.
 
 2. **Cuenta.** La primera vez aterrizas aquí. Pulsa **Conectar con GitHub**, escribe
    el código que te muestra en `github.com/login/device` y autoriza. Ese login sirve
@@ -566,18 +567,64 @@ tarjeta no puede estar mintiéndole al equipo el resto del día. Mejor no decir 
 
 ## Cosas que conviene saber
 
-**Aviso de versión nueva.** Al arrancar, Atalaya pregunta a GitHub si hay una versión más
-reciente que la tuya —como mucho una vez al día, sin retrasar nada y con el token de la cuenta
-que ya tienes conectada—. Si la hay, aparece un **banner discreto** encima de la página:
+**Actualizar Atalaya.** Al arrancar, Atalaya pregunta a GitHub si hay una versión más reciente
+que la tuya —como mucho una vez al día, sin retrasar nada y con el token de la cuenta que ya
+tienes conectada—. Si la hay, aparece un **banner discreto** encima de la página con tres cosas:
 
+- **Actualizar a X.Y.Z** — descarga la versión nueva, comprueba que llegó entera, sustituye la
+  carpeta y vuelve a abrir Atalaya ya actualizada. Ves la descarga avanzar mientras pasa.
 - **Ver novedades** abre la página de la versión en el navegador, con sus notas y su zip.
 - **Descartar** lo quita. No vuelve a avisar de esa versión; de la siguiente sí.
 
-**Atalaya no se actualiza sola** y no descarga nada por su cuenta: cierras, descargas el zip y
-reemplazas la carpeta. Tus datos no están ahí, así que no se pierde nada.
+**Nunca se actualiza sola.** No descarga nada por su cuenta, no instala al arrancar y no «se
+actualizará al cerrar». Pasa cuando pulsas el botón, y no antes.
 
-Si no hay red, si el token ya no vale o si GitHub no contesta, no pasa nada: queda anotado en el
-log y no se enseña nada. Un chequeo de cortesía no puede molestar por fallar.
+**Qué pasa exactamente al pulsar.** Se descarga el zip de la Release, se comprueba su
+**checksum SHA-256** —el que publica el propio workflow junto al paquete—, se descomprime aparte,
+y solo entonces Atalaya se cierra para que un programa auxiliar sustituya la carpeta y la vuelva
+a abrir. Verás una ventana de consola durante unos segundos: es ese relevo, y va diciendo lo que
+hace. **Hasta que el paquete no está descargado y verificado no se toca nada** de tu instalación.
+
+**Tus datos no se tocan, nunca.** Los ajustes, tu cuenta, los clones vinculados y el hub viven en
+`%LOCALAPPDATA%\Atalaya`, fuera de la carpeta de la aplicación. Lo que sí vive dentro y también
+se conserva es el `appsettings.deploy.json` de tu instalación, si alguien lo editó: la
+actualización lo devuelve a su sitio en vez de pisarlo con el de fábrica. Si una versión nueva
+trae ajustes nuevos en ese fichero, quien preparó la instalación tendrá que añadirlos a mano.
+
+**La versión anterior se guarda** en `.atalaya-anterior`, dentro de la carpeta, y **no se borra
+hasta que la nueva arranca bien**. Si la sustitución falla a mitad, se deshace sola y sigues con
+la de antes, entera, y se te dice qué pasó. Y si la nueva se instalara pero no llegara a arrancar,
+esa carpeta es la vuelta atrás: devuelve su contenido a la carpeta principal.
+
+**Cuándo NO aparece el botón** —y el banner dice cuál de éstas es—:
+
+- **Hay una sesión en curso**: auditoría, verificación o arreglo asistido. Actualizar la cortaría,
+  y eso tira trabajo ya pagado a Copilot. Termina o detén la sesión y el botón vuelve.
+- **Es un build local**, de los que en «Acerca de» aparecen como `· build local`. Ésos se
+  actualizan recompilando.
+- **No hay cuenta conectada**, o el despliegue no declara `appRepoUrl`.
+- **Falta `AtalayaUpdater.exe`** en tu carpeta: un paquete incompleto no puede sustituirse solo.
+
+Si tienes un **arreglo abierto**, el botón sí aparece, con un aviso: sus cambios están en el clon,
+fuera de la carpeta de la aplicación, y la actualización no los toca.
+
+**Cuando algo falla** se dice qué fue, y te queda el camino de siempre (**Ver novedades** →
+descargar el zip a mano):
+
+| Qué pasa | Qué verás |
+|---|---|
+| Sin red, o con el proxy cortando | «No hay conexión con github.com…» |
+| Sin permiso de escritura en la carpeta (típico bajo `Archivos de programa`) | «No se puede escribir en la carpeta de Atalaya…», con la ruta |
+| La descarga llegó corrupta o a medias | «El paquete descargado no coincide con su checksum… No se ha modificado nada.» |
+| La Release no publica checksum (las anteriores a esta versión) | «…no se puede verificar lo descargado. Descárgala a mano si te fías de ella.» |
+| Un antivirus retiene el ejecutable | «El ejecutable de Atalaya sigue bloqueado por otro programa…» |
+
+Cada intento queda anotado en `%LOCALAPPDATA%\Atalaya\updates.jsonl` —de qué versión, a cuál,
+cómo acabó y por qué si falló—, que es lo que hay que mirar cuando alguien pregunta por qué sigue
+en la versión de antes.
+
+Si el **chequeo** de versión falla (sin red, token caducado, GitHub caído), no pasa nada: queda
+anotado en el log y no se enseña nada. Un chequeo de cortesía no puede molestar por fallar.
 
 La versión que tienes está en **Ajustes → Acerca de Atalaya**.
 
