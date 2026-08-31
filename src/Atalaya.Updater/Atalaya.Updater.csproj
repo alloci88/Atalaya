@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- F11 — El relevo que sustituye la carpeta mientras Atalaya no corre.
+
+       Es un ejecutable APARTE y diminuto por una razón física: nadie puede reemplazar el
+       ejecutable desde el que se está ejecutando. Atalaya prepara la carpeta nueva, arranca este
+       relevo desde %LOCALAPPDATA% —fuera de lo que se va a sustituir— y se cierra; el relevo
+       espera a que el proceso muera, hace el cambio y vuelve a lanzarla.
+
+       Se publica self-contained: corre en una máquina donde el runtime .NET 8 no está instalado,
+       que es exactamente el caso de quien recibió el zip self-contained de una Release. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>AtalayaUpdater</AssemblyName>
+    <RootNamespace>Atalaya.Updater</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <TrimMode>partial</TrimMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- El motor del cambio (FolderSwap) se prueba desde los tests de la App: es la pieza que no
+         puede fallar, y probarla lanzando procesos sería probar el sistema operativo. -->
+    <InternalsVisibleTo Include="Atalaya.App.Tests" />
+  </ItemGroup>
+
+</Project>

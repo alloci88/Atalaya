@@ -19,6 +19,8 @@
     <ProjectReference Include="..\..\src\Atalaya.App\Atalaya.App.csproj" />
     <ProjectReference Include="..\..\src\Atalaya.Storage\Atalaya.Storage.csproj" />
     <ProjectReference Include="..\..\src\Atalaya.Domain\Atalaya.Domain.csproj" />
+    <!-- F11: el motor del cambio de carpeta se prueba aqui, no lanzando procesos. -->
+    <ProjectReference Include="..\..\src\Atalaya.Updater\Atalaya.Updater.csproj" />
   </ItemGroup>
 
 </Project>
