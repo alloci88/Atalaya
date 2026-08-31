@@ -99,7 +99,9 @@ public static class ReportBuilder
 
         SessionCounters cn = session.Counters;
         int total = cn.New + cn.Confirmed + cn.Resolved + cn.SilencedRespected + cn.NoVerificables;
-        double criterioPct = total == 0 ? 0 : 100.0 * newFindings.Count(f => f.Tag == FindingTag.Criterio) / Math.Max(1, newFindings.Count);
+        // BUGFIX-REDONDEO: se guardan los ENTEROS, no el porcentaje ya calculado. 1 de 500 es
+        // «0,2 %», no «0%» — y el informe es justo donde peor sienta un número redondeado a nada.
+        int criterioShare = newFindings.Count(f => f.Tag == FindingTag.Criterio);
         sb.AppendLine("## Resumen de hallazgos");
         sb.AppendLine($"- Nuevos: {cn.New}  · Confirmados: {cn.Confirmed}  · Resueltos: {cn.Resolved}"
             + $"  · Silenciados respetados: {cn.SilencedRespected}");
@@ -150,7 +152,7 @@ public static class ReportBuilder
             sb.AppendLine($"- ⚠ Unidades incompletas: {incompletas.Count}"
                 + $" ({incompletas.Sum(u => u.MissingVerdicts)} hallazgo(s) sin veredicto del auditor, intactos)");
         }
-        sb.AppendLine(Culture, $"- % criterio (informativo): {criterioPct:0}%");
+        sb.AppendLine($"- % criterio (informativo): {PercentText.Of(criterioShare, newFindings.Count)}");
         if (cn.Rejected > 0)
         {
             sb.AppendLine($"- ⚠ Payloads rechazados por validación: {cn.Rejected}");

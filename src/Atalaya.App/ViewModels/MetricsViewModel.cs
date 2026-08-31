@@ -370,7 +370,10 @@ public sealed partial class MetricsViewModel : ViewModelBase
                   + $"({d.UnitsAuditedInPeriod} en el periodo)"
                 : "Sin unidades auditadas en el periodo";
 
-        CyclePct = d.HasCycleData ? d.CyclePct.ToString("0%", CultureInfo.CurrentCulture) : Unknown;
+        // BUGFIX-REDONDEO: con los enteros, para que 3 de 1.335 no se enseñe como «0 %».
+        CyclePct = d.HasCycleData
+            ? PercentText.Of(d.CycleAudited, d.CycleAudited + d.CyclePending)
+            : Unknown;
         CycleDetail = d.HasCycleData
             ? $"{d.CycleAudited} de {d.CycleAudited + d.CyclePending} unidades auditables"
               + (d.CycleLarge > 0 ? $" · {d.CycleLarge} grandes excluidas" : string.Empty)
@@ -481,7 +484,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
                 donut.Slug,
                 donut.Name,
                 $"Ciclo {donut.Cycle}",
-                donut.Pct.ToString("0%", CultureInfo.CurrentCulture),
+                PercentText.Of(donut.Audited, donut.Audited + donut.Pending),
                 $"{donut.Audited} auditadas · {donut.Pending} pendientes"
                 + (donut.Large > 0 ? $" · {donut.Large} grandes" : string.Empty),
                 segments,
@@ -517,7 +520,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
                     count,
                     Brush(SeverityPalette.Hex(severity)),
                     $"{label} — {(count == 1 ? "1 hallazgo" : $"{count} hallazgos")} "
-                    + $"({(double)count / donut.Total:0%})",
+                    + $"({PercentText.Of(count, donut.Total)})",
                     new SeveritySlice(donut.Slug, severity)));
             }
 

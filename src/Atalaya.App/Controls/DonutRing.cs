@@ -1,5 +1,6 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
+using Atalaya.App.Services;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -108,6 +109,22 @@ public sealed class DonutRing : Canvas
         set => SetValue(SegmentCommandProperty, value);
     }
 
+    /// <summary>
+    /// Lo mínimo que se dibuja de un tramo que EXISTE (BUGFIX-REDONDEO).
+    /// <para>
+    /// Un tramo diminuto no puede quedarse en nada —ni por su propio tamaño ni por el aire entre
+    /// tramos—: «3 auditadas de 1.335» son 0,8° y sin suelo se verían igual que un rosco vacío,
+    /// que significa lo contrario. Dos grados es lo que se distingue de lejos a 108 px, que es el
+    /// tamaño pequeño de la fila.
+    /// </para>
+    /// <para>
+    /// El coste es una distorsión de grado y medio en el tramo más pequeño, y se acepta: el rosco
+    /// está para decir «hay algo» de un vistazo, y el número exacto vive en el centro y en el
+    /// tooltip. Vale para las DOS filas —cobertura y severidad— porque el problema es el mismo.
+    /// </para>
+    /// </summary>
+    public const double MinimumSweepDegrees = 2.0;
+
     public DonutRing() => SizeChanged += (_, _) => Rebuild();
 
     private static void OnVisualChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -175,9 +192,7 @@ public sealed class DonutRing : Canvas
         foreach (DonutSegment segment in segments)
         {
             double share = 360 * segment.Value / total;
-            // Un tramo minúsculo no puede quedarse en nada por culpa del aire: se le deja al
-            // menos un grado, que es lo que hace que «1 crítica de 400» siga viéndose.
-            double sweep = Math.Max(1, share - gap);
+            double sweep = Math.Max(MinimumSweepDegrees, share - gap);
             Children.Add(Arc(centre, radius, thickness, angle, sweep, segment, total));
             angle += share;
         }
@@ -253,7 +268,11 @@ public sealed class DonutRing : Canvas
         return new Point(centre.X + radius * Math.Cos(rad), centre.Y + radius * Math.Sin(rad));
     }
 
-    /// <summary>El tooltip dice el tramo, cuántas unidades y qué parte del total son.</summary>
+    /// <summary>
+    /// El tooltip dice el tramo, cuántas unidades y qué parte del total son. El porcentaje pasa por
+    /// el formateador común (BUGFIX-REDONDEO): un tramo de 3 sobre 1.335 decía «(0 %)» dentro del
+    /// mismo tooltip que ya estaba enseñando el 3.
+    /// </summary>
     private static string Tip(DonutSegment segment, double total)
-        => $"{segment.Name}: {segment.Value:0} de {total:0} ({segment.Value / total:0%})";
+        => $"{segment.Name}: {segment.Value:0} de {total:0} ({PercentText.Of(segment.Value / total)})";
 }

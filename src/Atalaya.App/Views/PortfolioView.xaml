@@ -107,7 +107,7 @@
                                     <TextBlock Text="Ciclo " Opacity="0.6" />
                                     <TextBlock Text="{Binding CurrentCycle}" FontWeight="SemiBold" />
                                     <TextBlock Text="  ·  " Opacity="0.4" />
-                                    <TextBlock Text="{Binding Progress, Converter={StaticResource ProgressToPercent}}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding ProgressText}" FontWeight="SemiBold" />
                                     <TextBlock Text=" auditado" Opacity="0.6" />
                                 </StackPanel>
                                 <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}" Height="6" Margin="0,6,0,0" />

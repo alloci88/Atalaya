@@ -163,7 +163,7 @@ public sealed class CheckStateToBrushConverter : IValueConverter
 public sealed class ProgressToPercentConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => value is double d ? $"{d * 100:0}%" : "0%";
+        => value is double d ? PercentText.Of(d) : PercentText.Of(0);
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();

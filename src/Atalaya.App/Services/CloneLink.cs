@@ -1,4 +1,4 @@
-using Atalaya.Domain.Hashing;
+﻿using Atalaya.Domain.Hashing;
 using Atalaya.Domain.Model;
 using Atalaya.Inventory;
 using Atalaya.Storage.Sync;
@@ -307,11 +307,11 @@ public sealed class CloneLinkService
         {
             progress?.Report(p.TotalObjects <= 0
                 ? "Descargando…"
-                : $"Descargando… {p.ReceivedObjects * 100 / p.TotalObjects} %");
+                : $"Descargando… {PercentText.Of(p.ReceivedObjects, p.TotalObjects)}");
             return true;
         };
         options.OnCheckoutProgress = (_, done, total) =>
-            progress?.Report(total <= 0 ? "Extrayendo…" : $"Extrayendo… {done * 100 / total} %");
+            progress?.Report(total <= 0 ? "Extrayendo…" : $"Extrayendo… {PercentText.Of(done, total)}");
 
         Repository.Clone(app.RepoUrl, target, options);
         progress?.Report("Clon terminado. Vinculando…");

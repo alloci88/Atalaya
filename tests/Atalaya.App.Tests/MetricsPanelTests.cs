@@ -565,8 +565,11 @@ public sealed class MetricsPanelTests : IDisposable
         await vm.LoadAsync();
 
         IReadOnlyList<DonutSegment> segments = vm.SeverityCards.Single().Segments;
-        segments[0].Tooltip.Should().Be("Alta — 3 hallazgos (75%)");
-        segments[1].Tooltip.Should().Be("Baja — 1 hallazgo (25%)", "uno en singular");
+        // BUGFIX-REDONDEO: el porcentaje del tooltip lo escribe el formateador común, así que se
+        // compara contra ÉL y no contra un literal — que además llevaría el separador de esta
+        // máquina y no el de la aplicación.
+        segments[0].Tooltip.Should().Be($"Alta — 3 hallazgos ({PercentText.Of(3, 4)})");
+        segments[1].Tooltip.Should().Be($"Baja — 1 hallazgo ({PercentText.Of(1, 4)})", "uno en singular");
     }
 
     /// <summary>Una leyenda para toda la fila, no una por rosco: las cuatro son siempre las mismas.</summary>

@@ -27,6 +27,14 @@ public sealed record AppCard(
     private readonly CloneLink? _link;
 
     /// <summary>
+    /// «Ciclo 2 · 0,2 % auditado» (BUGFIX-REDONDEO). Se calcula con los ENTEROS y no con
+    /// <see cref="Progress"/>: los extremos tienen que decidirse contando unidades, no
+    /// preguntándole a un <c>double</c> si 0,99925 «es uno». Sin auditable que repartir devuelve
+    /// «—», que es lo honesto: sin denominador no hay proporción, y un 0 % ahí sería inventado.
+    /// </summary>
+    public string ProgressText => PercentText.Of(AuditedUnits, TotalUnits - LargeUnits);
+
+    /// <summary>
     /// Si esta máquina tiene el clon de la app (F5.8 §1). No sale de la consulta —el hub no sabe
     /// nada de las rutas locales de nadie, y no debe (§4)—: lo pone el view-model del portafolio
     /// leyendo <c>machines.json</c>, que es por-máquina. Sin ponerlo, una tarjeta dice lo mismo
