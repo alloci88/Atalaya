@@ -186,6 +186,13 @@
                           VerticalAlignment="Center" Margin="0,0,14,0" FontSize="12"
                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                           ToolTip="Por defecto se compila solo el proyecto de los ficheros tocados y sus tests, que es lo que el veredicto puede atribuir al cambio. Marcando esto se compila la solución entera y los errores se cuentan contra una línea base del mismo commit." />
+                <!-- BUGFIX-CIERRE: archivar la pantalla del arreglo. Va DESPUES de «Descartar
+                     todo» y con apariencia neutra a proposito: son gestos distintos y el
+                     destructivo es el otro. -->
+                <ui:Button Content="Cerrar" Command="{Binding CloseCommand}" Appearance="Secondary"
+                           Margin="0,0,8,0"
+                           ToolTip="Archiva esta pantalla y vuelve al hallazgo. No revierte nada: si el agente dejo ficheros tocados, te pregunta que hacer con ellos."
+                           Visibility="{Binding CanClose, Converter={StaticResource BoolToVisibility}}" />
                 <ui:Button Content="Detener" Command="{Binding StopCommand}" Appearance="Caution"
                            ToolTip="Para al agente. Lo que ya haya aplicado se queda."
                            Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />

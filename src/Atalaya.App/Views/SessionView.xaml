@@ -24,6 +24,12 @@
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <ui:Button Content="Detener" Command="{Binding StopCommand}" Appearance="Danger"
                            Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
+                <!-- BUGFIX-CIERRE: una sesion terminada se puede ARCHIVAR. Antes se quedaba fija en
+                     el rail, sin salida, ocupando una entrada para siempre. Y solo en lo terminal:
+                     mientras corre, el boton de al lado es «Detener», que es otra cosa. -->
+                <ui:Button Content="Cerrar" Command="{Binding CloseCommand}" Appearance="Secondary"
+                           ToolTip="Archiva esta pantalla: desaparece del menu lateral y vuelves al Portafolio. No borra nada — la sesion, sus hallazgos y su informe siguen en el hub."
+                           Visibility="{Binding CanClose, Converter={StaticResource BoolToVisibility}}" />
             </StackPanel>
         </Grid>
 

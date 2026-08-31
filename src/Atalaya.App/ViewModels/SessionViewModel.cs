@@ -130,6 +130,13 @@ public sealed partial class SessionViewModel : ViewModelBase
     public bool IsRunning => _live.IsRunning;
 
     /// <summary>
+    /// «Cerrar» solo existe en lo TERMINAL (BUGFIX-CIERRE). Mientras la sesión corre lo que hay es
+    /// «Detener», que es otra cosa: archivar una sesión viva la dejaría corriendo sin ninguna
+    /// pantalla que la enseñe, que es el zombi que F5.15 vino a matar.
+    /// </summary>
+    public bool CanClose => !_live.IsRunning && _live.HasSession;
+
+    /// <summary>
     /// Navegar NO ejecuta trabajo. La vista se repinta desde el estado del servicio, que es lo que
     /// hace que volver a V5 a mitad de sesion enseñe la sesion al dia.
     /// </summary>
@@ -141,6 +148,28 @@ public sealed partial class SessionViewModel : ViewModelBase
 
     [RelayCommand]
     private void Stop() => _live.Stop();
+
+    /// <summary>
+    /// Archiva la pantalla y vuelve al Portafolio (BUGFIX-CIERRE). Una sesión fallida se quedaba
+    /// fija en el rail, sin salida, ocupando sitio para siempre.
+    /// <para>
+    /// No borra nada: el registro de la sesión, sus hallazgos y su informe siguen en el hub, y el
+    /// informe se lee donde se leen todos.
+    /// </para>
+    /// </summary>
+    [RelayCommand]
+    private async Task Close()
+    {
+        if (!_live.Close())
+        {
+            return;
+        }
+
+        if (_navigation is not null)
+        {
+            await _navigation.NavigateToAsync<PortfolioViewModel>();
+        }
+    }
 
     /// <summary>
     /// Lleva a Ajustes, que es donde se elige el modelo. Es la mitad accionable del mensaje de
@@ -237,6 +266,7 @@ public sealed partial class SessionViewModel : ViewModelBase
         OnPropertyChanged(nameof(FailureDetail));
         OnPropertyChanged(nameof(HasFailureDetail));
         OnPropertyChanged(nameof(IsRunning));
+        OnPropertyChanged(nameof(CanClose));
         OnPropertyChanged(nameof(CriticalCount));
         OnPropertyChanged(nameof(HighCount));
         OnPropertyChanged(nameof(MediumCount));

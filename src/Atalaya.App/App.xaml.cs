@@ -177,6 +177,10 @@ public partial class App : Application
         services.AddSingleton(sp => new BuildRunner(
             timeout: TimeSpan.FromMinutes(Math.Max(1, sp.GetRequiredService<SettingsService>().Current.CopilotTimeoutMinutes))));
         services.AddSingleton<IFixDiscardConfirmer, FixDiscardDialogConfirmer>();
+
+        // BUGFIX-CIERRE: cerrar la pantalla y descartar los cambios son preguntas distintas, con
+        // respuestas distintas. Cada una tiene su confirmador.
+        services.AddSingleton<IFixCloseConfirmer, FixCloseDialogConfirmer>();
         services.AddSingleton(sp => new LiveFixService(
             sp.GetRequiredService<HubContext>(),
             sp.GetRequiredService<ICopilotAgent>(),

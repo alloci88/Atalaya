@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Copilot;
@@ -683,6 +683,137 @@ public sealed class AssistedFixTests : IDisposable
         vm.DiscardAllCommand.Execute(null);
         File.ReadAllText(Path.Combine(_clone, UnitPath)).Should().Contain("var bytes");
         fix.Files.Should().BeEmpty();
+    }
+
+    // ================================================================= BUGFIX-CIERRE · cerrar
+
+    /// <summary>
+    /// Cerrar NO es descartar. Con ficheros tocados se pregunta, y conservar es lo normal: son del
+    /// usuario y su árbol es suyo. La pantalla se va; el clon se queda como está.
+    /// </summary>
+    [Fact]
+    public async Task Cerrar_con_cambios_pregunta_y_conservar_deja_el_clon_intacto()
+    {
+        LiveFixService fix = await FinishedFix();
+        var closer = new ScriptedClose(FixCloseChoice.ConservarYCerrar);
+        var vm = new AssistedFixViewModel(fix, _toasts, new ScriptedDiscard(answer: false),
+            closeConfirmer: closer);
+
+        fix.HasPendingChanges.Should().BeTrue();
+        vm.CanClose.Should().BeTrue();
+
+        vm.CloseCommand.Execute(null);
+
+        closer.Asked.Should().ContainSingle("hay cambios: hay que preguntar");
+        File.ReadAllText(Path.Combine(_clone, UnitPath)).Should().Contain("var octets",
+            "conservar significa conservar: cerrar una pantalla no toca el árbol de nadie");
+        fix.HasSession.Should().BeFalse("y la entrada del rail se va");
+        fix.HasPendingChanges.Should().BeFalse("Atalaya deja de ofrecerse a revertir lo que ya es suyo");
+    }
+
+    /// <summary>Y descartar-y-cerrar pasa por el MISMO camino de «Descartar todo».</summary>
+    [Fact]
+    public async Task Cerrar_descartando_revierte_y_luego_cierra()
+    {
+        LiveFixService fix = await FinishedFix();
+        var vm = new AssistedFixViewModel(fix, _toasts, new ScriptedDiscard(answer: true),
+            closeConfirmer: new ScriptedClose(FixCloseChoice.DescartarYCerrar));
+
+        vm.CloseCommand.Execute(null);
+
+        File.ReadAllText(Path.Combine(_clone, UnitPath)).Should().Contain("var bytes");
+        fix.HasSession.Should().BeFalse();
+    }
+
+    /// <summary>Cancelar no cierra nada, que es lo que significa cancelar.</summary>
+    [Fact]
+    public async Task Cancelar_al_cerrar_deja_la_pantalla_donde_estaba()
+    {
+        LiveFixService fix = await FinishedFix();
+        var vm = new AssistedFixViewModel(fix, _toasts, new ScriptedDiscard(answer: false),
+            closeConfirmer: new ScriptedClose(FixCloseChoice.Cancelar));
+
+        vm.CloseCommand.Execute(null);
+
+        fix.HasSession.Should().BeTrue();
+        File.ReadAllText(Path.Combine(_clone, UnitPath)).Should().Contain("var octets");
+    }
+
+    /// <summary>
+    /// Sin cambios que conservar, cerrar es directo y sin preguntas — que es exactamente el caso
+    /// del parte: el arreglo fallido por cuota no había tocado un solo fichero, y la propia
+    /// pantalla lo decía.
+    /// </summary>
+    [Fact]
+    public async Task Un_arreglo_fallido_sin_tocar_nada_se_cierra_sin_preguntar()
+    {
+        LiveFixService fix = Service(new FakeCopilotAgent(fixScript: _ =>
+            throw new CopilotProviderException(
+                CopilotHelp.QuotaExhausted("mensual"), AgentProblem.QuotaExhausted, "crudo")));
+
+        await fix.StartAsync(new FixSessionRequest(Slug, _findingId));
+
+        var closer = new ScriptedClose(FixCloseChoice.Cancelar);
+        var vm = new AssistedFixViewModel(fix, _toasts, new ScriptedDiscard(answer: false),
+            closeConfirmer: closer);
+
+        fix.HasFailed.Should().BeTrue();
+        fix.HasPendingChanges.Should().BeFalse("el agente no llegó a escribir nada");
+        vm.CanClose.Should().BeTrue();
+
+        vm.CloseCommand.Execute(null);
+
+        closer.Asked.Should().BeEmpty("no hay nada que preguntar: no se tocó ningún fichero");
+        fix.HasSession.Should().BeFalse("y la pantalla deja de ocupar una entrada del rail");
+    }
+
+    /// <summary>Un arreglo terminado con éxito y sin cambios vivos también se archiva.</summary>
+    [Fact]
+    public async Task Cerrar_no_borra_el_informe_del_arreglo()
+    {
+        LiveFixService fix = await FinishedFix();
+        string sessionId = fix.SessionId;
+
+        fix.Close(keepChanges: true).Should().BeTrue();
+
+        _hub.Store.ListSessions(Slug).Should().Contain(s => s.Id.ToString() == sessionId,
+            "cerrar quita la pantalla de en medio, no borra historia");
+    }
+
+    /// <summary>Un arreglo con cambios NO se cierra sin que alguien lo haya decidido.</summary>
+    [Fact]
+    public async Task Con_cambios_vivos_no_se_cierra_por_las_buenas()
+        => (await FinishedFix()).Close(keepChanges: false).Should().BeFalse(
+            "sería quitar de la vista el único camino al descarte");
+
+    /// <summary>Una sesión de arreglo TERMINADA con su edición aplicada, lista para cerrar.</summary>
+    private async Task<LiveFixService> FinishedFix()
+    {
+        var agent = new FakeCopilotAgent(fixScript: _ => new[]
+        {
+            new FixStep(Edit: new FixStepEdit(UnitPath, "arregla",
+                new[] { new FixEdit("var bytes", "var octets") })),
+            new FixStep(Done: new FixDoneArgs("hecho", "Arregla (BUG-0003)", "", null)),
+        });
+
+        LiveFixService fix = Service(agent);
+        await fix.StartAsync(new FixSessionRequest(Slug, _findingId));
+        return fix;
+    }
+
+    private sealed class ScriptedClose : IFixCloseConfirmer
+    {
+        private readonly FixCloseChoice _choice;
+
+        public ScriptedClose(FixCloseChoice choice) => _choice = choice;
+
+        public List<IReadOnlyList<string>> Asked { get; } = new();
+
+        public FixCloseChoice Ask(IReadOnlyList<string> files)
+        {
+            Asked.Add(files);
+            return _choice;
+        }
     }
 
     // ================================================================= F9 §2 · la huella del arreglo

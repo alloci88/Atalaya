@@ -612,6 +612,59 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             : title[..(CommitSuggestion.MaxTitleLength - 1)] + "…";
     }
 
+    /// <summary>
+    /// ARCHIVA un arreglo terminado (BUGFIX-CIERRE). Quita la pantalla de en medio; no toca el
+    /// clon ni el historial.
+    /// <para>
+    /// <b>Cerrar no es descartar.</b> «Descartar todo» revierte lo que el agente escribió; esto
+    /// solo retira la pantalla. Si quedaban cambios y el usuario decide conservarlos, se sueltan de
+    /// la contabilidad de Atalaya —<paramref name="keepChanges"/>—: a partir de ahí son suyos y de
+    /// su árbol, y la aplicación deja de ofrecerse a revertirlos.
+    /// </para>
+    /// </summary>
+    /// <param name="keepChanges">
+    /// El usuario ya ha dicho que conserva los ficheros modificados. Sin esto, un arreglo con
+    /// cambios vivos NO se cierra: sería quitar de la vista el único camino al descarte.
+    /// </param>
+    public bool Close(bool keepChanges = false)
+    {
+        if (IsRunning || !HasSession)
+        {
+            return false;
+        }
+
+        if (HasPendingChanges && !keepChanges)
+        {
+            return false;
+        }
+
+        if (HasPendingChanges)
+        {
+            // Los cambios se quedan en el clon, y Atalaya deja de considerarlos suyos: cerrar el
+            // conjunto es exactamente decir «esto ya no lo revierto yo». Es el MISMO gesto que
+            // «Dar por bueno» — no se estrena un segundo camino para lo mismo.
+            if (_set is not null)
+            {
+                _snapshots.Close(_set);
+            }
+        }
+
+        OnUi(() =>
+        {
+            Conversation.Clear();
+            Files.Clear();
+        });
+
+        HasFinished = false;
+        HasFailed = false;
+        FailureMessage = string.Empty;
+        FailureDetail = string.Empty;
+        FailureOffersModelChange = false;
+        StatusMessage = string.Empty;
+        Changed?.Invoke();
+        return true;
+    }
+
     private void Fail(string message, bool offersModelChange, string? detail = null)
     {
         FailureMessage = message;

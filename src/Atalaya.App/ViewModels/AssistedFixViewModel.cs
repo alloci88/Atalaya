@@ -34,6 +34,7 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
 {
     private readonly LiveFixService _fix;
     private readonly NavigationService? _navigation;
+    private readonly IFixCloseConfirmer _closeConfirmer;
     private readonly ToastCenter _toasts;
     private readonly EditorLauncher? _editor;
     private readonly IFixDiscardConfirmer _confirmer;
@@ -44,11 +45,13 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
         ToastCenter toasts,
         IFixDiscardConfirmer confirmer,
         NavigationService? navigation = null,
-        EditorLauncher? editor = null)
+        EditorLauncher? editor = null,
+        IFixCloseConfirmer? closeConfirmer = null)
     {
         _fix = fix;
         _toasts = toasts;
         _confirmer = confirmer;
+        _closeConfirmer = closeConfirmer ?? new KeepOnClose();
         _navigation = navigation;
         _editor = editor;
 
@@ -305,6 +308,70 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
         OnFixChanged();
     }
 
+    /// <inheritdoc cref="SessionViewModel.CanClose"/>
+    public bool CanClose => !_fix.IsRunning && _fix.HasSession;
+
+    /// <summary>
+    /// Archiva la pantalla y vuelve a la ficha del hallazgo (BUGFIX-CIERRE) — que es de donde se
+    /// salió y donde está lo siguiente que hacer con él: verificar.
+    /// <para>
+    /// <b>Cerrar no es descartar.</b> Si el agente dejó ficheros modificados se pregunta, y
+    /// conservarlos es lo normal: son del usuario y su árbol es suyo. Sin cambios, cierra directo
+    /// y sin preguntas.
+    /// </para>
+    /// </summary>
+    [RelayCommand]
+    private async Task Close()
+    {
+        bool keep = false;
+        if (_fix.HasPendingChanges)
+        {
+            FixCloseChoice choice = _closeConfirmer.Ask(_fix.Files.Select(f => f.RelativePath).ToList());
+            switch (choice)
+            {
+                case FixCloseChoice.Cancelar:
+                    return;
+
+                case FixCloseChoice.DescartarYCerrar:
+                    DiscardAll();
+                    if (_fix.HasPendingChanges)
+                    {
+                        return;   // el descarte no se completó: la pantalla sigue haciendo falta
+                    }
+
+                    break;
+
+                default:
+                    keep = true;
+                    break;
+            }
+        }
+
+        if (!_fix.Close(keep))
+        {
+            return;
+        }
+
+        if (keep)
+        {
+            _toasts.Show("Cerrado. Los ficheros modificados siguen en tu clon: son tuyos, "
+                + "y Atalaya ya no se ofrece a revertirlos.");
+        }
+
+        if (_navigation is null)
+        {
+            return;
+        }
+
+        if (CanGoBackToFinding)
+        {
+            await BackToFinding();
+            return;
+        }
+
+        await _navigation.NavigateToAsync<PortfolioViewModel>();
+    }
+
     [RelayCommand]
     private void ToggleFailureDetail() => IsFailureDetailExpanded = !IsFailureDetailExpanded;
 
@@ -492,6 +559,7 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
         OnPropertyChanged(nameof(FailureDetail));
         OnPropertyChanged(nameof(HasFailureDetail));
         OnPropertyChanged(nameof(FailureCloneNote));
+        OnPropertyChanged(nameof(CanClose));
         OnPropertyChanged(nameof(PauseLabel));
         OnPropertyChanged(nameof(HeaderText));
         OnPropertyChanged(nameof(SubHeaderText));
@@ -512,6 +580,38 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
 /// Quién confirma un descarte. Se inyecta —igual que el borrado de app y el reset de fábrica—
 /// para que el flujo entero, incluido cancelar, se pruebe sin abrir una ventana.
 /// </summary>
+/// <summary>
+/// Qué hacer con los ficheros que el agente dejó tocados cuando se cierra la pantalla
+/// (BUGFIX-CIERRE). Son TRES respuestas y no dos: cerrar y descartar son gestos distintos, y
+/// cancelar tiene que seguir siendo posible.
+/// </summary>
+public enum FixCloseChoice
+{
+    /// <summary>Se queda como está: la pantalla no se cierra.</summary>
+    Cancelar,
+
+    /// <summary>Los cambios se quedan en el clon. Es lo normal: son del usuario.</summary>
+    ConservarYCerrar,
+
+    /// <summary>Revierte lo del agente y luego cierra. Pasa por el mismo camino de «Descartar todo».</summary>
+    DescartarYCerrar,
+}
+
+/// <summary>Quién hace esa pregunta. Inyectable para que el flujo entero se pueda probar.</summary>
+public interface IFixCloseConfirmer
+{
+    FixCloseChoice Ask(IReadOnlyList<string> files);
+}
+
+/// <summary>
+/// La respuesta por defecto cuando nadie pregunta (tests, construcciones a mano): conservar. Es el
+/// lado seguro — cerrar una pantalla nunca puede tocar el árbol de trabajo de alguien por omisión.
+/// </summary>
+public sealed class KeepOnClose : IFixCloseConfirmer
+{
+    public FixCloseChoice Ask(IReadOnlyList<string> files) => FixCloseChoice.ConservarYCerrar;
+}
+
 public interface IFixDiscardConfirmer
 {
     /// <summary>True si el usuario confirma revertir esos ficheros.</summary>
