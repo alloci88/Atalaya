@@ -235,16 +235,17 @@ public sealed partial class MainViewModel : ObservableObject
     private bool HasLegacyCredentials() => _settings.GetPat() is not null;
 
     /// <summary>
-    /// Cierra la sesión que se quedó abierta por un cierre forzado y lo dice (D-110). Nunca lanza:
-    /// un fallo recuperando no puede impedir arrancar la aplicación.
+    /// Autocuración al arrancar (D-110 y BUGFIX-ACTIVIDAD): cierra la sesión que se quedó abierta
+    /// por un cierre forzado <b>y</b> suelta los claims de esta máquina que quedaron sueltos sin
+    /// marca detrás. Nunca lanza: un fallo limpiando no puede impedir arrancar la aplicación.
     /// </summary>
     private void RecoverInterruptedSession()
     {
         try
         {
-            if (_recovery.RecoverIfNeeded() is { } recovered)
+            if (_recovery.CleanUpAtStartup().Message is { } message)
             {
-                _toasts.Show(recovered.Message);
+                _toasts.Show(message);
             }
         }
         catch (Exception ex)

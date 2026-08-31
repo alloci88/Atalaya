@@ -250,6 +250,54 @@ public sealed partial class LiveSessionService : ObservableObject
         Failed?.Invoke(message);
     }
 
+    /// <summary>
+    /// ARCHIVA una sesión terminada (BUGFIX-CIERRE). La pantalla desaparece del rail y deja de
+    /// ocupar sitio; el informe y el registro de la sesión siguen donde estaban.
+    /// <para>
+    /// <b>Cerrar no borra historia.</b> Lo único que se tira es el estado de PANTALLA —los
+    /// contadores en vivo, la cola de unidades, el resumen— que solo existía en memoria. Lo que
+    /// pasó vive en el hub: su sesión, sus hallazgos y su informe, accesibles desde Informes.
+    /// </para>
+    /// <para>
+    /// Solo cierra lo TERMINAL. Mientras la sesión corre, lo que hay es «Detener», que es otra
+    /// cosa: archivar una sesión viva la dejaría corriendo sin ninguna superficie que la enseñe —
+    /// exactamente el zombi que F5.15 vino a matar.
+    /// </para>
+    /// </summary>
+    public bool Close()
+    {
+        if (IsRunning || !HasSession)
+        {
+            return false;
+        }
+
+        OnUi(() =>
+        {
+            Units.Clear();
+            Findings.Clear();
+            Summary.Clear();
+        });
+
+        HasFinished = false;
+        HasFailed = false;
+        FailureMessage = string.Empty;
+        FailureDetail = string.Empty;
+        FailureOffersModelChange = false;
+        StatusMessage = string.Empty;
+        HeaderText = string.Empty;
+        AppSlug = string.Empty;
+        SessionId = string.Empty;
+        ReportPath = string.Empty;
+        StartedUtc = null;
+        EndedUtc = null;
+        UnitIndex = UnitCount = CurrentPassNumber = Calls = 0;
+        InputTokens = OutputTokens = CacheReadTokens = CacheWriteTokens = 0;
+        Cost = null;
+
+        Changed?.Invoke();
+        return true;
+    }
+
     /// <summary>Detener: la parada ordenada de F5.1b. No hay un segundo camino de parada.</summary>
     public void Stop()
     {
@@ -313,6 +361,7 @@ public sealed partial class LiveSessionService : ObservableObject
     {
         SessionCoordinator coordinator = _coordinatorFactory();
         Subscribe(coordinator);
+        bool closedOrderly = false;
         try
         {
             AgentReadiness readiness = await _agent.CheckAsync(CancellationToken.None);
@@ -345,6 +394,11 @@ public sealed partial class LiveSessionService : ObservableObject
             Changed?.Invoke();
             _cts = new CancellationTokenSource();
             SessionResult result = await Task.Run(() => coordinator.RunAsync(request, _cts.Token));
+
+            // El coordinador llegó a su cierre ordenado, que es quien suelta los claims. Sin esta
+            // marca, el finally no sabría distinguir «cerró bien» de «reventó», y soltar dos veces
+            // los mismos claims no rompe nada pero soltar CERO veces sí (BUGFIX-ACTIVIDAD).
+            closedOrderly = true;
 
             SessionId = result.SessionId.ToString();
             ReportPath = _hub is null ? string.Empty : _hub.HubPaths.ReportFile(AppSlug, SessionId);
@@ -386,6 +440,20 @@ public sealed partial class LiveSessionService : ObservableObject
         finally
         {
             Unsubscribe(coordinator);
+
+            // BUGFIX-ACTIVIDAD. Antes esto era un `_marker.Delete()` a secas, y ahí estaba el fallo:
+            // si la sesión murió por una excepción —la cuota agotada, sin ir más lejos—, el cierre
+            // ordenado del coordinador no había llegado a soltar los claims, y borrar la marca
+            // dejaba también sin nada que encontrar a la recuperación del arranque. Resultado: la
+            // tarjeta del Portafolio anunciando «auditando ahora» durante media hora, y el fichero
+            // del claim en el hub para siempre.
+            //
+            // Ahora se sueltan AQUÍ, en el instante del fallo, antes de retirar la marca.
+            if (!closedOrderly && _openMarker is { } open && _hub is not null)
+            {
+                SessionClaims.Release(_hub, open.Slug, open.Units);
+            }
+
             // La marca de sesión abierta se retira SIEMPRE que el proceso siga vivo: si llegamos
             // aquí, esta sesión no necesita recuperación (D-110).
             _marker.Delete();

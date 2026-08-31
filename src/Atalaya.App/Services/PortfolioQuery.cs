@@ -1,4 +1,4 @@
-using Atalaya.Domain;
+﻿using Atalaya.Domain;
 using Atalaya.Domain.Model;
 using Atalaya.Storage;
 
@@ -143,7 +143,11 @@ public sealed class PortfolioQuery
             .FirstOrDefault();
 
         DateTimeOffset now = _time.GetUtcNow();
-        bool auditingNow = _store.ListClaims(slug).Any(c => !c.IsExpiredAt(now));
+        // BUGFIX-ACTIVIDAD: se pregunta si el claim puede ANUNCIARSE, no solo si no ha caducado.
+        // El margen lo pone quien lee (ClaimRules.MaxSilence), no quien escribió el claim: un
+        // portátil cerrado a mitad de sesión no puede tener al equipo entero viendo «auditando
+        // ahora» hasta que a su TTL le dé la gana.
+        bool auditingNow = _store.ListClaims(slug).Any(c => c.AnnouncesActivityAt(now));
 
         return new AppCard(
             slug, app.Name, app.Stack, app.CurrentCycle,

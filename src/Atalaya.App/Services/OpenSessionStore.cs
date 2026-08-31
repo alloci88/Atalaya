@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Atalaya.Domain;
@@ -167,6 +167,40 @@ public sealed class OpenSessionStore
     }
 }
 
+/// <summary>
+/// Suelta lo que una sesión anunciaba (BUGFIX-ACTIVIDAD).
+/// <para>
+/// Está aquí, y en un solo sitio, porque los claims son <b>la</b> fuente de «alguien está
+/// auditando esto»: el Portafolio no tiene otra. Antes solo los soltaba el cierre ordenado del
+/// coordinador, así que cualquier final que no pasara por ahí —una excepción del proveedor, por
+/// ejemplo— dejaba a la tarjeta anunciando actividad hasta que caducara el TTL. Y la marca de
+/// sesión abierta se borraba igualmente en el <c>finally</c>, con lo que la recuperación del
+/// arranque tampoco encontraba nada que limpiar.
+/// </para>
+/// </summary>
+public static class SessionClaims
+{
+    /// <summary>Suelta los claims de esas unidades. Devuelve cuántos se soltaron.</summary>
+    public static int Release(HubContext hub, string slug, IEnumerable<string> units)
+    {
+        int released = 0;
+        foreach (string unit in units)
+        {
+            try
+            {
+                hub.Store.DeleteClaim(slug, HashUtil.UnitHash(unit));
+                released++;
+            }
+            catch (Exception)
+            {
+                // Un claim que no se puede borrar caduca solo; seguimos con los demás.
+            }
+        }
+
+        return released;
+    }
+}
+
 /// <summary>Qué hizo la recuperación, para poder contarlo en un toast.</summary>
 public sealed record RecoveredSession(string Slug, string SessionId, int UnitsDone, int ClaimsReleased, int Findings)
 {
@@ -174,6 +208,46 @@ public sealed record RecoveredSession(string Slug, string SessionId, int UnitsDo
         $"Se recuperó una sesión interrumpida: {UnitsDone} unidad(es) procesadas antes del corte"
         + (ClaimsReleased > 0 ? $", {ClaimsReleased} claim(s) liberado(s)" : "")
         + ".";
+}
+
+/// <summary>
+/// Lo que la aplicación limpió al arrancar (BUGFIX-ACTIVIDAD). Son DOS cosas distintas y por eso
+/// van separadas:
+/// <list type="bullet">
+/// <item><see cref="Session"/> — había una marca de sesión abierta de un proceso que ya no está:
+/// se cierra como interrumpida, con su registro. Es el caso de D-110.</item>
+/// <item><see cref="OrphanClaims"/> — había claims de ESTA máquina sin ninguna marca detrás. Eso
+/// no puede recuperarse como sesión (no hay identidad que registrar), pero sí soltarse: son
+/// nuestros y no hay nada corriendo. Es lo que dejaba al Portafolio anunciando «auditando ahora»
+/// después de reiniciar.</item>
+/// </list>
+/// </summary>
+public sealed record StartupCleanup(RecoveredSession? Session, int OrphanClaims, IReadOnlyList<string> Apps)
+{
+    public bool DidSomething => Session is not null || OrphanClaims > 0;
+
+    /// <summary>Lo que se le cuenta al usuario. Null cuando no hubo nada que limpiar.</summary>
+    public string? Message
+    {
+        get
+        {
+            if (Session is { } recovered)
+            {
+                return OrphanClaims > 0
+                    ? recovered.Message + $" Y se soltaron {OrphanClaims} más que quedaron sueltos."
+                    : recovered.Message;
+            }
+
+            if (OrphanClaims == 0)
+            {
+                return null;
+            }
+
+            string apps = Apps.Count == 1 ? $"«{Apps[0]}»" : $"{Apps.Count} aplicaciones";
+            return $"Se soltaron {OrphanClaims} claim(s) de una sesión de esta máquina que no llegó a "
+                + $"cerrarse: {apps} ya no aparece(n) como «auditando ahora».";
+        }
+    }
 }
 
 /// <summary>
@@ -198,22 +272,86 @@ public sealed class InterruptedSessionRecovery
     }
 
     /// <summary>
-    /// Devuelve qué se recuperó, o null si no había nada que recuperar (ni marca, o la dejó un
-    /// proceso que sigue vivo — otra instancia de Atalaya auditando ahora mismo).
+    /// Lo que hay que limpiar al arrancar: la marca de sesión abierta que dejó un proceso muerto
+    /// <b>y</b> los claims de esta máquina que se quedaron sueltos sin marca detrás.
+    /// <para>
+    /// Si hay otra instancia de Atalaya auditando en esta misma máquina, no se toca NADA: ni su
+    /// marca ni sus claims, que son justamente los que está usando.
+    /// </para>
     /// </summary>
-    public RecoveredSession? RecoverIfNeeded()
+    public StartupCleanup CleanUpAtStartup()
     {
         OpenSessionMarker? marker = _store.TryRead();
-        if (marker is null)
+        if (marker is not null && _isAlive(marker.ProcessId, marker.ProcessStartedUtc))
         {
-            return null;
+            return new StartupCleanup(null, 0, Array.Empty<string>());
         }
 
-        if (_isAlive(marker.ProcessId, marker.ProcessStartedUtc))
+        RecoveredSession? recovered = marker is null ? null : Recover(marker);
+        (int orphans, IReadOnlyList<string> apps) = ReleaseOwnOrphanClaims();
+
+        if (orphans > 0)
         {
-            return null;   // hay otra instancia auditando: no se toca nada
+            _hub.Sync?.CommitAndPush(
+                $"claims: sueltos de {Environment.MachineName} liberados al arrancar ({orphans})");
         }
 
+        return new StartupCleanup(recovered, orphans, apps);
+    }
+
+    /// <inheritdoc cref="CleanUpAtStartup"/>
+    /// <remarks>Se conserva el nombre viejo: la marca sigue siendo la mitad importante del trabajo.</remarks>
+    public RecoveredSession? RecoverIfNeeded() => CleanUpAtStartup().Session;
+
+    /// <summary>
+    /// Los claims que dejó ESTA máquina y que ya no tienen nada detrás (BUGFIX-ACTIVIDAD).
+    /// <para>
+    /// Es el caso que la recuperación de D-110 no cubría: si la sesión murió por una excepción, el
+    /// <c>finally</c> borraba la marca —y sin marca no hay nada que recuperar—, pero los claims se
+    /// quedaban. Al arrancar no hay ningún proceso nuestro auditando (lo garantiza el guardia de
+    /// arriba), así que un claim de esta máquina es basura por definición.
+    /// </para>
+    /// <para>
+    /// <b>Solo los nuestros.</b> Los de otras máquinas no se tocan: no sabemos si están vivos, y
+    /// borrar el claim de un compañero que sí está auditando es exactamente el fallo que los
+    /// claims existen para evitar. Para ésos, el margen de lectura de
+    /// <see cref="ClaimRules.MaxSilence"/> hace que dejen de anunciarse sin borrar nada.
+    /// </para>
+    /// </summary>
+    private (int Released, IReadOnlyList<string> Apps) ReleaseOwnOrphanClaims()
+    {
+        string machine = Environment.MachineName;
+        int released = 0;
+        var apps = new List<string>();
+
+        try
+        {
+            foreach (string slug in _hub.Store.ListAppSlugs())
+            {
+                var mine = _hub.Store.ListClaims(slug)
+                    .Where(c => string.Equals(c.Machine, machine, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                if (mine.Count == 0)
+                {
+                    continue;
+                }
+
+                released += SessionClaims.Release(_hub, slug, mine.Select(c => c.Unit));
+                apps.Add(_hub.Store.TryReadApp(slug)?.Name ?? slug);
+            }
+        }
+        catch (Exception)
+        {
+            // Un hub ilegible al arrancar no puede impedir arrancar. Lo que no se suelte aquí
+            // deja de anunciarse igualmente por el margen de lectura.
+        }
+
+        return (released, apps);
+    }
+
+    private RecoveredSession Recover(OpenSessionMarker marker)
+    {
         // Los hallazgos creados por aquella sesión ya están en disco. No hay forma exacta de
         // atribuirlos (un hallazgo no guarda el ULID de su sesión), así que se cuentan los de esa
         // app detectados desde que arrancó: es una aproximación, y como tal se declara en la nota.
@@ -228,7 +366,7 @@ public sealed class InterruptedSessionRecovery
             // Un hub ilegible no debe impedir liberar los claims ni avisar.
         }
 
-        int released = ReleaseClaims(marker);
+        int released = SessionClaims.Release(_hub, marker.Slug, marker.Units);
         WriteSessionRecord(marker, findings, released);
 
         _store.Delete();
@@ -236,25 +374,6 @@ public sealed class InterruptedSessionRecovery
             $"session: recuperada tras cierre forzado {marker.Slug} ({marker.UnitsDone} unidades)");
 
         return new RecoveredSession(marker.Slug, marker.SessionId, marker.UnitsDone, released, findings);
-    }
-
-    private int ReleaseClaims(OpenSessionMarker marker)
-    {
-        int released = 0;
-        foreach (string unit in marker.Units)
-        {
-            try
-            {
-                _hub.Store.DeleteClaim(marker.Slug, HashUtil.UnitHash(unit));
-                released++;
-            }
-            catch (Exception)
-            {
-                // Un claim que no se puede borrar caduca solo por TTL; seguimos con los demás.
-            }
-        }
-
-        return released;
     }
 
     private void WriteSessionRecord(OpenSessionMarker marker, int findings, int released)
