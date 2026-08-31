@@ -110,6 +110,23 @@ public sealed partial class SessionViewModel : ViewModelBase
     /// <summary>El fallo se cura eligiendo otro modelo: la vista ofrece el atajo.</summary>
     public bool FailureOffersModelChange => _live.FailureOffersModelChange;
 
+    /// <summary>El error del proveedor tal cual (BUGFIX-CUOTA). Copiable, y plegado por defecto.</summary>
+    public string FailureDetail => _live.FailureDetail;
+
+    /// <summary>Hay crudo que enseñar. Sin esto, «Ver detalle» aparecería para abrir un hueco vacío.</summary>
+    public bool HasFailureDetail => _live.HasFailureDetail;
+
+    /// <summary>
+    /// El crudo empieza PLEGADO (BUGFIX-CUOTA). Un error del proveedor puede ocupar varias líneas, y
+    /// desplegado por defecto empujaba —o tapaba— el resto de la pantalla: justo el defecto que este
+    /// parte venía a arreglar. Se abre a un clic, y quien lo abre es porque va a copiarlo.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DetailToggleLabel))]
+    private bool _isFailureDetailExpanded;
+
+    public string DetailToggleLabel => IsFailureDetailExpanded ? "Ocultar detalle" : "Ver detalle";
+
     public bool IsRunning => _live.IsRunning;
 
     /// <summary>
@@ -135,6 +152,34 @@ public sealed partial class SessionViewModel : ViewModelBase
         if (_navigation is not null)
         {
             await _navigation.NavigateToAsync<SettingsViewModel>();
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleFailureDetail() => IsFailureDetailExpanded = !IsFailureDetailExpanded;
+
+    /// <summary>
+    /// Al portapapeles, que es a donde va este texto: a un correo para quien administre la
+    /// organización. Seleccionar a mano un bloque de varias líneas dentro de un banner es
+    /// exactamente el gesto que la gente no hace, así que hay botón.
+    /// </summary>
+    [RelayCommand]
+    private void CopyFailure()
+    {
+        string text = string.IsNullOrWhiteSpace(FailureDetail)
+            ? FailureMessage
+            : $"{FailureMessage}\n\n{FailureDetail}";
+
+        try
+        {
+            System.Windows.Clipboard.SetText(text);
+            _live.StatusMessage = "Error copiado al portapapeles.";
+        }
+        catch (Exception)
+        {
+            // El portapapeles lo puede tener tomado otro proceso. No es motivo para tumbar nada:
+            // el texto sigue delante y se puede seleccionar a mano.
+            _live.StatusMessage = "No se ha podido copiar: el portapapeles está ocupado.";
         }
     }
 
@@ -189,6 +234,8 @@ public sealed partial class SessionViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowFailure));
         OnPropertyChanged(nameof(FailureMessage));
         OnPropertyChanged(nameof(FailureOffersModelChange));
+        OnPropertyChanged(nameof(FailureDetail));
+        OnPropertyChanged(nameof(HasFailureDetail));
         OnPropertyChanged(nameof(IsRunning));
         OnPropertyChanged(nameof(CriticalCount));
         OnPropertyChanged(nameof(HighCount));

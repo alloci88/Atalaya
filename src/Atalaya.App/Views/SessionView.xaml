@@ -4,7 +4,12 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
     <Grid>
+        <!-- BUGFIX-CUOTA: el aviso de error tiene FILA PROPIA. Vivia en la fila 1, la misma que el
+             cuerpo de tres columnas, asi que los dos se pintaban uno encima del otro: el cuerpo se
+             declara despues y ganaba el Z-order, dejando el mensaje de error medio tapado y casi
+             ilegible. Un aviso que hay que leer no puede depender del orden de declaracion. -->
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
@@ -26,24 +31,56 @@
              con ellos desaparecía la única superficie que enseñaba el estado (la pantalla de cierre,
              condicionada a HasFinished): sesión zombi, reloj parado y ni una palabra. Este panel
              cuelga de HasFailed, que es un estado terminal propio, y lleva el remedio al lado del
-             problema. -->
-        <Border Grid.Row="1" VerticalAlignment="Top" CornerRadius="8" Padding="16" Margin="0,0,0,12"
+             problema.
+
+             BUGFIX-CUOTA · y ahora el texto se puede LEER y COPIAR: el mensaje va en un cuadro de
+             solo lectura (seleccionable con el ratón, que es como se pega en un correo a IT), el
+             error crudo del proveedor vive plegado tras «Ver detalle» para que su longitud no
+             empuje nada, y hay botón de copiar porque seleccionar a mano varias líneas dentro de un
+             banner es el gesto que nadie hace. -->
+        <Border Grid.Row="1" CornerRadius="8" Padding="16" Margin="0,0,0,12"
                 Background="#22C04040" BorderBrush="#66C04040" BorderThickness="1"
                 Visibility="{Binding ShowFailure, Converter={StaticResource BoolToVisibility}}">
             <StackPanel>
-                <TextBlock Text="No se pudo completar la sesión" FontSize="16" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding FailureMessage}" TextWrapping="Wrap" Margin="0,8,0,0" />
-                <TextBlock Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           Text="No se ha auditado nada y no se ha gastado presupuesto. La selección del inventario sigue como estaba." />
-                <ui:Button Content="Elegir modelo en Ajustes" Margin="0,12,0,0" Appearance="Primary"
-                           Command="{Binding FixModelCommand}"
-                           Visibility="{Binding FailureOffersModelChange, Converter={StaticResource BoolToVisibility}}" />
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE783;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                               Foreground="#E06C6C" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock Text="No se pudo completar la sesión" FontSize="16" FontWeight="SemiBold"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
+                <!-- Seleccionable: es un TextBox de solo lectura sin chrome, no un TextBlock. -->
+                <TextBox Text="{Binding FailureMessage, Mode=OneWay}" IsReadOnly="True" IsTabStop="False"
+                         TextWrapping="Wrap" BorderThickness="0" Background="Transparent" Padding="0"
+                         Margin="0,8,0,0" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <ui:Button Content="{Binding DetailToggleLabel}" Appearance="Secondary" FontSize="11"
+                               Command="{Binding ToggleFailureDetailCommand}"
+                               Visibility="{Binding HasFailureDetail, Converter={StaticResource BoolToVisibility}}" />
+                    <ui:Button Content="Copiar error" Appearance="Secondary" FontSize="11" Margin="8,0,0,0"
+                               Command="{Binding CopyFailureCommand}" />
+                    <ui:Button Content="Elegir modelo en Ajustes" Appearance="Primary" Margin="8,0,0,0"
+                               Command="{Binding FixModelCommand}"
+                               Visibility="{Binding FailureOffersModelChange, Converter={StaticResource BoolToVisibility}}" />
+                </StackPanel>
+
+                <!-- El crudo: acotado en alto y con su propio scroll, para que un error largo del
+                     proveedor no pueda comerse el cuerpo de la vista. -->
+                <Border Margin="0,10,0,0" CornerRadius="6" Padding="10" Background="#18000000"
+                        Visibility="{Binding IsFailureDetailExpanded, Converter={StaticResource BoolToVisibility}}">
+                    <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
+                        <TextBox Text="{Binding FailureDetail, Mode=OneWay}" IsReadOnly="True" IsTabStop="False"
+                                 TextWrapping="Wrap" BorderThickness="0" Background="Transparent" Padding="0"
+                                 FontFamily="Consolas" FontSize="11"
+                                 Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </ScrollViewer>
+                </Border>
             </StackPanel>
         </Border>
 
         <!-- Cuerpo: tres columnas -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="250" />
                 <ColumnDefinition Width="*" />
@@ -305,7 +342,7 @@
         </Grid>
 
         <!-- Pie fijo -->
-        <Border Grid.Row="2" Background="#14808080" CornerRadius="8" Padding="12,7" Margin="0,10,0,0">
+        <Border Grid.Row="3" Background="#14808080" CornerRadius="8" Padding="12,7" Margin="0,10,0,0">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="{Binding ProgressText}" FontWeight="SemiBold" VerticalAlignment="Center" />
                 <TextBlock Text="·" Opacity="0.4" Margin="10,0" VerticalAlignment="Center" />

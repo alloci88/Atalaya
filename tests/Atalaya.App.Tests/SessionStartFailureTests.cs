@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Copilot;
 using Atalaya.Domain;
@@ -191,7 +191,7 @@ public sealed class SessionStartFailureTests : IDisposable
             dir!.FullName, "src", "Atalaya.App", "Views", "SessionView.xaml"));
 
         xaml.Should().Contain("{Binding ShowFailure, Converter={StaticResource BoolToVisibility}}");
-        xaml.Should().Contain("{Binding FailureMessage}");
+        xaml.Should().Contain("{Binding FailureMessage, Mode=OneWay}");
         xaml.Should().Contain("FixModelCommand");
     }
 
