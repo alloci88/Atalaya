@@ -6944,3 +6944,103 @@ tres bloques se leen separados, los dos pelos se ven sin pesar, la rama se lee c
 nada se corta ni envuelve mal. Lo que sigue sin verse con ojos humanos es el circuito completo de
 arreglar→verificar sobre datos reales — no hay ningún arreglo con huella en el hub todavía—, y eso
 sigue en el backlog.
+
+## F9.2 — La deriva se cobra en la frontera del ciclo
+
+F9 dejó la deriva ortogonal: informa, y no reabre unidades mientras el ciclo dura. Eso está bien y
+se mantiene —un ciclo tiene que poder cerrarse aunque el código siga vivo, o sobre un repositorio
+activo no se cerraría ninguno—. Lo que faltaba era el otro extremo: **qué pasa con esa deriva
+acumulada cuando el ciclo termina**. F9.2 lo cierra con dos reglas, y las dos viven en la frontera.
+
+### D-700 — Empezar un ciclo es SEMBRARLO, y ésa pasa a ser la definición
+
+Hasta ahora el cierre abría el ciclo siguiente poniéndolo **todo a pendiente**. Es lo que había, y
+era mentira por los dos lados a la vez: re-auditaba entera una aplicación que acababa de auditarse
+—quemando cuota sobre código que nadie había tocado— y, si en vez de eso hubiera arrastrado las
+auditadas sin mirar la deriva, habría dado por buena una cobertura que ya no describía el código.
+
+La regla nueva es una sola, y se aplica unidad a unidad con la deriva del ciclo que TERMINA delante:
+
+| Cómo llega al cierre | Con qué estado nace | Por qué |
+|---|---|---|
+| Auditada y **sin deriva** | **Auditada**, con su commit de auditoría | El código es el que se miró. Su ancla sigue valiendo, y con ella la deriva del ciclo nuevo se puede seguir midiendo. |
+| **Cambiada** desde su auditoría | **Pendiente** | La deuda de mirada se cobra aquí. Lo que se auditó ya no es lo que hay. |
+| **Sin historial** disponible | **Pendiente** | No se puede demostrar que no cambió, y sin evidencia no hay estado (N-2). |
+| **Arreglada — pendiente de verificar** | **Auditada**, conserva su acción Verificar | El alcance está acotado por la huella del arreglo: verificar sigue siendo su cierre correcto y es más barato que re-auditar. Degradarla cambiaría un verify por una auditoría entera sin ganar nada. |
+| **Borrada** | **Pendiente**, y la retira el re-escaneo | El fichero no está: no hay nada que dar por auditado. Sus hallazgos siguen el flujo ya existente de «unidades que ya no existen». |
+
+**La que nace pendiente pierde el ancla.** `AuditedInSession` se va con el estado o no se va: una
+unidad que ya se ha cobrado como pendiente no puede seguir arrastrando el commit de una auditoría
+vieja, porque el rango que cuelga de él ya está cobrado y se contaría dos veces. Su próxima
+auditoría estrenará commit, que es exactamente lo que significa haber vuelto a la cola.
+
+**La consecuencia numérica es la buscada:** al arrancar el ciclo, el contador de **cambiadas queda
+a cero** —lo que había cambiado está ahora en pendientes, sumado a los conteos que ya contaban— y el
+de **arregladas sin verificar NO**, porque ésas conservan estado y acción, y su anotación sigue
+siendo cierta hasta que la verificación las cierre. Poner ese a cero también habría sido maquillar.
+
+**Sembrar no lanza nada.** Ni una sesión, ni una estimación, ni un diálogo. El ciclo nuevo
+simplemente sabe qué le queda por mirar.
+
+### D-701 — Sin historial con el que comparar, el ciclo nuevo nace entero pendiente
+
+La siembra necesita el clon local, y puede no haberlo: la máquina que cierra el ciclo puede no tener
+esa aplicación vinculada, la carpeta puede haberse movido, o el historial puede ser ilegible. En
+todos esos casos la siembra se cae al comportamiento de siempre —**todo pendiente**— y el cierre
+sigue adelante.
+
+No es un caso especial: es **la misma regla** aplicada a una unidad de la que no se puede demostrar
+nada. Y la degradación va en la dirección segura, que es la de F9 entera: re-auditar de más, nunca
+de menos. Un historial que no se puede leer **no puede impedir cerrar un ciclo** que está auditado
+entero — el `catch` está ahí para eso, y para nada más.
+
+### D-702 — «Reiniciar ciclo» NO se siembra, y por qué no es una excepción a D-700
+
+D-700 define qué significa que el sistema abra un ciclo. **«Reiniciar ciclo» no es eso**: es un gesto
+explícito de una persona que declara que quiere volver a mirarlo todo. Sembrarlo respetando las
+auditadas sin deriva lo dejaría **sin efecto ninguno** justo en la aplicación que está al día — que
+es el caso en el que se pulsa. Se queda como está: todo pendiente, sin borrar nada, y el manual dice
+la diferencia en el mismo sitio donde nombra el botón.
+
+### D-703 — El cierre no maquilla: la foto va con dos números y no con uno
+
+Al cerrar, el resumen dice **«Cerrado con N cambiadas desde su auditoría y M sin verificar»**. Los dos
+números van **separados y sin sumarse**, por lo mismo que en el panel (D-687): piden acciones
+distintas —auditar y verificar—, con coste distinto y con instrumento distinto, y una suma propondría
+gastar una auditoría entera en algo que se cierra con un verify.
+
+A cero **no se dice nada**. Una frase que informa de que no hay nada que informar es ruido, y el
+mismo criterio que colapsó el grupo de deriva a una línea (D-697) aplica aquí.
+
+**Un solo cálculo para las dos cosas.** La deriva se mide una vez, antes de tocar nada, y de ahí
+salen a la vez la semilla del inventario nuevo y la frase del cierre. Medirla dos veces es
+exactamente cómo un panel y su informe acaban diciendo cifras distintas del mismo instante.
+
+Se dice en los dos sitios donde alguien está mirando en ese momento: la **pantalla de cierre** de la
+sesión que lo cerró (`SessionResult.CycleAging`, pegada al «Ciclo sin pendientes» que ya había) y el
+**informe consolidado** del cierre, con la frase de qué hereda cada mitad. No estrena vista ninguna.
+
+**Lo que la frase deja fuera, a propósito:** las unidades sin historial comparable. También nacen
+pendientes, pero no son deriva medida sino ausencia de medida, y ya tienen su aviso propio arriba del
+inventario. Meterlas en «N cambiadas» habría hecho que el número dejara de significar lo que dice.
+
+### D-704 — Cobertura (13 tests nuevos, 1.278 en total, todo en verde)
+
+`CycleSeedingTests`, sobre repositorios git de verdad (`DriftRepo`, D-693) porque la siembra depende
+de lo que diga el historial: la auditada sin deriva que sigue auditada **y conserva su ancla**; la
+cambiada que nace pendiente **y la pierde**; la que no tiene historial comparable; la arreglada que
+conserva estado, ancla, etiqueta y acción Verificar **ya dentro del ciclo nuevo**; la borrada que no
+sobrevive como auditada; el cierre sin clon que siembra todo pendiente; y el cuadre completo —
+pendientes del inventario y contadores de deriva— tras una siembra con las cuatro situaciones a la
+vez. Del cierre: la frase con N y M reales, en el resultado y en el informe; el cierre limpio que no
+estrena ruido; y la frase con cada mitad a cero por separado.
+
+`CycleServiceTests` pasa a leer `CycleCloseResult` en vez de un `bool`: el cierre ya no devuelve solo
+si se cerró, sino con qué foto.
+
+### D-705 — Lo que sigue sin comprobarse, y es del usuario
+
+La siembra no se ha visto en la ventana. Queda el caso de aceptación: cerrar un ciclo sobre un clon
+con deriva real y comprobar que el inventario del ciclo siguiente sale con las cambiadas en
+pendientes y las limpias en auditadas, que el panel y la tarjeta del portafolio cuadran con él, y que
+la pantalla de cierre lee la frase sin cortarse a 1366×768.

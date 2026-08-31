@@ -68,7 +68,9 @@ Las unidades de la aplicación en el ciclo vigente, por módulos, con su estado
   pasado al código, que es una dimensión aparte del estado de auditoría.
 - **Re-escanear** vuelve a medir el clon: actualiza el inventario **y** los hallazgos
   medidos en el mismo gesto, y cuenta en un aviso qué cambió.
-- **Reiniciar ciclo** abre uno nuevo sin borrar nada.
+- **Reiniciar ciclo** abre uno nuevo con todo pendiente, sin borrar nada. Es
+  distinto del cierre normal, que **siembra** el ciclo siguiente con la deriva
+  del que termina (ver «Cambiar de ciclo», más abajo).
 - El panel del ciclo lleva **Patrones silenciados** y **Directivas** con su
   «Gestionar» al lado: las dos cosas que condicionan qué se reporta en esta
   aplicación (ver «Directivas del proyecto», más abajo).
@@ -328,6 +330,52 @@ Arriba del inventario aparecen los avisos que condicionan la lectura:
 El cálculo va **fuera del hilo de la interfaz**: el inventario se abre en el acto
 y la deriva aparece cuando llega. Sobre un clon de ~900 clases tarda **décimas de
 segundo** en el caso normal.
+
+#### Cambiar de ciclo: durante el ciclo la deriva informa, al cambiar de ciclo se cobra
+
+Durante el ciclo la deriva **no reabre nada**. Una clase que ya auditaste sigue
+auditada aunque su código haya cambiado: si la deriva devolviera unidades a la
+cola, un repositorio vivo no dejaría cerrar un ciclo nunca. Te lo dice, y decides
+tú si la recoges con «Seleccionar cambiadas» o la dejas para la siguiente.
+
+Pero esa deuda de mirada no se evapora al cerrar. **Cuando el ciclo se cierra y se
+abre el siguiente, la deriva acumulada se cobra**: el inventario nuevo no nace todo
+pendiente ni arrastra las auditadas sin mirar, se **siembra** con lo que se puede
+demostrar.
+
+| Cómo llega al cierre | Con qué estado nace en el ciclo nuevo | Por qué |
+|---|---|---|
+| **Auditada y sin deriva** | **Auditada** (conserva su commit de auditoría) | El código es el que se miró. Re-auditarlo sería quemar cuota sin causa. |
+| **Cambiada desde su auditoría** | **Pendiente** | Lo que se auditó ya no es lo que hay. Aquí es donde se paga. |
+| **Sin historial disponible** | **Pendiente** | No se puede demostrar que no cambió, y sin evidencia no hay estado. |
+| **Arreglada — pendiente de verificar** | **Auditada**, y conserva su **Verificar** | Su alcance está acotado por la huella del arreglo: verificar sigue siendo su cierre correcto, y es más barato que re-auditarla entera. |
+| **Ya no existe** | La retira el **re-escaneo**, como siempre | Sus hallazgos activos siguen su camino en «Sin código». |
+
+Consecuencias prácticas, para que no sorprendan:
+
+- La clase que nace **pendiente pierde su marca de deriva**, y con ella el ancla
+  del ciclo anterior: su próxima auditoría estrenará commit. Por eso el contador
+  de **cambiadas queda a cero** al arrancar el ciclo — hasta que el código vuelva
+  a moverse, claro.
+- El contador de **arregladas sin verificar no se pone a cero**, y es a propósito:
+  esas conservan su estado y su acción, así que la anotación sigue siendo verdad
+  hasta que la verificación las cierre.
+- **Sembrar pendientes no lanza nada.** Nadie re-audita solo: el ciclo nuevo
+  simplemente sabe qué le queda por mirar, y lo lanzas tú cuando toque.
+- Si esta máquina **no tiene el clon** de la aplicación, no hay historial con el
+  que demostrar nada y el ciclo nuevo nace **entero pendiente**. Es el mismo caso
+  que «sin historial disponible», y el error se comete hacia re-auditar de más.
+
+**El cierre no maquilla.** En el momento de cerrar, el resumen de la sesión y el
+informe consolidado dicen qué queda envejecido — «Cerrado con 4 cambiadas desde su
+auditoría y 1 sin verificar»—, que es exactamente lo que el ciclo siguiente hereda.
+Si no hay nada envejecido no se dice nada: una frase que informa de que no hay nada
+que informar es ruido.
+
+**«Reiniciar ciclo» es otra cosa.** El botón del inventario no siembra: abre un
+ciclo nuevo con **todo pendiente**, a propósito. Es el gesto de quien quiere volver
+a mirarlo todo desde cero, y sembrarlo respetando las auditadas lo dejaría sin
+efecto justo en la aplicación que está al día. Sigue sin borrar nada.
 
 ### Informes
 

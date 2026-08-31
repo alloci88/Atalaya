@@ -4,10 +4,15 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-30 (F9.1 — la verificación cierra el ciclo).
+Última revisión: 2026-08-31 (F9.2 — la deriva se cobra en la frontera del ciclo).
 
 ## En vuelo
 
+- **F9.2 — la siembra, con los ojos del usuario.** Cerrar un ciclo sobre un clon con deriva real y
+  ver que el inventario del siguiente sale sembrado: las cambiadas en pendientes, las limpias en
+  auditadas con su ancla, la arreglada conservando su Verificar. Que el panel del ciclo y la tarjeta
+  del portafolio cuadren con él, y que la frase del cierre —«Cerrado con N cambiadas… y M sin
+  verificar»— se lea entera en la pantalla de cierre a 1366×768 (D-705).
 - **F9 — el caso de aceptación de la deriva, con los ojos del usuario.** El panel del ciclo ya se ha
   visto en la ventana, en los dos temas y a dos anchos (D-698), y el inventario de XBLAST enseña sus
   2 cambiadas de verdad. Lo que falta es el **circuito con datos reales**: tras un pull con cambios,
@@ -98,6 +103,13 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## Cerrado
 
+- **F9.2 · La deriva se cobra en la frontera del ciclo** — empezar un ciclo pasa a ser **sembrarlo**:
+  la auditada sin deriva conserva su estado y su ancla, la cambiada y la que no tiene historial
+  nacen pendientes perdiendo la marca, y la arreglada pendiente de verificar conserva estado y
+  acción (D-700). Sin clon con el que comparar, todo pendiente, que es la misma regla aplicada a lo
+  que no se puede demostrar (D-701); «Reiniciar ciclo» sigue siendo el gesto explícito de mirarlo
+  todo y no se siembra (D-702). Y el cierre no maquilla: dice qué queda envejecido con los dos
+  números separados, y calla cuando están a cero (D-703).
 - **F9.1 · La verificación cierra el ciclo, y el panel se ordena** — un arreglo propio cuyo hallazgo
   queda resuelto por verificación (o por medida) pasa a estar **cubierto**: sus commits dejan de
   contar y la unidad vuelve a «sin cambios» sin re-auditar. El umbral de tres cuenta solo los no
