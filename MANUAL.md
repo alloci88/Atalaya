@@ -487,6 +487,42 @@ aplicación**.
 
 ---
 
+## Si una sesión falla: qué significa cada error
+
+Cuando Copilot rechaza una sesión, Atalaya la deja en un estado terminal **visible** —con
+su causa, el reloj parado y sin nada corriendo por detrás— y enseña un aviso en su propia
+franja, encima del cuerpo de la sesión. El texto se puede **seleccionar y copiar**, y
+**Copiar error** se lleva al portapapeles el mensaje junto con el error crudo del
+proveedor, que es lo que hay que pegar en un correo a quien administre la organización.
+
+| Si ves esto | Significa | Se arregla así |
+|---|---|---|
+| **La organización ha agotado sus peticiones premium de Copilot** | Vuestro plan se ha quedado sin peticiones. **No es tu asiento ni tus credenciales**: los dos siguen bien. | Nada que tocar en Atalaya: esperar a que se renueve la cuota, o auditar con un modelo de multiplicador menor si vuestro plan lo permite. Atalaya **no reintenta sola** — reintentar contra una cuota agotada gasta las peticiones del reset siguiente. |
+| **Tu cuenta no tiene asiento de Copilot asignado** | La licencia no está: nadie te la ha dado, o te la han quitado. | Pedírsela a quien administre la organización (github.com/settings/copilot). |
+| **GitHub ha rechazado tus credenciales** | El token está revocado, caducado o su SSO expiró. | **Cuenta → Conectar con GitHub**. El mismo login habilita el hub y tu asiento. |
+| **El modelo «X» no está disponible para tu cuenta** | GitHub retiró ese modelo, o tu plan no lo sirve. | **Elegir modelo en Ajustes**, que es el botón del propio aviso. |
+| **No hay conexión con GitHub** | Red, proxy o servicio caído. Es lo único **transitorio** de esta tabla. | Comprobar la red y reintentar. |
+| **Atalaya no reconoce el motivo** | El proveedor ha devuelto algo que Atalaya no sabe clasificar. | El aviso trae el **error crudo íntegro** con su *Request ID*: **Ver detalle** lo despliega y **Copiar error** lo copia. Ante la duda se enseña el dato, nunca una causa inventada. |
+
+> **Por qué la primera fila existe.** Hasta el 2026-08-31, agotar la cuota de la
+> organización se leía en rojo como «tu cuenta no tiene asiento en GitHub». Las dos cosas
+> impiden auditar, pero **el remedio es opuesto**: una se resuelve esperando y la otra
+> hablando con quien administra. Un diagnóstico equivocado no es medio diagnóstico: manda
+> a reclamar algo que ya se tiene.
+
+**Si el corte llega a mitad de un barrido**, lo auditado hasta ahí **no se tira**: los
+hallazgos ya remitidos siguen en el hub, las unidades cubiertas quedan marcadas como
+auditadas, y la sesión se registra con su informe y una nota que dice quién la cortó y por
+qué. El resumen de cierre lo cuenta —«Se auditaron 1 de 3 unidad(es) antes del corte»— y
+las que no se llegaron a mirar siguen pendientes para la próxima. Una sesión así **no
+cierra ciclo**: no cubrió lo que decía cubrir.
+
+Y no se prueba ni una unidad más contra un grifo cerrado: al primer corte por cuota el
+barrido para.
+
+
+---
+
 ## Cosas que conviene saber
 
 **Aviso de versión nueva.** Al arrancar, Atalaya pregunta a GitHub si hay una versión más

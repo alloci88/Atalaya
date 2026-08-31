@@ -4,10 +4,18 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-31 (F9.2 — la deriva se cobra en la frontera del ciclo).
+Última revisión: 2026-08-31 (BUGFIX-CUOTA — sin créditos no es sin asiento).
 
 ## En vuelo
 
+- **BUGFIX-CUOTA — el circuito de cuota, visto en la aplicación viva.** El banner se ha renderizado
+  con los textos reales en los dos temas y a dos anchos, y la geometría está medida por tests a tres
+  tamaños; falta verlo DENTRO de la ventana con una sesión de verdad, y —cuando vuelva a haber
+  cuota— el corte a mitad de barrido de punta a punta (D-713).
+- **BUGFIX-CUOTA — los textos del proveedor que aún no hemos visto.** La taxonomía se apoya en el
+  único error real que hay en los logs más las formas conocidas de nombrar lo mismo. Lo que no case
+  sale como desconocido con su crudo delante, que es lo correcto; cada vez que aparezca uno nuevo en
+  un log, su firma se añade al clasificador (D-707).
 - **F9.2 — la siembra, con los ojos del usuario.** Cerrar un ciclo sobre un clon con deriva real y
   ver que el inventario del siguiente sale sembrado: las cambiadas en pendientes, las limpias en
   auditadas con su ancla, la arreglada conservando su Verificar. Que el panel del ciclo y la tarjeta
@@ -103,6 +111,14 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## Cerrado
 
+- **BUGFIX-CUOTA · Sin créditos no es sin asiento, y los errores se leen** — la cuota agotada se
+  clasificaba como «sin asiento» porque «quota» vivía dentro del detector del asiento: causa falsa y
+  remedio opuesto. Ahora hay UN clasificador (`CopilotFailure`) con seis diagnósticos, cada uno con
+  su mensaje y su remedio, el más específico primero, y lo que no se reconoce enseña el error crudo
+  del proveedor con su Request ID en vez de proponer una causa (D-706, D-707, D-708). La cuota a
+  mitad de barrido ya no tira el trabajo pagado: se corta ahí, se cierra ordenadamente y el resumen
+  lo cuenta (D-709). Y el aviso de error pasa a tener fila propia —se solapaba con el cuerpo—,
+  seleccionable, copiable y con el crudo plegable acotado (D-710).
 - **F9.2 · La deriva se cobra en la frontera del ciclo** — empezar un ciclo pasa a ser **sembrarlo**:
   la auditada sin deriva conserva su estado y su ancla, la cambiada y la que no tiene historial
   nacen pendientes perdiendo la marca, y la arreglada pendiente de verificar conserva estado y

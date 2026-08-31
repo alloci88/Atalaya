@@ -7044,3 +7044,172 @@ La siembra no se ha visto en la ventana. Queda el caso de aceptación: cerrar un
 con deriva real y comprobar que el inventario del ciclo siguiente sale con las cambiadas en
 pendientes y las limpias en auditadas, que el panel y la tarjeta del portafolio cuadran con él, y que
 la pantalla de cierre lee la frase sin cortarse a 1366×768.
+
+## BUGFIX-CUOTA — Sin créditos no es sin asiento, y los errores se leen
+
+El parte del 2026-08-31: al agotarse las peticiones premium de la organización, la sesión en vivo
+dijo en rojo «tu cuenta no tiene asiento en GitHub», y además lo dijo medio tapado por los controles
+de al lado. Dos fallos independientes que se arreglan aparte.
+
+### D-706 — Qué devuelve REALMENTE el proveedor, y de dónde se ha sacado
+
+No se ha deducido del mensaje que se veía: se ha leído el log de la máquina del usuario
+(`%LOCALAPPDATA%/Atalaya/logs/atalaya-20260831.log`), donde el fallo aparece **tres veces**, a las
+08:17:31, 08:18:00 y 08:19:03, siempre igual:
+
+```
+[WRN] CopilotSession.SendAndWaitAsync failed. CompletedBy=error
+System.InvalidOperationException: Session error: You have exceeded your monthly quota
+  (Request ID: FA81:2498A4:244E7F9:2DAED35:6A951C79)
+```
+
+Tres hechos que gobiernan todo lo demás:
+
+1. **El SDK no tipa nada.** Un `InvalidOperationException` pelado, sin código, sin tipo de error y
+   sin campo estructurado. Clasificar es leer un texto — no hay otra vía, y hay que asumirlo.
+2. **El único dato duro es el `Request ID`.** Es lo que quien administra la organización puede
+   buscar. Por eso el crudo se conserva entero y se ofrece copiable, en vez de resumirse.
+3. **La cuota es mensual y el error lo dice** («monthly»), pero **NO dice la fecha del reset**. Así
+   que el mensaje dice «cuota mensual» y calla la fecha: decirla sería inventarla.
+
+**La causa raíz, en una línea:** `LooksLikeNoSeat` contenía `m.Contains("quota")`. La cuota estaba
+literalmente escrita dentro del detector del asiento.
+
+### D-707 — Una taxonomía, un clasificador, y el orden es la corrección
+
+`CopilotFailure` es ahora el único sitio donde se decide de qué se ha quejado el proveedor. Antes el
+criterio vivía repartido en cuatro `LooksLikeX` privados de `RealCopilotAgent`, consultados desde
+dos `catch` distintos con listas distintas — y con dos copias del criterio, una se queda vieja. Fue
+exactamente lo que pasó.
+
+Seis diagnósticos, cada uno con su remedio, y el **orden importa porque lo más específico gana**:
+
+| Orden | Diagnóstico | Se reconoce por | Remedio |
+|---|---|---|---|
+| 1 | `ModelUnavailable` | menciona un modelo **y** niega su disponibilidad | elegir otro en Ajustes (F5.15) |
+| 2 | `QuotaExhausted` | `quota`, `premium request`, `usage limit`, `spending limit`, `429` | esperar al reset o bajar de multiplicador |
+| 3 | `NoSeat` | `seat`, `not entitled`, `entitlement`, `copilot_not_enabled` | pedir la licencia |
+| 4 | `TokenRejected` / `NotAuthenticated` | `401`, `unauthorized`, `bad credentials` | reconectar la cuenta |
+| 5 | `Offline` | `HttpRequestException`, `no such host`, `503`… | reintentar: es lo único transitorio |
+| 6 | `Unknown` | nada de lo anterior | **el error crudo, íntegro** |
+
+**Qué salió del detector del asiento.** `quota` —el fallo— y también `403`/`forbidden` a secas, que
+no dicen de qué van. Un 403 pelado pasa a ser el **último** recurso, y solo con credencial válida
+detrás; cuando se usa, el mensaje **declara que es una conjetura** («el proveedor solo ha devuelto un
+403 sin más detalle») y el crudo viaja al lado para poder contradecirla. Sin credencial no se
+conjetura nada: falta lo primero, y eso es `NotAuthenticated`.
+
+**El Request ID se recorta ANTES de buscar códigos HTTP.** Es una ristra hexadecimal separada por
+dos puntos, y puede contener un `401` o un `403` por pura casualidad —`(Request ID: 401:403:AA)` es
+un identificador perfectamente válido—. Clasificar por él sería repetir el mismo fallo con otro
+disfraz. Los códigos se buscan además con frontera de palabra: el `403` de `F403A` no es un 403.
+
+**Y lo desconocido enseña el dato crudo.** «Copilot ha rechazado la operación y Atalaya no reconoce
+el motivo, así que no se lo inventa», seguido del error del proveedor entero. Un mensaje bonito con
+la causa equivocada es peor que un error feo con la causa verdadera (N-2): manda a alguien a
+arreglar lo que no está roto, que es justo lo que costó esta mañana.
+
+### D-708 — Una excepción de proveedor, con el problema y el crudo dentro
+
+`CopilotProviderException` gana `Problem` y `Detail`, y `CopilotAuthenticationException` pasa a
+**heredar** de ella en vez de ser el cajón de todo — así los `catch` que ya la nombraban no cambian
+de sentido, y cuota, red y lo desconocido dejan de colarse por debajo hasta el `catch (Exception)`
+genérico, donde salían como «La sesión se ha interrumpido por un error: …».
+
+`AgentReadiness` gana `Detail` por lo mismo: el mensaje es para decidir qué hacer, el crudo para
+poder reclamar. **Van separados**, y la vista los presenta separados.
+
+**`IsRetryable` se declara en el clasificador**, no en quien llama: solo `Offline` lo es. Con la
+regla escrita en un sitio, ningún camino futuro puede decidir por su cuenta reintentar contra un
+grifo cerrado. Hoy no hay reintento automático en ninguna parte, y ésta es la barandilla para que
+siga siendo verdad.
+
+### D-709 — La cuota a mitad de barrido NO tira el trabajo pagado
+
+El barrido solo capturaba `OperationCanceledException`. Cualquier otra excepción subía entera y se
+llevaba por delante **todo el cierre ordenado**: el registro de la sesión, las marcas del inventario,
+la liberación de los claims y el informe. Con la cuota agotada en la unidad 4 de 40, las tres
+primeras quedaban **pagadas y sin rastro** —y sus claims bloqueando al resto del equipo hasta que
+caducara el TTL—.
+
+Ahora un `CopilotProviderException` a mitad se trata **igual que una parada del usuario**: se corta
+ahí y se baja al cierre ordenado. La causa viaja en `SessionResult.Failure` y no como excepción,
+precisamente para que el cierre pueda ejecutarse.
+
+- **No se prueba ni una unidad más.** Al primer corte se para: seguir sería quemar llamadas del reset
+  siguiente contra un grifo cerrado.
+- **Queda escrito en la sesión**, no solo en la pantalla: una nota con el problema, el resumen y el
+  crudo. Dentro de un mes, quien mire por qué esta sesión cubrió una de tres tiene que leerlo en el
+  hub, que es donde vive la historia.
+- **No cierra ciclo.** Una sesión cortada no cubrió lo que decía cubrir.
+- **Y el límite:** si el corte llega ANTES de cerrar la primera unidad no hay nada que salvar, y la
+  excepción sube tal cual — sin sesión vacía en el hub y sin informe. Es el comportamiento que F5.15
+  dejó probado y sigue siendo el correcto.
+
+**La sesión queda marcada como las DOS cosas**: terminada (hay trabajo que resumir) y fallida (no
+cubrió todo). El banner dice por qué se paró y debajo sigue el resumen de lo que sí se auditó, con
+su línea propia — «Cortada por el proveedor», con las unidades que se quedaron sin mirar. Enseñar
+solo el banner tiraría a la basura la única prueba de que ese trabajo existe.
+
+### D-710 — El aviso de error tiene FILA PROPIA, y por qué se solapaba
+
+El banner vivía en `Grid.Row="1"`, **la misma fila que el cuerpo de tres columnas**. En un `Grid` de
+WPF eso no reparte espacio: superpone. Y gana el Z-order, o sea el que se declara después, que era
+el cuerpo — de ahí que el mensaje quedara medio tapado por la cola de unidades y la columna de
+actividad. El `VerticalAlignment="Top"` que llevaba era el parche con el que «casi» funcionaba.
+
+La corrección es estructural: una fila `Auto` propia. El banner mide lo que ocupa y **empuja** al
+cuerpo hacia abajo; sin fallo, la fila mide cero y no reserva ni un píxel.
+
+Con él, lo que faltaba para poder usar el error:
+
+- **Seleccionable.** El mensaje y el crudo son `TextBox` de solo lectura sin chrome, no `TextBlock`:
+  un `TextBlock` no se selecciona con el ratón, y este texto está para pegarlo en un correo.
+- **Copiar error** al portapapeles —mensaje + crudo—, porque seleccionar a mano varias líneas dentro
+  de un banner es el gesto que nadie hace. Si el portapapeles está ocupado se dice y no se rompe nada.
+- **Ver detalle** pliega el crudo por defecto y lo despliega a un clic, dentro de un `ScrollViewer`
+  de `MaxHeight` 120. Así la longitud del error del proveedor **no decide el layout**.
+- Icono y color de error de la casa, y las brochas del tema para el texto: legible en los dos.
+
+### D-711 — Y la lista de modelos vacía deja de culpar al asiento
+
+De la misma familia y encontrado por el camino: cuando `ListModelsAsync` devolvía vacío, el aviso
+decía «Revisa tu asiento antes de auditar». Una lista vacía es compatible con el asiento, con una
+política de la organización y con la cuota, y el runtime no dice cuál. Ahora se enumeran las tres en
+vez de afirmar una. Y cuando esa llamada **falla**, el motivo se clasifica con el mismo clasificador
+en vez de resumirse a mano.
+
+### D-712 — Cobertura (48 tests nuevos, 1.326 en total, todo en verde)
+
+`ProviderFailureTests` (Copilot) — la tabla entera de la taxonomía, con **el error literal del log**
+como caso principal: que sale `QuotaExhausted` y jamás `NoSeat`, que su mensaje habla de peticiones
+premium y descarta el asiento en voz alta, que dice «mensual» porque el error lo dice, y que la
+cuota gana al asiento cuando el texto menciona las dos. Más los matices que costaron el fallo: el
+código HTTP dentro del Request ID que no clasifica nada, el `403` de `F403A` que no es un 403, el
+403 pelado que se declara conjetura, el desconocido que enseña el crudo, y el crudo con su tipo, su
+texto y su Request ID.
+
+`QuotaMidSweepTests` (App) — la cuota en la unidad 2 de 3: hallazgo previo conservado, sesión
+registrada con su nota y su crudo, la unidad cubierta marcada y las otras pendientes, ninguna
+llamada de más, ciclo sin cerrar, y en la sesión en vivo el estado terminal con el reloj parado, el
+mensaje sin la palabra «asiento», el detalle plegado que se despliega, y el resumen con su línea.
+Más el límite: sin ninguna unidad cubierta no se registra una sesión vacía.
+
+`FailureBannerLayoutTests` (App) — la estructura (nadie comparte fila, cuatro filas, sin el parche
+del anclaje) y, sobre todo, **la geometría medida de verdad**: se carga el XAML real en un hilo STA,
+se mide a 1366×768, 900×700 y 700×520, y se comprueba que el rectángulo del banner no se cruza con
+el del cuerpo ni con el del pie, que el cuerpo empieza donde acaba el banner, que sin fallo la fila
+mide cero, y que un crudo cuarenta veces más largo que el real sigue sin empujar nada. El andamiaje
+STA son seis líneas: no se ha traído ningún paquete nuevo al proyecto de tests.
+
+### D-713 — Lo visto y lo que queda
+
+El banner se ha **renderizado** con los textos reales —el mensaje de cuota y el crudo del log— en
+los dos temas, a 1366×768 y 900×700, plegado y desplegado. Se lee entero, envuelve bien, el crudo
+sale en monoespaciada dentro de su caja acotada, y no toca el cuerpo en ningún caso.
+
+Queda para el asiento humano: verlo **dentro de la aplicación viva** con una sesión real —el render
+monta la plantilla fuera de la ventana— y, cuando vuelva a haber cuota, comprobar el circuito
+entero de punta a punta. Lo que ninguna prueba puede dar es el caso que no hemos visto: si el
+proveedor devuelve un texto nuevo, saldrá como desconocido **con su crudo delante**, que es
+exactamente para lo que está esa fila.
