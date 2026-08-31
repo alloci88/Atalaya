@@ -1,4 +1,4 @@
-using GitHub.Copilot;
+﻿using GitHub.Copilot;
 using GitHub.Copilot.Rpc;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -103,14 +103,19 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
             }
 
             // Authenticated. Now check the entitlement — a valid token with no seat fails here.
+            // Pero NO todo lo que falla aqui es un asiento que falta: con la cuota agotada esta
+            // misma llamada revienta, y decir «no tienes asiento» seria inventarse la causa. Se
+            // clasifica, y el clasificador mira la cuota primero (BUGFIX-CUOTA).
             try
             {
                 await _client.ListModelsAsync(ct);
             }
-            catch (Exception ex) when (LooksLikeNoSeat(ex))
+            catch (Exception ex) when (CopilotFailure.Classify(ex, hasToken)
+                                       is AgentProblem.NoSeat or AgentProblem.QuotaExhausted)
             {
-                _logger.LogWarning(ex, "Copilot token valid but no seat");
-                return new AgentReadiness(false, CopilotHelp.NoSeat, AgentProblem.NoSeat);
+                AgentReadiness bad = CopilotFailure.Diagnose(ex, hasToken, ModelName);
+                _logger.LogWarning(ex, "Copilot entitlement check failed: {Problem}", bad.Problem);
+                return bad;
             }
 
             // The account profile wins: with a token credential the runtime has no login to report.
@@ -126,7 +131,7 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Copilot readiness check failed");
-            return Classify(ex, hasToken);
+            return CopilotFailure.Diagnose(ex, hasToken, ModelName);
         }
     }
 
@@ -264,13 +269,11 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
                 await session.DisposeAsync();
             }
         }
-        catch (Exception ex) when (LooksLikeModelUnavailable(ex))
+        // BUGFIX-CUOTA: UN solo camino de traduccion. Antes habia dos catch con sus propios
+        // detectores y todo lo que no casara con ninguno se escapaba crudo hasta la vista.
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            throw new CopilotModelUnavailableException(ModelName, ex);
-        }
-        catch (Exception ex) when (LooksLikeAuthError(ex) || LooksLikeNoSeat(ex))
-        {
-            throw new CopilotAuthenticationException(Classify(ex, CurrentToken() is not null).Message, ex);
+            throw Translate(ex);
         }
     }
 
@@ -442,112 +445,40 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
                 await session.DisposeAsync();
             }
         }
-        // F5.15: el modelo que ya no existe va PRIMERO, porque su remedio es distinto —y más
-        // barato— que el de un problema de credenciales: elegir otro en Ajustes.
-        catch (Exception ex) when (LooksLikeModelUnavailable(ex))
+        // BUGFIX-CUOTA: UN solo camino de traduccion. Antes habia dos catch con sus propios
+        // detectores y todo lo que no casara con ninguno se escapaba crudo hasta la vista.
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            throw new CopilotModelUnavailableException(ModelName, ex);
-        }
-        catch (Exception ex) when (LooksLikeAuthError(ex) || LooksLikeNoSeat(ex))
-        {
-            throw new CopilotAuthenticationException(Classify(ex, CurrentToken() is not null).Message, ex);
+            throw Translate(ex);
         }
     }
 
     /// <summary>
-    /// El runtime rechazó el modelo (F5.15). El SDK no tipa este fallo, así que se reconoce por el
-    /// texto: <c>session.create</c> devuelve «Model {id} is not available». Se exige que aparezcan
-    /// las DOS piezas —«model» y la negación de disponibilidad— para no confundirlo con cualquier
-    /// otro mensaje que mencione un modelo de pasada.
+    /// Un fallo del proveedor convertido en la excepcion que le corresponde (BUGFIX-CUOTA).
+    /// <para>
+    /// La clasificacion entera vive en <see cref="CopilotFailure"/> y no aqui: la misma pregunta
+    /// —«de que se ha quejado el proveedor»— se hace desde el chequeo de disponibilidad y desde la
+    /// ejecucion, y con dos copias del criterio una de las dos se queda vieja. Fue exactamente lo
+    /// que paso: el detector de «sin asiento» llevaba «quota» dentro.
+    /// </para>
+    /// </summary>
+    private Exception Translate(Exception ex)
+    {
+        bool hasToken = CurrentToken() is not null;
+        AgentReadiness bad = CopilotFailure.Diagnose(ex, hasToken, ModelName);
+        _logger.LogWarning(ex, "Copilot rechazo la operacion: {Problem}", bad.Problem);
+
+        return bad.Problem == AgentProblem.ModelUnavailable
+            ? new CopilotModelUnavailableException(ModelName, ex)
+            : new CopilotProviderException(bad.Message, bad.Problem, bad.Detail, ex);
+    }
+
+    /// <summary>
+    /// El runtime rechazo el modelo (F5.15). Se conserva el nombre porque F5.15 lo dejo probado con
+    /// su tabla de mensajes; el criterio vive ya en el clasificador comun.
     /// </summary>
     public static bool LooksLikeModelUnavailable(Exception ex)
-    {
-        for (Exception? e = ex; e is not null; e = e.InnerException)
-        {
-            string m = e.Message ?? string.Empty;
-            bool mentionsModel = m.Contains("model", StringComparison.OrdinalIgnoreCase);
-            bool unavailable =
-                m.Contains("is not available", StringComparison.OrdinalIgnoreCase)
-                || m.Contains("not available", StringComparison.OrdinalIgnoreCase)
-                || m.Contains("unknown model", StringComparison.OrdinalIgnoreCase)
-                || m.Contains("unsupported model", StringComparison.OrdinalIgnoreCase)
-                || m.Contains("model_not_found", StringComparison.OrdinalIgnoreCase);
-            if (mentionsModel && unavailable)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>Maps an SDK/transport failure onto a specific, actionable diagnosis (F2.3).</summary>
-    private static AgentReadiness Classify(Exception ex, bool hasToken)
-    {
-        if (LooksLikeModelUnavailable(ex))
-        {
-            return new AgentReadiness(false, CopilotHelp.ModelUnavailable(null), AgentProblem.ModelUnavailable);
-        }
-
-        if (LooksLikeNoSeat(ex))
-        {
-            return new AgentReadiness(false, CopilotHelp.NoSeat, AgentProblem.NoSeat);
-        }
-
-        if (LooksLikeOffline(ex))
-        {
-            return new AgentReadiness(
-                false,
-                "No hay conexión con GitHub. Comprueba la red o el proxy y reintenta.",
-                AgentProblem.Offline);
-        }
-
-        if (!hasToken)
-        {
-            return new AgentReadiness(false, CopilotHelp.NoAccount, AgentProblem.NotAuthenticated);
-        }
-
-        return LooksLikeAuthError(ex)
-            ? new AgentReadiness(false, CopilotHelp.TokenRejected, AgentProblem.TokenRejected)
-            : new AgentReadiness(false, CopilotHelp.TokenRejected, AgentProblem.Unknown);
-    }
-
-    private static bool LooksLikeAuthError(Exception ex)
-    {
-        string m = Flatten(ex);
-        return m.Contains("authentication") || m.Contains("not authenticated")
-            || m.Contains("custom provider") || m.Contains("unauthorized") || m.Contains("401");
-    }
-
-    private static bool LooksLikeNoSeat(Exception ex)
-    {
-        string m = Flatten(ex);
-        return m.Contains("seat") || m.Contains("subscription") || m.Contains("not entitled")
-            || m.Contains("entitlement") || m.Contains("quota") || m.Contains("403") || m.Contains("forbidden");
-    }
-
-    private static bool LooksLikeOffline(Exception ex)
-    {
-        if (ex is HttpRequestException)
-        {
-            return true;
-        }
-
-        string m = Flatten(ex);
-        return m.Contains("no such host") || m.Contains("network") || m.Contains("connection refused")
-            || m.Contains("name or service not known") || m.Contains("timed out while connecting");
-    }
-
-    private static string Flatten(Exception? ex)
-    {
-        var text = new System.Text.StringBuilder();
-        for (Exception? e = ex; e is not null; e = e.InnerException)
-        {
-            text.Append(e.Message).Append(' ');
-        }
-
-        return text.ToString().ToLowerInvariant();
-    }
+        => CopilotFailure.Classify(ex, hasToken: true) == AgentProblem.ModelUnavailable;
 
     /// <summary>
     /// Mensajes cuyos deltas ya se han emitido: evita duplicar el texto cuando, al cerrar el turno,

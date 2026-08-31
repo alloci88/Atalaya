@@ -93,11 +93,27 @@ public enum AgentProblem
     /// </summary>
     ModelUnavailable,
 
+    /// <summary>
+    /// La organización se ha quedado sin peticiones premium de Copilot (BUGFIX-CUOTA). No es un
+    /// problema de la cuenta ni de la credencial: el asiento está, la licencia está, y lo que falta
+    /// son peticiones. Tiene tipo propio porque tiene REMEDIO propio —esperar al reset, o bajar a un
+    /// modelo con multiplicador menor—, y porque el remedio equivocado (reclamar un asiento que ya
+    /// se tiene) hace perder el tiempo a dos personas.
+    /// </summary>
+    QuotaExhausted,
+
     Unknown,
 }
 
 /// <summary>Whether the agent can run, with a human-readable reason (§6.1 help screen).</summary>
-public sealed record AgentReadiness(bool Ready, string Message, AgentProblem Problem = AgentProblem.None);
+/// <param name="Detail">
+/// El error del proveedor tal cual —tipo, texto y Request ID—, para poder copiarlo y pegarlo
+/// (BUGFIX-CUOTA). Va SEPARADO del mensaje: la frase es para decidir qué hacer, el crudo es para
+/// que quien administre la organización pueda buscar la petición concreta. Vacío cuando no hay
+/// excepción detrás, como en las comprobaciones que fallan por respuesta y no por error.
+/// </param>
+public sealed record AgentReadiness(
+    bool Ready, string Message, AgentProblem Problem = AgentProblem.None, string? Detail = null);
 
 /// <summary>
 /// Un modelo disponible para la cuenta, tal y como lo lista el SDK (F5.1). Se pide siempre al
@@ -113,12 +129,51 @@ public sealed record AgentReadiness(bool Ready, string Message, AgentProblem Pro
 public sealed record AgentModel(string Id, string Name, double? Multiplier = null);
 
 /// <summary>
+/// El proveedor ha rechazado la operación, y ya se sabe POR QUÉ (BUGFIX-CUOTA).
+/// <para>
+/// Existe porque «no se ha podido usar Copilot» tenía un solo tipo de excepción —la de
+/// autenticación— y por debajo se colaban cuota, asiento, red y lo desconocido. Quien la captura
+/// necesita las tres cosas que trae: el <see cref="Problem"/> para decidir qué ofrecer, el
+/// <see cref="Exception.Message"/> para enseñarlo, y el <see cref="Detail"/> crudo para que se
+/// pueda copiar.
+/// </para>
+/// </summary>
+public class CopilotProviderException : Exception
+{
+    public CopilotProviderException(
+        string message, AgentProblem problem, string? detail = null, Exception? inner = null)
+        : base(message, inner)
+    {
+        Problem = problem;
+        Detail = detail;
+    }
+
+    public AgentProblem Problem { get; }
+
+    /// <summary>El error del proveedor tal cual (tipo + texto + Request ID). Copiable.</summary>
+    public string? Detail { get; }
+
+    /// <summary>Reintentar solo tiene sentido si el problema es transitorio. La cuota NO lo es.</summary>
+    public bool IsRetryable => CopilotFailure.IsRetryable(Problem);
+}
+
+/// <summary>
 /// Thrown when a Copilot operation fails because the CLI is not authenticated (§6.1). Carries the
 /// help text so the UI can show "ejecuta `copilot` y autentícate" instead of a raw SDK error.
+/// <para>
+/// Sigue existiendo —y sigue siendo lo que se lanza en los casos de credencial— para que los
+/// <c>catch</c> que ya la nombraban no cambien de sentido. Lo que ha cambiado es que ahora es UNA
+/// de las hijas de <see cref="CopilotProviderException"/> y no el cajón de todo.
+/// </para>
 /// </summary>
-public sealed class CopilotAuthenticationException : Exception
+public sealed class CopilotAuthenticationException : CopilotProviderException
 {
-    public CopilotAuthenticationException(string message, Exception? inner = null) : base(message, inner) { }
+    public CopilotAuthenticationException(string message, Exception? inner = null)
+        : base(message, AgentProblem.NotAuthenticated, null, inner) { }
+
+    public CopilotAuthenticationException(
+        string message, AgentProblem problem, string? detail, Exception? inner = null)
+        : base(message, problem, detail, inner) { }
 }
 
 /// <summary>
@@ -130,10 +185,11 @@ public sealed class CopilotAuthenticationException : Exception
 /// puede ofrecer ese enlace, y sin el enlace el usuario no sabe que la cura está a dos clics.
 /// </para>
 /// </summary>
-public sealed class CopilotModelUnavailableException : Exception
+public sealed class CopilotModelUnavailableException : CopilotProviderException
 {
     public CopilotModelUnavailableException(string? modelId, Exception? inner = null)
-        : base(CopilotHelp.ModelUnavailable(modelId), inner)
+        : base(CopilotHelp.ModelUnavailable(modelId), AgentProblem.ModelUnavailable,
+               CopilotFailure.Raw(inner), inner)
         => ModelId = modelId;
 
     /// <summary>El id que se pidió, para poder nombrarlo. Null si no se había configurado ninguno.</summary>
@@ -170,6 +226,35 @@ public static class CopilotHelp
               + "Elige otro en Ajustes."
             : $"No se pudo iniciar: el modelo «{modelId}» no está disponible para tu cuenta. "
               + "Elige otro en Ajustes.";
+
+    /// <summary>
+    /// La organización se ha quedado sin peticiones premium (BUGFIX-CUOTA). Dice las tres cosas que
+    /// faltaban: QUÉ pasa (no es tu cuenta), que en Atalaya NO hay nada que tocar, y las dos únicas
+    /// salidas reales. El periodo solo se nombra cuando el propio error lo dice; la fecha exacta del
+    /// reset no la trae, así que no se inventa.
+    /// </summary>
+    public static string QuotaExhausted(string? period)
+        => "La organización ha agotado sus peticiones premium de Copilot"
+        + (period is { Length: > 0 } ? $" (el proveedor la describe como cuota {period})" : string.Empty)
+        + ". No es tu asiento ni tus credenciales, y no hay nada que arreglar en Atalaya: hay que "
+        + "esperar a que se renueve la cuota, o auditar con un modelo de multiplicador menor si "
+        + "vuestro plan lo permite. Atalaya no reintenta sola: reintentar contra una cuota agotada "
+        + "gasta las peticiones del reset siguiente.";
+
+    /// <summary>Sin red o con el servicio caído: es transitorio y se puede reintentar.</summary>
+    public const string Offline =
+        "No hay conexión con GitHub (o su servicio no responde). Comprueba la red o el proxy y "
+        + "reintenta: este fallo es transitorio.";
+
+    /// <summary>
+    /// Lo que no se ha sabido clasificar. Enseña el error del proveedor ÍNTEGRO en vez de proponer
+    /// una causa: un mensaje bonito con la causa equivocada manda a alguien a arreglar lo que no
+    /// está roto, que es justo lo que pasó con la cuota (N-2).
+    /// </summary>
+    public static string Unknown(string raw)
+        => "Copilot ha rechazado la operación y Atalaya no reconoce el motivo, así que no se lo "
+        + "inventa. Éste es el error tal cual lo ha devuelto el proveedor"
+        + (string.IsNullOrWhiteSpace(raw) ? "." : $": {raw}");
 
     /// <summary>
     /// Legacy fallback text: used only when there is no account token and Atalaya falls back to

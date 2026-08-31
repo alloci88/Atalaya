@@ -1,4 +1,4 @@
-using Atalaya.Copilot;
+﻿using Atalaya.Copilot;
 
 namespace Atalaya.App.Services;
 
@@ -73,13 +73,17 @@ public sealed class ModelResolver
         {
             // No se pudo preguntar. Con un modelo configurado se sigue adelante con él —puede ser
             // perfectamente válido y el fallo estar en la red—; sin ninguno no hay nada que probar.
+            //
+            // BUGFIX-CUOTA: pero el MOTIVO se clasifica, no se resume. Si lo que ha pasado es que la
+            // organización agotó sus peticiones, decirlo aquí ahorra el viaje entero.
+            AgentProblem why = CopilotFailure.Classify(ex, hasToken: true);
             return configured.Length > 0
                 ? ModelResolution.Keep(configured)
                 : new ModelResolution(
                     string.Empty,
-                    "No se pudo consultar la lista de modelos de tu cuenta ("
-                    + Short(ex.Message) + "), y esta máquina todavía no tiene ninguno elegido. "
-                    + "Abre Ajustes y elige uno.",
+                    "No se pudo consultar la lista de modelos de tu cuenta: "
+                    + CopilotFailure.Message(why, ex, null, CopilotFailure.Raw(ex))
+                    + " Esta máquina todavía no tiene ninguno elegido: abre Ajustes y elige uno.",
                     Changed: false,
                     Failed: true);
         }
@@ -87,9 +91,14 @@ public sealed class ModelResolver
         var usable = available.Where(m => !string.IsNullOrWhiteSpace(m.Id)).ToList();
         if (usable.Count == 0)
         {
+            // BUGFIX-CUOTA: una lista vacía es compatible con varias causas —asiento, política de
+            // la organización, cuota— y el runtime no dice cuál. Se enumeran en vez de elegir una:
+            // afirmar «revisa tu asiento» manda a la mitad de la gente a reclamar lo que ya tiene.
             return new ModelResolution(
                 configured,
-                "Tu cuenta no ofrece ningún modelo de Copilot. Revisa tu asiento antes de auditar.",
+                "Tu cuenta no ofrece ningún modelo de Copilot. El runtime no dice por qué: puede ser "
+                + "el asiento, una política de la organización o su cuota de peticiones. Mira Cuenta "
+                + "antes de auditar.",
                 Changed: false,
                 Failed: configured.Length == 0);
         }
