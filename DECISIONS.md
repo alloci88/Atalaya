@@ -7270,3 +7270,129 @@ Queda para el asiento humano: verlo **dentro de la ventana viva** —el render m
 ella— y, cuando vuelva a haber cuota, comprobar el circuito entero de punta a punta. Lo que ninguna prueba puede dar es el caso que no hemos visto: si el
 proveedor devuelve un texto nuevo, saldrá como desconocido **con su crudo delante**, que es
 exactamente para lo que está esa fila.
+
+## BUGFIX-CIERRE — Cerrar lo fallido, y que el Portafolio deje de mentir
+
+Dos consecuencias del mismo día de cuota agotada, independientes entre sí: las pantallas fallidas se
+quedaron fijas en el rail sin salida, y la tarjeta de XBLAST siguió diciendo «auditando ahora»
+**incluso tras reiniciar la aplicación**. Lo segundo era lo grave: el estado estaba en el hub.
+
+### D-714 — Los claims son LA fuente de «auditando ahora», y solo los soltaba un camino
+
+El distintivo del Portafolio se deriva de los claims publicados —`PortfolioQuery`: «hay algún claim
+vivo en esta app»—, que es lo correcto: es el único dato que ve **el equipo entero**, no solo esta
+máquina. El fallo no era la fuente, era **quién la cierra**.
+
+Los claims se publicaban al arrancar la sesión y se soltaban en el **cierre ordenado** del
+coordinador. Cualquier final que no pasara por ahí se los dejaba puestos. Y el `finally` de
+`LiveSessionService` remataba: borraba la marca de sesión abierta **sin soltarlos**, con lo que la
+recuperación del arranque (D-110) tampoco encontraba después nada que limpiar.
+
+Medido contra el hub real del usuario, esto es lo que había:
+
+| Claim | Máquina | Antigüedad | ¿Anunciaba? |
+|---|---|---|---|
+| `XBLASTCommon/Enums/EnumLanguage.cs` | ALVARO | 523 min | no (ya caducado, pero el fichero seguía ahí) |
+| `XBLASTCommon/Class/CommonStatics.cs` | ALVARO | 23 min | **sí** — era el que mentía |
+
+Dos ficheros huérfanos, ninguna marca de sesión, y nadie que fuera a limpiarlos.
+
+### D-715 — Soltar en el instante del fallo, y desde un solo sitio
+
+`SessionClaims.Release(hub, slug, units)` es ahora el único liberador, y lo llaman los tres caminos
+que pueden cerrar una sesión: el cierre ordenado del coordinador, el `finally` de la sesión en vivo
+cuando **no** llegó a ese cierre, y la recuperación del arranque.
+
+El `finally` distingue los dos casos con una bandera puesta justo después de que `RunAsync`
+devuelva: si devolvió, el coordinador ya soltó; si lanzó, se suelta aquí. Soltar de más no rompe
+nada —borrar un claim que ya no está es un no-op—; soltar de menos es lo que costó este parte.
+
+**Sin esperar a nada.** Se suelta en el instante del fallo, no en la siguiente sincronización ni
+cuando al usuario le dé por navegar. El Portafolio recalcula la tarjeta cada vez que se abre, así
+que en cuanto se vuelve a él ya dice la verdad.
+
+### D-716 — El margen de silencio lo pone QUIEN LEE, y son 30 minutos
+
+Un claim traía su propio `ttlMinutes`. Eso deja la verdad en manos de quien escribe: una versión
+futura, o una máquina con el reloj movido, podría dejar uno anunciándose durante días.
+
+`Claim.AnnouncesActivityAt(now)` añade la condición que faltaba —cuánto hace que **nadie lo
+refresca**— contra `ClaimRules.MaxSilence`, y manda el más estricto de los dos.
+
+**Treinta minutos, y por qué.** Es el mismo margen que el TTL con el que nacen los claims, así que
+no estrena una segunda regla que pudiera contradecir a la primera. El número sale de qué error se
+prefiere: por debajo, una unidad grande que de verdad se está auditando dejaría de anunciarse a
+mitad y dos personas podrían pisarse; por encima, a un compañero se le cierra el portátil y su
+tarjeta miente al equipo entero durante horas. Media hora es lo que tarda de sobra una unidad, y lo
+que ya nadie acepta como «ahora mismo».
+
+**Es un margen de LECTURA: no borra nada de nadie.** Un claim ajeno y callado sigue en el hub —no es
+nuestro, y no sabemos si su dueño está vivo—, simplemente deja de anunciarse. Mejor no decir nada
+que mentirle al equipo.
+
+### D-717 — Autocuración al arrancar, y por qué hacían falta DOS limpiezas
+
+`CleanUpAtStartup()` hace dos cosas distintas, y por eso van separadas:
+
+1. **La marca de sesión abierta de un proceso que ya no está** → se cierra como interrumpida, con su
+   registro y sus claims soltados. Es el caso de D-110 y ya existía.
+2. **Los claims de ESTA máquina sin ninguna marca detrás** → se sueltan. Esto es nuevo, y es lo
+   único que podía limpiar el estado real: no hay sesión que registrar (no queda identidad), pero sí
+   basura que soltar. Al arrancar no hay ningún proceso nuestro auditando, así que un claim de esta
+   máquina es basura **por definición**.
+
+**Solo los nuestros.** Los de otras máquinas no se tocan: borrar el claim de un compañero que sí
+está auditando es exactamente el fallo que los claims existen para evitar. Para ésos vale el margen
+de lectura de D-716, que no borra nada.
+
+**Y si hay otra instancia viva en esta misma máquina, no se toca NADA** —ni su marca ni sus claims,
+que son justo los que está usando—. Lo decide el mismo guardia de PID + instante de arranque que ya
+usaba D-110.
+
+**Verificado contra el caso real**, sobre una copia del hub del usuario: dos claims soltados, marca
+inexistente (como se esperaba), y XBLAST pasando de `auditandoAhora=True` a `False` sin que nadie
+edite nada a mano.
+
+### D-718 — «Cerrar» archiva la pantalla, y no es «Descartar»
+
+Una sesión o un arreglo en estado **terminal** —completado o fallido— ofrece **Cerrar** en su
+cabecera. La pantalla se archiva, su entrada desaparece del rail, y se vuelve al Portafolio; en el
+arreglo, a la **ficha del hallazgo**, que es de donde se salió y donde está lo siguiente que hacer
+con él.
+
+- **Solo en lo terminal.** Mientras corre, el botón de al lado es «Detener», que es otra cosa.
+  Archivar una sesión viva la dejaría corriendo sin ninguna superficie que la enseñe: el zombi que
+  F5.15 vino a matar.
+- **Cerrar no borra historia.** Lo único que se tira es estado de PANTALLA, que solo existía en
+  memoria. La sesión, sus hallazgos y su informe siguen en el hub, y el informe se lee donde se leen
+  todos.
+- **Cerrar no es descartar.** «Descartar todo» revierte lo que el agente escribió en el clon; esto
+  solo retira la pantalla. Si quedaban ficheros tocados se **pregunta**, con tres respuestas y no
+  dos: conservar (lo normal — son del usuario y su árbol es suyo), descartar (que pasa por el mismo
+  camino de siempre) o cancelar. Conservar cierra el registro de instantáneas: a partir de ahí son
+  suyos y Atalaya deja de ofrecerse a revertirlos, que es lo honesto. **Sin cambios, cierra directo
+  y sin preguntas** — que es exactamente el caso del parte: el arreglo fallido por cuota no había
+  tocado un solo fichero, y la propia pantalla lo decía.
+- El botón por defecto del diálogo es **conservar**: cerrar una pantalla no puede tocar el árbol de
+  trabajo de nadie por inercia.
+
+### D-719 — Cobertura (20 tests nuevos, 1.359 en total, todo en verde)
+
+`TerminalScreenTests` — la sesión que falla y suelta lo que anunciaba (claims vacíos y Portafolio sin
+«auditando ahora»); la marca que no se queda colgada; la sesión detenida, igual; **relanzar tras el
+fallo sin reiniciar**; el claim propio sin marca que se suelta al arrancar; el ajeno reciente que se
+respeta; el ajeno callado que deja de anunciarse **sin borrarse**; la otra instancia viva que no se
+toca; la marca de proceso muerto que se cierra como interrumpida; el arranque limpio que no dice
+nada; y del cierre: la sesión fallida que se archiva y desaparece del rail, que cerrar no borra el
+informe ni la sesión, que mientras corre no hay «Cerrar», y que sin sesión no hay nada que cerrar.
+
+En `AssistedFixTests` — cerrar con cambios pregunta y conservar deja el clon intacto; descartar y
+cerrar revierte primero; cancelar no cierra nada; el arreglo fallido sin tocar nada cierra sin
+preguntar; cerrar no borra el informe; y con cambios vivos no se cierra por las buenas.
+
+### D-720 — Lo que queda para el asiento humano
+
+Abrir la aplicación con el estado colgado que hay ahora mismo y ver las dos cosas: que la tarjeta de
+XBLAST deja de decir «auditando ahora» sola, con su aviso, y que «Sesión fallida» y «Arreglo
+fallido» se cierran y se van del rail. La lógica está verificada contra una copia del hub real; lo
+que falta es verlo en la ventana.

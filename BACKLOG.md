@@ -4,10 +4,14 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-31 (BUGFIX-CUOTA — sin créditos no es sin asiento).
+Última revisión: 2026-08-31 (BUGFIX-CIERRE — cerrar lo fallido y el estado de actividad).
 
 ## En vuelo
 
+- **BUGFIX-CIERRE — la limpieza vista en la ventana.** La autocuración está verificada contra una
+  COPIA del hub real (dos claims sueltos liberados, XBLAST dejando de decir «auditando ahora»);
+  falta abrir la aplicación con el estado colgado y ver que se limpia sola con su aviso, y que las
+  dos pantallas fallidas se cierran y desaparecen del rail (D-720).
 - **BUGFIX-CUOTA — el circuito de cuota, visto en la aplicación viva.** El banner se ha renderizado
   con los textos reales en los dos temas y a dos anchos, y la geometría está medida por tests a tres
   tamaños; falta verlo DENTRO de la ventana con una sesión de verdad, y —cuando vuelva a haber
@@ -111,6 +115,14 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## Cerrado
 
+- **BUGFIX-CIERRE · Cerrar lo fallido, y que el Portafolio deje de mentir** — los claims son la
+  fuente de «auditando ahora» y solo los soltaba el cierre ordenado, así que un fallo dejaba la
+  tarjeta mintiendo y el fichero del claim en el hub para siempre; ahora hay un solo liberador al
+  que llaman los tres finales posibles, y el arranque suelta además los claims de esta máquina que
+  quedaron sueltos sin marca detrás (D-714, D-715, D-717). El margen de silencio pasa a decidirlo
+  quien lee, 30 minutos, sin borrar nada de nadie (D-716). Y una pantalla terminal se puede
+  **Cerrar**: se archiva, sale del rail y no borra historia — que no es lo mismo que «Descartar
+  todo», y con ficheros tocados se pregunta (D-718).
 - **BUGFIX-CUOTA · Sin créditos no es sin asiento, y los errores se leen** — la cuota agotada se
   clasificaba como «sin asiento» porque «quota» vivía dentro del detector del asiento: causa falsa y
   remedio opuesto. Ahora hay UN clasificador (`CopilotFailure`) con seis diagnósticos, cada uno con

@@ -520,6 +520,37 @@ cierra ciclo**: no cubrió lo que decía cubrir.
 Y no se prueba ni una unidad más contra un grifo cerrado: al primer corte por cuota el
 barrido para.
 
+### Cerrar una pantalla terminada
+
+Una sesión o un arreglo que ya ha terminado —bien o mal— lleva **«Cerrar»** en su cabecera.
+Archiva la pantalla: su entrada desaparece del menú lateral y vuelves al Portafolio (en el
+arreglo, a la ficha del hallazgo del que saliste).
+
+- **Cerrar no borra nada.** La sesión, sus hallazgos y su informe siguen en el hub; el
+  informe se lee en **Informes**, como todos. Lo único que se va es la pantalla.
+- **Cerrar no es descartar.** Si el agente había dejado ficheros modificados en tu clon,
+  se te pregunta: **conservarlos** (lo normal — son tuyos y tu árbol es tuyo; a partir de
+  ahí Atalaya deja de ofrecerse a revertirlos), **descartarlos** primero, o **cancelar**.
+  Si no se tocó nada, cierra directo y sin preguntas.
+- **Mientras la sesión corre no hay «Cerrar»**: ahí lo que hay es **«Detener»**, que es
+  otra cosa. Archivar una sesión viva la dejaría corriendo sin ninguna pantalla que la
+  enseñe.
+
+### «Auditando ahora», y cuándo deja de decirse
+
+La tarjeta del Portafolio dice «auditando ahora» mientras haya **claims vivos** sobre esa
+aplicación. Los claims son lo que evita que dos personas auditen la misma clase a la vez, y
+son lo único que ve el equipo entero.
+
+Se sueltan **en cuanto la sesión termina**, sea como sea: completada, detenida o fallida.
+Si la aplicación se cierra de golpe a mitad, se sueltan **al volver a abrirla**, y la sesión
+queda registrada como interrumpida con su informe.
+
+Si el claim es de **otra máquina**, Atalaya no lo toca —no sabe si esa persona sigue
+auditando—, pero tampoco se lo cree para siempre: pasados **30 minutos** sin refrescarse, la
+tarjeta deja de anunciar actividad. A alguien se le cierra el portátil a mitad de sesión y su
+tarjeta no puede estar mintiéndole al equipo el resto del día. Mejor no decir nada que mentir.
+
 
 ---
 
