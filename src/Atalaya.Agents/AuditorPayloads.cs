@@ -65,6 +65,17 @@ public sealed record SubmitFindingsResult(IReadOnlyList<SubmitFindingResult> Res
 /// llamada. Son dos magnitudes distintas y sumarlas daría un número que no significa nada. Sin este
 /// campo nada lo impediría. Null = el proveedor no declaró unidad.
 /// </param>
+/// <param name="Calls">
+/// Cuántas llamadas al modelo cuenta esta muestra. Normalmente <b>una</b> — de ahí el valor por
+/// defecto—, y <b>cero</b> cuando la muestra es un AJUSTE y no una llamada nueva.
+/// <para>
+/// Existe porque «llamadas» se contaba como «cuántas muestras han llegado», y en cuanto un
+/// proveedor manda una muestra que corrige a las anteriores —el CLI de Claude Code lo hace al
+/// cerrar cada turno, ver <c>ClaudeStreamReader</c>— esa cuenta empieza a inventarse una llamada
+/// de más por turno. Un número que se enseña al usuario no puede depender de cuántos mensajes
+/// hizo falta para decirlo.
+/// </para>
+/// </param>
 public sealed record UsageSample(
     long InputTokens,
     long OutputTokens,
@@ -72,7 +83,8 @@ public sealed record UsageSample(
     string? Model,
     long CacheReadTokens = 0,
     long CacheWriteTokens = 0,
-    string? CostUnit = null);
+    string? CostUnit = null,
+    int Calls = 1);
 
 /// <summary>
 /// Un hallazgo YA EXISTENTE de la unidad, tal y como se le presenta al auditor (F4). Son pocos

@@ -135,15 +135,23 @@ public sealed class UsageTotals
     public decimal? Cost { get; set; }
     public string? Currency { get; set; }
 
+    /// <summary>
+    /// Llamadas al modelo de toda la sesión. Es un dato PRIMARIO —lo cuenta el proveedor, no se
+    /// deriva de nada— y va aquí para que un informe pueda decirlo sin tener que reconstruirlo del
+    /// desglose por unidad, que en una sesión de arreglo o de verificación no existe.
+    /// </summary>
+    public int Calls { get; set; }
+
     public void Add(long input, long output, decimal? cost)
         => Add(input, output, 0, 0, cost);
 
-    public void Add(long input, long output, long cacheRead, long cacheWrite, decimal? cost)
+    public void Add(long input, long output, long cacheRead, long cacheWrite, decimal? cost, int calls = 0)
     {
         InputTokens += input;
         OutputTokens += output;
         CacheReadTokens += cacheRead;
         CacheWriteTokens += cacheWrite;
+        Calls += calls;
         if (cost is not null)
         {
             Cost = (Cost ?? 0m) + cost.Value;

@@ -266,7 +266,7 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider
                     ModelName,
                     Conversational: true),
                 text => TextStreamed?.Invoke(text),
-                usage => UsageReported?.Invoke(usage with { Model = ModelName }),
+                usage => UsageReported?.Invoke(usage with { Model = usage.Model ?? ModelName }),
                 conversation.NextTurn ?? (_ => Task.FromResult<string?>(null)),
                 () => fix.Closed,
                 conversation.Ready,
@@ -320,15 +320,14 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider
         try
         {
             var runner = new ClaudeCliRunner(cli, message => _logger.LogDebug("{Message}", message), workDirectory);
+            // El consumo viaja SEGÚN OCURRE, llamada a llamada, y no de una vez al terminar: es lo
+            // que hace que el pie de la sesión en vivo se mueva mientras el agente trabaja. El
+            // modelo que se apunta es el que el CLI resolvió de verdad, no el alias que se le pidió.
             ClaudeRunOutcome outcome = await runner.RunAsync(
                 new ClaudeRun(prompt, tools.Select(t => AuditorTools.Qualified(t.Name)).ToList(), configPath, ModelName),
                 text => TextStreamed?.Invoke(text),
+                usage => UsageReported?.Invoke(usage with { Model = usage.Model ?? ModelName }),
                 ct);
-
-            if (outcome.Usage is { } usage)
-            {
-                UsageReported?.Invoke(usage with { Model = outcome.Model ?? ModelName });
-            }
 
             if (outcome.Failed)
             {

@@ -141,7 +141,7 @@ public sealed class ClaudeCliRunner
     /// un zombi gastando cuota, que es el fallo que D-086 costó descubrir en el runtime de Copilot.
     /// </summary>
     public async Task<ClaudeRunOutcome> RunAsync(
-        ClaudeRun run, Action<string>? onText, CancellationToken ct)
+        ClaudeRun run, Action<string>? onText, Action<UsageSample>? onUsage, CancellationToken ct)
     {
         using Process process = Start(Describe(run));
 
@@ -151,7 +151,7 @@ public sealed class ClaudeCliRunner
 
         await WritePromptAsync(process, run.Prompt, ct);
 
-        var reader = new ClaudeStreamReader(onText);
+        var reader = new ClaudeStreamReader(onText, onUsage);
         ClaudeRunOutcome outcome;
         try
         {
@@ -213,15 +213,7 @@ public sealed class ClaudeCliRunner
         var turns = Channel.CreateUnbounded<ClaudeTurn>();
         var pen = new SemaphoreSlim(1, 1);
 
-        var reader = new ClaudeStreamReader(onText, turn =>
-        {
-            if (turn.Usage is { } usage)
-            {
-                onUsage?.Invoke(usage);
-            }
-
-            turns.Writer.TryWrite(turn);
-        });
+        var reader = new ClaudeStreamReader(onText, onUsage, turn => turns.Writer.TryWrite(turn));
 
         ready?.Invoke(new ConversationSteering(process, _trace));
 

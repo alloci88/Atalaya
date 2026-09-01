@@ -228,7 +228,7 @@ public sealed class SessionCoordinator
     /// <c>decimal?</c> porque el pie tiene que poder decir POR QUÉ no hay número, y un nulo suelto
     /// obliga a inventarse una explicación en la vista (F16 §B).
     /// </summary>
-    public event Action<long, long, CostResult, string?>? UsageUpdated;
+    public event Action<long, long, CostResult, string?, int>? UsageUpdated;
 
     /// <summary>
     /// Las tarifas del hub, releídas en cada muestra. Es barato —un JSON pequeño— y evita que una
@@ -349,7 +349,8 @@ public sealed class SessionCoordinator
         long passOutput = 0;
         void OnUsage(UsageSample u)
         {
-            session.Usage.Add(u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.Cost);
+            session.Usage.Add(
+                u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.Cost, u.Calls);
             if (u.CostUnit is not null && string.IsNullOrEmpty(session.Usage.Currency))
             {
                 session.Usage.Currency = u.CostUnit;
@@ -357,7 +358,7 @@ public sealed class SessionCoordinator
 
             if (currentBreakdown is not null)
             {
-                currentBreakdown.Calls++;
+                currentBreakdown.Calls += u.Calls;
                 currentBreakdown.InputTokens += u.InputTokens;
                 currentBreakdown.OutputTokens += u.OutputTokens;
                 currentBreakdown.CacheReadTokens += u.CacheReadTokens;
@@ -393,7 +394,8 @@ public sealed class SessionCoordinator
                 session.Usage.InputTokens,
                 session.Usage.OutputTokens,
                 live,
-                session.Provider);
+                session.Provider,
+                session.Usage.Calls);
         }
 
         _agent.TextStreamed += OnText;

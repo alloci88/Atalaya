@@ -538,7 +538,11 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             FixFindingAlias = FindingAlias,
             Directives = _directiveBundle.Records.ToList(),
         };
-        session.Usage.Add(InputTokens, OutputTokens, CacheReadTokens, 0, Cost);
+        // La caché ESCRITA también, que se estaba pasando como cero: con Claude Code es el
+        // sumando más grande de la factura —escribir en caché se cobra al doble de la entrada— así
+        // que perderlo dejaba el informe del arreglo contando de menos justo donde más pesa. Y las
+        // llamadas, que hasta ahora no se guardaban en ninguna parte para una sesión sin unidades.
+        session.Usage.Add(InputTokens, OutputTokens, CacheReadTokens, CacheWriteTokens, Cost, Calls);
         session.Notes.Add($"Arreglo asistido de {FindingAlias}: {finding.Title}");
         foreach (FixFileChange file in Files)
         {
@@ -1184,7 +1188,9 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         Cost = CostResult.Credits;
         CostUnit = CreditText.LabelFor(Provider);
 
-        Calls++;
+        // Cuántas LLAMADAS trae la muestra, no «una por muestra»: un proveedor puede mandar un
+        // ajuste que corrige a las anteriores sin ser una llamada nueva (UsageSample.Calls).
+        Calls += sample.Calls;
         Changed?.Invoke();
     });
 

@@ -186,7 +186,7 @@ public sealed class VerifyCoordinator
         void OnUsage(UsageSample sample)
         {
             usage.Add(sample.InputTokens, sample.OutputTokens, sample.CacheReadTokens,
-                sample.CacheWriteTokens, sample.Cost);
+                sample.CacheWriteTokens, sample.Cost, sample.Calls);
             if (sample.CostUnit is not null && string.IsNullOrEmpty(usage.Currency))
             {
                 usage.Currency = sample.CostUnit;

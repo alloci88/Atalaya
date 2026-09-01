@@ -183,8 +183,14 @@ public sealed class AssistedFixClaudeTests : IDisposable
         session.Mode.Should().Be(AuditMode.Fix);
         session.Provider.Should().Be(ClaudeCodeProvider.Id);
         session.Model.Should().Be("opus");
-        session.Usage.InputTokens.Should().Be(100);
-        session.Usage.OutputTokens.Should().Be(50);
+        // El consumo de las OCHO llamadas del guion, ya cuadrado contra el agregado que declara el
+        // CLI al cerrar el turno (900 de encargo del sistema + 10 por llamada). Las llamadas se
+        // cuentan una vez cada una: el ajuste del final no es una llamada nueva.
+        session.Usage.Calls.Should().Be(8);
+        session.Usage.InputTokens.Should().Be(980);
+        session.Usage.OutputTokens.Should().Be(40);
+        session.Usage.CacheWriteTokens.Should().Be(160,
+            "la caché escrita también se guarda: con esta casa es el sumando más grande");
 
         string report = File.ReadAllText(_hub.HubPaths.ReportFile(Slug, session.Id.ToString()));
         report.Should().Contain("Claude Code");
@@ -402,11 +408,13 @@ public sealed class AssistedFixClaudeTests : IDisposable
             m => m.Text.Contains("ocupado con este turno"),
             "no se promete una inmediatez que el CLI no garantiza");
 
-        // Y los tokens de LOS DOS turnos se suman: el coste del CLI viene acumulado y el lector
-        // resta, así que sumar aquí no puede contar el primero dos veces.
+        // Y el consumo de LOS DOS turnos, sin contar el primero dos veces: el CLI informa en
+        // acumulado —tanto el coste como el agregado de tokens— y el lector reporta diferencias.
+        // Cuatro llamadas en total: una en el primer turno y tres en el segundo.
         AuditSession session = _hub.Store.ListSessions(Slug).Single();
-        session.Usage.InputTokens.Should().Be(200);
-        session.Usage.OutputTokens.Should().Be(100);
+        session.Usage.Calls.Should().Be(4);
+        session.Usage.InputTokens.Should().Be(940);
+        session.Usage.OutputTokens.Should().Be(20);
     }
 
     /// <summary>
@@ -430,6 +438,129 @@ public sealed class AssistedFixClaudeTests : IDisposable
             .Contain(m => m.Text.Contains("Claude Code") && m.Text.Contains("modelo opus"));
 
         Launcher().EngineLabel.Should().Be("Claude Code, modelo opus");
+    }
+
+    /// <summary>
+    /// <b>El pie se mueve MIENTRAS el agente trabaja.</b> Era el parte: con un turno ya avanzado
+    /// —pregunta contestada y edición aplicada— el pie seguía en «0 llamadas · coste no calculable
+    /// (sin tokens registrados)». Y era mentira dos veces: el proveedor sí informa consumo, y lo
+    /// informa por llamada.
+    /// <para>
+    /// La causa no era que el arreglo no reenviara nada: es que el consumo solo se leía del evento
+    /// que cierra el turno, y con Claude un arreglo entero —leer, preguntar, editar, compilar—
+    /// cabe en UN turno. El pie no se movía hasta el final de la sesión.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task El_pie_cuenta_llamadas_y_tokens_mientras_la_sesion_corre()
+    {
+        Script(
+            "text Voy a mirar el fichero del hallazgo.",
+            $$"""call read_file {"path":"{{Json(UnitPath)}}"}""",
+            "text Ya lo tengo.",
+            "wait sigue.txt",
+            $$"""call apply_edit {"path":"{{Json(UnitPath)}}","reason":"es donde esta el defecto","edits":[{"oldText":"var bytes","newText":"// arreglado\r\n        var bytes"}]}""",
+            """call fix_done {"summary":"hecho","commitTitle":"Arregla BUG-0003","commitDescription":"d"}""");
+
+        LiveFixService fix = Service();
+        var view = new AssistedFixViewModel(fix, new ToastCenter(), new AlwaysDiscard());
+        AnswerCards(fix, new List<FixQuestion>(), decision: "sí", authorize: true);
+
+        // Se espera a que el pie tenga algo que contar, SIN que el turno haya terminado: el guion
+        // está parado en `wait`, así que si el pie solo se moviera al cerrar, esto no llegaría.
+        var counting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fix.PropertyChanged += (_, _) =>
+        {
+            if (fix.Calls > 0 && fix.InputTokens > 0)
+            {
+                counting.TrySetResult();
+            }
+        };
+
+        Task running = fix.StartAsync(new FixSessionRequest(Slug, _findingId));
+        await counting.Task;
+
+        fix.IsRunning.Should().BeTrue("el agente sigue trabajando: esto es el pie A MITAD de sesión");
+        fix.Calls.Should().BeGreaterThanOrEqualTo(1);
+        fix.InputTokens.Should().BeGreaterThan(0);
+        fix.CacheWriteTokens.Should().BeGreaterThan(0, "la caché escrita también se cuenta");
+
+        view.CostText.Should().NotContain("sin tokens registrados",
+            "eso solo es verdad cuando de verdad no hay dato, y aquí lo hay");
+        view.CostText.Should().NotStartWith("0 llamadas");
+
+        File.WriteAllText(Path.Combine(_work, "sigue.txt"), "ya");
+        await running;
+
+        fix.HasFinished.Should().BeTrue(fix.FailureMessage);
+    }
+
+    /// <summary>
+    /// Y con tarifa configurada, el coste sale por la vía de siempre y con la etiqueta de su casa —
+    /// «equivalente API», porque una suscripción no factura por tokens (D-789).
+    /// </summary>
+    [Fact]
+    public async Task Con_tarifa_el_pie_ensena_el_coste_etiquetado()
+    {
+        SeedRates();
+        Script("""call fix_done {"summary":"hecho","commitTitle":"Arregla BUG-0003","commitDescription":"d"}""");
+
+        LiveFixService fix = Service();
+        var view = new AssistedFixViewModel(fix, new ToastCenter(), new AlwaysDiscard());
+        await fix.StartAsync(new FixSessionRequest(Slug, _findingId));
+
+        fix.HasFinished.Should().BeTrue(fix.FailureMessage);
+        fix.CostResult.HasValue.Should().BeTrue("hay tokens y hay tarifa para su modelo");
+        view.CostText.Should().Contain("equivalente API");
+        view.CostText.Should().NotContain("no calculable");
+    }
+
+    /// <summary>
+    /// «Sin tokens registrados» queda para cuando de verdad no hay dato: un proveedor que no
+    /// informa consumo. Es la otra mitad del arreglo — la frase no desaparece, se gana el derecho a
+    /// aparecer.
+    /// </summary>
+    [Fact]
+    public async Task Sin_consumo_informado_el_pie_lo_dice_con_esas_palabras()
+    {
+        SeedRates();
+        Script("""call fix_done {"summary":"hecho","commitTitle":"Arregla BUG-0003","commitDescription":"d"}""");
+        File.WriteAllText(Path.Combine(_work, "fake-silent.txt"), "sin usage");
+
+        LiveFixService fix = Service();
+        var view = new AssistedFixViewModel(fix, new ToastCenter(), new AlwaysDiscard());
+        await fix.StartAsync(new FixSessionRequest(Slug, _findingId));
+
+        fix.HasFinished.Should().BeTrue(fix.FailureMessage);
+        fix.InputTokens.Should().Be(0);
+        view.CostText.Should().Contain("sin tokens registrados");
+    }
+
+    /// <summary>
+    /// El informe del arreglo cuenta lo mismo que el de auditoría: tokens POR TIPO, llamadas al
+    /// modelo y el coste con su etiqueta. Los tokens van enteros porque son el hecho; el coste va
+    /// detrás porque es un derivado que mañana se recalcula (D-788).
+    /// </summary>
+    [Fact]
+    public async Task El_informe_del_arreglo_trae_tokens_llamadas_y_coste()
+    {
+        SeedRates();
+        Script(
+            "text Miro el fichero.",
+            $$"""call apply_edit {"path":"{{Json(UnitPath)}}","reason":"es donde esta el defecto","edits":[{"oldText":"var bytes","newText":"// arreglado\r\n        var bytes"}]}""",
+            """call fix_done {"summary":"hecho","commitTitle":"Arregla BUG-0003","commitDescription":"d"}""");
+
+        LiveFixService fix = Service();
+        AnswerCards(fix, new List<FixQuestion>(), decision: "sí", authorize: true);
+        await fix.StartAsync(new FixSessionRequest(Slug, _findingId));
+
+        fix.HasFinished.Should().BeTrue(fix.FailureMessage);
+        AuditSession session = _hub.Store.ListSessions(Slug).Single();
+        string report = File.ReadAllText(_hub.HubPaths.ReportFile(Slug, session.Id.ToString()));
+
+        report.Should().Contain("- **Tokens**: entrada 930, salida 15, caché lectura 300, escritura 60");
+        report.Should().Contain("3 llamada(s) al modelo");
+        report.Should().Contain("- **Coste**:").And.Contain("equivalente API");
     }
 
     // ================================================================= ayudas
@@ -465,6 +596,17 @@ public sealed class AssistedFixClaudeTests : IDisposable
     private void Script(params string[] lines)
         => File.WriteAllLines(
             Path.Combine(_work, "fake-script.txt"), lines, new UTF8Encoding(false));
+
+    /// <summary>
+    /// Una tarifa para el modelo de estas sesiones, atada a su casa. Sin ella el coste sale «no
+    /// calculable (tarifa no configurada)», que es correcto pero no es lo que estos tests miran.
+    /// </summary>
+    private void SeedRates()
+        => _hub.Store.WriteModelRates(new ModelRateTable
+        {
+            Source = "Tarifa de test para el arreglo con Claude Code.",
+            Rates = { new ModelRate("opus", 1m, 5m, 0.1m, 2m, ClaudeCodeProvider.Id) },
+        });
 
     /// <summary>El guion de la verificación que cierra el ciclo: un veredicto y nada más.</summary>
     private void ScriptVerify()

@@ -48,9 +48,38 @@ public static class Program
 
     private static readonly List<string> Transcript = new();
 
+    /// <summary>Lo que consume cada llamada al modelo en el CLI falso. Números redondos a propósito.</summary>
+    private const int CallInput = 10;
+
+    private const int CallOutput = 5;
+
+    private const int CallCacheRead = 100;
+
+    private const int CallCacheWrite = 20;
+
+    /// <summary>
+    /// Lo que el encargo del sistema añade a la primera llamada y que los eventos de la
+    /// conversación NO informan. El CLI real hace justo esto: <c>modelUsage</c> declaraba 986
+    /// tokens de entrada donde los eventos sumaban 40. Está aquí para que el ajuste del final del
+    /// turno tenga algo que ajustar — si el fake cuadrara solo, no probaría nada.
+    /// </summary>
+    private const int SystemPromptInput = 900;
+
+    /// <summary>
+    /// Con este fichero en el directorio de la sesión, el CLI falso NO informa consumo: ni por
+    /// llamada ni en el evento final. Sirve para ejercitar el único caso en el que «sin tokens
+    /// registrados» es verdad — un proveedor que no cuenta nada.
+    /// </summary>
+    public const string SilentFile = "fake-silent.txt";
+
     private static Process? _bridge;
     private static int _rpcId = 100;
     private static decimal _costSoFar;
+
+    /// <summary>Llamadas al modelo emitidas, para poder cuadrar como cuadra el de verdad.</summary>
+    private static int _calls;
+
+    private static int _turnCalls;
 
     public static int Main(string[] args)
     {
@@ -140,17 +169,10 @@ public static class Program
         switch (verb)
         {
             case "text":
-                Emit(new JsonObject
+                EmitAssistant(new JsonObject
                 {
-                    ["type"] = "assistant",
-                    ["message"] = new JsonObject
-                    {
-                        ["content"] = new JsonArray(new JsonObject
-                        {
-                            ["type"] = "text",
-                            ["text"] = rest,
-                        }),
-                    },
+                    ["type"] = "text",
+                    ["text"] = rest,
                 });
                 return true;
 
@@ -241,17 +263,10 @@ public static class Program
 
     private static void CallTool(string tool, string arguments)
     {
-        Emit(new JsonObject
+        EmitAssistant(new JsonObject
         {
-            ["type"] = "assistant",
-            ["message"] = new JsonObject
-            {
-                ["content"] = new JsonArray(new JsonObject
-                {
-                    ["type"] = "tool_use",
-                    ["name"] = "mcp__atalaya__" + tool,
-                }),
-            },
+            ["type"] = "tool_use",
+            ["name"] = "mcp__atalaya__" + tool,
         });
 
         JsonNode? response = Rpc("tools/call", new JsonObject
@@ -336,27 +351,80 @@ public static class Program
         });
 
     /// <summary>
-    /// El cierre de un turno. Tokens del TURNO y coste ACUMULADO, que es como lo hace el CLI real:
-    /// es justamente lo que el lector de Atalaya tiene que saber restar.
+    /// Una respuesta del modelo, con su consumo. <b>El mismo <c>usage</c> se repite en cada bloque
+    /// de contenido</b> —así lo hace el CLI real: una respuesta con pensamiento, texto y llamada a
+    /// herramienta son tres eventos con el mismo <c>id</c> y el mismo <c>usage</c>—, y aquí se
+    /// emite un bloque por evento con id propio, que es el caso simple del mismo formato.
+    /// </summary>
+    private static void EmitAssistant(JsonObject block)
+    {
+        _calls++;
+        _turnCalls++;
+        var message = new JsonObject
+        {
+            ["id"] = "msg_" + _calls,
+            ["content"] = new JsonArray(block),
+        };
+
+        if (!Silent)
+        {
+            message["usage"] = new JsonObject
+            {
+                ["input_tokens"] = CallInput,
+                ["output_tokens"] = CallOutput,
+                ["cache_read_input_tokens"] = CallCacheRead,
+                ["cache_creation_input_tokens"] = CallCacheWrite,
+            };
+        }
+
+        Emit(new JsonObject { ["type"] = "assistant", ["message"] = message });
+    }
+
+    /// <summary>El guion pide un proveedor que no informa consumo.</summary>
+    private static bool Silent
+        => _sessionDirectory is not null && File.Exists(Path.Combine(_sessionDirectory, SilentFile));
+
+    /// <summary>
+    /// El cierre de un turno, con las TRES cifras que el CLI real informa y que no dicen lo mismo:
+    /// <c>usage</c> es del turno y se queda corto, <c>modelUsage</c> es el agregado acumulado y es
+    /// el bueno, y <c>total_cost_usd</c> es acumulado. Es lo que el lector de Atalaya tiene que
+    /// saber restar y cuadrar.
     /// </summary>
     private static void EmitResult()
     {
-        _costSoFar += 0.01m;
-        Emit(new JsonObject
+        var result = new JsonObject
         {
             ["type"] = "result",
             ["subtype"] = "success",
             ["is_error"] = false,
             ["result"] = "turno cerrado",
-            ["total_cost_usd"] = _costSoFar,
-            ["usage"] = new JsonObject
+        };
+
+        if (!Silent)
+        {
+            _costSoFar += 0.01m;
+            result["total_cost_usd"] = _costSoFar;
+            result["usage"] = new JsonObject
             {
-                ["input_tokens"] = 100,
-                ["output_tokens"] = 50,
-                ["cache_read_input_tokens"] = 10,
-                ["cache_creation_input_tokens"] = 5,
-            },
-        });
+                ["input_tokens"] = _turnCalls * CallInput,
+                ["output_tokens"] = _turnCalls * CallOutput,
+                ["cache_read_input_tokens"] = _turnCalls * CallCacheRead,
+                ["cache_creation_input_tokens"] = _turnCalls * CallCacheWrite,
+            };
+            result["modelUsage"] = new JsonObject
+            {
+                ["claude-opus-5"] = new JsonObject
+                {
+                    ["inputTokens"] = (_calls * CallInput) + SystemPromptInput,
+                    ["outputTokens"] = _calls * CallOutput,
+                    ["cacheReadInputTokens"] = _calls * CallCacheRead,
+                    ["cacheCreationInputTokens"] = _calls * CallCacheWrite,
+                },
+            };
+        }
+
+        Emit(result);
+        _turnCalls = 0;
     }
 
     private static void Emit(JsonNode node)

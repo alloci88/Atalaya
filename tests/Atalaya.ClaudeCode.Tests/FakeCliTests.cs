@@ -169,10 +169,12 @@ public sealed class FakeCliTests
     // ---------------------------------------------------------------- ayudas
 
     private static Task<ClaudeRunOutcome> Run(
-        FakeCli cli, string prompt = "audita esto", Action<string>? onText = null, CancellationToken ct = default)
+        FakeCli cli, string prompt = "audita esto", Action<string>? onText = null,
+        Action<UsageSample>? onUsage = null, CancellationToken ct = default)
         => new ClaudeCliRunner(cli.Executable).RunAsync(
             new ClaudeRun(prompt, new[] { "mcp__atalaya__unit_done" }, cli.McpConfigPath, null),
             onText,
+            onUsage,
             ct);
 
     private static string Init(string mcp = "connected")

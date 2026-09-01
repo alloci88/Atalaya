@@ -38,6 +38,24 @@ public static class ReportBuilder
     internal static string ProviderLine(AuditSession session)
         => $"- **Proveedor**: {ProviderNames.Display(session.Provider)}";
 
+    /// <summary>
+    /// Los tokens por tipo y las llamadas al modelo. <b>Los tokens son el hecho</b> y por eso van
+    /// enteros: dentro de un año alguien puede recalcular el coste con otra tarifa a partir de
+    /// estos mismos números (D-788). Las llamadas van al lado porque son la otra magnitud que se
+    /// puede comparar entre sesiones sin saber nada de precios.
+    /// <para>
+    /// La caché solo se nombra cuando la hay: con Copilot en una sesión corta puede no haberla, y
+    /// un «caché 0» se lee como «no usó caché» cuando lo que pasa es que el proveedor no la
+    /// informó.
+    /// </para>
+    /// </summary>
+    private static string UsageLine(AuditSession session)
+        => $"- **Tokens**: entrada {session.Usage.InputTokens}, salida {session.Usage.OutputTokens}"
+        + (session.Usage.CacheReadTokens > 0 || session.Usage.CacheWriteTokens > 0
+            ? $", caché lectura {session.Usage.CacheReadTokens}, escritura {session.Usage.CacheWriteTokens}"
+            : string.Empty)
+        + (session.Usage.Calls > 0 ? $" · **{session.Usage.Calls} llamada(s) al modelo**" : string.Empty);
+
     public static string BuildSessionReport(
         AppConfig app,
         AuditSession session,
@@ -68,10 +86,7 @@ public static class ReportBuilder
         // F15 — los TOKENS son el hecho primario y se escriben enteros; el coste es un derivado y
         // va detrás. Un informe es inmutable, así que dentro de un año alguien podrá recalcular ese
         // coste con otra tarifa a partir de estos mismos números.
-        sb.AppendLine($"- **Tokens**: entrada {session.Usage.InputTokens}, salida {session.Usage.OutputTokens}"
-            + (session.Usage.CacheReadTokens > 0 || session.Usage.CacheWriteTokens > 0
-                ? $", caché lectura {session.Usage.CacheReadTokens}, escritura {session.Usage.CacheWriteTokens}"
-                : ""));
+        sb.AppendLine(UsageLine(session));
 
         CostResult cost = CreditCalculator.Calculate(session, rates);
         sb.AppendLine($"- **Coste**: {CreditText.OfSession(cost, session.Provider)}");
@@ -381,10 +396,7 @@ public static class ReportBuilder
         sb.AppendLine(ProviderLine(session));
         sb.AppendLine($"- **Modelo**: {session.Model ?? "n/d"}");
         sb.AppendLine($"- **Hallazgos verificados**: {lines.Count}");
-        sb.AppendLine($"- **Tokens**: entrada {session.Usage.InputTokens}, salida {session.Usage.OutputTokens}"
-            + (session.Usage.CacheReadTokens > 0 || session.Usage.CacheWriteTokens > 0
-                ? $", caché lectura {session.Usage.CacheReadTokens}, escritura {session.Usage.CacheWriteTokens}"
-                : ""));
+        sb.AppendLine(UsageLine(session));
 
         CostResult cost = CreditCalculator.Calculate(session, rates);
         sb.AppendLine($"- **Coste**: {CreditText.OfSession(cost, session.Provider)}");
@@ -494,10 +506,7 @@ public static class ReportBuilder
         sb.AppendLine($"- **Commit del clon al empezar**: {session.Commit}");
         sb.AppendLine(ProviderLine(session));
         sb.AppendLine($"- **Modelo**: {session.Model ?? "n/d"}");
-        sb.AppendLine($"- **Tokens**: entrada {session.Usage.InputTokens}, salida {session.Usage.OutputTokens}"
-            + (session.Usage.CacheReadTokens > 0 || session.Usage.CacheWriteTokens > 0
-                ? $", caché lectura {session.Usage.CacheReadTokens}, escritura {session.Usage.CacheWriteTokens}"
-                : ""));
+        sb.AppendLine(UsageLine(session));
 
         CostResult fixCost = CreditCalculator.Calculate(session, rates);
         sb.AppendLine($"- **Coste**: {CreditText.OfSession(fixCost, session.Provider)}");
