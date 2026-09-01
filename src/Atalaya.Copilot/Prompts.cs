@@ -295,6 +295,13 @@ public static class PromptComposer
                 sb.AppendLine($"    lo que se recomendó: {t.Recommendation.Trim()}");
             }
 
+            // El ancla, señalada dentro del bloque: lo de abajo es el símbolo ENTERO (F12 §B),
+            // así que sin esto el verificador tendría el contexto pero no el punto.
+            if (!string.IsNullOrEmpty(t.AnchoredSnippet))
+            {
+                sb.AppendLine($"    la línea anclada, dentro de lo de abajo: {t.AnchoredSnippet.Trim()}");
+            }
+
             if (!string.IsNullOrEmpty(t.Snippet))
             {
                 sb.AppendLine("    " + BasisCaption(t) + ":");
@@ -305,13 +312,22 @@ public static class PromptComposer
         return sb.ToString();
     }
 
-    /// <summary>Qué es el fragmento que va debajo, dicho con todas las letras (F6.6).</summary>
+    /// <summary>
+    /// Qué es el fragmento que va debajo, dicho con todas las letras (F6.6), y desde F12 §B también
+    /// CUÁNTO se enseña: el símbolo entero, o el margen de líneas cuando no se pudo resolver
+    /// ninguno. Un verificador que no sabe si está viendo un método completo o un recorte no puede
+    /// saber si su «no se puede decidir» es honesto o es falta de contexto.
+    /// </summary>
     private static string BasisCaption(VerifyTarget t) => t.Basis switch
     {
         VerifyBasis.Simbolo =>
-            $"el código anclado YA NO ESTÁ; este es el código ACTUAL de «{t.Member ?? "el miembro"}»",
+            $"el código anclado YA NO ESTÁ; este es el código ACTUAL de «{t.Member ?? "el miembro"}», entero",
         VerifyBasis.Unidad =>
             "ni el código anclado ni el símbolo aparecen ya; esta es la unidad tal y como está AHORA",
-        _ => "snippet anclado (sigue siendo, letra por letra, el que se auditó)",
+        _ when t.Member is { Length: > 0 } m =>
+            $"el ancla sigue casando en la línea {t.Line}; este es «{m}» ENTERO, que es el símbolo que la contiene",
+        _ =>
+            $"el ancla sigue casando en la línea {t.Line}; no se pudo resolver el símbolo que la "
+            + "contiene, así que van las líneas de alrededor",
     };
 }

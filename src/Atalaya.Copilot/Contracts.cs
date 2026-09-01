@@ -1,4 +1,4 @@
-﻿using Atalaya.Domain;
+using Atalaya.Domain;
 using Atalaya.Domain.Model;
 
 namespace Atalaya.Copilot;
@@ -347,10 +347,19 @@ public enum VerifyBasis
 /// el código que se auditó» de «el código que se auditó ya no existe y este es el que hay ahora»,
 /// y son preguntas distintas: la segunda es la que se contesta «arreglado».
 /// </param>
-/// <param name="Member">El miembro al que se re-ancló, cuando se re-ancló. Solo para nombrarlo.</param>
+/// <param name="Member">
+/// El miembro que se enseña: aquel al que se re-ancló, o —desde F12 §B— el que CONTIENE el ancla
+/// cuando el ancla sigue casando. Null cuando no se pudo resolver ninguno y lo que va debajo es un
+/// margen de líneas.
+/// </param>
 /// <param name="Recommendation">
 /// Lo que el hallazgo pedía hacer. Es el criterio contra el que se juzga si el código de ahora lo
 /// cumple; sin ella el verificador tiene que adivinar qué contaba como arreglo.
+/// </param>
+/// <param name="AnchoredSnippet">
+/// La línea exacta que el ancla casó, cuando casó (F12 §B). <paramref name="Snippet"/> es el
+/// símbolo entero, así que hace falta decir CUÁL de sus líneas es la que se auditó: sin ella el
+/// verificador tendría el contexto pero no el punto.
 /// </param>
 public sealed record VerifyTarget(
     string FindingUlid,
@@ -361,7 +370,8 @@ public sealed record VerifyTarget(
     string Description,
     VerifyBasis Basis = VerifyBasis.Anclado,
     string? Member = null,
-    string Recommendation = "");
+    string Recommendation = "",
+    string? AnchoredSnippet = null);
 
 public sealed record VerifyRequest(string Prompt, IReadOnlyList<VerifyTarget> Targets);
 

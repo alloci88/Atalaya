@@ -136,7 +136,7 @@ public sealed class VerifyCoordinator
             nextSteps[key] = NextStep(aim, loc.Path);
             targets.Add(new VerifyTarget(
                 key, loc.Path, aim.Line, aim.Snippet, f.Title, f.Description,
-                aim.Basis, aim.Member, f.Recommendation));
+                aim.Basis, aim.Member, f.Recommendation, aim.AnchoredSnippet));
         }
 
         if (targets.Count == 0)
@@ -295,11 +295,18 @@ public sealed class VerifyCoordinator
         }
 
         // (a1) El ancla exacta: el fragmento sigue siendo, letra por letra, el que se auditó.
+        //
+        // F12 §B — PERO NO SE ENSEÑA LA LÍNEA SUELTA. Se enseñaba, y era inútil: a un hallazgo cuya
+        // recomendación es estructural («acumula en una sola pasada») se le enseñaba `foreach (…)`
+        // y nada más, con lo que el verificador contestaba lo único honrado que podía contestar —
+        // que sin el cuerpo del método no se puede decidir—, y eso acababa en el «Confirmado» que
+        // arregla §A. El ancla dice DÓNDE mirar; lo que se juzga es el SÍMBOLO que la contiene.
         (bool anchored, int line, string? snippet) =
             SnippetAnchor.TryAnchor(clone, loc.Path, loc.Line, loc.SnippetHash);
         if (anchored)
         {
-            return VerifyAim.Judge(VerifyBasis.Anclado, line, snippet, null);
+            return VerifyAim.Judge(VerifyBasis.Anclado, line, Around(lines, line, loc.Path, out string? member), member)
+                with { AnchoredSnippet = snippet };
         }
 
         // (a2) El símbolo. AQUÍ estaba el fallo: esto ya funcionaba para pintar la ficha —el banner
@@ -329,6 +336,22 @@ public sealed class VerifyCoordinator
         }
 
         return VerifyAim.Judge(VerifyBasis.Unidad, 1, unit, null);
+    }
+
+    /// <summary>
+    /// El código que rodea a <paramref name="line"/>: el <b>miembro completo</b> que la contiene,
+    /// vía Roslyn, y cuando no hay ninguno que resolver —no es C#, o la línea cae fuera de todo
+    /// miembro— un margen de ±<see cref="MethodBoundary.FallbackRadius"/> líneas (F12 §B).
+    /// <para>
+    /// Es el mismo recorte que la ficha lleva enseñando desde F5.5, y por el mismo motivo: un
+    /// fragmento de una línea no permite juzgar nada que no quepa en esa línea.
+    /// </para>
+    /// </summary>
+    private static string Around(string[] lines, int line, string path, out string? member)
+    {
+        CodeSpanLines span = MethodBoundary.ForLine(lines, line, path);
+        member = span.Member;
+        return string.Join("\n", lines[(span.StartLine - 1)..span.EndLine]);
     }
 
     /// <summary>
@@ -369,6 +392,13 @@ public sealed class VerifyCoordinator
     private sealed record VerifyAim(
         bool Judgeable, VerifyBasis Basis, int Line, string? Snippet, string? Member, string Reason)
     {
+        /// <summary>
+        /// La línea que el ancla casó, cuando la casó. <see cref="Snippet"/> es ahora el símbolo
+        /// entero (F12 §B), así que este es el dato que dice CUÁL de esas líneas es la anclada —y
+        /// sin él el prompt no podría señalarla.
+        /// </summary>
+        public string? AnchoredSnippet { get; init; }
+
         public static VerifyAim Judge(VerifyBasis basis, int line, string? snippet, string? member)
             => new(true, basis, line, snippet, member, string.Empty);
 

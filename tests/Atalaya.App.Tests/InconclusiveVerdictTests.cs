@@ -284,6 +284,144 @@ public sealed class InconclusiveVerdictTests : IDisposable
         v.Should().Be(ReconcileVerdict.Presente);
     }
 
+    // ------------------------------------------------------------------ (4) F12 §B · qué se le enseña
+
+    /// <summary>
+    /// F12 §B — la causa raíz de §A en el banco de pruebas: a la verificación se le enseñaba
+    /// <b>solo la línea anclada</b> (<c>foreach (…)</c>). Para un hallazgo cuya recomendación es
+    /// estructural —«acumula en una sola pasada»— eso no permite decidir nada, y el modelo contestó
+    /// lo único honrado que podía contestar.
+    /// </summary>
+    [Fact]
+    public async Task El_contexto_de_verificacion_es_el_simbolo_que_contiene_el_anclaje()
+    {
+        Finding f = Seed();
+
+        VerifyTarget? visto = null;
+        var agent = new FakeCopilotAgent(verdictScript: t =>
+        {
+            visto = t;
+            return "confirmado";
+        });
+
+        await Coordinator(agent).RunAsync("app", new[] { f.Id }, CancellationToken.None);
+
+        visto.Should().NotBeNull();
+        visto!.Basis.Should().Be(VerifyBasis.Anclado, "el ancla sigue casando letra por letra");
+        visto.Member.Should().Be("Informe.Total");
+
+        // El método ENTERO: firma, cuerpo y retorno. No la línea suelta.
+        visto.Snippet.Should().Contain("public int Total(")
+            .And.Contain("total += l.Importe;")
+            .And.Contain("return total;");
+        visto.Snippet!.Split('\n').Length.Should().BeGreaterThan(4, "una línea suelta no es contexto");
+
+        // Y el ancla se sigue señalando: contexto sin punto es otra forma de no poder decidir.
+        visto.AnchoredSnippet.Should().Contain("foreach");
+    }
+
+    [Fact]
+    public async Task El_prompt_dice_que_lo_que_ensena_es_el_simbolo_entero()
+    {
+        Finding f = Seed();
+
+        string prompt = string.Empty;
+        var agent = new PromptSpyAgent(req =>
+        {
+            prompt = req.Prompt;
+            return "confirmado";
+        });
+
+        await Coordinator(agent).RunAsync("app", new[] { f.Id }, CancellationToken.None);
+
+        prompt.Should().Contain("Informe.Total").And.Contain("ENTERO");
+        prompt.Should().Contain("la línea anclada");
+        prompt.Should().Contain("return total;", "el cuerpo del método viaja en el prompt");
+    }
+
+    /// <summary>
+    /// Y cuando no hay símbolo que resolver —no es C#, o el ancla cae fuera de todo miembro— se
+    /// enseña un margen de líneas, que es el plan B declarado. Nunca se vuelve a la línea suelta.
+    /// </summary>
+    [Fact]
+    public async Task Sin_simbolo_resoluble_se_ensena_un_margen_de_lineas()
+    {
+        string[] texto = Enumerable.Range(1, 60).Select(n => $"linea {n}").ToArray();
+        File.WriteAllLines(Path.Combine(_clone, "notas.txt"), texto);
+
+        var stamp = new DetectionStamp(
+            DateTimeOffset.UtcNow.AddDays(-1), AuditMode.Lotes, "abc1234", "alvaro");
+        var f = new Finding
+        {
+            Id = _ulids.NewUlid(),
+            RuleId = "mejoras.documentacion",
+            Title = "Nota desfasada",
+            Description = "Dice lo que ya no hace.",
+            Recommendation = "Actualizarla.",
+            Locations = { new Location("notas.txt", 30, CodeAnchor.ComputeSnippetHash("linea 30")) },
+            Origin = AuditMode.Lotes,
+            FirstDetected = stamp,
+            LastConfirmed = stamp,
+        };
+        f.History.Add(new HistoryEntry(stamp.Utc, FindingEvent.Detected, "alvaro", "detected via Lotes"));
+        _hub.Store.WriteFinding("app", f);
+
+        VerifyTarget? visto = null;
+        var agent = new FakeCopilotAgent(verdictScript: t =>
+        {
+            visto = t;
+            return "confirmado";
+        });
+
+        await Coordinator(agent).RunAsync("app", new[] { f.Id }, CancellationToken.None);
+
+        visto.Should().NotBeNull();
+        visto!.Member.Should().BeNull("no hay miembro que resolver en un .txt");
+        visto.Snippet.Should().Contain("linea 30").And.Contain("linea 20").And.Contain("linea 40");
+        visto.Snippet.Should().NotContain("linea 5", "el margen es un margen, no el fichero");
+    }
+
+    /// <summary>Un agente que además deja mirar el prompt que se le mandó.</summary>
+    private sealed class PromptSpyAgent : ICopilotAgent
+    {
+        private readonly Func<VerifyRequest, string> _script;
+
+        public PromptSpyAgent(Func<VerifyRequest, string> script) => _script = script;
+
+        public string? ModelName => "fake-model";
+
+        public event Action<string>? TextStreamed;
+
+        public event Action<UsageSample>? UsageReported;
+
+        public Task<bool> EnsureReadyAsync(CancellationToken ct) => Task.FromResult(true);
+
+        public Task<AgentReadiness> CheckAsync(CancellationToken ct)
+            => Task.FromResult(new AgentReadiness(true, "listo"));
+
+        public Task<IReadOnlyList<AgentModel>> ListModelsAsync(CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<AgentModel>>(Array.Empty<AgentModel>());
+
+        public Task AuditUnitAsync(AuditUnitRequest request, IAuditToolbox toolbox, CancellationToken ct)
+            => Task.CompletedTask;
+
+        public Task VerifyAsync(VerifyRequest request, IVerifyToolbox toolbox, CancellationToken ct)
+        {
+            string verdict = _script(request);
+            TextStreamed?.Invoke(string.Empty);
+            UsageReported?.Invoke(new UsageSample(0, 0, null, "fake-model"));
+            foreach (VerifyTarget t in request.Targets)
+            {
+                toolbox.SubmitVerdict(t.FindingUlid, verdict, "sigue recorriendo dos veces");
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task FixAsync(FixRequest request, FixConversation conversation, CancellationToken ct)
+            => Task.CompletedTask;
+    }
+
     private FindingDetailViewModel Detail()
         => new(
             _hub,
