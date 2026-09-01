@@ -141,29 +141,56 @@ public sealed class ReconciliationService
     /// <summary>
     /// ¿Podemos PROBAR que la unidad no ha cambiado desde la última vez que se vio este hallazgo?
     /// <para>
-    /// Dos capas, ambas en la dirección segura: solo devuelven <c>true</c> cuando hay prueba
-    /// positiva de que nada cambió, así que degradar por ellas nunca acusa en falso.
+    /// Tres capas, todas en la dirección segura: solo devuelve <c>true</c> cuando hay prueba
+    /// positiva de que nada cambió, así que degradar por esto nunca acusa en falso.
     /// </para>
     /// <list type="number">
-    /// <item><b>Mismo commit</b> — el árbol auditado es literalmente el mismo.</item>
+    /// <item>
+    /// <b>El CONTENIDO de la unidad difiere</b> → ha cambiado, y se acabó la pregunta. Va PRIMERO
+    /// desde F16, y ése era el defecto: el orden estaba al revés.
+    /// </item>
+    /// <item><b>Mismo commit</b> — el árbol auditado es, en principio, el mismo.</item>
     /// <item><b>Mismo contentHash de la unidad</b> — el commit avanzó, pero ESTE fichero no cambió.
-    /// Sin esta segunda capa, cualquier commit en otra parte del repositorio bastaría para colar
-    /// una resolución falsa.</item>
+    /// Sin esta capa, cualquier commit en otra parte del repositorio bastaría para colar una
+    /// resolución falsa.</item>
     /// </list>
     /// <para>
+    /// <b>Por qué el orden importa, y el parte que lo destapó</b> (F16 §E). «Mismo commit» prueba
+    /// que HEAD no se ha movido, <b>no</b> que el fichero no haya cambiado: un árbol de trabajo con
+    /// cambios sin commitear tiene el mismo commit y otro contenido. Y ése no es un caso raro — es
+    /// exactamente el estado en el que la propia Atalaya deja el clon al terminar un arreglo, que
+    /// no commitea nada por diseño (D-556). Con el commit mirándose primero, la guarda afirmaba
+    /// «el código no ha cambiado» sobre un fichero reescrito entero, y el verify se rendía con «no
+    /// localizado» sin llegar a enseñar la unidad: un callejón sin salida, y de pago.
+    /// </para>
+    /// <para>
+    /// <b>Esto NO relaja la guarda de F5.1b: la informa mejor.</b> Un hash distinto es evidencia
+    /// más fuerte que un commit que no se movió, y antes ni siquiera se llegaba a leer. Lo que
+    /// sigue sin poder resolverse es lo que de verdad no cambió — mismo fichero, byte a byte—, y
+    /// eso tiene su test.
+    /// </para>
+    /// <para>
     /// Lo que NO cubre, declarado: un hallazgo anterior a F5.1b no tiene <c>unitContentHash</c>
-    /// registrado y solo cuenta con la capa del commit; y un árbol de trabajo sucio cambia el
-    /// código sin cambiar el commit. En ambos casos la duda favorece al auditor y se resuelve.
+    /// registrado, así que sobre él solo actúa la capa del commit. Ahí la duda sigue favoreciendo
+    /// al auditor.
     /// </para>
     /// </summary>
     public static bool UnchangedSinceLastSighting(Finding finding, DetectionStamp now, out string? reason)
     {
         DetectionStamp seen = finding.LastConfirmed ?? finding.FirstDetected;
 
+        // (1) El contenido manda. Dos huellas conocidas y distintas son la prueba más fuerte que
+        // hay de que la unidad cambió, y ninguna comparación de commits puede contradecirla.
+        if (Differs(seen.UnitContentHash, now.UnitContentHash))
+        {
+            reason = null;
+            return false;
+        }
+
         if (SameCommit(seen.Commit, now.Commit))
         {
-            reason = $"mismo commit que la última vez que se vio el hallazgo ({Short(now.Commit)}): "
-                + "el código no ha cambiado, así que no puede haberse arreglado";
+            reason = $"mismo commit que la última vez que se vio el hallazgo ({Short(now.Commit)}) "
+                + "y la unidad tampoco ha cambiado en el árbol de trabajo: no puede haberse arreglado";
             return true;
         }
 
@@ -177,6 +204,13 @@ public sealed class ReconciliationService
         reason = null;
         return false;
     }
+
+    /// <summary>
+    /// Las dos huellas se conocen y NO coinciden. Que falte alguna no prueba nada —ni a favor ni en
+    /// contra—, así que ahí devuelve false y deciden las capas de abajo.
+    /// </summary>
+    private static bool Differs(string? a, string? b)
+        => !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b) && !Same(a, b);
 
     private static bool Same(string? a, string? b)
         => !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b)
