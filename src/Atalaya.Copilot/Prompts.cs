@@ -7,13 +7,6 @@ namespace Atalaya.Copilot;
 /// <summary>Builds the auditor brief per stack (§6.4) from the versioned rule catalog.</summary>
 public static class PillarBrief
 {
-    private const string SeverityRubric =
-        "RÚBRICA DE SEVERIDAD:\n" +
-        "- critica: corrupción de datos, crash en producción, vulnerabilidad explotable, error de cálculo de negocio.\n" +
-        "- alta: degradación seria de rendimiento, fuga de recursos, CVE, race probable.\n" +
-        "- media: mantenibilidad, modernización, optimización notable.\n" +
-        "- baja: estilo, micro-optimización, DX.\n";
-
     /// <summary>
     /// El brief del stack, con el catálogo ENTERO.
     /// <para>
@@ -29,7 +22,11 @@ public static class PillarBrief
         var sb = new StringBuilder();
         sb.AppendLine($"BRIEF DE AUDITOR — stack {stack}.");
         sb.AppendLine();
-        sb.AppendLine(SeverityRubric);
+        // F12 §D — la rúbrica vive en su propio fichero versionado y se CITA, no se copia. Ver
+        // SeverityRubric: la de antes cabía en cuatro líneas, no daba un solo ejemplo, y su renglón
+        // de crítica acababa en «error de cálculo de negocio», que es por donde entraron siete
+        // críticas donde había una.
+        sb.AppendLine(SeverityRubric.Text);
         sb.AppendLine();
 
         foreach (Pillar pillar in new[] { Pillar.Errores, Pillar.Optimizacion, Pillar.Mejoras })
@@ -148,7 +145,8 @@ public static class PromptComposer
             * ruleId: un id EXACTO del catálogo (los listados en el brief como [rule.id]) o, si no encaja
               ninguno, uno de la forma criterio.<área> con las áreas listadas en el brief.
             * pillar: exactamente uno de {optimizacion, mejoras, errores}.
-            * severity: exactamente uno de {critica, alta, media, baja}.
+            * severity: exactamente uno de {critica, alta, media, baja}, aplicando la RÚBRICA DE
+              SEVERIDAD del brief — incluidas sus reglas de desempate.
             * locations: al menos una con {path, line} y opcionalmente snippet.
         - NO envíes tag: la app lo deriva de ruleId (criterio.* → criterio; resto → checklist).
         - NO asignes IDs ni confianza (eso es de la app). NO filtres silenciados: los verás en la lista
