@@ -1,12 +1,19 @@
-# Backlog Atalaya
+﻿# Backlog Atalaya
 
 Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo y se mantiene al día
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-01 (BUGFIX-SYNC — el updater contra carpetas sincronizadas).
+Última revisión: 2026-09-01 (BUGFIX-ARRANQUE — la 1.1.3 no arrancaba).
 
 ## En vuelo
+
+- **BUGFIX-ARRANQUE — publicar la 1.1.4 y ver correr el candado.** El arreglo está verificado sobre
+  el paquete real de esta máquina (`--selfcheck` → 8 pasos en verde, código 0), pero queda una cosa
+  que solo puede comprobar el primer release que corra: **que el paso `carcasa` funcione en el
+  runner de GitHub**. Construir la ventana es donde revientan los errores de XAML y es la mitad más
+  valiosa del chequeo; si el runner no pudiera, saldría en el log del workflow con su paso nombrado
+  (D-801). Y después, lo que de verdad cierra esto: **descomprimir la 1.1.4 en limpio y abrirla**.
 
 - **BUGFIX-SYNC — la actualización real, en la máquina donde falló.** Es la aceptación del arreglo
   y no la puede hacer ningún test: reintentar 1.1.2 → 1.1.3 con Atalaya en
@@ -197,6 +204,20 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **BUGFIX-ARRANQUE · La 1.1.3 no arrancaba** — muerte antes de la ventana, en cualquier máquina.
+  `v1.1.3` era exactamente el rango F14, y la causa estaba en dos líneas suyas que por separado eran
+  inofensivas: un segundo constructor «de comodidad» en `ModelResolver` y `ConnectionChecker`, y el
+  registro de `IAuditorProvider` en el contenedor. Juntas, dos firmas igualmente satisfacibles y un
+  `ActivatorUtilities` que no elige entre iguales: doce de ochenta y ocho servicios sin resolver,
+  `MainWindow` entre ellos. El arreglo **quita el constructor sobrante** en vez de marcar el bueno
+  con un atributo: las alternativas funcionan y dejan viva la clase de fallo (D-798). Los 1.661
+  tests no podían verlo —el compilador sí sabe desempatar constructores, y ningún test le pedía nada
+  al contenedor (D-799)—, así que el remedio es de otra naturaleza: **`Atalaya.exe --selfcheck`**
+  monta el contenedor de verdad, resuelve **todos** los servicios registrados y devuelve 0 o 1
+  (D-800), y el workflow lo ejecuta **sobre el zip recién comprimido**, antes de crear la Release
+  (D-801). De paso, un arranque que falla deja de morir en silencio: lo dice y lo escribe en el log
+  (D-802). 5 tests nuevos, 1.739 en total (D-803). **Falta publicar la 1.1.4**, arriba.
 
 - **BUGFIX-SYNC · El updater contra carpetas sincronizadas** — la actualización 1.1.2 → 1.1.3
   abortó contra un `.atalaya-anterior` residual con Atalaya instalada bajo OneDrive. El aborto fue

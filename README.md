@@ -276,6 +276,16 @@ dotnet test Atalaya.sln
 
 `Domain` y `Storage` compilan con *warnings-as-errors*.
 
+**Y que arranque**, que es lo que ningún test unitario mira:
+
+```bash
+dist/Atalaya.exe --selfcheck          # 0 = arranca · 1 = no arranca
+```
+
+Hace el arranque completo sin abrir ventana y enumera lo que comprueba. Es el mismo chequeo que
+corre el workflow de release sobre el paquete antes de publicarlo, y el mismo que corren los tests
+`StartupSelfCheckTests` sobre una carpeta de estado vacía —un primer arranque en limpio—.
+
 ### Formato de números y fechas
 
 Atalaya escribe **siempre en es-ES**, no en la cultura de la máquina: la aplicación es monolingüe
@@ -332,7 +342,14 @@ El workflow `.github/workflows/release.yml` hace el resto en `windows-latest`:
    calcula su **`Atalaya-v1.2.3-win-x64.zip.sha256`**. Los dos se adjuntan a la Release: la app
    verifica el checksum antes de tocar la instalación, y **sin ese fichero se niega a instalar** y
    manda al camino manual.
-5. **Crea la Release** del tag con los dos adjuntos y las notas que GitHub genera a partir de los
+5. **Comprueba que el paquete arranca.** Descomprime el zip aparte y ejecuta
+   `Atalaya.exe --selfcheck` sobre lo que se va a descargar: el arranque entero sin abrir ventana
+   —cultura, despliegue, contenedor, ajustes y migraciones, **todos** los servicios registrados,
+   los ficheros que deben viajar y la carcasa—, con 0 o 1 por respuesta. Si sale 1, **no se
+   publica nada**. Existe porque la 1.1.3 salió con 1.661 tests en verde y no arrancaba: ningún
+   test montaba el contenedor, así que el grafo de dependencias no lo miraba nadie (ver
+   BUGFIX-ARRANQUE en `DECISIONS.md`).
+6. **Crea la Release** del tag con los dos adjuntos y las notas que GitHub genera a partir de los
    commits desde el tag anterior (`--generate-notes`). Se pueden pulir a mano en la web después.
 
 No hacen falta secretos: el `GITHUB_TOKEN` del propio workflow basta, y sus permisos son los

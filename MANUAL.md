@@ -829,6 +829,19 @@ tarjeta no puede estar mintiéndole al equipo el resto del día. Mejor no decir 
 
 ## Cosas que conviene saber
 
+**Si Atalaya no arranca.** Ya no se muere en silencio: dice qué ha fallado, en una ventana, y lo
+deja escrito en `%LOCALAPPDATA%\Atalaya\logs`. Eso es lo que hay que pegar al contarlo. Y si
+quieres comprobarlo tú antes de reportar nada, desde una consola en la carpeta de Atalaya:
+
+```
+Atalaya.exe --selfcheck
+```
+
+hace el arranque entero **sin abrir ventana** y enumera lo que comprueba, con «Arranca» o «NO
+ARRANCA» al final. Es el mismo chequeo que corre la fábrica sobre cada paquete antes de publicarlo,
+así que una versión publicada no debería poder fallarlo — si lo falla, es un defecto y ese parte lo
+describe entero.
+
 **Actualizar Atalaya.** Al arrancar, Atalaya pregunta a GitHub si hay una versión más reciente
 que la tuya —sin retrasar nada y con el token de la cuenta que ya tienes conectada—. Publicada una
 versión nueva, **reiniciar Atalaya basta para verla**. Si abres y cierras varias veces seguidas no

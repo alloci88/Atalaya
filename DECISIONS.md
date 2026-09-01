@@ -9153,3 +9153,127 @@ se puede borrar ni se puede mover mientras el manejador viva—:
 **Verificación humana, que es del usuario**: reintentar la actualización real 1.1.2 → 1.1.3 en la
 máquina donde falló. Con OneDrive pausado debe pasar; y tras mover la instalación fuera de
 OneDrive, debe pasar sin pausar nada.
+
+## BUGFIX-ARRANQUE — La 1.1.3 no arrancaba
+
+`v1.1.3` es exactamente el rango **F14** (`v1.1.2` = `a6f7abc`, el commit justo anterior), así que
+la búsqueda estaba acotada a cinco commits. La causa, reproducida en el primer intento con el
+autochequeo nuevo sobre una carpeta de estado vacía:
+
+```
+InvalidOperationException: Unable to activate type 'Atalaya.App.Services.ModelResolver'.
+The following constructors are ambiguous:
+  Void .ctor(AuditorProviderRegistry, SettingsService)
+  Void .ctor(IAuditorProvider,        SettingsService)
+```
+
+Doce de los ochenta y ocho servicios registrados no se podían resolver, `MainWindow` y
+`MainViewModel` entre ellos. `MainWindow` se resuelve **antes** de `Show()`, así que el proceso
+moría sin llegar a pintar nada — el síntoma exacto que se reportó.
+
+### D-798 — Un tipo que resuelve el contenedor tiene UN constructor
+
+F14 añadió a `ModelResolver` y a `ConnectionChecker` un segundo constructor por comodidad: el que
+toma un `IAuditorProvider` suelto en vez del registro, para que los tests no tuvieran que montar un
+registro. Por sí solo era inofensivo. Lo que lo volvió mortal fue la otra mitad de F14:
+
+```csharp
+services.AddTransient(sp => sp.GetRequiredService<AuditorProviderRegistry>().Current);
+```
+
+Desde esa línea, el contenedor sabe resolver **las dos** firmas. Y `ActivatorUtilities` no elige
+entre dos constructores igualmente satisfacibles: lanza. No es un fallo de la biblioteca — es que
+la pregunta «¿cuál de los dos?» no tiene respuesta.
+
+**El arreglo es quitar el constructor sobrante**, no marcar el bueno con
+`[ActivatorUtilitiesConstructor]` ni registrar los dos tipos con una fábrica explícita. Las dos
+alternativas funcionan y las dos dejan viva la clase de fallo: bastaría con que alguien añadiera
+mañana otro constructor de conveniencia. Con uno solo, la ambigüedad no puede existir.
+
+Y no se pierde nada: `AuditorProviderRegistry.Of(provider)` ya existía **para esto** —«el atajo de
+los tests y de los caminos que no eligen», dice su propia documentación—. Los cuatro sitios que
+usaban el atajo pasan a usarlo. Ambos constructores llevan ahora escrito por qué son uno.
+
+### D-799 — Por qué 1.661 tests en verde no lo vieron
+
+No es mala suerte, y merece la pena decirlo entero porque describe un **agujero de forma**, no un
+caso que se olvidó:
+
+- **El compilador sí sabía desempatar.** `new ModelResolver(fake, settings)` es inequívoco: el tipo
+  estático del argumento elige el constructor. La ambigüedad **solo existe para quien resuelve por
+  reflexión**, y eso solo pasa en tiempo de ejecución, dentro del contenedor.
+- **Ningún test le pedía nada al contenedor.** Los 1.661 construían cada servicio a mano con sus
+  dobles — que es lo que los hace rápidos y honestos, y también lo que deja **el grafo de
+  dependencias sin mirar por nadie**. Un registro roto no rompe la compilación ni un test unitario.
+  Rompe el arranque, y solo el arranque.
+- **Y en la máquina de quien desarrolla siempre hay estado.** Ajustes escritos, cuenta conectada,
+  hub clonado: el camino del primer arranque en limpio no lo recorría nadie hasta que lo recorrió
+  un usuario.
+
+La lección no es «añadir un test para este caso». Es que **había una capa entera sin cobertura
+posible por partes**, y por eso el remedio es de otra naturaleza: montar el contenedor de verdad.
+
+### D-800 — `--selfcheck`: el arranque entero, sin ventana, con 0 o 1
+
+`Atalaya.exe --selfcheck` hace el arranque completo y no abre nada: cultura → configuración de
+despliegue → contenedor → ajustes y migraciones → **todos** los servicios registrados, uno a uno →
+los ficheros que tienen que viajar en el paquete → tema y carcasa.
+
+Tres decisiones dentro:
+
+- **Se resuelven TODOS los servicios, no una muestra.** El contenedor solo falla cuando alguien
+  pide algo; aquí se piden todos a propósito y de golpe. La lista sale de volver a correr
+  `App.ConfigureServices` sobre una colección de sonda, así que **no hay una segunda lista que
+  mantener**: lo que se comprueba es literalmente lo que se registra.
+- **Un solo sitio monta el contenedor** (`App.BuildHost`). Dos formas de montarlo serían dos grafos
+  que pueden divergir, y entonces el chequeo dejaría de decir nada sobre lo que arranca.
+- **Ningún paso lanza**: cada uno se apunta con su causa y se sigue. Saber que fallan doce cosas
+  vale más que saber que falla la primera — y en este caso fue exactamente así.
+
+No toca la red ni el hub: construye `ConnectionChecker` y `HubContext`, pero no los ejecuta. Es un
+chequeo, no una sesión.
+
+El parte sale por la consola de quien lo lanzó —una aplicación `WinExe` no tiene consola propia, así
+que hay que engancharse a la del padre con `AttachConsole`—, por el log, y por `--report <fichero>`
+**con BOM**, porque quien lo va a leer es el PowerShell 5.1 del workflow.
+
+### D-801 — El candado va sobre el ZIP, no sobre `dist/`
+
+El workflow de release lo ejecuta **después de comprimir y antes de crear la Release**,
+descomprimiendo el zip aparte: lo que tiene que arrancar es lo que la gente se va a descargar, no lo
+que quedó en la carpeta de compilación. Un `1` corta la publicación.
+
+Detalle que habría hecho inútil el paso: Atalaya es `WinExe`, y PowerShell **no espera** a un
+ejecutable de ventana invocado a secas. Sin `Start-Process -Wait`, el paso habría pasado siempre.
+
+Queda una comprobación que solo puede hacer el primer release que corra: que el paso `carcasa`
+—construir la ventana, que es donde revientan los errores de XAML— funcione en el runner de GitHub.
+Aquí, sobre el paquete publicado de verdad, pasa.
+
+### D-802 — Y un arranque que falla deja de morir en silencio
+
+`OnStartup` es `async void`: la excepción no la recogía nadie, no llegaba al log —que se escribe
+desde un contenedor que no llegó a existir— y quien lo sufría veía Atalaya no abrirse, y ya está.
+Ahora el arranque va dentro de un `try`, el fallo se escribe en el log y se dice en una ventana con
+la causa concreta, no con un «error inesperado».
+
+Esto no habría evitado el fallo, pero habría convertido «no arranca y no sé por qué» en un parte de
+una línea. Es lo mínimo que se le debe a alguien cuya aplicación no arranca.
+
+### D-803 — Cobertura (5 tests nuevos, 1.739 en total, todo en verde)
+
+- **El arranque en limpio**, sobre una carpeta de estado vacía: el contenedor entero montado y
+  todos los servicios resueltos. Es el test que habría salido rojo en la 1.1.3 — se comprobó que lo
+  hace: antes del arreglo daba «12 de 88 no se pueden resolver», después «88 resueltos».
+- **El segundo arranque**, con lo que dejó el primero: no es el mismo camino, porque ya hay
+  `settings.json` y las migraciones tienen sobre qué correr.
+- **El parte**: que un paso roto da código 1 y dice «NO ARRANCA», y que **la causa va dentro**, no
+  solo el veredicto.
+- **El interruptor** y el destino del parte.
+
+Lo que el test de consola **no** cubre y el chequeo dentro de la aplicación sí: los tipos que
+heredan de `DispatcherObject` —la ventana— exigen hilo STA, que un runner de xunit no da. Se
+aplazan y el parte lo dice con su recuento, en vez de callarlo o de inventarse una avería.
+
+**Verificado sobre el paquete real**: `dist/Atalaya.exe --selfcheck` → los ocho pasos en verde,
+`carcasa` incluida, código de salida 0.
