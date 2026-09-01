@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
 using Atalaya.Copilot;
@@ -129,7 +129,8 @@ internal static class TestFactory
     /// viven en ella y no en ninguna página —el de versión nueva, el de cierre de ciclo (F12 §G)—,
     /// que si no solo se podrían comprobar montando una sesión entera.
     /// </summary>
-    public static MainViewModel Shell(AppPaths paths, HubContext hub, ToastCenter? toasts = null)
+    public static MainViewModel Shell(
+        AppPaths paths, HubContext hub, ToastCenter? toasts = null, UpdateCheckService? updates = null)
     {
         var settings = new SettingsService(paths);
         settings.Load();
@@ -159,7 +160,8 @@ internal static class TestFactory
             fix,
             new InterruptedSessionRecovery(hub, openSession),
             new DisplayIdService(hub),
-            center);
+            center,
+            updates);
     }
 
     /// <summary>

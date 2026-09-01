@@ -613,9 +613,11 @@ tarjeta no puede estar mintiéndole al equipo el resto del día. Mejor no decir 
 ## Cosas que conviene saber
 
 **Actualizar Atalaya.** Al arrancar, Atalaya pregunta a GitHub si hay una versión más reciente
-que la tuya —como mucho una vez al día, sin retrasar nada y con el token de la cuenta que ya
-tienes conectada—. Si la hay, aparece un **banner discreto** encima de la página que dice las dos
-versiones —«**Tienes la 1.0.3 · disponible la 1.0.4**»— y ofrece tres cosas:
+que la tuya —sin retrasar nada y con el token de la cuenta que ya tienes conectada—. Publicada una
+versión nueva, **reiniciar Atalaya basta para verla**. Si abres y cierras varias veces seguidas no
+vuelve a preguntar: hay un mínimo de **15 minutos** entre consultas. Y si la dejas abierta días,
+mira otra vez cada 24 h. Si la hay, aparece un **banner discreto** encima de la página que dice
+las dos versiones —«**Tienes la 1.0.3 · disponible la 1.0.4**»— y ofrece tres cosas:
 
 - **Actualizar a X.Y.Z** — descarga la versión nueva, comprueba que llegó entera, sustituye la
   carpeta y vuelve a abrir Atalaya ya actualizada. Ves la descarga avanzar mientras pasa.

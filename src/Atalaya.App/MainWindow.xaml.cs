@@ -28,6 +28,11 @@ public partial class MainWindow : FluentWindow
         // Polling loop (§3): pull on a timer, off the UI thread, results marshalled back here.
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(viewModel.PollingSeconds) };
         _pollTimer.Tick += async (_, _) => await _viewModel.RefreshAsync();
+        // El re-chequeo de versión de las instancias que no se reinician (F8 §3). Va en el mismo
+        // tick del sondeo —no hace falta un reloj más para esto— pero como manejador APARTE: un
+        // fallo del sondeo no puede llevarse por delante el chequeo, ni al revés. El tick solo
+        // pregunta «¿le toca?»; las 24 h las decide UpdateCheckService.
+        _pollTimer.Tick += async (_, _) => await _viewModel.RecheckForUpdatesIfDueAsync();
         _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _toastTimer.Tick += (_, _) => _viewModel.SweepToasts();
 

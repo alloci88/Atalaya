@@ -8284,3 +8284,68 @@ de layout.
 **Lo que estos tests NO cubren, y sigue siendo del usuario**: la calibración de severidad —se
 verifica re-auditando el banco contra la clave, que es la única prueba que vale— y las capturas de
 los cinco puntos de pulido en los dos temas.
+
+## RETOQUE-CHEQUEO — El chequeo de versión, a ritmo razonable
+
+El parte: publicada una release nueva, quien ya había comprobado ese día no se enteraba hasta el
+siguiente. El sello del último chequeo vive en `settings.json`, así que **ni reiniciar servía**.
+
+### D-760 — El límite era una cuota diaria; ahora es un suelo de 15 minutos
+
+Se comprueba **en cada arranque**, y lo único que queda del límite es un suelo anti-bucle:
+`UpdateCheckService.MinimumInterval` = **15 minutos**. Reiniciar tras publicar una release basta
+para ver el aviso, sin tocar ningún fichero.
+
+Las 24 h nunca estuvieron pagando nada. El coste es **una** llamada REST por arranque, contra una
+aplicación que sondea el hub cada minuto: racionar eso a una al día no ahorraba un recurso escaso,
+solo retrasaba una noticia. Lo que sí costaba era todo lo demás — quien publicaba una versión no
+podía ver su propio aviso, y **la función era imposible de probar a mano sin editar la caché**, que
+es la clase de estado que se acaba editando mal.
+
+El suelo sigue existiendo porque el caso degenerado también: abrir y cerrar la aplicación diez
+veces seguidas —cosa que pasa mientras se trabaja en ella— no puede convertir una cortesía en diez
+consultas. Quince minutos cortan eso y no cortan nada más: nadie reinicia dos veces en un cuarto de
+hora *esperando* un aviso.
+
+Lo que **no** cambia: el chequeo sigue sin bloquear el arranque, sigue fallando en silencio con
+registro, un fallo sigue sin sellar la hora, el banner se mantiene con la última Release vista
+mientras no toca preguntar, y «Descartar» sigue callando esa versión — eso es del contenido, no de
+la frecuencia, y hay un test que lo fija ahora que la consulta sí se rehace.
+
+### D-761 — El re-chequeo de la instancia abierta no existía: había que construirlo
+
+La revisión iba a «mantener el re-chequeo periódico cada 24 h que ya existe», y **no existía**. Lo
+que había era un *throttle* de 24 h sobre la consulta, que es lo contrario de un temporizador: nada
+volvía a llamar al chequeo, así que una instancia abierta tres días no miraba ni una sola vez más.
+Con el suelo bajado a 15 minutos eso habría quedado peor todavía, así que el re-chequeo se ha
+escrito de verdad:
+
+- **El tick que ya había.** El sondeo del hub late cada minuto en la ventana; el re-chequeo cuelga
+  de ese mismo temporizador como manejador **aparte** —un fallo del sondeo no puede llevarse por
+  delante el chequeo, ni al revés— y no se añade un reloj más para algo que ocurre una vez al día.
+- **La regla vive en el servicio**, no en la ventana: el tick solo pregunta `PeriodicRecheckDue()`.
+  Preguntarlo no cuesta una llamada a nadie. Así los dos números de la política —el suelo y el
+  re-chequeo— están escritos en el mismo sitio y se comprueban sin montar una ventana.
+- **Cuenta desde el último INTENTO, no desde el último acierto.** El sello de los ajustes solo
+  avanza cuando la consulta sale bien (D-622, y sigue siendo lo correcto para el arranque). Si el
+  re-chequeo mirara ese sello, una instancia sin red lo vería viejo en **cada tick** y reintentaría
+  cada minuto: el machaqueo que el suelo existe para evitar. El intento se recuerda en memoria, que
+  es exactamente la vida de «esta instancia lleva abierta».
+
+Y sigue sin ser polling de la API de releases: en marcha, 24 h entre consultas bastan.
+
+### D-762 — Cobertura (7 tests nuevos, 4 reescritos, 1.546 en total, todo en verde)
+
+Los nuevos: **reiniciar tras publicar una release enseña el aviso** —el caso del parte, con ajustes
+releídos del disco en cada arranque, que es lo único que cruza un reinicio de verdad—; los dos
+números de la política; que una versión **descartada sigue callada aunque la consulta se rehaga**
+(dos peticiones, ningún aviso); que la instancia abierta **no** vuelve a preguntar a las 23 h y sí a
+las 24; que sin red no reintenta en cada tick; y el cableado de punta a punta sobre la carcasa —el
+tick llama, la carcasa pregunta si toca, y solo a las 24 h se consulta—, porque una regla que no
+llama nadie está escrita, no puesta.
+
+Los reescritos son los cuatro que fijaban la cuota del día: dentro del suelo no se pregunta, pasado
+el suelo sí, el aviso se mantiene mientras tanto, y un fallo no consume el turno.
+
+**Verificación humana, que sigue siendo del usuario**: publicar una release, reiniciar Atalaya y ver
+el banner sin tocar ficheros de caché.

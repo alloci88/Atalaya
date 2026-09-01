@@ -615,6 +615,22 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// El re-chequeo de las instancias que <b>llevan abiertas sin reiniciarse</b>. Lo llama el
+    /// temporizador de la ventana, que solo sabe que el tiempo pasa: si toca o no —24 h desde el
+    /// último intento— lo decide el propio chequeo, donde vive el resto de la política de
+    /// frecuencia. Aquí no se llama a ninguna API por preguntarlo.
+    /// </summary>
+    public async Task RecheckForUpdatesIfDueAsync(CancellationToken ct = default)
+    {
+        if (_updates is null || !_updates.PeriodicRecheckDue())
+        {
+            return;
+        }
+
+        await CheckForUpdatesAsync(ct);
+    }
+
+    /// <summary>
     /// Abre la página de la Release en el navegador. Ahí acaba el trabajo de Atalaya: descargar y
     /// reemplazar es del usuario, y el banner se retira porque ya ha hecho lo suyo.
     /// </summary>

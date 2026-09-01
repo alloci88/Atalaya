@@ -73,7 +73,28 @@ public sealed record UpdateAvailability(
 /// </summary>
 public sealed class UpdateCheckService
 {
-    /// <summary>Como mucho una consulta cada 24 h. Nadie tiene prisa por enterarse de esto.</summary>
+    /// <summary>
+    /// El <b>suelo anti-bucle</b>: dos consultas nunca se pisan a menos de 15 minutos.
+    /// <para>
+    /// No es una cuota diaria, y por eso son 15 minutos y no 24 horas: se comprueba <b>en cada
+    /// arranque</b>, así que reiniciar tras publicar una release basta para ver el aviso. Lo único
+    /// que este suelo impide es el caso degenerado —abrir y cerrar la aplicación diez veces
+    /// seguidas— que convertiría una cortesía en machaqueo. Contra el coste real no hay nada que
+    /// racionar: es <b>una</b> llamada REST por arranque, y la aplicación ya sondea el hub cada
+    /// minuto.
+    /// </para>
+    /// <para>
+    /// Y sella la diferencia entre poder probar la función y no poder: con la cuota de un día,
+    /// ver el aviso exigía editar la caché a mano.
+    /// </para>
+    /// </summary>
+    public static readonly TimeSpan MinimumInterval = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// Cada cuánto vuelve a mirar una instancia que <b>lleva abierta sin reiniciarse</b>. Ahí no
+    /// hay arranque que dispare el chequeo, y 24 h siguen bastando: nadie tiene prisa por
+    /// enterarse de esto, y menos quien no ha cerrado la aplicación en un día.
+    /// </summary>
     public static readonly TimeSpan CheckInterval = TimeSpan.FromHours(24);
 
     private readonly DeployConfig _deploy;
@@ -83,6 +104,13 @@ public sealed class UpdateCheckService
     private readonly ILogger _log;
     private readonly Func<DateTimeOffset> _now;
     private readonly Func<string> _currentVersion;
+
+    /// <summary>
+    /// Cuándo lo INTENTÓ este proceso, esté o no en los ajustes. El re-chequeo periódico cuenta
+    /// desde aquí y no desde el último acierto: un sello que solo avanza cuando hay red
+    /// convertiría el re-chequeo de una instancia offline en un reintento por cada tick.
+    /// </summary>
+    private DateTimeOffset? _lastAttemptUtc;
 
     public UpdateCheckService(
         DeployConfig deploy,
@@ -109,10 +137,12 @@ public sealed class UpdateCheckService
     /// <see cref="UpdateAvailability.None"/>.
     /// </summary>
     /// <param name="force">
-    /// Salta el límite de 24 h. Lo usa quien pregunta a mano; el arranque nunca.
+    /// Salta el suelo de <see cref="MinimumInterval"/>. Lo usa quien pregunta a mano; el arranque
+    /// nunca — para eso está el suelo.
     /// </param>
     public async Task<UpdateAvailability> CheckAsync(CancellationToken ct, bool force = false)
     {
+        _lastAttemptUtc = _now();
         try
         {
             return await CheckCoreAsync(ct, force);
@@ -157,8 +187,9 @@ public sealed class UpdateCheckService
 
         AppSettings settings = _settings.Current;
 
-        // Throttled: se contesta con lo último que se vio. El banner no puede parpadear cada 24 h.
-        if (!force && !DueAt(_now(), settings.LastUpdateCheckUtc))
+        // Dentro del suelo: se contesta con lo último que se vio. El banner no puede desaparecer
+        // solo porque esta consulta no tocara.
+        if (!force && !DueAt(_now(), settings.LastUpdateCheckUtc, MinimumInterval))
         {
             return Log(Decide(mine, settings.LastSeenReleaseTag, settings.LastSeenReleaseUrl, settings,
                 cached: true));
@@ -216,14 +247,25 @@ public sealed class UpdateCheckService
             theirs, url, $"hay versión nueva: {theirs} (tienes {mine})", tag, mine);
     }
 
-    /// <summary>¿Toca preguntar? Sin sello previo, siempre — es el primer arranque.</summary>
-    private static bool DueAt(DateTimeOffset now, DateTimeOffset? last)
-        => last is null || now - last.Value >= CheckInterval || last.Value > now;
+    /// <summary>
+    /// ¿Le toca a una instancia que lleva abierta? Se pregunta desde el temporizador de la
+    /// ventana, que solo sabe que el tiempo pasa; la regla —24 h desde el último intento de este
+    /// proceso— vive aquí, junto al resto de la política de frecuencia.
+    /// </summary>
+    public bool PeriodicRecheckDue() => DueAt(_now(), _lastAttemptUtc, CheckInterval);
+
+    /// <summary>
+    /// ¿Toca preguntar? Sin sello previo, siempre — es el primer arranque. Un sello del futuro
+    /// (reloj movido hacia atrás) también cuenta como que toca: si no, un solo cambio de hora
+    /// podría dejar la comprobación dormida para siempre.
+    /// </summary>
+    private static bool DueAt(DateTimeOffset now, DateTimeOffset? last, TimeSpan interval)
+        => last is null || now - last.Value >= interval || last.Value > now;
 
     /// <summary>
     /// Guarda lo que se acaba de ver y sella la hora. Los ajustes se escriben aquí y no en el
-    /// view-model porque el sello es parte de la consulta: si se olvidara, el límite de 24 h no
-    /// existiría.
+    /// view-model porque el sello es parte de la consulta: si se olvidara, el suelo de
+    /// <see cref="MinimumInterval"/> no existiría.
     /// </summary>
     private void Stamp(AppSettings settings, string? tag, string? url)
     {

@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -126,22 +126,25 @@ public sealed class AppSettings
     // ---- Aviso de versión nueva (F8 §3) ----
 
     /// <summary>
-    /// Cuándo se preguntó por última vez a GitHub por la última Release. El chequeo es de
-    /// cortesía, así que se limita a uno cada 24 h: no hay ninguna prisa por enterarse.
+    /// Cuándo se preguntó por última vez a GitHub por la última Release. Se comprueba en cada
+    /// arranque, con un suelo anti-bucle de 15 minutos (<c>UpdateCheckService.MinimumInterval</c>):
+    /// reiniciar tras publicar una release basta para ver el aviso, y abrir y cerrar diez veces
+    /// seguidas no dispara diez consultas.
     /// <para>
     /// Solo se sella tras una consulta que SALIÓ BIEN. Si falla —sin red, sin permisos, API
-    /// caída—, no se sella: un usuario que arrancó offline esta mañana no tiene por qué quedarse
-    /// un día entero sin enterarse de nada. Y no puede degenerar en machaqueo porque la consulta
-    /// se hace una vez por arranque, no en bucle.
+    /// caída—, no se sella: quien arrancó offline no tiene por qué quedarse sin enterarse hasta
+    /// que venza nada. Y no puede degenerar en machaqueo porque la consulta se hace una vez por
+    /// arranque, no en bucle; el re-chequeo de las instancias que llevan abiertas cuenta desde su
+    /// último INTENTO, y va cada 24 h.
     /// </para>
     /// </summary>
     public DateTimeOffset? LastUpdateCheckUtc { get; set; }
 
     /// <summary>
     /// El tag de la última Release que se llegó a ver (<c>v1.2.3</c>). Se guarda para que el
-    /// banner se pueda pintar en los arranques en los que el chequeo va throttled: sin esto, la
-    /// versión nueva desaparecería de la vista durante 24 h y volvería sola, que es justo el tipo
-    /// de intermitencia que hace desconfiar de un aviso.
+    /// banner se pueda pintar en los arranques en los que el chequeo no toca: sin esto, la versión
+    /// nueva desaparecería de la vista y volvería sola, que es justo el tipo de intermitencia que
+    /// hace desconfiar de un aviso.
     /// </summary>
     public string? LastSeenReleaseTag { get; set; }
 

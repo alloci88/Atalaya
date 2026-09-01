@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using Atalaya.App.Services;
 using Atalaya.Domain.Abstractions;
 using FluentAssertions;
@@ -215,21 +215,22 @@ public sealed class UpdateNoticeTests : IDisposable
     }
 
     /// <summary>
-    /// Y la respuesta cacheada de las 24 h produce la MISMA frase que la recién consultada. Era la
-    /// tercera sospecha del parte: se descarta con un test, no con una lectura.
+    /// Y la respuesta que se da sin consultar —dentro del suelo de 15 minutos— produce la MISMA
+    /// frase que la recién consultada. Era la tercera sospecha del parte: se descarta con un test,
+    /// no con una lectura.
     /// </summary>
     [Fact]
     public async Task La_respuesta_cacheada_dice_lo_mismo_que_la_consultada()
     {
         UpdateAvailability fresh = await Check("v1.0.4", mine: "1.0.3");
 
-        // Segundo arranque dentro de las 24 h: sin red que valga, se contesta con lo guardado.
+        // Segundo arranque dentro del suelo: sin red que valga, se contesta con lo guardado.
         var offline = new HttpStub();
         UpdateAvailability cached = await Service(offline, "1.0.3").CheckAsync(CancellationToken.None);
 
         cached.Headline.Should().Be(fresh.Headline);
         cached.Version!.ToString().Should().Be("1.0.4");
         cached.Current!.ToString().Should().Be("1.0.3");
-        offline.Requests.Should().BeEmpty("no se vuelve a preguntar dentro de las 24 h");
+        offline.Requests.Should().BeEmpty("no se vuelve a preguntar dentro del suelo");
     }
 }
