@@ -14,9 +14,14 @@ namespace Atalaya.ClaudeCode;
 /// </param>
 /// <param name="Problem">La causa ya clasificada, cuando se ha podido.</param>
 /// <param name="Message">Lo que el proveedor dijo, para poder enseñarlo.</param>
+/// <param name="Started">
+/// El CLI llegó a emitir su evento de inicio. Distingue «la sesión arrancó y algo salió mal» de
+/// «esto ni siquiera es el CLI contestando», y el diagnóstico de las dos NO puede ser el mismo:
+/// decir «el servidor MCP no conectó» ante una salida ilegible manda a mirar el sitio equivocado.
+/// </param>
 /// <param name="McpConnected">
 /// Si el servidor MCP de Atalaya llegó a conectar. Sale del evento <c>system/init</c>, que lista
-/// los servidores con su estado.
+/// los servidores con su estado. Solo significa algo cuando <paramref name="Started"/> es cierto.
 /// </param>
 /// <param name="Tools">Las tools que el CLI declaró disponibles en <c>system/init</c>.</param>
 /// <param name="Model">El modelo que el CLI resolvió de verdad (el alias ya expandido).</param>
@@ -24,6 +29,7 @@ public sealed record ClaudeRunOutcome(
     bool Failed,
     AgentProblem Problem,
     string Message,
+    bool Started,
     bool McpConnected,
     IReadOnlyList<string> Tools,
     string? Model,
@@ -127,10 +133,11 @@ public sealed class ClaudeStreamReader
         {
             return new ClaudeRunOutcome(
                 true,
-                sawInit ? AgentProblem.Unknown : AgentProblem.NotAuthenticated,
+                AgentProblem.Unknown,
                 sawInit
                     ? "Claude Code terminó sin dar un resultado: la sesión se cortó a mitad."
                     : "Claude Code no llegó a arrancar la sesión (no emitió el evento de inicio).",
+                sawInit,
                 mcpConnected,
                 tools,
                 model,
@@ -139,7 +146,7 @@ public sealed class ClaudeStreamReader
         }
 
         return new ClaudeRunOutcome(
-            failed, problem, message, mcpConnected, tools, model, toolCalls, usage);
+            failed, problem, message, sawInit, mcpConnected, tools, model, toolCalls, usage);
     }
 
     /// <summary>

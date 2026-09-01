@@ -39,7 +39,7 @@ public sealed class ClaudeCodeProvider : IAuditorProvider
     private readonly ILogger _logger;
     private readonly Func<string?> _modelProvider;
     private readonly Func<string> _workDirectory;
-    private readonly Func<string?> _cliOverride;
+    private readonly Func<string?>? _locator;
     private readonly string _bridgeExecutable;
 
     /// <param name="modelProvider">
@@ -50,22 +50,23 @@ public sealed class ClaudeCodeProvider : IAuditorProvider
     /// <param name="bridgeExecutable">
     /// La ruta de <c>Atalaya.Mcp</c>, el relé que el CLI lanza como servidor MCP.
     /// </param>
-    /// <param name="cliOverride">
-    /// Una ruta fija al CLI en vez de buscarlo en el PATH. Existe para los tests, que apuntan a un
-    /// CLI de mentira con un guion de eventos, y así el driver entero —argumentos, tubería, tools,
-    /// desenlace— se ejercita sin suscripción de nadie.
+    /// <param name="locator">
+    /// Quién encuentra el CLI. <b>Si se pasa, MANDA</b> —incluso devolviendo null, que significa
+    /// «en esta máquina no está»—, y no se recurre al PATH. Esa autoridad es el punto: con un
+    /// respaldo al PATH detrás, un test que quiere ejercitar «no hay CLI» encontraría el que tenga
+    /// instalado quien ejecuta la suite y probaría lo contrario de lo que dice probar.
     /// </param>
     public ClaudeCodeProvider(
         string bridgeExecutable,
         Func<string?>? modelProvider = null,
         Func<string>? workDirectory = null,
-        Func<string?>? cliOverride = null,
+        Func<string?>? locator = null,
         ILogger? logger = null)
     {
         _bridgeExecutable = bridgeExecutable;
         _modelProvider = modelProvider ?? (() => null);
         _workDirectory = workDirectory ?? (() => Path.Combine(Path.GetTempPath(), "atalaya-claude"));
-        _cliOverride = cliOverride ?? (() => null);
+        _locator = locator;
         _logger = logger ?? NullLogger.Instance;
     }
 
@@ -90,7 +91,7 @@ public sealed class ClaudeCodeProvider : IAuditorProvider
     public event Action<UsageSample>? UsageReported;
 
     /// <summary>La ruta del CLI ahora mismo, o null si no está en esta máquina.</summary>
-    public string? ResolveCli() => _cliOverride() ?? ClaudeCliLocator.Resolve();
+    public string? ResolveCli() => _locator is null ? ClaudeCliLocator.Resolve() : _locator();
 
     public async Task<bool> EnsureReadyAsync(CancellationToken ct) => (await CheckAsync(ct)).Ready;
 

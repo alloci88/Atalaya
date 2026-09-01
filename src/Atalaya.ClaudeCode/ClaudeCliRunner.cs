@@ -159,7 +159,11 @@ public sealed class ClaudeCliRunner
     /// </summary>
     internal static ClaudeRunOutcome Explain(ClaudeRunOutcome outcome, int exitCode, string stderr)
     {
-        if (!outcome.McpConnected)
+        // El orden importa. Solo se acusa al servidor MCP cuando la sesión ARRANCÓ de verdad: si
+        // el CLI no llegó ni a emitir su evento de inicio, lo que falla es otra cosa —una salida
+        // ilegible, un binario que no es el que creíamos— y culpar al MCP mandaría a mirar donde no
+        // es. El diagnóstico de la lectura ya dice lo que pasó.
+        if (outcome.Started && !outcome.McpConnected)
         {
             return outcome with
             {
@@ -269,7 +273,10 @@ public sealed class ClaudeCliRunner
         var arguments = new JsonArray();
         foreach (string argument in bridgeArguments)
         {
-            arguments.Add(argument);
+            // JsonValue.Create y no Add(string): el segundo envuelve la cadena en un valor
+            // «personalizado» que revienta al serializar con opciones propias («must specify a
+            // TypeInfoResolver»). Se escribe UNA vez por sesión, así que habría reventado siempre.
+            arguments.Add(JsonValue.Create(argument));
         }
 
         var config = new JsonObject
@@ -285,7 +292,7 @@ public sealed class ClaudeCliRunner
             },
         };
 
-        File.WriteAllText(path, config.ToJsonString(new JsonSerializerOptions { WriteIndented = false }));
+        File.WriteAllText(path, config.ToJsonString());
         return path;
     }
 }

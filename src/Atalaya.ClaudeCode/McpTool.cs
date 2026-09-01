@@ -32,13 +32,21 @@ public sealed record McpTool(
 /// </summary>
 internal static class Schema
 {
+    /// <summary>
+    /// Un objeto con sus propiedades. <b>Cada sub-esquema se CLONA al insertarlo</b>, y no es un
+    /// detalle: un <c>JsonNode</c> solo puede tener un padre, así que reutilizar el esquema de una
+    /// ubicación en <c>submit_finding</c> y en <c>add_locations</c> —que es lo natural, porque es
+    /// la misma forma— reventaba al construir el catálogo con «The node already has a parent», y
+    /// eso ocurre al ABRIR la sesión: habría tumbado toda auditoría con Claude Code antes de la
+    /// primera llamada al modelo. Clonar aquí deja que los esquemas se compartan como piezas.
+    /// </summary>
     public static JsonObject Object(params (string Name, JsonNode Schema, bool Required)[] properties)
     {
         var props = new JsonObject();
         var required = new JsonArray();
         foreach ((string name, JsonNode schema, bool isRequired) in properties)
         {
-            props[name] = schema;
+            props[name] = schema.DeepClone();
             if (isRequired)
             {
                 required.Add(name);
@@ -65,6 +73,7 @@ internal static class Schema
     public static JsonObject Integer(string description)
         => new() { ["type"] = "integer", ["description"] = description };
 
+    /// <inheritdoc cref="Object"/>
     public static JsonObject Array(JsonNode items, string description)
-        => new() { ["type"] = "array", ["items"] = items, ["description"] = description };
+        => new() { ["type"] = "array", ["items"] = items.DeepClone(), ["description"] = description };
 }

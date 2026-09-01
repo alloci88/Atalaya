@@ -74,7 +74,7 @@ public sealed class AtalayaMcpServer
             JsonNode? response = Handle(line);
             if (response is not null)
             {
-                await writer.WriteLineAsync(response.ToJsonString(Json));
+                await writer.WriteLineAsync(response.ToJsonString());
             }
         }
     }
