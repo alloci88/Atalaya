@@ -77,7 +77,7 @@ public sealed class ReconnectSyncTests : IDisposable
         var clock = new FakeClock();
         var api = new GitHubApiClient(stub.Client());
         var agent = new FakeCopilotAgent();
-        var checker = new ConnectionChecker(_account, api, _deploy, _hub, agent);
+        var checker = new ConnectionChecker(_account, api, _deploy, _hub, AuditorProviderRegistry.Of(agent));
 
         var services = new ServiceCollection();
         services.AddSingleton(_hub);

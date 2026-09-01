@@ -1,4 +1,4 @@
-﻿using Atalaya.App.Services;
+using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Copilot;
 using Atalaya.Domain;
@@ -255,7 +255,8 @@ public sealed class SessionStartFailureTests : IDisposable
 
     private ModelResolver Resolver(params string[] available)
         => new(
-            new FakeCopilotAgent(modelsScript: () => available.Select(m => new AgentModel(m, m)).ToList()),
+            AuditorProviderRegistry.Of(
+                new FakeCopilotAgent(modelsScript: () => available.Select(m => new AgentModel(m, m)).ToList())),
             _settings);
 
     /// <summary>Máquina recién instalada: sin modelo elegido, se resuelve contra la lista real.</summary>
@@ -311,7 +312,8 @@ public sealed class SessionStartFailureTests : IDisposable
     {
         Configure(string.Empty);
         var resolver = new ModelResolver(
-            new FakeCopilotAgent(modelsScript: () => throw new InvalidOperationException("sin red")),
+            AuditorProviderRegistry.Of(
+                new FakeCopilotAgent(modelsScript: () => throw new InvalidOperationException("sin red"))),
             _settings);
 
         ModelResolution r = await resolver.ResolveAsync(CancellationToken.None);
@@ -327,7 +329,8 @@ public sealed class SessionStartFailureTests : IDisposable
     {
         Configure("modelo-elegido");
         var resolver = new ModelResolver(
-            new FakeCopilotAgent(modelsScript: () => throw new InvalidOperationException("sin red")),
+            AuditorProviderRegistry.Of(
+                new FakeCopilotAgent(modelsScript: () => throw new InvalidOperationException("sin red"))),
             _settings);
 
         ModelResolution r = await resolver.ResolveAsync(CancellationToken.None);
@@ -348,7 +351,7 @@ public sealed class SessionStartFailureTests : IDisposable
         var agent = new FakeCopilotAgent(
             auditScript: _ => Array.Empty<SubmitFindingArgs>(),
             modelsScript: () => new[] { new AgentModel("modelo-a", "Modelo A") });
-        LiveSessionService live = Live(agent, new ModelResolver(agent, _settings));
+        LiveSessionService live = Live(agent, new ModelResolver(AuditorProviderRegistry.Of(agent), _settings));
         var avisos = new List<string>();
         live.Notice += avisos.Add;
 
@@ -370,7 +373,7 @@ public sealed class SessionStartFailureTests : IDisposable
         Configure(string.Empty);
         var agent = new FakeCopilotAgent(
             modelsScript: () => throw new InvalidOperationException("sin red"));
-        LiveSessionService live = Live(agent, new ModelResolver(agent, _settings));
+        LiveSessionService live = Live(agent, new ModelResolver(AuditorProviderRegistry.Of(agent), _settings));
 
         await live.StartAsync(new SessionRequest("app", AuditMode.Lotes, new[] { UnitPath }), new[] { UnitPath });
         await Wait(live);

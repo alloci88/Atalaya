@@ -114,6 +114,15 @@ public sealed class ConnectionChecker
     private readonly HubContext _hub;
     private readonly AuditorProviderRegistry _providers;
 
+    /// <summary>
+    /// <b>Un solo constructor, a propósito</b> (BUGFIX-ARRANQUE). Hubo un segundo por comodidad
+    /// —el que tomaba un <c>IAuditorProvider</c> suelto— y con él la aplicación dejó de arrancar:
+    /// desde que el contenedor sabe resolver también <c>IAuditorProvider</c>, los dos eran
+    /// satisfacibles y <c>ActivatorUtilities</c> no elige entre iguales, lanza
+    /// «The following constructors are ambiguous». El compilador sí sabía desempatarlos, así que
+    /// ningún test lo vio: la ambigüedad solo existe para quien resuelve por reflexión.
+    /// Quien quiera uno solo, que use <see cref="AuditorProviderRegistry.Of"/>.
+    /// </summary>
     public ConnectionChecker(
         GitHubAccountService account,
         GitHubApiClient api,
@@ -140,20 +149,6 @@ public sealed class ConnectionChecker
         }
         .Concat(providers.All.Select(p => new ConnectionStep(ProviderStepKey(p.ProviderId), $"{p.ProviderName} disponible")))
         .ToArray();
-    }
-
-    /// <summary>
-    /// Con UN proveedor. Lo usan los tests de la pantalla Cuenta que solo ejercitan la cadena de
-    /// GitHub y no tienen nada que decir sobre cuántos auditores hay.
-    /// </summary>
-    public ConnectionChecker(
-        GitHubAccountService account,
-        GitHubApiClient api,
-        DeployConfig deploy,
-        HubContext hub,
-        IAuditorProvider agent)
-        : this(account, api, deploy, hub, AuditorProviderRegistry.Of(agent))
-    {
     }
 
     /// <summary>La clave de la fila de un proveedor. En un sitio, para que las dos mitades casen.</summary>

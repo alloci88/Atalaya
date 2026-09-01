@@ -1,4 +1,4 @@
-﻿using Atalaya.Copilot;
+using Atalaya.Copilot;
 
 namespace Atalaya.App.Services;
 
@@ -49,19 +49,19 @@ public sealed class ModelResolver
     private readonly AuditorProviderRegistry _providers;
     private readonly SettingsService _settings;
 
+    /// <summary>
+    /// <b>Un solo constructor, a propósito</b> (BUGFIX-ARRANQUE). Hubo un segundo por comodidad
+    /// —el que tomaba un <c>IAuditorProvider</c> suelto— y con él la aplicación dejó de arrancar:
+    /// desde que el contenedor sabe resolver también <c>IAuditorProvider</c>, los dos eran
+    /// satisfacibles y <c>ActivatorUtilities</c> no elige entre iguales, lanza
+    /// «The following constructors are ambiguous». El compilador sí sabía desempatarlos, así que
+    /// ningún test lo vio: la ambigüedad solo existe para quien resuelve por reflexión.
+    /// Quien quiera uno solo, que use <see cref="AuditorProviderRegistry.Of"/>.
+    /// </summary>
     public ModelResolver(AuditorProviderRegistry providers, SettingsService settings)
     {
         _providers = providers;
         _settings = settings;
-    }
-
-    /// <summary>
-    /// Con UN proveedor y nada que elegir. Lo usan los tests, que ejercitan la resolución de
-    /// modelo con un agente falso y no tienen por qué montar un registro para eso.
-    /// </summary>
-    public ModelResolver(IAuditorProvider provider, SettingsService settings)
-        : this(AuditorProviderRegistry.Of(provider), settings)
-    {
     }
 
     /// <summary>
