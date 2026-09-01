@@ -9651,3 +9651,140 @@ elimina la contradicción, no reordena la aritmética. Queda anotado con su medi
 retome no tenga que volver a descubrirlo — y con la consecuencia dicha: mientras siga así, los
 tokens de entrada de una sesión de Claude Code con varias llamadas a herramienta se registran por
 debajo de lo que fueron. Al backlog.
+
+> **Cerrado en F16-RETOQUE (D-818).** Duró poco: al cablear el consumo del arreglo, el número que
+> se iba a enseñar era justamente el que se quedaba corto, así que se midió entero y se resolvió.
+> Manda `modelUsage`.
+
+## F16-RETOQUE — El pie que no contaba y la cabecera que se pisaba
+
+Dos defectos del primer uso real del arreglo asistido con Claude Code, con la pantalla delante.
+Ninguno toca la mecánica del arreglo: los dos son de **medición y presentación**.
+
+### D-817 — El pie no contaba porque el consumo solo se leía al cerrar el turno
+
+**El síntoma.** A mitad de una sesión de arreglo con Claude —pregunta contestada, edición ya
+aplicada— el pie seguía diciendo «0 llamadas · coste no calculable (sin tokens registrados)».
+
+**La causa, que no es la que parecía.** El camino del arreglo sí reenvía lo que el proveedor
+informa; lo que pasaba es que el driver **solo leía el consumo del evento `result`**, el que cierra
+un turno. Y con esta casa eso es el final de la sesión entera: `ask_user` es una herramienta MCP, y
+el modelo se queda bloqueado DENTRO de la llamada mientras el usuario decide, así que preguntar no
+cierra el turno. Un arreglo completo —leer, preguntar, editar, compilar, cerrar— cabe en **un solo
+turno**, y hasta el último segundo no había nada que enseñar. En una auditoría no se notaba: cada
+unidad es una invocación del CLI, así que el pie se movía una vez por unidad.
+
+**El arreglo.** El consumo viaja **según ocurre**: una muestra por cada llamada al modelo, leída del
+`usage` que trae cada evento `assistant`. El pie se mueve desde la primera.
+
+**Y con una trampa que hubo que medir** (N-2): el CLI parte una misma respuesta del modelo en varios
+eventos —uno por bloque de contenido: el pensamiento, el texto, la llamada a herramienta— y
+**repite el mismo `usage` en todos**. Contarlos por evento multiplicaba el gasto por tres. Se
+descuentan por `id` de mensaje.
+
+### D-818 — Cuál de las tres cifras del CLI es la buena, y se cierra lo que F16 dejó abierto
+
+D-816 dejó anotado que `usage.input_tokens` no cuadraba con `modelUsage` y lo mandó al backlog. Con
+el pie de por medio ya no se podía dejar: el número que se estaba a punto de enseñar era el que se
+quedaba corto. Se midió el evento `result` del CLI real (2.1.252) en una sesión de cuatro llamadas
+con herramientas:
+
+| | entrada | salida | caché lectura | caché escritura |
+| --- | ---: | ---: | ---: | ---: |
+| `usage` (del turno) | 40 | 412 | 22.760 | 7.921 |
+| `modelUsage` (acumulado) | **986** | **434** | 22.760 | 7.921 |
+
+Con `modelUsage` y las tarifas publicadas sale **0,021274 $**, que es al último decimal el
+`total_cost_usd` que el propio CLI declara. Con `usage`, 0,020218 $. **Manda `modelUsage`**: es el
+único de los tres que reproduce la aritmética del proveedor.
+
+La diferencia no es ruido ni error del CLI: el `usage` de los eventos informa lo que se sabe al
+empezar cada respuesta, y el encargo del sistema —que se cuenta una vez— queda fuera. Se comprobó
+además que en un segundo turno las dos cifras avanzan **lo mismo** (20 de entrada las dos), así que
+el desfase es un desnivel del primer turno y no un error que se acumule.
+
+**Cómo se cuadra.** Lo que llega llamada a llamada es un **anticipo** —está para que el pie se
+mueva— y al cerrar el turno se emite un **ajuste**: la diferencia entre el acumulado que declara el
+CLI y lo ya reportado. Nunca negativa, con el mismo blindaje que la fórmula de credits (D-785). Si
+un CLI no publicara `modelUsage`, se cae al `usage` de cada turno acumulado a mano, que es lo que
+había antes.
+
+**Y «llamadas» pasa a contarse por lo que dice cada muestra**, no por cuántas muestras llegan
+(`UsageSample.Calls`). El ajuste cuenta **cero**: no es una llamada nueva, es la misma contada
+mejor. Sin eso, cada turno se habría inventado una llamada de más — y un número que se le enseña al
+usuario no puede depender de cuántos mensajes hicieron falta para decirlo.
+
+**Dos cosas que se estaban perdiendo por el camino, encontradas al mirar esto:**
+
+- **La caché ESCRITA del arreglo se guardaba como cero.** `session.Usage.Add(..., 0, ...)`, un cero
+  literal donde iba `CacheWriteTokens`. Con Claude Code eso es el sumando más grande de la factura
+  —escribir en caché se cobra al doble de la entrada (D-785)—, así que el informe de un arreglo
+  contaba de menos justo donde más pesa.
+- **Las llamadas no se guardaban en ninguna parte** para una sesión sin unidades. En una auditoría
+  viven en el desglose por unidad; un arreglo y una verificación no tienen unidades, así que no
+  había dónde. Ahora `UsageTotals.Calls` las lleva y los tres informes las dicen.
+
+**Verificado de punta a punta con el CLI real**, que es como se cierra esto: el pie sube de 1 a 14
+llamadas mientras el agente trabaja, y la sesión cierra con 2.786 de entrada, 10.975 de salida y
+201.371 + 22.525 de caché — 12,3 credits equivalentes con la tarifa de la prueba. Los 2.786 de
+entrada son la prueba del ajuste: los eventos sumaban 140.
+
+### D-819 — La cabecera reparte por columnas, y el reparto vive en una clase
+
+**El síntoma.** «Pausar» pintado encima de «Volver al hallazgo (MEJ-0011)».
+
+**La causa es la de D-710b en el otro eje.** La cabecera era un `Grid` sin columnas con dos
+`StackPanel` dentro, el segundo con `HorizontalAlignment="Right"`. Un `Grid` sin columnas no reparte
+espacio: **superpone**, y gana el Z-order. Mientras la izquierda fue corta el hueco disimuló el
+defecto; con el distintivo de proveedor y modelo que añadió F16, dejó de haber hueco.
+
+**`PageHeader`**, un `Grid` que se pone sus dos columnas: identidad en una **estrella** que encoge y
+acciones en una **`Auto`** que no cede. El orden importa y es una decisión: lo que no se puede
+perder son las acciones, porque un botón medio tapado se pulsa igual y el usuario no sabe qué hay
+debajo; la identidad se recorta y se lee entera en el tooltip.
+
+**Y está en las DOS vistas que tenían el patrón** —el arreglo asistido y la sesión en vivo—, por lo
+mismo que el banner de fallo de D-710c: arreglar solo la que se reportó es como no arreglar
+ninguna. Por eso es una clase y no un retoque en un XAML.
+
+**La zona de identidad deja de ser un `StackPanel`**, y ése era el detalle que faltaba: un
+`StackPanel` mide a sus hijos con ancho infinito, así que `TextTrimming` no llega a activarse nunca
+y el texto se sale por el borde en vez de recortarse. Ahora es un `Grid` con el subtítulo en una
+columna estrella acotada — estrella para que ceda cuando no hay sitio, acotada para que cuando sobre
+no empuje al distintivo y al enlace al otro extremo.
+
+**Más el cinturón:** la cabecera recorta la zona de identidad a su celda. Es la garantía que no
+depende de que las cuentas salgan: un panel anidado que no quepa dibuja fuera de su columna sin
+pedirle permiso a nadie.
+
+### D-820 — Cobertura (27 tests nuevos, 1.808 en total, todo en verde)
+
+- **El consumo, contra el flujo real del CLI**: una muestra por llamada sin esperar al final; un
+  mensaje partido en tres bloques contado UNA vez; el agregado del CLI mandando sobre lo ya
+  reportado y la diferencia cuadrada al cerrar; el respaldo cuando no hay `modelUsage`; el coste de
+  un turno como diferencia contra el acumulado; que nunca se informa un consumo negativo; y que a un
+  proveedor que no informa nada no se le inventa ninguno.
+- **El pie, en la sesión de verdad**: con el guion detenido a mitad de turno —el CLI falso espera a
+  una señal del test— el pie ya cuenta llamadas y tokens, y `IsRunning` sigue siendo cierto. Con
+  tarifa, el coste sale etiquetado «equivalente API»; sin consumo informado, y solo entonces, sale
+  «sin tokens registrados».
+- **El informe del arreglo**: tokens por tipo —caché escrita incluida—, llamadas al modelo y coste
+  con su etiqueta.
+- **La cabecera**: que usa el reparto compartido, que las dos zonas no se cruzan a 1124 y 658 px
+  —los anchos de página que corresponden al portátil de la casa y al mínimo que la ventana
+  admite— ni a un ancho imposible, que ningún control de una zona pisa a uno de la otra, que el
+  título largo se recorta, y que la cabecera recorta lo que se salga.
+- **El CLI falso informa consumo como el de verdad**: por llamada, con id de mensaje, y con las tres
+  cifras del evento final desalineadas a propósito —900 tokens de encargo del sistema que los
+  eventos no cuentan— para que el ajuste tenga algo que ajustar. Un fake que cuadrara solo no
+  probaría nada.
+
+**Comprobado que el test de la cabecera sale ROJO con la cabecera vieja**, a 1124 px, que es el
+ancho de la captura del parte. Un test de geometría que no se ha visto fallar no dice nada.
+
+**Y el medidor de layout se comparte** con el del banner de fallo (`ViewLayout`) en vez de copiarse:
+dos medidores acaban midiendo distinto, que es la peor forma de tener una prueba de geometría.
+Midiendo se aprendió además una cosa que se deja escrita: `Rect.IntersectsWith` de WPF dice que sí
+cuando dos rectángulos solo se **tocan** por el borde —usa `>=`—, y dos columnas contiguas siempre
+se tocan. Con ese criterio, un reparto correcto daría siempre positivo; se compara superficie
+compartida.

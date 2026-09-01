@@ -218,6 +218,11 @@ como tarjetas con sus opciones— y el **diff**, una pestaña por fichero tocado
 compara con lo que había antes de empezar. Abajo: tiempo, coste, ficheros tocados y
 el resultado del último build.
 
+El pie **cuenta desde la primera llamada al modelo**, no al terminar: llamadas, tokens y
+—si el modelo tiene tarifa configurada— el coste con la etiqueta de su casa. Si dice
+«sin tokens registrados» es porque el proveedor no ha informado consumo, que con Claude
+Code no debería pasar.
+
 - **Pausar** no congela al agente —eso no se puede prometer— sino lo que importa: no
   cae ni un cambio más en tu clon ni se compila nada hasta que continúes.
 - **Descartar todo** devuelve cada fichero tocado a como estaba, byte a byte, con

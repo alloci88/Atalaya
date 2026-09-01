@@ -4,7 +4,7 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-01 (F16 — el arreglo asistido con Claude Code, y la cosecha de su estreno).
+Última revisión: 2026-09-01 (F16-RETOQUE — el pie que no contaba y la cabecera que se pisaba).
 
 ## En vuelo
 
@@ -14,12 +14,14 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   ver «Arreglada — pendiente de verificar» → Verificar → que quede limpia**. Y de paso mirar que la
   cabecera de la pantalla dice con quién trabaja, y que las tarjetas de pregunta y el diff se ven
   como con Copilot (D-804…D-808).
-- **F16 §B/§C — las capturas.** Los textos están fijados por test carácter a carácter —el pie y el
-  informe de la misma sesión, la unidad de cada casa, las cuatro apariciones del proveedor—, pero
-  las capturas necesitan la aplicación apuntando al hub real y con sesiones dentro: el pie de una
-  sesión en vivo, la columna «Proveedor» de la actividad de sesiones, la fila «Detectado con» de una
-  ficha, y un informe de verificación abierto en Informes. Va con la aceptación de arriba, que es
-  cuando esos datos existen.
+- **F16 §B/§C y F16-RETOQUE — las capturas.** Lo que se puede fijar sin ventana está fijado: los
+  textos, carácter a carácter —el pie y el informe de la misma sesión, la unidad de cada casa, las
+  cuatro apariciones del proveedor—, y la geometría de la cabecera, medida de verdad a 1124 y 658 px
+  y comprobada en rojo con el layout viejo. Lo que queda necesita la aplicación apuntando al hub
+  real y con sesiones dentro: el pie de una sesión en vivo, la columna «Proveedor» de la actividad
+  de sesiones, la fila «Detectado con» de una ficha, un informe de verificación abierto en Informes,
+  y **la cabecera del arreglo a 1366 y con la ventana a la mitad, en los dos temas**. Va con la
+  aceptación de arriba, que es cuando esos datos existen.
 - **F16 §E — el callejón, reproducido a mano.** El caso está fijado en test, pero conviene verlo
   una vez en la aplicación: arreglar algo que **borre el ancla y el símbolo** —quitar un campo
   estático al reestructurar—, dejarlo **sin commitear**, y pulsar **Verificar**: tiene que salir un
@@ -28,13 +30,6 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   antes se quedaban en «cobertura posiblemente incompleta» llegan ahora a las dos secas. Si siguen
   sin llegar, el problema no era el presupuesto y hay que volver a mirar (D-812). Y al abrir la
   aplicación por primera vez, comprobar que el aviso de la promoción sale una vez y solo una.
-- **F16 — los tokens de entrada de Claude Code, que se registran por debajo.** Medido de paso y no
-  arreglado a propósito, porque el fondo del coste es de F15: en el evento `result` del CLI,
-  `usage.input_tokens` es de la última iteración y `modelUsage.inputTokens` es el agregado de la
-  sesión (10 contra 913 en una sesión real), y solo con el segundo se reproduce el coste que el
-  propio CLI calcula. Mientras siga así, una sesión de Claude Code con varias llamadas a
-  herramienta cuenta menos entrada de la que tuvo (D-816).
-
 - **BUGFIX-ARRANQUE — publicar la 1.1.4 y ver correr el candado.** El arreglo está verificado sobre
   el paquete real de esta máquina (`--selfcheck` → 8 pasos en verde, código 0), pero queda una cosa
   que solo puede comprobar el primer release que corra: **que el paso `carcasa` funcione en el
@@ -221,6 +216,19 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **F16-RETOQUE · El pie que no contaba y la cabecera que se pisaba** — dos defectos del primer uso
+  real, los dos de medición y presentación. **El pie** se quedaba en «0 llamadas · sin tokens
+  registrados» con el agente trabajando: el consumo solo se leía del evento que cierra el turno, y
+  con Claude un arreglo entero cabe en UN turno porque `ask_user` bloquea dentro de la herramienta.
+  Ahora viaja llamada a llamada, descontando los eventos que repiten el mismo mensaje, y se cuadra
+  al cerrar (D-817). De paso se cierra lo que D-816 dejó abierto: de las tres cifras del CLI manda
+  **`modelUsage`**, que es la única que reproduce su propio coste al último decimal (D-818); y
+  aparecieron dos pérdidas —la caché escrita del arreglo guardada como cero, y las llamadas que no
+  cabían en ninguna parte para una sesión sin unidades—. **La cabecera** superponía «Pausar» sobre
+  «Volver al hallazgo»: un `Grid` sin columnas con dos paneles dentro no reparte, superpone. Nace
+  `PageHeader` y lo usan las dos pantallas que tenían el patrón (D-819). 27 tests nuevos, 1.808 en
+  total (D-820).
 
 - **F16 · El arreglo asistido con Claude Code, y la cosecha de su estreno** — `IAssistedFixProvider`
   baja al vocabulario común y **Claude Code arregla**, con el **mismo contrato observable**: las
