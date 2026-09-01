@@ -400,9 +400,14 @@ public sealed class PatternSilenceTests : IDisposable
         SessionResult result = await AuditSuppressing("alpha", (pattern.ShortId, 2));
 
         AuditSession session = _hub.Store.ListSessions("alpha").Single();
-        session.Units.Single().Passes!.Should().ContainSingle("la primera pasada ya quedó seca");
+
+        // Dos pasadas, las dos secas: es lo que cierra una unidad desde F12 §E. Lo que este test
+        // fija es que suprimir no las ROMPE — si callarse contase como trabajo, la racha no
+        // arrancaría nunca y una app con un patrón agotaría el tope sin producir nada.
+        session.Units.Single().Passes!.Should().HaveCount(2);
+        session.Units.Single().Passes!.Should().OnlyContain(p => p.Dry);
         session.Units.Single().Verdict.Should().Be("auditada");
-        result.Counters.SuppressedByPattern.Should().Be(2);
+        result.Counters.SuppressedByPattern.Should().Be(4, "dos por pasada, y hubo dos pasadas");
     }
 
     /// <summary>

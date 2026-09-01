@@ -1,4 +1,4 @@
-﻿using Atalaya.App.Services;
+using Atalaya.App.Services;
 using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
@@ -435,16 +435,17 @@ public sealed class SessionCoordinatorTests : IDisposable
     // ---------- F4.1 · barrido hasta agotar ----------
 
     /// <summary>
-    /// El barrido repite la pasada hasta que una queda SECA (0 nuevos y todos los veredictos
-    /// «presente»). Es lo que convierte "una auditoría" en "una unidad completa" pese a que el
-    /// auditor no cubra la unidad de una sola pasada.
+    /// El barrido repite la pasada hasta que CONVERGE: <b>dos pasadas secas seguidas</b> (F12 §E).
+    /// Era una sola, y con un modelo no determinista «esta pasada no vio nada nuevo» no es «no
+    /// queda nada» — en el banco de pruebas el barrido paró en 3 de 5 porque la tercera vino seca,
+    /// y una segunda auditoría encontró después un hallazgo que la primera no había visto.
     /// </summary>
     [Fact]
-    public async Task Sweep_repeats_until_a_pass_comes_up_dry()
+    public async Task Sweep_repeats_until_two_consecutive_dry_passes()
     {
-        SetMaxPasses(3);
+        SetMaxPasses(5);
 
-        // Pasada 1: dos hallazgos. Pasada 2: uno más. Pasada 3: nada → seca.
+        // Pasada 1: dos hallazgos. Pasada 2: uno más. Pasadas 3 y 4: nada → dos secas seguidas.
         int pass = 0;
         var agent = new FakeCopilotAgent(auditScript: _ =>
         {
@@ -459,7 +460,7 @@ public sealed class SessionCoordinatorTests : IDisposable
 
         SessionResult result = await RunLotes(agent);
 
-        pass.Should().Be(3, "debe parar en cuanto una pasada queda seca, no antes ni después");
+        pass.Should().Be(4, "para con la SEGUNDA seca seguida: ni antes ni después");
         result.Counters.New.Should().Be(3);
         result.Counters.Resolved.Should().Be(0);
         _hub.Store.ListFindings("app").Should().HaveCount(3, "las pasadas reconcilian, no duplican");
@@ -468,13 +469,76 @@ public sealed class SessionCoordinatorTests : IDisposable
         UnitVerdictRecord unit = session.Units.Single();
         unit.Verdict.Should().Be("auditada");
         unit.CoverageIncomplete.Should().BeFalse();
-        unit.Passes.Should().HaveCount(3);
+        unit.Passes.Should().HaveCount(4);
         unit.Passes![0].New.Should().Be(2);
         unit.Passes[1].New.Should().Be(1);
         unit.Passes[2].Dry.Should().BeTrue();
+        unit.Passes[3].Dry.Should().BeTrue();
 
         // Una sola sesión y un solo desglose de tokens: las pasadas son internas.
         session.UsageBreakdown.Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// Y una seca SUELTA no cierra nada: si la siguiente aporta, la cuenta se reinicia y el barrido
+    /// sigue. Es exactamente el caso del banco — la tercera vino seca y todavía quedaba un hallazgo.
+    /// </summary>
+    [Fact]
+    public async Task Una_seca_seguida_de_una_pasada_con_hallazgos_reinicia_la_cuenta()
+    {
+        SetMaxPasses(6);
+
+        // 1: uno. 2: seca. 3: uno más (lo que la seca no vio). 4 y 5: secas seguidas → para.
+        int pass = 0;
+        var agent = new FakeCopilotAgent(auditScript: _ =>
+        {
+            pass++;
+            return pass switch
+            {
+                1 => new[] { SampleFinding() with { Title = "El que vio la primera" } },
+                3 => new[] { SampleFinding() with { Title = "El que la seca no vio" } },
+                _ => Array.Empty<SubmitFindingArgs>(),
+            };
+        });
+
+        SessionResult result = await RunLotes(agent);
+
+        pass.Should().Be(5, "la pasada 3 reinicia la cuenta; hacen falta la 4 y la 5");
+        result.Counters.New.Should().Be(2, "el segundo hallazgo se habría perdido con una sola seca");
+
+        UnitVerdictRecord unit = _hub.Store.ListSessions("app").Single().Units.Single();
+        unit.Passes.Should().HaveCount(5);
+        unit.Passes![1].Dry.Should().BeTrue();
+        unit.Passes[2].Dry.Should().BeFalse("aportó, así que la racha se rompe");
+        unit.Passes[3].Dry.Should().BeTrue();
+        unit.Passes[4].Dry.Should().BeTrue();
+        unit.CoverageIncomplete.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// EL TECHO SIGUE MANDANDO. Con un tope de 1 no caben dos secas, así que se pide lo que cabe:
+    /// exigir dos convertiría cada unidad en «cobertura posiblemente incompleta» por una condición
+    /// que el propio tope hace inalcanzable. Quien fija el tope decide cuánto paga; la regla de las
+    /// dos secas decide cuándo se para dentro de él.
+    /// </summary>
+    [Fact]
+    public async Task Con_un_tope_de_una_pasada_la_unica_que_cabe_cierra_la_unidad()
+    {
+        SetMaxPasses(1);
+
+        int pass = 0;
+        var agent = new FakeCopilotAgent(auditScript: _ =>
+        {
+            pass++;
+            return Array.Empty<SubmitFindingArgs>();
+        });
+
+        await RunLotes(agent);
+
+        pass.Should().Be(1);
+        UnitVerdictRecord unit = _hub.Store.ListSessions("app").Single().Units.Single();
+        unit.Verdict.Should().Be("auditada");
+        unit.CoverageIncomplete.Should().BeFalse();
     }
 
     /// <summary>
@@ -497,7 +561,7 @@ public sealed class SessionCoordinatorTests : IDisposable
         unit.Verdict.Should().Be("cobertura posiblemente incompleta");
         unit.CoverageIncomplete.Should().BeTrue();
         unit.Passes.Should().HaveCount(2);
-        unit.Summary.Should().Contain("sin llegar a seca");
+        unit.Summary.Should().Contain("sin llegar a 2 pasadas secas seguidas");
         session.Notes.Should().Contain(nn => nn.Contains("Cobertura posiblemente incompleta"));
 
         string report = File.ReadAllText(_hub.HubPaths.ReportFile("app", result.SessionId.ToString()));
@@ -650,7 +714,7 @@ public sealed class SessionCoordinatorTests : IDisposable
     [Fact]
     public async Task A_pass_that_only_adds_locations_is_not_dry()
     {
-        SetMaxPasses(3);
+        SetMaxPasses(5);
 
         int pass = 0;
         var agent = new FakeCopilotAgent(
@@ -666,10 +730,11 @@ public sealed class SessionCoordinatorTests : IDisposable
         await RunLotes(agent);
 
         UnitVerdictRecord unit = _hub.Store.ListSessions("app").Single().Units.Single();
-        unit.Passes.Should().HaveCount(3);
+        unit.Passes.Should().HaveCount(4, "la 3 y la 4 son las dos secas seguidas que cierran");
         unit.Passes![1].LocationsAdded.Should().Be(1);
         unit.Passes[1].Dry.Should().BeFalse("extender ubicaciones es rendimiento de la pasada");
         unit.Passes[2].Dry.Should().BeTrue();
+        unit.Passes[3].Dry.Should().BeTrue();
         unit.CoverageIncomplete.Should().BeFalse();
     }
 

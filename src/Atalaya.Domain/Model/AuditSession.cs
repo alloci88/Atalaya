@@ -21,11 +21,15 @@ public sealed record UnitVerdictRecord(
 
 /// <summary>
 /// Una pasada del barrido de una unidad (F4.1). Las pasadas son internas: para el usuario una
-/// auditoría es una unidad completa. Esto es el desglose que lo hace comprobable.
+/// auditoría es una unidad barrida entera. Esto es el desglose que lo hace comprobable.
+/// <para>
+/// «Barrida» no es «sin defectos» (F12 §E): es que el auditor no saca más de esta unidad con este
+/// criterio. Dos pasadas secas seguidas son la señal de que ha convergido, no un certificado.
+/// </para>
 /// </summary>
 /// <param name="Dry">
-/// La pasada quedó SECA: 0 hallazgos nuevos y ningún veredicto distinto de «presente». Es la
-/// condición de parada del barrido.
+/// La pasada quedó SECA: 0 hallazgos nuevos y ningún veredicto distinto de «presente». DOS secas
+/// seguidas son la condición de parada del barrido (F12 §E); una sola no lo es.
 /// </param>
 /// <param name="Summary">
 /// La declaración de cobertura del auditor en esta pasada. Sabemos que es una afirmación y no

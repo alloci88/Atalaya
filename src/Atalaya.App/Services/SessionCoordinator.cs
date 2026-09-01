@@ -1,4 +1,4 @@
-﻿using Atalaya.Copilot;
+using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Anchoring;
 using Atalaya.Domain.Hashing;
@@ -188,6 +188,23 @@ public sealed class SessionCoordinator
 
     /// <summary>(unidad, número de pasada) al empezar cada pasada del barrido.</summary>
     public event Action<string, int>? PassStarted;
+
+    /// <summary>
+    /// Cuántas pasadas SECAS SEGUIDAS cierran una unidad (F12 §E).
+    /// <para>
+    /// Era una. En el banco de pruebas de F12, una segunda auditoría encontró un hallazgo que la
+    /// primera no vio: el barrido había parado en 3 de 5 pasadas porque la tercera vino seca. Con
+    /// un modelo no determinista, «esta pasada no vio nada nuevo» no es «no queda nada» — es una
+    /// muestra, y una muestra sola no es convergencia.
+    /// </para>
+    /// <para>
+    /// <b>El techo sigue mandando.</b> Se pide <c>min(2, maxPassesPerUnit)</c>: con un tope de 1,
+    /// la única pasada que cabe es la que hay, y exigir dos secas convertiría cada unidad en
+    /// «cobertura posiblemente incompleta» por una condición que el tope hace inalcanzable. Quien
+    /// fija el tope decide cuánto está dispuesto a pagar; esto decide cuándo se para dentro de él.
+    /// </para>
+    /// </summary>
+    private const int DryPassesToFinish = 2;
 
     /// <summary>(unidad, registro de la pasada) al cerrarla, con sus contadores y si quedó seca.</summary>
     public event Action<string, UnitPassRecord>? PassFinished;
@@ -404,8 +421,12 @@ public sealed class SessionCoordinator
                 // F4.1 — BARRIDO HASTA AGOTAR. Una pasada del auditor no cubre la unidad: declara
                 // haberla cubierto y, al repetir, encuentra más (2026-08-25: la pasada 1 dijo haber
                 // revisado ConvertToDetId/ConvertToSeq y la 2 halló tres defectos ahí). Así que la
-                // app repite hasta que una pasada queda SECA. Las pasadas son internas: para el
-                // usuario una auditoría sigue siendo una unidad completa.
+                // app repite hasta que el barrido CONVERGE — F12 §E: dos pasadas secas seguidas, no
+                // una. Las pasadas son internas: para el usuario una auditoría sigue siendo una
+                // unidad barrida entera.
+                //
+                // Y «barrida» no es «sin defectos»: es que el auditor no saca más de esta unidad
+                // con este criterio. Ningún texto de la aplicación puede sugerir lo otro.
                 //
                 // Cada pasada recalcula la lista de existentes, así que la siguiente ve lo que
                 // reportó la anterior y lo reconcilia por ULID en vez de duplicarlo — es la misma
@@ -416,11 +437,13 @@ public sealed class SessionCoordinator
                 string? coverageSummary = null;
                 bool overBudget = false;
                 bool dry = false;
+                int dryStreak = 0;
+                int dryToFinish = Math.Min(DryPassesToFinish, maxPasses);
                 IReadOnlyList<Finding> withoutVerdict = Array.Empty<Finding>();
                 toolbox.BeginUnitSweep(unit.Path, unitContentHash);
                 int locationsInUnit = 0;
 
-                for (int pass = 1; pass <= maxPasses && !dry && !overBudget; pass++)
+                for (int pass = 1; pass <= maxPasses && dryStreak < dryToFinish && !overBudget; pass++)
                 {
                     ct.ThrowIfCancellationRequested();
 
@@ -454,6 +477,14 @@ public sealed class SessionCoordinator
                     }
 
                     dry = !overBudget && toolbox.PassIsDry;
+
+                    // F12 §E — DOS SECAS SEGUIDAS. Con un modelo no determinista, «esta pasada no
+                    // vio nada nuevo» no es «no queda nada»: en el banco de pruebas el barrido paró
+                    // en 3 de 5 porque la tercera vino seca, y una segunda auditoría encontró
+                    // después un hallazgo que la primera no vio. Una pasada con aportación reinicia
+                    // la cuenta, porque lo que se busca es que el barrido converja, no que acierte
+                    // una vez.
+                    dryStreak = dry ? dryStreak + 1 : 0;
                     withoutVerdict = toolbox.PendingVerdicts;
                     coverageSummary = toolbox.LastUnitSummary ?? coverageSummary;
                     locationsInUnit += toolbox.PassLocationsAdded;
@@ -539,13 +570,16 @@ public sealed class SessionCoordinator
                 string unitVerdict = "auditada";
                 string? unitSummary = coverageSummary;
 
-                // Tope alcanzado sin secarse: el barrido no garantiza cobertura. Visible, nunca
+                // Tope alcanzado sin convergir: el barrido no garantiza cobertura. Visible, nunca
                 // silencioso — es justo el fallo que nos trajo hasta aquí.
-                bool coverageIncomplete = !dry;
+                bool coverageIncomplete = dryStreak < dryToFinish;
                 if (coverageIncomplete)
                 {
+                    string convergencia = dryToFinish > 1
+                        ? $"sin llegar a {dryToFinish} pasadas secas seguidas"
+                        : "sin llegar a una pasada seca";
                     unitVerdict = "cobertura posiblemente incompleta";
-                    unitSummary = $"Cobertura posiblemente incompleta: {passes.Count} pasada(s) sin llegar a seca "
+                    unitSummary = $"Cobertura posiblemente incompleta: {passes.Count} pasada(s) {convergencia} "
                         + $"(la última aportó {passes[^1].New} nuevo(s) y {passes[^1].LocationsAdded} ubicación(es))"
                         + (unitSummary is null ? "" : $" · {unitSummary}");
                     session.Notes.Add($"{unit.Path}: {unitSummary}");

@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Threading;
 using Atalaya.Copilot;
@@ -584,8 +584,12 @@ public sealed partial class LiveSessionService : ObservableObject
         // pero contarlo agregado es la diferencia entre resumir y callar.
         Add(pass, ActivityEntry.Event(
             record.Dry ? "✓" : "↻",
+            // F12 §E — una pasada seca ya no cierra la unidad, así que tampoco lo dice: hacen falta
+            // DOS seguidas. Y «unidad completa» sobraba de todos modos — una unidad barrida es una
+            // unidad de la que el auditor no saca más, que no es lo mismo que una unidad sin
+            // defectos.
             (record.Dry
-                ? $"Pasada {record.Index} seca — unidad completa"
+                ? $"Pasada {record.Index} seca — el auditor no aportó nada nuevo"
                 : $"Pasada {record.Index}: {record.New} nuevo(s)"
                   + (record.LocationsAdded > 0 ? $", {record.LocationsAdded} ubicación(es) añadida(s)" : ""))
             + verdicts));
