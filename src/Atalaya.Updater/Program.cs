@@ -74,9 +74,10 @@ internal static class Program
         // espera corta, el primer renombrado falla por «en uso» en una máquina lenta.
         if (!WaitUnlocked(Path.Combine(options.AppDir, options.MainExe), TimeSpan.FromSeconds(20)))
         {
+            string message = "El ejecutable de Atalaya sigue bloqueado por otro programa "
+                             + "(¿un antivirus, un cliente de sincronización?); no se ha modificado nada.";
             return new SwapResult(SwapOutcome.Intacta,
-                "El ejecutable de Atalaya sigue bloqueado por otro programa (¿un antivirus?); "
-                + "no se ha modificado nada.",
+                options.SyncNote.Length == 0 ? message : $"{message} {options.SyncNote}",
                 $"{options.MainExe} bloqueado tras cerrar el proceso");
         }
 
@@ -87,6 +88,7 @@ internal static class Program
             StagedDir = options.StagedDir,
             BackupDir = options.BackupDir,
             MainExe = options.MainExe,
+            SyncedAdvice = options.SyncNote,
         });
     }
 
@@ -191,7 +193,12 @@ internal static class Program
             Field(json, "message", result.Message, comma: true);
             Field(json, "detail", result.Detail, comma: true);
             Field(json, "appDir", options.AppDir, comma: true);
-            Field(json, "backupDir", result.Outcome == SwapOutcome.Actualizada ? options.BackupDir : "", comma: true);
+            // La copia que DE VERDAD se usó, que puede no llamarse como la pedida: la nueva
+            // versión borrará ésta al arrancar, y borrar otra sería peor que no borrar ninguna.
+            Field(json, "backupDir", result.Outcome == SwapOutcome.Actualizada ? result.BackupDir : "", comma: true);
+            // Y lo que quedó sin poder borrarse, para que la nueva versión lo reintente en cada
+            // arranque en vez de olvidarlo — que es lo que dejó el residuo que trajo aquí.
+            ArrayField(json, "orphanBackups", result.Orphans, comma: true);
             Field(json, "whenUtc", DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture), comma: false);
             json.Append("}\n");
             File.WriteAllText(options.ResultPath, json.ToString(), new UTF8Encoding(false));
@@ -205,6 +212,17 @@ internal static class Program
     private static void Field(StringBuilder json, string name, string value, bool comma)
         => json.Append("  \"").Append(name).Append("\": \"").Append(Escape(value)).Append('"')
                .Append(comma ? ",\n" : "\n");
+
+    private static void ArrayField(StringBuilder json, string name, IReadOnlyList<string> values, bool comma)
+    {
+        json.Append("  \"").Append(name).Append("\": [");
+        for (int i = 0; i < values.Count; i++)
+        {
+            json.Append(i == 0 ? string.Empty : ", ").Append('"').Append(Escape(values[i])).Append('"');
+        }
+
+        json.Append(']').Append(comma ? ",\n" : "\n");
+    }
 
     private static string Escape(string value)
     {
@@ -270,6 +288,13 @@ internal static class Program
 
         public string ToVersion { get; init; } = "?";
 
+        /// <summary>
+        /// La receta para un fallo de bloqueo, cuando la instalación cuelga de una carpeta
+        /// sincronizada. Opcional: quien detecta OneDrive es la aplicación, y una versión vieja
+        /// que lance a este relevo sin esta opción sigue funcionando — solo dará el mensaje seco.
+        /// </summary>
+        public string SyncNote { get; init; } = string.Empty;
+
         public static Options? Parse(string[] args, out string error)
         {
             var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -310,6 +335,7 @@ internal static class Program
                 MainExe = map.TryGetValue("exe", out string? exe) ? exe : "Atalaya.exe",
                 FromVersion = map.TryGetValue("from", out string? from) ? from : "?",
                 ToVersion = map.TryGetValue("to", out string? to) ? to : "?",
+                SyncNote = map.TryGetValue("sync-note", out string? note) ? note : string.Empty,
             };
         }
     }

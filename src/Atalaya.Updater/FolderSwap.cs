@@ -9,11 +9,24 @@ public sealed class SwapPlan
     /// <summary>La carpeta con el contenido ya descargado, verificado y descomprimido.</summary>
     public required string StagedDir { get; init; }
 
-    /// <summary>Adónde va lo viejo mientras dura el cambio, y hasta que la nueva arranque bien.</summary>
+    /// <summary>
+    /// Adónde va lo viejo mientras dura el cambio, y hasta que la nueva arranque bien. Es el
+    /// nombre <b>preferido</b>: si una copia residual de un intento anterior lo ocupa y no se
+    /// deja retirar, se usa el siguiente libre (<c>…-2</c>, <c>…-3</c>) antes que fallar.
+    /// </summary>
     public required string BackupDir { get; init; }
 
     /// <summary>El nombre del ejecutable, para comprobar que el paquete nuevo lo trae.</summary>
     public string MainExe { get; init; } = "Atalaya.exe";
+
+    /// <summary>
+    /// La receta que acompaña a un fallo cuando la instalación cuelga de una carpeta sincronizada
+    /// (BUGFIX-SYNC). <b>La escribe quien lanza el relevo, no el relevo</b>: detectar el cliente
+    /// de sincronización es cosa de la aplicación, y hacérselo saber por argumento es lo mismo
+    /// que ya se hace con los nombres de las carpetas — el relevo sobrevive a la versión que lo
+    /// lanzó justamente porque no comparte nada con ella salvo argumentos.
+    /// </summary>
+    public string SyncedAdvice { get; init; } = string.Empty;
 
     /// <summary>
     /// Ficheros de la instalación anterior que sobreviven al cambio. Hoy solo uno: el
@@ -43,6 +56,20 @@ public enum SwapOutcome
 public sealed record SwapResult(SwapOutcome Outcome, string Message, string Detail = "")
 {
     public bool Ok => Outcome == SwapOutcome.Actualizada;
+
+    /// <summary>
+    /// La copia de seguridad que de verdad se usó, que puede no ser la que se pidió. Viaja en el
+    /// parte porque quien la borra es la versión nueva al arrancar, y borrar la que no es sería
+    /// peor que no borrar ninguna.
+    /// </summary>
+    public string BackupDir { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Copias de intentos anteriores que no se dejaron retirar. No son un fallo —la actualización
+    /// las esquiva— pero alguien tiene que acordarse de ellas: se las lleva la versión nueva para
+    /// reintentarlo en cada arranque, hasta que se pueda.
+    /// </summary>
+    public IReadOnlyList<string> Orphans { get; init; } = Array.Empty<string>();
 }
 
 /// <summary>
@@ -59,15 +86,32 @@ public sealed record SwapResult(SwapOutcome Outcome, string Message, string Deta
 /// y se queda ahí; quien lo borra es la versión nueva, en su primer arranque con éxito. Un
 /// borrado antes de esa prueba convierte cualquier fallo en una pérdida.
 /// </para>
+/// <para>
+/// <b>Cada movimiento se reintenta</b> (<see cref="RetryPolicy"/>). En una carpeta sincronizada
+/// —Escritorio o Documentos redirigidos a OneDrive, que es el entorno corporativo normal— el
+/// cliente de sincronización retiene ficheros durante segundos y cualquier renombrado puede
+/// fallar por eso. Lo que no cambia es el final: agotados los reintentos, se deshace o no se toca
+/// nada, nunca una instalación a medias.
+/// </para>
 /// </summary>
 public sealed class FolderSwap
 {
+    /// <summary>
+    /// Cuántos nombres de copia se prueban antes de rendirse. Llegar al quinto significa cuatro
+    /// actualizaciones anteriores que dejaron residuos imborrables: a esas alturas el problema ya
+    /// no es el nombre, y seguir inventándolos sería llenar la carpeta de basura.
+    /// </summary>
+    internal const int MaxBackupNames = 5;
+
     /// <summary>
     /// Punto de inyección de fallos para los tests. Se llama al entrar en cada paso con su
     /// nombre; un test lo usa para lanzar justo a mitad y comprobar que la vuelta atrás deja la
     /// instalación entera. No es una opción de línea de órdenes: no existe fuera de los tests.
     /// </summary>
     internal Action<string>? Fault { get; set; }
+
+    /// <summary>Cuánto se insiste ante un bloqueo. La de producción, salvo en los tests.</summary>
+    public RetryPolicy Retries { get; init; } = RetryPolicy.Default;
 
     public SwapResult Apply(SwapPlan plan)
     {
@@ -93,22 +137,19 @@ public sealed class FolderSwap
                 $"no existe {plan.AppDir}");
         }
 
-        // Un intento anterior pudo dejar una copia. Se retira ANTES de empezar: dos «anteriores»
-        // no se distinguen, y quedarse con la equivocada es peor que no tener ninguna.
-        try
-        {
-            if (Directory.Exists(plan.BackupDir))
-            {
-                Directory.Delete(plan.BackupDir, recursive: true);
-            }
-
-            Directory.CreateDirectory(plan.BackupDir);
-        }
-        catch (Exception ex)
+        // Un intento anterior pudo dejar una copia. Se retira ANTES de empezar —dos «anteriores»
+        // no se distinguen, y quedarse con la equivocada es peor que no tener ninguna— y, si no
+        // se deja retirar, se usa un nombre libre en vez de fallar contra ella.
+        var orphans = new List<string>();
+        (string? backupDir, string problem) = PrepareBackup(plan.BackupDir, orphans);
+        if (backupDir is null)
         {
             return new SwapResult(SwapOutcome.Intacta,
-                "No se pudo preparar la copia de seguridad; no se ha modificado nada.",
-                Describe(ex));
+                Prescribe("No se pudo preparar la copia de seguridad; no se ha modificado nada.", plan),
+                problem)
+            {
+                Orphans = orphans,
+            };
         }
 
         // ---- Paso 1: apartar lo viejo. Desde aquí ya hay que saber deshacer.
@@ -118,9 +159,9 @@ public sealed class FolderSwap
         try
         {
             Fault?.Invoke("apartar");
-            foreach (string name in TopLevel(plan.AppDir, plan))
+            foreach (string name in TopLevel(plan))
             {
-                Move(Path.Combine(plan.AppDir, name), Path.Combine(plan.BackupDir, name));
+                Retries.Move(Path.Combine(plan.AppDir, name), Path.Combine(backupDir, name));
                 movedOut.Add(name);
             }
 
@@ -131,7 +172,7 @@ public sealed class FolderSwap
                          .Where(n => n is { Length: > 0 })
                          .Select(n => n!))
             {
-                Move(Path.Combine(plan.StagedDir, name), Path.Combine(plan.AppDir, name));
+                Retries.Move(Path.Combine(plan.StagedDir, name), Path.Combine(plan.AppDir, name));
                 movedIn.Add(name);
             }
 
@@ -139,29 +180,78 @@ public sealed class FolderSwap
             Fault?.Invoke("conservar");
             foreach (string name in plan.Preserved)
             {
-                string kept = Path.Combine(plan.BackupDir, name);
+                string kept = Path.Combine(backupDir, name);
                 if (File.Exists(kept))
                 {
-                    File.Copy(kept, Path.Combine(plan.AppDir, name), overwrite: true);
+                    Retries.Do(() => File.Copy(kept, Path.Combine(plan.AppDir, name), overwrite: true));
                 }
             }
 
-            // La carpeta de preparación, ya vacía, deja de tener sentido.
-            TryDelete(plan.StagedDir);
+            // La carpeta de preparación, ya vacía, deja de tener sentido. Si tampoco se deja
+            // borrar, se anota: la próxima actualización descomprimiría encima de ella.
+            if (!Retries.TryDelete(plan.StagedDir))
+            {
+                orphans.Add(plan.StagedDir);
+            }
 
-            return new SwapResult(SwapOutcome.Actualizada, "Atalaya se ha actualizado.");
+            return new SwapResult(SwapOutcome.Actualizada, "Atalaya se ha actualizado.")
+            {
+                BackupDir = backupDir,
+                Orphans = orphans,
+            };
         }
         catch (Exception ex)
         {
             // ---- Vuelta atrás. Primero se retira lo nuevo que hubiéramos llegado a poner, y
             //      después vuelve lo viejo a su sitio: al revés, lo viejo chocaría con lo nuevo.
-            string undo = Undo(plan, movedOut, movedIn);
+            string undo = Undo(plan, backupDir, movedOut, movedIn);
             return new SwapResult(
                 SwapOutcome.Restaurada,
-                "La sustitución falló a mitad y se ha restaurado la versión anterior. "
-                + "Atalaya sigue siendo la de antes.",
-                undo.Length == 0 ? Describe(ex) : $"{Describe(ex)} · {undo}");
+                Prescribe(
+                    "La sustitución falló a mitad y se ha restaurado la versión anterior. "
+                    + "Atalaya sigue siendo la de antes.",
+                    plan),
+                undo.Length == 0 ? Describe(ex) : $"{Describe(ex)} · {undo}")
+            {
+                BackupDir = backupDir,
+                Orphans = orphans,
+            };
         }
+    }
+
+    /// <summary>
+    /// Deja lista una carpeta de copia vacía y devuelve cuál es. Si la preferida está ocupada por
+    /// un residuo que no se deja borrar —lo que pasa cuando la limpieza de la actualización
+    /// anterior se topó con el cliente de sincronización—, se anota como huérfana y se prueba el
+    /// siguiente nombre: <b>un residuo de hace tres meses no puede impedir actualizar hoy</b>.
+    /// </summary>
+    private (string? Dir, string Problem) PrepareBackup(string preferred, List<string> orphans)
+    {
+        string problem = string.Empty;
+
+        for (int n = 1; n <= MaxBackupNames; n++)
+        {
+            string candidate = n == 1 ? preferred : $"{preferred}-{n}";
+
+            if (Directory.Exists(candidate) && !Retries.TryDelete(candidate))
+            {
+                orphans.Add(candidate);
+                problem = $"«{Path.GetFileName(candidate)}» no se dejó retirar";
+                continue;
+            }
+
+            try
+            {
+                Directory.CreateDirectory(candidate);
+                return (candidate, string.Empty);
+            }
+            catch (Exception ex)
+            {
+                problem = Describe(ex);
+            }
+        }
+
+        return (null, problem.Length == 0 ? "no quedó ningún nombre de copia libre" : problem);
     }
 
     /// <summary>
@@ -169,7 +259,7 @@ public sealed class FolderSwap
     /// volvió a su sitio — porque una vuelta atrás que también falla es lo único peor que el
     /// fallo original, y hay que decirlo en vez de callarlo.
     /// </summary>
-    private static string Undo(SwapPlan plan, List<string> movedOut, List<string> movedIn)
+    private string Undo(SwapPlan plan, string backupDir, List<string> movedOut, List<string> movedIn)
     {
         var failures = new List<string>();
 
@@ -177,7 +267,7 @@ public sealed class FolderSwap
         {
             try
             {
-                Move(Path.Combine(plan.AppDir, name), Path.Combine(plan.StagedDir, name));
+                Retries.Move(Path.Combine(plan.AppDir, name), Path.Combine(plan.StagedDir, name));
             }
             catch (Exception ex)
             {
@@ -192,7 +282,7 @@ public sealed class FolderSwap
                 string back = Path.Combine(plan.AppDir, name);
                 if (!File.Exists(back) && !Directory.Exists(back))
                 {
-                    Move(Path.Combine(plan.BackupDir, name), back);
+                    Retries.Move(Path.Combine(backupDir, name), back);
                 }
             }
             catch (Exception ex)
@@ -205,21 +295,24 @@ public sealed class FolderSwap
     }
 
     /// <summary>
-    /// Lo que hay dentro de la instalación y SÍ es parte de la versión. Las dos carpetas
-    /// reservadas se quedan donde están: mover la copia de seguridad dentro de sí misma, o el
-    /// paquete nuevo a la copia de lo viejo, sería un bucle con la instalación dentro.
+    /// Lo que hay dentro de la instalación y SÍ es parte de la versión. Las carpetas reservadas se
+    /// quedan donde están: mover la copia de seguridad dentro de sí misma, o el paquete nuevo a la
+    /// copia de lo viejo, sería un bucle con la instalación dentro. Se salta <b>toda</b> la
+    /// familia de copias —<c>.atalaya-anterior</c>, <c>-2</c>, <c>-3</c>—, incluidas las huérfanas
+    /// que precisamente no se pudieron borrar: meterlas en la copia buena sería enterrar dentro de
+    /// ella justo lo que está bloqueado.
     /// </summary>
-    private static IEnumerable<string> TopLevel(string appDir, SwapPlan plan)
+    private static IEnumerable<string> TopLevel(SwapPlan plan)
     {
         string staged = Path.GetFileName(plan.StagedDir.TrimEnd(Path.DirectorySeparatorChar));
         string backup = Path.GetFileName(plan.BackupDir.TrimEnd(Path.DirectorySeparatorChar));
 
-        foreach (string path in Directory.EnumerateFileSystemEntries(appDir))
+        foreach (string path in Directory.EnumerateFileSystemEntries(plan.AppDir))
         {
             string name = Path.GetFileName(path);
             if (name.Length == 0
                 || string.Equals(name, staged, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name, backup, StringComparison.OrdinalIgnoreCase))
+                || name.StartsWith(backup, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
@@ -228,33 +321,12 @@ public sealed class FolderSwap
         }
     }
 
-    /// <summary>Renombra, sea fichero o carpeta. Mismo volumen: es instantáneo.</summary>
-    private static void Move(string from, string to)
-    {
-        if (Directory.Exists(from))
-        {
-            Directory.Move(from, to);
-        }
-        else
-        {
-            File.Move(from, to, overwrite: false);
-        }
-    }
-
-    private static void TryDelete(string dir)
-    {
-        try
-        {
-            if (Directory.Exists(dir))
-            {
-                Directory.Delete(dir, recursive: true);
-            }
-        }
-        catch
-        {
-            // Una carpeta de preparación que sobra no es un fallo de la actualización.
-        }
-    }
+    /// <summary>
+    /// El mensaje, con la receta detrás cuando la hay. Un «acceso denegado» a secas no le dice a
+    /// nadie qué hacer; «estás dentro de OneDrive, pausa la sincronización» sí.
+    /// </summary>
+    private static string Prescribe(string message, SwapPlan plan)
+        => plan.SyncedAdvice.Length == 0 ? message : $"{message} {plan.SyncedAdvice}";
 
     private static string Describe(Exception ex) => $"{ex.GetType().Name}: {ex.Message}";
 }

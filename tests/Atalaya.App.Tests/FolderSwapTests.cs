@@ -68,13 +68,39 @@ public sealed class FolderSwapTests : IDisposable
         File.WriteAllText(Path.Combine(_staged, "appsettings.deploy.json"), """{"hubUrl":"EL-DE-FABRICA"}""");
     }
 
-    private SwapPlan Plan() => new()
+    private SwapPlan Plan(string syncedAdvice = "") => new()
     {
         AppDir = _appDir,
         StagedDir = _staged,
         BackupDir = _backup,
         MainExe = "Atalaya.exe",
+        SyncedAdvice = syncedAdvice,
     };
+
+    /// <summary>
+    /// La receta tal y como la escribe la aplicación cuando detecta el cliente de sincronización.
+    /// Aquí se pasa a mano: quien detecta es la App, y lo que se prueba es que el relevo la lleva
+    /// hasta el mensaje de fallo.
+    /// </summary>
+    private const string Receta =
+        "Atalaya está dentro de OneDrive: pausa la sincronización y reintenta.";
+
+    /// <summary>
+    /// La política de los tests: reintenta lo mismo que la de verdad, pero <b>sin esperar</b>. Un
+    /// test que esperase seis segundos para comprobar que se rinde estaría probando Thread.Sleep.
+    /// </summary>
+    private static RetryPolicy Impaciente() => new(new[] { 0, 0, 0 }, _ => { });
+
+    /// <summary>
+    /// Un fichero cogido por otro proceso, que es lo que hace un cliente de sincronización
+    /// mientras sube: <c>FileShare.None</c> hace de OneDrive. Ni se puede borrar ni se puede
+    /// mover mientras el manejador viva.
+    /// </summary>
+    private static FileStream Retener(string path)
+    {
+        File.WriteAllText(path, "lo está subiendo OneDrive");
+        return File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None);
+    }
 
     private string Read(string relative) => File.ReadAllText(Path.Combine(_appDir, relative));
 
@@ -255,5 +281,163 @@ public sealed class FolderSwapTests : IDisposable
 
         File.Exists(Path.Combine(_backup, "BASURA.txt")).Should().BeFalse();
         File.ReadAllText(Path.Combine(_backup, "Atalaya.exe")).Should().Be("vieja");
+    }
+
+    // ------------------------------------------------------------- carpetas sincronizadas (BUGFIX-SYNC)
+
+    /// <summary>
+    /// El caso real: Atalaya bajo OneDrive, un <c>.atalaya-anterior</c> residual que el cliente de
+    /// sincronización no suelta, y la actualización abortando contra él. Ahora se esquiva con un
+    /// nombre libre — <b>un residuo de un intento viejo no puede impedir actualizar hoy</b>— y la
+    /// huérfana queda anotada para retirarla cuando se pueda.
+    /// </summary>
+    [Fact]
+    public void Un_respaldo_residual_bloqueado_se_esquiva_con_otro_nombre()
+    {
+        InstallOld();
+        Stage();
+        Directory.CreateDirectory(_backup);
+        using FileStream held = Retener(Path.Combine(_backup, "RETENIDO.dll"));
+
+        SwapResult result = new FolderSwap { Retries = Impaciente() }.Apply(Plan());
+
+        result.Outcome.Should().Be(SwapOutcome.Actualizada);
+        result.BackupDir.Should().Be($"{_backup}-2");
+        result.Orphans.Should().ContainSingle().Which.Should().Be(_backup);
+
+        Read("Atalaya.exe").Should().Be("nueva");
+        Read("appsettings.deploy.json").Should().Contain("EL-DEL-DESPLIEGUE");
+        File.ReadAllText(Path.Combine($"{_backup}-2", "Atalaya.exe")).Should().Be("vieja");
+        File.Exists(Path.Combine(_backup, "RETENIDO.dll")).Should().BeTrue("la residual se deja donde está");
+    }
+
+    /// <summary>
+    /// El residual bloqueado sigue siendo una carpeta dentro de la instalación: si el barrido no
+    /// la saltara, intentaría meterla en la copia buena — y ahí sí que reventaría, porque está
+    /// bloqueada, con la instalación ya desmontada.
+    /// </summary>
+    [Fact]
+    public void El_respaldo_huerfano_no_se_mete_dentro_de_la_copia_nueva()
+    {
+        InstallOld();
+        Stage();
+        Directory.CreateDirectory(_backup);
+        using FileStream held = Retener(Path.Combine(_backup, "RETENIDO.dll"));
+
+        new FolderSwap { Retries = Impaciente() }.Apply(Plan()).Ok.Should().BeTrue();
+
+        Directory.Exists(Path.Combine($"{_backup}-2", ".atalaya-anterior")).Should().BeFalse();
+        Directory.Exists(_backup).Should().BeTrue("se queda fuera, en la carpeta, tal cual estaba");
+    }
+
+    /// <summary>
+    /// El bloqueo TRANSITORIO, que es la forma normal del problema: el cliente de sincronización
+    /// suelta el fichero a los pocos segundos. Antes eso era un aborto; ahora es una espera. La
+    /// espera del reintento es, aquí, el momento exacto en que se suelta.
+    /// </summary>
+    [Fact]
+    public void Un_bloqueo_transitorio_se_supera_reintentando()
+    {
+        InstallOld();
+        Stage();
+        Directory.CreateDirectory(_backup);
+        FileStream held = Retener(Path.Combine(_backup, "RETENIDO.dll"));
+
+        var suelta = new RetryPolicy(new[] { 0, 0, 0 }, _ => held.Dispose());
+        SwapResult result = new FolderSwap { Retries = suelta }.Apply(Plan());
+
+        result.Outcome.Should().Be(SwapOutcome.Actualizada);
+        result.BackupDir.Should().Be(_backup, "el residuo se dejó borrar al reintentar");
+        result.Orphans.Should().BeEmpty();
+        Read("Atalaya.exe").Should().Be("nueva");
+    }
+
+    /// <summary>
+    /// Y el bloqueo que NO se suelta: agotados los reintentos y los nombres, el aborto limpio de
+    /// siempre — nada modificado— pero con la receta detrás. Un «acceso denegado» a secas no le
+    /// dice a nadie qué hacer.
+    /// </summary>
+    [Fact]
+    public void Un_bloqueo_persistente_aborta_limpio_y_dice_que_hacer()
+    {
+        InstallOld();
+        Stage();
+
+        var held = new List<FileStream>();
+        try
+        {
+            for (int n = 1; n <= 5; n++)
+            {
+                string dir = n == 1 ? _backup : $"{_backup}-{n}";
+                Directory.CreateDirectory(dir);
+                held.Add(Retener(Path.Combine(dir, "RETENIDO.dll")));
+            }
+
+            SwapResult result = new FolderSwap { Retries = Impaciente() }.Apply(Plan(Receta));
+
+            result.Outcome.Should().Be(SwapOutcome.Intacta);
+            result.Message.Should().Contain("no se ha modificado nada");
+            result.Message.Should().Contain("OneDrive").And.Contain("pausa la sincronización");
+            result.Orphans.Should().HaveCount(5);
+
+            Read("Atalaya.exe").Should().Be("vieja");
+            Read("appsettings.deploy.json").Should().Contain("EL-DEL-DESPLIEGUE");
+            File.Exists(Path.Combine(_appDir, "NUEVO.dll")).Should().BeFalse();
+        }
+        finally
+        {
+            foreach (FileStream stream in held)
+            {
+                stream.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Un bloqueo que aparece con el cambio ya empezado: se deshace, queda la de antes entera, y
+    /// el mensaje receta igual. Es el mismo final de siempre — lo nuevo es que antes de rendirse
+    /// se ha insistido.
+    /// </summary>
+    [Fact]
+    public void Un_fichero_retenido_a_mitad_del_cambio_restaura_y_receta()
+    {
+        InstallOld();
+        Stage();
+        using FileStream held = File.Open(
+            Path.Combine(_appDir, "Atalaya.dll"), FileMode.Open, FileAccess.Read, FileShare.None);
+
+        SwapResult result = new FolderSwap { Retries = Impaciente() }.Apply(Plan(Receta));
+
+        result.Outcome.Should().Be(SwapOutcome.Restaurada);
+        result.Message.Should().Contain("OneDrive");
+        Read("Atalaya.exe").Should().Be("vieja");
+        Read("appsettings.deploy.json").Should().Contain("EL-DEL-DESPLIEGUE");
+        File.Exists(Path.Combine(_appDir, "NUEVO.dll")).Should().BeFalse("nada de la nueva se queda");
+    }
+
+    /// <summary>Sin carpeta sincronizada no hay receta que dar: el mensaje va limpio.</summary>
+    [Fact]
+    public void Sin_carpeta_sincronizada_el_mensaje_no_receta_nada()
+    {
+        InstallOld();
+        Stage();
+        using FileStream held = File.Open(
+            Path.Combine(_appDir, "Atalaya.dll"), FileMode.Open, FileAccess.Read, FileShare.None);
+
+        SwapResult result = new FolderSwap { Retries = Impaciente() }.Apply(Plan());
+
+        result.Outcome.Should().Be(SwapOutcome.Restaurada);
+        result.Message.Should().NotContain("OneDrive").And.NotContain("sincronización");
+    }
+
+    /// <summary>
+    /// Reintentar no puede convertirse en insistir para siempre: la política de producción son
+    /// seis intentos en poco más de seis segundos, y ahí se acaba.
+    /// </summary>
+    [Fact]
+    public void La_politica_de_produccion_insiste_unos_segundos_y_no_mas()
+    {
+        RetryPolicy.Default.Attempts.Should().Be(6);
+        RetryPolicy.DefaultWaitsMs.Sum().Should().BeInRange(3_000, 10_000);
     }
 }
