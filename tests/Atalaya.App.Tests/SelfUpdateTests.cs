@@ -461,6 +461,149 @@ public sealed class SelfUpdateTests : IDisposable
     public void Sin_parte_no_se_cuenta_nada()
         => Service().TakeAftermath().Should().BeNull();
 
+    // ------------------------------------------------------------- carpetas sincronizadas (BUGFIX-SYNC)
+
+    /// <summary>
+    /// Lo que probablemente dejó el residuo que trajo aquí: la copia de la versión anterior no se
+    /// dejó borrar y se olvidó para siempre. Ahora se apunta, y el arranque siguiente lo reintenta
+    /// — que es cuando el cliente de sincronización ya la ha soltado.
+    /// </summary>
+    [Fact]
+    public void La_limpieza_que_no_pudo_hacerse_se_reintenta_al_siguiente_arranque()
+    {
+        string backup = Path.Combine(_appDir, SelfUpdateService.BackupName);
+        Directory.CreateDirectory(backup);
+        string stuck = Path.Combine(backup, "RETENIDO.dll");
+        WriteResult("Actualizada", backup);
+
+        UpdateAftermath? aftermath;
+        using (Retener(stuck))
+        {
+            aftermath = Service(mine: "1.0.4").TakeAftermath();
+
+            Directory.Exists(backup).Should().BeTrue("no se dejó borrar");
+            File.ReadAllText(_paths.UpdateCleanupPending).Should().Contain(backup);
+        }
+
+        // La actualización salió bien igualmente: la limpieza es cortesía, no parte del resultado.
+        aftermath!.Ok.Should().BeTrue();
+        _journal.Read().Last().Outcome.Should().Be(UpdateOutcome.Completada);
+
+        // El arranque siguiente, ya sin el bloqueo: se retira y deja de estar apuntada.
+        Service(mine: "1.0.4").TakeAftermath().Should().BeNull("no hay parte nuevo que contar");
+
+        Directory.Exists(backup).Should().BeFalse();
+        File.Exists(_paths.UpdateCleanupPending).Should().BeFalse("no queda nada pendiente");
+    }
+
+    /// <summary>
+    /// Las copias huérfanas que el relevo tuvo que esquivar viajan en el parte, y las retira la
+    /// versión nueva al arrancar. Si no, se quedarían para siempre ocupando su nombre.
+    /// </summary>
+    [Fact]
+    public void Los_respaldos_huerfanos_que_el_relevo_esquivo_se_retiran_al_arrancar()
+    {
+        string backup = Path.Combine(_appDir, SelfUpdateService.BackupName + "-2");
+        string orphan = Path.Combine(_appDir, SelfUpdateService.BackupName);
+        Directory.CreateDirectory(backup);
+        Directory.CreateDirectory(orphan);
+        File.WriteAllText(Path.Combine(orphan, "de-un-intento-viejo.dll"), "x");
+        WriteResult("Actualizada", backup, orphans: new[] { orphan });
+
+        Service(mine: "1.0.4").TakeAftermath()!.Ok.Should().BeTrue();
+
+        Directory.Exists(backup).Should().BeFalse("la copia de esta actualización, ya no hace falta");
+        Directory.Exists(orphan).Should().BeFalse("y la huérfana también, ahora que se puede");
+        File.Exists(_paths.UpdateCleanupPending).Should().BeFalse();
+    }
+
+    /// <summary>Un parte de una versión anterior del relevo no trae ese campo, y no pasa nada.</summary>
+    [Fact]
+    public void Un_parte_sin_huerfanas_se_lee_igual()
+    {
+        string backup = Path.Combine(_appDir, SelfUpdateService.BackupName);
+        Directory.CreateDirectory(backup);
+        Directory.CreateDirectory(_paths.Update);
+        File.WriteAllText(_paths.UpdateResultJson, $$"""
+            {"outcome":"Actualizada","fromVersion":"1.0.3","toVersion":"1.0.4",
+             "message":"ok","detail":"","backupDir":"{{backup.Replace("\\", "\\\\")}}"}
+            """);
+
+        Service(mine: "1.0.4").TakeAftermath()!.Ok.Should().BeTrue();
+
+        Directory.Exists(backup).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// El aviso preventivo: instalada dentro de OneDrive, el banner lo dice. <b>Y el botón sigue
+    /// ahí</b> — se avisa y se recomienda, no se prohíbe: la mayoría de los días funcionará.
+    /// </summary>
+    [Fact]
+    public void Instalada_en_OneDrive_se_avisa_pero_no_se_impide()
+    {
+        UpdateReadiness readiness = Service(appDir: InstallUnderOneDrive()).CanOffer();
+
+        readiness.CanUpdate.Should().BeTrue();
+        readiness.Warning.Should().Contain("OneDrive").And.Contain("pausa la sincronización");
+    }
+
+    [Fact]
+    public void Fuera_de_una_carpeta_sincronizada_el_banner_calla()
+        => Service().CanOffer().Warning.Should().BeNull();
+
+    /// <summary>
+    /// La receta viaja al relevo por argumento: quien detecta el cliente de sincronización es la
+    /// aplicación, y el relevo solo necesita la frase para poder darla si algo se bloquea.
+    /// </summary>
+    [Fact]
+    public async Task El_relevo_recibe_la_receta_cuando_la_instalacion_esta_sincronizada()
+    {
+        string synced = InstallUnderOneDrive();
+        (byte[] zip, string hash) = MakePackage();
+        var stub = new HttpStub().Json(ReleaseJson()).Text(hash).Bytes(zip);
+
+        await Service(stub, appDir: synced).UpdateAsync("v1.0.4", RepoUrl, null, CancellationToken.None);
+
+        _launched.Should().ContainSingle();
+        _launched[0].ArgumentList.Should().Contain("--sync-note");
+        _launched[0].ArgumentList.Should().Contain(a => a.Contains("OneDrive"));
+    }
+
+    [Fact]
+    public async Task Y_no_lo_recibe_cuando_no_lo_esta()
+    {
+        (byte[] zip, string hash) = MakePackage();
+        var stub = new HttpStub().Json(ReleaseJson()).Text(hash).Bytes(zip);
+
+        await Service(stub).UpdateAsync("v1.0.4", RepoUrl, null, CancellationToken.None);
+
+        _launched[0].ArgumentList.Should().NotContain("--sync-note");
+    }
+
+    /// <summary>
+    /// Una carpeta de preparación de un intento anterior que no se deja borrar aborta ANTES de
+    /// descomprimir, con la receta. Descomprimir encima mezclaría dos versiones.
+    /// </summary>
+    [Fact]
+    public async Task Una_carpeta_de_preparacion_bloqueada_aborta_con_la_receta()
+    {
+        string synced = InstallUnderOneDrive();
+        string staged = Path.Combine(synced, SelfUpdateService.StagedName);
+        Directory.CreateDirectory(staged);
+
+        (byte[] zip, string hash) = MakePackage();
+        var stub = new HttpStub().Json(ReleaseJson()).Text(hash).Bytes(zip);
+
+        using FileStream held = Retener(Path.Combine(staged, "RETENIDO.dll"));
+        UpdateStart result = await Service(stub, appDir: synced).UpdateAsync(
+            "v1.0.4", RepoUrl, null, CancellationToken.None);
+
+        result.HandedOff.Should().BeFalse();
+        result.Message.Should().Contain("No se ha modificado nada");
+        result.Message.Should().Contain("OneDrive").And.Contain("pausa la sincronización");
+        File.ReadAllText(Path.Combine(synced, "Atalaya.exe")).Should().Be("vieja");
+    }
+
     // ------------------------------------------------------------------ el checksum, en detalle
 
     [Theory]
@@ -515,8 +658,15 @@ public sealed class SelfUpdateTests : IDisposable
         return (bytes, Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
     }
 
-    private void WriteResult(string outcome, string backup, string message = "Atalaya se ha actualizado.")
+    private void WriteResult(
+        string outcome,
+        string backup,
+        string message = "Atalaya se ha actualizado.",
+        IEnumerable<string>? orphans = null)
     {
+        string huerfanas = string.Join(", ", (orphans ?? Array.Empty<string>())
+            .Select(dir => $"\"{dir.Replace("\\", "\\\\")}\""));
+
         Directory.CreateDirectory(_paths.Update);
         File.WriteAllText(_paths.UpdateResultJson, $$"""
             {
@@ -527,9 +677,29 @@ public sealed class SelfUpdateTests : IDisposable
               "detail": "",
               "appDir": "{{_appDir.Replace("\\", "\\\\")}}",
               "backupDir": "{{backup.Replace("\\", "\\\\")}}",
+              "orphanBackups": [{{huerfanas}}],
               "whenUtc": "2026-08-31T19:00:00.0000000Z"
             }
             """);
+    }
+
+    /// <summary>
+    /// Un fichero cogido por otro proceso: <c>FileShare.None</c> hace de cliente de sincronización.
+    /// </summary>
+    private static FileStream Retener(string path)
+    {
+        File.WriteAllText(path, "lo está subiendo OneDrive");
+        return File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None);
+    }
+
+    /// <summary>Una instalación creíble dentro de una carpeta que sincroniza OneDrive.</summary>
+    private string InstallUnderOneDrive()
+    {
+        string dir = Path.Combine(_root, "OneDrive - MAXAM", "Escritorio", "Atalaya-v1.1.1-win-x64");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "Atalaya.exe"), "vieja");
+        File.WriteAllText(Path.Combine(dir, SelfUpdateService.RunnerExe), "relevo");
+        return dir;
     }
 
     private static FileSystemAccessRule Rule(AccessControlType type) => new(

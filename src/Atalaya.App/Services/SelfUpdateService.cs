@@ -183,7 +183,7 @@ public sealed class SelfUpdateService
         // carpeta de la aplicación, y no los toca nadie—, pero callarlo sería dejar que alguien
         // lo descubriera después y se preguntara si se los hemos comido.
         int pending = _fixes.ListPending().Count;
-        string? warning = pending == 0
+        string? fixes = pending == 0
             ? null
             : pending == 1
                 ? "Tienes un arreglo abierto. Sus cambios están en el clon y la actualización no "
@@ -191,7 +191,15 @@ public sealed class SelfUpdateService
                 : $"Tienes {pending} arreglos abiertos. Sus cambios están en los clones y la "
                   + "actualización no los toca, pero acuérdate de cerrarlos.";
 
-        return new UpdateReadiness(true, string.Empty, warning);
+        // El aviso preventivo (BUGFIX-SYNC): si la instalación cuelga de OneDrive, se dice ANTES
+        // de pulsar. No impide nada —la mayoría de los días funciona— pero convierte un fallo
+        // futuro en algo que ya se esperaba y con la salida escrita.
+        string synced = SyncedFolders.Note(_appDir);
+
+        string warning = string.Join(" ", new[] { fixes, synced.Length == 0 ? null : synced }
+            .Where(w => w is { Length: > 0 })!);
+
+        return new UpdateReadiness(true, string.Empty, warning.Length == 0 ? null : warning);
     }
 
     // ------------------------------------------------------------------ actualizar
@@ -255,8 +263,9 @@ public sealed class SelfUpdateService
             _journal.Record(new UpdateAttempt(
                 DateTimeOffset.UtcNow, from, to, UpdateOutcome.Abortada, permissionProblem));
             return Failed(
-                $"No se puede escribir en la carpeta de Atalaya ({_appDir}). "
-                + "Actualiza a mano descargando el zip, o pide permisos sobre esa carpeta.",
+                Prescribe(
+                    $"No se puede escribir en la carpeta de Atalaya ({_appDir}). "
+                    + "Actualiza a mano descargando el zip, o pide permisos sobre esa carpeta."),
                 releaseUrl);
         }
 
@@ -341,7 +350,19 @@ public sealed class SelfUpdateService
         //      para que la sustitución sea un renombrado en el mismo volumen: instantáneo, y no
         //      una copia de 460 MB que puede quedarse a medias.
         progress?.Report(new UpdateProgress(UpdatePhase.Descomprimiendo, "Descomprimiendo…"));
-        TryDeleteDirectory(StagedDir);
+
+        // Una carpeta de preparación de un intento anterior tiene que irse ENTERA: descomprimir
+        // encima mezclaría dos versiones, y `ExtractToDirectory` fallaría a mitad con un error que
+        // no explica nada. Si ni con reintentos se deja borrar, se aborta con la receta.
+        if (!TryDeleteDirectory(StagedDir))
+        {
+            return Failed(
+                Prescribe(
+                    $"No se pudo retirar la carpeta {StagedName} de un intento anterior, así que "
+                    + "no hay dónde descomprimir. No se ha modificado nada."),
+                release.HtmlUrl ?? releaseUrl);
+        }
+
         ZipFile.ExtractToDirectory(zipPath, StagedDir);
         TryDeleteFile(zipPath);
 
@@ -361,7 +382,7 @@ public sealed class SelfUpdateService
         _journal.Record(new UpdateAttempt(DateTimeOffset.UtcNow, from, to, UpdateOutcome.Iniciada));
         TryDeleteFile(_paths.UpdateResultJson);
 
-        _launch(new ProcessStartInfo(runner)
+        var relay = new ProcessStartInfo(runner)
         {
             UseShellExecute = true,
             WorkingDirectory = _paths.Update,
@@ -376,7 +397,17 @@ public sealed class SelfUpdateService
                 "--from", from,
                 "--to", to,
             },
-        });
+        };
+
+        // Quien detecta el cliente de sincronización es la aplicación, no el relevo: él solo
+        // necesita la frase para poder recetarla si algo se bloquea (BUGFIX-SYNC).
+        if (SyncedFolders.Advice(_appDir) is { Length: > 0 } advice)
+        {
+            relay.ArgumentList.Add("--sync-note");
+            relay.ArgumentList.Add(advice);
+        }
+
+        _launch(relay);
 
         _log.LogInformation("Actualización {From} → {To}: relevo lanzado, cerrando.", from, to);
         return new UpdateStart(true, $"Actualizando a {to}. Atalaya se cerrará y volverá sola.");
@@ -394,6 +425,11 @@ public sealed class SelfUpdateService
     /// </summary>
     public UpdateAftermath? TakeAftermath()
     {
+        // Lo primero, y pase lo que pase: lo que un arranque anterior no pudo borrar. Va aquí y no
+        // detrás del parte porque casi siempre no habrá parte que leer — y es justamente entonces
+        // cuando hay que reintentarlo (BUGFIX-SYNC).
+        SweepPendingCleanup();
+
         string path = _paths.UpdateResultJson;
         try
         {
@@ -412,10 +448,17 @@ public sealed class SelfUpdateService
             string backup = Text(root, "backupDir");
 
             bool ok = outcome == "Actualizada";
+
+            // Lo que hay que retirar: la copia de la versión anterior —solo si la nueva llegó a
+            // arrancar, que es esto— y las huérfanas que el relevo tuvo que esquivar. Lo que no se
+            // deje ahora se apunta y se reintenta en el siguiente arranque, hasta que se pueda.
+            var chores = new List<string>(Strings(root, "orphanBackups"));
             if (ok && backup.Length > 0)
             {
-                TryDeleteDirectory(backup);
+                chores.Add(backup);
             }
+
+            RememberForCleanup(chores.Where(dir => !TryDeleteDirectory(dir)));
 
             _journal.Record(new UpdateAttempt(
                 DateTimeOffset.UtcNow,
@@ -431,7 +474,10 @@ public sealed class SelfUpdateService
 
             _log.LogInformation("Actualización {From} → {To}: {Outcome}. {Detail}", from, to, outcome, detail);
             TryDeleteFile(path);
-            TryDeleteDirectory(StagedDir);
+            if (!TryDeleteDirectory(StagedDir))
+            {
+                RememberForCleanup(new[] { StagedDir });
+            }
 
             return new UpdateAftermath(ok, ok ? $"Atalaya se ha actualizado a la {to}." : message);
         }
@@ -443,7 +489,118 @@ public sealed class SelfUpdateService
         }
     }
 
+    // ------------------------------------------------------------------ la limpieza que quedó a medias
+
+    /// <summary>
+    /// Reintenta los borrados que un arranque anterior no pudo hacer (BUGFIX-SYNC).
+    /// <para>
+    /// Antes, una copia que no se dejaba borrar se olvidaba para siempre — y ahí se quedaba,
+    /// bloqueada, hasta que la actualización siguiente chocaba con ella y abortaba. Ahora consta
+    /// por escrito y cada arranque lo vuelve a intentar: un cliente de sincronización suelta lo
+    /// que retiene en segundos, y desde luego lo ha soltado al día siguiente.
+    /// </para>
+    /// <para>
+    /// Es cortesía, no un requisito: si tampoco hoy se puede, se anota en el log y se sigue.
+    /// </para>
+    /// </summary>
+    public void SweepPendingCleanup()
+    {
+        List<string> pending = ReadPending();
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        var left = new List<string>();
+        foreach (string dir in pending)
+        {
+            if (!Directory.Exists(dir))
+            {
+                _log.LogInformation("La carpeta {Dir} de una actualización anterior ya no está.", dir);
+            }
+            else if (TryDeleteDirectory(dir))
+            {
+                _log.LogInformation("Retirada la carpeta {Dir} que quedó de una actualización anterior.", dir);
+            }
+            else
+            {
+                left.Add(dir);
+            }
+        }
+
+        WritePending(left);
+
+        if (left.Count > 0)
+        {
+            _log.LogWarning(
+                "Quedan {Count} carpetas de actualizaciones anteriores que no se dejan borrar; se "
+                + "reintentará al arrancar: {Dirs}",
+                left.Count,
+                string.Join(", ", left));
+        }
+    }
+
+    /// <summary>Apunta lo que no se pudo borrar, sin duplicar lo que ya estaba apuntado.</summary>
+    private void RememberForCleanup(IEnumerable<string> dirs)
+    {
+        var all = ReadPending();
+        foreach (string dir in dirs.Where(d => d is { Length: > 0 }))
+        {
+            if (!all.Contains(dir, StringComparer.OrdinalIgnoreCase))
+            {
+                all.Add(dir);
+                _log.LogWarning(
+                    "No se pudo borrar {Dir}; queda apuntado para reintentarlo al arrancar.", dir);
+            }
+        }
+
+        WritePending(all);
+    }
+
+    private List<string> ReadPending()
+    {
+        try
+        {
+            return File.Exists(_paths.UpdateCleanupPending)
+                ? File.ReadAllLines(_paths.UpdateCleanupPending)
+                    .Select(line => line.Trim())
+                    .Where(line => line.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList()
+                : new List<string>();
+        }
+        catch (IOException)
+        {
+            return new List<string>();
+        }
+    }
+
+    private void WritePending(IReadOnlyList<string> dirs)
+    {
+        try
+        {
+            if (dirs.Count == 0)
+            {
+                TryDeleteFile(_paths.UpdateCleanupPending);
+                return;
+            }
+
+            Directory.CreateDirectory(_paths.Update);
+            File.WriteAllLines(_paths.UpdateCleanupPending, dirs);
+        }
+        catch (Exception ex)
+        {
+            _log.LogInformation(ex, "No se pudo apuntar la limpieza pendiente.");
+        }
+    }
+
     // ------------------------------------------------------------------ piezas
+
+    /// <summary>
+    /// El mensaje, con la receta detrás cuando la instalación cuelga de una carpeta sincronizada.
+    /// </summary>
+    private string Prescribe(string message)
+        => SyncedFolders.Advice(_appDir) is { Length: > 0 } advice ? $"{message} {advice}" : message;
 
     /// <summary>
     /// ¿Se puede escribir Y crear carpetas donde vive Atalaya? Se prueba HACIÉNDOLO: leer los ACL
@@ -549,7 +706,7 @@ public sealed class SelfUpdateService
     }
 
     /// <summary>La causa, dicha para quien la va a leer y no para quien escribió el código.</summary>
-    private static string Explain(Exception ex) => ex switch
+    private string Explain(Exception ex) => ex switch
     {
         GitHubApiException { Problem: GitHubApiProblem.Offline } =>
             "No hay conexión con github.com, así que no se ha podido descargar nada. "
@@ -557,12 +714,13 @@ public sealed class SelfUpdateService
         GitHubApiException { Problem: GitHubApiProblem.TokenRejected } =>
             "GitHub ha rechazado el token de la cuenta. Vuelve a conectar la cuenta y reintenta.",
         GitHubApiException api => api.Message,
-        UnauthorizedAccessException =>
-            "El sistema ha denegado el acceso a la carpeta de Atalaya. Puede ser el antivirus o "
-            + "los permisos de la carpeta. No se ha modificado nada.",
+        UnauthorizedAccessException => Prescribe(
+            "El sistema ha denegado el acceso a la carpeta de Atalaya. Puede ser el antivirus, un "
+            + "cliente de sincronización o los permisos de la carpeta. No se ha modificado nada."),
         IOException io when io.Message.Contains("space", StringComparison.OrdinalIgnoreCase) =>
             "No hay espacio en disco para el paquete. No se ha modificado nada.",
-        IOException io => $"Fallo de disco durante la descarga: {io.Message}. No se ha modificado nada.",
+        IOException io => Prescribe(
+            $"Fallo de disco durante la actualización: {io.Message}. No se ha modificado nada."),
         _ => $"La actualización no se ha podido preparar: {ex.Message}. No se ha modificado nada.",
     };
 
@@ -572,6 +730,26 @@ public sealed class SelfUpdateService
         => root.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.String
             ? value.GetString() ?? string.Empty
             : string.Empty;
+
+    /// <summary>
+    /// Una lista de cadenas del parte. Ausente vale como vacía: un relevo de una versión anterior
+    /// no escribe este campo, y eso no puede romper el arranque de la nueva.
+    /// </summary>
+    private static IEnumerable<string> Strings(JsonElement root, string name)
+    {
+        if (!root.TryGetProperty(name, out JsonElement value) || value.ValueKind != JsonValueKind.Array)
+        {
+            yield break;
+        }
+
+        foreach (JsonElement item in value.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.String && item.GetString() is { Length: > 0 } text)
+            {
+                yield return text;
+            }
+        }
+    }
 
     private static void TryDeleteFile(string path)
     {
@@ -588,17 +766,41 @@ public sealed class SelfUpdateService
         }
     }
 
-    private static void TryDeleteDirectory(string path)
+    /// <summary>
+    /// Las esperas entre intentos de borrado, en milisegundos. Más cortas que las del relevo
+    /// —1,3 s frente a 6— porque aquí nadie está esperando el resultado: lo que no salga hoy se
+    /// apunta y se reintenta al arrancar, así que insistir más solo retrasaría la ventana.
+    /// </summary>
+    private static readonly int[] DeleteWaitsMs = { 100, 300, 900 };
+
+    /// <summary>
+    /// Borra la carpeta, insistiendo. Devuelve si al final ya no está — que es lo único que
+    /// importa a quien llama: lo que quede se apunta para el siguiente arranque.
+    /// </summary>
+    private static bool TryDeleteDirectory(string path)
     {
-        try
+        for (int attempt = 0; ; attempt++)
         {
-            if (Directory.Exists(path))
+            try
             {
+                if (!Directory.Exists(path))
+                {
+                    return true;
+                }
+
                 Directory.Delete(path, recursive: true);
+                return true;
             }
-        }
-        catch
-        {
+            catch (Exception ex) when (attempt < DeleteWaitsMs.Length
+                                       && ex is IOException or UnauthorizedAccessException)
+            {
+                // Un cliente de sincronización que está subiendo la carpeta la suelta en segundos.
+                Thread.Sleep(DeleteWaitsMs[attempt]);
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }

@@ -55,6 +55,14 @@ public sealed class AppPaths
     /// <summary>El parte que deja el relevo, y que lee la versión que arranca después.</summary>
     public string UpdateResultJson => Path.Combine(Update, "result.json");
 
+    /// <summary>
+    /// Carpetas de actualizaciones anteriores que no se dejaron borrar, una por línea
+    /// (BUGFIX-SYNC). Existe porque «no se pudo borrar» tenía que dejar de significar «se olvida
+    /// para siempre»: eso es lo que dejó el residuo bloqueado que hacía fallar la actualización
+    /// siguiente. Mientras el fichero tenga líneas, cada arranque lo reintenta.
+    /// </summary>
+    public string UpdateCleanupPending => Path.Combine(Update, "limpieza-pendiente.txt");
+
     /// <summary>Registro de cada intento de actualización, una línea por intento (F11).</summary>
     public string UpdatesLog => Path.Combine(Root, "updates.jsonl");
 }
