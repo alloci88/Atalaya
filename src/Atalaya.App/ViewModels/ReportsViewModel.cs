@@ -70,7 +70,7 @@ public sealed class ReportRow
         : ReportsViewModel.Unknown;
 
     public string Cost => Entry.Cost is { } c
-        ? $"{c.ToString("0.##", CultureInfo.CurrentCulture)} {Entry.CostUnit}"
+        ? $"{Atalaya.App.Services.CreditText.Number(c)} {Entry.CostUnit}"
         : ReportsViewModel.Unknown;
 
     public string Title => Entry.Title;

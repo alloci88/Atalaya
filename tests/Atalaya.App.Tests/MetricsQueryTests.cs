@@ -32,6 +32,7 @@ public sealed class MetricsQueryTests : IDisposable
         var settings = new SettingsService(_paths);
         settings.Load();
         _hub = TestFactory.Hub(_paths, settings);
+        TestRates.Seed(_hub);
         App("app", "App");
     }
 
@@ -103,7 +104,7 @@ public sealed class MetricsQueryTests : IDisposable
             session.Units.Add(new UnitVerdictRecord($"src/U{i}.cs", "src", "auditada", null));
         }
 
-        session.Usage.Add(1000, 200, cost);
+        TestRates.CostAs(session, cost, inputTokens: 1000);
         _hub.Store.WriteSession(session);
         return session;
     }
@@ -132,7 +133,7 @@ public sealed class MetricsQueryTests : IDisposable
             session.Units.Add(new UnitVerdictRecord($"src/U{i}.cs", "src", "auditada", null));
         }
 
-        session.Usage.Add(1000, 200, cost);
+        TestRates.CostAs(session, cost, inputTokens: 1000);
         _hub.Store.WriteSession(session);
         return session;
     }

@@ -130,7 +130,7 @@ public sealed partial class LiveSessionService : ObservableObject
     [ObservableProperty] private long _cacheReadTokens;
     [ObservableProperty] private long _cacheWriteTokens;
     [ObservableProperty] private decimal? _cost;
-    [ObservableProperty] private string _costUnit = "(unidad SDK)";
+    [ObservableProperty] private string _costUnit = CreditText.Unit;
     [ObservableProperty] private int _calls;
     [ObservableProperty] private DateTimeOffset? _startedUtc;
     [ObservableProperty] private DateTimeOffset? _endedUtc;
@@ -747,7 +747,7 @@ public sealed partial class LiveSessionService : ObservableObject
         OutputTokens = output;
         Cost = cost;
         Calls++;
-        CostUnit = string.IsNullOrWhiteSpace(costUnit) ? "(unidad SDK)" : costUnit!;
+        CostUnit = string.IsNullOrWhiteSpace(costUnit) ? CreditText.Unit : costUnit!;
         OnPropertyChanged(nameof(CostPerUnit));
     });
 

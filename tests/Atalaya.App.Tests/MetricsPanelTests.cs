@@ -37,6 +37,7 @@ public sealed class MetricsPanelTests : IDisposable
         _settings = new SettingsService(_paths);
         _settings.Load();
         _hub = TestFactory.Hub(_paths, _settings);
+        TestRates.Seed(_hub);
         _hub.Store.WriteHub(new HubInfo { OrganizationName = "Org" });
     }
 
@@ -751,7 +752,7 @@ public sealed class MetricsPanelTests : IDisposable
             session.Units.Add(new UnitVerdictRecord($"src/A{i}.cs", "src", "auditada", null));
         }
 
-        session.Usage.Add(100, 20, cost);
+        TestRates.CostAs(session, cost, inputTokens: 100);
         _hub.Store.WriteSession(session);
         return session;
     }

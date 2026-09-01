@@ -35,6 +35,7 @@ public sealed class DeprecatedModesTests : IDisposable
         var settings = new SettingsService(_paths);
         settings.Load();
         _hub = TestFactory.Hub(_paths, settings);
+        TestRates.Seed(_hub);
         _hub.Store.WriteHub(new HubInfo { OrganizationName = "Org" });
         _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 1 });
     }
@@ -99,8 +100,15 @@ public sealed class DeprecatedModesTests : IDisposable
         // «Todo», que es justamente el rango que existe para que nada quede fuera del histórico.
         MetricsDashboard m = new MetricsQuery(_hub).Build(new MetricsFilter(null, MetricsRange.All));
 
-        m.CostInPeriod.Should().Be(25m, "el gasto de una sesión retirada se gastó igual");
-        m.CostUnit.Should().Be("premium requests", "la unidad la declaró la sesión, no la inventa el panel");
+        // F15 — el coste se RECALCULA de los tokens, no se lee el que guardó la sesión: aquél está
+        // en peticiones premium (12,5 cada una, 25 en total), la unidad que GitHub retiró. Las dos
+        // sesiones tienen 4.000 tokens de salida, que a la tarifa de test son 4 credits cada una.
+        // Que salga 8 y no 25 es exactamente la prueba de que el histórico se recalcula.
+        m.CostInPeriod.Should().Be(8m, "el histórico se recalcula desde los tokens, que sí siguen valiendo");
+        // F15 — y la unidad ya no la declara la sesión: es credits, siempre. La que aquella sesión
+        // guardó («premium requests») es una moneda retirada, y conservarla en el frontal sería
+        // enseñar un precio en una divisa que ya no se cambia.
+        m.CostUnit.Should().Be("credits");
         m.Sessions.Should().HaveCount(2, "y las dos siguen saliendo en el registro de operaciones");
     }
 
@@ -113,9 +121,16 @@ public sealed class DeprecatedModesTests : IDisposable
         string report = ReportBuilder.BuildSessionReport(
             _hub.Store.TryReadApp("app")!, session, Array.Empty<Finding>(), pendingUnits: 4, largeUnits: 1);
 
-        report.Should().Contain("**Modo**: Integral")
-            .And.Contain("premium requests")
-            .And.Contain("src/Common.cs");
+        string report2 = ReportBuilder.BuildSessionReport(
+            _hub.Store.TryReadApp("app")!, session, Array.Empty<Finding>(),
+            pendingUnits: 4, largeUnits: 1, organization: null, rates: TestRates.Table());
+
+        report2.Should().Contain("**Modo**: Integral")
+            .And.Contain("src/Common.cs")
+            .And.Contain("4,0 credits");
+        report2.Should().NotContain("premium requests",
+            "la unidad retirada desaparece del frontal; los tokens, que son el hecho, se quedan");
+        report = report2;
         report.Should().NotContain("Pasadas del barrido", "esa sesión no registraba tope");
     }
 

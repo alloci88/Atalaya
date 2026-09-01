@@ -131,10 +131,16 @@ public sealed record SessionRow(
 public sealed record ProviderCost(
     string ProviderId, string ProviderName, decimal? Cost, string CostUnit, int Sessions)
 {
-    /// <summary>La línea que se lee en el panel: «GitHub Copilot · 850 unidades SDK».</summary>
+    /// <summary>
+    /// El coste de esta casa es un EQUIVALENTE y no una factura (F15). Con suscripción no se paga
+    /// por tokens, así que llamarlo «lo que costó» sería decir que se cobró algo que no se cobró.
+    /// </summary>
+    public bool IsSubscription => CreditText.IsSubscription(ProviderId);
+
+    /// <summary>La línea que se lee en el panel: «GitHub Copilot · 68,2 AI credits».</summary>
     public string Line => Cost is { } c
-        ? $"{ProviderName} · {c.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture)} {CostUnit}"
-        : $"{ProviderName} · coste no informado por el proveedor";
+        ? $"{ProviderName} · {CreditText.Number(c)} {CostUnit}"
+        : $"{ProviderName} · coste no calculable";
 }
 
 /// <summary>Una opción del selector de aplicación.</summary>
@@ -162,6 +168,7 @@ public sealed record MetricsDashboard(
     string CostUnit,
     decimal? CostPerAuditedUnit,
     IReadOnlyList<ProviderCost> CostByProvider,
+    int PartialCostSessions,
     int UnitsAuditedInPeriod,
     int CycleAudited,
     int CyclePending,
@@ -208,10 +215,25 @@ public sealed record MetricsDashboard(
     public bool HasCost => CostInPeriod is not null;
 
     /// <summary>
-    /// En el periodo ha auditado más de una casa, así que NO hay un total que enseñar (F14): sus
-    /// unidades no son la misma magnitud. El panel enseña entonces el desglose y ningún total.
+    /// En el periodo conviven una FACTURA y un EQUIVALENTE (F15), así que no se ofrece un total
+    /// único: sumar lo que se paga con lo que no se paga daría una cifra que parece un gasto y no
+    /// lo es. Las dos están en credits —la aritmética sí valdría—, pero lo que no se puede mezclar
+    /// en silencio es su significado, así que el panel enseña el desglose con sus etiquetas.
     /// </summary>
-    public bool CostIsMixed => CostByProvider.Count > 1;
+    public bool CostIsMixed
+        => CostByProvider.Any(p => p.IsSubscription) && CostByProvider.Any(p => !p.IsSubscription);
+
+    /// <summary>
+    /// Hay sesiones con tokens que NO se han podido valorar —sin modelo registrado, o con un
+    /// modelo sin tarifa—, así que lo que se enseña es menos que lo que se gastó. Se DICE: un total
+    /// al que le falta gasto se lee como si fuera el gasto entero.
+    /// </summary>
+    public bool CostIsPartial => PartialCostSessions > 0;
+
+    /// <summary>La frase del parcial, con el número, para poder actuar sobre ella.</summary>
+    public string PartialCostNotice => PartialCostSessions == 1
+        ? "1 sesión sin tarifa para su modelo: no está contada."
+        : $"{PartialCostSessions} sesiones sin tarifa para su modelo: no están contadas.";
 
     /// <summary>
     /// El coste, listo para leer. Con un solo proveedor es el total de siempre; con varios son sus
@@ -324,30 +346,36 @@ public sealed class MetricsQuery
 
         // TODA sesión con coste cuenta: auditoría, arreglo, verificación y lo que venga. El tile
         // y la gráfica salen de la MISMA función (CostIn), no de dos sumas parecidas.
-        // F14 — el coste se agrupa POR PROVEEDOR antes de sumar nada. Copilot cuenta peticiones
-        // premium y Claude Code informa dólares de tarifa de lista: son magnitudes distintas, y
-        // una suma de las dos no es un gasto, es un número. El desglose es siempre la verdad; el
-        // total de una sola cifra solo existe cuando hay una sola casa detrás.
-        IReadOnlyList<ProviderCost> byProvider = CostByProvider(inPeriod);
+        //
+        // F15 — ahora las dos casas se miden en la MISMA unidad (credits, derivados de tokens), así
+        // que ya se pueden sumar sin mentir en la aritmética. Lo que sigue sin poder mezclarse en
+        // silencio es lo que significan: el de Copilot es una FACTURA y el de Claude Code con
+        // suscripción es un EQUIVALENTE. Por eso el desglose por proveedor se mantiene y el total
+        // único solo se ofrece cuando todo lo del periodo es de la misma naturaleza.
+        ModelRateTable? rates = ModelRates();
+        IReadOnlyList<ProviderCost> byProvider = CostByProvider(inPeriod, rates);
 
-        decimal? cost = byProvider.Count == 1 && inPeriod.Any(s => s.Usage.Cost is not null)
-            ? scope.Sum(a => CostIn(a.Sessions, from, to))
+        bool mixesKinds = byProvider.Any(p => p.IsSubscription) && byProvider.Any(p => !p.IsSubscription);
+
+        decimal? cost = byProvider.Count > 0 && !mixesKinds
+            ? scope.Sum(a => CostIn(a.Sessions, from, to, rates))
             : null;
         int unitsAudited = inPeriod.Sum(s => s.Units.Count);
+
+        // Cuántas sesiones del periodo tenían tokens pero NO se pudieron valorar: sin modelo
+        // registrado, o con un modelo sin tarifa. El agregado que las contiene es PARCIAL, y hay
+        // que decirlo — un total al que le falta gasto se lee como si fuera el gasto entero.
+        int partial = inPeriod.Count(x => !CreditCalculator.Calculate(x, rates).HasValue && HasTokens(x));
 
         // El ratio «por unidad auditada» NO divide el gasto entero: divide lo que costó AUDITAR.
         // Un arreglo o una verificación no auditan ninguna unidad, así que su gasto subía el
         // ratio sin que cambiara nada de lo auditado (28/08/2026: 262,5 por unidad cuando auditar
         // esa unidad había costado 105). El tile de coste los sigue sumando —eso es el gasto—;
         // lo que no se puede es repartirlos entre algo que no produjeron.
-        // El ratio por unidad se calcula solo si hay UNA unidad de coste: dividir una suma mixta
-        // entre unidades daría una precisión inventada.
-        decimal auditCost = byProvider.Count == 1
-            ? inPeriod.Where(s => s.Units.Count > 0).Sum(CostOf)
-            : 0m;
-        string costUnit = byProvider.Count == 1
-            ? byProvider[0].CostUnit
-            : CostEstimator.DefaultCostUnit;
+        decimal auditCost = mixesKinds
+            ? 0m
+            : inPeriod.Where(x => x.Units.Count > 0).Sum(x => CostOf(x, rates));
+        string costUnit = CreditText.Unit;
 
         int cycleAudited = 0;
         int cyclePending = 0;
@@ -377,7 +405,7 @@ public sealed class MetricsQuery
             donuts.Add(new CoverageDonut(app.Slug, app.Name, app.CurrentCycle, audited, pending, large));
         }
 
-        (IReadOnlyList<string> series, bool hasOthers) = TopSeries(scope, a => CostIn(a.Sessions, from, to));
+        (IReadOnlyList<string> series, bool hasOthers) = TopSeries(scope, a => CostIn(a.Sessions, from, to, rates));
 
         (IReadOnlyList<string> resSeries, bool resHasOthers) = TopSeries(
             scope, a => a.Findings.Sum(f => ResolutionsIn(f, from, to)));
@@ -397,6 +425,7 @@ public sealed class MetricsQuery
             costUnit,
             unitsAudited > 0 && auditCost > 0m ? auditCost / unitsAudited : null,
             byProvider,
+            partial,
             unitsAudited,
             cycleAudited,
             cyclePending,
@@ -404,7 +433,7 @@ public sealed class MetricsQuery
             series,
             hasOthers,
             all.ToDictionary(a => a.Slug, a => a.Name, StringComparer.OrdinalIgnoreCase),
-            Points(scope, buckets, series, hasOthers, (app, bFrom, bTo) => CostIn(app.Sessions, bFrom, bTo)),
+            Points(scope, buckets, series, hasOthers, (app, bFrom, bTo) => CostIn(app.Sessions, bFrom, bTo, rates)),
             resSeries,
             resHasOthers,
             Points(scope, buckets, resSeries, resHasOthers,
@@ -412,7 +441,7 @@ public sealed class MetricsQuery
             donuts.OrderByDescending(d => d.Total).ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList(),
             severities.OrderByDescending(d => d.Total).ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList(),
             FlowBuckets(findings, buckets),
-            SessionRows(scope, inPeriod));
+            SessionRows(scope, inPeriod, rates));
     }
 
     // ---------- El periodo y sus cubos ----------
@@ -578,20 +607,39 @@ public sealed class MetricsQuery
     /// «desconocido» que solo conseguiría partir el histórico en dos.
     /// </para>
     /// </summary>
-    private static IReadOnlyList<ProviderCost> CostByProvider(IReadOnlyList<AuditSession> sessions)
+    private static IReadOnlyList<ProviderCost> CostByProvider(
+        IReadOnlyList<AuditSession> sessions, ModelRateTable? rates)
         => sessions
-            .Where(s => s.Usage.Cost is not null)
-            .GroupBy(s => string.IsNullOrWhiteSpace(s.Provider) ? LegacyProviderId : s.Provider!,
+            .Select(s => (Session: s, Cost: CreditCalculator.Calculate(s, rates)))
+            .Where(x => x.Cost.HasValue)
+            .GroupBy(x => string.IsNullOrWhiteSpace(x.Session.Provider) ? LegacyProviderId : x.Session.Provider!,
                      StringComparer.OrdinalIgnoreCase)
             .Select(g => new ProviderCost(
                 g.Key,
                 ProviderDisplayName(g.Key),
-                g.Sum(s => s.Usage.Cost ?? 0m),
-                g.Select(s => s.Usage.Currency)
-                    .FirstOrDefault(c => !string.IsNullOrWhiteSpace(c)) ?? CostEstimator.DefaultCostUnit,
+                g.Sum(x => x.Cost.Credits ?? 0m),
+                CreditText.LabelFor(g.Key),
                 g.Count()))
             .OrderBy(p => p.ProviderName, StringComparer.CurrentCulture)
             .ToList();
+
+    /// <summary>¿Guardó esta sesión tokens? Sin ellos no hay nada que valorar, y no es «parcial».</summary>
+    private static bool HasTokens(AuditSession s)
+        => s.Usage.InputTokens > 0 || s.Usage.OutputTokens > 0
+        || s.Usage.CacheReadTokens > 0 || s.Usage.CacheWriteTokens > 0;
+
+    /// <summary>Las tarifas del hub, o null si no hay o no se pueden leer.</summary>
+    private ModelRateTable? ModelRates()
+    {
+        try
+        {
+            return _hub.Store.TryReadModelRates();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 
     /// <summary>Lo que era toda sesión antes de que hubiera un segundo proveedor.</summary>
     private const string LegacyProviderId = "copilot";
@@ -682,7 +730,22 @@ public sealed class MetricsQuery
     /// verificaciones). Una sesión sin coste declarado aporta cero, que no es lo mismo que «no se
     /// sabe» — esa distinción la lleva quien pregunta si HAY coste, no esta suma.
     /// </summary>
-    internal static decimal CostOf(AuditSession session) => session.Usage.Cost ?? 0m;
+    internal static decimal CostOf(AuditSession session) => CostOf(session, null);
+
+    /// <inheritdoc cref="CostOf(AuditSession)"/>
+    /// <remarks>
+    /// F15 — el coste se DERIVA de los tokens con la tarifa del modelo de la sesión; ya no se lee
+    /// el número que guardó el proveedor. Aquel estaba en premium requests, la unidad que GitHub
+    /// retiró el 1 de junio de 2026. Los tokens, en cambio, son el hecho primario y siguen en el
+    /// hub, así que el histórico se recalcula entero sin migrar un solo fichero.
+    /// <para>
+    /// Una sesión cuyo coste no se puede derivar —sin tokens, sin modelo o sin tarifa— aporta cero
+    /// a la SUMA y se cuenta aparte como parcial. La distinción entre «costó cero» y «no se sabe»
+    /// la lleva quien pregunta, no esta función.
+    /// </para>
+    /// </remarks>
+    internal static decimal CostOf(AuditSession session, ModelRateTable? rates)
+        => CreditCalculator.Calculate(session, rates).Credits ?? 0m;
 
     /// <summary>
     /// El coste de las sesiones que arrancaron dentro del tramo. El tile de «Coste del periodo» y
@@ -692,8 +755,8 @@ public sealed class MetricsQuery
     /// es la única que no se podría explicar.
     /// </summary>
     internal static decimal CostIn(
-        IEnumerable<AuditSession> sessions, DateTimeOffset from, DateTimeOffset to)
-        => sessions.Where(s => s.StartedUtc >= from && s.StartedUtc < to).Sum(CostOf);
+        IEnumerable<AuditSession> sessions, DateTimeOffset from, DateTimeOffset to, ModelRateTable? rates = null)
+        => sessions.Where(s => s.StartedUtc >= from && s.StartedUtc < to).Sum(x => CostOf(x, rates));
 
     // ---------- Las resoluciones ----------
 
@@ -827,7 +890,7 @@ public sealed class MetricsQuery
     // ---------- Gráfica 5: actividad de sesiones ----------
 
     private static IReadOnlyList<SessionRow> SessionRows(
-        IReadOnlyList<AppData> scope, IReadOnlyList<AuditSession> inPeriod)
+        IReadOnlyList<AppData> scope, IReadOnlyList<AuditSession> inPeriod, ModelRateTable? rates)
     {
         var names = scope.ToDictionary(a => a.Slug, a => a.Name, StringComparer.OrdinalIgnoreCase);
         return inPeriod
@@ -843,8 +906,11 @@ public sealed class MetricsQuery
                 s.Units.Count,
                 s.Counters.New,
                 s.Counters.Resolved,
-                s.Usage.Cost,
-                string.IsNullOrWhiteSpace(s.Usage.Currency) ? CostEstimator.DefaultCostUnit : s.Usage.Currency!))
+                // F15 — el coste de la fila se DERIVA como el del tile: misma aritmética, misma
+                // tarifa, mismo modelo. Dos cuentas parecidas para el mismo número acaban siempre
+                // discrepando (ya pasó dos veces con el tile y la gráfica).
+                CreditCalculator.Calculate(s, rates).Credits,
+                CreditText.LabelFor(s.Provider)))
             .ToList();
     }
 

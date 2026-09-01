@@ -77,7 +77,7 @@ public sealed partial class SessionViewModel : ViewModelBase
         : $"Unidad {Math.Max(1, _live.UnitIndex)} de {_live.UnitCount}";
 
     public string CostText => _live.Cost is { } c
-        ? $"{_live.Calls} llamadas · coste {c:0.##} {_live.CostUnit}"
+        ? $"{_live.Calls} llamadas · {CreditText.Number(c)} {_live.CostUnit}"
         : $"{_live.Calls} llamadas · coste no informado por el SDK";
 
     public string TokensText =>

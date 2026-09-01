@@ -34,9 +34,18 @@ public sealed class CostEstimatorTests
             CycleN = 1,
         };
 
+        s.Model = TestRates.Model;
+
         for (int i = 0; i < perUnitCosts.Length; i++)
         {
-            s.UsageBreakdown.Add(new UnitUsageBreakdown { Unit = $"U{i}.cs", Cost = perUnitCosts[i] });
+            // F15 — la unidad guarda TOKENS y el coste se deriva con la tarifa de su modelo. Con
+            // la tarifa de test, 1.000 tokens de salida = 1 credit, así que esto sigue leyéndose
+            // como «esta unidad costó N».
+            s.UsageBreakdown.Add(new UnitUsageBreakdown
+            {
+                Unit = $"U{i}.cs",
+                OutputTokens = TestRates.OutputFor(perUnitCosts[i]),
+            });
         }
 
         return s;
@@ -53,7 +62,7 @@ public sealed class CostEstimatorTests
             Session(1, maxPasses: 5, 30m, 20m),
         };
 
-        CostEstimate e = CostEstimator.Estimate(sessions, units: 47, maxPasses: 5);
+        CostEstimate e = CostEstimator.Estimate(sessions, units: 47, maxPasses: 5, rates: TestRates.Table());
 
         e.Evidence.Should().Be(CostEvidence.Suficiente);
         e.CostPerUnit.Should().Be(20m, "(10 + 20 + 30 + 20) / 4");
@@ -68,24 +77,34 @@ public sealed class CostEstimatorTests
     {
         var sessions = new[] { Session(1, maxPasses: 5, 18m, 18m, 18m) };
 
-        CostEstimate e = CostEstimator.Estimate(sessions, units: 47, maxPasses: 5);
+        CostEstimate e = CostEstimator.Estimate(sessions, units: 47, maxPasses: 5, rates: TestRates.Table());
 
-        // El formato que pide F5.6 §4: «47 unidades × ~18/unidad ≈ 846 unidades SDK».
-        e.Breakdown.Should().StartWith("47 unidades × ~18/unidad")
-            .And.Contain("846")
+        // El formato que pide F5.6 §4, ahora en credits: «47 unidades × ~18,0/unidad ≈ 846,0 credits».
+        e.Breakdown.Should().StartWith("47 unidades × ~18,0/unidad")
+            .And.Contain("846,0")
             .And.EndWith(CostEstimator.DefaultCostUnit);
     }
 
+    /// <summary>
+    /// F15 — la unidad ya no la declara el proveedor: es <b>AI credits</b>, siempre, porque es la
+    /// que factura GitHub y la que grafica el panel de la organización.
+    /// <para>
+    /// Este test decía antes lo contrario —que se respetara la unidad que declarase el SDK— y era
+    /// correcto mientras esa unidad fueran las peticiones premium. GitHub las retiró el 1 de junio
+    /// de 2026, así que respetar lo que declare el proveedor sería conservar una moneda que ya no
+    /// existe.
+    /// </para>
+    /// </summary>
     [Fact]
-    public void La_unidad_de_coste_es_la_que_declaro_el_SDK_no_una_inventada()
+    public void La_unidad_es_siempre_credits_porque_es_la_que_factura_GitHub()
     {
         AuditSession s = Session(1, maxPasses: 5, 4m, 4m, 4m);
-        s.Usage.Currency = "premium requests";
+        s.Usage.Currency = "premium requests";   // lo que guardó una sesión vieja: se ignora
 
-        CostEstimate e = CostEstimator.Estimate(new[] { s }, units: 10, maxPasses: 5);
+        CostEstimate e = CostEstimator.Estimate(new[] { s }, units: 10, maxPasses: 5, rates: TestRates.Table());
 
-        e.CostUnit.Should().Be("premium requests");
-        e.Breakdown.Should().EndWith("premium requests");
+        e.CostUnit.Should().Be("credits");
+        e.Breakdown.Should().EndWith("credits");
     }
 
     [Fact]
@@ -95,7 +114,7 @@ public sealed class CostEstimatorTests
             .Select(i => Session(daysAgo: i, maxPasses: 5, i == 0 ? 100m : 10m))
             .ToArray();
 
-        CostEstimate e = CostEstimator.Estimate(many, units: 1, maxPasses: 5);
+        CostEstimate e = CostEstimator.Estimate(many, units: 1, maxPasses: 5, rates: TestRates.Table());
 
         e.SampleSessions.Should().Be(CostEstimator.RecentSessions);
         e.SampleUnits.Should().Be(CostEstimator.RecentSessions);
@@ -106,13 +125,13 @@ public sealed class CostEstimatorTests
     [Fact]
     public void Sin_ninguna_sesion_no_se_estima_nada_y_se_dice()
     {
-        CostEstimate e = CostEstimator.Estimate(Array.Empty<AuditSession>(), units: 47, maxPasses: 5);
+        CostEstimate e = CostEstimator.Estimate(Array.Empty<AuditSession>(), units: 47, maxPasses: 5, rates: TestRates.Table());
 
         e.Evidence.Should().Be(CostEvidence.Ninguna);
         e.Total.Should().BeNull("no hay tarifa que aplicar: o hay medida o no hay número");
         e.HasNumber.Should().BeFalse();
-        e.Provenance.Should().Contain("Sin coste medido");
-        e.Breakdown.Should().Contain("47 unidades").And.Contain("desconocido");
+        e.Provenance.Should().Contain("Sin tokens medidos");
+        e.Breakdown.Should().Contain("47 unidades").And.Contain("sin histórico suficiente");
     }
 
     [Fact]
@@ -134,7 +153,7 @@ public sealed class CostEstimatorTests
     {
         var sessions = new[] { Session(1, maxPasses: 5, 12m) };
 
-        CostEstimate e = CostEstimator.Estimate(sessions, units: 20, maxPasses: 5);
+        CostEstimate e = CostEstimator.Estimate(sessions, units: 20, maxPasses: 5, rates: TestRates.Table());
 
         e.Evidence.Should().Be(CostEvidence.Escasa);
         e.CostPerUnit.Should().Be(12m);
@@ -151,7 +170,7 @@ public sealed class CostEstimatorTests
     {
         var sessions = new[] { Session(1, maxPasses: 2, 10m, 10m, 10m) };
 
-        CostEstimate e = CostEstimator.Estimate(sessions, units: 4, maxPasses: 6);
+        CostEstimate e = CostEstimator.Estimate(sessions, units: 4, maxPasses: 6, rates: TestRates.Table());
 
         e.ObservedMaxPasses.Should().Be(2);
         e.PassFactor.Should().Be(3m, "6 / 2");
@@ -173,7 +192,7 @@ public sealed class CostEstimatorTests
             Session(3, maxPasses: 5, 7m, 7m, 7m),         // más vieja, pero con el tope vigente
         };
 
-        CostEstimate e = CostEstimator.Estimate(sessions, units: 10, maxPasses: 5);
+        CostEstimate e = CostEstimator.Estimate(sessions, units: 10, maxPasses: 5, rates: TestRates.Table());
 
         e.PassFactor.Should().Be(1m);
         e.CostPerUnit.Should().Be(7m);
@@ -186,7 +205,7 @@ public sealed class CostEstimatorTests
         // MaxPassesPerUnit = 0 es lo que llevan las sesiones anteriores a F5.1.
         var sessions = new[] { Session(1, maxPasses: 0, 5m, 5m, 5m) };
 
-        CostEstimate e = CostEstimator.Estimate(sessions, units: 10, maxPasses: 5);
+        CostEstimate e = CostEstimator.Estimate(sessions, units: 10, maxPasses: 5, rates: TestRates.Table());
 
         e.ObservedMaxPasses.Should().Be(0);
         e.PassFactor.Should().Be(1m);
@@ -198,7 +217,7 @@ public sealed class CostEstimatorTests
     [Fact]
     public void Un_tope_absurdo_se_trata_como_uno()
     {
-        CostEstimate e = CostEstimator.Estimate(new[] { Session(1, 1, 3m, 3m, 3m) }, units: 2, maxPasses: 0);
+        CostEstimate e = CostEstimator.Estimate(new[] { Session(1, 1, 3m, 3m, 3m) }, units: 2, maxPasses: 0, rates: TestRates.Table());
 
         e.MaxPasses.Should().Be(1);
         e.Total.Should().Be(6m);

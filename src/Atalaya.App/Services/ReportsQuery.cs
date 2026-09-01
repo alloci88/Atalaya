@@ -132,6 +132,19 @@ public sealed record ReportsFilter(
 public sealed class ReportsQuery
 {
     private readonly HubContext _hub;
+
+    /// <summary>Las tarifas del hub, para derivar el coste de cada informe listado (F15).</summary>
+    private ModelRateTable? Rates()
+    {
+        try
+        {
+            return _hub.Store.TryReadModelRates();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
     private readonly object _gate = new();
     private IReadOnlyList<ReportEntry>? _cache;
     private readonly Dictionary<string, string> _contents = new(StringComparer.OrdinalIgnoreCase);
@@ -350,10 +363,10 @@ public sealed class ReportsQuery
                 session.Units.Count,
                 c.New,
                 c.Resolved,
-                session.Usage.Cost,
-                string.IsNullOrWhiteSpace(session.Usage.Currency)
-                    ? CostEstimator.DefaultCostUnit
-                    : session.Usage.Currency!,
+                // F15 — derivado de los tokens con la tarifa del modelo de la sesión, igual que en
+                // Métricas y en el informe. Una sola aritmética para el mismo número.
+                CreditCalculator.Calculate(session, Rates()).Credits,
+                CreditText.LabelFor(session.Provider),
                 HasSession: true,
                 FindingId: session.FixFindingId,
                 FindingAlias: session.FixFindingAlias);
@@ -379,7 +392,7 @@ public sealed class ReportsQuery
             null,
             null,
             null,
-            CostEstimator.DefaultCostUnit,
+            CreditText.Unit,
             HasSession: false);
     }
 

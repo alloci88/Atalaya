@@ -53,14 +53,15 @@ public sealed record CostEstimate(
         {
             if (Total is not { } total || CostPerUnit is not { } per)
             {
-                return $"{UnitsLabel} · coste desconocido";
+                return $"{UnitsLabel} · sin histórico suficiente para estimar";
             }
 
             string factor = PassFactor == 1m
                 ? string.Empty
                 : $" × {MaxPasses}/{ObservedMaxPasses} pasadas";
 
-            return $"{UnitsLabel} × ~{per:0.##}/unidad{factor} ≈ {total:0.##} {CostUnit}";
+            return $"{UnitsLabel} × ~{CreditText.Number(per)}/unidad{factor} "
+                + $"≈ {CreditText.Number(total)} {CostUnit}";
         }
     }
 
@@ -74,7 +75,8 @@ public sealed record CostEstimate(
         {
             if (Evidence == CostEvidence.Ninguna)
             {
-                return "Sin coste medido en el historial de esta aplicación: no hay con qué estimar.";
+                return "Sin tokens medidos en el historial de esta aplicación —o sin tarifa para su "
+                    + "modelo—: no hay con qué estimar.";
             }
 
             string sessions = SampleSessions == 1 ? "la última sesión" : $"las últimas {SampleSessions} sesiones";
@@ -126,8 +128,12 @@ public sealed class CostEstimator
     /// <inheritdoc cref="MinSessions"/>
     public const int MinUnits = 3;
 
-    /// <summary>Lo que se lee cuando el SDK no declara unidad de coste. Igual que en los informes.</summary>
-    public const string DefaultCostUnit = "unidades SDK";
+    /// <summary>
+    /// La unidad en la que se estima (F15): AI credits, la misma en la que factura GitHub y en la
+    /// que grafica el panel de la organización. Sustituye a las «unidades SDK», que eran premium
+    /// requests — el sistema retirado el 1 de junio de 2026.
+    /// </summary>
+    public const string DefaultCostUnit = CreditText.Unit;
 
     private readonly HubContext _hub;
 
@@ -144,9 +150,47 @@ public sealed class CostEstimator
             providerId,
             StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Lo que costó cada unidad de una sesión, en credits, con la tarifa del modelo de ESA sesión.
+    /// Vacío cuando no se puede saber —sin tokens, sin modelo o sin tarifa—, y entonces la sesión
+    /// simplemente no entra en la media: una estimación con datos a medias es peor que decir que no
+    /// hay datos.
+    /// </summary>
+    private static List<decimal> CostOfUnits(AuditSession session, ModelRateTable? rates)
+    {
+        var costs = new List<decimal>();
+
+        foreach (UnitUsageBreakdown unit in session.UsageBreakdown)
+        {
+            CostResult cost = CreditCalculator.Calculate(
+                session.Model, session.Provider,
+                unit.InputTokens, unit.OutputTokens, unit.CacheReadTokens, unit.CacheWriteTokens,
+                rates);
+
+            if (cost.Credits is { } credits)
+            {
+                costs.Add(credits);
+            }
+        }
+
+        return costs;
+    }
+
     /// <summary>Estima para una aplicación del hub, con el proveedor que vaya a auditar.</summary>
     public CostEstimate Estimate(string slug, int units, int maxPasses, string? providerId = null)
-        => Estimate(_hub.Store.ListSessions(slug), units, maxPasses, providerId);
+        => Estimate(_hub.Store.ListSessions(slug), units, maxPasses, providerId, Rates());
+
+    private ModelRateTable? Rates()
+    {
+        try
+        {
+            return _hub.Store.TryReadModelRates();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 
     /// <summary>El cálculo, sobre una lista de sesiones y nada más. Puro: se prueba sin hub.</summary>
     /// <param name="providerId">
@@ -156,13 +200,21 @@ public sealed class CostEstimator
     /// que hubiera un segundo proveedor y sigue valiendo para un hub que solo tiene sesiones de una.
     /// </param>
     public static CostEstimate Estimate(
-        IReadOnlyList<AuditSession> sessions, int units, int maxPasses, string? providerId = null)
+        IReadOnlyList<AuditSession> sessions,
+        int units,
+        int maxPasses,
+        string? providerId = null,
+        ModelRateTable? rates = null)
     {
         maxPasses = Math.Max(1, maxPasses);
 
+        // F15 — se mide sobre TOKENS, no sobre el coste que guardó la sesión. El coste guardado de
+        // las sesiones viejas está en premium requests, la unidad retirada; los tokens, en cambio,
+        // son el hecho primario y siguen valiendo. Cada sesión se convierte a credits con la tarifa
+        // de SU modelo, así que un histórico con modelos distintos promedia costes comparables.
         var measured = sessions
-            .Where(s => s.UsageBreakdown.Any(u => u.Cost is not null))
             .Where(s => providerId is null || SameProvider(s, providerId))
+            .Where(s => CostOfUnits(s, rates).Count > 0)
             .OrderByDescending(s => s.StartedUtc)
             .ToList();
 
@@ -192,16 +244,10 @@ public sealed class CostEstimator
             factor = observedCap > 0 ? (decimal)maxPasses / observedCap : 1m;
         }
 
-        var samples = chosen
-            .SelectMany(s => s.UsageBreakdown)
-            .Where(u => u.Cost is not null)
-            .Select(u => u.Cost!.Value)
-            .ToList();
+        var samples = chosen.SelectMany(s => CostOfUnits(s, rates)).ToList();
 
         decimal perUnit = samples.Average();
-        string costUnit = chosen
-            .Select(s => s.Usage.Currency)
-            .FirstOrDefault(c => !string.IsNullOrWhiteSpace(c)) ?? DefaultCostUnit;
+        string costUnit = DefaultCostUnit;
 
         CostEvidence evidence = chosen.Count >= MinSessions && samples.Count >= MinUnits
             ? CostEvidence.Suficiente

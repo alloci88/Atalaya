@@ -275,6 +275,17 @@ public sealed class SettingsViewModelTests : IDisposable
                 continue;
             }
 
+            // F15 — la SIEMBRA de tarifas es la excepción, y es una excepción razonada: ahí los
+            // identificadores de modelo son las CLAVES de una lista de precios, no la elección de
+            // con qué auditar. La diferencia es la que este guarda persigue: un modelo elegido que
+            // caduca deja rota a quien instale de cero, mientras que una tarifa que caduca sale
+            // como «tarifa no configurada» —está probado— y se corrige en el hub sin release.
+            // La siembra además solo se escribe UNA vez y a partir de ahí manda el hub.
+            if (Path.GetFileName(file) == "ModelRateSeed.cs")
+            {
+                continue;
+            }
+
             string code = WithoutComments(File.ReadAllText(file));
 
             // Familias reales de identificadores de modelo. El punto no es esta lista concreta:
@@ -338,6 +349,17 @@ public sealed class SettingsViewModelTests : IDisposable
                 continue;
             }
 
+            // F15 — la SIEMBRA de tarifas es la excepción, y es una excepción razonada: ahí los
+            // identificadores de modelo son las CLAVES de una lista de precios, no la elección de
+            // con qué auditar. La diferencia es la que este guarda persigue: un modelo elegido que
+            // caduca deja rota a quien instale de cero, mientras que una tarifa que caduca sale
+            // como «tarifa no configurada» —está probado— y se corrige en el hub sin release.
+            // La siembra además solo se escribe UNA vez y a partir de ahí manda el hub.
+            if (Path.GetFileName(file) == "ModelRateSeed.cs")
+            {
+                continue;
+            }
+
             string code = WithoutComments(File.ReadAllText(file));
             if (code.Contains("\"opus\"") || code.Contains("\"sonnet\"") || code.Contains("\"haiku\""))
             {
@@ -352,6 +374,43 @@ public sealed class SettingsViewModelTests : IDisposable
             "vacío significa «que elija el CLI»: una instalación de cero no nace con un modelo escrito");
         new AppSettings().AuditorProvider.Should().BeEmpty(
             "y sin proveedor escrito se audita con Copilot, que es como funcionaba antes de F14");
+    }
+
+    /// <summary>
+    /// La contrapartida de la exención de F15: <b>la siembra de tarifas no elige modelos</b>.
+    /// <para>
+    /// El guarda de arriba deja pasar los identificadores de <c>ModelRateSeed</c> porque ahí son
+    /// claves de precios. Este test es lo que impide que esa puerta se convierta en un atajo: si
+    /// alguien usara la tabla de tarifas para poblar el selector de Ajustes, los ids volverían a
+    /// ser una elección que caduca, que es justo lo que F5.15 prohibió.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void La_tabla_de_tarifas_no_es_fuente_de_modelos_seleccionables()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Atalaya.sln")))
+        {
+            dir = dir.Parent;
+        }
+
+        foreach (string file in Directory.EnumerateFiles(
+                     Path.Combine(dir!.FullName, "src"), "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
+                // El que siembra es, por definición, el que la nombra: su trabajo es escribirla
+                // en el hub una vez. Lo que se vigila es que nadie MÁS la toque.
+                || Path.GetFileName(file) is "ModelRateSeed.cs" or "ModelRates.cs" or "ModelRatesService.cs")
+            {
+                continue;
+            }
+
+            string code = WithoutComments(File.ReadAllText(file));
+            code.Should().NotContain("ModelRateSeed",
+                $"{Path.GetFileName(file)} no debe sacar modelos de la tabla de tarifas; "
+                + "los seleccionables los da el proveedor (F5.15)");
+        }
     }
 
     /// <summary>El fuente sin comentarios de línea ni de bloque. Basta para lo que se vigila aquí.</summary>

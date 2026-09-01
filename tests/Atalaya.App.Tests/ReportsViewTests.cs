@@ -36,6 +36,7 @@ public sealed class ReportsViewTests : IDisposable
         _settings = new SettingsService(_paths);
         _settings.Load();
         _hub = TestFactory.Hub(_paths, _settings);
+        TestRates.Seed(_hub);
         _hub.Store.WriteHub(new HubInfo { OrganizationName = "Org" });
         App("app", "App");
     }
@@ -76,7 +77,7 @@ public sealed class ReportsViewTests : IDisposable
             session.Units.Add(new UnitVerdictRecord($"src/U{i}.cs", "src", "auditada", null));
         }
 
-        session.Usage.Add(100, 20, cost);
+        TestRates.CostAs(session, cost, inputTokens: 100);
         _hub.Store.WriteSession(session);
 
         string id = session.Id.ToString();

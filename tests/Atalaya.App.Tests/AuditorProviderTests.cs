@@ -34,6 +34,7 @@ public sealed class AuditorProviderTests : IDisposable
         _settings = new SettingsService(_paths);
         _settings.Load();
         _hub = TestFactory.Hub(_paths, _settings);
+        TestRates.Seed(_hub);
         _hub.Store.WriteApp(new AppConfig
         {
             Slug = "app", Name = "App", RepoUrl = "u/app", CurrentCycle = 1,
@@ -144,8 +145,11 @@ public sealed class AuditorProviderTests : IDisposable
         dashboard.CostPerAuditedUnit.Should().BeNull("y menos aún un ratio de esa suma");
 
         dashboard.CostByProvider.Should().HaveCount(2);
-        dashboard.CostLines.Should().Contain(l => l.Contains("GitHub Copilot") && l.Contains("120"));
-        dashboard.CostLines.Should().Contain(l => l.Contains("Claude Code") && l.Contains("0,35"));
+        // F15 — los dos están ya en la misma unidad (credits derivados de tokens), así que la
+        // aritmética sí permitiría sumarlos. Lo que sigue sin poder mezclarse es lo que SIGNIFICAN:
+        // el de Copilot es una factura y el de Claude Code un equivalente, y la etiqueta lo dice.
+        dashboard.CostLines.Should().Contain(l => l.Contains("GitHub Copilot") && l.Contains("AI credits"));
+        dashboard.CostLines.Should().Contain(l => l.Contains("Claude Code") && l.Contains("equivalente API"));
     }
 
     /// <summary>Con una sola casa, el total de siempre: no se rompe lo que ya funcionaba.</summary>
@@ -159,7 +163,7 @@ public sealed class AuditorProviderTests : IDisposable
 
         dashboard.CostIsMixed.Should().BeFalse();
         dashboard.CostInPeriod.Should().Be(150m);
-        dashboard.CostUnit.Should().Be("unidades SDK");
+        dashboard.CostUnit.Should().Be("credits", "la unidad es la que factura GitHub (F15)");
     }
 
     /// <summary>
@@ -191,14 +195,17 @@ public sealed class AuditorProviderTests : IDisposable
 
         IReadOnlyList<AuditSession> sessions = _hub.Store.ListSessions("app");
 
-        CostEstimate conCopilot = CostEstimator.Estimate(sessions, units: 2, maxPasses: 5, "copilot");
-        CostEstimate conClaude = CostEstimator.Estimate(sessions, units: 2, maxPasses: 5, "claude-code");
+        CostEstimate conCopilot = CostEstimator.Estimate(
+            sessions, units: 2, maxPasses: 5, "copilot", TestRates.Table());
+        CostEstimate conClaude = CostEstimator.Estimate(
+            sessions, units: 2, maxPasses: 5, "claude-code", TestRates.Table());
 
         conCopilot.CostPerUnit.Should().Be(100m);
-        conCopilot.CostUnit.Should().Be("unidades SDK");
-
         conClaude.CostPerUnit.Should().Be(1m);
-        conClaude.CostUnit.Should().Be("USD (tarifa de lista)");
+
+        // Los dos en credits: lo que ya no se mezcla es el histórico de una casa con el de la otra.
+        conCopilot.CostUnit.Should().Be("credits");
+        conClaude.CostUnit.Should().Be("credits");
     }
 
     // ================================================================ 4 · el diálogo dice con quién
@@ -453,12 +460,12 @@ public sealed class AuditorProviderTests : IDisposable
         };
 
         session.Units.Add(new UnitVerdictRecord("src/U.cs", "src", "auditada", null));
-        session.Usage.Add(1000, 200, cost);
+        TestRates.CostAs(session, cost, inputTokens: 1000);
         session.Usage.Currency = unit;
         session.UsageBreakdown.Add(new UnitUsageBreakdown
         {
             Unit = "src/U.cs",
-            Cost = perUnitCost ?? cost,
+            OutputTokens = TestRates.OutputFor(perUnitCost ?? cost),
         });
 
         _hub.Store.WriteSession(session);

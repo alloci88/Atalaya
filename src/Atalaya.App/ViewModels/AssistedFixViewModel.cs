@@ -181,7 +181,7 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
     }
 
     public string CostText => _fix.Cost is { } c
-        ? $"{_fix.Calls} llamadas · coste {c:0.##} {_fix.CostUnit}"
+        ? $"{_fix.Calls} llamadas · {CreditText.Number(c)} {_fix.CostUnit}"
         : $"{_fix.Calls} llamadas · coste no informado por el SDK";
 
     public string TouchedText => $"ficheros tocados: {Files.Count}";

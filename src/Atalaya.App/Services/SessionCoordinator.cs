@@ -222,7 +222,23 @@ public sealed class SessionCoordinator
     /// <summary>(hallazgo, qué le pasó: nuevo | reconfirmed | resolved | needsreview | silencerespected).</summary>
     public event Action<Finding, string>? FindingReported;
     public event Action<string>? TextStreamed;
-    public event Action<long, long, decimal?, string?>? UsageUpdated;  // cumulative in/out/cost/costUnit
+    public event Action<long, long, decimal?, string?>? UsageUpdated;  // acumulado in/out/credits/etiqueta
+
+    /// <summary>
+    /// Las tarifas del hub, releídas en cada muestra. Es barato —un JSON pequeño— y evita que una
+    /// sesión larga siga midiendo con una tabla que alguien ya corrigió.
+    /// </summary>
+    private ModelRateTable? ModelRates()
+    {
+        try
+        {
+            return _hub.Store.TryReadModelRates();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 
     public async Task<SessionResult> RunAsync(SessionRequest request, CancellationToken ct)
     {
@@ -362,7 +378,16 @@ public sealed class SessionCoordinator
                 }
             }
 
-            UsageUpdated?.Invoke(session.Usage.InputTokens, session.Usage.OutputTokens, session.Usage.Cost, session.Usage.Currency);
+            // F15 — lo que viaja a la vista en vivo son CREDITS derivados de los tokens con la
+            // tarifa del modelo de esta sesión, no el número que informó el proveedor: aquél está
+            // en peticiones premium, la unidad retirada. Se deriva aquí, en el mismo sitio que lo
+            // acumula, para que la cifra en vivo y la del informe sean la misma cuenta.
+            CostResult live = CreditCalculator.Calculate(session, ModelRates());
+            UsageUpdated?.Invoke(
+                session.Usage.InputTokens,
+                session.Usage.OutputTokens,
+                live.Credits,
+                CreditText.LabelFor(session.Provider));
         }
 
         _agent.TextStreamed += OnText;
@@ -693,7 +718,7 @@ public sealed class SessionCoordinator
         int pending = inventory.Units.Count(u => u.State == UnitState.Pendiente);
         int large = inventory.Units.Count(u => u.State == UnitState.Grande);
         string report = ReportBuilder.BuildSessionReport(
-            app, session, newFindings, pending, large, _hub.OrganizationName);
+            app, session, newFindings, pending, large, _hub.OrganizationName, ModelRates());
         _hub.Store.WriteReport(request.Slug, sessionId.ToString(), report);
 
         _hub.Sync?.CommitAndPush(

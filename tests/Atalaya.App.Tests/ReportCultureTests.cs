@@ -55,7 +55,11 @@ public sealed class ReportCultureTests
         By = "alguien",
         Machine = "maquina",
         StartedUtc = new DateTimeOffset(2026, 8, 28, 9, 5, 0, TimeSpan.Zero),
-        Usage = new UsageTotals { InputTokens = 1000, OutputTokens = 20, Cost = cost, Currency = "USD" },
+        // F15 — el coste se DERIVA de los tokens. Con la tarifa de test (10 $/M de salida),
+        // 67.500 tokens de salida son 67,5 credits, así que el informe sigue teniendo un coste con
+        // decimales que escribir — que es lo que este test vigila: que la coma sea la española.
+        Model = TestRates.Model,
+        Usage = new UsageTotals { InputTokens = 1000, OutputTokens = TestRates.OutputFor(cost) },
     };
 
     public static TheoryData<string> HostileCultures => new() { string.Empty, "en-US", "de-DE" };
@@ -67,10 +71,11 @@ public sealed class ReportCultureTests
         var hostile = CultureInfo.GetCultureInfo(cultureName);
 
         string report = InCulture(hostile, () => ReportBuilder.BuildSessionReport(
-            App(), Session(67.5m), Array.Empty<Finding>(), pendingUnits: 0, largeUnits: 0, "Org"));
+            App(), Session(67.5m), Array.Empty<Finding>(), pendingUnits: 0, largeUnits: 0, "Org",
+            TestRates.Table()));
 
-        report.Should().Contain("coste 67,5 USD");
-        report.Should().NotContain("coste 67.5");
+        report.Should().Contain("67,5 credits");
+        report.Should().NotContain("67.5");
     }
 
     [Theory]
@@ -80,7 +85,8 @@ public sealed class ReportCultureTests
         var hostile = CultureInfo.GetCultureInfo(cultureName);
 
         string report = InCulture(hostile, () => ReportBuilder.BuildSessionReport(
-            App(), Session(1m), Array.Empty<Finding>(), pendingUnits: 0, largeUnits: 0, "Org"));
+            App(), Session(1m), Array.Empty<Finding>(), pendingUnits: 0, largeUnits: 0, "Org",
+            TestRates.Table()));
 
         // El «:» de HH:mm es el separador de hora de la CULTURA, no un literal: en una cultura con
         // separador «.» esta línea saldría «09.05» sin que nadie lo hubiera pedido.
@@ -97,11 +103,11 @@ public sealed class ReportCultureTests
         AuditSession session = Session(1234.5m);
 
         string invariant = InCulture(CultureInfo.InvariantCulture, () => ReportBuilder.BuildSessionReport(
-            App(), session, Array.Empty<Finding>(), 0, 0, "Org"));
+            App(), session, Array.Empty<Finding>(), 0, 0, "Org", TestRates.Table()));
         string english = InCulture(CultureInfo.GetCultureInfo("en-US"), () => ReportBuilder.BuildSessionReport(
-            App(), session, Array.Empty<Finding>(), 0, 0, "Org"));
+            App(), session, Array.Empty<Finding>(), 0, 0, "Org", TestRates.Table()));
         string spanish = InCulture(AppCulture.Display, () => ReportBuilder.BuildSessionReport(
-            App(), session, Array.Empty<Finding>(), 0, 0, "Org"));
+            App(), session, Array.Empty<Finding>(), 0, 0, "Org", TestRates.Table()));
 
         invariant.Should().Be(spanish);
         english.Should().Be(spanish);
@@ -135,9 +141,9 @@ public sealed class ReportCultureTests
         string report = InCulture(hostile, () => ReportBuilder.BuildFixReport(
             App(), session, finding,
             Array.Empty<(string, string, bool)>(),
-            "resumen", null, "título", "descripción", null, "Org"));
+            "resumen", null, "título", "descripción", null, "Org", null, TestRates.Table()));
 
-        report.Should().Contain("coste 67,5");
+        report.Should().Contain("67,5 credits");
         report.Should().Contain("**Fecha**: 2026-08-28 09:05 UTC");
     }
 

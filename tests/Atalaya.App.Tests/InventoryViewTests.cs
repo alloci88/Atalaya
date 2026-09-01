@@ -54,6 +54,7 @@ public sealed class InventoryViewTests : IDisposable
         _settings.Save(s);
 
         _hub = TestFactory.Hub(_paths, _settings);
+        TestRates.Seed(_hub);
         _hub.Store.WriteHub(new HubInfo { OrganizationName = "Org" });
         _hub.Store.WriteApp(new AppConfig
         {
@@ -417,7 +418,7 @@ public sealed class InventoryViewTests : IDisposable
         asked.Estimate.Units.Should().Be(6);
         asked.Estimate.MaxPasses.Should().Be(5, "el tope vigente de los ajustes");
         asked.Estimate.Total.Should().Be(60m);
-        asked.Breakdown.Should().Contain("6 unidades × ~10/unidad");
+        asked.Breakdown.Should().Contain("6 unidades × ~10,0/unidad");
         asked.PassesLine.Should().Contain("5 pasadas");
     }
 
@@ -484,7 +485,7 @@ public sealed class InventoryViewTests : IDisposable
         AuditLaunchConfirmation asked = _confirmer.Asked.Should().ContainSingle().Subject;
         asked.Estimate.HasNumber.Should().BeFalse();
         asked.IsWeakEstimate.Should().BeTrue();
-        asked.Provenance.Should().Contain("Sin coste medido");
+        asked.Provenance.Should().Contain("Sin tokens medidos");
         asked.Headline.Should().Contain("6 unidades").And.Contain("App");
     }
 
@@ -678,11 +679,17 @@ public sealed class InventoryViewTests : IDisposable
             EndedUtc = DateTimeOffset.UtcNow.AddDays(-1),
             MaxPassesPerUnit = maxPasses,
             CycleN = 1,
+            Model = TestRates.Model,
         };
 
         for (int i = 0; i < perUnitCosts.Length; i++)
         {
-            session.UsageBreakdown.Add(new UnitUsageBreakdown { Unit = $"h{i}.cs", Cost = perUnitCosts[i] });
+            // F15 — la unidad guarda TOKENS y el coste se deriva con la tarifa de su modelo.
+            session.UsageBreakdown.Add(new UnitUsageBreakdown
+            {
+                Unit = $"h{i}.cs",
+                OutputTokens = TestRates.OutputFor(perUnitCosts[i]),
+            });
         }
 
         _hub.Store.WriteSession(session);

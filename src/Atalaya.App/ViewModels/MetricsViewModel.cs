@@ -194,7 +194,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
     [ObservableProperty] private string _costTotal = Unknown;
 
-    [ObservableProperty] private string _costUnit = CostEstimator.DefaultCostUnit;
+    [ObservableProperty] private string _costUnit = CreditText.Unit;
 
     [ObservableProperty] private string _costPerUnit = string.Empty;
 
@@ -210,6 +210,15 @@ public sealed partial class MetricsViewModel : ViewModelBase
     /// sola casa esto es false y todo se ve como siempre.
     /// </summary>
     [ObservableProperty] private bool _costIsMixed;
+
+    /// <summary>
+    /// Falta gasto por contar: hay sesiones con tokens cuyo modelo no tiene tarifa. Se enseña, con
+    /// el número, para que se pueda ir a configurarla.
+    /// </summary>
+    [ObservableProperty] private string _costPartialNotice = string.Empty;
+
+    /// <summary>El equivalente en dólares del total, para el tooltip. 1 credit = 0,01 $.</summary>
+    [ObservableProperty] private string _costInDollars = string.Empty;
 
     [ObservableProperty] private string _cyclePct = Unknown;
 
@@ -375,9 +384,13 @@ public sealed partial class MetricsViewModel : ViewModelBase
         };
 
         CostUnit = d.CostUnit;
-        CostTotal = d.CostInPeriod is { } c ? c.ToString("0.##", CultureInfo.CurrentCulture) : Unknown;
+        CostTotal = d.CostInPeriod is { } c ? CreditText.Number(c) : Unknown;
 
         CostIsMixed = d.CostIsMixed;
+        CostPartialNotice = d.CostIsPartial ? d.PartialCostNotice : string.Empty;
+        CostInDollars = d.CostInPeriod is { } dollars
+            ? $"≈ {CreditText.Dollars(dollars)} · 1 credit = 0,01 $"
+            : string.Empty;
         CostByProvider.Clear();
         foreach (string line in d.CostLines)
         {
@@ -385,12 +398,12 @@ public sealed partial class MetricsViewModel : ViewModelBase
         }
 
         CostPerUnit = d.CostIsMixed
-            ? "Han auditado varios proveedores: sus unidades de coste no son la misma magnitud, "
-              + "así que se enseñan por separado y no se suman."
+            ? "En el periodo conviven una factura (Copilot) y un equivalente de API (Claude Code): "
+              + "se enseñan por separado, porque sumarlos parecería un gasto y no lo es."
             : d.CostInPeriod is null
                 ? "Se activará cuando alguna sesión registre coste"
                 : d.CostPerAuditedUnit is { } per
-                    ? $"~{per.ToString("0.##", CultureInfo.CurrentCulture)} por unidad auditada "
+                    ? $"~{CreditText.Number(per)} por unidad auditada "
                       + $"({d.UnitsAuditedInPeriod} en el periodo)"
                     : "Sin unidades auditadas en el periodo";
 
@@ -636,7 +649,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
                 row.By,
                 row.Units == 1 ? "1 unidad" : $"{row.Units} unidades",
                 findings,
-                row.Cost is { } c ? $"{c.ToString("0.##", CultureInfo.CurrentCulture)} {row.CostUnit}" : Unknown,
+                row.Cost is { } c ? $"{CreditText.Number(c)} {row.CostUnit}" : Unknown,
                 File.Exists(ReportPathFor(row.Slug, row.SessionId))));
         }
 

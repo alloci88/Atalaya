@@ -27,7 +27,8 @@ public static class ReportBuilder
         IReadOnlyList<Finding> newFindings,
         int pendingUnits,
         int largeUnits,
-        string? organization = null)
+        string? organization = null,
+        ModelRateTable? rates = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"# Informe de sesión — {app.Name}");
@@ -46,13 +47,18 @@ public static class ReportBuilder
         }
 
         sb.AppendLine($"- **Ciclo**: {session.CycleN}");
+        // F15 — los TOKENS son el hecho primario y se escriben enteros; el coste es un derivado y
+        // va detrás. Un informe es inmutable, así que dentro de un año alguien podrá recalcular ese
+        // coste con otra tarifa a partir de estos mismos números.
         sb.AppendLine($"- **Tokens**: entrada {session.Usage.InputTokens}, salida {session.Usage.OutputTokens}"
             + (session.Usage.CacheReadTokens > 0 || session.Usage.CacheWriteTokens > 0
                 ? $", caché lectura {session.Usage.CacheReadTokens}, escritura {session.Usage.CacheWriteTokens}"
-                : "")
-            + (session.Usage.Cost is { } c
-                ? string.Create(Culture, $", coste {c:0.####} {(string.IsNullOrWhiteSpace(session.Usage.Currency) ? "(unidad SDK)" : session.Usage.Currency)}")
                 : ""));
+
+        CostResult cost = CreditCalculator.Calculate(session, rates);
+        sb.AppendLine(cost.HasValue
+            ? $"- **Coste**: {CreditText.Of(cost.Credits)} ({CreditText.LabelFor(session.Provider)})"
+            : $"- **Coste**: no calculable ({CreditText.Reason(cost.Why)})");
         sb.AppendLine();
 
         sb.AppendLine("## Cobertura");
@@ -324,7 +330,8 @@ public static class ReportBuilder
         string commitDescription,
         BuildVerdict? build,
         string? organization = null,
-        FixTestSituation? tests = null)
+        FixTestSituation? tests = null,
+        ModelRateTable? rates = null)
     {
         string appName = app?.Name ?? session.AppSlug;
         string alias = finding.DisplayId ?? finding.Id.ToString();
@@ -340,7 +347,14 @@ public static class ReportBuilder
         sb.AppendLine($"- **Commit del clon al empezar**: {session.Commit}");
         sb.AppendLine($"- **Modelo**: {session.Model ?? "n/d"}");
         sb.AppendLine($"- **Tokens**: entrada {session.Usage.InputTokens}, salida {session.Usage.OutputTokens}"
-            + (session.Usage.Cost is { } c ? string.Create(Culture, $", coste {c:0.####}") : ""));
+            + (session.Usage.CacheReadTokens > 0 || session.Usage.CacheWriteTokens > 0
+                ? $", caché lectura {session.Usage.CacheReadTokens}, escritura {session.Usage.CacheWriteTokens}"
+                : ""));
+
+        CostResult fixCost = CreditCalculator.Calculate(session, rates);
+        sb.AppendLine(fixCost.HasValue
+            ? $"- **Coste**: {CreditText.Of(fixCost.Credits)} ({CreditText.LabelFor(session.Provider)})"
+            : $"- **Coste**: no calculable ({CreditText.Reason(fixCost.Why)})");
         if (session.Interrupted)
         {
             sb.AppendLine("- ⚠ **Sesión detenida por el usuario**: el agente no llegó a cerrar el arreglo.");

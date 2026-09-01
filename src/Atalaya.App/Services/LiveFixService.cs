@@ -145,8 +145,14 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
     [ObservableProperty] private long _inputTokens;
     [ObservableProperty] private long _outputTokens;
     [ObservableProperty] private long _cacheReadTokens;
+    [ObservableProperty] private long _cacheWriteTokens;
+
+    /// <summary>Con qué modelo y proveedor corre, para poder valorar sus tokens (F15).</summary>
+    [ObservableProperty] private string? _model;
+    [ObservableProperty] private string? _provider;
+
     [ObservableProperty] private decimal? _cost;
-    [ObservableProperty] private string _costUnit = "(unidad SDK)";
+    [ObservableProperty] private string _costUnit = CreditText.Unit;
     [ObservableProperty] private int _calls;
     [ObservableProperty] private DateTimeOffset? _startedUtc;
     [ObservableProperty] private DateTimeOffset? _endedUtc;
@@ -277,9 +283,15 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         FailureDetail = string.Empty;
         Commit.Title = string.Empty;
         Commit.Description = string.Empty;
-        InputTokens = OutputTokens = CacheReadTokens = 0;
+        InputTokens = OutputTokens = CacheReadTokens = CacheWriteTokens = 0;
         Cost = null;
         Calls = 0;
+
+        // F15 — con quién corre, para poder valorar sus tokens con la tarifa que toca. El arreglo
+        // asistido es de Copilot (F14), pero se lee del agente y no se da por supuesto: el día que
+        // otra casa sepa arreglar, esto ya dice la verdad.
+        Model = _agent.ModelName;
+        Provider = _agent.ProviderId;
         EndedUtc = null;
         StartedUtc = DateTimeOffset.UtcNow;
         StatusMessage = "Comprobando el clon y Copilot…";
@@ -507,7 +519,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             string report = ReportBuilder.BuildFixReport(
                 _app, session, finding, Files.Select(f => (f.RelativePath, f.Tally, f.InScope)).ToList(),
                 Summary, Risks, Commit.Title, Commit.Description, HasBuildResult ? LastVerdict : null,
-                _hub.OrganizationName, TestSituation);
+                _hub.OrganizationName, TestSituation, ModelRates());
             _hub.Store.WriteReport(Slug, SessionId, report);
             ReportPath = _hub.HubPaths.ReportFile(Slug, SessionId);
 
@@ -1106,20 +1118,32 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         _currentAgentText.Text += chunk;
     });
 
+    /// <summary>Las tarifas del hub. Releídas, por lo mismo que en la sesión de auditoría.</summary>
+    private ModelRateTable? ModelRates()
+    {
+        try
+        {
+            return _hub.Store.TryReadModelRates();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     private void OnUsage(UsageSample sample) => OnUi(() =>
     {
         InputTokens += sample.InputTokens;
         OutputTokens += sample.OutputTokens;
         CacheReadTokens += sample.CacheReadTokens;
-        if (sample.Cost is { } c)
-        {
-            Cost = (Cost ?? 0m) + c;
-        }
+        CacheWriteTokens += sample.CacheWriteTokens;
 
-        if (!string.IsNullOrWhiteSpace(sample.CostUnit))
-        {
-            CostUnit = sample.CostUnit!;
-        }
+        // F15 — el coste se DERIVA de los tokens con la tarifa del modelo, igual que en una sesión
+        // de auditoría. El número que informa el proveedor está en peticiones premium, la unidad
+        // que GitHub retiró: enseñarlo sería enseñar una moneda que ya no existe.
+        Cost = CreditCalculator.Calculate(
+            Model, Provider, InputTokens, OutputTokens, CacheReadTokens, CacheWriteTokens, ModelRates()).Credits;
+        CostUnit = CreditText.LabelFor(Provider);
 
         Calls++;
         Changed?.Invoke();
