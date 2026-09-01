@@ -1,4 +1,4 @@
-namespace Atalaya.Domain.Model;
+﻿namespace Atalaya.Domain.Model;
 
 /// <summary>Detected/declared technology stack of an audited app (§4).</summary>
 public enum TechStack
@@ -14,8 +14,20 @@ public enum TechStack
     CCpp,
 }
 
-/// <summary>Per-app thresholds (§4). All configurable and persisted in app.json.</summary>
-public sealed class Thresholds
+/// <summary>
+/// Los umbrales que la aplicación MIDE por su cuenta, sin preguntarle a nadie: cuándo una unidad
+/// es demasiado grande para auditarla de una vez, y cuándo un hallazgo confirmado se ha quedado
+/// viejo (§4, §8).
+/// <para>
+/// <b>Viven en <c>settings.json</c>, no en <c>app.json</c></b> (BUGFIX-AJUSTES). Son la misma clase
+/// de preferencia que el tope de pasadas (D-097): quien audita decide con qué grano trabaja, y
+/// subir el umbral desde una máquina no puede imponérselo al resto del equipo. Y por la misma
+/// razón que allí, el campo <b>no se queda</b> en <see cref="Thresholds"/> «por compatibilidad»: un
+/// valor que ya nadie lee, guardado junto a los que sí, es la invitación a leer el equivocado — que
+/// es exactamente lo que había pasado.
+/// </para>
+/// </summary>
+public sealed class MeasureThresholds
 {
     /// <summary>A unit above this LOC (or <see cref="LargeUnitChars"/>) is "grande" (§4).</summary>
     public int LargeUnitLoc { get; set; } = 1500;
@@ -24,8 +36,20 @@ public sealed class Thresholds
 
     /// <summary>Days since last confirmation before the freshness semaphore warns (§8, V3).</summary>
     public int FreshnessDays { get; set; } = 60;
+}
 
-    /// <summary>Default claim TTL in minutes (§2).</summary>
+/// <summary>
+/// Per-app thresholds (§4), persisted in app.json y COMPARTIDOS con todo el equipo. Lo que es
+/// preferencia de quien opera —el umbral de unidad grande, la frescura, el tope de pasadas— no
+/// vive aquí: ver <see cref="MeasureThresholds"/> y D-097.
+/// </summary>
+public sealed class Thresholds
+{
+    /// <summary>
+    /// TTL por defecto de un claim, en minutos (§2). Lo aplica <c>SessionCoordinator</c> al
+    /// publicarlos: es propiedad de la app —cuánto tarda el equipo en dar por muerta una sesión
+    /// ajena— y por eso sí es compartida.
+    /// </summary>
     public int ClaimTtlMinutes { get; set; } = 30;
 
     /// <summary>

@@ -196,15 +196,30 @@ public sealed class BuildRunner
     public const int MaxListedErrors = 12;
 
     private readonly IProcessRunner _runner;
-    private readonly TimeSpan _timeout;
+    private readonly Func<TimeSpan> _timeout;
     private readonly BuildBaselineStore? _baselines;
 
+    /// <param name="timeout">
+    /// Cuánto se espera a cada comando. Función, leída en cada uso: lo alimenta el mismo ajuste que
+    /// el timeout del modelo, y capturarlo al construir obligaba a reiniciar para cambiarlo
+    /// (BUGFIX-AJUSTES).
+    /// </param>
     public BuildRunner(
-        IProcessRunner? runner = null, TimeSpan? timeout = null, BuildBaselineStore? baselines = null)
+        IProcessRunner? runner = null, Func<TimeSpan>? timeout = null, BuildBaselineStore? baselines = null)
     {
         _runner = runner ?? new SystemProcessRunner();
-        _timeout = timeout is { TotalSeconds: > 0 } ? timeout.Value : DefaultTimeout;
+        _timeout = timeout ?? (() => DefaultTimeout);
         _baselines = baselines;
+    }
+
+    /// <summary>El plazo vigente, para poder comprobar que sale del ajuste y no de la constante.</summary>
+    public TimeSpan Timeout
+    {
+        get
+        {
+            TimeSpan configured = _timeout();
+            return configured.TotalSeconds > 0 ? configured : DefaultTimeout;
+        }
     }
 
     /// <summary>Qué se compila cuando el ámbito es la solución: la del clon, o nada.</summary>
@@ -251,11 +266,11 @@ public sealed class BuildRunner
             + (plan.Note is null ? string.Empty : $" — {plan.Note}"));
 
         ProcessOutcome build = _runner.Run(
-            "dotnet", $"build \"{plan.Target.FullPath}\" --nologo -v minimal", request.CloneRoot, _timeout, ct);
+            "dotnet", $"build \"{plan.Target.FullPath}\" --nologo -v minimal", request.CloneRoot, Timeout, ct);
 
         if (build.TimedOut)
         {
-            report.AppendLine($"BUILD: agotó el tiempo ({_timeout.TotalMinutes:0} min) y se abortó.");
+            report.AppendLine($"BUILD: agotó el tiempo ({Timeout.TotalMinutes:0} min) y se abortó.");
             report.Append(Truncate(build.Output));
             return new BuildVerdict(
                 false, report.ToString(), TimedOut: true, TargetLabel: plan.Target.Label,
@@ -322,7 +337,7 @@ public sealed class BuildRunner
         }
 
         ProcessOutcome probe = _runner.Run(
-            "dotnet", $"build \"{plan.Target.FullPath}\" --nologo -v minimal", request.CloneRoot, _timeout, ct);
+            "dotnet", $"build \"{plan.Target.FullPath}\" --nologo -v minimal", request.CloneRoot, Timeout, ct);
         if (probe.TimedOut)
         {
             return null;
@@ -348,7 +363,7 @@ public sealed class BuildRunner
         {
             ProcessOutcome all = _runner.Run(
                 "dotnet", $"test \"{plan.Target.FullPath}\" --nologo -v minimal --no-build",
-                request.CloneRoot, _timeout, ct);
+                request.CloneRoot, Timeout, ct);
             return Report(all, plan.Target.Relative, report);
         }
 
@@ -367,7 +382,7 @@ public sealed class BuildRunner
         {
             ProcessOutcome outcome = _runner.Run(
                 "dotnet", $"test \"{project}\" --nologo -v minimal --no-build",
-                request.CloneRoot, _timeout, ct);
+                request.CloneRoot, Timeout, ct);
             (bool _, bool thisOk, bool timedOut) = Report(
                 outcome, BuildScopeResolver.Relative(request.CloneRoot, project), report);
             if (timedOut)
@@ -386,7 +401,7 @@ public sealed class BuildRunner
     {
         if (outcome.TimedOut)
         {
-            report.AppendLine($"TESTS ({label}): agotaron el tiempo ({_timeout.TotalMinutes:0} min) y se abortaron.");
+            report.AppendLine($"TESTS ({label}): agotaron el tiempo ({Timeout.TotalMinutes:0} min) y se abortaron.");
             report.Append(Truncate(outcome.Output));
             return (true, false, true);
         }

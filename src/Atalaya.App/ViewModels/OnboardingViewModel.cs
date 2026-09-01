@@ -43,6 +43,12 @@ public sealed partial class OnboardingViewModel : ViewModelBase
 
     private readonly IFolderPicker _picker;
 
+    /// <summary>
+    /// De donde sale el umbral de «unidad grande» del PRIMER escaneo (BUGFIX-AJUSTES): el mismo
+    /// que usan el re-escaneo y la siembra de ciclo, leido al escanear.
+    /// </summary>
+    private readonly SettingsService _settings;
+
     public OnboardingViewModel(
         HubContext hub,
         InventoryScanner scanner,
@@ -54,9 +60,11 @@ public sealed partial class OnboardingViewModel : ViewModelBase
         LinkCloneFlow linkFlow,
         ImportService import,
         IFolderPicker picker,
-        MeasuredFindingService measured)
+        MeasuredFindingService measured,
+        SettingsService settings)
     {
         _measured = measured;
+        _settings = settings;
         _hub = hub;
         _scanner = scanner;
         _machines = machines;
@@ -293,7 +301,8 @@ public sealed partial class OnboardingViewModel : ViewModelBase
                 app.Stack = DetectedStack;
                 app.CurrentCycle = Math.Max(1, app.CurrentCycle);
 
-                ScanOutput scan = _scanner.Scan(ClonePath, app, app.CurrentCycle);
+                ScanOutput scan = _scanner.Scan(
+                    ClonePath, app, app.CurrentCycle, _settings.Current.Thresholds);
                 app.Stack = scan.Stack;
                 _hub.Store.WriteApp(app);
 

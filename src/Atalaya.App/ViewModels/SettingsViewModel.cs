@@ -93,8 +93,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _editor = s.Editor;
         _isLightTheme = string.Equals(s.Theme, "light", StringComparison.OrdinalIgnoreCase);
         _pollingSeconds = s.PollingSeconds;
-        _largeUnitLoc = s.DefaultThresholds.LargeUnitLoc;
-        _freshnessDays = s.DefaultThresholds.FreshnessDays;
+        _largeUnitLoc = s.Thresholds.LargeUnitLoc;
+        _freshnessDays = s.Thresholds.FreshnessDays;
         _maxPassesPerUnit = s.MaxPassesPerUnit;
         _copilotTimeoutMinutes = s.CopilotTimeoutMinutes;
         _enableAssistedFix = s.EnableAssistedFix;
@@ -204,31 +204,57 @@ public sealed partial class SettingsViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Vuelca a los ajustes SOLO lo que esta página edita. Lo que ya no tiene control —el flag de
-    /// H9, el override de la URL del hub, el TLS estricto y el PAT— se queda como esté en el
-    /// fichero: retirar un control de la interfaz no puede significar borrar el valor de quien lo
-    /// tenía puesto.
+    /// Vuelca a los ajustes SOLO lo que esta página edita. Lo que ya no tiene control —el override
+    /// de la URL del hub, el TLS estricto y el PAT— se queda como esté en el fichero: retirar un
+    /// control de la interfaz no puede significar borrar el valor de quien lo tenía puesto.
+    /// <para>
+    /// Los mínimos se aplican aquí y se APUNTAN en <paramref name="corrections"/>, para que
+    /// guardar pueda decir lo que ha cambiado (BUGFIX-AJUSTES). Un valor corregido en silencio se
+    /// vive exactamente igual que un ajuste que no ajusta: escribes 0, no pasa nada, y no hay forma
+    /// de saber si el número que mandó fue el tuyo.
+    /// </para>
     /// </summary>
-    private AppSettings BuildSettings()
+    private AppSettings BuildSettings(List<string> corrections)
     {
         AppSettings s = _settings.Current;
         s.Editor = Editor;
         s.Theme = IsLightTheme ? "light" : "dark";
-        s.PollingSeconds = Math.Max(15, PollingSeconds);
+        s.PollingSeconds = Floor(
+            PollingSeconds, SettingsLimits.MinPollingSeconds, "la sincronización del hub", "segundos", corrections);
         // Se parte de los umbrales vigentes y solo se pisan los editables: construir un
-        // Thresholds nuevo devolvía MaxTokensPerUnit y ClaimTtlMinutes a sus valores por defecto
-        // cada vez que alguien pulsaba Guardar.
-        s.DefaultThresholds.LargeUnitLoc = LargeUnitLoc;
-        s.DefaultThresholds.FreshnessDays = FreshnessDays;
+        // MeasureThresholds nuevo devolvería a sus valores por defecto los que la página no edita.
+        s.Thresholds.LargeUnitLoc = Floor(
+            LargeUnitLoc, SettingsLimits.MinLargeUnitLoc, "el umbral de unidad grande", "LOC", corrections);
+        s.Thresholds.FreshnessDays = Floor(
+            FreshnessDays, SettingsLimits.MinFreshnessDays, "la frescura", "días", corrections);
         // Tope 1 = una pasada única; por eso el barrido no necesita ningún selector de modo por
         // lanzamiento (F5.1).
-        s.MaxPassesPerUnit = Math.Max(1, MaxPassesPerUnit);
+        s.MaxPassesPerUnit = Floor(
+            MaxPassesPerUnit, SettingsLimits.MinMaxPassesPerUnit, "el tope de pasadas", "pasada", corrections);
         s.CopilotModel = string.IsNullOrWhiteSpace(SelectedModelId)
             ? s.CopilotModel
             : SelectedModelId.Trim();
-        s.CopilotTimeoutMinutes = Math.Max(1, CopilotTimeoutMinutes);
+        s.CopilotTimeoutMinutes = Floor(
+            CopilotTimeoutMinutes, SettingsLimits.MinCopilotTimeoutMinutes,
+            "el timeout de Copilot", "minuto", corrections);
         s.EnableAssistedFix = EnableAssistedFix;
         return s;
+    }
+
+    /// <summary>
+    /// El mínimo de un campo, aplicado y CONTADO. La frase se redacta aquí —donde se conoce el
+    /// campo, el número y la unidad— y no en el toast, para que no pueda decir un mínimo distinto
+    /// del que se aplicó.
+    /// </summary>
+    private static int Floor(int value, int minimum, string what, string unit, List<string> corrections)
+    {
+        int applied = SettingsLimits.Clamp(value, minimum, out bool corrected);
+        if (corrected)
+        {
+            corrections.Add($"{what}: el mínimo es {minimum} {unit}");
+        }
+
+        return applied;
     }
 
     /// <summary>
@@ -241,15 +267,22 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [RelayCommand]
     private void Save()
     {
-        _settings.Save(BuildSettings());
+        var corrections = new List<string>();
+        _settings.Save(BuildSettings(corrections));
 
+        // Las cajas enseñan lo que de verdad quedó guardado. Antes solo se refrescaban tres; el
+        // umbral y la frescura se quedaban enseñando un número que el fichero no tenía.
         MaxPassesPerUnit = _settings.Current.MaxPassesPerUnit;
         PollingSeconds = _settings.Current.PollingSeconds;
         CopilotTimeoutMinutes = _settings.Current.CopilotTimeoutMinutes;
+        LargeUnitLoc = _settings.Current.Thresholds.LargeUnitLoc;
+        FreshnessDays = _settings.Current.Thresholds.FreshnessDays;
         ThemeService.Apply(IsLightTheme ? "light" : "dark");
         // Toast global (F5.3): el aviso vivía al fondo de la página y no se veía sin bajar hasta
         // él — justo debajo del botón que lo provocaba, pero fuera de la pantalla.
-        _toasts.Show("Ajustes guardados.");
+        _toasts.Show(corrections.Count == 0
+            ? "Ajustes guardados."
+            : "Ajustes guardados, con correcciones — " + string.Join(" · ", corrections) + ".");
     }
 
     // ---------- Zona peligrosa (F5.7 §5) ----------

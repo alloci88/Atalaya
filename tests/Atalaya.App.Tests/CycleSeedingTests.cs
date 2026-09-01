@@ -24,7 +24,8 @@ public sealed class CycleSeedingTests
         machines.SetClonePath(r.Slug, r.Clone);
 
         var service = new CycleService(
-            r.Hub, new UlidFactory(Domain.Abstractions.SystemClock.Instance), new DriftQuery(r.Hub), machines);
+            r.Hub, new UlidFactory(Domain.Abstractions.SystemClock.Instance), TestFactory.Settings(r.Paths),
+            new DriftQuery(r.Hub), machines);
 
         CycleCloseResult result = service.TryCloseCycle(r.Slug, 1);
         return (result, r.Hub.Store.TryReadInventory(r.Slug, 2)!);
@@ -148,7 +149,7 @@ public sealed class CycleSeedingTests
         r.Audit(c1, "src/A.cs");
 
         // Ni DriftQuery ni clon: es el mismo caso que no poder demostrar que no cambió.
-        var service = new CycleService(r.Hub, new UlidFactory(Domain.Abstractions.SystemClock.Instance));
+        var service = new CycleService(r.Hub, new UlidFactory(Domain.Abstractions.SystemClock.Instance), TestFactory.Settings(r.Paths));
         CycleCloseResult result = service.TryCloseCycle(r.Slug, 1);
 
         result.Closed.Should().BeTrue();

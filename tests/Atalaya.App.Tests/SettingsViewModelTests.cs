@@ -93,11 +93,65 @@ public sealed class SettingsViewModelTests : IDisposable
         vm.MaxPassesPerUnit.Should().Be(1, "y la caja enseña lo que de verdad quedó guardado");
     }
 
+    // ---------- 1c. Los mínimos se DICEN (BUGFIX-AJUSTES) ----------
+
+    /// <summary>
+    /// Un valor corregido en silencio se vive igual que un ajuste que no ajusta: escribes 0, no
+    /// pasa nada, y no hay forma de saber qué número mandó. Ahora el toast lo dice, con el mínimo
+    /// y el campo.
+    /// </summary>
+    [Theory]
+    [InlineData("MaxPassesPerUnit", 0, "el tope de pasadas", 1)]
+    [InlineData("PollingSeconds", 3, "la sincronización del hub", 15)]
+    [InlineData("CopilotTimeoutMinutes", 0, "el timeout de Copilot", 1)]
+    [InlineData("LargeUnitLoc", 0, "el umbral de unidad grande", 1)]
+    [InlineData("FreshnessDays", -5, "la frescura", 1)]
+    public void Un_valor_por_debajo_del_minimo_se_corrige_y_se_dice(
+        string property, int value, string what, int minimum)
+    {
+        SettingsViewModel vm = NewViewModel();
+        typeof(SettingsViewModel).GetProperty(property)!.SetValue(vm, value);
+
+        vm.SaveCommand.Execute(null);
+
+        _toasts.Items.Should().Contain(t => t.Text.Contains(what) && t.Text.Contains($"el mínimo es {minimum}"));
+        typeof(SettingsViewModel).GetProperty(property)!.GetValue(vm).Should().Be(minimum,
+            "y la caja enseña lo que de verdad quedó guardado");
+    }
+
+    /// <summary>Y cuando no hay nada que corregir el aviso no inventa correcciones.</summary>
+    [Fact]
+    public void Sin_correcciones_el_aviso_es_el_de_siempre()
+    {
+        SettingsViewModel vm = NewViewModel();
+
+        vm.SaveCommand.Execute(null);
+
+        _toasts.Items.Should().Contain(t => t.Text == "Ajustes guardados.");
+    }
+
+    /// <summary>
+    /// El umbral y la frescura también refrescan su caja al guardar. Antes solo lo hacían tres
+    /// campos, así que un umbral corregido seguía enseñando el número que el fichero no tenía.
+    /// </summary>
+    [Fact]
+    public void El_umbral_guardado_es_el_que_queda_en_la_caja_y_en_el_fichero()
+    {
+        SettingsViewModel vm = NewViewModel();
+
+        vm.LargeUnitLoc = 30;
+        vm.SaveCommand.Execute(null);
+
+        vm.LargeUnitLoc.Should().Be(30);
+        new SettingsService(_paths).Load().Thresholds.LargeUnitLoc.Should().Be(30);
+    }
+
     [Fact]
     public void Saving_does_not_reset_the_thresholds_the_page_does_not_edit()
     {
-        _settings.Current.DefaultThresholds.MaxTokensPerUnit = 123_456;
-        _settings.Current.DefaultThresholds.ClaimTtlMinutes = 45;
+        // El umbral por caracteres no tiene control en la página: guardar no puede devolverlo a
+        // su valor de fábrica por el camino de construir un MeasureThresholds nuevo.
+        _settings.Current.Thresholds.LargeUnitChars = 123_456;
         _settings.Save(_settings.Current);
 
         SettingsViewModel vm = NewViewModel();
@@ -105,10 +159,9 @@ public sealed class SettingsViewModelTests : IDisposable
         vm.SaveCommand.Execute(null);
 
         AppSettings reloaded = new SettingsService(_paths).Load();
-        reloaded.DefaultThresholds.LargeUnitLoc.Should().Be(900);
-        reloaded.DefaultThresholds.MaxTokensPerUnit.Should().Be(123_456,
-            "construir un Thresholds nuevo al guardar los devolvía a los valores por defecto");
-        reloaded.DefaultThresholds.ClaimTtlMinutes.Should().Be(45);
+        reloaded.Thresholds.LargeUnitLoc.Should().Be(900);
+        reloaded.Thresholds.LargeUnitChars.Should().Be(123_456,
+            "construir un MeasureThresholds nuevo al guardar lo devolvía a su valor por defecto");
     }
 
     // ---------- 1b. El guardado se ve (F5.7 §4) ----------

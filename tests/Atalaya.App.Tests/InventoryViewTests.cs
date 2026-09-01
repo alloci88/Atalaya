@@ -110,6 +110,30 @@ public sealed class InventoryViewTests : IDisposable
         _provider = services.BuildServiceProvider();
     }
 
+    /// <summary>
+    /// BUGFIX-AJUSTES — reiniciar el ciclo fue el tercer gesto que el usuario probó, y también
+    /// leía el <c>app.json</c>. Con el umbral de Ajustes en 30, la unidad grande del ciclo nuevo
+    /// se decide con ESE número.
+    /// </summary>
+    [Fact]
+    public async Task Reiniciar_el_ciclo_reclasifica_con_el_umbral_de_ajustes()
+    {
+        _hub.Store.WriteInventory("app", new InventoryCycle
+        {
+            CycleN = 1,
+            Units = { new InventoryUnit { Path = "src/Legacy.cs", Module = "Legacy", Loc = 1117 } },
+        });
+        AppSettings s = _settings.Current;
+        s.Thresholds.LargeUnitLoc = 30;
+        _settings.Save(s);
+
+        InventoryViewModel vm = await Loaded();
+        await vm.ResetCycleCommand.ExecuteAsync(null);
+
+        InventoryCycle next = _hub.Store.TryReadInventory("app", 2)!;
+        next.Units.Single().State.Should().Be(UnitState.Grande);
+    }
+
     /// <summary>Recuerda qué se preguntó y responde lo que le digan. El diálogo real no aparece.</summary>
     private sealed class RecordingConfirmer : IAuditLaunchConfirmer
     {

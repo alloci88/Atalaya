@@ -67,7 +67,7 @@ public sealed class CycleServiceTests : IDisposable
     public void Close_promotes_media_to_alta_and_opens_next_cycle()
     {
         Finding f = SeedMediaFinding();
-        var cycles = new CycleService(_hub, _ulids);
+        var cycles = new CycleService(_hub, _ulids, _settings);
 
         CycleCloseResult closed = cycles.TryCloseCycle("app", 1);
 
@@ -83,7 +83,7 @@ public sealed class CycleServiceTests : IDisposable
     public void Close_desists_when_cycle_already_advanced()
     {
         SeedMediaFinding();
-        var cycles = new CycleService(_hub, _ulids);
+        var cycles = new CycleService(_hub, _ulids, _settings);
         cycles.TryCloseCycle("app", 1).Closed.Should().BeTrue();
 
         // A second attempt to close cycle 1 must desist (already at cycle 2).
@@ -99,7 +99,7 @@ public sealed class CycleServiceTests : IDisposable
             Units = { new InventoryUnit { Path = "A.cs", Module = "M", State = UnitState.Pendiente } },
         });
 
-        new CycleService(_hub, _ulids).TryCloseCycle("app", 1).Closed.Should().BeFalse();
+        new CycleService(_hub, _ulids, _settings).TryCloseCycle("app", 1).Closed.Should().BeFalse();
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public sealed class CycleServiceTests : IDisposable
         var coordinator = new SessionCoordinator(
             _hub, _ingestion, new ReconciliationService(_hub), _machines, _ulids,
             new FakeCopilotAgent(_ => Array.Empty<SubmitFindingArgs>()), _settings,
-            new CycleService(_hub, _ulids), new StatusExporter(_hub, _machines));
+            new CycleService(_hub, _ulids, _settings), new StatusExporter(_hub, _machines));
 
         SessionResult result = await coordinator.RunAsync(
             new SessionRequest("app", AuditMode.Integral, Array.Empty<string>()), CancellationToken.None);

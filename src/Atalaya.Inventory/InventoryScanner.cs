@@ -1,4 +1,4 @@
-using Atalaya.Domain;
+﻿using Atalaya.Domain;
 using Atalaya.Domain.Hashing;
 using Atalaya.Domain.Ingestion;
 using Atalaya.Domain.Model;
@@ -30,7 +30,13 @@ public sealed class InventoryScanner
     /// <summary>Un título constante para que el auditor lo reconozca entre ciclos (§4, F4).</summary>
     private const string LargeUnitTitle = "Unidad demasiado grande para auditar como una sola unidad";
 
-    public ScanOutput Scan(string root, AppConfig config, int cycleN)
+    /// <param name="thresholds">
+    /// El umbral de «unidad grande» CONFIGURADO, tal y como está en el momento de escanear
+    /// (BUGFIX-AJUSTES). Se pasa en cada llamada y no se captura en ninguna parte: el escáner leía
+    /// <c>config.Thresholds</c> —el <c>app.json</c> del hub, que Ajustes no toca— y por eso subir o
+    /// bajar el umbral en la pantalla no cambiaba una sola clasificación.
+    /// </param>
+    public ScanOutput Scan(string root, AppConfig config, int cycleN, MeasureThresholds thresholds)
     {
         root = Path.GetFullPath(root);
         TechStack stack = config.Stack != TechStack.Unknown ? config.Stack : StackDetector.Detect(root);
@@ -60,7 +66,7 @@ public sealed class InventoryScanner
             string module = moduleIndex.ModuleFor(rel);
             modules.Add(module);
 
-            bool isLarge = loc > config.Thresholds.LargeUnitLoc || chars > config.Thresholds.LargeUnitChars;
+            bool isLarge = loc > thresholds.LargeUnitLoc || chars > thresholds.LargeUnitChars;
 
             inventory.Units.Add(new InventoryUnit
             {
@@ -73,7 +79,7 @@ public sealed class InventoryScanner
 
             if (isLarge)
             {
-                largeFindings.Add(BuildLargeUnitFinding(rel, loc, config.Thresholds));
+                largeFindings.Add(BuildLargeUnitFinding(rel, loc, thresholds));
             }
         }
 
@@ -86,7 +92,7 @@ public sealed class InventoryScanner
     /// only in the description, so the title the auditor reconciles against is stable
     /// across cycles even as the file grows.
     /// </summary>
-    public static SubmittedFinding BuildLargeUnitFinding(string path, int loc, Thresholds thresholds)
+    public static SubmittedFinding BuildLargeUnitFinding(string path, int loc, MeasureThresholds thresholds)
         => new(
             RuleId: LargeUnitRuleId,
             Pillar: Pillar.Mejoras,

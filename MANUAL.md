@@ -477,6 +477,31 @@ Umbrales (tamaño de unidad, frescura), modelo de Copilot, el interruptor del
 intervalo de sincronización y las acciones destructivas, con su confirmación. Al final,
 **Acerca de Atalaya**: versión, organización y los enlaces al repositorio y a este manual.
 
+**Los ajustes son de esta máquina** —viven en tu `settings.json`, no en el hub—, así que
+cambiarlos no le toca nada a tus compañeros. Cada control dice bajo su caja **cuándo surte
+efecto**, porque no todos aplican igual:
+
+| Ajuste | Qué gobierna | Cuándo aplica |
+| --- | --- | --- |
+| **Unidad grande (LOC)** | Qué unidades salen «Grande» en el inventario y qué hallazgos de tamaño hay | **Al re-escanear** (y al cerrar o reiniciar el ciclo). El inventario ya escrito no se reclasifica solo |
+| **Pasadas del barrido (tope)** | Cuántas veces se repasa cada unidad | En las auditorías que lances **a partir de ahora** |
+| **Frescura (días)** | Cuándo un hallazgo confirmado se marca por revisar | Al guardar; la lista lo aplica al dibujarse |
+| **Modelo de Copilot** | Con qué modelo se auditan y arreglan las cosas | En las sesiones que lances a partir de ahora |
+| **Arreglo asistido** | Si aparece «Arreglar con agente» | Al guardar |
+| **Sincronización del hub (s)** | Cada cuánto se buscan cambios de tus compañeros | Al guardar, sin reiniciar |
+| **Timeout de Copilot (min)** | Espera máxima por una respuesta del modelo, y por cada compilación del arreglo | Al guardar, en el siguiente turno |
+| **Editor preferido** | Con qué editor se abre el código | Al guardar |
+| **Tema claro** | El aspecto de la aplicación | Al guardar |
+
+**Si escribes un número imposible, se te dice.** Cada campo numérico tiene un mínimo —15 s la
+sincronización, 1 el resto— y al guardar, si hubo que aplicarlo, el aviso dice cuál era y la caja
+enseña lo que de verdad quedó guardado. Ningún valor se descarta en silencio.
+
+**Cambiar el umbral y ver el efecto**: ponlo, guarda, y **re-escanea** la aplicación desde el
+Inventario. Las unidades que pasen a ser grandes salen de la cola de pendientes con su hallazgo de
+tamaño; las que dejen de serlo vuelven a la cola y ese hallazgo **se resuelve por medida**, con el
+número escrito en su historial («1117 LOC < umbral 1500»).
+
 ---
 
 ## Directivas del proyecto

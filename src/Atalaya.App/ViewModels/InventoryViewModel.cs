@@ -932,8 +932,10 @@ public sealed partial class InventoryViewModel : ViewModelBase
                 var fresh = new InventoryCycle { CycleN = next };
                 foreach (InventoryUnit u in current.Units)
                 {
-                    // Nothing is deleted; large units are re-evaluated against the threshold (§5.5).
-                    bool large = u.Loc > app.Thresholds.LargeUnitLoc;
+                    // Nothing is deleted; large units are re-evaluated against the threshold (§5.5),
+                    // el CONFIGURADO y leído ahora (BUGFIX-AJUSTES): reiniciar el ciclo fue lo
+                    // tercero que el usuario probó, y era el tercer sitio que leía el app.json.
+                    bool large = u.Loc > _settings.Current.Thresholds.LargeUnitLoc;
                     fresh.Units.Add(new InventoryUnit
                     {
                         Path = u.Path,

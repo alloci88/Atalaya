@@ -60,7 +60,7 @@
                     <ui:ToggleSwitch Grid.Row="0" Grid.Column="1" IsChecked="{Binding IsLightTheme}" HorizontalAlignment="Left" />
                     <TextBlock
                         Grid.Row="1" Grid.Column="1"
-                        Text="Cambia el tema oscuro por el claro. Se aplica al guardar, sin reiniciar la aplicación."
+                        Text="Cambia el tema oscuro por el claro. Aplica al guardar, sin reiniciar la aplicación."
                         Style="{StaticResource FieldHelp}" />
                 </Grid>
 
@@ -83,7 +83,7 @@
                     </ComboBox>
                     <TextBlock
                         Grid.Row="1" Grid.Column="1"
-                        Text="Con qué editor se abre el código desde la ficha de un hallazgo (botón «Abrir en el editor»)."
+                        Text="Con qué editor se abre el código desde la ficha de un hallazgo (botón «Abrir en el editor»). Aplica al guardar: lo lee cada vez que abres código."
                         Style="{StaticResource FieldHelp}" />
                 </Grid>
             </StackPanel>
@@ -105,7 +105,7 @@
                     <ui:TextBox Grid.Row="0" Grid.Column="1" Text="{Binding LargeUnitLoc}" Width="120" HorizontalAlignment="Left" />
                     <TextBlock
                         Grid.Row="1" Grid.Column="1"
-                        Text="A partir de cuántas líneas una unidad es demasiado grande para auditarla de una vez. Sale marcada «Grande» en el inventario: no cuenta como pendiente y no impide cerrar el ciclo."
+                        Text="A partir de cuántas líneas una unidad es demasiado grande para auditarla de una vez. Sale marcada «Grande» en el inventario: no cuenta como pendiente y no impide cerrar el ciclo. Aplica al RE-ESCANEAR (y al cerrar o reiniciar el ciclo): el inventario ya escrito no se reclasifica solo. Mínimo 1."
                         Style="{StaticResource FieldHelp}" />
                 </Grid>
 
@@ -122,7 +122,7 @@
                     <ui:TextBox Grid.Row="0" Grid.Column="1" Text="{Binding MaxPassesPerUnit}" Width="120" HorizontalAlignment="Left" />
                     <TextBlock
                         Grid.Row="1" Grid.Column="1"
-                        Text="Cuántas veces se repite la revisión de una unidad hasta que una pasada queda seca. Con 1, cada auditoría es una pasada única. Si se agota el tope sin secarse, la unidad queda marcada como «cobertura posiblemente incompleta»."
+                        Text="Cuántas veces se repite la revisión de una unidad hasta que una pasada queda seca. Con 1, cada auditoría es una pasada única. Si se agota el tope sin secarse, la unidad queda marcada como «cobertura posiblemente incompleta». Aplica a las auditorías que lances a partir de ahora; la que esté en curso termina con el tope que tenía. Mínimo 1."
                         Style="{StaticResource FieldHelp}" />
                 </Grid>
 
@@ -139,7 +139,7 @@
                     <ui:TextBox Grid.Row="0" Grid.Column="1" Text="{Binding FreshnessDays}" Width="120" HorizontalAlignment="Left" />
                     <TextBlock
                         Grid.Row="1" Grid.Column="1"
-                        Text="A partir de cuántos días sin reconfirmarse un hallazgo se marca como pendiente de revisión en «Hallazgos»."
+                        Text="A partir de cuántos días sin reconfirmarse un hallazgo se marca como pendiente de revisión en «Hallazgos». Aplica al guardar: la lista lo usa la próxima vez que se dibuja. Mínimo 1 día."
                         Style="{StaticResource FieldHelp}" />
                 </Grid>
 
@@ -165,7 +165,7 @@
                     </StackPanel>
                     <TextBlock
                         Grid.Row="1" Grid.Column="1"
-                        Text="La lista la publica el SDK de Copilot para tu cuenta; el multiplicador de coste aparece cuando el SDK lo da. El modelo elegido se usa en las sesiones nuevas y queda registrado en el informe."
+                        Text="La lista la publica el SDK de Copilot para tu cuenta; el multiplicador de coste aparece cuando el SDK lo da. Aplica a las sesiones que lances a partir de ahora, sin reiniciar, y queda registrado en el informe."
                         Style="{StaticResource FieldHelp}" />
                     <TextBlock
                         Grid.Row="2" Grid.Column="1"
@@ -190,7 +190,7 @@
                                      HorizontalAlignment="Left" />
                     <TextBlock
                         Grid.Row="1" Grid.Column="1"
-                        Text="Habilita «Arreglar con agente» en la ficha de un hallazgo: el agente arregla sobre tu clon local explicando lo que hace y pidiéndote permiso para tocar ficheros que no son del hallazgo. Nunca commitea ni publica nada, y exige que no tengas cambios sin commitear. El generador de prompt de arreglo funciona igual con esto apagado."
+                        Text="Habilita «Arreglar con agente» en la ficha de un hallazgo: el agente arregla sobre tu clon local explicando lo que hace y pidiéndote permiso para tocar ficheros que no son del hallazgo. Nunca commitea ni publica nada, y exige que no tengas cambios sin commitear. El generador de prompt de arreglo funciona igual con esto apagado. Aplica al guardar."
                         Style="{StaticResource FieldHelp}" />
                 </Grid>
             </StackPanel>
@@ -212,7 +212,7 @@
                     <ui:TextBox Grid.Row="0" Grid.Column="1" Text="{Binding PollingSeconds}" Width="120" HorizontalAlignment="Left" />
                     <TextBlock
                         Grid.Row="1" Grid.Column="1"
-                        Text="Cada cuántos segundos se buscan cambios de tus compañeros en el hub. El mínimo es 15."
+                        Text="Cada cuántos segundos se buscan cambios de tus compañeros en el hub. Aplica al guardar, sin reiniciar. El mínimo es 15."
                         Style="{StaticResource FieldHelp}" />
                 </Grid>
 
@@ -229,7 +229,7 @@
                     <ui:TextBox Grid.Row="0" Grid.Column="1" Text="{Binding CopilotTimeoutMinutes}" Width="120" HorizontalAlignment="Left" />
                     <TextBlock
                         Grid.Row="1" Grid.Column="1"
-                        Text="Tiempo máximo de espera por una respuesta del modelo antes de dar el turno por fallido."
+                        Text="Tiempo máximo de espera por una respuesta del modelo antes de dar el turno por fallido — y también por cada compilación del arreglo asistido. Aplica al guardar, en el siguiente turno. Mínimo 1 minuto."
                         Style="{StaticResource FieldHelp}" />
                 </Grid>
             </StackPanel>

@@ -416,7 +416,7 @@ public sealed partial class FindingsViewModel : ViewModelBase
         string search = SearchText?.Trim() ?? string.Empty;
         bool showApp = appFilter is null;
 
-        int freshness = _settings.Current.DefaultThresholds.FreshnessDays;
+        int freshness = _settings.Current.Thresholds.FreshnessDays;
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
         string[] slugs = appFilter is { Length: > 0 }

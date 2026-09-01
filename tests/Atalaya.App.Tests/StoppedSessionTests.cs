@@ -228,7 +228,7 @@ public sealed class StoppedSessionTests : IDisposable
         var agent = new StopsAfterFirstUnit(cts, Sample());
         var coordinator = new SessionCoordinator(
             _hub, _ingestion, _reconciliation, _machines, _ulids, agent, _settings,
-            new CycleService(_hub, _ulids));
+            new CycleService(_hub, _ulids, _settings));
 
         SessionResult result = await coordinator.RunAsync(
             new SessionRequest("app", AuditMode.Lotes, new[] { "A.cs", "B.cs" }), cts.Token);

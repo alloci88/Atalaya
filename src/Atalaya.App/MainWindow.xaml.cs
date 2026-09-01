@@ -27,6 +27,10 @@ public partial class MainWindow : FluentWindow
 
         // Polling loop (§3): pull on a timer, off the UI thread, results marshalled back here.
         _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(viewModel.PollingSeconds) };
+        // Y el intervalo SIGUE al ajuste (BUGFIX-AJUSTES): se fijaba al construir la ventana, así
+        // que cambiar la frecuencia en Ajustes no hacía nada hasta el siguiente arranque —sin que
+        // nada lo dijera—. Ajustarlo en el tick cuesta una comparación por minuto.
+        _pollTimer.Tick += (_, _) => SyncPollingInterval();
         _pollTimer.Tick += async (_, _) => await _viewModel.RefreshAsync();
         // El re-chequeo de versión de las instancias que no se reinician (F8 §3). Va en el mismo
         // tick del sondeo —no hace falta un reloj más para esto— pero como manejador APARTE: un
@@ -54,6 +58,20 @@ public partial class MainWindow : FluentWindow
         Activated += async (_, _) => await _viewModel.OnWindowActivatedAsync();
 
         FitToScreen();
+    }
+
+    /// <summary>
+    /// Pone el reloj del sondeo a lo que digan los ajustes ahora mismo. Solo toca el temporizador
+    /// cuando de verdad ha cambiado: reasignar <c>Interval</c> lo reinicia, y hacerlo en cada tick
+    /// dejaría el sondeo perpetuamente aplazado.
+    /// </summary>
+    private void SyncPollingInterval()
+    {
+        var wanted = TimeSpan.FromSeconds(_viewModel.PollingSeconds);
+        if (_pollTimer.Interval != wanted)
+        {
+            _pollTimer.Interval = wanted;
+        }
     }
 
     /// <summary>

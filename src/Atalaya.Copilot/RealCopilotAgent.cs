@@ -27,7 +27,7 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
     private readonly string? _baseDirectory;
     private readonly ILogger _logger;
     private readonly Func<string?>? _modelProvider;
-    private readonly TimeSpan _sendTimeout;
+    private readonly Func<TimeSpan> _sendTimeout;
     private readonly Func<string?>? _tokenProvider;
     private readonly Func<string?>? _loginProvider;
     private readonly SemaphoreSlim _startGate = new(1, 1);
@@ -49,6 +49,12 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
     /// not resolve a login of its own (<c>GetAuthStatusAsync</c> reports <c>authType: "token"</c>
     /// with no <c>Login</c>), so the profile we already fetched is the authoritative source.
     /// </param>
+    /// <param name="sendTimeout">
+    /// Cuánto se espera una respuesta del modelo. Es una FUNCIÓN, y se llama en cada envío, por la
+    /// misma razón que <paramref name="modelProvider"/>: cambiar el timeout en Ajustes tenía que
+    /// esperar a un reinicio porque el valor se capturaba al construir el agente, que se construye
+    /// una vez (BUGFIX-AJUSTES).
+    /// </param>
     /// <param name="modelProvider">
     /// The model id chosen in Ajustes (F5.1). Read on EVERY session so changing the model takes
     /// effect on the next audit without restarting the app — same reason as
@@ -59,7 +65,7 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
         string? baseDirectory = null,
         ILogger? logger = null,
         Func<string?>? modelProvider = null,
-        TimeSpan? sendTimeout = null,
+        Func<TimeSpan>? sendTimeout = null,
         Func<string?>? tokenProvider = null,
         Func<string?>? loginProvider = null)
     {
@@ -67,9 +73,25 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
         _logger = logger ?? NullLogger.Instance;
         _modelProvider = modelProvider;
         // The SDK default (1 min) is too short for auditing a real code unit.
-        _sendTimeout = sendTimeout is { TotalSeconds: > 0 } ? sendTimeout.Value : TimeSpan.FromMinutes(15);
+        _sendTimeout = sendTimeout ?? (() => DefaultSendTimeout);
         _tokenProvider = tokenProvider;
         _loginProvider = loginProvider;
+    }
+
+    /// <summary>Lo que se espera si nadie configura nada. El del SDK (1 min) no da para auditar.</summary>
+    public static readonly TimeSpan DefaultSendTimeout = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// El plazo que se aplicaría AHORA. Existe para poder comprobar que sale del ajuste vigente y
+    /// no de una constante capturada al arrancar.
+    /// </summary>
+    public TimeSpan SendTimeout
+    {
+        get
+        {
+            TimeSpan configured = _sendTimeout();
+            return configured.TotalSeconds > 0 ? configured : DefaultSendTimeout;
+        }
     }
 
     public string? ModelName => Blank(_modelProvider?.Invoke());
@@ -258,7 +280,7 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
                 string? next = request.Prompt;
                 while (next is { Length: > 0 })
                 {
-                    await session.SendAndWaitAsync(next, _sendTimeout, ct);
+                    await session.SendAndWaitAsync(next, SendTimeout, ct);
                     next = conversation.NextTurn is null
                         ? null
                         : await conversation.NextTurn(ct);
@@ -438,7 +460,7 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
             CopilotSession session = await _client!.CreateSessionAsync(config, ct);
             try
             {
-                await session.SendAndWaitAsync(prompt, _sendTimeout, ct);
+                await session.SendAndWaitAsync(prompt, SendTimeout, ct);
             }
             finally
             {

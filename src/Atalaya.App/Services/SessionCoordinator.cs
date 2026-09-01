@@ -817,6 +817,10 @@ public sealed class SessionCoordinator
 
     private void PublishClaims(string slug, IReadOnlyList<InventoryUnit> units, InventoryCycle inv, string by)
     {
+        // El TTL sale del app.json, que es donde se configura (BUGFIX-AJUSTES). Estaba ahí desde
+        // §2 y NADIE lo leía: todos los claims nacían con los 30 minutos por defecto del modelo, así
+        // que bajarlo o subirlo no cambiaba cuándo se da por muerta una sesión ajena.
+        int ttl = Math.Max(1, _hub.Store.TryReadApp(slug)?.Thresholds.ClaimTtlMinutes ?? 30);
         foreach (InventoryUnit unit in units)
         {
             _hub.Store.WriteClaim(slug, new Claim
@@ -826,6 +830,7 @@ public sealed class SessionCoordinator
                 By = by,
                 Machine = Environment.MachineName,
                 Utc = DateTimeOffset.UtcNow,
+                TtlMinutes = ttl,
             });
         }
 

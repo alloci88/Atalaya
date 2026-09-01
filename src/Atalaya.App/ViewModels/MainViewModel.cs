@@ -160,7 +160,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Parada ordenada del arreglo. Lo aplicado se conserva y queda registrado.</summary>
     public void StopFix() => _fix.Stop();
 
-    public int PollingSeconds => Math.Max(15, _settings.Current.PollingSeconds);
+    public int PollingSeconds => Math.Max(SettingsLimits.MinPollingSeconds, _settings.Current.PollingSeconds);
 
     /// <summary>
     /// First run (D4): with no account we land straight on the welcome = the Cuenta page in its

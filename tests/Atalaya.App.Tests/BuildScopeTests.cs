@@ -378,7 +378,7 @@ public sealed class BuildScopeTests : IDisposable
     // ================================================================= plomería
 
     private BuildRunner Runner(IProcessRunner process)
-        => new(process, TimeSpan.FromMinutes(1), new BuildBaselineStore(_paths));
+        => new(process, () => TimeSpan.FromMinutes(1), new BuildBaselineStore(_paths));
 
     private BuildRequest Request(bool pristine, bool fullSolution = false)
         => new(_clone, new[] { Touched }, fullSolution, "abc1234", pristine);

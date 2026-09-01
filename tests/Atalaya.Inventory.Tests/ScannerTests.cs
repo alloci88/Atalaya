@@ -8,15 +8,21 @@ namespace Atalaya.Inventory.Tests;
 
 public class ScannerTests
 {
-    private static AppConfig Config(TechStack stack = TechStack.Unknown, int largeLoc = 1500)
+    private static AppConfig Config(TechStack stack = TechStack.Unknown)
         => new()
         {
             Slug = "app",
             Name = "App",
             RepoUrl = "u",
             Stack = stack,
-            Thresholds = new Thresholds { LargeUnitLoc = largeLoc },
         };
+
+    /// <summary>
+    /// El umbral CONFIGURADO, que ahora viaja en la llamada y no dentro del <c>app.json</c>
+    /// (BUGFIX-AJUSTES).
+    /// </summary>
+    private static MeasureThresholds Umbral(int largeLoc = 1500)
+        => new() { LargeUnitLoc = largeLoc };
 
     [Fact]
     public void Detects_dotnet_stack_and_enumerates_cs_units()
@@ -28,7 +34,7 @@ public class ScannerTests
             .File("src/App/obj/Generated.cs", "// build output")
             .File("src/App/Widget.Designer.cs", "// designer");
 
-        ScanOutput output = new InventoryScanner().Scan(repo.Root, Config(), 1);
+        ScanOutput output = new InventoryScanner().Scan(repo.Root, Config(), 1, Umbral());
 
         output.Stack.Should().Be(TechStack.DotNet);
         output.Inventory.Units.Select(u => u.Path)
@@ -47,7 +53,7 @@ public class ScannerTests
             .File("pkg/__tests__/index.test.ts", "test")
             .File("pkg/types.d.ts", "declare const y: number;");
 
-        ScanOutput output = new InventoryScanner().Scan(repo.Root, Config(), 1);
+        ScanOutput output = new InventoryScanner().Scan(repo.Root, Config(), 1, Umbral());
 
         output.Stack.Should().Be(TechStack.TypeScript);
         output.Inventory.Units.Select(u => u.Path).Should().BeEquivalentTo("pkg/index.ts");
@@ -60,7 +66,7 @@ public class ScannerTests
         repo.File("src/App/App.csproj", "<Project/>")
             .Lines("src/App/Huge.cs", 2000);
 
-        ScanOutput output = new InventoryScanner().Scan(repo.Root, Config(largeLoc: 1500), 1);
+        ScanOutput output = new InventoryScanner().Scan(repo.Root, Config(), 1, Umbral(1500));
 
         InventoryUnit huge = output.Inventory.Units.Single();
         huge.State.Should().Be(UnitState.Grande);
@@ -81,7 +87,7 @@ public class ScannerTests
     [Fact]
     public void Large_unit_title_is_stable_as_loc_grows()
     {
-        var thresholds = new Thresholds { LargeUnitLoc = 1500 };
+        MeasureThresholds thresholds = Umbral();
         SubmittedFinding a = InventoryScanner.BuildLargeUnitFinding("src/Huge.cs", 2000, thresholds);
         SubmittedFinding b = InventoryScanner.BuildLargeUnitFinding("src/Huge.cs", 5000, thresholds);
 
@@ -99,7 +105,7 @@ public class ScannerTests
             .File("main.go", "package main")
             .File("util_test.go", "package main");
 
-        ScanOutput output = new InventoryScanner().Scan(repo.Root, Config(), 1);
+        ScanOutput output = new InventoryScanner().Scan(repo.Root, Config(), 1, Umbral());
 
         output.Stack.Should().Be(TechStack.Go);
         InventoryUnit unit = output.Inventory.Units.Should().ContainSingle().Subject;

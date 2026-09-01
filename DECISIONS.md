@@ -8349,3 +8349,124 @@ el suelo sí, el aviso se mantiene mientras tanto, y un fallo no consume el turn
 
 **Verificación humana, que sigue siendo del usuario**: publicar una release, reiniciar Atalaya y ver
 el banner sin tocar ficheros de caché.
+
+## BUGFIX-AJUSTES — Los Ajustes que no ajustaban
+
+El parte: umbral de unidad grande a **30 LOC** en Ajustes, un fichero de **1.117 líneas** que sigue
+sin salir «Grande». Se probó re-escanear, reiniciar la aplicación y reiniciar el ciclo. Nada.
+
+### D-763 — Dónde se cortaba la cadena, con las tres pruebas delante
+
+La cadena es UI → `settings.json` → lectura → clasificación, y se cortaba en **la lectura**: quien
+clasifica leía otro fichero.
+
+1. **La UI guarda bien.** El `settings.json` de la máquina del parte:
+   `"defaultThresholds": { "largeUnitLoc": 30, … }`. El valor estaba escrito, y sobrevivía a los
+   reinicios — por eso reiniciar no cambiaba nada, y por eso la sospecha de «no persiste» era falsa.
+2. **La clasificación leía el hub.** `InventoryScanner.Scan` decidía con
+   `config.Thresholds.LargeUnitLoc`, o sea el `app.json` del hub. Los tres `app.json` de esa
+   máquina traían **`largeUnitLoc: 1500`**, el valor de fábrica de la clase: nadie había escrito
+   nunca el 30 ahí, porque **ninguna ruta del código copiaba los ajustes al `app.json`**.
+3. **Y el resultado, en el inventario real**: `MotorCalculoLegacy.cs`, 1.117 LOC, estado
+   `pendiente` en el ciclo vigente del banco. 1117 < 1500. La clasificación fue correcta para el
+   umbral que usó; el umbral era el equivocado.
+
+Los tres gestos que se probaron leían **el mismo sitio erróneo**: el re-escaneo
+(`InventoryRescanService` → `Scan`), el reinicio de ciclo (`InventoryViewModel.ResetCycle`) y el
+cierre de ciclo (`CycleService` → `CycleSeeding.Seed`). Por eso ninguno funcionó, y por eso los tres
+tienen ahora su test.
+
+**No había clamp ni validación descartando el 30.** La sospecha era razonable y era falsa: no
+existía ningún mínimo para ese campo —de hecho aceptaba 0, que habría marcado «grande» hasta un
+fichero vacío—. Los clamps que sí había estaban en otros campos y son la mitad del §2.
+
+**Lo que hizo caro el diagnóstico**: el escaneo no registraba el umbral con el que clasificaba.
+Ahora lo escribe en cada re-escaneo (`umbral de unidad grande N LOC / M caracteres`), que es el dato
+que habría cerrado esto en una línea de log.
+
+### D-764 — Una sola fuente: el umbral vive en la máquina, y se ELIMINA del `app.json`
+
+Se aplica D-097 al pie de la letra, que es la decisión que ya resolvió este mismo dilema con el tope
+de pasadas: **es una preferencia de quien opera**, no una propiedad de la app auditada. Con qué
+grano quieres trocear el trabajo lo decides tú; subir el umbral desde tu máquina no puede
+imponérselo al equipo entero por un fichero compartido.
+
+Y como allí, **el campo no se queda «por compatibilidad»**: `LargeUnitLoc`, `LargeUnitChars` y
+`FreshnessDays` salen de `Thresholds` (`app.json`) y pasan a una clase propia, `MeasureThresholds`,
+que solo existe en `settings.json`. Un valor que ya nadie lee, guardado junto a los que sí, es la
+invitación a que la próxima generación de código lea el equivocado — que es literalmente lo que
+acababa de pasar. Los `app.json` antiguos que los traigan se leen sin error y los pierden en la
+siguiente escritura. Un test comprueba que esas propiedades **no vuelven** a `Thresholds`.
+
+**La clave del fichero NO se renombra.** La propiedad se llama ahora `AppSettings.Thresholds` —
+«default» era la mitad del engaño: invitaba a leerla como semilla de otro sitio— pero conserva
+`[JsonPropertyName("defaultThresholds")]`. Un arreglo que empieza tirando el 30 que el usuario ya
+tenía escrito no arregla nada.
+
+**Lo que esto significa, dicho claro:** la clasificación pasa a ser **local**, y su resultado
+—estado de la unidad y hallazgo de tamaño— sigue siendo **compartido**. Dos compañeros con umbrales
+distintos se pisan: manda el último que re-escanea. Es exactamente lo que ya pasa con las altas,
+bajas y renombrados de un re-escaneo, y se prefiere a la alternativa —que el umbral de uno viaje al
+`app.json` de todos sin que nadie lo decida—. Si algún día el equipo quiere un umbral pactado, el
+sitio es `app.json` y la puerta de entrada tiene que ser una pantalla de la app, no el ajuste
+personal de quien pasaba por ahí.
+
+### D-765 — Ningún clamp en silencio, y los mínimos escritos una sola vez
+
+Los mínimos vivían repartidos como `Math.Max(15, …)` y `Math.Max(1, …)` en el view-model, la
+carcasa y el arranque: tres sitios donde recordar el mismo número y ninguno donde leerlo. Ahora son
+`SettingsLimits` (15 s el sondeo, 1 el resto) y **guardar los cuenta**: «Ajustes guardados, con
+correcciones — el umbral de unidad grande: el mínimo es 1 LOC.» La caja se refresca con lo que de
+verdad quedó, también para el umbral y la frescura, que antes no se refrescaban.
+
+El umbral y la frescura **no tenían mínimo ninguno**: se podía guardar 0 días de frescura (todo
+hallazgo nace viejo) o 0 LOC (todo fichero es grande). Ahora es 1, y se dice.
+
+### D-766 — Los tres ajustes que aplicaban «al reiniciar» sin decirlo, ahora aplican al guardar
+
+La regla de la revisión es que lo que no aplica en caliente lo diga junto al campo. Tres campos
+podían hacer algo mejor que declararlo, con el mismo patrón que ya usaba el modelo (F5.1: leído en
+cada sesión, no capturado al arrancar):
+
+- **Sincronización del hub**: el intervalo se fijaba al construir la ventana. El tick lo sincroniza
+  ahora con el ajuste vigente, y solo toca el temporizador si cambió — reasignar `Interval` lo
+  reinicia, y hacerlo cada vez dejaría el sondeo perpetuamente aplazado.
+- **Timeout de Copilot**: se capturaba al construir el agente, que se construye una vez. Pasa a ser
+  un `Func<TimeSpan>` leído en cada envío.
+- **Y el de la compilación del arreglo asistido**, que sale del mismo ajuste. Medio cableado habría
+  sido peor que ninguno: el campo diría una cosa y haría otra en la mitad de los casos.
+
+El resto ya aplicaba al guardar (editor, tema, arreglo asistido, frescura) o en la siguiente sesión
+(modelo, tope de pasadas), y ahora lo dice en su línea de ayuda. Un test recorre todas las filas del
+XAML y falla si alguna no declara cuándo surte efecto.
+
+### D-767 — El otro campo muerto: el TTL de los claims
+
+Auditando el resto apareció uno más, y no estaba en la pantalla: `Thresholds.ClaimTtlMinutes` existe
+desde §2 en `app.json` y **nadie lo leía**. Todos los claims nacían con los 30 minutos por defecto
+del modelo `Claim`, así que configurarlo no cambiaba cuándo se da por muerta una sesión ajena. Se
+cablea —`SessionCoordinator` lo aplica al publicarlos— en vez de retirarlo: a diferencia del umbral,
+cuánto tarda el equipo en dar por caducado un claim ajeno **sí** es propiedad compartida de la app.
+
+Del resto del barrido: todos los campos de `AppSettings` tienen consumidor. `LargeUnitChars`,
+`CopilotBaseDirectory`, `HubUrlOverride`, `RequireTlsRevocationCheck`, el PAT y la identidad git
+heredada se consumen y **no tienen control en la pantalla** a propósito (F5.7 §2, D-275): se editan
+en el fichero y su público es quien prepara la instalación.
+
+### D-768 — Cobertura (28 tests nuevos, 1.574 en total, todo en verde)
+
+La regresión del parte, de ida y de vuelta: umbral 30 → re-escanear → la unidad de 1.117 LOC sale
+**Grande** con su hallazgo medido; umbral 1.500 → re-escanear → vuelve a auditable y el hallazgo se
+resuelve **por medida**, comprobando la evidencia («1117 LOC < umbral 1500»). Y los tres caminos que
+clasifican por separado: escaneo, siembra de cierre de ciclo y reinicio de ciclo desde la vista, más
+la re-medición de un hallazgo suelto.
+
+Un test por campo, y todos preguntan lo mismo: **que el consumidor lea el valor configurado**, que
+es justo lo que ningún test comprobaba —los que había verificaban que el ajuste se guardara, y eso
+funcionaba—. Más: que el umbral ya no exista en `Thresholds`; que un `settings.json` con el 30 ya
+escrito se siga leyendo; que un `{}` estrene todos los valores de fábrica campo a campo (la clase de
+defecto de D-563); que el fichero vacío y un `AppSettings` recién construido sean el mismo ajuste;
+los cinco mínimos, cada uno con su aviso; y que cada fila del XAML declare cuándo aplica.
+
+**Verificación humana, que sigue siendo del usuario**: en el banco real, umbral a 30 → re-escanear →
+`MotorCalculoLegacy.cs` sale Grande, sin reiniciar nada.

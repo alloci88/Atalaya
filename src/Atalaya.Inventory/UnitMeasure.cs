@@ -19,7 +19,7 @@ public sealed record UnitMeasurement(
     /// «LOC o caracteres», así que una unidad de 1.269 líneas puede seguir siendo grande por peso,
     /// y decir «1269 LOC ≥ 1500» sería mentir con un número correcto.
     /// </summary>
-    public string Describe(Thresholds t)
+    public string Describe(MeasureThresholds t)
         => !Measured
             ? Problem ?? "no se pudo medir"
             : Loc > t.LargeUnitLoc
@@ -66,7 +66,7 @@ public static class UnitMeasure
     /// no está NO es un hallazgo resuelto — puede haberse movido o renombrado, y «no está donde
     /// estaba» no es «ya no es grande».
     /// </summary>
-    public static UnitMeasurement Measure(string? clonePath, string unitPath, Thresholds thresholds)
+    public static UnitMeasurement Measure(string? clonePath, string unitPath, MeasureThresholds thresholds)
     {
         if (string.IsNullOrWhiteSpace(clonePath) || !Directory.Exists(clonePath))
         {

@@ -499,7 +499,7 @@ public sealed class FindingsViewTests : IDisposable
     [Fact]
     public async Task La_frescura_enciende_el_semaforo_al_pasar_el_umbral()
     {
-        int umbral = _settings.Current.DefaultThresholds.FreshnessDays;
+        int umbral = _settings.Current.Thresholds.FreshnessDays;
         Seed("alpha", "src/A.cs", "Reciente", Severity.Media, daysOld: 0);
         Seed("alpha", "src/B.cs", "Rancio", Severity.Media, daysOld: umbral + 5);
 

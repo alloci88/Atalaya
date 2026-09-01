@@ -147,7 +147,9 @@ public partial class App : Application
                 // F5.1: leído en cada sesión, no capturado aquí — cambiar el modelo en Ajustes
                 // surte efecto en la siguiente auditoría sin reiniciar la app.
                 modelProvider: () => settings.Current.CopilotModel,
-                sendTimeout: TimeSpan.FromMinutes(Math.Max(1, s.CopilotTimeoutMinutes)),
+                // F5.1 otra vez: leído en cada envío, no capturado aquí (BUGFIX-AJUSTES).
+                sendTimeout: () => TimeSpan.FromMinutes(
+                    Math.Max(SettingsLimits.MinCopilotTimeoutMinutes, settings.Current.CopilotTimeoutMinutes)),
                 tokenProvider: () => account.Token,
                 loginProvider: () => account.Current?.Login);
         });
@@ -192,7 +194,9 @@ public partial class App : Application
         services.AddSingleton<FixSnapshotStore>();
         services.AddSingleton<AssistedFixLauncher>();
         services.AddSingleton(sp => new BuildRunner(
-            timeout: TimeSpan.FromMinutes(Math.Max(1, sp.GetRequiredService<SettingsService>().Current.CopilotTimeoutMinutes))));
+            timeout: () => TimeSpan.FromMinutes(Math.Max(
+                SettingsLimits.MinCopilotTimeoutMinutes,
+                sp.GetRequiredService<SettingsService>().Current.CopilotTimeoutMinutes))));
         services.AddSingleton<IFixDiscardConfirmer, FixDiscardDialogConfirmer>();
 
         // BUGFIX-CIERRE: cerrar la pantalla y descartar los cambios son preguntas distintas, con
@@ -253,6 +257,7 @@ public partial class App : Application
         services.AddSingleton(sp => new CycleService(
             sp.GetRequiredService<HubContext>(),
             sp.GetRequiredService<IUlidFactory>(),
+            sp.GetRequiredService<SettingsService>(),
             sp.GetRequiredService<DriftQuery>(),
             sp.GetRequiredService<MachineConfigStore>()));
         services.AddSingleton<StatusExporter>();

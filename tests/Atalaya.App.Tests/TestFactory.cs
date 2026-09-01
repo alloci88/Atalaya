@@ -18,6 +18,14 @@ internal static class TestFactory
     public static GitHubAccountService Account(AppPaths paths, IClock? clock = null)
         => new(new AccountStore(paths), clock ?? SystemClock.Instance);
 
+    /// <summary>Los ajustes de esta máquina, ya cargados. Es de donde sale el umbral (§4).</summary>
+    public static SettingsService Settings(AppPaths paths)
+    {
+        var settings = new SettingsService(paths);
+        settings.Load();
+        return settings;
+    }
+
     public static HubContext Hub(AppPaths paths, SettingsService settings, DeployConfig? deploy = null)
     {
         AssertIsolated(paths);
@@ -37,11 +45,12 @@ internal static class TestFactory
         AppPaths paths,
         ToastCenter? toasts = null,
         IFolderPicker? picker = null,
-        ILinkCloneDialog? dialog = null)
+        ILinkCloneDialog? dialog = null,
+        SettingsService? settings = null)
         => new(
             hub,
             Links(hub, paths),
-            new InventoryRescanService(hub, new InventoryScanner()),
+            new InventoryRescanService(hub, new InventoryScanner(), settings ?? Settings(paths)),
             picker ?? new NoFolderPicker(),
             dialog ?? new NoLinkCloneDialog(),
             toasts ?? new ToastCenter());
@@ -84,7 +93,20 @@ internal static class TestFactory
         ToastCenter toasts,
         IUlidFactory ulids,
         NavigationService navigation,
-        IFolderPicker? picker = null)
+        IFolderPicker? picker = null,
+        SettingsService? settings = null)
+        => Onboarding(hub, paths, machines, toasts, ulids, navigation, picker, settings ?? Settings(paths), null);
+
+    private static OnboardingViewModel Onboarding(
+        HubContext hub,
+        AppPaths paths,
+        MachineConfigStore machines,
+        ToastCenter toasts,
+        IUlidFactory ulids,
+        NavigationService navigation,
+        IFolderPicker? picker,
+        SettingsService settings,
+        object? _)
         => new(
             hub,
             new InventoryScanner(),
@@ -93,10 +115,11 @@ internal static class TestFactory
             new FindingIngestionService(hub, ulids),
             toasts,
             Links(hub, paths),
-            LinkFlow(hub, paths, toasts),
+            LinkFlow(hub, paths, toasts, settings: settings),
             new ImportService(hub),
             picker ?? new NoFolderPicker(),
-            new MeasuredFindingService(hub, new FindingIngestionService(hub, ulids), machines));
+            new MeasuredFindingService(hub, new FindingIngestionService(hub, ulids), machines, settings),
+            settings);
 
     /// <summary>El panel de métricas (F5.9) sin nada que abra una ventana ni un fichero.</summary>
     public static MetricsViewModel Metrics(
@@ -130,10 +153,10 @@ internal static class TestFactory
     /// que si no solo se podrían comprobar montando una sesión entera.
     /// </summary>
     public static MainViewModel Shell(
-        AppPaths paths, HubContext hub, ToastCenter? toasts = null, UpdateCheckService? updates = null)
+        AppPaths paths, HubContext hub, ToastCenter? toasts = null, UpdateCheckService? updates = null,
+        SettingsService? settings = null)
     {
-        var settings = new SettingsService(paths);
-        settings.Load();
+        settings ??= Settings(paths);
         var ulids = new UlidFactory(SystemClock.Instance);
         var machines = new MachineConfigStore(paths.MachinesJson);
         var agent = new FakeCopilotAgent();

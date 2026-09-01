@@ -6,6 +6,43 @@ using Atalaya.Domain.Model;
 
 namespace Atalaya.App.Services;
 
+/// <summary>
+/// Los mínimos de los ajustes numéricos, escritos UNA vez (BUGFIX-AJUSTES).
+/// <para>
+/// Estaban repartidos como <c>Math.Max(15, …)</c> y <c>Math.Max(1, …)</c> por el view-model, la
+/// carcasa y el arranque: tres sitios donde recordar el mismo número, y ninguno donde leerlo. Aquí
+/// están los tres, y quien los aplica <b>avisa</b> — un valor corregido en silencio es
+/// indistinguible de un ajuste que no ajusta, que es de lo que venía este parte.
+/// </para>
+/// </summary>
+public static class SettingsLimits
+{
+    /// <summary>Un umbral de 0 líneas marcaría «grande» hasta un fichero vacío.</summary>
+    public const int MinLargeUnitLoc = 1;
+
+    /// <summary>Con 0 días todo hallazgo nacería viejo.</summary>
+    public const int MinFreshnessDays = 1;
+
+    /// <summary>Tope 1 = pasada única (D-097); 0 dejaría la auditoría sin hacer nada.</summary>
+    public const int MinMaxPassesPerUnit = 1;
+
+    /// <summary>Por debajo de 15 s el sondeo del hub se pisa a sí mismo.</summary>
+    public const int MinPollingSeconds = 15;
+
+    /// <summary>Menos de un minuto no le da al modelo tiempo ni a contestar.</summary>
+    public const int MinCopilotTimeoutMinutes = 1;
+
+    /// <summary>
+    /// Aplica el mínimo y dice si hubo que aplicarlo. Devolver las dos cosas juntas es lo que
+    /// permite que el que guarda pueda contarlo sin volver a comparar nada.
+    /// </summary>
+    public static int Clamp(int value, int minimum, out bool corrected)
+    {
+        corrected = value < minimum;
+        return corrected ? minimum : value;
+    }
+}
+
 /// <summary>Machine-local application settings (§8 Ajustes). Never stored in the hub.</summary>
 public sealed class AppSettings
 {
@@ -54,7 +91,19 @@ public sealed class AppSettings
 
     public int PollingSeconds { get; set; } = 60;
 
-    public Thresholds DefaultThresholds { get; set; } = new();
+    /// <summary>
+    /// Los umbrales que la aplicación mide por su cuenta: unidad grande y frescura (§4, §8). Los
+    /// edita Ajustes y los lee quien clasifica, <b>en el momento de clasificar</b>.
+    /// <para>
+    /// Se llamaba <c>DefaultThresholds</c>, y ese nombre era la mitad del defecto (BUGFIX-AJUSTES):
+    /// «default» invitaba a leerlos como la semilla de otro sitio —el <c>app.json</c> del hub— que
+    /// era donde de verdad miraba el escáner. La CLAVE del fichero sigue siendo
+    /// <c>defaultThresholds</c> a propósito: renombrarla habría tirado el umbral que cada máquina
+    /// ya tiene puesto, que es justo lo que se venía a arreglar.
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("defaultThresholds")]
+    public MeasureThresholds Thresholds { get; set; } = new();
 
     /// <summary>
     /// Interruptor del arreglo asistido (§5.7, H9 — entregado en F6.9).

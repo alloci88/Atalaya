@@ -208,7 +208,7 @@ public sealed class CloneLinkTests : IDisposable
             _hub.Store.TryReadApp("xblast")!,
             _links.For("xblast"),
             _links,
-            new InventoryRescanService(_hub, new InventoryScanner()),
+            new InventoryRescanService(_hub, new InventoryScanner(), _settings),
             picker ?? new TestFactory.NoFolderPicker());
 
     /// <summary>Elige lo que le digan, en el orden en que se lo digan.</summary>

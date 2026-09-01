@@ -197,6 +197,31 @@ public sealed class SettingsViewTests
 
     // ---------- §4. El guardado, por toast ----------
 
+    /// <summary>
+    /// BUGFIX-AJUSTES §3 — cada control dice CUÁNDO surte efecto. Descubrir a base de prueba y
+    /// error que un ajuste necesitaba re-escanear (o reiniciar) es la mitad de lo que hizo tan
+    /// caro el defecto del umbral: el usuario probó tres gestos sin saber cuál tocaba.
+    /// </summary>
+    [Fact]
+    public void Cada_ayuda_dice_cuando_surte_efecto()
+    {
+        foreach (string row in FieldRows())
+        {
+            row.Should().MatchRegex("Aplica al|Aplica a las",
+                $"este control no dice cuándo surte efecto → {Head(row)}");
+        }
+    }
+
+    /// <summary>Y el umbral dice lo que de verdad hace falta hacer: re-escanear.</summary>
+    [Fact]
+    public void El_umbral_dice_que_aplica_al_re_escanear()
+    {
+        string xaml = Markup(SettingsXaml());
+
+        xaml.Should().Contain("Aplica al RE-ESCANEAR");
+        xaml.Should().Contain("Mínimo 1.");
+    }
+
     [Fact]
     public void Ajustes_no_tiene_ningun_texto_de_estado_incrustado()
     {

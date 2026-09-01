@@ -72,11 +72,19 @@ public sealed class MeasuredFindingService
     private readonly HubContext _hub;
     private readonly FindingIngestionService _ingestion;
     private readonly MachineConfigStore _machines;
+    private readonly SettingsService _settings;
 
+    /// <param name="settings">
+    /// El umbral configurado (BUGFIX-AJUSTES). Se lee en cada reconciliación y en cada
+    /// re-medición: el hallazgo medido no puede juzgarse contra un umbral distinto del que acaba
+    /// de clasificar la unidad, o el inventario y la lista de hallazgos se contradicen.
+    /// </param>
     public MeasuredFindingService(
-        HubContext hub, FindingIngestionService ingestion, MachineConfigStore machines)
+        HubContext hub, FindingIngestionService ingestion, MachineConfigStore machines,
+        SettingsService settings)
     {
         _hub = hub;
+        _settings = settings;
         _ingestion = ingestion;
         _machines = machines;
     }
@@ -97,6 +105,7 @@ public sealed class MeasuredFindingService
             return MeasuredReconciliation.Empty;
         }
 
+        MeasureThresholds thresholds = _settings.Current.Thresholds;
         string commit = GitInfo.HeadSha(clonePath);
         string by = _hub.ResolveIdentity().Name;
         DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -137,7 +146,7 @@ public sealed class MeasuredFindingService
 
             if (f.Status == FindingStatus.Activo && !isLarge)
             {
-                string evidence = $"re-escaneo {when}: {unit.Loc} LOC < umbral {app.Thresholds.LargeUnitLoc}"
+                string evidence = $"re-escaneo {when}: {unit.Loc} LOC < umbral {thresholds.LargeUnitLoc}"
                     + $", commit del clon {commit}";
                 f.Resolve(new ResolutionStamp(now, ResolutionVia.Medida, AuditMode.Verify, commit, by, evidence));
                 ClearNeedsReview(f, now, by, "resuelto por medición");
@@ -149,7 +158,7 @@ public sealed class MeasuredFindingService
             if (f.Status == FindingStatus.Resuelto && isLarge)
             {
                 string evidence = $"re-escaneo {when}: {unit.Loc} LOC vuelve a superar el umbral "
-                    + $"{app.Thresholds.LargeUnitLoc}, commit del clon {commit}";
+                    + $"{thresholds.LargeUnitLoc}, commit del clon {commit}";
                 f.Reopen(now, by, evidence);
                 f.NeedsReview = false;
                 _hub.Store.WriteFinding(slug, f);
@@ -170,7 +179,7 @@ public sealed class MeasuredFindingService
         foreach (string path in large.Where(p => !covered.Contains(p)).OrderBy(p => p, StringComparer.Ordinal))
         {
             InventoryUnit unit = units[path];
-            SubmittedFinding submitted = InventoryScanner.BuildLargeUnitFinding(path, unit.Loc, app.Thresholds);
+            SubmittedFinding submitted = InventoryScanner.BuildLargeUnitFinding(path, unit.Loc, thresholds);
             Finding f = _ingestion.Create(submitted, slug, AuditMode.Lotes, stamp);
             created.Add($"{Alias(f)} {path} ({unit.Loc} LOC)");
         }
@@ -192,7 +201,8 @@ public sealed class MeasuredFindingService
 
         string? clone = _machines.Load().ClonePathFor(slug);
         string path = finding.Locations[0].Path;
-        UnitMeasurement m = UnitMeasure.Measure(clone, path, app.Thresholds);
+        MeasureThresholds thresholds = _settings.Current.Thresholds;
+        UnitMeasurement m = UnitMeasure.Measure(clone, path, thresholds);
 
         if (!m.Measured)
         {
@@ -204,7 +214,7 @@ public sealed class MeasuredFindingService
         DateTimeOffset now = DateTimeOffset.UtcNow;
         string commit = GitInfo.HeadSha(clone);
         string by = _hub.ResolveIdentity().Name;
-        string measured = m.Describe(app.Thresholds);
+        string measured = m.Describe(thresholds);
 
         if (m.Exceeds)
         {

@@ -25,7 +25,8 @@ public sealed class CycleCloseNoticeTests
         var machines = new MachineConfigStore(r.Paths.MachinesJson);
         machines.SetClonePath(r.Slug, r.Clone);
         var service = new CycleService(
-            r.Hub, new UlidFactory(Domain.Abstractions.SystemClock.Instance), new DriftQuery(r.Hub), machines);
+            r.Hub, new UlidFactory(Domain.Abstractions.SystemClock.Instance), TestFactory.Settings(r.Paths),
+            new DriftQuery(r.Hub), machines);
         return service.TryCloseCycle(r.Slug, 1);
     }
 
