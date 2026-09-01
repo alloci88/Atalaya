@@ -474,12 +474,17 @@ importación del baseline v4. Publica una sola vez, al final.
 ### Cuenta
 
 El estado de la conexión: quién eres, si GitHub acepta tus credenciales, si el hub
-está clonado y si Copilot responde. Es el sitio al que te manda cualquier fallo de
-conexión.
+está clonado y si cada **proveedor de auditoría** responde. Es el sitio al que te manda cualquier
+fallo de conexión.
+
+Las tres primeras filas son de **GitHub y no se sustituyen nunca**: sin ellas no hay identidad, ni
+autoría de los commits, ni hub donde escribir los hallazgos. Debajo hay **una fila por proveedor de
+auditoría**, cada una con su propio piloto y su propia instrucción si falta algo. **Basta con tener
+uno listo** para poder auditar: que el otro no esté instalado es información, no una avería.
 
 ### Ajustes
 
-Frescura, modelo de Copilot, el interruptor del
+Frescura, **proveedor de auditoría** y su modelo, el interruptor del
 **arreglo asistido** (encendido por defecto), tema **claro/oscuro**,
 intervalo de sincronización y las acciones destructivas, con su confirmación. Al final,
 **Acerca de Atalaya**: versión, organización y los enlaces al repositorio y a este manual.
@@ -497,7 +502,8 @@ Cada control dice bajo su caja **cuándo surte efecto**, porque no todos aplican
 | --- | --- | --- |
 | **Pasadas del barrido (tope)** | Cuántas veces se repasa cada unidad | En las auditorías que lances **a partir de ahora** |
 | **Frescura (días)** | Cuándo un hallazgo confirmado se marca por revisar | Al guardar; la lista lo aplica al dibujarse |
-| **Modelo de Copilot** | Con qué modelo se auditan y arreglan las cosas | En las sesiones que lances a partir de ahora |
+| **Proveedor de auditoría** | Con quién auditas y verificas tú | En las sesiones que lances a partir de ahora |
+| **Modelo del auditor** | Con qué modelo del proveedor elegido | En las sesiones que lances a partir de ahora |
 | **Arreglo asistido** | Si aparece «Arreglar con agente» | Al guardar |
 | **Sincronización del hub (s)** | Cada cuánto se buscan cambios de tus compañeros | Al guardar, sin reiniciar |
 | **Timeout de Copilot (min)** | Espera máxima por una respuesta del modelo, y por cada compilación del arreglo | Al guardar, en el siguiente turno |
@@ -517,6 +523,95 @@ de pendientes con su hallazgo de tamaño; las que dejen de serlo vuelven a la co
 que abras el Inventario de cada aplicación se te ofrece llevarlo a su política —«tenías 30 en esta
 máquina, ¿lo aplico a la aplicación?»— y se te pregunta **una sola vez** por aplicación. Nada se
 tira sin preguntar.
+
+---
+
+## Proveedores de auditoría
+
+Atalaya sabe auditar con **dos casas distintas**, y tú eliges con cuál. Antes solo había una, y
+cuando la organización agotaba su cuota de Copilot todo el mundo se quedaba parado; ahora hay una
+segunda bolsa, independiente. De propina te da algo que no se podía tener con una sola: **una
+segunda opinión de verdad**.
+
+| | **GitHub Copilot** | **Claude Code** |
+| --- | --- | --- |
+| Qué necesitas | Tu cuenta de GitHub conectada, con asiento de Copilot | El CLI de Claude Code instalado y con sesión iniciada |
+| Quién paga | El asiento de tu organización (peticiones premium) | Tu suscripción de Claude |
+| Cómo se instala | Nada: viaja dentro de Atalaya | `npm install -g @anthropic-ai/claude-code`, y `claude` una vez en tu terminal |
+| Auditar y verificar | Sí | Sí |
+| Arreglo asistido | Sí | Todavía no |
+
+**Atalaya no guarda credenciales de Anthropic.** Usa la sesión que el CLI ya tiene en tu máquina,
+exactamente igual que con Copilot usa tu login de GitHub. Si no has iniciado sesión, Atalaya te lo
+dice en **Cuenta** y te manda a hacerlo en tu terminal; no hay ningún sitio en la aplicación donde
+pegar una clave, y es a propósito.
+
+**GitHub sigue haciendo falta.** Elegir Claude Code cambia quién juzga el código y nada más: la
+identidad, la autoría de los commits y el hub donde viven los hallazgos siguen siendo de GitHub. No
+es un sustituto, es un segundo auditor.
+
+### Cómo se elige
+
+En **Ajustes → Proveedor de auditoría**. Es una preferencia **tuya y de esta máquina** —cada uno
+audita con la cuenta que tiene— y se aplica a la **siguiente** sesión: a mitad de un barrido no se
+cambia de juez. Cada proveedor recuerda **su propio modelo**, así que ir y volver no te deshace la
+elección.
+
+Antes de gastar, **el diálogo de lanzamiento dice con quién vas a auditar**: «Vas a auditar 2
+unidades de XBLAST con Claude Code (modelo opus)». El juez de una sesión no debería descubrirse
+leyendo el informe.
+
+### Qué NO cambia
+
+Nada de lo que Atalaya hace con lo que el auditor le cuenta. Los dos proveedores reciben **el mismo
+prompt** y **las mismas herramientas**, con los mismos nombres; y por encima de ellos, la
+reconciliación, los veredictos, la evidencia de cambio, la huella, los silencios, los ciclos y los
+informes funcionan **exactamente igual**. Cambiar de proveedor no cambia las reglas: cambia quién
+las aplica.
+
+Cada **sesión**, cada **hallazgo** y cada **informe** deja escrito **con qué proveedor y con qué
+modelo** se hizo. Así, meses después, se puede leer quién dijo qué.
+
+### Cuando las dos casas discrepan
+
+Ya existía la mecánica: un auditor que sostiene que un hallazgo **nunca fue un defecto** no lo
+resuelve, deja una **disputa (⚖)** colgada con su razonamiento, y las disputas se **acumulan**.
+
+Con dos proveedores esa marca vale más que antes. Tres modelos de la misma casa discrepando pueden
+estar compartiendo el mismo punto ciego; **dos casas distintas coincidiendo** en que algo no es un
+defecto es lo más parecido a una segunda opinión que hay. Por eso la disputa guarda también **de
+qué casa** venía. Sigue decidiendo una persona: la disputa informa, no cierra nada.
+
+### El coste, dicho como es
+
+**Los dos no cuentan en la misma moneda, y Atalaya no los mezcla.**
+
+- **Copilot** factura **peticiones premium**, con su multiplicador. Es lo que siempre se ha visto.
+- **Claude Code** informa un coste en **dólares de tarifa de lista** — lo que habrían costado esos
+  tokens pagando la API. **Tu suscripción no cobra por llamada**, así que ese número **no es una
+  factura**: sirve para comparar el peso de dos auditorías, no para cuadrar gastos. Donde aparece,
+  aparece con esa etiqueta puesta.
+
+En **Métricas**, cuando en el periodo han auditado las dos casas, **no verás un total**: verás una
+línea por proveedor. Un total sería la suma de dos magnitudes distintas, y no significaría nada.
+Con una sola casa, el número de siempre.
+
+Y antes de lanzar con Claude Code, la estimación **dice lo que sabe y no promete dinero**: «~2
+llamadas estimadas · coste según tu suscripción». Sin tarifa por llamada no hay nada que estimar,
+y Atalaya prefiere decirlo a inventarse una equivalencia.
+
+### Si algo falta
+
+| Lo que ves en **Cuenta** | Qué pasa | Qué hacer |
+| --- | --- | --- |
+| «Claude Code no está instalado» | El CLI no está en esta máquina | Instálalo e inicia sesión en tu terminal |
+| «no has iniciado sesión» | El CLI está, pero sin cuenta | Abre una terminal, ejecuta `claude` y completa el login |
+| «tu suscripción ha agotado su cuota» | Se acabaron las peticiones por ahora | Espera al reset, o audita mientras tanto con Copilot desde Ajustes |
+| «el modelo no está disponible» | El modelo configurado no sirve | Elige otro en Ajustes |
+
+Un proveedor que no está listo **se ve y se explica**: nunca falla en silencio, y nunca deja una
+sesión colgada. Si el proveedor elegido no puede auditar, la sesión **se para antes de gastar** y
+te dice por qué.
 
 ---
 

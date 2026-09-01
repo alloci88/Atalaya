@@ -4,9 +4,26 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-01 (F12 — la cosecha del banco de pruebas).
+Última revisión: 2026-09-01 (F14 — segundo proveedor de auditoría: Claude Code local).
 
 ## En vuelo
+
+- **F14 — el caso de aceptación con Claude Code, con los ojos del usuario.** El circuito está
+  verificado de punta a punta contra el CLI real —auditoría de una unidad sembrada con su hallazgo y
+  su reconciliación, y una verificación que devolvió «resuelto» citando el código—, pero sobre un
+  toolbox de prueba, no sobre el hub. Falta el recorrido **en la aplicación viva**: Ajustes →
+  Claude Code → auditar 2 unidades del banco → ver los hallazgos con sus severidades y la
+  reconciliación normal → verificar uno. Y de paso mirar las dos pantallas que cambian: **Cuenta**
+  con sus dos pilotos (y con GitHub arriba, que es lo que no puede leerse mal) y el **diálogo de
+  lanzamiento** diciendo «con Claude Code (modelo X)» (D-783).
+- **F14 — Métricas con dos proveedores dentro, vista.** Que el azulejo de coste enseñe **una línea
+  por casa y ningún total** está probado por consulta; falta verlo en la ventana, a 1366×768 y en
+  los dos temas, con un hub que tenga sesiones de las dos (D-780).
+- **F14 — las firmas de fallo de Claude Code que aún no hemos visto.** El clasificador se apoya en
+  los errores reales que devolvió el CLI durante la verificación más las formas conocidas de nombrar
+  lo mismo. Lo que no case sale como desconocido con su crudo delante, que es lo correcto; cada vez
+  que aparezca uno nuevo en un log, su firma se añade — igual que se hace con la de Copilot
+  (D-707, D-778).
 
 - **F12 — la calibración de severidad, contra la clave del banco.** Los criterios ya están
   implantados y viajan en el prompt de cada unidad (D-754), pero lo que prueba que calibran es
@@ -123,6 +140,16 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## Aparcado hasta que la realidad lo pida
 
+- **Arreglo asistido con Claude Code** — el siguiente paso natural del proveedor, y F14 lo dejó
+  fuera a propósito para no mezclar dos cosas grandes. Lo que falta no es el transporte, que ya
+  está: son las **cuatro tools del arreglo** (`read_file`, `apply_edit`, `run_build_and_tests`,
+  `fix_done`) servidas por el mismo servidor MCP, y sobre todo la **elicitación** — el `ask_user`
+  que en Copilot llega por `SessionConfig.OnUserInputRequest` y que en el CLI de Claude Code hay que
+  averiguar por dónde entra (MCP tiene `elicitation` en las capacidades del cliente: el CLI la
+  anuncia en su `initialize`, así que el camino existe y hay que verificarlo, N-2). El día que se
+  haga, `ClaudeCodeProvider` implementa `IAssistedFixProvider` y no hay que tocar nada más: el
+  compilador ya separa hoy quién sabe arreglar de quién solo audita (D-775).
+
 - **H9 ampliado**: mejoras sobre la sesión interactiva, según lo que pida el uso real.
 - **Descargas diferenciales**, si los 221 MB por versión molestan. Hoy cada actualización baja el
   paquete entero, que es lo mismo que ya se bajaba a mano. La medición está hecha: 221 MB por
@@ -142,6 +169,31 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **F14 · Segundo proveedor de auditoría: Claude Code local** — Atalaya deja de depender de una sola
+  bolsa de cuota. `ICopilotAgent` se convierte en **`IAuditorProvider`** en un ensamblado propio, y
+  Copilot pasa a ser su primera implementación sin cambiar una línea de comportamiento; el pipeline
+  entero —reconciliación, veredictos, evidencia, huella, informes— sigue **por encima** de la
+  interfaz, así que añadir una casa no cambia resultados, solo quién los propone (D-775). El
+  arreglo asistido se queda en `IAssistedFixProvider`, de Copilot, y que el compilador lo exija
+  impide desviar un arreglo hacia quien no sabe hacerlo. El proveedor elegido se **relee** de los
+  ajustes en cada consulta, no se captura (D-776). El transporte es un **servidor MCP propio por
+  stdio** con un relé de veinte líneas en medio —el CLI lanza los servidores como hijos suyos y
+  Atalaya ya está corriendo— sobre una **tubería con nombre**, no un puerto, y con las **mismas
+  tools que ve Copilot palabra por palabra**, que es lo que hace comparables a las dos casas
+  (D-777). Todo lo del CLI se comprobó ejecutándolo: el prompt va por **stdin** (en Windows es un
+  `.cmd` y `cmd.exe` reinterpretaría el código de dentro), la config MCP va a **fichero**, y
+  **`subtype` miente** — manda `is_error`. Y la trampa: con el servidor MCP caído el CLI termina
+  «con éxito» y sin herramientas, lo que se leería como una unidad limpia; ahora se para, porque
+  «no hay defectos» y «no se pudo mirar» no pueden verse igual (D-778). Los modelos se ofrecen por
+  **alias de familia**, que no caducan como caducó el `gpt-5` a mano (D-779). El coste se registra
+  **con su unidad pegada** y no se mezcla: Claude Code informa tarifa de lista que su suscripción no
+  cobra por llamada, así que Métricas enseña una línea por casa y **ningún total** cuando hay dos
+  (D-780). Cuenta enseña los dos proveedores con **GitHub arriba y sin sustituir** —identidad,
+  autoría y hub lo necesitan siempre—, Ajustes elige, y el diálogo de lanzar **nombra al juez**
+  (D-781). Escribir la cobertura destapó tres defectos que habrían roto toda sesión en el arranque
+  (D-782). 76 tests nuevos, 1.661 en total, más una verificación de punta a punta contra el CLI real
+  (D-783).
 
 - **F12 · La cosecha del banco de pruebas** — el ciclo completo recorrido sobre un repositorio con
   defectos sembrados de severidad conocida. Lo estructural aguantó; lo que salió fueron defectos de

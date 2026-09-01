@@ -21,6 +21,8 @@
     <ProjectReference Include="..\..\src\Atalaya.Domain\Atalaya.Domain.csproj" />
     <!-- F11: el motor del cambio de carpeta se prueba aqui, no lanzando procesos. -->
     <ProjectReference Include="..\..\src\Atalaya.Updater\Atalaya.Updater.csproj" />
+    <!-- F14: la eleccion de proveedor y el tratamiento del coste se prueban aqui, con la app. -->
+    <ProjectReference Include="..\..\src\Atalaya.ClaudeCode\Atalaya.ClaudeCode.csproj" />
   </ItemGroup>
 
 </Project>

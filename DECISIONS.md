@@ -8580,3 +8580,234 @@ habría fallado antes de esta tanda.
 **Verificación humana, que sigue siendo del usuario**: en el banco real, Inventario → Umbrales →
 30 → re-escanear → `MotorCalculoLegacy.cs` sale Grande; y si tenías el 30 en Ajustes, la oferta de
 mudanza aparece una vez por aplicación.
+
+## F14 — Segundo proveedor de auditoría: Claude Code local
+
+Atalaya solo sabía auditar con Copilot. Cuando la organización agota su cuota de peticiones
+premium, todo se para — y no hay nada que arreglar, solo esperar. Enganchar el CLI de Claude Code
+que el usuario ya tiene en su terminal da una **bolsa de cuota independiente** y, de propina, el
+«segundo auditor de otra casa» que llevaba tiempo pendiente.
+
+Alcance: **auditoría por lotes y verificación**. El arreglo asistido sigue siendo solo de Copilot.
+
+### D-775 — La interfaz se separa de la casa, y se llama por lo que hace
+
+`ICopilotAgent` ya era la costura del pipeline, pero llevaba el nombre de un proveedor y vivía en
+su ensamblado. Con dos casas eso deja de ser cosmética: quien captura un fallo no está capturando
+«un fallo de Copilot», y quien inyecta el agente no quiere «el de GitHub» sino **el que audite
+ahora**.
+
+Nace `Atalaya.Agents` con el vocabulario común —payloads, toolboxes, readiness, `IAuditorProvider`
+y las excepciones, renombradas a `Auditor*`—. Copilot pasa a ser su primera implementación **sin
+cambiar una línea de comportamiento**: la suite existente quedó en verde sin tocar un solo test de
+Copilot.
+
+**El pipeline no se movió, y ése es el punto.** Reconciliar, decidir veredictos, guardar la
+evidencia de cambio, calcular la huella, gobernar silencios y redactar informes siguen por ENCIMA
+de la interfaz. Un proveedor no elige qué es un duplicado ni qué se resuelve: reporta por el
+toolbox y la aplicación juzga. Por eso añadir una casa no puede cambiar resultados — solo cambia
+quién los propone.
+
+**El arreglo asistido se queda fuera, con tipo propio.** `IAssistedFixProvider` extiende la
+interfaz común y vive en `Atalaya.Copilot`, porque hoy es verdad de una sola casa. Meterlo en la
+interfaz común habría obligado a Claude Code a declarar un método que no implementa, que es la
+forma educada de mentir. Y que el compilador lo exija impide que elegir otro auditor desvíe por
+accidente un arreglo hacia quien no sabe hacerlo.
+
+**Los miembros nuevos tienen valor por defecto**, igual que `FixAsync` desde F6.9: los dos
+proveedores de verdad los declaran, pero lo repartido por los tests son dobles minúsculos que
+existen para ejercitar UN camino. Obligar a treinta de ellos a inventarse un identificador de
+proveedor no probaría nada.
+
+### D-776 — El registro resuelve el proveedor LEYENDO los ajustes, no capturándolo
+
+`AuditorProviderRegistry.Current` es una propiedad que relee `settings.json` en cada consulta, no
+un campo. Un singleton que capturase el proveedor al arrancar —la sesión en vivo, el resolutor de
+modelo, la pantalla Cuenta— obligaría a reiniciar la aplicación para que Ajustes sirviera de algo:
+**exactamente BUGFIX-AJUSTES otra vez**. Los servicios transitorios (los coordinadores, uno por
+sesión) sí reciben el proveedor ya resuelto, porque dentro de una sesión el juez no puede cambiar
+a mitad.
+
+Un identificador desconocido —un ajuste viejo, un proveedor retirado— **cae a Copilot** en vez de
+dejar a nadie sin poder auditar. Y `NameOf` sabe nombrar identificadores que esta versión ya no
+trae: Métricas e Informes leen sesiones de hace meses.
+
+### D-777 — El transporte: un servidor MCP de Atalaya, por stdio, con un relé en medio
+
+Claude Code recibe herramientas por **MCP**. Un servidor MCP por stdio lo **lanza el cliente** como
+proceso hijo: `claude` arranca un programa y le habla por su entrada y su salida estándar. Atalaya
+es una aplicación de escritorio que ya está corriendo, con el toolbox de la sesión vivo en memoria
+— **no puede ser ese hijo**.
+
+Así que el hijo es `Atalaya.Mcp`, un **relé de veinte líneas** que no entiende nada de lo que
+transporta: pasa bytes de su stdin a una tubería con nombre y de la tubería a su stdout. Toda la
+lógica —catálogo, llamadas, validación— vive dentro de la aplicación, junto al toolbox que persiste
+de verdad. Un relé que no entiende lo que transporta no puede corromperlo ni quedarse desfasado
+cuando el catálogo cambie.
+
+**Una tubería con nombre y no un puerto**: por ahí viajan los hallazgos de la auditoría, y un
+socket en `localhost` lo abre cualquier proceso de la máquina. La tubería la protege el sistema con
+la ACL de quien la crea, no hace falta elegir puerto, y no deja nada a la escucha al acabar. El
+nombre además es aleatorio y de un solo uso.
+
+**Las tools son las MISMAS que ve Copilot, palabra por palabra.** No es pulcritud: el prompt de la
+unidad es el mismo para los dos, y si aquí se llamaran distinto el mismo prompt significaría dos
+cosas y las dos casas no serían comparables. Toda la gracia de tener un segundo auditor es que
+discrepen sobre el CÓDIGO, no sobre las instrucciones.
+
+**Y son exactamente ésas**, por partida doble: `--tools ""` quita todas las herramientas propias
+del CLI (consola, ficheros, red) y `--allowedTools` deja pasar solo las de Atalaya. Es la misma
+salvaguarda que el `OnPermissionRequest` que rechaza todo en Copilot. `--strict-mcp-config` evita
+además heredar los servidores MCP que el usuario tenga configurados: sin eso, dos personas
+auditarían con superficies distintas.
+
+### D-778 — Lo que el CLI real enseñó, y que ninguna documentación contaba (N-2)
+
+Todo lo de abajo salió de **ejecutar el CLI** (2.1.252) antes de escribir el driver, que es lo que
+la norma N-2 exige. Cada punto responde a algo que se vio fallar:
+
+- **El prompt NO puede ir como argumento.** En Windows `claude` es un `.cmd`, así que la línea de
+  órdenes la reinterpreta `cmd.exe`: un prompt con código dentro —que es justo lo que Atalaya
+  manda— trae `&`, `|`, `^` y comillas, y acabaría troceado o ejecutando lo de detrás. Y hay un
+  tope de ~32 000 caracteres que una unidad normal se salta. **Va por stdin**, donde no hay ni
+  escapado ni tope.
+- **El servidor MCP se declara en un FICHERO.** El primer intento lo pasó como cadena JSON en la
+  línea de órdenes y el CLI contestó «MCP config is not a valid JSON»: las barras invertidas de una
+  ruta de Windows no sobreviven al paso por la consola.
+- **La extensión importa al localizarlo.** npm deja `claude` (script sh), `claude.ps1` y
+  `claude.cmd`. De los tres, el único que `Process.Start` sabe lanzar con `UseShellExecute=false`
+  es el `.cmd`; el que no tiene extensión falla con «no es una aplicación válida para esta
+  plataforma».
+- **`subtype` miente.** Un modelo inexistente devuelve `"subtype":"success"` con `"is_error":true`
+  y un 404. **Manda `is_error`**; creerle al `subtype` habría dado por buena una sesión que nunca
+  corrió.
+- **En la salida hay líneas que no son JSON** (`[claude-code:unrecognized_model] {...}`), y tipos
+  de evento que no nos incumben. Se ignoran sin ruido: un parser que se rompiera con una línea
+  desconocida convertiría cada versión nueva del CLI en una avería.
+
+**Y la trampa de verdad, que es la razón de este apartado.** Con el servidor MCP caído, el CLI
+**sigue adelante**: el modelo se queda sin herramientas, no puede reportar nada, y la sesión
+termina con `is_error:false` y `tools:[]`. Eso se leería como **una unidad sin defectos**. Se
+comprueba el estado del servidor en el evento de inicio y la sesión se para: **«no hay defectos» y
+«no se pudo mirar» no pueden verse igual** — lo primero cierra una unidad y lo segundo tiene que
+pararla.
+
+Se acusa al servidor MCP **solo si la sesión arrancó**. Sin evento de inicio, lo que falla es otra
+cosa, y culpar al MCP mandaría a mirar donde no es.
+
+### D-779 — El modelo: alias de familia, que es lo que el CLI ofrece de verdad
+
+El CLI **no publica una lista de modelos** —no hay `claude models list`, se buscó—, así que no se
+le puede preguntar como se le pregunta al SDK de Copilot. Lo que sí documenta su ayuda son los
+**alias de familia**, y ésos son justamente lo que conviene ofrecer: un alias apunta siempre al
+último modelo de su familia, así que **no caduca** como caducó el `gpt-5` escrito a mano que dejó
+rotas las máquinas nuevas (F5.15).
+
+Se comprobó ejecutándolo: `opus`, `sonnet` y `haiku` resuelven hoy a `claude-opus-5`,
+`claude-sonnet-5` y `claude-haiku-4-5-20251001`. Tres alias, tres versiones concretas distintas —
+que es precisamente la prueba de que fijar el id concreto sería el error.
+
+El guarda de F5.15 que prohíbe ids de modelo en producción **se afina en vez de aflojarse**: ahora
+distingue el identificador del PROVEEDOR (`"claude-code"`, que se escribe en el hub y no puede
+cambiar) de un id de modelo versionado, que es lo que caduca. Y un test nuevo fija las dos mitades
+del trato: que los alias viven en **un solo fichero** —el driver, que conoce a su CLI— y que el
+valor por defecto sigue siendo **vacío**, es decir «que elija el CLI».
+
+El modelo es un campo **por proveedor** (`copilotModel`, `claudeCodeModel`). Sus espacios de
+nombres no se solapan: compartir el campo garantizaría que cambiar de casa dejara configurado un
+modelo imposible.
+
+### D-780 — El coste, con honestidad: la unidad viaja pegada al número
+
+**El hecho.** El CLI informa tokens de verdad y también un `total_cost_usd`. Ese número es real,
+pero es lo que habrían costado esos tokens **a tarifa de lista de la API** — el propio CLI lo
+etiqueta `"costBasis": "list"`. Una suscripción de Claude **no factura por llamada**: esa cifra no
+le llega al usuario en ninguna factura.
+
+**Qué se hace con él.** Se guarda, porque es un dato medido y tirarlo sería perder la única forma
+de comparar el peso de dos auditorías. Pero se guarda **con su unidad puesta**, y la unidad no es
+«dólares»: es «USD (tarifa de lista)». Copilot cuenta peticiones premium con multiplicador.
+
+**Y no se mezclan, por construcción y no por buena voluntad:**
+
+- Cada muestra viaja con su `CostUnit`, y la sesión guarda con qué unidad se midió.
+- La sesión guarda además **con qué proveedor** se auditó. Las anteriores a F14 no lo traen, y eso
+  NO es un dato que falte: era Copilot, porque no había otro. Tratarlas como «desconocido» partiría
+  el histórico en dos justo en los hubs con más historia.
+- **Métricas agrupa por proveedor antes de sumar nada.** Con dos casas en el periodo **no hay
+  total** —ni ratio por unidad—: hay una línea por casa. Un total sería la suma de dos magnitudes
+  distintas y parecería dinero. Con una sola casa, el número de siempre, intacto.
+- **La estimación previa solo promedia sesiones del proveedor que va a auditar.**
+- Con Claude Code, el diálogo de lanzamiento **no promete dinero**: dice «~N llamadas estimadas ·
+  coste según tu suscripción», y advierte de que la cifra informada es tarifa de lista.
+
+No se inventa ninguna conversión entre proveedores, ni se inventará: no existe un tipo de cambio
+entre «peticiones premium» y «dólares de lista», y publicarlo sería fabricar una precisión que no
+tenemos (N-2).
+
+### D-781 — El reparto de pantallas: GitHub no se sustituye nunca
+
+- **Cuenta** enseña el estado de los DOS proveedores, cada uno con su piloto y su instrucción si
+  falta algo. Las tres filas de GitHub van **primero** y llevan una frase que dice por qué: sin
+  ellas no hay identidad, ni autoría, ni hub donde escribir, **se audite con quien se audite**.
+  Elegir Claude Code cambia quién juzga y nada más.
+  **Basta con un proveedor listo** para dar la conexión por buena. Antes el primer arranque exigía
+  todas las filas en verde, y con eso Claude Code sin instalar habría dejado atascado en esta
+  pantalla a todo el que solo tuviera Copilot — o sea, a todos los que ya estaban.
+- **Ajustes → Proveedor de auditoría**, justo encima del modelo porque lo condiciona: cambiar de
+  casa recarga la lista y recupera el modelo que esa casa tenía. Es **personal y registrado**
+  (regla de F13, D-769/D-773): lo que llega al hub no es el ajuste, es **con quién se auditó
+  aquella vez**. Un proveedor compartido obligaría a que todo el equipo tuviera las mismas cuentas.
+- **El diálogo de lanzar** dice con qué se va a auditar: «Vas a auditar 2 unidades de XBLAST con
+  Claude Code (modelo opus)». El juez de una sesión no puede descubrirse leyendo el informe.
+
+**Proveedor y modelo quedan escritos** en la sesión, en el sello de detección y en la disputa. Ahí
+es donde más se nota: tres modelos de la misma casa discrepando pueden compartir el mismo punto
+ciego, mientras que **dos casas distintas coincidiendo** es lo más parecido a una segunda opinión
+que existe. Sin el campo, las dos situaciones se leen igual. La mecánica de disputas (⚖) ya
+existía; lo que faltaba era saber de quién venía cada una.
+
+### D-782 — Tres defectos que los tests encontraron antes que el usuario
+
+Escribir la cobertura del driver destapó tres cosas que **habrían roto toda sesión con Claude
+Code**, y las tres en el arranque, antes de la primera llamada al modelo:
+
+1. **Reutilizar un sub-esquema JSON en dos tools reventaba el catálogo.** Un `JsonNode` solo admite
+   un padre, y el esquema de una ubicación se usa en `submit_finding` y en `add_locations` — que es
+   lo natural, porque es la misma forma. Ahora se clona al insertar.
+2. **`JsonArray.Add(string)` envuelve la cadena en un valor «personalizado»** que revienta al
+   serializar con opciones propias. Se escribe una vez por sesión, así que habría fallado siempre.
+3. **El localizador del CLI aceptaba un respaldo al PATH detrás del inyectado**, con lo que el test
+   de «no hay CLI» encontraba el instalado en la máquina y probaba lo contrario de lo que decía
+   probar. Ahora el localizador inyectado **manda**, incluso devolviendo null.
+
+### D-783 — Cobertura (76 tests nuevos, 1.661 en total, todo en verde)
+
+- **El servidor MCP** sobre streams: handshake, catálogo, llamadas, y los errores que NO tiran la
+  conexión —una tool que revienta, un nombre que no existe, una línea ilegible, un método
+  desconocido—. Que la aplicación rechace un payload es normal y el modelo tiene que poder leerlo y
+  corregirse.
+- **El puente, lanzado como PROCESO** contra una tubería de verdad, con el test haciendo el papel
+  del CLI. Es la mitad del diseño que ningún doble puede cubrir: que el relé conecte, que no se
+  coma un byte, que descargue cada mensaje en vez de esperar a llenar un buffer, y que se muera
+  cuando le cierran la entrada en vez de dejar un proceso colgado por sesión. Y que **no se
+  cuelgue** si no hay nadie escuchando.
+- **El lanzador contra un CLI falso** —un `.cmd` real, igual que el auténtico en Windows— con
+  guiones que son la forma real capturada del CLI: sesión completa, prompt con metacaracteres de
+  consola, prompt de 200 000 caracteres, salida malformada, CLI que muere a mitad, modelo
+  inexistente, cuota agotada, servidor MCP caído, y cancelación. **Ninguno deja un proceso vivo ni
+  una sesión esperando.**
+- **La elección y el coste**, en la aplicación: que el proveedor se relee sin reiniciar, que un id
+  desconocido cae a Copilot, que la sesión registra proveedor y modelo, que con dos casas no hay
+  total ni ratio, que las sesiones de antes de F14 cuentan como Copilot, que la estimación no
+  promedia entre casas, que el diálogo nombra al juez, y que Cuenta pone GitHub primero.
+
+**Verificación de punta a punta contra el CLI REAL**, con el proveedor de producción entero
+(localizador → auth → tubería → puente → servidor MCP → toolbox): una unidad sembrada auditada
+—hallazgo de división por cero en severidad alta, con su ubicación—, el hallazgo existente
+reconciliado como `presente` con evidencia, `unit_done` llamada, y después una verificación que
+devolvió `resuelto` citando el código arreglado. El uso llegó con su unidad puesta.
+
+**Caso de aceptación humano, que sigue siendo del usuario**: Ajustes → Claude Code → auditar 2
+unidades del banco → hallazgos con sus severidades y reconciliación normal → verificar uno. El
+mismo recorrido de siempre con el otro auditor.
