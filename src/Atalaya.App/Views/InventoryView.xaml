@@ -377,6 +377,32 @@
                                         Command="{Binding ManageDirectivesCommand}"
                                         ToolTip="Activar los ficheros de convenciones del proyecto, decidir a qué flujo aplica cada uno, ordenarlos y ver cuánto presupuesto consumen." />
                 </StackPanel>
+                <!-- F13: el umbral de tamaño es política de la aplicación y se edita aquí, junto a
+                     lo demás que gobierna qué se reporta. En Ajustes no está: aquello es de esta
+                     máquina, y esto clasifica el inventario que comparte el equipo. -->
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <TextBlock VerticalAlignment="Center" ToolTip="{Binding ThresholdsTooltip}"><Run Text="Umbrales: " /><Run Text="{Binding LargeUnitLoc}" FontWeight="Bold" /><Run Text=" LOC · " /></TextBlock>
+                    <ui:HyperlinkButton Content="Gestionar" Padding="0" Margin="0" VerticalAlignment="Center"
+                                        Command="{Binding ManageThresholdsCommand}"
+                                        ToolTip="Fijar a partir de cuántas líneas —o de cuántos caracteres— una unidad es demasiado grande para auditarla de una vez. Es política de la aplicación: vale para todo el equipo y aplica en el próximo re-escaneo." />
+                </StackPanel>
+                <!-- La mudanza del umbral personal, ofrecida UNA vez por aplicación. -->
+                <Border CornerRadius="6" Padding="10,8" Margin="0,8,0,0"
+                        Background="{DynamicResource SubtleFillColorTertiaryBrush}"
+                        Visibility="{Binding HasLargeUnitOffer, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <TextBlock Text="{Binding LargeUnitOfferLabel}" TextWrapping="Wrap" FontSize="11.5"
+                                   ToolTip="Este umbral era un ajuste de tu máquina y ahora es política de cada aplicación. Se te pregunta una vez por aplicación: lo que decidas queda en el hub, para todo el equipo." />
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <ui:HyperlinkButton Content="Aplicar a la aplicación" Padding="0" Margin="0"
+                                                Command="{Binding AcceptLargeUnitOfferCommand}"
+                                                ToolTip="Escribe ese umbral en la política de esta aplicación y lo publica en el hub, para todo el equipo." />
+                            <ui:HyperlinkButton Content="Aquí no" Padding="0" Margin="14,0,0,0"
+                                                Command="{Binding DismissLargeUnitOfferCommand}"
+                                                ToolTip="Deja esta aplicación con su política y no vuelve a preguntar por ella." />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
                 <!-- F5.7 §4: el resultado de la última acción va por el toast global, no
                      incrustado al fondo de este panel, donde se quedaba pegado. -->
             </StackPanel>

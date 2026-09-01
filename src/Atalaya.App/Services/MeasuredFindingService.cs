@@ -72,19 +72,11 @@ public sealed class MeasuredFindingService
     private readonly HubContext _hub;
     private readonly FindingIngestionService _ingestion;
     private readonly MachineConfigStore _machines;
-    private readonly SettingsService _settings;
 
-    /// <param name="settings">
-    /// El umbral configurado (BUGFIX-AJUSTES). Se lee en cada reconciliación y en cada
-    /// re-medición: el hallazgo medido no puede juzgarse contra un umbral distinto del que acaba
-    /// de clasificar la unidad, o el inventario y la lista de hallazgos se contradicen.
-    /// </param>
     public MeasuredFindingService(
-        HubContext hub, FindingIngestionService ingestion, MachineConfigStore machines,
-        SettingsService settings)
+        HubContext hub, FindingIngestionService ingestion, MachineConfigStore machines)
     {
         _hub = hub;
-        _settings = settings;
         _ingestion = ingestion;
         _machines = machines;
     }
@@ -105,7 +97,9 @@ public sealed class MeasuredFindingService
             return MeasuredReconciliation.Empty;
         }
 
-        MeasureThresholds thresholds = _settings.Current.Thresholds;
+        // La política de la app, la misma con la que se acaba de clasificar el inventario: el
+        // hallazgo medido y el estado de la unidad no pueden juzgarse contra umbrales distintos.
+        Thresholds thresholds = app.Thresholds;
         string commit = GitInfo.HeadSha(clonePath);
         string by = _hub.ResolveIdentity().Name;
         DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -201,7 +195,7 @@ public sealed class MeasuredFindingService
 
         string? clone = _machines.Load().ClonePathFor(slug);
         string path = finding.Locations[0].Path;
-        MeasureThresholds thresholds = _settings.Current.Thresholds;
+        Thresholds thresholds = app.Thresholds;
         UnitMeasurement m = UnitMeasure.Measure(clone, path, thresholds);
 
         if (!m.Measured)

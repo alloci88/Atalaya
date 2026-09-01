@@ -15,36 +15,29 @@ public enum TechStack
 }
 
 /// <summary>
-/// Los umbrales que la aplicación MIDE por su cuenta, sin preguntarle a nadie: cuándo una unidad
-/// es demasiado grande para auditarla de una vez, y cuándo un hallazgo confirmado se ha quedado
-/// viejo (§4, §8).
+/// Per-app thresholds (§4), persisted in app.json y COMPARTIDOS con todo el equipo.
 /// <para>
-/// <b>Viven en <c>settings.json</c>, no en <c>app.json</c></b> (BUGFIX-AJUSTES). Son la misma clase
-/// de preferencia que el tope de pasadas (D-097): quien audita decide con qué grano trabaja, y
-/// subir el umbral desde una máquina no puede imponérselo al resto del equipo. Y por la misma
-/// razón que allí, el campo <b>no se queda</b> en <see cref="Thresholds"/> «por compatibilidad»: un
-/// valor que ya nadie lee, guardado junto a los que sí, es la invitación a leer el equivocado — que
-/// es exactamente lo que había pasado.
+/// <b>La regla (F13):</b> lo que escribe estado compartido se gobierna con ajuste compartido; lo
+/// personal solo gobierna lo local. El umbral de «unidad grande» clasifica el inventario y crea
+/// hallazgos que viven en el hub, así que es <b>política de la aplicación</b> y vive aquí: una
+/// sola verdad para todo el equipo, versionada en git — el commit del hub dice quién la cambió y
+/// cuándo. El tope de pasadas y el modelo, que solo gastan la cuota de quien lanza la sesión, no
+/// están aquí y no deben estarlo (D-097).
 /// </para>
-/// </summary>
-public sealed class MeasureThresholds
-{
-    /// <summary>A unit above this LOC (or <see cref="LargeUnitChars"/>) is "grande" (§4).</summary>
-    public int LargeUnitLoc { get; set; } = 1500;
-
-    public int LargeUnitChars { get; set; } = 60_000;
-
-    /// <summary>Days since last confirmation before the freshness semaphore warns (§8, V3).</summary>
-    public int FreshnessDays { get; set; } = 60;
-}
-
-/// <summary>
-/// Per-app thresholds (§4), persisted in app.json y COMPARTIDOS con todo el equipo. Lo que es
-/// preferencia de quien opera —el umbral de unidad grande, la frescura, el tope de pasadas— no
-/// vive aquí: ver <see cref="MeasureThresholds"/> y D-097.
 /// </summary>
 public sealed class Thresholds
 {
+    /// <summary>
+    /// A partir de cuántas LOC (o de cuántos caracteres, <see cref="LargeUnitChars"/>) una unidad
+    /// es «grande» (§4). Política de la aplicación: la editan «Umbrales · Gestionar» en el panel
+    /// del Inventario, y la lee quien clasifica —escaneo, re-escaneo, siembra y reinicio de ciclo—
+    /// en el momento de clasificar.
+    /// </summary>
+    public int LargeUnitLoc { get; set; } = 1500;
+
+    /// <summary>El mismo umbral por peso: una unidad corta pero enorme tampoco cabe de una vez.</summary>
+    public int LargeUnitChars { get; set; } = 60_000;
+
     /// <summary>
     /// TTL por defecto de un claim, en minutos (§2). Lo aplica <c>SessionCoordinator</c> al
     /// publicarlos: es propiedad de la app —cuánto tarda el equipo en dar por muerta una sesión

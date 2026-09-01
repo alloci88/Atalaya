@@ -18,7 +18,52 @@ internal static class TestFactory
     public static GitHubAccountService Account(AppPaths paths, IClock? clock = null)
         => new(new AccountStore(paths), clock ?? SystemClock.Instance);
 
-    /// <summary>Los ajustes de esta máquina, ya cargados. Es de donde sale el umbral (§4).</summary>
+    /// <summary>
+    /// El Inventario montado con lo mínimo (F13). Existe para los tests que necesitan el panel de
+    /// gobernanza —la política de tamaño y la oferta de mudanza— sin levantar media aplicación.
+    /// </summary>
+    public static ViewModels.InventoryViewModel Inventory(
+        HubContext hub,
+        AppPaths paths,
+        MachineConfigStore machines,
+        IUlidFactory ulids,
+        SettingsService settings,
+        ToastCenter toasts)
+    {
+        var ingestion = new FindingIngestionService(hub, ulids);
+        var agent = new FakeCopilotAgent();
+        var openSession = new OpenSessionStore(paths);
+        var live = new LiveSessionService(
+            () => new SessionCoordinator(
+                hub, ingestion, new ReconciliationService(hub), machines, ulids, agent, settings),
+            agent, openSession, hub);
+        var governance = new GovernanceService(hub, ulids);
+        var directives = new DirectiveService(hub, new Atalaya.Inventory.DirectiveScanner(), ulids);
+
+        return new ViewModels.InventoryViewModel(
+            hub, ulids, new NavigationService(new EmptyServiceProvider()), live, settings,
+            new CostEstimator(hub), new AlwaysConfirms(), new GroupExpansionMemory(), toasts,
+            Links(hub, paths), LinkFlow(hub, paths, toasts),
+            new InventoryRescanService(hub, new Atalaya.Inventory.InventoryScanner()),
+            governance, new NoPatternSilencesDialog(),
+            directives, new NoDirectivesDialog(),
+            new DriftQuery(hub), new NoDeletedUnitsDialog(),
+            new ThresholdPolicyService(hub), new NoThresholdsDialog());
+    }
+
+    /// <summary>El confirmador que dice que sí: los tests que no ejercitan el diálogo no lo montan.</summary>
+    public sealed class AlwaysConfirms : IAuditLaunchConfirmer
+    {
+        public bool Confirm(AuditLaunchConfirmation confirmation) => true;
+    }
+
+    /// <summary>El diálogo de umbrales que no abre nada: el inventario lo pide y no hay ventana.</summary>
+    public sealed class NoThresholdsDialog : IThresholdsDialog
+    {
+        public ThresholdsViewModel Show(ThresholdsViewModel viewModel) => viewModel;
+    }
+
+    /// <summary>Los ajustes de esta máquina, ya cargados. De aquí sale la frescura (§8).</summary>
     public static SettingsService Settings(AppPaths paths)
     {
         var settings = new SettingsService(paths);
@@ -50,7 +95,7 @@ internal static class TestFactory
         => new(
             hub,
             Links(hub, paths),
-            new InventoryRescanService(hub, new InventoryScanner(), settings ?? Settings(paths)),
+            new InventoryRescanService(hub, new InventoryScanner()),
             picker ?? new NoFolderPicker(),
             dialog ?? new NoLinkCloneDialog(),
             toasts ?? new ToastCenter());
@@ -118,8 +163,7 @@ internal static class TestFactory
             LinkFlow(hub, paths, toasts, settings: settings),
             new ImportService(hub),
             picker ?? new NoFolderPicker(),
-            new MeasuredFindingService(hub, new FindingIngestionService(hub, ulids), machines, settings),
-            settings);
+            new MeasuredFindingService(hub, new FindingIngestionService(hub, ulids), machines));
 
     /// <summary>El panel de métricas (F5.9) sin nada que abra una ventana ni un fichero.</summary>
     public static MetricsViewModel Metrics(

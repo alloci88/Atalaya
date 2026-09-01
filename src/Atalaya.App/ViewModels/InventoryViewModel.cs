@@ -88,6 +88,11 @@ public sealed partial class InventoryViewModel : ViewModelBase
     /// </summary>
     private bool _selectionFromDrift;
 
+    /// <summary>F13: la política de tamaño de la aplicación, que se edita aquí y no en Ajustes.</summary>
+    private readonly ThresholdPolicyService _thresholds;
+
+    private readonly IThresholdsDialog _thresholdsDialog;
+
     public InventoryViewModel(
         HubContext hub, IUlidFactory ulids, NavigationService navigation, LiveSessionService live,
         SettingsService settings, CostEstimator costs, IAuditLaunchConfirmer confirmer,
@@ -95,8 +100,11 @@ public sealed partial class InventoryViewModel : ViewModelBase
         CloneLinkService links, LinkCloneFlow linkFlow, InventoryRescanService rescan,
         GovernanceService governance, IPatternSilencesDialog patternsDialog,
         DirectiveService directives, IDirectivesDialog directivesDialog,
-        DriftQuery driftQuery, IDeletedUnitsDialog deletedDialog)
+        DriftQuery driftQuery, IDeletedUnitsDialog deletedDialog,
+        ThresholdPolicyService thresholds, IThresholdsDialog thresholdsDialog)
     {
+        _thresholds = thresholds;
+        _thresholdsDialog = thresholdsDialog;
         _driftQuery = driftQuery;
         _deletedDialog = deletedDialog;
         _governanceForDeleted = governance;
@@ -493,6 +501,12 @@ public sealed partial class InventoryViewModel : ViewModelBase
         ActiveDirectives = directives.Count(d => d.IsActive);
         NewDirectiveCandidates = _directives.NewCandidates(Slug, Link.Path).Count;
 
+        // F13: el umbral de tamaño es gobernanza de la aplicación y se lee de su app.json, que es
+        // donde lo escribe «Umbrales · Gestionar». Enseñarlo aquí es lo que hace que un inventario
+        // con 40 unidades grandes se pueda explicar sin abrir nada.
+        LargeUnitLoc = app.Thresholds.LargeUnitLoc;
+        RefreshLargeUnitOffer();
+
         var sessions = _hub.Store.ListSessions(Slug);
         CycleStart start = CycleSummary.StartOf(sessions, CycleN);
         CycleLabel = CycleSummary.Label(CycleN, start);
@@ -845,6 +859,115 @@ public sealed partial class InventoryViewModel : ViewModelBase
         Rebuild();
     }
 
+    /// <summary>El umbral vigente de la aplicación, en líneas. Lo enseña el panel de gobernanza.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ThresholdsTooltip))]
+    private int _largeUnitLoc = 1500;
+
+    public string ThresholdsTooltip
+        => $"A partir de {LargeUnitLoc} líneas una unidad sale «Grande» y no entra en la cola de "
+           + "auditoría. Es política de esta aplicación: vive en el hub, vale para todo el equipo y "
+           + "aplica en el próximo re-escaneo.";
+
+    /// <summary>
+    /// La oferta de mudanza (F13): esta máquina traía un umbral personal distinto del de fábrica —
+    /// de cuando el ajuste era de Ajustes— y esta aplicación no lo tiene como política. Se ofrece
+    /// UNA vez por aplicación, y la respuesta se apunta: una oferta que reaparece en cada visita es
+    /// un aviso que se aprende a ignorar.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LargeUnitOfferLabel))]
+    private bool _hasLargeUnitOffer;
+
+    public string LargeUnitOfferLabel
+        => $"Tenías {_settings.Current.Thresholds.LegacyLargeUnitLoc} LOC configurados en esta "
+           + $"máquina, de cuando el umbral era un ajuste personal. Esta aplicación usa "
+           + $"{LargeUnitLoc}. ¿Lo aplico a la política de «{AppName}», para todo el equipo?";
+
+    /// <summary>
+    /// ¿Hay algo que ofrecer? Solo si el valor heredado existe, dice algo distinto de la política
+    /// vigente, y no se ha contestado ya por esta aplicación.
+    /// </summary>
+    private void RefreshLargeUnitOffer()
+    {
+        LocalThresholds local = _settings.Current.Thresholds;
+        HasLargeUnitOffer = local.HasLegacyLargeUnit
+            && local.LegacyLargeUnitLoc != LargeUnitLoc
+            && !_settings.Current.LargeUnitOfferedApps.Contains(Slug, StringComparer.OrdinalIgnoreCase);
+        OnPropertyChanged(nameof(LargeUnitOfferLabel));
+    }
+
+    /// <summary>Lleva el umbral heredado a la política de ESTA aplicación, y lo publica.</summary>
+    [RelayCommand]
+    private void AcceptLargeUnitOffer()
+    {
+        int inherited = _settings.Current.Thresholds.LegacyLargeUnitLoc;
+        if (Slug.Length == 0 || inherited <= 0)
+        {
+            return;
+        }
+
+        ThresholdPolicyResult result = _thresholds.Set(Slug, inherited, _thresholds.Read(Slug).LargeUnitChars);
+        AnswerLargeUnitOffer();
+        _toasts.Show(result.Saved
+            ? $"Umbral de «{AppName}» = {result.LargeUnitLoc} LOC, ahora para todo el equipo. "
+              + "Aplica en el próximo re-escaneo."
+            : result.Message);
+        Rebuild();
+    }
+
+    /// <summary>«Aquí no»: se apunta la respuesta y no se vuelve a preguntar por esta aplicación.</summary>
+    [RelayCommand]
+    private void DismissLargeUnitOffer()
+    {
+        AnswerLargeUnitOffer();
+        RefreshLargeUnitOffer();
+    }
+
+    /// <summary>
+    /// Apunta que esta aplicación ya contestó, y retira el valor heredado en cuanto no le quede
+    /// ninguna por preguntar que pudiera quererlo. Un número que ya no gobierna nada no puede
+    /// quedarse en el fichero invitando a que alguien lo lea.
+    /// </summary>
+    private void AnswerLargeUnitOffer()
+    {
+        AppSettings settings = _settings.Current;
+        if (!settings.LargeUnitOfferedApps.Contains(Slug, StringComparer.OrdinalIgnoreCase))
+        {
+            settings.LargeUnitOfferedApps.Add(Slug);
+        }
+
+        var pending = _hub.Store.ListAppSlugs()
+            .Where(s => !settings.LargeUnitOfferedApps.Contains(s, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+        if (pending.Count == 0)
+        {
+            settings.Thresholds.LegacyLargeUnitLoc = 0;
+            settings.LargeUnitOfferedApps.Clear();
+        }
+
+        _settings.Save(settings);
+        HasLargeUnitOffer = false;
+    }
+
+    /// <summary>
+    /// «Umbrales · Gestionar» (F13). Vive aquí y no en Ajustes porque lo que decide —qué unidades
+    /// son grandes— se escribe en el hub y lo comparte el equipo entero.
+    /// </summary>
+    [RelayCommand]
+    private void ManageThresholds()
+    {
+        if (Slug.Length == 0)
+        {
+            return;
+        }
+
+        var vm = new ThresholdsViewModel(_thresholds, _toasts);
+        vm.Load(Slug, AppName, _allUnits);
+        _thresholdsDialog.Show(vm);
+        Rebuild();
+    }
+
     /// <summary>
     /// Abre «Vincular clon local…» / «Reparar vínculo…» sin salir del inventario (F5.8 §3): el
     /// acceso directo que acompaña a cada acción deshabilitada. Al volver, la página se
@@ -932,10 +1055,9 @@ public sealed partial class InventoryViewModel : ViewModelBase
                 var fresh = new InventoryCycle { CycleN = next };
                 foreach (InventoryUnit u in current.Units)
                 {
-                    // Nothing is deleted; large units are re-evaluated against the threshold (§5.5),
-                    // el CONFIGURADO y leído ahora (BUGFIX-AJUSTES): reiniciar el ciclo fue lo
-                    // tercero que el usuario probó, y era el tercer sitio que leía el app.json.
-                    bool large = u.Loc > _settings.Current.Thresholds.LargeUnitLoc;
+                    // Nothing is deleted; large units are re-evaluated against the threshold
+                    // (§5.5) — la política de la aplicación, leída ahora (F13).
+                    bool large = u.Loc > app.Thresholds.LargeUnitLoc;
                     fresh.Units.Add(new InventoryUnit
                     {
                         Path = u.Path,

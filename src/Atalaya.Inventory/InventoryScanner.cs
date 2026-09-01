@@ -30,14 +30,15 @@ public sealed class InventoryScanner
     /// <summary>Un título constante para que el auditor lo reconozca entre ciclos (§4, F4).</summary>
     private const string LargeUnitTitle = "Unidad demasiado grande para auditar como una sola unidad";
 
-    /// <param name="thresholds">
-    /// El umbral de «unidad grande» CONFIGURADO, tal y como está en el momento de escanear
-    /// (BUGFIX-AJUSTES). Se pasa en cada llamada y no se captura en ninguna parte: el escáner leía
-    /// <c>config.Thresholds</c> —el <c>app.json</c> del hub, que Ajustes no toca— y por eso subir o
-    /// bajar el umbral en la pantalla no cambiaba una sola clasificación.
-    /// </param>
-    public ScanOutput Scan(string root, AppConfig config, int cycleN, MeasureThresholds thresholds)
+    /// <summary>
+    /// Clasifica contra la POLÍTICA de la aplicación (<c>config.Thresholds</c>, F13): el umbral
+    /// vive en el <c>app.json</c> del hub porque lo que sale de aquí —el estado de cada unidad y
+    /// los hallazgos de tamaño— lo comparte todo el equipo. Se lee del <see cref="AppConfig"/> que
+    /// llega en la llamada, que quien re-escanea acaba de leer del hub: nada se captura.
+    /// </summary>
+    public ScanOutput Scan(string root, AppConfig config, int cycleN)
     {
+        Thresholds thresholds = config.Thresholds;
         root = Path.GetFullPath(root);
         TechStack stack = config.Stack != TechStack.Unknown ? config.Stack : StackDetector.Detect(root);
         StackProfile profile = StackProfile.For(stack);
@@ -92,7 +93,7 @@ public sealed class InventoryScanner
     /// only in the description, so the title the auditor reconciles against is stable
     /// across cycles even as the file grows.
     /// </summary>
-    public static SubmittedFinding BuildLargeUnitFinding(string path, int loc, MeasureThresholds thresholds)
+    public static SubmittedFinding BuildLargeUnitFinding(string path, int loc, Thresholds thresholds)
         => new(
             RuleId: LargeUnitRuleId,
             Pillar: Pillar.Mejoras,

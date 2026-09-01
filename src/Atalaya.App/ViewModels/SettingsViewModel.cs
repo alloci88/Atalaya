@@ -48,6 +48,12 @@ public sealed record ModelOption(string Id, string Label)
 /// Y añade lo único que faltaba para poder empezar de cero: el restablecimiento de fábrica, con la
 /// confirmación fuerte que su alcance exige (§5).
 /// </para>
+/// <para>
+/// <b>F13 se lleva el umbral de unidad grande.</b> Esta página guarda lo de ESTA máquina, y aquel
+/// umbral clasifica un inventario que comparte todo el equipo: es política de cada aplicación y se
+/// edita en su Inventario. Aquí queda dicho dónde está, sin control que lo edite — dos sitios
+/// editables para el mismo valor son dos verdades esperando a discrepar.
+/// </para>
 /// </summary>
 public sealed partial class SettingsViewModel : ViewModelBase
 {
@@ -93,7 +99,6 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _editor = s.Editor;
         _isLightTheme = string.Equals(s.Theme, "light", StringComparison.OrdinalIgnoreCase);
         _pollingSeconds = s.PollingSeconds;
-        _largeUnitLoc = s.Thresholds.LargeUnitLoc;
         _freshnessDays = s.Thresholds.FreshnessDays;
         _maxPassesPerUnit = s.MaxPassesPerUnit;
         _copilotTimeoutMinutes = s.CopilotTimeoutMinutes;
@@ -110,7 +115,6 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _editor;
     [ObservableProperty] private bool _isLightTheme;
     [ObservableProperty] private int _pollingSeconds;
-    [ObservableProperty] private int _largeUnitLoc;
     [ObservableProperty] private int _freshnessDays;
     [ObservableProperty] private int _maxPassesPerUnit;
     [ObservableProperty] private int _copilotTimeoutMinutes;
@@ -222,9 +226,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
         s.PollingSeconds = Floor(
             PollingSeconds, SettingsLimits.MinPollingSeconds, "la sincronización del hub", "segundos", corrections);
         // Se parte de los umbrales vigentes y solo se pisan los editables: construir un
-        // MeasureThresholds nuevo devolvería a sus valores por defecto los que la página no edita.
-        s.Thresholds.LargeUnitLoc = Floor(
-            LargeUnitLoc, SettingsLimits.MinLargeUnitLoc, "el umbral de unidad grande", "LOC", corrections);
+        // LocalThresholds nuevo devolvería a sus valores por defecto los que la página no edita —
+        // hoy, el umbral heredado que la mudanza de F13 todavía tiene que poder ofrecer.
         s.Thresholds.FreshnessDays = Floor(
             FreshnessDays, SettingsLimits.MinFreshnessDays, "la frescura", "días", corrections);
         // Tope 1 = una pasada única; por eso el barrido no necesita ningún selector de modo por
@@ -275,7 +278,6 @@ public sealed partial class SettingsViewModel : ViewModelBase
         MaxPassesPerUnit = _settings.Current.MaxPassesPerUnit;
         PollingSeconds = _settings.Current.PollingSeconds;
         CopilotTimeoutMinutes = _settings.Current.CopilotTimeoutMinutes;
-        LargeUnitLoc = _settings.Current.Thresholds.LargeUnitLoc;
         FreshnessDays = _settings.Current.Thresholds.FreshnessDays;
         ThemeService.Apply(IsLightTheme ? "light" : "dark");
         // Toast global (F5.3): el aviso vivía al fondo de la página y no se veía sin bajar hasta

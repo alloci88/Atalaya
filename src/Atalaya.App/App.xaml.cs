@@ -180,6 +180,9 @@ public partial class App : Application
         services.AddSingleton<IDirectivesDialog, DirectivesDialogHost>();
         // F9 §4: quién abre la lista de hallazgos sin código.
         services.AddSingleton<IDeletedUnitsDialog, DeletedUnitsDialogHost>();
+        // F13: la política de tamaño de cada aplicación, y quién la abre.
+        services.AddSingleton<ThresholdPolicyService>();
+        services.AddSingleton<IThresholdsDialog, ThresholdsDialogHost>();
         // F5.6 §3 (D-228): el reparto de alias legibles, que nunca se había cableado.
         services.AddSingleton<DisplayIdService>();
         // F5.6 §2 (D-226): el re-anclaje que se persiste al abrir la ficha.
@@ -257,7 +260,6 @@ public partial class App : Application
         services.AddSingleton(sp => new CycleService(
             sp.GetRequiredService<HubContext>(),
             sp.GetRequiredService<IUlidFactory>(),
-            sp.GetRequiredService<SettingsService>(),
             sp.GetRequiredService<DriftQuery>(),
             sp.GetRequiredService<MachineConfigStore>()));
         services.AddSingleton<StatusExporter>();

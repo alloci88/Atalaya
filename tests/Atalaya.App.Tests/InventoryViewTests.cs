@@ -106,14 +106,16 @@ public sealed class InventoryViewTests : IDisposable
         // F9: la deriva y la lista de hallazgos sin código, que el inventario pide.
         services.AddSingleton(sp => new DriftQuery(sp.GetRequiredService<HubContext>()));
         services.AddSingleton<IDeletedUnitsDialog, TestFactory.NoDeletedUnitsDialog>();
+        // F13: la política de tamaño de la aplicación, y su diálogo mudo.
+        services.AddSingleton<ThresholdPolicyService>();
+        services.AddSingleton<IThresholdsDialog, TestFactory.NoThresholdsDialog>();
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
     }
 
     /// <summary>
-    /// BUGFIX-AJUSTES — reiniciar el ciclo fue el tercer gesto que el usuario probó, y también
-    /// leía el <c>app.json</c>. Con el umbral de Ajustes en 30, la unidad grande del ciclo nuevo
-    /// se decide con ESE número.
+    /// F13 — reiniciar el ciclo reclasifica con la POLÍTICA de la aplicación: el umbral vive en su
+    /// app.json, que es lo que comparte el equipo, y el ciclo nuevo se siembra con ese número.
     /// </summary>
     [Fact]
     public async Task Reiniciar_el_ciclo_reclasifica_con_el_umbral_de_ajustes()
@@ -123,9 +125,9 @@ public sealed class InventoryViewTests : IDisposable
             CycleN = 1,
             Units = { new InventoryUnit { Path = "src/Legacy.cs", Module = "Legacy", Loc = 1117 } },
         });
-        AppSettings s = _settings.Current;
-        s.Thresholds.LargeUnitLoc = 30;
-        _settings.Save(s);
+        AppConfig app = _hub.Store.TryReadApp("app")!;
+        app.Thresholds.LargeUnitLoc = 30;
+        _hub.Store.WriteApp(app);
 
         InventoryViewModel vm = await Loaded();
         await vm.ResetCycleCommand.ExecuteAsync(null);

@@ -104,7 +104,6 @@ public sealed class SettingsViewModelTests : IDisposable
     [InlineData("MaxPassesPerUnit", 0, "el tope de pasadas", 1)]
     [InlineData("PollingSeconds", 3, "la sincronización del hub", 15)]
     [InlineData("CopilotTimeoutMinutes", 0, "el timeout de Copilot", 1)]
-    [InlineData("LargeUnitLoc", 0, "el umbral de unidad grande", 1)]
     [InlineData("FreshnessDays", -5, "la frescura", 1)]
     public void Un_valor_por_debajo_del_minimo_se_corrige_y_se_dice(
         string property, int value, string what, int minimum)
@@ -131,37 +130,51 @@ public sealed class SettingsViewModelTests : IDisposable
     }
 
     /// <summary>
-    /// El umbral y la frescura también refrescan su caja al guardar. Antes solo lo hacían tres
-    /// campos, así que un umbral corregido seguía enseñando el número que el fichero no tenía.
+    /// La frescura también refresca su caja al guardar. Antes solo lo hacían tres campos, así que
+    /// un valor corregido seguía enseñando el número que el fichero no tenía.
     /// </summary>
     [Fact]
-    public void El_umbral_guardado_es_el_que_queda_en_la_caja_y_en_el_fichero()
+    public void La_frescura_guardada_es_la_que_queda_en_la_caja_y_en_el_fichero()
     {
         SettingsViewModel vm = NewViewModel();
 
-        vm.LargeUnitLoc = 30;
+        vm.FreshnessDays = 30;
         vm.SaveCommand.Execute(null);
 
-        vm.LargeUnitLoc.Should().Be(30);
-        new SettingsService(_paths).Load().Thresholds.LargeUnitLoc.Should().Be(30);
+        vm.FreshnessDays.Should().Be(30);
+        new SettingsService(_paths).Load().Thresholds.FreshnessDays.Should().Be(30);
+    }
+
+    /// <summary>
+    /// F13: el umbral de unidad grande YA NO SE EDITA aquí. Es política de cada aplicación porque
+    /// clasifica un inventario compartido, y dos sitios editables para el mismo valor son dos
+    /// verdades esperando a discrepar.
+    /// </summary>
+    [Fact]
+    public void El_umbral_de_unidad_grande_ya_no_se_edita_en_Ajustes()
+    {
+        typeof(SettingsViewModel).GetProperty("LargeUnitLoc")
+            .Should().BeNull("se gobierna por aplicación, en el Inventario");
+        typeof(LocalThresholds).GetProperty("LargeUnitLoc")
+            .Should().BeNull("y los ajustes de la máquina ya no tienen dónde guardarlo");
     }
 
     [Fact]
     public void Saving_does_not_reset_the_thresholds_the_page_does_not_edit()
     {
-        // El umbral por caracteres no tiene control en la página: guardar no puede devolverlo a
-        // su valor de fábrica por el camino de construir un MeasureThresholds nuevo.
-        _settings.Current.Thresholds.LargeUnitChars = 123_456;
+        // El umbral heredado de la máquina (F13) no tiene control en la página, y guardar no puede
+        // llevárselo por delante: la mudanza todavía tiene que poder ofrecerlo.
+        _settings.Current.Thresholds.LegacyLargeUnitLoc = 30;
         _settings.Save(_settings.Current);
 
         SettingsViewModel vm = NewViewModel();
-        vm.LargeUnitLoc = 900;
+        vm.FreshnessDays = 90;
         vm.SaveCommand.Execute(null);
 
         AppSettings reloaded = new SettingsService(_paths).Load();
-        reloaded.Thresholds.LargeUnitLoc.Should().Be(900);
-        reloaded.Thresholds.LargeUnitChars.Should().Be(123_456,
-            "construir un MeasureThresholds nuevo al guardar lo devolvía a su valor por defecto");
+        reloaded.Thresholds.FreshnessDays.Should().Be(90);
+        reloaded.Thresholds.LegacyLargeUnitLoc.Should().Be(30,
+            "construir un LocalThresholds nuevo al guardar lo devolvía a su valor por defecto");
     }
 
     // ---------- 1b. El guardado se ve (F5.7 §4) ----------

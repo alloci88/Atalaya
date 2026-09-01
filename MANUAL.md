@@ -72,9 +72,16 @@ Las unidades de la aplicación en el ciclo vigente, por módulos, con su estado
 - **Reiniciar ciclo** abre uno nuevo con todo pendiente, sin borrar nada. Es
   distinto del cierre normal, que **siembra** el ciclo siguiente con la deriva
   del que termina (ver «Cambiar de ciclo», más abajo).
-- El panel del ciclo lleva **Patrones silenciados** y **Directivas** con su
-  «Gestionar» al lado: las dos cosas que condicionan qué se reporta en esta
-  aplicación (ver «Directivas del proyecto», más abajo).
+- El panel del ciclo lleva **Patrones silenciados**, **Directivas** y **Umbrales**,
+  cada uno con su «Gestionar» al lado: las tres cosas que condicionan qué se
+  reporta en esta aplicación (ver «Directivas del proyecto», más abajo).
+- **Umbrales · Gestionar** fija a partir de cuántas líneas —o de cuántos
+  caracteres— una unidad es demasiado grande para auditarla de una vez. Es
+  **política de la aplicación**, no una preferencia tuya: vive en el hub, vale
+  para todo el equipo y el historial de git dice quién la cambió y cuándo. La
+  pantalla cuenta, antes de guardar, cuántas unidades pasarían a ser grandes o
+  dejarían de serlo. **Aplica al re-escanear**: guardar no reclasifica nada por
+  sí solo, y cualquier máquina que tenga el cambio clasificará igual.
 - Y las líneas de **deriva**: cambiadas, arregladas sin verificar y sin historial,
   cada una por su lado. No se suman nunca: piden acciones distintas.
 
@@ -472,18 +479,22 @@ conexión.
 
 ### Ajustes
 
-Umbrales (tamaño de unidad, frescura), modelo de Copilot, el interruptor del
+Frescura, modelo de Copilot, el interruptor del
 **arreglo asistido** (encendido por defecto), tema **claro/oscuro**,
 intervalo de sincronización y las acciones destructivas, con su confirmación. Al final,
 **Acerca de Atalaya**: versión, organización y los enlaces al repositorio y a este manual.
 
 **Los ajustes son de esta máquina** —viven en tu `settings.json`, no en el hub—, así que
-cambiarlos no le toca nada a tus compañeros. Cada control dice bajo su caja **cuándo surte
-efecto**, porque no todos aplican igual:
+cambiarlos no le toca nada a tus compañeros. Ésa es justamente la regla que decide qué está aquí:
+**lo que escribe algo que el equipo comparte se gobierna en la aplicación, no en tus Ajustes.** Por
+eso el **umbral de unidad grande** no está en esta pantalla —clasifica el inventario y crea los
+hallazgos de tamaño, que son de todos— y se gobierna en **Inventario → Umbrales**. La **frescura**
+sí está aquí: solo colorea tu lista de hallazgos y no le cambia el estado a nadie.
+
+Cada control dice bajo su caja **cuándo surte efecto**, porque no todos aplican igual:
 
 | Ajuste | Qué gobierna | Cuándo aplica |
 | --- | --- | --- |
-| **Unidad grande (LOC)** | Qué unidades salen «Grande» en el inventario y qué hallazgos de tamaño hay | **Al re-escanear** (y al cerrar o reiniciar el ciclo). El inventario ya escrito no se reclasifica solo |
 | **Pasadas del barrido (tope)** | Cuántas veces se repasa cada unidad | En las auditorías que lances **a partir de ahora** |
 | **Frescura (días)** | Cuándo un hallazgo confirmado se marca por revisar | Al guardar; la lista lo aplica al dibujarse |
 | **Modelo de Copilot** | Con qué modelo se auditan y arreglan las cosas | En las sesiones que lances a partir de ahora |
@@ -497,10 +508,15 @@ efecto**, porque no todos aplican igual:
 sincronización, 1 el resto— y al guardar, si hubo que aplicarlo, el aviso dice cuál era y la caja
 enseña lo que de verdad quedó guardado. Ningún valor se descarta en silencio.
 
-**Cambiar el umbral y ver el efecto**: ponlo, guarda, y **re-escanea** la aplicación desde el
-Inventario. Las unidades que pasen a ser grandes salen de la cola de pendientes con su hallazgo de
-tamaño; las que dejen de serlo vuelven a la cola y ese hallazgo **se resuelve por medida**, con el
-número escrito en su historial («1117 LOC < umbral 1500»).
+**Cambiar el umbral de tamaño y ver el efecto**: se hace en **Inventario → Umbrales · Gestionar**
+de la aplicación, y luego se **re-escanea**. Las unidades que pasen a ser grandes salen de la cola
+de pendientes con su hallazgo de tamaño; las que dejen de serlo vuelven a la cola y ese hallazgo
+**se resuelve por medida**, con el número escrito en su historial («1117 LOC < umbral 1500»).
+
+**Si venías de una versión anterior** y tenías un umbral propio en esta pantalla, la primera vez
+que abras el Inventario de cada aplicación se te ofrece llevarlo a su política —«tenías 30 en esta
+máquina, ¿lo aplico a la aplicación?»— y se te pregunta **una sola vez** por aplicación. Nada se
+tira sin preguntar.
 
 ---
 

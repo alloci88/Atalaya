@@ -62,8 +62,8 @@ public sealed class MeasuredFindingTests : IDisposable
         _machines.SetClonePath("app", _clone);
 
         _ingestion = new FindingIngestionService(_hub, _ulids);
-        _measured = new MeasuredFindingService(_hub, _ingestion, _machines, _settings);
-        _rescan = new InventoryRescanService(_hub, new InventoryScanner(), _settings, _measured);
+        _measured = new MeasuredFindingService(_hub, _ingestion, _machines);
+        _rescan = new InventoryRescanService(_hub, new InventoryScanner(), _measured);
     }
 
     public void Dispose()
@@ -91,7 +91,7 @@ public sealed class MeasuredFindingTests : IDisposable
     {
         var stamp = new DetectionStamp(DateTimeOffset.UtcNow.AddDays(-1), AuditMode.Lotes, "viejo", "alvaro");
         SubmittedFinding submitted = InventoryScanner.BuildLargeUnitFinding(
-            path, loc, _settings.Current.Thresholds);
+            path, loc, _hub.Store.TryReadApp("app")!.Thresholds);
         return _ingestion.Create(submitted, "app", AuditMode.Lotes, stamp);
     }
 

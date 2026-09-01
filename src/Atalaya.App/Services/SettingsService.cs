@@ -17,8 +17,15 @@ namespace Atalaya.App.Services;
 /// </summary>
 public static class SettingsLimits
 {
-    /// <summary>Un umbral de 0 líneas marcaría «grande» hasta un fichero vacío.</summary>
+    /// <summary>
+    /// Un umbral de 0 líneas marcaría «grande» hasta un fichero vacío. Lo aplica la política de la
+    /// aplicación (<c>ThresholdPolicyService</c>): desde F13 el umbral no se edita aquí, pero el
+    /// mínimo se sigue escribiendo en un solo sitio.
+    /// </summary>
     public const int MinLargeUnitLoc = 1;
+
+    /// <summary>Y el mismo suelo por peso: un umbral por debajo de un carácter no dice nada.</summary>
+    public const int MinLargeUnitChars = 1;
 
     /// <summary>Con 0 días todo hallazgo nacería viejo.</summary>
     public const int MinFreshnessDays = 1;
@@ -41,6 +48,39 @@ public static class SettingsLimits
         corrected = value < minimum;
         return corrected ? minimum : value;
     }
+}
+
+/// <summary>
+/// Los umbrales de ESTA máquina (§8 Ajustes). Nunca viajan al hub.
+/// </summary>
+public sealed class LocalThresholds
+{
+    /// <summary>
+    /// A partir de cuántos días sin reconfirmarse un hallazgo se enseña «rancio» (§8, V3).
+    /// <para>
+    /// Personal, y con evidencia (F13 §2): lo único que hace es rellenar <c>FindingRow.IsStale</c>
+    /// al reconstruir la lista. No se escribe en el hallazgo, no se publica y no se confunde con
+    /// <c>NeedsReview</c> —que sí es del hub y lo escriben la reconciliación y la verificación—.
+    /// Es una lente de lectura: dos compañeros con frescuras distintas ven el mismo hallazgo con
+    /// distinto color y ninguno le cambia el estado al otro.
+    /// </para>
+    /// </summary>
+    public int FreshnessDays { get; set; } = 60;
+
+    /// <summary>
+    /// <b>Legado.</b> El umbral de unidad grande que esta máquina tuvo mientras fue un ajuste
+    /// personal (BUGFIX-AJUSTES, entre d859d16 y F13). Ya no gobierna NADA: solo existe para poder
+    /// ofrecer una vez, por aplicación, llevarlo a la política del equipo. Contestada la oferta se
+    /// pone a 0 y deja de existir — un valor que nadie lee no puede quedarse en el fichero
+    /// invitando a leerlo.
+    /// </summary>
+    [JsonPropertyName("largeUnitLoc")]
+    public int LegacyLargeUnitLoc { get; set; }
+
+    /// <summary>¿Hay un umbral heredado que de verdad diga algo distinto de lo de fábrica?</summary>
+    [JsonIgnore]
+    public bool HasLegacyLargeUnit
+        => LegacyLargeUnitLoc > 0 && LegacyLargeUnitLoc != new Thresholds().LargeUnitLoc;
 }
 
 /// <summary>Machine-local application settings (§8 Ajustes). Never stored in the hub.</summary>
@@ -92,18 +132,26 @@ public sealed class AppSettings
     public int PollingSeconds { get; set; } = 60;
 
     /// <summary>
-    /// Los umbrales que la aplicación mide por su cuenta: unidad grande y frescura (§4, §8). Los
-    /// edita Ajustes y los lee quien clasifica, <b>en el momento de clasificar</b>.
+    /// Lo que esta máquina mide para SÍ MISMA. Hoy solo la frescura (§8, V3), que es una lente de
+    /// lectura: colorea la lista de hallazgos de quien mira y no escribe nada en el hub. Por la
+    /// regla de F13 —lo que escribe estado compartido se gobierna con ajuste compartido— eso puede
+    /// seguir siendo personal, y el umbral de tamaño no: aquel se mudó a
+    /// <see cref="Thresholds"/> del <c>app.json</c>.
     /// <para>
-    /// Se llamaba <c>DefaultThresholds</c>, y ese nombre era la mitad del defecto (BUGFIX-AJUSTES):
-    /// «default» invitaba a leerlos como la semilla de otro sitio —el <c>app.json</c> del hub— que
-    /// era donde de verdad miraba el escáner. La CLAVE del fichero sigue siendo
-    /// <c>defaultThresholds</c> a propósito: renombrarla habría tirado el umbral que cada máquina
-    /// ya tiene puesto, que es justo lo que se venía a arreglar.
+    /// La CLAVE del fichero sigue siendo <c>defaultThresholds</c>: renombrarla habría tirado la
+    /// frescura que cada máquina ya tiene puesta, y con ella el umbral heredado que la migración
+    /// tiene que poder ofrecer.
     /// </para>
     /// </summary>
     [JsonPropertyName("defaultThresholds")]
-    public MeasureThresholds Thresholds { get; set; } = new();
+    public LocalThresholds Thresholds { get; set; } = new();
+
+    /// <summary>
+    /// Las aplicaciones a las que ya se les ofreció llevar el umbral heredado de esta máquina a su
+    /// política (F13). Se apunta la respuesta —sea sí o sea no— porque una oferta que reaparece en
+    /// cada visita es un aviso que se aprende a ignorar.
+    /// </summary>
+    public List<string> LargeUnitOfferedApps { get; set; } = new();
 
     /// <summary>
     /// Interruptor del arreglo asistido (§5.7, H9 — entregado en F6.9).

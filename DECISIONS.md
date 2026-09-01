@@ -8470,3 +8470,113 @@ los cinco mínimos, cada uno con su aviso; y que cada fila del XAML declare cuá
 
 **Verificación humana, que sigue siendo del usuario**: en el banco real, umbral a 30 → re-escanear →
 `MotorCalculoLegacy.cs` sale Grande, sin reiniciar nada.
+
+## F13 — Lo que escribe estado compartido se gobierna con ajuste compartido
+
+BUGFIX-AJUSTES arregló el cableado del umbral de unidad grande, pero lo dejó donde no era: un
+ajuste **personal** (`settings.json`) gobernando un resultado **compartido** (la clasificación del
+inventario y los hallazgos de tamaño, que viven en el hub). El propio D-764 lo reconoció y lo
+aceptó: «manda el último que re-escanea». Con el equipo entero usando la app eso no es un matiz,
+es un ping-pong — la misma unidad entrando y saliendo de «Grande», y su hallazgo creándose y
+resolviéndose solo, cada vez que re-escanea alguien con otro número.
+
+### D-769 — La regla, con nombre
+
+**Lo que escribe estado compartido se gobierna con ajuste compartido; lo personal solo gobierna lo
+local.**
+
+Corta en los dos sentidos, y por eso es útil: no convierte en política todo lo que se pueda
+configurar, solo lo que deja rastro en el hub. La prueba para saber de qué lado cae un ajuste es
+una pregunta que se puede contestar mirando el código: **¿lo que decide se escribe en el hub?** Si
+sí, es de la aplicación; si solo cambia lo que ve quien mira, es de la máquina.
+
+### D-770 — El umbral de tamaño vuelve al `app.json`, y se edita por aplicación
+
+`largeUnitLoc` y `largeUnitChars` vuelven a `Thresholds`, en el `app.json` de cada aplicación: una
+sola verdad para todo el equipo, versionada en git — **el commit del hub ES la atribución** de
+quién la cambió y cuándo, así que no hace falta inventarse un campo «modificado por».
+
+Los cuatro caminos que clasifican leen esa política en el momento de clasificar: el escaneo del
+alta, el re-escaneo, la siembra del cierre de ciclo y el reinicio de ciclo. El escáner vuelve a
+leerla del `AppConfig` que recibe —no por un parámetro aparte— porque con una sola fuente el
+parámetro solo servía para poder pasarle la equivocada.
+
+**Se edita en el panel del ciclo del Inventario**, «Umbrales · Gestionar», junto a Patrones
+silenciados y Directivas: las otras dos cosas que gobiernan qué se reporta en esa aplicación. Es
+donde se ve la consecuencia, y es el mismo sitio y el mismo argumento que el presupuesto de
+directivas (D-712). La pantalla valida los mínimos —los de `SettingsLimits`, que ya existían— y los
+**dice**; cuenta cuántas unidades pasarían a ser grandes o dejarían de serlo con lo que hay escrito,
+sobre el inventario que ya hay; y avisa de que **aplica al re-escanear**, sin prometer una
+reclasificación que no va a ocurrir al pulsar Guardar.
+
+**El campo personal desaparece.** En Ajustes queda una línea que dice dónde se gobierna y por qué,
+sin ningún control que lo edite: dos sitios editables para el mismo valor son dos verdades
+esperando a discrepar, que es la lección de d859d16 escrita al derecho. Un test comprueba que no
+queda `{Binding LargeUnitLoc}` en el XAML de Ajustes ni la propiedad en su view-model.
+
+**Sincronización, que es lo que de verdad prueba que esto era el arreglo**: dos clones contra un
+`--bare` local (N-1). Ana fija la política en 30 y publica; María hace pull y **su** re-escaneo, en
+**su** clon del código, saca la unidad de 1.117 líneas como Grande. Antes, con el umbral en cada
+máquina, ese mismo re-escaneo la habría devuelto a pendiente.
+
+### D-771 — La migración: se ofrece una vez por aplicación, y nada se tira en silencio
+
+El umbral que cada máquina tuviera de la etapa personal no se pierde ni se aplica a espaldas de
+nadie. Se conserva en `LocalThresholds.LegacyLargeUnitLoc` —explícitamente marcado como legado, y
+sin que lo lea ningún camino de clasificación— y al abrir el Inventario de una aplicación cuya
+política diga otra cosa se ofrece llevarlo: «tenías 30 configurados en esta máquina; ¿lo aplico a la
+política de X, para todo el equipo?», con «Aplicar a la aplicación» y «Aquí no».
+
+Se pregunta **una vez por aplicación** y la respuesta se apunta —también el «no»—: una oferta que
+reaparece en cada visita es un aviso que se aprende a ignorar. Contestadas todas las aplicaciones
+del hub, el valor heredado se pone a 0 y desaparece del fichero, por la misma regla de D-764: un
+número que ya no gobierna nada no puede quedarse invitando a que alguien lo lea.
+
+Las aplicaciones que ya traían su `Thresholds` en el `app.json` lo conservan; las que lo perdieron
+en la escritura de d859d16 lo recuperan con el valor de fábrica al deserializar, que es lo que
+tenían antes de aquello.
+
+### D-772 — La frescura se queda personal, y aquí está la evidencia
+
+`freshnessDays` se miró antes de decidir (N-2). Lo único que hace es rellenar
+`FindingRow.IsStale = days > freshness` al reconstruir la lista de hallazgos: es una **lente de
+lectura**. No se escribe en el hallazgo, no se publica, y no se confunde con `NeedsReview` —que sí
+vive en el hub y lo escriben la reconciliación y la verificación, nunca el reloj de una máquina—.
+`Finding` no tiene ningún campo «rancio».
+
+Dos compañeros con frescuras distintas ven el mismo hallazgo con distinto color y ninguno le cambia
+el estado al otro. Por la regla, puede seguir siendo personal — y hay un test que lo fija, para que
+si algún día la frescura empezara a escribir estado, salte.
+
+### D-773 — El barrido del resto, para no volver a discutirlo
+
+- **Tope de pasadas** (`maxPassesPerUnit`) — **personal**. Gasta la cuota del asiento de quien
+  lanza la sesión, y su valor **queda registrado en la sesión y en su informe** (D-097): lo que
+  llega al hub no es el ajuste, es el hecho de con qué tope se auditó aquella vez. Que el de al
+  lado use otro no cambia ni una clasificación.
+- **Modelo de Copilot** — **personal**, y por lo mismo: es el asiento de quien lanza, la lista sale
+  de su cuenta, y el modelo usado queda escrito en la sesión. Un modelo compartido obligaría a que
+  todos tuvieran el mismo plan.
+- **Timeout de Copilot**, **sincronización del hub**, **editor**, **tema** — **personales** sin
+  discusión: gobiernan la espera, el reloj, el programa que se abre y los colores de una máquina.
+  Ninguno deja rastro en el hub.
+- **TTL de los claims** (`claimTtlMinutes`) — **de la aplicación**, y ya lo era: cuánto tarda el
+  equipo en dar por muerta una sesión ajena es una propiedad compartida, y el claim se escribe en
+  el hub. Se cableó en D-767 y ahí se queda.
+- **Presupuesto de directivas**, **unidades para pedir confirmación**, **techo de tokens por
+  unidad** — de la aplicación, ya estaban en `app.json`, y la regla los confirma: los tres
+  condicionan lo que se escribe en el hub o lo que se le cuenta al auditor de todos.
+
+### D-774 — Cobertura (17 tests nuevos, 1.585 en total, todo en verde)
+
+La regresión del parte, ahora contra la política: 30 → Grande con su hallazgo → 1.500 → auditable y
+resuelto por medida. Los caminos que clasifican, uno a uno. La pantalla: que guarda en el
+`app.json`, que valida los dos mínimos y los dice, y que su cuenta previa no reclasifica nada. La
+migración: que se ofrece, que aceptar la convierte en política, que rechazar no la toca, que no se
+repite en la visita siguiente y que el valor heredado desaparece cuando ya no queda a quién
+ofrecérselo. La frescura, con su evidencia. Y el de dos clones contra un `--bare`, que es el que
+habría fallado antes de esta tanda.
+
+**Verificación humana, que sigue siendo del usuario**: en el banco real, Inventario → Umbrales →
+30 → re-escanear → `MotorCalculoLegacy.cs` sale Grande; y si tenías el 30 en Ajustes, la oferta de
+mudanza aparece una vez por aplicación.

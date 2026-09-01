@@ -91,6 +91,9 @@ public sealed class DriftInventoryFlowTests : IDisposable
         services.AddSingleton<IDirectivesDialog, TestFactory.NoDirectivesDialog>();
         services.AddSingleton(sp => new DriftQuery(sp.GetRequiredService<HubContext>()));
         services.AddSingleton<IDeletedUnitsDialog, TestFactory.NoDeletedUnitsDialog>();
+        // F13: la política de tamaño de la aplicación, y su diálogo mudo.
+        services.AddSingleton<ThresholdPolicyService>();
+        services.AddSingleton<IThresholdsDialog, TestFactory.NoThresholdsDialog>();
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
     }

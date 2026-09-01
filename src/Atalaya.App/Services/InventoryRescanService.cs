@@ -18,7 +18,6 @@ public sealed class InventoryRescanService
 {
     private readonly HubContext _hub;
     private readonly InventoryScanner _scanner;
-    private readonly SettingsService _settings;
     private readonly MeasuredFindingService? _measured;
     private readonly DirectiveService? _directives;
     private readonly ILogger _log;
@@ -32,19 +31,13 @@ public sealed class InventoryRescanService
     /// Quien sabe qué ficheros de convenciones propone el catálogo (F7 §1). Opcional igual que
     /// <paramref name="measured"/>; sin él, un re-escaneo simplemente no anuncia candidatos.
     /// </param>
-    /// <param name="settings">
-    /// De donde sale el umbral de «unidad grande» (BUGFIX-AJUSTES). Se lee en CADA re-escaneo, no
-    /// se guarda: el gesto que el usuario hace después de cambiar el ajuste es exactamente éste, y
-    /// tiene que ver el valor nuevo sin reiniciar nada.
-    /// </param>
     public InventoryRescanService(
-        HubContext hub, InventoryScanner scanner, SettingsService settings,
+        HubContext hub, InventoryScanner scanner,
         MeasuredFindingService? measured = null, DirectiveService? directives = null,
         ILogger<InventoryRescanService>? log = null)
     {
         _hub = hub;
         _scanner = scanner;
-        _settings = settings;
         _measured = measured;
         _directives = directives;
         _log = log ?? NullLogger<InventoryRescanService>.Instance;
@@ -65,14 +58,15 @@ public sealed class InventoryRescanService
         AppConfig app = _hub.Store.TryReadApp(slug)
                         ?? throw new InvalidOperationException($"La aplicación «{slug}» ya no está en el hub.");
 
-        MeasureThresholds thresholds = _settings.Current.Thresholds;
-        // Queda escrito el número con el que se clasificó. Diagnosticar el defecto que trajo aquí
-        // costó mirar tres ficheros porque el log contaba el resultado y no el criterio.
+        // Queda escrito el número con el que se clasificó, y de dónde salió. Diagnosticar el
+        // defecto que trajo aquí costó mirar tres ficheros porque el log contaba el resultado y no
+        // el criterio.
         _log.LogInformation(
-            "Re-escaneo de {Slug} (ciclo {Cycle}): umbral de unidad grande {Loc} LOC / {Chars} caracteres.",
-            slug, app.CurrentCycle, thresholds.LargeUnitLoc, thresholds.LargeUnitChars);
+            "Re-escaneo de {Slug} (ciclo {Cycle}): umbral de unidad grande {Loc} LOC / {Chars} "
+            + "caracteres (política de la aplicación).",
+            slug, app.CurrentCycle, app.Thresholds.LargeUnitLoc, app.Thresholds.LargeUnitChars);
 
-        ScanOutput scan = _scanner.Scan(clonePath, app, app.CurrentCycle, thresholds);
+        ScanOutput scan = _scanner.Scan(clonePath, app, app.CurrentCycle);
         InventoryCycle? previous = _hub.Store.TryReadInventory(slug, app.CurrentCycle);
         InventoryCycle merged = previous is null
             ? scan.Inventory

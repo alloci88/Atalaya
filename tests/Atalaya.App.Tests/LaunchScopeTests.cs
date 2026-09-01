@@ -129,6 +129,9 @@ public sealed class LaunchScopeTests : IDisposable
         // F9: la deriva y la lista de hallazgos sin código, que el inventario pide.
         services.AddSingleton(sp => new DriftQuery(sp.GetRequiredService<HubContext>()));
         services.AddSingleton<IDeletedUnitsDialog, TestFactory.NoDeletedUnitsDialog>();
+        // F13: la política de tamaño de la aplicación, y su diálogo mudo.
+        services.AddSingleton<ThresholdPolicyService>();
+        services.AddSingleton<IThresholdsDialog, TestFactory.NoThresholdsDialog>();
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
     }

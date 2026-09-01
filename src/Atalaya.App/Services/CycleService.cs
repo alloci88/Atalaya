@@ -82,7 +82,6 @@ public sealed class CycleService
 {
     private readonly HubContext _hub;
     private readonly IUlidFactory _ulids;
-    private readonly SettingsService _settings;
     private readonly DriftQuery? _drift;
     private readonly MachineConfigStore? _machines;
 
@@ -91,19 +90,12 @@ public sealed class CycleService
     /// demostrar que nada cambió, y el ciclo nuevo nace entero pendiente: es el mismo caso que «sin
     /// historial disponible», y la dirección segura es re-auditar de más, nunca de menos.
     /// </param>
-    /// <param name="settings">
-    /// El umbral de «unidad grande» con el que se siembra el ciclo nuevo (BUGFIX-AJUSTES). Es el
-    /// mismo que usa el re-escaneo, y se lee al cerrar: sembrar contra un umbral distinto del que
-    /// clasificó el inventario anterior es cómo una unidad podía salir «Grande» en una lista y
-    /// «Pendiente» en la otra.
-    /// </param>
     public CycleService(
-        HubContext hub, IUlidFactory ulids, SettingsService settings, DriftQuery? drift = null,
+        HubContext hub, IUlidFactory ulids, DriftQuery? drift = null,
         MachineConfigStore? machines = null)
     {
         _hub = hub;
         _ulids = ulids;
-        _settings = settings;
         _drift = drift;
         _machines = machines;
     }
@@ -151,7 +143,9 @@ public sealed class CycleService
         }
 
         int next = expectedCycle + 1;
-        InventoryCycle fresh = CycleSeeding.Seed(inv, next, _settings.Current.Thresholds.LargeUnitLoc, drift);
+        // La siembra reclasifica contra la POLÍTICA de la app (F13), la misma que usó el último
+        // re-escaneo: sembrar contra otro umbral dejaría el ciclo nuevo discrepando del anterior.
+        InventoryCycle fresh = CycleSeeding.Seed(inv, next, app.Thresholds.LargeUnitLoc, drift);
 
         app.CurrentCycle = next;
         _hub.Store.WriteApp(app);

@@ -212,14 +212,19 @@ public sealed class SettingsViewTests
         }
     }
 
-    /// <summary>Y el umbral dice lo que de verdad hace falta hacer: re-escanear.</summary>
+    /// <summary>
+    /// F13: el umbral de unidad grande ya no se edita aquí —es política de cada aplicación— y la
+    /// fila que queda dice dónde está, sin ningún control que lo edite. Dos sitios editables para
+    /// el mismo valor son dos verdades esperando a discrepar.
+    /// </summary>
     [Fact]
-    public void El_umbral_dice_que_aplica_al_re_escanear()
+    public void El_umbral_no_se_edita_en_Ajustes_y_la_pagina_dice_donde_esta()
     {
         string xaml = Markup(SettingsXaml());
 
-        xaml.Should().Contain("Aplica al RE-ESCANEAR");
-        xaml.Should().Contain("Mínimo 1.");
+        xaml.Should().NotContain("{Binding LargeUnitLoc}", "no puede quedar un control que lo edite");
+        xaml.Should().Contain("Se gobierna por aplicación, en Inventario → Gobernanza → Umbrales.");
+        xaml.Should().Contain("Aplica al re-escanear");
     }
 
     [Fact]

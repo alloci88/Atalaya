@@ -13,26 +13,20 @@ using Xunit;
 namespace Atalaya.App.Tests;
 
 /// <summary>
-/// BUGFIX-AJUSTES — que cada ajuste de la pantalla llegue a la función que dice gobernar.
+/// BUGFIX-AJUSTES — que cada ajuste PERSONAL llegue a la función que dice gobernar.
 /// <para>
-/// El parte: con el umbral de unidad grande puesto a 30 LOC, un fichero de 1.117 líneas seguía sin
-/// salir «Grande». Se probó re-escanear, reiniciar y reiniciar el ciclo. El valor SÍ estaba
-/// guardado (<c>settings.json</c> → <c>defaultThresholds.largeUnitLoc: 30</c>): lo que pasaba es
-/// que quien clasifica leía <b>otro fichero</b>, el <c>app.json</c> del hub, donde nadie había
-/// escrito nunca ese 30 y seguía el 1500 de fábrica.
+/// Estos tests no comprueban que el ajuste se guarde —eso ya funcionaba y no habría detectado el
+/// defecto que los trajo—, sino que <b>el consumidor lee el valor configurado</b>. Uno por campo.
 /// </para>
 /// <para>
-/// Por eso estos tests no comprueban que el ajuste se guarde —eso ya funcionaba y no habría
-/// detectado nada—, sino que <b>el consumidor lee el valor configurado</b>. Uno por campo, con la
-/// regresión del umbral (30 → Grande → 1.500 → auditable) delante.
+/// El umbral de tamaño ya no está aquí: desde F13 es política de la aplicación —escribe estado
+/// compartido, así que se gobierna con ajuste compartido— y vive en <c>ThresholdPolicyTests</c>.
+/// Lo que queda en esta pantalla es lo que solo gobierna lo local.
 /// </para>
 /// </summary>
 public sealed class SettingsWiringTests : IDisposable
 {
     private const string RepoUrl = "https://example.invalid/org/app.git";
-
-    /// <summary>El fichero del parte: 1.117 líneas, por debajo del umbral de fábrica.</summary>
-    private const int LegacyLoc = 1117;
 
     private readonly string _root;
     private readonly string _clone;
@@ -42,8 +36,6 @@ public sealed class SettingsWiringTests : IDisposable
     private readonly MachineConfigStore _machines;
     private readonly UlidFactory _ulids = new(SystemClock.Instance);
     private readonly FindingIngestionService _ingestion;
-    private readonly MeasuredFindingService _measured;
-    private readonly InventoryRescanService _rescan;
 
     public SettingsWiringTests()
     {
@@ -65,8 +57,6 @@ public sealed class SettingsWiringTests : IDisposable
         _machines.SetClonePath("app", _clone);
 
         _ingestion = new FindingIngestionService(_hub, _ulids);
-        _measured = new MeasuredFindingService(_hub, _ingestion, _machines, _settings);
-        _rescan = new InventoryRescanService(_hub, new InventoryScanner(), _settings, _measured);
     }
 
     public void Dispose()
@@ -88,156 +78,6 @@ public sealed class SettingsWiringTests : IDisposable
         File.WriteAllText(abs, string.Join('\n', Enumerable.Range(0, lines).Select(i => $"// linea {i}")));
     }
 
-    /// <summary>Pone el umbral COMO LO PONE LA PANTALLA: guardado, no inyectado.</summary>
-    private void SetThresholdFromSettings(int loc)
-    {
-        AppSettings s = _settings.Current;
-        s.Thresholds.LargeUnitLoc = loc;
-        _settings.Save(s);
-    }
-
-    private InventoryUnit UnitOf(string path)
-        => _hub.Store.TryReadInventory("app", 1)!.Units.Single(u => u.Path == path);
-
-    private IReadOnlyList<Finding> SizeFindings()
-        => _hub.Store.ListFindings("app").Where(f => UnitMeasure.IsMeasured(f.RuleId)).ToList();
-
-    // ================================================================ 1 · la regresión del parte
-
-    /// <summary>
-    /// El caso exacto del parte, de ida y de vuelta. Con el umbral en 30 la unidad de 1.117 líneas
-    /// sale <b>Grande</b> y aparece su hallazgo medido; devuelto el umbral a 1.500 vuelve a ser
-    /// auditable y ese hallazgo se resuelve <b>por medida</b>, con el número escrito.
-    /// </summary>
-    [Fact]
-    public void Umbral_30_hace_grande_el_legacy_y_1500_lo_devuelve_a_auditable()
-    {
-        WriteUnit("src/Legacy/MotorCalculoLegacy.cs", LegacyLoc);
-        SetThresholdFromSettings(30);
-
-        _rescan.Rescan("app", _clone);
-
-        UnitOf("src/Legacy/MotorCalculoLegacy.cs").State.Should().Be(UnitState.Grande,
-            "1.117 LOC pasan de 30, y quien clasifica tiene que leer el umbral de Ajustes");
-        Finding size = SizeFindings().Should().ContainSingle().Subject;
-        size.Status.Should().Be(FindingStatus.Activo);
-        size.Description.Should().Contain("1117");
-
-        // Y de vuelta: el umbral se sube y el mismo gesto deshace la clasificación.
-        SetThresholdFromSettings(1500);
-
-        _rescan.Rescan("app", _clone);
-
-        UnitOf("src/Legacy/MotorCalculoLegacy.cs").State.Should().Be(UnitState.Pendiente,
-            "por debajo del umbral la unidad vuelve a la cola de auditoría");
-        Finding resolved = SizeFindings().Should().ContainSingle().Subject;
-        resolved.Status.Should().Be(FindingStatus.Resuelto);
-        resolved.Resolved!.Via.Should().Be(ResolutionVia.Medida);
-        resolved.Resolved!.Justification.Should().Contain("1117 LOC < umbral 1500");
-    }
-
-    /// <summary>
-    /// La causa, fijada donde estaba: el <c>app.json</c> del hub NO decide esto. Antes traía su
-    /// propio <c>largeUnitLoc</c> y era el que mandaba; ahora ni siquiera existe como campo, que es
-    /// la única forma de que nadie vuelva a leerlo (misma regla que D-097).
-    /// </summary>
-    [Fact]
-    public void El_umbral_ya_no_existe_en_el_app_json_del_hub()
-    {
-        typeof(Thresholds).GetProperty("LargeUnitLoc").Should().BeNull();
-        typeof(Thresholds).GetProperty("LargeUnitChars").Should().BeNull();
-        typeof(Thresholds).GetProperty("FreshnessDays").Should().BeNull();
-
-        typeof(AppSettings).GetProperty("Thresholds")!.PropertyType
-            .Should().Be<MeasureThresholds>("la única fuente del umbral son los ajustes de la máquina");
-    }
-
-    /// <summary>
-    /// Y la clave del fichero no se movió: la máquina que ya tenía el 30 escrito lo conserva. Un
-    /// arreglo que empieza tirando el valor que el usuario había puesto no arregla nada.
-    /// </summary>
-    [Fact]
-    public void Un_settings_json_con_el_umbral_ya_puesto_se_sigue_leyendo()
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(_paths.SettingsJson)!);
-        File.WriteAllText(_paths.SettingsJson,
-            """{"defaultThresholds":{"largeUnitLoc":30,"largeUnitChars":60000,"freshnessDays":45}}""");
-
-        AppSettings loaded = new SettingsService(_paths).Load();
-
-        loaded.Thresholds.LargeUnitLoc.Should().Be(30);
-        loaded.Thresholds.FreshnessDays.Should().Be(45);
-    }
-
-    // ---------------------------------------------------------------- los tres caminos que clasifican
-
-    /// <summary>El escaneo inicial (alta de app) — el primero de los tres.</summary>
-    [Fact]
-    public void El_escaneo_clasifica_con_el_umbral_configurado()
-    {
-        WriteUnit("src/Legacy/MotorCalculoLegacy.cs", LegacyLoc);
-        AppConfig app = _hub.Store.TryReadApp("app")!;
-
-        ScanOutput conUmbralAlto = new InventoryScanner().Scan(_clone, app, 1, new MeasureThresholds());
-        ScanOutput conUmbralBajo = new InventoryScanner()
-            .Scan(_clone, app, 1, new MeasureThresholds { LargeUnitLoc = 30 });
-
-        conUmbralAlto.Inventory.Units.Should().OnlyContain(u => u.State == UnitState.Pendiente);
-        conUmbralBajo.Inventory.Units.Should().Contain(u => u.State == UnitState.Grande);
-        conUmbralBajo.LargeUnitFindings.Should().ContainSingle();
-    }
-
-    /// <summary>
-    /// La siembra del ciclo — el tercero, y el que el usuario probó el último. Leía el mismo
-    /// <c>app.json</c>, así que reiniciar el ciclo tampoco servía de nada.
-    /// </summary>
-    [Fact]
-    public void La_siembra_de_ciclo_clasifica_con_el_umbral_configurado()
-    {
-        _hub.Store.WriteInventory("app", new InventoryCycle
-        {
-            CycleN = 1,
-            Units =
-            {
-                new InventoryUnit
-                {
-                    Path = "src/Legacy/MotorCalculoLegacy.cs", Module = "Legacy",
-                    Loc = LegacyLoc, State = UnitState.Auditada,
-                },
-            },
-        });
-        SetThresholdFromSettings(30);
-
-        var cycles = new CycleService(_hub, _ulids, _settings);
-        cycles.TryCloseCycle("app", 1).Closed.Should().BeTrue();
-
-        InventoryCycle next = _hub.Store.TryReadInventory("app", 2)!;
-        next.Units.Single().State.Should().Be(UnitState.Grande,
-            "el ciclo nuevo se siembra contra el umbral de Ajustes, no contra el del app.json");
-    }
-
-    /// <summary>
-    /// Y la re-medición de UN hallazgo («Verificar ahora» sobre uno medido) usa el mismo umbral: si
-    /// leyera otro, el inventario y la ficha del hallazgo se contradirían.
-    /// </summary>
-    [Fact]
-    public void La_re_medicion_de_un_hallazgo_usa_el_umbral_configurado()
-    {
-        WriteUnit("src/Legacy/MotorCalculoLegacy.cs", LegacyLoc);
-        SetThresholdFromSettings(30);
-        _rescan.Rescan("app", _clone);
-        Finding size = SizeFindings().Single();
-
-        MeasuredVerdict conservador = _measured.Verify("app", size);
-        conservador.Applied.Should().BeTrue();
-        conservador.Message.Should().Contain("1117 LOC ≥ umbral 30");
-
-        SetThresholdFromSettings(1500);
-        MeasuredVerdict generoso = _measured.Verify("app", _hub.Store.TryReadFinding("app", size.Id.ToString())!);
-
-        generoso.Message.Should().Contain("1117 LOC < umbral 1500");
-    }
-
     // ================================================================ 2 · un test por campo
 
     /// <summary>Frescura: la lista de hallazgos mira los días configurados, no una constante.</summary>
@@ -251,6 +91,25 @@ public sealed class SettingsWiringTests : IDisposable
         _settings.Current.Thresholds.FreshnessDays.Should().Be(7);
         Reflection.ReadsSetting(typeof(FindingsViewModel), "Thresholds.FreshnessDays")
             .Should().BeTrue("la vista de hallazgos lee el ajuste al reconstruir la lista");
+    }
+
+    /// <summary>
+    /// Y la frescura PUEDE seguir siendo personal porque no escribe nada compartido (F13 §2): solo
+    /// rellena <c>FindingRow.IsStale</c>, que es una columna de la lista de quien mira. El estado
+    /// que sí viaja al hub es <c>NeedsReview</c>, y lo escriben la reconciliación y la
+    /// verificación — nunca el reloj de una máquina.
+    /// </summary>
+    [Fact]
+    public void La_frescura_es_una_lente_de_lectura_y_no_escribe_en_el_hub()
+    {
+        string fuente = Reflection.SourceOf(typeof(FindingsViewModel));
+
+        fuente.Should().Contain("IsStale = days > freshness",
+            "la frescura solo colorea la fila que se está pintando");
+        fuente.Should().NotContain("NeedsReview = days",
+            "si la frescura escribiera el estado persistido, sería política de la aplicación");
+        typeof(Finding).GetProperty("IsStale")
+            .Should().BeNull("«rancio» no es un campo del hallazgo: se deriva al leer");
     }
 
     /// <summary>Tope de pasadas: la sesión nace con el configurado y lo deja escrito.</summary>
@@ -424,9 +283,10 @@ public sealed class SettingsWiringTests : IDisposable
         s.Editor.Should().Be("vs");
         s.Theme.Should().Be("dark");
         s.PollingSeconds.Should().Be(60);
-        s.Thresholds.LargeUnitLoc.Should().Be(1500);
-        s.Thresholds.LargeUnitChars.Should().Be(60_000);
         s.Thresholds.FreshnessDays.Should().Be(60);
+        s.Thresholds.LegacyLargeUnitLoc.Should().Be(0, "sin umbral heredado no hay nada que ofrecer");
+        new Thresholds().LargeUnitLoc.Should().Be(1500, "el umbral de fábrica es de la aplicación");
+        new Thresholds().LargeUnitChars.Should().Be(60_000);
         s.MaxPassesPerUnit.Should().Be(5);
         s.CopilotTimeoutMinutes.Should().Be(15);
         s.EnableAssistedFix.Should().BeTrue();
@@ -456,6 +316,10 @@ public sealed class SettingsWiringTests : IDisposable
         /// en la línea que hace la lectura.
         /// </summary>
         public static bool ReadsSetting(Type type, string path)
+            => SourceOf(type).Contains($"Current.{path}", StringComparison.Ordinal);
+
+        /// <summary>El fichero de ese tipo, para poder mirar la línea que hace la lectura.</summary>
+        public static string SourceOf(Type type)
         {
             var dir = new DirectoryInfo(AppContext.BaseDirectory);
             while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Atalaya.sln")))
@@ -467,7 +331,7 @@ public sealed class SettingsWiringTests : IDisposable
                 .EnumerateFiles(Path.Combine(dir!.FullName, "src"), $"{type.Name}.cs", SearchOption.AllDirectories)
                 .FirstOrDefault(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"));
 
-            return file is not null && File.ReadAllText(file).Contains($"Current.{path}", StringComparison.Ordinal);
+            return file is null ? string.Empty : File.ReadAllText(file);
         }
     }
 }

@@ -102,10 +102,11 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="Unidad grande (LOC)" Style="{StaticResource FieldLabel}" />
-                    <ui:TextBox Grid.Row="0" Grid.Column="1" Text="{Binding LargeUnitLoc}" Width="120" HorizontalAlignment="Left" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" TextWrapping="Wrap"
+                               Text="Se gobierna por aplicación, en Inventario → Gobernanza → Umbrales." />
                     <TextBlock
                         Grid.Row="1" Grid.Column="1"
-                        Text="A partir de cuántas líneas una unidad es demasiado grande para auditarla de una vez. Sale marcada «Grande» en el inventario: no cuenta como pendiente y no impide cerrar el ciclo. Aplica al RE-ESCANEAR (y al cerrar o reiniciar el ciclo): el inventario ya escrito no se reclasifica solo. Mínimo 1."
+                        Text="No se edita aquí: este umbral clasifica el inventario y crea los hallazgos de tamaño, que viven en el hub y comparte todo el equipo. Por eso es política de cada aplicación —una sola verdad, versionada, con el commit del hub diciendo quién la cambió— y no una preferencia de esta máquina. Aplica al re-escanear."
                         Style="{StaticResource FieldHelp}" />
                 </Grid>
 
