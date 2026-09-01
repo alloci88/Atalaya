@@ -69,7 +69,7 @@ public sealed class AgentBusyGate
     {
         AgentWork.Auditoria =>
             "Hay una auditoría en curso. Espera a que termine —o deténla desde «Sesión en vivo»— "
-            + "antes de lanzar un arreglo: las dos usan el mismo asiento de Copilot y el mismo clon.",
+            + "antes de lanzar un arreglo: las dos usan el mismo agente y el mismo clon.",
         AgentWork.Arreglo =>
             "Hay un arreglo asistido en curso. Termínalo o deténlo desde «Arreglo asistido» antes "
             + "de lanzar otra sesión.",

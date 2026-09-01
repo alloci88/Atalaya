@@ -387,7 +387,9 @@ public sealed partial class LiveSessionService : ObservableObject
         FailureDetail = string.Empty;
         EndedUtc = null;
         StartedUtc = DateTimeOffset.UtcNow;
-        StatusMessage = "Comprobando Copilot…";
+        // F16 §C: se nombra a QUIEN se va a comprobar. «Comprobando Copilot…» mientras la
+        // sesión iba a correr con Claude Code era la misma clase de mentira que el pie del coste.
+        StatusMessage = $"Comprobando {_agent().ProviderName}…";
         Changed?.Invoke();
     }
 

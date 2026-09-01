@@ -653,17 +653,12 @@ public sealed class MetricsQuery
     private const string LegacyProviderId = "copilot";
 
     /// <summary>
-    /// El nombre legible de un identificador guardado. Se resuelve aquí, con una tabla mínima, y no
-    /// preguntándole al registro de proveedores: Métricas lee sesiones de hace meses y tiene que
-    /// poder nombrar una casa aunque esta versión ya no la traiga. Lo que no conoce lo enseña tal
-    /// cual, que es más honesto que dejarlo en blanco.
+    /// El nombre legible de un identificador guardado. Sale de <see cref="ProviderNames"/>, que es
+    /// el mapa con el que se lee el HISTÓRICO —y no del registro de proveedores: Métricas lee
+    /// sesiones de hace meses y tiene que poder nombrar una casa aunque esta versión ya no la
+    /// traiga—. Era una tabla propia hasta F16 §C, que es como nacen dos nombres para lo mismo.
     /// </summary>
-    private static string ProviderDisplayName(string providerId) => providerId.ToLowerInvariant() switch
-    {
-        "copilot" => "GitHub Copilot",
-        "claude-code" => "Claude Code",
-        _ => providerId,
-    };
+    private static string ProviderDisplayName(string providerId) => ProviderNames.Display(providerId);
 
     private static (IReadOnlyList<string> Series, bool HasOthers) TopSeries(
         IReadOnlyList<AppData> scope, Func<AppData, decimal> totalOf)
