@@ -233,7 +233,7 @@ public sealed class QuotaMidSweepTests : IDisposable
         live.IsRunning.Should().BeFalse("sin zombis: nada sigue corriendo");
         live.EndedUtc.Should().NotBeNull("el temporizador para, no se queda contando");
 
-        live.FailureMessage.Should().Contain("peticiones premium");
+        live.FailureMessage.Should().Contain("AI credits");
         live.FailureMessage.Should().NotContain("no tiene asiento",
             "ÉSTE es el fallo del parte: el asiento está, lo que falta son peticiones");
         live.FailureMessage.Should().Contain("1 de 3", "y dice qué se salvó");
@@ -257,7 +257,7 @@ public sealed class QuotaMidSweepTests : IDisposable
         SummaryLine cut = live.Summary.Should().ContainSingle(l => l.Label.Contains("proveedor")).Subject;
         cut.Count.Should().Be(2, "las que se quedaron sin mirar");
         cut.IsWarning.Should().BeTrue();
-        cut.Explanation.Should().Contain("peticiones premium");
+        cut.Explanation.Should().Contain("AI credits");
 
         live.Summary.Should().Contain(l => l.Label == "Nuevos" && l.Count == 1,
             "el hallazgo de la unidad auditada cuenta igual: estaba pagado");
@@ -298,7 +298,7 @@ public sealed class QuotaMidSweepTests : IDisposable
 
         live.HasFailed.Should().BeTrue();
         live.HasFinished.Should().BeFalse("no terminó: murió antes de cubrir nada");
-        live.FailureMessage.Should().Contain("peticiones premium");
+        live.FailureMessage.Should().Contain("AI credits");
         _hub.Store.ListSessions("app").Should().BeEmpty("no hay trabajo que registrar");
     }
 }

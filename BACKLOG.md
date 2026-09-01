@@ -4,9 +4,24 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-01 (F14 — segundo proveedor de auditoría: Claude Code local).
+Última revisión: 2026-09-01 (F15 — el coste, en AI credits).
 
 ## En vuelo
+
+- **F15 — cuadrar un día contra el panel de GitHub.** Es la aceptación de la fase y solo se puede
+  hacer con datos reales: coger un día con auditorías, mirar el total de Atalaya y compararlo con la
+  gráfica de **AI credits** del panel de Copilot de la organización para ese mismo día, y **anotar
+  la desviación en DECISIONS**. Si es grande, investigar antes de dar nada por bueno; los
+  sospechosos, por orden: la semántica de la caché (D-785), un promocional vencido en la tabla, y
+  las llamadas que Copilot factura fuera de las sesiones de Atalaya (D-791).
+- **F15 — las tarifas, revisadas cuando venzan los promocionales.** La siembra del 2026-09-01 trae
+  GPT-5.6 Sol al 50 % **hasta el 2026-09-03** y Gemini 3.6/3.7 Flash **hasta el 2026-12-31**. Cuando
+  pasen esas fechas el precio sube y la tabla del hub hay que corregirla a mano — que es justo para
+  lo que se hizo editable (D-786).
+- **F15 — la sesión en vivo y el azulejo de coste, vistos.** Los credits están probados por consulta
+  en todos los sitios; falta abrirlos en la ventana: la cifra en vivo mientras corre una sesión, el
+  azulejo con su equivalente en dólares y el enlace de tarifas, y el aviso de «parcial» cuando un
+  modelo no tiene tarifa (D-787).
 
 - **F14 — el caso de aceptación con Claude Code, con los ojos del usuario.** El circuito está
   verificado de punta a punta contra el CLI real —auditoría de una unidad sembrada con su hallazgo y
@@ -174,6 +189,26 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **F15 · El coste, en AI credits** — GitHub factura desde el 1 de junio de 2026 en **AI credits**
+  (1 = 0,01 $) consumidos **por tokens** a las tarifas de API de cada modelo; las peticiones premium
+  —lo que Atalaya llamaba «unidades SDK»— están retiradas. Antes de calcular nada se verificó cómo
+  cuenta cada proveedor sus tokens, porque contar la caché dos veces o ninguna desviaría todos los
+  costes sin síntoma: **Copilot la incluye en la entrada y Claude Code la excluye**, y la prueba
+  definitiva fue reproducir con nuestra fórmula el coste que el propio CLI de Claude Code calcula,
+  exacto al sexto decimal (D-785). De ahí salió que **Claude Code usa caché de una hora**, al doble
+  de la entrada, contra la de cinco minutos que publica GitHub — un 44 % de desviación por una
+  tarifa de caché, y la razón de que una tarifa pueda atarse a un proveedor. Las tarifas son
+  **configuración compartida del hub**, editables desde Métricas, con su fecha y sus promocionales
+  anotados (D-786). El modelo se lee del registro de cada sesión y **jamás se asume**: sin él, o sin
+  tarifa, el coste sale «no aplicable» y el agregado se marca **parcial** con su recuento (D-787).
+  Los tokens siguen siendo el hecho primario y **no se ha migrado un solo fichero**: el coste se
+  deriva al leer, así que el histórico entero se reexpresa solo — un test lo fija sobre una sesión
+  legada, comprobando que da 8 y no los 25 que llevaba escritos (D-788). Con los dos proveedores, la
+  misma unidad pero distinto significado: factura contra equivalente API, y el total único solo
+  cuando todo el periodo es de la misma naturaleza (D-789). El guarda de ids de modelo se afina otra
+  vez en vez de aflojarse, con un test que impide usar la tabla de tarifas como atajo para poblar el
+  selector (D-790). 44 tests nuevos, 1.702 en total (D-791).
 
 - **F14 · Segundo proveedor de auditoría: Claude Code local** — Atalaya deja de depender de una sola
   bolsa de cuota. `ICopilotAgent` se convierte en **`IAuditorProvider`** en un ensamblado propio, y

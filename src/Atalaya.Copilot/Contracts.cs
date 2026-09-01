@@ -39,12 +39,12 @@ public static class CopilotHelp
     /// reset no la trae, así que no se inventa.
     /// </summary>
     public static string QuotaExhausted(string? period)
-        => "La organización ha agotado sus peticiones premium de Copilot"
+        => "La organización ha agotado sus AI credits de Copilot"
         + (period is { Length: > 0 } ? $" (el proveedor la describe como cuota {period})" : string.Empty)
         + ". No es tu asiento ni tus credenciales, y no hay nada que arreglar en Atalaya: hay que "
-        + "esperar a que se renueve la cuota, o auditar con un modelo de multiplicador menor si "
-        + "vuestro plan lo permite. Atalaya no reintenta sola: reintentar contra una cuota agotada "
-        + "gasta las peticiones del reset siguiente.";
+        + "esperar a que se renueve la cuota, o auditar con un modelo de tarifa menor. Atalaya no "
+        + "reintenta sola: reintentar contra una cuota agotada gasta los credits del reset "
+        + "siguiente.";
 
     /// <summary>Sin red o con el servicio caído: es transitorio y se puede reintentar.</summary>
     public const string Offline =

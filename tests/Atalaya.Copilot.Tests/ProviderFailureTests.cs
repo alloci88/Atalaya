@@ -38,12 +38,12 @@ public sealed class ProviderFailureTests
     }
 
     [Fact]
-    public void Y_su_mensaje_habla_de_peticiones_premium_y_no_de_asientos()
+    public void Y_su_mensaje_habla_de_credits_y_no_de_asientos()
     {
         var ex = new InvalidOperationException(RealQuotaError);
         AgentReadiness bad = CopilotFailure.Diagnose(ex, hasToken: true);
 
-        bad.Message.Should().Contain("peticiones premium");
+        bad.Message.Should().Contain("AI credits");
         bad.Message.Should().NotContain("no tiene asiento",
             "el asiento está: culparlo manda a alguien a reclamar lo que ya tiene");
         bad.Message.Should().Contain("No es tu asiento",

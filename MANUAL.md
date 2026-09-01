@@ -214,10 +214,16 @@ salva, se dice **«< 0,1 %»** o **«> 99,9 %»**. El 0 % y el 100 % exactos sí
 verdad y significan algo. Los decimales solo salen cuando hacen falta — «42 %» se lee de un
 vistazo y «42,0 %» no dice nada más.
 
-El **coste del periodo** incluye **todas** las sesiones que gastaron: auditorías,
-arreglos asistidos y verificaciones. El «por unidad auditada» que va debajo divide solo
-lo que costó **auditar** entre las unidades auditadas — un arreglo no audita ninguna
-unidad, así que repartir su gasto entre ellas daría un número que no significa nada.
+El **coste del periodo** va en **AI credits** —la misma unidad que el panel de Copilot de tu
+organización— e incluye **todas** las sesiones que gastaron: auditorías, arreglos asistidos y
+verificaciones. Debajo tienes el equivalente en dólares (1 credit = 0,01 $) y el enlace
+**Tarifas · Gestionar**. Si alguna sesión usó un modelo sin tarifa, el azulejo lo dice: falta gasto
+por contar y no se disimula.
+
+El «por unidad auditada» que va debajo divide solo lo que costó **auditar** entre las unidades
+auditadas — un arreglo no audita ninguna unidad, así que repartir su gasto entre ellas daría un
+número que no significa nada. Cómo se calcula todo esto está en **[El coste, dicho como
+es](#el-coste-dicho-como-es)**.
 
 Debajo, seis gráficas:
 
@@ -548,7 +554,7 @@ segunda opinión de verdad**.
 | | **GitHub Copilot** | **Claude Code** |
 | --- | --- | --- |
 | Qué necesitas | Tu cuenta de GitHub conectada, con asiento de Copilot | El CLI de Claude Code instalado y con sesión iniciada |
-| Quién paga | El asiento de tu organización (peticiones premium) | Tu suscripción de Claude |
+| Quién paga | El asiento de tu organización (AI credits) | Tu suscripción de Claude |
 | Cómo se instala | Nada: viaja dentro de Atalaya | `npm install -g @anthropic-ai/claude-code`, y `claude` una vez en tu terminal |
 | Auditar y verificar | Sí | Sí |
 | Arreglo asistido | Sí | Todavía no |
@@ -596,21 +602,75 @@ qué casa** venía. Sigue decidiendo una persona: la disputa informa, no cierra 
 
 ### El coste, dicho como es
 
-**Los dos no cuentan en la misma moneda, y Atalaya no los mezcla.**
+Desde el **1 de junio de 2026**, GitHub Copilot factura en **AI credits**. Atalaya habla esa
+lengua: es la misma unidad que grafica el panel de tu organización, que es con lo que vas a querer
+cuadrar.
 
-- **Copilot** factura **peticiones premium**, con su multiplicador. Es lo que siempre se ha visto.
-- **Claude Code** informa un coste en **dólares de tarifa de lista** — lo que habrían costado esos
-  tokens pagando la API. **Tu suscripción no cobra por llamada**, así que ese número **no es una
-  factura**: sirve para comparar el peso de dos auditorías, no para cuadrar gastos. Donde aparece,
-  aparece con esa etiqueta puesta.
+**Qué es un credit.** Vale **0,01 $**. Se consume **por tokens** —entrada, salida y caché— a las
+tarifas de API publicadas de cada modelo. El sistema anterior, las «peticiones premium» (llamadas ×
+un multiplicador), **está retirado**, y con él la vieja cifra de «unidades SDK» que Atalaya
+enseñaba: era correcta mientras aquello se facturaba así.
 
-En **Métricas**, cuando en el periodo han auditado las dos casas, **no verás un total**: verás una
-línea por proveedor. Un total sería la suma de dos magnitudes distintas, y no significaría nada.
-Con una sola casa, el número de siempre.
+**Cómo se calcula.** De los tokens que la sesión guardó, con la tarifa **del modelo de esa sesión**:
 
-Y antes de lanzar con Claude Code, la estimación **dice lo que sabe y no promete dinero**: «~2
-llamadas estimadas · coste según tu suscripción». Sin tarifa por llamada no hay nada que estimar,
-y Atalaya prefiere decirlo a inventarse una equivalencia.
+```
+(entrada no cacheada × tarifa de entrada)
+  + (caché leída      × tarifa de caché)
+  + (caché escrita    × la suya, si ese modelo la cobra aparte)
+  + (salida           × tarifa de salida)   →  dólares  →  × 100 = credits
+```
+
+El modelo **se lee del registro de cada sesión y nunca se supone**. Dos sesiones del mismo día con
+modelos distintos van cada una con su tarifa. Si una sesión no registró modelo, o su modelo no
+tiene tarifa configurada, su coste sale como **no aplicable** y el total que la contenga se marca
+**parcial** — con cuántas faltan. Nunca se le aplica la tarifa de otro modelo «parecido».
+
+**Por qué la caché ahorra tanto.** La caché leída cuesta alrededor de **una décima parte** de la
+entrada normal. Auditar la misma aplicación de seguido reutiliza el contexto, así que la segunda
+unidad y las siguientes se cobran a esa décima parte. Es la razón de que una sesión larga cueste
+mucho menos que la suma de sus unidades por separado.
+
+**Y la palanca de ahorro número uno sigue siendo el modelo.** Ahora vía sus tarifas, que están a la
+vista: entre el más caro y el más barato de la lista hay un factor de **veinte o más** en el mismo
+trabajo. Antes de optimizar nada, mira con qué estás auditando.
+
+**Los tokens son el hecho; los credits, un derivado.** En el hub se guardan los tokens, y el coste
+se recalcula al leerlo. Eso tiene dos consecuencias buenas: **tu historial entero se reexpresa en
+credits** sin tocar un solo fichero, y si mañana cambia una tarifa, los números viejos se corrigen
+solos. Donde no haya tokens guardados —sesiones muy antiguas—, verás **«—»**, nunca un número
+inventado.
+
+#### Las tarifas se editan, y viven en el hub
+
+**Métricas → Tarifas · Gestionar.** La tabla es de la **organización**: está en el hub, la ve todo
+el equipo y el historial de git dice quién cambió qué y cuándo. Se edita desde la aplicación porque
+las tarifas cambian, aparecen modelos nuevos y **hay promocionales con fecha de caducidad**:
+corregir un precio no puede exigir esperar a una versión nueva de Atalaya.
+
+La pantalla te señala **los modelos que estás usando y no tienen tarifa**, con cuántas sesiones
+esperan por ellos. Eso es lo que convierte un «parcial» en algo que puedes arreglar.
+
+Dos detalles que importan al editarla:
+
+- **Proveedor en blanco = vale para cualquiera.** Ponlo solo cuando el mismo modelo cueste distinto
+  según quién facture.
+- **Caché escrita en blanco ≠ 0.** En blanco significa «este modelo no la cobra aparte» y esos
+  tokens son entrada normal; un 0 afirmaría que escribir en caché es gratis, que es otra cosa.
+
+#### Con dos proveedores
+
+Copilot y Claude Code se miden **en la misma unidad**, pero no significan lo mismo:
+
+- El de **Copilot** es una **factura**: son los AI credits que tu organización paga.
+- El de **Claude Code** con suscripción es un **equivalente API** — lo que habrían costado esos
+  tokens pagando la API. **Tu suscripción no factura por tokens**, así que ese número no es un
+  cobro: sirve para comparar el peso de dos auditorías, no para cuadrar gastos.
+
+Por eso, cuando en el periodo han auditado las dos casas, **Métricas no te da un total**: te da una
+línea por proveedor con su etiqueta. La aritmética permitiría sumarlos; lo que no se puede es
+mezclar en silencio lo que se paga con lo que no.
+
+Y antes de lanzar con Claude Code, la estimación **no promete dinero**: dice lo que sabe.
 
 ### Si algo falta
 
@@ -701,7 +761,7 @@ proveedor, que es lo que hay que pegar en un correo a quien administre la organi
 
 | Si ves esto | Significa | Se arregla así |
 |---|---|---|
-| **La organización ha agotado sus peticiones premium de Copilot** | Vuestro plan se ha quedado sin peticiones. **No es tu asiento ni tus credenciales**: los dos siguen bien. | Nada que tocar en Atalaya: esperar a que se renueve la cuota, o auditar con un modelo de multiplicador menor si vuestro plan lo permite. Atalaya **no reintenta sola** — reintentar contra una cuota agotada gasta las peticiones del reset siguiente. |
+| **La organización ha agotado sus AI credits de Copilot** | Vuestro plan se ha quedado sin credits. **No es tu asiento ni tus credenciales**: los dos siguen bien. | Nada que tocar en Atalaya: esperar a que se renueve la cuota, o auditar con un modelo de tarifa menor. Atalaya **no reintenta sola** — reintentar contra una cuota agotada gasta los credits del reset siguiente. |
 | **Tu cuenta no tiene asiento de Copilot asignado** | La licencia no está: nadie te la ha dado, o te la han quitado. | Pedírsela a quien administre la organización (github.com/settings/copilot). |
 | **GitHub ha rechazado tus credenciales** | El token está revocado, caducado o su SSO expiró. | **Cuenta → Conectar con GitHub**. El mismo login habilita el hub y tu asiento. |
 | **El modelo «X» no está disponible para tu cuenta** | GitHub retiró ese modelo, o tu plan no lo sirve. | **Elegir modelo en Ajustes**, que es el botón del propio aviso. |

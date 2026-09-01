@@ -8859,3 +8859,179 @@ unidades del banco → hallazgos con sus severidades y reconciliación normal �
 mismo recorrido de siempre con el otro auditor. Y su reverso, que es el que protege a todo el
 equipo: en una máquina **sin** Claude Code instalado, abrir Cuenta y Ajustes y comprobar que no
 hay nada nuevo que atender.
+
+## F15 — El coste, en AI credits: la unidad que factura GitHub
+
+Desde el **1 de junio de 2026**, Copilot factura **AI credits** (1 credit = 0,01 $) consumidos
+**por tokens** —entrada, salida y caché— a las tarifas de API publicadas de cada modelo. Las
+peticiones premium (llamadas × multiplicador) son el sistema retirado, y son exactamente lo que
+Atalaya calculaba como «unidades SDK».
+
+La decisión original —«el coste va por llamadas; los tokens los absorbe la caché»— **era correcta
+entonces y está invertida hoy**: los tokens ya no son el detalle, son la factura. El panel de la
+organización grafica en credits, y Atalaya tiene que hablar esa lengua para que las dos cifras se
+puedan comparar.
+
+### D-785 — La semántica de los tokens, verificada antes de escribir la fórmula (N-2)
+
+Contar la caché dos veces —o ninguna— desviaría **todos** los costes a la vez y sin síntoma
+visible, así que esto se comprobó antes de calcular nada. Y salió que **los dos proveedores la
+cuentan al revés el uno del otro**:
+
+- **Copilot INCLUYE la caché en la entrada.** En una sesión real del hub: In 538.468, CacheRead
+  368.618, CacheWrite 169.826 — y 538.468 − 368.618 = 169.850 ≈ CacheWrite. La entrada es el prompt
+  entero, del que una parte vino de caché. La documentación del SDK no lo desambigua
+  (`InputTokens`: «Number of input tokens consumed»), así que el dato manda sobre la prosa.
+- **Claude Code la EXCLUYE.** En una sesión real: `input_tokens` 6 con `cache_read_input_tokens`
+  19.990. Un 6 no puede contener a 19.990.
+
+**La comprobación definitiva** fue reproducir con nuestra fórmula el coste que el propio CLI de
+Claude Code calcula: 0,001075 $ en Haiku 4.5 y 0,051106 $ en Sonnet 5, **exactos al sexto decimal**.
+Dos aritméticas independientes que coinciden.
+
+De ahí salió además el hallazgo que habría descuadrado un 44 %: **Claude Code usa caché de una
+hora**, que Anthropic cobra al **doble** de la entrada, mientras que la tabla de GitHub publica la
+de cinco minutos (1,25 ×). Con la tarifa de GitHub esa sesión salía 0,035545 $ contra los 0,051106 $
+reales. Por eso una tarifa puede **atarse a un proveedor**: el mismo modelo cuesta distinto según
+quién facture.
+
+La fórmula, entonces:
+
+```
+entrada facturable = In − caché leída − (caché escrita, si ese modelo la cobra aparte)   [Copilot]
+entrada facturable = In                                                                  [Claude Code]
+
+coste = entrada facturable × tarifa de entrada
+      + caché leída        × tarifa de caché
+      + caché escrita      × la suya (si la hay)
+      + salida             × tarifa de salida        → dólares → × 100 = credits
+```
+
+**Blindaje**: si las cachés suman más que la entrada, el supuesto no encaja con esos datos y la
+entrada facturable se queda en cero. Emitir un coste negativo lo propagaría a los agregados sin que
+nadie lo notara.
+
+**Caso de control**, con datos de una sesión real: In 538.468 / Out 42.371 / CacheRead 368.618 a
+1,25 / 10 / 0,125 $/M → **68,2 credits**. Contando la caché dos veces darían 74,0; no descontándola,
+719,3. Por eso ese número concreto vale como control y está fijado en un test.
+
+### D-786 — Las tarifas son configuración compartida del hub, no código
+
+`hub/model-rates.json`, en la **raíz**: un precio no es una propiedad de la aplicación auditada,
+es del contrato de la organización con su proveedor. Por app habría que corregir el mismo número N
+veces y alguna copia se quedaría vieja.
+
+Cambian, aparecen modelos nuevos y **hay promocionales con caducidad** —GPT-5.6 Sol al 50 % hasta el
+2026-09-03, Gemini 3.6/3.7 Flash hasta el 2026-12-31—, así que corregir un precio no puede exigir
+publicar una versión. Se editan en **Métricas → Tarifas · Gestionar**, que es donde se ve la
+consecuencia: el mismo argumento que llevó los umbrales al Inventario (D-770). **El commit del hub
+es la atribución**, así que no hay campo «modificado por» que mantener.
+
+**Sembradas y verificadas el 2026-09-01** de `docs.github.com/en/copilot/reference/copilot-billing/
+models-and-pricing` (la tabla por modelo y el valor del credit) y del anuncio de `github.blog`
+(la fecha de corte y que los credits se consumen por tokens «according to the published API rates
+for each model»). Las de Claude Code van atadas a su proveedor con la caché de 1 h, comprobadas
+contra la aritmética del propio CLI. Cada tarifa lleva su fecha de vigencia, y los promocionales,
+su caducidad escrita.
+
+Sembrar **no pisa** una tabla existente: lo que la organización haya corregido es lo que alguien fue
+a comprobar, y vale más que lo que traiga la versión.
+
+**Caché escrita en blanco ≠ 0.** Blanco significa «este modelo no la cobra aparte» y esos tokens son
+entrada normal; un cero afirmaría que escribir en caché es gratis, que es otra cosa que nadie ha
+dicho. Por eso esa caja es texto y no un número.
+
+### D-787 — El modelo se lee del registro; lo que falta se dice y el agregado sale parcial
+
+El coste de cada sesión se calcula con la tarifa **de su modelo**, leído de su registro. Dos
+sesiones del mismo periodo con modelos distintos van cada una con la suya.
+
+- Sin modelo registrado → **«modelo no registrado»**.
+- Con modelo sin tarifa → **«tarifa no configurada»**.
+- Sin tokens → **«—»**.
+
+Y el agregado que las contenga se marca **parcial**, con el recuento: «1 sesión sin tarifa para su
+modelo: no está contada». Un total al que le falta gasto se lee como si fuera el gasto entero, que
+es la única forma en que este panel podría mentir sin que se notara. **Nunca** se aplica la tarifa
+de otro modelo «parecido».
+
+Una sesión **sin tokens** no cuenta como parcial: no hay nada que valorar, y manchar el aviso con
+esas haría que se aprendiera a ignorarlo.
+
+La pantalla de tarifas lista **los modelos usados sin tarifa**, con cuántas sesiones esperan por
+ellos. Es lo que convierte un «parcial» en algo accionable.
+
+### D-788 — Los tokens son el hecho; los credits, un derivado que se recalcula
+
+**No se ha migrado ni un fichero del hub.** Los datos primarios —tokens y llamadas— se quedan como
+están, y el coste **se deriva en cada lectura**. Tres consecuencias, todas buenas:
+
+- **El histórico entero se reexpresa en credits** sin tocar nada. Una sesión de noviembre con
+  `"cost": 12.5, "currency": "premium requests"` escrito dentro ahora sale valorada desde sus
+  tokens. Hay un test que lo fija comprobando que da **8 y no 25**: si algún día alguien volviera a
+  leer el número guardado, se pone rojo.
+- **Cambiar una tarifa corrige los números viejos solos.**
+- La cifra vieja de «unidades SDK» **desaparece del frontal**. Lo que ya esté escrito dentro del
+  texto de un informe se queda: los informes son inmutables y son historial.
+
+Los tokens se siguen escribiendo enteros en el informe, y el coste va detrás como derivado — así,
+dentro de un año, alguien puede recalcularlo con otra tarifa a partir de los mismos números.
+
+**Una sola aritmética**: el azulejo, la gráfica, la fila del registro de sesiones, el informe, la
+lista de informes, la sesión en vivo y la estimación salen todos de `CreditCalculator`. Dos cuentas
+parecidas para el mismo número acaban discrepando — ya pasó dos veces entre el tile y la gráfica.
+
+**La estimación** promedia ahora **tokens por unidad** y los convierte con la tarifa del modelo de
+cada sesión, así que un histórico con modelos distintos promedia costes comparables. Sin histórico
+suficiente lo dice y no inventa un rango.
+
+### D-789 — Con dos proveedores: misma unidad, distinto significado
+
+Tras F14, Copilot y Claude Code se miden ya en la **misma unidad**, así que la aritmética permitiría
+sumarlos. Lo que sigue sin poder mezclarse **en silencio** es lo que significan:
+
+- El de Copilot es una **factura**: son los credits que la organización paga. Etiqueta: **«AI
+  credits»**.
+- El de Claude Code con suscripción es un **equivalente API**: la suscripción no factura por tokens,
+  y presentarlo como cobro sería mentir. Etiqueta: **«equivalente API»**.
+
+Así que el total único **solo se ofrece cuando todo el periodo es de la misma naturaleza**; con las
+dos, desglose por proveedor con su etiqueta visible. Es un criterio más fino que el de F14 —que no
+sumaba nunca porque las unidades eran incomparables— y sustituye a aquél.
+
+El tooltip da el equivalente en dólares (1 credit = 0,01 $). **A euros no se convierte**: no hay
+tipo de cambio configurado, e inventarse uno sería fabricar una precisión que no tenemos (N-2).
+
+### D-790 — El guarda de ids de modelo se afina, otra vez, en vez de aflojarse
+
+La siembra de tarifas nombra modelos, y el guarda de F5.15 saltó. La distinción que lo resuelve es
+real: ahí los ids son **claves de una lista de precios**, no la elección de con qué auditar. Un
+modelo elegido que caduca deja rota a quien instale de cero; una tarifa que caduca sale como
+«tarifa no configurada» —está probado— y se corrige en el hub sin release.
+
+Así que la siembra queda exenta, y **la contrapartida es un test nuevo**: ningún fichero de
+producción salvo el que siembra puede nombrar `ModelRateSeed`. Si alguien usara la tabla de tarifas
+para poblar el selector de modelos, los ids volverían a ser una elección que caduca — que es
+exactamente lo que F5.15 prohibió.
+
+### D-791 — Cobertura (44 tests nuevos, 1.702 en total, todo en verde)
+
+- **La fórmula**, parametrizada por modelo: la misma sesión con dos tarifas da dos costes distintos;
+  la misma sesión con las mismas tarifas da costes distintos según quién cuente los tokens; sin
+  modelo o sin tarifa, «no aplicable»; sin tokens, «—»; y nunca un negativo aunque los números no
+  cuadren. Más el caso de control (68,2 credits) y la reproducción exacta del coste que calcula el
+  CLI de Claude Code.
+- **La tabla**: que vive en la raíz del hub y no por app, que sembrar no pisa lo existente, que la
+  tarifa del proveedor gana a la genérica, y que el modelo se casa sin distinguir mayúsculas.
+- **La pantalla**: que valida y DICE qué rechaza sin guardar media tabla —negativa, repetida, tabla
+  vacía—, que el mismo modelo con dos proveedores sí es legítimo, y que la caché escrita en blanco
+  no es cero.
+- **El parcial**: que se declara con su recuento, que lo que sí se sabe se sigue contando, y que una
+  sesión sin tokens no lo dispara.
+- **El histórico recalculado**, con una sesión legada de verdad.
+
+**Aceptación humana, que es del usuario**: comparar el total de un día de Atalaya con la gráfica de
+AI credits del panel de Copilot de la organización para ese mismo día, y anotar aquí la desviación.
+Si es grande, investigar antes de dar nada por bueno — los sospechosos por orden son la semántica
+de la caché (D-785), una tarifa promocional vencida y las llamadas que Copilot factura fuera de las
+sesiones de Atalaya.
