@@ -59,8 +59,21 @@
     <ProjectReference Include="..\Atalaya.Domain\Atalaya.Domain.csproj" />
     <ProjectReference Include="..\Atalaya.Storage\Atalaya.Storage.csproj" />
     <ProjectReference Include="..\Atalaya.Inventory\Atalaya.Inventory.csproj" />
+    <ProjectReference Include="..\Atalaya.Agents\Atalaya.Agents.csproj" />
     <ProjectReference Include="..\Atalaya.Copilot\Atalaya.Copilot.csproj" />
+    <ProjectReference Include="..\Atalaya.ClaudeCode\Atalaya.ClaudeCode.csproj" />
     <ProjectReference Include="..\Atalaya.ImportV4\Atalaya.ImportV4.csproj" />
+
+    <!-- F14 — el puente MCP viaja JUNTO a la aplicación, no como assembly referenciado.
+         `claude` lo lanza como PROCESO (es su servidor MCP por stdio), así que lo que hace falta
+         es su .exe en la carpeta de salida; enlazarlo como biblioteca no tendría ningún sentido y
+         metería un ensamblado más en el grafo. ReferenceOutputAssembly=false dice exactamente eso:
+         constrúyelo y cópialo, pero no lo referencies. -->
+    <ProjectReference Include="..\Atalaya.Mcp\Atalaya.Mcp.csproj"
+                      ReferenceOutputAssembly="false"
+                      OutputItemType="Content"
+                      CopyToOutputDirectory="PreserveNewest"
+                      Targets="Build" />
   </ItemGroup>
 
 </Project>

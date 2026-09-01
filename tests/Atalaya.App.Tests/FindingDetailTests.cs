@@ -144,7 +144,7 @@ public sealed class FindingDetailTests : IDisposable
         return finding;
     }
 
-    private FindingDetailViewModel NewDetail(ICopilotAgent? agent = null)
+    private FindingDetailViewModel NewDetail(IAuditorProvider? agent = null)
         => new(
             _hub,
             _governance,

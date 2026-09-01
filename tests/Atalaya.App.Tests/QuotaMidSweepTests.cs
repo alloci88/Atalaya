@@ -82,7 +82,7 @@ public sealed class QuotaMidSweepTests : IDisposable
     /// Audita bien las primeras <c>okUnits</c> unidades y a partir de ahí devuelve lo que devolvió
     /// el runtime aquella mañana. Es exactamente la forma del fallo: el grifo se cierra a mitad.
     /// </summary>
-    private sealed class QuotaAtUnitAgent : ICopilotAgent
+    private sealed class QuotaAtUnitAgent : IAuditorProvider
     {
         private readonly int _okUnits;
         private readonly HashSet<string> _units = new(StringComparer.Ordinal);
@@ -115,7 +115,7 @@ public sealed class QuotaMidSweepTests : IDisposable
             {
                 // Lo que produce RealCopilotAgent.Translate ante el error real del proveedor.
                 var raw = new InvalidOperationException(RealQuotaError);
-                throw new CopilotProviderException(
+                throw new AuditorProviderException(
                     CopilotHelp.QuotaExhausted("mensual"), AgentProblem.QuotaExhausted,
                     CopilotFailure.Raw(raw), raw);
             }
@@ -141,11 +141,11 @@ public sealed class QuotaMidSweepTests : IDisposable
             => Task.CompletedTask;
     }
 
-    private SessionCoordinator Coordinator(ICopilotAgent agent)
+    private SessionCoordinator Coordinator(IAuditorProvider agent)
         => new(_hub, new FindingIngestionService(_hub, _ulids), new ReconciliationService(_hub),
             _machines, _ulids, agent, _settings);
 
-    private LiveSessionService Live(ICopilotAgent agent)
+    private LiveSessionService Live(IAuditorProvider agent)
         => new(() => Coordinator(agent), agent, new OpenSessionStore(_paths), _hub);
 
     private static async Task Wait(LiveSessionService live)

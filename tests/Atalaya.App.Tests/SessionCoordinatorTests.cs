@@ -83,10 +83,10 @@ public sealed class SessionCoordinatorTests : IDisposable
             "Conn leaked", "desc", "impact", "reco",
             new[] { new SubmitLocation(path, 1, "snippet") }, "A.M");
 
-    private SessionCoordinator NewCoordinator(ICopilotAgent agent)
+    private SessionCoordinator NewCoordinator(IAuditorProvider agent)
         => new(_hub, _ingestion, _reconciliation, _machines, _ulids, agent, _settings);
 
-    private Task<SessionResult> RunLotes(ICopilotAgent agent, params string[] units)
+    private Task<SessionResult> RunLotes(IAuditorProvider agent, params string[] units)
         => NewCoordinator(agent).RunAsync(
             new SessionRequest("app", AuditMode.Lotes, units.Length == 0 ? new[] { "A.cs" } : units),
             CancellationToken.None);
@@ -961,7 +961,7 @@ public sealed class SessionCoordinatorTests : IDisposable
     }
 
     /// <summary>Agente que invoca <c>submit_findings</c> con un array VACÍO: "no hay nada nuevo".</summary>
-    private sealed class SubmitsAnEmptyBatch : ICopilotAgent
+    private sealed class SubmitsAnEmptyBatch : IAuditorProvider
     {
         public string? ModelName => "empty-batch";
         public event Action<string>? TextStreamed { add { } remove { } }
@@ -987,7 +987,7 @@ public sealed class SessionCoordinatorTests : IDisposable
     /// <summary>Agente de test que emite un <c>UsageSample</c> lo bastante grande para disparar el
     /// presupuesto por unidad y, opcionalmente, empuja N payloads inválidos por el toolbox
     /// (<c>severity</c> desconocida) para probar el conteo y la moda de motivo de rechazo.</summary>
-    private sealed class BudgetTrippingAgent : ICopilotAgent
+    private sealed class BudgetTrippingAgent : IAuditorProvider
     {
         private readonly long _in;
         private readonly long _out;
@@ -1149,7 +1149,7 @@ public sealed class SessionCoordinatorTests : IDisposable
     }
 
     /// <summary>El coordinador con las directivas del proyecto conectadas (F7).</summary>
-    private SessionCoordinator CoordinatorWithDirectives(ICopilotAgent agent, out DirectiveService directives)
+    private SessionCoordinator CoordinatorWithDirectives(IAuditorProvider agent, out DirectiveService directives)
     {
         directives = new DirectiveService(_hub, new DirectiveScanner(), _ulids);
         return new SessionCoordinator(

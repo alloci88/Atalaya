@@ -113,7 +113,7 @@ public sealed class InconclusiveVerdictTests : IDisposable
 
     private Finding Read(Finding f) => _hub.Store.TryReadFinding("app", f.Id.ToString())!;
 
-    private VerifyCoordinator Coordinator(ICopilotAgent agent)
+    private VerifyCoordinator Coordinator(IAuditorProvider agent)
         => new(_hub, _machines, _ulids, agent);
 
     // ------------------------------------------------------------------ (1) el caso del parte
@@ -382,7 +382,7 @@ public sealed class InconclusiveVerdictTests : IDisposable
     }
 
     /// <summary>Un agente que además deja mirar el prompt que se le mandó.</summary>
-    private sealed class PromptSpyAgent : ICopilotAgent
+    private sealed class PromptSpyAgent : IAuditorProvider
     {
         private readonly Func<VerifyRequest, string> _script;
 

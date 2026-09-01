@@ -22,7 +22,7 @@ namespace Atalaya.Copilot;
 /// The agent only ever calls our registered tools; the permission handler rejects everything else
 /// (shell, files, network), so it can touch nothing. Compiled against SDK 1.0.11.
 /// </summary>
-public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
+public sealed class RealCopilotAgent : IAssistedFixProvider, IAsyncDisposable
 {
     private readonly string? _baseDirectory;
     private readonly ILogger _logger;
@@ -80,6 +80,26 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
 
     /// <summary>Lo que se espera si nadie configura nada. El del SDK (1 min) no da para auditar.</summary>
     public static readonly TimeSpan DefaultSendTimeout = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// El identificador que se escribe en sesiones, hallazgos e informes (F14). Es una constante y
+    /// no un literal repartido: lo lee la selección de Ajustes, lo escribe el pipeline y lo filtra
+    /// Métricas, y tres copias de la misma cadena son dos oportunidades de escribirla mal.
+    /// </summary>
+    public const string Id = "copilot";
+
+    /// <inheritdoc/>
+    public string ProviderId => Id;
+
+    /// <inheritdoc/>
+    public string ProviderName => "GitHub Copilot";
+
+    /// <summary>
+    /// La clasificación de esta casa (F14): el clasificador de errores del SDK, que ya existía y
+    /// que sabe distinguir cuota de asiento de credencial. La interfaz solo le pone nombre común.
+    /// </summary>
+    public AgentReadiness Diagnose(Exception ex)
+        => CopilotFailure.Diagnose(ex, CurrentToken() is not null, ModelName);
 
     /// <summary>
     /// El plazo que se aplicaría AHORA. Existe para poder comprobar que sale del ajuste vigente y
@@ -267,7 +287,7 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
         AgentReadiness readiness = await CheckAsync(ct);
         if (!readiness.Ready)
         {
-            throw new CopilotAuthenticationException(readiness.Message);
+            throw new AuditorAuthenticationException(readiness.Message);
         }
 
         try
@@ -452,7 +472,7 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
         AgentReadiness readiness = await CheckAsync(ct);
         if (!readiness.Ready)
         {
-            throw new CopilotAuthenticationException(readiness.Message);
+            throw new AuditorAuthenticationException(readiness.Message);
         }
 
         try
@@ -491,8 +511,9 @@ public sealed class RealCopilotAgent : ICopilotAgent, IAsyncDisposable
         _logger.LogWarning(ex, "Copilot rechazo la operacion: {Problem}", bad.Problem);
 
         return bad.Problem == AgentProblem.ModelUnavailable
-            ? new CopilotModelUnavailableException(ModelName, ex)
-            : new CopilotProviderException(bad.Message, bad.Problem, bad.Detail, ex);
+            ? new AuditorModelUnavailableException(
+                ModelName, CopilotHelp.ModelUnavailable(ModelName), CopilotFailure.Raw(ex), ex)
+            : new AuditorProviderException(bad.Message, bad.Problem, bad.Detail, ex);
     }
 
     /// <summary>

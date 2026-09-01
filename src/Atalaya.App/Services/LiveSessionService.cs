@@ -28,7 +28,7 @@ public sealed partial class LiveSessionService : ObservableObject
 {
     private readonly Func<SessionCoordinator> _coordinatorFactory;
     private readonly ModelResolver? _models;
-    private readonly ICopilotAgent _agent;
+    private readonly Func<IAuditorProvider> _agent;
     private readonly OpenSessionStore _marker;
     private readonly HubContext? _hub;
 
@@ -70,7 +70,29 @@ public sealed partial class LiveSessionService : ObservableObject
     /// usa el ajuste tal cual, que es lo que hacía antes.
     /// </param>
     public LiveSessionService(
-        Func<SessionCoordinator> coordinatorFactory, ICopilotAgent agent, OpenSessionStore marker,
+        Func<SessionCoordinator> coordinatorFactory, IAuditorProvider agent, OpenSessionStore marker,
+        HubContext? hub = null, ModelResolver? models = null, AgentBusyGate? busy = null)
+        : this(coordinatorFactory, () => agent, marker, hub, models, busy)
+    {
+    }
+
+    /// <summary>
+    /// La forma que usa la aplicación (F14): el proveedor se PIDE en cada arranque de sesión, no
+    /// se guarda.
+    /// <para>
+    /// Este servicio es un singleton y vive lo que vive la aplicación, mientras que el proveedor
+    /// elegido se cambia en Ajustes y cambia sin reiniciar. Guardarse el que hubiera al arrancar
+    /// haría que la comprobación previa —«¿puede auditar?»— interrogase a Copilot mientras la
+    /// sesión iba a correr con Claude Code: exactamente el fallo de BUGFIX-AJUSTES, un valor
+    /// capturado en el constructor que obliga a reiniciar para que un ajuste sirva de algo.
+    /// </para>
+    /// <para>
+    /// La sobrecarga que recibe UN agente sigue existiendo para los tests, y ahí capturar es lo
+    /// correcto: quien pasa un agente falso está diciendo «este», no «el que esté elegido».
+    /// </para>
+    /// </summary>
+    public LiveSessionService(
+        Func<SessionCoordinator> coordinatorFactory, Func<IAuditorProvider> agent, OpenSessionStore marker,
         HubContext? hub = null, ModelResolver? models = null, AgentBusyGate? busy = null)
     {
         _coordinatorFactory = coordinatorFactory;
@@ -367,7 +389,7 @@ public sealed partial class LiveSessionService : ObservableObject
         bool closedOrderly = false;
         try
         {
-            AgentReadiness readiness = await _agent.CheckAsync(CancellationToken.None);
+            AgentReadiness readiness = await _agent().CheckAsync(CancellationToken.None);
             if (!readiness.Ready)
             {
                 Fail(readiness.Message, readiness.Problem == AgentProblem.ModelUnavailable,
@@ -422,12 +444,12 @@ public sealed partial class LiveSessionService : ObservableObject
 
             Completed?.Invoke(result);
         }
-        catch (CopilotModelUnavailableException modelEx)
+        catch (AuditorModelUnavailableException modelEx)
         {
             // F5.15: el fallo con remedio de un clic. Se nombra el modelo y se ofrece Ajustes.
             Fail(modelEx.Message, offersModelChange: true, modelEx.Detail);
         }
-        catch (CopilotProviderException providerEx)
+        catch (AuditorProviderException providerEx)
         {
             // BUGFIX-CUOTA: cuota, asiento, credenciales, red o desconocido — cada uno ya trae su
             // frase y su remedio desde el clasificador. Aquí no se vuelve a diagnosticar nada: dos

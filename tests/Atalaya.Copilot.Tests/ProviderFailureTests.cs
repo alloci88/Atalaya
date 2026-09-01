@@ -177,7 +177,7 @@ public sealed class ProviderFailureTests
     [Fact]
     public void La_excepcion_del_proveedor_lleva_problema_y_crudo_hasta_la_vista()
     {
-        var ex = new CopilotProviderException(
+        var ex = new AuditorProviderException(
             CopilotHelp.QuotaExhausted("mensual"), AgentProblem.QuotaExhausted, "crudo del SDK");
 
         ex.Problem.Should().Be(AgentProblem.QuotaExhausted);
@@ -191,11 +191,11 @@ public sealed class ProviderFailureTests
     /// </summary>
     [Fact]
     public void La_de_autenticacion_sigue_siendo_una_excepcion_de_proveedor()
-        => new CopilotAuthenticationException(CopilotHelp.NoAccount)
-            .Should().BeAssignableTo<CopilotProviderException>();
+        => new AuditorAuthenticationException(CopilotHelp.NoAccount)
+            .Should().BeAssignableTo<AuditorProviderException>();
 
     [Fact]
     public void Y_la_de_modelo_tambien_lleva_su_problema()
-        => new CopilotModelUnavailableException("gpt-5").Problem
+        => new AuditorModelUnavailableException("gpt-5").Problem
             .Should().Be(AgentProblem.ModelUnavailable);
 }

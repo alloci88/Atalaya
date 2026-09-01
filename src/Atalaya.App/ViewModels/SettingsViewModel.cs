@@ -58,7 +58,7 @@ public sealed record ModelOption(string Id, string Label)
 public sealed partial class SettingsViewModel : ViewModelBase
 {
     private readonly SettingsService _settings;
-    private readonly ICopilotAgent _agent;
+    private readonly IAuditorProvider _agent;
     private readonly ToastCenter _toasts;
     private readonly FactoryResetService _reset;
     private readonly IFactoryResetConfirmer _confirmer;
@@ -77,7 +77,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     public SettingsViewModel(
         SettingsService settings,
-        ICopilotAgent agent,
+        IAuditorProvider agent,
         ToastCenter toasts,
         FactoryResetService reset,
         IFactoryResetConfirmer confirmer,

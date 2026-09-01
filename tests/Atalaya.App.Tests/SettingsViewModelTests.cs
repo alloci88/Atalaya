@@ -29,7 +29,7 @@ public sealed class SettingsViewModelTests : IDisposable
     }
 
     private SettingsViewModel NewViewModel(
-        ICopilotAgent? agent = null, IFactoryResetConfirmer? confirmer = null)
+        IAuditorProvider? agent = null, IFactoryResetConfirmer? confirmer = null)
     {
         HubContext hub = TestFactory.Hub(_paths, _settings);
         return new SettingsViewModel(
@@ -278,18 +278,80 @@ public sealed class SettingsViewModelTests : IDisposable
             string code = WithoutComments(File.ReadAllText(file));
 
             // Familias reales de identificadores de modelo. El punto no es esta lista concreta:
-            // es que ninguna cadena con forma de id de modelo viva en producción.
-            foreach (string needle in new[] { "\"gpt-", "\"claude-", "\"o3", "\"o4-", "\"gemini-" })
+            // es que ninguna cadena con forma de id de modelo VERSIONADO viva en producción.
+            //
+            // F14 afina el «claude-»: `"claude-code"` es el identificador del PROVEEDOR, y ése sí
+            // vive en el código a propósito —se escribe en cada sesión y en cada informe del hub,
+            // así que no puede cambiar nunca—. Lo que sigue prohibido es un modelo con versión
+            // dentro (`"claude-opus-5"`, `"claude-3-5-sonnet"`): eso es lo que caduca.
+            foreach (string needle in new[] { "\"gpt-", "\"o3", "\"o4-", "\"gemini-" })
             {
                 if (code.Contains(needle, StringComparison.OrdinalIgnoreCase))
                 {
                     offenders.Add($"{Path.GetFileName(file)} contiene {needle}\"");
                 }
             }
+
+            if (Regex.IsMatch(code, "\"claude-(?!code\")", RegexOptions.IgnoreCase))
+            {
+                offenders.Add($"{Path.GetFileName(file)} contiene un id de modelo \"claude-…\"");
+            }
         }
 
         offenders.Should().BeEmpty(
             "un id de modelo escrito a mano caduca sin avisar y rompe a quien instale de cero (F5.15)");
+    }
+
+    /// <summary>
+    /// F14 — la excepción razonada, acotada: Claude Code se ofrece por ALIAS DE FAMILIA.
+    /// <para>
+    /// El CLI de <c>claude</c> no publica una lista de modelos —no hay <c>claude models list</c>,
+    /// se buscó—, así que no se le puede preguntar como se le pregunta al SDK de Copilot. Lo que sí
+    /// documenta su ayuda son los alias de familia, y ésos son justamente lo que NO caduca: se
+    /// comprobó contra el CLI real que <c>opus</c>, <c>sonnet</c> y <c>haiku</c> resuelven a
+    /// <c>claude-opus-5</c>, <c>claude-sonnet-5</c> y <c>claude-haiku-4-5-20251001</c>. El alias
+    /// sobrevive a la versión; el id concreto es el que habría muerto, igual que murió
+    /// <c>gpt-5</c> (F5.15).
+    /// </para>
+    /// <para>
+    /// Este test fija las dos mitades del trato: que los alias viven en UN solo fichero —el driver,
+    /// que es quien conoce a su CLI— y que el valor por defecto sigue siendo VACÍO, es decir «que
+    /// elija el CLI». Una máquina recién instalada no nace con ningún modelo escrito.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Los_alias_de_Claude_Code_viven_en_un_solo_sitio_y_el_defecto_sigue_vacio()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Atalaya.sln")))
+        {
+            dir = dir.Parent;
+        }
+
+        var carriers = new List<string>();
+        foreach (string file in Directory.EnumerateFiles(
+                     Path.Combine(dir!.FullName, "src"), "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            {
+                continue;
+            }
+
+            string code = WithoutComments(File.ReadAllText(file));
+            if (code.Contains("\"opus\"") || code.Contains("\"sonnet\"") || code.Contains("\"haiku\""))
+            {
+                carriers.Add(Path.GetFileName(file));
+            }
+        }
+
+        carriers.Should().BeEquivalentTo(new[] { "ClaudeCodeProvider.cs" },
+            "los alias son cosa del driver que conoce su CLI; repartidos, uno se quedaría viejo");
+
+        new AppSettings().ClaudeCodeModel.Should().BeEmpty(
+            "vacío significa «que elija el CLI»: una instalación de cero no nace con un modelo escrito");
+        new AppSettings().AuditorProvider.Should().BeEmpty(
+            "y sin proveedor escrito se audita con Copilot, que es como funcionaba antes de F14");
     }
 
     /// <summary>El fuente sin comentarios de línea ni de bloque. Basta para lo que se vigila aquí.</summary>

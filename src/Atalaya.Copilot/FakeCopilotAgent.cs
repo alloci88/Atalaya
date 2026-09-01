@@ -4,7 +4,7 @@ namespace Atalaya.Copilot;
 /// A deterministic, seat-free agent (§11) that exercises the entire audit pipeline. Tests script
 /// which findings/verdicts it reports; production can inject it when no Copilot seat is available.
 /// </summary>
-public sealed class FakeCopilotAgent : ICopilotAgent
+public sealed class FakeCopilotAgent : IAssistedFixProvider
 {
     private readonly Func<AuditUnitRequest, IEnumerable<SubmitFindingArgs>> _auditScript;
     private readonly Func<VerifyTarget, string> _verdictScript;
@@ -76,6 +76,16 @@ public sealed class FakeCopilotAgent : ICopilotAgent
     }
 
     public string? ModelName => _modelName ?? "fake-model";
+
+    /// <summary>
+    /// No se hace pasar por Copilot (F14). Una sesión conducida por el agente falso queda escrita
+    /// en el hub con ESTE identificador, así que si alguna vez uno de estos datos llega al hub de
+    /// verdad se ve de dónde salió en lugar de disfrazarse de una casa real.
+    /// </summary>
+    public string ProviderId => "fake";
+
+    /// <inheritdoc/>
+    public string ProviderName => "Agente falso";
 
     public event Action<string>? TextStreamed;
 

@@ -33,7 +33,7 @@ public sealed record FixSessionRequest(string Slug, Ulid FindingId);
 public sealed partial class LiveFixService : ObservableObject, IUserQuestions, IFixApprovals
 {
     private readonly HubContext _hub;
-    private readonly ICopilotAgent _agent;
+    private readonly IAssistedFixProvider _agent;
     private readonly MachineConfigStore _machines;
     private readonly IUlidFactory _ulids;
     private readonly SettingsService _settings;
@@ -69,7 +69,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
 
     public LiveFixService(
         HubContext hub,
-        ICopilotAgent agent,
+        IAssistedFixProvider agent,
         MachineConfigStore machines,
         IUlidFactory ulids,
         SettingsService settings,
@@ -420,11 +420,11 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
                 Fail("La sesión de arreglo se detuvo antes de empezar.", offersModelChange: false);
             }
         }
-        catch (CopilotModelUnavailableException modelEx)
+        catch (AuditorModelUnavailableException modelEx)
         {
             Fail(modelEx.Message, offersModelChange: true, modelEx.Detail);
         }
-        catch (CopilotProviderException authEx)
+        catch (AuditorProviderException authEx)
         {
             // BUGFIX-CUOTA: cuota, asiento, credenciales o red, cada uno con su frase ya
             // decidida por el clasificador. Aquí no se vuelve a diagnosticar nada.

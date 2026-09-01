@@ -102,7 +102,7 @@ public sealed class PatternSilenceTests : IDisposable
         => Run(slug, new FakeCopilotAgent(
             suppressScript: _ => suppressed.Select(s => new SuppressedByPatternArgs(s.PatternId, s.Count))));
 
-    private Task<SessionResult> Run(string slug, ICopilotAgent agent)
+    private Task<SessionResult> Run(string slug, IAuditorProvider agent)
         => new SessionCoordinator(_hub, _ingestion, _reconciliation, _machines, _ulids, agent, _settings)
             .RunAsync(new SessionRequest(slug, AuditMode.Lotes, new[] { "A.cs" }), CancellationToken.None);
 

@@ -43,7 +43,7 @@ public sealed class VerifyCoordinator
     private readonly HubContext _hub;
     private readonly MachineConfigStore _machines;
     private readonly IUlidFactory _ulids;
-    private readonly ICopilotAgent _agent;
+    private readonly IAuditorProvider _agent;
     private readonly MeasuredFindingService? _measured;
     private readonly DirectiveService? _directives;
 
@@ -52,7 +52,7 @@ public sealed class VerifyCoordinator
     /// ella el verify se comporta como antes de F7.
     /// </param>
     public VerifyCoordinator(
-        HubContext hub, MachineConfigStore machines, IUlidFactory ulids, ICopilotAgent agent,
+        HubContext hub, MachineConfigStore machines, IUlidFactory ulids, IAuditorProvider agent,
         MeasuredFindingService? measured = null, DirectiveService? directives = null)
     {
         _hub = hub;

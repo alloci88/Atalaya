@@ -404,7 +404,7 @@ public sealed class MeasuredFindingTests : IDisposable
             TestFactory.Links(_hub, _paths), TestFactory.LinkFlow(_hub, _paths, new ToastCenter()));
 
     /// <summary>Un agente que no admite que se le llame: prueba que el desvío es real.</summary>
-    private sealed class ThrowingAgent : ICopilotAgent
+    private sealed class ThrowingAgent : IAuditorProvider
     {
         public bool Called { get; private set; }
 

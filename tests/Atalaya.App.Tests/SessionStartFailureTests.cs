@@ -78,7 +78,7 @@ public sealed class SessionStartFailureTests : IDisposable
         _settings.Save(s);
     }
 
-    private LiveSessionService Live(ICopilotAgent agent, ModelResolver? models = null)
+    private LiveSessionService Live(IAuditorProvider agent, ModelResolver? models = null)
         => new(
             () => new SessionCoordinator(
                 _hub, new FindingIngestionService(_hub, _ulids), new ReconciliationService(_hub),
@@ -96,7 +96,7 @@ public sealed class SessionStartFailureTests : IDisposable
     }
 
     /// <summary>Un agente que revienta al crear la sesión, como hizo el runtime aquella noche.</summary>
-    private sealed class FailingAgent : ICopilotAgent
+    private sealed class FailingAgent : IAuditorProvider
     {
         private readonly Exception _failure;
 
@@ -138,7 +138,7 @@ public sealed class SessionStartFailureTests : IDisposable
     {
         Configure("modelo-muerto");
         LiveSessionService live = Live(new FailingAgent(
-            new CopilotModelUnavailableException("modelo-muerto")));
+            new AuditorModelUnavailableException("modelo-muerto")));
         var avisos = new List<string>();
         live.Failed += avisos.Add;
 
@@ -160,7 +160,7 @@ public sealed class SessionStartFailureTests : IDisposable
     {
         Configure("modelo-muerto");
         LiveSessionService live = Live(new FailingAgent(
-            new CopilotModelUnavailableException("modelo-muerto")));
+            new AuditorModelUnavailableException("modelo-muerto")));
         var vm = new SessionViewModel(live);
 
         await live.StartAsync(new SessionRequest("app", AuditMode.Lotes, new[] { UnitPath }), new[] { UnitPath });
@@ -223,7 +223,7 @@ public sealed class SessionStartFailureTests : IDisposable
         Configure("modelo-muerto");
         var store = new OpenSessionStore(_paths);
         LiveSessionService live = Live(new FailingAgent(
-            new CopilotModelUnavailableException("modelo-muerto")));
+            new AuditorModelUnavailableException("modelo-muerto")));
 
         await live.StartAsync(new SessionRequest("app", AuditMode.Lotes, new[] { UnitPath }), new[] { UnitPath });
         await Wait(live);

@@ -65,12 +65,12 @@ public sealed class DriftInventoryFlowTests : IDisposable
         services.AddSingleton<InventoryScanner>();
         services.AddSingleton<FindingIngestionService>();
         services.AddSingleton<ReconciliationService>();
-        services.AddSingleton<ICopilotAgent>(new FakeCopilotAgent(_ => Array.Empty<SubmitFindingArgs>()));
+        services.AddSingleton<IAuditorProvider>(new FakeCopilotAgent(_ => Array.Empty<SubmitFindingArgs>()));
         services.AddSingleton<NavigationService>();
         services.AddSingleton<OpenSessionStore>();
         services.AddSingleton(sp => new LiveSessionService(
             sp.GetRequiredService<SessionCoordinator>,
-            sp.GetRequiredService<ICopilotAgent>(),
+            sp.GetRequiredService<IAuditorProvider>(),
             sp.GetRequiredService<OpenSessionStore>(),
             sp.GetRequiredService<HubContext>()));
         services.AddTransient<SessionCoordinator>();

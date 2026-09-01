@@ -137,7 +137,7 @@ public sealed class FixSessionSurfaceTests
     [Fact]
     public async Task Un_agente_que_no_sabe_arreglar_lo_dice()
     {
-        ICopilotAgent agent = new AuditOnlyAgent();
+        IAssistedFixProvider agent = new AuditOnlyAgent();
 
         Func<Task> act = () => agent.FixAsync(
             new FixRequest("p", "c"),
@@ -184,7 +184,7 @@ public sealed class FixSessionSurfaceTests
     }
 
     /// <summary>Un agente que solo audita: no sobrescribe <c>FixAsync</c>.</summary>
-    private sealed class AuditOnlyAgent : ICopilotAgent
+    private sealed class AuditOnlyAgent : IAssistedFixProvider
     {
         public string? ModelName => "audit-only";
 

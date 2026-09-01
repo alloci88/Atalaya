@@ -89,29 +89,52 @@ public sealed class ConnectionChecker
     private readonly GitHubApiClient _api;
     private readonly DeployConfig _deploy;
     private readonly HubContext _hub;
-    private readonly ICopilotAgent _agent;
+    private readonly AuditorProviderRegistry _providers;
 
     public ConnectionChecker(
         GitHubAccountService account,
         GitHubApiClient api,
         DeployConfig deploy,
         HubContext hub,
-        ICopilotAgent agent)
+        AuditorProviderRegistry providers)
     {
         _account = account;
         _api = api;
         _deploy = deploy;
         _hub = hub;
-        _agent = agent;
+        _providers = providers;
 
-        Steps = new[]
+        // F14 — GitHub NO se sustituye nunca, y el orden de las filas lo dice: identidad, ORG y
+        // hub van primero y son de GitHub, se audite con quien se audite. Solo DESPUÉS viene una
+        // fila por proveedor de auditoría. Quien mire esta pantalla tiene que poder ver que elegir
+        // Claude Code no le quita a Atalaya la necesidad de una cuenta de GitHub: sin ella no hay
+        // ni autoría, ni hub, ni sitio donde escribir los hallazgos.
+        Steps = new ConnectionStep[]
         {
-            new ConnectionStep("auth", "Autenticado"),
-            new ConnectionStep("org", "Miembro de la organización"),
-            new ConnectionStep("hub", "Acceso al hub"),
-            new ConnectionStep("copilot", "Copilot disponible"),
-        };
+            new("auth", "Autenticado"),
+            new("org", "Miembro de la organización"),
+            new("hub", "Acceso al hub"),
+        }
+        .Concat(providers.All.Select(p => new ConnectionStep(ProviderStepKey(p.ProviderId), $"{p.ProviderName} disponible")))
+        .ToArray();
     }
+
+    /// <summary>
+    /// Con UN proveedor. Lo usan los tests de la pantalla Cuenta que solo ejercitan la cadena de
+    /// GitHub y no tienen nada que decir sobre cuántos auditores hay.
+    /// </summary>
+    public ConnectionChecker(
+        GitHubAccountService account,
+        GitHubApiClient api,
+        DeployConfig deploy,
+        HubContext hub,
+        IAuditorProvider agent)
+        : this(account, api, deploy, hub, AuditorProviderRegistry.Of(agent))
+    {
+    }
+
+    /// <summary>La clave de la fila de un proveedor. En un sitio, para que las dos mitades casen.</summary>
+    internal static string ProviderStepKey(string providerId) => $"provider:{providerId}";
 
     /// <summary>The four rows, created once and mutated in place (safe to bind).</summary>
     public IReadOnlyList<ConnectionStep> Steps { get; }
@@ -127,7 +150,7 @@ public sealed class ConnectionChecker
                 "auth" => "Autenticado",
                 "org" => $"Miembro de {(_deploy.ChecksOrgMembership ? _deploy.OrganizationLogin : "la organización")}",
                 "hub" => "Acceso al hub",
-                _ => "Copilot disponible",
+                _ => $"{_providers.NameOf(step.Key["provider:".Length..])} disponible",
             });
         }
 
@@ -240,35 +263,61 @@ public sealed class ConnectionChecker
             }
         }
 
-        // 4 — Copilot: start the SDK client with the account token and ask for auth status; no
-        //     session is created (F2.1: cheapest check the 1.0.11 API allows).
-        ConnectionStep copilot = Step("copilot");
-        copilot.State = CheckState.Running;
-        try
+        // 4 — Un proveedor de auditoría por fila (F14). Cada uno con SU comprobación barata: el de
+        //     Copilot pregunta el estado de autenticación al SDK sin crear sesión (F2.1); el de
+        //     Claude Code mira si el CLI está y si tiene login. Ninguna gasta cuota.
+        //
+        //     Se comprueban TODOS, no solo el elegido: la pantalla Cuenta existe para poder
+        //     decidir, y para eso hay que ver el estado de los dos. Que a uno le falte algo NO
+        //     invalida la conexión —se puede auditar con el otro—, así que un proveedor caído no
+        //     tumba el resultado global mientras quede alguno en pie.
+        var providerSteps = new List<(ConnectionStep Step, bool Ready)>();
+
+        foreach (IAuditorProvider provider in _providers.All)
         {
-            AgentReadiness readiness = await _agent.CheckAsync(ct);
-            if (readiness.Ready)
+            ConnectionStep step = Step(ProviderStepKey(provider.ProviderId));
+            step.State = CheckState.Running;
+            try
             {
-                copilot.Succeed("Copilot disponible", readiness.Message);
+                AgentReadiness readiness = await provider.CheckAsync(ct);
+                if (readiness.Ready)
+                {
+                    step.Succeed($"{provider.ProviderName} disponible", readiness.Message);
+                }
+                else
+                {
+                    step.Fail(readiness.Message,
+                        readiness.Problem == AgentProblem.NoSeat ? ConnectionHelp.DocsCopilotSeat : null);
+                }
+
+                providerSteps.Add((step, readiness.Ready));
             }
-            else
+            catch (OperationCanceledException)
             {
-                copilot.Fail(readiness.Message,
-                    readiness.Problem == AgentProblem.NoSeat ? ConnectionHelp.DocsCopilotSeat : null);
-                firstProblem ??= readiness.Message;
+                throw;
             }
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            copilot.Fail($"No se pudo comprobar Copilot: {ex.Message}");
-            firstProblem ??= copilot.Detail;
+            catch (Exception ex)
+            {
+                step.Fail($"No se pudo comprobar {provider.ProviderName}: {ex.Message}");
+                providerSteps.Add((step, false));
+            }
         }
 
-        return new ConnectionCheckResult(Steps.All(s => s.State is CheckState.Ok or CheckState.Skipped), firstProblem);
+        // El problema que se destaca arriba es el del proveedor ELEGIDO: es con el que se va a
+        // auditar, y por tanto el único cuyo fallo impide trabajar ahora mismo. Que el otro esté
+        // sin instalar es información, no una avería.
+        string chosenKey = ProviderStepKey(_providers.Current.ProviderId);
+        if (providerSteps.FirstOrDefault(p => p.Step.Key == chosenKey) is { Ready: false, Step: { } chosen })
+        {
+            firstProblem ??= chosen.Detail;
+        }
+
+        bool nonProviderOk = Steps
+            .Where(s => !s.Key.StartsWith("provider:", StringComparison.Ordinal))
+            .All(s => s.State is CheckState.Ok or CheckState.Skipped);
+
+        return new ConnectionCheckResult(
+            nonProviderOk && providerSteps.Any(p => p.Ready), firstProblem);
     }
 
     /// <summary>

@@ -957,7 +957,7 @@ public sealed class FindingsViewTests : IDisposable
         after.Resolved!.Via.Should().Be(ResolutionVia.Verify);
     }
 
-    private FindingDetailViewModel NewDetail(ICopilotAgent? agent = null)
+    private FindingDetailViewModel NewDetail(IAuditorProvider? agent = null)
         => new(
             _hub,
             _governance,

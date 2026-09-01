@@ -46,13 +46,22 @@ public sealed record ModelResolution(string ModelId, string? Notice, bool Change
 /// </summary>
 public sealed class ModelResolver
 {
-    private readonly ICopilotAgent _agent;
+    private readonly AuditorProviderRegistry _providers;
     private readonly SettingsService _settings;
 
-    public ModelResolver(ICopilotAgent agent, SettingsService settings)
+    public ModelResolver(AuditorProviderRegistry providers, SettingsService settings)
     {
-        _agent = agent;
+        _providers = providers;
         _settings = settings;
+    }
+
+    /// <summary>
+    /// Con UN proveedor y nada que elegir. Lo usan los tests, que ejercitan la resolución de
+    /// modelo con un agente falso y no tienen por qué montar un registro para eso.
+    /// </summary>
+    public ModelResolver(IAuditorProvider provider, SettingsService settings)
+        : this(AuditorProviderRegistry.Of(provider), settings)
+    {
     }
 
     /// <summary>
@@ -60,29 +69,37 @@ public sealed class ModelResolver
     /// auditoría no puede volver a tropezar con lo mismo, ni el usuario tener que arreglarlo dos
     /// veces.
     /// </summary>
-    public async Task<ModelResolution> ResolveAsync(CancellationToken ct)
+    public Task<ModelResolution> ResolveAsync(CancellationToken ct)
+        => ResolveAsync(_providers.Current, ct);
+
+    /// <summary>
+    /// La misma resolución, para un proveedor CONCRETO (F14). Ajustes la usa para poder resolver
+    /// el modelo del proveedor que se está configurando aunque no sea el que está elegido.
+    /// </summary>
+    public async Task<ModelResolution> ResolveAsync(IAuditorProvider provider, CancellationToken ct)
     {
-        string configured = (_settings.Current.CopilotModel ?? string.Empty).Trim();
+        string configured = _settings.ModelFor(provider.ProviderId).Trim();
 
         IReadOnlyList<AgentModel> available;
         try
         {
-            available = await _agent.ListModelsAsync(ct);
+            available = await provider.ListModelsAsync(ct);
         }
         catch (Exception ex)
         {
             // No se pudo preguntar. Con un modelo configurado se sigue adelante con él —puede ser
             // perfectamente válido y el fallo estar en la red—; sin ninguno no hay nada que probar.
             //
-            // BUGFIX-CUOTA: pero el MOTIVO se clasifica, no se resume. Si lo que ha pasado es que la
-            // organización agotó sus peticiones, decirlo aquí ahorra el viaje entero.
-            AgentProblem why = CopilotFailure.Classify(ex, hasToken: true);
+            // BUGFIX-CUOTA: pero el MOTIVO se clasifica, no se resume. Si lo que ha pasado es que se
+            // agotaron las peticiones, decirlo aquí ahorra el viaje entero. F14: quién clasifica es
+            // el PROVEEDOR —cada casa nombra sus fallos a su manera—, no un clasificador fijo.
+            AgentReadiness why = provider.Diagnose(ex);
             return configured.Length > 0
                 ? ModelResolution.Keep(configured)
                 : new ModelResolution(
                     string.Empty,
                     "No se pudo consultar la lista de modelos de tu cuenta: "
-                    + CopilotFailure.Message(why, ex, null, CopilotFailure.Raw(ex))
+                    + why.Message
                     + " Esta máquina todavía no tiene ninguno elegido: abre Ajustes y elige uno.",
                     Changed: false,
                     Failed: true);
@@ -96,9 +113,9 @@ public sealed class ModelResolver
             // afirmar «revisa tu asiento» manda a la mitad de la gente a reclamar lo que ya tiene.
             return new ModelResolution(
                 configured,
-                "Tu cuenta no ofrece ningún modelo de Copilot. El runtime no dice por qué: puede ser "
-                + "el asiento, una política de la organización o su cuota de peticiones. Mira Cuenta "
-                + "antes de auditar.",
+                $"Tu cuenta no ofrece ningún modelo de {provider.ProviderName}. El proveedor no dice "
+                + "por qué: puede ser el asiento, una política de la organización o su cuota de "
+                + "peticiones. Mira Cuenta antes de auditar.",
                 Changed: false,
                 Failed: configured.Length == 0);
         }
@@ -109,7 +126,7 @@ public sealed class ModelResolver
         }
 
         AgentModel chosen = usable[0];
-        Save(chosen.Id);
+        _settings.SetModelFor(provider.ProviderId, chosen.Id);
 
         return new ModelResolution(
             chosen.Id,
@@ -126,14 +143,4 @@ public sealed class ModelResolver
             ? model.Id
             : $"{model.Name} ({model.Id})";
 
-    private static string Short(string? message)
-        => string.IsNullOrWhiteSpace(message) ? "sin detalle"
-            : message!.Length <= 120 ? message : message[..120] + "…";
-
-    private void Save(string modelId)
-    {
-        AppSettings s = _settings.Current;
-        s.CopilotModel = modelId;
-        _settings.Save(s);
-    }
 }

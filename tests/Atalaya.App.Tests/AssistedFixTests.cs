@@ -748,7 +748,7 @@ public sealed class AssistedFixTests : IDisposable
     public async Task Un_arreglo_fallido_sin_tocar_nada_se_cierra_sin_preguntar()
     {
         LiveFixService fix = Service(new FakeCopilotAgent(fixScript: _ =>
-            throw new CopilotProviderException(
+            throw new AuditorProviderException(
                 CopilotHelp.QuotaExhausted("mensual"), AgentProblem.QuotaExhausted, "crudo")));
 
         await fix.StartAsync(new FixSessionRequest(Slug, _findingId));
@@ -1117,7 +1117,7 @@ public sealed class AssistedFixTests : IDisposable
     private AssistedFixLauncher Launcher(SettingsService settings)
         => new(settings, new CloneLinkService(_hub, _machines), _machines, _busy);
 
-    private LiveFixService Service(ICopilotAgent agent)
+    private LiveFixService Service(IAssistedFixProvider agent)
         => new(
             _hub, agent, _machines, _ulids, _settings, new ReferenceCollector(), _snapshots,
             Launcher(), _busy, new BuildRunner(new NoProcess()));

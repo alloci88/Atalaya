@@ -221,8 +221,21 @@ public sealed class SettingsWiringTests : IDisposable
         s.CopilotModel = "un-modelo-elegido";
         _settings.Save(s);
 
-        Reflection.ReadsSetting(typeof(ModelResolver), "CopilotModel").Should().BeTrue();
-        _settings.Current.CopilotModel.Should().Be("un-modelo-elegido");
+        // F14: el resolutor ya no nombra el ajuste de una casa concreta —hay dos, con un campo
+        // cada una— sino que lo pide POR PROVEEDOR. La garantía sigue siendo la misma y ahora se
+        // comprueba en sus dos mitades: que el resolutor pregunta, y que quien contesta lee los
+        // ajustes de verdad y no una constante.
+        Reflection.SourceOf(typeof(ModelResolver)).Should().Contain("_settings.ModelFor(");
+        Reflection.ReadsSetting(typeof(SettingsService), "CopilotModel").Should().BeTrue();
+        Reflection.ReadsSetting(typeof(SettingsService), "ClaudeCodeModel").Should().BeTrue();
+
+        _settings.ModelFor("copilot").Should().Be("un-modelo-elegido");
+
+        // Y que los dos campos son independientes: cambiar de proveedor no puede pisar la
+        // elección del otro, porque sus espacios de nombres no se solapan.
+        _settings.SetModelFor("claude-code", "opus");
+        _settings.ModelFor("copilot").Should().Be("un-modelo-elegido");
+        _settings.ModelFor("claude-code").Should().Be("opus");
     }
 
     /// <summary>Arreglo asistido: apagado, el lanzador se niega y lo dice.</summary>

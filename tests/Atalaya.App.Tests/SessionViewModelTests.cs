@@ -78,9 +78,9 @@ public sealed class SessionViewModelTests : IDisposable
             "Conn leaked", "desc", "impact", "reco",
             new[] { new SubmitLocation("A.cs", 1, "snippet") }, "A.M");
 
-    private LiveSessionService NewLive(ICopilotAgent? agent = null)
+    private LiveSessionService NewLive(IAuditorProvider? agent = null)
     {
-        ICopilotAgent auditor = agent ?? new FakeCopilotAgent(_ => new[] { Sample() });
+        IAuditorProvider auditor = agent ?? new FakeCopilotAgent(_ => new[] { Sample() });
         return new LiveSessionService(
             () => new SessionCoordinator(_hub, _ingestion, _reconciliation, _machines, _ulids, auditor, _settings),
             auditor,
@@ -386,9 +386,9 @@ public sealed class SessionViewModelTests : IDisposable
     }
 
     /// <summary>Agente cuyo <c>CheckAsync</c> espera a una compuerta que abre el test.</summary>
-    private sealed class GatedAgent : ICopilotAgent
+    private sealed class GatedAgent : IAuditorProvider
     {
-        private readonly ICopilotAgent _inner = new FakeCopilotAgent();
+        private readonly IAuditorProvider _inner = new FakeCopilotAgent();
         private readonly TaskCompletionSource _gate = new();
 
         /// <summary>Cuántas llamadas llegaron a la compuerta. Es LA medida del cerrojo.</summary>

@@ -81,13 +81,13 @@ public sealed class ReAuditSelectionTests : IDisposable
         services.AddSingleton<InventoryScanner>();
         services.AddSingleton<FindingIngestionService>();
         services.AddSingleton<ReconciliationService>();
-        services.AddSingleton<ICopilotAgent>(new FakeCopilotAgent(_ => new[] { Sample() }));
+        services.AddSingleton<IAuditorProvider>(new FakeCopilotAgent(_ => new[] { Sample() }));
         services.AddSingleton<NavigationService>();
         services.AddSingleton(_paths);
         services.AddSingleton<OpenSessionStore>();
         services.AddSingleton(sp => new LiveSessionService(
             sp.GetRequiredService<SessionCoordinator>,
-            sp.GetRequiredService<ICopilotAgent>(),
+            sp.GetRequiredService<IAuditorProvider>(),
             sp.GetRequiredService<OpenSessionStore>()));
         services.AddTransient<SessionCoordinator>();
         services.AddTransient<SessionViewModel>();

@@ -57,13 +57,15 @@ public sealed class EmergencyBrakeTests : IDisposable
         services.AddSingleton(new MachineConfigStore(_paths.MachinesJson));
         services.AddSingleton<FindingIngestionService>();
         services.AddSingleton<ReconciliationService>();
-        services.AddSingleton<ICopilotAgent>(new FakeCopilotAgent(_ => Array.Empty<SubmitFindingArgs>()));
+        var agent = new FakeCopilotAgent(_ => Array.Empty<SubmitFindingArgs>());
+        services.AddSingleton<IAuditorProvider>(agent);
+        services.AddSingleton<IAssistedFixProvider>(agent);
         services.AddSingleton<NavigationService>();
         services.AddSingleton<OpenSessionStore>();
         services.AddSingleton<AgentBusyGate>();
         services.AddSingleton(sp => new LiveSessionService(
             sp.GetRequiredService<SessionCoordinator>,
-            sp.GetRequiredService<ICopilotAgent>(),
+            sp.GetRequiredService<IAuditorProvider>(),
             sp.GetRequiredService<OpenSessionStore>(),
             sp.GetRequiredService<HubContext>(),
             busy: sp.GetRequiredService<AgentBusyGate>()));
@@ -78,7 +80,7 @@ public sealed class EmergencyBrakeTests : IDisposable
         services.AddSingleton<AssistedFixLauncher>();
         services.AddSingleton(sp => new LiveFixService(
             sp.GetRequiredService<HubContext>(),
-            sp.GetRequiredService<ICopilotAgent>(),
+            sp.GetRequiredService<IAssistedFixProvider>(),
             sp.GetRequiredService<MachineConfigStore>(),
             sp.GetRequiredService<IUlidFactory>(),
             sp.GetRequiredService<SettingsService>(),

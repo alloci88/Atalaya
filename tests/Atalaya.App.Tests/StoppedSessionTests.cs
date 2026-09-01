@@ -73,7 +73,7 @@ public sealed class StoppedSessionTests : IDisposable
     /// Agente que reporta un hallazgo en la primera unidad y, justo después, cancela: reproduce a
     /// alguien pulsando «Detener» con la sesión a medias.
     /// </summary>
-    private sealed class StopsAfterFirstUnit : ICopilotAgent
+    private sealed class StopsAfterFirstUnit : IAuditorProvider
     {
         private readonly CancellationTokenSource _cts;
         private readonly SubmitFindingArgs _finding;

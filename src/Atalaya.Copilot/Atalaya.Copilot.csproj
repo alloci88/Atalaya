@@ -22,6 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Atalaya.Agents\Atalaya.Agents.csproj" />
     <ProjectReference Include="..\Atalaya.Domain\Atalaya.Domain.csproj" />
   </ItemGroup>
 

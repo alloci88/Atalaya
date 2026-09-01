@@ -220,6 +220,42 @@ public sealed class AppSettings
     /// </summary>
     public string CopilotModel { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Con qué proveedor se lanzan las sesiones nuevas de ESTA máquina (F14): <c>copilot</c> o
+    /// <c>claude-code</c>. Vacío = Copilot, que es el valor de fábrica y lo que tenían todas las
+    /// máquinas antes de que hubiera un segundo.
+    /// <para>
+    /// <b>Personal, y por la regla de F13</b> (D-769, D-773): lo que decide no se escribe en el
+    /// hub como política — se escribe como HECHO, en la sesión y en el informe («auditado con
+    /// Claude Code, modelo X»). Cada uno audita con la suscripción que tiene, igual que ya elegía
+    /// modelo y tope de pasadas, y lo que llega al hub no es el ajuste sino con quién se auditó
+    /// aquella vez. Un proveedor compartido obligaría a que todo el equipo tuviera las mismas
+    /// cuentas.
+    /// </para>
+    /// <para>
+    /// Se aplica a la SIGUIENTE sesión: cambiarlo a mitad de un barrido cambiaría de juez sin
+    /// avisar, y la sesión ya escribió en su registro con quién empezó.
+    /// </para>
+    /// </summary>
+    public string AuditorProvider { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Modelo con el que Claude Code lanza las sesiones (<c>claude --model</c>).
+    /// <para>
+    /// <b>Es un campo aparte de <see cref="CopilotModel"/> a propósito.</b> Los dos espacios de
+    /// nombres no se solapan —<c>gpt-5</c> no significa nada para Claude Code y <c>opus</c> no
+    /// significa nada para Copilot—, así que compartir el campo garantizaría que cambiar de
+    /// proveedor dejara configurado un modelo imposible. Con uno cada uno, ir y volver conserva
+    /// las dos elecciones.
+    /// </para>
+    /// <para>
+    /// Vacío por defecto, por la misma razón que el de Copilot (F5.15): un nombre de modelo es un
+    /// dato del proveedor con fecha de caducidad y no puede vivir como constante. Vacío significa
+    /// «que elija el CLI», y de eso se encarga <c>ModelResolver</c>.
+    /// </para>
+    /// </summary>
+    public string ClaudeCodeModel { get; set; } = string.Empty;
+
     // ---- Aviso de versión nueva (F8 §3) ----
 
     /// <summary>
@@ -398,6 +434,33 @@ public sealed class SettingsService
         string nb = Normalize(b);
         return na.Length > 0 && string.Equals(na, nb, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// El modelo configurado para UN proveedor (F14). Cada casa tiene su campo porque sus espacios
+    /// de nombres no se solapan; esto es el único sitio que sabe cuál es cuál, para que el
+    /// resolutor de modelo y Ajustes no tengan que repetir el <c>switch</c>.
+    /// </summary>
+    public string ModelFor(string? providerId)
+        => IsClaudeCode(providerId) ? Current.ClaudeCodeModel : Current.CopilotModel;
+
+    /// <summary>Guarda el modelo elegido para ese proveedor, sin tocar el del otro.</summary>
+    public void SetModelFor(string? providerId, string modelId)
+    {
+        AppSettings settings = Current;
+        if (IsClaudeCode(providerId))
+        {
+            settings.ClaudeCodeModel = modelId;
+        }
+        else
+        {
+            settings.CopilotModel = modelId;
+        }
+
+        Save(settings);
+    }
+
+    private static bool IsClaudeCode(string? providerId)
+        => string.Equals(providerId, "claude-code", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Encrypts and stores a PAT with DPAPI (current-user scope).</summary>
     public void SetPat(string? plainTextPat)

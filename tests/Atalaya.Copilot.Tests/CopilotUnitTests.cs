@@ -147,7 +147,7 @@ public class FakeAgentTests
     {
         CopilotHelp.NotAuthenticated.Should().Contain("copilot");
         CopilotHelp.NotAuthenticated.Should().Contain("/login");
-        new CopilotAuthenticationException(CopilotHelp.NotAuthenticated).Message.Should().Contain("autenticado");
+        new AuditorAuthenticationException(CopilotHelp.NotAuthenticated).Message.Should().Contain("autenticado");
     }
 
     [Fact]

@@ -134,7 +134,7 @@ public sealed class VerifyJudgmentTests : IDisposable
 
     private Finding Read(Finding f) => _hub.Store.TryReadFinding("app", f.Id.ToString())!;
 
-    private VerifyCoordinator Coordinator(ICopilotAgent agent)
+    private VerifyCoordinator Coordinator(IAuditorProvider agent)
         => new(_hub, _machines, _ulids, agent);
 
     // ------------------------------------------------------------------ (1) el caso real
@@ -338,7 +338,7 @@ public sealed class VerifyJudgmentTests : IDisposable
         session.Usage.Currency.Should().Be("unidades SDK");
     }
 
-    private sealed class ScriptedAgent : ICopilotAgent
+    private sealed class ScriptedAgent : IAuditorProvider
     {
         private readonly Func<VerifyRequest, string> _script;
         private readonly UsageSample _usage;

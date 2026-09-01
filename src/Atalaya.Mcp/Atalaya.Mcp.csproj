@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Atalaya.Mcp</RootNamespace>
+    <AssemblyName>Atalaya.Mcp</AssemblyName>
+    <!-- Un rele, no una aplicacion: no imprime nada por su cuenta porque su stdout ES el
+         canal del protocolo. Cualquier linea suelta lo romperia. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+</Project>

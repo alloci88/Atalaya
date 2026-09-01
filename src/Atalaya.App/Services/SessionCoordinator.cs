@@ -151,7 +151,7 @@ public sealed class SessionCoordinator
     private readonly ReconciliationService _reconciliation;
     private readonly MachineConfigStore _machines;
     private readonly IUlidFactory _ulids;
-    private readonly ICopilotAgent _agent;
+    private readonly IAuditorProvider _agent;
     private readonly SettingsService _settings;
     private readonly CycleService? _cycles;
     private readonly StatusExporter? _statusExporter;
@@ -165,7 +165,7 @@ public sealed class SessionCoordinator
     /// </param>
     public SessionCoordinator(
         HubContext hub, FindingIngestionService ingestion, ReconciliationService reconciliation,
-        MachineConfigStore machines, IUlidFactory ulids, ICopilotAgent agent,
+        MachineConfigStore machines, IUlidFactory ulids, IAuditorProvider agent,
         SettingsService settings,
         CycleService? cycles = null, StatusExporter? statusExporter = null,
         DisplayIdService? aliases = null, DirectiveService? directives = null)
@@ -620,7 +620,7 @@ public sealed class SessionCoordinator
             // ya esta en el hub. Se sigue al cierre ordenado en vez de dejarlo huerfano.
             stopped = true;
         }
-        catch (CopilotProviderException ex) when (session.Units.Count > 0)
+        catch (AuditorProviderException ex) when (session.Units.Count > 0)
         {
             // BUGFIX-CUOTA. El proveedor ha cerrado el grifo a mitad del barrido. Se trata IGUAL
             // que una parada: se corta aqui —no se prueba la unidad siguiente, que seria tirar

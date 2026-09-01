@@ -3,6 +3,7 @@ using System.Windows;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
+using Atalaya.ClaudeCode;
 using Atalaya.Copilot;
 using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Ids;
@@ -136,7 +137,7 @@ public partial class App : Application
         // The token is read lazily on every start, so connecting or switching account takes
         // effect immediately. With no account token the adapter falls back to the pre-F2
         // behaviour (UseLoggedInUser = true) so existing machines keep working.
-        services.AddSingleton<ICopilotAgent>(sp =>
+        services.AddSingleton<IAssistedFixProvider>(sp =>
         {
             var settings = sp.GetRequiredService<SettingsService>();
             AppSettings s = settings.Current;
@@ -153,6 +154,41 @@ public partial class App : Application
                 tokenProvider: () => account.Token,
                 loginProvider: () => account.Current?.Login);
         });
+
+        // F14 — el SEGUNDO proveedor: Claude Code, por el CLI que el usuario ya tiene.
+        //
+        // Atalaya no lo instala ni guarda credenciales de Anthropic: lo busca en el PATH y usa la
+        // sesión que el CLI tenga iniciada, igual que con Copilot usa el login de GitHub. El
+        // puente MCP viaja en la carpeta de la aplicación (ver el .csproj) y es lo que `claude`
+        // lanza como servidor de herramientas.
+        services.AddSingleton<ClaudeCodeProvider>(sp =>
+        {
+            var settings = sp.GetRequiredService<SettingsService>();
+            return new ClaudeCodeProvider(
+                bridgeExecutable: McpBridge.ResolvePath(),
+                // Leído en CADA sesión, por la misma razón que el de Copilot (BUGFIX-AJUSTES).
+                modelProvider: () => settings.Current.ClaudeCodeModel,
+                workDirectory: () => Path.Combine(paths.Root, "claude"),
+                logger: sp.GetRequiredService<ILoggerFactory>().CreateLogger("ClaudeCode"));
+        });
+
+        // Los dos proveedores, EN ORDEN y nombrados uno a uno. Se listan aquí en vez de dejar que
+        // el contenedor los recolecte por su interfaz porque ese orden es el que ve el usuario —el
+        // primero es el de fábrica, y el que la pantalla Cuenta enseña arriba— y no puede depender
+        // de en qué línea quedó registrado cada uno.
+        services.AddSingleton(sp => new AuditorProviderRegistry(
+            sp.GetRequiredService<SettingsService>(),
+            new IAuditorProvider[]
+            {
+                sp.GetRequiredService<IAssistedFixProvider>(),
+                sp.GetRequiredService<ClaudeCodeProvider>(),
+            }));
+
+        // Quien recibe UN proveedor recibe el elegido AHORA. Solo vale para servicios transitorios
+        // —los coordinadores, que se crean uno por sesión—: un singleton que lo capturase se
+        // quedaría con el proveedor que hubiera al arrancar, que es el fallo de BUGFIX-AJUSTES.
+        // Los singletons reciben el registro y preguntan cuando toca.
+        services.AddTransient(sp => sp.GetRequiredService<AuditorProviderRegistry>().Current);
         services.AddTransient<SessionCoordinator>();
         services.AddTransient<VerifyCoordinator>();
 
@@ -165,7 +201,7 @@ public partial class App : Application
         services.AddSingleton<ModelResolver>();
         services.AddSingleton(sp => new LiveSessionService(
             sp.GetRequiredService<SessionCoordinator>,
-            sp.GetRequiredService<ICopilotAgent>(),
+            () => sp.GetRequiredService<AuditorProviderRegistry>().Current,
             sp.GetRequiredService<OpenSessionStore>(),
             sp.GetRequiredService<HubContext>(),
             sp.GetRequiredService<ModelResolver>(),
@@ -207,7 +243,10 @@ public partial class App : Application
         services.AddSingleton<IFixCloseConfirmer, FixCloseDialogConfirmer>();
         services.AddSingleton(sp => new LiveFixService(
             sp.GetRequiredService<HubContext>(),
-            sp.GetRequiredService<ICopilotAgent>(),
+            // F14: el arreglo asistido sigue siendo de Copilot, y por eso pide el tipo que SABE
+            // arreglar. Que el compilador lo exija es la garantía de que elegir Claude Code como
+            // auditor no puede desviar por accidente un arreglo hacia un proveedor que no lo hace.
+            sp.GetRequiredService<IAssistedFixProvider>(),
             sp.GetRequiredService<MachineConfigStore>(),
             sp.GetRequiredService<IUlidFactory>(),
             sp.GetRequiredService<SettingsService>(),

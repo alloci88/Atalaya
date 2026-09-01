@@ -71,7 +71,7 @@ public sealed class TerminalScreenTests : IDisposable
     }
 
     /// <summary>Un agente que revienta con el error real de cuota en la primera unidad.</summary>
-    private sealed class QuotaAgent : ICopilotAgent
+    private sealed class QuotaAgent : IAuditorProvider
     {
         public string? ModelName => "gpt-5";
 
@@ -92,7 +92,7 @@ public sealed class TerminalScreenTests : IDisposable
             TextStreamed?.Invoke(string.Empty);
             UsageReported?.Invoke(new UsageSample(10, 5, null, ModelName));
             var inner = new InvalidOperationException(RealQuotaError);
-            throw new CopilotProviderException(
+            throw new AuditorProviderException(
                 CopilotHelp.QuotaExhausted("mensual"), AgentProblem.QuotaExhausted,
                 CopilotFailure.Raw(inner), inner);
         }
@@ -102,7 +102,7 @@ public sealed class TerminalScreenTests : IDisposable
     }
 
     /// <summary>Un agente que audita bien, para comprobar que se puede relanzar tras el fallo.</summary>
-    private sealed class GoodAgent : ICopilotAgent
+    private sealed class GoodAgent : IAuditorProvider
     {
         private readonly HashSet<string> _seen = new(StringComparer.Ordinal);
 
@@ -139,7 +139,7 @@ public sealed class TerminalScreenTests : IDisposable
             => Task.CompletedTask;
     }
 
-    private LiveSessionService Live(ICopilotAgent agent)
+    private LiveSessionService Live(IAuditorProvider agent)
         => new(
             () => new SessionCoordinator(
                 _hub, new FindingIngestionService(_hub, _ulids), new ReconciliationService(_hub),
