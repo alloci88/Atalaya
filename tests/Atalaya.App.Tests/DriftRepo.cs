@@ -223,6 +223,39 @@ internal sealed class DriftRepo : IDisposable
 
     public AppDrift Drift() => new DriftQuery(Hub).Compute(Slug, Clone);
 
+    private DriftQuery? _query;
+
+    /// <summary>
+    /// LA MISMA consulta entre llamadas, que es la única forma de ejercitar la caché (F12 §C).
+    /// <see cref="Drift"/> llama a <c>Compute</c> y por eso no la toca: con ella, el defecto de la
+    /// clave incompleta era invisible desde los tests.
+    /// </summary>
+    public DriftQuery Query => _query ??= new DriftQuery(Hub);
+
+    /// <summary>La deriva PASANDO por la caché, como la piden las vistas.</summary>
+    public AppDrift Cached() => Query.For(Slug, Clone);
+
+    /// <summary>
+    /// Resuelto por una MEDIDA de la aplicación (D-696): la otra vía que cierra el ciclo de un
+    /// arreglo, y que por tanto también mueve la cobertura.
+    /// </summary>
+    public void ResolveByMeasure(Ulid findingId)
+    {
+        Finding f = Hub.Store.TryReadFinding(Slug, findingId.ToString())!;
+        f.Resolve(new ResolutionStamp(
+            DateTimeOffset.UtcNow, ResolutionVia.Medida, AuditMode.Verify, Head, "tester",
+            "la unidad ya mide menos del umbral"));
+        Hub.Store.WriteFinding(Slug, f);
+    }
+
+    /// <summary>Una persona reabre lo que la verificación había cerrado: la cobertura se cae.</summary>
+    public void Reopen(Ulid findingId)
+    {
+        Finding f = Hub.Store.TryReadFinding(Slug, findingId.ToString())!;
+        f.Reopen(DateTimeOffset.UtcNow, "tester", "sigue estando");
+        Hub.Store.WriteFinding(Slug, f);
+    }
+
     public UnitDrift Of(AppDrift drift, string path)
         => drift.Units.Single(u => u.Path == path);
 

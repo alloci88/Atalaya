@@ -213,6 +213,122 @@ public sealed class DriftInventoryFlowTests : IDisposable
         vm.DriftProblem.Should().Contain("Vincula tu clon");
     }
 
+    // ============================================ F12 §C · la vista se refresca sola
+
+    /// <summary>
+    /// F12 §C — la fila del inventario tiene que enterarse de que el arreglo ya se verificó, sin
+    /// reiniciar la aplicación. En el banco de pruebas no se enteraba: la marca «Arreglada —
+    /// pendiente de verificar» seguía puesta hasta el reinicio, porque la caché de la deriva no
+    /// tenía la cobertura en su clave.
+    /// <para>
+    /// La página se pide DOS veces al mismo contenedor, así que las dos comparten el
+    /// <see cref="DriftQuery"/> singleton: es el escenario real —volver al inventario— y no un
+    /// servicio recién construido, que se habría enterado por no tener caché que consultar.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task La_fila_del_inventario_se_entera_de_la_verificacion_sin_reiniciar()
+    {
+        string c1 = Commit("inicial", ("A.cs", "1"));
+        Audit(c1, "A.cs");
+        File.WriteAllText(Path.Combine(_clone, "A.cs"), "arreglada");
+        Ulid finding = RecordFixFor("A.cs");
+        Commit("fix de A");
+
+        InventoryViewModel antes = await Page();
+        antes.FixedPendingVerify.Should().Be(1);
+        Row(antes, "A.cs").DriftLabel.Should().Be("Arreglada — pendiente de verificar");
+
+        VerifyGreen(finding);
+
+        InventoryViewModel despues = await Page();
+        despues.FixedPendingVerify.Should().Be(0);
+        despues.ChangedUnits.Should().Be(0, "y no reaparece por la otra puerta");
+        Row(despues, "A.cs").HasDrift.Should().BeFalse("el ciclo del arreglo está cerrado");
+    }
+
+    /// <summary>Y la tarjeta del portafolio, que lee la misma consulta, tampoco se queda atrás.</summary>
+    [Fact]
+    public async Task La_tarjeta_del_portafolio_se_entera_de_la_verificacion_sin_reiniciar()
+    {
+        string c1 = Commit("inicial", ("A.cs", "1"));
+        Audit(c1, "A.cs");
+        File.WriteAllText(Path.Combine(_clone, "A.cs"), "arreglada");
+        Ulid finding = RecordFixFor("A.cs");
+        Commit("fix de A");
+
+        PortfolioViewModel antes = await Cards();
+        antes.Apps.Single().FixedPendingVerify.Should().Be(1);
+
+        VerifyGreen(finding);
+
+        PortfolioViewModel despues = await Cards();
+        despues.Apps.Single().FixedPendingVerify.Should().Be(0);
+        despues.Apps.Single().ChangedUnits.Should().Be(0);
+    }
+
+    private static UnitNode Row(InventoryViewModel vm, string path)
+        => vm.Modules.SelectMany(m => m.Units).Single(u => u.Path == path);
+
+    private async Task<PortfolioViewModel> Cards()
+    {
+        var vm = new PortfolioViewModel(
+            new PortfolioQuery(_hub.Store),
+            _provider.GetRequiredService<NavigationService>(),
+            new AppDeletionService(_hub, _machines, _provider.GetRequiredService<OpenSessionStore>()),
+            new NeverDeletes(),
+            _provider.GetRequiredService<LiveSessionService>(),
+            _hub,
+            _toasts,
+            _provider.GetRequiredService<CloneLinkService>(),
+            _provider.GetRequiredService<LinkCloneFlow>(),
+            _provider.GetRequiredService<DriftQuery>());
+        await vm.LoadAsync();
+        return vm;
+    }
+
+    /// <summary>Un arreglo CON su hallazgo, que es lo que permite que una verificación lo cubra.</summary>
+    private Ulid RecordFixFor(string path)
+    {
+        Ulid finding = _ulids.NewUlid();
+        var stamp = new DetectionStamp(DateTimeOffset.UtcNow, AuditMode.Lotes, "abc1234", "t");
+        _hub.Store.WriteFinding("app", new Finding
+        {
+            Id = finding,
+            RuleId = "R-1",
+            Title = $"hallazgo de {path}",
+            Severity = Severity.Media,
+            Confidence = Confidence.Media,
+            Locations = { new Location(path, 1) },
+            FirstDetected = stamp,
+            LastConfirmed = stamp,
+        });
+
+        _hub.Store.WriteFix(new FixRecord
+        {
+            Id = _ulids.NewUlid(),
+            AppSlug = "app",
+            By = "t",
+            Utc = DateTimeOffset.UtcNow,
+            FindingId = finding.ToString(),
+            Files = { new FixFileStamp(
+                path,
+                Domain.Hashing.HashUtil.NormalizedContentHash(
+                    File.ReadAllBytes(Path.Combine(_clone, path)))) },
+        });
+
+        return finding;
+    }
+
+    private void VerifyGreen(Ulid findingId)
+    {
+        Finding f = _hub.Store.TryReadFinding("app", findingId.ToString())!;
+        f.Resolve(new ResolutionStamp(
+            DateTimeOffset.UtcNow, ResolutionVia.Verify, AuditMode.Verify, "def5678", "t",
+            "el defecto ya no está"));
+        _hub.Store.WriteFinding("app", f);
+    }
+
     // ================================================================= helpers
 
     private async Task<InventoryViewModel> Page()
@@ -287,6 +403,12 @@ public sealed class DriftInventoryFlowTests : IDisposable
                 Domain.Hashing.HashUtil.NormalizedContentHash(
                     File.ReadAllBytes(Path.Combine(_clone, p))))).ToList(),
         });
+
+    /// <summary>El portafolio de estos tests no borra nada: el confirmador dice que no.</summary>
+    private sealed class NeverDeletes : IDeleteAppConfirmer
+    {
+        public bool Confirm(DeleteAppConfirmation confirmation) => false;
+    }
 
     private sealed class AlwaysConfirms : IAuditLaunchConfirmer
     {

@@ -28,9 +28,19 @@ public sealed class DriftQuery
     private readonly HubContext _hub;
 
     /// <summary>
-    /// La caché, por aplicación. La clave la forman HEAD, el mapa de unidad→commit-de-auditoría y
-    /// cuántos arreglos hay registrados: si cambia cualquiera de los tres, el resultado ya no vale
-    /// y la clave deja de casar sola. No hay que acordarse de invalidarla al auditar ni al arreglar.
+    /// La caché, por aplicación. La clave la forman HEAD, el mapa de unidad→commit-de-auditoría,
+    /// cuántos arreglos hay registrados y —desde F12 §C— <b>la cobertura de esos arreglos</b>: si
+    /// cambia cualquiera de los cuatro, el resultado ya no vale y la clave deja de casar sola. No
+    /// hay que acordarse de invalidarla al auditar, al arreglar ni al resolver.
+    /// <para>
+    /// <b>La regla, escrita porque costó un defecto:</b> la clave incluye TODAS las entradas del
+    /// cálculo, o el evento correspondiente invalida. F9.1 añadió la cobertura como entrada de
+    /// <see cref="Verdicts"/> y no la añadió aquí, así que verificar en verde un arreglo propio
+    /// dejaba puesta la marca «Arreglada — pendiente de verificar» hasta reiniciar la aplicación —
+    /// y encima la dirección contraria funcionaba, porque re-auditar SÍ mueve el commit de la
+    /// unidad, que sí estaba en la clave. Una entrada del cálculo que no está en la clave es una
+    /// caché que miente sobre justo el gesto que acabas de hacer.
+    /// </para>
     /// </summary>
     private readonly Dictionary<string, (string Key, AppDrift Value)> _cache = new(StringComparer.Ordinal);
 
@@ -104,9 +114,38 @@ public sealed class DriftQuery
             .Select(u => $"{u.Path}={u.AuditedInSession}")
             ?? Enumerable.Empty<string>();
 
-        return $"{head}|{clonePath}|{_hub.Store.ListFixes(slug).Count}|"
-            + HashUtil.Sha256Hex(string.Join('\n', audited));
+        IReadOnlyList<FixRecord> fixes = _hub.Store.ListFixes(slug);
+        return $"{head}|{clonePath}|{fixes.Count}|"
+            + HashUtil.Sha256Hex(string.Join('\n', audited)) + "|"
+            + HashUtil.Sha256Hex(string.Join('\n', CoverageKey(slug, fixes)));
     }
+
+    /// <summary>
+    /// La cobertura, tal y como entra en la clave (F12 §C): por cada arreglo registrado, si su
+    /// hallazgo ya está cerrado por el instrumento que lo detectó.
+    /// <para>
+    /// Se pregunta SOLO por los hallazgos que algún arreglo nombra —que son los únicos cuya
+    /// cobertura cambia el resultado— y no por el hub entero: leer todos los hallazgos en cada
+    /// consulta convertiría la clave de la caché en el trabajo que la caché evita.
+    /// </para>
+    /// <para>
+    /// Con esto entran en la clave, sin nombrarlos uno a uno, todos los eventos que mueven la
+    /// cobertura: resolver verificando, resolver por medida (D-696), reabrir tras una verificación
+    /// fallida, y cualquier otro que cambie el estado o la vía de resolución de esos hallazgos.
+    /// </para>
+    /// </summary>
+    private IEnumerable<string> CoverageKey(string slug, IReadOnlyList<FixRecord> fixes)
+        => fixes
+            .Select(r => r.FindingId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .Select(id => $"{id}={(Covers(_hub.Store.TryReadFinding(slug, id)) ? 1 : 0)}");
+
+    /// <summary>¿Este hallazgo cierra el ciclo del arreglo que lo nombra? Ver <see cref="ClosesTheLoop"/>.</summary>
+    private static bool Covers(Finding? f)
+        => f is { Status: FindingStatus.Resuelto, Resolved: { } stamp } && ClosesTheLoop(stamp.Via);
 
     /// <summary>
     /// El cálculo, sin caché. Público para que los tests puedan ejercitarlo directamente sobre un
