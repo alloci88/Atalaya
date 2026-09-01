@@ -143,6 +143,37 @@ jobs:
           "ZIP=$zip" >> $env:GITHUB_ENV
           Write-Host "Paquete: $zip ($([math]::Round((Get-Item $zip).Length / 1MB, 1)) MB)"
 
+      # BUGFIX-ARRANQUE — El candado. La 1.1.3 se publicó con 1.661 tests en verde y NO ARRANCABA:
+      # ningún test montaba el contenedor, así que el grafo de dependencias no lo miraba nadie.
+      #
+      # Se ejecuta sobre el ZIP recién comprimido, descomprimido aparte —no sobre `dist/`— porque
+      # lo que tiene que arrancar es lo que la gente se va a descargar, no lo que quedó en la
+      # carpeta de compilación. Hace el arranque entero sin abrir ventana: cultura, despliegue,
+      # contenedor, ajustes y migraciones, TODOS los servicios registrados, los ficheros que deben
+      # viajar y la carcasa. Devuelve 0 o 1, y un 1 para la publicación aquí mismo.
+      - name: Autochequeo de arranque sobre el paquete
+        shell: pwsh
+        run: |
+          $probe = Join-Path $env:RUNNER_TEMP 'selfcheck'
+          Remove-Item $probe -Recurse -Force -ErrorAction SilentlyContinue
+          Expand-Archive -Path $env:ZIP -DestinationPath $probe -Force
+
+          $exe = Join-Path $probe 'Atalaya.exe'
+          if (-not (Test-Path $exe)) { throw "El paquete no trae Atalaya.exe." }
+
+          $report = Join-Path $probe 'selfcheck.txt'
+          # Atalaya es WinExe: PowerShell no espera a un ejecutable de ventana si se invoca a secas,
+          # y sin -Wait el paso pasaría siempre. El parte se lee del fichero, que es lo que el exe
+          # deja escrito pase lo que pase.
+          $run = Start-Process -FilePath $exe -ArgumentList '--selfcheck','--report',$report `
+                               -PassThru -Wait -NoNewWindow
+          if (Test-Path $report) { Get-Content $report -Encoding utf8 | Write-Host }
+
+          if ($run.ExitCode -ne 0) {
+            throw "El paquete NO ARRANCA (autochequeo = $($run.ExitCode)). No se publica."
+          }
+          Write-Host 'El paquete arranca.'
+
       # F11 — El checksum, junto al zip. Es lo que permite que la actualización desde la app
       # verifique lo descargado ANTES de tocar la instalación: sin este fichero, Atalaya se niega
       # a instalar el paquete y manda al camino manual, que es la respuesta correcta a «no puedo

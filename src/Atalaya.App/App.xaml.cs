@@ -1,4 +1,5 @@
 ﻿using System.Net.Http;
+using System.Text;
 using System.Windows;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
@@ -43,14 +44,34 @@ public partial class App : Application
                 retainedFileCountLimit: 14)
             .CreateLogger();
 
-        _host = Host.CreateDefaultBuilder()
-            .ConfigureLogging(b =>
-            {
-                b.ClearProviders();
-                b.AddSerilog(Log.Logger, dispose: true);
-            })
-            .ConfigureServices(services => ConfigureServices(services, paths))
-            .Build();
+        // `--selfcheck`: el arranque entero sin abrir nada, y 0 o 1 (BUGFIX-ARRANQUE). Lo corre el
+        // workflow de release sobre el paquete recién comprimido; un binario que no arranca no
+        // puede volver a publicarse.
+        if (StartupSelfCheck.IsRequested(e.Args))
+        {
+            Shutdown(await RunSelfCheckAsync(e.Args, paths));
+            return;
+        }
+
+        // Un fallo aquí mataba el proceso EN SILENCIO: `OnStartup` es `async void`, así que la
+        // excepción no la recogía nadie, no llegaba al log —que se escribe desde el contenedor que
+        // no llegó a existir— y quien lo sufría veía Atalaya no abrirse y ya está. Es lo que pasó
+        // con la 1.1.3. Ahora se apunta y se dice, que es lo mínimo que se le debe a alguien cuya
+        // aplicación no arranca.
+        try
+        {
+            await StartAsync(paths);
+        }
+        catch (Exception ex)
+        {
+            FailToStart(ex);
+        }
+    }
+
+    /// <summary>El arranque de verdad. Lo que antes era el cuerpo de <c>OnStartup</c>.</summary>
+    private async Task StartAsync(AppPaths paths)
+    {
+        _host = BuildHost(paths);
 
         await _host.StartAsync();
 
@@ -81,7 +102,99 @@ public partial class App : Application
         _ = main.CheckForUpdatesAsync();
     }
 
-    private static void ConfigureServices(IServiceCollection services, AppPaths paths)
+    /// <summary>
+    /// El contenedor, montado en UN solo sitio. Lo usan el arranque de verdad y el autochequeo:
+    /// dos formas de montarlo serían dos grafos que pueden divergir, y entonces el chequeo dejaría
+    /// de decir nada sobre lo que arranca.
+    /// </summary>
+    internal static IHost BuildHost(AppPaths paths)
+        => Host.CreateDefaultBuilder()
+            .ConfigureLogging(b =>
+            {
+                b.ClearProviders();
+                b.AddSerilog(Log.Logger, dispose: false);
+            })
+            .ConfigureServices(services => ConfigureServices(services, paths))
+            .Build();
+
+    /// <summary>
+    /// Corre el autochequeo y deja el parte donde se pueda leer: por la consola de quien lo lanzó
+    /// —una aplicación de ventana no tiene consola propia, así que hay que engancharse a la del
+    /// padre— y, si se pidió, en un fichero.
+    /// </summary>
+    private static async Task<int> RunSelfCheckAsync(string[] args, AppPaths paths)
+    {
+        SelfCheckReport report;
+        try
+        {
+            report = await StartupSelfCheck.RunAsync(paths, shell: true);
+        }
+        catch (Exception ex)
+        {
+            report = new SelfCheckReport(new[]
+            {
+                new SelfCheckStep("autochequeo", false, $"{ex.GetType().Name}: {ex.Message}"),
+            });
+        }
+
+        NativeConsole.Write(report.Text);
+        Log.Information("Autochequeo de arranque: {Result}{NewLine}{Report}",
+            report.Ok ? "arranca" : "NO ARRANCA", Environment.NewLine, report.Text);
+
+        if (StartupSelfCheck.ReportPath(args) is { Length: > 0 } path)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+                // Con BOM: quien lo va a leer es PowerShell 5.1 del workflow, que sin él
+                // interpreta el fichero en la página de códigos de la máquina y convierte
+                // cada acento del parte en un jeroglífico.
+                await File.WriteAllTextAsync(path, report.Text, new UTF8Encoding(true));
+            }
+            catch (Exception ex)
+            {
+                NativeConsole.Write($"(no se pudo escribir el parte en {path}: {ex.Message})");
+            }
+        }
+
+        Log.CloseAndFlush();
+        return report.ExitCode;
+    }
+
+    /// <summary>
+    /// No arrancó. Se deja escrito en el log y se dice en pantalla — con la causa, no con un
+    /// «error inesperado»: quien lo lea es quien va a tener que contarlo.
+    /// </summary>
+    private void FailToStart(Exception ex)
+    {
+        try
+        {
+            Log.Fatal(ex, "Atalaya no pudo arrancar.");
+            Log.CloseAndFlush();
+        }
+        catch (Exception)
+        {
+            // Si ni el log va, queda el mensaje.
+        }
+
+        try
+        {
+            MessageBox.Show(
+                $"Atalaya no ha podido arrancar.\n\n{ex.GetType().Name}: {ex.Message}\n\n"
+                + "El detalle está en %LOCALAPPDATA%\\Atalaya\\logs.",
+                "Atalaya",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        catch (Exception)
+        {
+            // Sin ventana tampoco se puede hacer más.
+        }
+
+        Shutdown(1);
+    }
+
+    internal static void ConfigureServices(IServiceCollection services, AppPaths paths)
     {
         services.AddSingleton(paths);
         services.AddSingleton<IClock>(SystemClock.Instance);
