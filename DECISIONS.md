@@ -1,4 +1,4 @@
-﻿# DECISIONS.md — Atalaya
+# DECISIONS.md — Atalaya
 
 Registro de decisiones tomadas en zonas **[LIBERTAD]** o ante ambigüedades no
 bloqueantes del prompt de construcción. Las decisiones **[NO NEGOCIABLE]** del
@@ -8014,3 +8014,273 @@ el chequeo hablan del mismo binario.
 Y el test de `SemanticVersion` que **daba por buena la truncación** se sustituye por el que fija la
 regla contraria: una versión se escribe entera, incluida la 1.0.4, y lo único que se recorta son
 los metadatos de build y el cuarto número de .NET.
+
+## F12 — La cosecha del banco de pruebas
+
+El ciclo completo —escanear, auditar, barrer, arreglar, verificar, deriva, cierre y siembra— se
+recorrió sobre un **banco de pruebas controlado**: un repositorio pequeño con defectos sembrados de
+severidad conocida. Lo estructural aguantó: la huella del arreglo, la reconciliación sin duplicados,
+la detección de deriva y la siembra del ciclo hicieron lo que prometían. Lo que salió fue una lista
+de defectos de **juicio y de lectura**, y es la que cierra esta fase.
+
+Un detalle de método que conviene no perder: casi todo lo de aquí solo se ve **usando la aplicación
+de punta a punta con datos reales**. Ninguno de estos defectos tenía un test rojo que mirar.
+
+### D-751 — Una no-respuesta no es una confirmación
+
+El verificador contestó, literalmente:
+
+```
+verify: no verificable — … Sin el cuerpo actual del método no se puede decidir si el defecto
+persiste o quedó resuelto
+```
+
+y la aplicación lo anotó en el historial del hallazgo como **Confirmado**.
+
+Eso rompe **dos** normas de la casa a la vez. La primera, **N-2**: ningún número sin causa — «Veces
+confirmado» pasa a estar alimentado por respuestas que no dicen nada. Y la segunda es el espejo de
+la guarda de F5.1b: si **no hay resolución sin evidencia**, tampoco puede haber **confirmación sin
+evidencia**. Que la mitad de la regla estuviera escrita y la otra no es exactamente por lo que
+sobrevivió.
+
+Lo que corrompe no es el historial, es la **prioridad**: un hallazgo parecía más sólido cuantas más
+veces NO se hubiera podido verificar.
+
+Ahora una no-respuesta tiene **desenlace propio**: `FindingEvent.Inconclusive`, «No concluyente» en
+la ficha y en el historial, con su glifo. No toca `TimesConfirmed`, ni la confianza, ni
+`lastConfirmed`. Lo que sí deja es la marca de revisión, la causa que dio el modelo, y **el paso
+siguiente**, que depende de cuánto código llegó a ver el instrumento: si vio menos que la unidad, lo
+que falta es contexto y se propone ampliarlo; si ya vio la unidad entera, lo que falta es una
+auditoría.
+
+**Y el barrido tenía la mitad del mismo agujero.** Un `no-verificable` del auditor también se
+escribía con el evento `Confirmed`. No subía el contador —eso lo hace `Finding.Confirm`, que ahí no
+se llamaba— pero la ficha decía «Confirmado ✓» sobre una no-respuesta, que es la lectura que
+corrompe. Y estaba a un `default:` de tener la otra mitad: **«presente» era la rama por defecto** del
+switch de veredictos, así que un valor nuevo del enum —o uno que el parser dejara pasar— habría
+subido «Veces confirmado» sin que nadie hubiera mirado el código. Ahora «presente» entra por su
+nombre y lo ambiguo queda sin concluir. El parser, que es la primera puerta, ya rechazaba lo que no
+entiende: eso no se toca.
+
+### D-752 — Se verifica el SÍMBOLO, no la línea anclada
+
+La causa raíz de D-751 en este caso. Cuando el ancla seguía casando, a la verificación se le
+enseñaba **solo la línea anclada** — `foreach (…)` y nada más. Para un hallazgo cuya recomendación
+es estructural («acumula en una sola pasada»), eso no permite decidir nada, y el modelo contestó lo
+único honrado que podía contestar.
+
+El contexto pasa a ser el **símbolo que contiene el anclaje**: el método completo, vía Roslyn, con
+`MethodBoundary` — que es exactamente lo que la ficha lleva enseñando desde F5.5, así que no hay
+pieza nueva. Si el símbolo no se resuelve (no es C#, o el ancla cae fuera de todo miembro) van las
+líneas de alrededor, que es el plan B que `MethodBoundary` ya tenía.
+
+La línea anclada **no se pierde**: viaja aparte en el prompt («la línea anclada, dentro de lo de
+abajo»), porque contexto sin punto es otra forma de no poder decidir. Y el pie del bloque dice
+CUÁNTO se enseña —el símbolo entero o un margen—, para que un «no se puede decidir» del modelo se
+distinga de una falta de contexto nuestra. Si con el símbolo completo delante sigue sin poder
+decidir, ése es el caso legítimo de «No concluyente».
+
+### D-753 — La clave de una caché incluye TODAS las entradas del cálculo
+
+Verificar en verde un arreglo propio **no limpiaba** la marca «Arreglada — pendiente de verificar».
+Al reiniciar la aplicación, la marca había desaparecido. Y la dirección contraria sí funcionaba:
+re-auditar la limpiaba al momento.
+
+Eso último es el diagnóstico entero. Re-auditar mueve el commit de la unidad, que **sí** estaba en la
+clave de la caché de deriva; verificar mueve la **cobertura**, que F9.1 añadió como entrada del
+cálculo (D-695) y **no** añadió a la clave. Una entrada del cálculo que no está en la clave es una
+caché que miente sobre justo el gesto que acabas de hacer.
+
+La regla queda escrita donde vive la caché: **la clave incluye todas las entradas del cálculo, o el
+evento correspondiente invalida.** Se elige la clave y no el evento, por lo mismo que la eligió F9:
+así no hay que acordarse de nada al añadir un camino nuevo.
+
+Con la cobertura dentro entran, sin nombrarlos uno a uno, todos los casos hermanos: resolver
+verificando, resolver por **medida** (D-696), **reabrir** tras una verificación fallida, y cualquier
+otro que cambie el estado o la vía de resolución de un hallazgo que algún arreglo nombre.
+
+**Y sigue siendo una caché.** Se pregunta solo por los hallazgos que alguna huella de arreglo
+nombra —los únicos cuya cobertura cambia el resultado—, no por el hub entero: leer todos los
+hallazgos en cada consulta convertiría la clave en el trabajo que la caché evita. Un test comprueba
+que dos consultas seguidas sin cambios devuelven **el mismo objeto**, para que «arreglar» la
+invalidación desactivándola no pase por bueno.
+
+Con la clave completa, la fila del Inventario y la tarjeta del Portafolio se enteran solas: las dos
+recalculan al cargarse, y lo que fallaba era la respuesta, no el momento de pedirla.
+
+### D-754 — Los criterios de severidad, con ejemplos y en un solo sitio
+
+La prueba objetiva del banco: había **una** crítica sembrada —credenciales escritas en el código— y
+la auditoría devolvió **siete**. Los off-by-one y las desreferencias nulas salieron críticas, y justo
+la crítica de verdad salió **alta**. La escala no estaba solo inflada: estaba **invertida en el peor
+sitio**.
+
+La rúbrica que había cabía en cuatro líneas, no daba un solo ejemplo, y su renglón de crítica
+terminaba en «error de cálculo de negocio» — que es la puerta por la que entró todo off-by-one.
+
+La nueva vive en `src/Atalaya.Copilot/SeverityRubric.cs`, en **un único sitio versionado** junto al
+prompt de auditoría, y se **cita**; un test comprueba que no aparece dos veces, porque el día que se
+copie habrá dos escalas y la segunda envejecerá sin que nadie se entere. Clasifica por el **daño**:
+
+- **crítica** — secretos o credenciales, pérdida o corrupción de datos, vulnerabilidad explotable;
+- **alta** — revienta o miente en el camino normal con una entrada corriente (aquí entran el
+  off-by-one y la desreferencia nula, con ejemplos);
+- **media** — falla en el camino de error, recurso sin liberar, contrato incumplido;
+- **baja** — estilo, eficiencia menor, documentación.
+
+Y lleva **reglas de desempate**, que son la otra mitad del arreglo: «crítica» no significa
+«importante»; el tamaño del defecto no es su daño; se clasifica este defecto en este código, no su
+categoría en abstracto; y ante la duda, el escalón **menor**, porque una escala inflada no prioriza
+nada.
+
+**Al verificador no se le manda**, y es una decisión: no clasifica — su contrato es
+`submit_verdict(findingUlid, verdict, evidence)` y no lleva severidad—, así que enseñarle un
+criterio que no puede aplicar es gastar tokens en ruido. Queda escrito en un test para que el día
+que clasifique se cite ésta y no se escriba una segunda escala.
+
+**Y nada de lo ya auditado se reclasifica por código.** Los criterios aplican a auditorías nuevas; lo
+existente se reclasifica por el camino humano que existe desde §5.6, que deja su entrada en el
+historial con autor. Barrer el hub reescribiría el juicio de una persona sin que nadie lo hubiera
+pedido. La verificación de este frente es del usuario: re-auditar el banco y comparar contra su
+clave.
+
+### D-755 — El barrido termina con DOS pasadas secas seguidas
+
+En el banco, una segunda auditoría encontró un hallazgo que la primera no vio. El barrido había
+parado en 3 de 5 pasadas porque la tercera vino seca.
+
+Con un modelo no determinista, «esta pasada no vio nada nuevo» **no es** «no queda nada»: es una
+muestra, y una muestra sola no es convergencia. Ahora hacen falta **dos secas consecutivas**, y una
+pasada con aportación reinicia la cuenta.
+
+**El techo sigue mandando.** Se pide `min(2, maxPassesPerUnit)`: con un tope de 1 la única pasada que
+cabe es la que hay, y exigir dos convertiría cada unidad en «cobertura posiblemente incompleta» por
+una condición que el propio tope hace inalcanzable. Quien fija el tope decide cuánto está dispuesto
+a pagar; esta regla decide cuándo se para dentro de él.
+
+**Y el lenguaje.** Una unidad barrida **no es** una unidad sin defectos: es una unidad de la que el
+auditor no saca más con este criterio. La sesión en vivo decía «Pasada N seca — unidad completa» y
+ahora dice «el auditor no aportó nada nuevo»; el resumen de una unidad que agota el tope dice «sin
+llegar a 2 pasadas secas seguidas»; y la documentación del modelo lo deja escrito donde vive.
+
+### D-756 — El silencio por patrón es DERIVADO
+
+Dos defectos, y el segundo es el de fondo.
+
+**Uno: un hallazgo silenciado no decía por qué lo estaba.** Ahora la ficha lo escribe entero —quién,
+cuándo, con qué motivo y con qué notas, o el patrón que lo tapa con su frase y quién lo puso— y dice
+**cómo deshacerlo** en la misma tarjeta. Faltaba sobre todo la fecha, que es el dato que convierte
+«alguien decidió esto» en «alguien decidió esto entonces».
+
+**Dos: retirar un patrón no revivía nada de lo que había tapado.** El veredicto «silenciado» quedaba
+congelado en el hallazgo, y la única forma de recuperarlo era otra auditoría —pagada—. Un silencio
+que se pone gratis y solo se quita pagando no es reversible: es una puerta de un solo sentido con
+aspecto de interruptor.
+
+Mismo principio que la deriva: **lo que se deriva de un hecho vigente no se guarda como veredicto**.
+`Silence` gana `ByPatternId`, y un hallazgo está silenciado por patrón **mientras ese patrón siga
+vigente**. Retirarlo devuelve a activo, al instante y gratis, lo que solo él tapaba, con la razón
+escrita en el historial. Lo derivado sigue a su origen: reescribir el ejemplar o mover la caducidad
+se propagan a los silencios que puso. Los silencios anteriores a F12 no traen id y se enganchan por
+el **texto del ejemplar**, que es el único dato que guardaban — si no, el defecto seguiría vivo para
+todo lo que ya está silenciado, que es justo lo que hay en el hub.
+
+**El silencio individual sí es un hecho del hallazgo** —alguien miró ese caso y decidió— y se
+conserva pase lo que pase con los patrones. Silenciar a mano lo que tapaba un patrón lo convierte en
+decisión propia por el mismo gesto.
+
+Consecuencia en la ficha: sobre un silencio por patrón **no se ofrece «Des-silenciar»**. El patrón
+seguiría puesto y la auditoría siguiente volvería a callarlo, así que el botón haría un gesto que se
+deshace solo; la acción que sirve lleva a gestionar el patrón.
+
+Esto **invierte** lo que F5.12 había decidido —«retirar el patrón no des-silencia lo ya decidido»—, y
+el test que lo fijaba queda reescrito diciendo por qué se invierte. Aquel razonamiento valía para
+decisiones humanas; el silencio que pone un patrón no lo es.
+
+### D-757 — Un ciclo que se cierra se anuncia
+
+Al completar el 100 %, el ciclo se cerró y sembró correctamente —F9.2 funciona con datos reales—
+pero lo hizo **en silencio**: el Portafolio pasó a «Ciclo 2» y ya está. La foto honesta existía,
+dentro del informe del cierre, y nadie tenía motivo para abrirlo. Un hito que no se anuncia no es un
+hito: es un cambio de número.
+
+`CycleCloseResult` trae ahora con qué cerró —auditadas sobre totales—, cuánto sembró pendiente, qué
+ciclo abre y dónde está su informe. Y **redacta su propia frase**, por la misma regla que D-746 fijó
+para el aviso de versión: quien decide es quien redacta, y así el aviso no puede decir unos números
+distintos de los que cerraron el ciclo.
+
+> Ciclo 1 cerrado · 11/11 auditadas · 1 unidad sembrada como pendiente · Ciclo 2 abierto
+
+La carcasa lo enseña con el **patrón del banner de versión**: discreto, no efímero, descartable y con
+enlace al informe del cierre. Ni toast —caduca a los 8 s y se pierde si mirabas otra pantalla, que
+es exactamente cómo un cierre pasa desapercibido— ni modal, porque cerrar un ciclo es una buena
+noticia y no una interrupción.
+
+El MANUAL dice ahora con todas las letras que **el ciclo se cierra solo al completarse y que no hay
+botón de cerrar** —las grandes no bloquean, una sesión detenida no cierra, y si dos personas llegan
+a la vez cierra una sola—, y que **«Reiniciar ciclo» es otra cosa**: el único botón que cambia de
+ciclo, que no siembra y que no espera a que el ciclo esté completo.
+
+### D-758 — Pulido: agrupar, contar, alinear y caber
+
+Cinco arreglos de lectura, cada uno con su causa.
+
+1. **El resumen de sesión agrupa por clase.** Salía como una lista corrida: con veinte hallazgos de
+   seis ficheros no había forma de ver de dónde venían, y la vista de Hallazgos ya había resuelto
+   exactamente eso. Se usa **el mismo patrón** —fichero como cabecera, recuento por severidad al
+   lado, ruta debajo—, porque un mismo dato se agrupa igual en las dos pantallas o el usuario
+   aprende dos formas de leerlo. `SummaryLine` gana `Named`, para que agrupar no rompa la
+   comprobación de «ningún número sin causa».
+
+2. **Cada pasada informa nuevos / confirmados / disputados.** Una pasada de reconciliación que
+   confirmaba siete hallazgos se titulaba «seca», que se lee como «aquí no ha pasado nada». Lo que
+   no aportó fueron **nuevos**; confirmar siete es trabajo hecho y pagado. `UnitPassRecord` gana
+   `Disputed`, que se contaba en la sesión y no en la pasada — o sea, no podía decirse mientras
+   pasaba, que es cuando importa.
+
+3. **Los indicadores de deriva, alineados.** Un `Border` dentro de una celda de `Grid` sin
+   `VerticalAlignment` se estira a lo alto de la fila y su texto queda pegado arriba, mientras el
+   punto de color —que sí lo llevaba— se queda en el medio. Vale para los **dos** indicadores, que
+   salen de la misma plantilla: un solo sitio que pintar, un solo sitio que arreglar.
+
+4. **El aviso amarillo cabe.** Vivía en un `StackPanel Orientation="Horizontal"`, y un StackPanel
+   horizontal mide a sus hijos con **ancho infinito**: con eso `TextWrapping="Wrap"` no envuelve
+   nunca y el texto sale por la derecha, cortado contra el borde y sin tooltip que lo rescate. Ahora
+   es una rejilla de dos columnas —texto elástico, botón a su medida— y además lleva el texto entero
+   en el tooltip.
+
+5. **El aviso reconoce el arreglo propio.** «Este código ya no es el que se auditó» es cierto y
+   desorientador cuando quien lo cambió fue Atalaya media hora antes. Si el contenido actual casa
+   con la huella que dejó un arreglo sobre **ese** hallazgo, el aviso dice «este código lo cambió el
+   arreglo de Atalaya el {fecha}; pendiente de verificar». Es una **prueba**, no una suposición —la
+   misma huella que usa la deriva—: si el usuario enmienda lo que el agente dejó, ya no casa y vuelve
+   el aviso genérico. La aplicación no se extraña de su propio trabajo.
+
+De los cinco, los dos de layout tienen su causa fijada en tests sobre el XAML real. No se miden
+montando la vista: la fila del inventario vive en un `DataTemplate` —sin datos no existe, y con
+datos falsos se mediría otra cosa— y la franja del aviso cuelga de una ficha que arrastra el editor
+de código entero, que en un proceso de tests sin aplicación se queda colgado. Lo que sí se fija es
+la decisión de marcado que causó cada defecto, que es lo que puede volver.
+
+### D-759 — Cobertura (56 tests nuevos, 1.539 en total, todo en verde)
+
+Por frente: **A** (9) — el no-verificable se anota como «No concluyente» y no como confirmado, no
+toca contador ni confianza ni última confirmación, propone el paso siguiente, conserva la evidencia
+del modelo, se ve así en la ficha, y las dos mitades del agujero del barrido. **B** (3) — el
+contexto es el símbolo entero, el prompt lo dice, y sin símbolo resoluble va un margen de líneas.
+**C** (7) — verificar, medir y reabrir mueven la respuesta cacheada sin reiniciar; una verificación
+fallida no; la caché sigue sirviendo; y la fila del Inventario y la tarjeta del Portafolio,
+conducidas con el `DriftQuery` singleton, que es el escenario real. **D** (8) — la rúbrica dice lo
+que tiene que decir, llega al prompt de la unidad, no está escrita dos veces, y el verificador no la
+recibe. **E** (2 nuevos, 1 reescrito y 3 actualizados) — dos secas seguidas, la seca suelta que
+reinicia la cuenta, y el techo de una pasada. **F** (9 nuevos, 2 actualizados) — la ficha con motivo,
+autor y fecha; el patrón con su frase y su camino; retirar el patrón revive lo que solo él tapaba;
+el silencio individual sobrevive; la migración de los silencios sin id; y el ejemplar y la caducidad
+propagándose. **G** (6) — el cierre trae sus datos y su informe, redacta su frase, y la carcasa lo
+enseña y lo descarta. **H** (12 nuevos, 2 actualizados) — el agrupado por clase con sus recuentos, el
+titular de la pasada con los tres números, el aviso que reconoce el arreglo propio y las dos causas
+de layout.
+
+**Lo que estos tests NO cubren, y sigue siendo del usuario**: la calibración de severidad —se
+verifica re-auditando el banco contra la clave, que es la única prueba que vale— y las capturas de
+los cinco puntos de pulido en los dos temas.

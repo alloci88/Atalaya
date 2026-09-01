@@ -1,12 +1,32 @@
-﻿# Backlog Atalaya
+# Backlog Atalaya
 
 Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo y se mantiene al día
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-08-31 (BUGFIX-VERSION — la versión dice de dónde sale el binario).
+Última revisión: 2026-09-01 (F12 — la cosecha del banco de pruebas).
 
 ## En vuelo
+
+- **F12 — la calibración de severidad, contra la clave del banco.** Los criterios ya están
+  implantados y viajan en el prompt de cada unidad (D-754), pero lo que prueba que calibran es
+  **re-auditar el banco de pruebas y comparar el resultado contra la clave**: una crítica sembrada,
+  una crítica reportada, y los off-by-one y las desreferencias nulas en alta. Ningún test puede
+  hacer eso — mide el juicio del modelo, no el nuestro. Si vuelve a salir inflada, lo que se toca
+  son los ejemplos y las reglas de desempate, que están en un solo fichero.
+- **F12 — las capturas del pulido, en los dos temas.** Los cinco puntos de D-758 con la aplicación
+  viva: el resumen de sesión agrupado por clase, el titular de una pasada de reconciliación que
+  confirma sin aportar, los dos indicadores de deriva alineados en la fila del inventario, el aviso
+  amarillo de re-anclaje entero, y ese mismo aviso reconociendo un arreglo de Atalaya. Las causas de
+  los dos de layout están fijadas en tests sobre el XAML real, pero lo que se ve —los colores y el
+  aire— solo se ve mirando.
+- **F12 — el aviso de cierre de ciclo, visto al cerrarse uno de verdad.** El texto y su enlace están
+  probados (D-757); falta llegar al 100 % en una aplicación real y ver el banner aparecer, leerlo
+  entero a 1366×768 y que «Ver el informe del cierre» aterrice en el informe correcto.
+- **F12 — la deriva de un silencio por patrón retirado, en el hub real.** Retirar un patrón devuelve
+  a activo lo que solo él tapaba (D-756), incluidos los silencios anteriores a F12 que se enganchan
+  por el texto del ejemplar. En el hub real no hay todavía ningún patrón con varios hallazgos
+  detrás, así que la migración solo se ha ejercitado en tests.
 
 - **BUGFIX-VERSION — el zip publicado de la 1.0.3, con ojos.** El camino de release está verificado
   reproduciéndolo en local y el workflow se vigila a sí mismo, pero el token de `gh` de esta máquina
@@ -122,6 +142,24 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **F12 · La cosecha del banco de pruebas** — el ciclo completo recorrido sobre un repositorio con
+  defectos sembrados de severidad conocida. Lo estructural aguantó; lo que salió fueron defectos de
+  **juicio y de lectura**, ninguno con un test rojo que mirar. Una no-respuesta del verificador se
+  anotaba como **Confirmado**, alimentando «Veces confirmado» con la ausencia de evidencia: ahora
+  tiene desenlace propio, «No concluyente», que no toca ningún contador y propone el paso siguiente
+  (D-751); su causa raíz era que a la verificación se le enseñaba **solo la línea anclada**, y pasa a
+  enseñarse el **símbolo que la contiene** (D-752). La caché de la deriva no se enteraba de las
+  resoluciones porque F9.1 añadió la cobertura al cálculo y no a la clave — regla escrita: la clave
+  incluye todas las entradas, o el evento invalida (D-753). La escala de severidad estaba inflada e
+  **invertida** —siete críticas donde había una, y la de verdad en alta—: criterios con ejemplos y
+  reglas de desempate, en un solo sitio versionado (D-754). El barrido paraba con **una** pasada
+  seca y ahora pide **dos seguidas**, con el techo mandando (D-755). El silencio por patrón pasa a
+  ser **derivado**: retirar el patrón devuelve a activo, gratis, lo que solo él tapaba, y el
+  individual se conserva (D-756). El cierre de ciclo deja de ser invisible: aviso discreto con sus
+  números y enlace al informe (D-757). Y cinco arreglos de lectura: el resumen agrupado por clase,
+  la pasada que cuenta lo que confirmó, los indicadores alineados, el aviso que cabe y el aviso que
+  reconoce el arreglo propio (D-758). 56 tests nuevos, 1.539 en total (D-759).
 
 - **BUGFIX-AVISO · El aviso anunciaba una versión que no existe** — el banner decía «Atalaya 1.0
   disponible» con la v1.0.4 publicada. No era una recaída de BUGFIX-VERSION: el chequeo leyó bien

@@ -114,19 +114,35 @@ asignar, cambiar severidad, resolver a mano con justificación, cerrar una dispu
   clon, o si el símbolo no se puede buscar, el prompt sale igual diciendo que va sin la
   lista: nunca deja entender que un método no se usa cuando lo que pasa es que no se ha
   podido mirar. Una vez generado, los metadatos enseñan **Usado desde: N sitios**.
-- **Verificar ahora** vuelve a preguntar al auditor si el defecto sigue ahí.
+- **Verificar ahora** vuelve a preguntar al auditor si el defecto sigue ahí. Lo que se le
+  enseña es el **método completo** que contiene el punto del hallazgo, no la línea suelta:
+  con una línea sola no se puede juzgar nada que no quepa en esa línea. Si el método no se
+  puede resolver, van las líneas de alrededor.
 - Un arreglo se confirma **juzgando el código que hay ahora**, no buscando el código
   viejo: que el fragmento auditado haya desaparecido es lo que pasa cuando algo se
   arregla, así que si el método sigue ahí se le enseña al auditor tal y como está hoy.
   Solo se dice «no localizado» cuando no queda nada que juzgar — ni el fragmento, ni el
   método, ni una unidad que haya cambiado.
+- Si el auditor **mira el código y no puede decidir**, el resultado es **«No concluyente»**,
+  no una confirmación: una no-respuesta no es evidencia de nada, así que no sube «Veces
+  confirmado» ni la confianza. Se anota con su causa y con el paso siguiente — ampliar el
+  contexto, o re-auditar la unidad—, y el hallazgo queda marcado **Por revisar**.
 - Resolver sigue exigiendo **evidencia de cambio**: si la unidad es la misma que la
   última vez que se vio el hallazgo, un «arreglado» se degrada a «presente».
 - El aviso dice siempre **qué ha pasado** — el veredicto, o la causa concreta si no se
   pudo verificar.
 - La franja de encima del código **depende del estado**: en los activos avisa en ámbar
   de la deriva sin verificar y trae la acción; en los resueltos dice que el arreglo está;
-  en los silenciados no dice nada.
+  en los silenciados no dice nada. Y si el código lo cambió **un arreglo de Atalaya** sobre
+  este hallazgo, lo dice con esas palabras —«este código lo cambió el arreglo de Atalaya el
+  {fecha}; pendiente de verificar»— en vez de extrañarse de su propio trabajo.
+- Un hallazgo **silenciado dice por qué lo está**: quién, cuándo, con qué motivo y con qué
+  notas, o el patrón que lo tapa con su frase y quién lo puso. Y dice cómo deshacerlo, ahí
+  mismo. Si lo tapa un patrón, el camino no es «Des-silenciar» —el patrón seguiría puesto y
+  la siguiente auditoría volvería a callarlo— sino **gestionar el patrón**: al retirarlo,
+  este hallazgo vuelve a activo **al instante y sin re-auditar nada**. Lo que se silenció a
+  mano, en cambio, es una decisión sobre ese caso y se conserva pase lo que pase con los
+  patrones.
 - En los hallazgos de tamaño el botón dice **Medir ahora**: los cuenta la aplicación
   leyendo el fichero, sin consultar al modelo y sin gastar tokens.
 
@@ -135,6 +151,20 @@ asignar, cambiar severidad, resolver a mano con justificación, cerrar una dispu
 Aparece en el menú solo cuando hay una sesión (en curso o recién terminada), y el
 punto late mientras corre. Enseña el progreso unidad a unidad, los hallazgos según
 van llegando, el coste y los tokens consumidos, y al terminar el resumen de cierre.
+
+Cada unidad se audita en **pasadas**, y cada pasada dice lo que hizo: **nuevos ·
+confirmados · disputados**. Una pasada que no aporta hallazgos nuevos se llama **seca**, y
+eso no significa que no haya pasado nada — puede haber confirmado siete. La unidad se da
+por barrida con **dos pasadas secas seguidas**: con un modelo no determinista, que una
+pasada no vea nada nuevo no prueba que no quede nada. El tope de pasadas de Ajustes sigue
+mandando por encima; si se agota antes, la unidad se marca **cobertura posiblemente
+incompleta**, con todas las letras.
+
+> Y una unidad barrida **no es** una unidad sin defectos: es una unidad de la que el
+> auditor no saca más con este criterio.
+
+El resumen de cierre agrupa sus hallazgos **por clase**, con el recuento por severidad al
+lado, igual que la vista de Hallazgos. Cada línea se despliega de un clic.
 
 Si la sesión falló, lo dice con el motivo y el atajo para arreglarlo. **Ver informe de
 sesión** abre el informe en la vista **Informes**.
