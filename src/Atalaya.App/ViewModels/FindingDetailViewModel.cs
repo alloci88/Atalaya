@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Windows;
 using Atalaya.App.Services;
 using Atalaya.App.Views;
@@ -86,6 +86,12 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     /// </summary>
     private (Ulid Finding, ReferenceReport Report)? _lastReferences;
 
+    /// <summary>
+    /// La gestión de patrones (F12 §F). Opcional: sin ella la ficha sigue diciendo POR QUÉ está
+    /// silenciado, y lo único que no ofrece es el atajo para retirar el patrón.
+    /// </summary>
+    private readonly IPatternSilencesDialog? _patternsDialog;
+
     public FindingDetailViewModel(
         HubContext hub,
         GovernanceService governance,
@@ -100,7 +106,8 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         AssistedFixLauncher? fixLauncher = null,
         LiveFixService? fix = null,
         NavigationService? navigation = null,
-        DirectiveService? directives = null)
+        DirectiveService? directives = null,
+        IPatternSilencesDialog? patternsDialog = null)
     {
         _hub = hub;
         ScopeOptions = new[]
@@ -123,6 +130,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         _references = references ?? new ReferenceCollector();
         _fixLauncher = fixLauncher;
         _fix = fix;
+        _patternsDialog = patternsDialog;
         _navigation = navigation;
         _directives = directives;
     }
@@ -268,8 +276,13 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
 
     // ------------------------------------------------------------------ gobernanza
 
-    /// <summary>Solo se des-silencia lo silenciado.</summary>
-    public bool CanUnsilence => Status == FindingStatus.Silenciado;
+    /// <summary>
+    /// Solo se des-silencia lo silenciado <b>a mano</b> (F12 §F). Lo que tapa un patrón no se
+    /// levanta desde aquí: el patrón seguiría puesto y la auditoría siguiente volvería a callarlo,
+    /// así que el botón habría hecho un gesto que se deshace solo. La palanca que sirve es retirar
+    /// el patrón, y a eso lleva <see cref="ManageSilencingPatternCommand"/>.
+    /// </summary>
+    public bool CanUnsilence => Status == FindingStatus.Silenciado && !SilencedByPattern;
 
     /// <summary>Silenciar algo ya silenciado no hace nada: el botón se retira.</summary>
     public bool CanSilence => Status != FindingStatus.Silenciado;
@@ -289,41 +302,110 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     /// <summary>Un hallazgo ya resuelto no se vuelve a resolver a mano.</summary>
     public bool CanResolveManually => Status != FindingStatus.Resuelto;
 
-    /// <summary>El silencio vigente, escrito: motivo, autor y caducidad.</summary>
+    /// <summary>El silencio que hay escrito sobre este hallazgo, o null.</summary>
+    private Silence? CurrentSilence
+        => Finding is null || Slug.Length == 0 ? null : _hub.Store.TryReadSilence(Slug, Finding.Id);
+
+    /// <summary>
+    /// Este silencio lo puso un PATRÓN, no una persona sobre este hallazgo (F5.12, F12 §F). Cambia
+    /// qué se lee y qué se ofrece: la palanca que lo deshace es el patrón.
+    /// </summary>
+    public bool SilencedByPattern
+    {
+        get
+        {
+            Silence? s = CurrentSilence;
+            return s is not null
+                   && (s.ByPatternId is not null || !string.IsNullOrWhiteSpace(s.ByPatternExemplar));
+        }
+    }
+
+    /// <summary>
+    /// El silencio vigente, escrito entero (F12 §F): <b>quién, cuándo, por qué</b> — o el patrón que
+    /// lo tapa. Le faltaba la fecha, que es justo el dato que convierte «alguien decidió esto» en
+    /// «alguien decidió esto entonces», y sin ella no hay forma de saber si la decisión es de este
+    /// sprint o de hace un año.
+    /// </summary>
     public string SilenceSummary
     {
         get
         {
-            if (Finding is null)
-            {
-                return string.Empty;
-            }
-
-            Silence? silence = _hub.Store.TryReadSilence(Slug, Finding.Id);
+            Silence? silence = CurrentSilence;
             if (silence is null)
             {
                 return string.Empty;
             }
 
+            string when = silence.Utc.ToLocalTime().ToString("dd/MM/yyyy");
             string expiry = silence.ExpiresUtc is null
                 ? "permanente"
                 : $"caduca el {silence.ExpiresUtc.Value.ToLocalTime():dd/MM/yyyy}";
+            string notes = string.IsNullOrWhiteSpace(silence.Notes) ? string.Empty : $" — {silence.Notes!.Trim()}";
 
             // F5.12: un silencio nacido de un patrón lo DICE. Sin esto, la ficha afirmaba que
             // alguien había mirado este caso concreto y decidido sobre él, cuando lo que hubo fue
             // una decisión sobre un tipo de problema entero — y de ahí salen las dos preguntas que
             // nadie podría contestar: por qué está silenciado y a quién preguntarle.
-            if (!string.IsNullOrEmpty(silence.ByPatternExemplar))
+            if (!string.IsNullOrWhiteSpace(silence.ByPatternExemplar))
             {
-                return $"Silenciado al silenciar el patrón «{silence.ByPatternExemplar}» (por {silence.By})"
-                    + $" · {SilenceReasonNames.Display(silence.Reason)} · {expiry}";
+                return $"Silenciado por el patrón «{silence.ByPatternExemplar!.Trim()}», puesto por "
+                    + $"{silence.By} el {when} · {SilenceReasonNames.Display(silence.Reason)} · {expiry}{notes}";
             }
 
-            return $"Silenciado por {silence.By} · {SilenceReasonNames.Display(silence.Reason)} · {expiry}";
+            return $"Silenciado por {silence.By} el {when} · "
+                + $"{SilenceReasonNames.Display(silence.Reason)} · {expiry}{notes}";
         }
     }
 
     public bool HasSilence => SilenceSummary.Length > 0;
+
+    /// <summary>
+    /// Cómo se deshace, dicho en la misma tarjeta que lo afirma (F12 §F). Un hallazgo que dice
+    /// «silenciado» y no dice cómo dejar de estarlo obliga a buscar la palanca por la aplicación.
+    /// </summary>
+    public string SilenceUndoHint
+    {
+        get
+        {
+            if (!HasSilence)
+            {
+                return string.Empty;
+            }
+
+            return SilencedByPattern
+                ? "Lo tapa un patrón, no una decisión sobre este caso: se deshace retirando el "
+                  + "patrón, y entonces vuelve a activo al instante — sin re-auditar."
+                : "Se deshace con «Des-silenciar»: vuelve a aparecer en informes y auditorías.";
+        }
+    }
+
+    /// <summary>El botón que lleva a la palanca de verdad cuando lo que tapa es un patrón.</summary>
+    public bool CanManageSilencingPattern => SilencedByPattern && _patternsDialog is not null;
+
+    /// <summary>
+    /// Abre la gestión de patrones de esta aplicación, que es donde se retira el que tapa este
+    /// hallazgo. No lo retira por su cuenta: retirar un patrón afecta a toda la aplicación y esa
+    /// decisión se toma viendo la lista, no desde una ficha.
+    /// </summary>
+    [RelayCommand]
+    private void ManageSilencingPattern()
+    {
+        if (_patternsDialog is null || Slug.Length == 0)
+        {
+            return;
+        }
+
+        var vm = new PatternSilencesViewModel(_hub, _governance, _toasts);
+        vm.Load(Slug);
+        _patternsDialog.Show(vm);
+
+        // Al volver, el hallazgo puede haber dejado de estar silenciado: el patrón que lo tapaba
+        // ya no está y el silencio por patrón es derivado (F12 §F).
+        if (Finding is not null)
+        {
+            Reload(Finding.Id);
+        }
+    }
 
     // ------------------------------------------------------------------ F5.12 · alcance
 
@@ -461,6 +543,9 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanResolveManually));
         OnPropertyChanged(nameof(SilenceSummary));
         OnPropertyChanged(nameof(HasSilence));
+        OnPropertyChanged(nameof(SilencedByPattern));
+        OnPropertyChanged(nameof(SilenceUndoHint));
+        OnPropertyChanged(nameof(CanManageSilencingPattern));
         OnPropertyChanged(nameof(PatternOriginSummary));
         OnPropertyChanged(nameof(HasPatternOrigin));
         OnPropertyChanged(nameof(AppName));

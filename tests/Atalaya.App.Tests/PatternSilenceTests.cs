@@ -508,8 +508,16 @@ public sealed class PatternSilenceTests : IDisposable
         silence.ByPatternExemplar.Should().BeNull();
     }
 
+    /// <summary>
+    /// F12 §F INVIERTE lo que F5.12 había decidido aquí. Antes, retirar un patrón no des-silenciaba
+    /// nada «porque cada silencio fue una decisión registrada»; pero el silencio que pone un patrón
+    /// NO es una decisión sobre ese hallazgo —nadie lo miró— y dejarlo congelado significaba que
+    /// solo otra auditoría, pagada, podía recuperarlo. Ahora el silencio por patrón es derivado:
+    /// retirar el patrón devuelve a activo, al instante, lo que solo él tapaba. Lo que sí se
+    /// conserva es el silencio individual, y eso lo prueba <see cref="DerivedPatternSilenceTests"/>.
+    /// </summary>
     [Fact]
-    public void Des_silenciar_el_patron_no_des_silencia_lo_ya_decidido()
+    public void Des_silenciar_el_patron_devuelve_a_activo_lo_que_solo_el_tapaba()
     {
         SeedApp("alpha");
         Finding f = SeedFinding("alpha");
@@ -519,7 +527,7 @@ public sealed class PatternSilenceTests : IDisposable
 
         _hub.Store.TryReadPatternSilence("alpha", pattern.Id).Should().BeNull();
         _hub.Store.TryReadFinding("alpha", f.Id.ToString())!.Status
-            .Should().Be(FindingStatus.Silenciado, "cada silencio fue una decisión registrada: se levanta desde su ficha");
+            .Should().Be(FindingStatus.Activo, "nadie había decidido nada sobre ESTE hallazgo");
     }
 
     [Fact]
@@ -670,7 +678,8 @@ public sealed class PatternSilenceTests : IDisposable
         FindingDetailViewModel vm = Detail();
         vm.Load("alpha", f.Id);
 
-        vm.SilenceSummary.Should().StartWith($"Silenciado al silenciar el patrón «{Exemplar}»");
+        vm.SilenceSummary.Should().StartWith($"Silenciado por el patrón «{Exemplar}»")
+            .And.Contain("puesto por", "F12 §F: quién lo puso y cuándo, no solo que lo puso un patrón");
     }
 
     [Fact]

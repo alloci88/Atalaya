@@ -431,11 +431,27 @@
                         <TextBlock Style="{StaticResource Help}"
                                    Text="Ocultar este hallazgo de informes y auditorías. Queda registrado con tu nombre y su motivo." />
 
+                        <!-- F12 §F — un hallazgo silenciado DICE por qué lo está: quién, cuándo,
+                             con qué motivo, o qué patrón lo tapa. Y dice cómo deshacerlo, en la
+                             misma tarjeta: la palanca que sirve para un silencio por patrón no es
+                             «Des-silenciar» —el patrón seguiría puesto y la auditoría siguiente
+                             volvería a callarlo— sino retirar el patrón. -->
                         <Border CornerRadius="6" Padding="9,6" Margin="0,0,0,8"
                                 Background="{DynamicResource SubtleFillColorTertiaryBrush}"
                                 Visibility="{Binding HasSilence, Converter={StaticResource BoolToVisibility}}">
-                            <TextBlock Text="{Binding SilenceSummary}" TextWrapping="Wrap" FontSize="11"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <StackPanel>
+                                <TextBlock Text="{Binding SilenceSummary}" TextWrapping="Wrap" FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <TextBlock Text="{Binding SilenceUndoHint}" TextWrapping="Wrap" FontSize="11"
+                                           Margin="0,4,0,0" Opacity="0.85"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <ui:HyperlinkButton Content="Gestionar el patrón que lo silencia"
+                                                    Command="{Binding ManageSilencingPatternCommand}"
+                                                    Margin="0,4,0,0" Padding="0"
+                                                    HorizontalAlignment="Left"
+                                                    ToolTip="Abre los patrones silenciados de esta aplicación. Al retirarlo, este hallazgo vuelve a activo al instante."
+                                                    Visibility="{Binding CanManageSilencingPattern, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
                         </Border>
 
                         <!-- F5.12: si este hallazgo fue el origen de un patrón, lo dice. Sin esto,

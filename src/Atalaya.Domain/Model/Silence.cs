@@ -47,6 +47,28 @@ public sealed class Silence
     /// </summary>
     public string? ByPatternExemplar { get; set; }
 
+    /// <summary>
+    /// El patrón que lo puso (F12 §F). Con esto el silencio por patrón pasa a ser <b>derivado</b>:
+    /// un hallazgo está silenciado por patrón mientras ese patrón siga VIGENTE, y retirarlo lo
+    /// devuelve a activo al instante y gratis.
+    /// <para>
+    /// Antes solo se guardaba el texto del ejemplar, y el veredicto «silenciado» quedaba congelado
+    /// en el hallazgo: retirar el patrón no revivía nada de lo que había tapado, y solo otra
+    /// auditoría —pagada— podía cambiarlo. Es el mismo principio que la deriva: lo que se puede
+    /// derivar de un hecho vigente no se persiste como veredicto.
+    /// </para>
+    /// <para>
+    /// El texto del ejemplar se conserva al lado a propósito (ver <see cref="ByPatternExemplar"/>):
+    /// es lo que hace legible la procedencia, y es además el enganche de los silencios escritos
+    /// antes de F12, que no traen id.
+    /// </para>
+    /// <para>
+    /// <b>Null = lo silenció una persona sobre ESTE hallazgo</b>, y eso sí es un hecho del hallazgo:
+    /// se conserva pase lo que pase con los patrones.
+    /// </para>
+    /// </summary>
+    public Ulid? ByPatternId { get; set; }
+
     /// <summary>A silence is live (suppresses) until its expiry, if any.</summary>
     public bool IsLiveAt(DateTimeOffset now) => ExpiresUtc is null || ExpiresUtc.Value > now;
 

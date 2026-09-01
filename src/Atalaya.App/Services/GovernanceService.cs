@@ -22,6 +22,11 @@ public sealed class GovernanceService
 
     private string Me => _hub.ResolveIdentity().Name;
 
+    /// <summary>
+    /// Silencia ESTE hallazgo, y solo este. Es un hecho del hallazgo: alguien lo miró y decidió,
+    /// así que sobrevive a que se retire cualquier patrón (F12 §F) — la procedencia de patrón, si
+    /// la había, queda sustituida por esta decisión, que es más reciente y de una persona.
+    /// </summary>
     public void Silence(string slug, Ulid findingId, SilenceReason reason, string? notes, DateTimeOffset? expiresUtc)
     {
         Finding f = Require(slug, findingId);
@@ -100,6 +105,10 @@ public sealed class GovernanceService
                 Utc = now,
                 ExpiresUtc = expiresUtc,
                 ByPatternExemplar = phrase,
+
+                // F12 §F: la procedencia deja de ser solo un texto legible y pasa a ser el
+                // enganche. Con el id, este silencio es DERIVADO — vale mientras el patrón viva.
+                ByPatternId = pattern.Id,
             });
 
             source.MarkSilenced(now, Me, $"silenciado al silenciar el patrón «{phrase}»"
@@ -115,12 +124,21 @@ public sealed class GovernanceService
     }
 
     /// <summary>
-    /// Retira el patrón: el ejemplar deja de viajar en el prompt y el auditor vuelve a reportar
-    /// problemas de ese tipo en la auditoría siguiente.
+    /// Retira el patrón: el ejemplar deja de viajar en el prompt, el auditor vuelve a reportar
+    /// problemas de ese tipo, y <b>lo que solo él tapaba vuelve a activo al instante</b> (F12 §F).
     /// <para>
-    /// NO des-silencia el hallazgo que lo originó ni ningún otro. Cada uno de esos silencios fue
-    /// una decisión registrada con su autor y su motivo; deshacerla en cascada tiraría también las
-    /// que se hubieran revisado a mano desde entonces. Se levantan desde su ficha.
+    /// <b>El silencio por patrón es DERIVADO.</b> Antes no lo era: el veredicto «silenciado» quedaba
+    /// congelado en cada hallazgo, retirar el patrón no revivía nada, y la única forma de recuperar
+    /// lo que había tapado era otra auditoría —pagada—. Un silencio que se pone gratis y solo se
+    /// quita pagando no es reversible: es una puerta de un solo sentido con aspecto de interruptor.
+    /// Mismo principio que la deriva: lo que se deriva de un hecho vigente no se guarda como
+    /// veredicto.
+    /// </para>
+    /// <para>
+    /// <b>El silencio individual SÍ es un hecho del hallazgo y se conserva.</b> Alguien miró ESE
+    /// caso y decidió sobre él; retirar un patrón no deshace la decisión de nadie. La distinción la
+    /// lleva <see cref="Silence.ByPatternId"/>, y quien silencia a mano un hallazgo que el patrón
+    /// tapaba lo convierte en individual por el mismo gesto.
     /// </para>
     /// </summary>
     public bool UnsilencePattern(string slug, Ulid patternId)
@@ -131,8 +149,125 @@ public sealed class GovernanceService
             return false;
         }
 
-        Push(slug, $"pattern-silence: retirado {pattern?.ShortId ?? patternId.ToString()} en {slug}");
+        int revived = ReconcilePatternSilences(slug);
+        Push(slug, $"pattern-silence: retirado {pattern?.ShortId ?? patternId.ToString()} en {slug}"
+            + (revived > 0 ? $" ({revived} hallazgo(s) de vuelta a activo)" : string.Empty));
         return true;
+    }
+
+    /// <summary>
+    /// Vuelve a derivar el silencio POR PATRÓN de una aplicación (F12 §F), y devuelve cuántos
+    /// hallazgos han vuelto a activo.
+    /// <para>
+    /// La regla, en una frase: <b>un hallazgo está silenciado por patrón si algún patrón vigente lo
+    /// cubre</b>. Así que aquí, para cada silencio con procedencia de patrón:
+    /// </para>
+    /// <list type="bullet">
+    /// <item>si su patrón ya no está, el silencio se retira y el hallazgo vuelve a activo — gratis,
+    /// sin re-auditar, y con la razón escrita en el historial;</item>
+    /// <item>si sigue estando, el silencio se mantiene AL DÍA con él: la frase y la caducidad son
+    /// del patrón, no una copia que envejece por su cuenta.</item>
+    /// </list>
+    /// <para>
+    /// <b>Los silencios anteriores a F12</b> no traen <see cref="Silence.ByPatternId"/>; se
+    /// enganchan por el texto del ejemplar, que es el único dato que guardaban. Si ese texto ya no
+    /// corresponde a ningún patrón, es que el patrón se retiró: mismo desenlace.
+    /// </para>
+    /// <para>
+    /// No hace push: lo hace quien provoca el cambio, para que retirar un patrón siga siendo UN
+    /// commit y no dos contando lo mismo.
+    /// </para>
+    /// </summary>
+    public int ReconcilePatternSilences(string slug)
+    {
+        IReadOnlyList<PatternSilence> patterns = _hub.Store.ListPatternSilences(slug);
+        var byId = patterns.ToDictionary(p => p.Id);
+        var byExemplar = new Dictionary<string, PatternSilence>(StringComparer.OrdinalIgnoreCase);
+        foreach (PatternSilence p in patterns)
+        {
+            byExemplar[p.Exemplar.Trim()] = p;
+        }
+
+        int revived = 0;
+
+        foreach (Silence silence in _hub.Store.ListSilences(slug))
+        {
+            PatternSilence? owner = Owner(silence, byId, byExemplar);
+            if (owner is null)
+            {
+                if (!FromPattern(silence))
+                {
+                    continue; // Individual: es un hecho del hallazgo y no se toca.
+                }
+
+                revived += Revive(slug, silence);
+                continue;
+            }
+
+            // Vigente: el silencio derivado no puede desviarse de su patrón. Si el ejemplar se
+            // reescribió o la caducidad se movió, aquí se pone al día — y solo se escribe si algo
+            // cambió de verdad, para no ensuciar el hub con reescrituras idénticas.
+            if (string.Equals(silence.ByPatternExemplar, owner.Exemplar, StringComparison.Ordinal)
+                && silence.ExpiresUtc == owner.ExpiresUtc
+                && silence.ByPatternId == owner.Id)
+            {
+                continue;
+            }
+
+            silence.ByPatternExemplar = owner.Exemplar;
+            silence.ExpiresUtc = owner.ExpiresUtc;
+            silence.ByPatternId = owner.Id;
+            _hub.Store.WriteSilence(slug, silence);
+        }
+
+        return revived;
+    }
+
+    /// <summary>¿Este silencio lo puso un patrón, o una persona sobre este hallazgo?</summary>
+    private static bool FromPattern(Silence silence)
+        => silence.ByPatternId is not null || !string.IsNullOrWhiteSpace(silence.ByPatternExemplar);
+
+    /// <summary>El patrón VIGENTE que respalda este silencio, o null si ya no hay ninguno.</summary>
+    private static PatternSilence? Owner(
+        Silence silence,
+        IReadOnlyDictionary<Ulid, PatternSilence> byId,
+        IReadOnlyDictionary<string, PatternSilence> byExemplar)
+    {
+        if (silence.ByPatternId is { } id)
+        {
+            return byId.TryGetValue(id, out PatternSilence? p) ? p : null;
+        }
+
+        // Migración: los silencios anteriores a F12 solo guardaban la frase.
+        return silence.ByPatternExemplar is { Length: > 0 } phrase
+               && byExemplar.TryGetValue(phrase.Trim(), out PatternSilence? legacy)
+            ? legacy
+            : null;
+    }
+
+    /// <summary>
+    /// Devuelve a activo un hallazgo que solo tapaba un patrón ya retirado. El historial lo dice con
+    /// todas las letras: nadie silenció ESTE hallazgo, así que nadie está deshaciendo la decisión de
+    /// nadie.
+    /// </summary>
+    private int Revive(string slug, Silence silence)
+    {
+        _hub.Store.DeleteSilence(slug, silence.FindingUlid);
+
+        Finding? f = _hub.Store.TryReadFinding(slug, silence.FindingUlid.ToString());
+        if (f is null)
+        {
+            return 0;
+        }
+
+        string phrase = string.IsNullOrWhiteSpace(silence.ByPatternExemplar)
+            ? "que lo silenciaba"
+            : $"«{silence.ByPatternExemplar!.Trim()}»";
+        f.Unsilence(DateTimeOffset.UtcNow, Me,
+            $"se retiró el patrón {phrase}: vuelve a activo. Nadie había silenciado este hallazgo "
+            + "en particular.");
+        _hub.Store.WriteFinding(slug, f);
+        return 1;
     }
 
     /// <summary>
@@ -160,6 +295,10 @@ public sealed class GovernanceService
         pattern.By = Me;
         pattern.Utc = DateTimeOffset.UtcNow;
         _hub.Store.WritePatternSilence(slug, pattern);
+
+        // Lo derivado sigue a su origen (F12 §F): si no, la ficha de un hallazgo tapado por este
+        // patrón citaría la frase vieja para siempre.
+        ReconcilePatternSilences(slug);
         Push(slug, $"pattern-silence: ejemplar de {pattern.ShortId} en {slug}");
         return true;
     }
@@ -182,6 +321,10 @@ public sealed class GovernanceService
         pattern.By = Me;
         pattern.Utc = DateTimeOffset.UtcNow;
         _hub.Store.WritePatternSilence(slug, pattern);
+
+        // Igual que con el ejemplar: «vigente» lo decide el patrón, así que su caducidad manda
+        // sobre la de los silencios que puso.
+        ReconcilePatternSilences(slug);
         Push(slug, $"pattern-silence: caducidad de {pattern.ShortId} en {slug}");
         return true;
     }
