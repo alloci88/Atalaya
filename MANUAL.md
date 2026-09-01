@@ -18,6 +18,15 @@ algo está hecho como está, `DECISIONS.md`.
    administrador: es una carpeta. Y no hace falta tener .NET instalado — el paquete lo lleva
    dentro.
 
+   > **Mejor fuera de OneDrive** (o de Dropbox, o de Google Drive). «Donde quieras» sigue siendo
+   > verdad, pero el Escritorio y Documentos de un equipo corporativo suelen estar redirigidos a
+   > OneDrive, y ahí la carpeta de Atalaya —medio giga— se sube entera **en cada actualización**,
+   > y el cliente de sincronización retiene ficheros mientras copia, que es lo que puede hacer
+   > fallar la sustitución. Un `C:\Apps\Atalaya` va mejor. **Mover la carpeta no pierde nada**:
+   > tus ajustes, tu cuenta, los clones y el hub viven en `%LOCALAPPDATA%\Atalaya`, no ahí dentro.
+   > Si ya la tienes en OneDrive, tampoco pasa nada: Atalaya te avisa y la mayoría de los días
+   > funciona igual.
+
    > **La primera vez, Windows avisa.** «Windows protegió su PC»: el ejecutable no está firmado
    > todavía. Pulsa **Más información** → **Ejecutar de todas formas**. Solo pasa la primera vez.
 
@@ -852,6 +861,17 @@ hasta que la nueva arranca bien**. Si la sustitución falla a mitad, se deshace 
 la de antes, entera, y se te dice qué pasó. Y si la nueva se instalara pero no llegara a arrancar,
 esa carpeta es la vuelta atrás: devuelve su contenido a la carpeta principal.
 
+**Si Atalaya vive dentro de OneDrive** —o de Dropbox, o de Google Drive— el banner te lo dice
+antes de que pulses nada. No impide actualizar, y la mayoría de los días saldrá bien: el aviso
+está porque, cuando falla, el motivo es siempre el mismo. El cliente de sincronización mantiene
+abiertos los ficheros mientras los sube, y la actualización mueve la carpeta entera. Atalaya
+**insiste unos segundos** en cada movimiento —esos bloqueos se sueltan solos— y solo entonces se
+rinde. Si se rinde, el mensaje te dice qué hacer: **pausa la sincronización y reintenta**, o mueve
+Atalaya a una carpeta que no se sincronice (`C:\Apps\Atalaya`), que es la solución definitiva.
+Verás también nombres como `.atalaya-anterior-2`: son copias de un intento anterior que el cliente
+de sincronización no dejó borrar; Atalaya las esquiva para no bloquear la actualización y las
+retira sola en cuanto pueda, en algún arranque posterior.
+
 **Cuándo NO aparece el botón** —y el banner dice cuál de éstas es—:
 
 - **Hay una sesión en curso**: auditoría, verificación o arreglo asistido. Actualizar la cortaría,
@@ -875,6 +895,7 @@ descargar el zip a mano):
 | La descarga llegó corrupta o a medias | «El paquete descargado no coincide con su checksum… No se ha modificado nada.» |
 | La Release no publica checksum (las anteriores a esta versión) | «…no se puede verificar lo descargado. Descárgala a mano si te fías de ella.» |
 | Un antivirus retiene el ejecutable | «El ejecutable de Atalaya sigue bloqueado por otro programa…» |
+| **Atalaya está dentro de OneDrive/Dropbox/Google Drive y la sincronización retiene ficheros** | «…no se ha modificado nada. Atalaya está dentro de OneDrive…: **pausa la sincronización y reintenta**, o mueve Atalaya a una carpeta no sincronizada (por ejemplo `C:\Apps\Atalaya`)» |
 
 Cada intento queda anotado en `%LOCALAPPDATA%\Atalaya\updates.jsonl` —de qué versión, a cuál,
 cómo acabó y por qué si falló—, que es lo que hay que mirar cuando alguien pregunta por qué sigue

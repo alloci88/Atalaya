@@ -4,9 +4,17 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-01 (F15 — el coste, en AI credits).
+Última revisión: 2026-09-01 (BUGFIX-SYNC — el updater contra carpetas sincronizadas).
 
 ## En vuelo
+
+- **BUGFIX-SYNC — la actualización real, en la máquina donde falló.** Es la aceptación del arreglo
+  y no la puede hacer ningún test: reintentar 1.1.2 → 1.1.3 con Atalaya en
+  `OneDrive\Escritorio\Atalaya-v1.1.1-win-x64`. **Con OneDrive pausado debe pasar**; y después,
+  **movida la instalación a una carpeta no sincronizada, debe pasar sin pausar nada**. De paso,
+  mirar el banner antes de pulsar: tiene que decir que está dentro de OneDrive y seguir ofreciendo
+  el botón (D-795). Si vuelve a fallar, el mensaje ya nombra al culpable y el log dice qué carpeta
+  quedó sin borrar (D-794).
 
 - **F15 — cuadrar un día contra el panel de GitHub.** Es la aceptación de la fase y solo se puede
   hacer con datos reales: coger un día con auditorías, mirar el total de Atalaya y compararlo con la
@@ -189,6 +197,20 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **BUGFIX-SYNC · El updater contra carpetas sincronizadas** — la actualización 1.1.2 → 1.1.3
+  abortó contra un `.atalaya-anterior` residual con Atalaya instalada bajo OneDrive. El aborto fue
+  limpio y honesto, y eso no se ha tocado; lo que estaba mal era todo lo demás, porque el caso es
+  **el entorno corporativo normal**: Escritorio y Documentos redirigidos a OneDrive. Ahora cada
+  mover/borrar del relevo **se reintenta unos segundos** —los bloqueos de un cliente de
+  sincronización se sueltan solos (D-792)—, un respaldo residual que no se deja retirar **se
+  esquiva con un nombre libre** en vez de bloquear la actualización (D-793), y lo que no se pudo
+  borrar **deja de olvidarse**: queda apuntado y cada arranque lo reintenta, que es lo que
+  probablemente dejó el residuo de este fallo (D-794). El diagnóstico **nombra al culpable y
+  receta** —pausar la sincronización o mover la carpeta—, y el banner lo avisa antes de pulsar sin
+  bloquear nada (D-795). MANUAL matizado en «Empezar» y «Actualizar» (D-796). 33 tests nuevos
+  sobre directorios de verdad con bloqueos simulados, 1.735 en total (D-797). **Falta la
+  verificación humana**, arriba.
 
 - **F15 · El coste, en AI credits** — GitHub factura desde el 1 de junio de 2026 en **AI credits**
   (1 = 0,01 $) consumidos **por tokens** a las tarifas de API de cada modelo; las peticiones premium

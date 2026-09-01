@@ -9035,3 +9035,121 @@ AI credits del panel de Copilot de la organización para ese mismo día, y anota
 Si es grande, investigar antes de dar nada por bueno — los sospechosos por orden son la semántica
 de la caché (D-785), una tarifa promocional vencida y las llamadas que Copilot factura fuera de las
 sesiones de Atalaya.
+
+## BUGFIX-SYNC — El updater contra carpetas sincronizadas
+
+Actualizando 1.1.2 → 1.1.3 con Atalaya en `…\OneDrive\Escritorio\Atalaya-v1.1.1-win-x64\`:
+
+> No se pudo preparar la copia de seguridad; no se ha modificado nada.
+> (IOException: Access to the path '\\?\…\.atalaya-anterior\assets' is denied.)
+
+El aborto fue **limpio y honesto** —nada modificado, mensaje claro— y eso no se toca. Lo que
+estaba mal era todo lo demás: el caso es el **entorno corporativo normal** —Escritorio y
+Documentos redirigidos a OneDrive—, el mensaje no decía qué hacer, y el residuo contra el que
+chocó lo había dejado, casi con seguridad, la limpieza de la actualización anterior.
+
+### D-792 — Reintentar, porque el bloqueo de un cliente de sincronización se suelta solo
+
+Un cliente de sincronización mantiene manejadores abiertos sobre los ficheros **mientras los
+sube**. Eso no es un problema de permisos: es una ventana de segundos. Rendirse en el primer
+intento convertía una espera de dos segundos en una actualización imposible.
+
+`RetryPolicy` envuelve cada mover/borrar del relevo: **seis intentos en poco más de seis
+segundos** (200 ms, 400, 800, 1,6 s, 3 s). Cortos al principio —el caso normal no espera nada— y
+largos al final. Se reintenta ante `IOException` **y** `UnauthorizedAccessException`, porque el
+mismo bloqueo llega como una o como otra según qué manejador esté abierto y sobre qué; el precio
+de equivocarse es esperar seis segundos antes de dar el mismo error que se habría dado al
+instante, y el de no reintentar ya lo conocemos.
+
+Agotados los intentos, **el final de siempre**: se deshace, o no se toca nada. El anti-objetivo
+del prompt es el mismo principio que ya regía, y no se ha movido.
+
+La política es un objeto y no una constante para que los tests inyecten esperas de cero — y, en el
+caso del bloqueo transitorio, **suelten el fichero justo en la espera**: así el «se supera
+reintentando» es determinista, mientras que con un temporizador sería una moneda al aire.
+
+### D-793 — Un residuo de un intento viejo no puede impedir actualizar hoy
+
+Antes, un `.atalaya-anterior` que no se dejaba borrar era el final del intento. Ahora:
+
+1. Se intenta retirar, con reintentos.
+2. Si no se deja, **se esquiva con el siguiente nombre libre** (`.atalaya-anterior-2`, …-3) y la
+   huérfana **se anota**, no se olvida.
+3. Solo si se agotan cinco nombres se aborta —y a esas alturas el problema ya no es el nombre—.
+
+Y el barrido de la carpeta se salta **toda la familia** `.atalaya-anterior*`, no solo el nombre
+exacto: meter la huérfana bloqueada dentro de la copia buena sería enterrar el bloqueo justo
+donde va a estorbar, con la instalación ya desmontada.
+
+La copia que **de verdad** se usó viaja en el parte (`backupDir`), porque quien la borra es la
+versión nueva al arrancar, y borrar la que no es sería peor que no borrar ninguna.
+
+### D-794 — «No se pudo borrar» deja de significar «se olvida para siempre»
+
+Es lo que dejó el residuo de hoy. La limpieza de la copia anterior —que hace la versión nueva en
+su primer arranque, D-740— era cortesía silenciosa: si fallaba, se acababa ahí.
+
+Ahora lo que no se pueda borrar se apunta en `%LOCALAPPDATA%\Atalaya\update\limpieza-pendiente.txt`
+(una ruta por línea) y **cada arranque lo reintenta**, hasta que se pueda; queda además en el log,
+que es donde se mira cuando alguien pregunta por qué hay carpetas raras. El barrido corre **antes**
+de leer el parte y también cuando no hay parte: es justamente entonces cuando hay algo pendiente.
+Las huérfanas que el relevo esquivó llegan por el mismo camino, en el campo `orphanBackups` del
+parte — un parte viejo que no lo traiga se lee igual.
+
+Las esperas de aquí son más cortas que las del relevo (1,3 s frente a 6): **nadie está esperando
+este resultado**, y lo que no salga hoy sale mañana. Insistir más solo retrasaría el arranque.
+
+### D-795 — El diagnóstico nombra al culpable, y el aviso llega antes del fallo
+
+`SyncedFolders` reconoce OneDrive, Dropbox y Google Drive por las variables de entorno del cliente
+(`OneDrive`, `OneDriveCommercial`, `OneDriveConsumer` — la vía fiable, que aguanta que la carpeta
+se llame como quiera el tenant) y, si no, por el nombre de la carpeta raíz, aceptando las formas
+con sufijo que crean los clientes: «OneDrive - MAXAM», «Dropbox (MAXAM)». **Sin pasarse de lista**:
+«OneDriveAntiguo» no es OneDrive. Un aviso que no viene a cuento se aprende a ignorar, y entonces
+tampoco se lee el día que sí viene a cuento — por eso hay tantos tests de silencio como de aviso.
+
+Con eso, dos cosas:
+
+- **La receta en el fallo**: «Atalaya está dentro de OneDrive…: pausa la sincronización y
+  reintenta, o mueve Atalaya a una carpeta no sincronizada (por ejemplo `C:\Apps\Atalaya`)». Las
+  dos salidas, la de ahora y la definitiva. Un «acceso denegado» a secas no le dice a nadie qué
+  hacer.
+- **El aviso preventivo** en el propio banner, una línea. **No bloquea nada** (anti-objetivo del
+  prompt): se avisa y se recomienda, porque la mayoría de los días funcionará igualmente y
+  prohibir sería castigar a todo el mundo por un fallo intermitente.
+
+**Quien detecta es la aplicación; el relevo recibe la frase por argumento** (`--sync-note`). Es la
+misma regla que ya rige para los nombres de las carpetas: el relevo sobrevive a la versión que lo
+lanzó precisamente porque no comparte con ella nada más que argumentos. Y por eso la opción es
+opcional — una versión anterior que lance a este relevo sigue funcionando, solo que sin receta.
+
+### D-796 — Y el manual deja de decir «donde quieras» a secas
+
+`§ Empezar` gana el matiz: mejor **fuera** de carpetas sincronizadas, y por dos razones, no una —
+los bloqueos, y que cada actualización obliga a resubir medio giga. Con la vuelta que lo hace
+barato: **mover la carpeta no pierde nada**, porque los datos no viven ahí. `§ Actualizar` explica
+el caso, el porqué y las dos salidas, y la tabla de fallos gana su fila.
+
+### D-797 — Cobertura (33 tests nuevos, 1.735 en total, todo en verde)
+
+Sobre directorios de verdad, con un fichero abierto con `FileShare.None` haciendo de OneDrive —ni
+se puede borrar ni se puede mover mientras el manejador viva—:
+
+- **Residual bloqueado** → se esquiva con `-2`, la huérfana queda anotada, la actualización sale, y
+  el residuo se queda fuera de la copia buena (no dentro).
+- **Bloqueo transitorio** → se suelta en la espera del reintento y se usa el nombre de siempre.
+- **Bloqueo persistente** (cinco nombres retenidos a la vez) → `Intacta`, la instalación de antes
+  entera, y el mensaje con la receta.
+- **Bloqueo a mitad del cambio** → `Restaurada`, entera, con receta; y sin carpeta sincronizada, el
+  mismo mensaje sin receta.
+- **La limpieza que no pudo** → queda apuntada, el arranque siguiente la resuelve y borra el
+  apunte; las huérfanas del parte se retiran igual; un parte sin ese campo se lee igual.
+- **La detección**, con un entorno de mentira inyectado —escribir en el del proceso contaminaría a
+  los tests que corren a la vez—: variable de OneDrive → aviso; nombres con sufijo → aviso; rutas
+  normales, `C:\Apps\Atalaya` y los nombres que solo empiezan igual → silencio.
+- **El banner** avisa y **sigue ofreciendo el botón**; y el relevo recibe `--sync-note` solo cuando
+  hay algo que recetar.
+
+**Verificación humana, que es del usuario**: reintentar la actualización real 1.1.2 → 1.1.3 en la
+máquina donde falló. Con OneDrive pausado debe pasar; y tras mover la instalación fuera de
+OneDrive, debe pasar sin pausar nada.
