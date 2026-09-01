@@ -300,7 +300,10 @@ public sealed class SettingsWiringTests : IDisposable
         s.Thresholds.LegacyLargeUnitLoc.Should().Be(0, "sin umbral heredado no hay nada que ofrecer");
         new Thresholds().LargeUnitLoc.Should().Be(1500, "el umbral de fábrica es de la aplicación");
         new Thresholds().LargeUnitChars.Should().Be(60_000);
-        s.MaxPassesPerUnit.Should().Be(5);
+        // F16 §D — 6: cuatro pasadas que puedan aportar más las dos secas seguidas con las que
+        // el barrido converge. Eran 5 desde D-095, y se quedaron en 5 cuando D-755 endureció la
+        // regla de parada y le quitó una productiva.
+        s.MaxPassesPerUnit.Should().Be(SettingsLimits.DefaultMaxPassesPerUnit);
         s.CopilotTimeoutMinutes.Should().Be(15);
         s.EnableAssistedFix.Should().BeTrue();
         s.CopilotModel.Should().BeEmpty("un nombre de modelo caduca; se le pregunta al runtime");

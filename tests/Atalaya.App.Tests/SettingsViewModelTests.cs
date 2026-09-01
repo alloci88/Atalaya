@@ -61,7 +61,8 @@ public sealed class SettingsViewModelTests : IDisposable
     public void The_sweep_cap_is_editable_and_survives_a_reload()
     {
         SettingsViewModel vm = NewViewModel();
-        vm.MaxPassesPerUnit.Should().Be(5, "el valor por defecto de D-095");
+        vm.MaxPassesPerUnit.Should().Be(SettingsLimits.DefaultMaxPassesPerUnit,
+            "el valor de fábrica: 4 pasadas productivas + las 2 secas que cierran (F16 §D)");
 
         vm.MaxPassesPerUnit = 2;
         vm.SaveCommand.Execute(null);

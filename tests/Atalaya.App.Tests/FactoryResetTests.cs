@@ -175,7 +175,8 @@ public sealed class FactoryResetTests : IDisposable
         File.Exists(_paths.SettingsJson).Should().BeFalse("los ajustes vuelven a los de fábrica");
         File.Exists(_paths.AuthDat).Should().BeFalse("la cuenta se desconecta");
         _account.IsConnected.Should().BeFalse();
-        _settings.Current.MaxPassesPerUnit.Should().Be(5, "y los valores en memoria también son los de fábrica");
+        _settings.Current.MaxPassesPerUnit.Should().Be(SettingsLimits.DefaultMaxPassesPerUnit,
+            "y los valores en memoria también son los de fábrica");
     }
 
     /// <summary>Los logs NO se borran: son justamente lo que hace falta si el reset sale mal.</summary>

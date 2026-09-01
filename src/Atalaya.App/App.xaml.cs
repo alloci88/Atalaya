@@ -84,6 +84,9 @@ public partial class App : Application
         // F6.9 traen un `false` escrito, no una clave ausente, y el nuevo valor por defecto no las
         // alcanza. Sin esto el botón «Arreglar con agente» no aparece en ninguna de ellas.
         settings.MigrateAssistedFixDefault();
+        // F16 §D: y el tope del barrido, por lo mismo — las máquinas traen el 5 escrito y el valor
+        // por defecto nuevo no las alcanza. La frase que devuelve se enseña una vez, abajo.
+        string? sweepNotice = settings.MigrateSweepCapDefault();
         ThemeService.Apply(settings.Current.Theme);
 
         var window = _host.Services.GetRequiredService<MainWindow>();
@@ -95,6 +98,7 @@ public partial class App : Application
         // F11: ¿venimos de una actualización? Lo cuenta la versión NUEVA, ya arrancada — que es
         // justo la prueba que faltaba para poder borrar la copia de la anterior.
         main.ReportUpdateAftermath();
+        main.ReportSettingsPromotion(sweepNotice);
 
         // F8 §3: el chequeo de versión va DESPUÉS de que todo esté en marcha y sin await. Nada de
         // lo que hace la aplicación depende de su respuesta, así que nada puede esperarla: una

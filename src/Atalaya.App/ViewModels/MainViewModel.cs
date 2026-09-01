@@ -584,6 +584,21 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Cuenta una vez que un ajuste de fábrica ha cambiado por debajo (F16 §D). Se enseña como
+    /// toast y no como banner: es una noticia, no algo que atender — el valor nuevo ya está puesto
+    /// y cambiarlo está a dos clics.
+    /// </summary>
+    public void ReportSettingsPromotion(string? notice)
+    {
+        if (string.IsNullOrWhiteSpace(notice))
+        {
+            return;
+        }
+
+        OnUiThread(() => _toasts.Show(notice!));
+    }
+
+    /// <summary>
     /// Pregunta si hay versión nueva, sin bloquear nada y sin poder romper el arranque.
     /// <para>
     /// Va DESPUÉS de que la aplicación esté en marcha y en su propia tarea: llega cuando llegue.

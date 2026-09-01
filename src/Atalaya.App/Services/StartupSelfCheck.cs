@@ -131,6 +131,7 @@ public static class StartupSelfCheck
                 settings.Load();
                 settings.MigrateConnection(host.Services.GetRequiredService<DeployConfig>());
                 settings.MigrateAssistedFixDefault();
+                settings.MigrateSweepCapDefault();
                 return $"tema «{settings.Current.Theme}»";
             });
 

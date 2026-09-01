@@ -33,6 +33,18 @@ public static class SettingsLimits
     /// <summary>Tope 1 = pasada única (D-097); 0 dejaría la auditoría sin hacer nada.</summary>
     public const int MinMaxPassesPerUnit = 1;
 
+    /// <summary>
+    /// El tope de fábrica: 4 pasadas que pueden aportar + las 2 secas que cierran el barrido
+    /// (F16 §D). Ver <c>AppSettings.MaxPassesPerUnit</c> para la aritmética.
+    /// </summary>
+    public const int DefaultMaxPassesPerUnit = 6;
+
+    /// <summary>
+    /// El tope que traían las máquinas antes de F16. Se nombra para poder reconocerlo en la
+    /// promoción única y NO tocar a quien eligió su propio número.
+    /// </summary>
+    public const int LegacyMaxPassesPerUnit = 5;
+
     /// <summary>Por debajo de 15 s el sondeo del hub se pisa a sí mismo.</summary>
     public const int MinPollingSeconds = 15;
 
@@ -179,6 +191,13 @@ public sealed class AppSettings
     public bool AssistedFixDefaultApplied { get; set; }
 
     /// <summary>
+    /// Constancia de que la promoción del tope de pasadas ya corrió (F16 §D). Sin la marca correría
+    /// en cada arranque y bajarlo a mano no sobreviviría a cerrar la aplicación, que es otra forma
+    /// de tener el ajuste roto — la contraria.
+    /// </summary>
+    public bool SweepCapDefaultApplied { get; set; }
+
+    /// <summary>
     /// Optional Copilot SDK BaseDirectory. Leave empty (default): the SDK uses its standard location,
     /// which is where the `copilot` CLI stores the login, so UseLoggedInUser finds it. Only set this
     /// if you deliberately want the SDK isolated to a custom directory.
@@ -200,11 +219,22 @@ public sealed class AppSettings
     /// hace falta ningún selector de «modo» por lanzamiento.
     /// </para>
     /// <para>
-    /// Por defecto 5 (D-095). El valor vigente se registra en cada sesión y en su informe, para que
-    /// «cobertura posiblemente incompleta» siempre se pueda leer contra el tope que había.
+    /// <b>Por defecto 6 desde F16, y el número no es un ajuste a ojo.</b> El tope es un
+    /// PRESUPUESTO —cuánto estoy dispuesto a pagar por unidad— y la regla de parada es otra cosa:
+    /// desde F12 (D-755) el barrido necesita <b>dos pasadas secas seguidas</b> para declararse
+    /// convergido, y esas dos salen del mismo presupuesto. Con un tope de 5, eso deja <b>3</b>
+    /// pasadas que pueden aportar algo; antes de D-755, cuando bastaba una seca, dejaba 4. El tope
+    /// se quedó en 5 cuando el criterio se hizo más estricto, y con eso el barrido se quedó sin
+    /// margen: en el banco, una unidad gastó la 5ª añadiendo ubicaciones y otra llegó a la 5ª con
+    /// su primera seca. Subir a 6 <b>restaura las 4 pasadas productivas</b> que la regla tenía
+    /// antes de endurecerse. No es «un poco más»: es volver a la relación que había.
+    /// </para>
+    /// <para>
+    /// El valor vigente se registra en cada sesión y en su informe, para que «cobertura
+    /// posiblemente incompleta» siempre se pueda leer contra el tope que había.
     /// </para>
     /// </summary>
-    public int MaxPassesPerUnit { get; set; } = 5;
+    public int MaxPassesPerUnit { get; set; } = SettingsLimits.DefaultMaxPassesPerUnit;
 
     /// <summary>
     /// Modelo de Copilot con el que se lanzan las sesiones nuevas (<c>SessionConfig.Model</c>).
@@ -417,6 +447,47 @@ public sealed class SettingsService
         Current.AssistedFixDefaultApplied = true;
         Current.EnableAssistedFix = true;
         Save(Current);
+    }
+
+    /// <summary>
+    /// Promoción única del tope de pasadas del barrido (F16 §D), con la misma forma que la de
+    /// D-563 y por el mismo motivo: <see cref="Save"/> escribe TODAS las propiedades, así que las
+    /// máquinas que ya han guardado ajustes traen un <c>"maxPassesPerUnit": 5</c> escrito con todas
+    /// las letras y el valor por defecto nuevo no las alcanza — el defecto solo se aplica cuando la
+    /// clave falta, y ahí no falta. Sin esto, el equipo entero seguiría barriendo con el tope viejo.
+    /// <para>
+    /// <b>Solo promociona el 5 exacto</b>, que es el valor de fábrica anterior. A quien haya
+    /// elegido su propio número —3 para gastar menos, 10 para barrer a fondo— no se le toca: eso es
+    /// una decisión, y pisarla sería exactamente lo que esta promoción existe para no hacer.
+    /// </para>
+    /// <para>
+    /// <b>Y no es silenciosa</b> (D-765): devuelve la frase que la aplicación enseña una vez. Un
+    /// presupuesto que sube solo y sin avisar es indistinguible de un ajuste que no ajusta.
+    /// </para>
+    /// </summary>
+    /// <returns>Qué contarle al usuario, o <c>null</c> si no hubo nada que promocionar.</returns>
+    public string? MigrateSweepCapDefault()
+    {
+        if (Current.SweepCapDefaultApplied)
+        {
+            return null;
+        }
+
+        Current.SweepCapDefaultApplied = true;
+
+        if (Current.MaxPassesPerUnit != SettingsLimits.LegacyMaxPassesPerUnit)
+        {
+            Save(Current);
+            return null;
+        }
+
+        Current.MaxPassesPerUnit = SettingsLimits.DefaultMaxPassesPerUnit;
+        Save(Current);
+
+        return $"El tope de pasadas del barrido ha pasado de {SettingsLimits.LegacyMaxPassesPerUnit} "
+            + $"a {SettingsLimits.DefaultMaxPassesPerUnit}: el barrido necesita dos pasadas secas "
+            + "seguidas para darse por terminado, y esas dos salen del mismo tope. Con 6 vuelve a "
+            + "haber 4 pasadas que puedan aportar algo. Puedes cambiarlo en Ajustes → Auditoría.";
     }
 
     /// <summary>Compares two remote URLs ignoring case, a trailing slash and a trailing ".git".</summary>

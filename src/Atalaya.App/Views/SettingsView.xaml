@@ -123,7 +123,7 @@
                     <ui:TextBox Grid.Row="0" Grid.Column="1" Text="{Binding MaxPassesPerUnit}" Width="120" HorizontalAlignment="Left" />
                     <TextBlock
                         Grid.Row="1" Grid.Column="1"
-                        Text="Cuántas veces se repite la revisión de una unidad hasta que una pasada queda seca. Con 1, cada auditoría es una pasada única. Si se agota el tope sin secarse, la unidad queda marcada como «cobertura posiblemente incompleta». Aplica a las auditorías que lances a partir de ahora; la que esté en curso termina con el tope que tenía. Mínimo 1."
+                        Text="El PRESUPUESTO de pasadas por unidad, y de él salen también las DOS pasadas secas seguidas con las que el barrido se da por terminado: con un tope de 6 quedan 4 pasadas que puedan aportar algo. Con 1, cada auditoría es una pasada única. Si se agota el tope sin llegar a las dos secas, la unidad queda marcada como «cobertura posiblemente incompleta». Aplica a las auditorías que lances a partir de ahora; la que esté en curso termina con el tope que tenía. Mínimo 1."
                         Style="{StaticResource FieldHelp}" />
                 </Grid>
 
