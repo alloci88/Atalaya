@@ -14,6 +14,12 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   ver «Arreglada — pendiente de verificar» → Verificar → que quede limpia**. Y de paso mirar que la
   cabecera de la pantalla dice con quién trabaja, y que las tarjetas de pregunta y el diff se ven
   como con Copilot (D-804…D-808).
+- **F16 §B/§C — las capturas.** Los textos están fijados por test carácter a carácter —el pie y el
+  informe de la misma sesión, la unidad de cada casa, las cuatro apariciones del proveedor—, pero
+  las capturas necesitan la aplicación apuntando al hub real y con sesiones dentro: el pie de una
+  sesión en vivo, la columna «Proveedor» de la actividad de sesiones, la fila «Detectado con» de una
+  ficha, y un informe de verificación abierto en Informes. Va con la aceptación de arriba, que es
+  cuando esos datos existen.
 - **F16 §E — el callejón, reproducido a mano.** El caso está fijado en test, pero conviene verlo
   una vez en la aplicación: arreglar algo que **borre el ancla y el símbolo** —quitar un campo
   estático al reestructurar—, dejarlo **sin commitear**, y pulsar **Verificar**: tiene que salir un

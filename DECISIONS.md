@@ -9504,6 +9504,15 @@ propio número no se le toca, eso es una decisión— y **no silenciosa** (D-765
 cuenta una vez con la razón, porque un presupuesto que sube solo y sin avisar es indistinguible de
 un ajuste que no ajusta.
 
+> **Efecto colateral observado, y dicho.** `--selfcheck` reproduce el arranque ENTERO sobre los
+> ajustes reales de la máquina, migraciones incluidas — que es su gracia (D-800). Así que
+> ejecutarlo a mano antes del primer arranque de una versión **se come el aviso único**: aplica la
+> promoción y deja la marca puesta, y cuando la persona abra la aplicación el valor ya está bien
+> pero nadie le cuenta por qué. Pasó al comprobar el paquete de esta fase, y se deshizo a mano
+> —`maxPassesPerUnit` de vuelta a 5 y la marca a `false`— para que el aviso llegue donde tiene que
+> llegar. No se cambia el autochequeo: un chequeo que no corriera las migraciones de verdad dejaría
+> de comprobar justo lo que más cuesta arreglar en caliente.
+
 ### D-813 — «Mismo commit» prueba que HEAD no se movió, no que el fichero no haya cambiado
 
 **Reproducido primero**, como pedía el encargo. Un arreglo elimina el código anclado **y** el
