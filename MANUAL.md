@@ -1,4 +1,4 @@
-﻿# MANUAL — Atalaya
+# MANUAL — Atalaya
 
 Manual de uso. Qué hace cada pantalla, en qué orden se usan y qué significa lo que
 enseñan. Para montar el entorno o compilar, ver `README.md`; para saber **por qué**
@@ -344,6 +344,19 @@ segundo** en el caso normal.
 
 #### Cambiar de ciclo: durante el ciclo la deriva informa, al cambiar de ciclo se cobra
 
+**El ciclo se cierra solo, al completarse. No hay ningún botón de cerrar.** En cuanto
+no queda ninguna unidad **pendiente** en el inventario, la sesión que quitó la última
+cierra el ciclo, abre el siguiente y escribe su informe. Las unidades **grandes** no
+lo bloquean, y una sesión **detenida** no cierra nada: no cubrió lo que decía cubrir.
+Si dos personas llegan a la vez, cierra una sola —la otra ve que el ciclo ya avanzó y
+desiste—, así que el cierre nunca se hace dos veces.
+
+Cuando pasa, la aplicación **te avisa**: una línea discreta arriba de la ventana —
+«Ciclo 1 cerrado · 11/11 auditadas · 1 unidad sembrada como pendiente · Ciclo 2
+abierto»— con un enlace al informe del cierre. Se queda hasta que la descartas: es la
+única vez que ese resumen pasa por delante, y perderlo por estar mirando otra pantalla
+sería perder la foto de con qué cerró el ciclo.
+
 Durante el ciclo la deriva **no reabre nada**. Una clase que ya auditaste sigue
 auditada aunque su código haya cambiado: si la deriva devolviera unidades a la
 cola, un repositorio vivo no dejaría cerrar un ciclo nunca. Te lo dice, y decides
@@ -383,10 +396,12 @@ auditoría y 1 sin verificar»—, que es exactamente lo que el ciclo siguiente 
 Si no hay nada envejecido no se dice nada: una frase que informa de que no hay nada
 que informar es ruido.
 
-**«Reiniciar ciclo» es otra cosa.** El botón del inventario no siembra: abre un
-ciclo nuevo con **todo pendiente**, a propósito. Es el gesto de quien quiere volver
-a mirarlo todo desde cero, y sembrarlo respetando las auditadas lo dejaría sin
-efecto justo en la aplicación que está al día. Sigue sin borrar nada.
+**«Reiniciar ciclo» es otra cosa.** Es el único botón que cambia de ciclo, y **no es
+el cierre**: no siembra, sino que abre un ciclo nuevo con **todo pendiente**, a
+propósito. Es el gesto de quien quiere volver a mirarlo todo desde cero, y sembrarlo
+respetando las auditadas lo dejaría sin efecto justo en la aplicación que está al día.
+Sigue sin borrar nada, y no espera a que el ciclo esté completo: se puede pulsar
+cuando quieras.
 
 ### Informes
 

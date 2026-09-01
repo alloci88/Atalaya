@@ -170,11 +170,13 @@
                 </StackPanel>
             </Border>
 
-            <!-- Page host. La fila de arriba es el banner de versión nueva (F8 §3): ocupa alto
-                 solo cuando hay algo que decir, así que el 99 % de los arranques la ventana se
-                 ve exactamente igual que antes. -->
+            <!-- Page host. Las dos filas de arriba son los avisos que no pueden perderse: la
+                 versión nueva (F8 §3) y el cierre de ciclo (F12 §G). Cada una ocupa alto solo
+                 cuando hay algo que decir, así que el 99 % de los arranques la ventana se ve
+                 exactamente igual que antes. -->
             <Grid Grid.Column="1">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
@@ -246,7 +248,37 @@
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Row="1" Padding="20,12">
+                <!-- F12 §G — CIERRE DE CICLO. F9.2 cerraba y sembraba bien, pero en silencio: el
+                     Portafolio pasaba a «Ciclo 2» y ya. Mismo patrón que el aviso de versión —
+                     discreto, no efímero y descartable— porque cerrar un ciclo es una buena
+                     noticia que no puede perderse si mirabas otra pantalla, y no una
+                     interrupción que merezca un modal. -->
+                <Border Grid.Row="1"
+                        Margin="20,12,20,0" Padding="12,8"
+                        CornerRadius="6"
+                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        Visibility="{Binding CycleClosed, Converter={StaticResource BoolToVisibility}}">
+                    <WrapPanel>
+                        <TextBlock Text="✓" VerticalAlignment="Center" Margin="0,0,10,0" FontWeight="Bold" />
+                        <TextBlock Text="{Binding CycleClosedLabel}" VerticalAlignment="Center"
+                                   TextWrapping="Wrap" FontWeight="SemiBold" />
+                        <ui:HyperlinkButton Content="Ver el informe del cierre"
+                                            Command="{Binding OpenCycleReportCommand}"
+                                            Margin="14,0,0,0" Padding="0"
+                                            VerticalAlignment="Center"
+                                            ToolTip="La foto de con qué cerró el ciclo y qué hereda el siguiente."
+                                            Visibility="{Binding CanOpenCycleReport, Converter={StaticResource BoolToVisibility}}" />
+                        <ui:HyperlinkButton Content="Descartar"
+                                            Command="{Binding DismissCycleCloseCommand}"
+                                            Margin="14,0,0,0" Padding="0"
+                                            VerticalAlignment="Center"
+                                            ToolTip="Quita el aviso. El informe del cierre sigue en Informes." />
+                    </WrapPanel>
+                </Border>
+
+                <Border Grid.Row="2" Padding="20,12">
                     <ContentControl Content="{Binding Navigation.Current}" />
                 </Border>
             </Grid>

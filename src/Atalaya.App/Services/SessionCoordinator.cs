@@ -107,6 +107,13 @@ public sealed record SessionResult(Ulid SessionId, SessionCounters Counters, boo
     public CycleAging CycleAging { get; init; } = CycleAging.None;
 
     /// <summary>
+    /// El cierre entero, cuando lo hubo (F12 §G): con qué cobertura cerró, cuánto sembró y dónde
+    /// está su informe. <see cref="CycleClosed"/> y <see cref="CycleAging"/> siguen siendo lo que
+    /// eran; esto es lo que hace posible AVISAR del cierre en vez de dejarlo pasar en silencio.
+    /// </summary>
+    public CycleCloseResult CycleClose { get; init; } = CycleCloseResult.NotClosed;
+
+    /// <summary>
     /// Unidades en las que el auditor dejó hallazgos existentes sin veredicto (F4). No bloquea la
     /// sesión, pero es visible: esos hallazgos no se han tocado y hay que volver sobre ellos.
     /// </summary>
@@ -712,6 +719,7 @@ public sealed class SessionCoordinator
         {
             CycleClosed = close.Closed,
             CycleAging = close.Aging,
+            CycleClose = close,
             Failure = providerFailure,
             IncompleteUnits = incompleteUnits,
             Interrupted = interrupted,

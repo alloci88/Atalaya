@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
@@ -286,8 +286,78 @@ public sealed partial class MainViewModel : ObservableObject
             + (c.Disputed > 0 ? $", ⚖ {c.Disputed} disputados" : "")
             + ". Abre «Última sesión» para el desglose.",
             ToastKind.SessionCompleted);
+        AnnounceCycleClose(result.CycleClose);
         SyncSession();
     });
+
+    // ---- Aviso de cierre de ciclo (F12 §G) ----
+
+    /// <summary>
+    /// Se ha cerrado un ciclo, y la carcasa lo dice.
+    /// <para>
+    /// F9.2 funcionaba con datos reales —el ciclo se cerró y sembró bien— pero lo hacía EN
+    /// SILENCIO: el Portafolio pasaba a «Ciclo 2» y ya. La foto honesta existía, dentro del informe
+    /// del cierre, y nadie tenía motivo para abrirlo. Un hito que no se anuncia no es un hito: es
+    /// un cambio de número.
+    /// </para>
+    /// <para>
+    /// Mismo patrón que el aviso de versión, y por los mismos motivos: banner y no toast —un toast
+    /// caduca a los 8 s y si mirabas otra cosa te quedas sin enterar— y no modal, porque cerrar un
+    /// ciclo es una buena noticia, no una interrupción.
+    /// </para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _cycleClosed;
+
+    /// <summary>«Ciclo 1 cerrado · 11/11 auditadas · 1 unidad sembrada como pendiente · Ciclo 2 abierto».</summary>
+    [ObservableProperty]
+    private string _cycleClosedLabel = string.Empty;
+
+    /// <summary>La app y la sesión del cierre: es a lo que lleva «Ver el informe del cierre».</summary>
+    private string _closedSlug = string.Empty;
+    private string _closedReportId = string.Empty;
+
+    /// <summary>Sin informe no se ofrece abrirlo: un enlace que no lleva a ningún sitio es peor que ninguno.</summary>
+    public bool CanOpenCycleReport => _closedReportId.Length > 0;
+
+    /// <summary>
+    /// Enseña el aviso de un cierre. Público para que se pueda ejercitar sin montar una sesión
+    /// entera: lo que hay que poder comprobar es que el aviso dice lo que dijo el cierre.
+    /// </summary>
+    public void AnnounceCycleClose(CycleCloseResult close)
+    {
+        if (!close.Closed)
+        {
+            return;
+        }
+
+        // El texto lo redacta el RESULTADO del cierre, no la interfaz (misma regla que D-746): así
+        // el aviso no puede decir unos números distintos de los que produjeron el cierre.
+        CycleClosedLabel = close.Headline;
+        _closedSlug = close.Slug;
+        _closedReportId = close.ReportSessionId;
+        CycleClosed = CycleClosedLabel.Length > 0;
+        OnPropertyChanged(nameof(CanOpenCycleReport));
+    }
+
+    /// <summary>El informe del cierre: la foto honesta de con qué se cerró y qué hereda el ciclo nuevo.</summary>
+    [RelayCommand]
+    private Task OpenCycleReport()
+    {
+        if (_closedReportId.Length == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        string slug = _closedSlug;
+        string report = _closedReportId;
+        CycleClosed = false;
+        return Navigation.NavigateToAsync<ReportsViewModel>(vm => vm.ShowReport(slug, report));
+    }
+
+    /// <summary>Descartable, como el de versión: se ha leído y no vuelve a estorbar.</summary>
+    [RelayCommand]
+    private void DismissCycleClose() => CycleClosed = false;
 
     /// <summary>
     /// La sesión no arrancó o reventó (F5.15). El toast dura y se puede descartar; el detalle vive

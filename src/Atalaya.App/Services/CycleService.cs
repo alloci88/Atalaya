@@ -1,4 +1,4 @@
-﻿using Atalaya.Domain;
+using Atalaya.Domain;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Inventory;
@@ -12,6 +12,58 @@ public sealed record CycleCloseResult(bool Closed, CycleAging Aging)
 {
     /// <summary>No se cerró: o ya lo cerró otro, o queda pendiente.</summary>
     public static CycleCloseResult NotClosed { get; } = new(false, CycleAging.None);
+
+    /// <summary>La aplicación cuyo ciclo se cerró.</summary>
+    public string Slug { get; init; } = string.Empty;
+
+    /// <summary>El ciclo que se cierra, y el que queda abierto detrás.</summary>
+    public int ClosedCycle { get; init; }
+
+    public int NextCycle { get; init; }
+
+    /// <summary>Unidades auditadas y totales del ciclo que se cierra: la cobertura con la que cerró.</summary>
+    public int UnitsAudited { get; init; }
+
+    public int UnitsTotal { get; init; }
+
+    /// <summary>
+    /// Cuántas unidades nacen PENDIENTES en el ciclo nuevo. Es la deuda de mirada que la siembra
+    /// acaba de cobrar (F9.2 §1), y el número que hace que «Ciclo 2 abierto» signifique algo.
+    /// </summary>
+    public int SeededPending { get; init; }
+
+    /// <summary>La sesión de cierre: es la que tiene el informe con la foto honesta.</summary>
+    public string ReportSessionId { get; init; } = string.Empty;
+
+    /// <summary>
+    /// El aviso, en una línea (F12 §G). El cierre funcionaba y sembraba bien, pero lo hacía EN
+    /// SILENCIO: el Portafolio pasaba a «Ciclo 2» sin más, y la foto honesta existía solo dentro
+    /// del informe del cierre, que nadie tenía motivo para abrir.
+    /// <para>
+    /// Lo redacta el resultado, no la interfaz: es la misma regla que D-746 fijó para el aviso de
+    /// versión — quien decide es quien redacta, y así el texto no puede discrepar de los números
+    /// que lo produjeron.
+    /// </para>
+    /// </summary>
+    public string Headline
+    {
+        get
+        {
+            if (!Closed)
+            {
+                return string.Empty;
+            }
+
+            string seeded = SeededPending == 0
+                ? "nada sembrado como pendiente"
+                : SeededPending == 1
+                    ? "1 unidad sembrada como pendiente"
+                    : $"{SeededPending} unidades sembradas como pendientes";
+
+            return $"Ciclo {ClosedCycle} cerrado · {UnitsAudited}/{UnitsTotal} auditadas · "
+                + $"{seeded} · Ciclo {NextCycle} abierto";
+        }
+    }
 }
 
 /// <summary>
@@ -119,7 +171,16 @@ public sealed class CycleService
         _hub.Store.WriteReport(slug, sessionId.ToString(), report);
 
         _hub.Sync?.CommitAndPush($"cierre: {slug} ciclo {expectedCycle}→{next}");
-        return new CycleCloseResult(true, aging);
+        return new CycleCloseResult(true, aging)
+        {
+            Slug = slug,
+            ClosedCycle = expectedCycle,
+            NextCycle = next,
+            UnitsAudited = inv.Units.Count(u => u.State == UnitState.Auditada),
+            UnitsTotal = inv.Units.Count,
+            SeededPending = fresh.Units.Count(u => u.State == UnitState.Pendiente),
+            ReportSessionId = sessionId.ToString(),
+        };
     }
 
     /// <summary>

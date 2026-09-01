@@ -1,6 +1,7 @@
-﻿using Atalaya.App.Services;
+using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
+using Atalaya.Copilot;
 using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Ids;
 using Atalaya.Inventory;
@@ -122,6 +123,44 @@ internal static class TestFactory
             navigation ?? new NavigationService(new EmptyServiceProvider()),
             saver ?? new RecordingFileSaver(null),
             toasts ?? new ToastCenter());
+
+    /// <summary>
+    /// La carcasa (MainViewModel) con lo mínimo para poder construirla. Existe para los avisos que
+    /// viven en ella y no en ninguna página —el de versión nueva, el de cierre de ciclo (F12 §G)—,
+    /// que si no solo se podrían comprobar montando una sesión entera.
+    /// </summary>
+    public static MainViewModel Shell(AppPaths paths, HubContext hub, ToastCenter? toasts = null)
+    {
+        var settings = new SettingsService(paths);
+        settings.Load();
+        var ulids = new UlidFactory(SystemClock.Instance);
+        var machines = new MachineConfigStore(paths.MachinesJson);
+        var agent = new FakeCopilotAgent();
+        var openSession = new OpenSessionStore(paths);
+        var busy = new AgentBusyGate();
+        ToastCenter center = toasts ?? new ToastCenter();
+
+        var live = new LiveSessionService(
+            () => new SessionCoordinator(
+                hub, new FindingIngestionService(hub, ulids), new ReconciliationService(hub),
+                machines, ulids, agent, settings),
+            agent, openSession, hub, busy: busy);
+
+        var fix = new LiveFixService(
+            hub, agent, machines, ulids, settings, new ReferenceCollector(),
+            new FixSnapshotStore(paths), new AssistedFixLauncher(settings, Links(hub, paths), machines, busy), busy);
+
+        return new MainViewModel(
+            new NavigationService(new EmptyServiceProvider()),
+            hub,
+            settings,
+            Account(paths),
+            live,
+            fix,
+            new InterruptedSessionRecovery(hub, openSession),
+            new DisplayIdService(hub),
+            center);
+    }
 
     /// <summary>
     /// Una navegacion que sabe resolver las paginas que se le den. Existe porque los enlaces entre
