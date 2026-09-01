@@ -42,7 +42,7 @@
             </Setter>
         </Style>
 
-        <!-- La insignia de tipo. Los tres tonos salen del TEMA, no de una paleta nueva: los colores
+        <!-- La insignia de tipo. Los tonos salen del TEMA, no de una paleta nueva: los colores
              de severidad están reservados (D-316) y un informe no habla de gravedad. -->
         <Style x:Key="KindBadge" TargetType="Border">
             <Setter Property="CornerRadius" Value="9" />
@@ -58,6 +58,12 @@
                 </DataTrigger>
                 <DataTrigger Binding="{Binding KindLabel}" Value="Operaciones">
                     <Setter Property="Background" Value="Transparent" />
+                </DataTrigger>
+                <!-- F16 §F: verificar tiene insignia propia porque tiene FILTRO propio; si se
+                     pintara como una sesión, la lista diría que son lo mismo. -->
+                <DataTrigger Binding="{Binding KindLabel}" Value="Verificación">
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentTextFillColorSecondaryBrush}" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>

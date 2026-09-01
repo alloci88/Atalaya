@@ -12,8 +12,16 @@ namespace Atalaya.App.Services;
 /// </summary>
 public enum ReportKind
 {
-    /// <summary>Una auditoría: lotes, verify o los modos retirados de las sesiones antiguas.</summary>
+    /// <summary>Una auditoría: lotes o los modos retirados de las sesiones antiguas.</summary>
     Sesion,
+
+    /// <summary>
+    /// Una verificación (F16 §F). Tiene clase propia y no se mezcla con las auditorías porque
+    /// responde a otra pregunta —«¿sigue estando este hallazgo?» y no «¿qué hay en esta unidad?»—,
+    /// cuesta dinero, decide estados, y quien busca «qué se ha verificado esta semana» no tiene por
+    /// qué bucear entre auditorías para encontrarlo.
+    /// </summary>
+    Verificacion,
 
     /// <summary>El consolidado de un cierre de ciclo (§7).</summary>
     Consolidado,
@@ -29,6 +37,7 @@ public static class ReportKinds
     {
         ReportKind.Consolidado => "Consolidado",
         ReportKind.Operaciones => "Operaciones",
+        ReportKind.Verificacion => "Verificación",
         _ => "Sesión",
     };
 }
@@ -468,6 +477,7 @@ public sealed class ReportsQuery
     {
         AuditMode.Cierre => ReportKind.Consolidado,
         AuditMode.Reset => ReportKind.Operaciones,
+        AuditMode.Verify => ReportKind.Verificacion,
         _ => ReportKind.Sesion,
     };
 
@@ -476,6 +486,7 @@ public sealed class ReportsQuery
         AuditMode.Cierre => $"Cierre de ciclo {session.CycleN - 1} — {appName}",
         AuditMode.Reset => $"Reset de auditoría — {appName}",
         AuditMode.Fix => $"Arreglo asistido — {appName}",
+        AuditMode.Verify => $"Verificación — {appName}",
         _ => $"Informe de sesión — {appName}",
     };
 
@@ -570,6 +581,11 @@ public sealed record ReportHeader(string? Title, ReportKind? Kind, DateTimeOffse
         if (t.Contains("cierre de ciclo", StringComparison.Ordinal))
         {
             return ReportKind.Consolidado;
+        }
+
+        if (t.Contains("verificacion", StringComparison.Ordinal))
+        {
+            return ReportKind.Verificacion;
         }
 
         return t.Contains("informe de sesion", StringComparison.Ordinal) ? ReportKind.Sesion : null;

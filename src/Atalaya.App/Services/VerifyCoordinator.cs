@@ -70,8 +70,25 @@ public sealed class VerifyCoordinator
         string by = _hub.ResolveIdentity().Name;
         DateTimeOffset utc = DateTimeOffset.UtcNow;
 
+        // F16 §F — el identificador de la sesión se saca AQUÍ y no al final, porque cada evento
+        // que se escriba en el historial de un hallazgo tiene que poder apuntar a ella. Sin eso,
+        // el rastro de una verificación en la ficha es una línea de texto que no lleva a ninguna
+        // parte: la única acción de las tres que no dejaba camino de vuelta a su informe.
+        Ulid sessionId = _ulids.NewUlid();
+        string sessionKey = sessionId.ToString();
+
+        // Con quién se está verificando, para escribirlo en cada evento. Un veredicto sin la casa
+        // que lo emitió no se puede pesar: dos casas coincidiendo valen más que dos modelos de la
+        // misma (D-781).
+        string judge = Judge(_agent);
+
         var measuredMessages = new List<string>();
         var notes = new List<string>();
+
+        // Los que ni llegaron al instrumento, para que el informe los cuente igual: un desenlace
+        // frustrante es un desenlace, y esconderlo haría que el informe pareciera más limpio de lo
+        // que fue la sesión.
+        var lost = new List<ReportBuilder.VerifyLine>();
         int measuredApplied = 0;
         int written = 0;
 
@@ -124,10 +141,16 @@ public sealed class VerifyCoordinator
                 // Fase (a) agotada y sin nada que enseñar: AQUÍ sí es «no localizado». Y el evento
                 // lo dice con esas palabras: un hallazgo activo no puede «reabrirse» (F6.6).
                 f.NeedsReview = true;
-                f.Record(new HistoryEntry(utc, FindingEvent.NotLocated, by, aim.Reason));
+                f.Record(new HistoryEntry(utc, FindingEvent.NotLocated, by, $"{aim.Reason} · {judge}")
+                {
+                    SessionId = sessionKey,
+                });
                 _hub.Store.WriteFinding(slug, f);
                 written++;
                 notes.Add($"{Alias(f)}: {aim.Reason}");
+                lost.Add(new ReportBuilder.VerifyLine(
+                    Alias(f), f.Title, f.Severity, loc.Path, loc.Line,
+                    VerifyBasis.Anclado, null, "no localizado", aim.Reason));
                 continue;
             }
 
@@ -146,7 +169,7 @@ public sealed class VerifyCoordinator
             return new VerifyOutcome(measuredApplied, measuredMessages, notes);
         }
 
-        var toolbox = new VerifyToolbox(_hub, slug, stamps, nextSteps);
+        var toolbox = new VerifyToolbox(_hub, slug, stamps, nextSteps, sessionKey, judge, aimed);
 
         // F7 §3: el verificador juzga el mismo código que el auditor y necesita el mismo criterio.
         // Sin las directivas de ámbito Auditoría confirmaría como defecto justo lo que la auditoría
@@ -193,15 +216,20 @@ public sealed class VerifyCoordinator
             }
 
             (FindingEvent kind, string detail, string note) = Silent(f, aim);
-            f.Record(new HistoryEntry(utc, kind, by, detail));
+            f.Record(new HistoryEntry(utc, kind, by, $"{detail} · {judge}") { SessionId = sessionKey });
             _hub.Store.WriteFinding(slug, f);
             written++;
             notes.Add(note);
+            Location silentLoc = f.Locations.Count > 0 ? f.Locations[0] : new Location { Path = "?", Line = 0 };
+            lost.Add(new ReportBuilder.VerifyLine(
+                Alias(f), f.Title, f.Severity, silentLoc.Path, silentLoc.Line,
+                aim.Basis, aim.Member, "sin veredicto", detail));
         }
 
-        _hub.Store.WriteSession(new AuditSession
+        AppConfig? app = _hub.Store.TryReadApp(slug);
+        var session = new AuditSession
         {
-            Id = _ulids.NewUlid(),
+            Id = sessionId,
             AppSlug = slug,
             Mode = AuditMode.Verify,
             By = by,
@@ -209,14 +237,64 @@ public sealed class VerifyCoordinator
             StartedUtc = utc,
             EndedUtc = DateTimeOffset.UtcNow,
             Commit = commit,
-            CycleN = _hub.Store.TryReadApp(slug)?.CurrentCycle ?? 1,
+            CycleN = app?.CurrentCycle ?? 1,
             Model = _agent.ModelName,
             Provider = _agent.ProviderId,
             Usage = usage,
             Directives = directives.Records.ToList(),
-        });
+        };
+        _hub.Store.WriteSession(session);
+
+        // F16 §F — y su INFORME. Verificar cuesta dinero y decide estados; que fuera la única de
+        // las tres acciones sin informe era lo que la convertía en un fantasma.
+        WriteReport(slug, app, session, toolbox.Lines.Concat(lost).ToList(), notes);
+
         Push(slug, written + toolbox.Applied);
         return new VerifyOutcome(toolbox.Applied + measuredApplied, measuredMessages, notes);
+    }
+
+    /// <summary>
+    /// Con qué casa y qué modelo se está verificando, en una línea. Va a cada evento del historial
+    /// porque un veredicto sin la casa que lo emitió no se puede pesar: dos casas coincidiendo son
+    /// una segunda opinión de verdad, y dos modelos de la misma pueden compartir el punto ciego.
+    /// </summary>
+    private static string Judge(IAuditorProvider agent)
+        => agent.ModelName is { Length: > 0 } model
+            ? $"verificado con {agent.ProviderName} (modelo {model})"
+            : $"verificado con {agent.ProviderName}";
+
+    /// <summary>
+    /// Escribe el informe de la verificación. Un fallo aquí NO tumba la sesión: los veredictos ya
+    /// están aplicados y son el hecho; el informe es la narración.
+    /// </summary>
+    private void WriteReport(
+        string slug, AppConfig? app, AuditSession session,
+        IReadOnlyList<ReportBuilder.VerifyLine> lines, IReadOnlyList<string> notes)
+    {
+        try
+        {
+            string report = ReportBuilder.BuildVerifyReport(
+                app, session, lines, notes, _hub.OrganizationName, ModelRates());
+            _hub.Store.WriteReport(slug, session.Id.ToString(), report);
+        }
+        catch (Exception)
+        {
+            // Sin informe, pero con los veredictos escritos. Lo contrario sería perder el trabajo
+            // pagado por no poder contarlo.
+        }
+    }
+
+    /// <summary>Las tarifas del hub, para derivar el coste del informe. Null si no hay.</summary>
+    private ModelRateTable? ModelRates()
+    {
+        try
+        {
+            return _hub.Store.TryReadModelRates();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     /// <summary>Se empuja cuando se ha escrito algo, y no por haber preguntado.</summary>
@@ -417,19 +495,35 @@ public sealed class VerifyCoordinator
 
         /// <summary>Qué proponerle al usuario cuando el veredicto sea «no concluyente» (F12 §A).</summary>
         private readonly IReadOnlyDictionary<string, string> _nextSteps;
+        private readonly string _sessionKey;
+        private readonly string _judge;
+        private readonly IReadOnlyDictionary<string, (Finding Finding, VerifyAim Aim)> _aimed;
 
         private readonly HashSet<string> _judged = new(StringComparer.Ordinal);
         private readonly List<string> _notes = new();
 
+        /// <param name="sessionKey">
+        /// La sesión a la que apunta cada evento (F16 §F). Es lo que convierte una línea del
+        /// historial en un camino: del veredicto al informe que lo explica.
+        /// </param>
+        /// <param name="judge">Con qué casa y qué modelo se juzgó, para escribirlo en el evento.</param>
+        /// <param name="aimed">Qué código se le enseñó a cada objetivo, para el informe.</param>
         public VerifyToolbox(
             HubContext hub, string slug, IReadOnlyDictionary<string, DetectionStamp> stamps,
-            IReadOnlyDictionary<string, string> nextSteps)
+            IReadOnlyDictionary<string, string> nextSteps, string sessionKey, string judge,
+            IReadOnlyDictionary<string, (Finding Finding, VerifyAim Aim)> aimed)
         {
             _hub = hub;
             _slug = slug;
             _stamps = stamps;
             _nextSteps = nextSteps;
+            _sessionKey = sessionKey;
+            _judge = judge;
+            _aimed = aimed;
         }
+
+        /// <summary>Lo que contestó el instrumento sobre cada hallazgo, para el informe.</summary>
+        public List<ReportBuilder.VerifyLine> Lines { get; } = new();
 
         public int Applied { get; private set; }
 
@@ -457,7 +551,8 @@ public sealed class VerifyCoordinator
                 : new DetectionStamp(DateTimeOffset.UtcNow, AuditMode.Verify, "unknown", _hub.ResolveIdentity().Name);
 
             string note;
-            switch (Normalize(verdict))
+            string verdictName = Normalize(verdict);
+            switch (verdictName)
             {
                 case "confirmado":
                     f.Confirm(AuditMode.Verify, stamp); // refreshes lastConfirmed, no confidence change
@@ -496,6 +591,7 @@ public sealed class VerifyCoordinator
                     break;
 
                 default: // no-verificable → NO CONCLUYENTE (F12 §A)
+                    verdictName = "no concluyente";
                     // Una no-respuesta tiene desenlace propio. Se anotaba como «Confirmado», y con
                     // eso el hallazgo se leía más sólido cuantas más veces NO se hubiera podido
                     // verificar: la métrica se alimentaba justo de la ausencia de evidencia. Aquí
@@ -509,10 +605,50 @@ public sealed class VerifyCoordinator
                     break;
             }
 
+            // EL SELLO (F16 §F). El evento lo escribe quien hace la transición —Confirm, Resolve,
+            // Dispute o el Record de arriba—, y quién lo juzgó y con qué sesión lo pone aquí, sobre
+            // la última entrada que acaba de nacer. Se hace así, y no metiendo la sesión en la
+            // firma de cada transición del dominio, porque esto es una circunstancia de ESTA
+            // acción y no una propiedad del hallazgo: el dominio no tiene por qué saber que existen
+            // los informes.
+            //
+            // Y el COSTE no se escribe aquí a propósito. Es un derivado (D-788): se calcula de los
+            // tokens de la sesión con la tarifa de su modelo, y guardarlo en un texto del hub sería
+            // congelar un número que mañana se recalcula. El evento apunta a su sesión; el coste lo
+            // deriva quien lo pinte.
+            Seal(f, verdictName, evidence);
+
             _judged.Add(key);
             _hub.Store.WriteFinding(_slug, f);
             _notes.Add(note);
             Applied++;
+        }
+
+        /// <summary>
+        /// Sella el último evento del hallazgo con quién lo juzgó y con la sesión que lo produjo, y
+        /// anota la línea del informe. Es lo que convierte una verificación en algo que se puede
+        /// releer: en la ficha, un camino al informe; en Informes, una fila con lo que se le enseñó
+        /// y lo que contestó.
+        /// </summary>
+        private void Seal(Finding f, string verdictName, string evidence)
+        {
+            if (f.History.Count > 0)
+            {
+                HistoryEntry last = f.History[^1];
+                f.History[^1] = last with
+                {
+                    Detail = string.IsNullOrWhiteSpace(last.Detail) ? _judge : $"{last.Detail} · {_judge}",
+                    SessionId = _sessionKey,
+                };
+            }
+
+            if (_aimed.TryGetValue(f.Id.ToString(), out (Finding Finding, VerifyAim Aim) aimed))
+            {
+                Location loc = f.Locations.Count > 0 ? f.Locations[0] : new Location { Path = "?", Line = 0 };
+                Lines.Add(new ReportBuilder.VerifyLine(
+                    Alias(f), f.Title, f.Severity, loc.Path, loc.Line,
+                    aimed.Aim.Basis, aimed.Aim.Member, verdictName, Detail(evidence)));
+            }
         }
 
         /// <summary>

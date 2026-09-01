@@ -156,9 +156,16 @@ public sealed class ReportsViewTests : IDisposable
     }
 
     /// <summary>
-    /// Los tres tipos conviven en la misma lista, cada uno con su insignia. El cierre escribe un
+    /// Los CUATRO tipos conviven en la misma lista, cada uno con su insignia. El cierre escribe un
     /// consolidado y el reset es un evento de sistema: llamarlos «sesión» a los dos sería perder
     /// justo la distinción por la que existe el filtro de tipo.
+    /// <para>
+    /// <b>Y desde F16 §F, verificar tiene clase propia.</b> Aquí ponía que «verificar también es
+    /// auditar», y era cierto en el sentido de que las dos miran código — pero no contestan a la
+    /// misma pregunta: una dice qué hay en una unidad y la otra si un hallazgo concreto sigue
+    /// estando. Mezcladas, quien busca «qué se ha verificado esta semana» tiene que bucear entre
+    /// auditorías, que es lo que el filtro de tipo existe para evitar.
+    /// </para>
     /// </summary>
     [Fact]
     public void El_cierre_es_consolidado_y_el_reset_es_operaciones()
@@ -171,7 +178,8 @@ public sealed class ReportsViewTests : IDisposable
         var kinds = Query().All().ToDictionary(e => e.ModeLabel!, e => e.Kind);
 
         kinds["Lotes"].Should().Be(ReportKind.Sesion);
-        kinds["Verify"].Should().Be(ReportKind.Sesion, "verificar también es auditar");
+        kinds["Verify"].Should().Be(ReportKind.Verificacion,
+            "verificar contesta otra pregunta y se filtra aparte");
         kinds["Cierre de ciclo"].Should().Be(ReportKind.Consolidado);
         kinds["Reset de auditoría"].Should().Be(ReportKind.Operaciones);
     }

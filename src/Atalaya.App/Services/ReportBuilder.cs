@@ -324,6 +324,137 @@ public static class ReportBuilder
         => string.IsNullOrEmpty(f.DisplayId) ? string.Empty : $"{f.DisplayId} · ";
 
     /// <summary>
+    /// Qué se le enseñó a un hallazgo en una verificación y qué contestó (F16 §F).
+    /// </summary>
+    /// <param name="Basis">
+    /// El eslabón de la cadena con el que se le juzgó: el ancla exacta, el símbolo o la unidad
+    /// entera. Sin esto un veredicto no se puede pesar — «no concluyente» con el método delante y
+    /// «no concluyente» con la unidad entera delante no significan lo mismo, y el segundo es el que
+    /// pide re-auditar.
+    /// </param>
+    /// <param name="Verdict">El desenlace tal y como lo aplicó la aplicación.</param>
+    /// <param name="Evidence">El razonamiento del modelo, literal.</param>
+    public sealed record VerifyLine(
+        string Alias,
+        string Title,
+        Severity Severity,
+        string Path,
+        int Line,
+        VerifyBasis Basis,
+        string? Member,
+        string Verdict,
+        string Evidence);
+
+    /// <summary>
+    /// El informe de una VERIFICACIÓN (F16 §F).
+    /// <para>
+    /// <b>Por qué existe.</b> Hasta aquí verificar era una acción fantasma: gastaba dinero, decidía
+    /// estados —resolvía hallazgos, abría disputas, ponía marcas de revisión— y no dejaba más rastro
+    /// que unas líneas en el historial de cada ficha. Auditar y arreglar sí dejan informe, y por
+    /// eso se pueden auditar a sí mismos meses después; verificar no, y era justo la acción cuyo
+    /// veredicto más cuesta reconstruir.
+    /// </para>
+    /// <para>
+    /// <b>Qué lleva, y por qué cada cosa.</b> Qué hallazgo, <b>qué código se le enseñó</b> —el
+    /// ancla, el símbolo o la unidad entera—, el veredicto textual del modelo, y los tokens con su
+    /// coste derivado. El «qué se le enseñó» es la pieza que nadie más guarda: sin ella, releer un
+    /// «no concluyente» no permite saber si al instrumento le faltó contexto o le faltó criterio.
+    /// </para>
+    /// </summary>
+    public static string BuildVerifyReport(
+        AppConfig? app,
+        AuditSession session,
+        IReadOnlyList<VerifyLine> lines,
+        IReadOnlyList<string> notes,
+        string? organization = null,
+        ModelRateTable? rates = null)
+    {
+        string appName = app?.Name ?? session.AppSlug;
+        var sb = new StringBuilder();
+
+        sb.AppendLine($"# Verificación — {appName}");
+        sb.AppendLine();
+        sb.AppendLine($"- **Modo**: {session.Mode}");
+        sb.AppendLine(Culture, $"- **Fecha**: {session.StartedUtc:yyyy-MM-dd HH:mm} UTC");
+        sb.AppendLine($"- **Autor**: {session.By} ({session.Machine})");
+        sb.AppendLine($"- **Commit del clon**: {session.Commit}");
+        sb.AppendLine(ProviderLine(session));
+        sb.AppendLine($"- **Modelo**: {session.Model ?? "n/d"}");
+        sb.AppendLine($"- **Hallazgos verificados**: {lines.Count}");
+        sb.AppendLine($"- **Tokens**: entrada {session.Usage.InputTokens}, salida {session.Usage.OutputTokens}"
+            + (session.Usage.CacheReadTokens > 0 || session.Usage.CacheWriteTokens > 0
+                ? $", caché lectura {session.Usage.CacheReadTokens}, escritura {session.Usage.CacheWriteTokens}"
+                : ""));
+
+        CostResult cost = CreditCalculator.Calculate(session, rates);
+        sb.AppendLine($"- **Coste**: {CreditText.OfSession(cost, session.Provider)}");
+        sb.AppendLine();
+
+        sb.AppendLine("> Verificar **juzga el código que hay ahora**. Que el código anclado haya "
+            + "desaparecido es precisamente lo que hace un arreglo, así que se le enseña al "
+            + "instrumento lo que quede —el método, su margen, o la unidad entera si cambió— y se "
+            + "le pide un veredicto sobre eso.");
+        sb.AppendLine();
+
+        AppendDirectives(sb, session);
+
+        sb.AppendLine("## Veredictos");
+        sb.AppendLine();
+
+        if (lines.Count == 0)
+        {
+            sb.AppendLine("_(ningún hallazgo llegó al instrumento; ver las notas de abajo)_");
+            sb.AppendLine();
+        }
+
+        foreach (VerifyLine line in lines)
+        {
+            sb.AppendLine($"### {line.Alias} — {line.Title}");
+            sb.AppendLine();
+            sb.AppendLine($"- **Severidad**: {line.Severity}");
+            sb.AppendLine($"- **Ubicación**: `{line.Path}:{line.Line}`");
+            sb.AppendLine($"- **Código que se le enseñó**: {BasisText(line.Basis, line.Member)}");
+            sb.AppendLine($"- **Veredicto**: {line.Verdict}");
+            sb.AppendLine();
+            sb.AppendLine(string.IsNullOrWhiteSpace(line.Evidence)
+                ? "_(sin evidencia aportada)_"
+                : "> " + line.Evidence.Trim().Replace("\n", "\n> "));
+            sb.AppendLine();
+        }
+
+        if (notes.Count > 0)
+        {
+            sb.AppendLine("## Notas de la sesión");
+            sb.AppendLine();
+            foreach (string note in notes)
+            {
+                sb.AppendLine($"- {note}");
+            }
+
+            sb.AppendLine();
+        }
+
+        Sign(sb, organization);
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Cómo se escribe el eslabón de la cadena con el que se juzgó. Se DICE, y con el nombre del
+    /// miembro cuando lo hay: «el método `Get`» pesa distinto que «la unidad entera».
+    /// </summary>
+    private static string BasisText(VerifyBasis basis, string? member) => basis switch
+    {
+        VerifyBasis.Simbolo => member is { Length: > 0 }
+            ? $"el símbolo del hallazgo, re-anclado a «{member}»"
+            : "el símbolo del hallazgo, re-anclado",
+        VerifyBasis.Unidad => "**la unidad entera**, porque ni el código anclado ni el símbolo "
+            + "seguían ahí y la unidad había cambiado",
+        _ => member is { Length: > 0 }
+            ? $"el código anclado, dentro de «{member}»"
+            : "el código anclado",
+    };
+
+    /// <summary>
     /// El informe de una sesión de ARREGLO asistido (F6.9 §5).
     /// <para>
     /// Tiene forma propia porque cuenta otra cosa: no hay unidades auditadas ni veredictos, hay
