@@ -3,6 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:c="clr-namespace:Atalaya.App.Controls"
     xmlns:services="clr-namespace:Atalaya.App.Services">
 
     <UserControl.Resources>
@@ -152,20 +153,41 @@
         </Grid.RowDefinitions>
 
         <!-- ================================ CABECERA ================================ -->
-        <Grid Grid.Row="0" Margin="0,0,0,10">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Arreglo asistido" FontSize="24" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding HeaderText}" Opacity="0.6" VerticalAlignment="Bottom" Margin="12,0,0,4" />
+        <!-- El reparto lo pone c:PageHeader: identidad a la izquierda (columna que encoge) y
+             acciones a la derecha (columna que no cede). Antes eran dos StackPanel sueltos en un
+             Grid sin columnas, que no reparte: superpone. Con el distintivo de proveedor de F16,
+             «Pausar» acabó pintado encima de «Volver al hallazgo». -->
+        <c:PageHeader Grid.Row="0" Margin="0,0,0,10">
+            <!-- Identidad. Es un Grid y no un StackPanel a propósito: un StackPanel da a sus hijos
+                 ancho infinito, así que el recorte con puntos suspensivos no llega a ocurrir nunca
+                 y el texto se sale por el borde. La columna estrella del final absorbe el hueco
+                 cuando sobra sitio, para que el distintivo y el enlace queden pegados al título. -->
+            <Grid VerticalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <!-- El subtítulo va en la columna que ENCOGE, y acotada: estrella para que se
+                         quede con lo que sobre y ceda lo que haga falta, y MaxWidth para que
+                         cuando sobre sitio no empuje al distintivo y al enlace al otro extremo. -->
+                    <ColumnDefinition Width="*" MaxWidth="260" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="Arreglo asistido" FontSize="24" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="1" Text="{Binding HeaderText}" Opacity="0.6"
+                           VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="12,0,0,4"
+                           MaxWidth="260" TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding HeaderText}" />
                 <!-- F16: la pantalla es la misma con los dos motores, así que dice cuál trabaja. -->
-                <Border Background="#18808080" CornerRadius="10" Padding="8,2" VerticalAlignment="Bottom"
-                        Margin="12,0,0,4"
+                <Border Grid.Column="2" Background="#18808080" CornerRadius="10" Padding="8,2"
+                        VerticalAlignment="Bottom" Margin="12,0,0,4"
                         Visibility="{Binding HasEngine, Converter={StaticResource BoolToVisibility}}"
                         ToolTip="El proveedor y el modelo que están haciendo este arreglo. Quedan escritos en el informe.">
-                    <TextBlock Text="{Binding EngineText}" FontSize="11.5" Opacity="0.85" />
+                    <TextBlock Text="{Binding EngineText}" FontSize="11.5" Opacity="0.85"
+                               MaxWidth="220" TextTrimming="CharacterEllipsis" />
                 </Border>
                 <!-- H9.1 §1: el camino de vuelta al hallazgo, disponible mientras haya sesión que
                      mirar —corriendo, terminada o fallida—, no solo en la pantalla de cierre. -->
-                <Button Content="{Binding BackToFindingLabel}" Command="{Binding BackToFindingCommand}"
+                <Button Grid.Column="3" Content="{Binding BackToFindingLabel}" Command="{Binding BackToFindingCommand}"
                         Style="{StaticResource LinkButton}" VerticalAlignment="Bottom" Margin="14,0,0,4"
                         FontSize="12"
                         ToolTip="Abre la ficha del hallazgo que originó este arreglo">
@@ -176,9 +198,9 @@
                         </MultiBinding>
                     </Button.Visibility>
                 </Button>
-            </StackPanel>
+            </Grid>
             <!-- Barra de acciones: pausar, descartar, detener. -->
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <ui:Button Content="{Binding PauseLabel}" Command="{Binding TogglePauseCommand}"
                            Margin="0,0,8,0"
                            ToolTip="Mientras esté en pausa no se aplicará ningún cambio ni se compilará nada. El agente puede seguir razonando."
@@ -204,7 +226,7 @@
                            ToolTip="Para al agente. Lo que ya haya aplicado se queda."
                            Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
             </StackPanel>
-        </Grid>
+        </c:PageHeader>
 
         <!-- ================================ SIN SESIÓN ================================ -->
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
