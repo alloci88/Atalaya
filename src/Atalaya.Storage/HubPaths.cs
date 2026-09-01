@@ -13,6 +13,13 @@ public sealed class HubPaths
 
     public string HubJson => Path.Combine(Root, "hub.json");
 
+    /// <summary>
+    /// F15 — las tarifas por modelo de la organización. En la RAÍZ y no dentro de cada app: un
+    /// precio no es una propiedad de la aplicación auditada, es del contrato de la organización con
+    /// su proveedor. Por app habría que corregir el mismo número N veces.
+    /// </summary>
+    public string ModelRatesJson => Path.Combine(Root, "model-rates.json");
+
     public string AppsDir => Path.Combine(Root, "apps");
 
     public string AppDir(string slug) => Path.Combine(AppsDir, slug);

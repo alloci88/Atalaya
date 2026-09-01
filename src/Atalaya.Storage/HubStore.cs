@@ -32,6 +32,21 @@ public sealed class HubStore
 
     public void WriteHub(HubInfo hub) => WriteJson(_paths.HubJson, hub, SchemaValidation.Validate);
 
+    // --- Tarifas por modelo (F15) ---
+
+    /// <summary>
+    /// La tabla de tarifas de la organización, o null si todavía no se ha sembrado. Null NO se
+    /// convierte en una tabla vacía a la ligera: «no hay tabla» y «hay tabla y está vacía» son
+    /// estados distintos, y quien pregunta tiene que poder ofrecer sembrarla.
+    /// </summary>
+    public ModelRateTable? TryReadModelRates()
+        => File.Exists(_paths.ModelRatesJson)
+            ? ReadJson<ModelRateTable>(_paths.ModelRatesJson, SchemaValidation.Validate)
+            : null;
+
+    public void WriteModelRates(ModelRateTable rates)
+        => WriteJson(_paths.ModelRatesJson, rates, SchemaValidation.Validate);
+
     // --- Apps ---
 
     public IReadOnlyList<string> ListAppSlugs()
