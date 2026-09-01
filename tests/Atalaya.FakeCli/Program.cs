@@ -167,8 +167,12 @@ public static class Program
                 // Espera a que el test cree un fichero en el directorio de la sesión. Es lo que
                 // permite escribir guiones SIN carreras: sin esto, un turno que solo dice una
                 // frase termina en microsegundos y el test no llega a tiempo de reaccionar.
+                // Un minuto de margen. No es que se espere tanto —el test crea el fichero en
+                // milisegundos—, es que con la suite entera corriendo en paralelo la maquina se
+                // satura y una espera corta convertiria una carrera perdida en un fallo de test
+                // que no habla de nada.
                 string flag = Path.Combine(_sessionDirectory ?? ".", rest);
-                for (int i = 0; i < 200 && !File.Exists(flag); i++)
+                for (int i = 0; i < 1200 && !File.Exists(flag); i++)
                 {
                     Thread.Sleep(50);
                 }
