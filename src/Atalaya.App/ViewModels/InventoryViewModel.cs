@@ -1,6 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 using Atalaya.App.Services;
 using Atalaya.App.Views;
+using Atalaya.ClaudeCode;
 using Atalaya.Domain;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
@@ -89,6 +90,14 @@ public sealed partial class InventoryViewModel : ViewModelBase
     private bool _selectionFromDrift;
 
     /// <summary>F13: la política de tamaño de la aplicación, que se edita aquí y no en Ajustes.</summary>
+    /// <summary>
+    /// Quién va a auditar, para poder DECIRLO en el diálogo de lanzamiento (F14). Es opcional
+    /// porque el inventario funciona igual sin saberlo —los tests que ejercitan la selección y el
+    /// barrido no tienen nada que decir sobre proveedores—: sin registro, el diálogo enseña lo que
+    /// enseñaba antes y no se inventa un nombre.
+    /// </summary>
+    private readonly AuditorProviderRegistry? _providers;
+
     private readonly ThresholdPolicyService _thresholds;
 
     private readonly IThresholdsDialog _thresholdsDialog;
@@ -101,8 +110,10 @@ public sealed partial class InventoryViewModel : ViewModelBase
         GovernanceService governance, IPatternSilencesDialog patternsDialog,
         DirectiveService directives, IDirectivesDialog directivesDialog,
         DriftQuery driftQuery, IDeletedUnitsDialog deletedDialog,
-        ThresholdPolicyService thresholds, IThresholdsDialog thresholdsDialog)
+        ThresholdPolicyService thresholds, IThresholdsDialog thresholdsDialog,
+        AuditorProviderRegistry? providers = null)
     {
+        _providers = providers;
         _thresholds = thresholds;
         _thresholdsDialog = thresholdsDialog;
         _driftQuery = driftQuery;
@@ -1144,7 +1155,33 @@ public sealed partial class InventoryViewModel : ViewModelBase
     /// Estima el coste de auditar esas unidades. Público para que la verificación humana y los
     /// tests puedan leer el mismo número que verá el diálogo.
     /// </summary>
-    public CostEstimate EstimateFor(int units) => _costs.Estimate(Slug, units, MaxPasses);
+    public CostEstimate EstimateFor(int units)
+        => _costs.Estimate(Slug, units, MaxPasses, _providers?.Current.ProviderId);
+
+    /// <summary>
+    /// La confirmación de un lanzamiento, con el juez de la sesión escrito en el titular (F14).
+    /// <para>
+    /// Cuando el proveedor no cobra por llamada —Claude Code— no hay dinero que prometer, así que
+    /// no se promete: se dice lo que sí se sabe, «~N llamadas · coste según tu suscripción», y se
+    /// acompaña de la salvedad de la unidad. Inventar una equivalencia con las peticiones premium
+    /// de Copilot sería fabricar una precisión que no existe.
+    /// </para>
+    /// </summary>
+    internal AuditLaunchConfirmation ConfirmationFor(int units)
+    {
+        IAuditorProvider? provider = _providers?.Current;
+        CostEstimate estimate = EstimateFor(units);
+
+        bool listPriced = estimate.CostUnit.Contains("tarifa de lista", StringComparison.OrdinalIgnoreCase)
+            || provider?.ProviderId == "claude-code";
+
+        return new AuditLaunchConfirmation(
+            AppName,
+            estimate,
+            provider?.ProviderName ?? string.Empty,
+            provider?.ModelName,
+            listPriced ? ClaudeUsage.ListPriceCaveat : null);
+    }
 
     /// <summary>
     /// Desde cuántas unidades se pregunta. Configurable por app; por defecto 3 — el clic de más
@@ -1187,7 +1224,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
 
         if (paths.Count > ConfirmThreshold)
         {
-            var confirmation = new AuditLaunchConfirmation(AppName, EstimateFor(paths.Count));
+            AuditLaunchConfirmation confirmation = ConfirmationFor(paths.Count);
             if (!_confirmer.Confirm(confirmation))
             {
                 _toasts.Show("Lanzamiento cancelado. La selección sigue como estaba.");

@@ -480,6 +480,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             Commit = GitInfo.HeadSha(_clonePath),
             CycleN = _app?.CurrentCycle ?? 0,
             Model = _agent.ModelName,
+            Provider = _agent.ProviderId,
             Interrupted = interrupted,
             // De qué hallazgo era este arreglo (H9.1 §1). Sin esto, el informe de una sesión fix
             // nombra el hallazgo en su texto pero nadie puede navegar de vuelta a su ficha.

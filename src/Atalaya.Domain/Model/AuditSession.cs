@@ -221,6 +221,17 @@ public sealed class AuditSession
     public string? Model { get; set; }
 
     /// <summary>
+    /// Con qué proveedor se auditó (F14): <c>copilot</c>, <c>claude-code</c>. Se guarda junto al
+    /// modelo porque un id de modelo no dice de quién es, y porque el COSTE de esta sesión está en
+    /// la unidad de ESTE proveedor —peticiones premium en uno, dólares de tarifa de lista en el
+    /// otro— y sumarlos daría una cifra sin significado. Métricas lo usa para no mezclarlos.
+    /// <para>
+    /// Null en toda sesión anterior a F14, y eso se lee como Copilot: era el único que había.
+    /// </para>
+    /// </summary>
+    public string? Provider { get; set; }
+
+    /// <summary>
     /// Tope de pasadas del barrido vigente cuando se ejecutó la sesión (F5.1). Es un ajuste de la
     /// máquina que lanza la auditoría, así que sin registrarlo aquí no habría forma de saber, al
     /// leer una sesión antigua, si «cobertura posiblemente incompleta» significa «el modelo no

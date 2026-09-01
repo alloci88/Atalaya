@@ -133,17 +133,36 @@ public sealed class CostEstimator
 
     public CostEstimator(HubContext hub) => _hub = hub;
 
-    /// <summary>Estima para una aplicación del hub.</summary>
-    public CostEstimate Estimate(string slug, int units, int maxPasses)
-        => Estimate(_hub.Store.ListSessions(slug), units, maxPasses);
+    /// <summary>
+    /// ¿Es esta sesión de ese proveedor? Una sesión sin proveedor escrito es anterior a F14 y por
+    /// tanto de Copilot: no había otro. Tratarla como «desconocida» dejaría a Copilot sin histórico
+    /// justo en los hubs con más historia, que es donde la estimación vale más.
+    /// </summary>
+    private static bool SameProvider(AuditSession session, string providerId)
+        => string.Equals(
+            string.IsNullOrWhiteSpace(session.Provider) ? "copilot" : session.Provider,
+            providerId,
+            StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Estima para una aplicación del hub, con el proveedor que vaya a auditar.</summary>
+    public CostEstimate Estimate(string slug, int units, int maxPasses, string? providerId = null)
+        => Estimate(_hub.Store.ListSessions(slug), units, maxPasses, providerId);
 
     /// <summary>El cálculo, sobre una lista de sesiones y nada más. Puro: se prueba sin hub.</summary>
-    public static CostEstimate Estimate(IReadOnlyList<AuditSession> sessions, int units, int maxPasses)
+    /// <param name="providerId">
+    /// Con quién se va a auditar (F14). Solo entran en la media las sesiones de ESA casa: Copilot
+    /// gastó peticiones premium y Claude Code informó dólares de tarifa de lista, así que promediar
+    /// las dos daría un número en ninguna unidad. Null = sin filtrar, que es lo que hacía antes de
+    /// que hubiera un segundo proveedor y sigue valiendo para un hub que solo tiene sesiones de una.
+    /// </param>
+    public static CostEstimate Estimate(
+        IReadOnlyList<AuditSession> sessions, int units, int maxPasses, string? providerId = null)
     {
         maxPasses = Math.Max(1, maxPasses);
 
         var measured = sessions
             .Where(s => s.UsageBreakdown.Any(u => u.Cost is not null))
+            .Where(s => providerId is null || SameProvider(s, providerId))
             .OrderByDescending(s => s.StartedUtc)
             .ToList();
 

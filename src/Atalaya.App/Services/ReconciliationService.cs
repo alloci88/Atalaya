@@ -220,7 +220,7 @@ public sealed class ReconciliationService
     /// </summary>
     private static ReconcileOutcome Dispute(Finding finding, string evidence, DetectionStamp stamp)
     {
-        finding.Dispute(stamp.Utc, stamp.By, stamp.Model, evidence);
+        finding.Dispute(stamp.Utc, stamp.By, stamp.Model, evidence, stamp.Provider);
         return ReconcileOutcome.Disputed;
     }
 

@@ -198,6 +198,19 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
     [ObservableProperty] private string _costPerUnit = string.Empty;
 
+    /// <summary>
+    /// El coste POR PROVEEDOR (F14). Es la única forma honesta de enseñarlo cuando han auditado
+    /// dos casas en el periodo: Copilot cuenta peticiones premium y Claude Code informa dólares de
+    /// tarifa de lista, y una suma de las dos no sería un gasto sino un número.
+    /// </summary>
+    public ObservableCollection<string> CostByProvider { get; } = new();
+
+    /// <summary>
+    /// Han auditado varias casas y por eso NO hay un total: el azulejo enseña el desglose. Con una
+    /// sola casa esto es false y todo se ve como siempre.
+    /// </summary>
+    [ObservableProperty] private bool _costIsMixed;
+
     [ObservableProperty] private string _cyclePct = Unknown;
 
     [ObservableProperty] private string _cycleDetail = string.Empty;
@@ -363,12 +376,23 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
         CostUnit = d.CostUnit;
         CostTotal = d.CostInPeriod is { } c ? c.ToString("0.##", CultureInfo.CurrentCulture) : Unknown;
-        CostPerUnit = d.CostInPeriod is null
-            ? "Se activará cuando alguna sesión registre coste"
-            : d.CostPerAuditedUnit is { } per
-                ? $"~{per.ToString("0.##", CultureInfo.CurrentCulture)} por unidad auditada "
-                  + $"({d.UnitsAuditedInPeriod} en el periodo)"
-                : "Sin unidades auditadas en el periodo";
+
+        CostIsMixed = d.CostIsMixed;
+        CostByProvider.Clear();
+        foreach (string line in d.CostLines)
+        {
+            CostByProvider.Add(line);
+        }
+
+        CostPerUnit = d.CostIsMixed
+            ? "Han auditado varios proveedores: sus unidades de coste no son la misma magnitud, "
+              + "así que se enseñan por separado y no se suman."
+            : d.CostInPeriod is null
+                ? "Se activará cuando alguna sesión registre coste"
+                : d.CostPerAuditedUnit is { } per
+                    ? $"~{per.ToString("0.##", CultureInfo.CurrentCulture)} por unidad auditada "
+                      + $"({d.UnitsAuditedInPeriod} en el periodo)"
+                    : "Sin unidades auditadas en el periodo";
 
         // BUGFIX-REDONDEO: con los enteros, para que 3 de 1.335 no se enseñe como «0 %».
         CyclePct = d.HasCycleData

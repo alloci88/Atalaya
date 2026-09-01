@@ -13,20 +13,69 @@ namespace Atalaya.App.ViewModels;
 /// </summary>
 public sealed class AuditLaunchConfirmation
 {
-    public AuditLaunchConfirmation(string appName, CostEstimate estimate)
+    /// <param name="providerName">
+    /// Con QUIÉN se va a auditar (F14). Va en el titular, no en la letra pequeña: desde que hay dos
+    /// proveedores, el juez de la sesión es la decisión más consecuente del lanzamiento —cambia el
+    /// criterio, la cuota que se gasta y la unidad en la que se mide— y no puede ser una sorpresa
+    /// que se descubra leyendo el informe.
+    /// </param>
+    /// <param name="modelName">
+    /// El modelo, cuando ya se sabe. Vacío significa que todavía no se ha resuelto y entonces NO se
+    /// nombra: prometer un modelo concreto y usar otro sería peor que no decirlo.
+    /// </param>
+    public AuditLaunchConfirmation(
+        string appName,
+        CostEstimate estimate,
+        string providerName = "",
+        string? modelName = null,
+        string? costCaveat = null)
     {
         AppName = appName;
         Estimate = estimate;
+        ProviderName = providerName;
+        ModelName = modelName;
+        CostCaveat = costCaveat;
     }
 
     public string AppName { get; }
 
     public CostEstimate Estimate { get; }
 
-    /// <summary>Qué se va a auditar. El número de unidades va primero: es lo que se multiplica.</summary>
-    public string Headline => AppName.Length > 0
-        ? $"Vas a auditar {Estimate.UnitsLabel} de {AppName}."
-        : $"Vas a auditar {Estimate.UnitsLabel}.";
+    /// <summary>El proveedor que va a juzgar esta sesión.</summary>
+    public string ProviderName { get; }
+
+    /// <summary>El modelo, si ya se conoce.</summary>
+    public string? ModelName { get; }
+
+    /// <summary>
+    /// La advertencia de la unidad de coste, cuando la casa la necesita (F14). Claude Code informa
+    /// tarifa de lista, que no es lo que factura su suscripción, y decirlo aquí evita que alguien
+    /// lea la cifra como dinero.
+    /// </summary>
+    public string? CostCaveat { get; }
+
+    /// <summary>
+    /// Qué se va a auditar, con quién, y con qué modelo. El número de unidades va primero —es lo
+    /// que se multiplica— y el auditor justo detrás.
+    /// </summary>
+    public string Headline
+    {
+        get
+        {
+            string what = AppName.Length > 0
+                ? $"Vas a auditar {Estimate.UnitsLabel} de {AppName}"
+                : $"Vas a auditar {Estimate.UnitsLabel}";
+
+            if (ProviderName.Length == 0)
+            {
+                return what + ".";
+            }
+
+            return string.IsNullOrWhiteSpace(ModelName)
+                ? $"{what} con {ProviderName}."
+                : $"{what} con {ProviderName} (modelo {ModelName}).";
+        }
+    }
 
     /// <summary>El tope vigente. Es un ajuste de la máquina, así que se recuerda aquí y no se supone.</summary>
     public string PassesLine => Estimate.MaxPasses == 1
@@ -48,6 +97,7 @@ public sealed class AuditLaunchConfirmation
     /// <summary>La estimación informa, no bloquea: el botón de confirmar nunca se deshabilita.</summary>
     public string Reassurance =>
         "La estimación es informativa: sale del gasto ya medido, no de una tarifa. "
+        + (CostCaveat is { Length: > 0 } caveat ? caveat + " " : string.Empty)
         + "Puedes detener la sesión en cualquier momento desde «Sesión en vivo».";
 }
 

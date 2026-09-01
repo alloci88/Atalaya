@@ -199,11 +199,28 @@
                         <ui:Card Margin="0,0,12,0">
                             <StackPanel>
                                 <TextBlock Text="Coste del periodo" Style="{StaticResource TileCaption}" />
-                                <StackPanel Orientation="Horizontal">
+
+                                <!-- F14 — con UNA casa, el total de siempre. -->
+                                <StackPanel Orientation="Horizontal"
+                                            Visibility="{Binding CostIsMixed, Converter={StaticResource InverseBoolToVisibility}}">
                                     <TextBlock Text="{Binding CostTotal}" Style="{StaticResource TileNumber}" />
                                     <TextBlock Text="{Binding CostUnit}" Style="{StaticResource TileCaption}"
                                                VerticalAlignment="Bottom" Margin="7,0,0,7" />
                                 </StackPanel>
+
+                                <!-- Con VARIAS, una línea por proveedor y NINGÚN total: peticiones
+                                     premium y dólares de tarifa de lista no son la misma magnitud,
+                                     y sumarlos daría una cifra que no significa nada. -->
+                                <ItemsControl ItemsSource="{Binding CostByProvider}" Margin="0,4,0,0"
+                                              Visibility="{Binding CostIsMixed, Converter={StaticResource BoolToVisibility}}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding}" TextWrapping="Wrap"
+                                                       FontSize="14" FontWeight="SemiBold" Margin="0,0,0,3" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
                                 <TextBlock Text="{Binding CostPerUnit}" Style="{StaticResource TileFoot}" />
                             </StackPanel>
                         </ui:Card>

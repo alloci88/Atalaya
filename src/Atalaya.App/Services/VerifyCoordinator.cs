@@ -115,7 +115,8 @@ public sealed class VerifyCoordinator
 
             Location loc = f.Locations[0];
             var stamp = new DetectionStamp(
-                utc, AuditMode.Verify, commit, by, TryHashUnit(clone, loc.Path), _agent.ModelName);
+                utc, AuditMode.Verify, commit, by, TryHashUnit(clone, loc.Path),
+                _agent.ModelName, _agent.ProviderId);
 
             VerifyAim aim = Aim(clone, f, loc, stamp);
             if (!aim.Judgeable)
@@ -210,6 +211,7 @@ public sealed class VerifyCoordinator
             Commit = commit,
             CycleN = _hub.Store.TryReadApp(slug)?.CurrentCycle ?? 1,
             Model = _agent.ModelName,
+            Provider = _agent.ProviderId,
             Usage = usage,
             Directives = directives.Records.ToList(),
         });
@@ -489,7 +491,7 @@ public sealed class VerifyCoordinator
                     break;
 
                 case "no-es-defecto":
-                    f.Dispute(stamp.Utc, stamp.By, stamp.Model, evidence);
+                    f.Dispute(stamp.Utc, stamp.By, stamp.Model, evidence, stamp.Provider);
                     note = $"{Alias(f)}: el auditor sostiene que nunca fue un defecto. Queda disputado.";
                     break;
 

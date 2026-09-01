@@ -15,13 +15,21 @@ namespace Atalaya.Domain.Model;
 /// Modelo que hizo la observación, cuando se conoce (F5.1b). Sirve para nombrar a quién discrepa
 /// cuando dos modelos se contradicen sobre el mismo hallazgo. Null si no se registró.
 /// </param>
+/// <param name="Provider">
+/// La CASA que hizo la observación (F14): <c>copilot</c>, <c>claude-code</c>. Va junto al modelo
+/// porque el modelo solo no basta para saber quién juzgó — y desde que hay dos proveedores, «dos
+/// modelos discrepan» y «dos casas discrepan» no valen lo mismo: lo segundo es una señal mucho más
+/// fuerte, porque no comparten ni entrenamiento ni criterio. Null en todo lo anterior a F14, que
+/// es Copilot.
+/// </param>
 public sealed record DetectionStamp(
     DateTimeOffset Utc,
     AuditMode Mode,
     string Commit,
     string By,
     string? UnitContentHash = null,
-    string? Model = null);
+    string? Model = null,
+    string? Provider = null);
 
 /// <summary>
 /// Una discrepancia de criterio (F5.1b): el auditor sostiene que el hallazgo NUNCA fue un defecto.
@@ -36,11 +44,18 @@ public sealed record DetectionStamp(
 /// <param name="Model">El modelo que discrepó; null si la sesión no lo registró.</param>
 /// <param name="By">El usuario en cuya sesión se produjo la discrepancia.</param>
 /// <param name="Justification">El razonamiento del auditor. Obligatorio: sin él no hay disputa.</param>
+/// <param name="Provider">
+/// La casa del que discrepó (F14). Aquí es donde más se nota: tres modelos de la MISMA casa
+/// discrepando pueden estar compartiendo el mismo punto ciego, mientras que dos casas distintas
+/// coincidiendo en que algo no es un defecto es lo más parecido a una segunda opinión que existe.
+/// Sin este campo las dos situaciones se leen igual. Null en disputas anteriores a F14.
+/// </param>
 public sealed record DisputeEntry(
     DateTimeOffset Utc,
     string? Model,
     string By,
-    string Justification);
+    string Justification,
+    string? Provider = null);
 
 /// <summary>How a finding reached <see cref="FindingStatus.Resuelto"/> (§5.7 — four vías).</summary>
 public enum ResolutionVia

@@ -205,11 +205,11 @@ public sealed partial class AccountViewModel : ViewModelBase
 
             Sync();
             StatusMessage = string.Empty;
-            await CheckConnection();
+            bool ready = await CheckConnection();
 
             // First run (D4): connect → chained verification → hub cloned → land on V1 Portfolio.
             // Zero further questions. If something failed, stay here showing which step and why.
-            if (Checker.Steps.All(s => s.State is CheckState.Ok or CheckState.Skipped))
+            if (ready)
             {
                 await _navigation.NavigateToAsync<PortfolioViewModel>();
             }
@@ -288,11 +288,18 @@ public sealed partial class AccountViewModel : ViewModelBase
 
     /// <summary>Re-runs the four checks. Absorbs the old "Comprobar Copilot" button (D2).</summary>
     [RelayCommand]
-    private async Task CheckConnection()
+    /// <summary>
+    /// Corre la cadena y devuelve si se puede trabajar. <b>Devuelve el veredicto del comprobador</b>
+    /// y no «todas las filas en verde» (F14): desde que hay dos proveedores de auditoría, que a uno
+    /// le falte algo —Claude Code sin instalar, por ejemplo— es información, no una avería, porque
+    /// se puede auditar con el otro. Contar filas dejaba el primer arranque atascado en esta
+    /// pantalla a todo el que solo tuviera Copilot, que son todos los que ya estaban.
+    /// </summary>
+    private async Task<bool> CheckConnection()
     {
         if (IsBusy)
         {
-            return;
+            return false;
         }
 
         IsBusy = true;
@@ -301,10 +308,12 @@ public sealed partial class AccountViewModel : ViewModelBase
         {
             ConnectionCheckResult result = await Checker.RunAsync(CancellationToken.None);
             StatusMessage = result.AllOk ? "Todo listo." : result.FirstProblem ?? "Revisa los pasos marcados.";
+            return result.AllOk;
         }
         catch (Exception ex)
         {
             StatusMessage = $"Error comprobando la conexión: {ex.Message}";
+            return false;
         }
         finally
         {

@@ -12,6 +12,13 @@ namespace Atalaya.App.ViewModels;
 /// Una opción del desplegable de modelos (F5.1). El precio solo aparece si el SDK lo publica:
 /// un multiplicador inventado sería peor que ninguno.
 /// </summary>
+/// <summary>
+/// Una casa entre las que elegir en Ajustes (F14). Solo el identificador y el nombre: la
+/// disponibilidad —si el CLI está, si hay sesión iniciada— se enseña en Cuenta, que es donde se
+/// arregla. Repetir aquí ese estado obligaría a mantener dos sitios diciendo lo mismo.
+/// </summary>
+public sealed record ProviderOption(string Id, string Name);
+
 public sealed record ModelOption(string Id, string Label)
 {
     public static ModelOption From(AgentModel model)
@@ -59,6 +66,13 @@ public sealed partial class SettingsViewModel : ViewModelBase
 {
     private readonly SettingsService _settings;
     private readonly IAuditorProvider _agent;
+
+    /// <summary>
+    /// Los proveedores disponibles (F14). Opcional: sin registro la página funciona como antes —un
+    /// solo auditor, el que se le inyecte— y no enseña el selector. Los tests que solo ejercitan
+    /// los ajustes numéricos no tienen por qué montar dos casas.
+    /// </summary>
+    private readonly AuditorProviderRegistry? _providers;
     private readonly ToastCenter _toasts;
     private readonly FactoryResetService _reset;
     private readonly IFactoryResetConfirmer _confirmer;
@@ -84,10 +98,12 @@ public sealed partial class SettingsViewModel : ViewModelBase
         HubContext hub,
         NavigationService navigation,
         IAboutDialog? about = null,
-        DeployConfig? deploy = null)
+        DeployConfig? deploy = null,
+        AuditorProviderRegistry? providers = null)
     {
         _settings = settings;
         _agent = agent;
+        _providers = providers;
         _toasts = toasts;
         _reset = reset;
         _confirmer = confirmer;
@@ -103,12 +119,66 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _maxPassesPerUnit = s.MaxPassesPerUnit;
         _copilotTimeoutMinutes = s.CopilotTimeoutMinutes;
         _enableAssistedFix = s.EnableAssistedFix;
-        _selectedModelId = s.CopilotModel;
+        // F14 — el proveedor elegido, y el modelo DE ESE proveedor. Los dos campos de modelo son
+        // independientes porque sus espacios de nombres no se solapan, así que ir y volver entre
+        // casas conserva las dos elecciones en vez de dejar una configurada con un id imposible.
+        _selectedProviderId = providers?.Current.ProviderId ?? string.Empty;
+        foreach (IAuditorProvider provider in providers?.All ?? Array.Empty<IAuditorProvider>())
+        {
+            Providers.Add(new ProviderOption(provider.ProviderId, provider.ProviderName));
+        }
 
-        // Hasta que el SDK conteste, el desplegable enseña el modelo configurado: así nunca está
-        // vacío ni «elige» en silencio uno distinto del que se está usando.
-        Models.Add(ModelOption.Unverified(s.CopilotModel));
+        _selectedModelId = _selectedProviderId.Length > 0
+            ? settings.ModelFor(_selectedProviderId)
+            : s.CopilotModel;
+
+        // Hasta que el proveedor conteste, el desplegable enseña el modelo configurado: así nunca
+        // está vacío ni «elige» en silencio uno distinto del que se está usando.
+        Models.Add(ModelOption.Unverified(_selectedModelId));
     }
+
+    // --- Proveedor de auditoría (F14) ---
+
+    /// <summary>
+    /// Las casas entre las que se puede elegir. Vacía cuando la página se monta sin registro, y
+    /// entonces el selector no se enseña: un desplegable con una sola opción no es una elección.
+    /// </summary>
+    public ObservableCollection<ProviderOption> Providers { get; } = new();
+
+    /// <summary>Hay algo que elegir de verdad.</summary>
+    public bool HasProviderChoice => Providers.Count > 1;
+
+    [ObservableProperty] private string _selectedProviderId;
+
+    /// <summary>
+    /// Cambiar de proveedor recarga la lista de modelos y recupera el modelo que ESA casa tenía
+    /// elegido. Sin esto, el desplegable de modelos seguiría enseñando los de la otra —y guardar
+    /// dejaría configurado un id que el proveedor nuevo no reconoce.
+    /// </summary>
+    partial void OnSelectedProviderIdChanged(string value)
+    {
+        if (_providers is null || string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        SelectedModelId = _settings.ModelFor(value);
+        Models.Clear();
+        Models.Add(ModelOption.Unverified(SelectedModelId));
+        OnPropertyChanged(nameof(ProviderNotice));
+        _ = RefreshModels();
+    }
+
+    /// <summary>
+    /// Qué significa la elección, dicho donde se toma. Las dos mitades importan: que se aplica a la
+    /// SIGUIENTE sesión —cambiarlo a mitad de un barrido cambiaría de juez sin avisar— y que es una
+    /// preferencia personal de esta máquina, no una política del equipo (F13, D-769): lo que llega
+    /// al hub no es el ajuste, es con quién se auditó aquella vez.
+    /// </summary>
+    public string ProviderNotice =>
+        "Con quién auditas TÚ, en esta máquina: cada uno usa la cuenta que tiene. Se aplica a la "
+        + "siguiente sesión, y queda escrito en ella y en su informe. El arreglo asistido sigue "
+        + "siendo de Copilot.";
 
     public override string Title => "Ajustes";
 
@@ -141,6 +211,14 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// <summary>Por qué la lista no es la del SDK (offline, sin credencial, sin asiento).</summary>
     [ObservableProperty] private string _modelsNotice = string.Empty;
 
+    /// <summary>
+    /// El proveedor cuya lista de modelos se está enseñando. Es el SELECCIONADO en la página, no
+    /// el guardado en los ajustes: cambiar el desplegable tiene que refrescar los modelos antes de
+    /// guardar nada, o se elegiría un modelo a ciegas.
+    /// </summary>
+    private IAuditorProvider CurrentProvider
+        => _providers is null ? _agent : _providers.ById(SelectedProviderId);
+
     public override Task LoadAsync() => RefreshModels();
 
     /// <summary>
@@ -162,10 +240,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
         using var timeout = new CancellationTokenSource(ModelListTimeout);
         try
         {
-            IReadOnlyList<AgentModel> models = await _agent.ListModelsAsync(timeout.Token);
+            IReadOnlyList<AgentModel> models = await CurrentProvider.ListModelsAsync(timeout.Token);
             if (models.Count == 0)
             {
-                ModelsNotice = "El SDK no devolvió ningún modelo; se mantiene el configurado.";
+                ModelsNotice = $"{CurrentProvider.ProviderName} no devolvió ningún modelo; "
+                    + "se mantiene el configurado.";
                 return;
             }
 
@@ -192,7 +271,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
-            ModelsNotice = "No se pudo obtener la lista de modelos (Copilot no respondió a tiempo). "
+            ModelsNotice = $"No se pudo obtener la lista de modelos ({CurrentProvider.ProviderName} "
+                + "no respondió a tiempo). "
                 + "Se muestra el modelo configurado.";
         }
         catch (Exception ex)
@@ -234,9 +314,28 @@ public sealed partial class SettingsViewModel : ViewModelBase
         // lanzamiento (F5.1).
         s.MaxPassesPerUnit = Floor(
             MaxPassesPerUnit, SettingsLimits.MinMaxPassesPerUnit, "el tope de pasadas", "pasada", corrections);
-        s.CopilotModel = string.IsNullOrWhiteSpace(SelectedModelId)
-            ? s.CopilotModel
-            : SelectedModelId.Trim();
+        if (!string.IsNullOrWhiteSpace(SelectedProviderId))
+        {
+            s.AuditorProvider = SelectedProviderId;
+        }
+
+        // El modelo se guarda en el campo de SU proveedor: guardar el de Claude Code encima del de
+        // Copilot dejaría a la otra casa con un id que no reconoce.
+        if (!string.IsNullOrWhiteSpace(SelectedModelId))
+        {
+            if (string.IsNullOrWhiteSpace(SelectedProviderId))
+            {
+                s.CopilotModel = SelectedModelId.Trim();
+            }
+            else if (string.Equals(SelectedProviderId, "claude-code", StringComparison.OrdinalIgnoreCase))
+            {
+                s.ClaudeCodeModel = SelectedModelId.Trim();
+            }
+            else
+            {
+                s.CopilotModel = SelectedModelId.Trim();
+            }
+        }
         s.CopilotTimeoutMinutes = Floor(
             CopilotTimeoutMinutes, SettingsLimits.MinCopilotTimeoutMinutes,
             "el timeout de Copilot", "minuto", corrections);

@@ -152,15 +152,35 @@ public sealed class Finding
     /// no se tocan. Mover cualquiera de los tres convertiría un desacuerdo en evidencia.
     /// </para>
     /// </summary>
-    public void Dispute(DateTimeOffset utc, string by, string? model, string justification)
+    /// <param name="provider">
+    /// La casa del auditor que discrepa (F14). Se guarda con la disputa porque dos casas distintas
+    /// discrepando del mismo hallazgo no vale lo mismo que dos modelos de la misma: la primera es
+    /// una segunda opinión de verdad, la segunda puede ser el mismo punto ciego dos veces.
+    /// </param>
+    public void Dispute(
+        DateTimeOffset utc, string by, string? model, string justification, string? provider = null)
     {
         string reason = string.IsNullOrWhiteSpace(justification)
             ? "sin razonamiento aportado"
             : justification.Trim();
-        Disputes.Add(new DisputeEntry(utc, model, by, reason));
+        Disputes.Add(new DisputeEntry(utc, model, by, reason, provider));
         History.Add(new HistoryEntry(utc, FindingEvent.Disputed, by,
-            $"no-es-defecto según {model ?? "el auditor"}: {reason}"));
+            $"no-es-defecto según {Who(model, provider)}: {reason}"));
     }
+
+    /// <summary>
+    /// Cómo se nombra a quien juzgó, en una línea de historial. Con las dos cosas cuando se saben
+    /// —«gpt-5 (GitHub Copilot)»— porque un id de modelo suelto no dice de quién es, y el historial
+    /// lo lee una persona meses después.
+    /// </summary>
+    private static string Who(string? model, string? provider)
+        => (model, provider) switch
+        {
+            ({ Length: > 0 }, { Length: > 0 }) => $"{model} ({provider})",
+            ({ Length: > 0 }, _) => model!,
+            (_, { Length: > 0 }) => provider!,
+            _ => "el auditor",
+        };
 
     /// <summary>
     /// Cierra la disputa dejando el hallazgo en pie: una persona ha decidido que SÍ es un defecto

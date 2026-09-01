@@ -119,6 +119,24 @@ public sealed record SessionRow(
     decimal? Cost,
     string CostUnit);
 
+/// <summary>
+/// Lo que costó UN proveedor en el periodo, en SU unidad (F14).
+/// <para>
+/// Existe porque los dos proveedores no cuentan lo mismo: Copilot factura peticiones premium con
+/// multiplicador y Claude Code informa dólares de tarifa de lista que su suscripción no cobra por
+/// llamada. Sumarlos daría un número que no significa nada y que además parecería dinero. Así que
+/// no se suman: se enseñan uno al lado del otro, cada uno con su unidad pegada.
+/// </para>
+/// </summary>
+public sealed record ProviderCost(
+    string ProviderId, string ProviderName, decimal? Cost, string CostUnit, int Sessions)
+{
+    /// <summary>La línea que se lee en el panel: «GitHub Copilot · 850 unidades SDK».</summary>
+    public string Line => Cost is { } c
+        ? $"{ProviderName} · {c.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture)} {CostUnit}"
+        : $"{ProviderName} · coste no informado por el proveedor";
+}
+
 /// <summary>Una opción del selector de aplicación.</summary>
 public sealed record AppOption(string? Slug, string Name)
 {
@@ -143,6 +161,7 @@ public sealed record MetricsDashboard(
     decimal? CostInPeriod,
     string CostUnit,
     decimal? CostPerAuditedUnit,
+    IReadOnlyList<ProviderCost> CostByProvider,
     int UnitsAuditedInPeriod,
     int CycleAudited,
     int CyclePending,
@@ -187,6 +206,18 @@ public sealed record MetricsDashboard(
     /// declararlo), y sin ella la gráfica de coste no puede dibujar nada honesto.
     /// </summary>
     public bool HasCost => CostInPeriod is not null;
+
+    /// <summary>
+    /// En el periodo ha auditado más de una casa, así que NO hay un total que enseñar (F14): sus
+    /// unidades no son la misma magnitud. El panel enseña entonces el desglose y ningún total.
+    /// </summary>
+    public bool CostIsMixed => CostByProvider.Count > 1;
+
+    /// <summary>
+    /// El coste, listo para leer. Con un solo proveedor es el total de siempre; con varios son sus
+    /// líneas, una por casa. Nunca una suma de unidades distintas.
+    /// </summary>
+    public IReadOnlyList<string> CostLines => CostByProvider.Select(p => p.Line).ToList();
 
     /// <summary>El delta del tile de resueltos: positivo = mejor que el periodo anterior.</summary>
     public int ResolvedDelta => ResolvedInPeriod - ResolvedPreviousPeriod;
@@ -293,7 +324,13 @@ public sealed class MetricsQuery
 
         // TODA sesión con coste cuenta: auditoría, arreglo, verificación y lo que venga. El tile
         // y la gráfica salen de la MISMA función (CostIn), no de dos sumas parecidas.
-        decimal? cost = inPeriod.Any(s => s.Usage.Cost is not null)
+        // F14 — el coste se agrupa POR PROVEEDOR antes de sumar nada. Copilot cuenta peticiones
+        // premium y Claude Code informa dólares de tarifa de lista: son magnitudes distintas, y
+        // una suma de las dos no es un gasto, es un número. El desglose es siempre la verdad; el
+        // total de una sola cifra solo existe cuando hay una sola casa detrás.
+        IReadOnlyList<ProviderCost> byProvider = CostByProvider(inPeriod);
+
+        decimal? cost = byProvider.Count == 1 && inPeriod.Any(s => s.Usage.Cost is not null)
             ? scope.Sum(a => CostIn(a.Sessions, from, to))
             : null;
         int unitsAudited = inPeriod.Sum(s => s.Units.Count);
@@ -303,10 +340,14 @@ public sealed class MetricsQuery
         // ratio sin que cambiara nada de lo auditado (28/08/2026: 262,5 por unidad cuando auditar
         // esa unidad había costado 105). El tile de coste los sigue sumando —eso es el gasto—;
         // lo que no se puede es repartirlos entre algo que no produjeron.
-        decimal auditCost = inPeriod.Where(s => s.Units.Count > 0).Sum(CostOf);
-        string costUnit = inPeriod
-            .Select(s => s.Usage.Currency)
-            .FirstOrDefault(c => !string.IsNullOrWhiteSpace(c)) ?? CostEstimator.DefaultCostUnit;
+        // El ratio por unidad se calcula solo si hay UNA unidad de coste: dividir una suma mixta
+        // entre unidades daría una precisión inventada.
+        decimal auditCost = byProvider.Count == 1
+            ? inPeriod.Where(s => s.Units.Count > 0).Sum(CostOf)
+            : 0m;
+        string costUnit = byProvider.Count == 1
+            ? byProvider[0].CostUnit
+            : CostEstimator.DefaultCostUnit;
 
         int cycleAudited = 0;
         int cyclePending = 0;
@@ -355,6 +396,7 @@ public sealed class MetricsQuery
             cost,
             costUnit,
             unitsAudited > 0 && auditCost > 0m ? auditCost / unitsAudited : null,
+            byProvider,
             unitsAudited,
             cycleAudited,
             cyclePending,
@@ -528,6 +570,45 @@ public sealed class MetricsQuery
     /// las dos gráficas no pueden discrepar en cómo agrupan.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// Agrupa las sesiones del periodo por proveedor, cada una con SU unidad de coste (F14).
+    /// <para>
+    /// Las sesiones anteriores a F14 no llevan proveedor escrito, y eso NO es un dato que falte:
+    /// era Copilot, porque no había otro. Se les asigna esa casa en vez de inventar una categoría
+    /// «desconocido» que solo conseguiría partir el histórico en dos.
+    /// </para>
+    /// </summary>
+    private static IReadOnlyList<ProviderCost> CostByProvider(IReadOnlyList<AuditSession> sessions)
+        => sessions
+            .Where(s => s.Usage.Cost is not null)
+            .GroupBy(s => string.IsNullOrWhiteSpace(s.Provider) ? LegacyProviderId : s.Provider!,
+                     StringComparer.OrdinalIgnoreCase)
+            .Select(g => new ProviderCost(
+                g.Key,
+                ProviderDisplayName(g.Key),
+                g.Sum(s => s.Usage.Cost ?? 0m),
+                g.Select(s => s.Usage.Currency)
+                    .FirstOrDefault(c => !string.IsNullOrWhiteSpace(c)) ?? CostEstimator.DefaultCostUnit,
+                g.Count()))
+            .OrderBy(p => p.ProviderName, StringComparer.CurrentCulture)
+            .ToList();
+
+    /// <summary>Lo que era toda sesión antes de que hubiera un segundo proveedor.</summary>
+    private const string LegacyProviderId = "copilot";
+
+    /// <summary>
+    /// El nombre legible de un identificador guardado. Se resuelve aquí, con una tabla mínima, y no
+    /// preguntándole al registro de proveedores: Métricas lee sesiones de hace meses y tiene que
+    /// poder nombrar una casa aunque esta versión ya no la traiga. Lo que no conoce lo enseña tal
+    /// cual, que es más honesto que dejarlo en blanco.
+    /// </summary>
+    private static string ProviderDisplayName(string providerId) => providerId.ToLowerInvariant() switch
+    {
+        "copilot" => "GitHub Copilot",
+        "claude-code" => "Claude Code",
+        _ => providerId,
+    };
+
     private static (IReadOnlyList<string> Series, bool HasOthers) TopSeries(
         IReadOnlyList<AppData> scope, Func<AppData, decimal> totalOf)
     {

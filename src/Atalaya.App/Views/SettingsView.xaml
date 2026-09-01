@@ -144,6 +144,34 @@
                         Style="{StaticResource FieldHelp}" />
                 </Grid>
 
+                <!-- F14 — con quién auditas. Va JUSTO ENCIMA del modelo porque lo condiciona:
+                     cambiar de casa recarga la lista de modelos y recupera el que esa casa tenía
+                     elegido. El estado de cada proveedor (instalado, con sesión) se ve en Cuenta,
+                     que es donde se arregla; aquí solo se elige. -->
+                <Grid Style="{StaticResource FieldRow}"
+                      Visibility="{Binding HasProviderChoice, Converter={StaticResource BoolToVisibility}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Proveedor de auditoría" Style="{StaticResource FieldLabel}" />
+                    <ComboBox
+                        Grid.Row="0" Grid.Column="1"
+                        ItemsSource="{Binding Providers}"
+                        SelectedValue="{Binding SelectedProviderId}"
+                        SelectedValuePath="Id"
+                        DisplayMemberPath="Name"
+                        Width="260" HorizontalAlignment="Left" />
+                    <TextBlock
+                        Grid.Row="1" Grid.Column="1"
+                        Text="{Binding ProviderNotice}"
+                        Style="{StaticResource FieldHelp}" />
+                </Grid>
+
                 <Grid Style="{StaticResource FieldRow}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="220" />
@@ -154,7 +182,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Modelo de Copilot" Style="{StaticResource FieldLabel}" />
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Modelo del auditor" Style="{StaticResource FieldLabel}" />
                     <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
                         <ComboBox
                             ItemsSource="{Binding Models}"
@@ -166,7 +194,7 @@
                     </StackPanel>
                     <TextBlock
                         Grid.Row="1" Grid.Column="1"
-                        Text="La lista la publica el SDK de Copilot para tu cuenta; el multiplicador de coste aparece cuando el SDK lo da. Aplica a las sesiones que lances a partir de ahora, sin reiniciar, y queda registrado en el informe."
+                        Text="Los modelos del proveedor elegido arriba: Copilot los publica para tu cuenta con su multiplicador de coste cuando lo da, y Claude Code ofrece sus alias de familia, que siempre apuntan al último modelo de cada una. Cada proveedor recuerda el suyo. Aplica a las sesiones que lances a partir de ahora, sin reiniciar, y queda registrado en el informe."
                         Style="{StaticResource FieldHelp}" />
                     <TextBlock
                         Grid.Row="2" Grid.Column="1"

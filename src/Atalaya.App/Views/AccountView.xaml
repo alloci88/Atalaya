@@ -12,7 +12,7 @@
             <!-- ============ DESCONECTADO: bienvenida + un botón ============ -->
             <StackPanel Visibility="{Binding IsDisconnected, Converter={StaticResource BoolToVisibility}}">
                 <TextBlock
-                    Text="Conecta tu cuenta de GitHub de la organización; con ella accedes al hub de auditorías y a tu asiento de Copilot."
+                    Text="Conecta tu cuenta de GitHub de la organización: es la que te da identidad, autoría y acceso al hub de auditorías, y hace falta audites con quien audites. Con ella entra además tu asiento de Copilot."
                     TextWrapping="Wrap" Opacity="0.9" Margin="0,0,0,20" FontSize="15" />
 
                 <ui:Button
@@ -101,6 +101,12 @@
                 </Border>
 
                 <TextBlock Text="Estado de la conexión" FontWeight="SemiBold" Margin="0,0,0,8" />
+                <!-- F14 — la pantalla no puede sugerir que elegir otro auditor sustituya a GitHub:
+                     identidad, autoría y hub lo necesitan siempre. Las tres primeras filas son de
+                     GitHub; las de abajo, una por proveedor de auditoría. -->
+                <TextBlock
+                    Text="Las tres primeras son de GitHub y no se sustituyen: sin ellas no hay identidad, ni autoría, ni hub donde escribir. Debajo, un auditor por proveedor: basta con tener uno listo para poder auditar, y cuál se usa se elige en Ajustes."
+                    TextWrapping="Wrap" Opacity="0.75" FontSize="12" Margin="0,0,0,10" />
                 <ItemsControl ItemsSource="{Binding Checker.Steps}" Margin="0,0,0,14">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>

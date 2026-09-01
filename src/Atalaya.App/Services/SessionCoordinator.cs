@@ -263,6 +263,7 @@ public sealed class SessionCoordinator
             Commit = commit,
             CycleN = app.CurrentCycle,
             Model = _agent.ModelName,
+            Provider = _agent.ProviderId,
             MaxPassesPerUnit = Math.Max(1, _settings.Current.MaxPassesPerUnit),
         };
 
@@ -369,7 +370,8 @@ public sealed class SessionCoordinator
 
         // El modelo va en el sello (F5.1b): es quien hace la observación, y hace falta para poder
         // nombrar a quién discrepa cuando dos modelos se contradicen sobre el mismo hallazgo.
-        var stamp = new DetectionStamp(now, request.Mode, commit, by, Model: _agent.ModelName);
+        var stamp = new DetectionStamp(
+            now, request.Mode, commit, by, Model: _agent.ModelName, Provider: _agent.ProviderId);
 
         // Los tipos de problema silenciados en ESTA app (F5.12), congelados al arrancar: los
         // mismos en el prompt de todas las unidades y en la lectura de lo que el auditor declara.
