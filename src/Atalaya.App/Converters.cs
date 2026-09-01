@@ -137,6 +137,9 @@ public sealed class CheckStateToGlyphConverter : IValueConverter
         CheckState.Ok => "✓",
         CheckState.Failed => "✕",
         CheckState.Running => "…",
+        // F14 (adenda): un extra disponible se marca con un signo NEUTRO. Ni ✓ —no está activado—
+        // ni ✕ —no falta nada—: es información, y el glifo tiene que leerse como tal.
+        CheckState.Optional => "+",
         _ => "•",
     };
 
@@ -152,6 +155,9 @@ public sealed class CheckStateToBrushConverter : IValueConverter
         CheckState.Ok => new SolidColorBrush(Color.FromRgb(0x3F, 0xB9, 0x50)),
         CheckState.Failed => new SolidColorBrush(Color.FromRgb(0xE0, 0x50, 0x50)),
         CheckState.Running => new SolidColorBrush(Color.FromRgb(0xE0, 0xA0, 0x30)),
+        // Gris, como el estado en reposo: lo opcional no llama la atención. Pintarlo de ámbar lo
+        // convertiría en una tarea pendiente, que es justo lo que no es.
+        CheckState.Optional => new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
         _ => new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
     };
 

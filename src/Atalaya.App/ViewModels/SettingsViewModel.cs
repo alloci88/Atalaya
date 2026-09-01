@@ -122,8 +122,13 @@ public sealed partial class SettingsViewModel : ViewModelBase
         // F14 — el proveedor elegido, y el modelo DE ESE proveedor. Los dos campos de modelo son
         // independientes porque sus espacios de nombres no se solapan, así que ir y volver entre
         // casas conserva las dos elecciones en vez de dejar una configurada con un id imposible.
+        // Solo los SELECCIONABLES (F14, adenda): Copilot siempre, y los opcionales únicamente si
+        // están instalados. Ofrecer una casa que no está en la máquina sería un desplegable con una
+        // opción que no funciona, y para quien no use Claude Code el selector ni siquiera aparece
+        // —con una sola opción no hay nada que elegir—, que es lo que la regla pide: ninguna
+        // exigencia y ninguna merma para quien no lo tenga.
         _selectedProviderId = providers?.Current.ProviderId ?? string.Empty;
-        foreach (IAuditorProvider provider in providers?.All ?? Array.Empty<IAuditorProvider>())
+        foreach (IAuditorProvider provider in providers?.Selectable ?? Array.Empty<IAuditorProvider>())
         {
             Providers.Add(new ProviderOption(provider.ProviderId, provider.ProviderName));
         }

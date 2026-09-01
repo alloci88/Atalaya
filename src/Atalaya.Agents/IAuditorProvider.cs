@@ -82,6 +82,32 @@ public interface IAuditorProvider
     /// <summary>Cómo se llama para una persona: «GitHub Copilot», «Claude Code».</summary>
     string ProviderName => ProviderId;
 
+    /// <summary>
+    /// Este proveedor es un EXTRA: no se le exige a nadie (F14, adenda).
+    /// <para>
+    /// Copilot es el requisito del equipo y el proveedor por defecto; Claude Code es opcional
+    /// SIEMPRE. La diferencia no es cosmética, es una regla de producto: quien no lo tenga
+    /// instalado <b>no ve ningún aviso, ninguna exigencia y ninguna merma</b>. La aplicación se
+    /// comporta exactamente igual que antes de que existiera.
+    /// </para>
+    /// <para>
+    /// Un proveedor opcional que no está en la máquina no es un fallo que reportar: es una
+    /// capacidad que no se ha activado. Pintarlo en rojo convertiría en deuda de cada usuario algo
+    /// que nadie le ha pedido.
+    /// </para>
+    /// </summary>
+    bool IsOptional => false;
+
+    /// <summary>
+    /// ¿Está en esta máquina? Comprobación <b>barata</b>: sin red, sin credenciales y sin gastar
+    /// cuota — un vistazo al PATH, o nada en el caso de quien viaja dentro de la aplicación.
+    /// <para>
+    /// Es distinta de <see cref="CheckAsync"/>, que además pregunta por la sesión iniciada y lanza
+    /// un proceso. Ésta se puede llamar al pintar una pantalla; aquélla no.
+    /// </para>
+    /// </summary>
+    bool IsPresent => true;
+
     /// <summary>Model in use, if known (for session records).</summary>
     string? ModelName { get; }
 

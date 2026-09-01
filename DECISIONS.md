@@ -8781,7 +8781,7 @@ Code**, y las tres en el arranque, antes de la primera llamada al modelo:
    de «no hay CLI» encontraba el instalado en la máquina y probaba lo contrario de lo que decía
    probar. Ahora el localizador inyectado **manda**, incluso devolviendo null.
 
-### D-783 — Cobertura (76 tests nuevos, 1.661 en total, todo en verde)
+### D-783 — Cobertura (80 tests nuevos, 1.665 en total, todo en verde)
 
 - **El servidor MCP** sobre streams: handshake, catálogo, llamadas, y los errores que NO tiran la
   conexión —una tool que revienta, un nombre que no existe, una línea ilegible, un método
@@ -8801,6 +8801,10 @@ Code**, y las tres en el arranque, antes de la primera llamada al modelo:
   desconocido cae a Copilot, que la sesión registra proveedor y modelo, que con dos casas no hay
   total ni ratio, que las sesiones de antes de F14 cuentan como Copilot, que la estimación no
   promedia entre casas, que el diálogo nombra al juez, y que Cuenta pone GitHub primero.
+- **La opcionalidad, en un test que la fija entera** (D-784): sin el CLI de Claude en la máquina,
+  Cuenta informa y no alerta, Ajustes ofrece solo Copilot y ni enseña el selector, y ningún flujo se
+  degrada — ni siquiera con el ajuste apuntando al que ya no está. Más el que exige que a un extra
+  ausente **no se le pregunte** ni una vez.
 
 **Verificación de punta a punta contra el CLI REAL**, con el proveedor de producción entero
 (localizador → auth → tubería → puente → servidor MCP → toolbox): una unidad sembrada auditada
@@ -8808,6 +8812,50 @@ Code**, y las tres en el arranque, antes de la primera llamada al modelo:
 reconciliado como `presente` con evidencia, `unit_done` llamada, y después una verificación que
 devolvió `resuelto` citando el código arreglado. El uso llegó con su unidad puesta.
 
+### D-784 — Claude Code es OPCIONAL, siempre, y eso es una regla y no un ajuste
+
+Copilot es el proveedor por defecto y **el único requisito del equipo**. Claude Code es un extra
+que da una bolsa de cuota independiente a quien lo tenga; a quien no, **no se le pide nada ni se le
+recorta nada**. Para quien no lo instale, la aplicación se comporta **exactamente igual que antes
+de que existiera**.
+
+Es una regla de producto, no un detalle de interfaz: convertir en deuda de cada usuario una
+capacidad que nadie le ha pedido es la forma más rápida de que un aviso legítimo deje de leerse.
+Un piloto en rojo enseña a ignorar los pilotos en rojo.
+
+**Vive en la interfaz del proveedor y no en un `if` por nombre**: `IsOptional` (por defecto
+`false`, así que Copilot y los dobles de test no cambian) e `IsPresent`, una comprobación **barata**
+—un vistazo al PATH— que se puede llamar al pintar una pantalla, a diferencia de `CheckAsync`, que
+lanza un proceso. Un tercer proveedor futuro decide de qué lado cae sin tocar nada de lo de abajo.
+
+Las tres mitades de la regla, y las tres con test:
+
+- **Cuenta informa, no alerta.** Estado propio, `CheckState.Optional`: glifo `+` y gris, el mismo
+  del reposo. Ni `Ok` —no está activado— ni `Failed` —no falta nada—. No es `Skipped` porque
+  `Skipped` se esconde y esto **sí se enseña**: la gracia es que quien quiera el extra sepa que
+  está ahí. La fila no lleva enlace de ayuda, porque no hay nada que ir a arreglar.
+  Se declara **al empezar la comprobación y no dentro del bucle**, porque no depende de GitHub: que
+  Claude Code esté instalado o no es independiente de que haya cuenta conectada, y meterlo en el
+  bucle hacía que un fallo de autenticación lo marcara «no aplicable» — otra forma de contar algo
+  que no es.
+- **A un extra ausente no se le pregunta.** Ni se lanza su proceso: sería gasto por nada, en una
+  pantalla que se abre a menudo. Un test cuenta las veces que se le interroga y exige **cero**.
+- **Ajustes no ofrece lo que no está.** El desplegable se puebla de `Selectable` —los no opcionales
+  más los opcionales presentes—, así que sin el CLI solo aparece Copilot y **el selector no se
+  enseña**: con una sola opción no hay nada que elegir.
+
+Y la red de seguridad, para el peor momento posible: si el proveedor **elegido** es opcional y ya
+no está —lo desinstalaron, cambió el PATH—, `Current` vuelve al de fábrica. Un ajuste guardado hace
+semanas no puede dejar a nadie sin poder auditar hoy.
+
+**Un defecto encontrado por el camino.** `SkipRest` enumeraba las claves de las filas a mano —
+`"org"`, `"hub"`, `"copilot"`— y al pasar a una fila por proveedor esa última clave dejó de
+existir: la pantalla Cuenta reventaba con «Sequence contains no matching element» **en el caso más
+común de todos**, abrirla sin cuenta conectada. Ahora se recorre lo que hay en vez de nombrarlo:
+una lista de claves paralela a las filas es una lista que se queda vieja.
+
 **Caso de aceptación humano, que sigue siendo del usuario**: Ajustes → Claude Code → auditar 2
 unidades del banco → hallazgos con sus severidades y reconciliación normal → verificar uno. El
-mismo recorrido de siempre con el otro auditor.
+mismo recorrido de siempre con el otro auditor. Y su reverso, que es el que protege a todo el
+equipo: en una máquina **sin** Claude Code instalado, abrir Cuenta y Ajustes y comprobar que no
+hay nada nuevo que atender.

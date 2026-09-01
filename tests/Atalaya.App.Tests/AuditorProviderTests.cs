@@ -1,6 +1,7 @@
 using Atalaya.Agents;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
+using Atalaya.App.Views;
 using Atalaya.ClaudeCode;
 using Atalaya.Copilot;
 using Atalaya.Domain;
@@ -271,7 +272,147 @@ public sealed class AuditorProviderTests : IDisposable
         checker.Steps.Last().Title.Should().Be("Claude Code disponible");
     }
 
+    // ================================================================ 6 · Claude Code es OPCIONAL
+
+    /// <summary>
+    /// <b>La regla, entera y en un solo test.</b> Sin el CLI de Claude en la máquina —que es la
+    /// situación de todo el equipo hoy— la aplicación se comporta <b>exactamente como antes de que
+    /// existiera</b>: Cuenta informa sin alertar, Ajustes ofrece solo Copilot, y ningún flujo se
+    /// degrada.
+    /// <para>
+    /// Es una regla de producto y no un detalle de interfaz: Copilot es el requisito del equipo y
+    /// Claude Code un extra que cada uno activa si quiere. Convertir en deuda de cada usuario algo
+    /// que nadie le ha pedido es la forma más rápida de que un aviso legítimo deje de leerse.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Sin_Claude_Code_instalado_la_aplicacion_no_reclama_nada_y_no_pierde_nada()
+    {
+        AuditorProviderRegistry registry = RegistryWithoutClaude();
+
+        // --- 1. Cuenta INFORMA, no alerta -------------------------------------------------
+        var checker = new ConnectionChecker(
+            TestFactory.Account(_paths),
+            new GitHubApiClient(new System.Net.Http.HttpClient()),
+            DeployConfig.Load(),
+            _hub,
+            registry);
+
+        await checker.RunAsync(CancellationToken.None);
+
+        ConnectionStep fila = checker.Steps.Single(s => s.Key == "provider:claude-code");
+
+        fila.State.Should().Be(CheckState.Optional,
+            "un extra que no se ha activado no es un fallo, y no se pinta como tal");
+        fila.State.Should().NotBe(CheckState.Failed);
+        fila.IsVisible.Should().BeTrue("se enseña: la gracia es que quien lo quiera sepa que existe");
+        fila.HelpUrl.Should().BeNull("no hay nada que ir a arreglar");
+        fila.Detail.Should().Contain("no hace falta");
+        fila.Title.Should().Contain("opcional");
+
+        // --- 2. Ajustes ofrece SOLO Copilot como seleccionable ----------------------------
+        registry.Selectable.Should().ContainSingle()
+            .Which.ProviderId.Should().Be("copilot");
+
+        SettingsViewModel ajustes = Settings(registry);
+
+        ajustes.Providers.Select(p => p.Id).Should().Equal("copilot");
+        ajustes.HasProviderChoice.Should().BeFalse(
+            "con una sola opción no hay nada que elegir: el selector ni se enseña");
+
+        // --- 3. Ningún flujo se degrada ---------------------------------------------------
+        registry.Current.ProviderId.Should().Be("copilot");
+
+        // Y ni siquiera con el ajuste apuntando a Claude: un ajuste guardado hace semanas no puede
+        // dejar a nadie sin poder auditar hoy.
+        Save(s => s.AuditorProvider = "claude-code");
+        registry.Current.ProviderId.Should().Be("copilot",
+            "si el opcional ya no está, se vuelve al de fábrica en vez de romper la sesión");
+    }
+
+    /// <summary>
+    /// Y a un proveedor opcional ausente ni siquiera se le pregunta: lanzar su proceso para
+    /// confirmar lo que ya sabemos sería gasto por nada, y en una pantalla que se abre a menudo.
+    /// </summary>
+    [Fact]
+    public async Task A_un_proveedor_opcional_ausente_no_se_le_pregunta_siquiera()
+    {
+        var claude = new NamedAgent("claude-code", "Claude Code", "opus")
+        {
+            Optional = true,
+            Present = false,
+        };
+
+        var checker = new ConnectionChecker(
+            TestFactory.Account(_paths),
+            new GitHubApiClient(new System.Net.Http.HttpClient()),
+            DeployConfig.Load(),
+            _hub,
+            new AuditorProviderRegistry(_settings, new IAuditorProvider[]
+            {
+                new NamedAgent(RealCopilotAgent.Id, "GitHub Copilot", "gpt-x"),
+                claude,
+            }));
+
+        await checker.RunAsync(CancellationToken.None);
+
+        claude.Checks.Should().Be(0, "no se lanza un proceso para confirmar lo que ya se sabe");
+    }
+
+    /// <summary>
+    /// Con el CLI presente, en cambio, el extra se ofrece con normalidad: la regla quita la
+    /// exigencia, no la capacidad.
+    /// </summary>
+    [Fact]
+    public void Con_Claude_Code_instalado_el_extra_se_ofrece_con_normalidad()
+    {
+        AuditorProviderRegistry registry = Registry();
+
+        registry.Selectable.Select(p => p.ProviderId).Should().Equal("copilot", "claude-code");
+        Settings(registry).HasProviderChoice.Should().BeTrue();
+    }
+
+    /// <summary>Copilot NO es opcional: es el requisito, y su fallo sí es un fallo.</summary>
+    [Fact]
+    public void Copilot_no_es_opcional()
+    {
+        new NamedAgent(RealCopilotAgent.Id, "GitHub Copilot", "gpt-x").IsOptional.Should().BeFalse();
+        new ClaudeCodeProvider("puente.exe", locator: () => null).IsOptional.Should().BeTrue();
+    }
+
     // ================================================================ ayudas
+
+    /// <summary>Lo que tiene HOY todo el equipo: Copilot, y Claude Code sin instalar.</summary>
+    private AuditorProviderRegistry RegistryWithoutClaude()
+        => new(_settings, new IAuditorProvider[]
+        {
+            new NamedAgent(RealCopilotAgent.Id, "GitHub Copilot", "gpt-x"),
+            new NamedAgent(ClaudeCodeProvider.Id, "Claude Code", "opus") { Optional = true, Present = false },
+        });
+
+    private SettingsViewModel Settings(AuditorProviderRegistry registry)
+        => new(
+            _settings,
+            registry.Fallback,
+            new ToastCenter(),
+            new FactoryResetService(
+                _hub, _paths, _settings, TestFactory.Account(_paths), new OpenSessionStore(_paths)),
+            new NeverResets(),
+            _hub,
+            new NavigationService(new NoServices()),
+            about: null,
+            deploy: null,
+            providers: registry);
+
+    private sealed class NeverResets : IFactoryResetConfirmer
+    {
+        public bool Confirm(FactoryResetConfirmation confirmation) => false;
+    }
+
+    private sealed class NoServices : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => null;
+    }
 
     private AuditorProviderRegistry Registry()
         => new(_settings, new IAuditorProvider[]
@@ -339,6 +480,19 @@ public sealed class AuditorProviderTests : IDisposable
 
         public string ProviderName { get; }
 
+        /// <summary>Si este doble hace de extra opcional.</summary>
+        public bool Optional { get; init; }
+
+        /// <summary>Si está en la máquina. Un opcional ausente no debe interrogarse.</summary>
+        public bool Present { get; init; } = true;
+
+        public bool IsOptional => Optional;
+
+        public bool IsPresent => Present;
+
+        /// <summary>Cuántas veces se le ha preguntado por su estado. Debe ser 0 si es opcional y no está.</summary>
+        public int Checks { get; private set; }
+
         public string? ModelName => _model;
 
         public event Action<string>? TextStreamed;
@@ -348,7 +502,10 @@ public sealed class AuditorProviderTests : IDisposable
         public Task<bool> EnsureReadyAsync(CancellationToken ct) => Task.FromResult(true);
 
         public Task<AgentReadiness> CheckAsync(CancellationToken ct)
-            => Task.FromResult(new AgentReadiness(true, $"{ProviderName} listo."));
+        {
+            Checks++;
+            return Task.FromResult(new AgentReadiness(true, $"{ProviderName} listo."));
+        }
 
         public Task<IReadOnlyList<AgentModel>> ListModelsAsync(CancellationToken ct)
             => Task.FromResult<IReadOnlyList<AgentModel>>(new[] { new AgentModel(_model, _model) });

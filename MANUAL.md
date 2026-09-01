@@ -480,7 +480,11 @@ fallo de conexión.
 Las tres primeras filas son de **GitHub y no se sustituyen nunca**: sin ellas no hay identidad, ni
 autoría de los commits, ni hub donde escribir los hallazgos. Debajo hay **una fila por proveedor de
 auditoría**, cada una con su propio piloto y su propia instrucción si falta algo. **Basta con tener
-uno listo** para poder auditar: que el otro no esté instalado es información, no una avería.
+uno listo** para poder auditar.
+
+Un proveedor **opcional** que no tengas instalado —hoy, Claude Code— sale con un `+` gris y la
+palabra «opcional»: te dice que existe y cómo activarlo si te interesa, y ahí acaba. **No es un
+fallo**, no se pinta como tal y no impide nada.
 
 ### Ajustes
 
@@ -532,6 +536,14 @@ Atalaya sabe auditar con **dos casas distintas**, y tú eliges con cuál. Antes 
 cuando la organización agotaba su cuota de Copilot todo el mundo se quedaba parado; ahora hay una
 segunda bolsa, independiente. De propina te da algo que no se podía tener con una sola: **una
 segunda opinión de verdad**.
+
+> **Claude Code es opcional. Siempre.**
+> **Copilot** es el proveedor por defecto y el único requisito del equipo. Si no tienes Claude Code
+> instalado —que es la situación normal— **no verás ningún aviso, ninguna exigencia ni ninguna
+> merma**: la aplicación se comporta exactamente igual que antes de que esto existiera. El piloto
+> de Claude Code en **Cuenta** te informa de que hay un extra disponible; no te reclama nada, no se
+> pinta en rojo y no bloquea nada. Y si no está instalado, **Ajustes no te ofrece elegirlo**: con
+> una sola opción no hay selector que enseñar.
 
 | | **GitHub Copilot** | **Claude Code** |
 | --- | --- | --- |
@@ -604,7 +616,7 @@ y Atalaya prefiere decirlo a inventarse una equivalencia.
 
 | Lo que ves en **Cuenta** | Qué pasa | Qué hacer |
 | --- | --- | --- |
-| «Claude Code no está instalado» | El CLI no está en esta máquina | Instálalo e inicia sesión en tu terminal |
+| «Claude Code · opcional» (en gris) | No lo tienes, y no hace falta | **Nada.** Sigues auditando con Copilot. Instálalo solo si quieres el extra |
 | «no has iniciado sesión» | El CLI está, pero sin cuenta | Abre una terminal, ejecuta `claude` y completa el login |
 | «tu suscripción ha agotado su cuota» | Se acabaron las peticiones por ahora | Espera al reset, o audita mientras tanto con Copilot desde Ajustes |
 | «el modelo no está disponible» | El modelo configurado no sirve | Elige otro en Ajustes |

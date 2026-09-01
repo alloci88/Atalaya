@@ -76,6 +76,16 @@ public sealed class ClaudeCodeProvider : IAuditorProvider
     /// <inheritdoc/>
     public string ProviderName => "Claude Code";
 
+    /// <summary>
+    /// <b>Siempre opcional.</b> Es un extra que da una bolsa de cuota independiente a quien lo
+    /// tenga; a quien no, no se le pide nada ni se le recorta nada. Copilot sigue siendo el
+    /// proveedor por defecto y el único requisito del equipo.
+    /// </summary>
+    public bool IsOptional => true;
+
+    /// <inheritdoc/>
+    public bool IsPresent => ResolveCli() is not null;
+
     /// <inheritdoc/>
     public string? ModelName
     {

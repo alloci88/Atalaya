@@ -58,8 +58,28 @@ public sealed class AuditorProviderRegistry
     /// <summary>
     /// El proveedor con el que se lanzaría una sesión AHORA. Se resuelve en cada lectura: cambiar
     /// el proveedor en Ajustes surte efecto en la siguiente sesión sin reiniciar la aplicación.
+    /// <para>
+    /// Si el elegido es OPCIONAL y ya no está en la máquina —lo desinstalaron, cambió el PATH—, se
+    /// vuelve al de fábrica (F14, adenda). Es la regla de «ninguna merma» aplicada al peor momento
+    /// posible: un ajuste guardado hace semanas no puede dejar a nadie sin poder auditar hoy.
+    /// </para>
     /// </summary>
-    public IAuditorProvider Current => ById(_settings?.Current.AuditorProvider);
+    public IAuditorProvider Current
+    {
+        get
+        {
+            IAuditorProvider chosen = ById(_settings?.Current.AuditorProvider);
+            return chosen.IsOptional && !chosen.IsPresent ? Fallback : chosen;
+        }
+    }
+
+    /// <summary>
+    /// Los que se pueden elegir de verdad en esta máquina: los que no son opcionales —Copilot, que
+    /// siempre está— más los opcionales que sí estén instalados. Es lo que ofrece Ajustes: un
+    /// desplegable no debe ofrecer algo que no va a funcionar.
+    /// </summary>
+    public IReadOnlyList<IAuditorProvider> Selectable
+        => _providers.Where(p => !p.IsOptional || p.IsPresent).ToList();
 
     /// <summary>
     /// El proveedor con ese identificador, o el <see cref="Fallback"/> si no se reconoce. Nunca

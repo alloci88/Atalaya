@@ -16,6 +16,11 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   reconciliación normal → verificar uno. Y de paso mirar las dos pantallas que cambian: **Cuenta**
   con sus dos pilotos (y con GitHub arriba, que es lo que no puede leerse mal) y el **diálogo de
   lanzamiento** diciendo «con Claude Code (modelo X)» (D-783).
+- **F14 — el reverso del caso de aceptación: una máquina SIN Claude Code.** Que la opcionalidad se
+  cumple está fijado por test —Cuenta informa y no alerta, Ajustes solo ofrece Copilot, nada se
+  degrada—, pero conviene verlo con los ojos en una máquina que no tenga el CLI: abrir Cuenta y que
+  la fila gris de «Claude Code · opcional» no se lea como una tarea pendiente, y abrir Ajustes y
+  comprobar que el selector de proveedor ni aparece (D-784).
 - **F14 — Métricas con dos proveedores dentro, vista.** Que el azulejo de coste enseñe **una línea
   por casa y ningún total** está probado por consulta; falta verlo en la ventana, a 1366×768 y en
   los dos temas, con un hub que tenga sesiones de las dos (D-780).
@@ -191,9 +196,12 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   cobra por llamada, así que Métricas enseña una línea por casa y **ningún total** cuando hay dos
   (D-780). Cuenta enseña los dos proveedores con **GitHub arriba y sin sustituir** —identidad,
   autoría y hub lo necesitan siempre—, Ajustes elige, y el diálogo de lanzar **nombra al juez**
-  (D-781). Escribir la cobertura destapó tres defectos que habrían roto toda sesión en el arranque
-  (D-782). 76 tests nuevos, 1.661 en total, más una verificación de punta a punta contra el CLI real
-  (D-783).
+  (D-781). Y una regla que corta de raíz el riesgo de esto: **Claude Code es opcional, siempre** —
+  Copilot sigue siendo el único requisito del equipo, y quien no lo instale no ve aviso, ni
+  exigencia, ni merma; la fila de Cuenta informa de un extra y jamás reclama, y Ajustes no ofrece lo
+  que no está (D-784). Escribir la cobertura destapó tres defectos que habrían roto toda sesión en
+  el arranque, y un cuarto que reventaba Cuenta sin cuenta conectada (D-782, D-784). 80 tests
+  nuevos, 1.665 en total, más una verificación de punta a punta contra el CLI real (D-783).
 
 - **F12 · La cosecha del banco de pruebas** — el ciclo completo recorrido sobre un repositorio con
   defectos sembrados de severidad conocida. Lo estructural aguantó; lo que salió fueron defectos de

@@ -14,6 +14,17 @@ public enum CheckState
 
     /// <summary>Not applicable in this deployment (e.g. no organization configured).</summary>
     Skipped,
+
+    /// <summary>
+    /// Una capacidad OPCIONAL que no está activada (F14, adenda). No es un fallo y no se pinta como
+    /// tal: la fila informa de que existe un extra y de cómo activarlo, y no reclama nada.
+    /// <para>
+    /// Tiene estado propio y no reutiliza <see cref="Skipped"/> porque <c>Skipped</c> se esconde
+    /// —no aplica en este despliegue— y esto sí se enseña: la gracia es que quien quiera el extra
+    /// sepa que está ahí. Y no es <see cref="Failed"/> porque nadie ha pedido nunca que estuviera.
+    /// </para>
+    /// </summary>
+    Optional,
 }
 
 /// <summary>
@@ -60,6 +71,18 @@ public sealed partial class ConnectionStep : ObservableObject
         Detail = detail;
         HelpUrl = null;
         State = CheckState.Ok;
+    }
+
+    /// <summary>
+    /// Cuenta algo que se puede tener y no se tiene. Ni verde ni rojo: gris. Es la diferencia entre
+    /// «te falta algo» y «hay esto disponible si lo quieres» (F14, adenda).
+    /// </summary>
+    internal void Inform(string title, string detail)
+    {
+        Title = title;
+        Detail = detail;
+        HelpUrl = null;
+        State = CheckState.Optional;
     }
 
     internal void Fail(string detail, string? helpUrl = null)
@@ -154,6 +177,19 @@ public sealed class ConnectionChecker
             });
         }
 
+        // F14 (adenda) — los extras ausentes se declaran informativos ANTES de nada, y no vuelven a
+        // tocarse. No dependen de GitHub: Claude Code no necesita una cuenta de GitHub para estar o
+        // no estar instalado. Ponerlo aquí evita además que un fallo de autenticación los marque
+        // como «no aplicable», que es otra forma de contar algo que no es.
+        foreach (IAuditorProvider optional in _providers.All.Where(p => p.IsOptional && !p.IsPresent))
+        {
+            Step(ProviderStepKey(optional.ProviderId)).Inform(
+                $"{optional.ProviderName} · opcional",
+                "No está instalado en esta máquina, y no hace falta: auditas con "
+                + $"{_providers.Fallback.ProviderName}. Si algún día quieres una segunda bolsa de "
+                + "cuota y un auditor de otra casa, instálalo e inicia sesión en tu terminal.");
+        }
+
         string? firstProblem = null;
 
         // 1 — Authenticated. Re-reads the profile so a renamed account or a new avatar refreshes,
@@ -164,7 +200,7 @@ public sealed class ConnectionChecker
         if (string.IsNullOrWhiteSpace(token))
         {
             auth.Fail("No hay ninguna cuenta conectada. Pulsa «Conectar con GitHub».");
-            SkipRest("org", "hub", "copilot");
+            SkipRestAfterAuth();
             return new ConnectionCheckResult(false, auth.Detail);
         }
 
@@ -178,7 +214,7 @@ public sealed class ConnectionChecker
         {
             _account.NoteFailure(ex);
             auth.Fail(ex.Message, HelpFor(ex.Problem));
-            SkipRest("org", "hub", "copilot");
+            SkipRestAfterAuth();
             return new ConnectionCheckResult(false, ex.Message);
         }
 
@@ -276,6 +312,16 @@ public sealed class ConnectionChecker
         foreach (IAuditorProvider provider in _providers.All)
         {
             ConnectionStep step = Step(ProviderStepKey(provider.ProviderId));
+
+            // Ya declarado como extra ausente al empezar: no se le pregunta. Lanzar su proceso
+            // para confirmar lo que ya sabemos sería gasto por nada, y en una pantalla que se abre
+            // a menudo. Copilot nunca entra por aquí: no es opcional, es el requisito.
+            if (step.State == CheckState.Optional)
+            {
+                providerSteps.Add((step, false));
+                continue;
+            }
+
             step.State = CheckState.Running;
             try
             {
@@ -350,11 +396,21 @@ public sealed class ConnectionChecker
         };
     }
 
-    private void SkipRest(params string[] keys)
+    /// <summary>
+    /// Sin identidad no se puede comprobar nada más: el resto de filas se marcan como no aplicables.
+    /// <para>
+    /// <b>Se calcula, no se enumera.</b> Antes eran tres claves escritas a mano —incluida
+    /// <c>"copilot"</c>—, y al pasar a una fila por proveedor esa clave dejó de existir: la pantalla
+    /// Cuenta reventaba con «Sequence contains no matching element» en el caso más común de todos,
+    /// abrirla sin cuenta conectada. Una lista de claves paralela a las filas es una lista que se
+    /// queda vieja; se recorre lo que hay.
+    /// </para>
+    /// </summary>
+    private void SkipRestAfterAuth()
     {
-        foreach (string key in keys)
+        foreach (ConnectionStep step in Steps.Where(s => s.Key != "auth" && s.State != CheckState.Optional))
         {
-            Step(key).Skip();
+            step.Skip();
         }
     }
 
