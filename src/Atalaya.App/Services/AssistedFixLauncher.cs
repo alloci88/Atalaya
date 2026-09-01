@@ -53,14 +53,46 @@ public sealed class AssistedFixLauncher
     private readonly CloneLinkService _links;
     private readonly MachineConfigStore _machines;
     private readonly AgentBusyGate _busy;
+    private readonly AuditorProviderRegistry? _providers;
 
+    /// <param name="providers">
+    /// Con quién se va a arreglar, para poder decirlo ANTES de gastar nada (F16). Es opcional
+    /// porque las precondiciones no dependen de ello: quien no lo pase obtiene exactamente el
+    /// mismo veredicto, sin la frase que nombra al motor.
+    /// </param>
     public AssistedFixLauncher(
-        SettingsService settings, CloneLinkService links, MachineConfigStore machines, AgentBusyGate busy)
+        SettingsService settings, CloneLinkService links, MachineConfigStore machines, AgentBusyGate busy,
+        AuditorProviderRegistry? providers = null)
     {
         _settings = settings;
         _links = links;
         _machines = machines;
         _busy = busy;
+        _providers = providers;
+    }
+
+    /// <summary>
+    /// Con quién y con qué modelo se arreglaría ahora: «Claude Code, modelo opus» (F16).
+    /// <para>
+    /// Se dice antes de empezar por el mismo motivo por el que el diálogo de lanzar una auditoría
+    /// nombra al juez (D-781): quien va a revisar un diff tiene derecho a saber quién lo escribió,
+    /// y descubrirlo leyendo el informe es descubrirlo tarde. Vacío cuando no hay a quién nombrar.
+    /// </para>
+    /// </summary>
+    public string EngineLabel
+    {
+        get
+        {
+            IAssistedFixProvider? fixer = _providers?.CurrentFixer;
+            if (fixer is null)
+            {
+                return string.Empty;
+            }
+
+            return fixer.ModelName is { Length: > 0 } model
+                ? $"{fixer.ProviderName}, modelo {model}"
+                : $"{fixer.ProviderName}, con el modelo que elija él";
+        }
     }
 
     /// <summary>La ruta del clon de una app, o null si no hay.</summary>

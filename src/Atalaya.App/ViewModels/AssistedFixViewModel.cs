@@ -137,6 +137,29 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
     public string SubHeaderText => _fix.FindingTitle;
 
     /// <summary>
+    /// Con quién se está arreglando: «Claude Code · modelo opus» (F16). Va en la cabecera, no
+    /// escondido en el informe: la pantalla es la misma con los dos motores —ése es el punto— y
+    /// justamente por eso tiene que decir cuál está detrás. Vacío antes de que haya sesión.
+    /// </summary>
+    public string EngineText
+    {
+        get
+        {
+            if (_fix.ProviderName.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            return _fix.Model is { Length: > 0 } model
+                ? $"{_fix.ProviderName} · modelo {model}"
+                : $"{_fix.ProviderName} · modelo por defecto";
+        }
+    }
+
+    /// <summary>Hay motor que nombrar. Sin esto la cabecera abriría un hueco vacío.</summary>
+    public bool HasEngine => EngineText.Length > 0;
+
+    /// <summary>
     /// «Volver al hallazgo (OPT-0002)» (H9.1 §1). Terminada una sesión —o descartada— el hallazgo
     /// que la originó no tenía camino de vuelta: había que ir a Hallazgos y buscarlo. El alias va
     /// en el rótulo porque es lo que el usuario tiene en la cabeza.
@@ -563,6 +586,8 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
         OnPropertyChanged(nameof(PauseLabel));
         OnPropertyChanged(nameof(HeaderText));
         OnPropertyChanged(nameof(SubHeaderText));
+        OnPropertyChanged(nameof(EngineText));
+        OnPropertyChanged(nameof(HasEngine));
         OnPropertyChanged(nameof(BackToFindingLabel));
         OnPropertyChanged(nameof(CanGoBackToFinding));
         OnPropertyChanged(nameof(BuildFullSolution));

@@ -156,6 +156,13 @@
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="Arreglo asistido" FontSize="24" FontWeight="SemiBold" />
                 <TextBlock Text="{Binding HeaderText}" Opacity="0.6" VerticalAlignment="Bottom" Margin="12,0,0,4" />
+                <!-- F16: la pantalla es la misma con los dos motores, así que dice cuál trabaja. -->
+                <Border Background="#18808080" CornerRadius="10" Padding="8,2" VerticalAlignment="Bottom"
+                        Margin="12,0,0,4"
+                        Visibility="{Binding HasEngine, Converter={StaticResource BoolToVisibility}}"
+                        ToolTip="El proveedor y el modelo que están haciendo este arreglo. Quedan escritos en el informe.">
+                    <TextBlock Text="{Binding EngineText}" FontSize="11.5" Opacity="0.85" />
+                </Border>
                 <!-- H9.1 §1: el camino de vuelta al hallazgo, disponible mientras haya sesión que
                      mirar —corriendo, terminada o fallida—, no solo en la pantalla de cierre. -->
                 <Button Content="{Binding BackToFindingLabel}" Command="{Binding BackToFindingCommand}"

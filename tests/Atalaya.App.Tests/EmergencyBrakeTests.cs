@@ -80,7 +80,7 @@ public sealed class EmergencyBrakeTests : IDisposable
         services.AddSingleton<AssistedFixLauncher>();
         services.AddSingleton(sp => new LiveFixService(
             sp.GetRequiredService<HubContext>(),
-            sp.GetRequiredService<IAssistedFixProvider>(),
+            () => sp.GetRequiredService<IAssistedFixProvider>(),
             sp.GetRequiredService<MachineConfigStore>(),
             sp.GetRequiredService<IUlidFactory>(),
             sp.GetRequiredService<SettingsService>(),

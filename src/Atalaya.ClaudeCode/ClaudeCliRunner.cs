@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Threading.Channels;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Atalaya.Agents;
@@ -11,11 +12,18 @@ namespace Atalaya.ClaudeCode;
 /// <param name="AllowedTools">Los nombres cualificados de las únicas tools permitidas.</param>
 /// <param name="McpConfigPath">El fichero con la declaración del servidor MCP de Atalaya.</param>
 /// <param name="Model">El modelo, o vacío para dejar que el CLI elija el suyo.</param>
+/// <param name="Conversational">
+/// La sesión dura VARIOS turnos y el usuario puede hablar mientras corre (F16, arreglo asistido).
+/// Cambia la entrada a <c>stream-json</c>: cada mensaje del usuario es una línea JSON y la
+/// conversación sigue viva mientras stdin siga abierto. Una auditoría es de un solo turno y no lo
+/// necesita.
+/// </param>
 public sealed record ClaudeRun(
     string Prompt,
     IReadOnlyList<string> AllowedTools,
     string McpConfigPath,
-    string? Model);
+    string? Model,
+    bool Conversational = false);
 
 /// <summary>
 /// Lanza <c>claude</c> en modo no interactivo y devuelve cómo fue (F14).
@@ -59,11 +67,22 @@ public sealed class ClaudeCliRunner
 {
     private readonly string _executable;
     private readonly Action<string>? _trace;
+    private readonly string? _workDirectory;
 
-    public ClaudeCliRunner(string executable, Action<string>? trace = null)
+    /// <param name="workDirectory">
+    /// Dónde corre el CLI. <b>NUNCA el clon del usuario</b>, y eso es una decisión (F16): el
+    /// directorio de trabajo es la puerta por la que el CLI se auto-carga el <c>CLAUDE.md</c> del
+    /// proyecto y su memoria, y eso sería un segundo canal de instrucciones que Copilot no tiene —
+    /// el mismo encargo significaría cosas distintas según la casa. Las convenciones del proyecto
+    /// viajan por donde tienen que viajar: las directivas de F7, declaradas y con su traza. El
+    /// agente no necesita el clon para nada: no tiene herramientas de fichero, y las rutas de
+    /// <c>read_file</c> y <c>apply_edit</c> las resuelve el toolbox de la aplicación.
+    /// </param>
+    public ClaudeCliRunner(string executable, Action<string>? trace = null, string? workDirectory = null)
     {
         _executable = executable;
         _trace = trace;
+        _workDirectory = workDirectory;
     }
 
     /// <summary>
@@ -82,12 +101,31 @@ public sealed class ClaudeCliRunner
             "--verbose",
             "--mcp-config", run.McpConfigPath,
             "--strict-mcp-config",
+            // Ni ajustes de usuario, de proyecto ni locales. Es el mismo argumento que
+            // --strict-mcp-config, extendido a lo que faltaba (F16): en esos ficheros viven
+            // permisos y HOOKS —órdenes que el CLI ejecuta por su cuenta al usar una tool—, y con
+            // ellos cargados la superficie de una sesión de Atalaya dependería de la máquina de
+            // quien la lanza. El régimen de permisos de Atalaya no se delega en el del CLI.
+            "--setting-sources", string.Empty,
             // Sin herramientas propias del CLI: ni consola, ni ficheros, ni red.
             "--tools", string.Empty,
             "--allowedTools", string.Join(",", run.AllowedTools),
+            // Que NO pregunte él y que NO autorice él. Lo permitido es exactamente la lista de
+            // arriba; para todo lo demás no hay a quién preguntar en un proceso sin consola, y una
+            // pregunta sin respuesta sería una sesión colgada. El permiso que sí existe —tocar un
+            // fichero que no es del hallazgo— lo gobierna Atalaya dentro de `apply_edit`.
             "--permission-mode", "dontAsk",
             "--no-session-persistence",
         };
+
+        if (run.Conversational)
+        {
+            // La entrada por líneas JSON es lo que permite que el usuario hable a mitad de sesión.
+            // Comprobado contra el CLI real (2.1.252): el session_id se conserva entre turnos y el
+            // modelo recuerda lo anterior, aun con --no-session-persistence.
+            args.Add("--input-format");
+            args.Add("stream-json");
+        }
 
         if (!string.IsNullOrWhiteSpace(run.Model))
         {
@@ -105,24 +143,7 @@ public sealed class ClaudeCliRunner
     public async Task<ClaudeRunOutcome> RunAsync(
         ClaudeRun run, Action<string>? onText, CancellationToken ct)
     {
-        var psi = new ProcessStartInfo
-        {
-            FileName = _executable,
-            UseShellExecute = false,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
-            StandardOutputEncoding = new UTF8Encoding(false),
-            StandardErrorEncoding = new UTF8Encoding(false),
-        };
-
-        foreach (string argument in BuildArguments(run))
-        {
-            psi.ArgumentList.Add(argument);
-        }
-
-        using Process process = Start(psi);
+        using Process process = Start(Describe(run));
 
         // stderr se drena SIEMPRE y en paralelo. Si no se lee, el CLI se bloquea al llenar la
         // tubería y la sesión se queda colgada para siempre sin decir por qué.
@@ -148,6 +169,217 @@ public sealed class ClaudeCliRunner
             $"claude terminó con {process.ExitCode}; mcp={outcome.McpConnected}; tools={outcome.ToolCalls}");
 
         return Explain(outcome, process.ExitCode, stderr);
+    }
+
+    /// <summary>
+    /// Una CONVERSACIÓN de varios turnos: el arreglo asistido (F16).
+    /// <para>
+    /// La diferencia con <see cref="RunAsync"/> no es de grado. Allí se manda un prompt, se lee
+    /// hasta el final y se acabó; aquí la sesión sigue viva mientras stdin siga abierto, cada
+    /// mensaje del usuario es una línea JSON más, y el CLI cierra un <c>result</c> por turno sin
+    /// terminar. <b>Quien decide que se acabó es la aplicación</b>: cuando el agente cierra con
+    /// <c>fix_done</c> (<paramref name="closed"/>) o cuando <paramref name="nextTurn"/> dice que no
+    /// hay nada más que decirle. Entonces se cierra stdin, que es la señal de fin para el CLI.
+    /// </para>
+    /// <para>
+    /// <b>Verificado contra el CLI real (2.1.252)</b>, porque nada de esto lo promete su ayuda: que
+    /// el <c>session_id</c> se conserva entre turnos, que el modelo recuerda lo anterior —también
+    /// con <c>--no-session-persistence</c>—, y que <c>usage</c> es del turno mientras
+    /// <c>total_cost_usd</c> viene acumulado.
+    /// </para>
+    /// </summary>
+    /// <param name="onUsage">El consumo de cada turno, ya restado. Se acumula fuera.</param>
+    /// <param name="nextTurn">
+    /// Qué decirle al agente cuando su turno acaba sin haber cerrado. Devolver <c>null</c> termina
+    /// la conversación. Es por donde llegan las órdenes que el usuario escribió mientras trabajaba.
+    /// </param>
+    /// <param name="closed">El agente ya cerró el arreglo: no se le da otro turno.</param>
+    /// <param name="ready">El mando a distancia, en cuanto el proceso existe.</param>
+    public async Task<ClaudeRunOutcome> RunConversationAsync(
+        ClaudeRun run,
+        Action<string>? onText,
+        Action<UsageSample>? onUsage,
+        Func<CancellationToken, Task<string?>> nextTurn,
+        Func<bool> closed,
+        Action<IFixSteering>? ready,
+        CancellationToken ct)
+    {
+        using Process process = Start(Describe(run with { Conversational = true }));
+
+        // stderr se drena SIEMPRE y en paralelo, igual que en una auditoría: sin leerlo, el CLI se
+        // bloquea al llenar la tubería y la sesión se cuelga sin decir por qué.
+        Task<string> errors = process.StandardError.ReadToEndAsync(ct);
+
+        var turns = Channel.CreateUnbounded<ClaudeTurn>();
+        var pen = new SemaphoreSlim(1, 1);
+
+        var reader = new ClaudeStreamReader(onText, turn =>
+        {
+            if (turn.Usage is { } usage)
+            {
+                onUsage?.Invoke(usage);
+            }
+
+            turns.Writer.TryWrite(turn);
+        });
+
+        ready?.Invoke(new ConversationSteering(process, _trace));
+
+        Task<ClaudeRunOutcome> reading = ReadAndCloseAsync(reader, process, turns, ct);
+
+        try
+        {
+            await SendUserMessageAsync(process, pen, run.Prompt, ct);
+
+            while (await turns.Reader.WaitToReadAsync(ct))
+            {
+                if (!turns.Reader.TryRead(out ClaudeTurn? turn))
+                {
+                    continue;
+                }
+
+                // Un turno que falla no se contesta con otro turno: la causa ya viaja en el
+                // desenlace y darle cuerda encima gastaría cuota contra una sesión rota.
+                if (turn.Failed || closed() || ct.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                string? next = await nextTurn(ct);
+                if (string.IsNullOrWhiteSpace(next))
+                {
+                    break;
+                }
+
+                await SendUserMessageAsync(process, pen, next!, ct);
+            }
+
+            // Cerrar stdin ES el fin de la conversación para el CLI. Sin esto se quedaría esperando
+            // otro mensaje que nadie va a escribir, y la sesión no terminaría nunca.
+            CloseInput(process);
+
+            ClaudeRunOutcome outcome = await reading;
+            await process.WaitForExitAsync(ct);
+            string stderr = await SafeAsync(errors);
+            _trace?.Invoke(
+                $"claude (conversación) terminó con {process.ExitCode}; mcp={outcome.McpConnected}");
+
+            return Explain(outcome, process.ExitCode, stderr);
+        }
+        catch (OperationCanceledException)
+        {
+            Kill(process);
+            throw;
+        }
+        finally
+        {
+            pen.Dispose();
+        }
+    }
+
+    /// <summary>Lee el flujo entero y cierra el canal de turnos pase lo que pase.</summary>
+    private static async Task<ClaudeRunOutcome> ReadAndCloseAsync(
+        ClaudeStreamReader reader, Process process, Channel<ClaudeTurn> turns, CancellationToken ct)
+    {
+        try
+        {
+            return await reader.ReadAsync(process.StandardOutput, ct);
+        }
+        finally
+        {
+            // Sin esto, un CLI que muere dejaría al bucle de arriba esperando un turno que ya no
+            // va a llegar: exactamente el cuelgue que este driver no puede permitirse.
+            turns.Writer.TryComplete();
+        }
+    }
+
+    /// <summary>
+    /// Un mensaje del usuario, en el formato de entrada <c>stream-json</c> del CLI. Se serializa
+    /// con <c>System.Text.Json</c> y no a mano: el mensaje puede llevar código, comillas y saltos
+    /// de línea, y una línea mal escapada rompe la conversación entera.
+    /// </summary>
+    private static async Task SendUserMessageAsync(
+        Process process, SemaphoreSlim pen, string text, CancellationToken ct)
+    {
+        var message = new JsonObject
+        {
+            ["type"] = "user",
+            ["message"] = new JsonObject
+            {
+                ["role"] = "user",
+                ["content"] = new JsonArray(new JsonObject
+                {
+                    ["type"] = "text",
+                    ["text"] = text,
+                }),
+            },
+        };
+
+        await pen.WaitAsync(ct);
+        try
+        {
+            await process.StandardInput.WriteLineAsync(message.ToJsonString().AsMemory(), ct);
+            await process.StandardInput.FlushAsync(ct);
+        }
+        catch (IOException)
+        {
+            // El CLI se fue. El flujo de salida trae la causa buena y llegará enseguida.
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        finally
+        {
+            pen.Release();
+        }
+    }
+
+    private static void CloseInput(Process process)
+    {
+        try
+        {
+            process.StandardInput.Close();
+        }
+        catch (IOException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// El mando a distancia de una conversación viva.
+    /// <para>
+    /// <b><see cref="SendAsync"/> devuelve siempre <c>false</c>, y es una decisión, no una carencia
+    /// (F16).</b> El CLI acepta una línea escrita a mitad de turno y la ENCOLA, pero no dice cuándo
+    /// la entregará ni la devuelve si la conversación se cierra antes; con eso, un mensaje podría
+    /// quedarse dentro del CLI sin llegar nunca al modelo y sin que nadie lo supiera. La cola de
+    /// Atalaya sí sabe lo que tiene, y la vacía en el límite del turno, que es cuando el modelo
+    /// puede leerla de verdad. Es exactamente el camino que D-535 dejó escrito para cuando el
+    /// runtime no acepta un mensaje a mitad: la interfaz lo dice con esas palabras y no promete una
+    /// inmediatez que no puede garantizar.
+    /// </para>
+    /// </summary>
+    private sealed class ConversationSteering : IFixSteering
+    {
+        private readonly Process _process;
+        private readonly Action<string>? _trace;
+
+        public ConversationSteering(Process process, Action<string>? trace)
+        {
+            _process = process;
+            _trace = trace;
+        }
+
+        public Task<bool> SendAsync(string message, CancellationToken ct) => Task.FromResult(false);
+
+        public Task AbortAsync(CancellationToken ct)
+        {
+            _trace?.Invoke("claude: se aborta la conversación a petición del usuario");
+            Kill(_process);
+            return Task.CompletedTask;
+        }
     }
 
     /// <summary>
@@ -187,6 +419,40 @@ public sealed class ClaudeCliRunner
             Message = ClaudeCodeHelp.Unknown(
                 raw.Length > 0 ? raw : $"el CLI terminó con código {exitCode} y sin mensaje"),
         };
+    }
+
+    /// <summary>
+    /// Cómo se lanza el CLI. Está separado porque lo comparten la auditoría y la conversación del
+    /// arreglo: dos copias de esta configuración serían dos superficies distintas para el agente,
+    /// que es justo lo que este driver existe para impedir.
+    /// </summary>
+    private ProcessStartInfo Describe(ClaudeRun run)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = _executable,
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            StandardInputEncoding = new UTF8Encoding(false),
+            StandardOutputEncoding = new UTF8Encoding(false),
+            StandardErrorEncoding = new UTF8Encoding(false),
+        };
+
+        if (_workDirectory is { Length: > 0 } directory)
+        {
+            Directory.CreateDirectory(directory);
+            psi.WorkingDirectory = directory;
+        }
+
+        foreach (string argument in BuildArguments(run))
+        {
+            psi.ArgumentList.Add(argument);
+        }
+
+        return psi;
     }
 
     private static Process Start(ProcessStartInfo psi)

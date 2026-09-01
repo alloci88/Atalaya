@@ -33,7 +33,16 @@ public sealed record FixSessionRequest(string Slug, Ulid FindingId);
 public sealed partial class LiveFixService : ObservableObject, IUserQuestions, IFixApprovals
 {
     private readonly HubContext _hub;
-    private readonly IAssistedFixProvider _agent;
+
+    /// <summary>
+    /// Quién arregla, preguntado en CADA sesión y no capturado (F16). Es la misma regla que hizo
+    /// que el registro releyera los ajustes (D-776): un singleton que se quedara con el proveedor
+    /// que hubiera al arrancar obligaría a reiniciar la aplicación para que cambiar de casa en
+    /// Ajustes sirviera de algo. Dentro de una sesión, en cambio, el motor no puede cambiar a
+    /// mitad: por eso se resuelve una vez al empezar y se guarda en <see cref="_agent"/>.
+    /// </summary>
+    private readonly Func<IAssistedFixProvider?> _fixer;
+
     private readonly MachineConfigStore _machines;
     private readonly IUlidFactory _ulids;
     private readonly SettingsService _settings;
@@ -57,6 +66,9 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
     private readonly Queue<string> _queued = new();
     private readonly FixPauseGate _pause = new();
 
+    /// <summary>El proveedor de ESTA sesión, ya resuelto. Null entre sesiones.</summary>
+    private IAssistedFixProvider? _agent;
+
     private CancellationTokenSource? _cts;
     private IFixSteering? _steering;
     private FixToolbox? _toolbox;
@@ -69,7 +81,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
 
     public LiveFixService(
         HubContext hub,
-        IAssistedFixProvider agent,
+        Func<IAssistedFixProvider?> fixer,
         MachineConfigStore machines,
         IUlidFactory ulids,
         SettingsService settings,
@@ -82,7 +94,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         DirectiveService? directives = null)
     {
         _hub = hub;
-        _agent = agent;
+        _fixer = fixer;
         _machines = machines;
         _ulids = ulids;
         _settings = settings;
@@ -150,6 +162,13 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
     /// <summary>Con qué modelo y proveedor corre, para poder valorar sus tokens (F15).</summary>
     [ObservableProperty] private string? _model;
     [ObservableProperty] private string? _provider;
+
+    /// <summary>
+    /// Cómo se llama esa casa para una persona («GitHub Copilot», «Claude Code»). La pantalla
+    /// anuncia con quién se está arreglando (F16): quien mira un diff tiene derecho a saber quién
+    /// lo escribió, y el identificador que va al hub no es un nombre que se lea.
+    /// </summary>
+    [ObservableProperty] private string _providerName = string.Empty;
 
     [ObservableProperty] private decimal? _cost;
     [ObservableProperty] private string _costUnit = CreditText.Unit;
@@ -287,14 +306,18 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         Cost = null;
         Calls = 0;
 
-        // F15 — con quién corre, para poder valorar sus tokens con la tarifa que toca. El arreglo
-        // asistido es de Copilot (F14), pero se lee del agente y no se da por supuesto: el día que
-        // otra casa sepa arreglar, esto ya dice la verdad.
-        Model = _agent.ModelName;
-        Provider = _agent.ProviderId;
+        // F16 — el motor de ESTA sesión se resuelve aquí, una vez, y ya no cambia: dentro de un
+        // arreglo el proveedor no puede cambiar a mitad. Con él vienen el modelo y la casa, que
+        // son lo que la pantalla anuncia y lo que el informe registra.
+        _agent = _fixer();
+        Model = _agent?.ModelName;
+        Provider = _agent?.ProviderId;
+        ProviderName = _agent?.ProviderName ?? string.Empty;
         EndedUtc = null;
         StartedUtc = DateTimeOffset.UtcNow;
-        StatusMessage = "Comprobando el clon y Copilot…";
+        StatusMessage = _agent is null
+            ? "Comprobando el clon…"
+            : $"Comprobando el clon y {_agent.ProviderName}…";
         Changed?.Invoke();
     }
 
@@ -328,6 +351,15 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
 
             _clonePath = _machines.Load().ClonePathFor(request.Slug);
 
+            if (_agent is null)
+            {
+                Fail(
+                    "El proveedor de auditoría elegido no sabe hacer arreglos asistidos. Elige otro "
+                    + "en Ajustes → Auditoría, o genera el prompt de arreglo y hazlo a mano.",
+                    offersModelChange: false);
+                return;
+            }
+
             AgentReadiness readiness = await _agent.CheckAsync(CancellationToken.None);
             if (!readiness.Ready)
             {
@@ -356,8 +388,10 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             _set = _snapshots.Begin(SessionId, request.Slug, _clonePath!, FindingAlias, finding.Title);
 
             Say(FixMessage.System("◆",
-                $"Arreglo asistido de {FindingAlias} sobre tu clon en {_clonePath}. El árbol estaba "
-                + "limpio: cualquier cambio que veas a partir de aquí lo ha hecho el agente."));
+                $"Arreglo asistido de {FindingAlias} sobre tu clon en {_clonePath}, con "
+                + $"{_agent.ProviderName}{(Model is { Length: > 0 } m ? $" (modelo {m})" : string.Empty)}. "
+                + "El árbol estaba limpio: cualquier cambio que veas a partir de aquí lo ha hecho "
+                + "el agente."));
 
             StatusMessage = "Buscando quién usa este código…";
             Changed?.Invoke();
@@ -491,8 +525,8 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             EndedUtc = DateTimeOffset.UtcNow,
             Commit = GitInfo.HeadSha(_clonePath),
             CycleN = _app?.CurrentCycle ?? 0,
-            Model = _agent.ModelName,
-            Provider = _agent.ProviderId,
+            Model = Model,
+            Provider = Provider,
             Interrupted = interrupted,
             // De qué hallazgo era este arreglo (H9.1 §1). Sin esto, el informe de una sesión fix
             // nombra el hallazgo en su texto pero nadie puede navegar de vuelta a su ficha.

@@ -44,38 +44,107 @@ public sealed class AtalayaMcpServer
         _trace = trace;
     }
 
+    private int _toolCalls;
+
     /// <summary>Cuántas veces llamó el auditor a una tool. Va a las métricas de la sesión.</summary>
-    public int ToolCalls { get; private set; }
+    /// <remarks>
+    /// Se incrementa con <see cref="Interlocked"/> porque desde F16 las peticiones se atienden en
+    /// paralelo: un <c>++</c> desde dos hilos pierde cuentas en silencio, que es la peor forma de
+    /// equivocarse en un contador que va a una métrica.
+    /// </remarks>
+    public int ToolCalls => Volatile.Read(ref _toolCalls);
 
     /// <summary>
     /// Atiende peticiones hasta que <paramref name="input"/> se cierra (el CLI terminó) o se
     /// cancela. No lanza por una línea mal formada ni por una tool que revienta: contestar un error
     /// tipado deja al modelo reintentar, mientras que tirar la conexión lo deja sin herramientas y
     /// convierte una unidad recuperable en una sesión perdida.
+    /// <para>
+    /// <b>Cada petición se atiende EN PARALELO, y no es una optimización</b> (F16). Con las tools
+    /// de auditoría —todas instantáneas— un bucle secuencial bastaba. Las del arreglo no lo son:
+    /// <c>ask_user</c> espera a una persona, <c>apply_edit</c> se queda en la puerta mientras la
+    /// sesión está en pausa y <c>run_build_and_tests</c> compila la solución entera. Atendiendo de
+    /// una en una, cualquiera de las tres dejaría al servidor mudo durante minutos —sin contestar
+    /// ni siquiera un <c>ping</c>—, y un cliente que no obtiene respuesta da al servidor por caído.
+    /// Las respuestas pueden salir desordenadas y eso es legítimo: JSON-RPC correlaciona por
+    /// <c>id</c>, no por orden.
+    /// </para>
     /// </summary>
     public async Task ServeAsync(Stream input, Stream output, CancellationToken ct)
     {
         using var reader = new StreamReader(input, new UTF8Encoding(false), leaveOpen: true);
         var writer = new StreamWriter(output, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true };
 
-        while (!ct.IsCancellationRequested)
+        // Una sola pluma para todos: dos respuestas escribiéndose a la vez se entrelazarían y
+        // ninguna de las dos sería JSON.
+        using var pen = new SemaphoreSlim(1, 1);
+        var inFlight = new List<Task>();
+
+        try
         {
-            string? line = await reader.ReadLineAsync(ct);
-            if (line is null)
+            while (!ct.IsCancellationRequested)
             {
-                return;                 // El cliente cerró la tubería: fin normal.
-            }
+                string? line = await reader.ReadLineAsync(ct);
+                if (line is null)
+                {
+                    return;             // El cliente cerró la tubería: fin normal.
+                }
 
-            if (line.Trim().Length == 0)
-            {
-                continue;
-            }
+                if (line.Trim().Length == 0)
+                {
+                    continue;
+                }
 
-            JsonNode? response = Handle(line);
-            if (response is not null)
-            {
-                await writer.WriteLineAsync(response.ToJsonString());
+                inFlight.RemoveAll(t => t.IsCompleted);
+                inFlight.Add(Task.Run(() => AnswerAsync(line, writer, pen, ct), ct));
             }
+        }
+        finally
+        {
+            // Lo que quedara a medio contestar se deja terminar antes de soltar la pluma: una
+            // respuesta escrita sobre un writer ya dispuesto es una excepción sin dueño.
+            try
+            {
+                await Task.WhenAll(inFlight);
+            }
+            catch (Exception)
+            {
+                // Ya se está cerrando; el detalle de cada una ya se trazó donde ocurrió.
+            }
+        }
+    }
+
+    /// <summary>Contesta UNA petición. Una tool que revienta no puede tumbar la conexión.</summary>
+    private async Task AnswerAsync(string line, TextWriter writer, SemaphoreSlim pen, CancellationToken ct)
+    {
+        JsonNode? response;
+        try
+        {
+            response = Handle(line);
+        }
+        catch (Exception ex)
+        {
+            _trace?.Invoke($"MCP: fallo atendiendo una petición ({ex.Message})");
+            return;
+        }
+
+        if (response is null)
+        {
+            return;
+        }
+
+        await pen.WaitAsync(ct);
+        try
+        {
+            await writer.WriteLineAsync(response.ToJsonString());
+        }
+        catch (Exception ex)
+        {
+            _trace?.Invoke($"MCP: no se pudo escribir la respuesta ({ex.Message})");
+        }
+        finally
+        {
+            pen.Release();
         }
     }
 
@@ -180,7 +249,7 @@ public sealed class AtalayaMcpServer
             return ToolResult($"No existe la herramienta «{name}».", isError: true);
         }
 
-        ToolCalls++;
+        Interlocked.Increment(ref _toolCalls);
 
         try
         {

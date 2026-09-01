@@ -21,6 +21,23 @@ public static class ReportBuilder
     /// </summary>
     private static CultureInfo Culture => AppCulture.Display;
 
+    /// <summary>
+    /// Con qué CASA se hizo, junto al modelo (F16 §C).
+    /// <para>
+    /// El modelo solo no basta: «claude-opus-4.6» no dice si detrás hubo un CLI local o el asiento
+    /// de la organización, y eso cambia qué cuota se gastó, qué superficie tuvo el agente y con
+    /// quién hay que hablar cuando algo no cuadra. Sobre todo, es lo que hace legible una
+    /// discrepancia: dos casas distintas coincidiendo es una segunda opinión, y tres modelos de la
+    /// misma pueden compartir el mismo punto ciego (D-781).
+    /// </para>
+    /// <para>
+    /// Las sesiones anteriores a F14 no lo traen y eso NO es un dato que falte: era Copilot, porque
+    /// no había otro. Se nombra así, sin marcarlas de «desconocido».
+    /// </para>
+    /// </summary>
+    internal static string ProviderLine(AuditSession session)
+        => $"- **Proveedor**: {ProviderNames.Display(session.Provider)}";
+
     public static string BuildSessionReport(
         AppConfig app,
         AuditSession session,
@@ -37,6 +54,7 @@ public static class ReportBuilder
         sb.AppendLine(Culture, $"- **Fecha**: {session.StartedUtc:yyyy-MM-dd HH:mm} UTC");
         sb.AppendLine($"- **Autor**: {session.By} ({session.Machine})");
         sb.AppendLine($"- **Commit auditado**: {session.Commit}");
+        sb.AppendLine(ProviderLine(session));
         sb.AppendLine($"- **Modelo**: {session.Model ?? "n/d"}");
         // F5.1: el tope del barrido va en el informe porque sin él «cobertura posiblemente
         // incompleta» no se puede interpretar: no es lo mismo agotar 5 pasadas que agotar 1.
@@ -345,6 +363,7 @@ public static class ReportBuilder
         sb.AppendLine(Culture, $"- **Fecha**: {session.StartedUtc:yyyy-MM-dd HH:mm} UTC");
         sb.AppendLine($"- **Autor**: {session.By} ({session.Machine})");
         sb.AppendLine($"- **Commit del clon al empezar**: {session.Commit}");
+        sb.AppendLine(ProviderLine(session));
         sb.AppendLine($"- **Modelo**: {session.Model ?? "n/d"}");
         sb.AppendLine($"- **Tokens**: entrada {session.Usage.InputTokens}, salida {session.Usage.OutputTokens}"
             + (session.Usage.CacheReadTokens > 0 || session.Usage.CacheWriteTokens > 0

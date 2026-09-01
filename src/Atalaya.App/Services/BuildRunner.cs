@@ -135,7 +135,7 @@ public sealed record BuildVerdict(
     public IReadOnlyList<string> Excluded => ExcludedProjects ?? Array.Empty<string>();
 
     /// <summary>Lo que ve el agente. Mismo texto que el usuario lee en la vista y en el informe.</summary>
-    public Atalaya.Copilot.BuildAndTestResult ToAgentResult()
+    public Atalaya.Agents.BuildAndTestResult ToAgentResult()
         => new(Ok, Summary, TimedOut);
 
     /// <summary>«0 errores nuevos · 18 preexistentes». La línea que resume el veredicto.</summary>

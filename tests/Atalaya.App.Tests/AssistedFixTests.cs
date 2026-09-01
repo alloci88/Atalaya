@@ -1119,7 +1119,7 @@ public sealed class AssistedFixTests : IDisposable
 
     private LiveFixService Service(IAssistedFixProvider agent)
         => new(
-            _hub, agent, _machines, _ulids, _settings, new ReferenceCollector(), _snapshots,
+            _hub, () => agent, _machines, _ulids, _settings, new ReferenceCollector(), _snapshots,
             Launcher(), _busy, new BuildRunner(new NoProcess()));
 
     private FixToolbox Toolbox(

@@ -349,7 +349,12 @@ public partial class App : Application
         // mismo runtime, el mismo asiento y el mismo clon, así que solo puede correr uno.
         services.AddSingleton<AgentBusyGate>();
         services.AddSingleton<FixSnapshotStore>();
-        services.AddSingleton<AssistedFixLauncher>();
+        services.AddSingleton(sp => new AssistedFixLauncher(
+            sp.GetRequiredService<SettingsService>(),
+            sp.GetRequiredService<CloneLinkService>(),
+            sp.GetRequiredService<MachineConfigStore>(),
+            sp.GetRequiredService<AgentBusyGate>(),
+            sp.GetRequiredService<AuditorProviderRegistry>()));
         services.AddSingleton(sp => new BuildRunner(
             timeout: () => TimeSpan.FromMinutes(Math.Max(
                 SettingsLimits.MinCopilotTimeoutMinutes,
@@ -361,10 +366,11 @@ public partial class App : Application
         services.AddSingleton<IFixCloseConfirmer, FixCloseDialogConfirmer>();
         services.AddSingleton(sp => new LiveFixService(
             sp.GetRequiredService<HubContext>(),
-            // F14: el arreglo asistido sigue siendo de Copilot, y por eso pide el tipo que SABE
-            // arreglar. Que el compilador lo exija es la garantía de que elegir Claude Code como
-            // auditor no puede desviar por accidente un arreglo hacia un proveedor que no lo hace.
-            sp.GetRequiredService<IAssistedFixProvider>(),
+            // F16: se arregla con el proveedor ELEGIDO, preguntado en cada sesión — igual que se
+            // audita con él (D-776). El tipo sigue exigiendo que sepa arreglar, y eso es lo que
+            // impide que un proveedor futuro que no lo haga se cuele por accidente: cuando el
+            // activo no arregla, esto devuelve null y la sesión no arranca diciendo por qué.
+            () => sp.GetRequiredService<AuditorProviderRegistry>().CurrentFixer,
             sp.GetRequiredService<MachineConfigStore>(),
             sp.GetRequiredService<IUlidFactory>(),
             sp.GetRequiredService<SettingsService>(),

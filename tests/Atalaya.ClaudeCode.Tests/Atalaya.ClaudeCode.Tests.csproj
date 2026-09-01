@@ -26,6 +26,14 @@
                       ReferenceOutputAssembly="false"
                       OutputItemType="Content"
                       CopyToOutputDirectory="PreserveNewest" />
+
+    <!-- F16 — el CLI falso que SÍ habla MCP: lanza el puente y llama a las tools, que es el
+         sentido que un guion de eventos no puede ejercitar. Se necesita como EJECUTABLE, igual
+         que el puente, así que se construye y se copia pero no se referencia. -->
+    <ProjectReference Include="..\Atalaya.FakeCli\Atalaya.FakeCli.csproj"
+                      ReferenceOutputAssembly="false"
+                      OutputItemType="Content"
+                      CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

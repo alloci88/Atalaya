@@ -37,6 +37,16 @@ public sealed record ClaudeRunOutcome(
     UsageSample? Usage);
 
 /// <summary>
+/// Cómo terminó UN turno de una conversación (F16). Una sesión de auditoría tiene exactamente uno;
+/// una de arreglo tiene tantos como veces hable el usuario.
+/// </summary>
+/// <param name="Usage">
+/// El consumo DE ESTE TURNO. Los tokens los da el CLI por turno; el coste, no —ver
+/// <see cref="ClaudeStreamReader"/>—, así que aquí ya viene restado.
+/// </param>
+public sealed record ClaudeTurn(bool Failed, AgentProblem Problem, string Message, UsageSample? Usage);
+
+/// <summary>
 /// Lee la salida <c>--output-format stream-json</c> del CLI de <c>claude</c> (F14).
 /// <para>
 /// <b>El formato se verificó ejecutando el CLI real (2.1.252), no leyendo documentación.</b> Lo
@@ -52,13 +62,23 @@ public sealed record ClaudeRunOutcome(
 public sealed class ClaudeStreamReader
 {
     private readonly Action<string>? _onText;
+    private readonly Action<ClaudeTurn>? _onTurn;
 
+    /// <param name="onTurn">
+    /// Se invoca al cerrar CADA turno (el evento <c>result</c>). En una sesión de un solo turno da
+    /// lo mismo que leer el desenlace al final; en una conversación es la única forma de saber que
+    /// le toca hablar al usuario.
+    /// </param>
     /// <param name="onText">
     /// El texto del auditor según llega, para la columna de actividad de V5. Es el equivalente de
     /// <c>AssistantMessageDeltaEvent</c> en Copilot: se emite el TEXTO, no un punto por evento
     /// (F5.2).
     /// </param>
-    public ClaudeStreamReader(Action<string>? onText = null) => _onText = onText;
+    public ClaudeStreamReader(Action<string>? onText = null, Action<ClaudeTurn>? onTurn = null)
+    {
+        _onText = onText;
+        _onTurn = onTurn;
+    }
 
     /// <summary>
     /// Consume el flujo hasta que se acaba y devuelve cómo terminó. No lanza por contenido: un
@@ -78,6 +98,10 @@ public sealed class ClaudeStreamReader
         string message = string.Empty;
         UsageSample? usage = null;
         bool sawResult = false;
+
+        // El coste acumulado que el CLI lleva declarado. Ver ReadUsage: `total_cost_usd` es de la
+        // SESIÓN entera y `usage` es del turno, así que el coste de un turno es la diferencia.
+        decimal costSoFar = 0m;
 
         while (await output.ReadLineAsync(ct) is { } line)
         {
@@ -106,7 +130,9 @@ public sealed class ClaudeStreamReader
                 case "system" when Str(e, "subtype") == "init":
                     sawInit = true;
                     model = Str(e, "model") is { Length: > 0 } m ? m : null;
-                    tools.AddRange(Strings(e, "tools"));
+                    // En una conversación el CLI emite un `init` por turno: se acumulan SIN
+                    // repetir, o la lista de tools crecería con copias a cada vuelta.
+                    tools.AddRange(Strings(e, "tools").Where(t => !tools.Contains(t, StringComparer.Ordinal)));
                     mcpConnected = McpIsConnected(e);
                     break;
 
@@ -122,7 +148,8 @@ public sealed class ClaudeStreamReader
 
                 case "result":
                     sawResult = true;
-                    (failed, problem, message, usage) = ReadResult(e);
+                    (failed, problem, message, usage) = ReadResult(e, ref costSoFar);
+                    _onTurn?.Invoke(new ClaudeTurn(failed, problem, message, usage));
                     break;
             }
         }
@@ -206,13 +233,14 @@ public sealed class ClaudeStreamReader
         return (calls, text.ToString());
     }
 
-    private static (bool Failed, AgentProblem Problem, string Message, UsageSample? Usage) ReadResult(JsonElement e)
+    private static (bool Failed, AgentProblem Problem, string Message, UsageSample? Usage) ReadResult(
+        JsonElement e, ref decimal costSoFar)
     {
         // is_error manda. `subtype` dice "success" incluso cuando la sesión murió con un 404 del
         // modelo — comprobado contra el CLI real.
         bool failed = Bool(e, "is_error");
         string text = Str(e, "result");
-        UsageSample? usage = ReadUsage(e);
+        UsageSample? usage = ReadUsage(e, ref costSoFar);
 
         if (!failed)
         {
@@ -226,22 +254,35 @@ public sealed class ClaudeStreamReader
     }
 
     /// <summary>
-    /// El uso del evento final. El CLI da tokens de verdad y un <c>total_cost_usd</c> que es
+    /// El uso de un turno. El CLI da tokens de verdad y un <c>total_cost_usd</c> que es
     /// <b>tarifa de lista</b> —lo dice él mismo con <c>costBasis: "list"</c>—, no lo que factura
     /// una suscripción. Se guarda con su unidad puesta para que nadie lo sume con las peticiones
     /// premium de Copilot; el porqué está en <see cref="ClaudeUsage.ListPriceUnit"/>.
+    /// <para>
+    /// <b>Y las dos cifras no tienen el mismo alcance</b>, que es algo que hubo que medir (N-2, F16)
+    /// porque en una sesión de un solo turno —lo único que había hasta ahora— no se distingue.
+    /// En una conversación de dos turnos, <c>usage</c> es de CADA turno y <c>total_cost_usd</c> es
+    /// ACUMULADO: el segundo coste menos el primero da exactamente lo que cuestan los tokens del
+    /// segundo turno a las tarifas publicadas, al último decimal. Sumar la cifra de cada turno
+    /// habría contado el primero tantas veces como turnos hubiera. Así que aquí se resta.
+    /// </para>
     /// </summary>
-    private static UsageSample? ReadUsage(JsonElement e)
+    private static UsageSample? ReadUsage(JsonElement e, ref decimal costSoFar)
     {
         if (!e.TryGetProperty("usage", out JsonElement usage) || usage.ValueKind != JsonValueKind.Object)
         {
             return null;
         }
 
-        decimal? cost = e.TryGetProperty("total_cost_usd", out JsonElement c)
-                        && c.ValueKind == JsonValueKind.Number
-            ? c.GetDecimal()
-            : null;
+        decimal? cost = null;
+        if (e.TryGetProperty("total_cost_usd", out JsonElement c) && c.ValueKind == JsonValueKind.Number)
+        {
+            decimal cumulative = c.GetDecimal();
+            // Nunca negativo: si el CLI dejara de acumular, un turno gratis es una lectura mucho
+            // menos dañina que un coste que resta de los agregados.
+            cost = Math.Max(0m, cumulative - costSoFar);
+            costSoFar = Math.Max(costSoFar, cumulative);
+        }
 
         return new UsageSample(
             Long(usage, "input_tokens"),

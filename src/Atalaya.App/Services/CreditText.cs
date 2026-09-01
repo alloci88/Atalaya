@@ -102,6 +102,5 @@ public static class CreditText
     /// ¿El coste de esta casa es un equivalente y no una factura? Se pregunta por el proveedor y no
     /// por la unidad guardada, porque la unidad es una consecuencia de esto y no al revés.
     /// </summary>
-    public static bool IsSubscription(string? providerId)
-        => string.Equals(providerId, "claude-code", StringComparison.OrdinalIgnoreCase);
+    public static bool IsSubscription(string? providerId) => ProviderNames.IsSubscription(providerId);
 }

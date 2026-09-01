@@ -28,7 +28,7 @@ namespace Atalaya.ClaudeCode;
 /// nunca falla mudo.
 /// </para>
 /// </summary>
-public sealed class ClaudeCodeProvider : IAuditorProvider
+public sealed class ClaudeCodeProvider : IAssistedFixProvider
 {
     /// <summary>
     /// El identificador que se escribe en sesiones, hallazgos e informes. Constante, y no un
@@ -216,6 +216,79 @@ public sealed class ClaudeCodeProvider : IAuditorProvider
     }
 
     /// <summary>
+    /// El ARREGLO ASISTIDO con Claude Code (F16).
+    /// <para>
+    /// <b>Mismo contrato observable que Copilot, otro motor.</b> Las mismas cuatro herramientas con
+    /// el mismo nombre y la misma descripción (<see cref="FixToolText"/>), la misma tarjeta de
+    /// pregunta, el mismo diff por fichero y el mismo cierre. La aplicación no se entera de cuál de
+    /// los dos está detrás: recibe un <see cref="FixConversation"/> y le contesta por él.
+    /// </para>
+    /// <para>
+    /// <b>Lo único que cambia, y hay que decirlo:</b> aquí la conversación viaja por la entrada
+    /// <c>stream-json</c> del CLI en vez de por una sesión del SDK, y la pregunta al usuario la
+    /// sirve Atalaya como tool MCP porque el CLI se lanza sin herramientas propias. Ninguna de las
+    /// dos cosas asoma a la pantalla.
+    /// </para>
+    /// <para>
+    /// <b>Y lo que NO cambia por venir de otra casa:</b> el presupuesto de lecturas, la copia de
+    /// seguridad antes de la primera edición, el permiso fichero a fichero, la pausa y la huella
+    /// del arreglo son de la aplicación y viven por encima de esta interfaz. Un proveedor no decide
+    /// qué se puede tocar.
+    /// </para>
+    /// </summary>
+    public async Task FixAsync(FixRequest request, FixConversation conversation, CancellationToken ct)
+    {
+        AgentReadiness readiness = await CheckAsync(ct);
+        if (!readiness.Ready)
+        {
+            throw new AuditorAuthenticationException(
+                readiness.Message, readiness.Problem, readiness.Detail);
+        }
+
+        string cli = ResolveCli()!;
+        string workDirectory = _workDirectory();
+
+        FixToolSet fix = FixTools.ForFix(conversation.Toolbox, conversation.Questions, ct);
+
+        await using var host = new McpPipeHost(fix.Tools, message => _logger.LogDebug("{Message}", message));
+        host.Start();
+
+        string configPath = ClaudeCliRunner.WriteMcpConfig(workDirectory, _bridgeExecutable, host.PipeName);
+
+        try
+        {
+            var runner = new ClaudeCliRunner(cli, message => _logger.LogDebug("{Message}", message), workDirectory);
+            ClaudeRunOutcome outcome = await runner.RunConversationAsync(
+                new ClaudeRun(
+                    request.Prompt,
+                    fix.Tools.Select(t => AuditorTools.Qualified(t.Name)).ToList(),
+                    configPath,
+                    ModelName,
+                    Conversational: true),
+                text => TextStreamed?.Invoke(text),
+                usage => UsageReported?.Invoke(usage with { Model = ModelName }),
+                conversation.NextTurn ?? (_ => Task.FromResult<string?>(null)),
+                () => fix.Closed,
+                conversation.Ready,
+                ct);
+
+            if (outcome.Failed)
+            {
+                _logger.LogWarning(
+                    "Claude Code rechazó el arreglo: {Problem} — {Message}", outcome.Problem, outcome.Message);
+
+                throw outcome.Problem == AgentProblem.ModelUnavailable
+                    ? new AuditorModelUnavailableException(ModelName, outcome.Message, outcome.Message)
+                    : new AuditorProviderException(outcome.Message, outcome.Problem, outcome.Message);
+            }
+        }
+        finally
+        {
+            TryDelete(configPath);
+        }
+    }
+
+    /// <summary>
     /// Una sesión completa: levantar la tubería, lanzar el CLI con el prompt por stdin, dejar que
     /// llame a las tools, y traducir el desenlace.
     /// <para>
@@ -246,7 +319,7 @@ public sealed class ClaudeCodeProvider : IAuditorProvider
 
         try
         {
-            var runner = new ClaudeCliRunner(cli, message => _logger.LogDebug("{Message}", message));
+            var runner = new ClaudeCliRunner(cli, message => _logger.LogDebug("{Message}", message), workDirectory);
             ClaudeRunOutcome outcome = await runner.RunAsync(
                 new ClaudeRun(prompt, tools.Select(t => AuditorTools.Qualified(t.Name)).ToList(), configPath, ModelName),
                 text => TextStreamed?.Invoke(text),

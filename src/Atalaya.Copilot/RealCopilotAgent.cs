@@ -366,26 +366,14 @@ public sealed class RealCopilotAgent : IAssistedFixProvider, IAsyncDisposable
             };
         };
 
-        AddTool(config, ReadFile, "read_file",
-            "Lee un fichero del clon (ruta relativa a la raíz del repositorio). Tienes un "
-            + "PRESUPUESTO de lecturas y la respuesta te dice cuántas te quedan: no explores, "
-            + "lee lo que necesites para arreglar.");
-        AddTool(config, ApplyEdit, "apply_edit",
-            "La ÚNICA forma de modificar código. path es relativo al clon; reason explica en una "
-            + "frase por qué tocas ESE fichero; edits es un array de {oldText, newText, "
-            + "replaceAll}. oldText debe aparecer EXACTAMENTE una vez (o marca replaceAll). "
-            + "Sobre ficheros del hallazgo y sus tests se aplica directamente; sobre cualquier "
-            + "otro, la aplicación le pedirá permiso al usuario y puede denegarlo.");
-        AddTool(config, RunBuildAndTests, "run_build_and_tests",
-            "Pide a la aplicación que compile y ejecute los tests del clon y te devuelva un "
-            + "resumen. Tú no tienes shell: esto es lo más parecido, y tarda, así que úsalo "
-            + "cuando el cambio esté completo, no después de cada edición.");
-        AddTool(config, FixDone, "fix_done",
-            "Cierra el arreglo. summary: qué cambiaste y por qué, con los ficheros tocados. "
-            + "commitTitle: ≤72 caracteres, imperativo, referenciando el identificador del "
-            + "hallazgo. commitDescription: el qué y el porqué, incluyendo los llamadores "
-            + "adaptados si los hubo. risks: lo que queda pendiente de revisión humana, o vacío.",
-            terminal: true);
+        // F16 — los nombres y las descripciones salen de FixToolText, que los comparte con el
+        // driver de Claude Code. Con dos motores detrás del mismo contrato, una copia a mano de
+        // este texto es una copia esperando a divergir — y en cuanto divergiera, la diferencia
+        // entre las dos casas dejaría de poder atribuirse al modelo.
+        AddTool(config, ReadFile, FixToolText.ReadFile, FixToolText.ReadFileDescription);
+        AddTool(config, ApplyEdit, FixToolText.ApplyEdit, FixToolText.ApplyEditDescription);
+        AddTool(config, RunBuildAndTests, FixToolText.RunBuildAndTests, FixToolText.RunBuildAndTestsDescription);
+        AddTool(config, FixDone, FixToolText.FixDone, FixToolText.FixDoneDescription, terminal: true);
 
         return config;
     }

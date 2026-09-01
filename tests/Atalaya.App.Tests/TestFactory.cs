@@ -215,7 +215,7 @@ internal static class TestFactory
             agent, openSession, hub, busy: busy);
 
         var fix = new LiveFixService(
-            hub, agent, machines, ulids, settings, new ReferenceCollector(),
+            hub, () => agent, machines, ulids, settings, new ReferenceCollector(),
             new FixSnapshotStore(paths), new AssistedFixLauncher(settings, Links(hub, paths), machines, busy), busy);
 
         return new MainViewModel(

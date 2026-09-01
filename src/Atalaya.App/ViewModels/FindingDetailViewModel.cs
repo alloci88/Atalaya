@@ -1122,7 +1122,16 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     public string AssistedFixTooltip => CanStartFix
         ? "Abre una sesión con el agente: arregla este hallazgo sobre tu clon local explicando lo "
           + "que hace y preguntándote en las decisiones. No commitea nada."
+          + (AssistedFixEngine.Length == 0 ? string.Empty : $" Se arreglará con {AssistedFixEngine}.")
         : AssistedFixBlock;
+
+    /// <summary>
+    /// Con quién se arreglaría: «Claude Code, modelo opus» (F16). Se dice en el botón porque es el
+    /// último sitio antes de gastar, y porque el diff que salga de ahí hay que poder atribuirlo.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AssistedFixTooltip))]
+    private string _assistedFixEngine = string.Empty;
 
     /// <summary>
     /// Vuelve a mirar las precondiciones. Se llama al cargar la ficha y tras vincular el clon: el
@@ -1143,6 +1152,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         ShowAssistedFix = decision.Block != FixBlock.Desactivado;
         CanStartFix = decision.CanStart;
         AssistedFixBlock = decision.Message;
+        AssistedFixEngine = _fixLauncher.EngineLabel;
     }
 
     /// <summary>

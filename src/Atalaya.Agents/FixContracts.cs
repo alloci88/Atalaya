@@ -1,4 +1,8 @@
-namespace Atalaya.Copilot;
+// Los contratos del ARREGLO ASISTIDO. Vivían en Atalaya.Copilot mientras arreglar era verdad de
+// una sola casa (F14, D-775); desde F16 hay dos motores detrás del mismo contrato, así que bajan
+// al vocabulario común. Lo que se movió fue el ensamblado, no una sola línea de comportamiento.
+
+namespace Atalaya.Agents;
 
 /// <summary>
 /// Una edición puntual dentro de un fichero: sustituir <paramref name="OldText"/> por
@@ -134,3 +138,37 @@ public sealed record FixConversation(
     IUserQuestions Questions,
     Func<CancellationToken, Task<string?>>? NextTurn = null,
     Action<IFixSteering>? Ready = null);
+
+/// <summary>
+/// Un proveedor que además sabe ARREGLAR (H9, F6.9; segunda casa en F16).
+/// <para>
+/// <b>Sigue separado de <see cref="IAuditorProvider"/>, y ahora por un motivo mejor.</b> En F14
+/// vivía en <c>Atalaya.Copilot</c> porque arreglar era verdad de una sola casa. Ya no lo es, así
+/// que baja al vocabulario común — pero NO se funde con la interfaz del auditor: auditar y
+/// arreglar son capacidades distintas, y un tercer proveedor futuro puede saber una y no la otra.
+/// Que el compilador exija este tipo donde se arregla es lo que impide que elegir un auditor
+/// desvíe por accidente un arreglo hacia quien no sabe hacerlo.
+/// </para>
+/// <para>
+/// <b>Tiene implementación por defecto, y lanza.</b> Los proveedores de verdad la implementan; lo
+/// repartido por los tests son dobles minúsculos que existen para ejercitar UN camino de
+/// auditoría. Obligarlos a llevar un <c>FixAsync</c> vacío no probaría nada y serían copias
+/// esperando a quedarse desfasadas. Lanzar dice la verdad: ese agente no sabe arreglar.
+/// </para>
+/// </summary>
+public interface IAssistedFixProvider : IAuditorProvider
+{
+    /// <summary>
+    /// Arregla UN hallazgo sobre el clon local, de forma interactiva (F6.9). A diferencia de
+    /// auditar y verificar, aquí la sesión es una CONVERSACIÓN: dura varios turnos, el agente
+    /// pregunta y el usuario puede dirigirla mientras corre.
+    /// <para>
+    /// La sesión se cierra cuando el agente llama a <c>fix_done</c> (tool terminal) o cuando
+    /// <see cref="FixConversation.NextTurn"/> devuelve <c>null</c>. El agente edita SOLO por
+    /// <c>apply_edit</c>: no tiene shell, ni git, ni red.
+    /// </para>
+    /// </summary>
+    Task FixAsync(FixRequest request, FixConversation conversation, CancellationToken ct)
+        => throw new NotSupportedException(
+            $"{GetType().Name} no implementa el arreglo asistido.");
+}

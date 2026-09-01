@@ -36,6 +36,24 @@ public sealed class FixSessionSurfaceTests
     }
 
     /// <summary>
+    /// <b>Y las cuatro se declaran con el texto COMPARTIDO</b> (F16). Desde que hay dos motores
+    /// detrás del mismo contrato, el nombre y la descripción de cada herramienta salen de
+    /// <see cref="FixToolText"/> y no de un literal en cada driver: dos copias del mismo texto son
+    /// dos copias esperando a divergir, y el día que divergieran, una diferencia entre las dos
+    /// casas dejaría de poder atribuirse al modelo — que es toda la gracia de tener dos.
+    /// </summary>
+    [Fact]
+    public void Las_cuatro_se_declaran_con_el_texto_que_comparten_los_dos_motores()
+    {
+        var byName = Config().Tools!.ToDictionary(t => t.Name, t => t.Description, StringComparer.Ordinal);
+
+        byName[FixToolText.ReadFile].Should().Be(FixToolText.ReadFileDescription);
+        byName[FixToolText.ApplyEdit].Should().Be(FixToolText.ApplyEditDescription);
+        byName[FixToolText.RunBuildAndTests].Should().Be(FixToolText.RunBuildAndTestsDescription);
+        byName[FixToolText.FixDone].Should().Be(FixToolText.FixDoneDescription);
+    }
+
+    /// <summary>
     /// Lo que NO está es lo que importa: el agente no tiene forma de pedir una shell, un commit,
     /// un push ni una descarga. Se nombran a propósito los que dolerían.
     /// </summary>

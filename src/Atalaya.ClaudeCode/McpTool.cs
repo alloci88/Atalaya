@@ -73,6 +73,9 @@ internal static class Schema
     public static JsonObject Integer(string description)
         => new() { ["type"] = "integer", ["description"] = description };
 
+    public static JsonObject Boolean(string description)
+        => new() { ["type"] = "boolean", ["description"] = description };
+
     /// <inheritdoc cref="Object"/>
     public static JsonObject Array(JsonNode items, string description)
         => new() { ["type"] = "array", ["items"] = items.DeepClone(), ["description"] = description };

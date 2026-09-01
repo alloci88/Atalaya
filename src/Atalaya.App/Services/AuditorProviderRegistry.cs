@@ -74,6 +74,23 @@ public sealed class AuditorProviderRegistry
     }
 
     /// <summary>
+    /// Quién ARREGLA ahora (F16). Es el proveedor activo <b>si sabe arreglar</b>, y nada si no.
+    /// <para>
+    /// <b>No cae a otro, y ésa es la decisión.</b> Sería fácil buscar el primero de la lista que
+    /// implemente el arreglo asistido, y sería mentir: la pantalla anuncia con quién se arregla, y
+    /// arreglar con una casa distinta de la que se anunció convierte el proveedor en un dato que no
+    /// se puede creer. Cuando no hay quien arregle, la sesión no arranca y lo dice — que es lo
+    /// mismo que hace cuando el proveedor elegido no está autenticado.
+    /// </para>
+    /// <para>
+    /// Hoy los dos proveedores de verdad arreglan, así que esto solo devuelve null con un tercero
+    /// que no lo haga. Existe porque el tipo lo exige, y el tipo lo exige para que ese tercero no
+    /// se cuele por accidente.
+    /// </para>
+    /// </summary>
+    public IAssistedFixProvider? CurrentFixer => Current as IAssistedFixProvider;
+
+    /// <summary>
     /// Los que se pueden elegir de verdad en esta máquina: los que no son opcionales —Copilot, que
     /// siempre está— más los opcionales que sí estén instalados. Es lo que ofrece Ajustes: un
     /// desplegable no debe ofrecer algo que no va a funcionar.
@@ -108,6 +125,8 @@ public sealed class AuditorProviderRegistry
         return _providers.FirstOrDefault(p =>
                    string.Equals(p.ProviderId, providerId, StringComparison.OrdinalIgnoreCase))
                ?.ProviderName
-               ?? providerId!;
+               // F16: y si esta versión ya no lo trae, el mapa de lectura del histórico sabe
+               // nombrarlo igual que lo nombran los informes. Un solo texto por casa.
+               ?? ProviderNames.Display(providerId);
     }
 }
