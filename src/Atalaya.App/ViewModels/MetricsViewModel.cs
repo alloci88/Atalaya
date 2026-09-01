@@ -60,6 +60,10 @@ public sealed record SeveritySlice(string Slug, Severity Severity);
 /// que no auditan unidades —un arreglo, una verificación— se leían como auditorías vacías: misma
 /// fila, «0 unidades», «sin cambios» y, en el caso del arreglo, un coste sin nada que lo explique.
 /// </param>
+/// <param name="Provider">
+/// Con qué casa se hizo (F16 §C). El modelo solo no bastaba y la casa no estaba en ninguna parte:
+/// dos filas del mismo día podían gastar de bolsas distintas sin que la tabla lo dijera.
+/// </param>
 public sealed record SessionLine(
     string SessionId,
     string Slug,
@@ -67,6 +71,7 @@ public sealed record SessionLine(
     Brush AppBrush,
     string When,
     string Type,
+    string Provider,
     string By,
     string Units,
     string Findings,
@@ -678,6 +683,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
                 SeriesBrush(row.Slug, d),
                 row.When.ToLocalTime().ToString("d MMM HH:mm", CultureInfo.CurrentCulture),
                 AuditModeNames.Display(row.Mode),
+                row.Provider,
                 row.By,
                 row.Units == 1 ? "1 unidad" : $"{row.Units} unidades",
                 findings,

@@ -659,6 +659,11 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         Meta.Add(new MetaRow("Primera detección", Stamp(f.FirstDetected)));
         Meta.Add(new MetaRow("Última confirmación", Stamp(f.LastConfirmed)));
         Meta.Add(new MetaRow(
+            "Detectado con", Judge(f),
+            "Con qué casa y con qué modelo se vio por última vez. El modelo solo no basta: no dice "
+            + "si detrás hubo un CLI local o el asiento de la organización, y es lo que hace legible "
+            + "una discrepancia — dos casas distintas coincidiendo es una segunda opinión."));
+        Meta.Add(new MetaRow(
             "Veces confirmado", f.TimesConfirmed.ToString(),
             "Cuántas auditorías han vuelto a verlo. Es lo que sostiene la confianza."));
         Meta.Add(new MetaRow(
@@ -719,6 +724,21 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
 
     private static string Stamp(DetectionStamp stamp)
         => $"{stamp.Utc.ToLocalTime():dd/MM/yyyy HH:mm} · {stamp.By}";
+
+    /// <summary>
+    /// Quién lo juzgó la última vez: la casa y el modelo (F16 §C).
+    /// <para>
+    /// Se lee del último avistamiento y, si aquél no lo registró, del primero: los hallazgos de
+    /// antes de F5.1b no guardaban modelo y los de antes de F14 no guardaban casa. Un proveedor en
+    /// blanco es Copilot y no «desconocido» — no había otro (D-780).
+    /// </para>
+    /// </summary>
+    private static string Judge(Finding f)
+    {
+        string house = ProviderNames.Display(f.LastConfirmed.Provider ?? f.FirstDetected.Provider);
+        string? model = f.LastConfirmed.Model ?? f.FirstDetected.Model;
+        return model is { Length: > 0 } ? $"{house} · modelo {model}" : house;
+    }
 
     private static string Short(string? sha)
         => string.IsNullOrWhiteSpace(sha) ? "—" : (sha!.Length <= 8 ? sha : sha[..8]);

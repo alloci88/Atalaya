@@ -106,6 +106,11 @@ public sealed record CoverageDonut(string Slug, string Name, int Cycle, int Audi
 public sealed record FlowBucket(string Label, string Range, int New, int Resolved, int ActiveAtEnd);
 
 /// <summary>Una línea del registro de operaciones (gráfica 4).</summary>
+/// <param name="Provider">
+/// Con qué casa se hizo (F16 §C). Va junto al coste y no como adorno: con dos proveedores, dos
+/// filas del mismo día pueden gastar de bolsas distintas, y sin esta columna la única forma de
+/// saber de cuál era abrir el informe de cada una.
+/// </param>
 public sealed record SessionRow(
     string SessionId,
     string Slug,
@@ -117,7 +122,8 @@ public sealed record SessionRow(
     int New,
     int Resolved,
     decimal? Cost,
-    string CostUnit);
+    string CostUnit,
+    string Provider);
 
 /// <summary>
 /// Lo que costó UN proveedor en el periodo, en SU unidad (F14).
@@ -912,7 +918,8 @@ public sealed class MetricsQuery
                 // tarifa, mismo modelo. Dos cuentas parecidas para el mismo número acaban siempre
                 // discrepando (ya pasó dos veces con el tile y la gráfica).
                 CreditCalculator.Calculate(s, rates).Credits,
-                CreditText.LabelFor(s.Provider)))
+                CreditText.LabelFor(s.Provider),
+                ProviderNames.Display(s.Provider)))
             .ToList();
     }
 

@@ -526,19 +526,22 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="110" />
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="130" />
                                     <ColumnDefinition Width="120" />
-                                    <ColumnDefinition Width="90" />
-                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="110" />
+                                    <ColumnDefinition Width="80" />
+                                    <ColumnDefinition Width="95" />
                                     <ColumnDefinition Width="140" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Fecha" FontSize="11" Opacity="0.6" />
                                 <TextBlock Grid.Column="1" Text="Aplicación" FontSize="11" Opacity="0.6" />
                                 <TextBlock Grid.Column="2" Text="Tipo" FontSize="11" Opacity="0.6" />
-                                <TextBlock Grid.Column="3" Text="Quién" FontSize="11" Opacity="0.6" />
-                                <TextBlock Grid.Column="4" Text="Unidades" FontSize="11" Opacity="0.6" />
-                                <TextBlock Grid.Column="5" Text="Hallazgos" FontSize="11" Opacity="0.6" />
-                                <TextBlock Grid.Column="6" Text="Coste" FontSize="11" Opacity="0.6" />
+                                <!-- F16 §C: con dos casas, saber cuál gastó es parte de leer la fila. -->
+                                <TextBlock Grid.Column="3" Text="Proveedor" FontSize="11" Opacity="0.6" />
+                                <TextBlock Grid.Column="4" Text="Quién" FontSize="11" Opacity="0.6" />
+                                <TextBlock Grid.Column="5" Text="Unidades" FontSize="11" Opacity="0.6" />
+                                <TextBlock Grid.Column="6" Text="Hallazgos" FontSize="11" Opacity="0.6" />
+                                <TextBlock Grid.Column="7" Text="Coste" FontSize="11" Opacity="0.6" />
                             </Grid>
 
                             <ItemsControl ItemsSource="{Binding Sessions}"
@@ -554,10 +557,11 @@
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="110" />
                                                     <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="140" />
+                                                    <ColumnDefinition Width="130" />
                                                     <ColumnDefinition Width="120" />
-                                                    <ColumnDefinition Width="90" />
-                                                    <ColumnDefinition Width="100" />
+                                                    <ColumnDefinition Width="110" />
+                                                    <ColumnDefinition Width="80" />
+                                                    <ColumnDefinition Width="95" />
                                                     <ColumnDefinition Width="140" />
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Grid.Column="0" Text="{Binding When}" FontSize="12" Opacity="0.85" />
@@ -568,10 +572,13 @@
                                                 </StackPanel>
                                                 <TextBlock Grid.Column="2" Text="{Binding Type}" FontSize="12" Opacity="0.85"
                                                            TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Grid.Column="3" Text="{Binding By}" FontSize="12" Opacity="0.85" />
-                                                <TextBlock Grid.Column="4" Text="{Binding Units}" FontSize="12" Opacity="0.85" />
-                                                <TextBlock Grid.Column="5" Text="{Binding Findings}" FontSize="12" Opacity="0.85" />
-                                                <TextBlock Grid.Column="6" Text="{Binding Cost}" FontSize="12" Opacity="0.85" />
+                                                <TextBlock Grid.Column="3" Text="{Binding Provider}" FontSize="12" Opacity="0.85"
+                                                           TextTrimming="CharacterEllipsis" ToolTip="{Binding Provider}" />
+                                                <TextBlock Grid.Column="4" Text="{Binding By}" FontSize="12" Opacity="0.85"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Grid.Column="5" Text="{Binding Units}" FontSize="12" Opacity="0.85" />
+                                                <TextBlock Grid.Column="6" Text="{Binding Findings}" FontSize="12" Opacity="0.85" />
+                                                <TextBlock Grid.Column="7" Text="{Binding Cost}" FontSize="12" Opacity="0.85" />
                                             </Grid>
                                         </Button>
                                     </DataTemplate>
