@@ -218,6 +218,11 @@ public partial class App : Application
         services.AddSingleton<IDeletedUnitsDialog, DeletedUnitsDialogHost>();
         // F13: la política de tamaño de cada aplicación, y quién la abre.
         services.AddSingleton<ThresholdPolicyService>();
+
+        // F15 — las tarifas por modelo: configuración de la ORGANIZACIÓN, en el hub, y editable
+        // desde Métricas, que es donde se ve su consecuencia (mismo argumento que D-770).
+        services.AddSingleton<ModelRatesService>();
+        services.AddSingleton<IModelRatesDialog, ModelRatesDialogHost>();
         services.AddSingleton<IThresholdsDialog, ThresholdsDialogHost>();
         // F5.6 §3 (D-228): el reparto de alias legibles, que nunca se había cableado.
         services.AddSingleton<DisplayIdService>();

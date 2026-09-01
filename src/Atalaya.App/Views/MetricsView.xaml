@@ -222,6 +222,22 @@
                                 </ItemsControl>
 
                                 <TextBlock Text="{Binding CostPerUnit}" Style="{StaticResource TileFoot}" />
+
+                                <!-- F15 — falta gasto por contar: hay sesiones cuyo modelo no tiene
+                                     tarifa. Se dice, porque un total al que le falta gasto se lee
+                                     como si fuera el gasto entero. -->
+                                <TextBlock Text="{Binding CostPartialNotice}" TextWrapping="Wrap"
+                                           FontSize="11" Foreground="#E0A030" Margin="0,4,0,0"
+                                           Visibility="{Binding CostPartialNotice, Converter={StaticResource NotEmptyToVisibility}}" />
+
+                                <TextBlock Text="{Binding CostInDollars}" FontSize="11" Opacity="0.6"
+                                           Margin="0,4,0,0"
+                                           Visibility="{Binding CostInDollars, Converter={StaticResource NotEmptyToVisibility}}" />
+
+                                <ui:HyperlinkButton Content="Tarifas · Gestionar"
+                                                    Command="{Binding ManageRatesCommand}"
+                                                    FontSize="11" Padding="0,2" Margin="0,4,0,0"
+                                                    Visibility="{Binding CanManageRates, Converter={StaticResource BoolToVisibility}}" />
                             </StackPanel>
                         </ui:Card>
 

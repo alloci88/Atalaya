@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows.Media;
 using Atalaya.App.Controls;
 using Atalaya.App.Services;
+using Atalaya.App.Views;
 using Atalaya.Domain;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -113,8 +114,12 @@ public sealed partial class MetricsViewModel : ViewModelBase
         NavigationService navigation,
         SettingsService settings,
         HubContext hub,
-        ToastCenter toasts)
+        ToastCenter toasts,
+        ModelRatesService? rates = null,
+        IModelRatesDialog? ratesDialog = null)
     {
+        _rates = rates;
+        _ratesDialog = ratesDialog;
         _metrics = metrics;
         _navigation = navigation;
         _settings = settings;
@@ -216,6 +221,33 @@ public sealed partial class MetricsViewModel : ViewModelBase
     /// el número, para que se pueda ir a configurarla.
     /// </summary>
     [ObservableProperty] private string _costPartialNotice = string.Empty;
+
+    /// <summary>
+    /// Las tarifas se editan DESDE AQUÍ (F15), que es donde se ve su consecuencia — el mismo
+    /// argumento que llevó los umbrales al Inventario (D-770). Opcionales: los tests que solo
+    /// ejercitan la agregación no tienen por qué montar un diálogo.
+    /// </summary>
+    private readonly ModelRatesService? _rates;
+    private readonly IModelRatesDialog? _ratesDialog;
+
+    /// <summary>Se puede gestionar la tabla: hay servicio y hay quien la enseñe.</summary>
+    public bool CanManageRates => _rates is not null && _ratesDialog is not null;
+
+    /// <summary>Abre las tarifas y recarga: cambiarlas cambia todos los costes de la pantalla.</summary>
+    [RelayCommand]
+    private async Task ManageRatesAsync()
+    {
+        if (_rates is null || _ratesDialog is null)
+        {
+            return;
+        }
+
+        ModelRatesViewModel dialog = _ratesDialog.Show(new ModelRatesViewModel(_rates));
+        if (dialog.Saved)
+        {
+            await LoadAsync();
+        }
+    }
 
     /// <summary>El equivalente en dólares del total, para el tooltip. 1 credit = 0,01 $.</summary>
     [ObservableProperty] private string _costInDollars = string.Empty;
