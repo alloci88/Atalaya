@@ -8,6 +8,7 @@ public sealed class FakeCopilotAgent : ICopilotAgent
 {
     private readonly Func<AuditUnitRequest, IEnumerable<SubmitFindingArgs>> _auditScript;
     private readonly Func<VerifyTarget, string> _verdictScript;
+    private readonly Func<VerifyTarget, string> _verdictEvidence;
     private readonly Func<AuditUnitRequest, IEnumerable<VerdictArgs>>? _reconcileScript;
     private readonly Func<AuditUnitRequest, IEnumerable<AddLocationsArgs>>? _extendScript;
     private readonly Func<IReadOnlyList<AgentModel>>? _modelsScript;
@@ -45,6 +46,11 @@ public sealed class FakeCopilotAgent : ICopilotAgent
     /// <param name="fixFollowUp">
     /// Qué hace el agente falso con una orden que el usuario encoló para el turno siguiente.
     /// </param>
+    /// <param name="verdictEvidence">
+    /// F12 §A: la evidencia que acompaña al veredicto. Por defecto una frase de relleno; los tests
+    /// que comprueban que la causa REAL del modelo llega al historial pasan la suya — que es lo que
+    /// distingue «no concluyente» de «no concluyente, y por esto».
+    /// </param>
     public FakeCopilotAgent(
         Func<AuditUnitRequest, IEnumerable<SubmitFindingArgs>>? auditScript = null,
         Func<VerifyTarget, string>? verdictScript = null,
@@ -54,10 +60,12 @@ public sealed class FakeCopilotAgent : ICopilotAgent
         string? modelName = null,
         Func<AuditUnitRequest, IEnumerable<SuppressedByPatternArgs>>? suppressScript = null,
         Func<FixRequest, IEnumerable<FixStep>>? fixScript = null,
-        Action<string, IFixToolbox>? fixFollowUp = null)
+        Action<string, IFixToolbox>? fixFollowUp = null,
+        Func<VerifyTarget, string>? verdictEvidence = null)
     {
         _auditScript = auditScript ?? (_ => Array.Empty<SubmitFindingArgs>());
         _verdictScript = verdictScript ?? (_ => "confirmado");
+        _verdictEvidence = verdictEvidence ?? (_ => "veredicto (fake)");
         _reconcileScript = reconcileScript;
         _extendScript = extendScript;
         _modelsScript = modelsScript;
@@ -149,7 +157,7 @@ public sealed class FakeCopilotAgent : ICopilotAgent
         foreach (VerifyTarget target in request.Targets)
         {
             ct.ThrowIfCancellationRequested();
-            toolbox.SubmitVerdict(target.FindingUlid, _verdictScript(target), "veredicto (fake)");
+            toolbox.SubmitVerdict(target.FindingUlid, _verdictScript(target), _verdictEvidence(target));
         }
 
         UsageReported?.Invoke(new UsageSample(request.Targets.Count * 50L, request.Targets.Count * 10L, null, ModelName));

@@ -131,6 +131,7 @@ public static class FindingEventNames
         FindingEvent.DisputeCleared => "Disputa cerrada",
         FindingEvent.NotLocated => "No localizado",
         FindingEvent.Reanchored => "Re-anclado",
+        FindingEvent.Inconclusive => "No concluyente",
         _ => e.ToString(),
     };
 
@@ -156,6 +157,7 @@ public static class FindingEventNames
         FindingEvent.DisputeCleared => "⚖︎",
         FindingEvent.NotLocated => "◌",
         FindingEvent.Reanchored => "⌖",
+        FindingEvent.Inconclusive => "?",
         _ => "•",
     };
 }

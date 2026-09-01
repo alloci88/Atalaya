@@ -125,7 +125,8 @@ public static class AtalayaJson
             (FindingEvent.Disputed, "disputed"),
             (FindingEvent.DisputeCleared, "disputeCleared"),
             (FindingEvent.NotLocated, "notLocated"),
-            (FindingEvent.Reanchored, "reanchored")));
+            (FindingEvent.Reanchored, "reanchored"),
+            (FindingEvent.Inconclusive, "inconclusive")));
 
         o.Converters.Add(new EnumJsonConverter<TechStack>(
             (TechStack.Unknown, "unknown"),

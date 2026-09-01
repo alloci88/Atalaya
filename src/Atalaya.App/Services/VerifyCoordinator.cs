@@ -1,4 +1,4 @@
-﻿using Atalaya.Copilot;
+using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Anchoring;
 using Atalaya.Domain.Hashing;
@@ -79,6 +79,11 @@ public sealed class VerifyCoordinator
         var stamps = new Dictionary<string, DetectionStamp>(StringComparer.Ordinal);
         var aimed = new Dictionary<string, (Finding Finding, VerifyAim Aim)>(StringComparer.Ordinal);
 
+        // El paso siguiente de cada objetivo, por si el instrumento acaba diciendo que no puede
+        // decidir (F12 §A). Se calcula AQUÍ porque aquí es donde se sabe qué código se le enseñó:
+        // proponerlo desde la caja de herramientas obligaría a adivinarlo.
+        var nextSteps = new Dictionary<string, string>(StringComparer.Ordinal);
+
         foreach (Ulid id in findingIds)
         {
             Finding? f = _hub.Store.TryReadFinding(slug, id.ToString());
@@ -128,6 +133,7 @@ public sealed class VerifyCoordinator
             string key = f.Id.ToString();
             stamps[key] = stamp;
             aimed[key] = (f, aim);
+            nextSteps[key] = NextStep(aim, loc.Path);
             targets.Add(new VerifyTarget(
                 key, loc.Path, aim.Line, aim.Snippet, f.Title, f.Description,
                 aim.Basis, aim.Member, f.Recommendation));
@@ -139,7 +145,7 @@ public sealed class VerifyCoordinator
             return new VerifyOutcome(measuredApplied, measuredMessages, notes);
         }
 
-        var toolbox = new VerifyToolbox(_hub, slug, stamps);
+        var toolbox = new VerifyToolbox(_hub, slug, stamps, nextSteps);
 
         // F7 §3: el verificador juzga el mismo código que el auditor y necesita el mismo criterio.
         // Sin las directivas de ámbito Auditoría confirmaría como defecto justo lo que la auditoría
@@ -219,6 +225,27 @@ public sealed class VerifyCoordinator
             _hub.Sync?.CommitAndPush($"verify: {slug} {changed} hallazgos");
         }
     }
+
+    /// <summary>
+    /// Lo que se propone cuando no hay nada mejor que proponer: el objetivo ni siquiera llegó a
+    /// registrarse (no debería pasar, pero un «no concluyente» sin salida es peor que un genérico).
+    /// </summary>
+    private const string DefaultNextStep = "El siguiente paso es re-auditar la unidad.";
+
+    /// <summary>
+    /// El paso siguiente de un «no concluyente» (F12 §A). Depende de CUÁNTO código llegó a ver el
+    /// instrumento: si vio menos que la unidad, lo que falta es contexto; si ya vio la unidad
+    /// entera y sigue sin poder decidir, lo que falta es una auditoría con el criterio completo.
+    /// </summary>
+    private static string NextStep(VerifyAim aim, string path) => aim.Basis switch
+    {
+        VerifyBasis.Unidad =>
+            $"se juzgó con {path} entera delante y aun así no se pudo decidir: el siguiente paso es "
+            + "re-auditar la unidad.",
+        _ =>
+            $"el siguiente paso es ampliar el contexto — re-audita {path} para juzgarlo con la "
+            + "unidad entera delante.",
+    };
 
     /// <summary>Qué anotar de un objetivo sobre el que el auditor no llegó a pronunciarse.</summary>
     private static (FindingEvent Kind, string Detail, string Note) Silent(Finding f, VerifyAim aim)
@@ -355,14 +382,21 @@ public sealed class VerifyCoordinator
         private readonly HubContext _hub;
         private readonly string _slug;
         private readonly IReadOnlyDictionary<string, DetectionStamp> _stamps;
+
+        /// <summary>Qué proponerle al usuario cuando el veredicto sea «no concluyente» (F12 §A).</summary>
+        private readonly IReadOnlyDictionary<string, string> _nextSteps;
+
         private readonly HashSet<string> _judged = new(StringComparer.Ordinal);
         private readonly List<string> _notes = new();
 
-        public VerifyToolbox(HubContext hub, string slug, IReadOnlyDictionary<string, DetectionStamp> stamps)
+        public VerifyToolbox(
+            HubContext hub, string slug, IReadOnlyDictionary<string, DetectionStamp> stamps,
+            IReadOnlyDictionary<string, string> nextSteps)
         {
             _hub = hub;
             _slug = slug;
             _stamps = stamps;
+            _nextSteps = nextSteps;
         }
 
         public int Applied { get; private set; }
@@ -429,11 +463,17 @@ public sealed class VerifyCoordinator
                     note = $"{Alias(f)}: el auditor sostiene que nunca fue un defecto. Queda disputado.";
                     break;
 
-                default: // no-verificable
+                default: // no-verificable → NO CONCLUYENTE (F12 §A)
+                    // Una no-respuesta tiene desenlace propio. Se anotaba como «Confirmado», y con
+                    // eso el hallazgo se leía más sólido cuantas más veces NO se hubiera podido
+                    // verificar: la métrica se alimentaba justo de la ausencia de evidencia. Aquí
+                    // no se toca ni TimesConfirmed, ni la confianza, ni lastConfirmed — solo queda
+                    // la marca de revisión, la causa, y qué hacer a continuación.
                     f.NeedsReview = true;
-                    f.Record(new HistoryEntry(stamp.Utc, FindingEvent.Confirmed, stamp.By,
-                        $"verify: no verificable — {Detail(evidence)}"));
-                    note = $"{Alias(f)}: no verificable — {Detail(evidence)}";
+                    string step = _nextSteps.TryGetValue(key, out string? next) ? next : DefaultNextStep;
+                    f.Record(new HistoryEntry(stamp.Utc, FindingEvent.Inconclusive, stamp.By,
+                        $"no concluyente — {Detail(evidence)} · {step}"));
+                    note = $"{Alias(f)}: no concluyente — {Detail(evidence)} · {step}";
                     break;
             }
 

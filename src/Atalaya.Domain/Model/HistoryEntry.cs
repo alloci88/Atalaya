@@ -39,6 +39,23 @@ public enum FindingEvent
     /// veredicto, el veredicto es el evento y esto sería eco.
     /// </summary>
     Reanchored,
+
+    /// <summary>
+    /// El instrumento MIRÓ el código y no pudo decidir (F12 §A). Es el desenlace propio de una
+    /// no-respuesta, y existe porque hasta aquí se anotaba como <see cref="Confirmed"/>.
+    /// <para>
+    /// Una no-respuesta no es evidencia de nada. Registrarla como confirmación violaba las dos
+    /// caras de la misma norma —«ningún número sin causa» y «ninguna resolución sin evidencia»,
+    /// cuyo espejo es que tampoco hay CONFIRMACIÓN sin evidencia— y corrompía la prioridad: un
+    /// hallazgo parecía más sólido cuantas más veces no se hubiera podido verificar.
+    /// </para>
+    /// <para>
+    /// No toca <see cref="Finding.TimesConfirmed"/>, ni la confianza, ni
+    /// <see cref="Finding.LastConfirmed"/>. Lo único que deja es la marca de revisión y el paso
+    /// siguiente escrito en el detalle.
+    /// </para>
+    /// </summary>
+    Inconclusive,
 }
 
 /// <summary>One immutable entry in a finding's audit trail.</summary>

@@ -120,8 +120,17 @@ public sealed class ReconciliationService
                 outcome = Dispute(finding, evidence, stamp);
                 break;
 
-            default:
+            case ReconcileVerdict.Presente:
                 outcome = Present(slug, finding, evidence, mode, stamp);
+                break;
+
+            default:
+                // «PRESENTE» NO ES EL CAJÓN DE SASTRE (F12 §A). Un veredicto que no se reconoce es
+                // una no-respuesta, y una no-respuesta no confirma nada: iba a parar aquí por ser
+                // el `default` del switch, con lo que un valor nuevo del enum —o uno que el parser
+                // dejara pasar— habría subido «Veces confirmado» sin que nadie hubiera mirado el
+                // código. El que decide entra por su nombre; lo demás queda sin concluir.
+                outcome = NeedsReview(finding, $"veredicto no reconocido: {Detail(evidence)}", stamp);
                 break;
         }
 
@@ -215,11 +224,19 @@ public sealed class ReconciliationService
         return ReconcileOutcome.Disputed;
     }
 
+    /// <summary>
+    /// El auditor miró la unidad y no pudo decidir. Es un desenlace propio —«No concluyente»— y no
+    /// una confirmación (F12 §A): se anotaba con <see cref="FindingEvent.Confirmed"/>, que es el
+    /// mismo agujero que tenía la verificación, y por el mismo motivo. Ni toca
+    /// <c>TimesConfirmed</c>, ni la confianza, ni <c>lastConfirmed</c>.
+    /// </summary>
     private static ReconcileOutcome NeedsReview(Finding finding, string evidence, DetectionStamp stamp)
     {
         finding.NeedsReview = true;
-        finding.History.Add(new HistoryEntry(stamp.Utc, FindingEvent.Confirmed, stamp.By,
-            $"auditor: no verificable desde la unidad — {Detail(evidence)}"));
+        finding.History.Add(new HistoryEntry(stamp.Utc, FindingEvent.Inconclusive, stamp.By,
+            $"no concluyente — el auditor no pudo decidirlo desde la unidad: {Detail(evidence)} · "
+            + "el siguiente paso es ampliar el contexto (auditarlo junto al código que lo usa) o "
+            + "revisarlo a mano."));
         return ReconcileOutcome.NeedsReview;
     }
 
