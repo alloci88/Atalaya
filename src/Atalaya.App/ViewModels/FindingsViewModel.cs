@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using Atalaya.App.Services;
 using Atalaya.Domain;
 using Atalaya.Domain.Ids;
@@ -37,12 +37,6 @@ public sealed record SeverityFilterOption(Severity? Value, string Label)
 public sealed record ScopeFilterOption(FindingsScope Value, string Label)
 {
     public override string ToString() => Label;
-}
-
-/// <summary>Un conteo por severidad, para el resumen de la cabecera de grupo.</summary>
-public sealed record SeverityChip(Severity Severity, int Count)
-{
-    public string Label => $"{Count} {SeverityNames.Display(Severity)}";
 }
 
 /// <summary>

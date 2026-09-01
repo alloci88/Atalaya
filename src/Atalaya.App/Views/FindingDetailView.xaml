@@ -213,8 +213,22 @@
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding SnippetNotice}" TextWrapping="Wrap" FontSize="11.5"
+                            <!-- F12 §H.4 — EL AVISO CABE. Era un StackPanel horizontal, y un
+                                 StackPanel horizontal da a sus hijos ancho infinito: con eso
+                                 `TextWrapping="Wrap"` no envuelve NUNCA y el texto se salía por la
+                                 derecha, cortado contra el borde y sin tooltip que lo rescatara —
+                                 justo el aviso de re-anclaje, que es de los largos. Una rejilla de
+                                 dos columnas (texto elástico, botón a su medida) le da un ancho
+                                 real, así que envuelve; y el tooltip lleva el texto entero por si
+                                 aun así no cupiera. -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding SnippetNotice}" TextWrapping="Wrap" FontSize="11.5"
+                                           ToolTip="{Binding SnippetNotice}"
                                            VerticalAlignment="Center">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
@@ -229,13 +243,14 @@
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
-                                <ui:Button Content="Verificar ahora" Command="{Binding VerifyCommand}"
+                                <ui:Button Grid.Column="1"
+                                           Content="Verificar ahora" Command="{Binding VerifyCommand}"
                                            Appearance="Secondary" Padding="10,3" FontSize="11"
                                            IsEnabled="{Binding CanAudit}"
                                            ToolTip="{Binding AuditDisabledTooltip}"
                                            Margin="10,0,0,0" VerticalAlignment="Center"
                                            Visibility="{Binding SnippetNoticeOffersVerify, Converter={StaticResource BoolToVisibility}}" />
-                            </StackPanel>
+                            </Grid>
                         </Border>
 
                         <Border CornerRadius="6" ClipToBounds="True"

@@ -342,6 +342,58 @@
                                                            TextWrapping="Wrap" VerticalAlignment="Center" />
                                             </Grid>
                                         </Button>
+                                        <!-- F12 §H.1 — el desglose de HALLAZGOS va agrupado por
+                                             clase, con el recuento por severidad al lado, que es
+                                             el mismo patrón de la vista de Hallazgos. Salía como
+                                             una lista corrida: con veinte hallazgos de seis
+                                             ficheros no había forma de ver de dónde venían. Las
+                                             líneas que no hablan de hallazgos (unidades,
+                                             incidencias) siguen siendo una lista: ahí la unidad
+                                             ya ES la línea. -->
+                                        <ItemsControl ItemsSource="{Binding Groups}" Margin="60,4,0,8"
+                                                      Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Margin="0,0,0,7">
+                                                        <WrapPanel>
+                                                            <TextBlock Text="{Binding FileName}" FontWeight="SemiBold"
+                                                                       FontSize="12" VerticalAlignment="Center" />
+                                                            <TextBlock Text="{Binding CountLabel}" FontSize="11" Opacity="0.6"
+                                                                       Margin="8,0,0,0" VerticalAlignment="Center" />
+                                                            <ItemsControl ItemsSource="{Binding Chips}" Margin="8,0,0,0"
+                                                                          VerticalAlignment="Center">
+                                                                <ItemsControl.ItemsPanel>
+                                                                    <ItemsPanelTemplate>
+                                                                        <WrapPanel />
+                                                                    </ItemsPanelTemplate>
+                                                                </ItemsControl.ItemsPanel>
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Border CornerRadius="8" Padding="6,1" Margin="0,0,4,0"
+                                                                                Background="#16808080">
+                                                                            <TextBlock Text="{Binding Label}" FontSize="10"
+                                                                                       Foreground="{Binding Severity, Converter={StaticResource SeverityToBrush}}" />
+                                                                        </Border>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </WrapPanel>
+                                                        <TextBlock Text="{Binding Subtitle}" FontSize="10" Opacity="0.5"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   ToolTip="{Binding Subtitle}" />
+                                                        <ItemsControl ItemsSource="{Binding Items}" Margin="12,3,0,0">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
+                                                                               FontSize="11" Opacity="0.85" Margin="0,1" />
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
                                         <ItemsControl ItemsSource="{Binding Details}" Margin="60,4,0,8"
                                                       Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}">
                                             <ItemsControl.ItemTemplate>

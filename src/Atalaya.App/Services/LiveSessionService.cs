@@ -49,13 +49,16 @@ public sealed partial class LiveSessionService : ObservableObject
     private int _unitsDone;
 
     // Desglose para la pantalla de cierre: qué hallazgos produjeron cada contador.
-    private readonly List<string> _new = new();
-    private readonly List<string> _confirmed = new();
-    private readonly List<string> _resolved = new();
-    private readonly List<string> _disputed = new();
-    private readonly List<string> _refused = new();
-    private readonly List<string> _nonVerifiable = new();
-    private readonly List<string> _silenced = new();
+    // F12 §H.1 — los desgloses de hallazgos llevan la UNIDAD y la severidad, que es lo que permite
+    // agruparlos por clase igual que los agrupa la vista de Hallazgos. Los de unidades e
+    // incidencias siguen siendo líneas sueltas: ahí la unidad ya es la línea.
+    private readonly List<SummaryItem> _new = new();
+    private readonly List<SummaryItem> _confirmed = new();
+    private readonly List<SummaryItem> _resolved = new();
+    private readonly List<SummaryItem> _disputed = new();
+    private readonly List<SummaryItem> _refused = new();
+    private readonly List<SummaryItem> _nonVerifiable = new();
+    private readonly List<SummaryItem> _silenced = new();
     private readonly List<string> _incidents = new();
 
     /// <param name="hub">
@@ -565,16 +568,22 @@ public sealed partial class LiveSessionService : ObservableObject
             return;
         }
 
-        string verdicts = record.Confirmed + record.Resolved + record.NonVerifiable > 0
+        string verdicts = record.Confirmed + record.Resolved + record.NonVerifiable + record.Disputed > 0
             ? $" · veredictos: {record.Confirmed} presente"
               + (record.Resolved > 0 ? $" · {record.Resolved} arreglado" : "")
-              + (record.NonVerifiable > 0 ? $" · {record.NonVerifiable} no-verificable" : "")
+              + (record.NonVerifiable > 0 ? $" · {record.NonVerifiable} no concluyente" : "")
+              + (record.Disputed > 0 ? $" · {record.Disputed} disputado" : "")
             : "";
 
-        pass.Headline = record.Dry
-            ? $"Pasada {record.Index} — seca"
-            : $"Pasada {record.Index} — {record.New} nuevo(s)"
-              + (record.LocationsAdded > 0 ? $", {record.LocationsAdded} ubicación(es)" : "");
+        // F12 §H.2 — EL TITULAR CUENTA LO QUE HIZO LA PASADA, no solo lo que trajo de nuevo. Una
+        // pasada de reconciliación que confirmaba siete hallazgos se titulaba «seca», que se lee
+        // como «aquí no ha pasado nada»: lo que no aportó fueron NUEVOS, y confirmar siete es
+        // trabajo hecho y pagado. Los tres números van siempre, en el mismo orden.
+        pass.Headline =
+            $"Pasada {record.Index} — {record.New} nuevo(s) · {record.Confirmed} confirmado(s) · "
+            + $"{record.Disputed} disputado(s)"
+            + (record.LocationsAdded > 0 ? $" · {record.LocationsAdded} ubicación(es)" : "")
+            + (record.Dry ? " · seca" : "");
 
         // Los veredictos van en las DOS ramas (F5.14). Estaban solo en la de la pasada con
         // aportación, así que el caso más común —una pasada seca en la que el auditor confirmó
@@ -592,7 +601,8 @@ public sealed partial class LiveSessionService : ObservableObject
                 ? $"Pasada {record.Index} seca — el auditor no aportó nada nuevo"
                 : $"Pasada {record.Index}: {record.New} nuevo(s)"
                   + (record.LocationsAdded > 0 ? $", {record.LocationsAdded} ubicación(es) añadida(s)" : ""))
-            + verdicts));
+            + verdicts
+            + (record.Disputed > 0 && verdicts.Length == 0 ? $" · {record.Disputed} disputado" : "")));
         _currentText = null;
     });
 
@@ -643,12 +653,15 @@ public sealed partial class LiveSessionService : ObservableObject
     {
         string title = finding.Title;
         string alias = finding.DisplayId ?? finding.Id.ToString();
+        string unit = finding.Locations.Count > 0 ? finding.Locations[0].Path : "(sin ubicación)";
+
+        SummaryItem Item(string text) => new(unit, finding.Severity, text);
 
         switch (kind)
         {
             case "nuevo":
                 Findings.Add(finding);
-                _new.Add($"[{finding.Severity}] {title}");
+                _new.Add(Item($"[{SeverityNames.Display(finding.Severity)}] {title}"));
                 Add(_currentPass, ActivityEntry.Event("＋", $"Hallazgo: {title}", finding.Severity));
                 break;
 
@@ -657,30 +670,30 @@ public sealed partial class LiveSessionService : ObservableObject
                 break;
 
             case "disputed":
-                _disputed.Add($"{alias} «{title}» — el auditor sostiene que nunca fue un defecto");
+                _disputed.Add(Item($"{alias} «{title}» — el auditor sostiene que nunca fue un defecto"));
                 Add(_currentPass, ActivityEntry.Event("⚖", $"Disputado: {title}"));
                 break;
 
             case "resolutionrefused":
-                _refused.Add($"{alias} «{title}» — «arreglado» sin evidencia de cambio, degradado a presente");
+                _refused.Add(Item($"{alias} «{title}» — «arreglado» sin evidencia de cambio, degradado a presente"));
                 Add(_currentPass, ActivityEntry.Event("⚠", $"«Arreglado» sin evidencia de cambio: {title}"));
                 break;
 
             case "resolved":
-                _resolved.Add($"{alias} «{title}»");
+                _resolved.Add(Item($"{alias} «{title}»"));
                 Add(_currentPass, ActivityEntry.Event("✔", $"Resuelto: {title}"));
                 break;
 
             case "needsreview":
-                _nonVerifiable.Add($"{alias} «{title}»");
+                _nonVerifiable.Add(Item($"{alias} «{title}»"));
                 break;
 
             case "silencerespected":
-                _silenced.Add($"{alias} «{title}»");
+                _silenced.Add(Item($"{alias} «{title}»"));
                 break;
 
             case "reconfirmed":
-                _confirmed.Add($"{alias} «{title}»");
+                _confirmed.Add(Item($"{alias} «{title}»"));
                 break;
         }
     });
@@ -755,19 +768,38 @@ public sealed partial class LiveSessionService : ObservableObject
             });
         }
 
-        Line("Nuevos", c.New, "Hallazgos que no estaban en el baseline de la unidad.", _new);
-        Line("Confirmados", c.Confirmed, "El auditor los declaró presentes; sigue contando la máquina de confianza.", _confirmed);
-        Line("Resueltos", c.Resolved,
+        // La misma línea, con el desglose AGRUPADO POR CLASE (F12 §H.1).
+        void Findings_(string label, int count, string explanation, List<SummaryItem> items, bool warning = false)
+        {
+            if (count == 0 && items.Count == 0)
+            {
+                return;
+            }
+
+            Summary.Add(new SummaryLine
+            {
+                Label = label,
+                Count = count,
+                Explanation = explanation,
+                Groups = SummaryLine.GroupOf(items),
+                IsWarning = warning,
+            });
+        }
+
+        Findings_("Nuevos", c.New, "Hallazgos que no estaban en el baseline de la unidad.", _new);
+        Findings_("Confirmados", c.Confirmed, "El auditor los declaró presentes; sigue contando la máquina de confianza.", _confirmed);
+        Findings_("Resueltos", c.Resolved,
             "Cerrados con evidencia de cambio: la unidad cambió desde la última vez que se vieron.", _resolved);
-        Line("Disputados", c.Disputed,
+        Findings_("Disputados", c.Disputed,
             "El auditor sostiene que nunca fueron un defecto. NO están resueltos: los decides tú en Hallazgos.",
             _disputed, warning: true);
-        Line("«Arreglado» sin evidencia", c.ResolutionsRefused,
+        Findings_("«Arreglado» sin evidencia", c.ResolutionsRefused,
             "El auditor los dio por arreglados, pero la unidad no había cambiado: degradados a presente.",
             _refused, warning: true);
-        Line("No verificables", c.NoVerificables,
-            "No se pueden determinar desde esta unidad; quedan marcados para revisión.", _nonVerifiable);
-        Line("Silenciados detectados", c.SilencedRespected,
+        Findings_("No concluyentes", c.NoVerificables,
+            "El auditor miró la unidad y no pudo decidir. No es una confirmación: quedan marcados "
+            + "para revisión, con el paso siguiente escrito en su ficha.", _nonVerifiable);
+        Findings_("Silenciados detectados", c.SilencedRespected,
             "Siguen presentes, pero el silencio es una decisión humana y el auditor no la revoca.", _silenced);
         Line("Ubicaciones añadidas", c.LocationsAdded,
             "Un defecto sistémico es UN hallazgo con varias ubicaciones.", new List<string>());

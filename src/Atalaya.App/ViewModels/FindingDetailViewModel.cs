@@ -747,7 +747,10 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         // F6.7: el panel se pide POR HALLAZGO, no por ubicación. El anclaje dice qué relación hay
         // entre el clon y lo que se auditó; el estado dice si eso es un problema — y sobre un
         // resuelto no lo es, porque ese cambio en el código es precisamente el arreglo.
-        SnippetPanel panel = SnippetReader.ForFinding(_machines.Load().ClonePathFor(Slug), f);
+        // Las huellas de los arreglos viajan con la petición (F12 §H.5): son lo que permite que el
+        // aviso distinga «alguien cambió este código» de «lo cambió Atalaya, y falta verificarlo».
+        SnippetPanel panel = SnippetReader.ForFinding(
+            _machines.Load().ClonePathFor(Slug), f, _hub.Store.ListFixes(Slug));
 
         SnippetPath = loc?.Path ?? string.Empty;
         SnippetState = panel.State;

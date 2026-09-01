@@ -139,12 +139,27 @@ public static class SnippetReader
     /// ESTADO (F6.7). Es la entrada que usa la ficha; las sobrecargas de <see cref="Read"/> son la
     /// capa de anclaje a secas y no saben nada del hallazgo.
     /// </summary>
-    public static SnippetPanel ForFinding(string? clonePath, Finding finding)
+    public static SnippetPanel ForFinding(
+        string? clonePath, Finding finding, IReadOnlyList<FixRecord>? fixes = null)
     {
         Location? loc = finding.Locations.FirstOrDefault();
         SnippetPanel panel = Read(
             clonePath, loc, finding.LastConfirmed.Commit,
             SymbolAnchor.Candidates(finding.Symbol, finding.Title));
+
+        // F12 §H.5 — LA APLICACIÓN NO SE EXTRAÑA DE SU PROPIO TRABAJO. Si el código que hay ahora
+        // es exactamente el que dejó un arreglo de Atalaya sobre ESTE hallazgo, decir «ya no es el
+        // que se auditó» es técnicamente cierto y desorientador: suena a que alguien de fuera tocó
+        // el código, cuando lo tocó ella misma y hace media hora. La huella del arreglo lo sabe.
+        if (OwnFixOn(clonePath, loc, finding, fixes) is { } own)
+        {
+            panel = panel with
+            {
+                Notice = own,
+                Fact = own,
+                Tone = SnippetTone.Aviso,
+            };
+        }
 
         return finding.Status switch
         {
@@ -170,6 +185,71 @@ public static class SnippetReader
 
             _ => panel,
         };
+    }
+
+    /// <summary>
+    /// El aviso de un hallazgo cuyo código lo cambió un arreglo de la propia aplicación (F12 §H.5),
+    /// o <c>null</c> si no fue así.
+    /// <para>
+    /// <b>Es una prueba, no una suposición</b>, y usa la misma huella que la deriva (F9 §2): el
+    /// contenido actual del fichero tiene que casar, byte a byte y normalizado, con el que el
+    /// arreglo dejó escrito. Si el usuario enmendó, aplastó o rehizo el cambio, ya no casa y el
+    /// aviso vuelve a ser el genérico — que es la dirección segura.
+    /// </para>
+    /// <para>
+    /// Solo se aplica a hallazgos ACTIVOS: sobre uno resuelto el aviso ya lo escribe
+    /// <see cref="Resolved"/>, y sobre uno silenciado no hay nada que pedir.
+    /// </para>
+    /// </summary>
+    private static string? OwnFixOn(
+        string? clonePath, Location? loc, Finding finding, IReadOnlyList<FixRecord>? fixes)
+    {
+        if (loc is null || fixes is null || fixes.Count == 0
+            || finding.Status != FindingStatus.Activo
+            || string.IsNullOrWhiteSpace(clonePath))
+        {
+            return null;
+        }
+
+        string id = finding.Id.ToString();
+        string path = CodeAnchor.NormalizePath(loc.Path);
+        string? current = TryContentHash(clonePath, loc.Path);
+        if (current is null)
+        {
+            return null;
+        }
+
+        FixRecord? mine = fixes
+            .Where(r => string.Equals(r.FindingId, id, StringComparison.Ordinal))
+            .OrderByDescending(r => r.Utc)
+            .FirstOrDefault(r => r.Files.Any(f =>
+                CodeAnchor.NormalizePath(f.Path) == path
+                && string.Equals(f.ContentHash, current, StringComparison.OrdinalIgnoreCase)));
+
+        return mine is null
+            ? null
+            : $"Este código lo cambió el arreglo de Atalaya el "
+              + $"{mine.Utc.ToLocalTime():dd/MM/yyyy}; pendiente de verificar.";
+    }
+
+    /// <summary>La huella del fichero tal y como está AHORA en el clon, o null si no se puede leer.</summary>
+    private static string? TryContentHash(string clonePath, string path)
+    {
+        try
+        {
+            string abs = Path.Combine(clonePath, path.Replace('/', Path.DirectorySeparatorChar));
+            return File.Exists(abs)
+                ? Atalaya.Domain.Hashing.HashUtil.NormalizedContentHash(File.ReadAllBytes(abs))
+                : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

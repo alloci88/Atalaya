@@ -1,4 +1,4 @@
-﻿using Atalaya.App.Services;
+using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Copilot;
 using Atalaya.Domain;
@@ -225,7 +225,14 @@ public sealed class SessionViewModelTests : IDisposable
 
         SummaryLine nuevos = live.Summary.Single(l => l.Label == "Nuevos");
         nuevos.Count.Should().Be(1);
-        nuevos.Details.Should().ContainSingle().Which.Should().Contain("Conn leaked");
+        nuevos.Named.Should().ContainSingle().Which.Should().Contain("Conn leaked");
+
+        // F12 §H.1 — y va agrupado por clase, con su recuento por severidad, igual que en Hallazgos.
+        SummaryGroup group = nuevos.Groups.Should().ContainSingle().Subject;
+        group.Unit.Should().Be("A.cs");
+        group.FileName.Should().Be("A.cs");
+        group.CountLabel.Should().Be("1 hallazgo");
+        group.Chips.Should().ContainSingle().Which.Count.Should().Be(1);
     }
 
     /// <summary>Terminada la sesión, la barra inferior deja de decir «auditando».</summary>

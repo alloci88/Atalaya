@@ -304,7 +304,7 @@ public sealed class LiveNarrationTests : IDisposable
         foreach (string label in new[] { "Nuevos", "Disputados" })
         {
             SummaryLine line = Line(live, label)!;
-            line.Details.Should().HaveCount(line.Count, $"«{label}» dice {line.Count}: tiene que nombrar {line.Count}");
+            line.Named.Should().HaveCount(line.Count, $"«{label}» dice {line.Count}: tiene que nombrar {line.Count}");
         }
 
         // El estado persistido manda: la disputa está en el hallazgo, y solo en ese.

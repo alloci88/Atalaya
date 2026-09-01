@@ -37,6 +37,11 @@ public sealed record UnitVerdictRecord(
 /// encontró tres defectos ahí). Se conserva porque cuesta cero y, comparada entre pasadas,
 /// enseña qué zonas revisita el modelo.
 /// </param>
+/// <param name="Disputed">
+/// Veredictos «no es defecto» de esta pasada (F12 §H.2). Se contaban en la sesión y no en la
+/// pasada, así que la sesión en vivo no podía decirlos mientras pasaban — que es justo cuando
+/// importan.
+/// </param>
 public sealed record UnitPassRecord(
     int Index,
     int New,
@@ -46,7 +51,8 @@ public sealed record UnitPassRecord(
     int Rejected,
     bool Dry,
     string? Summary,
-    int LocationsAdded = 0);
+    int LocationsAdded = 0,
+    int Disputed = 0);
 
 /// <summary>Session tallies (§2).</summary>
 public sealed class SessionCounters

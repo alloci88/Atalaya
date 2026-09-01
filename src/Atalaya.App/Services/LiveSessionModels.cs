@@ -220,9 +220,61 @@ public sealed partial class UnitProgress : ObservableObject
             : string.Join('/', segments[^Math.Min(count, segments.Length)..]);
 }
 
+/// <summary>Un conteo por severidad, para el resumen de una cabecera de grupo.</summary>
+public sealed record SeverityChip(Severity Severity, int Count)
+{
+    public string Label => $"{Count} {SeverityNames.Display(Severity)}";
+}
+
+/// <summary>
+/// Un hallazgo dentro del desglose de una línea del resumen (F12 §H.1): además de la frase que se
+/// lee, de qué UNIDAD es y con qué severidad. Sin esas dos cosas el desglose no se puede agrupar,
+/// que es exactamente por lo que salía como una lista corrida.
+/// </summary>
+public sealed record SummaryItem(string Unit, Severity Severity, string Text);
+
+/// <summary>
+/// Los hallazgos de una unidad dentro del desglose de una línea (F12 §H.1). Es el MISMO patrón que
+/// la vista de Hallazgos: el fichero como cabecera y el recuento por severidad al lado.
+/// </summary>
+public sealed class SummaryGroup
+{
+    public required string Unit { get; init; }
+
+    public required IReadOnlyList<SummaryItem> Items { get; init; }
+
+    /// <summary>El nombre del fichero: la ruta entera va debajo, atenuada, como en V3.</summary>
+    public string FileName
+    {
+        get
+        {
+            string name = Path.GetFileName(Unit.Replace('\\', '/'));
+            return name.Length > 0 ? name : Unit;
+        }
+    }
+
+    public string Subtitle => Unit;
+
+    public string CountLabel => Items.Count == 1 ? "1 hallazgo" : $"{Items.Count} hallazgos";
+
+    public IReadOnlyList<SeverityChip> Chips => Enum.GetValues<Severity>()
+        .Select(sev => new SeverityChip(sev, Items.Count(i => i.Severity == sev)))
+        .Where(c => c.Count > 0)
+        .ToList();
+
+    /// <summary>La más grave del grupo: ordena los grupos, igual que en V3.</summary>
+    public Severity WorstSeverity => Items.Count == 0 ? Severity.Baja : Items.Min(i => i.Severity);
+}
+
 /// <summary>
 /// Una línea del resumen de cierre (V5). Nunca un número suelto: cada contador trae su explicación
 /// y el desglose de qué hallazgos o unidades lo componen, desplegable de un clic.
+/// <para>
+/// F12 §H.1 — el desglose de hallazgos va AGRUPADO POR CLASE, con su recuento por severidad. Salía
+/// como una lista corrida: con veinte hallazgos de seis ficheros no había forma de ver de dónde
+/// venían, y la vista de Hallazgos ya había resuelto exactamente eso. Un mismo dato se agrupa igual
+/// en las dos pantallas o el usuario aprende dos formas de leerlo.
+/// </para>
 /// </summary>
 public sealed partial class SummaryLine : ObservableObject
 {
@@ -233,14 +285,52 @@ public sealed partial class SummaryLine : ObservableObject
     /// <summary>Qué significa el número, en una frase.</summary>
     public required string Explanation { get; init; }
 
-    /// <summary>Qué hallazgos o unidades lo componen, y por qué.</summary>
+    /// <summary>
+    /// Qué unidades o incidencias lo componen. Es el desglose de las líneas que NO hablan de
+    /// hallazgos concretos (unidades incompletas, cortes, paradas); las de hallazgos usan
+    /// <see cref="Groups"/>.
+    /// </summary>
     public List<string> Details { get; init; } = new();
+
+    /// <summary>El desglose agrupado por clase, cuando la línea habla de hallazgos.</summary>
+    public IReadOnlyList<SummaryGroup> Groups { get; init; } = Array.Empty<SummaryGroup>();
 
     /// <summary>Resalta las líneas que piden atención (disputas, degradaciones, incidencias).</summary>
     public bool IsWarning { get; init; }
 
-    public bool HasDetails => Details.Count > 0;
+    public bool HasDetails => Details.Count > 0 || Groups.Count > 0;
+
+    /// <summary>
+    /// TODO lo que esta línea nombra, esté agrupado o no. Es la lectura de «ningún número sin
+    /// causa»: cuántos casos nombra el desglose frente a lo que dice el contador. Agrupar por clase
+    /// (F12 §H.1) no puede hacer que esa comprobación deje de poder hacerse en un sitio.
+    /// </summary>
+    public IReadOnlyList<string> Named => Groups.Count > 0
+        ? Groups.SelectMany(g => g.Items).Select(i => i.Text).ToList()
+        : Details;
+
+    public bool HasGroups => Groups.Count > 0;
+
+    /// <summary>Las dos listas nunca se pintan a la vez: o hay grupos, o hay líneas sueltas.</summary>
+    public bool HasFlatDetails => Groups.Count == 0 && Details.Count > 0;
 
     [ObservableProperty]
     private bool _isExpanded;
+
+    /// <summary>
+    /// Agrupa por unidad y ordena como V3: primero la clase con lo más grave, y dentro de cada una
+    /// los hallazgos por severidad.
+    /// </summary>
+    public static IReadOnlyList<SummaryGroup> GroupOf(IEnumerable<SummaryItem> items)
+        => items
+            .GroupBy(i => i.Unit, StringComparer.Ordinal)
+            .Select(g => new SummaryGroup
+            {
+                Unit = g.Key,
+                Items = g.OrderBy(i => i.Severity).ThenBy(i => i.Text, StringComparer.OrdinalIgnoreCase).ToList(),
+            })
+            .OrderBy(g => g.WorstSeverity)
+            .ThenByDescending(g => g.Items.Count)
+            .ThenBy(g => g.FileName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
 }

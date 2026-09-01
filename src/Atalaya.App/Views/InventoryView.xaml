@@ -240,22 +240,35 @@
                                             </Grid.ColumnDefinitions>
                                             <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}" VerticalAlignment="Center" />
                                             <TextBlock Grid.Column="1" Text="{Binding FileName}" VerticalAlignment="Center" Margin="6,0,0,0" />
-                                            <Border Grid.Column="2" Background="#22808080" CornerRadius="8" Padding="8,2" Margin="6,0">
-                                                <TextBlock Text="{Binding StateLabel}" FontSize="11" />
+                                            <Border Grid.Column="2" Background="#22808080" CornerRadius="8" Padding="8,2" Margin="6,0"
+                                                    VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding StateLabel}" FontSize="11"
+                                                           VerticalAlignment="Center" />
                                             </Border>
                                             <!-- F9 §3: la deriva es una dimensión APARTE del estado
                                                  de auditoría, así que lleva su propio indicador al
                                                  lado del otro y no lo sustituye: una unidad puede
                                                  estar «Auditada» y «Cambiada» a la vez. El color
                                                  nunca es el único canal — el texto va siempre. -->
+                                            <!-- F12 §H.3 — TODO va centrado en la fila: la píldora,
+                                                 el punto de color y su texto. Sin el centrado, la
+                                                 píldora se estiraba a lo alto de la fila y su texto
+                                                 quedaba pegado arriba mientras el punto sí estaba
+                                                 centrado: el indicador se leía descolgado del
+                                                 nombre de la unidad y de la píldora de estado. Vale
+                                                 para los DOS indicadores —«Cambiada desde su
+                                                 auditoría» y «Arreglada — pendiente de verificar»—
+                                                 porque los dos salen de esta misma plantilla. -->
                                             <Border Grid.Column="3" CornerRadius="8" Padding="8,2" Margin="0,0,6,0"
                                                     Background="#18808080"
+                                                    VerticalAlignment="Center"
                                                     ToolTip="{Binding DriftTooltip}"
                                                     Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}">
-                                                <StackPanel Orientation="Horizontal">
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                                     <Ellipse Width="7" Height="7" VerticalAlignment="Center"
                                                              Fill="{Binding DriftInk}" Margin="0,0,6,0" />
-                                                    <TextBlock Text="{Binding DriftLabel}" FontSize="11" />
+                                                    <TextBlock Text="{Binding DriftLabel}" FontSize="11"
+                                                               VerticalAlignment="Center" />
                                                 </StackPanel>
                                             </Border>
                                             <TextBlock Grid.Column="4" Text="{Binding ClaimedBy, StringFormat='🔒 {0}'}" FontSize="11" Opacity="0.7" VerticalAlignment="Center" Margin="6,0,0,0" />

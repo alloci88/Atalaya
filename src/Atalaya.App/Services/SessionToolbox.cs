@@ -200,7 +200,7 @@ public sealed class SessionToolbox : IAuditToolbox
         SuppressedByPattern.Clear();
         _exemplars.Clear();
         LastUnitSummary = null;
-        PassNew = PassConfirmed = PassResolved = PassNonVerifiable = PassRejected = 0;
+        PassNew = PassConfirmed = PassResolved = PassNonVerifiable = PassRejected = PassDisputed = 0;
         PassSuppressedByPattern = 0;
         PassLocationsAdded = 0;
         PassHasNonPresentVerdict = false;
@@ -216,6 +216,12 @@ public sealed class SessionToolbox : IAuditToolbox
     public int PassNonVerifiable { get; private set; }
 
     public int PassRejected { get; private set; }
+
+    /// <summary>
+    /// Discrepancias de criterio de esta pasada (F12 §H.2). La sesión las contaba; la pasada no,
+    /// así que la narración en vivo no podía nombrarlas hasta el cierre.
+    /// </summary>
+    public int PassDisputed { get; private set; }
 
     /// <summary>Detecciones que el auditor declaró haberse callado por patrón en la pasada (F5.12).</summary>
     public int PassSuppressedByPattern { get; private set; }
@@ -425,6 +431,7 @@ public sealed class SessionToolbox : IAuditToolbox
             // Discrepancia de criterio: ni resuelve ni desactiva. Queda marcado para una persona.
             case ReconcileOutcome.Disputed:
                 Counters.Disputed++;
+                PassDisputed++;
                 DegradedVerdicts.Add(
                     $"disputado {id} «{Truncate(finding.Title, 60)}» — el auditor sostiene que nunca fue "
                     + $"un defecto: {Truncate(v.Evidence, 160)}");

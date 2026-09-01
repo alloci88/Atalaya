@@ -498,7 +498,7 @@ public sealed class SessionCoordinator
                     var passRecord = new UnitPassRecord(
                         pass, toolbox.PassNew, toolbox.PassConfirmed, toolbox.PassResolved,
                         toolbox.PassNonVerifiable, toolbox.PassRejected, dry, toolbox.LastUnitSummary,
-                        toolbox.PassLocationsAdded);
+                        toolbox.PassLocationsAdded, toolbox.PassDisputed);
                     passes.Add(passRecord);
                     PassFinished?.Invoke(unit.Path, passRecord);
 
