@@ -222,7 +222,13 @@ public sealed class SessionCoordinator
     /// <summary>(hallazgo, qué le pasó: nuevo | reconfirmed | resolved | needsreview | silencerespected).</summary>
     public event Action<Finding, string>? FindingReported;
     public event Action<string>? TextStreamed;
-    public event Action<long, long, decimal?, string?>? UsageUpdated;  // acumulado in/out/credits/etiqueta
+    /// <summary>
+    /// El consumo acumulado: tokens y el coste YA RESUELTO —con su número o con su motivo— más el
+    /// proveedor con el que se está midiendo. Viaja el <see cref="CostResult"/> entero y no un
+    /// <c>decimal?</c> porque el pie tiene que poder decir POR QUÉ no hay número, y un nulo suelto
+    /// obliga a inventarse una explicación en la vista (F16 §B).
+    /// </summary>
+    public event Action<long, long, CostResult, string?>? UsageUpdated;
 
     /// <summary>
     /// Las tarifas del hub, releídas en cada muestra. Es barato —un JSON pequeño— y evita que una
@@ -386,8 +392,8 @@ public sealed class SessionCoordinator
             UsageUpdated?.Invoke(
                 session.Usage.InputTokens,
                 session.Usage.OutputTokens,
-                live.Credits,
-                CreditText.LabelFor(session.Provider));
+                live,
+                session.Provider);
         }
 
         _agent.TextStreamed += OnText;

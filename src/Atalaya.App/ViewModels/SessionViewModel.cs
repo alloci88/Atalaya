@@ -76,9 +76,14 @@ public sealed partial class SessionViewModel : ViewModelBase
         ? "Sin unidades"
         : $"Unidad {Math.Max(1, _live.UnitIndex)} de {_live.UnitCount}";
 
-    public string CostText => _live.Cost is { } c
-        ? $"{_live.Calls} llamadas · {CreditText.Number(c)} {_live.CostUnit}"
-        : $"{_live.Calls} llamadas · coste no informado por el SDK";
+    /// <summary>
+    /// El pie dice del coste EXACTAMENTE lo que dirá el informe de esta sesión (F16 §B). Decía
+    /// «coste no informado por el SDK», que era una frase acuñada para Copilot —y que además nombra
+    /// un SDK que con Claude Code no existe— mientras el informe de la misma sesión decía «tarifa
+    /// no configurada». Un solo criterio, en <see cref="CreditText.OfSession"/>.
+    /// </summary>
+    public string CostText
+        => $"{_live.Calls} llamadas · {CreditText.OfSession(_live.CostResult, _live.Provider)}";
 
     public string TokensText =>
         $"tokens {_live.InputTokens:N0} in / {_live.OutputTokens:N0} out"

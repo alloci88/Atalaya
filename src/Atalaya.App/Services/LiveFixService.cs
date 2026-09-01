@@ -172,6 +172,9 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
 
     [ObservableProperty] private decimal? _cost;
     [ObservableProperty] private string _costUnit = CreditText.Unit;
+
+    /// <summary>El coste con su motivo cuando no lo hay, igual que en la auditoría (F16 §B).</summary>
+    [ObservableProperty] private CostResult _costResult = CostResult.Unavailable(CostUnavailable.TokensMissing);
     [ObservableProperty] private int _calls;
     [ObservableProperty] private DateTimeOffset? _startedUtc;
     [ObservableProperty] private DateTimeOffset? _endedUtc;
@@ -304,6 +307,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         Commit.Description = string.Empty;
         InputTokens = OutputTokens = CacheReadTokens = CacheWriteTokens = 0;
         Cost = null;
+        CostResult = CostResult.Unavailable(CostUnavailable.TokensMissing);
         Calls = 0;
 
         // F16 — el motor de ESTA sesión se resuelve aquí, una vez, y ya no cambia: dentro de un
@@ -1175,8 +1179,9 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         // F15 — el coste se DERIVA de los tokens con la tarifa del modelo, igual que en una sesión
         // de auditoría. El número que informa el proveedor está en peticiones premium, la unidad
         // que GitHub retiró: enseñarlo sería enseñar una moneda que ya no existe.
-        Cost = CreditCalculator.Calculate(
-            Model, Provider, InputTokens, OutputTokens, CacheReadTokens, CacheWriteTokens, ModelRates()).Credits;
+        CostResult = CreditCalculator.Calculate(
+            Model, Provider, InputTokens, OutputTokens, CacheReadTokens, CacheWriteTokens, ModelRates());
+        Cost = CostResult.Credits;
         CostUnit = CreditText.LabelFor(Provider);
 
         Calls++;

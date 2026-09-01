@@ -203,9 +203,9 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
         }
     }
 
-    public string CostText => _fix.Cost is { } c
-        ? $"{_fix.Calls} llamadas · {CreditText.Number(c)} {_fix.CostUnit}"
-        : $"{_fix.Calls} llamadas · coste no informado por el SDK";
+    /// <summary>Mismo criterio que el pie de la auditoría y que el informe (F16 §B).</summary>
+    public string CostText
+        => $"{_fix.Calls} llamadas · {CreditText.OfSession(_fix.CostResult, _fix.Provider)}";
 
     public string TouchedText => $"ficheros tocados: {Files.Count}";
 

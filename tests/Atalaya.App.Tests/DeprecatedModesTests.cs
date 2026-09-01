@@ -127,7 +127,7 @@ public sealed class DeprecatedModesTests : IDisposable
 
         report2.Should().Contain("**Modo**: Integral")
             .And.Contain("src/Common.cs")
-            .And.Contain("4,0 credits");
+            .And.Contain("4,0 AI credits");
         report2.Should().NotContain("premium requests",
             "la unidad retirada desaparece del frontal; los tokens, que son el hecho, se quedan");
         report = report2;

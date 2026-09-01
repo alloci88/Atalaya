@@ -57,6 +57,37 @@ public static class CreditText
         => credits is null ? Unknown : $"{Number(credits)} {Unit}";
 
     /// <summary>
+    /// <b>El coste de una sesión, con UN solo criterio y consciente de la casa</b> (F16 §B).
+    /// <para>
+    /// Existía el mismo número contado de dos maneras distintas en la misma sesión: el pie decía
+    /// «coste no informado por el SDK» —una frase acuñada para Copilot, que además nombra un SDK
+    /// que en Claude Code no existe— y el informe de esa misma sesión decía «no calculable (tarifa
+    /// no configurada)». Las dos hablaban del mismo hueco y ninguna era la del otro, así que quien
+    /// leía las dos tenía que elegir a cuál creer.
+    /// </para>
+    /// <para>
+    /// La verdad es una: desde F15 el coste se DERIVA de los tokens con la tarifa del modelo, así
+    /// que cuando no hay número el motivo es siempre uno de los tres de
+    /// <see cref="CostUnavailable"/> — y ninguno tiene que ver con lo que informe o deje de
+    /// informar un proveedor. Aquí se escribe una vez y la usan el pie, el informe y el panel.
+    /// </para>
+    /// </summary>
+    public static string OfSession(CostResult cost, string? providerId)
+        => cost.HasValue
+            ? WithUnit(cost.Credits, providerId)
+            : $"coste no calculable ({Reason(cost.Why)})";
+
+    /// <summary>
+    /// El número con la unidad de SU casa: «68,2 AI credits» o «68,2 credits (equivalente API)».
+    /// El paréntesis no es adorno — con suscripción no se factura por tokens, y llamarlo como a lo
+    /// que sí se cobra sería decir que costó algo que no costó (D-789).
+    /// </summary>
+    public static string WithUnit(decimal? credits, string? providerId)
+        => IsSubscription(providerId)
+            ? $"{Number(credits)} {Unit} ({LabelFor(providerId)})"
+            : $"{Number(credits)} {LabelFor(providerId)}";
+
+    /// <summary>
     /// El coste con su motivo cuando no lo hay. Es la forma que se enseña en las vistas: un número,
     /// o una frase que dice por qué no hay número — jamás un cero de relleno.
     /// </summary>

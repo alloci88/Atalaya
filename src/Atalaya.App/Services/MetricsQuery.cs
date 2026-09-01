@@ -140,6 +140,8 @@ public sealed record ProviderCost(
     /// <summary>La línea que se lee en el panel: «GitHub Copilot · 68,2 AI credits».</summary>
     public string Line => Cost is { } c
         ? $"{ProviderName} · {CreditText.Number(c)} {CostUnit}"
+        // Las que no se pueden valorar no llegan aquí: el agregado las deja fuera y las cuenta
+        // aparte como «parcial», con su motivo (D-787). Esta rama es la red por si alguna vez sí.
         : $"{ProviderName} · coste no calculable";
 }
 

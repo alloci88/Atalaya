@@ -74,7 +74,9 @@ public sealed class ReportCultureTests
             App(), Session(67.5m), Array.Empty<Finding>(), pendingUnits: 0, largeUnits: 0, "Org",
             TestRates.Table()));
 
-        report.Should().Contain("67,5 credits");
+        // F16 §B — «67,5 AI credits», sin el paréntesis redundante que repetía la unidad. Lo que
+        // este test vigila sigue siendo lo mismo: que el separador decimal sea el español.
+        report.Should().Contain("67,5 AI credits");
         report.Should().NotContain("67.5");
     }
 
@@ -143,7 +145,7 @@ public sealed class ReportCultureTests
             Array.Empty<(string, string, bool)>(),
             "resumen", null, "título", "descripción", null, "Org", null, TestRates.Table()));
 
-        report.Should().Contain("67,5 credits");
+        report.Should().Contain("67,5 AI credits");
         report.Should().Contain("**Fecha**: 2026-08-28 09:05 UTC");
     }
 

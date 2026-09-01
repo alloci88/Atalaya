@@ -131,6 +131,15 @@ public sealed partial class LiveSessionService : ObservableObject
     [ObservableProperty] private long _cacheWriteTokens;
     [ObservableProperty] private decimal? _cost;
     [ObservableProperty] private string _costUnit = CreditText.Unit;
+
+    /// <summary>
+    /// El coste con su procedencia: el número, o el motivo por el que no lo hay (F16 §B). Es lo
+    /// que permite que el pie diga lo MISMO que el informe de esa misma sesión.
+    /// </summary>
+    [ObservableProperty] private CostResult _costResult = CostResult.Unavailable(CostUnavailable.TokensMissing);
+
+    /// <summary>Con qué casa se está midiendo, para etiquetar el número con su unidad.</summary>
+    [ObservableProperty] private string? _provider;
     [ObservableProperty] private int _calls;
     [ObservableProperty] private DateTimeOffset? _startedUtc;
     [ObservableProperty] private DateTimeOffset? _endedUtc;
@@ -741,13 +750,15 @@ public sealed partial class LiveSessionService : ObservableObject
         _currentText.Text += chunk;
     });
 
-    private void OnUsage(long input, long output, decimal? cost, string? costUnit) => OnUi(() =>
+    private void OnUsage(long input, long output, CostResult cost, string? provider) => OnUi(() =>
     {
         InputTokens = input;
         OutputTokens = output;
-        Cost = cost;
+        CostResult = cost;
+        Cost = cost.Credits;
+        Provider = provider;
         Calls++;
-        CostUnit = string.IsNullOrWhiteSpace(costUnit) ? CreditText.Unit : costUnit!;
+        CostUnit = CreditText.LabelFor(provider);
         OnPropertyChanged(nameof(CostPerUnit));
     });
 

@@ -74,9 +74,7 @@ public static class ReportBuilder
                 : ""));
 
         CostResult cost = CreditCalculator.Calculate(session, rates);
-        sb.AppendLine(cost.HasValue
-            ? $"- **Coste**: {CreditText.Of(cost.Credits)} ({CreditText.LabelFor(session.Provider)})"
-            : $"- **Coste**: no calculable ({CreditText.Reason(cost.Why)})");
+        sb.AppendLine($"- **Coste**: {CreditText.OfSession(cost, session.Provider)}");
         sb.AppendLine();
 
         sb.AppendLine("## Cobertura");
@@ -371,9 +369,7 @@ public static class ReportBuilder
                 : ""));
 
         CostResult fixCost = CreditCalculator.Calculate(session, rates);
-        sb.AppendLine(fixCost.HasValue
-            ? $"- **Coste**: {CreditText.Of(fixCost.Credits)} ({CreditText.LabelFor(session.Provider)})"
-            : $"- **Coste**: no calculable ({CreditText.Reason(fixCost.Why)})");
+        sb.AppendLine($"- **Coste**: {CreditText.OfSession(fixCost, session.Provider)}");
         if (session.Interrupted)
         {
             sb.AppendLine("- ⚠ **Sesión detenida por el usuario**: el agente no llegó a cerrar el arreglo.");
