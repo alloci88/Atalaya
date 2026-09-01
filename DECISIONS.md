@@ -8590,6 +8590,10 @@ que el usuario ya tiene en su terminal da una **bolsa de cuota independiente** y
 
 Alcance: **auditoría por lotes y verificación**. El arreglo asistido sigue siendo solo de Copilot.
 
+> **Ampliado en F16 (D-804).** Claude Code arregla desde entonces, con el mismo contrato observable,
+> y `IAssistedFixProvider` baja a `Atalaya.Agents` — sigue separada de la interfaz del auditor por
+> el mismo motivo que se explica abajo, con el alcance corregido.
+
 ### D-775 — La interfaz se separa de la casa, y se llama por lo que hace
 
 `ICopilotAgent` ya era la costura del pipeline, pero llevaba el nombre de un proveedor y vivía en
@@ -8609,7 +8613,8 @@ toolbox y la aplicación juzga. Por eso añadir una casa no puede cambiar result
 quién los propone.
 
 **El arreglo asistido se queda fuera, con tipo propio.** `IAssistedFixProvider` extiende la
-interfaz común y vive en `Atalaya.Copilot`, porque hoy es verdad de una sola casa. Meterlo en la
+interfaz común y vive en `Atalaya.Copilot`, porque hoy es verdad de una sola casa (hasta F16, que
+lo baja a `Atalaya.Agents` sin fundirlo con la del auditor: D-804). Meterlo en la
 interfaz común habría obligado a Claude Code a declarar un método que no implementa, que es la
 forma educada de mentir. Y que el compilador lo exija impide que elegir otro auditor desvíe por
 accidente un arreglo hacia quien no sabe hacerlo.
@@ -9277,3 +9282,363 @@ aplazan y el parte lo dice con su recuento, en vez de callarlo o de inventarse u
 
 **Verificado sobre el paquete real**: `dist/Atalaya.exe --selfcheck` → los ocho pasos en verde,
 `carcasa` incluida, código de salida 0.
+
+## F16 — El arreglo asistido con Claude Code, y la cosecha de su estreno
+
+F14 dejó dos auditores y una frase escrita: «el arreglo asistido sigue siendo solo de Copilot».
+Deja de serlo. Y con el estreno real de la segunda casa salieron cinco asuntos más —un pie que
+mentía sobre el coste, un proveedor invisible, un tope de barrido descuadrado, una verificación que
+se metía en un callejón sin salida y otra que no dejaba rastro— que se cierran aquí.
+
+### D-804 — Un contrato, dos motores: los contratos del arreglo bajan al vocabulario común
+
+`IAssistedFixProvider` y sus tipos vivían en `Atalaya.Copilot` porque en F14 arreglar era verdad de
+una sola casa (D-775). Bajan a `Atalaya.Agents` **sin cambiar una línea de comportamiento**: lo que
+se movió fue el ensamblado.
+
+**Pero NO se funden con `IAuditorProvider`**, y eso sí es una decisión. Auditar y arreglar son
+capacidades distintas y un tercer proveedor puede saber una y no la otra; que el compilador exija
+el tipo que arregla allí donde se arregla es lo que impide que elegir un auditor desvíe por
+accidente un arreglo hacia quien no sabe hacerlo. Es el mismo argumento de D-775, con el alcance
+corregido.
+
+**Y el que arregla es el proveedor ELEGIDO, preguntado en cada sesión.** El registro ya releía los
+ajustes en cada consulta por la lección de BUGFIX-AJUSTES (D-776); `LiveFixService` es un singleton
+y capturaba su agente en el constructor, así que ahora recibe una función y resuelve al empezar.
+Dentro de una sesión, en cambio, el motor no cambia a mitad: se resuelve una vez y se guarda.
+
+**`CurrentFixer` no cae a otro proveedor si el activo no arregla.** Sería fácil buscar el primero de
+la lista que sepa hacerlo, y sería mentir: la pantalla anuncia con quién se arregla, y arreglar con
+una casa distinta de la anunciada convierte el proveedor en un dato que no se puede creer. Cuando no
+hay quien arregle, la sesión no arranca y lo dice — igual que cuando el proveedor elegido no está
+autenticado. Hoy los dos proveedores de verdad arreglan, así que ese camino no se recorre; existe
+para que un tercero no se cuele.
+
+### D-805 — Las cuatro herramientas son las mismas por CONSTRUCCIÓN, no por copia
+
+En F14 las tools de auditoría se copiaron palabra por palabra de un driver al otro y se confió en
+que nadie tocara solo un lado (D-777). Con el arreglo eso ya no vale: nace `FixToolText` en
+`Atalaya.Agents` con el nombre y la descripción de cada herramienta, y **los dos drivers las leen de
+ahí**. Dos copias del mismo texto son dos copias esperando a divergir, y el día que divergieran una
+diferencia entre las dos casas dejaría de poder atribuirse al modelo — que es toda la gracia de
+tener dos. Hay un test por cada lado que lo fija.
+
+**La quinta tool: `ask_user`, y por qué la sirve Atalaya aquí.** En Copilot la pone el runtime y
+desemboca en `OnUserInputRequest` (D-533). Aquí el CLI se lanza **sin ninguna herramienta propia**,
+así que si Atalaya no la declarase, el agente no tendría forma de preguntar y la mitad
+conversacional del producto no existiría. Se declara con el **mismo nombre** —el encargo la nombra
+con esas letras—, los mismos argumentos y la misma tarjeta en la conversación. Lo que cambia es el
+transporte, no el contrato. Y una pregunta que nadie va a contestar —la sesión se detuvo— NO se
+contesta con una cadena vacía, que el modelo leería como «me da igual»: se le dice lo que ha pasado.
+
+**`fix_done` es terminal, y aquí lo tiene que mirar el driver.** En Copilot lo declara el SDK
+(`IsTerminal`); MCP no tiene ese concepto. El catálogo devuelve un objeto que dice si ya se cerró, y
+el bucle de la conversación no le da otro turno. Sin eso, la sesión seguiría pidiéndole al usuario
+qué decir después de que el arreglo estuviera cerrado.
+
+### D-806 — La conversación viaja por `--input-format stream-json`, y esto se midió (N-2)
+
+Una auditoría es un turno; un arreglo es una conversación de varios, con el usuario hablando por
+medio. El CLI lo permite con `--input-format stream-json`: cada mensaje del usuario es una línea
+JSON por stdin y la sesión sigue viva mientras stdin siga abierto. **Nada de esto lo promete su
+ayuda**, así que se ejecutó el CLI real (2.1.252) antes de escribir el driver:
+
+- El formato de entrada es `{"type":"user","message":{"role":"user","content":[{"type":"text",...}]}}`.
+- **El `session_id` se conserva entre turnos y el modelo recuerda lo anterior** — comprobado
+  pidiéndole que retuviera un número y preguntándoselo en el turno siguiente. También con
+  `--no-session-persistence`, que se conserva: la sesión es de Atalaya y no tiene por qué aparecer
+  en el historial de `claude` del usuario.
+- El CLI emite un `system/init` **por turno** con el mismo `session_id`, y un `result` al cerrar
+  cada uno. Quien decide que se acabó es la aplicación: cerrar stdin es la señal de fin.
+
+**Y la trampa de esta tanda: `usage` es del TURNO y `total_cost_usd` viene ACUMULADO.** Se midió con
+una conversación de dos turnos: el coste del segundo menos el del primero da exactamente lo que
+cuestan los tokens del segundo a las tarifas publicadas, al último decimal. Sumar la cifra de cada
+turno habría contado el primero tantas veces como turnos hubiera, así que el lector **resta**. En
+una sesión de un solo turno —lo único que había hasta ahora— la diferencia no se nota, que es
+justamente por qué había que buscarla.
+
+**El mando a distancia devuelve siempre «no lo he entregado», y es una decisión.** El CLI acepta una
+línea escrita a mitad de turno y la encola, pero no dice cuándo la entregará ni la devuelve si la
+conversación se cierra antes: un mensaje podría quedarse dentro del CLI sin llegar nunca al modelo y
+sin que nadie lo supiera. La cola de Atalaya sí sabe lo que tiene, y la vacía en el límite del
+turno, que es cuando el modelo puede leerla de verdad. Es exactamente el camino que D-535 dejó
+escrito para cuando el runtime no acepta un mensaje a mitad, y la interfaz lo dice con esas
+palabras. No se promete una inmediatez que no se puede garantizar.
+
+### D-807 — El régimen de permisos es el de Atalaya, y el del CLI se neutraliza
+
+El encargo lo pedía explícitamente y se cumple por partida triple, con test que lo fija por lista
+blanca **y** por lista negra —un modo nuevo del CLI que otorgara permisos entraría por la segunda
+sin avisar—:
+
+- **`--tools ""`**: ni consola, ni ficheros, ni red. El agente no tiene ninguna herramienta propia.
+- **`--allowedTools`** con la lista exacta del catálogo de la sesión: ni una de más.
+- **`--permission-mode dontAsk`**: ni pregunta él ni autoriza él. En un proceso sin consola no hay a
+  quien preguntar, y una pregunta sin respuesta sería una sesión colgada.
+
+**Y una cuarta que faltaba: `--setting-sources ""`.** Es el mismo argumento de `--strict-mcp-config`
+extendido a lo que se había quedado fuera. En los ajustes de usuario, de proyecto y locales viven
+permisos y **hooks** —órdenes que el CLI ejecuta por su cuenta al usar una herramienta—, así que con
+ellos cargados la superficie de una sesión de Atalaya dependería de la máquina de quien la lanza:
+dos personas auditarían con superficies distintas, que es exactamente lo que `--strict-mcp-config`
+vino a impedir con los servidores MCP. Se comprobó ejecutando el CLI: con la bandera puesta la
+sesión arranca igual —la autenticación no vive en esos ficheros— y `tools` y `mcp_servers` salen
+vacíos.
+
+El único permiso que sí existe —tocar un fichero que no es del hallazgo— lo gobierna Atalaya dentro
+de `apply_edit`, igual que con Copilot, y un «no» se le devuelve al agente como **decisión** y no
+como error para que replantee (D-546).
+
+**El directorio de trabajo del CLI NO es el clon**, y es la misma familia de razones: el cwd es la
+puerta por la que el CLI se auto-carga el `CLAUDE.md` del proyecto y su memoria, y eso sería un
+segundo canal de instrucciones que Copilot no tiene. Las convenciones del proyecto viajan por donde
+tienen que viajar —las directivas de F7, declaradas y con su traza—. El agente no necesita el clon
+para nada: no tiene herramientas de fichero, y las rutas las resuelve el toolbox de la aplicación.
+
+### D-808 — El servidor MCP atiende en paralelo, porque una tool que espera a una persona no puede callarlo
+
+Con las tools de auditoría —todas instantáneas— un bucle secuencial bastaba. Las del arreglo no lo
+son: `ask_user` espera a una persona, `apply_edit` se queda en la puerta mientras la sesión está en
+pausa, y `run_build_and_tests` compila. Atendiendo de una en una, cualquiera de las tres dejaría al
+servidor mudo durante minutos —sin contestar ni siquiera un `ping`— y un cliente que no obtiene
+respuesta da al servidor por caído: la sesión se perdería por estar el usuario pensando.
+
+Ahora cada petición se atiende en su tarea, con una sola pluma para escribir. Las respuestas pueden
+salir desordenadas y eso es legítimo: JSON-RPC correlaciona por `id`, no por orden. El contador de
+llamadas pasa a `Interlocked` — un `++` desde dos hilos pierde cuentas en silencio, que es la peor
+forma de equivocarse en un número que va a una métrica.
+
+### D-809 — Doctrina de verificación entre proveedores, para que no se rediscuta
+
+**La regla «cada hallazgo se verifica con el instrumento que lo detectó» (F5.16) distingue AUDITOR
+de MEDIDA, no un modelo de otro.** Lo que dice es que un hallazgo que la aplicación **mide** —hoy
+«unidad demasiado grande»— se vuelve a medir y no se le pregunta a un LLM, porque pedirle a un
+modelo que cuente líneas desde un fragmento anclado es usar el instrumento equivocado y responde lo
+único honrado que puede responder, que además ensucia el hallazgo con `needsReview`.
+
+Entre auditores no hay tal regla, y no la va a haber:
+
+- **Un hallazgo detectado por Copilot puede verificarlo Claude, y al revés.** Se verifica con el
+  **proveedor activo**, sin más.
+- El evento del historial y el informe registran **con qué casa y qué modelo** se hizo.
+- Una discrepancia entre casas sigue el cauce de siempre: **disputa (⚖)** con su razonamiento, o
+  **«no concluyente»** con el paso siguiente escrito. Nunca se cierra nada por mayoría, y nunca se
+  vuelve a preguntar a la casa original «para desempatar»: eso convertiría la coincidencia en
+  evidencia y la discrepancia en ruido, y es justo al revés — dos casas distintas coincidiendo es lo
+  más parecido a una segunda opinión que existe (D-781).
+
+Exigir el mismo modelo obligaría a guardar disponibilidad de cada casa para siempre y a no poder
+verificar nada de quien se quedó sin cuota, que es precisamente el problema que F14 vino a resolver.
+
+### D-810 — Un solo criterio para el coste, y «SDK» donde no aplica
+
+Auditando con Claude, el pie de la sesión decía «coste no informado por el SDK» y el informe de esa
+**misma** sesión decía «no calculable (tarifa no configurada)». Dos respuestas a la misma pregunta y
+solo una cierta; y la primera nombra un SDK que en esta casa no existe —hay un CLI y un servidor
+MCP—, que es la clase de mensaje bonito con la causa equivocada que manda a alguien a arreglar lo
+que no está roto (N-2).
+
+Desde F15 el coste se **deriva** de los tokens con la tarifa del modelo, así que cuando no hay
+número el motivo es siempre uno de los tres de `CostUnavailable` y ninguno tiene que ver con lo que
+informe o deje de informar un proveedor. `CreditText.OfSession` es ahora el único sitio donde un
+coste de sesión se convierte en texto, y lo usan el pie de la auditoría, el pie del arreglo y los
+dos informes.
+
+**Con la unidad de su casa** (D-789): «68,2 AI credits» para Copilot, «68,2 credits (equivalente
+API)» para una suscripción. De paso desaparece el paréntesis que repetía la unidad — el informe
+escribía «67,5 credits (AI credits)», que decía dos veces lo mismo.
+
+### D-811 — El proveedor acompaña al modelo en los cuatro sitios
+
+«Modelo: claude-opus-4.6» no dice si detrás hubo un CLI local o el asiento de la organización. Con
+una sola casa daba igual; con dos cambia de qué bolsa de cuota salió, qué superficie tuvo el agente
+y —lo que más importa— si dos veredictos que discrepan vienen de casas distintas o de la misma.
+
+Aparece en: el **informe de sesión**, los **metadatos de la ficha** («Detectado con: Claude Code ·
+modelo opus»), una **columna propia** en la actividad de sesiones de Métricas, y los informes de
+**arreglo** y **verificación**.
+
+**Una sesión o un hallazgo sin proveedor escrito NO es un dato que falte: era Copilot, porque no
+había otro** (D-780). Se nombra así, y hay un test que lo fija para que nadie lo convierta en
+«desconocido» y parta el histórico en dos justo en los hubs con más historia. La traducción vive en
+`ProviderNames`, que lee el histórico, y a la que cae también el registro cuando el identificador
+guardado es de un proveedor que esta versión ya no trae.
+
+### D-812 — El tope del barrido y la regla de parada salen del mismo presupuesto
+
+**El hecho medido.** Con un modelo minucioso, el tope de 5 se agota sin llegar a las dos secas: en
+el banco una unidad gastó la 5ª añadiendo ubicaciones y otra llegó a la 5ª siendo su primera seca.
+El etiquetado «cobertura posiblemente incompleta» funcionó; lo que estaba mal era el equilibrio.
+
+**La causa, que no es «5 es poco».** El tope es un PRESUPUESTO —cuánto se está dispuesto a pagar por
+unidad— y la convergencia es otra cosa. El 5 se eligió (D-095) cuando bastaba **una** pasada seca
+para converger: dejaba **4** pasadas que pudieran aportar algo. D-755 subió la condición a **dos
+secas seguidas** —con razón: con un modelo no determinista, una muestra sola no es convergencia— y
+esas dos se pagan del mismo tope, así que las productivas bajaron a **3** sin que nadie re-ajustara
+el presupuesto. El tope se quedó atrás cuando el criterio se endureció.
+
+**Lo elegido: 6.** Restaura las cuatro pasadas productivas que la regla tenía antes de endurecerse.
+No es un número tocado a ojo: es volver a la relación que había, y se puede escribir como
+aritmética —`tope − secas_para_cerrar = productivas`— en vez de como preferencia.
+
+**Lo descartado, y por qué.** La otra opción era que una pasada que solo añade ubicaciones a
+hallazgos ya conocidos contara como seca.
+
+- **A favor**: las ubicaciones no son un criterio nuevo, son el mismo criterio aplicado a más
+  sitios; y en el caso real fue justo lo que gastó la última pasada.
+- **En contra, y pesa más**: una pasada así **está encontrando cosas**. Las ubicaciones son deuda
+  real —son exactamente lo que un arreglo tiene que tocar— y tratarlas como silencio pararía el
+  barrido mientras el auditor enumera un defecto sistémico, que es para lo que F4.1 construyó
+  `add_locations` (D-090: un defecto en N sitios es UN hallazgo con N ubicaciones). Y «secas
+  **seguidas**» dejaría de significar lo que dice si una pasada productiva pudiera mantener la
+  racha: habría que inventar un tercer estado a medio camino, que es más difícil de explicar que el
+  problema que resuelve.
+- El efecto que se buscaba —que la unidad no acabe etiquetada de incompleta cuando le faltaba una
+  pasada— se consigue con el presupuesto, que es la palanca **honrada**: la que dice lo que cuesta.
+
+**Y llega a las máquinas que ya existen.** Es el patrón de D-562 otra vez: `Save` escribe todas las
+propiedades, así que ahí hay un `"maxPassesPerUnit": 5` con todas las letras y un valor por defecto
+nuevo no lo alcanza. Promoción única con su marca, **solo sobre el 5 exacto** —a quien eligió su
+propio número no se le toca, eso es una decisión— y **no silenciosa** (D-765): la aplicación lo
+cuenta una vez con la razón, porque un presupuesto que sube solo y sin avisar es indistinguible de
+un ajuste que no ajusta.
+
+### D-813 — «Mismo commit» prueba que HEAD no se movió, no que el fichero no haya cambiado
+
+**Reproducido primero**, como pedía el encargo. Un arreglo elimina el código anclado **y** el
+símbolo del hallazgo —quitar el campo estático al reestructurar la clase—: la ficha se queda en «No
+localizado… Verifica para re-anclarlo o cerrarlo» y verificar vuelve a decir «no localizado». Un
+callejón sin salida, y de pago.
+
+**Dónde se cortaba la cadena, que no era donde parecía.** El fallback a la unidad entera **existe y
+funciona**: el test lo confirma en cuanto el arreglo está commiteado. Lo que fallaba es que la
+pregunta «¿ha cambiado la unidad?» se contestaba con el **commit** antes que con el **contenido**.
+Sin commitear, el commit es el mismo y el fichero es otro — y ése no es un caso raro: es exactamente
+el estado en el que la propia Atalaya deja el clon al terminar un arreglo, porque no commitea nada
+por diseño (D-556). La guarda afirmaba «el código no ha cambiado» sobre un fichero reescrito entero,
+y el verify se rendía sin llegar a enseñar nada.
+
+Lo más elocuente es que la documentación de la propia guarda ya lo decía —«un árbol de trabajo sucio
+cambia el código sin cambiar el commit; la duda favorece al auditor»— y el código hacía lo
+contrario: el `SameCommit` de arriba cortocircuitaba antes de que nadie leyera la huella.
+
+**El arreglo: se invierte el orden.** Dos huellas de contenido conocidas y distintas son la prueba
+más fuerte que hay de que la unidad cambió, y ninguna comparación de commits puede contradecirla, así
+que se miran primero. **Esto NO relaja la guarda de evidencia de cambio de F5.1b: la informa mejor**
+—antes ni siquiera se llegaba a leer ese dato—. Lo que sigue sin poder resolverse es lo que de verdad
+no cambió: mismo fichero, byte a byte, y tiene su test.
+
+Un hallazgo anterior a F5.1b no tiene huella de unidad registrada; sobre él solo actúa la capa del
+commit, y ahí la duda sigue favoreciendo al auditor. Se dice, no se disimula.
+
+### D-814 — Verificar deja constancia: evento con desenlace, e informe propio
+
+Verificar era una acción fantasma. Gastaba dinero, decidía estados —resolvía hallazgos, abría
+disputas, ponía marcas de revisión— y era la única de las tres acciones que gastan cuota sin informe
+que releer meses después.
+
+**El evento, siempre y con su desenlace.** Cada veredicto ya escribía en el historial; lo que
+faltaba era quién lo emitió y a dónde lleva. Ahora el ULID de la sesión se genera **al principio** y
+cada evento apunta a ella, que es lo que convierte una línea de texto en un camino de vuelta al
+informe — la infraestructura ya existía desde H9.1 y solo la usaba el arreglo. Y el evento nombra la
+casa y el modelo. También cuando el desenlace es frustrante: un «no concluyente» es justo el que más
+cuesta reconstruir después.
+
+**Cómo se sella, y por qué no se cambió el dominio.** El evento lo escribe quien hace la transición
+—`Confirm`, `Resolve`, `Dispute` o el `Record` del coordinador—, y quién juzgó y con qué sesión se
+sella encima, sobre la última entrada. Meter la sesión en la firma de cada transición del dominio
+habría sido enseñarle al modelo de dominio que existen los informes: esto es una circunstancia de
+ESTA acción, no una propiedad del hallazgo.
+
+**El coste NO se escribe en el evento, y es a propósito.** El encargo lo pedía; la casa dice que no.
+Desde D-788 el coste es un **derivado**: se calcula de los tokens con la tarifa de su modelo y se
+recalcula solo cuando una tarifa cambia. Congelarlo en un texto del hub sería volver a guardar el
+número que F15 quitó, y dentro de un año diría algo que ya no es verdad. El evento apunta a su
+sesión; el coste lo deriva quien lo pinte, con la aritmética de siempre — y el informe de la
+verificación lo lleva escrito arriba.
+
+**El informe, con la pieza que nadie más guardaba: QUÉ CÓDIGO se le enseñó.** El fragmento anclado,
+el símbolo re-anclado o la unidad entera. Sin eso, releer un «no concluyente» no permite saber si al
+instrumento le faltó **contexto** o le faltó **criterio**, que son dos cosas con dos remedios
+distintos —ampliar el contexto o re-auditar— y es justo la distinción que F12 §A construyó. Va
+además el veredicto textual del modelo, los tokens y el coste; y los que ni llegaron al instrumento
+salen igual, porque un desenlace frustrante es un desenlace y esconderlo haría que el informe
+pareciera más limpio de lo que fue la sesión.
+
+**Tipo propio en Informes**, con su filtro y su insignia. «Verificar también es auditar» era cierto
+en que las dos miran código, pero no contestan a la misma pregunta —una dice qué hay en una unidad y
+la otra si un hallazgo concreto sigue estando—, y mezcladas obligaban a bucear entre auditorías para
+responder «qué se ha verificado esta semana». La fila de «Actividad de sesiones» de Métricas ya
+llevaba al informe de su sesión: ahora las verificaciones tienen uno.
+
+**Un fallo al escribir el informe no tumba la sesión**: los veredictos ya están aplicados y son el
+hecho; el informe es la narración. Lo contrario sería perder trabajo pagado por no poder contarlo.
+
+### D-815 — Cobertura (42 tests nuevos, 1.781 en total, todo en verde)
+
+**Y un CLI falso nuevo, que es lo que hace posible el resto.** El de F14 es un `.cmd` que escupe un
+guion de eventos: sirve para probar cómo se LEE la salida y para eso sigue siendo el bueno. Una
+sesión de arreglo no se puede probar así — lo que hay que ejercitar es el otro sentido: que el
+agente LLAME a las herramientas, que la aplicación edite el clon de verdad, que un permiso denegado
+vuelva como decisión y que `fix_done` cierre. Nada de eso ocurre si nadie llama a nada.
+
+`Atalaya.FakeCli` hace exactamente lo que hace el de verdad: lee `--mcp-config`, **lanza el puente**
+declarado ahí como proceso hijo y habla JSON-RPC con él. En los tests corre la cadena de producción
+entera —CLI → puente → tubería con nombre → servidor MCP → toolbox— sobre un clon de git de verdad.
+Lo único de mentira es quién decide qué llamar: en vez de un modelo, un guion. Y el guion se busca
+junto al fichero de configuración MCP, que es de una sola sesión: sin variables de entorno, que son
+del proceso entero y dos tests a la vez se las pisarían.
+
+Lo que queda probado:
+
+- **La sesión de arreglo completa con Claude**, con las mismas afirmaciones que la de Copilot, una
+  por una: leer, preguntar por tarjeta, **intentar salirse del hallazgo y que se lo nieguen** —con
+  el fichero intacto y el «no» devuelto como decisión—, replantear dentro, compilar por delegación,
+  cerrar con resumen y commit sugerido, y el hallazgo **sigue activo**.
+- **Los tres frenos, con este motor**: en pausa no cae ni un cambio más en el clon y la edición que
+  esperaba se aplica al continuar; descartar devuelve el clon **byte a byte**; detener cierra la
+  sesión, deja lo aplicado y no deja el CLI vivo.
+- **El campo de instrucciones**: lo que el usuario escribe llega en el turno siguiente, la interfaz
+  dice que el agente estaba ocupado, y **los tokens de los dos turnos se suman** sin contar el
+  primero dos veces.
+- **La huella del arreglo**, con la huella de contenido que la aplicación calcula de lo que quedó en
+  disco, y el circuito entero **arreglar → commitear → verificar** cerrado con este proveedor.
+- **La superficie**: los argumentos del CLI por lista blanca y por lista negra, el catálogo con el
+  texto compartido, `run_build_and_tests` sin argumentos —una tool que aceptara un comando sería una
+  shell con otro nombre—, `ask_user` de ida y vuelta, y `fix_done` cerrando la conversación.
+- **El coste**: que el pie y el informe de la misma sesión dicen lo mismo, que ningún texto de coste
+  nombra un SDK, y que el número lleva la unidad de su casa.
+- **El proveedor**, en los cuatro sitios, y un hallazgo de antes de F14 nombrado como Copilot.
+- **El tope**: la aritmética del presupuesto, la promoción sobre el 5 exacto, que NO toca a quien
+  eligió su número, que corre una sola vez y que una instalación nueva no recibe aviso.
+- **El caso E reproducido**: sin commitear y commiteado, que se enseña la unidad actual, que el
+  desenlace es normal en los tres sabores, y que sobre una unidad idéntica byte a byte un
+  «arreglado» se sigue degradando.
+- **La constancia de las verificaciones**: evento con desenlace, casa, modelo y sesión; informe con
+  el código que se le enseñó y el veredicto textual; filtro por tipo; y la fila de Métricas que
+  lleva a él.
+
+**Verificación de punta a punta contra el CLI REAL**, con el proveedor de producción entero y un
+hallazgo sembrado en un clon de git: el agente leyó los dos ficheros, **preguntó** («(A) lanzar
+excepción… (B) algún otro enfoque») y esperó la respuesta, aplicó la edición dentro del hallazgo,
+pidió compilar y cerró con `fix_done` — resumen, título de commit ≤72 y descripción. Consumo
+registrado: 89 de entrada, 4.172 de salida, 100.064 de caché leída y 15.152 escrita, con su
+proveedor y su modelo escritos en la sesión.
+
+**Lo que NO cubren los tests, y se dice.** Ninguno lanza `dotnet build` de verdad (D-561 sigue
+vigente). Y la calidad del arreglo la sigue juzgando el humano: lo que estos tests fijan es el
+contrato y las salvaguardas, no lo bien que arregla un modelo.
+
+### D-816 — Lo que se vio de paso y NO se ha tocado
+
+Al medir el coste por turno apareció otra cosa: en el evento `result` del CLI, `usage.input_tokens`
+**no** es la entrada de la sesión sino la de la última iteración, mientras que `modelUsage` sí trae
+el agregado. En una sesión real se vio `usage.input_tokens: 10` con `modelUsage.inputTokens: 913`, y
+solo con el segundo se reproduce el coste que el propio CLI calcula.
+
+**No se cambia aquí.** El fondo del coste es de F15 y este encargo dice explícitamente que su §B
+elimina la contradicción, no reordena la aritmética. Queda anotado con su medida para que quien lo
+retome no tenga que volver a descubrirlo — y con la consecuencia dicha: mientras siga así, los
+tokens de entrada de una sesión de Claude Code con varias llamadas a herramienta se registran por
+debajo de lo que fueron. Al backlog.

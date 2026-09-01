@@ -347,7 +347,7 @@ public sealed partial class ReportsViewModel : ViewModelBase
             ? string.Empty
             : HasActiveFilters
                 ? "Ningún informe con estos filtros."
-                : "Todavía no hay informes. Cada auditoría deja el suyo al terminar.";
+                : "Todavía no hay informes. Cada auditoría, cada verificación y cada arreglo deja el suyo al terminar.";
     }
 
     /// <summary>

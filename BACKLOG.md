@@ -4,9 +4,30 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-01 (BUGFIX-ARRANQUE — la 1.1.3 no arrancaba).
+Última revisión: 2026-09-01 (F16 — el arreglo asistido con Claude Code, y la cosecha de su estreno).
 
 ## En vuelo
+
+- **F16 — arreglar de verdad con Claude Code, con los ojos del usuario.** El circuito está probado
+  de punta a punta contra el CLI real y contra un CLI falso que habla MCP, pero la aceptación es
+  suya: **Ajustes → Claude Code → abrir un hallazgo del banco → Arreglar con agente → commitear →
+  ver «Arreglada — pendiente de verificar» → Verificar → que quede limpia**. Y de paso mirar que la
+  cabecera de la pantalla dice con quién trabaja, y que las tarjetas de pregunta y el diff se ven
+  como con Copilot (D-804…D-808).
+- **F16 §E — el callejón, reproducido a mano.** El caso está fijado en test, pero conviene verlo
+  una vez en la aplicación: arreglar algo que **borre el ancla y el símbolo** —quitar un campo
+  estático al reestructurar—, dejarlo **sin commitear**, y pulsar **Verificar**: tiene que salir un
+  veredicto útil con la unidad entera delante, no «no localizado» otra vez (D-813).
+- **F16 §D — el tope nuevo, en un barrido de verdad.** Con 6 pasadas, mirar si las unidades que
+  antes se quedaban en «cobertura posiblemente incompleta» llegan ahora a las dos secas. Si siguen
+  sin llegar, el problema no era el presupuesto y hay que volver a mirar (D-812). Y al abrir la
+  aplicación por primera vez, comprobar que el aviso de la promoción sale una vez y solo una.
+- **F16 — los tokens de entrada de Claude Code, que se registran por debajo.** Medido de paso y no
+  arreglado a propósito, porque el fondo del coste es de F15: en el evento `result` del CLI,
+  `usage.input_tokens` es de la última iteración y `modelUsage.inputTokens` es el agregado de la
+  sesión (10 contra 913 en una sesión real), y solo con el segundo se reproduce el coste que el
+  propio CLI calcula. Mientras siga así, una sesión de Claude Code con varias llamadas a
+  herramienta cuenta menos entrada de la que tuvo (D-816).
 
 - **BUGFIX-ARRANQUE — publicar la 1.1.4 y ver correr el candado.** El arreglo está verificado sobre
   el paquete real de esta máquina (`--selfcheck` → 8 pasos en verde, código 0), pero queda una cosa
@@ -175,16 +196,6 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## Aparcado hasta que la realidad lo pida
 
-- **Arreglo asistido con Claude Code** — el siguiente paso natural del proveedor, y F14 lo dejó
-  fuera a propósito para no mezclar dos cosas grandes. Lo que falta no es el transporte, que ya
-  está: son las **cuatro tools del arreglo** (`read_file`, `apply_edit`, `run_build_and_tests`,
-  `fix_done`) servidas por el mismo servidor MCP, y sobre todo la **elicitación** — el `ask_user`
-  que en Copilot llega por `SessionConfig.OnUserInputRequest` y que en el CLI de Claude Code hay que
-  averiguar por dónde entra (MCP tiene `elicitation` en las capacidades del cliente: el CLI la
-  anuncia en su `initialize`, así que el camino existe y hay que verificarlo, N-2). El día que se
-  haga, `ClaudeCodeProvider` implementa `IAssistedFixProvider` y no hay que tocar nada más: el
-  compilador ya separa hoy quién sabe arreglar de quién solo audita (D-775).
-
 - **H9 ampliado**: mejoras sobre la sesión interactiva, según lo que pida el uso real.
 - **Descargas diferenciales**, si los 221 MB por versión molestan. Hoy cada actualización baja el
   paquete entero, que es lo mismo que ya se bajaba a mano. La medición está hecha: 221 MB por
@@ -204,6 +215,27 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **F16 · El arreglo asistido con Claude Code, y la cosecha de su estreno** — `IAssistedFixProvider`
+  baja al vocabulario común y **Claude Code arregla**, con el **mismo contrato observable**: las
+  mismas cuatro herramientas —ahora con nombre y descripción compartidos por los dos drivers, así
+  que no pueden divergir (D-805)—, las mismas precondiciones, la misma pantalla y los mismos frenos.
+  La conversación viaja por `--input-format stream-json`, verificado contra el CLI real: el
+  `session_id` sobrevive entre turnos y `total_cost_usd` viene **acumulado** mientras `usage` es del
+  turno, así que el coste de un turno es una resta (D-806). El régimen de permisos sigue siendo el
+  de Atalaya y el del CLI se neutraliza por cuatro vías —sin herramientas propias, lista blanca
+  cerrada, sin poder preguntar ni autorizar, y sin cargar los ajustes de la máquina, donde viven los
+  hooks— (D-807); y el servidor MCP pasa a atender en paralelo porque `ask_user` espera a una
+  persona (D-808). Queda escrita la **doctrina de verificación entre casas**: se verifica con el
+  proveedor activo, la regla del instrumento distingue auditor de medida y no obliga a repetir
+  modelo (D-809). Más la cosecha del estreno: **un solo criterio de coste** en pie e informe, sin
+  nombrar un SDK que aquí no existe (D-810); el **proveedor visible** en los cuatro sitios (D-811);
+  el **tope del barrido a 6**, que restaura las cuatro pasadas productivas que D-755 se llevó al
+  endurecer la parada, con la alternativa de las ubicaciones descartada y por qué (D-812); el
+  **callejón del verify** —«mismo commit» no prueba que el fichero no haya cambiado, y un arreglo
+  sin commitear es justo ese caso— reproducido y arreglado (D-813); y **verificar deja constancia**,
+  con evento que apunta a su sesión e informe propio que dice qué código se le enseñó (D-814).
+  42 tests nuevos, 1.781 en total (D-815).
 
 - **BUGFIX-ARRANQUE · La 1.1.3 no arrancaba** — muerte antes de la ventana, en cualquier máquina.
   `v1.1.3` era exactamente el rango F14, y la causa estaba en dos líneas suyas que por separado eran

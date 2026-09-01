@@ -143,8 +143,18 @@ asignar, cambiar severidad, resolver a mano con justificación, cerrar una dispu
   no una confirmación: una no-respuesta no es evidencia de nada, así que no sube «Veces
   confirmado» ni la confianza. Se anota con su causa y con el paso siguiente — ampliar el
   contexto, o re-auditar la unidad—, y el hallazgo queda marcado **Por revisar**.
+- **Un arreglo que borra el ancla Y el símbolo tampoco es un callejón.** Si un arreglo
+  reestructura la clase y hace desaparecer el campo o el método que el hallazgo nombraba, se
+  te enseña **la unidad entera** y se pide un veredicto sobre ella. La cadena es método →
+  margen → unidad si cambió, y funciona **también antes de commitear**: es el estado en el que
+  Atalaya deja tu clon al terminar un arreglo.
 - Resolver sigue exigiendo **evidencia de cambio**: si la unidad es la misma que la
-  última vez que se vio el hallazgo, un «arreglado» se degrada a «presente».
+  última vez que se vio el hallazgo —el mismo fichero, byte a byte—, un «arreglado» se degrada
+  a «presente».
+- **Verificar deja constancia siempre**: el historial gana un evento con el desenlace, con qué
+  casa y qué modelo se juzgó, y con un enlace al **informe de esa verificación**. También
+  cuando el desenlace es frustrante: un «no concluyente» es justo el que más cuesta reconstruir
+  meses después.
 - El aviso dice siempre **qué ha pasado** — el veredicto, o la causa concreta si no se
   pudo verificar.
 - La franja de encima del código **depende del estado**: en los activos avisa en ámbar
@@ -176,6 +186,13 @@ pasada no vea nada nuevo no prueba que no quede nada. El tope de pasadas de Ajus
 mandando por encima; si se agota antes, la unidad se marca **cobertura posiblemente
 incompleta**, con todas las letras.
 
+> **El tope es un presupuesto, y las dos secas salen de él.** Con el tope de fábrica —**6**—
+> quedan cuatro pasadas que puedan aportar algo más las dos que cierran. Eran 5 desde el
+> principio, cuando bastaba UNA seca para converger; al subir la condición a dos, las
+> productivas bajaron a tres sin que nadie lo re-ajustara, y con un modelo minucioso el barrido
+> se quedaba corto. Si tu tope era 5 y no lo habías tocado, Atalaya lo sube a 6 una vez y te lo
+> dice; si habías elegido tu propio número, no se toca.
+
 > Y una unidad barrida **no es** una unidad sin defectos: es una unidad de la que el
 > auditor no saca más con este criterio.
 
@@ -190,6 +207,12 @@ sesión** abre el informe en la vista **Informes**.
 Aparece en el menú solo cuando hay un arreglo (en curso, terminado, o con cambios que
 todavía puedes descartar), y el punto late mientras el agente escribe.
 
+**Se arregla con el proveedor que tengas elegido**, sea Copilot o Claude Code. La pantalla es
+**la misma con los dos** —las mismas herramientas, las mismas tarjetas de pregunta, el mismo
+diff y el mismo cierre— y por eso dice, arriba, **cuál está trabajando**: «Claude Code · modelo
+opus». También lo dice el botón de la ficha antes de empezar, y queda escrito en el informe del
+arreglo. Quien revise un diff tiene derecho a saber quién lo escribió.
+
 Dos paneles: la **conversación** —lo que el agente va explicando, y las preguntas
 como tarjetas con sus opciones— y el **diff**, una pestaña por fichero tocado, que
 compara con lo que había antes de empezar. Abajo: tiempo, coste, ficheros tocados y
@@ -203,6 +226,10 @@ el resultado del último build.
 - El campo de entrada de abajo está **siempre** disponible: escribe y pulsa Enter para
   dirigirle («no toques ese fichero», «prefiero TryParse»). Si está a mitad de un paso,
   el mensaje se le entrega al empezar el siguiente, y la aplicación te lo dice.
+- **Los ficheros del hallazgo se editan directamente; cualquier otro te pide permiso**, uno a
+  uno, con el fichero y el motivo del agente delante. Un «no» se le devuelve como decisión, no
+  como error: replantea el arreglo sin ese fichero y no vuelve a pedirlo. **Esto lo gobierna
+  Atalaya**, con los dos proveedores — el permiso no se delega en el del CLI ni en el del SDK.
 
 Si cierras Atalaya con un arreglo en curso, se detiene ordenadamente y **los cambios
 se quedan** en tu clon: la próxima vez que abras, esta pantalla te ofrece descartarlos.
@@ -457,9 +484,15 @@ cuando quieras.
 
 ### Informes
 
-Todo lo que las auditorías han dejado escrito: los informes de sesión, los
-consolidados de cierre de ciclo y los de operaciones. Solo aparece lo que tiene
-informe de verdad en el hub.
+Todo lo que Atalaya ha dejado escrito: los informes de **sesión**, las **verificaciones**, los
+**consolidados** de cierre de ciclo y los de **operaciones**. Solo aparece lo que tiene informe
+de verdad en el hub.
+
+Un **informe de verificación** cuenta lo que ninguna otra cosa guarda: qué hallazgo se
+verificó, **qué código se le enseñó al instrumento** —el fragmento anclado, el símbolo
+re-anclado o la unidad entera—, el veredicto con el razonamiento textual del modelo, y los
+tokens con su coste. Sin el «qué se le enseñó», releer un «no concluyente» no permite saber si
+al modelo le faltó contexto o le faltó criterio, que son dos cosas con dos remedios distintos.
 
 Cada fila trae fecha, aplicación, tipo, modo, usuario, unidades procesadas, hallazgos
 (±) y coste; lo que un informe sin sesión asociada no declare sale como «—».
@@ -519,7 +552,7 @@ Cada control dice bajo su caja **cuándo surte efecto**, porque no todos aplican
 
 | Ajuste | Qué gobierna | Cuándo aplica |
 | --- | --- | --- |
-| **Pasadas del barrido (tope)** | Cuántas veces se repasa cada unidad | En las auditorías que lances **a partir de ahora** |
+| **Pasadas del barrido (tope)** | El presupuesto de pasadas por unidad; de él salen también las dos secas que cierran el barrido (fábrica: 6) | En las auditorías que lances **a partir de ahora** |
 | **Frescura (días)** | Cuándo un hallazgo confirmado se marca por revisar | Al guardar; la lista lo aplica al dibujarse |
 | **Proveedor de auditoría** | Con quién auditas y verificas tú | En las sesiones que lances a partir de ahora |
 | **Modelo del auditor** | Con qué modelo del proveedor elegido | En las sesiones que lances a partir de ahora |
@@ -566,7 +599,7 @@ segunda opinión de verdad**.
 | Quién paga | El asiento de tu organización (AI credits) | Tu suscripción de Claude |
 | Cómo se instala | Nada: viaja dentro de Atalaya | `npm install -g @anthropic-ai/claude-code`, y `claude` una vez en tu terminal |
 | Auditar y verificar | Sí | Sí |
-| Arreglo asistido | Sí | Todavía no |
+| Arreglo asistido | Sí | Sí |
 
 **Atalaya no guarda credenciales de Anthropic.** Usa la sesión que el CLI ya tiene en tu máquina,
 exactamente igual que con Copilot usa tu login de GitHub. Si no has iniciado sesión, Atalaya te lo
@@ -608,6 +641,19 @@ Con dos proveedores esa marca vale más que antes. Tres modelos de la misma casa
 estar compartiendo el mismo punto ciego; **dos casas distintas coincidiendo** en que algo no es un
 defecto es lo más parecido a una segunda opinión que hay. Por eso la disputa guarda también **de
 qué casa** venía. Sigue decidiendo una persona: la disputa informa, no cierra nada.
+
+### Verificar entre casas
+
+**Un hallazgo detectado por Copilot lo puede verificar Claude, y al revés.** La regla de la casa
+—«cada hallazgo se verifica con el instrumento que lo detectó»— distingue **auditor de medida**,
+no un modelo de otro: lo que dice es que un hallazgo que la aplicación MIDE (el tamaño de una
+unidad) se vuelve a medir y no se le pregunta a un modelo, porque preguntarle a un LLM cuántas
+líneas tiene un fichero es usar el instrumento equivocado. Entre auditores no hay tal regla.
+
+Así que verificar usa **el proveedor que tengas activo ahora**, sin más. El evento y el informe
+registran con qué casa y qué modelo se hizo, y si la respuesta contradice a la de la otra casa,
+eso sigue el cauce de siempre: una **disputa (⚖)** con su razonamiento, o un **«no concluyente»**
+con el paso siguiente escrito. Nunca se cierra nada por mayoría.
 
 ### El coste, dicho como es
 
@@ -925,13 +971,19 @@ alcance: **no tiene consola, ni git, ni red**. Solo puede leer ficheros del clon
 modificarlos por una herramienta que la aplicación controla, y pedir que se compile —
 lo ejecuta Atalaya, no él.
 
+Funciona igual **con cualquiera de los dos proveedores**: las mismas cuatro herramientas, las
+mismas preguntas, el mismo diff y los mismos frenos. Con Claude Code, además, el CLI arranca
+**sin ninguna de sus herramientas propias** y sin poder conceder permisos por su cuenta: el
+único permiso que existe —tocar un fichero que no es del hallazgo— lo decides tú, y te lo
+pregunta Atalaya.
+
 Antes de arrancar se comprueban cuatro cosas, y si falla alguna se dice cuál:
 
 1. Que tengas el **clon vinculado** de esa aplicación.
 2. Que tu **árbol de trabajo esté limpio** — sin cambios sin commitear. Sin excepciones:
    es lo único que permite después distinguir lo que tocó el agente de lo tuyo, y por
    tanto lo que hace que «Descartar todo» sea seguro.
-3. Que no haya **otra sesión de Copilot** corriendo (auditoría o arreglo).
+3. Que no haya **otra sesión del agente** corriendo (auditoría o arreglo), sea de la casa que sea.
 4. Que el **arreglo asistido** esté activado en Ajustes.
 
 Durante la sesión:
