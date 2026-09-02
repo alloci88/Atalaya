@@ -235,10 +235,14 @@ todo**. Si estrechas la ventana, la cabecera **baja a dos filas** en vez de apre
 **Compilar solución completa** no está entre los botones: vive abajo, junto al resultado del
 build, que es donde se ve lo que hace.
 
-El pie **cuenta desde la primera llamada al modelo**, no al terminar: llamadas, tokens y el
-coste. Con Copilot el coste son **AI credits**; con Claude Code, que no factura a la
-organización, el pie dice los tokens por tipo y **«coste: incluido en tu suscripción de
-Claude»**.
+El pie **cuenta desde la primera llamada al modelo**, no al terminar, y en las dos casas dice lo
+mismo y en el mismo orden: **llamadas, coste y tokens**. Con Copilot el coste son **AI credits**;
+con Claude Code, que no factura a la organización, es **«coste: incluido en tu suscripción de
+Claude»**. Los tokens van una sola vez, detrás, por tipo (entrada, salida y la caché leída y
+escrita). Si la ventana no da para todo, el pie **no corta nada a media palabra**: primero los
+tokens se quedan en su total («330.124 tokens») y luego se retiran, después el coste se abrevia
+(«coste: suscripción»), y las llamadas se leen siempre. El texto entero está en el tooltip del
+pie, y el desglose, en el informe.
 
 - **Pausar** no congela al agente —eso no se puede prometer— sino lo que importa: no
   cae ni un cambio más en tu clon ni se compila nada hasta que continúes.

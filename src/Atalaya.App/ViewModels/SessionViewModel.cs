@@ -39,7 +39,11 @@ public sealed partial class SessionViewModel : ViewModelBase
         if (System.Windows.Application.Current is not null)
         {
             _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-            _clock.Tick += (_, _) => OnPropertyChanged(nameof(ElapsedText));
+            _clock.Tick += (_, _) =>
+            {
+                OnPropertyChanged(nameof(ElapsedText));
+                OnPropertyChanged(nameof(Footer));
+            };
             _clock.Start();
         }
     }
@@ -86,11 +90,34 @@ public sealed partial class SessionViewModel : ViewModelBase
         _live.Calls, _live.InputTokens, _live.OutputTokens,
         _live.CacheReadTokens, _live.CacheWriteTokens, _live.CostResult, _live.Provider);
 
-    public string TokensText =>
-        $"tokens {_live.InputTokens:N0} in / {_live.OutputTokens:N0} out"
-        + (_live.CacheReadTokens > 0 ? $" · cache {_live.CacheReadTokens:N0}" : "");
-
     public string PerUnitText => _live.CostPerUnit is { } c ? $"media {c:0.##}/unidad" : string.Empty;
+
+    /// <summary>
+    /// El pie entero, por segmentos (F17-RETOQUE): progreso y tiempo, que no ceden; y el consumo
+    /// —llamadas, coste, tokens— por el criterio común, con la media por unidad la última en
+    /// quedarse. Aquí ya no hay un segundo bloque de tokens: el que había («tokens X in / Y out»)
+    /// era el resto de antes de F16-RETOQUE y repetía, peor formateado, lo que el criterio ya dice.
+    /// </summary>
+    public IReadOnlyList<FooterSegment> Footer
+    {
+        get
+        {
+            var segments = new List<FooterSegment>
+            {
+                FooterSegment.Of(ProgressText, bold: true),
+                FooterSegment.Of(ElapsedText, opacity: 0.85),
+            };
+            segments.AddRange(CreditText.UsageSegments(
+                _live.Calls, _live.InputTokens, _live.OutputTokens,
+                _live.CacheReadTokens, _live.CacheWriteTokens, _live.CostResult, _live.Provider));
+            if (PerUnitText.Length > 0)
+            {
+                segments.Add(FooterSegment.Of(PerUnitText, priority: 3, opacity: 0.7));
+            }
+
+            return segments;
+        }
+    }
 
     public int CriticalCount => Findings.Count(f => f.Severity == Severity.Critica);
 
@@ -262,8 +289,8 @@ public sealed partial class SessionViewModel : ViewModelBase
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(ProgressText));
         OnPropertyChanged(nameof(CostText));
-        OnPropertyChanged(nameof(TokensText));
         OnPropertyChanged(nameof(PerUnitText));
+        OnPropertyChanged(nameof(Footer));
         OnPropertyChanged(nameof(ElapsedText));
         OnPropertyChanged(nameof(ShowSummary));
         OnPropertyChanged(nameof(ShowFailure));

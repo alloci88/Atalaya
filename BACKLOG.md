@@ -4,7 +4,7 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-02 (F17 — ciclos temáticos: cada ciclo elige su lupa).
+Última revisión: 2026-09-02 (F17-RETOQUE — el pie que decía los tokens dos veces).
 
 ## En vuelo
 
@@ -17,6 +17,10 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   fecha). Después, **cambiar a Seguridad** → el aviso de «N unidades auditadas pasarán a
   pendientes» → todas a pendiente → auditar ClienteRemoto → las credenciales caen, y solo cosas de
   seguridad. Si el modelo se sale de la lupa, el sitio para apretar es `ThemeCatalog.Excludes`.
+- **F17-RETOQUE — el pie, con una sesión corriendo.** Está medido a los tres anchos y renderizado en
+  los dos temas con los números del parte (D-837), pero el pie cambia cada llamada: verlo con Claude
+  Code y con Copilot auditando de verdad, a 1366×768 y con la ventana a la mitad, y comprobar que
+  ceden los tokens antes que el coste y que el tooltip lleva el desglose entero.
 - **F17 — la cinta, vista.** Está capturada en los dos temas sobre datos sintéticos (D-833); falta
   verla sobre el hub real: que los nombres de las bandas no se corten mal, que el tooltip del
   tramo se lea entero, y que con «Todo» y muchos ciclos la cinta se desplace dentro de su
@@ -241,6 +245,11 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **F17-RETOQUE · El pie que decía los tokens dos veces** — el criterio común del consumo dice
+  llamadas → coste → tokens una sola vez en las dos casas (D-835), y el pie es una `FooterLine`
+  que o cabe o se abrevia con acceso al detalle, nunca truncada: ceden tokens, luego coste, las
+  llamadas nunca (D-836); medido a 1124, 658 y 441 px y visto en los dos temas (D-837).
 
 - **F17 · Ciclos temáticos: cada ciclo elige su lupa** — catálogo cerrado de seis temáticas junto
   a la rúbrica, con qué busca y qué no reporta cada una, y la regla dura: fuera de la lupa no se

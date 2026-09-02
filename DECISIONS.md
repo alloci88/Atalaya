@@ -10192,3 +10192,70 @@ está descrita en BACKLOG con lo que tiene que salir y lo que no. Si el modelo s
 el sitio para apretar es `ThemeCatalog.Excludes` de esa temática — la regla de la aplicación ya
 sostiene lo que puede sostener (la reconciliación), y lo que reporta de nuevo solo lo gobierna el
 prompt.
+
+## F17-RETOQUE — El pie que decía los tokens dos veces, y cortaba la segunda
+
+El parte, literal: con Claude Code el pie de la sesión decía «20 llamadas · 28.050 entrada ·
+15.670 salida · caché 235.327 leída / 51.077 escrita · coste: incluido en tu suscripción de
+Claude» y, detrás, «tokens 28.050 in / … out», cortado por falta de sitio. El segundo bloque era
+el resto de antes de F16-RETOQUE: el criterio común del coste (D-817) se puso delante y el
+`TokensText` de siempre siguió detrás. Con Copilot no se repetía —el criterio común no llevaba
+tokens con factura—, pero el bloque viejo seguía siendo un trozo suelto con su propio formato
+(«in / out», en inglés) y sin nadie que lo midiera.
+
+### D-835 — Los tokens los dice el criterio común, una vez, en las dos casas
+
+`CreditText.UsageSegments` es ahora el único sitio que decide qué se enseña del consumo:
+**llamadas → coste → tokens**, en ese orden para Copilot y para Claude Code. Con factura, el coste
+son los credits y los tokens van detrás; sin ella, la frase del coste dice quién paga y los tokens
+—que son el hecho primario que queda— van detrás igual. `SessionFooter`, la frase que comparten
+el pie y los tests de paridad con el informe (D-817), se deriva de esos mismos segmentos, así que
+no puede volver a decir otra cosa. `TokensText` desaparece del view-model y de la vista; un test
+comprueba que no existe.
+
+**Lo que cambia con Copilot, y se dice:** el pie con factura pasa de «3 llamadas · 68,2 AI
+credits» a «3 llamadas · 68,2 AI credits · 1.000 entrada · 200 salida». No es un añadido: es el
+mismo dato que antes daba el bloque viejo, ahora en castellano y en el mismo sitio que en la otra
+casa.
+
+### D-836 — El pie no puede cortar sin avisar: `FooterLine`
+
+El pie era un `StackPanel` horizontal, y un StackPanel no reparte: apila, y lo que no cabe se
+recorta sin avisar (la misma lección de D-710b y D-819, en el otro eje). Se sustituye por
+`FooterLine`, un control que aplica la regla de la casa —**o cabe, o se abrevia con acceso al
+detalle, nunca texto truncado a media palabra**— y que se puede afirmar sin pintar un píxel:
+
+- Cada trozo (`FooterSegment`) trae sus **formas**, de la más larga a la más corta, y una
+  **prioridad**. Con sitio se pinta todo entero; al faltar, cede el trozo de mayor prioridad que
+  todavía pueda ceder —primero abreviándose, y agotadas sus formas, retirándose—. Prioridad 0 no
+  cede nunca. La elección (`Choose`) es una función pura sobre una medida; el control solo la
+  aplica con la medida real del texto.
+- **El orden de ceder es el del encargo**: tokens (2) → coste (1) → llamadas (0, nunca). El
+  progreso y el tiempo tampoco ceden; la media por unidad de Copilot cede la primera (3). En el
+  arreglo asistido, el título del hallazgo cede el primero de los que ceden y el resultado del
+  build nunca.
+- **Las formas del coste**: «coste: incluido en tu suscripción de Claude» → «coste:
+  suscripción»; «68,2 AI credits» → «68,2 credits». **Las de los tokens**: el desglose → el total
+  con su unidad («330.124 tokens»). El prompt pedía colapsar a «tokens: ver informe», y se
+  descartó por medida: esa frase es MÁS larga que el total con su número, así que nunca sería la
+  forma que cabe cuando el total no cabe. El total ES la forma abreviada con acceso al detalle: el
+  tooltip del pie lleva el texto entero y el informe, el desglose.
+- **El detalle completo viaja siempre en el tooltip** (`FullText`), sea cual sea la forma pintada.
+- El arreglo asistido tenía un `WrapPanel` que bajaba de línea lo que no cabía; ahora comparte el
+  control, y el anillo del build y el ajuste del ámbito van a la derecha en columna propia.
+
+### D-837 — Medido a los tres anchos, en las dos casas, y visto en los dos temas
+
+`SessionFooterLayoutTests`: los tokens una vez y desglosados con Claude, una vez detrás del coste
+con Copilot; el orden y las prioridades; las formas del coste; la vista y el view-model sin el
+bloque viejo; la elección sobre una medida de mentira (cada carácter, uno) en los cinco tramos —de
+sobra, justo, tokens al total, tokens fuera, coste abreviado, y el imposible donde lo que no cede
+se pinta entero—; y sobre el control real a 1124, 658 y 441 px de página (D-819) con el pie
+completo de cada casa: lo pintado cabe en su caja, cada trozo es una forma entera, las llamadas
+están siempre, el coste nunca desaparece, el tooltip lleva el detalle. A 1124 cabe todo entero en
+las dos casas; a 441 ceden los tokens antes que el coste.
+
+Y renderizado con el arnés del scratchpad (D-833) en claro y oscuro, seis pies —dos casas por tres
+anchos—: sin solapes, sin cortes, con el desglose de Claude entero a 1124 y con «coste:
+suscripción» a 441. Las capturas se entregaron con el parte. Queda para el usuario verlo con una
+sesión de verdad corriendo, que es donde el pie cambia cada llamada.

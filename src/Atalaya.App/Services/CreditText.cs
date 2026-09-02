@@ -1,4 +1,4 @@
-using Atalaya.Domain.Model;
+﻿using Atalaya.Domain.Model;
 
 namespace Atalaya.App.Services;
 
@@ -157,19 +157,52 @@ public static class CreditText
     public static string SessionFooter(
         int calls, long input, long output, long cacheRead, long cacheWrite,
         CostResult cost, string? providerId)
-    {
-        string head = $"{calls} llamadas";
+        => string.Join(" · ", UsageSegments(calls, input, output, cacheRead, cacheWrite, cost, providerId).Select(s => s.Full));
 
-        if (cost.Why != CostUnavailable.NotBilled)
+    /// <summary>
+    /// Los tres trozos del consumo, con sus formas y su prioridad (F17-RETOQUE): llamadas, que no
+    /// ceden nunca; coste, que se abrevia; y tokens, que se abrevian antes y hasta desaparecer
+    /// detrás de «tokens: ver informe». Es el ÚNICO sitio donde se decide qué tokens se enseñan,
+    /// para que no vuelva a haber dos bloques diciendo lo mismo — el pie los repetía: el segmento
+    /// de F16-RETOQUE los daba enteros y el bloque anterior, «tokens X in / Y out», seguía detrás.
+    /// <para>
+    /// El orden es llamadas → coste → tokens en las dos casas. Con factura, el coste son los credits
+    /// y los tokens van detrás; sin ella, los tokens son el hecho primario que queda y la frase del
+    /// coste dice quién paga. En ninguna de las dos los tokens aparecen dos veces.
+    /// </para>
+    /// </summary>
+    public static IReadOnlyList<FooterSegment> UsageSegments(
+        int calls, long input, long output, long cacheRead, long cacheWrite,
+        CostResult cost, string? providerId)
+    {
+        var segments = new List<FooterSegment>
         {
-            return $"{head} · {OfSession(cost, providerId)}";
+            FooterSegment.Of($"{calls} llamadas"),
+            new(new[] { CostLong(cost, providerId), CostShort(cost) }, Priority: 1, Bold: true),
+        };
+
+        // Los tokens, en dos formas: el desglose y el total («330.124 tokens»). El total ES la
+        // forma abreviada con acceso al detalle —el tooltip lleva el desglose y el informe también—;
+        // una frase como «tokens: ver informe» mide MÁS que el total con su número, así que nunca
+        // sería la forma que cabe cuando el total no cabe. Agotado el total, el trozo se retira.
+        string tokens = Tokens(input, output, cacheRead, cacheWrite);
+        if (tokens.Length > 0)
+        {
+            segments.Add(new FooterSegment(
+                new[] { tokens, TokensTotal(input, output, cacheRead, cacheWrite) }, Priority: 2, Opacity: 0.7));
         }
 
-        string tokens = Tokens(input, output, cacheRead, cacheWrite);
-        return tokens.Length == 0
-            ? $"{head} · coste: {SubscriptionCost}"
-            : $"{head} · {tokens} · coste: {SubscriptionCost}";
+        return segments;
     }
+
+    private static string CostLong(CostResult cost, string? providerId)
+        => cost.Why == CostUnavailable.NotBilled ? $"coste: {SubscriptionCost}" : OfSession(cost, providerId);
+
+    /// <summary>La forma corta del coste: el número con su unidad, o dos palabras cuando no hay número.</summary>
+    private static string CostShort(CostResult cost)
+        => cost.Why == CostUnavailable.NotBilled
+            ? $"coste: {SubscriptionCostShort}"
+            : cost.HasValue ? $"{Number(cost.Credits)} {Unit}" : "coste: —";
 
     /// <summary>
     /// El número con la unidad de la casa que lo factura: «68,2 AI credits». Ya no hay una segunda

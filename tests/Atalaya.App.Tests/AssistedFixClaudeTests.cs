@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.ClaudeCode;
@@ -516,7 +516,10 @@ public sealed class AssistedFixClaudeTests : IDisposable
         fix.CostResult.Why.Should().Be(CostUnavailable.NotBilled);
 
         view.CostText.Should().Contain("llamadas").And.Contain("entrada").And.Contain("salida");
-        view.CostText.Should().EndWith("coste: incluido en tu suscripción de Claude");
+        // F17-RETOQUE: el orden es llamadas → coste → tokens; el coste ya no va el último.
+        view.CostText.Should().Contain("coste: incluido en tu suscripción de Claude");
+        view.CostText.IndexOf("coste:", StringComparison.Ordinal).Should()
+            .BeLessThan(view.CostText.IndexOf("entrada", StringComparison.Ordinal));
         view.CostText.Should().NotContain("credits")
             .And.NotContain("equivalente API")
             .And.NotContain("tarifa")

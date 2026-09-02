@@ -61,7 +61,11 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
         if (Application.Current is not null)
         {
             _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-            _clock.Tick += (_, _) => OnPropertyChanged(nameof(ElapsedText));
+            _clock.Tick += (_, _) =>
+            {
+                OnPropertyChanged(nameof(ElapsedText));
+                OnPropertyChanged(nameof(Footer));
+            };
             _clock.Start();
         }
     }
@@ -224,6 +228,32 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
         _fix.CacheReadTokens, _fix.CacheWriteTokens, _fix.CostResult, _fix.Provider);
 
     public string TouchedText => $"ficheros tocados: {Files.Count}";
+
+    /// <summary>
+    /// El pie del arreglo, por segmentos (F17-RETOQUE), con el mismo criterio de consumo que el de
+    /// la auditoría. El título del hallazgo va el primero y cede el último de los que ceden: el
+    /// resultado del build y las llamadas no ceden nunca.
+    /// </summary>
+    public IReadOnlyList<FooterSegment> Footer
+    {
+        get
+        {
+            var segments = new List<FooterSegment>
+            {
+                new(new[] { SubHeaderText, Shorten(SubHeaderText, 40) }.Distinct().ToList(), Priority: 4, Bold: true),
+                FooterSegment.Of(ElapsedText, opacity: 0.85),
+            };
+            segments.AddRange(CreditText.UsageSegments(
+                _fix.Calls, _fix.InputTokens, _fix.OutputTokens,
+                _fix.CacheReadTokens, _fix.CacheWriteTokens, _fix.CostResult, _fix.Provider));
+            segments.Add(FooterSegment.Of(TouchedText, priority: 3, opacity: 0.8));
+            segments.Add(FooterSegment.Of(BuildText, opacity: 0.8));
+            return segments;
+        }
+    }
+
+    private static string Shorten(string text, int max)
+        => text.Length <= max ? text : text[..(max - 1)].TrimEnd() + "…";
 
     /// <summary>
     /// El resultado de compilar, en la barra inferior. Desde H9.1 lleva el DELTA: «✓ verde · 0
@@ -611,6 +641,7 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
         OnPropertyChanged(nameof(SelectedFile));
         OnPropertyChanged(nameof(ElapsedText));
         OnPropertyChanged(nameof(CostText));
+        OnPropertyChanged(nameof(Footer));
         OnPropertyChanged(nameof(TouchedText));
         OnPropertyChanged(nameof(BuildText));
         OnPropertyChanged(nameof(BuildScopeText));

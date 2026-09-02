@@ -1,4 +1,4 @@
-<UserControl
+﻿<UserControl
     x:Class="Atalaya.App.Views.SessionView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -428,21 +428,15 @@
             </Border>
         </Grid>
 
-        <!-- Pie fijo -->
+        <!-- ================================ PIE ================================
+             F17-RETOQUE: una sola línea que nunca trunca. Era un StackPanel horizontal, y con el
+             segmento de Claude Code —tokens con la caché desglosada— el bloque antiguo de tokens
+             que venía detrás se salía por el borde cortado a media palabra; además repetía lo que
+             el segmento nuevo ya decía. Ahora el pie es una FooterLine: cada trozo trae sus formas
+             y su prioridad (llamadas → coste → tokens), y el detalle entero está en el tooltip. -->
         <Border Grid.Row="3" Background="#14808080" CornerRadius="8" Padding="12,7" Margin="0,10,0,0">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding ProgressText}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                <TextBlock Text="·" Opacity="0.4" Margin="10,0" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding ElapsedText}" VerticalAlignment="Center" Opacity="0.85" />
-                <TextBlock Text="·" Opacity="0.4" Margin="10,0" VerticalAlignment="Center" />
-                <!-- La métrica que manda: coste = llamadas × multiplicador del modelo (D-113). -->
-                <TextBlock Text="{Binding CostText}" VerticalAlignment="Center" FontWeight="SemiBold" />
-                <TextBlock Text="·" Opacity="0.4" Margin="10,0" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding TokensText}" VerticalAlignment="Center" Opacity="0.7" FontSize="12" />
-                <TextBlock Text="·" Opacity="0.4" Margin="10,0" VerticalAlignment="Center"
-                           Visibility="{Binding PerUnitText, Converter={StaticResource NotEmptyToVisibility}}" />
-                <TextBlock Text="{Binding PerUnitText}" VerticalAlignment="Center" Opacity="0.7" FontSize="12" />
-            </StackPanel>
+            <c:FooterLine x:Name="Footer" Segments="{Binding Footer}"
+                          Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
         </Border>
     </Grid>
 </UserControl>

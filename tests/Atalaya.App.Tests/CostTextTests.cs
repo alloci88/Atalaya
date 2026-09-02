@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.ClaudeCode;
 using Atalaya.Copilot;
@@ -121,15 +121,21 @@ public sealed class CostTextTests : IDisposable
         footer.Should().StartWith("14 llamadas · ");
         footer.Should().Contain("2.786 entrada").And.Contain("10.975 salida");
         footer.Should().Contain("201.371 leída").And.Contain("22.525 escrita");
-        footer.Should().EndWith($"coste: {CreditText.SubscriptionCost}");
+        // F17-RETOQUE: el orden es llamadas → coste → tokens, en las dos casas.
+        footer.Should().Contain($"coste: {CreditText.SubscriptionCost}");
+        footer.IndexOf("coste:", StringComparison.Ordinal).Should()
+            .BeLessThan(footer.IndexOf("2.786 entrada", StringComparison.Ordinal));
         footer.Should().NotContain("credits");
     }
 
-    /// <summary>Con factura, el pie es el de siempre: llamadas y credits, sin desglose de tokens.</summary>
+    /// <summary>
+    /// Con factura, el pie dice llamadas y credits, y los tokens DETRÁS del coste (F17-RETOQUE):
+    /// antes iban en un segundo bloque aparte, que es como acabaron repetidos con Claude Code.
+    /// </summary>
     [Fact]
     public void Con_factura_el_pie_sigue_diciendo_credits()
         => CreditText.SessionFooter(3, 1000, 200, 0, 0, new CostResult(68.2m), RealCopilotAgent.Id)
-            .Should().Be("3 llamadas · 68,2 AI credits");
+            .Should().Be("3 llamadas · 68,2 AI credits · 1.000 entrada · 200 salida");
 
     /// <summary>
     /// Y la palabra «SDK» no aparece donde no aplica. Con Claude Code no hay ningún SDK: hay un CLI
