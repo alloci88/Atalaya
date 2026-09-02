@@ -105,6 +105,58 @@ public sealed record CoverageDonut(string Slug, string Name, int Cycle, int Audi
 /// <summary>Un cubo del flujo: lo que entró, lo que salió y la deuda viva al cerrarlo.</summary>
 public sealed record FlowBucket(string Label, string Range, int New, int Resolved, int ActiveAtEnd);
 
+/// <summary>De dónde sale cada extremo de un tramo de ciclo (F17 §6). Se declara, como todo dato (N-2).</summary>
+public enum CycleEdge
+{
+    /// <summary>Fecha exacta: la apertura o el cierre quedaron registrados.</summary>
+    Exact,
+
+    /// <summary>Inferida de la primera o de la última sesión del ciclo: existía al menos desde/hasta entonces.</summary>
+    Inferred,
+
+    /// <summary>No hay traza: el tramo empieza o termina donde alcanza el dato, y el tooltip lo dice.</summary>
+    Unknown,
+}
+
+/// <summary>
+/// Un tramo de la cinta de ciclos (F17 §6): un ciclo de una aplicación, con su temática, sus
+/// fechas y su foto. Los ciclos anteriores a F17 no tienen temática y se pintan como General;
+/// una fecha que no se pudo recuperar termina donde alcanza el dato y se declara — nada se rellena.
+/// </summary>
+/// <param name="Audited">Unidades auditadas al cierre (o ahora, si está abierto).</param>
+/// <param name="Auditable">Unidades auditables: todas menos las grandes.</param>
+/// <param name="HasInventory">False si el <c>cycle{N}.json</c> ya no está en disco: sin foto de cobertura.</param>
+/// <param name="Cost">Coste del ciclo en AI credits, solo lo facturable. Null si nada facturable lo cobró.</param>
+/// <param name="ReportSessionId">La sesión del cierre —su informe— o null si el ciclo se cerró por reinicio o sigue abierto.</param>
+public sealed record CycleSpan(
+    string Slug,
+    string AppName,
+    int CycleN,
+    AuditTheme Theme,
+    DateTimeOffset From,
+    DateTimeOffset To,
+    bool IsOpen,
+    CycleEdge StartEdge,
+    CycleEdge EndEdge,
+    int Audited,
+    int Auditable,
+    bool HasInventory,
+    int NewFindings,
+    int ResolvedFindings,
+    decimal? Cost,
+    string? ReportSessionId)
+{
+    public string Label => $"C{CycleN} · {Copilot.ThemeCatalog.Display(Theme)}";
+
+    public string ShortLabel => $"C{CycleN}";
+
+    /// <summary>El fin se pudo recuperar (o el ciclo sigue abierto, que es fin conocido: hoy).</summary>
+    public bool EndIsKnown => IsOpen || EndEdge == CycleEdge.Exact;
+}
+
+/// <summary>Una banda de la cinta: una aplicación y sus ciclos en orden.</summary>
+public sealed record CycleTrack(string Slug, string Name, IReadOnlyList<CycleSpan> Spans);
+
 /// <summary>Una línea del registro de operaciones (gráfica 4).</summary>
 /// <param name="Provider">
 /// Con qué casa se hizo (F16 §C). Va junto al coste y no como adorno: con dos proveedores, dos
@@ -199,7 +251,8 @@ public sealed record MetricsDashboard(
     IReadOnlyList<CoverageDonut> Coverage,
     IReadOnlyList<SeverityDonut> Severity,
     IReadOnlyList<FlowBucket> Flow,
-    IReadOnlyList<SessionRow> Sessions)
+    IReadOnlyList<SessionRow> Sessions,
+    IReadOnlyList<CycleTrack> Cycles)
 {
     /// <summary>La clave con la que se agrupa lo que no tiene color propio.</summary>
     public const string OthersSlug = " otras";
@@ -334,7 +387,8 @@ public sealed class MetricsQuery
         int CurrentCycle,
         IReadOnlyList<Finding> Findings,
         IReadOnlyList<AuditSession> Sessions,
-        InventoryCycle? Inventory);
+        InventoryCycle? Inventory,
+        IReadOnlyList<InventoryCycle> Inventories);
 
     /// <summary>Tira la caché. La llama el evento de sync; también sirve a los tests.</summary>
     public void Invalidate()
@@ -483,7 +537,123 @@ public sealed class MetricsQuery
             donuts.OrderByDescending(d => d.Total).ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList(),
             severities.OrderByDescending(d => d.Total).ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList(),
             FlowBuckets(findings, buckets),
-            SessionRows(scope, inPeriod, rates));
+            SessionRows(scope, inPeriod, rates),
+            CycleTracks(scope, from, to, now, rates));
+    }
+
+    // ---------- Gráfica 7: la cinta de ciclos (F17 §6) ----------
+
+    /// <summary>
+    /// La historia de auditoría de cada app: un tramo por ciclo, del 1 al vigente. Las fechas
+    /// salen, por este orden, de lo registrado (la apertura escrita en el ciclo, el cierre o reset
+    /// que lo abrió), de lo inferible (su primera o su última sesión) y, si no hay nada, del primer
+    /// dato de la aplicación — y cada extremo dice de dónde salió. El periodo RECORTA: un ciclo
+    /// que no toca el periodo no aparece; uno que lo cruza se dibuja entero y lo recorta el eje.
+    /// </summary>
+    private static IReadOnlyList<CycleTrack> CycleTracks(
+        IReadOnlyList<AppData> scope, DateTimeOffset from, DateTimeOffset to, DateTimeOffset now,
+        ModelRateTable? rates)
+    {
+        var tracks = new List<(CycleTrack Track, int Key, int Weight)>();
+        foreach (AppData app in scope)
+        {
+            var spans = new List<CycleSpan>();
+            DateTimeOffset? previousEnd = null;
+            DateTimeOffset? earliest = app.Sessions.Select(s => s.StartedUtc)
+                .Concat(app.Findings.Select(f => f.FirstDetected.Utc))
+                .Select(d => (DateTimeOffset?)d)
+                .Min();
+
+            for (int n = 1; n <= app.CurrentCycle; n++)
+            {
+                InventoryCycle? inv = app.Inventories.FirstOrDefault(c => c.CycleN == n);
+                CycleStart start = CycleSummary.StartOf(app.Sessions, n);
+
+                (DateTimeOffset? begin, CycleEdge startEdge) =
+                    inv?.OpenedUtc is { } opened ? (opened, CycleEdge.Exact)
+                    : start.When is { } when ? (when, start.Source == CycleStartSource.Opened ? CycleEdge.Exact : CycleEdge.Inferred)
+                    : previousEnd is { } prev ? (prev, CycleEdge.Exact)
+                    : (earliest, CycleEdge.Unknown);
+                if (begin is null)
+                {
+                    continue; // ni un dato del que colgar el tramo: no se inventa
+                }
+
+                bool isOpen = n == app.CurrentCycle;
+                AuditSession? opening = app.Sessions
+                    .Where(s => s.CycleN == n + 1 && s.Mode is AuditMode.Cierre or AuditMode.Reset)
+                    .OrderBy(s => s.StartedUtc)
+                    .FirstOrDefault();
+                InventoryCycle? nextInv = app.Inventories.FirstOrDefault(c => c.CycleN == n + 1);
+                AuditSession? lastOfCycle = app.Sessions
+                    .Where(s => s.CycleN == n)
+                    .OrderByDescending(s => s.EndedUtc ?? s.StartedUtc)
+                    .FirstOrDefault();
+
+                (DateTimeOffset end, CycleEdge endEdge) =
+                    isOpen ? (now, CycleEdge.Exact)
+                    : opening is not null ? (opening.StartedUtc, CycleEdge.Exact)
+                    : nextInv?.OpenedUtc is { } nextOpened ? (nextOpened, CycleEdge.Exact)
+                    : lastOfCycle is not null ? (lastOfCycle.EndedUtc ?? lastOfCycle.StartedUtc, CycleEdge.Inferred)
+                    : (begin.Value, CycleEdge.Unknown);
+                if (end < begin.Value)
+                {
+                    end = begin.Value;
+                }
+
+                previousEnd = end;
+
+                var mine = app.Sessions.Where(s => s.CycleN == n).ToList();
+                decimal? cost = mine.Any(s => CreditCalculator.Calculate(s, rates).HasValue)
+                    ? mine.Sum(s => CostOf(s, rates))
+                    : null;
+
+                int audited = inv?.Units.Count(u => u.State == UnitState.Auditada) ?? 0;
+                int large = inv?.Units.Count(u => u.State == UnitState.Grande) ?? 0;
+                int total = inv?.Units.Count ?? 0;
+
+                DateTimeOffset b = begin.Value;
+                spans.Add(new CycleSpan(
+                    app.Slug,
+                    app.Name,
+                    n,
+                    inv?.Theme ?? AuditTheme.General,
+                    b,
+                    end,
+                    isOpen,
+                    startEdge,
+                    endEdge,
+                    audited,
+                    total - large,
+                    inv is not null,
+                    app.Findings.Count(f => f.FirstDetected.Utc >= b && f.FirstDetected.Utc < end),
+                    app.Findings.Sum(f => ResolutionsIn(f, b, end)),
+                    cost,
+                    opening?.Mode == AuditMode.Cierre ? opening.Id.ToString() : null));
+            }
+
+            // El filtro de periodo recorta el eje: fuera de él no hay tramos.
+            var visible = spans.Where(s => s.To > from && s.From < to).ToList();
+            if (visible.Count == 0)
+            {
+                continue;
+            }
+
+            var live = app.Findings.Where(f => f.Status == FindingStatus.Activo).ToList();
+            int critica = live.Count(f => f.Severity == Severity.Critica);
+            int alta = live.Count(f => f.Severity == Severity.Alta);
+            tracks.Add((
+                new CycleTrack(app.Slug, app.Name, visible),
+                PortfolioOrder.Key(critica, live.Count),
+                PortfolioOrder.Weight(critica, alta)));
+        }
+
+        return tracks
+            .OrderBy(t => t.Key)
+            .ThenByDescending(t => t.Weight)
+            .ThenBy(t => t.Track.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(t => t.Track)
+            .ToList();
     }
 
     // ---------- El periodo y sus cubos ----------
@@ -1004,7 +1174,8 @@ public sealed class MetricsQuery
                 app.CurrentCycle,
                 _hub.Store.ListFindings(slug),
                 _hub.Store.ListSessions(slug),
-                _hub.Store.TryReadInventory(slug, app.CurrentCycle)));
+                _hub.Store.TryReadInventory(slug, app.CurrentCycle),
+                _hub.Store.ListInventories(slug)));
         }
 
         lock (_gate)

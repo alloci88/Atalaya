@@ -327,7 +327,7 @@ public sealed class MetricsPanelTests : IDisposable
     // ============================================ La vista
 
     [Fact]
-    public void La_vista_trae_los_filtros_los_cuatro_tiles_y_las_seis_graficas()
+    public void La_vista_trae_los_filtros_los_cuatro_tiles_y_las_siete_graficas()
     {
         string xaml = Markup(Source("src/Atalaya.App/Views/MetricsView.xaml"));
 
@@ -344,7 +344,8 @@ public sealed class MetricsPanelTests : IDisposable
         foreach (string chart in new[]
                  {
                      "Coste en el tiempo", "Resoluciones en el tiempo", "Cobertura por aplicación",
-                     "Severidad por aplicación", "Flujo de hallazgos", "Actividad de sesiones",
+                     "Severidad por aplicación", "Flujo de hallazgos", "Ciclos y temáticas",
+                     "Actividad de sesiones",
                  })
         {
             xaml.Should().Contain(chart);
@@ -361,6 +362,12 @@ public sealed class MetricsPanelTests : IDisposable
             .And.BeLessThan(xaml.IndexOf("Cobertura por aplicación", StringComparison.Ordinal));
         Regex.Matches(xaml, "controls:DonutRing").Count.Should()
             .Be(2, "cobertura y severidad; cada fila es UNA plantilla repetida, no un rosco por app");
+        Regex.Matches(xaml, "controls:CycleRibbon").Count.Should().Be(1, "la cinta de ciclos (F17 §6)");
+
+        // La cinta va entre el flujo y el registro de sesiones: es historia, y el registro es el detalle.
+        xaml.IndexOf("Ciclos y temáticas", StringComparison.Ordinal).Should()
+            .BeGreaterThan(xaml.IndexOf("Flujo de hallazgos", StringComparison.Ordinal))
+            .And.BeLessThan(xaml.IndexOf("Actividad de sesiones", StringComparison.Ordinal));
 
         // La de severidad va justo debajo de la de cobertura: las dos son roscos y se leen juntas.
         xaml.IndexOf("Severidad por aplicación", StringComparison.Ordinal).Should()

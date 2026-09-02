@@ -4,6 +4,7 @@ using System.Windows.Media;
 using Atalaya.App.Controls;
 using Atalaya.App.Services;
 using Atalaya.App.Views;
+using Atalaya.Copilot;
 using Atalaya.Domain;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -53,6 +54,9 @@ public sealed record SeverityCard(
 /// qué significan sus tramos.
 /// </summary>
 public sealed record SeveritySlice(string Slug, Severity Severity);
+
+/// <summary>Lo que se entrega al pulsar un tramo de la cinta de ciclos (F17 §6).</summary>
+public sealed record CycleSpanRef(string Slug, int CycleN, bool IsOpen, string? ReportSessionId);
 
 /// <summary>Una línea del registro de operaciones, ya escrita.</summary>
 /// <param name="Type">
@@ -375,6 +379,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
             ApplySeverity(dashboard);
             ApplyFlow(dashboard);
             ApplySessions(dashboard);
+            ApplyCycles(dashboard);
 
             PeriodLabel = DescribePeriod(dashboard);
             IsEmpty = dashboard.IsEmpty;
@@ -674,6 +679,144 @@ public sealed partial class MetricsViewModel : ViewModelBase
         }
 
         ShowFlowLegend = FlowLegend.Count >= 2;
+    }
+
+    // ---------- Gráfica 7: la cinta de ciclos (F17 §6) ----------
+
+    public ObservableCollection<LegendItem> CycleLegend { get; } = new();
+
+    [ObservableProperty] private bool _showCycleLegend;
+
+    [ObservableProperty] private IReadOnlyList<RibbonTrack> _cycleTracks = Array.Empty<RibbonTrack>();
+
+    [ObservableProperty] private bool _hasCycles;
+
+    /// <summary>Los extremos del eje de la cinta, en hora local: los mismos que el resto del panel.</summary>
+    [ObservableProperty] private DateTime _ribbonFrom;
+
+    [ObservableProperty] private DateTime _ribbonTo;
+
+    private void ApplyCycles(MetricsDashboard d)
+    {
+        RibbonFrom = d.From.ToLocalTime().DateTime;
+        RibbonTo = d.To.ToLocalTime().DateTime;
+
+        var themes = new SortedSet<AuditTheme>();
+        var tracks = new List<RibbonTrack>();
+        foreach (CycleTrack track in d.Cycles)
+        {
+            var spans = new List<RibbonSpan>();
+            foreach (CycleSpan s in track.Spans)
+            {
+                themes.Add(s.Theme);
+                spans.Add(new RibbonSpan(
+                    s.Label,
+                    s.ShortLabel,
+                    ThemeBrush(s.Theme),
+                    s.From.ToLocalTime().DateTime,
+                    s.To.ToLocalTime().DateTime,
+                    s.IsOpen,
+                    s.EndIsKnown,
+                    CycleTooltip(s),
+                    new CycleSpanRef(s.Slug, s.CycleN, s.IsOpen, s.ReportSessionId)));
+            }
+
+            tracks.Add(new RibbonTrack(track.Name, spans));
+        }
+
+        CycleTracks = tracks;
+        HasCycles = tracks.Count > 0;
+
+        // La leyenda nombra las temáticas que se VEN, en el orden del catálogo. Color + nombre,
+        // nunca un color solo (D-296).
+        CycleLegend.Clear();
+        foreach (AuditTheme theme in ThemeCatalog.All.Where(themes.Contains))
+        {
+            CycleLegend.Add(new LegendItem(ThemeCatalog.Display(theme), ThemeBrush(theme), false));
+        }
+
+        ShowCycleLegend = CycleLegend.Count >= 1;
+    }
+
+    private Brush ThemeBrush(AuditTheme theme) => Brush(ThemePalette.Hex(theme, _dark));
+
+    /// <summary>
+    /// El tooltip de un tramo: ciclo, temática, fechas, cobertura al cierre, hallazgos del ciclo y
+    /// coste facturable. Y lo que NO se sabe, dicho: un inicio inferido, un fin que no se pudo
+    /// recuperar, un inventario que ya no está.
+    /// </summary>
+    internal static IReadOnlyList<string> CycleTooltip(CycleSpan s)
+    {
+        CultureInfo culture = CultureInfo.CurrentCulture;
+        string Day(DateTimeOffset d) => d.ToLocalTime().ToString("d MMM yyyy", culture);
+
+        var lines = new List<string> { $"Ciclo {s.CycleN} · {ThemeCatalog.Display(s.Theme)}" };
+        lines.Add(s.IsOpen
+            ? $"En curso desde el {Day(s.From)}"
+            : $"Del {Day(s.From)} al {Day(s.To)}");
+
+        if (s.StartEdge == CycleEdge.Inferred)
+        {
+            lines.Add("Inicio inferido de su primera sesión: pudo abrirse antes.");
+        }
+        else if (s.StartEdge == CycleEdge.Unknown)
+        {
+            lines.Add("Sin fecha de apertura registrada: el tramo empieza en el primer dato de la aplicación.");
+        }
+
+        if (!s.IsOpen && s.EndEdge == CycleEdge.Inferred)
+        {
+            lines.Add("Sin fecha de cierre recuperable: el tramo termina en su última sesión registrada.");
+        }
+        else if (!s.IsOpen && s.EndEdge == CycleEdge.Unknown)
+        {
+            lines.Add("Sin fecha de cierre recuperable ni sesiones: el tramo no tiene duración medible.");
+        }
+
+        lines.Add(!s.HasInventory
+            ? "Cobertura: sin inventario conservado para este ciclo."
+            : s.IsOpen
+                ? $"Auditadas: {s.Audited} / {s.Auditable} auditables (ahora)"
+                : $"Auditadas al cierre: {s.Audited} / {s.Auditable} auditables");
+        lines.Add($"Hallazgos: +{s.NewFindings} nuevos · −{s.ResolvedFindings} resueltos");
+        lines.Add(s.Cost is { } c
+            ? $"Coste: {CreditText.Number(c)} {CreditText.BillingUnit} (solo lo facturable)"
+            : "Coste: — (nada facturable en este ciclo)");
+        lines.Add(s.IsOpen
+            ? "Pulsa para abrir el inventario."
+            : s.ReportSessionId is null
+                ? "Este ciclo no dejó informe de cierre."
+                : "Pulsa para abrir el informe del cierre.");
+        return lines;
+    }
+
+    /// <summary>
+    /// Un clic en un tramo: el informe de cierre de ese ciclo, o el inventario si sigue abierto.
+    /// La gráfica encuentra; el informe explica.
+    /// </summary>
+    [RelayCommand]
+    private async Task OpenCycle(CycleSpanRef? span)
+    {
+        if (span is null)
+        {
+            return;
+        }
+
+        if (span.IsOpen)
+        {
+            await _navigation.NavigateToAsync<InventoryViewModel>(vm => vm.SetApp(span.Slug));
+            return;
+        }
+
+        if (span.ReportSessionId is null || !File.Exists(ReportPathFor(span.Slug, span.ReportSessionId)))
+        {
+            _toasts.Show($"El ciclo {span.CycleN} no dejó informe de cierre.");
+            return;
+        }
+
+        string slug = span.Slug;
+        string report = span.ReportSessionId;
+        await _navigation.NavigateToAsync<ReportsViewModel>(vm => vm.ShowReport(slug, report));
     }
 
     private void ApplySessions(MetricsDashboard d)

@@ -523,7 +523,50 @@
                         </StackPanel>
                     </ui:Card>
 
-                    <!-- ============ Gráfica 5: actividad de sesiones ============ -->
+                    <!-- ============ Gráfica 6: la cinta de ciclos (F17 §6) ============ -->
+                    <ui:Card Style="{StaticResource Block}">
+                        <StackPanel>
+                            <TextBlock Text="Ciclos y temáticas" Style="{StaticResource BlockTitle}" />
+                            <TextBlock Style="{StaticResource BlockHint}"
+                                       Text="La historia de auditoría de cada aplicación: un tramo por ciclo, coloreado por su temática. Pulsa un tramo para abrir el informe de su cierre; el ciclo abierto lleva al inventario." />
+
+                            <ItemsControl ItemsSource="{Binding CycleLegend}"
+                                          ItemTemplate="{StaticResource LegendEntry}"
+                                          Margin="0,12,0,0"
+                                          Visibility="{Binding ShowCycleLegend, Converter={StaticResource BoolToVisibility}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+
+                            <!-- La cinta se desplaza DENTRO de su tarjeta cuando no cabe: jamás la
+                                 página. El ancho de la ventana le llega por ViewportWidth, y ella
+                                 se hace tan ancha como necesite para que cada tramo se pueda señalar. -->
+                            <ScrollViewer x:Name="RibbonScroll"
+                                          HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Disabled"
+                                          Margin="0,8,0,0"
+                                          Visibility="{Binding HasCycles, Converter={StaticResource BoolToVisibility}}">
+                                <controls:CycleRibbon
+                                    Tracks="{Binding CycleTracks}"
+                                    From="{Binding RibbonFrom}"
+                                    To="{Binding RibbonTo}"
+                                    ViewportWidth="{Binding ViewportWidth, ElementName=RibbonScroll}"
+                                    SpanCommand="{Binding OpenCycleCommand}"
+                                    AxisBrush="{DynamicResource TextFillColorSecondaryBrush}"
+                                    GridBrush="{DynamicResource TextFillColorTertiaryBrush}"
+                                    TextBrush="{DynamicResource TextFillColorPrimaryBrush}" />
+                            </ScrollViewer>
+
+                            <TextBlock Style="{StaticResource EmptyNote}"
+                                       Text="— · se activará cuando alguna aplicación tenga un ciclo con alguna fecha registrada en el periodo."
+                                       Visibility="{Binding HasCycles, Converter={StaticResource InverseBoolToVisibility}}" />
+                        </StackPanel>
+                    </ui:Card>
+
+                    <!-- ============ Gráfica 7: actividad de sesiones ============ -->
                     <ui:Card Style="{StaticResource Block}">
                         <StackPanel>
                             <TextBlock Text="Actividad de sesiones" Style="{StaticResource BlockTitle}" />
