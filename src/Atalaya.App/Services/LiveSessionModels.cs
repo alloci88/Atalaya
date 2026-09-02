@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Atalaya.Domain;
+using Atalaya.Domain.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Atalaya.App.Services;
@@ -334,3 +335,25 @@ public sealed partial class SummaryLine : ObservableObject
             .ThenBy(g => g.FileName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 }
+
+/// <summary>
+/// El consumo acumulado de una sesión en vivo, tal y como lo enseña el pie (F16-RETOQUE §1).
+/// <para>
+/// Los cuatro tipos de token van juntos porque el pie los necesita <b>todos</b> cuando la casa no
+/// factura: sin coste que enseñar, lo que dice el peso de la sesión son las llamadas y los tokens,
+/// y con Claude Code la caché es el sumando gordo. Y van en un registro y no en siete argumentos
+/// sueltos porque cuatro <c>long</c> seguidos se cruzan sin que el compilador se entere.
+/// </para>
+/// </summary>
+/// <param name="Cost">
+/// El coste YA RESUELTO: con su número, o con el motivo por el que no lo hay —incluido «esta casa
+/// no factura»—. Viaja entero para que la vista no tenga que inventarse la explicación.
+/// </param>
+public sealed record LiveUsage(
+    long InputTokens,
+    long OutputTokens,
+    long CacheReadTokens,
+    long CacheWriteTokens,
+    CostResult Cost,
+    string? Provider,
+    int Calls);

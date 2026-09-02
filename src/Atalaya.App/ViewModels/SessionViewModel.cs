@@ -82,8 +82,9 @@ public sealed partial class SessionViewModel : ViewModelBase
     /// un SDK que con Claude Code no existe— mientras el informe de la misma sesión decía «tarifa
     /// no configurada». Un solo criterio, en <see cref="CreditText.OfSession"/>.
     /// </summary>
-    public string CostText
-        => $"{_live.Calls} llamadas · {CreditText.OfSession(_live.CostResult, _live.Provider)}";
+    public string CostText => CreditText.SessionFooter(
+        _live.Calls, _live.InputTokens, _live.OutputTokens,
+        _live.CacheReadTokens, _live.CacheWriteTokens, _live.CostResult, _live.Provider);
 
     public string TokensText =>
         $"tokens {_live.InputTokens:N0} in / {_live.OutputTokens:N0} out"

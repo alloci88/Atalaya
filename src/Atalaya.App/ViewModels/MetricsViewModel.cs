@@ -64,6 +64,11 @@ public sealed record SeveritySlice(string Slug, Severity Severity);
 /// Con qué casa se hizo (F16 §C). El modelo solo no bastaba y la casa no estaba en ninguna parte:
 /// dos filas del mismo día podían gastar de bolsas distintas sin que la tabla lo dijera.
 /// </param>
+/// <param name="Tokens">
+/// Los tokens de la sesión, por tipo (F16-RETOQUE §1). Con una casa que no factura son la única
+/// magnitud que esta fila puede enseñar, y sirven igual para comparar el peso de dos sesiones de
+/// cualquier casa.
+/// </param>
 public sealed record SessionLine(
     string SessionId,
     string Slug,
@@ -76,7 +81,10 @@ public sealed record SessionLine(
     string Units,
     string Findings,
     string Cost,
-    bool HasReport);
+    bool HasReport,
+    string Tokens = "",
+    string TokensDetail = "",
+    string CostDetail = "");
 
 /// <summary>
 /// El panel de mando de F5.9: filtros, cuatro cifras grandes y cinco gráficas.
@@ -209,17 +217,19 @@ public sealed partial class MetricsViewModel : ViewModelBase
     [ObservableProperty] private string _costPerUnit = string.Empty;
 
     /// <summary>
-    /// El coste POR PROVEEDOR (F14). Es la única forma honesta de enseñarlo cuando han auditado
-    /// dos casas en el periodo: Copilot cuenta peticiones premium y Claude Code informa dólares de
-    /// tarifa de lista, y una suma de las dos no sería un gasto sino un número.
+    /// El coste POR PROVEEDOR, cuando hay más de una casa que facture en el periodo. Con una sola
+    /// —lo normal— el total del azulejo ya lo dice todo y el desglose sobra.
     /// </summary>
     public ObservableCollection<string> CostByProvider { get; } = new();
 
+    /// <summary>Hay más de una casa facturando: además del total, su reparto.</summary>
+    [ObservableProperty] private bool _costHasBreakdown;
+
     /// <summary>
-    /// Han auditado varias casas y por eso NO hay un total: el azulejo enseña el desglose. Con una
-    /// sola casa esto es false y todo se ve como siempre.
+    /// Por qué el coste del periodo no cubre toda la actividad: hubo sesiones de una casa que no
+    /// factura (F16-RETOQUE §1). Vacío cuando no las hubo.
     /// </summary>
-    [ObservableProperty] private bool _costIsMixed;
+    [ObservableProperty] private string _costScopeNote = string.Empty;
 
     /// <summary>
     /// Falta gasto por contar: hay sesiones con tokens cuyo modelo no tiene tarifa. Se enseña, con
@@ -423,8 +433,8 @@ public sealed partial class MetricsViewModel : ViewModelBase
         CostUnit = d.CostUnit;
         CostTotal = d.CostInPeriod is { } c ? CreditText.Number(c) : Unknown;
 
-        CostIsMixed = d.CostIsMixed;
         CostPartialNotice = d.CostIsPartial ? d.PartialCostNotice : string.Empty;
+        CostScopeNote = d.HasUntariffed ? d.UntariffedNotice : string.Empty;
         CostInDollars = d.CostInPeriod is { } dollars
             ? $"≈ {CreditText.Dollars(dollars)} · 1 credit = 0,01 $"
             : string.Empty;
@@ -434,15 +444,14 @@ public sealed partial class MetricsViewModel : ViewModelBase
             CostByProvider.Add(line);
         }
 
-        CostPerUnit = d.CostIsMixed
-            ? "En el periodo conviven una factura (Copilot) y un equivalente de API (Claude Code): "
-              + "se enseñan por separado, porque sumarlos parecería un gasto y no lo es."
-            : d.CostInPeriod is null
-                ? "Se activará cuando alguna sesión registre coste"
-                : d.CostPerAuditedUnit is { } per
-                    ? $"~{CreditText.Number(per)} por unidad auditada "
-                      + $"({d.UnitsAuditedInPeriod} en el periodo)"
-                    : "Sin unidades auditadas en el periodo";
+        CostHasBreakdown = CostByProvider.Count > 1;
+
+        CostPerUnit = d.CostInPeriod is null
+            ? "Se activará cuando alguna sesión registre coste"
+            : d.CostPerAuditedUnit is { } per
+                ? $"~{CreditText.Number(per)} por unidad auditada "
+                  + $"({d.UnitsAuditedInPeriod} en el periodo)"
+                : "Sin unidades auditadas en el periodo";
 
         // BUGFIX-REDONDEO: con los enteros, para que 3 de 1.335 no se enseñe como «0 %».
         CyclePct = d.HasCycleData
@@ -687,8 +696,12 @@ public sealed partial class MetricsViewModel : ViewModelBase
                 row.By,
                 row.Units == 1 ? "1 unidad" : $"{row.Units} unidades",
                 findings,
-                row.Cost is { } c ? $"{CreditText.Number(c)} {row.CostUnit}" : Unknown,
-                File.Exists(ReportPathFor(row.Slug, row.SessionId))));
+                row.Cost is { } c ? $"{CreditText.Number(c)} {row.CostUnit}"
+                    : row.Billed ? Unknown : CreditText.SubscriptionCostShort,
+                File.Exists(ReportPathFor(row.Slug, row.SessionId)),
+                row.Tokens,
+                row.TokensDetail,
+                row.Billed ? CreditText.Caveat : CreditText.SubscriptionCost));
         }
 
         HasSessions = Sessions.Count > 0;

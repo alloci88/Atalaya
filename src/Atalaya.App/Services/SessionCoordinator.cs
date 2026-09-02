@@ -227,8 +227,14 @@ public sealed class SessionCoordinator
     /// proveedor con el que se está midiendo. Viaja el <see cref="CostResult"/> entero y no un
     /// <c>decimal?</c> porque el pie tiene que poder decir POR QUÉ no hay número, y un nulo suelto
     /// obliga a inventarse una explicación en la vista (F16 §B).
+    /// <para>
+    /// Y viajan los CUATRO tipos de token, no solo entrada y salida (F16-RETOQUE §1): cuando la
+    /// casa no factura, los tokens son lo único que el pie puede enseñar, y con Claude Code la
+    /// caché es la parte gruesa. Se agrupan en un registro porque siete argumentos posicionales
+    /// son siete oportunidades de cruzar dos <c>long</c> sin que el compilador diga nada.
+    /// </para>
     /// </summary>
-    public event Action<long, long, CostResult, string?, int>? UsageUpdated;
+    public event Action<LiveUsage>? UsageUpdated;
 
     /// <summary>
     /// Las tarifas del hub, releídas en cada muestra. Es barato —un JSON pequeño— y evita que una
@@ -390,12 +396,14 @@ public sealed class SessionCoordinator
             // en peticiones premium, la unidad retirada. Se deriva aquí, en el mismo sitio que lo
             // acumula, para que la cifra en vivo y la del informe sean la misma cuenta.
             CostResult live = CreditCalculator.Calculate(session, ModelRates());
-            UsageUpdated?.Invoke(
+            UsageUpdated?.Invoke(new LiveUsage(
                 session.Usage.InputTokens,
                 session.Usage.OutputTokens,
+                session.Usage.CacheReadTokens,
+                session.Usage.CacheWriteTokens,
                 live,
                 session.Provider,
-                session.Usage.Calls);
+                session.Usage.Calls));
         }
 
         _agent.TextStreamed += OnText;

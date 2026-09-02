@@ -752,15 +752,17 @@ public sealed partial class LiveSessionService : ObservableObject
         _currentText.Text += chunk;
     });
 
-    private void OnUsage(long input, long output, CostResult cost, string? provider, int calls) => OnUi(() =>
+    private void OnUsage(LiveUsage u) => OnUi(() =>
     {
-        InputTokens = input;
-        OutputTokens = output;
-        CostResult = cost;
-        Cost = cost.Credits;
-        Provider = provider;
-        Calls = calls;
-        CostUnit = CreditText.LabelFor(provider);
+        InputTokens = u.InputTokens;
+        OutputTokens = u.OutputTokens;
+        CacheReadTokens = u.CacheReadTokens;
+        CacheWriteTokens = u.CacheWriteTokens;
+        CostResult = u.Cost;
+        Cost = u.Cost.Credits;
+        Provider = u.Provider;
+        Calls = u.Calls;
+        CostUnit = CreditText.BillingUnit;
         OnPropertyChanged(nameof(CostPerUnit));
     });
 

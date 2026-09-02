@@ -87,7 +87,8 @@ public sealed record ReportEntry(
     string CostUnit,
     bool HasSession,
     string? FindingId = null,
-    string? FindingAlias = null)
+    string? FindingAlias = null,
+    bool Billed = true)
 {
     /// <summary>
     /// Este informe es de un arreglo asistido y se sabe de qué hallazgo (H9.1 §1). Es lo que
@@ -375,10 +376,13 @@ public sealed class ReportsQuery
                 // F15 — derivado de los tokens con la tarifa del modelo de la sesión, igual que en
                 // Métricas y en el informe. Una sola aritmética para el mismo número.
                 CreditCalculator.Calculate(session, Rates()).Credits,
-                CreditText.LabelFor(session.Provider),
+                CreditText.BillingUnit,
                 HasSession: true,
                 FindingId: session.FixFindingId,
-                FindingAlias: session.FixFindingAlias);
+                FindingAlias: session.FixFindingAlias,
+                // F16-RETOQUE §1 — si su casa no factura, la fila no dice «—» (que es «no se
+                // sabe»): dice que va contra la suscripción, que sí se sabe.
+                Billed: CreditCalculator.IsBilled(session.Provider));
         }
 
         // Sin sesión: lo único que se sabe es lo que el informe declara de sí mismo. Se lee la

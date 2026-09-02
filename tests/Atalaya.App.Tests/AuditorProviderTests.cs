@@ -128,28 +128,52 @@ public sealed class AuditorProviderTests : IDisposable
     // ================================================================ 3 · los costes NO se mezclan
 
     /// <summary>
-    /// Con dos casas en el periodo NO hay total: Copilot cuenta peticiones premium y Claude Code
-    /// informa dólares de tarifa de lista. Sumarlos daría un número que no significa nada y que
-    /// además parecería dinero.
+    /// <b>El coste del panel es la FACTURA, y solo eso</b> (F16-RETOQUE §1). Con las dos casas en
+    /// el periodo, el total existe y es limpio: son los credits de Copilot. Lo de Claude Code no
+    /// se suma —ni con etiqueta ni sin ella— porque no factura a nadie: va contra la suscripción
+    /// de quien lo lanzó. Y no desaparece: sale en la actividad y el azulejo dice que está fuera.
     /// </summary>
     [Fact]
-    public void Con_dos_proveedores_no_hay_total_sino_desglose()
+    public void El_coste_del_periodo_es_solo_lo_que_factura()
     {
         WriteSession("copilot", cost: 120m, unit: "unidades SDK");
         WriteSession("claude-code", cost: 0.35m, unit: "USD (tarifa de lista)");
 
         MetricsDashboard dashboard = new MetricsQuery(_hub).Build(new MetricsFilter(null, MetricsRange.All));
 
-        dashboard.CostIsMixed.Should().BeTrue();
-        dashboard.CostInPeriod.Should().BeNull("una suma de magnitudes distintas no es un gasto");
-        dashboard.CostPerAuditedUnit.Should().BeNull("y menos aún un ratio de esa suma");
-
-        dashboard.CostByProvider.Should().HaveCount(2);
-        // F15 — los dos están ya en la misma unidad (credits derivados de tokens), así que la
-        // aritmética sí permitiría sumarlos. Lo que sigue sin poder mezclarse es lo que SIGNIFICAN:
-        // el de Copilot es una factura y el de Claude Code un equivalente, y la etiqueta lo dice.
+        dashboard.CostInPeriod.Should().NotBeNull("lo que factura sí tiene total, y es el de Copilot");
+        dashboard.CostByProvider.Should()
+            .ContainSingle("solo llega al desglose la casa que factura")
+            .Which.ProviderName.Should().Be("GitHub Copilot");
         dashboard.CostLines.Should().Contain(l => l.Contains("GitHub Copilot") && l.Contains("AI credits"));
-        dashboard.CostLines.Should().Contain(l => l.Contains("Claude Code") && l.Contains("equivalente API"));
+
+        dashboard.CostLines.Should().NotContain(l => l.Contains("Claude Code"));
+        dashboard.CostLines.Should().NotContain(l => l.Contains("equivalente API"));
+
+        // Y las suyas NO se cuentan como «parciales»: no les falta una tarifa, es que no llevan.
+        dashboard.CostIsPartial.Should().BeFalse(
+            "pedir una tarifa para lo que no factura es justo lo que no hay que hacer");
+        dashboard.HasUntariffed.Should().BeTrue();
+        dashboard.UntariffedNotice.Should().Contain("Claude Code").And.Contain("suscripción");
+    }
+
+    /// <summary>
+    /// Y la sesión que no se tarifa <b>sigue viéndose</b>: en la actividad, con su proveedor y sus
+    /// tokens. Retirarla del panel para «no contaminar el coste» sería esconder trabajo hecho.
+    /// </summary>
+    [Fact]
+    public void La_sesion_que_no_se_tarifa_sale_en_la_actividad_con_su_proveedor_y_sus_tokens()
+    {
+        WriteSession("claude-code", cost: 0.35m, unit: "USD (tarifa de lista)");
+
+        MetricsDashboard dashboard = new MetricsQuery(_hub).Build(new MetricsFilter(null, MetricsRange.All));
+
+        SessionRow row = dashboard.Sessions.Should().ContainSingle().Subject;
+        row.Provider.Should().Be("Claude Code");
+        row.Billed.Should().BeFalse();
+        row.Cost.Should().BeNull("no hay coste que enseñar, y un cero afirmaría que fue gratis");
+        row.Tokens.Should().Contain("tokens");
+        row.TokensDetail.Should().Contain("entrada").And.Contain("salida");
     }
 
     /// <summary>Con una sola casa, el total de siempre: no se rompe lo que ya funcionaba.</summary>
@@ -161,7 +185,6 @@ public sealed class AuditorProviderTests : IDisposable
 
         MetricsDashboard dashboard = new MetricsQuery(_hub).Build(new MetricsFilter(null, MetricsRange.All));
 
-        dashboard.CostIsMixed.Should().BeFalse();
         dashboard.CostInPeriod.Should().Be(150m);
         dashboard.CostUnit.Should().Be("credits", "la unidad es la que factura GitHub (F15)");
     }
@@ -179,33 +202,46 @@ public sealed class AuditorProviderTests : IDisposable
 
         MetricsDashboard dashboard = new MetricsQuery(_hub).Build(new MetricsFilter(null, MetricsRange.All));
 
-        dashboard.CostIsMixed.Should().BeFalse("las dos son de la misma casa");
         dashboard.CostInPeriod.Should().Be(100m);
     }
 
     /// <summary>
-    /// Y la estimación previa al lanzamiento tampoco promedia entre casas: solo entran las
-    /// sesiones del proveedor con el que se va a auditar.
+    /// La estimación previa al lanzamiento no promedia entre casas: solo entran las sesiones del
+    /// proveedor con el que se va a auditar.
     /// </summary>
     [Fact]
     public void La_estimacion_solo_promedia_las_sesiones_del_proveedor_que_va_a_auditar()
     {
         WriteSession("copilot", cost: 100m, unit: "unidades SDK", perUnitCost: 100m);
-        WriteSession("claude-code", cost: 1m, unit: "USD (tarifa de lista)", perUnitCost: 1m);
+        WriteSession("copilot", cost: 100m, unit: "unidades SDK", perUnitCost: 100m);
 
         IReadOnlyList<AuditSession> sessions = _hub.Store.ListSessions("app");
 
         CostEstimate conCopilot = CostEstimator.Estimate(
             sessions, units: 2, maxPasses: 5, "copilot", TestRates.Table());
-        CostEstimate conClaude = CostEstimator.Estimate(
-            sessions, units: 2, maxPasses: 5, "claude-code", TestRates.Table());
 
         conCopilot.CostPerUnit.Should().Be(100m);
-        conClaude.CostPerUnit.Should().Be(1m);
-
-        // Los dos en credits: lo que ya no se mezcla es el histórico de una casa con el de la otra.
         conCopilot.CostUnit.Should().Be("credits");
-        conClaude.CostUnit.Should().Be("credits");
+    }
+
+    /// <summary>
+    /// Y con una casa que NO factura no estima nada — y lo dice por su nombre (F16-RETOQUE §1).
+    /// Antes se caía por el camino de «sin histórico suficiente», que manda a buscar unas medidas
+    /// que no arreglarían nada porque esas sesiones no producen coste por definición.
+    /// </summary>
+    [Fact]
+    public void Con_una_casa_que_no_factura_no_hay_coste_que_estimar()
+    {
+        WriteSession("claude-code", cost: 1m, unit: "USD (tarifa de lista)", perUnitCost: 1m);
+
+        CostEstimate estimate = CostEstimator.Estimate(
+            _hub.Store.ListSessions("app"), units: 2, maxPasses: 5, "claude-code", TestRates.Table());
+
+        estimate.Billed.Should().BeFalse();
+        estimate.Total.Should().BeNull();
+        estimate.Breakdown.Should().Contain("sin coste para la organización");
+        estimate.Provenance.Should().Contain("suscripción");
+        estimate.IsWeak.Should().BeFalse("no hay número flojo que marcar: no hay número");
     }
 
     // ================================================================ 4 · el diálogo dice con quién
@@ -236,26 +272,24 @@ public sealed class AuditorProviderTests : IDisposable
     }
 
     /// <summary>
-    /// Con Claude Code no hay tarifa por llamada que prometer, así que no se promete: se advierte
-    /// de qué es la cifra que sí se informa.
+    /// Con Claude Code el diálogo no promete dinero ni lo desmiente con una nota al pie: dice
+    /// directamente que ese consumo no factura a la organización (F16-RETOQUE §1). La salvedad de
+    /// la «tarifa de lista» existía para explicar un número; sin número no hay nada que explicar.
     /// </summary>
     [Fact]
-    public void Con_Claude_Code_el_dialogo_advierte_de_que_el_coste_no_es_una_factura()
+    public void Con_Claude_Code_el_dialogo_dice_que_no_hay_coste_que_estimar()
     {
         var confirmation = new AuditLaunchConfirmation(
             "XBLAST",
-            CostEstimator.Estimate(Array.Empty<AuditSession>(), 2, 5),
+            CostEstimator.Estimate(Array.Empty<AuditSession>(), 2, 5, "claude-code"),
             "Claude Code",
-            "opus",
-            ClaudeUsage.ListPriceCaveat);
+            "opus");
 
-        confirmation.Reassurance.Should().Contain("no lo que factura tu suscripción");
+        confirmation.Breakdown.Should().Contain("sin coste para la organización");
+        confirmation.Provenance.Should().Contain("suscripción");
+        confirmation.IsWeakEstimate.Should().BeFalse();
+        confirmation.Reassurance.Should().NotContain("tarifa de lista");
     }
-
-    /// <summary>Y la frase de «~N llamadas · coste según tu suscripción», que es lo que sí se sabe.</summary>
-    [Fact]
-    public void Sin_tarifa_por_llamada_se_dice_lo_que_si_se_sabe()
-        => ClaudeUsage.LaunchEstimate(2).Should().Be("~2 llamadas estimadas · coste según tu suscripción");
 
     // ================================================================ 5 · Cuenta enseña los dos
 

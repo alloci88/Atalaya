@@ -71,7 +71,14 @@ public sealed class ReportRow
 
     public string Cost => Entry.Cost is { } c
         ? $"{Atalaya.App.Services.CreditText.Number(c)} {Entry.CostUnit}"
-        : ReportsViewModel.Unknown;
+        : Entry.Billed
+            ? ReportsViewModel.Unknown
+            : Atalaya.App.Services.CreditText.SubscriptionCostShort;
+
+    /// <summary>La frase entera detrás de la celda de coste, para el tooltip.</summary>
+    public string CostDetail => Entry.Billed
+        ? Atalaya.App.Services.CreditText.Caveat
+        : Atalaya.App.Services.CreditText.SubscriptionCost;
 
     public string Title => Entry.Title;
 }

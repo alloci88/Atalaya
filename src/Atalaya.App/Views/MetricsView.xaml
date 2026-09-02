@@ -200,19 +200,20 @@
                             <StackPanel>
                                 <TextBlock Text="Coste del periodo" Style="{StaticResource TileCaption}" />
 
-                                <!-- F14 — con UNA casa, el total de siempre. -->
-                                <StackPanel Orientation="Horizontal"
-                                            Visibility="{Binding CostIsMixed, Converter={StaticResource InverseBoolToVisibility}}">
+                                <!-- F16-RETOQUE §1 — SIEMPRE hay total, porque todo lo que llega
+                                     aquí es de la misma naturaleza: la factura de la organización.
+                                     Lo que no factura no se tarifa y no entra (ver la nota de
+                                     abajo), así que ya no hay dos magnitudes que malabarear. -->
+                                <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="{Binding CostTotal}" Style="{StaticResource TileNumber}" />
                                     <TextBlock Text="{Binding CostUnit}" Style="{StaticResource TileCaption}"
                                                VerticalAlignment="Bottom" Margin="7,0,0,7" />
                                 </StackPanel>
 
-                                <!-- Con VARIAS, una línea por proveedor y NINGÚN total: peticiones
-                                     premium y dólares de tarifa de lista no son la misma magnitud,
-                                     y sumarlos daría una cifra que no significa nada. -->
+                                <!-- Y si más de una casa factura, además el reparto: saber de qué
+                                     bolsa salió el gasto es la mitad de poder cuadrarlo. -->
                                 <ItemsControl ItemsSource="{Binding CostByProvider}" Margin="0,4,0,0"
-                                              Visibility="{Binding CostIsMixed, Converter={StaticResource BoolToVisibility}}">
+                                              Visibility="{Binding CostHasBreakdown, Converter={StaticResource BoolToVisibility}}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding}" TextWrapping="Wrap"
@@ -222,6 +223,13 @@
                                 </ItemsControl>
 
                                 <TextBlock Text="{Binding CostPerUnit}" Style="{StaticResource TileFoot}" />
+
+                                <!-- F16-RETOQUE §1 — por qué esta cifra no cubre toda la actividad
+                                     de más abajo: hubo sesiones de una casa que no factura. No es
+                                     un aviso de que falte una tarifa; es justo lo contrario. -->
+                                <TextBlock Text="{Binding CostScopeNote}" TextWrapping="Wrap"
+                                           FontSize="11" Opacity="0.7" Margin="0,4,0,0"
+                                           Visibility="{Binding CostScopeNote, Converter={StaticResource NotEmptyToVisibility}}" />
 
                                 <!-- F15 — falta gasto por contar: hay sesiones cuyo modelo no tiene
                                      tarifa. Se dice, porque un total al que le falta gasto se lee
@@ -293,7 +301,7 @@
                                 Visibility="{Binding HasCost, Converter={StaticResource BoolToVisibility}}" />
 
                             <TextBlock Style="{StaticResource EmptyNote}"
-                                       Text="— · se activará cuando alguna sesión del periodo registre coste. Las sesiones ya guardan tokens; el coste lo declara el SDK cuando lo conoce."
+                                       Text="— · se activará cuando alguna sesión del periodo tenga coste facturable. El coste se deriva de los tokens con la tarifa del modelo; las sesiones de Claude Code no se tarifan y salen en la actividad con sus tokens."
                                        Visibility="{Binding HasCost, Converter={StaticResource InverseBoolToVisibility}}" />
                         </StackPanel>
                     </ui:Card>
@@ -531,7 +539,7 @@
                                     <ColumnDefinition Width="110" />
                                     <ColumnDefinition Width="80" />
                                     <ColumnDefinition Width="95" />
-                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="150" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="Fecha" FontSize="11" Opacity="0.6" />
                                 <TextBlock Grid.Column="1" Text="Aplicación" FontSize="11" Opacity="0.6" />
@@ -541,7 +549,7 @@
                                 <TextBlock Grid.Column="4" Text="Quién" FontSize="11" Opacity="0.6" />
                                 <TextBlock Grid.Column="5" Text="Unidades" FontSize="11" Opacity="0.6" />
                                 <TextBlock Grid.Column="6" Text="Hallazgos" FontSize="11" Opacity="0.6" />
-                                <TextBlock Grid.Column="7" Text="Coste" FontSize="11" Opacity="0.6" />
+                                <TextBlock Grid.Column="7" Text="Coste y tokens" FontSize="11" Opacity="0.6" />
                             </Grid>
 
                             <ItemsControl ItemsSource="{Binding Sessions}"
@@ -562,7 +570,7 @@
                                                     <ColumnDefinition Width="110" />
                                                     <ColumnDefinition Width="80" />
                                                     <ColumnDefinition Width="95" />
-                                                    <ColumnDefinition Width="140" />
+                                                    <ColumnDefinition Width="150" />
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Grid.Column="0" Text="{Binding When}" FontSize="12" Opacity="0.85" />
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
@@ -578,7 +586,20 @@
                                                            TextTrimming="CharacterEllipsis" />
                                                 <TextBlock Grid.Column="5" Text="{Binding Units}" FontSize="12" Opacity="0.85" />
                                                 <TextBlock Grid.Column="6" Text="{Binding Findings}" FontSize="12" Opacity="0.85" />
-                                                <TextBlock Grid.Column="7" Text="{Binding Cost}" FontSize="12" Opacity="0.85" />
+                                                <!-- F16-RETOQUE §1 — el coste y, debajo, los tokens.
+                                                     Una sesión que no se tarifa dice «suscripción» y
+                                                     sus tokens son lo que deja comparar su peso con
+                                                     el de cualquier otra. El desglose por tipo y la
+                                                     frase entera, en los tooltips. -->
+                                                <StackPanel Grid.Column="7">
+                                                    <TextBlock Text="{Binding Cost}" FontSize="12" Opacity="0.85"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding CostDetail}" />
+                                                    <TextBlock Text="{Binding Tokens}" FontSize="10.5" Opacity="0.6"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding TokensDetail}"
+                                                               Visibility="{Binding Tokens, Converter={StaticResource NotEmptyToVisibility}}" />
+                                                </StackPanel>
                                             </Grid>
                                         </Button>
                                     </DataTemplate>

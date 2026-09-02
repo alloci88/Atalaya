@@ -56,6 +56,38 @@ public static class ReportBuilder
             : string.Empty)
         + (session.Usage.Calls > 0 ? $" · **{session.Usage.Calls} llamada(s) al modelo**" : string.Empty);
 
+    /// <summary>
+    /// Lo que el CLI del proveedor DECLARÓ que costó, tal cual y con su unidad (F16-RETOQUE §1).
+    /// <para>
+    /// <b>Es un dato del proveedor, no el coste de la sesión.</b> El CLI de Claude Code publica un
+    /// <c>total_cost_usd</c> que él mismo etiqueta <c>"costBasis": "list"</c>: lo que habrían
+    /// costado esos tokens pagando la API. La suscripción no factura por tokens, así que ese número
+    /// no le llega a nadie en ninguna factura — y por eso ni se presenta como coste ni entra en
+    /// ninguna métrica.
+    /// </para>
+    /// <para>
+    /// <b>Y aun así se escribe</b>, en una línea aparte y diciendo lo que es. Viene gratis —el CLI
+    /// lo manda solo—, no obliga a mantener ninguna tabla de precios y es una medida independiente
+    /// de la nuestra: el día que alguien quiera comparar el peso de dos sesiones, o comprobar si
+    /// nuestros tokens cuadran con los suyos, está ahí. Solo aparece cuando llegó.
+    /// </para>
+    /// </summary>
+    private static void AppendDeclaredCost(StringBuilder sb, AuditSession session)
+    {
+        if (CreditCalculator.IsBilled(session.Provider) || session.Usage.Cost is not { } declared)
+        {
+            return;
+        }
+
+        string unit = string.IsNullOrWhiteSpace(session.Usage.Currency)
+            ? "USD (tarifa de lista)"
+            : session.Usage.Currency!;
+
+        string amount = declared.ToString("0.######", Culture);
+        sb.AppendLine($"- **Lo que declaró el CLI**: {amount} {unit} — dato del proveedor, no el "
+            + "coste de esta sesión y no entra en ninguna métrica.");
+    }
+
     public static string BuildSessionReport(
         AppConfig app,
         AuditSession session,
@@ -90,6 +122,7 @@ public static class ReportBuilder
 
         CostResult cost = CreditCalculator.Calculate(session, rates);
         sb.AppendLine($"- **Coste**: {CreditText.OfSession(cost, session.Provider)}");
+        AppendDeclaredCost(sb, session);
         sb.AppendLine();
 
         sb.AppendLine("## Cobertura");
@@ -400,6 +433,7 @@ public static class ReportBuilder
 
         CostResult cost = CreditCalculator.Calculate(session, rates);
         sb.AppendLine($"- **Coste**: {CreditText.OfSession(cost, session.Provider)}");
+        AppendDeclaredCost(sb, session);
         sb.AppendLine();
 
         sb.AppendLine("> Verificar **juzga el código que hay ahora**. Que el código anclado haya "
@@ -510,6 +544,7 @@ public static class ReportBuilder
 
         CostResult fixCost = CreditCalculator.Calculate(session, rates);
         sb.AppendLine($"- **Coste**: {CreditText.OfSession(fixCost, session.Provider)}");
+        AppendDeclaredCost(sb, session);
         if (session.Interrupted)
         {
             sb.AppendLine("- ⚠ **Sesión detenida por el usuario**: el agente no llegó a cerrar el arreglo.");

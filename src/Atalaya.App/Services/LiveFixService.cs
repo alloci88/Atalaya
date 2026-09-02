@@ -173,6 +173,22 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
     [ObservableProperty] private decimal? _cost;
     [ObservableProperty] private string _costUnit = CreditText.Unit;
 
+    /// <summary>
+    /// Lo que el PROVEEDOR declara que ha costado, en su unidad, tal cual lo dice (F16-RETOQUE §1).
+    /// <para>
+    /// No es el coste de la sesión y no se enseña como tal: el CLI de Claude Code publica un
+    /// <c>total_cost_usd</c> a tarifa de lista que su suscripción no factura. Se guarda porque
+    /// viene gratis y es un dato medido, y acaba en el informe como una línea informativa. Hasta
+    /// aquí este camino escribía en <c>Usage.Cost</c> los credits DERIVADOS, que no es un dato del
+    /// proveedor sino una cuenta nuestra: los otros dos caminos —auditoría y verificación— siempre
+    /// guardaron ahí lo declarado, y ahora los tres dicen lo mismo.
+    /// </para>
+    /// </summary>
+    [ObservableProperty] private decimal? _declaredCost;
+
+    /// <summary>La unidad de <see cref="DeclaredCost"/>, tal y como la nombra el proveedor.</summary>
+    [ObservableProperty] private string? _declaredCostUnit;
+
     /// <summary>El coste con su motivo cuando no lo hay, igual que en la auditoría (F16 §B).</summary>
     [ObservableProperty] private CostResult _costResult = CostResult.Unavailable(CostUnavailable.TokensMissing);
     [ObservableProperty] private int _calls;
@@ -308,6 +324,8 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         InputTokens = OutputTokens = CacheReadTokens = CacheWriteTokens = 0;
         Cost = null;
         CostResult = CostResult.Unavailable(CostUnavailable.TokensMissing);
+        DeclaredCost = null;
+        DeclaredCostUnit = null;
         Calls = 0;
 
         // F16 — el motor de ESTA sesión se resuelve aquí, una vez, y ya no cambia: dentro de un
@@ -542,7 +560,13 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         // sumando más grande de la factura —escribir en caché se cobra al doble de la entrada— así
         // que perderlo dejaba el informe del arreglo contando de menos justo donde más pesa. Y las
         // llamadas, que hasta ahora no se guardaban en ninguna parte para una sesión sin unidades.
-        session.Usage.Add(InputTokens, OutputTokens, CacheReadTokens, CacheWriteTokens, Cost, Calls);
+        session.Usage.Add(
+            InputTokens, OutputTokens, CacheReadTokens, CacheWriteTokens, DeclaredCost, Calls);
+        if (DeclaredCostUnit is { Length: > 0 } declaredUnit)
+        {
+            session.Usage.Currency = declaredUnit;
+        }
+
         session.Notes.Add($"Arreglo asistido de {FindingAlias}: {finding.Title}");
         foreach (FixFileChange file in Files)
         {
@@ -1183,10 +1207,26 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         // F15 — el coste se DERIVA de los tokens con la tarifa del modelo, igual que en una sesión
         // de auditoría. El número que informa el proveedor está en peticiones premium, la unidad
         // que GitHub retiró: enseñarlo sería enseñar una moneda que ya no existe.
+        //
+        // F16-RETOQUE §1 — y si esta casa no factura a la organización, `Calculate` lo dice y no
+        // hay número: el pie enseña llamadas y tokens, y el coste se lee «incluido en tu
+        // suscripción de Claude».
         CostResult = CreditCalculator.Calculate(
             Model, Provider, InputTokens, OutputTokens, CacheReadTokens, CacheWriteTokens, ModelRates());
         Cost = CostResult.Credits;
-        CostUnit = CreditText.LabelFor(Provider);
+        CostUnit = CreditText.BillingUnit;
+
+        // Y lo que el proveedor DECLARA, aparte y sin mezclarse con lo anterior: es un dato suyo,
+        // no una cuenta nuestra, y solo vale para dejarlo escrito en el informe.
+        if (sample.Cost is { } declared)
+        {
+            DeclaredCost = (DeclaredCost ?? 0m) + declared;
+        }
+
+        if (sample.CostUnit is { Length: > 0 } unit && string.IsNullOrEmpty(DeclaredCostUnit))
+        {
+            DeclaredCostUnit = unit;
+        }
 
         // Cuántas LLAMADAS trae la muestra, no «una por muestra»: un proveedor puede mandar un
         // ajuste que corrige a las anteriores sin ser una llamada nueva (UsageSample.Calls).

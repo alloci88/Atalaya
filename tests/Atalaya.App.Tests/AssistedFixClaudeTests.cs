@@ -496,11 +496,13 @@ public sealed class AssistedFixClaudeTests : IDisposable
     }
 
     /// <summary>
-    /// Y con tarifa configurada, el coste sale por la vía de siempre y con la etiqueta de su casa —
-    /// «equivalente API», porque una suscripción no factura por tokens (D-789).
+    /// <b>El pie de un arreglo con Claude Code: llamadas, tokens y quién paga</b> (F16-RETOQUE §1).
+    /// Ni credits, ni «equivalente API», ni «tarifa no configurada» — ese consumo va contra la
+    /// suscripción de quien lanzó la sesión y no factura a nadie, así que no se tarifa. Lo que se
+    /// enseña son las magnitudes que SÍ son hechos medidos.
     /// </summary>
     [Fact]
-    public async Task Con_tarifa_el_pie_ensena_el_coste_etiquetado()
+    public async Task El_pie_ensena_llamadas_tokens_y_que_va_contra_la_suscripcion()
     {
         SeedRates();
         Script("""call fix_done {"summary":"hecho","commitTitle":"Arregla BUG-0003","commitDescription":"d"}""");
@@ -510,18 +512,48 @@ public sealed class AssistedFixClaudeTests : IDisposable
         await fix.StartAsync(new FixSessionRequest(Slug, _findingId));
 
         fix.HasFinished.Should().BeTrue(fix.FailureMessage);
-        fix.CostResult.HasValue.Should().BeTrue("hay tokens y hay tarifa para su modelo");
-        view.CostText.Should().Contain("equivalente API");
-        view.CostText.Should().NotContain("no calculable");
+        fix.InputTokens.Should().BeGreaterThan(0, "los tokens se siguen registrando: son dato primario");
+        fix.CostResult.Why.Should().Be(CostUnavailable.NotBilled);
+
+        view.CostText.Should().Contain("llamadas").And.Contain("entrada").And.Contain("salida");
+        view.CostText.Should().EndWith("coste: incluido en tu suscripción de Claude");
+        view.CostText.Should().NotContain("credits")
+            .And.NotContain("equivalente API")
+            .And.NotContain("tarifa")
+            .And.NotContain("no calculable");
     }
 
     /// <summary>
-    /// «Sin tokens registrados» queda para cuando de verdad no hay dato: un proveedor que no
-    /// informa consumo. Es la otra mitad del arreglo — la frase no desaparece, se gana el derecho a
-    /// aparecer.
+    /// Y aunque la organización tenga una tarifa escrita para ese modelo, tampoco se usa: el freno
+    /// está en el cálculo, no en que falte el dato. Es el test que se pondría rojo si alguien
+    /// volviera a colar a esta casa por el camino de las tarifas.
     /// </summary>
     [Fact]
-    public async Task Sin_consumo_informado_el_pie_lo_dice_con_esas_palabras()
+    public async Task Aunque_haya_tarifa_escrita_para_su_modelo_no_se_tarifa()
+    {
+        _hub.Store.WriteModelRates(new ModelRateTable
+        {
+            Source = "Una tarifa heredada de la siembra vieja, atada a claude-code.",
+            Rates = { new ModelRate("opus", 1m, 5m, 0.1m, 2m, ClaudeCodeProvider.Id) },
+        });
+        Script("""call fix_done {"summary":"hecho","commitTitle":"Arregla BUG-0003","commitDescription":"d"}""");
+
+        LiveFixService fix = Service();
+        var view = new AssistedFixViewModel(fix, new ToastCenter(), new AlwaysDiscard());
+        await fix.StartAsync(new FixSessionRequest(Slug, _findingId));
+
+        fix.HasFinished.Should().BeTrue(fix.FailureMessage);
+        fix.CostResult.Credits.Should().BeNull();
+        view.CostText.Should().NotContain("credits");
+    }
+
+    /// <summary>
+    /// Y sin consumo informado por el proveedor, el pie no se inventa unos tokens: dice las
+    /// llamadas y la frase del coste, y nada más. «Sin tokens registrados» queda para las casas que
+    /// SÍ facturan — a ésta no le puede salir, porque su motivo se decide antes de mirar los tokens.
+    /// </summary>
+    [Fact]
+    public async Task Sin_consumo_informado_el_pie_no_se_inventa_tokens()
     {
         SeedRates();
         Script("""call fix_done {"summary":"hecho","commitTitle":"Arregla BUG-0003","commitDescription":"d"}""");
@@ -533,7 +565,9 @@ public sealed class AssistedFixClaudeTests : IDisposable
 
         fix.HasFinished.Should().BeTrue(fix.FailureMessage);
         fix.InputTokens.Should().Be(0);
-        view.CostText.Should().Contain("sin tokens registrados");
+        view.CostText.Should().EndWith("coste: incluido en tu suscripción de Claude");
+        view.CostText.Should().NotContain("entrada", "sin tokens no se escribe un desglose de ceros");
+        view.CostText.Should().NotContain("sin tokens registrados");
     }
 
     /// <summary>
@@ -560,7 +594,16 @@ public sealed class AssistedFixClaudeTests : IDisposable
 
         report.Should().Contain("- **Tokens**: entrada 930, salida 15, caché lectura 300, escritura 60");
         report.Should().Contain("3 llamada(s) al modelo");
-        report.Should().Contain("- **Coste**:").And.Contain("equivalente API");
+
+        // F16-RETOQUE §1 — el coste, dicho entero y sin insinuar que falte nada por configurar.
+        report.Should().Contain("- **Coste**: incluido en tu suscripción de Claude");
+        report.Should().NotContain("equivalente API").And.NotContain("tarifa no configurada");
+
+        // Y lo que el CLI declaró, como línea informativa del proveedor: viene gratis, es un dato
+        // medido y NO es el coste de la sesión. Se dice qué es en la misma línea.
+        report.Should().Contain("- **Lo que declaró el CLI**:")
+            .And.Contain("USD (tarifa de lista)")
+            .And.Contain("no el coste de esta sesión y no entra en ninguna métrica");
     }
 
     // ================================================================= ayudas

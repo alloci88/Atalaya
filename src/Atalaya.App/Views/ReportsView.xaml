@@ -255,7 +255,8 @@
                                 <TextBlock Grid.Column="4" Text="{Binding By}" Style="{StaticResource Cell}" />
                                 <TextBlock Grid.Column="5" Text="{Binding Units}" Style="{StaticResource Cell}" />
                                 <TextBlock Grid.Column="6" Text="{Binding Findings}" Style="{StaticResource Cell}" />
-                                <TextBlock Grid.Column="7" Text="{Binding Cost}" Style="{StaticResource Cell}" />
+                                <TextBlock Grid.Column="7" Text="{Binding Cost}" Style="{StaticResource Cell}"
+                                           ToolTip="{Binding CostDetail}" />
                             </Grid>
                         </Button>
                     </DataTemplate>

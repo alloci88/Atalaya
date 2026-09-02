@@ -111,6 +111,15 @@ public sealed record FlowBucket(string Label, string Range, int New, int Resolve
 /// filas del mismo día pueden gastar de bolsas distintas, y sin esta columna la única forma de
 /// saber de cuál era abrir el informe de cada una.
 /// </param>
+/// <param name="Cost">
+/// Los credits que la sesión le costó a la organización, o <c>null</c> cuando no hay coste que
+/// enseñar: porque su casa no factura (F16-RETOQUE §1) o porque falta la tarifa de su modelo.
+/// </param>
+/// <param name="Tokens">
+/// Los tokens de la sesión, por tipo. Están en la fila desde F16-RETOQUE §1 porque son <b>lo que
+/// queda</b> cuando el coste no aplica: una sesión de Claude Code sigue teniendo un peso que se
+/// puede comparar con el de otra, y sin esta columna la actividad la enseñaría en blanco.
+/// </param>
 public sealed record SessionRow(
     string SessionId,
     string Slug,
@@ -123,26 +132,24 @@ public sealed record SessionRow(
     int Resolved,
     decimal? Cost,
     string CostUnit,
-    string Provider);
+    string Provider,
+    string Tokens = "",
+    string TokensDetail = "",
+    bool Billed = true);
 
 /// <summary>
-/// Lo que costó UN proveedor en el periodo, en SU unidad (F14).
+/// Lo que costó UN proveedor en el periodo (F14, reducido en F16-RETOQUE §1).
 /// <para>
-/// Existe porque los dos proveedores no cuentan lo mismo: Copilot factura peticiones premium con
-/// multiplicador y Claude Code informa dólares de tarifa de lista que su suscripción no cobra por
-/// llamada. Sumarlos daría un número que no significa nada y que además parecería dinero. Así que
-/// no se suman: se enseñan uno al lado del otro, cada uno con su unidad pegada.
+/// Aquí solo llegan las casas que <b>facturan</b>. El desglose se mantiene porque mañana puede
+/// haber dos que facturen, y porque saber de qué bolsa salió un gasto es la mitad de poder
+/// cuadrarlo con el panel del proveedor. Lo que ya no aparece es Claude Code: su consumo va contra
+/// la suscripción de quien lo usa y no se tarifa, así que no tiene línea de coste que enseñar
+/// — sale en la actividad, con su proveedor y sus tokens.
 /// </para>
 /// </summary>
 public sealed record ProviderCost(
     string ProviderId, string ProviderName, decimal? Cost, string CostUnit, int Sessions)
 {
-    /// <summary>
-    /// El coste de esta casa es un EQUIVALENTE y no una factura (F15). Con suscripción no se paga
-    /// por tokens, así que llamarlo «lo que costó» sería decir que se cobró algo que no se cobró.
-    /// </summary>
-    public bool IsSubscription => CreditText.IsSubscription(ProviderId);
-
     /// <summary>La línea que se lee en el panel: «GitHub Copilot · 68,2 AI credits».</summary>
     public string Line => Cost is { } c
         ? $"{ProviderName} · {CreditText.Number(c)} {CostUnit}"
@@ -177,6 +184,7 @@ public sealed record MetricsDashboard(
     decimal? CostPerAuditedUnit,
     IReadOnlyList<ProviderCost> CostByProvider,
     int PartialCostSessions,
+    int UntariffedSessions,
     int UnitsAuditedInPeriod,
     int CycleAudited,
     int CyclePending,
@@ -222,19 +230,22 @@ public sealed record MetricsDashboard(
     /// </summary>
     public bool HasCost => CostInPeriod is not null;
 
-    /// <summary>
-    /// En el periodo conviven una FACTURA y un EQUIVALENTE (F15), así que no se ofrece un total
-    /// único: sumar lo que se paga con lo que no se paga daría una cifra que parece un gasto y no
-    /// lo es. Las dos están en credits —la aritmética sí valdría—, pero lo que no se puede mezclar
-    /// en silencio es su significado, así que el panel enseña el desglose con sus etiquetas.
-    /// </summary>
-    public bool CostIsMixed
-        => CostByProvider.Any(p => p.IsSubscription) && CostByProvider.Any(p => !p.IsSubscription);
+    // <b>El coste de este panel es la FACTURA de la organización, y solo eso</b> (F16-RETOQUE §1).
+    // Aquí vivía `CostIsMixed`: el panel hacía malabares con dos naturalezas —una factura y un
+    // «equivalente API»— y se negaba a dar un total cuando convivían. Ya no hace falta, y por eso
+    // no hay ninguna propiedad que lo diga: lo que no factura no se tarifa y no llega, así que todo
+    // lo que suma este panel es de la misma naturaleza POR CONSTRUCCIÓN. Un total que mezclara
+    // factura con suscripción no es que se evite — es que no se puede formar.
 
     /// <summary>
-    /// Hay sesiones con tokens que NO se han podido valorar —sin modelo registrado, o con un
-    /// modelo sin tarifa—, así que lo que se enseña es menos que lo que se gastó. Se DICE: un total
-    /// al que le falta gasto se lee como si fuera el gasto entero.
+    /// Hay sesiones <b>facturables</b> con tokens que NO se han podido valorar —sin modelo
+    /// registrado, o con un modelo sin tarifa—, así que lo que se enseña es menos que lo que se
+    /// gastó. Se DICE: un total al que le falta gasto se lee como si fuera el gasto entero.
+    /// <para>
+    /// Las de una casa que no factura <b>no cuentan como parciales</b> (F16-RETOQUE §1): no es que
+    /// falte su gasto, es que no lo tienen. Meterlas aquí haría que el panel pidiera una tarifa que
+    /// no debe existir, y un aviso que ladra sin causa se aprende a ignorar.
+    /// </para>
     /// </summary>
     public bool CostIsPartial => PartialCostSessions > 0;
 
@@ -242,6 +253,24 @@ public sealed record MetricsDashboard(
     public string PartialCostNotice => PartialCostSessions == 1
         ? "1 sesión sin tarifa para su modelo: no está contada."
         : $"{PartialCostSessions} sesiones sin tarifa para su modelo: no están contadas.";
+
+    /// <summary>
+    /// En el periodo hubo sesiones de una casa que <b>no factura</b> (F16-RETOQUE §1).
+    /// <para>
+    /// No es un aviso de que falte nada: es la explicación de por qué el coste del periodo no
+    /// cubre toda la actividad que se ve más abajo. Sin decirlo, quien mire el tile y luego el
+    /// registro de sesiones no entendería la diferencia — y lo primero que haría sería buscar la
+    /// tarifa que falta, que es justo lo que aquí no hay que hacer.
+    /// </para>
+    /// </summary>
+    public bool HasUntariffed => UntariffedSessions > 0;
+
+    /// <inheritdoc cref="HasUntariffed"/>
+    public string UntariffedNotice => UntariffedSessions == 1
+        ? "1 sesión con Claude Code: no se tarifa —va contra la suscripción de quien la lanzó—, "
+          + "así que no está en esta cifra. Sus tokens sí están en la actividad."
+        : $"{UntariffedSessions} sesiones con Claude Code: no se tarifan —van contra la suscripción "
+          + "de quien las lanzó—, así que no están en esta cifra. Sus tokens sí están en la actividad.";
 
     /// <summary>
     /// El coste, listo para leer. Con un solo proveedor es el total de siempre; con varios son sus
@@ -355,34 +384,38 @@ public sealed class MetricsQuery
         // TODA sesión con coste cuenta: auditoría, arreglo, verificación y lo que venga. El tile
         // y la gráfica salen de la MISMA función (CostIn), no de dos sumas parecidas.
         //
-        // F15 — ahora las dos casas se miden en la MISMA unidad (credits, derivados de tokens), así
-        // que ya se pueden sumar sin mentir en la aritmética. Lo que sigue sin poder mezclarse en
-        // silencio es lo que significan: el de Copilot es una FACTURA y el de Claude Code con
-        // suscripción es un EQUIVALENTE. Por eso el desglose por proveedor se mantiene y el total
-        // único solo se ofrece cuando todo lo del periodo es de la misma naturaleza.
+        // F16-RETOQUE §1 — y «con coste» quiere decir lo que FACTURA. El consumo de Claude Code va
+        // contra la suscripción de quien lo usa, así que no se tarifa y no entra en ninguna de
+        // estas cifras: el tile, la gráfica y el desglose son la factura de la organización y nada
+        // más. Ya no hay dos naturalezas que malabarear —eso era D-789—, porque la segunda dejó de
+        // producir un número. Esas sesiones no desaparecen: salen en la actividad, con su proveedor
+        // y sus tokens.
         ModelRateTable? rates = ModelRates();
         IReadOnlyList<ProviderCost> byProvider = CostByProvider(inPeriod, rates);
 
-        bool mixesKinds = byProvider.Any(p => p.IsSubscription) && byProvider.Any(p => !p.IsSubscription);
-
-        decimal? cost = byProvider.Count > 0 && !mixesKinds
+        decimal? cost = byProvider.Count > 0
             ? scope.Sum(a => CostIn(a.Sessions, from, to, rates))
             : null;
         int unitsAudited = inPeriod.Sum(s => s.Units.Count);
 
-        // Cuántas sesiones del periodo tenían tokens pero NO se pudieron valorar: sin modelo
-        // registrado, o con un modelo sin tarifa. El agregado que las contiene es PARCIAL, y hay
-        // que decirlo — un total al que le falta gasto se lee como si fuera el gasto entero.
-        int partial = inPeriod.Count(x => !CreditCalculator.Calculate(x, rates).HasValue && HasTokens(x));
+        // Cuántas sesiones FACTURABLES del periodo tenían tokens pero NO se pudieron valorar: sin
+        // modelo registrado, o con un modelo sin tarifa. El agregado que las contiene es PARCIAL, y
+        // hay que decirlo — un total al que le falta gasto se lee como si fuera el gasto entero.
+        // Las que no facturan no cuentan: no les falta una tarifa, es que no llevan ninguna.
+        int partial = inPeriod.Count(x =>
+            CreditCalculator.Calculate(x, rates).Why is CostUnavailable.ModelUnknown or CostUnavailable.RateMissing
+            && HasTokens(x));
+
+        // Y cuántas del periodo son de una casa que no factura. No es un hueco que rellenar: es lo
+        // que explica que el coste del tile no cubra toda la actividad de más abajo.
+        int untariffed = inPeriod.Count(x => !CreditCalculator.IsBilled(x.Provider));
 
         // El ratio «por unidad auditada» NO divide el gasto entero: divide lo que costó AUDITAR.
         // Un arreglo o una verificación no auditan ninguna unidad, así que su gasto subía el
         // ratio sin que cambiara nada de lo auditado (28/08/2026: 262,5 por unidad cuando auditar
         // esa unidad había costado 105). El tile de coste los sigue sumando —eso es el gasto—;
         // lo que no se puede es repartirlos entre algo que no produjeron.
-        decimal auditCost = mixesKinds
-            ? 0m
-            : inPeriod.Where(x => x.Units.Count > 0).Sum(x => CostOf(x, rates));
+        decimal auditCost = inPeriod.Where(x => x.Units.Count > 0).Sum(x => CostOf(x, rates));
         string costUnit = CreditText.Unit;
 
         int cycleAudited = 0;
@@ -434,6 +467,7 @@ public sealed class MetricsQuery
             unitsAudited > 0 && auditCost > 0m ? auditCost / unitsAudited : null,
             byProvider,
             partial,
+            untariffed,
             unitsAudited,
             cycleAudited,
             cyclePending,
@@ -608,7 +642,13 @@ public sealed class MetricsQuery
     /// </para>
     /// </summary>
     /// <summary>
-    /// Agrupa las sesiones del periodo por proveedor, cada una con SU unidad de coste (F14).
+    /// Agrupa por proveedor las sesiones del periodo <b>que facturan</b> (F14, F16-RETOQUE §1).
+    /// <para>
+    /// El filtro es el mismo <c>Calculate</c> de siempre: una casa que no factura devuelve
+    /// «no tarifado» y se cae por el <c>HasValue</c>, igual que se cae una a la que le falta la
+    /// tarifa. No hay aquí ninguna regla propia — si la hubiera, sería la segunda copia de una
+    /// decisión que ya vive en <see cref="CreditCalculator.IsBilled"/>.
+    /// </para>
     /// <para>
     /// Las sesiones anteriores a F14 no llevan proveedor escrito, y eso NO es un dato que falte:
     /// era Copilot, porque no había otro. Se les asigna esa casa en vez de inventar una categoría
@@ -626,7 +666,7 @@ public sealed class MetricsQuery
                 g.Key,
                 ProviderDisplayName(g.Key),
                 g.Sum(x => x.Cost.Credits ?? 0m),
-                CreditText.LabelFor(g.Key),
+                CreditText.BillingUnit,
                 g.Count()))
             .OrderBy(p => p.ProviderName, StringComparer.CurrentCulture)
             .ToList();
@@ -913,8 +953,17 @@ public sealed class MetricsQuery
                 // tarifa, mismo modelo. Dos cuentas parecidas para el mismo número acaban siempre
                 // discrepando (ya pasó dos veces con el tile y la gráfica).
                 CreditCalculator.Calculate(s, rates).Credits,
-                CreditText.LabelFor(s.Provider),
-                ProviderNames.Display(s.Provider)))
+                CreditText.BillingUnit,
+                ProviderNames.Display(s.Provider),
+                // Los tokens de la fila. Con una casa que no factura son la ÚNICA magnitud que la
+                // actividad puede enseñar, y son dato primario: se quedan (F16-RETOQUE §1).
+                CreditText.TokensTotal(
+                    s.Usage.InputTokens, s.Usage.OutputTokens,
+                    s.Usage.CacheReadTokens, s.Usage.CacheWriteTokens),
+                CreditText.Tokens(
+                    s.Usage.InputTokens, s.Usage.OutputTokens,
+                    s.Usage.CacheReadTokens, s.Usage.CacheWriteTokens),
+                CreditCalculator.IsBilled(s.Provider)))
             .ToList();
     }
 

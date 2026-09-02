@@ -20,9 +20,13 @@ namespace Atalaya.App.Tests;
 /// Dos respuestas a la misma pregunta, y solo una de ellas cierta.
 /// </para>
 /// <para>
-/// Desde F15 el coste se DERIVA de los tokens con la tarifa del modelo, así que cuando no hay
-/// número el motivo es siempre uno de tres y ninguno tiene que ver con lo que informe un
-/// proveedor. Lo que se fija aquí es que hay un solo criterio y que los dos sitios lo usan.
+/// <b>F16-RETOQUE §1 y la respuesta de verdad.</b> Ninguna de las dos era la buena, porque las dos
+/// daban por hecho que ahí faltaba algo por configurar. No falta nada: el consumo de Claude Code va
+/// contra la suscripción personal de quien lo usa y <b>no factura a la organización</b>, así que no
+/// se tarifa. Lo que se fija aquí es que hay un solo criterio, que los dos sitios lo usan, y —lo
+/// más importante— que a una casa no tarifada <b>no le puede salir jamás</b> un «tarifa no
+/// configurada»: el aviso existe para que alguien vaya a arreglar una tabla, y aquí no hay tabla
+/// que arreglar.
 /// </para>
 /// </summary>
 public sealed class CostTextTests : IDisposable
@@ -57,23 +61,75 @@ public sealed class CostTextTests : IDisposable
     }
 
     /// <summary>
-    /// <b>El defecto exacto del parte.</b> Una sesión con Claude Code cuyo modelo no tiene tarifa:
-    /// el pie y el informe tienen que decir la MISMA cosa, y esa cosa es el motivo real.
+    /// <b>El defecto exacto del parte, con la respuesta de F16-RETOQUE.</b> Una sesión con Claude
+    /// Code: el pie y el informe dicen la MISMA cosa, y esa cosa es que no se tarifa.
     /// </summary>
     [Fact]
-    public void Sin_tarifa_el_pie_dice_lo_mismo_que_el_informe_de_esa_misma_sesion()
+    public void El_pie_dice_lo_mismo_que_el_informe_de_esa_misma_sesion()
     {
         AuditSession session = Session(ClaudeCodeProvider.Id, model: "opus");
         var cost = CreditCalculator.Calculate(session, TestRates.Table());
-        cost.Why.Should().Be(CostUnavailable.RateMissing, "«opus» no está en la tabla de tarifas");
+        cost.Why.Should().Be(CostUnavailable.NotBilled);
 
         string footer = CreditText.OfSession(cost, session.Provider);
         string report = ReportBuilder.BuildSessionReport(
             App(), session, Array.Empty<Finding>(), 0, 0, "Org", TestRates.Table());
 
-        footer.Should().Be("coste no calculable (tarifa no configurada)");
+        footer.Should().Be("incluido en tu suscripción de Claude");
         report.Should().Contain($"- **Coste**: {footer}");
     }
+
+    /// <summary>
+    /// <b>La regla, blindada donde se decide.</b> A una casa que no factura no le puede salir
+    /// «tarifa no configurada» — ni «modelo no registrado», ni «sin tokens registrados»— haga lo
+    /// que haga el hub: da igual que el modelo esté en la tabla, que no esté, que no haya modelo o
+    /// que no haya ni un token. La pregunta que esos avisos hacen —«¿qué falta por configurar?»—
+    /// no tiene sentido aquí, y un aviso que ladra sin causa se aprende a ignorar.
+    /// </summary>
+    [Theory]
+    [InlineData(TestRates.Model)]   // este modelo SÍ tiene tarifa en la tabla
+    [InlineData("opus")]            // no está en ninguna
+    [InlineData(null)]              // ni siquiera hay modelo registrado
+    public void A_una_casa_que_no_factura_no_le_puede_salir_una_tarifa_que_falta(string? model)
+    {
+        foreach (long tokens in new long[] { 0, 1000 })
+        {
+            CostResult cost = CreditCalculator.Calculate(
+                model, ClaudeCodeProvider.Id, tokens, tokens, tokens, tokens, TestRates.Table());
+
+            cost.Why.Should().Be(CostUnavailable.NotBilled);
+            cost.Credits.Should().BeNull("un número aquí sería un cobro que nadie hace");
+
+            string text = CreditText.OfSession(cost, ClaudeCodeProvider.Id);
+            text.Should().Be(CreditText.SubscriptionCost);
+            text.Should().NotContain("tarifa").And.NotContain("credits").And.NotContain("no calculable");
+        }
+    }
+
+    /// <summary>
+    /// Y el pie de una sesión que no se tarifa <b>no se queda mudo</b>: enseña las llamadas y los
+    /// tokens, que son hechos medidos, además de la frase del coste. Quitar el número no puede
+    /// significar quitar la magnitud — si no, no habría forma de comparar el peso de dos sesiones.
+    /// </summary>
+    [Fact]
+    public void Sin_coste_el_pie_ensena_llamadas_y_tokens()
+    {
+        string footer = CreditText.SessionFooter(
+            14, 2786, 10975, 201371, 22525,
+            CostResult.Unavailable(CostUnavailable.NotBilled), ClaudeCodeProvider.Id);
+
+        footer.Should().StartWith("14 llamadas · ");
+        footer.Should().Contain("2.786 entrada").And.Contain("10.975 salida");
+        footer.Should().Contain("201.371 leída").And.Contain("22.525 escrita");
+        footer.Should().EndWith($"coste: {CreditText.SubscriptionCost}");
+        footer.Should().NotContain("credits");
+    }
+
+    /// <summary>Con factura, el pie es el de siempre: llamadas y credits, sin desglose de tokens.</summary>
+    [Fact]
+    public void Con_factura_el_pie_sigue_diciendo_credits()
+        => CreditText.SessionFooter(3, 1000, 200, 0, 0, new CostResult(68.2m), RealCopilotAgent.Id)
+            .Should().Be("3 llamadas · 68,2 AI credits");
 
     /// <summary>
     /// Y la palabra «SDK» no aparece donde no aplica. Con Claude Code no hay ningún SDK: hay un CLI
@@ -85,26 +141,24 @@ public sealed class CostTextTests : IDisposable
     [InlineData(CostUnavailable.TokensMissing)]
     public void Ningun_texto_de_coste_nombra_un_SDK(CostUnavailable why)
     {
-        foreach (string provider in new[] { RealCopilotAgent.Id, ClaudeCodeProvider.Id })
-        {
-            CreditText.OfSession(CostResult.Unavailable(why), provider)
-                .Should().NotContain("SDK")
-                .And.StartWith("coste no calculable (");
-        }
+        // Solo se prueba con la casa que factura: a la otra no le llega nunca uno de estos tres
+        // motivos —los para IsBilled antes—, y fingir que sí probaría un camino que no existe.
+        CreditText.OfSession(CostResult.Unavailable(why), RealCopilotAgent.Id)
+            .Should().NotContain("SDK")
+            .And.StartWith("coste no calculable (");
     }
 
     /// <summary>
-    /// Cuando SÍ hay número, la unidad es la de su casa (D-789): lo de Copilot es una factura, lo
-    /// de una suscripción es un equivalente, y presentarlos con la misma palabra sería decir que
-    /// uno cuesta lo que no cuesta.
+    /// Cuando hay número, la unidad es una sola: <b>AI credits</b>, lo que factura GitHub. El
+    /// «equivalente API» de D-789 se retiró con la tarifa que lo producía (F16-RETOQUE §1): existía
+    /// para etiquetar una cifra que no era un cobro, y esa cifra ya no se calcula.
     /// </summary>
     [Fact]
-    public void El_numero_lleva_la_unidad_de_su_casa()
+    public void El_numero_lleva_la_unidad_de_lo_que_factura()
     {
         var cost = new CostResult(68.2m);
 
         CreditText.OfSession(cost, RealCopilotAgent.Id).Should().Be("68,2 AI credits");
-        CreditText.OfSession(cost, ClaudeCodeProvider.Id).Should().Be("68,2 credits (equivalente API)");
 
         // Y una sesión anterior a F14, sin proveedor escrito, es Copilot: no había otro.
         CreditText.OfSession(cost, null).Should().Be("68,2 AI credits");
@@ -124,13 +178,18 @@ public sealed class CostTextTests : IDisposable
             new OpenSessionStore(_paths))
         {
             Provider = ClaudeCodeProvider.Id,
-            CostResult = CostResult.Unavailable(CostUnavailable.RateMissing),
+            CostResult = CostResult.Unavailable(CostUnavailable.NotBilled),
+            InputTokens = 900,
+            OutputTokens = 120,
+            Calls = 4,
         };
 
         var view = new SessionViewModel(live);
 
-        view.CostText.Should().EndWith(CreditText.OfSession(live.CostResult, live.Provider));
-        view.CostText.Should().NotContain("SDK");
+        view.CostText.Should().Be(CreditText.SessionFooter(
+            live.Calls, live.InputTokens, live.OutputTokens,
+            live.CacheReadTokens, live.CacheWriteTokens, live.CostResult, live.Provider));
+        view.CostText.Should().NotContain("SDK").And.NotContain("tarifa");
     }
 
     private static AppConfig App() => new() { Slug = "app", Name = "App", RepoUrl = "https://github.com/org/app.git", CurrentCycle = 1 };
