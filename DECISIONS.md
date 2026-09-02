@@ -9007,6 +9007,11 @@ sumaba nunca porque las unidades eran incomparables— y sustituye a aquél.
 El tooltip da el equivalente en dólares (1 credit = 0,01 $). **A euros no se convierte**: no hay
 tipo de cambio configurado, e inventarse uno sería fabricar una precisión que no tenemos (N-2).
 
+> **Superado en F16-RETOQUE-2 (D-821).** La regla —no mezclar en silencio una factura con lo que no
+> lo es— sigue en pie; lo que ya no existe es el «equivalente API»: el consumo de Claude Code no
+> factura a la organización y ha dejado de tarifarse. Con una sola naturaleza de coste, el total
+> mezclado no es que se evite, es que no se puede formar.
+
 ### D-790 — El guarda de ids de modelo se afina, otra vez, en vez de aflojarse
 
 La siembra de tarifas nombra modelos, y el guarda de F5.15 saltó. La distinción que lo resuelve es
@@ -9788,3 +9793,155 @@ Midiendo se aprendió además una cosa que se deja escrita: `Rect.IntersectsWith
 cuando dos rectángulos solo se **tocan** por el borde —usa `>=`—, y dos columnas contiguas siempre
 se tocan. Con ese criterio, un reparto correcto daría siempre positivo; se compara superficie
 compartida.
+
+## F16-RETOQUE-2 — El coste de Claude deja de tarifarse, y la cabecera respira
+
+Dos encargos sin relación entre sí, del mismo día con la pantalla delante: una **decisión de
+producto** sobre qué es un coste, y el acabado de la cabecera que D-819 dejó a medias.
+
+### D-821 — El consumo de Claude Code NO factura, así que no se tarifa [decisión del usuario]
+
+**La decisión, y de quién es.** El consumo de Claude Code va contra la **suscripción personal** de
+quien lo usa. A la organización no le llega en ninguna factura. Es una decisión de producto del
+usuario, no una deducción del código, y por eso está escrita aquí antes que en ningún sitio.
+
+**Lo que se retira y por qué.** Desde F15, Atalaya valoraba también ese consumo y lo etiquetaba
+«equivalente API» (D-789). El número era bueno: reproducía **al sexto decimal** el que calcula el
+propio CLI, y esa comprobación es lo que validó la fórmula entera (D-785). El problema no era la
+aritmética, era el **mantenimiento**: para tenerlo había que llevar a mano una copia de la lista de
+precios de Anthropic en `ModelRateSeed`. Un precio copiado a mano es ruido el día que se escribe y
+**desinformación** el día que cambia sin avisar — y todo eso para poner delante de alguien un
+número que además no era un cobro. Se retira el camino entero.
+
+**Lo que queda, que no es poco.** Llamadas y tokens —entrada, salida y las dos cachés— siguen
+siendo **dato primario**: se miden, se guardan enteros y se enseñan. Lo único que desaparece es
+ponerles precio. Un arreglo con Claude Code sigue diciendo cuánto pesó; lo que ya no dice es cuánto
+habría costado si lo pagara otro.
+
+**Dónde vive la regla, que es la mitad de la decisión.** En `CreditCalculator.IsBilled`, y
+`Calculate` la consulta **lo primero**, antes de mirar tokens, modelo o tabla. Ése es el embudo por
+el que pasan el pie, los tres informes, la lista de informes, el diálogo de lanzamiento y las
+cuatro cifras de Métricas. Puesta en cualquier otro sitio habría que acordarse N veces, y a la
+primera que se olvidara saldría un **«tarifa no configurada»** — un aviso cuyo único propósito es
+mandarte a arreglar una tabla que aquí no existe. Con el freno en el cálculo, ese motivo es
+literalmente inalcanzable para una casa no tarifada, y hay un test que lo recorre con tarifa, sin
+tarifa, sin modelo y sin tokens.
+
+**Las consecuencias, una por una:**
+
+- **Pie e informes.** Con Copilot, lo de siempre: llamadas y AI credits. Con Claude Code: llamadas,
+  **tokens por tipo** y «coste: **incluido en tu suscripción de Claude**». Los tokens entran en el
+  pie porque sin coste son la única magnitud que queda, y un pie sin ninguna magnitud no deja
+  comparar el peso de dos sesiones. Se compone en `CreditText.SessionFooter`, que usan los dos
+  pies —auditoría y arreglo—, por lo mismo que F16 §B: dos frases para el mismo hueco acaban
+  diciendo cosas distintas.
+- **La tabla de tarifas es la de lo que factura.** Se retiran de la siembra las cuatro tarifas
+  atadas a `claude-code`. Los `claude-*` **genéricos se quedan**: son los modelos de Anthropic que
+  **Copilot revende**, y ésos sí los paga la organización con la tarifa que publica GitHub —
+  tocarlos sería tocar el cálculo de credits, que es justo lo que este encargo prohíbe. La pantalla
+  de gestión ni las lista ni las admite, y las que un hub viejo tenga escritas desaparecen al
+  primer guardado. «Modelos sin tarifa» tampoco las nombra: a un modelo usado solo con Claude Code
+  no le falta ninguna tarifa.
+- **Métricas.** El coste del periodo, la gráfica, el ratio por unidad y el desglose por proveedor
+  son **la factura de la organización** y nada más. Ya no hay dos naturalezas que malabarear: el
+  total mezclado de D-789 no es que se evite, es que **no se puede formar** — lo que no factura no
+  produce cifra. Las sesiones de Claude siguen en la actividad, con su proveedor, su coste dicho
+  («suscripción») y sus **tokens**; y el azulejo dice cuántas hubo, para que la diferencia entre el
+  coste y la actividad tenga explicación en vez de parecer un agujero. **No cuentan como
+  «parciales»**: a un parcial le falta gasto por contar, y a éstas no les falta nada.
+- **Lo que el CLI declara se guarda como dato del proveedor.** El `total_cost_usd` a tarifa de
+  lista sigue llegando gratis, así que se sigue guardando —con su unidad puesta— y el informe lo
+  saca en una línea aparte que dice qué es: «Lo que declaró el CLI: X USD (tarifa de lista) — dato
+  del proveedor, no el coste de esta sesión y no entra en ninguna métrica». Es la excepción que
+  confirma la regla: se guarda **porque no obliga a mantener nada**.
+- **Un cable suelto encontrado al hacerlo.** El camino del arreglo escribía en `Usage.Cost` los
+  **credits derivados** —una cuenta nuestra— mientras la auditoría y la verificación escribían ahí
+  lo que **declara el proveedor**. Tres caminos, dos significados en el mismo campo. Ahora los tres
+  guardan lo declarado, que es lo que ese campo dice ser.
+
+> **D-789 queda superado en su segunda mitad.** Su regla —«no mezclar en silencio una factura con
+> un equivalente»— era correcta y sigue siéndolo; lo que cambia es que ya no hay equivalente que
+> mezclar. La medida de la caché de una hora (D-785) se queda escrita: costó comprobarla, explica
+> por qué `AccountingOf` dice lo que dice, y el día que aparezca un proveedor que facture y cuente
+> los tokens así, estará ahí.
+
+### D-822 — La cabecera del arreglo: aire, jerarquía y dos filas antes que comprimir
+
+D-819 quitó el solape. La captura del usuario, con eso ya arreglado, seguía enseñando una cabecera
+apretada y redundante. **«Apretado» es una apreciación hasta que se mide**, así que se midió.
+
+- **Aire consistente.** El hueco entre la zona de identidad y la de acciones lo pone `PageHeader`
+  —16 px, en el margen de la identidad—, no cada vista: una separación declarada en dos XAML acaba
+  siendo dos separaciones distintas, que es el mismo argumento por el que el reparto de columnas
+  vive en la clase. Dentro de cada zona, 12 px entre piezas contiguas; los botones iban a 8 y se
+  leían como un bloque continuo.
+- **El identificador, una vez.** Salía recortado junto al título («BUG-0012…») y otra vez entero
+  dentro del rótulo del enlace. Ahora vive junto al título, en una columna `Auto` que no encoge
+  —es corto, cabe siempre— y el enlace dice solo a dónde lleva. Lo que cede cuando falta sitio es
+  el nombre de la aplicación, que es lo único de esa zona que puede ser largo.
+- **«Compilar solución completa» no es una acción.** Al marcarlo no pasa nada: cambia lo que hará
+  el **siguiente** build. Se va de la fila de botones al pie, junto al veredicto del build, que es
+  donde se ve su consecuencia. La cabecera se queda con lo que se pulsa.
+- **La destructiva no viaja entre las de control.** «Descartar todo» iba entre «Pausar» y «Cerrar»:
+  mismo tamaño, misma fila, mismo aire. Ahora va la última y con 24 px por delante — el doble que
+  entre las de control. **La separación ES la jerarquía.** Se reubica dentro de la cabecera y no
+  junto al panel del diff (la otra opción que daba el encargo) porque ese panel no existe en la
+  pantalla de cierre, y ahí es justamente donde alguien decide descartar: moverla habría quitado la
+  única salida que hay en esa pantalla.
+- **Dos filas antes que comprimir.** Cuando a la identidad no le quedarían ni 200 px, la cabecera
+  se parte: identidad arriba, acciones debajo con 12 px. Se decide con lo que piden las
+  **acciones**, que es el dato duro —son las que no ceden—; medir la identidad no serviría, porque
+  vive en una columna estrella y siempre pide más de lo que necesita. El ancho de corte no es el
+  mismo en las dos vistas y **tiene que** no serlo: la sesión en vivo tiene dos botones y aguanta
+  hasta 240 px; el arreglo asistido tiene cuatro y se parte ya a **441**, que es el área de página
+  con la ventana a media pantalla de un 1366 — el caso que el usuario mira de verdad.
+- **Y el orden decide qué se pierde.** Cuando la identidad no cabe, la cabecera la recorta por la
+  derecha. El enlace «Volver al hallazgo» pasa por delante del distintivo de proveedor: entre un
+  camino que se pulsa y un dato que se lee, se pierde el dato — que además está entero en el
+  informe.
+
+**Un defecto real que apareció al medir, y que ya estaba antes.** El subtítulo se pintaba **20 px
+por dentro** del distintivo de al lado. Dos causas encadenadas, las dos con moraleja:
+
+1. Con `HorizontalAlignment="Left"`, WPF arregla un texto a su tamaño **deseado** —hasta su
+   `MaxWidth`— y no al de su celda. En cuanto la columna estrella bajaba de 220, el texto se salía.
+2. Y quitando eso seguía pasando: **una columna estrella sí llega a cero**, y un `TextBlock` en una
+   celda de ancho cero **no desaparece** — pinta sus puntos suspensivos encima de lo siguiente. Con
+   un `MinWidth` la columna tiene suelo: o cabe recortado, o lo recorta la cabecera, pero nunca se
+   pinta sobre nadie.
+
+### D-823 — Cobertura (37 tests nuevos, 1.845 en total, todo en verde)
+
+- **El coste que no se tarifa**, en el sitio donde se decide: con tarifa para su modelo, sin ella,
+  sin modelo y sin tokens, el motivo es siempre «no se tarifa» y **nunca** «tarifa no configurada».
+  Más quién factura y quién no, el pie con llamadas y tokens, el pie sin tokens —que no se inventa
+  un desglose de ceros—, y que el pie y el informe de la misma sesión siguen diciendo lo mismo.
+- **La siembra**, que ya no trae ninguna tarifa de una casa que no factura, y que las de Copilot
+  —incluidos sus modelos de Anthropic— **siguen ahí**: ése es el test que se pone rojo si alguien
+  confunde «retirar lo de Claude Code» con «buscar claude y borrar».
+- **La pantalla de tarifas**: rechaza entera una tabla con una tarifa de una casa que no factura y
+  dice cuál es; y una tabla heredada con las cuatro viejas ni se enseña ni sobrevive al guardado.
+- **Métricas**: el total del periodo es solo lo que factura, el desglose no nombra a Claude Code,
+  esas sesiones no disparan el «parcial», y **siguen saliendo** en la actividad con su proveedor y
+  sus tokens.
+- **El informe del arreglo**: tokens por tipo, llamadas, el coste dicho entero, y la línea
+  informativa de lo que declaró el CLI con su unidad y su salvedad.
+- **El diálogo de lanzamiento** con una casa que no factura: dice que no hay coste que estimar en
+  vez de mandar a buscar un histórico que no existiría nunca, y no pinta el ⚠ de «dato flojo» —no
+  hay número que sostener.
+- **La cabecera**, medida a 1124, 658 y 441 px y a un ancho imposible: separaciones mínimas entre
+  piezas y entre zonas, la destructiva la última y con más aire, la cabecera sin ajustes y el
+  ajuste presente junto al build, el identificador una sola vez, dos filas cuando no hay ancho y
+  una sola cuando lo hay.
+
+**Rojo comprobado contra la versión anterior**, que es lo único que hace valer un test de
+geometría: con los XAML de antes del arreglo caen las seis variantes de separación entre piezas
+—en las dos vistas y a los tres anchos—, la de la destructiva, la del ajuste y la del
+identificador. Y el margen entre zonas se comprobó aparte, poniendo el hueco a cero en
+`PageHeader`: **el mínimo se escribe en el test como número**, no como `PageHeader.ZoneGap`, porque
+un test que compare la producción consigo misma pasa con el hueco a cero y no prueba nada.
+
+**Lo que NO se ha verificado en pantalla, y se dice.** La geometría está medida sobre los controles
+reales a los anchos reales, y los colores salen todos de brochas del tema —no hay ni un color
+nuevo—, pero **no se ha montado la aplicación para hacer capturas** en los dos temas. Eso queda
+para el usuario, que es quien tiene el hub y el clon.

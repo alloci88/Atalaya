@@ -218,10 +218,17 @@ como tarjetas con sus opciones— y el **diff**, una pestaña por fichero tocado
 compara con lo que había antes de empezar. Abajo: tiempo, coste, ficheros tocados y
 el resultado del último build.
 
-El pie **cuenta desde la primera llamada al modelo**, no al terminar: llamadas, tokens y
-—si el modelo tiene tarifa configurada— el coste con la etiqueta de su casa. Si dice
-«sin tokens registrados» es porque el proveedor no ha informado consumo, que con Claude
-Code no debería pasar.
+Arriba, la cabecera dice **qué hallazgo** se está arreglando —con su identificador entero, una
+sola vez—, **en qué aplicación** y **con qué motor**, y a la derecha lo que puedes pulsar:
+**Pausar**, **Detener**, **Cerrar** y, separada del resto porque deshace el trabajo, **Descartar
+todo**. Si estrechas la ventana, la cabecera **baja a dos filas** en vez de apretarse. El ajuste
+**Compilar solución completa** no está entre los botones: vive abajo, junto al resultado del
+build, que es donde se ve lo que hace.
+
+El pie **cuenta desde la primera llamada al modelo**, no al terminar: llamadas, tokens y el
+coste. Con Copilot el coste son **AI credits**; con Claude Code, que no factura a la
+organización, el pie dice los tokens por tipo y **«coste: incluido en tu suscripción de
+Claude»**.
 
 - **Pausar** no congela al agente —eso no se puede prometer— sino lo que importa: no
   cae ni un cambio más en tu clon ni se compila nada hasta que continúes.
@@ -256,10 +263,16 @@ verdad y significan algo. Los decimales solo salen cuando hacen falta — «42 %
 vistazo y «42,0 %» no dice nada más.
 
 El **coste del periodo** va en **AI credits** —la misma unidad que el panel de Copilot de tu
-organización— e incluye **todas** las sesiones que gastaron: auditorías, arreglos asistidos y
-verificaciones. Debajo tienes el equivalente en dólares (1 credit = 0,01 $) y el enlace
+organización— e incluye **todas** las sesiones de Copilot que gastaron: auditorías, arreglos
+asistidos y verificaciones. Debajo tienes el equivalente en dólares (1 credit = 0,01 $) y el enlace
 **Tarifas · Gestionar**. Si alguna sesión usó un modelo sin tarifa, el azulejo lo dice: falta gasto
 por contar y no se disimula.
+
+**Esta cifra es la factura de tu organización, y solo eso.** Las sesiones de Claude Code no entran:
+ese consumo va contra la suscripción de quien las lanzó y no se tarifa. Si las hubo, el azulejo lo
+dice con cuántas fueron — no para que busques una tarifa que falta, sino para que sepas por qué el
+coste no cubre toda la actividad que ves más abajo. Esas sesiones **sí** están en la sexta gráfica,
+con su proveedor y sus tokens.
 
 El «por unidad auditada» que va debajo divide solo lo que costó **auditar** entre las unidades
 auditadas — un arreglo no audita ninguna unidad, así que repartir su gasto entre ellas daría un
@@ -281,8 +294,10 @@ Debajo, seis gráficas:
    Hallazgos con esa app y esa severidad; en el centro, esa app entera.
 5. **Flujo de hallazgos** — lo que entra, lo que se cierra y cuántos quedan vivos.
 6. **Actividad de sesiones** — el registro del periodo, con el **tipo** de cada sesión
-   (auditoría, arreglo asistido, verificación, cierre…) y su coste. **Un clic en una
-   línea abre su informe en la vista Informes.**
+   (auditoría, arreglo asistido, verificación, cierre…), su proveedor, su coste y sus
+   **tokens**. Las de Claude Code dicen «suscripción» donde las otras dicen credits, y sus
+   tokens siguen ahí: es con lo que puedes comparar el peso de dos sesiones de cualquier casa.
+   **Un clic en una línea abre su informe en la vista Informes.**
 
 **El eje temporal.** Llega **siempre hasta hoy**, aunque el último tramo esté a cero: un
 eje que termina en el pasado afirma que desde entonces no ha pasado nada. Los tramos
@@ -602,6 +617,7 @@ segunda opinión de verdad**.
 | --- | --- | --- |
 | Qué necesitas | Tu cuenta de GitHub conectada, con asiento de Copilot | El CLI de Claude Code instalado y con sesión iniciada |
 | Quién paga | El asiento de tu organización (AI credits) | Tu suscripción de Claude |
+| Cómo se mide el gasto | En AI credits, derivados de los tokens con la tarifa del modelo | En llamadas y tokens: **no se tarifa** |
 | Cómo se instala | Nada: viaja dentro de Atalaya | `npm install -g @anthropic-ai/claude-code`, y `claude` una vez en tu terminal |
 | Auditar y verificar | Sí | Sí |
 | Arreglo asistido | Sí | Sí |
@@ -662,6 +678,10 @@ con el paso siguiente escrito. Nunca se cierra nada por mayoría.
 
 ### El coste, dicho como es
 
+**La regla, en una frase: Copilot gasta la bolsa de la organización y se mide en AI credits;
+Claude Code va contra la suscripción de cada uno y no se tarifa.** Todo lo que sigue desarrolla
+esa frase.
+
 Desde el **1 de junio de 2026**, GitHub Copilot factura en **AI credits**. Atalaya habla esa
 lengua: es la misma unidad que grafica el panel de tu organización, que es con lo que vas a querer
 cuadrar.
@@ -707,8 +727,15 @@ el equipo y el historial de git dice quién cambió qué y cuándo. Se edita des
 las tarifas cambian, aparecen modelos nuevos y **hay promocionales con fecha de caducidad**:
 corregir un precio no puede exigir esperar a una versión nueva de Atalaya.
 
+**Es la tabla de lo que FACTURA**, o sea de los modelos de Copilot — incluidos los de Anthropic que
+Copilot revende, que ésos sí los paga tu organización. Los de Claude Code no están y no se admiten:
+ahí no hay factura que calcular, y una tarifa que no gobierna nada solo consigue que alguien la
+mantenga para siempre creyendo que sirve. Si tu hub venía de una versión anterior con esas cuatro
+tarifas escritas, desaparecen la primera vez que guardes.
+
 La pantalla te señala **los modelos que estás usando y no tienen tarifa**, con cuántas sesiones
-esperan por ellos. Eso es lo que convierte un «parcial» en algo que puedes arreglar.
+esperan por ellos. Eso es lo que convierte un «parcial» en algo que puedes arreglar. Solo aparecen
+modelos de las casas que facturan: a un modelo usado con Claude Code no le falta ninguna tarifa.
 
 Dos detalles que importan al editarla:
 
@@ -719,18 +746,35 @@ Dos detalles que importan al editarla:
 
 #### Con dos proveedores
 
-Copilot y Claude Code se miden **en la misma unidad**, pero no significan lo mismo:
+**Copilot gasta la bolsa de la organización y se mide en AI credits; Claude Code va contra la
+suscripción de cada uno y no se tarifa.**
 
-- El de **Copilot** es una **factura**: son los AI credits que tu organización paga.
-- El de **Claude Code** con suscripción es un **equivalente API** — lo que habrían costado esos
-  tokens pagando la API. **Tu suscripción no factura por tokens**, así que ese número no es un
-  cobro: sirve para comparar el peso de dos auditorías, no para cuadrar gastos.
+Hubo una versión intermedia en la que lo de Claude Code se valoraba igual y se etiquetaba
+«equivalente API»: lo que habrían costado esos tokens pagando la API. El número salía —reproducía
+al sexto decimal el que calcula el propio CLI—, pero para tenerlo había que mantener a mano una
+copia de la lista de precios de Anthropic. Un precio copiado a mano es ruido el día que se escribe
+y **desinformación** el día que cambia sin avisar, y encima el número no era un cobro. Se retiró
+entero.
 
-Por eso, cuando en el periodo han auditado las dos casas, **Métricas no te da un total**: te da una
-línea por proveedor con su etiqueta. La aritmética permitiría sumarlos; lo que no se puede es
-mezclar en silencio lo que se paga con lo que no.
+Así que hoy:
 
-Y antes de lanzar con Claude Code, la estimación **no promete dinero**: dice lo que sabe.
+- **Copilot**: coste en **AI credits**, que es lo que tu organización paga. Entra en el azulejo, en
+  la gráfica, en el ratio por unidad y en los informes.
+- **Claude Code**: **llamadas y tokens** —entrada, salida y caché—, y donde iría el coste,
+  **«incluido en tu suscripción de Claude»**. Ni credits, ni equivalentes, ni «tarifa no
+  configurada»: ese aviso existe para mandarte a arreglar la tabla de tarifas, y aquí no hay tabla
+  que arreglar.
+
+Los tokens de esas sesiones **no desaparecen**: son dato primario, se guardan enteros y salen en el
+informe y en la actividad de Métricas. Lo único que ya no existe es ponerles precio.
+
+Si el CLI declara su propio coste, el informe lo recoge en una línea aparte —«Lo que declaró el
+CLI: 0,021274 USD (tarifa de lista)»— diciendo que es un dato del proveedor y **no** el coste de la
+sesión. Viene gratis, es una medida real y no obliga a mantener nada; por eso se guarda y por eso
+no se presenta como otra cosa.
+
+Y antes de lanzar con Claude Code, la estimación no promete dinero ni lo desmiente con una nota al
+pie: dice que ese consumo no factura a la organización.
 
 ### Si algo falta
 
