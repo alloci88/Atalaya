@@ -1,4 +1,4 @@
-using Atalaya.Copilot;
+﻿using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Anchoring;
 using Atalaya.Domain.Hashing;
@@ -290,6 +290,8 @@ public sealed class SessionCoordinator
             StartedUtc = now,
             Commit = commit,
             CycleN = app.CurrentCycle,
+            // F17: la lupa del ciclo queda escrita en la sesión, que es lo que el informe lee.
+            Theme = inventory.Theme,
             Model = _agent.ModelName,
             Provider = _agent.ProviderId,
             MaxPassesPerUnit = Math.Max(1, _settings.Current.MaxPassesPerUnit),
@@ -432,9 +434,13 @@ public sealed class SessionCoordinator
         var suppressionTotals = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var suppressionExemplars = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+        // F17 — la lupa del ciclo, leída del inventario vigente y congelada para toda la sesión
+        // como los patrones y las directivas: la misma en todas las unidades. Decide con qué
+        // temática nacen los hallazgos nuevos, qué existentes se reconcilian y qué dice el prompt.
+        AuditTheme theme = inventory.Theme;
         var toolbox = new SessionToolbox(
             request.Slug, request.Mode, stamp, _ingestion, _reconciliation, _hub.Store, clone!, OnFinding,
-            patterns);
+            patterns, theme);
         var auditedPaths = new HashSet<string>(StringComparer.Ordinal);
         int incompleteUnits = 0;
 
@@ -500,9 +506,13 @@ public sealed class SessionCoordinator
                     PassStarted?.Invoke(unit.Path, pass);
                     IReadOnlyList<Finding> existing = _reconciliation.ExistingForUnit(request.Slug, unit.Path);
                     toolbox.BeginPass(existing);
-                    var listed = existing.Select(ToExisting).ToList();
+                    // F17 §3: al auditor se le listan para reconciliar SOLO los de la temática del
+                    // ciclo (todos, con General). Los de otras temáticas viajan aparte, como «no los
+                    // juzgues»: están en la unidad y sin verlos los re-reportaría como nuevos.
+                    var listed = existing.Where(f => ThemeScope.Reconciles(theme, f.Theme)).Select(ToExisting).ToList();
+                    var offTheme = existing.Where(f => !ThemeScope.Reconciles(theme, f.Theme)).Select(ToExisting).ToList();
                     string prompt = PromptComposer.ComposeUnitPrompt(
-                        unit.Path, content, brief, request.Mode, listed, patterns, directives);
+                        unit.Path, content, brief, request.Mode, listed, patterns, directives, theme, offTheme);
                     breakdown.PromptTokensEstimate += EstimateTokens(prompt);
 
                     budgetTripped = false;
@@ -910,7 +920,8 @@ public sealed class SessionCoordinator
             f.Title,
             f.Severity.ToString().ToLowerInvariant(),
             loc is null ? "(sin ubicación)" : $"{loc.Path}:{loc.Line}",
-            f.Status == FindingStatus.Silenciado ? "silenciado" : "activo");
+            f.Status == FindingStatus.Silenciado ? "silenciado" : "activo",
+            ThemeCatalog.Display(f.Theme));
     }
 
     /// <summary>

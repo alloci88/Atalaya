@@ -1,4 +1,4 @@
-using Atalaya.Domain;
+﻿using Atalaya.Domain;
 using Atalaya.Domain.Model;
 
 namespace Atalaya.Agents;
@@ -94,13 +94,19 @@ public sealed record UsageSample(
 /// <param name="FindingId">El ULID. Es el identificador que el auditor DEBE devolver.</param>
 /// <param name="DisplayId">Alias legible (BUG-0042) si lo tiene; solo contexto.</param>
 /// <param name="State">Estado visible: <c>activo</c> o <c>silenciado</c>.</param>
+/// <param name="Theme">
+/// La temática con la que se detectó (F17), escrita. Null en lo que no la distingue (el
+/// verificador, los dobles de prueba); el prompt de un ciclo temático la enseña para que el
+/// auditor vea por qué un hallazgo está en la lista de «no los juzgues».
+/// </param>
 public sealed record ExistingFinding(
     string FindingId,
     string? DisplayId,
     string Title,
     string Severity,
     string Location,
-    string State);
+    string State,
+    string? Theme = null);
 
 /// <summary>What the app hands the auditor to audit one unit (§5.1.3).</summary>
 /// <param name="Patterns">

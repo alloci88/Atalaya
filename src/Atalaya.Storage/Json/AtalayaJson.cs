@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 using Atalaya.Domain;
 using Atalaya.Domain.Model;
@@ -78,6 +78,16 @@ public static class AtalayaJson
         o.Converters.Add(new EnumJsonConverter<SessionTrigger>(
             (SessionTrigger.Manual, "manual"),
             (SessionTrigger.Deriva, "deriva")));
+
+        // F17 — la lupa del ciclo. Wire-values en minúscula como todo lo demás; un fichero sin la
+        // clave se lee como General por el valor por defecto de la propiedad, no por este mapa.
+        o.Converters.Add(new EnumJsonConverter<AuditTheme>(
+            (AuditTheme.General, "general"),
+            (AuditTheme.Seguridad, "seguridad"),
+            (AuditTheme.Rendimiento, "rendimiento"),
+            (AuditTheme.Fiabilidad, "fiabilidad"),
+            (AuditTheme.Concurrencia, "concurrencia"),
+            (AuditTheme.Mantenibilidad, "mantenibilidad")));
 
         o.Converters.Add(new EnumJsonConverter<UnitState>(
             (UnitState.Pendiente, "pendiente"),

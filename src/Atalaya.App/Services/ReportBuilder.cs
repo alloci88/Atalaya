@@ -3,6 +3,8 @@ using System.Text;
 using Atalaya.Domain;
 using Atalaya.Domain.Model;
 
+using Atalaya.Copilot;
+
 namespace Atalaya.App.Services;
 
 /// <summary>Builds the immutable per-session markdown report (§7).</summary>
@@ -115,6 +117,9 @@ public static class ReportBuilder
         }
 
         sb.AppendLine($"- **Ciclo**: {session.CycleN}");
+        // F17 — con qué lupa se auditó. Sin ella, «esta unidad salió limpia» no se puede leer
+        // dentro de un mes: limpia de todo, o limpia de defectos de rendimiento.
+        sb.AppendLine($"- **Temática del ciclo**: {ThemeCatalog.Display(session.Theme)}");
         // F15 — los TOKENS son el hecho primario y se escriben enteros; el coste es un derivado y
         // va detrás. Un informe es inmutable, así que dentro de un año alguien podrá recalcular ese
         // coste con otra tarifa a partir de estos mismos números.
@@ -717,13 +722,31 @@ public static class ReportBuilder
     /// Lo que quedaba envejecido al cerrar (F9.2 §2). Cerrar no maquilla: si el código se movió
     /// mientras duraba el ciclo, el informe lo dice — es lo que el ciclo siguiente hereda.
     /// </param>
+    /// <param name="config">
+    /// La configuración del ciclo que se cierra (F17): su temática y su juez preferido. El ciclo
+    /// siguiente la hereda, y el informe lo dice para que la foto del cierre lleve la lupa con la
+    /// que se hizo.
+    /// </param>
     public static string BuildCycleCloseReport(
         AppConfig app, int closedCycle, int promoted, IReadOnlyList<Finding> findings,
-        string? organization = null, CycleAging? aging = null)
+        string? organization = null, CycleAging? aging = null, CycleConfig? config = null)
     {
         var active = findings.Where(f => f.Status == FindingStatus.Activo).ToList();
         var sb = new StringBuilder();
         sb.AppendLine($"# Cierre de ciclo {closedCycle} — {app.Name}");
+        sb.AppendLine();
+
+        CycleConfig cfg = config ?? CycleConfig.Default;
+        sb.AppendLine($"- **Temática del ciclo**: {ThemeCatalog.Display(cfg.Theme)}");
+        if (cfg.HasPreferredModel)
+        {
+            string house = string.IsNullOrWhiteSpace(cfg.PreferredProvider)
+                ? string.Empty
+                : $" ({ProviderNames.Display(cfg.PreferredProvider)})";
+            sb.AppendLine($"- **Modelo preferido**: {cfg.PreferredModel}{house}");
+        }
+
+        sb.AppendLine($"- El ciclo {closedCycle + 1} hereda esta configuración; se puede cambiar desde «Configurar ciclo».");
         sb.AppendLine();
 
         // A cero no se dice nada: una frase que informa de que no hay nada que informar es ruido.

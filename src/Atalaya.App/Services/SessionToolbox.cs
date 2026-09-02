@@ -1,4 +1,4 @@
-using Atalaya.Copilot;
+﻿using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Anchoring;
 using Atalaya.Domain.Ids;
@@ -35,8 +35,21 @@ public sealed class SessionToolbox : IAuditToolbox
     /// </summary>
     private readonly PatternSilenceSet _patterns;
 
+    /// <summary>
+    /// La lupa del ciclo (F17). Decide dos cosas: con qué temática nacen los hallazgos nuevos y
+    /// cuáles de los existentes se reconcilian. General reconcilia todo, como siempre.
+    /// </summary>
+    private readonly AuditTheme _theme;
+
     /// <summary>Hallazgos existentes mostrados al auditor en la unidad en curso, por ULID.</summary>
     private readonly Dictionary<string, Finding> _listed = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Hallazgos de OTRAS temáticas presentes en la unidad (F17 §3). Están en la unidad y el
+    /// auditor los ve —para no re-reportarlos—, pero NO son suyos: un veredicto sobre uno de estos
+    /// se rechaza con error tipado y el hallazgo no se toca. Vacío en un ciclo General.
+    /// </summary>
+    private readonly Dictionary<string, Finding> _offTheme = new(StringComparer.Ordinal);
 
     /// <summary>ULIDs de la unidad en curso sobre los que el auditor YA se ha pronunciado.</summary>
     private readonly HashSet<string> _verdicted = new(StringComparer.Ordinal);
@@ -75,9 +88,11 @@ public sealed class SessionToolbox : IAuditToolbox
         string slug, AuditMode mode, DetectionStamp stamp,
         FindingIngestionService ingestion, ReconciliationService reconciliation, Storage.HubStore hub,
         string clonePath, Action<Finding, string>? onFinding = null,
-        PatternSilenceSet? patterns = null)
+        PatternSilenceSet? patterns = null,
+        AuditTheme theme = AuditTheme.General)
     {
         _hub = hub;
+        _theme = theme;
         _patterns = patterns ?? PatternSilenceSet.Empty;
         _slug = slug;
         _mode = mode;
@@ -185,10 +200,20 @@ public sealed class SessionToolbox : IAuditToolbox
     public void BeginPass(IReadOnlyList<Finding> existing)
     {
         _listed.Clear();
+        _offTheme.Clear();
         _verdicted.Clear();
         foreach (Finding f in existing)
         {
-            _listed[f.Id.ToString()] = f;
+            // F17 §3: solo los de la temática del ciclo son reconciliables. Los demás están en la
+            // unidad pero no en el encargo — no se les pide veredicto y no cuentan como pendientes.
+            if (ThemeScope.Reconciles(_theme, f.Theme))
+            {
+                _listed[f.Id.ToString()] = f;
+            }
+            else
+            {
+                _offTheme[f.Id.ToString()] = f;
+            }
         }
 
         ToolCallCount = 0;
@@ -357,6 +382,18 @@ public sealed class SessionToolbox : IAuditToolbox
         }
 
         string id = v.FindingId.Trim();
+
+        // F17 §3: un hallazgo de OTRA temática está en la unidad, pero no en el encargo de esta
+        // pasada. Se rechaza con su motivo y NO se toca — ni se confirma, ni se resuelve, ni se
+        // disputa—: pedirle un veredicto de seguridad a una pasada de rendimiento contradice lo
+        // que se le encargó, y ese hallazgo envejecerá hasta que lo mire un ciclo que sí lo juzgue.
+        if (_offTheme.TryGetValue(id, out Finding? foreign))
+        {
+            return RejectVerdict(
+                $"hallazgo de otra temática ({ThemeCatalog.Display(foreign.Theme)}) '{id}': este ciclo de "
+                + $"{ThemeCatalog.Display(_theme)} no lo juzga. No emitas veredictos sobre los hallazgos "
+                + "listados como de otras temáticas.");
+        }
 
         // Error tipado: el auditor solo puede pronunciarse sobre lo que se le ha listado. Un ULID
         // inventado o de otra unidad NO toca nada — se le devuelve el motivo para que se corrija.
@@ -540,7 +577,7 @@ public sealed class SessionToolbox : IAuditToolbox
             return Reject("duplicado exacto dentro de esta sesión (mismo título y misma ubicación).", args);
         }
 
-        Finding created = _ingestion.Create(submitted, _slug, _mode, Stamp);
+        Finding created = _ingestion.Create(submitted, _slug, _mode, Stamp, _theme);
         _createdInSweep[created.Id.ToString()] = created;
         Counters.New++;
         PassNew++;

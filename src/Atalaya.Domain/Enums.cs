@@ -1,4 +1,4 @@
-namespace Atalaya.Domain;
+﻿namespace Atalaya.Domain;
 
 /// <summary>Los tres pilares de auditoría del sistema v4.</summary>
 public enum Pillar
@@ -127,6 +127,38 @@ public enum SessionTrigger
 
     /// <summary>Salió de «Seleccionar cambiadas»: se audita lo que ha cambiado desde su auditoría.</summary>
     Deriva,
+}
+
+/// <summary>
+/// La LUPA de un ciclo (F17): qué busca el auditor mientras dura. <see cref="General"/> es el
+/// criterio completo de siempre y el único que mantiene todo el catálogo; las demás acotan el
+/// encargo a una familia de defectos y NADA fuera de ella se reporta. Un hallazgo lleva la
+/// temática del ciclo que lo detectó; lo anterior a F17 se lee como General, que es lo que era.
+/// <para>
+/// Catálogo cerrado de la casa, versionado junto a la rúbrica de severidad (mismo sitio, mismo
+/// régimen): los criterios de cada una viven en <c>ThemeCatalog</c>, en <c>Atalaya.Copilot</c>.
+/// Aquí solo está el vocabulario, que es lo que el dominio necesita para guardar y comparar.
+/// </para>
+/// </summary>
+public enum AuditTheme
+{
+    /// <summary>El criterio completo. Es el ciclo de referencia y el valor de todo lo anterior a F17.</summary>
+    General,
+
+    /// <summary>Secretos, validación de entradas, inyección, transporte, permisos, criptografía casera.</summary>
+    Seguridad,
+
+    /// <summary>Algoritmia cara, colecciones ineficientes, E/S y llamadas redundantes, recursos no reutilizados.</summary>
+    Rendimiento,
+
+    /// <summary>Nulos, índices, excepciones tragadas, casos límite, contratos incumplidos, using/dispose.</summary>
+    Fiabilidad,
+
+    /// <summary>Carreras, bloqueos, .Result/.Wait, estado compartido mutable, deadlocks.</summary>
+    Concurrencia,
+
+    /// <summary>Duplicación, nomenclatura, documentación que miente, complejidad y tamaño, código muerto.</summary>
+    Mantenibilidad,
 }
 
 /// <summary>Estado de una unidad dentro del inventario de un ciclo (§2).</summary>

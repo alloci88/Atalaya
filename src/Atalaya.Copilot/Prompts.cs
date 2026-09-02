@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Atalaya.Domain;
 using Atalaya.Domain.Model;
 
@@ -167,20 +167,42 @@ public static class PromptComposer
     /// dicen qué de lo que se busca ya está decidido en esta casa. Null o vacío = no se escribe
     /// nada.
     /// </param>
+    /// <param name="theme">
+    /// La lupa del ciclo (F17). Con General no cambia ni un byte del prompt; con otra, el bloque
+    /// de enfoque va JUSTO detrás del brief —el brief dice cómo se clasifica, el enfoque dice qué
+    /// se busca— y la lista de existentes se parte en dos: los de la temática, que se reconcilian,
+    /// y los de otras, que se enseñan para no re-reportarlos y NO se juzgan.
+    /// </param>
+    /// <param name="offTheme">
+    /// Los hallazgos existentes de OTRAS temáticas en la unidad (F17 §3). Solo tiene sentido con
+    /// una temática concreta; en un ciclo General todo se reconcilia y esta lista va vacía.
+    /// </param>
     public static string ComposeUnitPrompt(
         string unitPath, string unitContent, string brief, AuditMode mode,
         IReadOnlyList<ExistingFinding>? existing = null,
         PatternSilenceSet? patterns = null,
-        DirectiveBundle? directives = null)
+        DirectiveBundle? directives = null,
+        AuditTheme theme = AuditTheme.General,
+        IReadOnlyList<ExistingFinding>? offTheme = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine(AuditorRules);
         sb.AppendLine($"MODO: {mode}. Los hallazgos nuevos nacen con la confianza que la app asigne.");
         sb.AppendLine();
         sb.AppendLine(brief);
+        if (theme != AuditTheme.General)
+        {
+            sb.AppendLine(ThemeSection.Render(theme));
+        }
+
         sb.AppendLine(DirectiveSection.Render(directives ?? DirectiveBundle.Empty, DirectivePurpose.Auditoria));
         sb.AppendLine(PatternBlock(patterns));
-        sb.AppendLine(ExistingBlock(unitPath, existing));
+        sb.AppendLine(ExistingBlock(unitPath, existing, theme));
+        if (theme != AuditTheme.General)
+        {
+            sb.Append(OffThemeBlock(unitPath, offTheme));
+        }
+
         sb.AppendLine($"UNIDAD: {unitPath}");
         sb.AppendLine("CONTENIDO ÍNTEGRO DE LA UNIDAD (entre marcadores):");
         sb.AppendLine("<<<UNIT");
@@ -236,10 +258,15 @@ public static class PromptComposer
     /// sabe ya y se pronuncia. Cuando no hay ninguno se dice explícitamente, para que el modelo no
     /// invente veredictos sobre una lista vacía.
     /// </summary>
-    private static string ExistingBlock(string unitPath, IReadOnlyList<ExistingFinding>? existing)
+    private static string ExistingBlock(string unitPath, IReadOnlyList<ExistingFinding>? existing, AuditTheme theme)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"HALLAZGOS YA EXISTENTES EN {unitPath} (reconcilia TODOS con report_verdicts):");
+        // Con General la cabecera es la de siempre, byte a byte. Con una lupa, dice de qué
+        // temática son los de la lista: es la única que el auditor tiene que reconciliar.
+        sb.AppendLine(theme == AuditTheme.General
+            ? $"HALLAZGOS YA EXISTENTES EN {unitPath} (reconcilia TODOS con report_verdicts):"
+            : $"HALLAZGOS YA EXISTENTES DE TU TEMÁTICA ({ThemeCatalog.Display(theme)}) EN {unitPath} "
+              + "(reconcilia TODOS con report_verdicts):");
         if (existing is null || existing.Count == 0)
         {
             sb.AppendLine("  (ninguno — no llames a report_verdicts en esta unidad)");
@@ -254,6 +281,34 @@ public static class PromptComposer
             sb.AppendLine($"      severidad: {f.Severity} · ubicacion: {f.Location} · estado: {f.State}");
         }
 
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Los hallazgos de OTRAS temáticas que hay en la unidad (F17 §3). Se enseñan por una sola
+    /// razón: que el auditor no los re-reporte como nuevos si su familia roza la suya (un
+    /// <c>.Result</c> puede ser de Rendimiento y de Concurrencia a la vez). Y se dice, con el
+    /// mismo peso, que NO se juzgan: un veredicto sobre uno de estos lo rechaza la aplicación.
+    /// Cuando no hay ninguno no se escribe nada — un bloque vacío solo invita a buscar qué callar.
+    /// </summary>
+    private static string OffThemeBlock(string unitPath, IReadOnlyList<ExistingFinding>? offTheme)
+    {
+        if (offTheme is null || offTheme.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"HALLAZGOS DE OTRAS TEMÁTICAS EN {unitPath} (NO los juzgues ni los re-reportes; "
+                      + "no llames a report_verdicts con estos ULID):");
+        foreach (ExistingFinding f in offTheme)
+        {
+            string alias = string.IsNullOrWhiteSpace(f.DisplayId) ? "" : $" [{f.DisplayId}]";
+            string theme = string.IsNullOrWhiteSpace(f.Theme) ? "" : $" · temática: {f.Theme}";
+            sb.AppendLine($"  - {f.FindingId}{alias} «{f.Title}»{theme} · ubicacion: {f.Location}");
+        }
+
+        sb.AppendLine();
         return sb.ToString();
     }
 

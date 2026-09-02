@@ -1,3 +1,4 @@
+﻿using System.Text.Json.Serialization;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Rules;
 
@@ -55,6 +56,16 @@ public sealed class Finding
 
     public AuditMode Origin { get; set; }
 
+    /// <summary>
+    /// La temática del CICLO que lo detectó (F17). No es una clasificación del defecto —un mismo
+    /// <c>.Result</c> puede caer en Rendimiento o en Concurrencia según con qué lupa se mirara—,
+    /// sino la traza de bajo qué encargo se vio: es lo que decide qué pasada lo reconcilia después.
+    /// Aditivo: los hallazgos anteriores a F17 no traen la clave y se leen como General, que era
+    /// la única mirada que existía.
+    /// </summary>
+    [JsonPropertyName("tematica")]
+    public AuditTheme Theme { get; set; } = AuditTheme.General;
+
     public required DetectionStamp FirstDetected { get; set; }
 
     public required DetectionStamp LastConfirmed { get; set; }
@@ -90,7 +101,8 @@ public sealed class Finding
         Ulid id,
         Ingestion.SubmittedFinding submitted,
         AuditMode origin,
-        DetectionStamp stamp)
+        DetectionStamp stamp,
+        AuditTheme theme = AuditTheme.General)
     {
         var finding = new Finding
         {
@@ -108,6 +120,7 @@ public sealed class Finding
             Locations = submitted.Locations.ToList(),
             Symbol = submitted.Symbol,
             Origin = origin,
+            Theme = theme,
             FirstDetected = stamp,
             LastConfirmed = stamp,
             TimesConfirmed = 1,

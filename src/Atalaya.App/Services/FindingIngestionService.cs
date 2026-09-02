@@ -1,4 +1,4 @@
-using Atalaya.Domain;
+﻿using Atalaya.Domain;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Ingestion;
 using Atalaya.Domain.Model;
@@ -33,9 +33,12 @@ public sealed class FindingIngestionService
     }
 
     /// <summary>Crea y persiste el hallazgo. Devuelve el hallazgo creado.</summary>
-    public Finding Create(SubmittedFinding submitted, string slug, AuditMode mode, DetectionStamp stamp)
+    /// <param name="theme">La lupa del ciclo que lo detectó (F17): queda escrita en el hallazgo.</param>
+    public Finding Create(
+        SubmittedFinding submitted, string slug, AuditMode mode, DetectionStamp stamp,
+        AuditTheme theme = AuditTheme.General)
     {
-        Finding created = Finding.CreateNew(_ulids.NewUlid(), submitted, mode, stamp);
+        Finding created = Finding.CreateNew(_ulids.NewUlid(), submitted, mode, stamp, theme);
         _hub.Store.WriteFinding(slug, created);
         return created;
     }

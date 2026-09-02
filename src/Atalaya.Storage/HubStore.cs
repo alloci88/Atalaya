@@ -1,4 +1,4 @@
-using Atalaya.Domain.Ids;
+﻿using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Storage.Json;
 using Microsoft.Extensions.Logging;
@@ -99,6 +99,16 @@ public sealed class HubStore
 
     public void WriteInventory(string slug, InventoryCycle inventory)
         => WriteJson(_paths.InventoryFile(slug, inventory.CycleN), inventory, SchemaValidation.Validate);
+
+    /// <summary>
+    /// Todos los ciclos que la app conserva en disco, del 1 en adelante (F17 §6). El cierre nunca
+    /// borra el <c>cycle{N}.json</c> del ciclo que termina, así que la historia de auditoría de
+    /// una aplicación está aquí entera: es de donde sale la cinta de ciclos de Métricas.
+    /// </summary>
+    public IReadOnlyList<InventoryCycle> ListInventories(string slug)
+        => ReadAll<InventoryCycle>(_paths.InventoryDir(slug), SchemaValidation.Validate)
+            .OrderBy(c => c.CycleN)
+            .ToList();
 
     // --- Findings ---
 

@@ -1,3 +1,4 @@
+﻿using System.Text.Json.Serialization;
 using Atalaya.Domain.Ids;
 
 namespace Atalaya.Domain.Model;
@@ -255,6 +256,14 @@ public sealed class AuditSession
     public bool Interrupted { get; set; }
 
     public int CycleN { get; set; }
+
+    /// <summary>
+    /// La temática del ciclo en que corrió la sesión (F17): con qué lupa se auditó. Va en la
+    /// sesión y en su informe por la misma razón que el tope de pasadas: sin ella, «esta unidad
+    /// salió limpia» no se puede interpretar dentro de un mes. General en todo lo anterior a F17.
+    /// </summary>
+    [JsonPropertyName("tematica")]
+    public AuditTheme Theme { get; set; } = AuditTheme.General;
 
     public List<UnitVerdictRecord> Units { get; set; } = new();
 
