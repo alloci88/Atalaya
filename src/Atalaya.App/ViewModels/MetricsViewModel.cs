@@ -691,16 +691,8 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
     [ObservableProperty] private bool _hasCycles;
 
-    /// <summary>Los extremos del eje de la cinta, en hora local: los mismos que el resto del panel.</summary>
-    [ObservableProperty] private DateTime _ribbonFrom;
-
-    [ObservableProperty] private DateTime _ribbonTo;
-
     private void ApplyCycles(MetricsDashboard d)
     {
-        RibbonFrom = d.From.ToLocalTime().DateTime;
-        RibbonTo = d.To.ToLocalTime().DateTime;
-
         var themes = new SortedSet<AuditTheme>();
         var tracks = new List<RibbonTrack>();
         foreach (CycleTrack track in d.Cycles)
@@ -721,7 +713,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
                 spans.Add(new RibbonSpan(
                     s.Label,
-                    s.ShortLabel,
+                    CycleDates(s),
                     slices,
                     s.From.ToLocalTime().DateTime,
                     s.To.ToLocalTime().DateTime,
@@ -731,7 +723,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
                     new CycleSpanRef(s.Slug, s.CycleN, s.IsOpen, s.ReportSessionId)));
             }
 
-            tracks.Add(new RibbonTrack(track.Name, spans));
+            tracks.Add(new RibbonTrack(track.Name, spans, Notice: track.Notice));
         }
 
         CycleTracks = tracks;
@@ -749,6 +741,27 @@ public sealed partial class MetricsViewModel : ViewModelBase
     }
 
     private Brush ThemeBrush(AuditTheme theme) => Brush(ThemePalette.Hex(theme, _dark));
+
+    /// <summary>
+    /// Las fechas de un capítulo, escritas debajo de su rótulo (F17.2): «14 ago – 2 sept»; «2 sept»
+    /// si empezó y acabó el mismo día; «14 ago – en curso» si sigue abierto; con el año cuando
+    /// cruza uno. En hora local, como todo el panel.
+    /// </summary>
+    internal static string CycleDates(CycleSpan s)
+    {
+        CultureInfo culture = CultureInfo.CurrentCulture;
+        DateTime from = s.From.ToLocalTime().DateTime;
+        DateTime to = s.To.ToLocalTime().DateTime;
+        string format = from.Year == to.Year ? "d MMM" : "d MMM yyyy";
+        string a = from.ToString(format, culture);
+        if (s.IsOpen)
+        {
+            return $"{a} – en curso";
+        }
+
+        string b = to.ToString(format, culture);
+        return from.Date == to.Date ? a : $"{a} – {b}";
+    }
 
     /// <summary>El tooltip de UN trozo de temática (F17.1): la lupa y sus fechas, y quién la puso.</summary>
     internal static IReadOnlyList<string> SliceTooltip(CycleSpan span, ThemeSlice slice)

@@ -528,7 +528,7 @@
                         <StackPanel>
                             <TextBlock Text="Ciclos y temáticas" Style="{StaticResource BlockTitle}" />
                             <TextBlock Style="{StaticResource BlockHint}"
-                                       Text="La historia de auditoría de cada aplicación: un tramo por ciclo, coloreado por su temática. Pulsa un tramo para abrir el informe de su cierre; el ciclo abierto lleva al inventario." />
+                                       Text="Los ciclos de cada aplicación, en orden: un bloque por ciclo, coloreado por su temática, con sus fechas debajo y los huecos sin auditar contados. Pulsa un bloque para abrir el informe de su cierre; el ciclo abierto lleva al inventario." />
 
                             <ItemsControl ItemsSource="{Binding CycleLegend}"
                                           ItemTemplate="{StaticResource LegendEntry}"
@@ -547,16 +547,13 @@
                             <controls:CycleRibbon
                                 Margin="0,8,0,0"
                                 Tracks="{Binding CycleTracks}"
-                                From="{Binding RibbonFrom}"
-                                To="{Binding RibbonTo}"
                                 SpanCommand="{Binding OpenCycleCommand}"
                                 AxisBrush="{DynamicResource TextFillColorSecondaryBrush}"
-                                GridBrush="{DynamicResource TextFillColorTertiaryBrush}"
                                 TextBrush="{DynamicResource TextFillColorPrimaryBrush}"
                                 Visibility="{Binding HasCycles, Converter={StaticResource BoolToVisibility}}" />
 
                             <TextBlock Style="{StaticResource EmptyNote}"
-                                       Text="— · se activará cuando alguna aplicación tenga un ciclo con alguna fecha registrada en el periodo."
+                                       Text="— · se activará cuando haya alguna aplicación registrada."
                                        Visibility="{Binding HasCycles, Converter={StaticResource InverseBoolToVisibility}}" />
                         </StackPanel>
                     </ui:Card>

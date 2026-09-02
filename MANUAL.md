@@ -307,41 +307,39 @@ Debajo, siete gráficas:
    (hallazgos activos a día de hoy: el periodo no la recorta). Un clic en un tramo abre
    Hallazgos con esa app y esa severidad; en el centro, esa app entera.
 5. **Flujo de hallazgos** — lo que entra, lo que se cierra y cuántos quedan vivos.
-6. **Ciclos y temáticas** — la cinta de ciclos: la historia de auditoría de cada
-   aplicación, legible de un vistazo. Una banda por aplicación (en el orden del
-   Portafolio) sobre el mismo eje temporal que las demás gráficas, y **un tramo por
-   ciclo** del inicio al cierre, **coloreado por su temática**, con su etiqueta
-   («C2 · Seguridad») cuando cabe y solo el tooltip cuando no. El ciclo abierto llega
-   hasta hoy y se desvanece por la derecha: está en curso. El tooltip de cada tramo
-   dice el ciclo, la temática, las fechas exactas, las unidades auditadas sobre las
-   auditables al cierre, los hallazgos nuevos y resueltos durante el ciclo y su coste
-   en AI credits (solo lo facturable, como el resto del panel). **Un clic en un tramo
-   abre el informe de cierre de ese ciclo**; si el ciclo sigue abierto, abre el
-   inventario. Los ciclos anteriores a esta versión no tienen temática y se pintan
-   como General; si a uno le falta la fecha de cierre, su tramo termina donde
-   alcanza el dato —su última sesión— con el borde a puntos, y el tooltip lo dice:
-   nada se rellena. **Un ciclo que cambió de temática a mitad se pinta partido**: un
-   trozo por lupa, cada uno con su color, una muesca en el punto del cambio y un
-   tooltip propio con la temática, sus fechas y quién la cambió; la etiqueta lo
-   resume («C3 · Rendimiento → Seguridad»). **Una aplicación sin ciclos tiene su
-   banda igualmente**, vacía y rotulada «sin ciclos en este periodo»: una fila
-   ausente invita a leer el tramo de al lado como suyo. Solo cuenta como ciclo lo
-   que tiene apertura registrada o alguna sesión: los hallazgos medidos por la
-   propia Atalaya no son una auditoría y no cuelgan ningún tramo. El nombre de la
-   aplicación va en una columna fija, fuera del área que se desplaza —nombre y
-   banda no pueden separarse—, y si no cabe se acorta por el medio con el nombre
-   entero en el tooltip. La vista arranca en el final del eje, hoy, que es donde
-   está lo que importa; si retrocedes, se respeta tu posición. Un ciclo de horas se
-   ve sin buscarlo: se pinta con un ancho mínimo sin estirar el eje entero, y la
-   cinta solo crece —y se desplaza dentro de su tarjeta, nunca la página— cuando
-   dos ciclos seguidos de una misma aplicación no se distinguirían.
+6. **Ciclos y temáticas** — la secuencia de ciclos de cada aplicación: **no es una
+   línea de tiempo**, es la lista de capítulos. Una fila por aplicación (en el orden
+   del Portafolio, con el nombre en una columna fija) y, en cada fila, sus ciclos **en
+   orden, uno tras otro, como bloques del mismo ancho**: un ciclo de tres horas y uno de
+   tres semanas cuentan lo mismo como capítulo. Cada bloque dice «C2 · Seguridad» y,
+   debajo, sus fechas («14 ago – 2 sept», o «2 sept» si empezó y acabó el mismo día,
+   o «14 ago – en curso»); si el rótulo se lleva las dos líneas, las fechas caen —nunca
+   el identificador ni la temática— y el tooltip las trae. El color es el de la temática
+   (la misma paleta de siempre), y el ciclo abierto va el último, desvaneciéndose por la
+   derecha. **Un ciclo que cambió de temática a mitad se pinta partido** dentro de su
+   bloque, cada trozo con su color y en proporción a lo que duró cada lupa, con una
+   muesca en el cambio y un tooltip propio; el rótulo lo resume («C1 · Rendimiento →
+   Seguridad»). **Los huecos se cuentan, no se dibujan**: entre dos ciclos separados por
+   una semana o más aparece un separador discreto con el dato —«3 semanas sin
+   auditar»—, que informa más que un desierto de píxeles. Una aplicación sin ciclos
+   conserva su fila, rotulada «sin ciclos en este periodo»; solo cuenta como ciclo lo
+   que tiene apertura registrada o alguna sesión. El tooltip de cada bloque lleva el
+   ciclo, la temática, las fechas, las unidades auditadas sobre las auditables al
+   cierre, los hallazgos nuevos y resueltos y el coste en AI credits (solo lo
+   facturable). **Un clic abre el informe de cierre**; el ciclo abierto abre el
+   inventario. Con muchos ciclos la fila se desplaza dentro de su tarjeta, nunca la
+   página, y la vista **arranca por el final**: las filas se alinean por su último
+   capítulo, así que al abrir se ve el ciclo más reciente de todas; si retrocedes, se
+   respeta tu posición. El filtro de periodo recorta por pertenencia: se enseñan los
+   ciclos que lo solapan, y si alguno queda fuera la fila lo dice («2 ciclos anteriores
+   fuera del periodo») en vez de fabricar un eje.
 7. **Actividad de sesiones** — el registro del periodo, con el **tipo** de cada sesión
    (auditoría, arreglo asistido, verificación, cierre…), su proveedor, su coste y sus
    **tokens**. Las de Claude Code dicen «suscripción» donde las otras dicen credits, y sus
    tokens siguen ahí: es con lo que puedes comparar el peso de dos sesiones de cualquier casa.
    **Un clic en una línea abre su informe en la vista Informes.**
 
-Los colores de la cinta son una **paleta propia de temáticas**, fija: gris sobrio para General
+Los colores de la secuencia de ciclos son una **paleta propia de temáticas**, fija: gris sobrio para General
 y cinco colores distinguibles para las demás, elegidos con un paso para cada tema y medidos
 contra su fondo. No se parecen a los cuatro de severidad, que siguen reservados a chips y
 roscos. La leyenda los nombra siempre.
@@ -727,7 +725,8 @@ El diálogo aparece en tres momentos:
 un aviso —«N unidades auditadas pasarán a pendientes; los hallazgos existentes no se tocan»— y la
 re-siembra. **Y queda registrado**: el ciclo guarda su historial de temáticas —cuál, desde cuándo,
 hasta cuándo y quién la cambió—, el panel del ciclo enseña las anteriores debajo del distintivo, el
-informe de cierre lista con qué lupas se trabajó, y la cinta de Métricas pinta el ciclo partido.
+informe de cierre lista con qué lupas se trabajó, y la secuencia de ciclos de Métricas pinta el
+bloque partido.
 El trabajo hecho con la lupa anterior no se borra de ninguna parte. Es lo que dice la tabla de
 siembra, extendida:
 
@@ -753,7 +752,7 @@ reales.
 
 El **distintivo** de temática va en la tarjeta del Portafolio y en el panel del ciclo; los
 informes de sesión y de cierre registran la temática del ciclo; Hallazgos filtra por ella y la
-ficha la enseña; y la cinta **Ciclos y temáticas** de Métricas pinta la historia entera.
+ficha la enseña; y la secuencia **Ciclos y temáticas** de Métricas pinta la historia entera.
 
 ## Proveedores de auditoría
 

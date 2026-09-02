@@ -10382,3 +10382,90 @@ Y renderizado con el arnés del scratchpad, **con datos desiguales** (D-843): At
 C1 de dos horas partido en Rendimiento → Seguridad, XBLAST sin ciclos, y una tercera app de nombre
 largo con tres ciclos, uno de ellos partido; a 1124 y 441 px de página, en claro y oscuro. Las
 capturas se entregaron con el parte. Lo que queda es verlo sobre el hub real, y está en BACKLOG.
+
+## F17.2 — La cinta deja el calendario: los ciclos son capítulos
+
+Los arreglos de F17.1 funcionaron y aun así la gráfica no se leía: dos meses de eje vacío para
+unos milímetros de contenido apretado contra el borde derecho. El problema era la forma, no el
+acabado, y por eso esta vez se rehace en vez de retocarse por tercera vez.
+
+### D-845 — Por qué capítulos y no calendario [DECISIÓN DE FORMA]
+
+Los ciclos son eventos **escasos y de duración dispar**: unos pocos al año por aplicación, unos
+de horas y otros de semanas. Sobre un eje de calendario eso da una vista vacía casi siempre, con
+ráfagas ilegibles y desiertos entre ellas, y **empeora con el tiempo** —con ocho apps y treinta
+ciclos sería peor, no mejor—. La pregunta que responde esta gráfica es «¿con qué lupas se ha
+mirado esta aplicación, en qué orden y con qué resultado?», y esa pregunta necesita **orden, no
+calendario**. Es la lección del mapa de calor (F10.3) aplicada a la primera en vez de a la
+tercera: la forma sale de la naturaleza del dato, y estos datos son capítulos.
+
+La forma nueva: una fila por aplicación (la columna de nombres fija de F17.1 se conserva tal
+cual) y, en cada fila, sus ciclos **en orden, uno tras otro, como bloques de ancho fijo** (168 px:
+lo que cabe «C12 · Concurrencia y asincronía» a dos líneas con sus fechas debajo). Sin eje ni
+rejilla de fechas. **No proporcional a la duración**, y no como opción: un ciclo de tres horas y
+uno de tres semanas cuentan lo mismo como capítulo, y lo proporcional trae de vuelta justo el
+problema que se quita. El eje de calendario tampoco vuelve como opción: se ha probado dos veces y
+no sirve para este dato. El tiempo no desaparece: cada bloque lleva sus fechas debajo, y los
+huecos se cuentan (D-846).
+
+**Lo que se conserva** de F17 y F17.1, sin tocar: el color por temática con la paleta medida, el
+bloque partido por periodos del historial (ahora con tamaño para verse: cada trozo en proporción
+a lo que duró su lupa, con un mínimo de 6 px para que un cambio reciente no desaparezca, y la
+muesca en el corte), el remate de «en curso» del ciclo abierto, el borde a puntos del fin no
+recuperable, el tooltip por bloque y por trozo con la foto entera, el clic al informe o al
+inventario, el toast del reinicio sin informe, la fila vacía rotulada, y la regla de que sin
+apertura ni sesión no hay ciclo. Las demás gráficas de Métricas no se han tocado: `ChartPlot` y
+`DonutRing` siguen como estaban, y el test de la vista lo comprueba.
+
+### D-846 — Los huecos se cuentan, no se dibujan; y el umbral
+
+Entre dos ciclos separados en el tiempo va un separador discreto —una línea a puntos con el dato
+encima—: «3 semanas sin auditar». Informa mucho más que trescientos píxeles de vacío, y no crece
+con el tiempo.
+
+**Umbral: una semana.** Por debajo, dos ciclos seguidos son continuación —el cierre abre el
+siguiente el mismo día, o al día siguiente— y anotar «2 días sin auditar» sería ruido; a partir
+de una semana ya es un dato que explica algo del historial. La unidad se elige para que se lea
+de un vistazo sin dividir: días hasta dos semanas, semanas hasta dos meses, meses después.
+`CycleRibbon.GapThreshold` y `GapText` lo fijan, y una teoría de nueve casos lo recorre.
+
+### D-847 — Las filas se alinean por el final, y la vista arranca ahí
+
+Con muchos ciclos la fila se desplaza dentro de su tarjeta —jamás la página— y la vista arranca
+por el final, el ciclo más reciente, que es lo relevante; si el usuario retrocede, se respeta su
+posición (un cambio de tamaño no es un cambio de datos, y solo los datos vuelven a colocar la
+vista al final).
+
+**Y las filas se alinean por el final, no por el principio.** El primer render de esta fase lo
+enseñó: con la vista al final de la fila más larga, una fila de un solo ciclo y la fila vacía
+quedaban desplazadas fuera de la ventana —justo las que menos tenían que enseñar eran las que no
+se veían—. Ahora el último capítulo de cada aplicación queda en el mismo borde derecho, así que
+al abrir se ve el ciclo más reciente de TODAS las filas, la fila vacía con su rótulo y el aviso
+del periodo. Un test lo mide a 441 px, que es donde se rompía.
+
+### D-848 — El filtro de periodo recorta por pertenencia
+
+Sin eje no hay nada que recortar: el periodo pasa a decidir **qué ciclos se enseñan** —los que
+lo solapan— y lo que deja fuera **se dice** al principio de la fila: «2 ciclos anteriores fuera
+del periodo» (`CycleTrack.HiddenEarlier`, `Notice`). El filtro de aplicación deja una fila, como
+antes. Con «Todo» no hay aviso, porque no hay nada fuera.
+
+### D-849 — Cobertura (15 tests nuevos, 1.997 en total, todo en verde), y las capturas
+
+`CycleRibbonLayoutTests` se reescribe para la forma nueva, sobre el control real y con datos
+desiguales (D-843): varios ciclos con huecos, uno solo con dos lupas, ninguno. El orden y el
+ancho fijo a cuatro anchos; la fila indivisible con el scroll aplicado; el bloque partido en los
+colores y proporciones de sus periodos (dos horas de tres) y el corte en un solo punto; el
+separador escrito entre C2 y C3 y solo ahí, con la teoría de umbral y unidades; el arranque por
+el final con doce ciclos y el respeto a quien retrocede; las filas alineadas por el final con el
+último capítulo de todas a la vista; la fila vacía rotulada; el aviso de lo que el periodo deja
+fuera, delante del primer bloque; el rótulo largo que envuelve a dos líneas mientras las fechas
+caen y el tooltip las trae; y los nombres con elipsis media. En `CycleRibbonTests` se retiran los
+tests del eje (escala y marcas) y entran el aviso del periodo con su número y las fechas escritas
+—mismo día, dos días, en curso, cruce de año—.
+
+Renderizado con el arnés del scratchpad, con los cuatro casos del parte en una sola imagen: una
+app con cuatro ciclos y dos huecos (uno de ellos de cinco horas, que como capítulo mide lo mismo
+que los de semanas), una con un solo ciclo de dos lupas, una sin ninguno, y un ciclo partido en
+la fila larga; a 1124 y 441 px de página, en claro y oscuro, con la vista arrancando por el
+final. Las capturas se entregaron con el parte. Verlo sobre el hub real sigue en BACKLOG.

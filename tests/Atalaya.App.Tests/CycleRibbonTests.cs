@@ -370,9 +370,37 @@ public sealed class CycleRibbonTests : IDisposable
         Tracks("b").Should().ContainSingle().Which.Name.Should().Be("Beta");
         Tracks(null, MetricsRange.All).Should().HaveCount(2);
 
-        // Cuatro semanas: el ciclo 1 de Alpha (hace 200-100 días) queda fuera; el 2 se ve.
+        // Cuatro semanas: el ciclo 1 de Alpha (hace 200-100 días) queda fuera; el 2 se ve, y se
+        // DICE que hay uno anterior fuera del periodo (F17.2: recortar por pertenencia, no
+        // fabricar un eje).
         IReadOnlyList<CycleTrack> recent = Tracks(null, MetricsRange.Weeks4);
-        recent.Single(t => t.Slug == "a").Spans.Should().ContainSingle().Which.CycleN.Should().Be(2);
+        CycleTrack alpha = recent.Single(t => t.Slug == "a");
+        alpha.Spans.Should().ContainSingle().Which.CycleN.Should().Be(2);
+        alpha.HiddenEarlier.Should().Be(1);
+        alpha.Notice.Should().Be("1 ciclo anterior fuera del periodo");
+        recent.Single(t => t.Slug == "b").Notice.Should().BeEmpty();
+        Tracks(null, MetricsRange.All).Single(t => t.Slug == "a").HiddenEarlier.Should().Be(0);
+    }
+
+    [Fact]
+    public void Las_fechas_del_capitulo_se_escriben_cortas_y_honestas()
+    {
+        App("app", "App", 3);
+        Inventory("app", 1, opened: new DateTimeOffset(2026, 8, 14, 10, 0, 0, TimeSpan.Zero));
+        Inventory("app", 2, opened: new DateTimeOffset(2026, 8, 30, 8, 0, 0, TimeSpan.Zero));
+        Inventory("app", 3, opened: new DateTimeOffset(2026, 9, 1, 8, 0, 0, TimeSpan.Zero));
+        Session("app", 1, daysAgo: 10);
+        Session("app", 2, daysAgo: 3, AuditMode.Cierre, units: 0);
+        Session("app", 3, daysAgo: 1, AuditMode.Cierre, units: 0);
+
+        IReadOnlyList<CycleSpan> spans = Tracks().Single().Spans;
+
+        MetricsViewModel.CycleDates(spans[0]).Should().Be("14 ago – 30 ago");
+        MetricsViewModel.CycleDates(spans[1]).Should().Be("30 ago – 1 sept");
+        MetricsViewModel.CycleDates(spans[2]).Should().Be("1 sept – en curso");
+        MetricsViewModel.CycleDates(spans[0] with { To = spans[0].From.AddHours(2) }).Should().Be("14 ago", "empezó y acabó el mismo día");
+        MetricsViewModel.CycleDates(spans[0] with { From = new DateTimeOffset(2025, 12, 20, 10, 0, 0, TimeSpan.Zero) })
+            .Should().Be("20 dic 2025 – 30 ago 2026", "cruza el año");
     }
 
     [Fact]
@@ -470,66 +498,6 @@ public sealed class CycleRibbonTests : IDisposable
 
     // ---------------------------------------------------------------- la geometría de la cinta
 
-    /// <summary>
-    /// F17.1 — escala honesta: el eje cabe en la ventana salvo que dos tramos consecutivos de una
-    /// misma banda no se distinguieran. Un ciclo corto suelto NO estira el eje: se pinta con el
-    /// ancho mínimo donde está. En F17 un ciclo de 55 minutos en un eje de ocho semanas forzaba una
-    /// cinta de decenas de miles de píxeles, y había que arrastrar mucho para llegar a hoy.
-    /// </summary>
-    [Fact]
-    public void La_cinta_cabe_en_su_ventana_salvo_que_dos_tramos_consecutivos_no_se_distinguieran()
-    {
-        var from = new DateTime(2026, 7, 9);
-        var to = new DateTime(2026, 9, 3);
-        RibbonSpan Span(DateTime a, DateTime b, bool open = false) => new("C", "C",
-            new[] { new RibbonSlice(Brushes.Gray, a, b, new[] { "t" }) }, a, b, open, true, new[] { "t" });
-
-        // Una app con un ciclo de horas: cabe, y punto.
-        var single = new[] { new RibbonTrack("App", new[] { Span(to.AddHours(-2), to, open: true) }) };
-        (double w1, _, _) = CycleRibbon.Geometry(single, from, to, viewport: 900, minSpan: 28);
-        w1.Should().Be(900, "un tramo corto suelto se pinta con el mínimo; no estira el eje");
-
-        // Varias apps con historias dispares: tampoco, mientras cada banda se lea.
-        var mixed = new[]
-        {
-            new RibbonTrack("Larga", new[] { Span(from.AddDays(-30), from.AddDays(20)), Span(from.AddDays(20), to, open: true) }),
-            new RibbonTrack("Corta", new[] { Span(to.AddHours(-1), to, open: true) }),
-            new RibbonTrack("Vacía", Array.Empty<RibbonSpan>()),
-        };
-        (double w2, double h2, _) = CycleRibbon.Geometry(mixed, from, to, viewport: 900, minSpan: 28);
-        w2.Should().Be(900);
-        h2.Should().Be(CycleRibbon.RowTop(3) + CycleRibbon.AxisHeight, "tres bandas, la vacía incluida, más el eje");
-
-        // Dos ciclos de una hora seguidos en la misma banda: a esta escala se pisarían, y la
-        // cinta crece justo lo necesario para que el segundo empiece a 28 px del primero.
-        var packed = new[]
-        {
-            new RibbonTrack("App", new[] { Span(to.AddHours(-2), to.AddHours(-1)), Span(to.AddHours(-1), to, open: true) }),
-        };
-        (double w3, _, double scale) = CycleRibbon.Geometry(packed, from, to, viewport: 900, minSpan: 28);
-        w3.Should().BeGreaterThan(900);
-        (scale / 24).Should().BeGreaterThanOrEqualTo(28 - 0.01, "píxeles por hora: los dos arranques quedan a 28 px");
-    }
-
-    [Fact]
-    public void Las_marcas_del_eje_se_anclan_al_ultimo_dia_y_cambian_de_grano_con_el_periodo()
-    {
-        var today = new DateTime(2026, 9, 2);
-        DateTime to = today.AddDays(1);
-
-        IReadOnlyList<(DateTime When, string Label)> weeks = CycleRibbon.Ticks(to.AddDays(-28), to);
-        weeks.Last().When.Should().Be(today, "hoy siempre tiene marca");
-        weeks.Select(t => t.When).Should().BeInAscendingOrder();
-        weeks.Zip(weeks.Skip(1)).Should().OnlyContain(p => (p.Second.When - p.First.When).TotalDays == 7);
-
-        IReadOnlyList<(DateTime When, string Label)> months = CycleRibbon.Ticks(to.AddDays(-180), to);
-        months.Last().When.Should().Be(today);
-        months.Take(months.Count - 1).Should().OnlyContain(t => t.When.Day == 1, "marcas de mes");
-
-        IReadOnlyList<(DateTime When, string Label)> quarters = CycleRibbon.Ticks(to.AddDays(-800), to);
-        quarters.Take(quarters.Count - 1).Should().OnlyContain(t => t.When.Day == 1 && (t.When.Month - 1) % 3 == 0, "trimestres");
-    }
-
     // ---------------------------------------------------------------- la vista y el clic
 
     /// <summary>
@@ -544,6 +512,8 @@ public sealed class CycleRibbonTests : IDisposable
 
         Regex.Matches(xaml, "<controls:CycleRibbon").Count.Should().Be(1);
         xaml.Should().NotContain("ViewportWidth=", "la cinta mide su propia ventana");
+        xaml.Should().NotContain("RibbonFrom").And.NotContain("RibbonTo", "F17.2: ya no hay eje de calendario");
+        xaml.Should().NotContain("controls:ChartPlot\n", "las demás gráficas no se tocan");
         xaml.Should().NotContain("x:Name=\"RibbonScroll\"", "el desplazamiento vive en el control, con la fila entera");
         xaml.Should().Contain("SpanCommand=\"{Binding OpenCycleCommand}\"");
         Regex.Matches(xaml, "Ciclos y temáticas").Count.Should().Be(1);
