@@ -161,34 +161,53 @@
             <!-- Identidad. Es un Grid y no un StackPanel a propósito: un StackPanel da a sus hijos
                  ancho infinito, así que el recorte con puntos suspensivos no llega a ocurrir nunca
                  y el texto se sale por el borde. La columna estrella del final absorbe el hueco
-                 cuando sobra sitio, para que el distintivo y el enlace queden pegados al título. -->
+                 cuando sobra sitio, para que el distintivo y el enlace queden pegados al título.
+
+                 F16-RETOQUE §2·2 — el identificador aparece UNA vez. Salía truncado junto al
+                 título («BUG-0012…») y otra vez entero dentro del rótulo del enlace, que es
+                 leerlo dos veces y ninguna bien. Ahora vive aquí, en su propia columna Auto —es
+                 corto, cabe entero y nunca se recorta— y el enlace dice solo a dónde lleva. Lo
+                 que cede cuando falta sitio es el nombre de la aplicación, que es lo único de
+                 esta zona que puede ser largo. -->
             <Grid VerticalAlignment="Center">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
-                    <!-- El subtítulo va en la columna que ENCOGE, y acotada: estrella para que se
-                         quede con lo que sobre y ceda lo que haga falta, y MaxWidth para que
-                         cuando sobre sitio no empuje al distintivo y al enlace al otro extremo. -->
-                    <ColumnDefinition Width="*" MaxWidth="260" />
+                    <!-- El identificador: Auto y sin recorte. Un alias a medias no identifica. -->
+                    <ColumnDefinition Width="Auto" />
+                    <!-- El nombre de la app va en la columna que ENCOGE, y acotada por los dos
+                         lados: estrella para que se quede con lo que sobre y ceda lo que haga
+                         falta, MaxWidth para que cuando sobre sitio no empuje al distintivo y al
+                         enlace al extremo, y MinWidth porque una columna estrella SÍ llega a cero
+                         — y un TextBlock en una celda de cero ancho no desaparece: pinta sus
+                         puntos suspensivos encima de la pieza siguiente. Con un suelo, o cabe
+                         recortado o lo recorta la cabecera, pero nunca se pinta sobre nadie. -->
+                    <ColumnDefinition Width="*" MinWidth="60" MaxWidth="220" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="Arreglo asistido" FontSize="24" FontWeight="SemiBold" />
-                <TextBlock Grid.Column="1" Text="{Binding HeaderText}" Opacity="0.6"
+                <TextBlock Grid.Column="1" Text="{Binding FindingAliasText}" Opacity="0.75"
                            VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="12,0,0,4"
-                           MaxWidth="260" TextTrimming="CharacterEllipsis"
-                           ToolTip="{Binding HeaderText}" />
-                <!-- F16: la pantalla es la misma con los dos motores, así que dice cuál trabaja. -->
-                <Border Grid.Column="2" Background="#18808080" CornerRadius="10" Padding="8,2"
-                        VerticalAlignment="Bottom" Margin="12,0,0,4"
-                        Visibility="{Binding HasEngine, Converter={StaticResource BoolToVisibility}}"
-                        ToolTip="El proveedor y el modelo que están haciendo este arreglo. Quedan escritos en el informe.">
-                    <TextBlock Text="{Binding EngineText}" FontSize="11.5" Opacity="0.85"
-                               MaxWidth="220" TextTrimming="CharacterEllipsis" />
-                </Border>
+                           FontWeight="SemiBold"
+                           ToolTip="El hallazgo que se está arreglando" />
+                <!-- SIN HorizontalAlignment="Left": con alineación distinta de Stretch, WPF
+                     arregla el texto a su tamaño DESEADO —hasta su MaxWidth— y no al de su celda,
+                     así que en cuanto la columna estrella encogía por debajo de 220 el nombre se
+                     metía 20 px dentro del distintivo de al lado. Estirado, ocupa su columna y ni
+                     un píxel más, que es justo lo que el recorte necesita para activarse. -->
+                <TextBlock Grid.Column="2" Text="{Binding AppNameText}" Opacity="0.6"
+                           VerticalAlignment="Bottom" Margin="12,0,0,4"
+                           MaxWidth="220" TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding AppNameText}" />
                 <!-- H9.1 §1: el camino de vuelta al hallazgo, disponible mientras haya sesión que
-                     mirar —corriendo, terminada o fallida—, no solo en la pantalla de cierre. -->
+                     mirar —corriendo, terminada o fallida—, no solo en la pantalla de cierre.
+
+                     Va ANTES del distintivo (F16-RETOQUE §2). Cuando no hay ancho, la cabecera
+                     recorta la identidad por la derecha, así que el orden decide qué se pierde
+                     primero: entre un camino que se pulsa y un dato que se lee, se pierde el
+                     dato — y el dato, además, está entero en el informe. -->
                 <Button Grid.Column="3" Content="{Binding BackToFindingLabel}" Command="{Binding BackToFindingCommand}"
-                        Style="{StaticResource LinkButton}" VerticalAlignment="Bottom" Margin="14,0,0,4"
+                        Style="{StaticResource LinkButton}" VerticalAlignment="Bottom" Margin="16,0,0,4"
                         FontSize="12"
                         ToolTip="Abre la ficha del hallazgo que originó este arreglo">
                     <Button.Visibility>
@@ -198,33 +217,42 @@
                         </MultiBinding>
                     </Button.Visibility>
                 </Button>
+                <!-- F16: la pantalla es la misma con los dos motores, así que dice cuál trabaja. -->
+                <Border Grid.Column="4" Background="#18808080" CornerRadius="10" Padding="8,2"
+                        VerticalAlignment="Bottom" Margin="14,0,0,4"
+                        Visibility="{Binding HasEngine, Converter={StaticResource BoolToVisibility}}"
+                        ToolTip="El proveedor y el modelo que están haciendo este arreglo. Quedan escritos en el informe.">
+                    <TextBlock Text="{Binding EngineText}" FontSize="11.5" Opacity="0.85"
+                               MaxWidth="220" TextTrimming="CharacterEllipsis" />
+                </Border>
             </Grid>
-            <!-- Barra de acciones: pausar, descartar, detener. -->
+            <!-- Barra de acciones. F16-RETOQUE §2·3 y §2·4, dos reglas:
+
+                 · Aquí solo va lo que SE PULSA. «Compilar solución completa» no es una acción sino
+                   un ajuste de la sesión, y se ha ido al pie, junto al resultado del build — que
+                   es el sitio donde se ve su consecuencia.
+
+                 · Y la destructiva no viaja entre las de control. Pausar, Detener y Cerrar
+                   gobiernan la sesión; «Descartar todo» deshace el trabajo, y va la última, con
+                   más aire del que separa a las demás. Estaba en medio, entre Pausar y Cerrar. -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <ui:Button Content="{Binding PauseLabel}" Command="{Binding TogglePauseCommand}"
-                           Margin="0,0,8,0"
+                           Margin="0,0,12,0"
                            ToolTip="Mientras esté en pausa no se aplicará ningún cambio ni se compilará nada. El agente puede seguir razonando."
                            Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
-                <ui:Button Content="Descartar todo" Command="{Binding DiscardAllCommand}"
-                           Appearance="Danger" Margin="0,0,8,0"
-                           ToolTip="Devuelve cada fichero tocado a como estaba antes de esta sesión." />
-                <!-- H9.1 §2: el ámbito de la compilación es decisión del USUARIO. El agente no
-                     puede tocarlo: él no sabe si este cambio puede haber roto a un vecino, ni paga
-                     el tiempo de averiguarlo. -->
-                <CheckBox Content="Compilar solución completa" IsChecked="{Binding BuildFullSolution}"
-                          VerticalAlignment="Center" Margin="0,0,14,0" FontSize="12"
-                          Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                          ToolTip="Por defecto se compila solo el proyecto de los ficheros tocados y sus tests, que es lo que el veredicto puede atribuir al cambio. Marcando esto se compila la solución entera y los errores se cuentan contra una línea base del mismo commit." />
-                <!-- BUGFIX-CIERRE: archivar la pantalla del arreglo. Va DESPUES de «Descartar
-                     todo» y con apariencia neutra a proposito: son gestos distintos y el
-                     destructivo es el otro. -->
-                <ui:Button Content="Cerrar" Command="{Binding CloseCommand}" Appearance="Secondary"
-                           Margin="0,0,8,0"
-                           ToolTip="Archiva esta pantalla y vuelve al hallazgo. No revierte nada: si el agente dejo ficheros tocados, te pregunta que hacer con ellos."
-                           Visibility="{Binding CanClose, Converter={StaticResource BoolToVisibility}}" />
                 <ui:Button Content="Detener" Command="{Binding StopCommand}" Appearance="Caution"
+                           Margin="0,0,12,0"
                            ToolTip="Para al agente. Lo que ya haya aplicado se queda."
                            Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
+                <!-- BUGFIX-CIERRE: archivar la pantalla del arreglo. Apariencia neutra a
+                     proposito: no revierte nada, y el gesto destructivo es el de al lado. -->
+                <ui:Button Content="Cerrar" Command="{Binding CloseCommand}" Appearance="Secondary"
+                           Margin="0,0,12,0"
+                           ToolTip="Archiva esta pantalla y vuelve al hallazgo. No revierte nada: si el agente dejo ficheros tocados, te pregunta que hacer con ellos."
+                           Visibility="{Binding CanClose, Converter={StaticResource BoolToVisibility}}" />
+                <ui:Button Content="Descartar todo" Command="{Binding DiscardAllCommand}"
+                           Appearance="Danger" Margin="12,0,0,0"
+                           ToolTip="Devuelve cada fichero tocado a como estaba antes de esta sesión." />
             </StackPanel>
         </c:PageHeader>
 
@@ -596,6 +624,19 @@
                 <TextBlock Text="{Binding BuildText}" VerticalAlignment="Center" Opacity="0.8" FontSize="12" />
                 <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="12,0,0,0"
                                  Visibility="{Binding Fix.IsBuilding, Converter={StaticResource BoolToVisibility}}" />
+                <!-- H9.1 §2: el ámbito de la compilación es decisión del USUARIO. El agente no
+                     puede tocarlo: él no sabe si este cambio puede haber roto a un vecino, ni paga
+                     el tiempo de averiguarlo.
+
+                     F16-RETOQUE §2·3 — y vive AQUÍ, no en la cabecera. Estaba entre los botones de
+                     la barra de acciones, que es donde va lo que se pulsa para que pase algo; esto
+                     no hace nada al marcarlo, cambia lo que hará el siguiente build. Su sitio es
+                     al lado del resultado de ese build, que es donde se ve su consecuencia. -->
+                <TextBlock Text="·" Opacity="0.4" Margin="10,0" VerticalAlignment="Center" />
+                <CheckBox Content="Compilar solución completa" IsChecked="{Binding BuildFullSolution}"
+                          VerticalAlignment="Center" FontSize="12"
+                          Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                          ToolTip="Por defecto se compila solo el proyecto de los ficheros tocados y sus tests, que es lo que el veredicto puede atribuir al cambio. Marcando esto se compila la solución entera y los errores se cuentan contra una línea base del mismo commit." />
             </WrapPanel>
         </Border>
     </Grid>

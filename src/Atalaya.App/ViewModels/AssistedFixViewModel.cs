@@ -130,9 +130,20 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
 
     public string PauseLabel => _fix.IsPaused ? "Continuar" : "Pausar";
 
-    public string HeaderText => _fix.FindingAlias.Length == 0
-        ? string.Empty
-        : $"{_fix.FindingAlias} · {_fix.AppName}";
+    /// <summary>
+    /// El identificador del hallazgo, y <b>solo él</b> (F16-RETOQUE §2·2).
+    /// <para>
+    /// Antes esto era «{alias} · {app}» en una sola caja con recorte, así que lo primero que
+    /// perdía era justamente el alias: se leía «BUG-0012…» junto al título y el alias entero solo
+    /// aparecía dentro de «Volver al hallazgo (BUG-0012)». Dos apariciones y ninguna completa.
+    /// Ahora el alias va aparte, en una columna que no encoge —es corto y cabe siempre— y el
+    /// nombre de la aplicación, que sí puede ser largo, es lo que cede.
+    /// </para>
+    /// </summary>
+    public string FindingAliasText => _fix.FindingAlias;
+
+    /// <summary>La aplicación del arreglo. Es lo que se recorta cuando falta ancho.</summary>
+    public string AppNameText => _fix.FindingAlias.Length == 0 ? string.Empty : _fix.AppName;
 
     public string SubHeaderText => _fix.FindingTitle;
 
@@ -160,13 +171,17 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
     public bool HasEngine => EngineText.Length > 0;
 
     /// <summary>
-    /// «Volver al hallazgo (OPT-0002)» (H9.1 §1). Terminada una sesión —o descartada— el hallazgo
-    /// que la originó no tenía camino de vuelta: había que ir a Hallazgos y buscarlo. El alias va
-    /// en el rótulo porque es lo que el usuario tiene en la cabeza.
+    /// «Volver al hallazgo» (H9.1 §1). Terminada una sesión —o descartada— el hallazgo que la
+    /// originó no tenía camino de vuelta: había que ir a Hallazgos y buscarlo.
+    /// <para>
+    /// <b>Sin el alias entre paréntesis</b> (F16-RETOQUE §2·2). Lo llevaba porque «es lo que el
+    /// usuario tiene en la cabeza», y es cierto — pero ya lo tiene delante, dos piezas más a la
+    /// izquierda y entero. Repetirlo aquí no informaba de nada y era lo que hacía la cabecera
+    /// redundante además de apretada. El enlace dice a dónde lleva; cuál es el hallazgo lo dice
+    /// la identidad.
+    /// </para>
     /// </summary>
-    public string BackToFindingLabel => _fix.FindingAlias.Length == 0
-        ? "Volver al hallazgo"
-        : $"Volver al hallazgo ({_fix.FindingAlias})";
+    public string BackToFindingLabel => "Volver al hallazgo";
 
     /// <summary>Hay hallazgo al que volver: hace falta la app y el identificador.</summary>
     public bool CanGoBackToFinding => _fix.Slug.Length > 0 && _fix.FindingId != default;
@@ -204,8 +219,9 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
     }
 
     /// <summary>Mismo criterio que el pie de la auditoría y que el informe (F16 §B).</summary>
-    public string CostText
-        => $"{_fix.Calls} llamadas · {CreditText.OfSession(_fix.CostResult, _fix.Provider)}";
+    public string CostText => CreditText.SessionFooter(
+        _fix.Calls, _fix.InputTokens, _fix.OutputTokens,
+        _fix.CacheReadTokens, _fix.CacheWriteTokens, _fix.CostResult, _fix.Provider);
 
     public string TouchedText => $"ficheros tocados: {Files.Count}";
 
@@ -584,11 +600,11 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
         OnPropertyChanged(nameof(FailureCloneNote));
         OnPropertyChanged(nameof(CanClose));
         OnPropertyChanged(nameof(PauseLabel));
-        OnPropertyChanged(nameof(HeaderText));
+        OnPropertyChanged(nameof(FindingAliasText));
+        OnPropertyChanged(nameof(AppNameText));
         OnPropertyChanged(nameof(SubHeaderText));
         OnPropertyChanged(nameof(EngineText));
         OnPropertyChanged(nameof(HasEngine));
-        OnPropertyChanged(nameof(BackToFindingLabel));
         OnPropertyChanged(nameof(CanGoBackToFinding));
         OnPropertyChanged(nameof(BuildFullSolution));
         OnPropertyChanged(nameof(HasFiles));

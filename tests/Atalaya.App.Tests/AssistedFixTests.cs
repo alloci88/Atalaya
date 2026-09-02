@@ -906,10 +906,13 @@ public sealed class AssistedFixTests : IDisposable
         stored.History.Last(h => h.Event == FindingEvent.FixProposed).SessionId
             .Should().Be(session.Id.ToString());
 
-        // Y la vista ofrece la vuelta con el identificador en el rótulo.
+        // Y la vista ofrece la vuelta. El identificador NO va en el rótulo (F16-RETOQUE §2·2):
+        // ya está en la cabecera, entero y dos piezas más a la izquierda. Repetirlo era lo que
+        // hacía la cabecera redundante además de apretada.
         var vm = new AssistedFixViewModel(fix, _toasts, new ScriptedDiscard(answer: false));
         vm.CanGoBackToFinding.Should().BeTrue();
-        vm.BackToFindingLabel.Should().Be("Volver al hallazgo (BUG-0003)");
+        vm.BackToFindingLabel.Should().Be("Volver al hallazgo");
+        vm.FindingAliasText.Should().Be("BUG-0003", "el alias vive en la identidad, y entero");
     }
 
     /// <summary>
