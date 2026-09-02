@@ -4,7 +4,7 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-02 (F17-RETOQUE — el pie que decía los tokens dos veces).
+Última revisión: 2026-09-02 (F17.1 — la cinta de ciclos: que diga la verdad y se pueda leer).
 
 ## En vuelo
 
@@ -21,10 +21,11 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   los dos temas con los números del parte (D-837), pero el pie cambia cada llamada: verlo con Claude
   Code y con Copilot auditando de verdad, a 1366×768 y con la ventana a la mitad, y comprobar que
   ceden los tokens antes que el coste y que el tooltip lleva el desglose entero.
-- **F17 — la cinta, vista.** Está capturada en los dos temas sobre datos sintéticos (D-833); falta
-  verla sobre el hub real: que los nombres de las bandas no se corten mal, que el tooltip del
-  tramo se lea entero, y que con «Todo» y muchos ciclos la cinta se desplace dentro de su
-  tarjeta y nunca la página.
+- **F17.1 — la cinta, sobre el hub real.** Rehecha y medida con datos desiguales (D-838…D-842), y
+  capturada en los dos temas a 1124 y 441 px; falta abrir Métricas con AtalayaBanco y XBLAST
+  delante: XBLAST con su fila «sin ciclos en este periodo», AtalayaBanco con su C1 partido en
+  Rendimiento → Seguridad y la muesca en el cambio, el tooltip de cada trozo con quién cambió y
+  cuándo, y la vista arrancando en hoy sin arrastrar.
 
 - **F16 — arreglar de verdad con Claude Code, con los ojos del usuario.** El circuito está probado
   de punta a punta contra el CLI real y contra un CLI falso que habla MCP, pero la aceptación es
@@ -245,6 +246,15 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **F17.1 · La cinta de ciclos: que diga la verdad y se pueda leer** — el diagnóstico primero: el hub
+  guardaba bien la temática, pero el ciclo solo guardaba la última y la cinta colgaba un tramo de
+  los hallazgos medidos de una app que nadie había auditado (D-838). El ciclo guarda ahora su
+  historial de temáticas con autor y fecha, y la cinta lo pinta partido (D-839); la fila es
+  indivisible, con el nombre en columna fija (D-840); sin apertura ni sesión no hay tramo, y la app
+  sin ciclos tiene su fila rotulada (D-841); la vista arranca en hoy, la escala es honesta y los
+  nombres van con elipsis media (D-842). Y el método: los escenarios de verificación de una
+  gráfica incluyen el caso desigual y el vacío (D-843).
 
 - **F17-RETOQUE · El pie que decía los tokens dos veces** — el criterio común del consumo dice
   llamadas → coste → tokens una sola vez en las dos casas (D-835), y el pie es una `FooterLine`

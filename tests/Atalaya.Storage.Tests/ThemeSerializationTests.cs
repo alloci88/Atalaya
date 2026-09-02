@@ -1,4 +1,4 @@
-using Atalaya.Domain;
+﻿using Atalaya.Domain;
 using Atalaya.Domain.Model;
 using Atalaya.Storage.Json;
 using FluentAssertions;
@@ -53,6 +53,39 @@ public class ThemeSerializationTests
             .And.Contain("\"openedUtc\"");
         back.Config.Should().Be(new CycleConfig(AuditTheme.Seguridad, "claude-code", "opus"));
         back.OpenedUtc.Should().Be(Samples.T0);
+    }
+
+    /// <summary>F17.1 — el historial de temáticas viaja entero, con autor y fechas.</summary>
+    [Fact]
+    public void El_ciclo_escribe_su_historial_de_tematicas()
+    {
+        InventoryCycle inv = Samples.Inventory(1, ("src/A.cs", UnitState.Pendiente));
+        inv.OpenThemeHistory(AuditTheme.Rendimiento, Samples.T0, "ana");
+        inv.ChangeTheme(AuditTheme.Seguridad, Samples.T0.AddHours(3), "maría");
+
+        string json = AtalayaJson.Serialize(inv);
+        InventoryCycle back = AtalayaJson.Deserialize<InventoryCycle>(json);
+
+        json.Should().Contain("\"historialTematica\"");
+        back.Theme.Should().Be(AuditTheme.Seguridad, "la vigente es la última");
+        back.ThemeHistory.Should().HaveCount(2);
+        back.ThemeHistory[0].Should().Be(new ThemePeriod(AuditTheme.Rendimiento, Samples.T0, Samples.T0.AddHours(3), "ana"));
+        back.ThemeHistory[1].Should().Be(new ThemePeriod(AuditTheme.Seguridad, Samples.T0.AddHours(3), null, "maría"));
+    }
+
+    /// <summary>Un ciclo de antes de F17.1 no trae historial: se deriva UNA entrada con la vigente desde la apertura, sin migrar nada.</summary>
+    [Fact]
+    public void Un_ciclo_sin_historial_deriva_una_entrada_desde_su_apertura()
+    {
+        InventoryCycle inv = Samples.Inventory(1, ("src/A.cs", UnitState.Pendiente));
+        inv.Theme = AuditTheme.Fiabilidad;
+        inv.OpenedUtc = Samples.T0;
+        string json = AtalayaJson.Serialize(inv).Replace("\"historialTematica\"", "\"x\"");
+
+        InventoryCycle back = AtalayaJson.Deserialize<InventoryCycle>(json);
+
+        back.ThemeHistory.Should().BeEmpty("no se escribe nada que no estuviera");
+        back.Periods.Should().ContainSingle().Which.Should().Be(new ThemePeriod(AuditTheme.Fiabilidad, Samples.T0, null, null));
     }
 
     /// <summary>Un <c>cycle{N}.json</c> anterior a F17: General, sin preferencia y sin fecha — nada se rellena.</summary>

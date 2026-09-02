@@ -727,9 +727,14 @@ public static class ReportBuilder
     /// siguiente la hereda, y el informe lo dice para que la foto del cierre lleve la lupa con la
     /// que se hizo.
     /// </param>
+    /// <param name="periods">
+    /// El historial de temáticas del ciclo (F17.1). Con más de una, el informe dice con qué lupas se
+    /// trabajó y quién cambió cuándo — no solo con la última.
+    /// </param>
     public static string BuildCycleCloseReport(
         AppConfig app, int closedCycle, int promoted, IReadOnlyList<Finding> findings,
-        string? organization = null, CycleAging? aging = null, CycleConfig? config = null)
+        string? organization = null, CycleAging? aging = null, CycleConfig? config = null,
+        IReadOnlyList<ThemePeriod>? periods = null)
     {
         var active = findings.Where(f => f.Status == FindingStatus.Activo).ToList();
         var sb = new StringBuilder();
@@ -737,7 +742,19 @@ public static class ReportBuilder
         sb.AppendLine();
 
         CycleConfig cfg = config ?? CycleConfig.Default;
-        sb.AppendLine($"- **Temática del ciclo**: {ThemeCatalog.Display(cfg.Theme)}");
+        if (periods is { Count: > 1 })
+        {
+            sb.AppendLine($"- **Temáticas del ciclo**: {ThemeHistoryText.Chain(periods)}");
+            foreach (string line in ThemeHistoryText.Lines(periods))
+            {
+                sb.AppendLine($"  - {line}");
+            }
+        }
+        else
+        {
+            sb.AppendLine($"- **Temática del ciclo**: {ThemeCatalog.Display(cfg.Theme)}");
+        }
+
         if (cfg.HasPreferredModel)
         {
             string house = string.IsNullOrWhiteSpace(cfg.PreferredProvider)

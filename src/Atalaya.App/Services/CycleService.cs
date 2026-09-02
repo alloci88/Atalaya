@@ -181,7 +181,7 @@ public sealed class CycleService
 
         string report = ReportBuilder.BuildCycleCloseReport(
             app, expectedCycle, promoted, _hub.Store.ListFindings(slug), _hub.OrganizationName, aging,
-            inv.Config);
+            inv.Config, inv.Periods);
         _hub.Store.WriteReport(slug, sessionId.ToString(), report);
 
         _hub.Sync?.CommitAndPush($"cierre: {slug} ciclo {expectedCycle}→{next}");

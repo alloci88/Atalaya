@@ -237,6 +237,16 @@ public sealed partial class InventoryViewModel : ViewModelBase
     /// <summary>«opus (Claude Code)» o «sin preferencia»: el juez que el equipo prefiere para este ciclo.</summary>
     [ObservableProperty] private string _preferredModelLabel = "sin preferencia";
 
+    /// <summary>
+    /// El historial de temáticas del ciclo (F17.1), cuando lo hay: «Antes: Rendimiento (hasta 2 sep
+    /// 15:26, cambiada por alopezciller)». Vacío si el ciclo no ha cambiado de lupa.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCycleThemeHistory))]
+    private string _cycleThemeHistory = string.Empty;
+
+    public bool HasCycleThemeHistory => CycleThemeHistory.Length > 0;
+
     /// <summary>La configuración vigente, para el aviso del lanzar (F17 §5).</summary>
     private CycleConfig _cycleConfigValue = CycleConfig.Default;
 
@@ -555,6 +565,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
         // F17: la lupa y el juez preferido del ciclo, leídos del mismo fichero que las unidades.
         _cycleConfigValue = inv?.Config ?? CycleConfig.Default;
         CycleTheme = _cycleConfigValue.Theme;
+        CycleThemeHistory = inv is null ? string.Empty : ThemeHistoryText.Previous(inv.Periods);
         PreferredModelLabel = !_cycleConfigValue.HasPreferredModel
             ? "sin preferencia"
             : string.IsNullOrWhiteSpace(_cycleConfigValue.PreferredProvider)
@@ -1164,6 +1175,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
             {
                 int next = app.CurrentCycle + 1;
                 var fresh = new InventoryCycle { CycleN = next, Config = config, OpenedUtc = DateTimeOffset.UtcNow };
+                fresh.OpenThemeHistory(config.Theme, fresh.OpenedUtc, _hub.ResolveIdentity().Name);
                 foreach (InventoryUnit u in current.Units)
                 {
                     // Nothing is deleted; large units are re-evaluated against the threshold

@@ -161,6 +161,44 @@ public sealed class ThematicSeedingTests
         File.ReadAllText(r.Hub.HubPaths.FindingFile(r.Slug, finding.ToString())).Should().Be(before, "ni un byte del hallazgo cambia");
     }
 
+    /// <summary>F17.1 — el cambio de temática queda en el historial del ciclo, con autor y fecha; lo anterior no se borra.</summary>
+    [Fact]
+    public void Cambiar_de_tematica_escribe_su_entrada_en_el_historial_del_ciclo()
+    {
+        using var r = new DriftRepo();
+        string c1 = r.Commit("inicial", ("src/A.cs", "uno"));
+        r.Audit(c1, "src/A.cs");
+        InventoryCycle before = r.Hub.Store.TryReadInventory(r.Slug, 1)!;
+        before.Config = new CycleConfig(AuditTheme.Rendimiento, null, null);
+        before.OpenedUtc = DateTimeOffset.UtcNow.AddHours(-2);
+        r.Hub.Store.WriteInventory(r.Slug, before);
+
+        new CycleConfigService(r.Hub).Apply(r.Slug, new CycleConfig(AuditTheme.Seguridad, null, null));
+
+        InventoryCycle after = r.Hub.Store.TryReadInventory(r.Slug, 1)!;
+        after.Theme.Should().Be(AuditTheme.Seguridad);
+        after.ThemeHistory.Should().HaveCount(2, "el periodo de Rendimiento se conserva cerrado y el de Seguridad se abre");
+        after.ThemeHistory[0].Theme.Should().Be(AuditTheme.Rendimiento);
+        after.ThemeHistory[0].FromUtc.Should().Be(before.OpenedUtc);
+        after.ThemeHistory[0].ToUtc.Should().NotBeNull();
+        after.ThemeHistory[1].Theme.Should().Be(AuditTheme.Seguridad);
+        after.ThemeHistory[1].FromUtc.Should().Be(after.ThemeHistory[0].ToUtc, "el corte es el mismo instante");
+        after.ThemeHistory[1].ToUtc.Should().BeNull();
+        after.ThemeHistory[1].By.Should().NotBeNullOrWhiteSpace("una decisión de gobernanza lleva autor");
+        after.OpenedUtc.Should().Be(before.OpenedUtc);
+    }
+
+    [Fact]
+    public void El_ciclo_nuevo_abre_su_historial_con_la_lupa_heredada()
+    {
+        InventoryCycle closing = Closing(AuditTheme.Concurrencia);
+        var when = new DateTimeOffset(2026, 9, 1, 10, 0, 0, TimeSpan.Zero);
+
+        InventoryCycle next = CycleSeeding.Seed(closing, 2, Large, Drift(), openedUtc: when);
+
+        next.ThemeHistory.Should().ContainSingle().Which.Should().Be(new ThemePeriod(AuditTheme.Concurrencia, when, null, null));
+    }
+
     [Fact]
     public void Aplicar_la_misma_configuracion_no_cambia_nada()
     {

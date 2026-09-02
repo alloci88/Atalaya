@@ -708,11 +708,21 @@ public sealed partial class MetricsViewModel : ViewModelBase
             var spans = new List<RibbonSpan>();
             foreach (CycleSpan s in track.Spans)
             {
-                themes.Add(s.Theme);
+                var slices = new List<RibbonSlice>();
+                foreach (ThemeSlice slice in s.Slices)
+                {
+                    themes.Add(slice.Theme);
+                    slices.Add(new RibbonSlice(
+                        ThemeBrush(slice.Theme),
+                        slice.From.ToLocalTime().DateTime,
+                        slice.To.ToLocalTime().DateTime,
+                        SliceTooltip(s, slice)));
+                }
+
                 spans.Add(new RibbonSpan(
                     s.Label,
                     s.ShortLabel,
-                    ThemeBrush(s.Theme),
+                    slices,
                     s.From.ToLocalTime().DateTime,
                     s.To.ToLocalTime().DateTime,
                     s.IsOpen,
@@ -740,6 +750,19 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
     private Brush ThemeBrush(AuditTheme theme) => Brush(ThemePalette.Hex(theme, _dark));
 
+    /// <summary>El tooltip de UN trozo de temática (F17.1): la lupa y sus fechas, y quién la puso.</summary>
+    internal static IReadOnlyList<string> SliceTooltip(CycleSpan span, ThemeSlice slice)
+    {
+        CultureInfo culture = CultureInfo.CurrentCulture;
+        string Stamp(DateTimeOffset d) => d.ToLocalTime().ToString("d MMM yyyy HH:mm", culture);
+        bool open = span.IsOpen && ReferenceEquals(slice, span.Slices[^1]);
+        string when = open
+            ? $"desde el {Stamp(slice.From)}"
+            : $"del {Stamp(slice.From)} al {Stamp(slice.To)}";
+        string by = string.IsNullOrWhiteSpace(slice.By) ? string.Empty : $" · cambiada por {slice.By}";
+        return new[] { $"Temática {ThemeCatalog.Display(slice.Theme)} · {when}{by}" };
+    }
+
     /// <summary>
     /// El tooltip de un tramo: ciclo, temática, fechas, cobertura al cierre, hallazgos del ciclo y
     /// coste facturable. Y lo que NO se sabe, dicho: un inicio inferido, un fin que no se pudo
@@ -750,7 +773,12 @@ public sealed partial class MetricsViewModel : ViewModelBase
         CultureInfo culture = CultureInfo.CurrentCulture;
         string Day(DateTimeOffset d) => d.ToLocalTime().ToString("d MMM yyyy", culture);
 
-        var lines = new List<string> { $"Ciclo {s.CycleN} · {ThemeCatalog.Display(s.Theme)}" };
+        var lines = new List<string> { $"Ciclo {s.CycleN} · {s.ThemesLabel}" };
+        if (s.ChangedTheme)
+        {
+            lines.Add($"Cambió de temática {s.DistinctThemes.Count - 1} vez/veces durante el ciclo: cada trozo lleva la suya.");
+        }
+
         lines.Add(s.IsOpen
             ? $"En curso desde el {Day(s.From)}"
             : $"Del {Day(s.From)} al {Day(s.To)}");

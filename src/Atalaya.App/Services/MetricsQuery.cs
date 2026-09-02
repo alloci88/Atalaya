@@ -127,7 +127,11 @@ public enum CycleEdge
 /// <param name="Auditable">Unidades auditables: todas menos las grandes.</param>
 /// <param name="HasInventory">False si el <c>cycle{N}.json</c> ya no está en disco: sin foto de cobertura.</param>
 /// <param name="Cost">Coste del ciclo en AI credits, solo lo facturable. Null si nada facturable lo cobró.</param>
+/// <summary>Un periodo de temática dentro de un tramo (F17.1), ya recortado al tramo.</summary>
+public sealed record ThemeSlice(AuditTheme Theme, DateTimeOffset From, DateTimeOffset To, string? By);
+
 /// <param name="ReportSessionId">La sesión del cierre —su informe— o null si el ciclo se cerró por reinicio o sigue abierto.</param>
+/// <param name="Slices">Los periodos de temática del ciclo, en orden (F17.1). Uno solo en el caso normal.</param>
 public sealed record CycleSpan(
     string Slug,
     string AppName,
@@ -144,9 +148,33 @@ public sealed record CycleSpan(
     int NewFindings,
     int ResolvedFindings,
     decimal? Cost,
-    string? ReportSessionId)
+    string? ReportSessionId,
+    IReadOnlyList<ThemeSlice> Slices)
 {
-    public string Label => $"C{CycleN} · {Copilot.ThemeCatalog.Display(Theme)}";
+    /// <summary>«C2 · Seguridad», o «C3 · Rendimiento → Seguridad» cuando el ciclo cambió de lupa.</summary>
+    public string Label => $"C{CycleN} · {ThemesLabel}";
+
+    /// <summary>Las temáticas por las que pasó, en orden y sin repetir las consecutivas.</summary>
+    public string ThemesLabel => string.Join(" → ", DistinctThemes.Select(Copilot.ThemeCatalog.Display));
+
+    public IReadOnlyList<AuditTheme> DistinctThemes
+    {
+        get
+        {
+            var list = new List<AuditTheme>();
+            foreach (ThemeSlice s in Slices)
+            {
+                if (list.Count == 0 || list[^1] != s.Theme)
+                {
+                    list.Add(s.Theme);
+                }
+            }
+
+            return list.Count == 0 ? new[] { Theme } : list;
+        }
+    }
+
+    public bool ChangedTheme => DistinctThemes.Count > 1;
 
     public string ShortLabel => $"C{CycleN}";
 
@@ -546,9 +574,12 @@ public sealed class MetricsQuery
     /// <summary>
     /// La historia de auditoría de cada app: un tramo por ciclo, del 1 al vigente. Las fechas
     /// salen, por este orden, de lo registrado (la apertura escrita en el ciclo, el cierre o reset
-    /// que lo abrió), de lo inferible (su primera o su última sesión) y, si no hay nada, del primer
-    /// dato de la aplicación — y cada extremo dice de dónde salió. El periodo RECORTA: un ciclo
-    /// que no toca el periodo no aparece; uno que lo cruza se dibuja entero y lo recorta el eje.
+    /// que lo abrió) y de lo inferible (su primera o su última sesión), y cada extremo dice de
+    /// dónde salió. <b>Sin apertura ni sesión no hay tramo</b> (F17.1): en F17 se colgaba del
+    /// primer hallazgo de la app, y eso pintaba un «C1 · General» para una aplicación cuyos
+    /// únicos hallazgos eran medidos por la propia Atalaya —un ciclo que nadie auditó—. El periodo
+    /// RECORTA: un ciclo que no toca el periodo no aparece; uno que lo cruza se dibuja entero y lo
+    /// recorta el eje. Y una app sin tramos conserva su banda, vacía y rotulada.
     /// </summary>
     private static IReadOnlyList<CycleTrack> CycleTracks(
         IReadOnlyList<AppData> scope, DateTimeOffset from, DateTimeOffset to, DateTimeOffset now,
@@ -559,10 +590,6 @@ public sealed class MetricsQuery
         {
             var spans = new List<CycleSpan>();
             DateTimeOffset? previousEnd = null;
-            DateTimeOffset? earliest = app.Sessions.Select(s => s.StartedUtc)
-                .Concat(app.Findings.Select(f => f.FirstDetected.Utc))
-                .Select(d => (DateTimeOffset?)d)
-                .Min();
 
             for (int n = 1; n <= app.CurrentCycle; n++)
             {
@@ -573,10 +600,10 @@ public sealed class MetricsQuery
                     inv?.OpenedUtc is { } opened ? (opened, CycleEdge.Exact)
                     : start.When is { } when ? (when, start.Source == CycleStartSource.Opened ? CycleEdge.Exact : CycleEdge.Inferred)
                     : previousEnd is { } prev ? (prev, CycleEdge.Exact)
-                    : (earliest, CycleEdge.Unknown);
+                    : ((DateTimeOffset?)null, CycleEdge.Unknown);
                 if (begin is null)
                 {
-                    continue; // ni un dato del que colgar el tramo: no se inventa
+                    continue; // ni apertura ni sesión: no hay ciclo que pintar, y no se inventa
                 }
 
                 bool isOpen = n == app.CurrentCycle;
@@ -629,15 +656,13 @@ public sealed class MetricsQuery
                     app.Findings.Count(f => f.FirstDetected.Utc >= b && f.FirstDetected.Utc < end),
                     app.Findings.Sum(f => ResolutionsIn(f, b, end)),
                     cost,
-                    opening?.Mode == AuditMode.Cierre ? opening.Id.ToString() : null));
+                    opening?.Mode == AuditMode.Cierre ? opening.Id.ToString() : null,
+                    SlicesOf(inv, b, end)));
             }
 
-            // El filtro de periodo recorta el eje: fuera de él no hay tramos.
+            // El filtro de periodo recorta el eje: fuera de él no hay tramos. La banda se queda
+            // igualmente, vacía y rotulada: una fila ausente invita a que otro tramo ocupe su sitio.
             var visible = spans.Where(s => s.To > from && s.From < to).ToList();
-            if (visible.Count == 0)
-            {
-                continue;
-            }
 
             var live = app.Findings.Where(f => f.Status == FindingStatus.Activo).ToList();
             int critica = live.Count(f => f.Severity == Severity.Critica);
@@ -654,6 +679,48 @@ public sealed class MetricsQuery
             .ThenBy(t => t.Track.Name, StringComparer.OrdinalIgnoreCase)
             .Select(t => t.Track)
             .ToList();
+    }
+
+    /// <summary>
+    /// Los periodos de temática del ciclo, recortados al tramo (F17.1). Sin historial escrito, uno
+    /// solo con la temática vigente; sin fichero de ciclo, uno solo General. El primer periodo
+    /// empieza donde empieza el tramo aunque su fecha no esté, y el último termina donde termina.
+    /// </summary>
+    private static IReadOnlyList<ThemeSlice> SlicesOf(InventoryCycle? inv, DateTimeOffset begin, DateTimeOffset end)
+    {
+        if (inv is null)
+        {
+            return new[] { new ThemeSlice(AuditTheme.General, begin, end, null) };
+        }
+
+        var slices = new List<ThemeSlice>();
+        IReadOnlyList<ThemePeriod> periods = inv.Periods;
+        DateTimeOffset cursor = begin;
+        for (int i = 0; i < periods.Count; i++)
+        {
+            ThemePeriod p = periods[i];
+            DateTimeOffset from = i == 0 ? begin : (p.FromUtc ?? cursor);
+            DateTimeOffset to = i == periods.Count - 1 ? end : (p.ToUtc ?? periods[i + 1].FromUtc ?? end);
+            if (from < begin)
+            {
+                from = begin;
+            }
+
+            if (to > end)
+            {
+                to = end;
+            }
+
+            if (to < from)
+            {
+                to = from;
+            }
+
+            slices.Add(new ThemeSlice(p.Theme, from, to, p.By));
+            cursor = to;
+        }
+
+        return slices;
     }
 
     // ---------- El periodo y sus cubos ----------

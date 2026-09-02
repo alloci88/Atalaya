@@ -329,6 +329,7 @@ public sealed partial class OnboardingViewModel : ViewModelBase
                     : Rescanner.Reconcile(previous, scan.Inventory).Merged;
                 inventory.Config = config;
                 inventory.OpenedUtc ??= DateTimeOffset.UtcNow;
+                inventory.OpenThemeHistory(config.Theme, inventory.OpenedUtc, _hub.ResolveIdentity().Name);
                 _hub.Store.WriteInventory(slug, inventory);
 
                 // Los hallazgos de «unidad demasiado grande» los pone al día el MISMO servicio que

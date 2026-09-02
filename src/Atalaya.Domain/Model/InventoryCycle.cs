@@ -63,6 +63,57 @@ public sealed class InventoryCycle
     /// </summary>
     public DateTimeOffset? OpenedUtc { get; set; }
 
+    /// <summary>
+    /// El HISTORIAL de temáticas del ciclo (F17.1): con qué lupa se trabajó y desde cuándo, una
+    /// entrada por periodo, la última abierta. Un cambio de temática a mitad de ciclo es una
+    /// decisión de gobernanza con re-siembra detrás: los hallazgos de la lupa anterior existen y
+    /// llevan su temática, así que pintar el ciclo entero con la última los negaría. Nada se borra;
+    /// todo lleva historial.
+    /// <para>
+    /// Vacío en los ficheros anteriores a F17.1: entonces <see cref="Periods"/> deriva una sola
+    /// entrada con la temática vigente desde la apertura, sin migrar nada — como se hizo con «lo
+    /// anterior es General».
+    /// </para>
+    /// </summary>
+    [JsonPropertyName("historialTematica")]
+    public List<ThemePeriod> ThemeHistory { get; set; } = new();
+
+    /// <summary>
+    /// Los periodos de temática, siempre al menos uno: el historial escrito o, si no lo hay, la
+    /// temática vigente desde la apertura (o desde «no se sabe», si tampoco hay apertura).
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<ThemePeriod> Periods
+        => ThemeHistory.Count > 0
+            ? ThemeHistory
+            : new[] { new ThemePeriod(Theme, OpenedUtc, null, null) };
+
+    /// <summary>
+    /// Cambia la temática vigente dejando rastro: cierra el periodo abierto y abre otro con autor y
+    /// fecha. Si el historial estaba vacío (ciclo anterior a F17.1), primero se materializa la
+    /// entrada derivada, para que el cambio no borre de dónde venía.
+    /// </summary>
+    public void ChangeTheme(AuditTheme theme, DateTimeOffset atUtc, string? by)
+    {
+        if (ThemeHistory.Count == 0)
+        {
+            ThemeHistory.AddRange(Periods);
+        }
+
+        ThemePeriod last = ThemeHistory[^1];
+        ThemeHistory[^1] = last with { ToUtc = atUtc };
+        ThemeHistory.Add(new ThemePeriod(theme, atUtc, null, by));
+        Theme = theme;
+    }
+
+    /// <summary>Abre el historial con la temática con la que nace el ciclo.</summary>
+    public void OpenThemeHistory(AuditTheme theme, DateTimeOffset? atUtc, string? by)
+    {
+        ThemeHistory.Clear();
+        ThemeHistory.Add(new ThemePeriod(theme, atUtc, null, by));
+        Theme = theme;
+    }
+
     /// <summary>La configuración del ciclo, como un solo valor comparable.</summary>
     [JsonIgnore]
     public CycleConfig Config
@@ -93,3 +144,9 @@ public sealed record CycleConfig(AuditTheme Theme, string? PreferredProvider, st
     /// <summary>Si hay un modelo preferido declarado (con proveedor o sin él).</summary>
     public bool HasPreferredModel => !string.IsNullOrWhiteSpace(PreferredModel);
 }
+
+/// <summary>
+/// Un periodo de temática dentro de un ciclo (F17.1): qué lupa, desde cuándo, hasta cuándo (null =
+/// sigue vigente) y quién la puso (null en lo derivado y en lo abierto por el sistema).
+/// </summary>
+public sealed record ThemePeriod(AuditTheme Theme, DateTimeOffset? FromUtc, DateTimeOffset? ToUtc, string? By);

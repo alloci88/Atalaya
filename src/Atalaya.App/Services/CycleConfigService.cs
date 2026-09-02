@@ -1,4 +1,4 @@
-using Atalaya.Copilot;
+﻿using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Model;
 
@@ -90,7 +90,10 @@ public sealed class CycleConfigService
         bool themeChanged = inv.Theme != config.Theme;
         int reseeded = themeChanged ? inv.Units.Count(u => u.State == UnitState.Auditada) : 0;
 
-        InventoryCycle written = CycleSeeding.Reseed(inv, config, app.Thresholds.LargeUnitLoc);
+        // F17.1: el cambio de temática queda en el historial del ciclo con autor y fecha, como
+        // cualquier otra decisión de gobernanza.
+        InventoryCycle written = CycleSeeding.Reseed(
+            inv, config, app.Thresholds.LargeUnitLoc, DateTimeOffset.UtcNow, _hub.ResolveIdentity().Name);
         _hub.Store.WriteInventory(slug, written);
 
         // El inventario vigente ha cambiado bajo la caché de deriva: una auditada que vuelve a

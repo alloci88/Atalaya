@@ -541,24 +541,19 @@
                                 </ItemsControl.ItemsPanel>
                             </ItemsControl>
 
-                            <!-- La cinta se desplaza DENTRO de su tarjeta cuando no cabe: jamás la
-                                 página. El ancho de la ventana le llega por ViewportWidth, y ella
-                                 se hace tan ancha como necesite para que cada tramo se pueda señalar. -->
-                            <ScrollViewer x:Name="RibbonScroll"
-                                          HorizontalScrollBarVisibility="Auto"
-                                          VerticalScrollBarVisibility="Disabled"
-                                          Margin="0,8,0,0"
-                                          Visibility="{Binding HasCycles, Converter={StaticResource BoolToVisibility}}">
-                                <controls:CycleRibbon
-                                    Tracks="{Binding CycleTracks}"
-                                    From="{Binding RibbonFrom}"
-                                    To="{Binding RibbonTo}"
-                                    ViewportWidth="{Binding ViewportWidth, ElementName=RibbonScroll}"
-                                    SpanCommand="{Binding OpenCycleCommand}"
-                                    AxisBrush="{DynamicResource TextFillColorSecondaryBrush}"
-                                    GridBrush="{DynamicResource TextFillColorTertiaryBrush}"
-                                    TextBrush="{DynamicResource TextFillColorPrimaryBrush}" />
-                            </ScrollViewer>
+                            <!-- F17.1: la cinta lleva DENTRO su columna fija de nombres y su propio
+                                 desplazamiento horizontal (jamás el de la página): la fila es la
+                                 unidad indivisible, y nombre y banda no pueden moverse por separado. -->
+                            <controls:CycleRibbon
+                                Margin="0,8,0,0"
+                                Tracks="{Binding CycleTracks}"
+                                From="{Binding RibbonFrom}"
+                                To="{Binding RibbonTo}"
+                                SpanCommand="{Binding OpenCycleCommand}"
+                                AxisBrush="{DynamicResource TextFillColorSecondaryBrush}"
+                                GridBrush="{DynamicResource TextFillColorTertiaryBrush}"
+                                TextBrush="{DynamicResource TextFillColorPrimaryBrush}"
+                                Visibility="{Binding HasCycles, Converter={StaticResource BoolToVisibility}}" />
 
                             <TextBlock Style="{StaticResource EmptyNote}"
                                        Text="— · se activará cuando alguna aplicación tenga un ciclo con alguna fecha registrada en el periodo."

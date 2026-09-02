@@ -320,8 +320,21 @@ Debajo, siete gráficas:
    inventario. Los ciclos anteriores a esta versión no tienen temática y se pintan
    como General; si a uno le falta la fecha de cierre, su tramo termina donde
    alcanza el dato —su última sesión— con el borde a puntos, y el tooltip lo dice:
-   nada se rellena. Con muchos ciclos en poco espacio cada tramo conserva un ancho
-   mínimo y la cinta se desplaza dentro de su tarjeta, nunca la página.
+   nada se rellena. **Un ciclo que cambió de temática a mitad se pinta partido**: un
+   trozo por lupa, cada uno con su color, una muesca en el punto del cambio y un
+   tooltip propio con la temática, sus fechas y quién la cambió; la etiqueta lo
+   resume («C3 · Rendimiento → Seguridad»). **Una aplicación sin ciclos tiene su
+   banda igualmente**, vacía y rotulada «sin ciclos en este periodo»: una fila
+   ausente invita a leer el tramo de al lado como suyo. Solo cuenta como ciclo lo
+   que tiene apertura registrada o alguna sesión: los hallazgos medidos por la
+   propia Atalaya no son una auditoría y no cuelgan ningún tramo. El nombre de la
+   aplicación va en una columna fija, fuera del área que se desplaza —nombre y
+   banda no pueden separarse—, y si no cabe se acorta por el medio con el nombre
+   entero en el tooltip. La vista arranca en el final del eje, hoy, que es donde
+   está lo que importa; si retrocedes, se respeta tu posición. Un ciclo de horas se
+   ve sin buscarlo: se pinta con un ancho mínimo sin estirar el eje entero, y la
+   cinta solo crece —y se desplaza dentro de su tarjeta, nunca la página— cuando
+   dos ciclos seguidos de una misma aplicación no se distinguirían.
 7. **Actividad de sesiones** — el registro del periodo, con el **tipo** de cada sesión
    (auditoría, arreglo asistido, verificación, cierre…), su proveedor, su coste y sus
    **tokens**. Las de Claude Code dicen «suscripción» donde las otras dicen credits, y sus
@@ -712,7 +725,11 @@ El diálogo aparece en tres momentos:
 
 **Cambiar de temática con trabajo hecho** es siempre la misma operación, se haga cuando se haga:
 un aviso —«N unidades auditadas pasarán a pendientes; los hallazgos existentes no se tocan»— y la
-re-siembra. Es lo que dice la tabla de siembra, extendida:
+re-siembra. **Y queda registrado**: el ciclo guarda su historial de temáticas —cuál, desde cuándo,
+hasta cuándo y quién la cambió—, el panel del ciclo enseña las anteriores debajo del distintivo, el
+informe de cierre lista con qué lupas se trabajó, y la cinta de Métricas pinta el ciclo partido.
+El trabajo hecho con la lupa anterior no se borra de ninguna parte. Es lo que dice la tabla de
+siembra, extendida:
 
 | | Misma temática | Temática distinta |
 |---|---|---|

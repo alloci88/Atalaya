@@ -7,74 +7,93 @@ using System.Windows.Shapes;
 
 namespace Atalaya.App.Controls;
 
-/// <summary>Un tramo de la cinta: un ciclo de una aplicación, ya coloreado y ya explicado.</summary>
-/// <param name="Label">«C2 · Seguridad», cuando cabe.</param>
+/// <summary>Un trozo de un tramo (F17.1): el periodo en que el ciclo tuvo UNA temática.</summary>
+/// <param name="From">Inicio del periodo, en hora local.</param>
+/// <param name="To">Fin del periodo, en hora local (el último llega al fin del tramo).</param>
+/// <param name="TooltipLines">Las líneas del tooltip de ESTE trozo: su temática y sus fechas.</param>
+public sealed record RibbonSlice(Brush Fill, DateTime From, DateTime To, IReadOnlyList<string> TooltipLines);
+
+/// <summary>Un tramo de la cinta: un ciclo de una aplicación, partido por sus temáticas.</summary>
+/// <param name="Label">«C2 · Seguridad» —o «C3 · Rendimiento → Seguridad»— cuando cabe.</param>
 /// <param name="ShortLabel">«C2», cuando solo cabe eso.</param>
-/// <param name="From">Inicio del tramo, en hora LOCAL.</param>
-/// <param name="To">Fin del tramo, en hora local. Para el ciclo abierto es «hoy».</param>
+/// <param name="Slices">Los periodos de temática, en orden. Uno solo en el caso normal.</param>
 /// <param name="IsOpen">El ciclo sigue abierto: el tramo llega hasta hoy con remate de «en curso».</param>
 /// <param name="EndIsKnown">
 /// False cuando la fecha de cierre no se pudo recuperar y el tramo termina donde alcanza el dato
 /// (F17 §6, honestidad con el pasado). Se dibuja con el borde derecho a puntos.
 /// </param>
-/// <param name="TooltipLines">Las líneas del tooltip; la primera va en negrita.</param>
+/// <param name="TooltipLines">El tooltip del ciclo entero; el de cada trozo lo lleva el trozo.</param>
 /// <param name="Payload">Lo que se entrega al mando al pulsar. La cinta no sabe qué es.</param>
 public sealed record RibbonSpan(
     string Label,
     string ShortLabel,
-    Brush Fill,
+    IReadOnlyList<RibbonSlice> Slices,
     DateTime From,
     DateTime To,
     bool IsOpen,
     bool EndIsKnown,
     IReadOnlyList<string> TooltipLines,
-    object? Payload = null);
+    object? Payload = null)
+{
+    /// <summary>El relleno de la temática vigente: la última. Decide la tinta de la etiqueta.</summary>
+    public Brush Fill => Slices[^1].Fill;
+}
 
-/// <summary>Una banda de la cinta: una aplicación con sus tramos, en orden.</summary>
-public sealed record RibbonTrack(string Name, IReadOnlyList<RibbonSpan> Spans);
+/// <summary>Una banda de la cinta: una aplicación con sus tramos, en orden. Sin tramos, se dice.</summary>
+/// <param name="EmptyText">Lo que se escribe en la banda cuando no tiene ningún tramo en el periodo.</param>
+public sealed record RibbonTrack(string Name, IReadOnlyList<RibbonSpan> Spans, string EmptyText = "sin ciclos en este periodo");
 
 /// <summary>
-/// La cinta de ciclos de Métricas (F17 §6): un eje temporal horizontal, una banda por aplicación
-/// y un tramo por ciclo, coloreado por su temática.
+/// La cinta de ciclos de Métricas (F17 §6, rehecha en F17.1): un eje temporal horizontal, una
+/// banda por aplicación y un tramo por ciclo, partido por temáticas.
 /// <para>
-/// Misma familia que <see cref="ChartPlot"/>: dibujo propio sobre un <c>Canvas</c>, medida real
-/// del texto, tooltip nativo (hereda el tema) y ninguna decisión de color aquí — los pinceles
-/// llegan dados desde el view-model, que es quien sabe de temáticas y de temas.
+/// <b>La fila es la unidad indivisible.</b> El nombre va en una columna FIJA, fuera del área que
+/// se desplaza, y la banda en un lienzo dentro de un <c>ScrollViewer</c> propio; los dos se
+/// colocan con la misma aritmética de fila (<see cref="RowTop"/>), así que nombre y banda
+/// comparten altura a cualquier posición de scroll y a cualquier ancho. En F17 el nombre vivía
+/// dentro del mismo lienzo que se desplazaba, y al arrastrar cada nombre acababa a la altura de
+/// la banda de otra aplicación: la gráfica atribuía auditorías a quien no las hizo.
 /// </para>
 /// <para>
-/// <b>Muchos ciclos en poco espacio.</b> Cada tramo tiene un ancho mínimo (<see cref="MinSpanWidth"/>);
-/// si el periodo no cabe respetándolo, la cinta se hace MÁS ANCHA que su ventana y se desplaza
-/// dentro de su tarjeta. Nunca la página: la regla de la casa es que nada provoque scroll
-/// horizontal de página, y por eso la cinta vive dentro de un <c>ScrollViewer</c> propio y lee
-/// el ancho de su ventana por <see cref="ViewportWidth"/>.
+/// <b>Una aplicación sin tramos tiene fila igualmente, y lo dice.</b> Una fila vacía y rotulada es
+/// información; una fila ausente invita a que otro tramo ocupe su sitio visualmente.
+/// </para>
+/// <para>
+/// <b>Escala honesta.</b> El eje cabe en la tarjeta salvo que dos tramos consecutivos de una misma
+/// banda no se puedan distinguir a esa escala; solo entonces la cinta crece y se desplaza. Un
+/// tramo más corto que el mínimo se PINTA con el ancho mínimo (anclado a la derecha si está en
+/// curso), sin estirar el eje entero por él. Y al cambiar los datos la vista arranca en el final
+/// del eje —hoy—, que es donde está lo que importa; si el usuario retrocede, se respeta.
 /// </para>
 /// </summary>
-public sealed class CycleRibbon : Canvas
+public sealed class CycleRibbon : Grid
 {
-    private const double PadTop = 8;
-    private const double PadRight = 14;
-    private const double RowHeight = 24;
-    private const double RowGap = 10;
-    private const double AxisHeight = 24;
-    private const double GutterCap = 150;
+    internal const double PadTop = 8;
+    internal const double PadRight = 14;
+    internal const double RowHeight = 24;
+    internal const double RowGap = 10;
+    internal const double AxisHeight = 24;
+    private const double GutterCap = 170;
     private const double GutterPad = 12;
     private const double OpenFade = 16;
+    private const double ChangeMark = 2;
+
+    private readonly Canvas _names = new();
+    private readonly Canvas _plot = new();
+    private readonly ScrollViewer _scroll;
+    private bool _scrollToEndPending;
 
     public static readonly DependencyProperty TracksProperty = DependencyProperty.Register(
         nameof(Tracks), typeof(IReadOnlyList<RibbonTrack>), typeof(CycleRibbon),
-        new PropertyMetadata(null, OnVisualChanged));
+        new PropertyMetadata(null, OnDataChanged));
 
     public static readonly DependencyProperty FromProperty = DependencyProperty.Register(
         nameof(From), typeof(DateTime), typeof(CycleRibbon),
-        new PropertyMetadata(DateTime.MinValue, OnVisualChanged));
+        new PropertyMetadata(DateTime.MinValue, OnDataChanged));
 
     public static readonly DependencyProperty ToProperty = DependencyProperty.Register(
         nameof(To), typeof(DateTime), typeof(CycleRibbon),
-        new PropertyMetadata(DateTime.MinValue, OnVisualChanged));
-
-    public static readonly DependencyProperty ViewportWidthProperty = DependencyProperty.Register(
-        nameof(ViewportWidth), typeof(double), typeof(CycleRibbon),
-        new PropertyMetadata(0d, OnVisualChanged));
+        new PropertyMetadata(DateTime.MinValue, OnDataChanged));
 
     public static readonly DependencyProperty MinSpanWidthProperty = DependencyProperty.Register(
         nameof(MinSpanWidth), typeof(double), typeof(CycleRibbon),
@@ -116,17 +135,7 @@ public sealed class CycleRibbon : Canvas
         set => SetValue(ToProperty, value);
     }
 
-    /// <summary>
-    /// El ancho de la ventana en la que vive. La cinta ocupa como mínimo eso, y más si sus tramos
-    /// no caben con su ancho mínimo — y entonces es su ventana la que se desplaza.
-    /// </summary>
-    public double ViewportWidth
-    {
-        get => (double)GetValue(ViewportWidthProperty);
-        set => SetValue(ViewportWidthProperty, value);
-    }
-
-    /// <summary>Ancho mínimo de un tramo en píxeles. Por debajo, un ciclo no se puede ni señalar.</summary>
+    /// <summary>Ancho mínimo con el que se PINTA un tramo. Por debajo, un ciclo no se puede ni señalar.</summary>
     public double MinSpanWidth
     {
         get => (double)GetValue(MinSpanWidthProperty);
@@ -159,97 +168,239 @@ public sealed class CycleRibbon : Canvas
         set => SetValue(SpanCommandProperty, value);
     }
 
+    /// <summary>El área desplazable, para poder afirmar dónde arranca y qué se ve.</summary>
+    internal ScrollViewer Scroll => _scroll;
+
+    /// <summary>La columna fija de nombres.</summary>
+    internal Canvas Names => _names;
+
+    /// <summary>El lienzo de las bandas.</summary>
+    internal Canvas Plot => _plot;
+
+    /// <summary>El rótulo de cada fila, por índice de banda.</summary>
+    internal IReadOnlyList<TextBlock> NameLabels { get; private set; } = Array.Empty<TextBlock>();
+
+    /// <summary>Las formas de cada tramo (una por trozo), con la fila a la que pertenecen.</summary>
+    internal IReadOnlyList<(int Row, RibbonSpan Span, Rectangle Shape)> SpanShapes { get; private set; }
+        = Array.Empty<(int, RibbonSpan, Rectangle)>();
+
+    /// <summary>El rótulo de «sin ciclos» de cada fila vacía, con su fila.</summary>
+    internal IReadOnlyList<(int Row, TextBlock Text)> EmptyLabels { get; private set; } = Array.Empty<(int, TextBlock)>();
+
     public CycleRibbon()
     {
-        ClipToBounds = true;
+        ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        _names.VerticalAlignment = VerticalAlignment.Top;
+        SetColumn(_names, 0);
+        Children.Add(_names);
+
+        _plot.ClipToBounds = true;
+        _scroll = new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalAlignment = VerticalAlignment.Top,
+            Content = _plot,
+        };
+        SetColumn(_scroll, 1);
+        Children.Add(_scroll);
+
+        SizeChanged += (_, _) => Rebuild();
         Loaded += (_, _) => Rebuild();
+        _scroll.LayoutUpdated += (_, _) => ApplyPendingScroll();
+    }
+
+    private static void OnDataChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var ribbon = (CycleRibbon)d;
+        // Datos nuevos: la vista arranca en el presente. Un cambio de tamaño no toca la posición.
+        ribbon._scrollToEndPending = true;
+        ribbon.Rebuild();
     }
 
     private static void OnVisualChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         => ((CycleRibbon)d).Rebuild();
 
+    /// <summary>Dónde empieza la fila <paramref name="row"/>. La misma cuenta para el nombre y para la banda.</summary>
+    internal static double RowTop(int row) => PadTop + row * (RowHeight + RowGap);
+
     /// <summary>
-    /// La geometría de la cinta para unos datos y una ventana: cuánto mide y con qué escala. Está
-    /// separada del dibujo para poder afirmarla sin pintar un píxel: es lo que fija que el ancho
-    /// mínimo por tramo se respeta y que la cinta nunca es más estrecha que su ventana.
+    /// La geometría del área de bandas para unos datos y una ventana: cuánto mide y con qué escala.
+    /// Separada del dibujo para poder afirmarla sin pintar un píxel.
+    /// <para>
+    /// La escala nace de la ventana. Solo crece cuando dos tramos CONSECUTIVOS de una misma banda
+    /// quedarían a menos del ancho mínimo uno del otro —entonces no se distinguirían—; un tramo
+    /// corto suelto no estira el eje: se pinta con el ancho mínimo donde está.
+    /// </para>
     /// </summary>
-    internal static (double Width, double Height, double PixelsPerDay, double Gutter) Geometry(
-        IReadOnlyList<RibbonTrack> tracks, DateTime from, DateTime to, double viewport, double minSpan,
-        double gutter)
+    internal static (double Width, double Height, double PixelsPerDay) Geometry(
+        IReadOnlyList<RibbonTrack> tracks, DateTime from, DateTime to, double viewport, double minSpan)
     {
-        double totalDays = Math.Max(1, (to - from).TotalDays);
-        double plot = Math.Max(0, viewport - gutter - PadRight);
+        double totalDays = Math.Max(1.0 / 24, (to - from).TotalDays);
+        double plot = Math.Max(1, viewport - PadRight);
         double scale = plot / totalDays;
 
-        // El tramo más corto VISIBLE en el periodo manda: si a esta escala no llega al mínimo, la
-        // cinta crece hasta que llegue. Recortado al periodo, no al ciclo entero: un ciclo de dos
-        // años del que solo se ve una semana necesita una semana ancha, no dos años.
-        double shortest = tracks
-            .SelectMany(t => t.Spans)
-            .Select(s => ((s.To < to ? s.To : to) - (s.From > from ? s.From : from)).TotalDays)
-            .Where(d => d > 0)
-            .DefaultIfEmpty(totalDays)
-            .Min();
-        double needed = minSpan / Math.Max(shortest, 1.0 / 24);
-        if (needed > scale)
+        double closestStarts = double.PositiveInfinity;
+        foreach (RibbonTrack track in tracks)
         {
-            scale = needed;
+            var starts = track.Spans
+                .Where(s => s.To > from && s.From < to)
+                .Select(s => (s.From > from ? s.From : from))
+                .OrderBy(d => d)
+                .ToList();
+            for (int i = 1; i < starts.Count; i++)
+            {
+                closestStarts = Math.Min(closestStarts, (starts[i] - starts[i - 1]).TotalDays);
+            }
         }
 
-        double width = Math.Max(viewport, gutter + PadRight + scale * totalDays);
+        if (!double.IsPositiveInfinity(closestStarts))
+        {
+            double needed = minSpan / Math.Max(closestStarts, 1.0 / 1440);
+            if (needed > scale)
+            {
+                scale = needed;
+            }
+        }
+
+        double width = Math.Max(viewport, scale * totalDays + PadRight);
         double height = PadTop + tracks.Count * (RowHeight + RowGap) + AxisHeight;
-        return (width, height, scale, gutter);
+        return (width, height, scale);
     }
 
     private void Rebuild()
     {
-        Children.Clear();
+        _names.Children.Clear();
+        _plot.Children.Clear();
+        var names = new List<TextBlock>();
+        var shapes = new List<(int, RibbonSpan, Rectangle)>();
+        var empties = new List<(int, TextBlock)>();
+
         IReadOnlyList<RibbonTrack> tracks = Tracks ?? Array.Empty<RibbonTrack>();
         if (tracks.Count == 0 || To <= From)
         {
-            Width = double.NaN;
-            Height = 0;
+            _names.Width = 0;
+            _names.Height = 0;
+            _plot.Width = 0;
+            _plot.Height = 0;
+            NameLabels = names;
+            SpanShapes = shapes;
+            EmptyLabels = empties;
             return;
         }
 
         double gutter = Math.Min(GutterCap, tracks.Max(t => Measure(t.Name, 12).Width)) + GutterPad;
-        double viewport = ViewportWidth > 0 ? ViewportWidth : ActualWidth;
-        (double width, double height, double scale, _) = Geometry(tracks, From, To, viewport, MinSpanWidth, gutter);
-        Width = width;
-        Height = height;
+        double viewport = Math.Max(1, ActualWidth - gutter);
+        (double width, double height, double scale) = Geometry(tracks, From, To, viewport, MinSpanWidth);
 
-        double plotLeft = gutter;
+        _names.Width = gutter;
+        _names.Height = height;
+        _plot.Width = width;
+        _plot.Height = height;
+
         double plotRight = width - PadRight;
-        double axisTop = PadTop + tracks.Count * (RowHeight + RowGap);
-
-        DrawAxis(plotLeft, plotRight, PadTop, axisTop, scale);
+        double axisTop = RowTop(tracks.Count);
+        DrawAxis(0, plotRight, PadTop, axisTop, scale);
 
         for (int row = 0; row < tracks.Count; row++)
         {
             RibbonTrack track = tracks[row];
-            double top = PadTop + row * (RowHeight + RowGap);
+            double top = RowTop(row);
 
-            var name = new TextBlock
+            TextBlock name = NameLabel(track.Name, gutter - GutterPad);
+            Canvas.SetLeft(name, 0);
+            Canvas.SetTop(name, top + (RowHeight - Measure(track.Name, 12).Height) / 2);
+            _names.Children.Add(name);
+            names.Add(name);
+
+            if (track.Spans.Count == 0 || !track.Spans.Any(s => s.To > From && s.From < To))
             {
-                Text = track.Name,
-                FontSize = 12,
-                Foreground = TextBrush,
-                Width = gutter - GutterPad,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                ToolTip = track.Name,
-            };
-            SetLeft(name, 0);
-            SetTop(name, top + (RowHeight - Measure(track.Name, 12).Height) / 2);
-            Children.Add(name);
+                var empty = new TextBlock
+                {
+                    Text = track.EmptyText,
+                    FontSize = 11.5,
+                    FontStyle = FontStyles.Italic,
+                    Opacity = 0.55,
+                    Foreground = TextBrush,
+                    IsHitTestVisible = false,
+                };
+                Canvas.SetLeft(empty, 4);
+                Canvas.SetTop(empty, top + (RowHeight - Measure(track.EmptyText, 11.5).Height) / 2);
+                _plot.Children.Add(empty);
+                empties.Add((row, empty));
+                continue;
+            }
 
             foreach (RibbonSpan span in track.Spans)
             {
-                DrawSpan(span, top, plotLeft, plotRight, scale);
+                DrawSpan(row, span, top, plotRight, scale, shapes);
             }
+        }
+
+        NameLabels = names;
+        SpanShapes = shapes;
+        EmptyLabels = empties;
+    }
+
+    /// <summary>Al cambiar los datos, la vista arranca en el presente. Se aplica en cuanto el scroll sabe cuánto mide.</summary>
+    private void ApplyPendingScroll()
+    {
+        if (!_scrollToEndPending || _scroll.ViewportWidth <= 0)
+        {
+            return;
+        }
+
+        _scrollToEndPending = false;
+        if (_scroll.ScrollableWidth > 0)
+        {
+            _scroll.ScrollToRightEnd();
         }
     }
 
-    private void DrawSpan(RibbonSpan span, double top, double plotLeft, double plotRight, double scale)
+    /// <summary>
+    /// El nombre entero si cabe; si no, con elipsis por el MEDIO —el final de un nombre suele ser lo
+    /// que lo distingue— y el nombre completo en el tooltip. Nunca cortado a secas.
+    /// </summary>
+    private TextBlock NameLabel(string name, double maxWidth)
+    {
+        string text = name;
+        if (Measure(text, 12).Width > maxWidth)
+        {
+            for (int max = name.Length - 1; max >= 3; max--)
+            {
+                text = MiddleEllipsis(name, max);
+                if (Measure(text, 12).Width <= maxWidth)
+                {
+                    break;
+                }
+            }
+        }
+
+        return new TextBlock
+        {
+            Text = text,
+            FontSize = 12,
+            Foreground = TextBrush,
+            ToolTip = name,
+        };
+    }
+
+    internal static string MiddleEllipsis(string name, int max)
+    {
+        if (name.Length <= max)
+        {
+            return name;
+        }
+
+        int keep = Math.Max(1, max - 1);
+        int head = (keep + 1) / 2;
+        int tail = keep - head;
+        return name[..head] + "…" + (tail > 0 ? name[^tail..] : string.Empty);
+    }
+
+    private void DrawSpan(int row, RibbonSpan span, double top, double plotRight, double scale, List<(int, RibbonSpan, Rectangle)> shapes)
     {
         DateTime from = span.From < From ? From : span.From;
         DateTime to = span.To > To ? To : span.To;
@@ -258,42 +409,92 @@ public sealed class CycleRibbon : Canvas
             return; // fuera del periodo: el filtro recorta el eje, no inventa tramos
         }
 
-        double x0 = plotLeft + (from - From).TotalDays * scale;
-        double x1 = Math.Min(plotRight, plotLeft + (to - From).TotalDays * scale);
-        double w = Math.Max(2, x1 - x0);
+        double x0 = (from - From).TotalDays * scale;
+        double x1 = Math.Min(plotRight, (to - From).TotalDays * scale);
 
-        var rect = new Rectangle
+        // Un tramo más corto que el mínimo se PINTA con el mínimo, sin estirar el eje: hacia la
+        // derecha si está cerrado; anclado al presente, hacia la izquierda, si está en curso.
+        if (x1 - x0 < MinSpanWidth)
         {
-            Width = w,
-            Height = RowHeight,
-            RadiusX = 3,
-            RadiusY = 3,
-            Fill = span.IsOpen ? OpenFill(span.Fill, w) : span.Fill,
-            Cursor = Cursors.Hand,
-            ToolTip = BuildTooltip(span.TooltipLines),
-        };
-        SetLeft(rect, x0);
-        SetTop(rect, top);
-        ToolTipService.SetInitialShowDelay(rect, 120);
-        ToolTipService.SetBetweenShowDelay(rect, 0);
-        object? payload = span.Payload;
-        rect.MouseLeftButtonUp += (_, e) =>
-        {
-            if (SpanCommand?.CanExecute(payload) == true)
+            if (span.IsOpen || x0 + MinSpanWidth > plotRight)
             {
-                SpanCommand.Execute(payload);
-                e.Handled = true;
+                x0 = Math.Max(0, x1 - MinSpanWidth);
             }
-        };
-        Children.Add(rect);
+            else
+            {
+                x1 = x0 + MinSpanWidth;
+            }
+        }
+
+        double total = Math.Max(2, x1 - x0);
+        double spanDays = Math.Max(1.0 / 1440, (to - from).TotalDays);
+        double cursor = x0;
+        for (int i = 0; i < span.Slices.Count; i++)
+        {
+            RibbonSlice slice = span.Slices[i];
+            DateTime sFrom = slice.From < from ? from : slice.From;
+            DateTime sTo = slice.To > to ? to : slice.To;
+            if (sTo <= sFrom)
+            {
+                continue;
+            }
+
+            bool last = i == span.Slices.Count - 1;
+            double w = last
+                ? Math.Max(1, x0 + total - cursor)
+                : Math.Max(1, total * (sTo - sFrom).TotalDays / spanDays);
+
+            var rect = new Rectangle
+            {
+                Width = w,
+                Height = RowHeight,
+                Fill = span.IsOpen && last ? OpenFill(slice.Fill, w) : slice.Fill,
+                Cursor = Cursors.Hand,
+                ToolTip = BuildTooltip(span.Slices.Count > 1 ? slice.TooltipLines.Concat(span.TooltipLines).ToList() : span.TooltipLines),
+                Tag = span,
+            };
+            Canvas.SetLeft(rect, cursor);
+            Canvas.SetTop(rect, top);
+            ToolTipService.SetInitialShowDelay(rect, 120);
+            ToolTipService.SetBetweenShowDelay(rect, 0);
+            object? payload = span.Payload;
+            rect.MouseLeftButtonUp += (_, e) =>
+            {
+                if (SpanCommand?.CanExecute(payload) == true)
+                {
+                    SpanCommand.Execute(payload);
+                    e.Handled = true;
+                }
+            };
+            _plot.Children.Add(rect);
+            shapes.Add((row, span, rect));
+
+            // La marca del cambio de temática: una muesca clara entre un trozo y el siguiente.
+            if (!last)
+            {
+                var mark = new Rectangle
+                {
+                    Width = ChangeMark,
+                    Height = RowHeight,
+                    Fill = AxisBrush,
+                    Opacity = 0.9,
+                    IsHitTestVisible = false,
+                };
+                Canvas.SetLeft(mark, cursor + w - ChangeMark / 2);
+                Canvas.SetTop(mark, top);
+                _plot.Children.Add(mark);
+            }
+
+            cursor += w;
+        }
 
         // El fin sin fecha recuperable se dice también en el dibujo: borde derecho a puntos.
         if (!span.EndIsKnown && !span.IsOpen)
         {
             var edge = new Line
             {
-                X1 = x0 + w,
-                X2 = x0 + w,
+                X1 = x0 + total,
+                X2 = x0 + total,
                 Y1 = top,
                 Y2 = top + RowHeight,
                 Stroke = AxisBrush,
@@ -301,12 +502,12 @@ public sealed class CycleRibbon : Canvas
                 StrokeDashArray = new DoubleCollection(new double[] { 1.5, 2 }),
                 IsHitTestVisible = false,
             };
-            Children.Add(edge);
+            _plot.Children.Add(edge);
         }
 
         // La etiqueta, cuando cabe; la corta, cuando cabe solo ella; nada, y el tooltip lo
         // explica, cuando no cabe ni eso. Se MIDE — no se estima por número de caracteres.
-        string? text = Fits(span.Label, w) ? span.Label : Fits(span.ShortLabel, w) ? span.ShortLabel : null;
+        string? text = Fits(span.Label, total) ? span.Label : Fits(span.ShortLabel, total) ? span.ShortLabel : null;
         if (text is not null)
         {
             Size size = Measure(text, 11);
@@ -315,12 +516,12 @@ public sealed class CycleRibbon : Canvas
                 Text = text,
                 FontSize = 11,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = InkFor(span.Fill),
+                Foreground = InkFor(span.Slices[0].Fill),
                 IsHitTestVisible = false,
             };
-            SetLeft(label, x0 + 6);
-            SetTop(label, top + (RowHeight - size.Height) / 2);
-            Children.Add(label);
+            Canvas.SetLeft(label, x0 + 6);
+            Canvas.SetTop(label, top + (RowHeight - size.Height) / 2);
+            _plot.Children.Add(label);
         }
     }
 
@@ -354,8 +555,7 @@ public sealed class CycleRibbon : Canvas
 
     /// <summary>
     /// La tinta de la etiqueta sobre su tramo: negro o blanco, decidido por la luminancia del
-    /// relleno y no por el tema (F10.1, D-649: la tinta va por paso, medida). Los pasos claros de
-    /// la paleta —los del tema oscuro— llevan negro; los oscuros —los del tema claro—, blanco.
+    /// relleno y no por el tema (F10.1, D-649: la tinta va por paso, medida).
     /// </summary>
     internal static Brush InkFor(Brush fill)
         => fill is SolidColorBrush solid && Luminance(solid.Color) > 0.3 ? Brushes.Black : Brushes.White;
@@ -383,7 +583,7 @@ public sealed class CycleRibbon : Canvas
             StrokeThickness = 1,
             Opacity = 0.6,
         };
-        Children.Add(baseline);
+        _plot.Children.Add(baseline);
 
         IReadOnlyList<(DateTime When, string Label)> ticks = Ticks(From, To);
         double widest = ticks.Count == 0 ? 0 : ticks.Max(t => Measure(t.Label, 10).Width);
@@ -412,7 +612,7 @@ public sealed class CycleRibbon : Canvas
                 Opacity = 0.25,
                 IsHitTestVisible = false,
             };
-            Children.Add(grid);
+            _plot.Children.Add(grid);
 
             if (lastLabelX - x < minGap)
             {
@@ -427,17 +627,17 @@ public sealed class CycleRibbon : Canvas
                 Foreground = AxisBrush,
                 IsHitTestVisible = false,
             };
-            SetLeft(text, Math.Max(left, Math.Min(x - size.Width / 2, right - size.Width)));
-            SetTop(text, axisTop + 5);
-            Children.Add(text);
+            Canvas.SetLeft(text, Math.Max(left, Math.Min(x - size.Width / 2, right - size.Width)));
+            Canvas.SetTop(text, axisTop + 5);
+            _plot.Children.Add(text);
             lastLabelX = x;
         }
     }
 
     /// <summary>
-    /// Las marcas del eje según lo que abarca: semanas para dos meses o menos, meses hasta poco
-    /// más de un año, trimestres de ahí en adelante. Anclado al final —el último día del periodo
-    /// es hoy— para que la marca de «hoy» exista siempre.
+    /// Las marcas del eje según lo que abarca: días para una semana o menos, semanas para dos
+    /// meses o menos, meses hasta poco más de un año, trimestres de ahí en adelante. Anclado al
+    /// final —el último día del periodo es hoy— para que la marca de «hoy» exista siempre.
     /// </summary>
     internal static IReadOnlyList<(DateTime When, string Label)> Ticks(DateTime from, DateTime to)
     {
@@ -446,7 +646,14 @@ public sealed class CycleRibbon : Canvas
         CultureInfo culture = CultureInfo.CurrentCulture;
         DateTime last = to.AddDays(-1).Date;
 
-        if (days <= 70)
+        if (days <= 8)
+        {
+            for (DateTime d = last; d >= from; d = d.AddDays(-1))
+            {
+                ticks.Add((d, d.ToString("d MMM", culture)));
+            }
+        }
+        else if (days <= 70)
         {
             for (DateTime d = last; d >= from; d = d.AddDays(-7))
             {

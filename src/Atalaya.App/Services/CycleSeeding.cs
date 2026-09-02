@@ -89,6 +89,7 @@ public static class CycleSeeding
         CycleConfig born = config ?? closing.Config;
         bool sameTheme = born.Theme == closing.Theme;
         var fresh = new InventoryCycle { CycleN = nextCycle, Config = born, OpenedUtc = openedUtc };
+        fresh.OpenThemeHistory(born.Theme, openedUtc, by: null);
 
         foreach (InventoryUnit u in closing.Units)
         {
@@ -130,7 +131,11 @@ public static class CycleSeeding
     /// «Arreglada — pendiente de verificar» también pasa a pendiente: la unidad no está auditada
     /// bajo la lupa nueva; su hallazgo, que no se toca, conserva su acción Verificar.
     /// </summary>
-    public static InventoryCycle Reseed(InventoryCycle current, CycleConfig config, int largeUnitLoc)
+    /// <param name="atUtc">Cuándo se cambia, para el historial de temáticas (F17.1).</param>
+    /// <param name="by">Quién cambia, para el historial. La re-siembra es una decisión de gobernanza.</param>
+    public static InventoryCycle Reseed(
+        InventoryCycle current, CycleConfig config, int largeUnitLoc,
+        DateTimeOffset? atUtc = null, string? by = null)
     {
         if (current.Theme == config.Theme)
         {
@@ -139,6 +144,7 @@ public static class CycleSeeding
                 CycleN = current.CycleN,
                 Config = config,
                 OpenedUtc = current.OpenedUtc,
+                ThemeHistory = current.ThemeHistory.ToList(),
             };
             same.Units.AddRange(current.Units.Select(u => new InventoryUnit
             {
@@ -153,8 +159,13 @@ public static class CycleSeeding
         }
 
         // Temática distinta: Seed sin deriva y con otra lupa no conserva ninguna auditada, que es
-        // exactamente la regla. Se pasa por el mismo método para que no haya dos siembras.
-        return Seed(current, current.CycleN, largeUnitLoc, drift: null, config, current.OpenedUtc);
+        // exactamente la regla. Se pasa por el mismo método para que no haya dos siembras. Y el
+        // historial de temáticas CONTINÚA el del ciclo: el periodo anterior se cierra y el nuevo
+        // se abre con autor y fecha — el trabajo hecho con la lupa anterior no se borra del ciclo.
+        InventoryCycle reseeded = Seed(current, current.CycleN, largeUnitLoc, drift: null, config, current.OpenedUtc);
+        reseeded.ThemeHistory = current.Periods.ToList();
+        reseeded.ChangeTheme(config.Theme, atUtc ?? DateTimeOffset.UtcNow, by);
+        return reseeded;
     }
 
     /// <summary>Lo que queda envejecido del ciclo que se cierra. Sin deriva medible, nada que decir.</summary>

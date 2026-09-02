@@ -10259,3 +10259,126 @@ Y renderizado con el arnés del scratchpad (D-833) en claro y oscuro, seis pies 
 anchos—: sin solapes, sin cortes, con el desglose de Claude entero a 1124 y con «coste:
 suscripción» a 441. Las capturas se entregaron con el parte. Queda para el usuario verlo con una
 sesión de verdad corriendo, que es donde el pie cambia cada llamada.
+
+## F17.1 — La cinta de ciclos: que diga la verdad y se pueda leer
+
+F17 pasó la aceptación humana sobre el banco —un ciclo de Rendimiento saca lo suyo, cambiar a
+Seguridad re-siembra y saca otras cosas— y falló en la cinta «Ciclos y temáticas» de Métricas. El
+parte traía cuatro frentes de representación y uno previo, el más grave: la cinta no pintaba los
+ciclos reales. Se empezó por ése, con evidencia (N-2), antes de tocar un píxel.
+
+### D-838 — Lo que había en el hub y lo que pintaba la cinta, lado a lado
+
+Se leyó el clon local del hub y se ejecutó la consulta real de la cinta contra él, con un arnés
+del scratchpad. **AtalayaBanco**: `app.json` en ciclo 1; `cycle1.json` con `tematica: seguridad`,
+modelo preferido `opus` (Claude Code), abierto el 2026-09-02 a las 13:02 UTC, 2 unidades
+auditadas; cuatro sesiones `lotes` del ciclo 1 —dos con `tematica: rendimiento` (13:19, 13:20) y
+dos con `seguridad` (13:26, 13:42)—; ocho hallazgos, cuatro de cada temática; y en el historial de
+git del hub, entre la segunda y la tercera sesión, el commit «config: atalayabanco ciclo 1 ·
+Seguridad». **XBLAST**: `cycle1.json` sin temática (anterior a F17), 924 unidades, ninguna
+auditada, sin ninguna sesión, y 34 hallazgos «unidad demasiado grande» medidos por Atalaya el
+2026-09-01. **La cinta**, sobre esos datos: una banda AtalayaBanco con «C1 · Seguridad» de 13:02 a
+ahora (55 minutos) y una banda XBLAST con «C1 · General» desde el 2026-09-01 hasta hoy, abierto,
+con inicio *desconocido*.
+
+De ahí salen las tres verdades del parte:
+
+- **El hub guarda bien la temática.** El ciclo, las sesiones y los hallazgos coinciden y cuentan la
+  misma historia; los distintivos del Portafolio y del panel y los informes leen ese mismo campo,
+  así que el alcance NO crece por ese lado. El usuario no hizo dos ciclos: hizo UN ciclo que cambió
+  de lupa a mitad, con el aviso y la re-siembra de F17.
+- **El ciclo solo guardaba la última temática** (`tematica`), así que el trabajo real con
+  Rendimiento —sus dos sesiones y sus cuatro hallazgos existen— no aparecía por ninguna parte en
+  la cinta. Es el frente B.
+- **El «C1 · General» de XBLAST no correspondía a ninguna auditoría**: F17 colgaba el inicio de un
+  ciclo sin apertura ni sesiones «del primer dato de la aplicación», y ese dato eran los hallazgos
+  medidos. Un tramo inventado, con la etiqueta de otra banda encima por el frente A. Y el eje
+  entero estaba estirado a decenas de miles de píxeles por la regla del ancho mínimo aplicada a un
+  tramo de 55 minutos (frente C).
+
+### D-839 — El ciclo guarda su historial de temáticas, y la cinta lo pinta partido
+
+`InventoryCycle.ThemeHistory` (clave `historialTematica`): una entrada por periodo —temática,
+desde, hasta, quién—, la última abierta; `Theme` sigue siendo la vigente y se mantiene igual a la
+última entrada, así que todo lo que ya leía `tematica` sigue leyendo lo mismo. Los ciclos
+anteriores a F17.1 no traen la lista y `Periods` deriva una sola entrada con la vigente desde la
+apertura, sin migrar nada — exactamente como se hizo con «lo anterior es General» (D-826).
+
+**Quién escribe.** El alta, el cierre y el reinicio abren el historial con la lupa con la que nace
+el ciclo (`OpenThemeHistory`); el cambio de temática, que ya avisaba y re-sembraba, cierra el
+periodo abierto y abre el nuevo con autor y fecha (`ChangeTheme`, desde `CycleSeeding.Reseed`, con
+la identidad del hub). Es una decisión de gobernanza con re-siembra detrás; merece quedar
+registrada como cualquier otra. Cambiar solo el modelo preferido no toca el historial.
+
+**Dónde se lee.** La cinta parte cada tramo en `ThemeSlice`s recortados al tramo, con el corte en
+la fecha del cambio; cada trozo lleva su color y su tooltip («Temática Seguridad · desde el 2 sep
+2026 15:26 · cambiada por alopezciller»), hay una muesca visible en el punto del cambio, y la
+etiqueta y el tooltip del ciclo resumen: «C1 · Rendimiento → Seguridad». El panel del ciclo dice
+debajo del distintivo «Antes: Rendimiento (hasta el 2 sep 15:26, cambiada por alopezciller)», y el
+informe de cierre lista las lupas con sus fechas en vez de solo la última. Un ciclo con una sola
+temática es un solo trozo, idéntico a hoy; un migrado, una entrada desde su inicio. Los textos
+salen de un solo sitio, `ThemeHistoryText`.
+
+### D-840 — La fila es la unidad indivisible
+
+`CycleRibbon` deja de ser un `Canvas` que se desplazaba entero —con los nombres dentro— y pasa a
+ser un `Grid` de dos columnas: la de nombres, **fija**, y la del área temporal, con su
+`ScrollViewer` propio. Nombre y banda se colocan con la misma aritmética de fila (`RowTop`), así
+que comparten altura a cualquier posición de scroll y a cualquier ancho. El test lo comprueba
+como pedía el parte: **con el desplazamiento aplicado**, la caja del nombre no se mueve y cada
+tramo sigue en la fila de su banda; y con datos desiguales —una banda con tramos, una vacía y
+una con historia larga—, a 1124, 658, 441 y 320 px.
+
+### D-841 — No se inventan tramos, y la app sin ciclos tiene su fila
+
+Sin apertura registrada ni sesión, no hay ciclo que pintar: el respaldo «el primer dato de la
+aplicación» se retira. Un hallazgo medido por Atalaya no es una auditoría, y un tramo colgado de
+él afirmaba una que no hubo. **Y la banda se queda**: una aplicación sin tramos en el periodo
+tiene su fila igualmente, rotulada «sin ciclos en este periodo», tenue. Una fila vacía y rotulada
+es información; una fila ausente invita a que otro tramo ocupe su sitio visualmente — que es
+justo como nació el frente A. Con el caso del parte reproducido en test: AtalayaBanco con su C1 en
+dos trozos y el corte en la fecha del cambio; XBLAST con banda y sin tramo.
+
+### D-842 — Arranca en hoy, escala honesta, y ningún texto cortado a secas
+
+- **La vista arranca en el final del eje** cuando cambian los datos: hoy es donde está lo que
+  importa. Un cambio de tamaño no toca la posición, y si el usuario retrocede se respeta.
+- **Escala honesta.** El eje cabe en la tarjeta salvo que dos tramos CONSECUTIVOS de una misma
+  banda quedaran a menos del ancho mínimo uno del otro —entonces no se distinguirían—; solo
+  entonces la cinta crece lo justo y se desplaza dentro de su tarjeta. Un tramo corto suelto no
+  estira el eje: se pinta con el ancho mínimo donde está, anclado a la derecha si está en curso.
+  En F17 la regla se aplicaba a cada tramo por separado, y un ciclo de 55 minutos en un eje de
+  ocho semanas daba una cinta de más de cuarenta mil píxeles. Verificado en los tres casos del
+  parte: un ciclo de horas cabe; varias apps con historias dispares caben; y dos ciclos de una
+  hora seguidos son lo único que fuerza el desplazamiento.
+- **Nombres**: la columna da el ancho necesario hasta un tope; por encima, elipsis por el MEDIO
+  —el final de un nombre es lo que lo distingue— y el nombre entero en el tooltip. Medido, no
+  contado por caracteres.
+
+### D-843 — Método: los escenarios de una gráfica incluyen el caso desigual y el vacío
+
+El frente A era invisible en el render de verificación de F17 porque las tres bandas de prueba
+tenían tramos: la correspondencia fila-etiqueta no se puede romper si todas las filas están
+igual de llenas. Desde aquí, **los escenarios de verificación de una gráfica —tests y capturas—
+incluyen siempre el caso desigual (una serie con datos y otra sin) y el caso vacío**, que es donde
+la correspondencia se rompe. Vale para las gráficas que vengan, y los tests de esta fase están
+escritos así: `CycleRibbonLayoutTests` mide con XBLAST vacío al lado de AtalayaBanco lleno, y las
+capturas se hicieron con esos mismos datos.
+
+### D-844 — Cobertura (23 tests nuevos, 1.982 en total, todo en verde), y las capturas
+
+`ThemeSerializationTests`: el historial viaja con autor y fechas; el ciclo sin historial deriva
+una entrada. `ThematicSeedingTests`: el cambio escribe su entrada (el anterior cerrado, el nuevo
+abierto en el mismo instante, con autor) y el ciclo nuevo abre la suya. `CycleRibbonTests`: el
+caso del parte lado a lado, el ciclo de una lupa idéntico a hoy, el migrado con un periodo, la app
+sin apertura ni sesión con banda y sin tramo inventado, la escala honesta en los tres casos, y el
+tramo partido en el view-model con sus dos colores y su tooltip por trozo. `CycleRibbonLayoutTests`,
+sobre el control real: nombre a la altura de su banda a cuatro anchos, con el scroll aplicado, la
+fila vacía rotulada y a la altura de su nombre, el arranque en hoy y el respeto a quien retrocede,
+el ciclo corto visible sin buscarlo, la elipsis media con tooltip, y el tramo partido con el corte
+en la fecha del cambio.
+
+Y renderizado con el arnés del scratchpad, **con datos desiguales** (D-843): AtalayaBanco con un
+C1 de dos horas partido en Rendimiento → Seguridad, XBLAST sin ciclos, y una tercera app de nombre
+largo con tres ciclos, uno de ellos partido; a 1124 y 441 px de página, en claro y oscuro. Las
+capturas se entregaron con el parte. Lo que queda es verlo sobre el hub real, y está en BACKLOG.

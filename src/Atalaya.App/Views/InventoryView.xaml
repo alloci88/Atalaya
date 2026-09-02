@@ -328,6 +328,11 @@
                 </StackPanel>
                 <TextBlock Margin="0,4,0,0" FontSize="12" Opacity="0.8"
                            ToolTip="El modelo con el que el equipo prefiere auditar este ciclo. Es una preferencia: lanzar con otro avisa y deja continuar."><Run Text="Modelo preferido: " /><Run Text="{Binding PreferredModelLabel}" /></TextBlock>
+                <!-- F17.1: el ciclo no olvida con qué lupa se trabajó antes del cambio. -->
+                <TextBlock Margin="0,4,0,0" FontSize="11.5" Opacity="0.75" TextWrapping="Wrap"
+                           Text="{Binding CycleThemeHistory}"
+                           ToolTip="Las temáticas por las que ha pasado este ciclo, con quién las cambió y cuándo. Los hallazgos de cada lupa siguen llevando la suya."
+                           Visibility="{Binding HasCycleThemeHistory, Converter={StaticResource BoolToVisibility}}" />
                 <TextBlock Margin="0,4,0,0" ToolTip="{Binding UnitsTooltip}"><Run Text="Unidades: " /><Run Text="{Binding TotalUnits}" FontWeight="Bold" /></TextBlock>
                 <TextBlock Margin="0,4,0,0" ToolTip="Ya revisadas en este ciclo. Puedes volver sobre ellas marcándolas a mano."><Run Text="Auditadas: " /><Run Text="{Binding AuditedUnits}" FontWeight="Bold" /></TextBlock>
                 <TextBlock Margin="0,4,0,0" ToolTip="Aún sin revisar en este ciclo. Es lo que queda para que se cierre."><Run Text="Pendientes: " /><Run Text="{Binding PendingUnits}" FontWeight="Bold" /></TextBlock>

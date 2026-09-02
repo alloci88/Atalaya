@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using System.Windows.Media;
 using Atalaya.App.Controls;
 using Atalaya.App.Services;
@@ -220,12 +220,87 @@ public sealed class CycleRibbonTests : IDisposable
         MetricsViewModel.CycleTooltip(c1).Should().Contain("Este ciclo no dejó informe de cierre.");
     }
 
+    /// <summary>
+    /// F17.1 — una app sin apertura ni sesión no tiene tramo, pero SÍ banda: vacía y rotulada. Y
+    /// sus hallazgos medidos no cuelgan ningún ciclo: en F17 lo hacían, y XBLAST —que nadie
+    /// había auditado— salía con un «C1 · General» desde el día en que se midieron sus unidades
+    /// grandes.
+    /// </summary>
     [Fact]
-    public void Una_app_sin_ningun_dato_no_tiene_tramo()
+    public void Una_app_sin_apertura_ni_sesiones_tiene_banda_vacia_y_ningun_tramo_inventado()
     {
         App("vacia", "Vacía", 1);
+        Inventory("vacia", 1, theme: null, audited: 0, pending: 3, large: 1);
+        Finding("vacia", daysAgo: 1); // un hallazgo medido no es una auditoría
 
-        Tracks().Should().BeEmpty("ni sesiones, ni hallazgos, ni fecha: no hay de qué colgar un tramo");
+        CycleTrack track = Tracks().Should().ContainSingle().Subject;
+
+        track.Slug.Should().Be("vacia");
+        track.Spans.Should().BeEmpty("ni apertura ni sesión: no hay ciclo que pintar, y no se inventa");
+    }
+
+    /// <summary>El caso real del parte de F17.1: lo que hay en el hub, lado a lado con lo que se pinta.</summary>
+    [Fact]
+    public void El_caso_del_parte_una_app_con_un_ciclo_de_dos_lupas_y_otra_sin_ninguno()
+    {
+        App("banco", "AtalayaBanco", 1);
+        DateTimeOffset opened = Now.AddHours(-2);
+        DateTimeOffset changed = Now.AddMinutes(-40);
+        var inv = new InventoryCycle { CycleN = 1, OpenedUtc = opened, Units = { new InventoryUnit { Path = "a.cs", Module = "m", State = UnitState.Auditada } } };
+        inv.OpenThemeHistory(AuditTheme.Rendimiento, opened, "alopezciller");
+        inv.ChangeTheme(AuditTheme.Seguridad, changed, "alopezciller");
+        _hub.Store.WriteInventory("banco", inv);
+        Session("banco", 1, daysAgo: 0);
+        App("xblast", "XBLAST", 1);
+        Inventory("xblast", 1, theme: null, audited: 0, pending: 5);
+        Finding("xblast", daysAgo: 1);
+
+        IReadOnlyList<CycleTrack> tracks = Tracks(null, MetricsRange.Weeks8);
+
+        tracks.Select(t => t.Slug).Should().Equal("xblast", "banco"); // el orden del Portafolio: la deuda viva primero
+        CycleSpan c1 = tracks[1].Spans.Should().ContainSingle().Subject;
+        c1.Label.Should().Be("C1 · Rendimiento → Seguridad");
+        c1.Slices.Should().HaveCount(2);
+        c1.Slices[0].Theme.Should().Be(AuditTheme.Rendimiento);
+        c1.Slices[0].From.Should().Be(opened);
+        c1.Slices[0].To.Should().Be(changed, "el corte está en la fecha del cambio");
+        c1.Slices[1].Theme.Should().Be(AuditTheme.Seguridad);
+        c1.Slices[1].From.Should().Be(changed);
+        c1.Slices[1].By.Should().Be("alopezciller");
+        tracks[0].Spans.Should().BeEmpty("XBLAST no tiene ningún ciclo auditado");
+    }
+
+    [Fact]
+    public void Un_ciclo_con_una_sola_tematica_tiene_un_trozo_y_su_etiqueta_de_siempre()
+    {
+        App("app", "App", 1);
+        Inventory("app", 1, theme: AuditTheme.Fiabilidad, opened: Now.AddDays(-3));
+        Session("app", 1, daysAgo: 1);
+
+        CycleSpan span = Tracks().Single().Spans.Single();
+
+        span.Slices.Should().ContainSingle().Which.Theme.Should().Be(AuditTheme.Fiabilidad);
+        span.Label.Should().Be("C1 · Fiabilidad");
+        span.ChangedTheme.Should().BeFalse();
+        MetricsViewModel.CycleTooltip(span)[0].Should().Be("Ciclo 1 · Fiabilidad");
+    }
+
+    /// <summary>Un ciclo de antes de F17.1 no tiene historial escrito: un trozo desde su inicio, con la temática vigente.</summary>
+    [Fact]
+    public void Un_ciclo_sin_historial_escrito_deriva_un_solo_periodo_desde_su_inicio()
+    {
+        App("app", "App", 1);
+        Inventory("app", 1, theme: AuditTheme.Seguridad, opened: Now.AddDays(-3));
+        InventoryCycle inv = _hub.Store.TryReadInventory("app", 1)!;
+        inv.ThemeHistory.Should().BeEmpty();
+        Session("app", 1, daysAgo: 1);
+
+        CycleSpan span = Tracks().Single().Spans.Single();
+
+        span.Slices.Should().ContainSingle();
+        span.Slices[0].Theme.Should().Be(AuditTheme.Seguridad);
+        span.Slices[0].From.Should().Be(span.From);
+        span.Slices[0].To.Should().Be(span.To);
     }
 
     // ---------------------------------------------------------------- la foto de cada tramo
@@ -395,28 +470,45 @@ public sealed class CycleRibbonTests : IDisposable
 
     // ---------------------------------------------------------------- la geometría de la cinta
 
+    /// <summary>
+    /// F17.1 — escala honesta: el eje cabe en la ventana salvo que dos tramos consecutivos de una
+    /// misma banda no se distinguieran. Un ciclo corto suelto NO estira el eje: se pinta con el
+    /// ancho mínimo donde está. En F17 un ciclo de 55 minutos en un eje de ocho semanas forzaba una
+    /// cinta de decenas de miles de píxeles, y había que arrastrar mucho para llegar a hoy.
+    /// </summary>
     [Fact]
-    public void La_cinta_nunca_es_mas_estrecha_que_su_ventana_y_respeta_el_ancho_minimo_por_tramo()
+    public void La_cinta_cabe_en_su_ventana_salvo_que_dos_tramos_consecutivos_no_se_distinguieran()
     {
-        var from = new DateTime(2026, 1, 1);
+        var from = new DateTime(2026, 7, 9);
         var to = new DateTime(2026, 9, 3);
-        RibbonSpan Span(DateTime a, DateTime b) => new("C", "C", Brushes.Gray, a, b, false, true, new[] { "t" });
-        var tracks = new[]
+        RibbonSpan Span(DateTime a, DateTime b, bool open = false) => new("C", "C",
+            new[] { new RibbonSlice(Brushes.Gray, a, b, new[] { "t" }) }, a, b, open, true, new[] { "t" });
+
+        // Una app con un ciclo de horas: cabe, y punto.
+        var single = new[] { new RibbonTrack("App", new[] { Span(to.AddHours(-2), to, open: true) }) };
+        (double w1, _, _) = CycleRibbon.Geometry(single, from, to, viewport: 900, minSpan: 28);
+        w1.Should().Be(900, "un tramo corto suelto se pinta con el mínimo; no estira el eje");
+
+        // Varias apps con historias dispares: tampoco, mientras cada banda se lea.
+        var mixed = new[]
         {
-            new RibbonTrack("App", new[]
-            {
-                Span(from, from.AddDays(3)),          // un ciclo de TRES días en un eje de ocho meses
-                Span(from.AddDays(3), to),
-            }),
+            new RibbonTrack("Larga", new[] { Span(from.AddDays(-30), from.AddDays(20)), Span(from.AddDays(20), to, open: true) }),
+            new RibbonTrack("Corta", new[] { Span(to.AddHours(-1), to, open: true) }),
+            new RibbonTrack("Vacía", Array.Empty<RibbonSpan>()),
         };
+        (double w2, double h2, _) = CycleRibbon.Geometry(mixed, from, to, viewport: 900, minSpan: 28);
+        w2.Should().Be(900);
+        h2.Should().Be(CycleRibbon.RowTop(3) + CycleRibbon.AxisHeight, "tres bandas, la vacía incluida, más el eje");
 
-        (double wide, _, _, _) = CycleRibbon.Geometry(tracks, from, to, viewport: 3000, minSpan: 28, gutter: 60);
-        wide.Should().Be(3000, "cabe: la cinta ocupa su ventana y no más");
-
-        (double narrow, double height, double scale, _) = CycleRibbon.Geometry(tracks, from, to, viewport: 900, minSpan: 28, gutter: 60);
-        narrow.Should().BeGreaterThan(900, "el tramo de tres días no llega a 28 px a esa escala: la cinta crece y su ventana se desplaza");
-        (scale * 3).Should().BeGreaterThanOrEqualTo(28, "el tramo de tres días mide al menos el mínimo");
-        height.Should().BeGreaterThan(24, "una banda más el eje");
+        // Dos ciclos de una hora seguidos en la misma banda: a esta escala se pisarían, y la
+        // cinta crece justo lo necesario para que el segundo empiece a 28 px del primero.
+        var packed = new[]
+        {
+            new RibbonTrack("App", new[] { Span(to.AddHours(-2), to.AddHours(-1)), Span(to.AddHours(-1), to, open: true) }),
+        };
+        (double w3, _, double scale) = CycleRibbon.Geometry(packed, from, to, viewport: 900, minSpan: 28);
+        w3.Should().BeGreaterThan(900);
+        (scale / 24).Should().BeGreaterThanOrEqualTo(28 - 0.01, "píxeles por hora: los dos arranques quedan a 28 px");
     }
 
     [Fact]
@@ -440,20 +532,22 @@ public sealed class CycleRibbonTests : IDisposable
 
     // ---------------------------------------------------------------- la vista y el clic
 
+    /// <summary>
+    /// F17.1 — la cinta lleva DENTRO su desplazamiento (y su columna fija de nombres): la vista ya
+    /// no la envuelve en un ScrollViewer, porque un nombre que viaja con el lienzo acaba frente a
+    /// la banda de otra app. Y jamás el scroll horizontal de la página.
+    /// </summary>
     [Fact]
-    public void La_cinta_vive_en_su_propio_desplazamiento_horizontal_y_nunca_en_el_de_la_pagina()
+    public void La_cinta_lleva_dentro_su_desplazamiento_y_nunca_usa_el_de_la_pagina()
     {
         string xaml = File.ReadAllText(Source("src/Atalaya.App/Views/MetricsView.xaml"));
-        int ribbon = xaml.IndexOf("<controls:CycleRibbon", StringComparison.Ordinal);
-        ribbon.Should().BePositive();
 
-        string before = xaml[..ribbon];
-        int scroll = before.LastIndexOf("<ScrollViewer", StringComparison.Ordinal);
-        string opener = xaml[scroll..ribbon];
-        opener.Should().Contain("HorizontalScrollBarVisibility=\"Auto\"");
-        xaml.Should().Contain("ViewportWidth=\"{Binding ViewportWidth, ElementName=RibbonScroll}\"");
+        Regex.Matches(xaml, "<controls:CycleRibbon").Count.Should().Be(1);
+        xaml.Should().NotContain("ViewportWidth=", "la cinta mide su propia ventana");
+        xaml.Should().NotContain("x:Name=\"RibbonScroll\"", "el desplazamiento vive en el control, con la fila entera");
         xaml.Should().Contain("SpanCommand=\"{Binding OpenCycleCommand}\"");
         Regex.Matches(xaml, "Ciclos y temáticas").Count.Should().Be(1);
+        typeof(CycleRibbon).Should().BeDerivedFrom<System.Windows.Controls.Grid>("columna fija de nombres + área desplazable");
     }
 
     [Fact]
@@ -529,6 +623,39 @@ public sealed class CycleRibbonTests : IDisposable
         vm.ShowCycleLegend.Should().BeTrue();
         vm.CycleTracks.Single().Spans[0].Label.Should().Be("C1 · Rendimiento");
         vm.CycleTracks.Single().Spans[1].IsOpen.Should().BeTrue();
+    }
+
+    /// <summary>F17.1 — un ciclo que cambió de lupa llega a la cinta partido, con un tooltip por trozo y los dos colores.</summary>
+    [Fact]
+    public async Task Un_ciclo_que_cambio_de_lupa_llega_a_la_cinta_en_dos_trozos_con_sus_colores()
+    {
+        App("app", "App", 1);
+        DateTimeOffset opened = Now.AddDays(-4);
+        DateTimeOffset changed = Now.AddDays(-1);
+        var inv = new InventoryCycle { CycleN = 1, OpenedUtc = opened };
+        inv.OpenThemeHistory(AuditTheme.Rendimiento, opened, "ana");
+        inv.ChangeTheme(AuditTheme.Seguridad, changed, "maría");
+        _hub.Store.WriteInventory("app", inv);
+        Session("app", 1, daysAgo: 2);
+        MetricsViewModel vm = TestFactory.Metrics(_hub, _paths, _settings);
+        await vm.LoadAsync();
+
+        RibbonSpan span = vm.CycleTracks.Single().Spans.Single();
+
+        span.Slices.Should().HaveCount(2);
+        span.Slices[0].To.Should().Be(changed.ToLocalTime().DateTime, "el corte está en la fecha del cambio");
+        Hex(span.Slices[0].Fill).Should().Be(ThemePalette.Hex(AuditTheme.Rendimiento, dark: true));
+        Hex(span.Slices[1].Fill).Should().Be(ThemePalette.Hex(AuditTheme.Seguridad, dark: true));
+        span.Slices[1].TooltipLines.Single().Should().StartWith("Temática Seguridad · desde el ").And.EndWith("cambiada por maría");
+        span.Label.Should().Be("C1 · Rendimiento → Seguridad");
+        span.TooltipLines[0].Should().Be("Ciclo 1 · Rendimiento → Seguridad");
+        vm.CycleLegend.Select(l => l.Name).Should().Equal("Seguridad", "Rendimiento");
+    }
+
+    private static string Hex(Brush brush)
+    {
+        Color c = ((SolidColorBrush)brush).Color;
+        return $"#{c.R:X2}{c.G:X2}{c.B:X2}";
     }
 
     // ---------------------------------------------------------------- utilidades
