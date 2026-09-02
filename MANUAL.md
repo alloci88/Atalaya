@@ -1,4 +1,4 @@
-# MANUAL — Atalaya
+﻿# MANUAL — Atalaya
 
 Manual de uso. Qué hace cada pantalla, en qué orden se usan y qué significa lo que
 enseñan. Para montar el entorno o compilar, ver `README.md`; para saber **por qué**
@@ -56,6 +56,10 @@ activos por severidad y el estado de su clon local. Un clic entra al inventario.
 El piloto de vinculación dice si el clon de esa app está donde debería: verde
 vinculado, ámbar con avisos, rojo sin clon. Sin clon no se puede auditar ni medir.
 
+Junto al número de ciclo va un **distintivo con su temática** —«General», «Seguridad»,
+«Rendimiento»…—: la lupa con la que se está auditando ese ciclo. Qué significa está en
+**[Ciclos temáticos](#ciclos-temáticos)**.
+
 Cada tarjeta dice además **cuántas clases han cambiado desde que se auditaron**
 —«12 clases cambiadas desde su auditoría»—, y es un enlace: lleva al inventario
 con el filtro puesto. Es lo que convierte esto en un hábito: la deuda nueva que
@@ -80,7 +84,12 @@ Las unidades de la aplicación en el ciclo vigente, por módulos, con su estado
   medidos en el mismo gesto, y cuenta en un aviso qué cambió.
 - **Reiniciar ciclo** abre uno nuevo con todo pendiente, sin borrar nada. Es
   distinto del cierre normal, que **siembra** el ciclo siguiente con la deriva
-  del que termina (ver «Cambiar de ciclo», más abajo).
+  del que termina (ver «Cambiar de ciclo», más abajo). Antes de reiniciar te
+  pregunta con qué **temática** y qué **modelo preferido** quieres el ciclo nuevo;
+  cancelar el diálogo cancela el reinicio.
+- El panel del ciclo lleva la **temática** del ciclo como distintivo, el **modelo
+  preferido** del equipo para él, y **Configurar ciclo**, que abre el diálogo para
+  cambiar cualquiera de las dos cosas (ver «Ciclos temáticos», más abajo).
 - El panel del ciclo lleva **Patrones silenciados**, **Directivas** y **Umbrales**,
   cada uno con su «Gestionar» al lado: las tres cosas que condicionan qué se
   reporta en esta aplicación (ver «Directivas del proyecto», más abajo).
@@ -105,8 +114,9 @@ La lista de todo lo detectado, agrupada por fichero. **La lista encuentra; la fi
 actúa**: aquí no se silencia, ni se asigna, ni se resuelve.
 
 Filtros: búsqueda de texto, aplicación, severidad, estado (activos / resueltos /
-silenciados / todos) y dos interruptores — **Por revisar** y **Disputados**. Todos los
-combos arrancan en «Todas/Todos» y **Limpiar filtros** los devuelve ahí.
+silenciados / todos), **temática** (la lupa del ciclo que lo detectó) y dos
+interruptores — **Por revisar** y **Disputados**. Todos los combos arrancan en
+«Todas/Todos» y **Limpiar filtros** los devuelve ahí.
 
 - **Por revisar**: la última comprobación no pudo confirmarlo, o su ubicación en el
   código se perdió. Pide una decisión humana.
@@ -279,7 +289,7 @@ auditadas — un arreglo no audita ninguna unidad, así que repartir su gasto en
 número que no significa nada. Cómo se calcula todo esto está en **[El coste, dicho como
 es](#el-coste-dicho-como-es)**.
 
-Debajo, seis gráficas:
+Debajo, siete gráficas:
 
 1. **Coste en el tiempo** — una línea por aplicación, con toggle *Acumulado*.
 2. **Resoluciones en el tiempo** — cuántos hallazgos se dieron por resueltos en cada
@@ -293,11 +303,31 @@ Debajo, seis gráficas:
    (hallazgos activos a día de hoy: el periodo no la recorta). Un clic en un tramo abre
    Hallazgos con esa app y esa severidad; en el centro, esa app entera.
 5. **Flujo de hallazgos** — lo que entra, lo que se cierra y cuántos quedan vivos.
-6. **Actividad de sesiones** — el registro del periodo, con el **tipo** de cada sesión
+6. **Ciclos y temáticas** — la cinta de ciclos: la historia de auditoría de cada
+   aplicación, legible de un vistazo. Una banda por aplicación (en el orden del
+   Portafolio) sobre el mismo eje temporal que las demás gráficas, y **un tramo por
+   ciclo** del inicio al cierre, **coloreado por su temática**, con su etiqueta
+   («C2 · Seguridad») cuando cabe y solo el tooltip cuando no. El ciclo abierto llega
+   hasta hoy y se desvanece por la derecha: está en curso. El tooltip de cada tramo
+   dice el ciclo, la temática, las fechas exactas, las unidades auditadas sobre las
+   auditables al cierre, los hallazgos nuevos y resueltos durante el ciclo y su coste
+   en AI credits (solo lo facturable, como el resto del panel). **Un clic en un tramo
+   abre el informe de cierre de ese ciclo**; si el ciclo sigue abierto, abre el
+   inventario. Los ciclos anteriores a esta versión no tienen temática y se pintan
+   como General; si a uno le falta la fecha de cierre, su tramo termina donde
+   alcanza el dato —su última sesión— con el borde a puntos, y el tooltip lo dice:
+   nada se rellena. Con muchos ciclos en poco espacio cada tramo conserva un ancho
+   mínimo y la cinta se desplaza dentro de su tarjeta, nunca la página.
+7. **Actividad de sesiones** — el registro del periodo, con el **tipo** de cada sesión
    (auditoría, arreglo asistido, verificación, cierre…), su proveedor, su coste y sus
    **tokens**. Las de Claude Code dicen «suscripción» donde las otras dicen credits, y sus
    tokens siguen ahí: es con lo que puedes comparar el peso de dos sesiones de cualquier casa.
    **Un clic en una línea abre su informe en la vista Informes.**
+
+Los colores de la cinta son una **paleta propia de temáticas**, fija: gris sobrio para General
+y cinco colores distinguibles para las demás, elegidos con un paso para cada tema y medidos
+contra su fondo. No se parecen a los cuatro de severidad, que siguen reservados a chips y
+roscos. La leyenda los nombra siempre.
 
 **El eje temporal.** Llega **siempre hasta hoy**, aunque el último tramo esté a cero: un
 eje que termina en el pasado afirma que desde entonces no ha pasado nada. Los tramos
@@ -500,7 +530,14 @@ el cierre**: no siembra, sino que abre un ciclo nuevo con **todo pendiente**, a
 propósito. Es el gesto de quien quiere volver a mirarlo todo desde cero, y sembrarlo
 respetando las auditadas lo dejaría sin efecto justo en la aplicación que está al día.
 Sigue sin borrar nada, y no espera a que el ciclo esté completo: se puede pulsar
-cuando quieras.
+cuando quieras. Y como ya lo pone todo pendiente, de paso pregunta con qué **lupa** se
+va a volver a mirar (ver «Ciclos temáticos»).
+
+**El ciclo nuevo hereda la configuración del que cierra.** Temática y modelo preferido
+pasan tal cual al ciclo siguiente —el cierre es automático y no puede quedarse esperando
+a que alguien decida—, y quien cerró ve a continuación el diálogo de configurar por si
+quiere cambiarla. Con la misma temática la tabla de arriba es la que manda; con otra,
+todo cambia: ver «Ciclos temáticos», justo debajo.
 
 ### Informes
 
@@ -597,6 +634,105 @@ máquina, ¿lo aplico a la aplicación?»— y se te pregunta **una sola vez** p
 tira sin preguntar.
 
 ---
+
+## Ciclos temáticos
+
+Hasta ahora todo ciclo auditaba «en general». Desde esta versión **cada ciclo se configura**:
+una **temática** —General por defecto, que es lo de siempre— y un **modelo preferido**. Con una
+temática concreta el auditor busca **solo** hallazgos de esa familia. Es la lupa del ciclo, y
+cambia lo que «auditada» significa: auditada bajo Rendimiento es «no hay más defectos de
+rendimiento que sacar de aquí», no «esta unidad está limpia».
+
+### Las seis lupas
+
+Es un catálogo cerrado, de la casa, versionado junto a la rúbrica de severidad:
+
+- **General** (recomendada) — el criterio completo de siempre. Es la única que mantiene TODO el
+  catálogo de hallazgos, y el ciclo de referencia.
+- **Seguridad** — secretos y credenciales, validación de entradas, inyección, transporte
+  inseguro, permisos, criptografía casera.
+- **Rendimiento** — algoritmia innecesariamente cara, asignaciones y colecciones ineficientes,
+  E/S y llamadas redundantes, recursos que no se reutilizan.
+- **Fiabilidad** — nulos, índices, excepciones tragadas o sin manejar, casos límite, contratos
+  incumplidos, gestión de recursos (using/dispose).
+- **Concurrencia y asincronía** — carreras, bloqueos, `.Result`/`.Wait`, estado compartido
+  mutable, deadlocks.
+- **Mantenibilidad** — duplicación, nomenclatura, documentación que miente, complejidad y tamaño,
+  código muerto.
+
+Cada una lleva escrito, en el mismo sitio, qué busca y qué **no** debe reportar; las dos listas
+viajan en el prompt del auditor. Temáticas personalizadas no hay: está en el backlog.
+
+### La regla dura
+
+**Fuera de la temática no se reporta nada.** Ni «también he visto esto», ni la crítica de otra
+familia que el auditor tenía delante. Un enfoque que además mira otras cosas no es un enfoque, y
+para la mirada completa existe el ciclo General. Por eso **un ciclo temático no sustituye a uno
+General**: es una pasada acotada, y una aplicación que solo haya tenido ciclos de Rendimiento no
+ha sido auditada de seguridad ni de fiabilidad.
+
+Lo que la temática **no** cambia: ni la rúbrica de severidad —un secreto en claro es crítico en
+un ciclo de Seguridad exactamente igual que en uno General—, ni la gobernanza: silencios,
+patrones silenciados, directivas y la guarda de evidencia aplican por aplicación, sin mirar la
+lupa.
+
+### Qué se reconcilia, y qué envejece
+
+Cada hallazgo lleva la **temática del ciclo que lo detectó** (los anteriores a esta versión son
+General). Se ve en su ficha y se filtra en Hallazgos.
+
+Un ciclo temático encontrará unidades con hallazgos previos de otras temáticas. La regla es
+simple y hay que conocerla:
+
+- El auditor temático **reconcilia solo los hallazgos de su temática** (y añade ubicaciones solo
+  a esos). Los de otras temáticas se le enseñan aparte, para que no los re-reporte como nuevos,
+  pero **no los juzga**: ni presente, ni arreglado, ni no-es-defecto. Si lo intenta, Atalaya
+  rechaza el veredicto y lo anota en la sesión.
+- Consecuencia honesta: **los hallazgos de otras temáticas envejecen durante un ciclo temático**.
+  Nadie los está mirando, y su frescura los llevará a «por revisar» por el camino normal. Es la
+  verdad, y ocultarla haría que un ciclo de Rendimiento pareciera haber vuelto a confirmar la
+  credencial en claro que nadie miró.
+- Un ciclo **General** reconcilia todo, sea de la temática que sea. Exactamente como antes.
+
+### Configurar el ciclo
+
+El diálogo aparece en tres momentos:
+
+- **Al dar de alta una aplicación**, tras el escaneo y antes de abrir el ciclo 1. General viene
+  preseleccionada y marcada como recomendada.
+- **Al cerrarse un ciclo.** El siguiente se abre **heredando** la configuración del anterior —el
+  cierre es automático y no espera a nadie— y quien lo cerró ve el diálogo para cambiarla si
+  quiere. Mientras el ciclo nuevo no tenga trabajo hecho bajo su lupa, cambiarla no cuesta nada.
+- **Desde el panel del ciclo**, con «Configurar ciclo», en cualquier momento. «Reiniciar ciclo»
+  lo enseña también.
+
+**Cambiar de temática con trabajo hecho** es siempre la misma operación, se haga cuando se haga:
+un aviso —«N unidades auditadas pasarán a pendientes; los hallazgos existentes no se tocan»— y la
+re-siembra. Es lo que dice la tabla de siembra, extendida:
+
+| | Misma temática | Temática distinta |
+|---|---|---|
+| Auditada y sin deriva | Auditada | **Pendiente** (auditada bajo otra lupa no es auditada bajo esta) |
+| Cambiada desde su auditoría | Pendiente | Pendiente |
+| Grande | Grande | Grande |
+| Arreglada — pendiente de verificar | Auditada, conserva su Verificar | **Pendiente**, y su hallazgo **conserva** la acción Verificar: el arreglo sigue necesitando su cierre, sea cual sea la lupa |
+
+Cambiar solo el modelo preferido no re-siembra nada: no cambia la lupa.
+
+### El modelo preferido
+
+El diálogo ofrece los modelos disponibles para **tu** proveedor preferente, y lo elegido se guarda
+con el ciclo, en el hub, para todo el equipo. Es **preferencia, no imposición**: no todo el mundo
+tiene las dos casas. Al lanzar una sesión con otro proveedor u otro modelo, el diálogo de lanzar
+lo avisa en una línea —«Este ciclo prefiere opus (Claude Code); auditar con otro juez puede
+producir disputas»— y deja continuar. La sesión registra, como siempre, el proveedor y el modelo
+reales.
+
+### Dónde se ve
+
+El **distintivo** de temática va en la tarjeta del Portafolio y en el panel del ciclo; los
+informes de sesión y de cierre registran la temática del ciclo; Hallazgos filtra por ella y la
+ficha la enseña; y la cinta **Ciclos y temáticas** de Métricas pinta la historia entera.
 
 ## Proveedores de auditoría
 

@@ -4,9 +4,23 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-01 (F16-RETOQUE — el pie que no contaba y la cabecera que se pisaba).
+Última revisión: 2026-09-02 (F17 — ciclos temáticos: cada ciclo elige su lupa).
 
 ## En vuelo
+
+- **F17 — la aceptación humana, sobre el banco.** Todo lo que se puede fijar sin un modelo delante
+  está fijado —el prompt lleva la lupa y sus exclusiones, la reconciliación acotada, la siembra,
+  el diálogo en sus tres momentos, la cinta—, pero el juicio del modelo solo se ve auditando:
+  **Configurar ciclo → Rendimiento** sobre el banco → auditar → tiene que encontrar el doble
+  recorrido y similares, y **NO** las credenciales de ClienteRemoto ni los nulos de Voladura; los
+  hallazgos previos de otras temáticas tienen que quedar intactos (mismo `TimesConfirmed`, misma
+  fecha). Después, **cambiar a Seguridad** → el aviso de «N unidades auditadas pasarán a
+  pendientes» → todas a pendiente → auditar ClienteRemoto → las credenciales caen, y solo cosas de
+  seguridad. Si el modelo se sale de la lupa, el sitio para apretar es `ThemeCatalog.Excludes`.
+- **F17 — la cinta, vista.** Está capturada en los dos temas sobre datos sintéticos (D-833); falta
+  verla sobre el hub real: que los nombres de las bandas no se corten mal, que el tooltip del
+  tramo se lea entero, y que con «Todo» y muchos ciclos la cinta se desplace dentro de su
+  tarjeta y nunca la página.
 
 - **F16 — arreglar de verdad con Claude Code, con los ojos del usuario.** El circuito está probado
   de punta a punta contra el CLI real y contra un CLI falso que habla MCP, pero la aceptación es
@@ -207,7 +221,18 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 - **Migrar el diff a DiffPlex** si el artesanal falla en los casos finos —cambios intra-línea,
   ficheros grandes, encodings—. Decidido de antemano y sin debate (D-552).
-- **Pasadas con «lentes» por pilar**, solo si los barridos siguen dejando hallazgos.
+- **Pasadas con «lentes» por pilar**, solo si los barridos siguen dejando hallazgos. F17 trajo la
+  versión de ciclo entero (las temáticas); una lente por pasada dentro de un ciclo General sigue
+  aparcada.
+- **Temáticas personalizadas.** El catálogo de F17 es cerrado a propósito: una temática es un
+  encargo que el auditor tiene que poder cumplir sin interpretar, y una libre sería un prompt
+  suelto con nombre de lupa. Si el equipo pide una que no está —«accesibilidad», «i18n»—, se
+  añade al catálogo de la casa con sus dos listas, versionada como las demás; editable en el hub
+  solo si eso empieza a pasar a menudo.
+- **Válvula de escape en un ciclo temático** (p. ej. «las críticas de seguridad se reportan
+  siempre»). Se descartó en F17 a favor de la regla limpia (D-825); si el uso real enseña que
+  una crítica se quedó sin reportar por estar fuera de lupa, es una opción de la temática y no
+  un cambio de la regla.
 - **`HubMergePolicy`**: riesgo teórico de pérdida de alias en un merge. Sin síntoma observado, y el
   backfill lo recuperaría.
 - **Limpieza de los campos vestigiales del fingerprint** en los JSON antiguos.
@@ -216,6 +241,16 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **F17 · Ciclos temáticos: cada ciclo elige su lupa** — catálogo cerrado de seis temáticas junto
+  a la rúbrica, con qué busca y qué no reporta cada una, y la regla dura: fuera de la lupa no se
+  reporta nada (D-824, D-825). El hallazgo lleva la temática del ciclo que lo detectó, lo anterior
+  es General, y se filtra en Hallazgos y se lee en la ficha, la tarjeta y el panel (D-826). La
+  reconciliación acotada: un ciclo temático juzga solo lo suyo, lo demás envejece y un veredicto
+  fuera de lupa se rechaza con error tipado (D-827). El diálogo en el alta, tras el cierre y desde
+  el panel, con el cierre heredando y una sola mecánica para cambiar de lupa con trabajo hecho
+  (D-828, D-829). El modelo preferido, compartido y avisado sin bloquear (D-830). Y la cinta de
+  ciclos en Métricas, con su paleta medida y su honestidad con el pasado (D-831…D-833).
 
 - **F16-RETOQUE · El pie que no contaba y la cabecera que se pisaba** — dos defectos del primer uso
   real, los dos de medición y presentación. **El pie** se quedaba en «0 llamadas · sin tokens

@@ -9945,3 +9945,250 @@ un test que compare la producción consigo misma pasa con el hueco a cero y no p
 reales a los anchos reales, y los colores salen todos de brochas del tema —no hay ni un color
 nuevo—, pero **no se ha montado la aplicación para hacer capturas** en los dos temas. Eso queda
 para el usuario, que es quien tiene el hub y el clon.
+
+## F17 — Ciclos temáticos: cada ciclo elige su lupa
+
+Hasta aquí todo ciclo auditaba «en general». La petición del equipo es que **cada ciclo se
+configure**: una temática —General por defecto— y un modelo preferido. No es una funcionalidad
+más: cambia lo que «auditada» significa, y por eso lo difícil de esta fase no fue construir el
+diálogo sino sostener la consistencia — qué se reconcilia, qué envejece, qué se re-siembra — sin
+tocar ni un byte del comportamiento del ciclo General.
+
+### D-824 — El catálogo es cerrado, vive junto a la rúbrica y se CITA
+
+Seis temáticas —General, Seguridad, Rendimiento, Fiabilidad, Concurrencia y asincronía,
+Mantenibilidad— en `ThemeCatalog`, al lado de `SeverityRubric` y con su mismo régimen: un solo
+sitio versionado en git, que el prompt cita y no copia (hay un test que cuenta las apariciones).
+Cada una lleva DOS listas, escritas con el cuidado de la rúbrica —ejemplos que se reconocen en el
+código, no categorías—: **qué busca** y **qué NO debe reportar**. La segunda no es cortesía: un
+modelo al que solo se le dice «no mires otras cosas» acaba reportando la crítica de al lado con la
+excusa de que era importante, así que se le nombra lo concreto que se va a encontrar y tiene que
+callarse.
+
+**Por qué cerrado.** Una temática es un encargo que el auditor tiene que poder cumplir sin
+interpretar. Una personalizada sería un prompt libre con nombre de lupa —otra auditoría general
+con otro nombre— y además una superficie más de gobernanza que mantener. Si el equipo pide una
+que falta, se añade al catálogo con sus dos listas. Queda en BACKLOG.
+
+**El enum vive en Domain; el catálogo, en Copilot.** El dominio necesita el vocabulario para
+guardar y comparar (`AuditTheme`, con wire-values en minúscula como todo lo demás); los criterios
+son texto de prompt y van donde va el prompt. La paleta de la cinta (§6) va también en el
+catálogo, porque es «lo que significa cada temática» dicho en color.
+
+### D-825 — La regla dura del enfoque: fuera de temática NO se reporta nada [DECISIÓN]
+
+Se toma la recomendación del prompt, estricta, sin válvula. Un enfoque que «también mira otras
+cosas» no es un enfoque, y para la mirada completa existe el ciclo General. Se le dice al auditor
+en el bloque `ENFOQUE DEL CICLO` del prompt —con las dos listas y con la instrucción de que ni
+`submit_findings` ni `add_locations` salgan de la lupa, por grave que le parezca lo que ve— y el
+MANUAL lo dice con las mismas palabras: **un ciclo temático no sustituye a uno General**.
+
+La válvula que el prompt ofrecía (p. ej. «las críticas de seguridad se reportan siempre») se
+descarta y se apunta en BACKLOG como opción DE LA TEMÁTICA para el día en que el uso real enseñe
+una crítica que se quedó sin reportar por estar fuera de lupa. Hoy no hay ese caso, y una regla
+con excepción es exactamente lo que hace que «auditada bajo Rendimiento» deje de poderse explicar
+en una frase.
+
+**Lo que la temática NO cambia, y se comprueba:** la rúbrica de severidad viaja entera en el
+prompt temático (un secreto en claro es crítico bajo Seguridad igual que bajo General), y la
+gobernanza —silencios, patrones, directivas, guarda de evidencia— no mira la lupa: aplica por
+aplicación. Ninguna de esas rutas recibe la temática como parámetro, y así no puede consultarla.
+
+### D-826 — El hallazgo lleva la temática del ciclo que lo detectó, y lo anterior es General
+
+`Finding.Theme` (clave `tematica`), escrito en la creación con la lupa del ciclo. **No es una
+clasificación del defecto**: un mismo `.Result` puede caer en Rendimiento o en Concurrencia según
+con qué lupa se mirara. Es la traza de bajo qué encargo se vio, que es lo que decide qué pasada lo
+reconcilia después (D-827).
+
+La migración es aditiva y sin código: un JSON anterior a F17 no trae la clave y se lee como
+General, que era la única mirada que existía. Lo mismo para `AuditSession.Theme` —con qué lupa
+corrió la sesión, que el informe escribe junto al ciclo— y para `InventoryCycle.Theme`. Tests de
+serialización fijan los seis wire-values y la lectura de un fichero legado de cada tipo.
+
+**Dónde se ve:** filtro «Temática» en Hallazgos (arranca en «Todas», «Limpiar filtros» lo devuelve
+ahí), fila «Temática» en la ficha pegada a «Origen», distintivo con su color en la tarjeta del
+Portafolio y en el panel del ciclo, y una línea en los informes de sesión y de cierre.
+
+### D-827 — Reconciliación acotada: un ciclo temático juzga SOLO lo suyo, y lo demás envejece
+
+La consistencia difícil. Un ciclo de Rendimiento encontrará unidades con hallazgos de Seguridad, y
+la pregunta es qué hace la pasada con ellos. La respuesta es una sola función,
+`ThemeScope.Reconciles(ciclo, hallazgo)`: **General reconcilia todo; una lupa concreta reconcilia
+solo su temática**. La usan el toolbox y el coordinador, para que no puedan discrepar.
+
+Con una lupa, la lista de existentes que se le pide reconciliar al auditor se parte en dos:
+
+- **Los de su temática** van en la lista de siempre —«reconcilia TODOS con report_verdicts»— y
+  son los únicos ULID sobre los que puede pronunciarse. Si omite uno, la unidad es `incompleta`,
+  como siempre.
+- **Los de otras temáticas** se le enseñan en un bloque aparte, «NO los juzgues ni los
+  re-reportes», por una única razón: sin verlos los volvería a reportar como nuevos cuando su
+  familia roza la suya. No cuentan como pendientes de veredicto, y **un veredicto sobre uno de
+  ellos se rechaza con error tipado** («hallazgo de otra temática (Seguridad): este ciclo de
+  Rendimiento no lo juzga») sin tocar el hallazgo. El rechazo queda en las notas de la sesión.
+
+**La consecuencia honesta, escrita en el MANUAL:** los hallazgos de otras temáticas **envejecen**
+durante un ciclo temático. Nadie los está mirando; su frescura los llevará a «por revisar» por el
+camino normal. Es la verdad, y la alternativa —confirmarlos de tapadillo— haría que un ciclo de
+Rendimiento pareciera haber vuelto a ver la credencial que nadie miró.
+
+**Y el anti-objetivo, fijado en test:** con General el prompt es **byte a byte** el de antes de
+F17 (se compara con la llamada que no sabe nada de temáticas), la lista de existentes es la de
+siempre, y un ciclo escrito antes de F17 reconcilia como General. Los tests de reconciliación de
+F4 no se han tocado y siguen en verde.
+
+### D-828 — Configurar el ciclo: tres momentos, un diálogo, y el cierre HEREDA
+
+`CycleConfig` (temática, proveedor y modelo preferidos) se guarda en el `cycle{N}.json` del hub:
+es política compartida por la regla de F13 (D-769) —lo que decide se escribe en el hub y cambia lo
+que «auditada» significa para todo el equipo—, y el commit del hub es la atribución. Un diálogo,
+`CycleConfigViewModel`, con toda la regla fuera de la ventana, aparece en:
+
+- **El alta**, tras el escaneo y antes de escribir el ciclo 1. El escaneo, el diálogo y la
+  escritura se separaron en tres pasos porque el diálogo vive en el hilo de la interfaz y el
+  escaneo no puede congelarla. General preseleccionada y marcada «recomendada». Cancelar deja
+  los valores por defecto y el alta sigue: la aplicación ya está escaneada, y abortarla por un
+  «no» sobre la lupa sería castigar la duda.
+- **El cierre.** El cierre es automático y **no puede quedarse bloqueado esperando a un
+  humano**, así que el ciclo siguiente nace heredando la configuración del que cierra
+  (`CycleSeeding.Seed` recibe la configuración; con null, hereda), el resultado del cierre trae
+  `NextConfig`, y quien cerró ve el diálogo después, desde la carcasa. Cancelar deja la herencia.
+- **El panel**, con «Configurar ciclo», en cualquier momento. Y **«Reiniciar ciclo»** lo enseña
+  también: ya lo pone todo pendiente, que de paso se elija la lupa. Aquí cancelar sí cancela el
+  reinicio — nadie ha dicho que sí a nada.
+
+El flujo (`CycleConfigFlow`) pide los modelos al proveedor preferente de quien configura con un
+tope de diez segundos; si no contesta, el combo trae el modelo configurado en la máquina, marcado
+como no verificado, y una frase que dice por qué. Un diálogo que se queda esperando a un SDK no es
+un diálogo.
+
+### D-829 — Cambiar de temática con trabajo hecho: una sola mecánica, se cambie cuando se cambie
+
+La tabla de siembra de F9.2 se extiende con una columna: **temática distinta → todas las
+auditables a pendiente** (auditada bajo otra lupa no es auditada bajo esta), las grandes siguen
+siendo grandes, y la que nace pendiente pierde su ancla, por lo mismo que en D-700. Con la misma
+temática, la siembra es la de F9.2 sin un cambio — un test compara unidad a unidad el resultado
+de pasar la configuración heredada con el de no pasar nada.
+
+**«Arreglada — pendiente de verificar»** pasa a pendiente con la lupa nueva —la unidad no está
+auditada bajo ella— pero su hallazgo, que no se toca, **conserva la acción Verificar**: el arreglo
+sigue necesitando su cierre, independiente de la lupa del ciclo. Lo que se verifica es el hallazgo
+contra su huella, no la unidad contra el ciclo.
+
+A mitad de ciclo la operación es LA MISMA: `CycleSeeding.Reseed` pasa por `Seed` con el mismo
+número de ciclo y la lupa nueva (así no hay dos siembras), y el aviso es el mismo texto en el
+diálogo, el toast y el test — «N unidades auditadas pasarán a pendientes; los hallazgos existentes
+no se tocan» —, redactado por el servicio y no por la ventana. Cambiar solo el modelo preferido no
+re-siembra nada: no cambia la lupa. Y los hallazgos, ni un byte: hay un test que compara el JSON
+antes y después.
+
+### D-830 — El modelo preferido es preferencia, no imposición
+
+Se guarda con el ciclo (proveedor + modelo, porque un id de modelo no dice de quién es). Al
+lanzar, `CyclePreference.Notice` compara el juez de esta máquina —el modelo CONFIGURADO para el
+proveedor actual, que es el que va a resolver la sesión— con el preferido, y si difieren el
+diálogo de lanzar lo dice en una línea: «Este ciclo prefiere opus (Claude Code); vas a auditar con
+gpt-5 (GitHub Copilot). Auditar con otro juez puede producir disputas». El botón de confirmar
+sigue ahí. **Y el diálogo se enseña aunque la selección no llegue al umbral de unidades**: el
+aviso es lo que hay que ver, y no cabe en ningún otro sitio. La sesión registra proveedor y modelo
+reales, como ya hacía.
+
+Por qué no se impone: no todo el mundo tiene las dos casas (F14), y un ciclo que exigiera Claude
+Code dejaría sin auditar a quien solo tiene Copilot — que es la merma que D-776 prohíbe.
+
+### D-831 — La cinta de ciclos: las fechas salen de donde salen, y lo que no se sabe se dice
+
+Gráfica nueva en Métricas, **«Ciclos y temáticas»**, séptima del panel (entre el flujo y el
+registro de sesiones: es historia, y el registro es el detalle). `MetricsQuery` lee ahora TODOS
+los `cycle{N}.json` de cada app —el cierre nunca borra el del ciclo que termina, así que la
+historia está entera en disco— y construye un tramo por ciclo, del 1 al vigente.
+
+**De dónde sale cada extremo, por este orden, y cada uno con su fuente declarada (`CycleEdge`):**
+
+- Inicio: la apertura escrita en el ciclo (`OpenedUtc`, nuevo en F17, lo escriben el alta, el
+  cierre y el reinicio) → el cierre o reset que lo abrió (lo que ya hacía `CycleSummary`) → su
+  primera sesión (*inferido*: pudo abrirse antes) → el fin del ciclo anterior → el primer dato de
+  la aplicación (*desconocido*). Sin ningún dato, no hay tramo: no se inventa.
+- Fin: hoy si está abierto → la sesión de cierre o reinicio del siguiente → la apertura escrita
+  del siguiente → su última sesión (*inferido*, borde derecho a puntos, y el tooltip lo dice) →
+  ninguna duración medible (*desconocido*).
+
+Los ciclos anteriores a F17 se pintan como General, que es lo que eran. El tooltip lleva ciclo,
+temática, fechas exactas, auditadas / auditables al cierre (o «ahora» si sigue abierto; o «sin
+inventario conservado» si el fichero no está), hallazgos nuevos y resueltos durante el ciclo —los
+resueltos con la misma `ResolutionsIn` que la gráfica de resoluciones— y el coste del ciclo en AI
+credits, **solo lo facturable**, por el mismo `CostOf` que el resto del panel: un ciclo auditado
+con Claude Code enseña «—», no un cero.
+
+**El clic** lleva al informe de cierre —la sesión `Cierre` que abrió el ciclo siguiente— o, si el
+ciclo está abierto, al inventario. Un ciclo cerrado por reinicio no dejó informe, y el clic lo
+dice con un toast en vez de no hacer nada. Filtros: el de aplicación deja una banda; el de
+periodo **recorta el eje y no inventa tramos** (un ciclo que no toca el periodo no aparece; uno
+que lo cruza se dibuja entero y lo recorta el eje). Las bandas van **en el orden del Portafolio**,
+y para que «como el Portafolio» no sea una copia que se queda sin actualizar, la regla se sacó a
+`PortfolioOrder` y la usan los dos.
+
+### D-832 — La paleta de temáticas, elegida por paso y medida; y el dibujo
+
+Seis colores con dos pasos cada uno, en `ThemePalette` junto al catálogo: General en un gris
+sobrio —es «lo de siempre», y las lupas tienen que destacar sobre él— y cinco colores para las
+demás. Se eligieron con la regla de F5.9 y F10.1 (un paso por tema, cada uno contra su superficie:
+`#F6F7FA` claro, `#12151D` oscuro) y se **midieron**, no se pusieron a ojo: un test comprueba
+contraste ≥ 3,0 (el mínimo de WCAG para objetos gráficos) de cada paso sobre su fondo, distancia
+RGB ≥ 40 entre cualquier par de temáticas en cada tema, distancia ≥ 40 de cada paso a cada color
+de severidad (`#D13A3A`, `#E07A2B`, `#D2B036`, `#6C93C0` siguen reservados a chips y roscos: aquí
+no hay rojo, ni naranja, ni amarillo, ni el azul-gris de Baja), y que el paso oscuro es el más
+claro de los dos. El verde de Fiabilidad se oscureció de `#2E8B57` a `#25784A` porque la tinta
+blanca de la etiqueta no llegaba a 4,5 sobre el primero: la tinta va **por paso** (D-649) —blanco
+sobre los pasos del tema claro, negro sobre los del oscuro, decidido por luminancia— y un test la
+mide sobre los doce.
+
+**El control**, `CycleRibbon`, es de la familia de `ChartPlot`: `Canvas`, medida real del texto,
+tooltip nativo, y ningún color decidido dentro. Etiqueta entera cuando cabe («C2 · Seguridad»), la
+corta cuando solo cabe ella («C4»), nada y el tooltip cuando ni eso — medido, no estimado por
+caracteres. El ciclo abierto se desvanece por la derecha: no tiene borde derecho porque no ha
+terminado. Las marcas del eje se anclan al último día (hoy siempre tiene marca) y cambian de
+grano con el periodo: semanas hasta dos meses, meses hasta poco más de un año, trimestres después.
+**Muchos ciclos en poco espacio:** cada tramo visible tiene un ancho mínimo de 28 px; si a la
+escala de la ventana no llega, la cinta crece y se desplaza dentro de su `ScrollViewer` —el ancho
+de la ventana le llega por `ViewportWidth`—, jamás la página. La geometría (`Geometry`) está
+separada del dibujo para poder afirmarla sin pintar un píxel.
+
+### D-833 — Cobertura (95 tests nuevos, 1.941 en total, todo en verde), y las capturas
+
+`ThemeCatalogTests` (Copilot): el catálogo cerrado, las dos listas de cada lupa, el prompt General
+byte a byte, el bloque de enfoque con sus exclusiones y su sitio, la rúbrica entera en el prompt
+temático, los existentes partidos en dos, el criterio citado una sola vez.
+`ThemeSerializationTests` (Storage): los seis wire-values y la lectura de hallazgo, ciclo y sesión
+anteriores a F17. `ThematicReconciliationTests`: el caso de aceptación en pequeño —Rendimiento
+con un hallazgo de Seguridad delante: intacto, no listado, no incompleta—; el de la misma
+temática reconciliado; el veredicto fuera de lupa rechazado y anotado; el prompt de la pasada; la
+sesión y el informe con su temática; General reconciliando las tres temáticas; el ciclo legado
+como General. `ThematicSeedingTests`: la tabla de D-829 por cada estado y por cada temática, la
+re-siembra a mitad de ciclo, el servicio sobre el hub con el JSON del hallazgo comparado byte a
+byte, la arreglada-pendiente que conserva su Verificar, y el cierre que hereda y fecha.
+`CycleConfigDialogTests`: el view-model en sus tres momentos, el aviso con su número, el flujo con
+la lista real y sin ella, cancelar en cada camino, el reinicio, el alta, la carcasa tras el cierre,
+y el aviso del juez preferido. `ThemeSurfaceTests`: el filtro, la ficha, la tarjeta, el panel.
+`CycleRibbonTests`: las fechas de un ciclo legado, el fin no recuperable, el reinicio sin informe,
+la app sin datos, el tooltip completo, el ciclo sin nada facturable, los dos filtros, el orden del
+Portafolio, la paleta medida en sus cuatro propiedades, la geometría y las marcas del eje, la
+vista y los tres clics.
+
+**Y esta vez la cinta sí se ha visto.** Se montó un arnés aparte —fuera del repo, en el
+scratchpad de la sesión— que instancia el `CycleRibbon` real dentro de una tarjeta con los fondos
+de cada tema y lo renderiza a PNG a 1060 px: tres bandas, seis temáticas, un ciclo de seis días
+que fuerza el ancho mínimo (y con él el desplazamiento dentro de la tarjeta), un fin no
+recuperable con su borde a puntos y dos ciclos abiertos. En los dos temas las etiquetas se leen
+sobre cada color, la corta aparece donde no cabe la entera, los nombres largos se recortan con
+elipsis y el eje llega a hoy. Las dos capturas se entregaron con el parte de la fase. Lo que
+sigue sin verse es la cinta sobre el hub real y los tooltips con el ratón encima: BACKLOG.
+
+### D-834 — Lo que sigue siendo del usuario
+
+El juicio del modelo bajo una lupa no lo prueba ningún test: la aceptación es sobre el banco, y
+está descrita en BACKLOG con lo que tiene que salir y lo que no. Si el modelo se sale de la lupa,
+el sitio para apretar es `ThemeCatalog.Excludes` de esa temática — la regla de la aplicación ya
+sostiene lo que puede sostener (la reconciliación), y lo que reporta de nuevo solo lo gobierna el
+prompt.
