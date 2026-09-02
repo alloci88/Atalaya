@@ -1,4 +1,4 @@
-<ui:FluentWindow
+﻿<ui:FluentWindow
     x:Class="Atalaya.App.Views.AuditLaunchDialog"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -50,6 +50,17 @@
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                 </StackPanel>
             </Border>
+
+            <!-- F17 §5: el juez preferido del ciclo no es el de esta máquina. Una línea, y se
+                 sigue: es preferencia, no imposición. -->
+            <StackPanel Orientation="Horizontal" Margin="0,10,0,0"
+                        Visibility="{Binding HasPreferenceNotice, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="⚠" Margin="0,0,7,0"
+                           Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                <TextBlock Text="{Binding PreferenceNotice}"
+                           TextWrapping="Wrap" FontSize="12" MaxWidth="440"
+                           Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+            </StackPanel>
 
             <!-- Solo cuando el dato es flojo: si la media se sostiene, no hay nada que advertir. -->
             <StackPanel Orientation="Horizontal" Margin="0,10,0,0"

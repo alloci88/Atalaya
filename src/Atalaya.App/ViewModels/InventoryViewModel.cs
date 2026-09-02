@@ -8,6 +8,8 @@ using Atalaya.Domain.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
+using Atalaya.Copilot;
+
 namespace Atalaya.App.ViewModels;
 
 /// <summary>V2 Inventory (§8): module→unit tree with state, claims, filters, and cycle actions.</summary>
@@ -102,6 +104,15 @@ public sealed partial class InventoryViewModel : ViewModelBase
 
     private readonly IThresholdsDialog _thresholdsDialog;
 
+    /// <summary>
+    /// Configurar el ciclo (F17 §4). Los dos son opcionales por lo mismo que el registro de
+    /// proveedores: los tests que ejercitan la selección y el barrido no tienen nada que decir
+    /// sobre temáticas, y sin flujo el reinicio hereda la configuración sin preguntar.
+    /// </summary>
+    private readonly CycleConfigService? _cycleConfig;
+
+    private readonly CycleConfigFlow? _configFlow;
+
     public InventoryViewModel(
         HubContext hub, IUlidFactory ulids, NavigationService navigation, LiveSessionService live,
         SettingsService settings, CostEstimator costs, IAuditLaunchConfirmer confirmer,
@@ -111,8 +122,11 @@ public sealed partial class InventoryViewModel : ViewModelBase
         DirectiveService directives, IDirectivesDialog directivesDialog,
         DriftQuery driftQuery, IDeletedUnitsDialog deletedDialog,
         ThresholdPolicyService thresholds, IThresholdsDialog thresholdsDialog,
-        AuditorProviderRegistry? providers = null)
+        AuditorProviderRegistry? providers = null,
+        CycleConfigService? cycleConfig = null, CycleConfigFlow? configFlow = null)
     {
+        _cycleConfig = cycleConfig;
+        _configFlow = configFlow;
         _providers = providers;
         _thresholds = thresholds;
         _thresholdsDialog = thresholdsDialog;
@@ -205,6 +219,26 @@ public sealed partial class InventoryViewModel : ViewModelBase
 
     /// <summary>El ciclo con su fecha: «Ciclo 5 · iniciado 12 ago 2026» (F5.6 §5).</summary>
     [ObservableProperty] private string _cycleLabel = "Ciclo 1";
+
+    /// <summary>La lupa del ciclo vigente (F17): un distintivo en el panel, con su color.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CycleThemeLabel))]
+    [NotifyPropertyChangedFor(nameof(CycleThemeTooltip))]
+    private AuditTheme _cycleTheme = AuditTheme.General;
+
+    public string CycleThemeLabel => ThemeCatalog.Display(CycleTheme);
+
+    public string CycleThemeTooltip => CycleTheme == AuditTheme.General
+        ? "Ciclo General: el criterio completo. Es el ciclo de referencia."
+        : $"Ciclo temático: el auditor busca SOLO defectos de {ThemeCatalog.Display(CycleTheme)} y reconcilia "
+          + "solo los hallazgos de esa temática. Los de otras temáticas envejecen mientras dura. Un ciclo "
+          + "temático no sustituye a uno General.";
+
+    /// <summary>«opus (Claude Code)» o «sin preferencia»: el juez que el equipo prefiere para este ciclo.</summary>
+    [ObservableProperty] private string _preferredModelLabel = "sin preferencia";
+
+    /// <summary>La configuración vigente, para el aviso del lanzar (F17 §5).</summary>
+    private CycleConfig _cycleConfigValue = CycleConfig.Default;
 
     /// <inheritdoc cref="CycleSummary.Tooltip"/>
     [ObservableProperty] private string _cycleTooltip = string.Empty;
@@ -517,6 +551,15 @@ public sealed partial class InventoryViewModel : ViewModelBase
         // con 40 unidades grandes se pueda explicar sin abrir nada.
         LargeUnitLoc = app.Thresholds.LargeUnitLoc;
         RefreshLargeUnitOffer();
+
+        // F17: la lupa y el juez preferido del ciclo, leídos del mismo fichero que las unidades.
+        _cycleConfigValue = inv?.Config ?? CycleConfig.Default;
+        CycleTheme = _cycleConfigValue.Theme;
+        PreferredModelLabel = !_cycleConfigValue.HasPreferredModel
+            ? "sin preferencia"
+            : string.IsNullOrWhiteSpace(_cycleConfigValue.PreferredProvider)
+                ? _cycleConfigValue.PreferredModel!
+                : $"{_cycleConfigValue.PreferredModel} ({ProviderNames.Display(_cycleConfigValue.PreferredProvider)})";
 
         var sessions = _hub.Store.ListSessions(Slug);
         CycleStart start = CycleSummary.StartOf(sessions, CycleN);
@@ -1047,6 +1090,46 @@ public sealed partial class InventoryViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// «Configurar ciclo» (F17 §4): la temática y el juez preferido del ciclo vigente. Cambiar de
+    /// temática con trabajo hecho avisa y re-siembra; es la misma operación se haga cuando se haga.
+    /// </summary>
+    [RelayCommand]
+    private async Task ConfigureCycle()
+    {
+        if (_cycleConfig is null || _configFlow is null)
+        {
+            _toasts.Show("Configurar el ciclo no está disponible en esta instalación.");
+            return;
+        }
+
+        CycleConfigPreview? preview = _cycleConfig.Preview(Slug);
+        if (preview is null)
+        {
+            _toasts.Show("No hay ciclo que configurar todavía.");
+            return;
+        }
+
+        CycleConfig? chosen = await _configFlow.AskAsync(preview, CycleConfigReason.Configurar);
+        if (chosen is null)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            CycleConfigResult result = await Task.Run(() => _cycleConfig.Apply(Slug, chosen));
+            _toasts.Show(result.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+            Rebuild();
+            _ = RefreshDriftAsync();
+        }
+    }
+
     [RelayCommand]
     private async Task ResetCycle()
     {
@@ -1057,13 +1140,30 @@ public sealed partial class InventoryViewModel : ViewModelBase
             return;
         }
 
+        // F17 §4: reiniciar ya pone todo pendiente; que de paso se elija la lupa. Cancelar el
+        // diálogo cancela el reinicio — nadie ha dicho que sí a nada. Sin flujo (tests, instalación
+        // sin diálogo) el ciclo nuevo hereda la configuración del que se reinicia.
+        CycleConfig config = current.Config;
+        if (_configFlow is not null)
+        {
+            var preview = new CycleConfigPreview(Slug, app.Name, app.CurrentCycle + 1, current.Config, 0);
+            CycleConfig? chosen = await _configFlow.AskAsync(preview, CycleConfigReason.Reinicio);
+            if (chosen is null)
+            {
+                _toasts.Show("Reinicio cancelado. El ciclo sigue como estaba.");
+                return;
+            }
+
+            config = chosen;
+        }
+
         IsBusy = true;
         try
         {
             await Task.Run(() =>
             {
                 int next = app.CurrentCycle + 1;
-                var fresh = new InventoryCycle { CycleN = next };
+                var fresh = new InventoryCycle { CycleN = next, Config = config, OpenedUtc = DateTimeOffset.UtcNow };
                 foreach (InventoryUnit u in current.Units)
                 {
                     // Nothing is deleted; large units are re-evaluated against the threshold
@@ -1092,6 +1192,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
                     StartedUtc = DateTimeOffset.UtcNow,
                     EndedUtc = DateTimeOffset.UtcNow,
                     CycleN = next,
+                    Theme = config.Theme,
                 });
                 _hub.Sync?.CommitAndPush($"reset: {Slug} nuevo ciclo {next}");
             });
@@ -1175,7 +1276,24 @@ public sealed partial class InventoryViewModel : ViewModelBase
             AppName,
             EstimateFor(units),
             provider?.ProviderName ?? string.Empty,
-            provider?.ModelName);
+            provider?.ModelName,
+            preferenceNotice: PreferenceNoticeFor(provider));
+    }
+
+    /// <summary>
+    /// El aviso del juez preferido (F17 §5), si el de esta máquina no es el del ciclo. El modelo que
+    /// se compara es el CONFIGURADO para el proveedor actual: es el que va a resolver la sesión.
+    /// </summary>
+    internal string? PreferenceNoticeFor(IAuditorProvider? provider)
+    {
+        if (provider is null)
+        {
+            return null;
+        }
+
+        string configured = _settings.ModelFor(provider.ProviderId).Trim();
+        string? model = configured.Length > 0 ? configured : provider.ModelName;
+        return CyclePreference.Notice(_cycleConfigValue, provider.ProviderId, model, provider.ProviderName);
     }
 
     /// <summary>
@@ -1217,9 +1335,11 @@ public sealed partial class InventoryViewModel : ViewModelBase
             return;
         }
 
-        if (paths.Count > ConfirmThreshold)
+        // F17 §5: con un juez distinto del preferido, el diálogo se enseña aunque la selección
+        // no llegue al umbral — el aviso es lo que hay que ver, y no cabe en ningún otro sitio.
+        AuditLaunchConfirmation confirmation = ConfirmationFor(paths.Count);
+        if (paths.Count > ConfirmThreshold || confirmation.HasPreferenceNotice)
         {
-            AuditLaunchConfirmation confirmation = ConfirmationFor(paths.Count);
             if (!_confirmer.Confirm(confirmation))
             {
                 _toasts.Show("Lanzamiento cancelado. La selección sigue como estaba.");

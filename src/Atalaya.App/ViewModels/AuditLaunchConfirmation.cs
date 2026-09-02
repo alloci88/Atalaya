@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 
 namespace Atalaya.App.ViewModels;
 
@@ -28,14 +28,25 @@ public sealed class AuditLaunchConfirmation
         CostEstimate estimate,
         string providerName = "",
         string? modelName = null,
-        string? costCaveat = null)
+        string? costCaveat = null,
+        string? preferenceNotice = null)
     {
         AppName = appName;
         Estimate = estimate;
         ProviderName = providerName;
         ModelName = modelName;
         CostCaveat = costCaveat;
+        PreferenceNotice = preferenceNotice;
     }
+
+    /// <summary>
+    /// «Este ciclo prefiere X; auditar con otro juez puede producir disputas» (F17 §5), cuando el
+    /// proveedor o el modelo de esta máquina no son los preferidos del ciclo. Avisa en una línea y
+    /// deja continuar: es preferencia, no imposición. Null cuando coinciden o no hay preferencia.
+    /// </summary>
+    public string? PreferenceNotice { get; }
+
+    public bool HasPreferenceNotice => !string.IsNullOrWhiteSpace(PreferenceNotice);
 
     public string AppName { get; }
 

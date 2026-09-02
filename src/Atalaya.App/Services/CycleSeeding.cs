@@ -1,4 +1,4 @@
-using Atalaya.Domain;
+﻿using Atalaya.Domain;
 using Atalaya.Domain.Model;
 
 namespace Atalaya.App.Services;
@@ -73,15 +73,27 @@ public static class CycleSeeding
     /// <paramref name="drift"/> es la deriva medida sobre el ciclo que TERMINA; <c>null</c> —o con
     /// problema, que es lo mismo: no se ha podido mirar— siembra todo pendiente.
     /// </summary>
+    /// <param name="config">
+    /// La configuración con la que NACE el ciclo nuevo (F17 §4). Null = hereda la del que cierra,
+    /// que es lo que hace el cierre automático: no puede quedarse bloqueado esperando a un humano.
+    /// Con la MISMA temática la siembra es la de F9.2, intacta. Con otra, «auditada» deja de
+    /// significar nada —auditada bajo otra lupa no es auditada bajo esta— y todas las auditables
+    /// nacen pendientes; las grandes siguen siendo grandes.
+    /// </param>
+    /// <param name="openedUtc">Cuándo se abre. Null solo en los caminos que no lo saben.</param>
     public static InventoryCycle Seed(
-        InventoryCycle closing, int nextCycle, int largeUnitLoc, AppDrift? drift)
+        InventoryCycle closing, int nextCycle, int largeUnitLoc, AppDrift? drift,
+        CycleConfig? config = null, DateTimeOffset? openedUtc = null)
     {
         IReadOnlyDictionary<string, DriftState> byPath = StatesByPath(drift);
-        var fresh = new InventoryCycle { CycleN = nextCycle };
+        CycleConfig born = config ?? closing.Config;
+        bool sameTheme = born.Theme == closing.Theme;
+        var fresh = new InventoryCycle { CycleN = nextCycle, Config = born, OpenedUtc = openedUtc };
 
         foreach (InventoryUnit u in closing.Units)
         {
-            bool keepsAudit = u.State == UnitState.Auditada
+            bool keepsAudit = sameTheme
+                && u.State == UnitState.Auditada
                 && byPath.TryGetValue(u.Path, out DriftState state)
                 && Survives(state);
 
@@ -107,6 +119,42 @@ public static class CycleSeeding
         }
 
         return fresh;
+    }
+
+    /// <summary>
+    /// Cambiar la configuración del ciclo EN CURSO (F17 §4). Es la misma mecánica que la siembra,
+    /// aplicada sobre el mismo número de ciclo: si la temática no cambia, las unidades se quedan
+    /// exactamente como están y solo se reescribe la preferencia de juez; si cambia, todas las
+    /// auditables vuelven a pendiente y pierden su ancla —la deriva que colgaba de ella ya no
+    /// describe nada que se haya mirado con esta lupa—, y las grandes siguen siendo grandes.
+    /// «Arreglada — pendiente de verificar» también pasa a pendiente: la unidad no está auditada
+    /// bajo la lupa nueva; su hallazgo, que no se toca, conserva su acción Verificar.
+    /// </summary>
+    public static InventoryCycle Reseed(InventoryCycle current, CycleConfig config, int largeUnitLoc)
+    {
+        if (current.Theme == config.Theme)
+        {
+            var same = new InventoryCycle
+            {
+                CycleN = current.CycleN,
+                Config = config,
+                OpenedUtc = current.OpenedUtc,
+            };
+            same.Units.AddRange(current.Units.Select(u => new InventoryUnit
+            {
+                Path = u.Path,
+                Module = u.Module,
+                Loc = u.Loc,
+                ContentHash = u.ContentHash,
+                State = u.State,
+                AuditedInSession = u.AuditedInSession,
+            }));
+            return same;
+        }
+
+        // Temática distinta: Seed sin deriva y con otra lupa no conserva ninguna auditada, que es
+        // exactamente la regla. Se pasa por el mismo método para que no haya dos siembras.
+        return Seed(current, current.CycleN, largeUnitLoc, drift: null, config, current.OpenedUtc);
     }
 
     /// <summary>Lo que queda envejecido del ciclo que se cierra. Sin deriva medible, nada que decir.</summary>

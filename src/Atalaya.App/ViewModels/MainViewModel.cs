@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
@@ -19,6 +19,11 @@ public sealed partial class MainViewModel : ObservableObject
 {
     private readonly HubContext _hub;
     private readonly SettingsService _settings;
+
+    /// <summary>Ofrecer configurar el ciclo recién abierto tras un cierre (F17 §4). Opcionales: los tests de la carcasa no lo montan.</summary>
+    private readonly CycleConfigService? _cycleConfig;
+
+    private readonly CycleConfigFlow? _configFlow;
     private readonly GitHubAccountService _account;
     private readonly LiveSessionService _live;
 
@@ -46,8 +51,12 @@ public sealed partial class MainViewModel : ObservableObject
         DisplayIdService aliases,
         ToastCenter toasts,
         UpdateCheckService? updates = null,
-        SelfUpdateService? selfUpdate = null)
+        SelfUpdateService? selfUpdate = null,
+        CycleConfigService? cycleConfig = null,
+        CycleConfigFlow? configFlow = null)
     {
+        _cycleConfig = cycleConfig;
+        _configFlow = configFlow;
         _selfUpdate = selfUpdate;
         Navigation = navigation;
         _toasts = toasts;
@@ -288,7 +297,40 @@ public sealed partial class MainViewModel : ObservableObject
             ToastKind.SessionCompleted);
         AnnounceCycleClose(result.CycleClose);
         SyncSession();
+        _ = OfferCycleConfigAsync(result.CycleClose);
     });
+
+    /// <summary>
+    /// Quien cerró el ciclo ve el diálogo para cambiar la configuración que el siguiente acaba de
+    /// heredar (F17 §4). El cierre ya está hecho y publicado —no espera a nadie—; esto es la
+    /// oportunidad de cambiar la lupa mientras el ciclo nuevo todavía no tiene trabajo bajo ella.
+    /// Cancelar deja la herencia tal cual.
+    /// </summary>
+    internal async Task OfferCycleConfigAsync(CycleCloseResult close)
+    {
+        if (!close.Closed || _cycleConfig is null || _configFlow is null)
+        {
+            return;
+        }
+
+        CycleConfigPreview? preview = _cycleConfig.Preview(close.Slug);
+        if (preview is null || preview.CycleN != close.NextCycle)
+        {
+            return;
+        }
+
+        CycleConfig? chosen = await _configFlow.AskAsync(preview, CycleConfigReason.Cierre);
+        if (chosen is null)
+        {
+            return;
+        }
+
+        CycleConfigResult result = await Task.Run(() => _cycleConfig.Apply(close.Slug, chosen));
+        if (result.Applied)
+        {
+            _toasts.Show(result.Message);
+        }
+    }
 
     // ---- Aviso de cierre de ciclo (F12 §G) ----
 

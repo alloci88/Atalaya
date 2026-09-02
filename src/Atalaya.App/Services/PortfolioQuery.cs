@@ -4,6 +4,19 @@ using Atalaya.Storage;
 
 namespace Atalaya.App.Services;
 
+/// <summary>
+/// El orden del Portafolio, en un solo sitio (F17 §6): primero las apps con críticas, luego las
+/// que tienen deuda viva, luego las limpias; dentro de cada grupo, más críticas+altas antes; y
+/// el nombre desempata. La cinta de ciclos de Métricas ordena sus bandas con ESTA misma regla,
+/// para que «como el Portafolio» no sea una copia que se quede sin actualizar.
+/// </summary>
+public static class PortfolioOrder
+{
+    public static int Key(int critica, int activeTotal) => critica > 0 ? 0 : activeTotal > 0 ? 1 : 2;
+
+    public static int Weight(int critica, int alta) => critica + alta;
+}
+
 /// <summary>A computed portfolio card for one app (§8 V1). Never stored — always derived.</summary>
 public sealed record AppCard(
     string Slug,
@@ -57,6 +70,16 @@ public sealed record AppCard(
     /// <summary>Arregladas desde Atalaya y sin verificar (F9 §2). Va SEPARADO: es otra acción.</summary>
     public int? FixedPendingVerify { get; init; }
 
+    /// <summary>La lupa del ciclo vigente (F17): un distintivo en la tarjeta, con su color.</summary>
+    public AuditTheme Theme { get; init; } = AuditTheme.General;
+
+    public string ThemeLabel => Copilot.ThemeCatalog.Display(Theme);
+
+    public string ThemeTooltip => Theme == AuditTheme.General
+        ? "Ciclo General: el criterio completo."
+        : $"Ciclo temático de {Copilot.ThemeCatalog.Display(Theme)}: el auditor busca solo esa familia de defectos. "
+          + "Un ciclo temático no sustituye a uno General.";
+
     /// <summary>
     /// Lo que se lee en la tarjeta. Es la frase que convierte esto en un hábito: cada mañana dice
     /// cuánta deuda nueva puede haber entrado sin que nadie lo busque.
@@ -88,7 +111,7 @@ public sealed record AppCard(
           + ". Un clic abre el Inventario con el filtro puesto.";
 
     /// <summary>Apps with open critical findings sort first (§8 V1).</summary>
-    public int SortKey => Critica > 0 ? 0 : ActiveTotal > 0 ? 1 : 2;
+    public int SortKey => PortfolioOrder.Key(Critica, ActiveTotal);
 
     /// <summary>
     /// Borrar exige que NADIE esté auditando la app (F5.3 §4). Un hard-reset a mitad de sesión
@@ -123,7 +146,7 @@ public sealed class PortfolioQuery
             .Where(c => c is not null)
             .Select(c => c!)
             .OrderBy(c => c.SortKey)
-            .ThenByDescending(c => c.Critica + c.Alta)
+            .ThenByDescending(c => PortfolioOrder.Weight(c.Critica, c.Alta))
             .ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -164,7 +187,10 @@ public sealed class PortfolioQuery
             active.Count,
             last?.By, last?.StartedUtc,
             auditingNow,
-            BuildTrend(active, now));
+            BuildTrend(active, now))
+        {
+            Theme = inv?.Theme ?? AuditTheme.General,
+        };
     }
 
     /// <summary>A 30-day sparkline of active findings first detected per day.</summary>

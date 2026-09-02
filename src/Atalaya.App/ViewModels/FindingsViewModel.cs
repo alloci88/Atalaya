@@ -1,10 +1,12 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using Atalaya.App.Services;
 using Atalaya.Domain;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+
+using Atalaya.Copilot;
 
 namespace Atalaya.App.ViewModels;
 
@@ -39,6 +41,12 @@ public sealed record ScopeFilterOption(FindingsScope Value, string Label)
     public override string ToString() => Label;
 }
 
+/// <inheritdoc cref="AppFilterOption"/>
+public sealed record ThemeFilterOption(AuditTheme? Value, string Label)
+{
+    public override string ToString() => Label;
+}
+
 /// <summary>
 /// Elemento de la lista plana de V3: o una cabecera de unidad o un hallazgo. La lista se aplana
 /// para que la virtualización siga siendo por FILA — agrupar con contenedores anidados la habría
@@ -60,6 +68,9 @@ public sealed class FindingRow : FindingsListItem
     public Confidence Confidence { get; init; }
     public FindingStatus Status { get; init; }
     public Pillar Pillar { get; init; }
+
+    /// <summary>La lupa del ciclo que lo detectó (F17).</summary>
+    public AuditTheme Theme { get; init; } = AuditTheme.General;
     public string? Assignee { get; init; }
 
     /// <summary>La unidad (fichero) que agrupa el hallazgo: la ruta de su primera localización.</summary>
@@ -220,6 +231,9 @@ public sealed partial class FindingsViewModel : ViewModelBase
     /// <summary>La opción neutra del combo de severidad. Es el valor inicial.</summary>
     public static readonly SeverityFilterOption AllSeverities = new(null, "Todas");
 
+    /// <summary>La opción neutra del combo de temática (F17). Es el valor inicial.</summary>
+    public static readonly ThemeFilterOption AllThemes = new(null, "Todas");
+
     private readonly HubContext _hub;
     private readonly NavigationService _navigation;
     private readonly SettingsService _settings;
@@ -262,11 +276,16 @@ public sealed partial class FindingsViewModel : ViewModelBase
             new(FindingsScope.Todos, "Todos"),
         };
 
+        ThemeOptions = new List<ThemeFilterOption> { AllThemes }
+            .Concat(ThemeCatalog.All.Select(t => new ThemeFilterOption(t, ThemeCatalog.Display(t))))
+            .ToList();
+
         _suspendReload = true;
         AppOptions.Add(AllApps);
         SelectedApp = AllApps;
         SelectedSeverity = AllSeverities;
         SelectedScope = ScopeOptions[0];
+        SelectedTheme = AllThemes;
         _suspendReload = false;
     }
 
@@ -283,6 +302,11 @@ public sealed partial class FindingsViewModel : ViewModelBase
     public IReadOnlyList<SeverityFilterOption> SeverityOptions { get; }
 
     public IReadOnlyList<ScopeFilterOption> ScopeOptions { get; }
+
+    /// <summary>Filtro por temática (F17): la lupa del ciclo que detectó cada hallazgo.</summary>
+    public IReadOnlyList<ThemeFilterOption> ThemeOptions { get; }
+
+    [ObservableProperty] private ThemeFilterOption? _selectedTheme;
 
     [ObservableProperty] private AppFilterOption? _selectedApp;
     [ObservableProperty] private SeverityFilterOption? _selectedSeverity;
@@ -307,6 +331,7 @@ public sealed partial class FindingsViewModel : ViewModelBase
 
     partial void OnSelectedAppChanged(AppFilterOption? value) => Reload();
     partial void OnSelectedSeverityChanged(SeverityFilterOption? value) => Reload();
+partial void OnSelectedThemeChanged(ThemeFilterOption? value) => Reload();
     partial void OnSelectedScopeChanged(ScopeFilterOption? value) => Reload();
     partial void OnOnlyNeedsReviewChanged(bool value) => Reload();
     partial void OnOnlyDisputedChanged(bool value) => Reload();
@@ -412,6 +437,7 @@ public sealed partial class FindingsViewModel : ViewModelBase
 
         string? appFilter = SelectedApp?.Slug;
         Severity? severityFilter = SelectedSeverity?.Value;
+        AuditTheme? themeFilter = SelectedTheme?.Value;
         FindingsScope scope = SelectedScope?.Value ?? FindingsScope.Activos;
         string search = SearchText?.Trim() ?? string.Empty;
         bool showApp = appFilter is null;
@@ -432,7 +458,8 @@ public sealed partial class FindingsViewModel : ViewModelBase
                 if (!MatchesScope(f, scope)
                     || (OnlyNeedsReview && !f.NeedsReview)
                     || (OnlyDisputed && f.Disputes.Count == 0)
-                    || (severityFilter is { } sev && f.Severity != sev))
+                    || (severityFilter is { } sev && f.Severity != sev)
+                    || (themeFilter is { } th && f.Theme != th))
                 {
                     continue;
                 }
@@ -455,6 +482,7 @@ public sealed partial class FindingsViewModel : ViewModelBase
                     Confidence = f.Confidence,
                     Status = f.Status,
                     Pillar = f.Pillar,
+                    Theme = f.Theme,
                     Assignee = f.Assignee,
                     UnitPath = loc.Path,
                     Line = loc.Line,
@@ -488,6 +516,7 @@ public sealed partial class FindingsViewModel : ViewModelBase
         IsEmpty = rows.Count == 0;
         HasActiveFilters = appFilter is not null
             || severityFilter is not null
+            || themeFilter is not null
             || scope != FindingsScope.Activos
             || OnlyNeedsReview
             || OnlyDisputed
@@ -574,6 +603,7 @@ public sealed partial class FindingsViewModel : ViewModelBase
         SelectedApp = AppOptions.FirstOrDefault(o => o.Slug is null) ?? AllApps;
         SelectedSeverity = AllSeverities;
         SelectedScope = ScopeOptions[0];
+        SelectedTheme = AllThemes;
         OnlyNeedsReview = false;
         OnlyDisputed = false;
         _suspendReload = false;

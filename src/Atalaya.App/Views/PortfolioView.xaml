@@ -1,4 +1,4 @@
-<UserControl
+﻿<UserControl
     x:Class="Atalaya.App.Views.PortfolioView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -109,6 +109,13 @@
                                     <TextBlock Text="  ·  " Opacity="0.4" />
                                     <TextBlock Text="{Binding ProgressText}" FontWeight="SemiBold" />
                                     <TextBlock Text=" auditado" Opacity="0.6" />
+                                    <!-- F17: la lupa del ciclo, como distintivo. Un chip, no un párrafo. -->
+                                    <Border CornerRadius="9" Padding="7,1" Margin="8,0,0,0" VerticalAlignment="Center"
+                                            Background="{Binding Theme, Converter={StaticResource ThemeToBrush}, ConverterParameter=soft}"
+                                            ToolTip="{Binding ThemeTooltip}">
+                                        <TextBlock Text="{Binding ThemeLabel}" FontSize="10.5" FontWeight="SemiBold"
+                                                   Foreground="{Binding Theme, Converter={StaticResource ThemeToBrush}}" />
+                                    </Border>
                                 </StackPanel>
                                 <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}" Height="6" Margin="0,6,0,0" />
 

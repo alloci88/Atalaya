@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Text;
 using Atalaya.App.Services;
 using Atalaya.Domain;
@@ -43,6 +43,9 @@ public sealed partial class OnboardingViewModel : ViewModelBase
 
     private readonly IFolderPicker _picker;
 
+    /// <summary>El diálogo del primer ciclo (F17 §4). Opcional: sin él, el ciclo 1 nace General.</summary>
+    private readonly CycleConfigFlow? _configFlow;
+
     public OnboardingViewModel(
         HubContext hub,
         InventoryScanner scanner,
@@ -54,8 +57,10 @@ public sealed partial class OnboardingViewModel : ViewModelBase
         LinkCloneFlow linkFlow,
         ImportService import,
         IFolderPicker picker,
-        MeasuredFindingService measured)
+        MeasuredFindingService measured,
+        CycleConfigFlow? configFlow = null)
     {
+        _configFlow = configFlow;
         _measured = measured;
         _hub = hub;
         _scanner = scanner;
@@ -263,7 +268,10 @@ public sealed partial class OnboardingViewModel : ViewModelBase
         _toasts.Show(importing ? "Importando el baseline v4, escaneando y registrando…" : "Escaneando y registrando…");
         try
         {
-            IReadOnlyList<string> log = await Task.Run(() =>
+            // F17 §4: el escaneo primero, el diálogo después, y el ciclo 1 se escribe con lo
+            // elegido. Los tres pasos se separan porque el diálogo vive en el hilo de la interfaz
+            // y el escaneo no puede congelarla.
+            (IReadOnlyList<string> log, AppConfig app, ScanOutput scan) = await Task.Run(() =>
             {
                 if (DetectedStack == TechStack.Unknown)
                 {
@@ -298,14 +306,29 @@ public sealed partial class OnboardingViewModel : ViewModelBase
                 ScanOutput scan = _scanner.Scan(ClonePath, app, app.CurrentCycle);
                 app.Stack = scan.Stack;
                 _hub.Store.WriteApp(app);
+                return (importLog, app, scan);
+            });
 
+            // F17 §4: tras el escaneo y ANTES de abrir el ciclo 1, la lupa. General preseleccionada
+            // y marcada como recomendada; cancelar deja los valores por defecto y el alta sigue.
+            InventoryCycle? previous = _hub.Store.TryReadInventory(slug, app.CurrentCycle);
+            CycleConfig config = previous?.Config ?? CycleConfig.Default;
+            if (_configFlow is not null)
+            {
+                var preview = new CycleConfigPreview(slug, app.Name, app.CurrentCycle, config, 0);
+                config = await _configFlow.AskAsync(preview, CycleConfigReason.Alta) ?? config;
+            }
+
+            await Task.Run(() =>
+            {
                 // 3) El inventario del ciclo vigente sale del CÓDIGO que hay en el clon, pero
                 //    arrastrando el estado de lo que el baseline daba por auditado: es la misma
                 //    reconciliación del re-escaneo (D-302), no una segunda escrita aparte.
-                InventoryCycle? previous = _hub.Store.TryReadInventory(slug, app.CurrentCycle);
                 InventoryCycle inventory = previous is null
                     ? scan.Inventory
                     : Rescanner.Reconcile(previous, scan.Inventory).Merged;
+                inventory.Config = config;
+                inventory.OpenedUtc ??= DateTimeOffset.UtcNow;
                 _hub.Store.WriteInventory(slug, inventory);
 
                 // Los hallazgos de «unidad demasiado grande» los pone al día el MISMO servicio que
@@ -318,7 +341,6 @@ public sealed partial class OnboardingViewModel : ViewModelBase
                 _hub.Sync?.CommitAndPush(importing
                     ? $"app: onboard {slug} ({scan.Stack}) + import v4"
                     : $"app: onboard {slug} ({scan.Stack})");
-                return importLog;
             });
 
             foreach (string line in log)

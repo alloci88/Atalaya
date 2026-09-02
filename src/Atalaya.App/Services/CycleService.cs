@@ -36,6 +36,12 @@ public sealed record CycleCloseResult(bool Closed, CycleAging Aging)
     public string ReportSessionId { get; init; } = string.Empty;
 
     /// <summary>
+    /// Con qué configuración nace el ciclo siguiente (F17 §4): la heredada del que cierra. Es lo
+    /// que la carcasa ofrece cambiar a quien cerró, sin que el cierre haya tenido que esperarle.
+    /// </summary>
+    public CycleConfig NextConfig { get; init; } = CycleConfig.Default;
+
+    /// <summary>
     /// El aviso, en una línea (F12 §G). El cierre funcionaba y sembraba bien, pero lo hacía EN
     /// SILENCIO: el Portafolio pasaba a «Ciclo 2» sin más, y la foto honesta existía solo dentro
     /// del informe del cierre, que nadie tenía motivo para abrir.
@@ -145,7 +151,10 @@ public sealed class CycleService
         int next = expectedCycle + 1;
         // La siembra reclasifica contra la POLÍTICA de la app (F13), la misma que usó el último
         // re-escaneo: sembrar contra otro umbral dejaría el ciclo nuevo discrepando del anterior.
-        InventoryCycle fresh = CycleSeeding.Seed(inv, next, app.Thresholds.LargeUnitLoc, drift);
+        // F17 §4: el ciclo nuevo HEREDA la configuración del que cierra. El cierre es automático y
+        // no puede quedarse bloqueado esperando a un humano; quien cerró ve el diálogo después.
+        InventoryCycle fresh = CycleSeeding.Seed(
+            inv, next, app.Thresholds.LargeUnitLoc, drift, config: inv.Config, openedUtc: now);
 
         app.CurrentCycle = next;
         _hub.Store.WriteApp(app);
@@ -166,11 +175,13 @@ public sealed class CycleService
             StartedUtc = now,
             EndedUtc = now,
             CycleN = next,
+            Theme = inv.Theme,
             Counters = new SessionCounters { Confirmed = promoted },
         });
 
         string report = ReportBuilder.BuildCycleCloseReport(
-            app, expectedCycle, promoted, _hub.Store.ListFindings(slug), _hub.OrganizationName, aging);
+            app, expectedCycle, promoted, _hub.Store.ListFindings(slug), _hub.OrganizationName, aging,
+            inv.Config);
         _hub.Store.WriteReport(slug, sessionId.ToString(), report);
 
         _hub.Sync?.CommitAndPush($"cierre: {slug} ciclo {expectedCycle}→{next}");
@@ -183,6 +194,7 @@ public sealed class CycleService
             UnitsTotal = inv.Units.Count,
             SeededPending = fresh.Units.Count(u => u.State == UnitState.Pendiente),
             ReportSessionId = sessionId.ToString(),
+            NextConfig = fresh.Config,
         };
     }
 

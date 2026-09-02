@@ -458,3 +458,37 @@ public sealed class InverseBoolConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => value is not true;
 }
+
+/// <summary>
+/// El color de una TEMÁTICA (F17 §6), sacado de <see cref="Copilot.ThemePalette"/> en el paso del
+/// tema vigente. Con el parámetro <c>soft</c> devuelve el mismo color atenuado, para fondos de
+/// chip: es el mismo par «color pleno / color al 20 %» que usan los chips de severidad.
+/// </summary>
+public sealed class ThemeToBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        var theme = value as AuditTheme? ?? AuditTheme.General;
+        bool dark = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme() != Wpf.Ui.Appearance.ApplicationTheme.Light;
+        var color = (Color)ColorConverter.ConvertFromString(Copilot.ThemePalette.Hex(theme, dark));
+        if (string.Equals(parameter as string, "soft", StringComparison.OrdinalIgnoreCase))
+        {
+            color.A = 0x33;
+        }
+
+        return new SolidColorBrush(color);
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>El nombre de una temática tal y como se escribe (F17).</summary>
+public sealed class ThemeToLabelConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is AuditTheme t ? Copilot.ThemeCatalog.Display(t) : string.Empty;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}

@@ -341,6 +341,16 @@ public partial class App : Application
         services.AddSingleton<ModelRatesService>();
         services.AddSingleton<IModelRatesDialog, ModelRatesDialogHost>();
         services.AddSingleton<IThresholdsDialog, ThresholdsDialogHost>();
+        // F17 §4: configurar el ciclo —su lupa y su juez preferido— y quién lo pregunta. El
+        // servicio escribe en el hub (política compartida, D-769); el flujo monta el diálogo con
+        // la lista de modelos del proveedor de quien configura, y se inyecta como los demás.
+        services.AddSingleton(sp => new CycleConfigService(
+            sp.GetRequiredService<HubContext>(), sp.GetRequiredService<DriftQuery>()));
+        services.AddSingleton<ICycleConfigDialog, CycleConfigDialogHost>();
+        services.AddSingleton(sp => new CycleConfigFlow(
+            sp.GetRequiredService<ICycleConfigDialog>(),
+            sp.GetRequiredService<SettingsService>(),
+            sp.GetRequiredService<AuditorProviderRegistry>()));
         // F5.6 §3 (D-228): el reparto de alias legibles, que nunca se había cableado.
         services.AddSingleton<DisplayIdService>();
         // F5.6 §2 (D-226): el re-anclaje que se persiste al abrir la ficha.

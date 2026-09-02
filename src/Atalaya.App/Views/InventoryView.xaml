@@ -1,4 +1,4 @@
-<UserControl
+﻿<UserControl
     x:Class="Atalaya.App.Views.InventoryView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -310,6 +310,24 @@
                 <TextBlock Text="{Binding CycleLabel}" FontWeight="SemiBold" TextWrapping="Wrap"
                            Margin="0,6,0,0"
                            ToolTip="{Binding CycleTooltip}" />
+                <!-- F17: la lupa del ciclo, como distintivo con su color de temática, y el
+                     acceso a cambiarla. Va pegado al ciclo porque ES del ciclo: con otra lupa,
+                     «auditada» significa otra cosa. -->
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                    <Border CornerRadius="9" Padding="8,2" VerticalAlignment="Center"
+                            Background="{Binding CycleTheme, Converter={StaticResource ThemeToBrush}, ConverterParameter=soft}"
+                            ToolTip="{Binding CycleThemeTooltip}">
+                        <TextBlock Text="{Binding CycleThemeLabel}" FontSize="11" FontWeight="SemiBold"
+                                   ToolTip="{Binding CycleThemeTooltip}"
+                                   Foreground="{Binding CycleTheme, Converter={StaticResource ThemeToBrush}}" />
+                    </Border>
+                    <ui:HyperlinkButton Content="Configurar ciclo" Padding="0" Margin="8,0,0,0" FontSize="12"
+                                        VerticalAlignment="Center"
+                                        Command="{Binding ConfigureCycleCommand}"
+                                        ToolTip="Elegir la temática del ciclo y el modelo preferido. Cambiar de temática con unidades auditadas las devuelve a pendientes; los hallazgos no se tocan." />
+                </StackPanel>
+                <TextBlock Margin="0,4,0,0" FontSize="12" Opacity="0.8"
+                           ToolTip="El modelo con el que el equipo prefiere auditar este ciclo. Es una preferencia: lanzar con otro avisa y deja continuar."><Run Text="Modelo preferido: " /><Run Text="{Binding PreferredModelLabel}" /></TextBlock>
                 <TextBlock Margin="0,4,0,0" ToolTip="{Binding UnitsTooltip}"><Run Text="Unidades: " /><Run Text="{Binding TotalUnits}" FontWeight="Bold" /></TextBlock>
                 <TextBlock Margin="0,4,0,0" ToolTip="Ya revisadas en este ciclo. Puedes volver sobre ellas marcándolas a mano."><Run Text="Auditadas: " /><Run Text="{Binding AuditedUnits}" FontWeight="Bold" /></TextBlock>
                 <TextBlock Margin="0,4,0,0" ToolTip="Aún sin revisar en este ciclo. Es lo que queda para que se cierre."><Run Text="Pendientes: " /><Run Text="{Binding PendingUnits}" FontWeight="Bold" /></TextBlock>

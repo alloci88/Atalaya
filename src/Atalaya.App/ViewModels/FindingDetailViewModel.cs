@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Windows;
 using Atalaya.App.Services;
 using Atalaya.App.Views;
@@ -656,6 +656,10 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
         Meta.Add(new MetaRow(
             "Origen", AuditModeNames.Display(f.Origin),
             "La clase de sesión en la que se detectó."));
+        Meta.Add(new MetaRow(
+            "Temática", Copilot.ThemeCatalog.Display(f.Theme),
+            "La lupa del ciclo que lo detectó (F17). Solo un ciclo General o uno de esta misma temática "
+            + "lo reconcilia; durante un ciclo de otra temática envejece sin que nadie lo mire."));
         Meta.Add(new MetaRow("Primera detección", Stamp(f.FirstDetected)));
         Meta.Add(new MetaRow("Última confirmación", Stamp(f.LastConfirmed)));
         Meta.Add(new MetaRow(

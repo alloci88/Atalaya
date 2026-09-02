@@ -139,20 +139,11 @@ internal static class TestFactory
         IUlidFactory ulids,
         NavigationService navigation,
         IFolderPicker? picker = null,
-        SettingsService? settings = null)
-        => Onboarding(hub, paths, machines, toasts, ulids, navigation, picker, settings ?? Settings(paths), null);
-
-    private static OnboardingViewModel Onboarding(
-        HubContext hub,
-        AppPaths paths,
-        MachineConfigStore machines,
-        ToastCenter toasts,
-        IUlidFactory ulids,
-        NavigationService navigation,
-        IFolderPicker? picker,
-        SettingsService settings,
-        object? _)
-        => new(
+        SettingsService? settings = null,
+        CycleConfigFlow? flow = null)
+    {
+        settings ??= Settings(paths);
+        return new OnboardingViewModel(
             hub,
             new InventoryScanner(),
             machines,
@@ -163,7 +154,9 @@ internal static class TestFactory
             LinkFlow(hub, paths, toasts, settings: settings),
             new ImportService(hub),
             picker ?? new NoFolderPicker(),
-            new MeasuredFindingService(hub, new FindingIngestionService(hub, ulids), machines));
+            new MeasuredFindingService(hub, new FindingIngestionService(hub, ulids), machines),
+            flow);
+    }
 
     /// <summary>El panel de métricas (F5.9) sin nada que abra una ventana ni un fichero.</summary>
     public static MetricsViewModel Metrics(
@@ -198,7 +191,7 @@ internal static class TestFactory
     /// </summary>
     public static MainViewModel Shell(
         AppPaths paths, HubContext hub, ToastCenter? toasts = null, UpdateCheckService? updates = null,
-        SettingsService? settings = null)
+        SettingsService? settings = null, CycleConfigService? cycleConfig = null, CycleConfigFlow? configFlow = null)
     {
         settings ??= Settings(paths);
         var ulids = new UlidFactory(SystemClock.Instance);
@@ -228,7 +221,9 @@ internal static class TestFactory
             new InterruptedSessionRecovery(hub, openSession),
             new DisplayIdService(hub),
             center,
-            updates);
+            updates,
+            cycleConfig: cycleConfig,
+            configFlow: configFlow);
     }
 
     /// <summary>
