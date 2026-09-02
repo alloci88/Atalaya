@@ -33,6 +33,13 @@ public enum CostUnavailable
 
     /// <summary>La sesión no guardó tokens (muy antigua, o proveedor que no los dio).</summary>
     TokensMissing,
+
+    /// <summary>
+    /// Este proveedor <b>no factura a la organización</b>, así que su consumo no se tarifa
+    /// (F16-RETOQUE §1). No es un dato que falte ni una tarifa por configurar: es que no hay
+    /// factura que calcular. Los tokens y las llamadas siguen registrándose.
+    /// </summary>
+    NotBilled,
 }
 
 /// <summary>
@@ -93,6 +100,14 @@ public sealed record CostResult(
 /// tarifa de caché de una hora).
 /// </item>
 /// </list>
+/// <para>
+/// <b>Y desde F16-RETOQUE esa segunda casa ya no pasa por aquí.</b> El consumo de Claude Code va
+/// contra la suscripción personal de quien lo usa y <b>no factura a la organización</b>, así que no
+/// se tarifa: <see cref="IsBilled"/> lo para en la puerta y el resultado es
+/// <see cref="CostUnavailable.NotBilled"/>. La medida de arriba no se borra —costó comprobarla y
+/// explica por qué <see cref="AccountingOf"/> dice lo que dice—, pero ya no se usa para poner un
+/// número delante de nadie. Lo que factura, y lo único que esta clase valora, es Copilot.
+/// </para>
 /// </summary>
 public static class CreditCalculator
 {
@@ -104,6 +119,31 @@ public static class CreditCalculator
     /// sobre sesiones <b>ya guardadas</b> —Métricas relee meses de historia— y el proveedor que las
     /// escribió puede no estar registrado hoy, o no existir ya en esta versión.
     /// </summary>
+    /// <summary>
+    /// ¿El consumo de esta casa <b>factura a la organización</b>? (F16-RETOQUE §1).
+    /// <para>
+    /// <b>La decisión de producto.</b> Claude Code corre contra la <b>suscripción personal</b> de
+    /// quien lo usa: nadie le pasa una factura a la organización por esos tokens. Tarifarlo exigía
+    /// mantener a mano una copia de la lista de precios de Anthropic — un dato que cambia sin
+    /// avisar y que, en cuanto se quedara viejo, dejaría de ser ruido para pasar a ser
+    /// desinformación. Así que no se tarifa: se cuentan las llamadas y los tokens, que son hechos
+    /// medidos, y el coste se dice como lo que es.
+    /// </para>
+    /// <para>
+    /// <b>Vive aquí y no en la vista</b>, y ése es el punto: es el mismo embudo por el que pasan el
+    /// pie, el informe, la lista de informes y las cuatro cifras de Métricas. Puesto en cualquier
+    /// otro sitio habría que acordarse de preguntarlo N veces, y a la primera que se olvidara
+    /// saldría un «tarifa no configurada» por una tarifa que no debe existir.
+    /// </para>
+    /// <para>
+    /// Un proveedor vacío es Copilot —lo único que había antes de F14— y sí factura. Uno que esta
+    /// versión no conozca se supone facturable: es la suposición conservadora, porque hace que su
+    /// gasto se vea en vez de desaparecer del panel sin decir nada.
+    /// </para>
+    /// </summary>
+    public static bool IsBilled(string? providerId)
+        => !string.Equals(providerId?.Trim(), "claude-code", StringComparison.OrdinalIgnoreCase);
+
     public static TokenAccounting AccountingOf(string? providerId) => providerId?.ToLowerInvariant() switch
     {
         // Sin proveedor escrito es Copilot: es lo único que había antes de F14.
@@ -132,6 +172,15 @@ public static class CreditCalculator
         long cacheWriteTokens,
         ModelRateTable? rates)
     {
+        // Lo PRIMERO, antes que mirar tokens o tarifas: si esta casa no factura a la organización,
+        // no hay nada que tarifar y no puede haber ningún motivo de los otros tres. Preguntarlo
+        // aquí —y no en cada vista— es lo que garantiza que a un proveedor no tarifado no le pueda
+        // ladrar jamás un «tarifa no configurada» (F16-RETOQUE §1).
+        if (!IsBilled(provider))
+        {
+            return CostResult.Unavailable(CostUnavailable.NotBilled, model);
+        }
+
         if (inputTokens <= 0 && outputTokens <= 0 && cacheReadTokens <= 0 && cacheWriteTokens <= 0)
         {
             return CostResult.Unavailable(CostUnavailable.TokensMissing, model);

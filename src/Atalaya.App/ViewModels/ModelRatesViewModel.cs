@@ -77,6 +77,11 @@ public sealed partial class RateRow : ObservableObject
 /// El commit del hub es la atribución de quién cambió qué tarifa y cuándo, así que no hay ningún
 /// campo «modificado por» que mantener.
 /// </para>
+/// <para>
+/// <b>Y es la tabla de lo que FACTURA</b> (F16-RETOQUE §1). Los modelos que solo se usan contra una
+/// suscripción personal —Claude Code— ni se listan ni se admiten: no hay factura que calcular, y
+/// una tarifa que no gobierna nada es una que alguien mantendrá para siempre sin saberlo.
+/// </para>
 /// </summary>
 public sealed partial class ModelRatesViewModel : ObservableObject
 {
@@ -112,7 +117,11 @@ public sealed partial class ModelRatesViewModel : ObservableObject
         ModelRateTable table = _rates.EnsureSeeded();
         Source = table.Source ?? string.Empty;
 
-        foreach (ModelRate rate in table.Rates.OrderBy(r => r.Model, StringComparer.OrdinalIgnoreCase))
+        // Solo lo que factura (F16-RETOQUE §1). Un hub sembrado antes de este cambio tiene
+        // escritas las tarifas de `claude-code`; el cálculo ya las ignora, y enseñarlas aquí sería
+        // ofrecer editar un precio que no gobierna nada. Desaparecen del hub al primer guardado.
+        foreach (ModelRate rate in ModelRatesService.Billable(table)
+                     .OrderBy(r => r.Model, StringComparer.OrdinalIgnoreCase))
         {
             Rows.Add(new RateRow(rate));
         }
@@ -166,6 +175,18 @@ public sealed partial class ModelRatesViewModel : ObservableObject
                 || rate.CachedInputPerMillion < 0 || rate.CacheWritePerMillion < 0)
             {
                 Status = $"«{rate.Model}»: una tarifa no puede ser negativa. No se ha guardado nada.";
+                return;
+            }
+
+            // F16-RETOQUE §1 — esta tabla es la de lo que FACTURA a la organización. Una tarifa
+            // para una casa que corre contra la suscripción de quien la usa no gobernaría nada, y
+            // dejarla entrar solo conseguiría que alguien la mantuviera para siempre creyendo que
+            // sirve para algo.
+            if (!CreditCalculator.IsBilled(rate.Provider))
+            {
+                Status = $"«{rate.Model}» ({rate.Provider}): esa casa no factura a la organización "
+                    + "—su consumo va contra la suscripción de quien la usa—, así que no lleva "
+                    + "tarifa. Quita la fila. No se ha guardado nada.";
                 return;
             }
 

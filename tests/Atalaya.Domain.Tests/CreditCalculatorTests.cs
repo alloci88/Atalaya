@@ -63,63 +63,64 @@ public sealed class CreditCalculatorTests
     }
 
     /// <summary>
-    /// <b>Claude Code la excluye.</b> Verificado en una sesión real: <c>input_tokens</c> 6 con
-    /// <c>cache_read_input_tokens</c> 19.990 — un 6 no puede contener a 19.990.
+    /// <b>Claude Code la excluye</b>, y eso sigue escrito aunque ya no se use para cobrar nada.
+    /// Verificado en una sesión real: <c>input_tokens</c> 6 con <c>cache_read_input_tokens</c>
+    /// 19.990 — un 6 no puede contener a 19.990.
+    /// <para>
+    /// Desde F16-RETOQUE §1 esa casa no se tarifa, así que la fórmula no llega a aplicarse; lo que
+    /// se fija aquí es el <b>mapa</b>, que es donde vive el conocimiento. El día que aparezca un
+    /// proveedor que facture y cuente los tokens de esta manera, la semántica tiene que seguir
+    /// estando bien descrita — costó medirla y tirarla sería tirar la medida.
+    /// </para>
     /// </summary>
     [Fact]
-    public void Con_Claude_Code_la_entrada_excluye_la_cache_y_no_se_descuenta()
+    public void La_semantica_de_cada_casa_sigue_escrita_aunque_una_ya_no_se_tarife()
     {
-        CostResult cost = CreditCalculator.Calculate(
-            "m", "claude-code",
-            inputTokens: 100_000, outputTokens: 0,
-            cacheReadTokens: 900_000, cacheWriteTokens: 0,
-            Table(new ModelRate("m", 10.00m, 0m, 1.00m)));
+        CreditCalculator.AccountingOf("copilot").Should().Be(TokenAccounting.InputIncludesCache);
+        CreditCalculator.AccountingOf(null).Should().Be(TokenAccounting.InputIncludesCache);
+        CreditCalculator.AccountingOf("claude-code").Should().Be(TokenAccounting.InputExcludesCache);
 
-        cost.Credits.Should().Be(190m, "los mismos 100.000 facturables, pero ya venían aparte");
-        cost.BillableInputTokens.Should().Be(100_000);
+        // Y un proveedor que esta versión no conoce se supone como el histórico: el de Copilot.
+        CreditCalculator.AccountingOf("proveedor-de-2027").Should().Be(TokenAccounting.InputIncludesCache);
     }
 
     /// <summary>
-    /// La prueba de que la semántica importa: los MISMOS números con las MISMAS tarifas dan costes
-    /// distintos según quién los informe. Si algún día alguien unifica los dos caminos, este test
-    /// es el que se pone rojo.
+    /// <b>La casa que no factura se para en la puerta</b> (F16-RETOQUE §1). El consumo de Claude
+    /// Code va contra la suscripción personal de quien lo usa, así que no hay factura que calcular:
+    /// da igual que su modelo tenga tarifa en la tabla y que haya tokens de sobra — el resultado es
+    /// «no se tarifa», y nunca un número ni uno de los tres motivos de «falta algo».
+    /// <para>
+    /// Se comprueba aquí, en el cálculo, porque es el embudo por el que pasan el pie, el informe,
+    /// la lista de informes y las cifras de Métricas. Una regla puesta en cualquier otro sitio
+    /// habría que recordarla N veces.
+    /// </para>
     /// </summary>
     [Fact]
-    public void La_misma_sesion_cuesta_distinto_segun_quien_cuente_los_tokens()
+    public void Una_casa_que_no_factura_no_se_tarifa_aunque_su_modelo_tenga_tarifa()
     {
         ModelRateTable rates = Table(new ModelRate("m", 10.00m, 0m, 1.00m));
 
-        decimal copilot = CreditCalculator.Calculate("m", "copilot", 1_000_000, 0, 900_000, 0, rates).Credits!.Value;
-        decimal claude = CreditCalculator.Calculate("m", "claude-code", 1_000_000, 0, 900_000, 0, rates).Credits!.Value;
+        CostResult claude = CreditCalculator.Calculate("m", "claude-code", 1_000_000, 0, 900_000, 0, rates);
 
-        copilot.Should().Be(190m);
-        claude.Should().Be(1_090m);
-        claude.Should().NotBe(copilot);
+        claude.HasValue.Should().BeFalse();
+        claude.Why.Should().Be(CostUnavailable.NotBilled);
+        claude.Credits.Should().BeNull();
+
+        // Y los MISMOS números por la casa que sí factura sí dan coste: lo que cambia es quién paga.
+        CreditCalculator.Calculate("m", "copilot", 1_000_000, 0, 900_000, 0, rates)
+            .Credits.Should().Be(190m);
     }
 
-    /// <summary>
-    /// La comprobación definitiva de la semántica de Anthropic: con los tokens que informó el CLI
-    /// de Claude Code en una sesión real, esta fórmula reproduce <b>exactamente</b> el coste que el
-    /// propio CLI calculó. Dos aritméticas independientes que coinciden hasta el sexto decimal.
-    /// </summary>
+    /// <summary>Quién factura, dicho en una línea: todas menos la que corre contra una suscripción.</summary>
     [Theory]
-    // Haiku 4.5: 980 in / 19 out / sin caché — el CLI dijo 0,001075 $.
-    [InlineData(980, 19, 0, 0, 1.00, 5.00, 0.10, 2.00, 0.001075)]
-    // Sonnet 5: 6 in / 560 out / 19.990 leídos de caché / 10.374 escritos — el CLI dijo 0,051106 $.
-    // La escritura va a 4 $/M porque Claude Code usa caché de UNA HORA (2 × la entrada), no la de
-    // cinco minutos (2,50 $/M) que publica la tabla de GitHub.
-    [InlineData(6, 560, 19_990, 10_374, 2.00, 10.00, 0.20, 4.00, 0.051106)]
-    public void La_formula_reproduce_el_coste_que_el_propio_CLI_calculo(
-        long input, long output, long cacheRead, long cacheWrite,
-        double inRate, double outRate, double cachedRate, double writeRate,
-        double expectedUsd)
-    {
-        CostResult cost = CreditCalculator.Calculate(
-            "m", "claude-code", input, output, cacheRead, cacheWrite,
-            Table(new ModelRate("m", (decimal)inRate, (decimal)outRate, (decimal)cachedRate, (decimal)writeRate)));
-
-        cost.Usd.Should().BeApproximately((decimal)expectedUsd, 0.000001m);
-    }
+    [InlineData("copilot", true)]
+    [InlineData(null, true)]                  // antes de F14 solo había Copilot
+    [InlineData("", true)]
+    [InlineData("proveedor-de-2027", true)]   // suposición conservadora: su gasto se ve
+    [InlineData("claude-code", false)]
+    [InlineData("Claude-Code", false)]        // el identificador se casa sin distinguir mayúsculas
+    public void Quien_factura_y_quien_no(string? provider, bool billed)
+        => CreditCalculator.IsBilled(provider).Should().Be(billed);
 
     // ================================================================ la escritura de caché
 
@@ -251,8 +252,9 @@ public sealed class CreditCalculatorTests
     // ================================================================ la tabla
 
     /// <summary>
-    /// Una tarifa atada a un proveedor gana a la genérica. Es lo que permite que Claude Sonnet 5
-    /// cueste una cosa por Copilot (caché de 5 min) y otra por Claude Code (caché de 1 h).
+    /// Una tarifa atada a un proveedor gana a la genérica: el mismo modelo puede costar distinto
+    /// según quién lo revenda. El mecanismo se queda aunque hoy solo facture una casa — el día que
+    /// facturen dos, es lo único que impide elegir una de las dos tarifas y equivocarse con la otra.
     /// </summary>
     [Fact]
     public void La_tarifa_del_proveedor_gana_a_la_generica()
@@ -262,12 +264,12 @@ public sealed class CreditCalculatorTests
             Rates =
             {
                 new ModelRate("claude-sonnet-5", 2m, 10m, 0.2m, 2.50m),
-                new ModelRate("claude-sonnet-5", 2m, 10m, 0.2m, 4.00m, Provider: "claude-code"),
+                new ModelRate("claude-sonnet-5", 2m, 10m, 0.2m, 4.00m, Provider: "otra-reventa"),
             },
         };
 
         rates.Find("claude-sonnet-5", "copilot")!.CacheWritePerMillion.Should().Be(2.50m);
-        rates.Find("claude-sonnet-5", "claude-code")!.CacheWritePerMillion.Should().Be(4.00m);
+        rates.Find("claude-sonnet-5", "otra-reventa")!.CacheWritePerMillion.Should().Be(4.00m);
     }
 
     [Fact]
@@ -299,16 +301,29 @@ public sealed class CreditCalculatorTests
     }
 
     /// <summary>
-    /// Y los modelos que la aplicación ofrece de serie con Claude Code —sus alias resueltos— tienen
-    /// tarifa sembrada. Sin esto, la primera auditoría con Claude Code saldría «tarifa no
-    /// configurada» de fábrica.
+    /// <b>La siembra es solo de lo que FACTURA</b> (F16-RETOQUE §1). Traía cuatro tarifas atadas a
+    /// <c>claude-code</c>, bien medidas —reproducían al sexto decimal el coste que el propio CLI
+    /// calcula— y se retiraron igual: la pregunta no era si el número salía, era quién paga.
+    /// Mantener a mano una copia de la lista de precios de Anthropic para un consumo que nadie
+    /// factura es un dato que caduca solo.
+    /// <para>
+    /// Los modelos de Anthropic que <b>sí</b> siguen en la tabla son los que Copilot revende: ésos
+    /// los paga la organización, con la tarifa que publica GitHub. Por eso no vale con buscar
+    /// «claude» — lo que no puede haber es una tarifa de una casa que no factura.
+    /// </para>
     /// </summary>
-    [Theory]
-    [InlineData("claude-opus-5")]
-    [InlineData("claude-sonnet-5")]
-    [InlineData("claude-haiku-4-5-20251001")]
-    public void Los_modelos_que_resuelve_Claude_Code_nacen_con_tarifa(string model)
-        => ModelRateSeed.Create().Find(model, "claude-code").Should().NotBeNull();
+    [Fact]
+    public void La_siembra_no_trae_tarifas_de_una_casa_que_no_factura()
+    {
+        ModelRateTable seed = ModelRateSeed.Create();
+
+        seed.Rates.Should().OnlyContain(r => CreditCalculator.IsBilled(r.Provider));
+
+        // Y lo de Copilot NO se toca: sus modelos de Anthropic son factura de verdad.
+        seed.Find("claude-opus-5", "copilot").Should().NotBeNull();
+        seed.Find("claude-sonnet-4.5", "copilot").Should().NotBeNull();
+        seed.Find("gpt-5.4", "copilot").Should().NotBeNull();
+    }
 
     private static ModelRateTable Table(params ModelRate[] rates)
         => new() { Rates = rates.ToList() };

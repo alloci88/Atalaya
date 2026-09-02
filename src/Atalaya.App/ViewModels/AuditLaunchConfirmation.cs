@@ -48,9 +48,9 @@ public sealed class AuditLaunchConfirmation
     public string? ModelName { get; }
 
     /// <summary>
-    /// La advertencia de la unidad de coste, cuando la casa la necesita (F14). Claude Code informa
-    /// tarifa de lista, que no es lo que factura su suscripción, y decirlo aquí evita que alguien
-    /// lea la cifra como dinero.
+    /// La advertencia de la unidad de coste, cuando la casa la necesita (F14). Desde F16-RETOQUE §1
+    /// ninguna la necesita: la que no facturaba dejó de producir cifra, así que ya no hay ningún
+    /// número que se pueda leer como dinero sin serlo. Se mantiene el canal por si mañana lo hay.
     /// </summary>
     public string? CostCaveat { get; }
 
@@ -90,9 +90,10 @@ public sealed class AuditLaunchConfirmation
 
     /// <summary>
     /// El número no se sostiene solo: o hay poco historial, o no hay ninguno. Se marca en el
-    /// diálogo para que nadie lo lea como una medida.
+    /// diálogo para que nadie lo lea como una medida. Con una casa que no factura no hay número
+    /// que marcar, así que tampoco hay aviso (F16-RETOQUE §1).
     /// </summary>
-    public bool IsWeakEstimate => Estimate.Evidence != CostEvidence.Suficiente;
+    public bool IsWeakEstimate => Estimate.IsWeak;
 
     /// <summary>La estimación informa, no bloquea: el botón de confirmar nunca se deshabilita.</summary>
     public string Reassurance =>

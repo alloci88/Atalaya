@@ -107,6 +107,25 @@ public sealed class ModelRatesTests : IDisposable
     }
 
     /// <summary>
+    /// <b>Y «modelos sin tarifa» no lista modelos de una casa que no factura</b> (F16-RETOQUE §1).
+    /// A un modelo que solo se ha usado con Claude Code no le falta ninguna tarifa: es que no lleva
+    /// ninguna. Listarlo aquí pediría configurar un precio que no debe existir — y quien lo
+    /// configurara empezaría a ver un coste donde no lo hay.
+    /// </summary>
+    [Fact]
+    public void Los_modelos_de_una_casa_que_no_factura_no_estan_esperando_tarifa()
+    {
+        _rates.Save(new ModelRateTable { Rates = { new ModelRate("conocido", 1m, 2m, 0.1m) } });
+        WriteSession("claude-opus-5", provider: "claude-code");
+        WriteSession("recien-salido");
+
+        IReadOnlyList<(string Model, string? Provider, int Sessions)> missing = _rates.ModelsWithoutRate();
+
+        missing.Should().ContainSingle().Which.Model.Should().Be("recien-salido");
+        missing.Should().NotContain(m => m.Model.Contains("claude", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Y el agregado que las contiene sale PARCIAL, con su recuento. Un total al que le falta gasto
     /// se lee como si fuera el gasto entero, y ése es el error que hay que impedir.
     /// </summary>
@@ -239,13 +258,64 @@ public sealed class ModelRatesTests : IDisposable
         var vm = new ModelRatesViewModel(_rates);
         vm.Rows.Clear();
         vm.Rows.Add(new RateRow { Model = "claude-sonnet-5", Input = 2m, Output = 10m, CacheWrite = "2,5" });
-        vm.Rows.Add(new RateRow { Model = "claude-sonnet-5", Provider = "claude-code", Input = 2m, Output = 10m, CacheWrite = "4" });
+        vm.Rows.Add(new RateRow { Model = "claude-sonnet-5", Provider = "otra-reventa", Input = 2m, Output = 10m, CacheWrite = "4" });
 
         vm.SaveCommand.Execute(null);
 
         vm.Saved.Should().BeTrue();
         _rates.Current!.Find("claude-sonnet-5", "copilot")!.CacheWritePerMillion.Should().Be(2.5m);
-        _rates.Current!.Find("claude-sonnet-5", "claude-code")!.CacheWritePerMillion.Should().Be(4m);
+        _rates.Current!.Find("claude-sonnet-5", "otra-reventa")!.CacheWritePerMillion.Should().Be(4m);
+    }
+
+    /// <summary>
+    /// <b>Y una tarifa para una casa que no factura se RECHAZA</b> (F16-RETOQUE §1). Esta tabla es
+    /// la de lo que le llega a la organización en una factura; una tarifa de Claude Code no
+    /// gobernaría nada —el cálculo para esa casa en la puerta— y lo único que conseguiría es que
+    /// alguien la mantuviera para siempre creyendo que sirve. Se dice cuál es y no se guarda nada.
+    /// </summary>
+    [Fact]
+    public void Una_tarifa_de_una_casa_que_no_factura_se_rechaza_entera()
+    {
+        var vm = new ModelRatesViewModel(_rates);
+        vm.Rows.Clear();
+        vm.Rows.Add(new RateRow { Model = "gpt-5.4", Input = 2.5m, Output = 15m });
+        vm.Rows.Add(new RateRow { Model = "claude-opus-5", Provider = "claude-code", Input = 5m, Output = 25m });
+
+        vm.SaveCommand.Execute(null);
+
+        vm.Saved.Should().BeFalse();
+        vm.Status.Should().Contain("claude-opus-5").And.Contain("no factura");
+        vm.Status.Should().Contain("No se ha guardado nada",
+            "media tabla guardada es peor que ninguna: nadie sabría qué quedó dentro");
+    }
+
+    /// <summary>
+    /// Un hub sembrado ANTES de este cambio tiene escritas las cuatro tarifas de <c>claude-code</c>
+    /// que traía la siembra vieja. No hacen daño —el cálculo ya no las mira—, pero sí confunden:
+    /// son filas editables que no gobiernan nada. La pantalla no las enseña, y desaparecen del hub
+    /// la primera vez que alguien guarda.
+    /// </summary>
+    [Fact]
+    public void Las_tarifas_heredadas_de_una_casa_que_no_factura_ni_se_ensenan_ni_sobreviven()
+    {
+        var legacy = new ModelRateTable
+        {
+            Rates =
+            {
+                new ModelRate("gpt-5.4", 2.5m, 15m, 0.25m),
+                new ModelRate("claude-opus-5", 5m, 25m, 0.5m, 10m, Provider: "claude-code"),
+            },
+        };
+        _rates.Save(legacy);
+
+        var vm = new ModelRatesViewModel(_rates);
+
+        vm.Rows.Should().ContainSingle().Which.Model.Should().Be("gpt-5.4");
+
+        vm.SaveCommand.Execute(null);
+
+        vm.Saved.Should().BeTrue();
+        _rates.Current!.Rates.Should().OnlyContain(r => CreditCalculator.IsBilled(r.Provider));
     }
 
     [Fact]
@@ -262,7 +332,7 @@ public sealed class ModelRatesTests : IDisposable
 
     // ================================================================ ayudas
 
-    private void WriteSession(string model, long outputTokens = 1000)
+    private void WriteSession(string model, long outputTokens = 1000, string provider = "copilot")
     {
         var session = new AuditSession
         {
@@ -275,7 +345,7 @@ public sealed class ModelRatesTests : IDisposable
             EndedUtc = DateTimeOffset.UtcNow,
             CycleN = 1,
             Model = model,
-            Provider = "copilot",
+            Provider = provider,
         };
 
         session.Units.Add(new UnitVerdictRecord("src/U.cs", "src", "auditada", null));

@@ -18,6 +18,12 @@ namespace Atalaya.Domain.Model;
 /// </item>
 /// </list>
 /// <para>
+/// <b>Solo lo que factura a la organización</b> (F16-RETOQUE §1). Hasta aquí la siembra traía
+/// también las tarifas de Claude Code, atadas a su proveedor. Se retiraron: ese consumo va contra
+/// la suscripción personal de quien lo usa, así que no hay factura que calcular y mantener a mano
+/// una copia de la lista de precios de Anthropic solo servía para tener un dato que caduca solo.
+/// </para>
+/// <para>
 /// <b>Esto es una SIEMBRA, no la verdad permanente.</b> Se escribe una vez en el hub y a partir de
 /// ahí manda lo que haya allí, que es lo que la organización puede corregir sin esperar a una
 /// release. Varias de estas tarifas son promocionales con fecha de caducidad y están anotadas como
@@ -30,9 +36,8 @@ public static class ModelRateSeed
     public static readonly DateOnly VerifiedOn = new(2026, 9, 1);
 
     public const string SourceNote =
-        "Sembrado el 2026-09-01 de docs.github.com (Copilot · models-and-pricing) y, para "
-        + "Claude Code, de las tarifas de API de Anthropic comprobadas contra el coste que el "
-        + "propio CLI calcula. Revisa cuando venzan los promocionales.";
+        "Sembrado el 2026-09-01 de docs.github.com (Copilot · models-and-pricing). Solo lo que "
+        + "factura a la organización. Revisa cuando venzan los promocionales.";
 
     /// <summary>La tabla inicial. Nombres de modelo tal y como los registra cada proveedor.</summary>
     public static ModelRateTable Create()
@@ -87,20 +92,20 @@ public static class ModelRateSeed
         Add(table, "kimi-k3", 3.00m, 15.00m, 0.30m);
         Add(table, "raptor-mini", 0.25m, 2.00m, 0.025m);
 
-        // ---- Claude Code · las MISMAS familias, pero con SU tarifa de caché ----------------
+        // ---- Claude Code: NO va en esta tabla (F16-RETOQUE §1) -----------------------------
         //
-        // Atadas al proveedor a propósito, y esto es el hallazgo que lo justifica: Claude Code usa
-        // caché de UNA HORA, que Anthropic cobra al DOBLE de la entrada, mientras que la tabla de
-        // GitHub publica la de cinco minutos (1,25 ×). Con la tarifa de GitHub, el coste de una
-        // sesión real de Claude Code salía 0,035545 $ cuando el propio CLI calculaba 0,051106 $;
-        // con la de una hora sale 0,051106 $ EXACTO. Un 44 % de desviación por una tarifa de caché.
+        // Aquí hubo cuatro tarifas atadas al proveedor `claude-code`, con su caché de una hora al
+        // doble de la entrada. Estaban bien medidas —reproducían al sexto decimal el coste que el
+        // propio CLI calcula— y aun así se retiran, porque la pregunta no era si el número salía:
+        // era quién paga. El consumo de Claude Code va contra la SUSCRIPCIÓN PERSONAL de quien lo
+        // usa y no le llega a la organización en ninguna factura, así que tarifarlo obligaba a
+        // mantener a mano una copia de la lista de precios de Anthropic: ruido el día que se
+        // escribe y desinformación el día que cambia sin avisar.
         //
-        // El CLI resuelve los alias a nombres concretos —`opus` → `claude-opus-5`— y es ese nombre
-        // resuelto el que queda registrado en la sesión, así que es el que hay que casar.
-        AddForClaudeCode(table, "claude-opus-5", 5.00m, 25.00m, 0.50m, 10.00m);
-        AddForClaudeCode(table, "claude-sonnet-5", 2.00m, 10.00m, 0.20m, 4.00m);
-        AddForClaudeCode(table, "claude-haiku-4-5-20251001", 1.00m, 5.00m, 0.10m, 2.00m);
-        AddForClaudeCode(table, "claude-fable-5", 10.00m, 50.00m, 1.00m, 20.00m);
+        // Esta tabla es la de lo que FACTURA. Los modelos de Anthropic que sí están arriba son los
+        // que Copilot revende, y ésos sí los paga la organización, con la tarifa que publica
+        // GitHub. La medida de la caché de una hora queda escrita en DECISIONS (D-785) por si
+        // alguna vez vuelve a hacer falta.
 
         return table;
     }
@@ -117,11 +122,4 @@ public static class ModelRateSeed
             model, input, output, cachedInput, cacheWrite,
             Provider: null, EffectiveFrom: VerifiedOn, Note: note));
 
-    private static void AddForClaudeCode(
-        ModelRateTable table, string model, decimal input, decimal output, decimal cachedInput, decimal cacheWrite1h)
-        => table.Rates.Add(new ModelRate(
-            model, input, output, cachedInput, cacheWrite1h,
-            Provider: "claude-code",
-            EffectiveFrom: VerifiedOn,
-            Note: "Escritura de caché a 1 h (2 × la entrada), que es la que usa el CLI de Claude Code."));
 }

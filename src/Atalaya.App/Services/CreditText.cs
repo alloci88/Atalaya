@@ -24,6 +24,30 @@ public static class CreditText
     public const string Unknown = "—";
 
     /// <summary>
+    /// Cómo se dice el coste de una casa que <b>no factura a la organización</b> (F16-RETOQUE §1).
+    /// <para>
+    /// No es un hueco ni un «no se sabe»: es la respuesta completa. Claude Code corre contra la
+    /// suscripción personal de quien lo usa, así que la pregunta «¿cuánto ha costado esto?» tiene
+    /// contestación exacta y no hace falta ninguna tabla de precios para darla. Vive en una
+    /// constante porque la dicen el pie, el informe, la lista de informes y el diálogo de
+    /// lanzamiento, y una frase escrita cuatro veces acaba diciendo cuatro cosas.
+    /// </para>
+    /// </summary>
+    public const string SubscriptionCost = "incluido en tu suscripción de Claude";
+
+    /// <summary>
+    /// Lo mismo, en una palabra, para una celda de tabla. <b>Va siempre con la frase larga en el
+    /// tooltip</b>: no es una segunda versión de la verdad, es la misma abreviada donde no cabe.
+    /// </summary>
+    public const string SubscriptionCostShort = "suscripción";
+
+    /// <summary>
+    /// La unidad en la que factura GitHub. Es la de TODO lo que esta clase valora, porque desde
+    /// F16-RETOQUE lo único que se tarifa es lo que factura (F15, D-789 revisado).
+    /// </summary>
+    public const string BillingUnit = "AI credits";
+
+    /// <summary>
     /// Los credits, sin unidad («68,2»). Un decimal, que es la precisión con la que el panel de
     /// GitHub enseña sus cifras y suficiente para decidir.
     /// </summary>
@@ -57,7 +81,8 @@ public static class CreditText
         => credits is null ? Unknown : $"{Number(credits)} {Unit}";
 
     /// <summary>
-    /// <b>El coste de una sesión, con UN solo criterio y consciente de la casa</b> (F16 §B).
+    /// <b>El coste de una sesión, con UN solo criterio y consciente de la casa</b> (F16 §B,
+    /// revisado en F16-RETOQUE §1).
     /// <para>
     /// Existía el mismo número contado de dos maneras distintas en la misma sesión: el pie decía
     /// «coste no informado por el SDK» —una frase acuñada para Copilot, que además nombra un SDK
@@ -67,25 +92,92 @@ public static class CreditText
     /// </para>
     /// <para>
     /// La verdad es una: desde F15 el coste se DERIVA de los tokens con la tarifa del modelo, así
-    /// que cuando no hay número el motivo es siempre uno de los tres de
-    /// <see cref="CostUnavailable"/> — y ninguno tiene que ver con lo que informe o deje de
-    /// informar un proveedor. Aquí se escribe una vez y la usan el pie, el informe y el panel.
+    /// que cuando no hay número el motivo es uno de los de <see cref="CostUnavailable"/>. Y desde
+    /// F16-RETOQUE hay uno que <b>no es un hueco</b>: una casa que no factura a la organización no
+    /// tiene coste que calcular, y eso se dice entero —«incluido en tu suscripción de Claude»— sin
+    /// el «no calculable» delante, que insinuaría que falta algo por configurar.
     /// </para>
     /// </summary>
     public static string OfSession(CostResult cost, string? providerId)
-        => cost.HasValue
-            ? WithUnit(cost.Credits, providerId)
-            : $"coste no calculable ({Reason(cost.Why)})";
+        => cost.Why switch
+        {
+            CostUnavailable.NotBilled => SubscriptionCost,
+            CostUnavailable.None => WithUnit(cost.Credits, providerId),
+            _ => $"coste no calculable ({Reason(cost.Why)})",
+        };
 
     /// <summary>
-    /// El número con la unidad de SU casa: «68,2 AI credits» o «68,2 credits (equivalente API)».
-    /// El paréntesis no es adorno — con suscripción no se factura por tokens, y llamarlo como a lo
-    /// que sí se cobra sería decir que costó algo que no costó (D-789).
+    /// Los tokens de una sesión, por tipo: «2.786 entrada · 10.975 salida · caché 201.371 leída /
+    /// 22.525 escrita».
+    /// <para>
+    /// <b>Existe por las sesiones que no se tarifan</b> (F16-RETOQUE §1). En Copilot el pie enseña
+    /// credits y los tokens quedan en el informe; con una casa que no factura no hay número de
+    /// coste que enseñar, así que lo que dice el peso de la sesión son las llamadas y estos
+    /// tokens. Retirarlos sería quedarse sin ninguna magnitud, y son dato primario.
+    /// </para>
+    /// </summary>
+    public static string Tokens(long input, long output, long cacheRead, long cacheWrite)
+    {
+        if (input <= 0 && output <= 0 && cacheRead <= 0 && cacheWrite <= 0)
+        {
+            return string.Empty;
+        }
+
+        string head = $"{N(input)} entrada · {N(output)} salida";
+        return cacheRead > 0 || cacheWrite > 0
+            ? $"{head} · caché {N(cacheRead)} leída / {N(cacheWrite)} escrita"
+            : head;
+    }
+
+    /// <summary>
+    /// Los mismos tokens en una sola cifra —«237.657 tokens»—, para una celda estrecha. El desglose
+    /// completo va en su tooltip: aquí se resume, no se esconde.
+    /// </summary>
+    public static string TokensTotal(long input, long output, long cacheRead, long cacheWrite)
+    {
+        long total = Math.Max(0, input) + Math.Max(0, output)
+            + Math.Max(0, cacheRead) + Math.Max(0, cacheWrite);
+        return total == 0 ? string.Empty : $"{N(total)} tokens";
+    }
+
+    private static string N(long value) => value.ToString("N0", AppCulture.Display);
+
+    /// <summary>
+    /// <b>El pie de una sesión en vivo</b>: llamadas, y el coste — con los tokens en medio cuando
+    /// la casa no factura (F16-RETOQUE §1).
+    /// <para>
+    /// Está aquí y no en cada view-model porque los dos pies —el de la auditoría y el del arreglo—
+    /// tienen que decir exactamente lo mismo, y porque es el sitio donde se ve de un vistazo la
+    /// regla entera: con factura, un número de credits; sin ella, las magnitudes que sí son
+    /// hechos —llamadas y tokens— y la frase que dice quién paga. Ni «tarifa no configurada» ni
+    /// «equivalente API» pueden salir de aquí para una casa no tarifada, porque el motivo que
+    /// llega es <see cref="CostUnavailable.NotBilled"/> y no hay rama que los produzca.
+    /// </para>
+    /// </summary>
+    public static string SessionFooter(
+        int calls, long input, long output, long cacheRead, long cacheWrite,
+        CostResult cost, string? providerId)
+    {
+        string head = $"{calls} llamadas";
+
+        if (cost.Why != CostUnavailable.NotBilled)
+        {
+            return $"{head} · {OfSession(cost, providerId)}";
+        }
+
+        string tokens = Tokens(input, output, cacheRead, cacheWrite);
+        return tokens.Length == 0
+            ? $"{head} · coste: {SubscriptionCost}"
+            : $"{head} · {tokens} · coste: {SubscriptionCost}";
+    }
+
+    /// <summary>
+    /// El número con la unidad de la casa que lo factura: «68,2 AI credits». Ya no hay una segunda
+    /// forma —el «equivalente API» de D-789— porque ya no hay un segundo coste: lo que no factura
+    /// no se tarifa y no llega hasta aquí (F16-RETOQUE §1).
     /// </summary>
     public static string WithUnit(decimal? credits, string? providerId)
-        => IsSubscription(providerId)
-            ? $"{Number(credits)} {Unit} ({LabelFor(providerId)})"
-            : $"{Number(credits)} {LabelFor(providerId)}";
+        => $"{Number(credits)} {BillingUnit}";
 
     /// <summary>
     /// El coste con su motivo cuando no lo hay. Es la forma que se enseña en las vistas: un número,
@@ -99,6 +191,7 @@ public static class CreditText
         CostUnavailable.ModelUnknown => "modelo no registrado",
         CostUnavailable.RateMissing => "tarifa no configurada",
         CostUnavailable.TokensMissing => "sin tokens registrados",
+        CostUnavailable.NotBilled => SubscriptionCost,
         _ => Unknown,
     };
 
@@ -113,25 +206,9 @@ public static class CreditText
             : (value * CreditCalculator.UsdPerCredit).ToString("0.00", AppCulture.Display) + " $";
 
     /// <summary>
-    /// Cómo se etiqueta el coste de un proveedor (F15). No es cosmética: el de Copilot es una
-    /// <b>factura de verdad</b> —lo que la organización paga— y el de Claude Code con suscripción
-    /// es un <b>equivalente</b>, porque esa suscripción no cobra por tokens. Presentarlos con la
-    /// misma palabra sería decir que uno cuesta lo que no cuesta.
+    /// Qué hay que saber del número que se enseña. Con una sola naturaleza de coste —la factura de
+    /// la organización— la salvedad es una sola: qué es un credit.
     /// </summary>
-    public static string LabelFor(string? providerId)
-        => IsSubscription(providerId) ? "equivalente API" : "AI credits";
-
-    /// <summary>La salvedad del equivalente, donde haga falta explicarlo.</summary>
-    public static string CaveatFor(string? providerId)
-        => IsSubscription(providerId)
-            ? "Equivalente API: lo que habrían costado estos tokens pagando la API. Tu suscripción "
-              + "no factura por tokens, así que no es un cobro — sirve para comparar el peso de dos "
-              + "auditorías."
-            : "AI credits: lo que GitHub factura por estos tokens. 1 credit = 0,01 $.";
-
-    /// <summary>
-    /// ¿El coste de esta casa es un equivalente y no una factura? Se pregunta por el proveedor y no
-    /// por la unidad guardada, porque la unidad es una consecuencia de esto y no al revés.
-    /// </summary>
-    public static bool IsSubscription(string? providerId) => ProviderNames.IsSubscription(providerId);
+    public static string Caveat =>
+        "AI credits: lo que GitHub factura por estos tokens. 1 credit = 0,01 $.";
 }

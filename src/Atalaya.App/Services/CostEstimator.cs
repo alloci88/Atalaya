@@ -28,6 +28,12 @@ public enum CostEvidence
 /// <param name="SampleSessions">De cuántas sesiones salen.</param>
 /// <param name="ObservedMaxPasses">Con qué tope se midieron. 0 si el historial no lo registra.</param>
 /// <param name="PassFactor">Cuánto se escala por la diferencia de tope. 1 cuando se midió con el mismo.</param>
+/// <param name="Billed">
+/// ¿El proveedor con el que se va a lanzar <b>factura a la organización</b>? (F16-RETOQUE §1).
+/// Cuando no —Claude Code va contra la suscripción de quien lo usa—, no hay coste que estimar y
+/// eso no es falta de datos: es la respuesta. Sin este campo, la pantalla decía «sin histórico
+/// suficiente para estimar», que manda a buscar unas medidas que no arreglarían nada.
+/// </param>
 public sealed record CostEstimate(
     int Units,
     int MaxPasses,
@@ -38,7 +44,8 @@ public sealed record CostEstimate(
     int SampleSessions,
     int ObservedMaxPasses,
     decimal PassFactor,
-    CostEvidence Evidence)
+    CostEvidence Evidence,
+    bool Billed = true)
 {
     /// <summary>Cuántas unidades, en castellano.</summary>
     public string UnitsLabel => Units == 1 ? "1 unidad" : $"{Units} unidades";
@@ -51,6 +58,11 @@ public sealed record CostEstimate(
     {
         get
         {
+            if (!Billed)
+            {
+                return $"{UnitsLabel} · sin coste para la organización";
+            }
+
             if (Total is not { } total || CostPerUnit is not { } per)
             {
                 return $"{UnitsLabel} · sin histórico suficiente para estimar";
@@ -73,6 +85,13 @@ public sealed record CostEstimate(
     {
         get
         {
+            if (!Billed)
+            {
+                return "El consumo de Claude Code va contra tu suscripción y no factura a la "
+                    + "organización, así que no hay coste que estimar. Las llamadas y los tokens de "
+                    + "la sesión sí quedan registrados.";
+            }
+
             if (Evidence == CostEvidence.Ninguna)
             {
                 return "Sin tokens medidos en el historial de esta aplicación —o sin tarifa para su "
@@ -101,6 +120,12 @@ public sealed record CostEstimate(
 
     /// <summary>La estimación no bloquea nada; el diálogo la enseña aunque no haya número.</summary>
     public bool HasNumber => Total is not null;
+
+    /// <summary>
+    /// Hay que advertir de que el número es flojo. Con una casa que no factura NO se advierte de
+    /// nada: no hay número que sostener, y un ⚠ ahí solo enseñaría a ignorar los ⚠ de verdad.
+    /// </summary>
+    public bool IsWeak => Billed && Evidence != CostEvidence.Suficiente;
 }
 
 /// <summary>
@@ -207,6 +232,16 @@ public sealed class CostEstimator
         ModelRateTable? rates = null)
     {
         maxPasses = Math.Max(1, maxPasses);
+
+        // F16-RETOQUE §1 — si esta casa no factura, no hay nada que estimar y se dice así. Antes se
+        // caía por el camino de «no hay medidas», que manda a buscar un histórico que no existiría
+        // nunca porque esas sesiones no producen coste por definición.
+        if (!CreditCalculator.IsBilled(providerId))
+        {
+            return new CostEstimate(
+                units, maxPasses, null, null, DefaultCostUnit, 0, 0, 0, 1m,
+                CostEvidence.Ninguna, Billed: false);
+        }
 
         // F15 — se mide sobre TOKENS, no sobre el coste que guardó la sesión. El coste guardado de
         // las sesiones viejas está en premium requests, la unidad retirada; los tokens, en cambio,

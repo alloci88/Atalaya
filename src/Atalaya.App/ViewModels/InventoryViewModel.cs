@@ -1161,26 +1161,21 @@ public sealed partial class InventoryViewModel : ViewModelBase
     /// <summary>
     /// La confirmación de un lanzamiento, con el juez de la sesión escrito en el titular (F14).
     /// <para>
-    /// Cuando el proveedor no cobra por llamada —Claude Code— no hay dinero que prometer, así que
-    /// no se promete: se dice lo que sí se sabe, «~N llamadas · coste según tu suscripción», y se
-    /// acompaña de la salvedad de la unidad. Inventar una equivalencia con las peticiones premium
-    /// de Copilot sería fabricar una precisión que no existe.
+    /// Cuando el proveedor no factura a la organización —Claude Code va contra la suscripción de
+    /// quien lo usa— no hay coste que prometer, y la propia estimación lo dice (F16-RETOQUE §1).
+    /// Hasta aquí se acompañaba de una salvedad sobre la «tarifa de lista»; ya no hace falta,
+    /// porque ya no se enseña ninguna cifra que pudiera confundirse con dinero.
     /// </para>
     /// </summary>
     internal AuditLaunchConfirmation ConfirmationFor(int units)
     {
         IAuditorProvider? provider = _providers?.Current;
-        CostEstimate estimate = EstimateFor(units);
-
-        bool listPriced = estimate.CostUnit.Contains("tarifa de lista", StringComparison.OrdinalIgnoreCase)
-            || provider?.ProviderId == "claude-code";
 
         return new AuditLaunchConfirmation(
             AppName,
-            estimate,
+            EstimateFor(units),
             provider?.ProviderName ?? string.Empty,
-            provider?.ModelName,
-            listPriced ? ClaudeUsage.ListPriceCaveat : null);
+            provider?.ModelName);
     }
 
     /// <summary>

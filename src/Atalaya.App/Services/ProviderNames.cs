@@ -44,9 +44,9 @@ public static class ProviderNames
     }
 
     /// <summary>
-    /// El coste de esta casa es un EQUIVALENTE y no una factura (F15, D-789): con suscripción no se
-    /// paga por tokens. Vive aquí, con el resto de lo que se sabe de cada casa leyendo el hub.
+    /// <b>Si lo que se busca es si esa casa FACTURA, se pregunta en otro sitio</b>:
+    /// <see cref="CreditCalculator.IsBilled"/> (F16-RETOQUE §1). Aquí vivió un reenvío durante un
+    /// rato y se quitó — dos puertas a la misma decisión son dos sitios donde mirar cuando alguien
+    /// quiera cambiarla, y esta clase es la de los NOMBRES.
     /// </summary>
-    public static bool IsSubscription(string? providerId)
-        => string.Equals(providerId?.Trim(), ClaudeCodeProvider.Id, StringComparison.OrdinalIgnoreCase);
 }
