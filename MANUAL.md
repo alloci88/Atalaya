@@ -1063,6 +1063,37 @@ significa que el prefijo se está reescribiendo entero cada vez.
 > **Los tokens son el hecho; el coste, un derivado.** Los informes guardan los tokens enteros, así
 > que dentro de un año se puede recalcular el coste con otra tarifa a partir de los mismos números.
 
+### Cuántas llamadas hace falta, y por qué
+
+El gasto no escala con el tamaño de la unidad: escala con las **llamadas**. Cada una reenvía el
+prompt entero —el sistema del proveedor, el brief, los hallazgos conocidos y el código—, así que
+una llamada de más cuesta casi lo mismo que auditar la unidad otra vez.
+
+Una pasada sana son **dos llamadas**:
+
+1. **La que entrega**: el auditor manda de una vez sus veredictos sobre lo conocido, los hallazgos
+   nuevos, las ubicaciones que añade y el cierre de la unidad.
+2. **La de cortesía**: después de recibir la respuesta de una herramienta, el modelo tiene que
+   contestar algo. Se le pide que no diga nada y aun así gasta la vuelta. Es del CLI, no de
+   Atalaya, y no se puede quitar sin perder las cuentas de consumo que ese mismo CLI solo publica
+   al final.
+
+Se convierte en **tres** cuando el auditor pide las firmas de una dependencia (`read_signatures`),
+que es su única lectura extra.
+
+Si en el desglose por pasada del informe ves muchas más, algo va mal: o el modelo está dando
+vueltas, o está soltando los hallazgos de uno en uno en vez de agruparlos. Para eso está el techo.
+
+### El techo de llamadas
+
+`maxCallsPerPass` en el `app.json` de la aplicación, junto a `maxTokensPerUnit`. **Por defecto 12**,
+que es cuatro veces una pasada sana: no molesta a quien trabaja bien y corta un bucle a tiempo.
+
+Si salta, la unidad se cierra como **presupuesto superado** y el informe dice **cuál** de los dos
+techos fue —«5/4 llamadas en una pasada» o «500000/300000 tokens»—, porque los dos tienen remedios
+distintos: uno es un agente dando vueltas, el otro es una unidad demasiado grande. **0 lo
+desactiva** y deja el de tokens como única red.
+
 ### Las palancas que tienes
 
 En orden de cuánto mueven la aguja:
@@ -1083,6 +1114,9 @@ En orden de cuánto mueven la aguja:
 5. **Excluir del inventario** lo que no aporta: generado, migraciones, ficheros de recursos. Cada
    unidad del inventario es una factura potencial.
 
+Lo que **no** tienes que hacer es apretar las llamadas a mano: el prompt ya le pide al auditor que
+entregue todo en un solo turno, y el techo de arriba está para cuando no obedezca.
+
 ### Lo que NO es una palanca
 
 - **Pedirle brevedad al modelo.** La salida es el 4 % del gasto y es donde está todo el valor.
@@ -1090,6 +1124,9 @@ En orden de cuánto mueven la aguja:
   degrada la auditoría.
 - **Colocar la caché tú.** El orden ya está puesto y probado; dónde corta su caché lo decide el
   proveedor, y se comprobó midiendo que con el CLI de Claude Code no hay forma de pedírselo.
+- **Bajar el techo de llamadas para ahorrar.** No es un presupuesto, es una alarma. Puesto por
+  debajo de lo que necesita una pasada sana, lo que hace no es gastar menos: es cortar auditorías
+  a medias y dejarlas marcadas como superadas.
 
 ---
 

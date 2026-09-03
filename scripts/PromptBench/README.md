@@ -26,8 +26,13 @@ $bench = "scripts/PromptBench/bin/Debug/net8.0/PromptBench.exe"
 & $bench claude --split --model sonnet
 ```
 
-Opciones: `--model <alias|id>` (por defecto `sonnet`), `--tema <General|Seguridad|…>`, y las
-unidades a medir como argumentos sueltos (rutas relativas a la raíz del repositorio).
+Opciones: `--model <alias|id>` (por defecto `sonnet`), `--tema <General|Seguridad|…>`,
+`--existentes N` y las unidades a medir como argumentos sueltos (rutas relativas a la raíz del
+repositorio).
+
+`--existentes N` siembra N hallazgos conocidos en la unidad. **Sin él todas las medidas son de una
+PRIMERA pasada**, que es el caso barato: en una segunda el auditor además tiene que reconciliar, y
+es ahí donde se ve si agrupa sus herramientas en un turno o gasta una vuelta por cada cosa (F19).
 
 **El escenario por defecto** son dos unidades pequeñas de este mismo repositorio
 (`Hashing.cs` y `AxisScale.cs`), del tamaño de las del banco de pruebas de la línea base. Se pueden
@@ -48,9 +53,23 @@ dar otras; lo que **no** se puede es comparar dos ejecuciones con unidades disti
 - **La caché del proveedor dura una hora.** Repetir el mismo escenario mide una caché caliente, no
   una fría. Para una medida limpia, unidades que no se hayan enviado antes.
 
+## El mapa de llamadas (F19)
+
+En el modo `claude`, después de la tabla sale **qué pidió cada llamada**:
+
+```
+llamada 1: entrada 19.605 · salida 7   → report_verdicts × 3 + submit_findings × 2
+llamada 2: entrada 29.782 · salida 32  → unit_done
+llamada 3: entrada 30.171 · salida 2   → (sin herramienta: solo texto)
+```
+
+Es el diagnóstico que ordenó F19. Una llamada sin herramienta detrás es texto, y en una auditoría
+el texto no entra en ningún dato: los hallazgos viajan por herramienta. Si una tanda enseña muchas
+llamadas «solo texto», o una herramienta por llamada en vez de agrupadas, ahí está el gasto.
+
 ## Qué se midió con esto
 
-Ver `DECISIONS.md` § F18, D-850 a D-858. El resumen: `--split` salió **neutro** —las dos formas
+Ver `DECISIONS.md` § F18 (D-850…D-858) y § F19 (D-861…D-869). El resumen: `--split` salió **neutro** —las dos formas
 producen la misma clave de caché y ninguna reutiliza el prefijo entre unidades—, así que no entró en
 producción. La palanca sigue aquí, desarmada, para poder repetir la medida el día que el CLI cambie
 sus cortes de caché.

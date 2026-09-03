@@ -4,9 +4,25 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-03 (F18 — saber a dónde va cada token).
+Última revisión: 2026-09-03 (F19 — menos llamadas por unidad).
 
 ## En vuelo
+
+- **F19 — la economía de turnos, con Copilot delante.** Todo lo de la fase es prompt y coordinador,
+  así que vale para las dos casas sin una línea por proveedor, pero **solo se ha medido con Claude
+  Code**: aquí no hay asiento de Copilot. Dos cosas que solo se ven allí (D-869): que el modelo
+  agrupe igual —se lee en el desglose por pasada del informe: las llamadas por unidad tienen que
+  bajar de ~3,5 a ~2— y que `unit_done`, que allí es `IsTerminal`, no trunque el resto del turno.
+  El prompt le pide que vaya la última justo para eso, pero es un razonamiento, no una medida.
+- **F19 — `read_signatures` por adelantado, si sale a cuenta.** Medido: aparece en 2 de cada 6
+  unidades y cuesta una llamada entera (~25.000 tokens). Mandar las firmas de las dependencias sin
+  que las pidan cambiaría esa llamada condicional por tokens incondicionales en todas las unidades.
+  Puede ganar, pero exige resolver dependencias de verdad —hoy `ReadSignatures` es heurístico
+  (D-018)— y eso no se decide a ojo: medir con `PromptBench` antes de tocar nada.
+- **F19 — la llamada de cortesía, si el CLI cambia.** Es hoy la mitad de las llamadas de una pasada
+  y no aporta nada. Matarla se midió y se descartó porque cuesta las cuentas de consumo (D-865). El
+  día que el CLI publique el consumo llamada a llamada, o admita una herramienta terminal, esto
+  vuelve a estar sobre la mesa y baja el suelo de 2 a 1 por pasada.
 
 - **F18 — la línea de composición, con una sesión real delante.** Toda la aritmética está fijada
   con tests y la medida contra el CLI de Claude Code está hecha y escrita (D-850…D-858), pero
@@ -267,6 +283,18 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **F19 · Menos llamadas por unidad, sin tocar la cobertura** — primero el desglose, que era el
+  trabajo: una pasada son tres llamadas y la tercera no hace nada (D-861). La hipótesis de que las
+  pasadas compartían conversación era falsa y se comprueba en el código y en la medida: cada pasada
+  ya arrancaba limpia desde F4.1/F14 (D-862). Lo que entra es una regla de prompt —entregar
+  veredictos, hallazgos, ubicaciones y cierre en un solo turno, con `unit_done` la última (D-863)—,
+  medida a 3,5 → 2,0 llamadas por unidad y −43 % de entrada con los mismos hallazgos, y 2,33 de
+  media sobre seis unidades (D-864). Matar el proceso al cerrar la unidad se implementó, se midió y
+  se descartó: quitaba la misma llamada pero dejaba la sesión declarando 43 tokens de salida donde
+  se consumieron 51.451 (D-865). Y los guardarraíles: techo de llamadas por pasada que dice cuál de
+  los dos techos saltó (D-866) y un test que impide pagar las llamadas de menos con un prefijo de
+  más (D-867).
 
 - **F18 · Saber a dónde va cada token** — el banco de medida reutiliza el código de producción y
   deja el escenario repetible (D-850), y la lección de método: lo determinista es la PRIMERA

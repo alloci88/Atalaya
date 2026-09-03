@@ -10740,3 +10740,197 @@ por intuición, y son las que de verdad mueven los 894 $:
   dos unidades de la sesión, la duración se registra y el informe sale con su línea.
 - **La palanca desarmada**: `--append-system-prompt-file` no aparece en la línea de órdenes de una
   auditoría normal.
+## F19 — Menos llamadas por unidad, sin tocar la cobertura
+
+F18 dejó el mapa: el código auditado es el 2,7 % de una llamada, y los dos bloques grandes —el
+sistema del CLI y la conversación acumulada— solo se atacan haciendo **menos llamadas**. Esta fase
+las cuenta, dice por qué son las que son, y quita las que sobran.
+
+**Resultado: 3,5 → 2,33 llamadas por pasada (−33 %), con los mismos hallazgos.** No se llega a las
+~6 por unidad que pedía el encargo sino a ~7, y el motivo está medido y escrito (D-864).
+
+### D-861 — El desglose de las 11 llamadas, que era el trabajo de verdad
+
+El banco imprime ahora **qué pidió cada llamada**. No hace falta nada del proveedor: una llamada
+termina de una de dos formas —pidiendo una herramienta o cerrando el turno—, y las herramientas
+pasan todas por el toolbox, así que basta con intercalar las dos series en el orden en que ocurren.
+
+Una pasada de auditoría, medida contra el CLI real (sonnet, 2026-09-03), es exactamente esto:
+
+```
+llamada 1: entrada 19.605 · salida 7   → report_verdicts × 3 + submit_findings × 2
+llamada 2: entrada 29.782 · salida 32  → unit_done
+llamada 3: entrada 30.171 · salida 2   → (sin herramienta: solo texto)
+```
+
+Tres llamadas, y **la tercera no hace nada**: gasta 30.171 tokens de entrada para producir dos
+tokens de cortesía. Los hallazgos viajan por herramienta; el texto del auditor no entra en ningún
+dato de Atalaya. Con una lectura de firmas de una dependencia son cuatro.
+
+Las once de la línea base salen de ahí: **3,5 llamadas por pasada × las pasadas del barrido**.
+
+Lo que el diagnóstico **descartó**, y conviene que quede escrito para no volver a proponerlo:
+
+- **El código NO se pide, se recibe.** La unidad viaja entera en el prompt desde siempre. La única
+  lectura extra es `read_signatures`, y es de **dependencias**, no de la unidad: apareció en 2 de
+  las 6 unidades medidas, y cuando aparece el modelo agrupa las dos lecturas en un solo turno.
+- **Las herramientas YA venían agrupadas** en los dos proveedores: `submit_findings` y
+  `report_verdicts` reciben arrays, y el modelo los usa (`report_verdicts × 3 + submit_findings × 2`
+  en una sola llamada). Ahí no había nada que ganar.
+- **Descubrimiento y reconciliación YA van en el mismo viaje**, y en el mismo turno.
+- **Los cierres de pasada seca no gastan una llamada de más**: una pasada seca es la misma
+  estructura con `submit_findings` vacío o ausente.
+
+### D-862 — §2 no era una hipótesis: ya estaba hecho, y se comprueba en el código y en la medida
+
+El encargo daba por supuesto que «las pasadas de una unidad comparten conversación, así que la
+pasada 3 arrastra todo lo dicho en la 1 y la 2» y que el coste crece de forma cuadrática. **No es
+así, y no lo era desde F4.1/F14.**
+
+- `SessionCoordinator` llama a `AuditUnitAsync` **una vez por pasada**, con un prompt recompuesto.
+- `ClaudeCodeProvider.RunSessionAsync` lanza un **proceso `claude` nuevo** en cada llamada.
+- `RealCopilotAgent.RunAsync` hace `CreateSessionAsync` → `SendAndWaitAsync` → `DisposeAsync`, o
+  sea **una sesión nueva** en cada llamada.
+
+Y la medida lo corrobora: la primera llamada de cada pasada arranca siempre en el tamaño del
+prompt (19–25 k tokens), no en un acumulado que crezca de pasada en pasada. **El coste por pasada
+ya es plano**, y lo que cada pasada hereda de la anterior son sus conclusiones —la lista de
+hallazgos conocidos, dato estructurado—, que es exactamente lo que el encargo proponía construir.
+
+No hay nada que cambiar. Se anota porque una hipótesis descartada con evidencia vale lo mismo que
+una confirmada, y porque el siguiente que lea «esto crece cuadráticamente» tiene que encontrar aquí
+por qué no.
+
+### D-863 — La economía de turnos: entregar todo en un turno, y no una vuelta por cosa
+
+El cambio que entra es de **prompt**, no de mecanismo. Se le dice al auditor que las vueltas de
+ENTREGA son caras y las de RAZONAMIENTO no se tocan:
+
+> Cuando ya sepas lo que vas a reportar, ENTREGA TODO EN UN SOLO TURNO: `report_verdicts`,
+> `submit_findings`, `add_locations` y `unit_done`, las cuatro en la misma vuelta, y `unit_done` la
+> última de las cuatro.
+
+**Es seguro que `unit_done` viaje con las demás**, y no por confianza: `SessionToolbox.UnitDone`
+solo apunta el resumen de cobertura y lo suprimido por patrón — no cierra nada ni decide nada. La
+condición de pasada seca la calcula el coordinador **después** de que la sesión entera termine, así
+que el orden en que lleguen las cuatro no cambia ni un resultado. Lo único que se pierde es que el
+modelo vea el resultado de `submit_findings` antes de cerrar; en las seis unidades medidas no
+reaccionaba a él nunca, los rechazos se siguen contando y nombrando en el informe, y la pasada
+siguiente del barrido vuelve a verlo todo.
+
+**Se le pide que vaya la última** por un motivo que solo aplica a Copilot: allí `unit_done` está
+declarada `IsTerminal`, y una herramienta terminal emitida antes que las demás podría truncar el
+turno. Puesta la última no hay nada detrás que truncar.
+
+### D-864 — La medida, y por qué el suelo son 2 llamadas por pasada y no 1
+
+Mismo par de unidades, mismas condiciones (sonnet, ciclo General, 3 hallazgos conocidos sembrados,
+1 pasada), con el prompt de F18 y con el de F19:
+
+| | Llamadas/unidad | Entrada total | Salida | Hallazgos | Veredictos |
+|---|---:|---:|---:|---:|---:|
+| **Antes** (prompt F18) | **3,5** | 199.097 | 24.304 | 4 | 6 |
+| **Después** (economía de turnos) | **2,0** | 113.496 | 21.252 | 4 | 6 |
+
+**−43 % de llamadas y −43 % de entrada, con los mismos hallazgos.** Y el guardarraíl del §3 se
+cumple: la entrada **por llamada** no se disparó —28.442 antes, 28.374 después—, así que el ahorro
+es real y no un traslado de muchas llamadas pequeñas a una gigante.
+
+Sobre **seis unidades** medidas con el prompt nuevo, cinco agruparon `unit_done` con lo demás y una
+no: la media honesta es **2,33 llamadas por pasada**, no 2. Proyectado sobre el barrido, **11 → ~7
+llamadas por unidad (−35 %)**. El encargo pedía ~6 y no se llega; el motivo es éste:
+
+**El suelo real con este CLI son 2 llamadas por pasada**, porque la segunda es estructural: después
+de un resultado de herramienta el modelo tiene que contestar algo, y esa contestación es una llamada
+con el prompt entero dentro. Se le pide que no diga nada —la descripción de `unit_done` lo dice y el
+prompt lo repite— y obedece a medias: deja de usar herramientas, pero gasta la vuelta.
+
+### D-865 — Matar el proceso al cerrar la unidad: medido, y FUERA por cambiar verdad por dinero
+
+Se implementó y se midió lo evidente: si la llamada de cortesía no aporta nada, **matar el proceso
+del CLI en cuanto `unit_done` pasa por el toolbox**. Funcionaba, y bien: 3 llamadas por unidad → 2,
+con los hallazgos ya persistidos y el resumen de cobertura ya registrado.
+
+**Y hay que dejarlo fuera, porque las cuentas dejan de ser ciertas.** El CLI **no publica el consumo
+real llamada a llamada**: los eventos `assistant` traen un `output_tokens` parcial —el de ese
+instante—, y las cifras completas, con los tokens de razonamiento y con lo que gasta el modelo
+auxiliar que el propio CLI usa por su cuenta, solo aparecen en el evento `result` del final. El
+lector las reconcilia ahí (`ClaudeStreamReader.Settle`). Matando el proceso, ese evento no llega.
+
+Medido en la misma tanda: **la sesión habría declarado 43 tokens de salida donde se consumieron
+51.451**. Comprobado además en aislado con una sola llamada: el evento `assistant` decía
+`output_tokens: 5` y el `result` de esa misma llamada, 20.
+
+Eso rompe lo que F18 acababa de construir —«los tokens son el hecho»— y lo rompe **en silencio**:
+un informe que dice 43 no se lee como un error, se lee como una sesión barata. Un ahorro que se
+paga con un dato falso no es un ahorro (N-2). Fuera.
+
+Es además la razón por la que el camino que sí entró es mejor de lo que parecía: **quita la misma
+llamada, y encima la de entrega, dejando intacto el `result`** — el ahorro es el mismo y las
+cuentas siguen cuadrando.
+
+### D-866 — Techo de llamadas por pasada: la causa, no la consecuencia
+
+`Thresholds.MaxCallsPerPass`, por defecto **12**. Hermano del de tokens (Hito 1c) y por la misma
+razón, pero midiendo lo que de verdad multiplica el gasto: **cada llamada reenvía el prompt entero**,
+así que las llamadas son la causa y los tokens, la consecuencia. Un agente en bucle se nota en el
+contador de llamadas mucho antes de que los tokens se acerquen a su tope.
+
+- **12 porque lo medido son 2** —3 con lectura de firmas—: cuatro veces el gasto sano no molesta a
+  nadie que trabaje bien y corta un bucle a tiempo.
+- **Nunca corta mudo**: la pasada se cierra, la unidad queda `presupuesto-superado` y el motivo
+  dice **cuál de los dos techos saltó** —«5/4 llamadas en una pasada» o «500000/300000 tokens»—.
+  Sin eso, «cortada por presupuesto» obliga a adivinar si el agente gastó mucho o dio muchas
+  vueltas, y los dos tienen remedios distintos (N-2).
+- **0 lo desactiva** y deja el de tokens como única red.
+
+Va en `Thresholds` —configuración compartida de la aplicación auditada— y no en Ajustes, junto a
+`MaxTokensPerUnit`, que es su hermano y se gobierna igual.
+
+### D-867 — El guardarraíl del prefijo, fijado con un test
+
+El §3 avisaba de lo obvio: menos llamadas no puede significar prompts gigantes. La regla nueva
+engordó el prefijo estable de **2.838 a 3.039 tokens (+7 %)** y quitó un **43 %** de las llamadas,
+que es el cambio que se quería. Pero el prefijo viaja en TODAS las llamadas de la sesión, así que
+cada token añadido ahí se paga tantas veces como llamadas haya.
+
+Hay ahora un test que salta si el prefijo pasa de **3.500 tokens**. No es un presupuesto, es una
+alarma: quien necesite más sitio tiene que venir a cambiar el número y explicar por qué, en vez de
+descubrirlo en la factura tres meses después. Es la misma idea que el test de F18 que impide que el
+prefijo se contamine, aplicada al tamaño en vez de al contenido.
+
+### D-868 — Lo que NO se tocó, y sigue sin tocarse
+
+- **El tope de pasadas y la regla de las dos secas.** Hay hallazgos reales en la 4.ª y la 5.ª:
+  menos pasadas es menos cobertura, no ahorro.
+- **La salida.** Sigue siendo donde está el valor, y sigue sin pedírsele brevedad a nadie.
+- **La rúbrica, las temáticas y la gobernanza**: intactas.
+- **`--system-prompt`** del CLI: fuera desde F18 y sigue fuera.
+- **`read_signatures` por adelantado.** Se evaluó: mandar las firmas de las dependencias sin que
+  las pidan cambiaría una llamada condicional (~25.000 tokens, en 2 de 6 unidades medidas) por
+  tokens incondicionales en todas. Puede salir a cuenta, pero exige resolver dependencias de verdad
+  —hoy `ReadSignatures` es heurístico (D-018)— y eso no se hace a ojo. Queda medido y en el backlog.
+
+### D-869 — Lo que no se ha podido medir: Copilot
+
+Todo lo de esta fase es de prompt y de coordinador, así que **vale para los dos proveedores** sin
+una línea de código por casa. Pero **medido solo con Claude Code**: en esta máquina no hay asiento
+de Copilot, y sin él no se puede comprobar ni el ahorro ni —lo que importa— que la cobertura no se
+mueva.
+
+Dos cosas concretas que solo se ven allí, y que van a la aceptación del usuario:
+
+1. Que el modelo agrupe igual. Si no lo hiciera, se vería en el desglose por pasada del informe:
+   las llamadas por unidad no bajarían.
+2. Que `unit_done` con `IsTerminal` no trunque el resto del turno. El prompt le pide que vaya la
+   última precisamente para que no haya nada detrás que truncar, pero eso es un razonamiento, no
+   una medida.
+
+### D-870 — Cobertura (7 tests nuevos, 2.037 en total, todo en verde)
+
+- **El techo de llamadas**: corta un bucle, dice «llamadas» y no «tokens», el de tokens sigue
+  diciendo «tokens», 0 lo desactiva de verdad, y una pasada sana no roza el de por defecto.
+- **La economía de turnos en el prompt**: nombra las cuatro herramientas y su orden dentro del
+  turno, y **no contradice la cobertura** — se comprueba que el «tómate los turnos que necesites»
+  de F4.1 sigue entero al lado del «entrega todo en un turno».
+- **El guardarraíl del prefijo**: salta por arriba si engorda y por abajo si se cae un bloque.
