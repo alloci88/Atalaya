@@ -24,3 +24,7 @@ machines.json
 
 # Copias locales para diagnóstico forense (F3.1 Bloque 1)
 diagnostics/
+
+## Worktrees del agente (R1). `git worktree add .claude/worktrees/<x>` deja un fichero
+## `.git` suelto en la raiz del arbol principal, que se veia como cambio sin seguir.
+.claude/worktrees/

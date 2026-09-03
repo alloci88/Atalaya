@@ -12382,3 +12382,13 @@ lupas), sin directivas ni patrones silenciados — que son por aplicación y se 
 propio presupuesto desde F7. El brazo estructurado de M1 es del banco y no entra: su test sigue
 afirmando lo suyo, que cuesta ~90 tokens y no es quien rompía nada.
 
+### D-912 — Los worktrees del agente se ignoran
+
+`git worktree add .claude/worktrees/<x>` deja en el árbol principal una carpeta que `git status`
+enseñaba como cambio sin seguir —«1 changed file · `.claude\worktrees\f24-variantes`»—, con el riesgo
+de que acabe en un `git add .`. `.claude/worktrees/` entra en `.gitignore`.
+
+Comprobado con un worktree **vivo** (`git worktree add --detach .claude/worktrees/r1-prueba`):
+`git ls-files --others --exclude-standard` no devuelve nada bajo `.claude`, y `git status` en la raíz
+sale limpio. `git check-ignore -v` señala la regla nueva. El ajuste local de la máquina,
+`.claude/settings.local.json`, ya lo ignoraba la configuración global del usuario; esto no lo toca.
