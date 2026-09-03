@@ -1,4 +1,4 @@
-using Atalaya.Agents;
+﻿using Atalaya.Agents;
 using Atalaya.ClaudeCode;
 using Atalaya.Domain;
 using Atalaya.Domain.Model;
@@ -143,6 +143,31 @@ public sealed class ClaudeProviderTests
         => ClaudeAuthStatus.Parse(payload).Should().BeNull();
 
     // ---------------------------------------------------------------- la superficie que se le da al CLI
+
+    /// <summary>
+    /// F18 §2 — <b>el prompt sigue yendo entero por stdin</b>, y la palanca del prefijo estable no
+    /// aparece en la línea de órdenes salvo que alguien la arme a propósito.
+    /// <para>
+    /// La medida contra el CLI real (2.1.259, 2026-09-03) dijo que mandar el prefijo por
+    /// <c>--append-system-prompt-file</c> produce <b>la misma clave de caché</b> que mandarlo
+    /// dentro del mensaje, y que en ninguno de los dos casos la unidad siguiente lo reutiliza. No
+    /// mejora, así que no entra (F18 §0). Lo que se fija aquí es que <i>de verdad</i> no entra: un
+    /// cambio de opinión silencioso en el driver se vería como un rojo, no como una factura.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void El_prefijo_estable_no_viaja_por_el_system_prompt_salvo_que_se_arme()
+    {
+        var run = new ClaudeRun("prompt", new[] { "mcp__atalaya__unit_done" }, "mcp.json", null);
+
+        ClaudeCliRunner.BuildArguments(run)
+            .Should().NotContain(a => a.Contains("system-prompt", StringComparison.Ordinal));
+
+        // Y cuando el banco de medida la arma, va por FICHERO: en Windows el CLI es un `claude.cmd`
+        // y un prefijo de doce mil caracteres en la línea de órdenes no sobreviviría a cmd.exe.
+        ClaudeCliRunner.BuildArguments(run with { SystemPromptFile = @"C:\tmp\prefijo.txt" })
+            .Should().ContainInConsecutiveOrder("--append-system-prompt-file", @"C:\tmp\prefijo.txt");
+    }
 
     /// <summary>
     /// <b>La salvaguarda entera de este flujo cabe en esta lista</b>, y por eso se comprueba aquí

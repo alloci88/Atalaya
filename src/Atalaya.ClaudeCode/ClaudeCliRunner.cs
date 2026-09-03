@@ -18,12 +18,29 @@ namespace Atalaya.ClaudeCode;
 /// conversación sigue viva mientras stdin siga abierto. Una auditoría es de un solo turno y no lo
 /// necesita.
 /// </param>
+/// <param name="SystemPromptFile">
+/// El fichero con el PREFIJO ESTABLE del prompt (F18 §2), que se añade al system prompt del CLI
+/// con <c>--append-system-prompt-file</c>. Null = todo va por stdin, como antes.
+/// <para>
+/// <b>Por qué el system prompt y no el mensaje.</b> El CLI cachea su prefijo —system prompt y
+/// herramientas— y lo reutiliza entre PROCESOS distintos: medido el 2026-09-03 contra el CLI real
+/// (2.1.259), un bloque de 12.500 caracteres pasado así se escribe en caché una vez (8.974 tokens
+/// de escritura la primera vez) y se lee de ella en todas las invocaciones siguientes (26.973 de
+/// lectura, 0 de escritura). Dentro del mensaje de usuario ese mismo bloque va detrás del código
+/// de la unidad en la clave de caché, así que cada unidad lo vuelve a pagar entero.
+/// </para>
+/// <para>
+/// <b>Y por FICHERO y no como argumento</b>, por lo mismo que el prompt va por stdin: en Windows
+/// el CLI es un <c>claude.cmd</c> y la línea de órdenes la reinterpreta <c>cmd.exe</c>.
+/// </para>
+/// </param>
 public sealed record ClaudeRun(
     string Prompt,
     IReadOnlyList<string> AllowedTools,
     string McpConfigPath,
     string? Model,
-    bool Conversational = false);
+    bool Conversational = false,
+    string? SystemPromptFile = null);
 
 /// <summary>
 /// Lanza <c>claude</c> en modo no interactivo y devuelve cómo fue (F14).
@@ -117,6 +134,16 @@ public sealed class ClaudeCliRunner
             "--permission-mode", "dontAsk",
             "--no-session-persistence",
         };
+
+        if (run.SystemPromptFile is { Length: > 0 } systemPrompt)
+        {
+            // Se AÑADE al system prompt del CLI, no lo sustituye: reemplazarlo del todo
+            // (--system-prompt) ahorra otros ~6.100 tokens por llamada —medido— pero cambia las
+            // instrucciones con las que el modelo trabaja, y eso no se toca sin una comparación de
+            // CALIDAD delante. F18 mide y deja la palanca escrita; no la acciona a ciegas.
+            args.Add("--append-system-prompt-file");
+            args.Add(systemPrompt);
+        }
 
         if (run.Conversational)
         {

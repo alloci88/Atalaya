@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text.Json;
 using Atalaya.Agents;
 using Microsoft.Extensions.Logging;
@@ -41,6 +41,17 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider
     private readonly Func<string> _workDirectory;
     private readonly Func<string?>? _locator;
     private readonly string _bridgeExecutable;
+
+    /// <summary>Lo que contestó la ayuda del CLI sobre <c>--append-system-prompt-file</c>.</summary>
+    private bool? _supportsSystemPromptFile;
+
+    /// <summary>
+    /// <b>Apagado, y así se queda</b> hasta que una medida diga otra cosa. Manda el prefijo estable
+    /// por el system prompt del CLI en vez de por stdin. F18 lo midió y salió neutro (ver
+    /// <see cref="AuditUnitAsync"/>); vive aquí para que el banco de medida pueda volver a
+    /// comprobarlo contra el CLI del día, no para encenderlo desde la aplicación.
+    /// </summary>
+    public bool UseSystemPromptPrefix { get; init; }
 
     /// <param name="modelProvider">
     /// El modelo elegido en Ajustes. Es una FUNCIÓN y se llama en CADA sesión, por la misma razón
@@ -194,13 +205,74 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider
         return Task.FromResult(models);
     }
 
-    /// <inheritdoc/>
-    public Task AuditUnitAsync(AuditUnitRequest request, IAuditToolbox toolbox, CancellationToken ct)
-        => RunSessionAsync(request.Prompt, AuditorTools.ForAudit(toolbox), ct);
+    /// <summary>
+    /// Audita la unidad. <b>El prompt va entero por stdin</b>, que es lo que se venía haciendo.
+    /// <para>
+    /// <b>F18 §2 midió la alternativa y la dejó fuera.</b> La idea era mandar el prefijo estable
+    /// por <c>--append-system-prompt-file</c>, donde la caché del CLI pudiera reutilizarlo entre
+    /// unidades. Medido contra el CLI real (2.1.259, 2026-09-03) con las herramientas MCP puestas:
+    /// las dos formas producen <b>la misma clave de caché</b> —una tanda con el prompt entero leyó
+    /// de caché el 100 % de lo que había escrito la tanda partida, con la entrada idéntica al
+    /// token— y en ninguna de las dos la unidad siguiente reutiliza el prefijo: su primera llamada
+    /// lee siempre los mismos ~11.300 tokens del CLI y escribe todo lo nuestro. No hay un punto de
+    /// corte de caché entre el prefijo y el código, y no lo decidimos nosotros.
+    /// </para>
+    /// <para>
+    /// Así que no entra: un cambio que no mueve la tabla no se defiende (F18 §0). Lo que queda es
+    /// <see cref="UseSystemPromptPrefix"/>, apagado, para poder <b>repetir la medida</b> el día que
+    /// el CLI cambie sus cortes de caché — que es cuando esta decisión habría que revisarla.
+    /// </para>
+    /// </summary>
+    public async Task AuditUnitAsync(AuditUnitRequest request, IAuditToolbox toolbox, CancellationToken ct)
+    {
+        if (!UseSystemPromptPrefix || !request.CanSplit || !await SupportsSystemPromptFileAsync(ct))
+        {
+            await RunSessionAsync(request.Prompt, AuditorTools.ForAudit(toolbox), ct);
+            return;
+        }
+
+        await RunSessionAsync(request.UnitPart!, AuditorTools.ForAudit(toolbox), ct, request.StablePrefix);
+    }
 
     /// <inheritdoc/>
     public Task VerifyAsync(VerifyRequest request, IVerifyToolbox toolbox, CancellationToken ct)
         => RunSessionAsync(request.Prompt, AuditorTools.ForVerify(toolbox), ct);
+
+    /// <summary>
+    /// ¿Admite este CLI <c>--append-system-prompt-file</c>? Se PREGUNTA a su ayuda, una vez por
+    /// proceso, y no se supone por el número de versión: el flag existe en 2.1.259 pero no está en
+    /// la lista principal de opciones, así que atarlo a una versión sería atarlo a una conjetura.
+    /// <para>
+    /// Que no esté no es un fallo: se manda el prompt entero por stdin, que es lo que se venía
+    /// haciendo. Una optimización que rompiera la auditoría en una máquina con un CLI viejo sería
+    /// mucho peor que la optimización.
+    /// </para>
+    /// </summary>
+    private async Task<bool> SupportsSystemPromptFileAsync(CancellationToken ct)
+    {
+        if (_supportsSystemPromptFile is { } known)
+        {
+            return known;
+        }
+
+        bool supported = false;
+        try
+        {
+            (_, string stdout, string stderr) = await RunPlainAsync(ResolveCli()!, new[] { "--help" }, ct);
+            supported = (stdout + stderr).Contains("append-system-prompt-file", StringComparison.Ordinal);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug("Claude Code: no se pudo preguntar por --append-system-prompt-file: {Message}", ex.Message);
+        }
+
+        _supportsSystemPromptFile = supported;
+        return supported;
+    }
 
     /// <inheritdoc/>
     public AgentReadiness Diagnose(Exception ex)
@@ -300,7 +372,8 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider
     /// defectos.
     /// </para>
     /// </summary>
-    private async Task RunSessionAsync(string prompt, IReadOnlyList<McpTool> tools, CancellationToken ct)
+    private async Task RunSessionAsync(
+        string prompt, IReadOnlyList<McpTool> tools, CancellationToken ct, string? stablePrefix = null)
     {
         AgentReadiness readiness = await CheckAsync(ct);
         if (!readiness.Ready)
@@ -316,6 +389,7 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider
         host.Start();
 
         string configPath = ClaudeCliRunner.WriteMcpConfig(workDirectory, _bridgeExecutable, host.PipeName);
+        string? systemPromptPath = WriteSystemPrompt(workDirectory, stablePrefix);
 
         try
         {
@@ -324,7 +398,9 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider
             // que hace que el pie de la sesión en vivo se mueva mientras el agente trabaja. El
             // modelo que se apunta es el que el CLI resolvió de verdad, no el alias que se le pidió.
             ClaudeRunOutcome outcome = await runner.RunAsync(
-                new ClaudeRun(prompt, tools.Select(t => AuditorTools.Qualified(t.Name)).ToList(), configPath, ModelName),
+                new ClaudeRun(
+                    prompt, tools.Select(t => AuditorTools.Qualified(t.Name)).ToList(), configPath, ModelName,
+                    SystemPromptFile: systemPromptPath),
                 text => TextStreamed?.Invoke(text),
                 usage => UsageReported?.Invoke(usage with { Model = usage.Model ?? ModelName }),
                 ct);
@@ -343,6 +419,48 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider
         {
             TryDelete(configPath);
         }
+    }
+
+    /// <summary>
+    /// Escribe el prefijo estable donde el CLI pueda leerlo. <b>El nombre sale del contenido</b>:
+    /// dos unidades con el mismo prefijo escriben el mismo fichero y no hay uno por unidad
+    /// acumulándose en el directorio de trabajo. <b>Y no se borra al terminar</b>, a diferencia de
+    /// la configuración MCP: la sesión siguiente lo va a querer idéntico, y borrarlo para volver a
+    /// escribirlo igual solo sería trabajo. Vive en el directorio de trabajo de Atalaya, que es
+    /// temporal por definición.
+    /// </summary>
+    private string? WriteSystemPrompt(string workDirectory, string? stablePrefix)
+    {
+        if (stablePrefix is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(workDirectory);
+            string name = $"prefijo-{Hash(stablePrefix)}.txt";
+            string path = Path.Combine(workDirectory, name);
+            if (!File.Exists(path))
+            {
+                File.WriteAllText(path, stablePrefix, new System.Text.UTF8Encoding(false));
+            }
+
+            return path;
+        }
+        catch (Exception ex)
+        {
+            // No poder escribirlo no puede tumbar una auditoría: se manda el prompt entero por
+            // stdin, que es lo que se hacía antes de F18. Se pierde caché, no cobertura.
+            _logger.LogDebug("Claude Code: no se pudo escribir el prefijo estable: {Message}", ex.Message);
+            return null;
+        }
+    }
+
+    private static string Hash(string text)
+    {
+        byte[] bytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text));
+        return Convert.ToHexString(bytes)[..16].ToLowerInvariant();
     }
 
     /// <summary>Una invocación corta del CLI que no necesita ni MCP ni streaming.</summary>

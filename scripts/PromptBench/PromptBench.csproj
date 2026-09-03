@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- El banco de medida de F18. NO está en Atalaya.sln a propósito: no forma parte del producto
+       ni de la suite, y meterlo en la solución haría que cada build de la aplicación arrastrara un
+       ejecutable que solo se usa a mano. Se compila y se corre por su ruta, como IconGen. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>PromptBench</AssemblyName>
+    <RootNamespace>Atalaya.PromptBench</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Atalaya.Agents\Atalaya.Agents.csproj" />
+    <ProjectReference Include="..\..\src\Atalaya.ClaudeCode\Atalaya.ClaudeCode.csproj" />
+    <ProjectReference Include="..\..\src\Atalaya.Copilot\Atalaya.Copilot.csproj" />
+    <ProjectReference Include="..\..\src\Atalaya.Domain\Atalaya.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Atalaya.Mcp\Atalaya.Mcp.csproj" />
+  </ItemGroup>
+
+</Project>
