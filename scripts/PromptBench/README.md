@@ -24,11 +24,20 @@ $bench = "scripts/PromptBench/bin/Debug/net8.0/PromptBench.exe"
 # Una pasada REAL por unidad, con el CLI y el servidor MCP de verdad. GASTA cuota.
 & $bench claude --whole --model sonnet
 & $bench claude --split --model sonnet
+
+# La comparacion de F21: la misma tanda con el corte apagado.
+& $bench claude --sin-corte --model sonnet --pasadas 3
 ```
 
 Opciones: `--model <alias|id>` (por defecto `sonnet`), `--tema <General|Seguridad|…>`,
 `--existentes N` y las unidades a medir como argumentos sueltos (rutas relativas a la raíz del
 repositorio).
+
+`--sin-corte` apaga el corte en `unit_done` (F21), que en producción va encendido. **Es la línea
+contra la que se compara**: sin él no hay forma de enseñar que la escritura de caché baja y que los
+hallazgos tardíos no se mueven. Al final de la tanda el banco dice cuántas pasadas se cortaron de
+verdad y, de las que no, por qué — una pasada que paga su llamada de cortesía tiene que verse, no
+esconderse en la media.
 
 `--pasadas N` simula el barrido: N pasadas sobre la misma unidad, cada una viendo como conocido lo
 que reportaron las anteriores. **Una sola pasada mide el caso barato**; el gasto de F20 estaba en
@@ -69,6 +78,14 @@ llamada 2: fresca 2 · leída 25.003 · ESCRITA 29.786 · salida 2 → (sin herr
 **Lectura y escritura van separadas, y no es cosmético** (F20): escribir en caché cuesta doce veces
 leerla, así que dos llamadas con la misma «entrada» pueden costar trece veces distinto. La columna
 que decide es **ESCRITA**.
+
+**Y la salida es la de verdad desde F21.** Antes se leía del evento `assistant`, que trae un consumo
+PARCIAL: decía 5 donde la llamada acabó gastando 23.569. Ahora se lee del evento que cierra el
+mensaje, así que las cifras de esta tabla anteriores a F21 subestiman la salida.
+
+La fila **`ajuste`** no es una llamada: es el cuadre del final, y lo que trae es sobre todo lo que el
+CLI gastó por su cuenta con **su modelo auxiliar** (~10.000 tokens de entrada fresca por pasada), que
+no es de ninguna llamada del auditor y no aparece en ningún otro sitio del flujo.
 
 Es el diagnóstico que ordenó F19. Una llamada sin herramienta detrás es texto, y en una auditoría
 el texto no entra en ningún dato: los hallazgos viajan por herramienta. Si una tanda enseña muchas

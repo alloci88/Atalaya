@@ -26,19 +26,90 @@ internal sealed class CallTrace
         public long CacheReadTokens;
         public long CacheWriteTokens;
         public long OutputTokens;
+        public long ReasoningTokens;
         public readonly List<string> Tools = new();
     }
 
-    /// <summary>Una llamada al modelo, según la informa el proveedor.</summary>
+    /// <summary>
+    /// Una muestra de consumo. <b>Abre una llamada nueva solo si el proveedor dice que lo es</b>
+    /// (<c>Calls == 1</c>); lo que llega con <c>Calls == 0</c> es la MISMA llamada contada mejor y
+    /// se suma a la fila que ya está abierta.
+    /// <para>
+    /// Desde F21 hay dos muestras por llamada: el anticipo del evento <c>assistant</c>, que trae un
+    /// consumo parcial, y el <c>message_delta</c> que la cierra con el definitivo. Abriendo fila
+    /// por muestra, una pasada de dos llamadas salía en la tabla con cinco, y la columna que decide
+    /// —la escritura— quedaba repartida entre filas que no existen.
+    /// </para>
+    /// </summary>
     public void Model(UsageSample sample)
-        => _calls.Add(new Call
+    {
+        if (sample.Reconciliation)
         {
-            Index = _calls.Count + 1,
+            // El cuadre del final. Va en su propia fila y NO sobre la última llamada: lo que trae
+            // es, sobre todo, lo que el CLI gastó por su cuenta con su modelo auxiliar, que no es
+            // de ninguna llamada del auditor. Cargárselo a la última mentiría sobre las dos.
+            _calls.Add(new Call
+            {
+                Index = -1,
+                InputTokens = sample.InputTokens,
+                CacheReadTokens = sample.CacheReadTokens,
+                CacheWriteTokens = sample.CacheWriteTokens,
+                OutputTokens = sample.OutputTokens,
+            });
+            return;
+        }
+
+        if (sample.Calls <= 0 && _calls.Count > 0)
+        {
+            Call open = _calls[^1];
+            open.InputTokens += sample.InputTokens;
+            open.CacheReadTokens += sample.CacheReadTokens;
+            open.CacheWriteTokens += sample.CacheWriteTokens;
+            open.OutputTokens += sample.OutputTokens;
+            open.ReasoningTokens += sample.ReasoningTokens;
+            return;
+        }
+
+        _calls.Add(new Call
+        {
+            Index = _calls.Count(c => c.Index > 0) + 1,
             InputTokens = sample.InputTokens,
             CacheReadTokens = sample.CacheReadTokens,
             CacheWriteTokens = sample.CacheWriteTokens,
             OutputTokens = sample.OutputTokens,
+            ReasoningTokens = sample.ReasoningTokens,
         });
+    }
+
+    /// <summary>
+    /// <b>De qué está hecho lo que la vuelta siguiente reescribe en caché</b> (F21 §3). Lo que una
+    /// llamada escribe es lo que se dijo desde la anterior: el mensaje entero del modelo —su
+    /// razonamiento y los argumentos de sus herramientas— más los resultados que le devolvió la
+    /// aplicación. La salida de la llamada anterior mide lo primero; el razonamiento, lo desglosa
+    /// el propio proveedor.
+    /// </summary>
+    public string RenderWriteBreakdown()
+    {
+        var sb = new StringBuilder();
+        for (int i = 1; i < _calls.Count; i++)
+        {
+            Call previous = _calls[i - 1];
+            Call current = _calls[i];
+            if (current.Index < 0 || current.CacheWriteTokens <= 0)
+            {
+                continue;
+            }
+
+            long resto = current.CacheWriteTokens - previous.OutputTokens;
+            sb.AppendLine(
+                $"    lo que ESCRIBE la llamada {current.Index} ({current.CacheWriteTokens}) ="
+                + $" salida de la {previous.Index} ({previous.OutputTokens}"
+                + $", de la cual razonamiento {previous.ReasoningTokens})"
+                + $" + resultados de herramienta y demás ({resto})");
+        }
+
+        return sb.ToString().TrimEnd();
+    }
 
     /// <summary>
     /// Una herramienta, atribuida a la llamada en curso. Si llegara antes de la primera muestra de
@@ -72,15 +143,18 @@ internal sealed class CallTrace
         sb.AppendLine($"  {unit}");
         foreach (Call c in _calls)
         {
-            string tools = c.Tools.Count == 0
-                ? "(sin herramienta: solo texto)"
-                : string.Join(" + ", c.Tools);
+            string tools = c.Index < 0
+                ? "(cuadre del final: sobre todo el modelo AUXILIAR del CLI)"
+                : c.Tools.Count == 0
+                    ? "(sin herramienta: solo texto)"
+                    : string.Join(" + ", c.Tools);
+            string label = c.Index < 0 ? "ajuste" : $"llamada {c.Index}";
             // F20 §2 — la lectura y la escritura VAN SEPARADAS. Sumadas no dicen nada: con Opus
             // escribir cuesta doce veces leer, así que dos llamadas con la misma «entrada» pueden
             // costar trece veces distinto. El síntoma que esta fase persigue —un prefijo que se
             // reescribe en vez de leerse— solo se ve en estas dos columnas.
             sb.AppendLine(
-                $"    llamada {c.Index}: fresca {c.InputTokens} · leída {c.CacheReadTokens}"
+                $"    {label}: fresca {c.InputTokens} · leída {c.CacheReadTokens}"
                 + $" · ESCRITA {c.CacheWriteTokens} · salida {c.OutputTokens} → {tools}");
         }
 

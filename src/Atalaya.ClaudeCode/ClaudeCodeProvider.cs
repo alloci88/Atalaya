@@ -42,8 +42,10 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider
     private readonly Func<string?>? _locator;
     private readonly string _bridgeExecutable;
 
-    /// <summary>Lo que contestó la ayuda del CLI sobre <c>--append-system-prompt-file</c>.</summary>
-    private bool? _supportsSystemPromptFile;
+    /// <summary>Lo que la ayuda del CLI ha contestado ya sobre cada flag. Se pregunta una vez.</summary>
+    private readonly Dictionary<string, bool> _supportedFlags = new(StringComparer.Ordinal);
+
+    private readonly SemaphoreSlim _askingHelp = new(1, 1);
 
     /// <summary>
     /// <b>Apagado, y así se queda</b> hasta que una medida diga otra cosa. Manda el prefijo estable
@@ -52,6 +54,27 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider
     /// comprobarlo contra el CLI del día, no para encenderlo desde la aplicación.
     /// </summary>
     public bool UseSystemPromptPrefix { get; init; }
+
+    /// <summary>
+    /// <b>Cortar la pasada en <c>unit_done</c></b> (F21 §2), en vez de pagar la llamada de cortesía
+    /// que el CLI exige después del resultado de una herramienta — la que F20 midió en 29.786
+    /// tokens de escritura de caché, cerca del 70 % del coste de entrada de una pasada.
+    /// <para>
+    /// Solo aplica a la AUDITORÍA. La verificación es de una llamada y no tiene nada que cortar; el
+    /// arreglo asistido es una conversación viva en la que el turno siguiente es el trabajo, no
+    /// cortesía.
+    /// </para>
+    /// </summary>
+    public bool CutOnUnitDone { get; init; } = true;
+
+    /// <summary>El flag del CLI sin el que no hay cuentas por llamada, y por tanto no hay corte.</summary>
+    private const string PartialMessagesFlag = "include-partial-messages";
+
+    /// <summary>
+    /// Se avisa de cada pasada que <b>no</b> se pudo cortar, con el motivo. Va al informe: una
+    /// pasada que costó una llamada de más tiene que decir por qué (N-2).
+    /// </summary>
+    public event Action<string>? CutSkipped;
 
     /// <param name="modelProvider">
     /// El modelo elegido en Ajustes. Es una FUNCIÓN y se llama en CADA sesión, por la misma razón
@@ -225,13 +248,25 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider
     /// </summary>
     public async Task AuditUnitAsync(AuditUnitRequest request, IAuditToolbox toolbox, CancellationToken ct)
     {
+        // F21 §1 — los eventos crudos del CLI son CÓMO SE MIDE una llamada, no solo cómo se corta:
+        // sin ellos, el consumo por llamada es el parcial del evento `assistant` (decía 5 donde la
+        // llamada gastó 23.569). Se piden siempre que el CLI los admita, y se pregunta en vez de
+        // suponerlo: un flag desconocido no se ignora, tumba la invocación entera.
+        //
+        // Y el corte DEPENDE de ellos: sin cuentas por llamada sería un ahorro con un hueco dentro.
+        bool partial = await SupportsFlagAsync(PartialMessagesFlag, ct);
+        bool cut = CutOnUnitDone && partial;
+
         if (!UseSystemPromptPrefix || !request.CanSplit || !await SupportsSystemPromptFileAsync(ct))
         {
-            await RunSessionAsync(request.Prompt, AuditorTools.ForAudit(toolbox), ct);
+            await RunSessionAsync(
+                request.Prompt, AuditorTools.ForAudit(toolbox), ct, cut: cut, partialMessages: partial);
             return;
         }
 
-        await RunSessionAsync(request.UnitPart!, AuditorTools.ForAudit(toolbox), ct, request.StablePrefix);
+        await RunSessionAsync(
+            request.UnitPart!, AuditorTools.ForAudit(toolbox), ct, request.StablePrefix,
+            cut: cut, partialMessages: partial);
     }
 
     /// <inheritdoc/>
@@ -248,30 +283,52 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider
     /// mucho peor que la optimización.
     /// </para>
     /// </summary>
-    private async Task<bool> SupportsSystemPromptFileAsync(CancellationToken ct)
-    {
-        if (_supportsSystemPromptFile is { } known)
-        {
-            return known;
-        }
+    private Task<bool> SupportsSystemPromptFileAsync(CancellationToken ct)
+        => SupportsFlagAsync("append-system-prompt-file", ct);
 
-        bool supported = false;
+    /// <summary>
+    /// <b>¿Admite este CLI un flag dado?</b> Se le PREGUNTA a su ayuda, una vez por flag y por
+    /// proceso. Es la misma cautela que ya tenía <c>--append-system-prompt-file</c>, aplicada
+    /// también a <c>--include-partial-messages</c> (F21): un flag que el CLI no conozca no se
+    /// ignora, hace que la invocación falle entera, así que suponerlo por el número de versión
+    /// convertiría una optimización en una avería en la máquina de otro.
+    /// <para>
+    /// Que no esté nunca es un fallo: sin él no hay cuentas por llamada, así que <b>no se corta</b>
+    /// y la pasada paga su vuelta de cortesía, como antes de esta fase.
+    /// </para>
+    /// </summary>
+    private async Task<bool> SupportsFlagAsync(string flag, CancellationToken ct)
+    {
+        await _askingHelp.WaitAsync(ct);
         try
         {
-            (_, string stdout, string stderr) = await RunPlainAsync(ResolveCli()!, new[] { "--help" }, ct);
-            supported = (stdout + stderr).Contains("append-system-prompt-file", StringComparison.Ordinal);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug("Claude Code: no se pudo preguntar por --append-system-prompt-file: {Message}", ex.Message);
-        }
+            if (_supportedFlags.TryGetValue(flag, out bool known))
+            {
+                return known;
+            }
 
-        _supportsSystemPromptFile = supported;
-        return supported;
+            bool supported = false;
+            try
+            {
+                (_, string stdout, string stderr) = await RunPlainAsync(ResolveCli()!, new[] { "--help" }, ct);
+                supported = (stdout + stderr).Contains(flag, StringComparison.Ordinal);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug("Claude Code: no se pudo preguntar por --{Flag}: {Message}", flag, ex.Message);
+            }
+
+            _supportedFlags[flag] = supported;
+            return supported;
+        }
+        finally
+        {
+            _askingHelp.Release();
+        }
     }
 
     /// <inheritdoc/>
@@ -373,7 +430,12 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider
     /// </para>
     /// </summary>
     private async Task RunSessionAsync(
-        string prompt, IReadOnlyList<McpTool> tools, CancellationToken ct, string? stablePrefix = null)
+        string prompt,
+        IReadOnlyList<McpTool> tools,
+        CancellationToken ct,
+        string? stablePrefix = null,
+        bool cut = false,
+        bool partialMessages = false)
     {
         AgentReadiness readiness = await CheckAsync(ct);
         if (!readiness.Ready)
@@ -385,8 +447,15 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider
         string cli = ResolveCli()!;
         string workDirectory = _workDirectory();
 
-        await using var host = new McpPipeHost(tools, message => _logger.LogDebug("{Message}", message));
+        // F21 §2 — la retención de `unit_done` es lo que impide que el CLI llegue a MANDAR la
+        // llamada de cortesía. Sin ella, cortar «pronto» seguiría pagando la petición y encima la
+        // perdería de las cuentas.
+        var retention = cut ? new ToolRetention("unit_done") : null;
+        await using var host = new McpPipeHost(
+            tools, message => _logger.LogDebug("{Message}", message), retention);
         host.Start();
+
+        ClaudeCut? cutting = retention is null ? null : new ClaudeCut(retention, () => host.Busy == 0);
 
         string configPath = ClaudeCliRunner.WriteMcpConfig(workDirectory, _bridgeExecutable, host.PipeName);
         string? systemPromptPath = WriteSystemPrompt(workDirectory, stablePrefix);
@@ -400,10 +469,18 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider
             ClaudeRunOutcome outcome = await runner.RunAsync(
                 new ClaudeRun(
                     prompt, tools.Select(t => AuditorTools.Qualified(t.Name)).ToList(), configPath, ModelName,
-                    SystemPromptFile: systemPromptPath),
+                    SystemPromptFile: systemPromptPath,
+                    PartialMessages: partialMessages),
                 text => TextStreamed?.Invoke(text),
                 usage => UsageReported?.Invoke(usage with { Model = usage.Model ?? ModelName }),
-                ct);
+                ct,
+                cutting);
+
+            if (cutting is { Cut: false, NotCutBecause: { } why })
+            {
+                // Nunca una llamada de más sin causa: si no se pudo cortar, se dice por qué.
+                CutSkipped?.Invoke(why);
+            }
 
             if (outcome.Failed)
             {

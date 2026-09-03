@@ -34,13 +34,63 @@ namespace Atalaya.ClaudeCode;
 /// el CLI es un <c>claude.cmd</c> y la línea de órdenes la reinterpreta <c>cmd.exe</c>.
 /// </para>
 /// </param>
+/// <param name="PartialMessages">
+/// Pide al CLI que reenvíe los eventos CRUDOS de la API (<c>--include-partial-messages</c>). Es lo
+/// que hace que el consumo de cada llamada exista <b>antes</b> del evento final: el
+/// <c>message_delta</c> que cierra un mensaje trae su consumo definitivo, mientras que el
+/// <c>usage</c> del evento <c>assistant</c> es parcial (F21 §1).
+/// </param>
 public sealed record ClaudeRun(
     string Prompt,
     IReadOnlyList<string> AllowedTools,
     string McpConfigPath,
     string? Model,
     bool Conversational = false,
-    string? SystemPromptFile = null);
+    string? SystemPromptFile = null,
+    bool PartialMessages = false);
+
+/// <summary>
+/// <b>El corte de la pasada</b> (F21 §2): cerrar la sesión en cuanto el auditor ha entregado, sin
+/// pagar la llamada de cortesía que el CLI exige después de un resultado de herramienta.
+/// <para>
+/// No es «matar el proceso pronto». El mecanismo es <see cref="ToolRetention"/>: con la respuesta
+/// de <c>unit_done</c> retenida el CLI <b>no puede</b> mandar la petición siguiente, así que al
+/// cortar no hay nada en vuelo que se facture sin quedar registrado. Y no se mata: se le manda su
+/// propia orden de interrupción, con lo que el CLI <b>emite igualmente su evento final</b> y las
+/// cuentas llegan enteras —modelo principal y modelo auxiliar—, que es lo que F19 no pudo
+/// conseguir (D-865) y por lo que aquel corte se quedó fuera.
+/// </para>
+/// </summary>
+public sealed class ClaudeCut
+{
+    /// <param name="retention">La retención de <c>unit_done</c> servida por el relay MCP.</param>
+    /// <param name="toolsIdle">
+    /// Si no queda ninguna herramienta del turno atendiéndose. Se espera a que sea cierto antes de
+    /// cortar: las hermanas de <c>unit_done</c> son las que persisten los hallazgos, y cortar
+    /// encima de una sería cambiar dinero por cobertura.
+    /// </param>
+    public ClaudeCut(ToolRetention retention, Func<bool> toolsIdle)
+    {
+        Retention = retention;
+        ToolsIdle = toolsIdle;
+    }
+
+    public ToolRetention Retention { get; }
+
+    public Func<bool> ToolsIdle { get; }
+
+    /// <summary>Cuánto se espera, como mucho, a que las hermanas del turno terminen.</summary>
+    public TimeSpan IdleTimeout { get; init; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>Se cortó de verdad: la llamada de cortesía no se ha pagado.</summary>
+    public bool Cut { get; internal set; }
+
+    /// <summary>
+    /// Por qué NO se cortó, cuando no se cortó. Va al informe: una pasada que costó una llamada de
+    /// más tiene que decir por qué, en vez de dejar una cifra sin causa (N-2).
+    /// </summary>
+    public string? NotCutBecause { get; internal set; }
+}
 
 /// <summary>
 /// Lanza <c>claude</c> en modo no interactivo y devuelve cómo fue (F14).
@@ -82,6 +132,13 @@ public sealed record ClaudeRun(
 /// </summary>
 public sealed class ClaudeCliRunner
 {
+    /// <summary>
+    /// Cómo dice el CLI que terminó cuando se le interrumpe <b>con herramientas pendientes y nada
+    /// en vuelo</b>. Verificado contra el CLI real (2.1.259): es el sello de que el corte cayó
+    /// donde tenía que caer.
+    /// </summary>
+    internal const string AbortedWithToolsPending = "aborted_tools";
+
     private readonly string _executable;
     private readonly Action<string>? _trace;
     private readonly string? _workDirectory;
@@ -145,6 +202,14 @@ public sealed class ClaudeCliRunner
             args.Add(systemPrompt);
         }
 
+        if (run.PartialMessages)
+        {
+            // Los eventos crudos de la API. Sin esto el consumo de una llamada solo se conoce en
+            // el agregado del final; con esto, el `message_delta` que cierra cada mensaje trae su
+            // consumo definitivo y las cuentas existen antes de cortar (F21 §1).
+            args.Add("--include-partial-messages");
+        }
+
         if (run.Conversational)
         {
             // La entrada por líneas JSON es lo que permite que el usuario hable a mitad de sesión.
@@ -168,20 +233,49 @@ public sealed class ClaudeCliRunner
     /// un zombi gastando cuota, que es el fallo que D-086 costó descubrir en el runtime de Copilot.
     /// </summary>
     public async Task<ClaudeRunOutcome> RunAsync(
-        ClaudeRun run, Action<string>? onText, Action<UsageSample>? onUsage, CancellationToken ct)
+        ClaudeRun run,
+        Action<string>? onText,
+        Action<UsageSample>? onUsage,
+        CancellationToken ct,
+        ClaudeCut? cut = null)
     {
-        using Process process = Start(Describe(run));
+        // Para cortar hay que poder hablarle al CLI mientras corre —su orden de interrupción viaja
+        // por la entrada `stream-json`—, así que una sesión con corte es conversacional aunque solo
+        // vaya a tener un turno. Sin corte, el prompt va por stdin como siempre.
+        ClaudeRun actual = cut is null ? run : run with { Conversational = true };
+        using Process process = Start(Describe(actual));
 
         // stderr se drena SIEMPRE y en paralelo. Si no se lee, el CLI se bloquea al llenar la
         // tubería y la sesión se queda colgada para siempre sin decir por qué.
         Task<string> errors = process.StandardError.ReadToEndAsync(ct);
 
-        await WritePromptAsync(process, run.Prompt, ct);
+        // Una sesión con corte habla por la entrada `stream-json`, y ésa NO se acaba sola: el CLI
+        // cierra su turno y se queda esperando otro mensaje. Quien dice que se acabó es la
+        // aplicación, cerrando stdin — y el momento es el mismo se haya cortado o no: en cuanto
+        // llega el evento final del turno, que es el que trae las cuentas.
+        var reader = cut is null
+            ? new ClaudeStreamReader(onText, onUsage)
+            : new ClaudeStreamReader(onText, onUsage, _ => CloseInput(process));
 
-        var reader = new ClaudeStreamReader(onText, onUsage);
+        using var finished = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        // Una sola pluma para stdin: el mensaje inicial y la orden de corte no pueden entrelazarse.
+        using var pen = new SemaphoreSlim(1, 1);
+
         ClaudeRunOutcome outcome;
+        Task? cutting = null;
         try
         {
+            if (cut is null)
+            {
+                await WritePromptAsync(process, run.Prompt, ct);
+            }
+            else
+            {
+                await SendUserMessageAsync(process, pen, run.Prompt, ct);
+                cutting = CutWhenDeliveredAsync(process, pen, reader, cut, finished.Token);
+            }
+
             outcome = await reader.ReadAsync(process.StandardOutput, ct);
             await process.WaitForExitAsync(ct);
         }
@@ -190,12 +284,134 @@ public sealed class ClaudeCliRunner
             Kill(process);
             throw;
         }
+        finally
+        {
+            // Pase lo que pase: si nadie suelta la retención, el relay se queda esperando una
+            // liberación que ya no va a llegar y con él la tubería entera.
+            cut?.Retention.Release();
+            finished.Cancel();
+            if (cutting is not null)
+            {
+                await SafeAsync(cutting);
+            }
+        }
 
         string stderr = await SafeAsync(errors);
         _trace?.Invoke(
-            $"claude terminó con {process.ExitCode}; mcp={outcome.McpConnected}; tools={outcome.ToolCalls}");
+            $"claude terminó con {process.ExitCode}; mcp={outcome.McpConnected}; tools={outcome.ToolCalls}"
+            + (cut is null ? string.Empty : $"; corte={cut.Cut}"));
 
-        return Explain(outcome, process.ExitCode, stderr);
+        return Explain(outcome, process.ExitCode, stderr, cut);
+    }
+
+    /// <summary>
+    /// <b>El corte, cuando el auditor ya ha entregado</b> (F21 §2). Espera a que <c>unit_done</c>
+    /// quede retenida —momento en que el CLI está parado y no puede mandar nada—, comprueba las
+    /// dos condiciones y, solo si se cumplen las dos, manda la orden de interrupción.
+    /// <para>
+    /// <b>Las condiciones, y por qué son ésas.</b> Primero, que no quede ninguna hermana del turno
+    /// atendiéndose: son las que persisten los hallazgos. Segundo, y es la que manda, que las
+    /// cuentas de todo lo consumido estén ya (<see cref="ClaudeStreamReader.AccountingIsComplete"/>).
+    /// Si falta cualquiera de las dos <b>se suelta la retención y no se corta</b>: la pasada
+    /// termina como siempre, paga su llamada y el informe dice por qué. Un ahorro pagado con un
+    /// número falso no es un ahorro (D-865).
+    /// </para>
+    /// </summary>
+    private async Task CutWhenDeliveredAsync(
+        Process process, SemaphoreSlim pen, ClaudeStreamReader reader, ClaudeCut cut, CancellationToken ct)
+    {
+        try
+        {
+            if (!await ShouldCutAsync(cut, () => reader.AccountingIsComplete, ct))
+            {
+                _trace?.Invoke($"claude: NO se corta — {cut.NotCutBecause}");
+                return;
+            }
+
+            _trace?.Invoke($"claude: se corta la pasada con {reader.SettledCalls} llamada(s) cuadradas");
+            await SendInterruptAsync(process, pen, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // La sesión terminó por su cuenta antes de que hubiera nada que cortar.
+        }
+    }
+
+    /// <summary>
+    /// <b>La decisión</b>: espera a que <c>unit_done</c> quede retenida y luego a las dos
+    /// condiciones del corte. Devuelve si se corta, y si no, deja el motivo escrito y <b>suelta la
+    /// retención</b> para que la pasada termine como siempre.
+    /// <para>
+    /// <b>Se ESPERAN, no se preguntan una vez</b>, y eso costó una medida: las dos llegan
+    /// milisegundos DESPUÉS de la herramienta —las hermanas porque se atienden en paralelo, y las
+    /// cuentas porque el <c>message_delta</c> que cierra la llamada lo emite el CLI justo después
+    /// de despachar las herramientas de ese mensaje—. Preguntándolo al llegar <c>unit_done</c>, la
+    /// respuesta era «todavía no» <b>siempre</b> y no se cortaba nunca.
+    /// </para>
+    /// </summary>
+    internal static async Task<bool> ShouldCutAsync(
+        ClaudeCut cut, Func<bool> accountingIsComplete, CancellationToken ct)
+    {
+        await cut.Retention.Retained.WaitAsync(ct);
+
+        DateTime until = DateTime.UtcNow + cut.IdleTimeout;
+        while ((!cut.ToolsIdle() || !accountingIsComplete()) && DateTime.UtcNow < until)
+        {
+            await Task.Delay(25, ct);
+        }
+
+        if (!cut.ToolsIdle())
+        {
+            cut.NotCutBecause = "había herramientas del turno todavía atendiéndose";
+        }
+        else if (!accountingIsComplete())
+        {
+            cut.NotCutBecause = "el CLI no publicó el consumo de todas sus llamadas";
+        }
+
+        if (cut.NotCutBecause is not null)
+        {
+            cut.Retention.Release();
+            return false;
+        }
+
+        cut.Cut = true;
+        return true;
+    }
+
+    /// <summary>
+    /// La orden de interrupción del propio CLI. <b>No es matar el proceso</b>, y ésa es toda la
+    /// diferencia: el CLI cierra ordenadamente y <b>emite su evento final</b>, con el consumo
+    /// completo de la invocación —incluido el del modelo auxiliar que usa por su cuenta, que no
+    /// aparece en ningún otro sitio del flujo—. Matándolo, ese evento no llega y la sesión
+    /// declararía menos de lo que gastó (D-865).
+    /// </summary>
+    private static async Task SendInterruptAsync(Process process, SemaphoreSlim pen, CancellationToken ct)
+    {
+        var order = new JsonObject
+        {
+            ["type"] = "control_request",
+            ["request_id"] = $"atalaya-corte-{Guid.NewGuid():N}",
+            ["request"] = new JsonObject { ["subtype"] = "interrupt" },
+        };
+
+        await pen.WaitAsync(ct);
+        try
+        {
+            await process.StandardInput.WriteLineAsync(order.ToJsonString().AsMemory(), ct);
+            await process.StandardInput.FlushAsync(ct);
+        }
+        catch (IOException)
+        {
+            // El CLI se fue solo. No hay nada que cortar y el flujo trae el desenlace bueno.
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        finally
+        {
+            pen.Release();
+        }
     }
 
     /// <summary>
@@ -408,8 +624,35 @@ public sealed class ClaudeCliRunner
     /// <c>is_error:false</c>. Una auditoría así no reporta nada y parecería una unidad limpia. Se
     /// convierte en fallo explícito: es la diferencia entre «no hay defectos» y «no se pudo mirar».
     /// </summary>
-    internal static ClaudeRunOutcome Explain(ClaudeRunOutcome outcome, int exitCode, string stderr)
+    internal static ClaudeRunOutcome Explain(
+        ClaudeRunOutcome outcome, int exitCode, string stderr, ClaudeCut? cut = null)
     {
+        // F21 §2 — LO PRIMERO: una sesión que hemos cortado nosotros no es una sesión que ha
+        // fallado. El CLI la marca con `is_error` y sale con código 1 —desde su punto de vista lo
+        // han interrumpido—, así que sin esto toda pasada cortada se leería como una avería.
+        //
+        // Y se exige SU propia declaración de cómo terminó: `aborted_tools` significa que abortó
+        // con herramientas pendientes y NINGUNA petición en vuelo, que es exactamente la condición
+        // que hace que el corte no pierda cuentas. Si dijera otra cosa, el corte no cayó donde
+        // creíamos y esto vuelve a ser un fallo — que es como tiene que leerse.
+        if (cut?.Cut == true)
+        {
+            return outcome.TerminalReason == AbortedWithToolsPending
+                ? outcome with { Failed = false, Problem = AgentProblem.None, Message = string.Empty }
+
+                // Cortamos, pero el CLI dice que terminó de otra manera. NO se da por bueno: si el
+                // corte no cayó con las herramientas pendientes, pudo haber una petición en vuelo
+                // —que se factura y no se registra—, y eso hay que verlo, con el motivo delante.
+                : outcome with
+                {
+                    Failed = true,
+                    Problem = AgentProblem.Unknown,
+                    Message = ClaudeCodeHelp.Unknown(
+                        $"la pasada se cortó en unit_done pero el CLI terminó por «{outcome.TerminalReason ?? "(sin motivo)"}» "
+                        + $"en vez de «{AbortedWithToolsPending}»"),
+                };
+        }
+
         // El orden importa. Solo se acusa al servidor MCP cuando la sesión ARRANCÓ de verdad: si
         // el CLI no llegó ni a emitir su evento de inicio, lo que falla es otra cosa —una salida
         // ilegible, un binario que no es el que creíamos— y culpar al MCP mandaría a mirar donde no
@@ -542,6 +785,18 @@ public sealed class ClaudeCliRunner
         catch (Exception)
         {
             return string.Empty;
+        }
+    }
+
+    /// <summary>Esperar a algo que ya no importa cómo acabe: la sesión se está cerrando.</summary>
+    private static async Task SafeAsync(Task task)
+    {
+        try
+        {
+            await task;
+        }
+        catch (Exception)
+        {
         }
     }
 

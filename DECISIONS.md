@@ -10869,6 +10869,15 @@ Es además la razón por la que el camino que sí entró es mejor de lo que pare
 llamada, y encima la de entrega, dejando intacto el `result`** — el ahorro es el mismo y las
 cuentas siguen cuadrando.
 
+> **Actualización (F21, D-878…D-880).** Esta decisión **se mantiene tal cual está escrita**: matar el
+> proceso sigue costando las cuentas, y por dos motivos, no uno —el consumo del modelo AUXILIAR del
+> CLI solo existe en el evento final (D-879), y una petición cortada a medias se factura sin quedar
+> registrada (D-880)—. Lo que F21 encontró es que **la premisa de la que colgaba era más estrecha de
+> lo que parecía**: el CLI sí publica el consumo llamada a llamada, pero hay que **pedírselo** con
+> `--include-partial-messages`, y el corte no tiene por qué ser una muerte: interrumpiéndolo, el
+> evento final llega igual. Así que la llamada de cortesía se quita —lo que aquí se descartó— **sin
+> tocar ni una coma de por qué aquello no se podía hacer**.
+
 ### D-866 — Techo de llamadas por pasada: la causa, no la consecuencia
 
 `Thresholds.MaxCallsPerPass`, por defecto **12**. Hermano del de tokens (Hito 1c) y por la misma
@@ -11016,6 +11025,10 @@ sigue costando las cuentas de consumo (D-865), y una sesión que declara 43 toke
 consumieron 51.451 no es una sesión más barata, es una sesión que miente—, pero el precio de ese
 límite ahora se sabe, y es alto.
 
+> **Actualización (F21).** Ese precio es lo que movió la fase siguiente, y el límite cayó: la llamada
+> ya no se paga, y no por matarla. Ver D-880. El desglose de estos ~30.000 tokens está en D-882: el
+> **71 % es razonamiento** de la llamada anterior y solo el 6 % son los JSON de hallazgos.
+
 ### D-874 — Hipótesis B: la aritmética acierta, el modelo deja de trabajar. SE CAE
 
 La idea era la inversa de la hipótesis (falsa) de F19 §2, y con la aritmética a favor por un factor
@@ -11134,3 +11147,293 @@ porque algo hizo fallar al modelo de una forma nueva.
   su prioridad de cesión y su forma mínima; y que sin factura no aparece en ninguno de los dos.
 - **La pasada muda**: no cuenta como seca, se nombra en el informe, y una pasada honesta —que sí
   llama a `unit_done`— sigue contando como seca de toda la vida.
+## F21 — Cortar en `unit_done`: las cuentas sí estaban antes del final
+
+F20 midió el precio del límite que F19 no pudo romper: la llamada de cortesía —la que el CLI exige
+después del resultado de una herramienta y que no aporta un solo dato— **escribe en caché el
+razonamiento de la llamada anterior**, cerca del **70 % del coste de entrada de una pasada**
+(D-873). Quitarla costaba las cuentas de consumo (D-865), y por eso se quedó.
+
+Esta fase no cambia de opinión sobre aquello. **Deshace la razón que lo forzaba.**
+
+**Resultado: el suelo de una pasada baja de 2 llamadas a 1** —2 cuando el auditor pide firmas—, y
+medido sobre el escenario de F19 son **2,5 → 1,33 llamadas por pasada y un 67 % menos de escritura
+de caché**, con las cuentas cuadradas al token contra el agregado del propio CLI.
+
+### D-878 — Las cuentas por llamada existen antes del final: había que pedirlas
+
+La premisa de D-865 era correcta con los eventos que se estaban leyendo, y se vuelve a confirmar
+aquí: **el `usage` de un evento `assistant` es parcial**. Medido de nuevo contra el CLI real
+(2.1.259, 2026-09-03): un evento `assistant` declaraba `output_tokens: 5` donde esa misma llamada
+acabó gastando 23.569. Una sesión que sumara esos eventos declararía una fracción de lo consumido.
+
+Lo que faltaba no era un dato que el CLI no tuviera: era **pedírselo**. Se comprobaron los dos
+candidatos del encargo, y el segundo gana.
+
+**Candidato A — la transcripción en disco: NO SIRVE, y por una razón que no es un detalle.** El CLI
+persiste su sesión en `~/.claude/projects/<proyecto>/<id>.jsonl` y **cada registro `assistant` lleva
+su `usage` completo y final**, idéntico al del evento `result`. Pero Atalaya lanza el CLI con
+`--no-session-persistence` desde F14, y con ese flag **no se escribe nada**: comprobado, el
+directorio del proyecto queda con un `memory/` vacío y ningún `.jsonl`. Usar la transcripción exige
+quitar ese flag, es decir, **meter las sesiones de Atalaya en el historial y el disco del usuario**,
+que es exactamente lo que aquella decisión evitaba. Y además tampoco resolvería el problema entero
+(ver abajo el modelo auxiliar). Descartado por el precio, no por la técnica.
+
+**Candidato B — los eventos crudos del stream: SIRVE.** Con `--include-partial-messages` el CLI
+reenvía los eventos de la API tal cual, y el `message_delta` que **cierra** un mensaje trae el
+consumo **definitivo** de esa llamada en los cuatro conceptos.
+
+La conciliación se hizo en dos niveles, porque el `modelUsage` del `result` suma **dos modelos** y
+hay que separarlos para poder afirmar algo:
+
+**Contra el modelo principal, aislado.** Sesión con las herramientas MCP puestas, cortada con
+`unit_done` retenida, leyendo el `modelUsage` desglosado POR MODELO:
+
+| | Fresca | Leída | Escrita | Salida |
+| --- | ---: | ---: | ---: | ---: |
+| Suma de los `message_delta` por llamada | 2 | 9.722 | 0 | 207 |
+| `modelUsage` del modelo principal | 2 | 9.722 | 0 | 207 |
+| **Diferencia** | **0** | **0** | **0** | **0** |
+
+**Cuadra al token, en los cuatro conceptos.** No «aproximadamente»: es lo que se declara como
+consumido.
+
+**Y sobre varias pasadas y varias unidades.** En la tanda de D-881 —**8 llamadas, 6 pasadas, 2
+unidades, dos de ellas con `read_signatures`** (turno con más de una herramienta)—, el cuadre del
+final (`ClaudeStreamReader.Settle`) informó **0 de lectura y 0 de escritura en las seis pasadas**:
+es decir, la suma por llamada ya era exacta en los dos conceptos de caché, sin excepción. Lo que
+queda en ese cuadre, invariablemente, es entrada fresca y salida por el importe del **modelo
+auxiliar** del CLI, que es de lo que trata la decisión siguiente.
+
+**Y es formato interno, no contrato.** Lo fija un test (`PerCallAccountingTests`) que se pone en
+rojo si el CLI deja de emitir `message_delta` con su `usage`, en vez de degradarse en silencio a
+declarar de menos. La salvaguarda por el otro lado está en el propio corte:
+`ClaudeStreamReader.AccountingIsComplete` es falso mientras no haya visto eventos crudos, así que un
+CLI que dejara de publicarlos **no corta** — paga la vuelta y lo dice.
+
+### D-879 — Lo que NINGÚN evento del flujo trae: el modelo auxiliar del CLI
+
+Aquí está la pieza que decide la forma del corte, y que solo aparece midiendo.
+
+El CLI usa **un segundo modelo por su cuenta** (Haiku 4.5) para cosas suyas. Ese consumo **no está
+en ningún evento del flujo ni en la transcripción del disco**: aparece únicamente en el `modelUsage`
+del evento `result`. Y no es simbólico: en una pasada de auditoría real son **~10.800 tokens de
+entrada fresca**, contra los 2 del modelo principal.
+
+Eso descarta de raíz cortar matando el proceso, aunque las cuentas del modelo principal estuvieran:
+sin el evento final, esos tokens se pagan y no se declaran. Es la misma objeción de D-865, y sigue
+siendo válida.
+
+**La conclusión no es que no se pueda cortar. Es que el corte tiene que dejar llegar el `result`.**
+
+### D-880 — El corte: retener `unit_done` y pedirle al CLI que se interrumpa
+
+Dos piezas, y las dos se comprobaron antes de escribir el código.
+
+**1. La retención, para que la petición no SALGA.** El encargo avisaba de que «matar pronto» no
+vale: una petición ya enviada y cortada a medias se factura igual y encima no queda registrada.
+**Medido, y es peor de lo que parecía**: interrumpiendo a mitad de respuesta, el modelo principal
+desaparece *entero* del `modelUsage` del `result`, que pasa a declarar solo el auxiliar. Lo peor de
+los dos mundos, literalmente.
+
+La pista del encargo era correcta y se verificó en lugar de suponerse: **el CLI no manda el turno
+siguiente hasta tener todos los resultados de herramienta del turno.** Con la respuesta de
+`unit_done` retenida —el efecto ya aplicado, el resumen de cobertura ya apuntado; lo único que no se
+escribe es la contestación—, el CLI se queda parado. Medido: **25 segundos con `unit_done` sin
+contestar y el contador de peticiones abiertas no se movió ni una.**
+
+De propina resuelve lo que preocupaba a F19 en D-863: que `unit_done` truncara el resto del turno.
+Ya no depende de que el modelo la ponga la última.
+
+**2. La interrupción, para que el `result` llegue igual.** No se mata el proceso: se le manda al CLI
+su propia orden (`control_request` / `interrupt`, por la entrada `stream-json`). El CLI cierra
+ordenadamente y **emite su evento final con el `modelUsage` completo** —modelo principal y auxiliar—,
+así que `Settle` cuadra exactamente como en una sesión sin cortar. Esto es lo que F19 no tenía.
+
+**Y con su sello.** El `result` de un corte trae `terminal_reason: "aborted_tools"`, que es la
+declaración del propio CLI de que abortó con herramientas pendientes y **nada en vuelo**. Si dijera
+otra cosa, el corte no cayó donde creíamos y podría haber una petición a medias: entonces la pasada
+se declara **fallida, nombrando el motivo terminal**, en vez de pasar por buena.
+
+**Las tres condiciones para cortar, y son conjuntivas:**
+
+1. `unit_done` retenida (el CLI está parado).
+2. Ninguna herramienta hermana del turno atendiéndose todavía — son las que persisten los hallazgos.
+3. `AccountingIsComplete`: eventos crudos vistos, y **ninguna petición abierta sin cerrar**.
+
+Si falla cualquiera, **se suelta la retención y no se corta**: la pasada termina como siempre, paga
+su llamada y el informe dice por qué. Nunca un corte con hueco.
+
+**Detalle que costó una medida:** las tres condiciones se **esperan**, no se preguntan una vez. El
+`message_delta` que cierra la llamada lo emite el CLI *justo después* de despachar las herramientas
+de ese mensaje, así que preguntando al llegar `unit_done` la respuesta era «todavía no» **siempre** y
+no se cortaba nunca. Las tres llegan en milisegundos; el tope de 10 s está para que un fallo raro no
+deje la pasada esperando.
+
+**Sin huérfanos.** No hay proceso que matar: el CLI termina él solo y su árbol con él. La retención
+se suelta en un `finally` pase lo que pase —un relay esperando una liberación que no llega es una
+sesión colgada—, y la entrada del CLI se cierra al llegar su evento final, se haya cortado o no.
+
+### D-881 — La medida sobre el escenario de F19
+
+Mismo escenario que D-876, para poder comparar: **dos unidades** de este repositorio
+(`BuildScope.cs` y `CloneLink.cs`), **tres pasadas** cada una, ciclo General, modelo **sonnet**, 3
+hallazgos sembrados, con el servidor MCP y las cinco tools. Reproduce
+`PromptBench claude --pasadas 3 --existentes 3` y, para la línea de comparación, el mismo con
+`--sin-corte`.
+
+| | Sin corte | **Con corte** | |
+| --- | ---: | ---: | ---: |
+| **Llamadas por pasada** | 2,5 | **1,33** | −47 % |
+| **Escritura de caché por pasada** | 32.955 | **10.851** | **−67 %** |
+| Lectura de caché por pasada | 57.604 | 24.081 | −58 % |
+| Entrada por llamada | 40.495 | 34.237 | −15 % |
+| Llamadas totales (6 pasadas) | 15 | 8 | |
+| Entrada total | 607.433 | 273.899 | −55 % |
+| **Credits por unidad** (tarifas Opus) | 260,9 | **189,8** | −27 % |
+| **…solo la entrada** | 86,5 | **40,0** | **−54 %** |
+| Hallazgos en pasadas ≥ 2 | 6 | 4 | |
+| Pasadas cortadas | — | **6 de 6** | |
+
+**La llamada de cortesía desapareció de las seis pasadas.** En el mapa por llamada de la tanda con
+corte no queda **ni una** fila «(sin herramienta: solo texto)»; en la de sin corte hay exactamente
+una por pasada, seis de seis, todas con `unit_done` ya entregado en la anterior.
+
+**Las dos pasadas que gastaron 2 llamadas no son un fallo del corte**: son las que pidieron
+`read_signatures`, que es una lectura de verdad. El suelo pasa de 2 llamadas por pasada (3 con
+firmas) a **1 (2 con firmas)**, que es exactamente lo que F19 dejó anotado como el techo alcanzable
+«el día que el CLI publique el consumo llamada a llamada, o admita una herramienta terminal».
+
+**Sobre la cobertura, con todas las letras.** La variable de control salió **6 sin corte y 4 con
+corte**, y **eso no es un empate**. No se presenta como uno. Lo que sostiene que el corte no cuesta
+cobertura no es esa comparación —dos tandas de un modelo no determinista sobre 12 pasadas no
+distinguen 4 de 6—, sino **dónde cae el corte**: después de `unit_done`, es decir, después de que el
+auditor haya entregado veredictos, hallazgos y cierre. Y hay evidencia directa de que lo que se
+quita no entregaba nada: en la tanda sin corte, **las seis llamadas de cortesía llamaron a cero
+herramientas** —son las seis filas «solo texto»— y las seis produjeron entre 2 y 15 tokens de
+salida. No se está quitando trabajo: se está quitando una vuelta que ya se sabía vacía desde F19
+(D-861), ahora sobre seis pasadas más.
+
+**Y un aviso de método sobre estas cifras.** La tanda sin corte se lanzó **después**, con la caché
+del proveedor más caliente, así que cualquier ventaja de caché juega a favor de la línea de
+comparación: el ahorro medido es un **suelo**, no un techo. Dos pasadas de cada tanda arrancaron con
+0 de escritura por esa misma razón.
+
+**La salida (119.819 frente a 139.576) no la mueve el corte y no se le apunta.** Es cuánto razonó el
+modelo, que cambia en cada ejecución; por eso la fila que decide es la escritura de caché, y por eso
+se da también el reparto solo de la entrada, que es lo único que este cambio toca.
+
+### D-882 — De qué está hecha esa escritura [diagnóstico, no acción]
+
+F20 dijo que la llamada de cortesía «escribe el razonamiento de la llamada anterior» (D-873). Era
+verdad, y ahora tiene números: el propio CLI desglosa la salida en `output_tokens_details`, así que
+el reparto no hay que inferirlo.
+
+Una pasada sin corte, medida con el instrumento nuevo (`ClaudeFailure.cs`, sonnet, 3 hallazgos
+sembrados):
+
+```
+llamada 1: leída 11.322 · ESCRITA 7.877 · salida 5.826   → report_verdicts×3 + submit_findings×1 + unit_done
+llamada 2: leída 19.199 · ESCRITA 6.192 · salida    15   → (sin herramienta: solo texto)
+
+lo que ESCRIBE la llamada 2 (6.192)
+  = salida entera de la llamada 1 (5.826, de la cual RAZONAMIENTO 4.401)
+  + resultados de herramienta y demás (366)
+```
+
+En orden de magnitud, lo que una vuelta reescribe en caché es:
+
+| Concepto | Tokens | % |
+| --- | ---: | ---: |
+| **Razonamiento de la llamada anterior** | 4.401 | **71 %** |
+| Argumentos de sus herramientas y su texto | 1.425 | 23 % |
+| Resultados devueltos (los JSON de hallazgos) | 366 | **6 %** |
+
+**Los JSON de hallazgos son el 6 %.** La idea intuitiva de que lo caro es «lo que se devuelve» es
+falsa por un factor de doce: lo caro es lo que el modelo *pensó*, que viaja dentro de la
+conversación en el turno siguiente y se vuelve a escribir a 1,25 ×.
+
+**Y hay que leer bien qué queda de esto después del corte.** La vuelta que reescribía el
+razonamiento **era justamente la de cortesía**, y ya no existe: en una pasada de una sola llamada no
+hay nadie que lo reescriba. Sigue habiendo reescritura en las pasadas que gastan dos llamadas —las
+de `read_signatures`—, que fueron 2 de 6. Es decir: el corte no solo quitó una llamada, quitó **el
+sitio donde el razonamiento se pagaba dos veces**.
+
+**Lo que sigue costando el razonamiento es la SALIDA**, que se paga a 5 × la entrada y que F20 midió
+como el 35 % de la factura (D-871). Existe un dial de presupuesto de razonamiento. **No se toca en
+esta fase**, y el número de arriba es exactamente el motivo por el que hay que medirlo antes: se
+pagaría en cobertura, y la prueba no sería que ahorre tokens sino que **las pasadas ≥ 2 sigan
+encontrando lo que encuentran hoy** — la misma condición que tumbó la hipótesis B de F20 (D-874).
+Queda el dato para decidir la siguiente fase, y nada más.
+
+### D-883 — Copilot no tiene esta llamada, y no la tiene desde F14
+
+El encargo pedía comprobar si el SDK expone el consumo **por mensaje** antes de cerrar el turno, o
+si permite cerrar el turno tras las herramientas sin perderlo. **Las dos cosas, y la segunda ya está
+puesta desde F14.** Aquí no hay asiento de Copilot, así que esto sale de leer el contrato del SDK
+(1.0.11) y **no está medido**; se dice como lo que es, y abajo va lo que lo desmentiría.
+
+**El consumo, por llamada.** `AssistantUsageEvent` está documentado como «LLM API call usage
+metrics» —por **llamada a la API**, no por turno— y trae `ApiCallId` («completion ID from the model
+provider»), `FinishReason`, `InputTokens`, `OutputTokens`, `CacheReadTokens`, `CacheWriteTokens`,
+`ReasoningTokens` y `Cost`. Es decir: lo que a Claude Code hubo que pedirle con
+`--include-partial-messages`, el SDK de Copilot lo publica de serie y ya llega a
+`UsageAdapter.From` — que es por donde entra desde F2.
+
+**Y el corte no hace falta, porque allí el turno ya termina en `unit_done`.**
+`CopilotToolOptions.IsTerminal` dice, con esas palabras: *«a successful call to this tool ends the
+agent turn… the runtime's tool phase halts after a successful call instead of feeding the result
+back to the model for another round»*. `RealCopilotAgent` declara `unit_done` con `IsTerminal: true`
+desde F14. La llamada de cortesía que en Claude Code costaba cerca del 70 % de la entrada de una
+pasada **nunca existió en Copilot**.
+
+Eso además cierra por fin una asimetría que llevaba dos fases sin explicación: F19 medía 3,5 → 2,33
+llamadas por pasada con Claude Code y la aceptación de Copilot no cuadraba del todo (F20, cabecera).
+Parte de la diferencia era ésta.
+
+**Lo que quedaría por ver con un asiento delante**, y es una medida, no un razonamiento: en el
+desglose por pasada del informe, **las llamadas por pasada de Copilot tienen que ser 1** —dos cuando
+el auditor pide firmas—. Si salieran 2 y 3, el `IsTerminal` no estaría haciendo lo que dice su
+documentación y habría que medir allí exactamente lo mismo que se ha medido aquí. Va al backlog con
+esas palabras.
+
+**Y una consecuencia de diseño que sí es de esta fase:** la petición de F19 (D-863) de que
+`unit_done` viaje **la última de las cuatro** sigue en el prompt y **no se toca**. Para Claude Code
+ya daba igual —la retención hace que el orden no importe—, pero para Copilot sigue siendo lo que
+impide que una herramienta terminal emitida antes que sus hermanas trunque el resto del turno. Un
+prompt compartido se gobierna por la casa más exigente.
+
+### D-884 — Lo que NO se toca
+
+- **El tope de pasadas y la regla de las dos secas**, y la de F20: una pasada muda no es una pasada
+  seca. El corte llega **después** de `unit_done`, así que no cambia ni una condición de parada: una
+  pasada cortada es una pasada que entregó.
+- **La salida.** Sigue siendo donde está el valor.
+- **La agrupación de F19.** El prompt sigue pidiendo las cuatro herramientas en un turno y
+  `unit_done` la última. La retención hace que lo segundo ya no haga falta **para Claude Code**,
+  pero sigue haciendo falta para Copilot, donde `unit_done` es `IsTerminal`.
+- **El razonamiento del modelo.** Hay un dial y no se toca: se pagaría en cobertura y habría que
+  medirlo contra los hallazgos tardíos, como todo lo demás. El número queda en D-882 para decidirlo.
+
+### D-885 — Cobertura (18 tests nuevos, 2.070 en total, todo en verde)
+
+- **Las cuentas por llamada** (`PerCallAccountingTests`): que el consumo definitivo llega al cerrarse
+  el mensaje y manda sobre el anticipo parcial del evento `assistant`; que **una llamada sigue
+  contando como una** aunque hagan falta tres eventos para contarla; que la suma por llamada
+  **cuadra al token** con el agregado del CLI en los cuatro conceptos; que el cuadre del final va
+  marcado y no es una llamada; y que el motivo terminal llega al desenlace.
+- **La condición del corte**: con una petición abierta y sin cerrar, `AccountingIsComplete` es
+  **falso** —es el blindaje contra cortar sobre una petición en vuelo, que se factura y no se
+  registra—; y **sin eventos crudos nunca es cierto**, así que un CLI que dejara de publicarlos no
+  corta en vez de declarar de menos. Es el test que se pone en rojo si el formato interno cambia.
+- **La retención** (`CutOnUnitDoneTests`): que la herramienta retenida **se ejecuta** y lo único que
+  espera es su respuesta; que soltarla devuelve la respuesta y la sesión sigue como si nada; que las
+  hermanas del turno se contestan al instante mientras `unit_done` espera; y que sin retención
+  declarada el relay es exactamente el de siempre.
+- **La decisión**: se corta con las dos condiciones; **no** se corta sin las cuentas, ni encima de
+  una herramienta a medias, y en los dos casos se suelta la retención y queda escrito el motivo; las
+  condiciones se **esperan** —un test comprueba que unas cuentas que llegan un instante tarde no
+  impiden el corte, que es el fallo que se midió—; y sin `unit_done` no hay corte que decidir.
+- **El desenlace**: un corte nuestro no se lee como avería, pero **solo con el sello del CLI**
+  (`aborted_tools`); con cualquier otro motivo terminal la pasada se denuncia nombrándolo. Y sin
+  corte, una sesión interrumpida sigue siendo un fallo: por ahí no se ha tocado nada.

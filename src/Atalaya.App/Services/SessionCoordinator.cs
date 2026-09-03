@@ -1,4 +1,5 @@
-﻿using Atalaya.Copilot;
+﻿using Atalaya.ClaudeCode;
+using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Anchoring;
 using Atalaya.Domain.Hashing;
@@ -435,6 +436,26 @@ public sealed class SessionCoordinator
         _agent.TextStreamed += OnText;
         _agent.UsageReported += OnUsage;
 
+        // F21 §2 — las pasadas que NO se pudieron cortar en `unit_done`, con su motivo. El corte
+        // ahorra la llamada de cortesía del CLI; cuando no se puede —porque el proveedor no había
+        // publicado el consumo de todas sus llamadas, o porque quedaba una herramienta a medias—
+        // la pasada cuesta una llamada más, y eso NO puede quedar como una cifra sin causa (N-2).
+        // Se pregunta por el tipo porque el corte es de esta casa: Copilot no tiene esta llamada.
+        var cutSkipped = new List<string>();
+        void OnCutSkipped(string why)
+        {
+            lock (cutSkipped)
+            {
+                cutSkipped.Add(why);
+            }
+        }
+
+        var claude = _agent as ClaudeCodeProvider;
+        if (claude is not null)
+        {
+            claude.CutSkipped += OnCutSkipped;
+        }
+
         // El modelo va en el sello (F5.1b): es quien hace la observación, y hace falta para poder
         // nombrar a quién discrepa cuando dos modelos se contradicen sobre el mismo hallazgo.
         var stamp = new DetectionStamp(
@@ -639,6 +660,20 @@ public sealed class SessionCoordinator
                         session.Notes.Add($"{unit.Path} (pasada {pass}): tool · {entry}");
                     }
 
+                    // F21 §2 — «esta pasada costó una llamada más, y por esto». Se vacía por
+                    // pasada: lo que se apuntó mientras corría es de ella.
+                    lock (cutSkipped)
+                    {
+                        foreach (string why in cutSkipped)
+                        {
+                            session.Notes.Add(
+                                $"{unit.Path} (pasada {pass}): no se pudo cerrar la pasada en unit_done "
+                                + $"—{why}—, así que costó una llamada de cortesía más.");
+                        }
+
+                        cutSkipped.Clear();
+                    }
+
                     if (toolbox.PassWasMute)
                     {
                         // F20 — el turno se gastó y no llegó ni un `unit_done`. NO cuenta como
@@ -752,6 +787,10 @@ public sealed class SessionCoordinator
         {
             _agent.TextStreamed -= OnText;
             _agent.UsageReported -= OnUsage;
+            if (claude is not null)
+            {
+                claude.CutSkipped -= OnCutSkipped;
+            }
         }
 
         MarkAuditedInInventory(inventory, auditedPaths, sessionId);

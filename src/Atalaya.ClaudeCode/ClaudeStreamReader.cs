@@ -25,6 +25,11 @@ namespace Atalaya.ClaudeCode;
 /// </param>
 /// <param name="Tools">Las tools que el CLI declaró disponibles en <c>system/init</c>.</param>
 /// <param name="Model">El modelo que el CLI resolvió de verdad (el alias ya expandido).</param>
+/// <param name="TerminalReason">
+/// Cómo dice el CLI que terminó. Importa para el corte de F21: <c>aborted_tools</c> es <b>su</b>
+/// declaración de que se abortó con herramientas pendientes y <b>ninguna petición en vuelo</b>, que
+/// es exactamente la condición que hace que el corte no pierda cuentas ni pague nada a medias.
+/// </param>
 public sealed record ClaudeRunOutcome(
     bool Failed,
     AgentProblem Problem,
@@ -34,7 +39,8 @@ public sealed record ClaudeRunOutcome(
     IReadOnlyList<string> Tools,
     string? Model,
     int ToolCalls,
-    UsageSample? Usage);
+    UsageSample? Usage,
+    string? TerminalReason = null);
 
 /// <summary>
 /// Cómo terminó UN turno de una conversación (F16). Una sesión de auditoría tiene exactamente uno;
@@ -65,6 +71,37 @@ public sealed class ClaudeStreamReader
     private readonly Action<string>? _onText;
     private readonly Action<UsageSample>? _onUsage;
     private readonly Action<ClaudeTurn>? _onTurn;
+
+    /// <summary>Peticiones al modelo abiertas y todavía sin cerrar. Ver <see cref="AccountingIsComplete"/>.</summary>
+    private int _openCalls;
+
+    /// <summary>Llamadas cuyo consumo FINAL ya se conoce, por su <c>message_delta</c>.</summary>
+    private int _settledCalls;
+
+    /// <summary>
+    /// El CLI está reenviando los eventos crudos de la API (<c>--include-partial-messages</c>). Sin
+    /// ellos no hay cuentas por llamada, solo el agregado del final.
+    /// </summary>
+    private bool _sawPartialMessages;
+
+    /// <summary>
+    /// <b>¿Están ya las cuentas de todo lo consumido hasta este instante?</b> (F21 §1). Es la
+    /// condición que gobierna el corte, y por eso se pregunta desde fuera mientras el flujo corre.
+    /// <para>
+    /// Cierto cuando el CLI publica sus eventos crudos, alguna llamada ha cerrado con su consumo
+    /// final, y <b>no queda ninguna petición en vuelo</b>. Esa última parte es la que importa: una
+    /// petición ya enviada y cortada a medias <b>se factura igual y no aparece en ningún sitio</b>
+    /// —medido: al interrumpir a mitad de respuesta, el modelo principal desaparece entero del
+    /// <c>modelUsage</c> del <c>result</c>—, que es lo peor de los dos mundos. Con la respuesta de
+    /// <c>unit_done</c> retenida no hay ninguna en vuelo por construcción, pero el corte se
+    /// pregunta igual: una salvaguarda que depende de un razonamiento no es una salvaguarda.
+    /// </para>
+    /// </summary>
+    public bool AccountingIsComplete
+        => _sawPartialMessages && Volatile.Read(ref _openCalls) == 0 && Volatile.Read(ref _settledCalls) > 0;
+
+    /// <summary>Cuántas llamadas han cerrado con su consumo final declarado por el CLI.</summary>
+    public int SettledCalls => Volatile.Read(ref _settledCalls);
 
     /// <param name="onUsage">
     /// El consumo, <b>según ocurre</b>: una muestra por cada llamada al modelo, y un ajuste al
@@ -107,6 +144,7 @@ public sealed class ClaudeStreamReader
         var problem = AgentProblem.None;
         string message = string.Empty;
         bool sawResult = false;
+        string? terminalReason = null;
 
         // Lo que ya se ha REPORTADO de esta invocación. El CLI cuenta en acumulado y la aplicación
         // suma lo que le llega, así que cada muestra es una diferencia contra esto.
@@ -121,6 +159,26 @@ public sealed class ClaudeStreamReader
         // REPITE su usage en todos. Contarlos por evento multiplicaría el consumo por tres.
         var counted = new HashSet<string>(StringComparer.Ordinal);
         int callsThisTurn = 0;
+
+        // Lo ya emitido de la llamada EN CURSO, y cuál es. El evento `assistant` trae un consumo
+        // PARCIAL —el del instante en que el modelo empieza a contestar— y el `message_delta` que
+        // cierra el mensaje trae el FINAL; emitir la diferencia deja el pie moviéndose con lo que
+        // se sabe y acaba en la cifra exacta, sin contar nada dos veces (F21 §1).
+        var callEmitted = new Consumption();
+        string currentCall = string.Empty;
+        bool currentCallCounted = false;
+
+        void OpenCall(string id)
+        {
+            if (string.Equals(id, currentCall, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            currentCall = id;
+            callEmitted = new Consumption();
+            currentCallCounted = false;
+        }
 
         // El coste acumulado que el CLI lleva declarado. Ver ReadCost: `total_cost_usd` es de la
         // SESIÓN entera, así que el coste de un turno es la diferencia.
@@ -170,21 +228,72 @@ public sealed class ClaudeStreamReader
                         _onText?.Invoke(text);
                     }
 
+                    OpenCall(MessageId(e));
+
                     // El consumo de ESTA llamada, en cuanto se sabe. Es lo que hace que el pie se
                     // mueva mientras el agente trabaja: con un arreglo, todo —leer, preguntar,
                     // editar, compilar— cabe en un solo turno, así que esperar al `result` es
                     // esperar al final de la sesión entera y enseñar «0 llamadas» hasta entonces.
                     if (ReadCallUsage(e, counted) is { } call)
                     {
-                        emitted.Add(call);
+                        Consumption advance = call.Minus(callEmitted);
+                        emitted.Add(advance);
+                        callEmitted.Add(advance);
                         callsThisTurn++;
-                        _onUsage?.Invoke(call.ToSample(model, calls: 1));
+                        currentCallCounted = true;
+                        _onUsage?.Invoke(advance.ToSample(model, calls: 1));
+                    }
+
+                    break;
+
+                // Los eventos CRUDOS de la API, que el CLI reenvía con
+                // `--include-partial-messages`. Solo interesan los dos que enmarcan una llamada:
+                // `message_start` la abre y `message_delta` la cierra CON SU CONSUMO FINAL. Es lo
+                // que hace que las cuentas existan antes del evento final (F21 §1) — el `usage`
+                // del evento `assistant` es parcial y se queda corto (medido: decía 5 donde el
+                // `result` decía 20). Lo demás del flujo crudo —cada trocito de texto— se ignora.
+                case "stream_event" when e.TryGetProperty("event", out JsonElement raw):
+                    switch (Str(raw, "type"))
+                    {
+                        case "message_start":
+                            _sawPartialMessages = true;
+                            Interlocked.Increment(ref _openCalls);
+                            OpenCall(raw.TryGetProperty("message", out JsonElement started)
+                                ? Str(started, "id")
+                                : string.Empty);
+                            break;
+
+                        case "message_delta" when raw.TryGetProperty("usage", out JsonElement final)
+                                                  && final.ValueKind == JsonValueKind.Object:
+                            _sawPartialMessages = true;
+                            Consumption closed = Consumption.Read(final);
+                            closed.Reasoning = final.TryGetProperty("output_tokens_details", out JsonElement details)
+                                ? Long(details, "thinking_tokens")
+                                : 0;
+                            Consumption rest = closed.Minus(callEmitted);
+                            emitted.Add(rest);
+                            callEmitted.Add(rest);
+
+                            // La llamada ya se contó si trajo un `assistant` con consumo; si no
+                            // —un turno que solo razona—, se cuenta aquí: haberla, la hubo.
+                            int newCall = currentCallCounted ? 0 : 1;
+                            callsThisTurn += newCall;
+                            currentCallCounted = true;
+                            Interlocked.Increment(ref _settledCalls);
+                            if (Volatile.Read(ref _openCalls) > 0)
+                            {
+                                Interlocked.Decrement(ref _openCalls);
+                            }
+
+                            _onUsage?.Invoke(rest.ToSample(model, calls: newCall));
+                            break;
                     }
 
                     break;
 
                 case "result":
                     sawResult = true;
+                    terminalReason = Str(e, "terminal_reason") is { Length: > 0 } tr ? tr : null;
                     (failed, problem, message) = ReadResult(e, ref costSoFar, out decimal? turnCost);
 
                     // El ajuste se calcula SIEMPRE, haya quien lo escuche o no: cuadra las cuentas
@@ -219,7 +328,7 @@ public sealed class ClaudeStreamReader
 
         return new ClaudeRunOutcome(
             failed, problem, message, sawInit, mcpConnected, tools, model, toolCalls,
-            Total(emitted, model, totalCost));
+            Total(emitted, model, totalCost), terminalReason);
     }
 
     /// <summary>
@@ -245,6 +354,12 @@ public sealed class ClaudeStreamReader
 
         return false;
     }
+
+    /// <summary>El id del mensaje del modelo que trae este evento, o vacío si no lo dice.</summary>
+    private static string MessageId(JsonElement e)
+        => e.TryGetProperty("message", out JsonElement message) && message.ValueKind == JsonValueKind.Object
+            ? Str(message, "id")
+            : string.Empty;
 
     private static (int ToolCalls, string Text) ReadAssistant(JsonElement e)
     {
@@ -412,7 +527,8 @@ public sealed class ClaudeStreamReader
             model,
             calls: callsThisTurn == 0 ? 1 : 0,
             cost: turnCost,
-            costUnit: turnCost is null ? null : ClaudeUsage.ListPriceUnit);
+            costUnit: turnCost is null ? null : ClaudeUsage.ListPriceUnit,
+            reconciliation: true);
     }
 
     /// <summary>El agregado ACUMULADO de la invocación, sumando los modelos que hayan intervenido.</summary>
@@ -480,6 +596,12 @@ public sealed class ClaudeStreamReader
 
         public long CacheWrite { get; set; }
 
+        /// <summary>
+        /// Cuántos de los <see cref="Output"/> fueron razonamiento. Es un desglose de la salida, NO
+        /// un quinto concepto: no se suma a nada ni se resta de nada (F21 §3).
+        /// </summary>
+        public long Reasoning { get; set; }
+
         public static Consumption Read(JsonElement usage) => new()
         {
             Input = Long(usage, "input_tokens"),
@@ -494,6 +616,7 @@ public sealed class ClaudeStreamReader
             Output += other.Output;
             CacheRead += other.CacheRead;
             CacheWrite += other.CacheWrite;
+            Reasoning += other.Reasoning;
         }
 
         /// <summary>
@@ -507,10 +630,13 @@ public sealed class ClaudeStreamReader
             Output = Math.Max(0, Output - other.Output),
             CacheRead = Math.Max(0, CacheRead - other.CacheRead),
             CacheWrite = Math.Max(0, CacheWrite - other.CacheWrite),
+            Reasoning = Math.Max(0, Reasoning - other.Reasoning),
         };
 
-        public UsageSample ToSample(string? model, int calls, decimal? cost = null, string? costUnit = null)
-            => new(Input, Output, cost, model, CacheRead, CacheWrite, costUnit, calls);
+        public UsageSample ToSample(
+            string? model, int calls, decimal? cost = null, string? costUnit = null, bool reconciliation = false)
+            => new(
+                Input, Output, cost, model, CacheRead, CacheWrite, costUnit, calls, reconciliation, Reasoning);
     }
 
     private static string Str(JsonElement e, string name)

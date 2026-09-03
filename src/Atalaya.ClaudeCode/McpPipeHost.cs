@@ -31,9 +31,14 @@ public sealed class McpPipeHost : IAsyncDisposable
     private NamedPipeServerStream? _pipe;
     private Task? _serving;
 
-    public McpPipeHost(IEnumerable<McpTool> tools, Action<string>? trace = null)
+    /// <param name="retention">
+    /// La herramienta cuya respuesta se retiene para poder cortar la pasada sin pagar la llamada
+    /// siguiente (F21 §2). Null —lo normal— es el comportamiento de siempre: se contesta todo.
+    /// </param>
+    public McpPipeHost(
+        IEnumerable<McpTool> tools, Action<string>? trace = null, ToolRetention? retention = null)
     {
-        _server = new AtalayaMcpServer(tools, trace);
+        _server = new AtalayaMcpServer(tools, trace, retention);
         _trace = trace;
         PipeName = $"atalaya-mcp-{Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant()}";
     }
@@ -47,6 +52,9 @@ public sealed class McpPipeHost : IAsyncDisposable
 
     /// <summary>Cuántas veces llamó el auditor a una tool. Va a las métricas de la unidad.</summary>
     public int ToolCalls => _server.ToolCalls;
+
+    /// <summary>Herramientas atendiéndose ahora mismo, sin contar la retenida (F21 §2).</summary>
+    public int Busy => _server.Busy;
 
     /// <summary>
     /// Empieza a escuchar. Vuelve en cuanto la tubería está creada —NO espera al cliente—, porque

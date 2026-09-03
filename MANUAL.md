@@ -1086,7 +1086,10 @@ Por eso el informe y el pie no dicen solo cuánto costó, sino **de qué**:
 Cómo se lee:
 
 - **Manda la escritura de caché.** Es lo normal cuando cada pasada empieza de cero: todo lo que se
-  manda es contenido nuevo para el proveedor, y se paga a 1,25 ×. Es el frente de ahorro.
+  manda es contenido nuevo para el proveedor, y se paga a 1,25 ×. Es el frente de ahorro. Lo que más
+  lo movió fue quitar la llamada de cortesía: **lo que una llamada escribe en caché es, casi todo,
+  la respuesta entera de la anterior** —su razonamiento incluido—, así que una vuelta que no aporta
+  nada resulta ser la más cara de la pasada.
 - **Manda la salida.** Está bien: es donde está el valor, y no se toca.
 - **Manda la lectura.** Es la mejor noticia posible: significa que el proveedor está reutilizando
   lo que ya le mandaste, a una décima parte del precio.
@@ -1099,17 +1102,26 @@ El gasto no escala con el tamaño de la unidad: escala con las **llamadas**. Cad
 prompt entero —el sistema del proveedor, el brief, los hallazgos conocidos y el código—, así que
 una llamada de más cuesta casi lo mismo que auditar la unidad otra vez.
 
-Una pasada sana son **dos llamadas**:
+Una pasada sana es **una llamada**: el auditor manda de una vez sus veredictos sobre lo conocido,
+los hallazgos nuevos, las ubicaciones que añade y el cierre de la unidad. Se convierte en **dos**
+cuando además pide las firmas de una dependencia (`read_signatures`), que es su única lectura extra.
 
-1. **La que entrega**: el auditor manda de una vez sus veredictos sobre lo conocido, los hallazgos
-   nuevos, las ubicaciones que añade y el cierre de la unidad.
-2. **La de cortesía**: después de recibir la respuesta de una herramienta, el modelo tiene que
-   contestar algo. Se le pide que no diga nada y aun así gasta la vuelta. Es del CLI, no de
-   Atalaya, y no se puede quitar sin perder las cuentas de consumo que ese mismo CLI solo publica
-   al final.
+**Antes eran dos y tres.** Había una segunda llamada **de cortesía**: después de recibir la
+respuesta de una herramienta, el modelo tenía que contestar algo, y aunque se le pedía que no dijera
+nada, gastaba la vuelta igual — con el prompt entero dentro. No era un capricho del modelo: era el
+CLI, que no manda el turno siguiente hasta tener contestadas todas las herramientas del turno.
 
-Se convierte en **tres** cuando el auditor pide las firmas de una dependencia (`read_signatures`),
-que es su única lectura extra.
+Ahora Atalaya **cierra la pasada en `unit_done`**, que es el momento en que el auditor ya ha
+entregado todo. Y lo hace sin perder una sola cifra de consumo, que era lo que lo impedía: el CLI
+publica el gasto de cada llamada según ocurre y se le pide que se interrumpa —no se le mata—, así
+que sigue emitiendo su cuenta final completa. **Si por lo que sea las cuentas no estuvieran, la
+pasada NO se corta**: termina como siempre, paga su llamada y el informe lo dice con esas palabras
+(«no se pudo cerrar la pasada en unit_done —motivo—, así que costó una llamada de cortesía más»).
+Un ahorro pagado con un número falso no sería un ahorro.
+
+Con Copilot esto no cambia nada, porque allí nunca existió: su SDK admite declarar una herramienta
+como **terminal**, y `unit_done` lo es desde el primer día, así que el turno acaba ahí sin vuelta de
+cortesía.
 
 Si en el desglose por pasada del informe ves muchas más, algo va mal: o el modelo está dando
 vueltas, o está soltando los hallazgos de uno en uno en vez de agruparlos. Para eso está el techo.
@@ -1121,7 +1133,8 @@ darse por terminado—, pero es gasto sin trabajo y por eso aparece nombrada.
 ### El techo de llamadas
 
 `maxCallsPerPass` en el `app.json` de la aplicación, junto a `maxTokensPerUnit`. **Por defecto 12**,
-que es cuatro veces una pasada sana: no molesta a quien trabaja bien y corta un bucle a tiempo.
+que con una pasada sana en una o dos llamadas es holgura de sobra: no molesta a quien trabaja bien y
+corta un bucle a tiempo.
 
 Si salta, la unidad se cierra como **presupuesto superado** y el informe dice **cuál** de los dos
 techos fue —«5/4 llamadas en una pasada» o «500000/300000 tokens»—, porque los dos tienen remedios

@@ -4,10 +4,21 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-03 (F20 — la escritura de caché, que es el 60 % de la factura).
+Última revisión: 2026-09-03 (F21 — el corte en `unit_done`, con las cuentas cuadradas).
 
 ## En vuelo
 
+- **F21 — el corte, con Copilot delante.** Aquí no hay asiento, así que §4 se resolvió leyendo el
+  contrato del SDK y no midiéndolo (D-883): `CopilotToolOptions.IsTerminal` dice que una llamada
+  con éxito **termina el turno en vez de devolverle el resultado al modelo**, y `unit_done` lo lleva
+  desde F14 — es decir, allí la llamada de cortesía nunca existió. Lo que hay que ver con un asiento
+  delante es el desglose por pasada del informe: **las llamadas por pasada tienen que ser 1**, dos
+  con `read_signatures`. Si salieran 2 y 3, el `IsTerminal` no está haciendo lo que dice su
+  documentación y hay que medir allí lo mismo que se ha medido aquí.
+- **F21 — el presupuesto de razonamiento, medido.** Es la palanca grande que queda y está
+  cuantificada (D-882), pero no se toca sin una comparación de COBERTURA: se pagaría en hallazgos
+  tardíos, que es la variable de control de F20. Medir con `PromptBench --pasadas 3` y mirar
+  «Hallazgos en pasadas >= 2» antes y después, no los tokens.
 - **F20 — el reparto del coste, con una sesión real delante.** La aritmética está fijada con tests
   y reproduce al credit la aceptación de F19 (D-871), pero falta verlo: la línea «Reparto del coste»
   en el informe de una sesión de Copilot, y el trozo del pie en vivo a 1366×768 —tiene que ceder
@@ -18,12 +29,13 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   cero hallazgos tardíos. El día que se vuelva a intentar, **la prueba no es que ahorre**: es que
   las pasadas ≥ 2 sigan encontrando lo que encuentran hoy. La medida y los dos prompts que se
   probaron están en DECISIONS.
-- **F20 — la escritura de caché sigue siendo el frente abierto.** Es el 60 % de la factura y ninguna
-  de las dos hipótesis la ha movido: A porque no hay corte de caché que podamos pedir (D-872), B
-  porque el modelo deja de trabajar (D-874). Lo que queda medido y sin explotar es que la llamada de
-  cortesía **escribe el razonamiento de la anterior** —~30.000 tokens, cerca del 70 % del coste de
-  entrada de una pasada (D-873)—; quitarla sigue costando las cuentas de consumo (D-865), y ése es
-  el nudo que hay que deshacer.
+- **F20 — la escritura de caché, después de F21.** Las dos hipótesis de F20 siguen caídas —A porque
+  no hay corte de caché que podamos pedir (D-872), B porque el modelo deja de trabajar (D-874)—,
+  pero el nudo que dejaron escrito **sí se ha deshecho**: la llamada de cortesía escribía el
+  razonamiento de la anterior y ya no existe (F21, D-880). Lo que queda del frente es la escritura
+  de la llamada que **sí** trabaja, y ahí la palanca medida es el **razonamiento**: es casi todo lo
+  que la conversación vuelve a escribir (D-882). No se toca sin medirlo contra los hallazgos
+  tardíos.
 
 - **F19 — la economía de turnos, con Copilot delante.** Todo lo de la fase es prompt y coordinador,
   así que vale para las dos casas sin una línea por proveedor, pero **solo se ha medido con Claude
@@ -36,10 +48,6 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   que las pidan cambiaría esa llamada condicional por tokens incondicionales en todas las unidades.
   Puede ganar, pero exige resolver dependencias de verdad —hoy `ReadSignatures` es heurístico
   (D-018)— y eso no se decide a ojo: medir con `PromptBench` antes de tocar nada.
-- **F19 — la llamada de cortesía, si el CLI cambia.** Es hoy la mitad de las llamadas de una pasada
-  y no aporta nada. Matarla se midió y se descartó porque cuesta las cuentas de consumo (D-865). El
-  día que el CLI publique el consumo llamada a llamada, o admita una herramienta terminal, esto
-  vuelve a estar sobre la mesa y baja el suelo de 2 a 1 por pasada.
 
 - **F18 — la línea de composición, con una sesión real delante.** Toda la aritmética está fijada
   con tests y la medida contra el CLI de Claude Code está hecha y escrita (D-850…D-858), pero
@@ -301,6 +309,18 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## Cerrado
 
+- **F21 · Cortar en `unit_done` sin perder las cuentas** — la llamada de cortesía que F19 midió y no
+  pudo quitar (D-865) y que F20 valoró en cerca del 70 % de la entrada de una pasada (D-873) ya no
+  se paga. Las cuentas por llamada existían antes del evento final, había que **pedirlas**
+  (`--include-partial-messages`): el `message_delta` que cierra un mensaje trae su consumo
+  definitivo y **cuadra al token** con el agregado del CLI (D-878). El corte no es matar el proceso
+  —eso seguiría perdiendo el consumo del modelo auxiliar, que solo existe en el evento final
+  (D-879)—: se **retiene la respuesta de `unit_done`**, lo que impide que el CLI llegue a mandar la
+  petición siguiente, y se le pide que se interrumpa, con lo que su evento final llega igual
+  (D-880). Suelo de 2 llamadas por pasada → **1**; sobre el escenario de F19, **−67 % de escritura
+  de caché** y 6 de 6 pasadas cortadas (D-881). Y si las cuentas no están, **no se corta**: la
+  pasada paga su vuelta y el informe dice por qué. Copilot no tenía esta llamada desde F14, porque
+  allí `unit_done` es `IsTerminal` (D-883).
 - **F20 · El 60 % de la factura era reescribir el prefijo en cada pasada** — el coste se reparte
   ahora por concepto en credits, no en tokens, porque escribir caché cuesta doce veces leerla y dos
   cifras parecidas costaban trece veces distinto (D-871). El diagnóstico de por qué el prefijo no se

@@ -36,6 +36,10 @@ int existing = int.TryParse(Flag(argv, "--existentes"), out int n) ? Math.Max(0,
 // Cuántas pasadas del barrido se simulan por unidad (F20). Una sola mide la primera pasada, que es
 // el caso barato; el gasto de F20 está en las siguientes, donde el prefijo se vuelve a escribir.
 int passes = int.TryParse(Flag(argv, "--pasadas"), out int pn) ? Math.Max(1, pn) : 1;
+// F21 — el corte en `unit_done` va encendido en producción; el banco puede apagarlo porque la
+// tanda SIN corte es la línea contra la que se compara. No hay otra forma de enseñar que la
+// escritura de caché baja y que los hallazgos no se mueven.
+bool noCut = argv.Contains("--sin-corte");
 
 string root = RepoRoot();
 // Los valores de las opciones (--model sonnet) NO son unidades: sin esto, «sonnet» acabaría
@@ -62,7 +66,7 @@ if (units.Count == 0)
 }
 
 Console.WriteLine($"Banco de medida · modo {mode}"
-    + (mode == "claude" ? (split ? " --split" : " --whole") : string.Empty));
+    + (mode == "claude" ? (split ? " --split" : " --whole") + (noCut ? " --sin-corte" : " (con corte)") : string.Empty));
 Console.WriteLine($"Raíz: {root}");
 Console.WriteLine(
     $"Temática: {theme} · unidades: {units.Count} · hallazgos conocidos: {existing} · pasadas: {passes}");
@@ -97,7 +101,7 @@ foreach (string relative in units)
 return mode switch
 {
     "composicion" => Composicion(composed),
-    "claude" => await ClaudeAsync(composed, split, model, passes, known, brief, theme),
+    "claude" => await ClaudeAsync(composed, split, model, passes, known, brief, theme, !noCut),
     _ => Uso(),
 };
 
@@ -151,7 +155,7 @@ static int Composicion(List<(string Path, string Content, ComposedUnitPrompt Pro
 // ---------------------------------------------------------------------------------------------
 static async Task<int> ClaudeAsync(
     List<(string Path, string Content, ComposedUnitPrompt Prompt)> composed, bool split, string? model,
-    int passes, IReadOnlyList<ExistingFinding> seeded, AuditorBrief brief, AuditTheme theme)
+    int passes, IReadOnlyList<ExistingFinding> seeded, AuditorBrief brief, AuditTheme theme, bool cut)
 {
     string bridge = Path.Combine(AppContext.BaseDirectory, "Atalaya.Mcp.exe");
     if (!File.Exists(bridge))
@@ -167,7 +171,20 @@ static async Task<int> ClaudeAsync(
     // --split arma la palanca que F18 midió y dejó apagada en producción: el prefijo estable por
     // el system prompt del CLI. Es la única forma de volver a comprobar el resultado el día que el
     // CLI cambie dónde corta su caché.
-    var provider = new ClaudeCodeProvider(bridge, () => model, () => work) { UseSystemPromptPrefix = split };
+    var provider = new ClaudeCodeProvider(bridge, () => model, () => work)
+    {
+        UseSystemPromptPrefix = split,
+        CutOnUnitDone = cut,
+    };
+
+    // Las pasadas que NO se pudieron cortar, con su motivo. Es la mitad honesta de la medida: un
+    // corte que a veces no ocurre tiene que verse en la tabla, no esconderse en la media.
+    int skipped = 0;
+    provider.CutSkipped += why =>
+    {
+        skipped++;
+        Console.WriteLine($"  SIN CORTE en esta pasada — {why}");
+    };
 
     AgentReadiness ready = await provider.CheckAsync(CancellationToken.None);
     if (!ready.Ready)
@@ -248,6 +265,13 @@ static async Task<int> ClaudeAsync(
                 + $"| {bench.Describe()} |");
             traces.Add(trace.Render($"{path} · pasada {pass}"));
 
+            // F21 §3 — de qué está hecho lo que la vuelta siguiente reescribe en caché. Solo sale
+            // cuando hay más de una llamada: con una, no hay vuelta siguiente que pagar.
+            if (trace.RenderWriteBreakdown() is { Length: > 0 } desglose)
+            {
+                traces.Add(desglose);
+            }
+
             // Una pasada MUDA —sin una sola herramienta— es el fallo que hay que diagnosticar, no
             // contar: su texto dice si el modelo se creyó que había terminado o si le pasó otra cosa.
             if (trace.CallsWithoutTools == trace.Calls && said.Length > 0)
@@ -311,6 +335,13 @@ static async Task<int> ClaudeAsync(
         if (passes > 1)
         {
             Console.WriteLine($"Hallazgos en pasadas >= 2 (variable de control): {lateFindings}");
+        }
+
+        if (cut)
+        {
+            int prompts2 = composed.Count * passes;
+            Console.WriteLine($"Corte en unit_done: {prompts2 - skipped}/{prompts2} pasadas cortadas"
+                + (skipped > 0 ? $" · {skipped} pagaron su llamada de cortesía (motivo arriba)" : string.Empty));
         }
     }
 

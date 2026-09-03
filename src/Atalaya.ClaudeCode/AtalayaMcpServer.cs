@@ -37,14 +37,25 @@ public sealed class AtalayaMcpServer
 
     private readonly IReadOnlyDictionary<string, McpTool> _tools;
     private readonly Action<string>? _trace;
+    private readonly ToolRetention? _retention;
 
-    public AtalayaMcpServer(IEnumerable<McpTool> tools, Action<string>? trace = null)
+    public AtalayaMcpServer(
+        IEnumerable<McpTool> tools, Action<string>? trace = null, ToolRetention? retention = null)
     {
         _tools = tools.ToDictionary(t => t.Name, StringComparer.Ordinal);
         _trace = trace;
+        _retention = retention;
     }
 
     private int _toolCalls;
+
+    private int _busy;
+
+    /// <summary>
+    /// Peticiones que se están atendiendo en este instante, <b>sin contar la retenida</b>. Es lo
+    /// que el corte consulta para no interrumpir a una herramienta a mitad de trabajo (F21 §2).
+    /// </summary>
+    public int Busy => Volatile.Read(ref _busy);
 
     /// <summary>Cuántas veces llamó el auditor a una tool. Va a las métricas de la sesión.</summary>
     /// <remarks>
@@ -118,19 +129,50 @@ public sealed class AtalayaMcpServer
     private async Task AnswerAsync(string line, TextWriter writer, SemaphoreSlim pen, CancellationToken ct)
     {
         JsonNode? response;
+        bool retained;
+
+        // Lo que se está atendiendo AHORA. Se cuenta solo mientras la tool corre de verdad, no
+        // mientras la retenida espera: el corte pregunta por esto para no llevarse por delante a
+        // una hermana del mismo turno que todavía está persistiendo hallazgos (F21 §2).
+        Interlocked.Increment(ref _busy);
         try
         {
-            response = Handle(line);
+            try
+            {
+                response = Handle(line, out retained);
+            }
+            catch (Exception ex)
+            {
+                _trace?.Invoke($"MCP: fallo atendiendo una petición ({ex.Message})");
+                return;
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            _trace?.Invoke($"MCP: fallo atendiendo una petición ({ex.Message})");
-            return;
+            Interlocked.Decrement(ref _busy);
         }
 
         if (response is null)
         {
             return;
+        }
+
+        if (retained)
+        {
+            // F21 §2 — el efecto YA se ha aplicado (el resumen de cobertura está apuntado); lo
+            // único que se retiene es la contestación, que es lo que el CLI necesita para poder
+            // mandar la petición siguiente. Aquí se queda hasta que alguien decida: cortar, o
+            // soltarla y dejar que la pasada termine como siempre.
+            _trace?.Invoke("MCP: unit_done retenida — el CLI no puede mandar la petición siguiente");
+            _retention!.Hold();
+            try
+            {
+                await _retention.WaitForReleaseAsync(ct);
+            }
+            catch (OperationCanceledException)
+            {
+                return;             // La sesión se cerró: no hay a quién contestar.
+            }
         }
 
         await pen.WaitAsync(ct);
@@ -153,8 +195,16 @@ public sealed class AtalayaMcpServer
     /// contesta). Es <c>internal</c> y separada del bucle a propósito: así el test puede afirmar
     /// sobre el JSON exacto que se devuelve sin montar streams.
     /// </summary>
-    internal JsonNode? Handle(string line)
+    internal JsonNode? Handle(string line) => Handle(line, out _);
+
+    /// <inheritdoc cref="Handle(string)"/>
+    /// <param name="retained">
+    /// La respuesta NO debe escribirse todavía: es la herramienta que se retiene (F21 §2). El
+    /// efecto ya se ha aplicado; lo que se retiene es la contestación.
+    /// </param>
+    internal JsonNode? Handle(string line, out bool retained)
     {
+        retained = false;
         JsonNode? request;
         try
         {
@@ -196,6 +246,12 @@ public sealed class AtalayaMcpServer
                 return Ok(id, ToolCatalog());
 
             case "tools/call":
+                // Se decide ANTES de llamar: retener es no escribir la respuesta, no dejar de
+                // ejecutar. Una tool que no existe no se retiene — su error tiene que llegar.
+                string called = message["params"]?["name"]?.GetValue<string>() ?? string.Empty;
+                retained = _retention is not null
+                           && _retention.Holds(called)
+                           && _tools.ContainsKey(called);
                 return Ok(id, CallTool(message["params"]));
 
             default:

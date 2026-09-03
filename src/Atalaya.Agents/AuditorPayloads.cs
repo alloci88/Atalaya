@@ -76,6 +76,22 @@ public sealed record SubmitFindingsResult(IReadOnlyList<SubmitFindingResult> Res
 /// hizo falta para decirlo.
 /// </para>
 /// </param>
+/// <param name="ReasoningTokens">
+/// Cuántos de los <paramref name="OutputTokens"/> fueron RAZONAMIENTO, cuando el proveedor lo
+/// desglosa (Claude Code lo publica como <c>thinking_tokens</c>; el SDK de Copilot, como
+/// <c>ReasoningTokens</c>). Es un <b>diagnóstico</b> y no entra en ninguna suma de coste: la salida
+/// ya está contada entera en <paramref name="OutputTokens"/>. Existe porque lo que la conversación
+/// vuelve a escribir en caché en la vuelta siguiente es, sobre todo, esto (F21 §3), y sin el número
+/// esa frase no se puede sostener. 0 = el proveedor no lo dice.
+/// </param>
+/// <param name="Reconciliation">
+/// La muestra es el <b>CUADRE del final</b>, no consumo de una llamada concreta: la diferencia
+/// entre lo que el proveedor declara haber gastado en total y lo que ya se había reportado sobre la
+/// marcha. Se marca porque desde F21 hay dos muestras por llamada —el anticipo y el definitivo— y
+/// las tres llevan <c>Calls = 0</c>; sin distinguirlas, un desglose por llamada le carga a la
+/// última todo lo que el proveedor gastó por su cuenta (el modelo auxiliar del CLI), que no es de
+/// ninguna llamada del auditor. No cambia ninguna suma: lo que agrega, agrega igual.
+/// </param>
 public sealed record UsageSample(
     long InputTokens,
     long OutputTokens,
@@ -84,7 +100,9 @@ public sealed record UsageSample(
     long CacheReadTokens = 0,
     long CacheWriteTokens = 0,
     string? CostUnit = null,
-    int Calls = 1);
+    int Calls = 1,
+    bool Reconciliation = false,
+    long ReasoningTokens = 0);
 
 /// <summary>
 /// Un hallazgo YA EXISTENTE de la unidad, tal y como se le presenta al auditor (F4). Son pocos
