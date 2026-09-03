@@ -55,6 +55,25 @@ public sealed class Thresholds
     public long MaxTokensPerUnit { get; set; } = 300_000;
 
     /// <summary>
+    /// Techo de LLAMADAS al modelo en una sola pasada (F19 §3). Hermano del de tokens y por la
+    /// misma razón —un agente en bucle no puede gastar sin tope—, pero mide lo que de verdad
+    /// escala el coste: cada llamada reenvía el prompt entero, así que las llamadas son el
+    /// multiplicador y los tokens, su consecuencia.
+    /// <para>
+    /// <b>Por defecto 12</b>, elegido contra lo medido en F19: una pasada sana gasta 2 —todo lo
+    /// que entrega va en un turno, más la vuelta de cortesía del CLI— y 3 cuando además pide
+    /// firmas de una dependencia. Doce es cuatro veces eso: no molesta a nadie que trabaje bien y
+    /// corta un bucle mucho antes de que el techo de tokens llegue a enterarse.
+    /// </para>
+    /// <para>
+    /// <b>Nunca corta mudo</b>: la pasada se cierra, la unidad queda como
+    /// <c>presupuesto-superado</c> con el motivo escrito, y el informe dice cuál de los dos techos
+    /// saltó. <b>0 lo desactiva</b> y deja el de tokens como única red.
+    /// </para>
+    /// </summary>
+    public int MaxCallsPerPass { get; set; } = 12;
+
+    /// <summary>
     /// A partir de cuántas unidades seleccionadas el lanzamiento pide confirmación (F5.6 §4).
     /// Por debajo se lanza directo: el coste de un clic de más solo se justifica cuando el gasto
     /// es relevante, y una tanda de dos unidades no lo es. Por defecto 3.

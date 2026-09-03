@@ -342,7 +342,15 @@ public sealed class SessionCoordinator
         UnitUsageBreakdown? currentBreakdown = null;
         CancellationTokenSource? unitCts = null;
         bool budgetTripped = false;
+        // Cuál de los dos techos saltó, para poder decirlo: un «presupuesto superado» sin nombrar
+        // el techo obliga a adivinar si el agente gastó mucho o dio muchas vueltas (N-2).
+        string? trippedBy = null;
         long maxTokensPerUnit = Math.Max(0, app.Thresholds.MaxTokensPerUnit);
+        // F19 §3 — el techo de LLAMADAS por pasada. Mide lo que de verdad multiplica el coste:
+        // cada llamada reenvía el prompt entero. Con lo medido en F19 —2 llamadas por pasada, 3
+        // con lectura de firmas— doce es holgura de sobra y corta un bucle mucho antes que el
+        // techo de tokens. 0 lo desactiva.
+        int maxCallsPerPass = Math.Max(0, app.Thresholds.MaxCallsPerPass);
         // F5.1: el tope del barrido es un ajuste de ESTA máquina (Ajustes), no de app.json — el
         // barrido gasta los tokens del asiento de quien lanza la sesión. Queda registrado en la
         // sesión y en el informe para que «cobertura posiblemente incompleta» se lea contra él.
@@ -394,11 +402,16 @@ public sealed class SessionCoordinator
                 passCacheRead += u.CacheReadTokens;
                 passCacheWrite += u.CacheWriteTokens;
                 passCalls += u.Calls;
-                if (maxTokensPerUnit > 0
-                    && passInput + passOutput > maxTokensPerUnit
-                    && !budgetTripped)
+                if (!budgetTripped && maxTokensPerUnit > 0 && passInput + passOutput > maxTokensPerUnit)
                 {
                     budgetTripped = true;
+                    trippedBy = $"{passInput + passOutput}/{maxTokensPerUnit} tokens";
+                    try { unitCts?.Cancel(); } catch { /* already disposed */ }
+                }
+                else if (!budgetTripped && maxCallsPerPass > 0 && passCalls > maxCallsPerPass)
+                {
+                    budgetTripped = true;
+                    trippedBy = $"{passCalls}/{maxCallsPerPass} llamadas en una pasada";
                     try { unitCts?.Cancel(); } catch { /* already disposed */ }
                 }
             }
@@ -533,6 +546,7 @@ public sealed class SessionCoordinator
                     breakdown.PromptTokensEstimate += EstimateTokens(prompt);
 
                     budgetTripped = false;
+                    trippedBy = null;
                     passInput = 0;
                     passOutput = 0;
                     passCacheRead = 0;
@@ -647,7 +661,7 @@ public sealed class SessionCoordinator
                 if (overBudget)
                 {
                     long spent = breakdown.InputTokens + breakdown.OutputTokens;
-                    string summary = $"Cortada por presupuesto: {spent}/{maxTokensPerUnit} tokens"
+                    string summary = $"Cortada por presupuesto: {trippedBy ?? $"{spent}/{maxTokensPerUnit} tokens"}"
                         + (rejectedInUnit > 0
                             ? $" · {rejectedInUnit} rechazos" + (dominantReason is null ? "" : $": {dominantReason}")
                             : "");
