@@ -109,7 +109,8 @@ public sealed partial class SessionViewModel : ViewModelBase
             };
             segments.AddRange(CreditText.UsageSegments(
                 _live.Calls, _live.InputTokens, _live.OutputTokens,
-                _live.CacheReadTokens, _live.CacheWriteTokens, _live.CostResult, _live.Provider));
+                _live.CacheReadTokens, _live.CacheWriteTokens, _live.CostResult, _live.Provider,
+                _live.Budget));
             if (PerUnitText.Length > 0)
             {
                 segments.Add(FooterSegment.Of(PerUnitText, priority: 3, opacity: 0.7));

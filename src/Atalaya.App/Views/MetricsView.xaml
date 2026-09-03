@@ -224,6 +224,20 @@
 
                                 <TextBlock Text="{Binding CostPerUnit}" Style="{StaticResource TileFoot}" />
 
+                                <!-- F18 §1 — EN QUE SE VA. El total dice cuanto; esto dice en que:
+                                     descubrimiento, verificacion y arreglo cuestan muy distinto y
+                                     hasta aqui habia que abrir los informes uno a uno para saberlo.
+                                     Los tokens van siempre, el coste solo cuando lo hay. -->
+                                <ItemsControl ItemsSource="{Binding CostByPhase}" Margin="0,6,0,0"
+                                              Visibility="{Binding HasPhases, Converter={StaticResource BoolToVisibility}}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding}" TextWrapping="Wrap"
+                                                       FontSize="11" Opacity="0.75" Margin="0,0,0,2" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
                                 <!-- F16-RETOQUE §1 — por qué esta cifra no cubre toda la actividad
                                      de más abajo: hubo sesiones de una casa que no factura. No es
                                      un aviso de que falte una tarifa; es justo lo contrario. -->

@@ -90,6 +90,86 @@ public static class ReportBuilder
             + "coste de esta sesión y no entra en ninguna métrica.");
     }
 
+    /// <summary>
+    /// <b>La línea que hasta F18 había que calcular a mano</b> (§1): en qué se reparte una llamada.
+    /// <para>
+    /// Los tokens totales de una sesión no dicen dónde actuar. Lo que sí lo dice es que el código
+    /// auditado sea el 2 % de lo que se manda, o que hagan falta once llamadas para una clase de
+    /// cuarenta líneas — y las dos cosas caben en un renglón. Va justo debajo de los tokens porque
+    /// es su lectura, no un apartado nuevo.
+    /// </para>
+    /// <para>
+    /// No aparece cuando no hay con qué escribirla: en las sesiones anteriores a F18 no hay
+    /// desglose por pasada, y una línea con un 0 % afirmaría que no viajó código.
+    /// </para>
+    /// </summary>
+    private static void AppendBudgetLine(StringBuilder sb, AuditSession session)
+    {
+        PromptBudget budget = PromptBudget.From(session);
+        if (budget.Line.Length == 0)
+        {
+            return;
+        }
+
+        sb.AppendLine($"- **Composición**: {budget.Line}");
+
+        // El termómetro del prefijo inestable (F18 §2). Solo cuando hay escritura de caché que
+        // interpretar: sin ella no hay nada que diagnosticar y la frase sobraría.
+        if (budget.CacheWriteTokens > 0)
+        {
+            sb.AppendLine(
+                $"- **Caché**: {budget.CacheWriteTokens} escritos, {budget.CacheReadTokens} leídos · "
+                + $"suelo inevitable ≈ {budget.CacheWriteFloor} (prefijo estable {budget.StablePrefixTokens} "
+                + $"× 1 + parte variable de {budget.Prompts} prompt(s)) · "
+                + $"re-escrituras ≈ {budget.CacheRewrites}");
+        }
+    }
+
+    /// <summary>
+    /// <b>Pasada a pasada, y de qué estaba hecho cada prompt</b> (F18 §1). Es el nivel que faltaba:
+    /// una unidad son N pasadas y cada una manda su prompt entero, así que sin esto no se puede
+    /// distinguir «abrir la unidad cuesta» de «insistir sobre ella cuesta».
+    /// <para>
+    /// Las columnas de composición son ESTIMACIONES (la regla de siempre, ~4 caracteres por token),
+    /// y por eso van marcadas con ~. No hacen falta exactas: lo que se decide con ellas —dónde está
+    /// el peso— no cambia porque la cuenta se desvíe.
+    /// </para>
+    /// </summary>
+    private static void AppendPassBreakdown(StringBuilder sb, AuditSession session)
+    {
+        if (!session.UsageBreakdown.Any(u => u.Passes.Count > 0))
+        {
+            return;
+        }
+
+        sb.AppendLine("### Por pasada, y de qué se compone el prompt (F18)");
+        sb.AppendLine();
+        sb.AppendLine("Los tokens de composición son estimados (~4 caracteres por token); los de consumo, medidos.");
+        sb.AppendLine();
+        sb.AppendLine("| Unidad | Pasada | Llamadas | In | Out | CacheRead | CacheWrite | Duración "
+            + "| Estable~ | Existentes~ | Unidad~ | Código % |");
+        sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+        foreach (UnitUsageBreakdown b in session.UsageBreakdown)
+        {
+            foreach (PassUsage p in b.Passes)
+            {
+                PromptComposition c = p.Composition ?? new PromptComposition();
+                string share = c.Total > 0
+                    ? (100.0 * c.Unidad / c.Total).ToString("0.#", Culture) + " %"
+                    : "—";
+                sb.AppendLine($"| {b.Unit} | {p.Pass} | {p.Calls} | {p.InputTokens} | {p.OutputTokens} "
+                    + $"| {p.CacheReadTokens} | {p.CacheWriteTokens} | {Seconds(p.DurationMs)} "
+                    + $"| {c.Estable} | {c.Existentes} | {c.Unidad} | {share} |");
+            }
+        }
+
+        sb.AppendLine();
+    }
+
+    /// <summary>Milisegundos leídos como segundos con un decimal. «—» cuando no se midió.</summary>
+    private static string Seconds(long ms)
+        => ms <= 0 ? "—" : (ms / 1000.0).ToString("0.#", Culture) + " s";
+
     public static string BuildSessionReport(
         AppConfig app,
         AuditSession session,
@@ -124,6 +204,7 @@ public static class ReportBuilder
         // va detrás. Un informe es inmutable, así que dentro de un año alguien podrá recalcular ese
         // coste con otra tarifa a partir de estos mismos números.
         sb.AppendLine(UsageLine(session));
+        AppendBudgetLine(sb, session);
 
         CostResult cost = CreditCalculator.Calculate(session, rates);
         sb.AppendLine($"- **Coste**: {CreditText.OfSession(cost, session.Provider)}");
@@ -319,15 +400,17 @@ public static class ReportBuilder
         if (session.UsageBreakdown.Count > 0)
         {
             sb.AppendLine("## Desglose por unidad (instrumentación Hito 1a)");
-            sb.AppendLine("| Unidad | Prompt~ | Llamadas | ToolCalls | In | Out | CacheRead | CacheWrite |");
-            sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|");
+            sb.AppendLine("| Unidad | Prompt~ | Llamadas | ToolCalls | In | Out | CacheRead | CacheWrite | Duración |");
+            sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
             foreach (UnitUsageBreakdown b in session.UsageBreakdown)
             {
                 sb.AppendLine($"| {b.Unit} | {b.PromptTokensEstimate} | {b.Calls} | {b.ToolCalls} "
-                    + $"| {b.InputTokens} | {b.OutputTokens} | {b.CacheReadTokens} | {b.CacheWriteTokens} |");
+                    + $"| {b.InputTokens} | {b.OutputTokens} | {b.CacheReadTokens} | {b.CacheWriteTokens} "
+                    + $"| {Seconds(b.DurationMs)} |");
             }
 
             sb.AppendLine();
+            AppendPassBreakdown(sb, session);
         }
 
         if (newFindings.Count > 0)

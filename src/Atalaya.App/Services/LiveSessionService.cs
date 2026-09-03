@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Threading;
 using Atalaya.Copilot;
@@ -141,6 +141,11 @@ public sealed partial class LiveSessionService : ObservableObject
     /// <summary>Con qué casa se está midiendo, para etiquetar el número con su unidad.</summary>
     [ObservableProperty] private string? _provider;
     [ObservableProperty] private int _calls;
+
+    /// <summary>
+    /// Adónde va lo que se está gastando, según ocurre (F18 §1). Null hasta la primera medida.
+    /// </summary>
+    [ObservableProperty] private PromptBudget? _budget;
     [ObservableProperty] private DateTimeOffset? _startedUtc;
     [ObservableProperty] private DateTimeOffset? _endedUtc;
     [ObservableProperty] private string _sessionId = string.Empty;
@@ -326,6 +331,7 @@ public sealed partial class LiveSessionService : ObservableObject
         EndedUtc = null;
         UnitIndex = UnitCount = CurrentPassNumber = Calls = 0;
         InputTokens = OutputTokens = CacheReadTokens = CacheWriteTokens = 0;
+        Budget = null;
         Cost = null;
 
         Changed?.Invoke();
@@ -376,6 +382,7 @@ public sealed partial class LiveSessionService : ObservableObject
         UnitIndex = 0;
         CurrentPassNumber = 0;
         InputTokens = OutputTokens = CacheReadTokens = CacheWriteTokens = 0;
+        Budget = null;
         Cost = null;
         Calls = 0;
         SessionId = string.Empty;
@@ -763,6 +770,7 @@ public sealed partial class LiveSessionService : ObservableObject
         Provider = u.Provider;
         Calls = u.Calls;
         CostUnit = CreditText.BillingUnit;
+        Budget = u.Budget;
         OnPropertyChanged(nameof(CostPerUnit));
     });
 

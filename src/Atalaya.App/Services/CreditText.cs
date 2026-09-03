@@ -143,6 +143,34 @@ public static class CreditText
     private static string N(long value) => value.ToString("N0", AppCulture.Display);
 
     /// <summary>
+    /// <b>El resumen de adónde van los tokens, en una frase</b> (F18 §1): «código 2 % · 11
+    /// llamadas/unidad». Es lo mismo que dice la línea de composición del informe, recortado a lo
+    /// que cabe en un pie — y va en vivo porque es mientras la sesión corre cuando se nota que algo
+    /// se ha disparado; en el informe se lee cuando ya está pagado.
+    /// <para>
+    /// Vacía cuando no hay composición con la que decirlo. Un «0 %» afirmaría que no viajó código.
+    /// </para>
+    /// </summary>
+    public static string BudgetShort(PromptBudget? budget)
+    {
+        if (budget is not { HasComposition: true, Calls: > 0 })
+        {
+            return string.Empty;
+        }
+
+        string share = $"código {(budget.CodeShare * 100).ToString("0.#", AppCulture.Display)} %";
+        return budget.Units > 0
+            ? $"{share} · {budget.CallsPerUnit.ToString("0.#", AppCulture.Display)} llamadas/unidad"
+            : share;
+    }
+
+    /// <summary>La forma mínima: solo la fracción de código, que es la cifra que decide.</summary>
+    private static string BudgetTiny(PromptBudget? budget)
+        => budget is { HasComposition: true, Calls: > 0 }
+            ? $"código {(budget.CodeShare * 100).ToString("0.#", AppCulture.Display)} %"
+            : string.Empty;
+
+    /// <summary>
     /// <b>El pie de una sesión en vivo</b>: llamadas, y el coste — con los tokens en medio cuando
     /// la casa no factura (F16-RETOQUE §1).
     /// <para>
@@ -173,7 +201,7 @@ public static class CreditText
     /// </summary>
     public static IReadOnlyList<FooterSegment> UsageSegments(
         int calls, long input, long output, long cacheRead, long cacheWrite,
-        CostResult cost, string? providerId)
+        CostResult cost, string? providerId, PromptBudget? budget = null)
     {
         var segments = new List<FooterSegment>
         {
@@ -190,6 +218,16 @@ public static class CreditText
         {
             segments.Add(new FooterSegment(
                 new[] { tokens, TokensTotal(input, output, cacheRead, cacheWrite) }, Priority: 2, Opacity: 0.7));
+        }
+
+        // F18 — la composición va la ÚLTIMA en el orden y la primera en ceder: es una lectura de los
+        // tokens, no un hecho nuevo, y el informe la lleva entera. Cuando el sitio escasea se queda
+        // en la fracción de código, que es la cifra que decide.
+        string composicion = BudgetShort(budget);
+        if (composicion.Length > 0)
+        {
+            segments.Add(new FooterSegment(
+                new[] { composicion, BudgetTiny(budget) }, Priority: 4, Opacity: 0.7));
         }
 
         return segments;

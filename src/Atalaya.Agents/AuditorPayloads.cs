@@ -114,6 +114,18 @@ public sealed record ExistingFinding(
 /// Viajan también aquí porque el agente falso los necesita para poder simular una supresión, que es
 /// como se prueba el circuito entero sin asiento de ningún proveedor.
 /// </param>
+/// <param name="StablePrefix">
+/// El tramo del <paramref name="Prompt"/> que es IDÉNTICO en todas las unidades y en todas las
+/// pasadas de la sesión (F18 §2): reglas, rúbrica, catálogo, temática, directivas y patrones.
+/// <para>
+/// Viaja aparte para que un proveedor que sepa marcar un prefijo cacheable lo marque, y no como
+/// una segunda versión del prompt: <b>la app garantiza que
+/// <c>Prompt == StablePrefix + UnitPart</c></b>, byte a byte. Quien no sepa partirlo manda
+/// <paramref name="Prompt"/> y no se entera de nada. Null en las llamadas que no lo declaran (los
+/// dobles de prueba), y entonces solo hay prompt.
+/// </para>
+/// </param>
+/// <param name="UnitPart">Lo que cambia con la unidad: sus hallazgos conocidos y su código.</param>
 public sealed record AuditUnitRequest(
     string UnitPath,
     string UnitContent,
@@ -121,7 +133,18 @@ public sealed record AuditUnitRequest(
     TechStack Stack,
     AuditMode Mode,
     IReadOnlyList<ExistingFinding> Existing,
-    PatternSilenceSet? Patterns = null);
+    PatternSilenceSet? Patterns = null,
+    string? StablePrefix = null,
+    string? UnitPart = null)
+{
+    /// <summary>
+    /// El prompt se puede partir y las dos piezas cuadran con el entero. Se COMPRUEBA aquí y no se
+    /// supone: partirlo mal mandaría al modelo un prompt distinto del que la app cree que mandó, y
+    /// eso no da un error — da una auditoría peor sin causa visible.
+    /// </summary>
+    public bool CanSplit =>
+        StablePrefix is { Length: > 0 } && UnitPart is not null && StablePrefix + UnitPart == Prompt;
+}
 
 /// <summary>
 /// Lo que el auditor declara haberse callado por un patrón silenciado (F5.12), en

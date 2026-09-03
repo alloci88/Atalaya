@@ -172,6 +172,54 @@ public sealed class MetricsQueryTests : IDisposable
         _hub.Store.WriteInventory(slug, inv);
     }
 
+    /// <summary>
+    /// F18 §1 — <b>en qué se va el dinero, por fase</b>. Las tres cosas que se le piden a un modelo
+    /// cuestan muy distinto, y hasta aquí contestarlo obligaba a abrir los informes uno a uno.
+    /// <para>
+    /// Los modos de gestión —cierre, reset— NO aparecen: no llaman a ningún modelo, y una fila a
+    /// cero solo ocupa sitio. Y el orden es el del trabajo: se descubre, se verifica, se arregla.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void El_panel_reparte_el_gasto_por_fase()
+    {
+        FixtureDeLosTresTipos();
+
+        IReadOnlyList<PhaseCost> phases = Build().ByPhase;
+
+        phases.Select(p => p.Phase).Should().Equal("Descubrimiento", "Verificación", "Arreglo");
+        phases[0].Sessions.Should().Be(1);
+        phases[0].Cost.Should().Be(105m);
+        phases[1].Cost.Should().Be(12m);
+        phases[2].Sessions.Should().Be(2, "los dos arreglos");
+        phases[2].Cost.Should().Be(90m);
+        phases[2].Line.Should().Contain("Arreglo · 2 sesión(es)").And.Contain("90,0 AI credits");
+    }
+
+    /// <summary>
+    /// Una fase hecha con una casa que <b>no factura</b> tiene peso pero no tiene precio: sus
+    /// tokens se cuentan y su coste se calla. Un 0 diría que salió gratis, que es otra cosa.
+    /// </summary>
+    [Fact]
+    public void Una_fase_sin_factura_ensena_tokens_y_no_coste()
+    {
+        AuditSession s = Session("app", Now, AuditMode.Verify, cost: 4m);
+        s.Provider = ClaudeCode.ClaudeCodeProvider.Id;
+        _hub.Store.WriteSession(s);
+        Query().Invalidate();
+
+        PhaseCost verify = Build().ByPhase.Single(p => p.Phase == "Verificación");
+
+        verify.Cost.Should().BeNull();
+        verify.Tokens.Should().BeGreaterThan(0);
+        verify.Line.Should().NotContain("credits").And.Contain("tokens");
+    }
+
+    /// <summary>Sin sesiones en el periodo no hay reparto que enseñar, y no se pinta uno vacío.</summary>
+    [Fact]
+    public void Sin_sesiones_no_hay_reparto_por_fase()
+        => Build().ByPhase.Should().BeEmpty();
+
     // =============================================================== Tiles
 
     [Fact]

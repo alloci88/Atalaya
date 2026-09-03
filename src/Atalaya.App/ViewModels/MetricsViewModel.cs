@@ -230,6 +230,15 @@ public sealed partial class MetricsViewModel : ViewModelBase
     [ObservableProperty] private bool _costHasBreakdown;
 
     /// <summary>
+    /// <b>En qué se va el dinero, por fase</b> (F18 §1): descubrimiento, verificación y arreglo.
+    /// Hasta aquí, contestar esa pregunta obligaba a abrir los informes uno a uno.
+    /// </summary>
+    public ObservableCollection<string> CostByPhase { get; } = new();
+
+    /// <summary>Hubo actividad que repartir. Sin sesiones en el periodo el bloque no se pinta.</summary>
+    [ObservableProperty] private bool _hasPhases;
+
+    /// <summary>
     /// Por qué el coste del periodo no cubre toda la actividad: hubo sesiones de una casa que no
     /// factura (F16-RETOQUE §1). Vacío cuando no las hubo.
     /// </summary>
@@ -450,6 +459,14 @@ public sealed partial class MetricsViewModel : ViewModelBase
         }
 
         CostHasBreakdown = CostByProvider.Count > 1;
+
+        CostByPhase.Clear();
+        foreach (PhaseCost phase in d.ByPhase)
+        {
+            CostByPhase.Add(phase.Line);
+        }
+
+        HasPhases = CostByPhase.Count > 0;
 
         CostPerUnit = d.CostInPeriod is null
             ? "Se activará cuando alguna sesión registre coste"

@@ -252,6 +252,37 @@ public sealed record ProviderCost(
         : $"{ProviderName} · coste no calculable";
 }
 
+/// <summary>
+/// En qué se le va el dinero, por FASE del trabajo (F18 §1). Las tres fases son las tres cosas
+/// distintas que se le piden a un modelo, y cuestan muy distinto: <b>descubrimiento</b> (auditar,
+/// que barre cada unidad hasta agotarla), <b>verificación</b> (releer un puñado de hallazgos) y
+/// <b>arreglo</b> (una conversación larga sobre un solo defecto).
+/// <para>
+/// Sale del modo de la sesión, que ya estaba escrito: no hay dato nuevo en el hub. Hasta F18, para
+/// contestar «¿en qué se me va el dinero?» había que abrir los informes uno a uno.
+/// </para>
+/// <para>
+/// <b>Los tokens van siempre; el coste, solo cuando lo hay.</b> Una fase hecha con una casa que no
+/// factura tiene peso pero no tiene precio, y poner un 0 diría que fue gratis.
+/// </para>
+/// </summary>
+/// <param name="Sessions">Cuántas sesiones del periodo fueron de esta fase.</param>
+/// <param name="Cost">Los credits facturados, o null si nada de esta fase factura.</param>
+public sealed record PhaseCost(
+    string Phase, int Sessions, int Calls, long Tokens, decimal? Cost)
+{
+    /// <summary>«Descubrimiento · 12 sesiones · 264 llamadas · 1.284.000 tokens · 193,3 AI credits».</summary>
+    public string Line
+    {
+        get
+        {
+            string head = $"{Phase} · {Sessions} sesión(es) · {Calls} llamada(s) · "
+                + $"{Tokens.ToString("N0", AppCulture.Display)} tokens";
+            return Cost is { } c ? $"{head} · {CreditText.WithUnit(c, null)}" : head;
+        }
+    }
+}
+
 /// <summary>Una opción del selector de aplicación.</summary>
 public sealed record AppOption(string? Slug, string Name)
 {
@@ -294,8 +325,12 @@ public sealed record MetricsDashboard(
     IReadOnlyList<SeverityDonut> Severity,
     IReadOnlyList<FlowBucket> Flow,
     IReadOnlyList<SessionRow> Sessions,
-    IReadOnlyList<CycleTrack> Cycles)
+    IReadOnlyList<CycleTrack> Cycles,
+    IReadOnlyList<PhaseCost>? Phases = null)
 {
+    /// <summary>El reparto por fase del periodo (F18 §1). Vacío cuando no hubo sesiones.</summary>
+    public IReadOnlyList<PhaseCost> ByPhase => Phases ?? Array.Empty<PhaseCost>();
+
     /// <summary>La clave con la que se agrupa lo que no tiene color propio.</summary>
     public const string OthersSlug = " otras";
 
@@ -580,7 +615,47 @@ public sealed class MetricsQuery
             severities.OrderByDescending(d => d.Total).ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList(),
             FlowBuckets(findings, buckets),
             SessionRows(scope, inPeriod, rates),
-            CycleTracks(scope, from, to, now, rates));
+            CycleTracks(scope, from, to, now, rates),
+            PhaseCosts(inPeriod, rates));
+    }
+
+    /// <summary>
+    /// El reparto por fase del periodo (F18 §1). El modo de la sesión ES la fase; los modos
+    /// retirados (Integral, Superficial) son auditoría igual, y los de gestión —cierre y reset— no
+    /// llaman a ningún modelo, así que no aparecen: una fila a cero solo ocupa sitio.
+    /// </summary>
+    private static IReadOnlyList<PhaseCost> PhaseCosts(
+        IReadOnlyList<AuditSession> sessions, ModelRateTable? rates)
+    {
+        var order = new (string Name, Func<AuditSession, bool> Is)[]
+        {
+            ("Descubrimiento", x => x.Mode is AuditMode.Lotes or AuditMode.Integral or AuditMode.Superficial),
+            ("Verificación", x => x.Mode == AuditMode.Verify),
+            ("Arreglo", x => x.Mode == AuditMode.Fix),
+        };
+
+        var rows = new List<PhaseCost>();
+        foreach ((string name, Func<AuditSession, bool> isPhase) in order)
+        {
+            var mine = sessions.Where(isPhase).ToList();
+            if (mine.Count == 0)
+            {
+                continue;
+            }
+
+            // Los tokens son de TODAS —es el peso, y siempre está—; el coste solo de las que
+            // facturan, y null cuando ninguna lo hace. Un 0 diría que la fase salió gratis.
+            long tokens = mine.Sum(x =>
+                Math.Max(0, x.Usage.InputTokens) + Math.Max(0, x.Usage.OutputTokens)
+                + Math.Max(0, x.Usage.CacheReadTokens) + Math.Max(0, x.Usage.CacheWriteTokens));
+
+            var billed = mine.Where(x => CreditCalculator.IsBilled(x.Provider)).ToList();
+            decimal? cost = billed.Count > 0 ? billed.Sum(x => CostOf(x, rates)) : null;
+
+            rows.Add(new PhaseCost(name, mine.Count, mine.Sum(x => Math.Max(0, x.Usage.Calls)), tokens, cost));
+        }
+
+        return rows;
     }
 
     // ---------- Gráfica 7: la cinta de ciclos (F17 §6) ----------

@@ -355,6 +355,13 @@ public sealed class SessionCoordinator
         // (900 k por defecto) en el peor caso; con consolidación no debería acercarse.
         long passInput = 0;
         long passOutput = 0;
+
+        // F18 §1 — el consumo de la PASADA, que hasta aquí no existía como dato. El desglose por
+        // unidad (Hito 1a) no distingue abrir una unidad de insistir sobre ella, y esa es
+        // justamente la diferencia que decide si el gasto está en el barrido o en el prompt.
+        int passCalls = 0;
+        long passCacheRead = 0;
+        long passCacheWrite = 0;
         void OnUsage(UsageSample u)
         {
             session.Usage.Add(
@@ -384,6 +391,9 @@ public sealed class SessionCoordinator
 
                 passInput += u.InputTokens;
                 passOutput += u.OutputTokens;
+                passCacheRead += u.CacheReadTokens;
+                passCacheWrite += u.CacheWriteTokens;
+                passCalls += u.Calls;
                 if (maxTokensPerUnit > 0
                     && passInput + passOutput > maxTokensPerUnit
                     && !budgetTripped)
@@ -405,7 +415,8 @@ public sealed class SessionCoordinator
                 session.Usage.CacheWriteTokens,
                 live,
                 session.Provider,
-                session.Usage.Calls));
+                session.Usage.Calls,
+                PromptBudget.From(session)));
         }
 
         _agent.TextStreamed += OnText;
@@ -446,7 +457,7 @@ public sealed class SessionCoordinator
 
         try
         {
-            string brief = PillarBrief.For(app.Stack);
+            AuditorBrief brief = PillarBrief.Parts(app.Stack);
             foreach (InventoryUnit unit in units)
             {
                 ct.ThrowIfCancellationRequested();
@@ -473,6 +484,7 @@ public sealed class SessionCoordinator
                 var breakdown = new UnitUsageBreakdown { Unit = unit.Path };
                 session.UsageBreakdown.Add(breakdown);
                 currentBreakdown = breakdown;
+                var unitClock = System.Diagnostics.Stopwatch.StartNew();
 
                 // F4.1 — BARRIDO HASTA AGOTAR. Una pasada del auditor no cubre la unidad: declara
                 // haberla cubierto y, al repetir, encuentra más (2026-08-25: la pasada 1 dijo haber
@@ -511,18 +523,36 @@ public sealed class SessionCoordinator
                     // juzgues»: están en la unidad y sin verlos los re-reportaría como nuevos.
                     var listed = existing.Where(f => ThemeScope.Reconciles(theme, f.Theme)).Select(ToExisting).ToList();
                     var offTheme = existing.Where(f => !ThemeScope.Reconciles(theme, f.Theme)).Select(ToExisting).ToList();
-                    string prompt = PromptComposer.ComposeUnitPrompt(
+                    // F18 §2 — el prompt se compone PARTIDO por la costura de la caché: lo estable
+                    // (reglas, rúbrica, catálogo, temática, directivas, patrones) delante y sin nada
+                    // que varíe por unidad ni por pasada, y lo variable detrás. Concatenarlo da el
+                    // prompt de siempre byte a byte; quien sepa marcar el prefijo lo marca.
+                    ComposedUnitPrompt composed = PromptComposer.Compose(
                         unit.Path, content, brief, request.Mode, listed, patterns, directives, theme, offTheme);
+                    string prompt = composed.Text;
                     breakdown.PromptTokensEstimate += EstimateTokens(prompt);
 
                     budgetTripped = false;
                     passInput = 0;
                     passOutput = 0;
+                    passCacheRead = 0;
+                    passCacheWrite = 0;
+                    passCalls = 0;
+                    var passClock = System.Diagnostics.Stopwatch.StartNew();
+
+                    // La pasada se apunta ANTES de correr, con su composición y sin consumo: el
+                    // resumen en vivo tiene que poder decir «el código es el 2 % de lo que se manda»
+                    // mientras la pasada está pasando, que es cuando sirve. Al terminar se sustituye
+                    // por la fila con sus tokens.
+                    breakdown.Passes.Add(new PassUsage(pass, Composition: composed.Composition));
+                    int passRow = breakdown.Passes.Count - 1;
                     unitCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     try
                     {
                         await _agent.AuditUnitAsync(
-                            new AuditUnitRequest(unit.Path, content, prompt, app.Stack, request.Mode, listed, patterns),
+                            new AuditUnitRequest(
+                                unit.Path, content, prompt, app.Stack, request.Mode, listed, patterns,
+                                composed.StablePrefix, composed.UnitPart),
                             toolbox, unitCts.Token);
                     }
                     catch (OperationCanceledException) when (budgetTripped && !ct.IsCancellationRequested)
@@ -532,6 +562,10 @@ public sealed class SessionCoordinator
                     finally
                     {
                         breakdown.ToolCalls += toolbox.ToolCallCount;
+                        passClock.Stop();
+                        breakdown.Passes[passRow] = new PassUsage(
+                            pass, passCalls, passInput, passOutput, passCacheRead, passCacheWrite,
+                            composed.Composition, passClock.ElapsedMilliseconds);
                         unitCts.Dispose();
                         unitCts = null;
                     }
@@ -605,6 +639,8 @@ public sealed class SessionCoordinator
                 }
 
                 currentBreakdown = null;
+                unitClock.Stop();
+                breakdown.DurationMs = unitClock.ElapsedMilliseconds;
                 string? dominantReason = DominantReason(reasonsInUnit);
                 session.Counters.Rejected += rejectedInUnit;
 

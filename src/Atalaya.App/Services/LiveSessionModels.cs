@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using Atalaya.Domain;
 using Atalaya.Domain.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -349,6 +349,12 @@ public sealed partial class SummaryLine : ObservableObject
 /// El coste YA RESUELTO: con su número, o con el motivo por el que no lo hay —incluido «esta casa
 /// no factura»—. Viaja entero para que la vista no tenga que inventarse la explicación.
 /// </param>
+/// <param name="Budget">
+/// Adónde va lo que se está gastando, mientras se gasta (F18 §1): qué parte de cada llamada es
+/// código auditado y cuántas llamadas lleva cada unidad. Va en vivo porque es <b>aquí</b> donde se
+/// nota que algo se ha disparado: en el informe se lee cuando ya está pagado. Null en las sesiones
+/// que no auditan unidades, donde no hay composición que resumir.
+/// </param>
 public sealed record LiveUsage(
     long InputTokens,
     long OutputTokens,
@@ -356,4 +362,5 @@ public sealed record LiveUsage(
     long CacheWriteTokens,
     CostResult Cost,
     string? Provider,
-    int Calls);
+    int Calls,
+    PromptBudget? Budget = null);
