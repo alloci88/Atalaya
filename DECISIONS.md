@@ -12287,3 +12287,45 @@ No se sube el techo ni se toca el prompt: se anota, y el test de M1 afirma lo qu
 brazo cuesta poco— en vez de una cifra cómoda. Quien lo arregle tiene dos caminos y ninguno es
 gratis: recortar el bloque de enfoque, o aceptar que un ciclo temático paga 550 tokens más en cada
 llamada y decirlo en el guardarraíl.
+
+## R1 — Tres retoques: un giro de menos, un guardarraíl que mide, y los worktrees fuera de la vista
+
+Ninguno es de una fase y ninguno cambia cómo se audita. Van juntos porque los tres eran ruido que se
+veía desde fuera: dos círculos girando donde hacía falta uno, un techo que llevaba dos fases sin
+tocar la puerta que decía vigilar, y una carpeta de trabajo del agente que se colaba en `git status`.
+
+### D-910 — El segundo giro de la barra de estado: el que no decía de qué era
+
+La captura del usuario del 2026-09-03 enseña **dos círculos girando pegados** delante de
+«Auditando atalayabanco · unidad 2/2 · pasada 5». Eran dos `ui:ProgressRing` de la barra de estado,
+uno detrás de otro: el del botón de la sesión —que trae su propia línea— y, delante, uno **genérico**
+colgado de `MainViewModel.IsBusy`, sin texto ni destino.
+
+**La evidencia, porque un icono de menos hay que poder demostrarlo.** El defecto se reprodujo
+montando el trozo de `MainWindow.xaml` de la barra en una ventana de verdad y contando los anillos
+del árbol visual: con `IsBusy` en `false`, **1 visible**; con `IsBusy` en `true`, **2 visibles**, a
+36 px uno del otro y los dos antes del texto — la captura del usuario, clavada. Con el arreglo
+puesto, el mismo montaje da **1 en los dos casos**.
+
+**Por qué sobra el genérico y no el otro.** El de la sesión dice qué está en proceso; el genérico
+solo dice que algo pasa, y lo que contaba —el hub sincronizando en el arranque— ya lo cuenta el
+piloto de sync que tiene tres centímetros a la izquierda, y además con su estado (verde / ámbar /
+rojo) en vez de con un giro. `IsBusy` **no se borra**: sigue siendo el cerrojo que impide que el
+sondeo y la recarga al enfocar pisen el arranque. Lo que se retira es su superficie.
+
+La regla que queda, con test (`Every_spinner_in_the_status_bar_says_what_it_is_spinning_for`): en la
+barra de estado, **cada giro tiene que estar dentro de un control que diga de qué es**. Se fija por
+construcción y no por número, así que un indicador nuevo sin texto vuelve a saltar.
+
+**Y de paso, lo que el encargo mandaba comprobar: el pie de F23 §6 sí lleva lo suyo.** La captura del
+usuario no es del pie, es de la **barra de estado de la carcasa**, que es otra superficie y siempre
+ha dicho lo mismo —`LiveSessionService.ProgressLine`: aplicación, unidad n/m y pasada—. El pie de la
+sesión en vivo, el `FooterLine` de V5, pintado con una sesión real de dos unidades:
+
+> **Unidad 2 de 2** · 12:34 · 41 llamadas · **68,2 AI credits**
+
+Unidad n de m, tiempo transcurrido, llamadas y coste acumulado: las tres del encargo más la
+desviación que F23 dejó a propósito. El desglose de caché —«28.050 entrada · 15.670 salida · caché
+235.327 leída / 51.077 escrita»— sigue en el tooltip y no compite por la línea. **No se toca nada
+del pie**: lo que había que hacer era comprobarlo, y está comprobado.
+

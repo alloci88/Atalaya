@@ -337,12 +337,18 @@
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Ellipse Width="12" Height="12" Fill="{Binding SyncHealth, Converter={StaticResource SyncHealthToBrush}}" />
                     <TextBlock Text="{Binding SyncHealth}" Margin="8,0,0,0" VerticalAlignment="Center" Opacity="0.85" />
-                    <ui:ProgressRing
-                        IsIndeterminate="True"
-                        Width="16"
-                        Height="16"
-                        Margin="12,0,0,0"
-                        Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
+
+                    <!-- R1 §1 — AQUÍ HABÍA UN SEGUNDO GIRO. Un ui:ProgressRing genérico colgado de
+                         IsBusy, justo delante del de la sesión: mientras el arranque sincronizaba
+                         el hub y había una sesión en marcha, la barra enseñaba DOS círculos
+                         girando pegados, uno detrás de otro, delante de «Auditando … · unidad 2/2
+                         · pasada 5». El que sobra es éste: no dice QUÉ está en proceso, mientras
+                         que el de al lado lo dice con su propia línea. Y lo que este contaba —el
+                         hub sincronizando— ya lo cuenta el piloto de sync que tiene a la
+                         izquierda, que además dice en qué estado está y no solo que algo pasa.
+
+                         La regla que queda, y que hay un test que la fija: en la barra de estado,
+                         UN indicador de proceso por cosa en proceso, y ninguno anónimo. -->
 
                     <!-- Progreso de la sesión: clic → V5. Que se vea desde cualquier página es
                          justo lo que faltaba (F5.2, Hito 1). -->

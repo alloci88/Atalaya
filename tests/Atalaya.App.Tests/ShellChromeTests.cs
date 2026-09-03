@@ -83,4 +83,47 @@ public sealed class ShellChromeTests
         statusBar.Should().Contain("{Binding SessionProgress}");
         statusBar.Should().Contain("{Binding AccountLabel}");
     }
+
+    /// <summary>
+    /// R1 §1 — <b>un indicador de proceso por cosa en proceso, y ninguno anónimo.</b>
+    /// <para>
+    /// El defecto: la barra llevaba un <c>ProgressRing</c> genérico colgado de <c>IsBusy</c> justo
+    /// delante del de la sesión, así que con el hub sincronizando y una auditoría en marcha se
+    /// veían <b>dos círculos girando pegados</b> delante de «Auditando … · unidad 2/2 · pasada 5»
+    /// (captura del usuario del 2026-09-03). El segundo no decía qué estaba en proceso; el de al
+    /// lado sí, porque lleva su propia línea.
+    /// </para>
+    /// <para>
+    /// La regla se fija por CONSTRUCCIÓN y no por número: cada giro de la barra tiene que estar
+    /// dentro de un control que además diga de qué es. Un indicador nuevo sin texto vuelve a
+    /// romper esto, que es justo lo que se quiere que salte.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Every_spinner_in_the_status_bar_says_what_it_is_spinning_for()
+    {
+        string statusBar = StatusBar();
+
+        // Cada giro cuelga de un Button que enseña su propia línea: el de la sesión y el del
+        // arreglo asistido. Nada más gira en la barra.
+        var spinners = Regex.Matches(statusBar, "<ui:ProgressRing").Count;
+        spinners.Should().Be(2, "la sesión y el arreglo asistido; el genérico de IsBusy se fue");
+
+        Regex.Matches(statusBar, @"<ui:ProgressRing[^>]*?/>\s*<TextBlock Text=""\{Binding (\w+)\}")
+            .Select(m => m.Groups[1].Value)
+            .Should().BeEquivalentTo(new[] { "SessionProgress", "FixProgress" },
+                "un giro sin texto al lado es un giro que no dice de qué es");
+
+        statusBar.Should().NotContain("{Binding IsBusy",
+            "el estado de ocupado de la carcasa ya lo cuenta el piloto de sync, y con más detalle");
+    }
+
+    /// <summary>El trozo de XAML de la barra de estado, sin comentarios.</summary>
+    private static string StatusBar()
+    {
+        string xaml = MainWindowXaml();
+        int start = xaml.IndexOf("<!-- Status bar -->", StringComparison.Ordinal);
+        start.Should().BeGreaterThan(0, "la barra de estado sigue estando en la carcasa");
+        return Markup(xaml[start..]);
+    }
 }
