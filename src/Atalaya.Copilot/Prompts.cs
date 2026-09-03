@@ -180,6 +180,16 @@ public static class PromptComposer
            de existentes, NO lo reportes como nuevo — referéncialo en report_verdicts como 'presente'.
            submit_findings es SOLO para problemas que no están en la lista.
 
+        ECONOMÍA DE TURNOS — importa tanto como lo anterior, y no contradice nada de lo anterior.
+        Cada vuelta tuya reenvía el prompt ENTERO otra vez, así que un turno de más cuesta lo mismo
+        que auditar la unidad entera. Tómate los turnos de RAZONAMIENTO que necesites —eso no se
+        discute—; lo que no puede ser es gastar una vuelta por cada cosa que entregas.
+        Cuando ya sepas lo que vas a reportar, ENTREGA TODO EN UN SOLO TURNO: report_verdicts,
+        submit_findings, add_locations y unit_done, las cuatro en la misma vuelta, y unit_done la
+        última de las cuatro. No hace falta que esperes la respuesta de una para emitir la
+        siguiente: son independientes, y la aplicación las procesa todas.
+        Después de unit_done NO digas nada más. Ni un resumen, ni una despedida: has terminado.
+
         Reglas de forma:
         - Agrupa los hallazgos en UNA llamada a submit_findings. La versión singular es solo un
           fallback; no la uses para ir soltándolos de uno en uno.
@@ -197,7 +207,7 @@ public static class PromptComposer
         - Puedes pedir firmas de dependencias con read_signatures(path); es tu única lectura extra.
         - add_locations solo acepta ULIDs de la lista de existentes o de hallazgos que hayas
           reportado en ESTA unidad, y ubicaciones dentro de la unidad que estás auditando.
-        - Termina con unit_done. Su resumen DEBE empezar por la lista de miembros que has revisado,
+        - Cierra con unit_done, en el mismo turno que lo demás. Su resumen DEBE empezar por la lista de miembros que has revisado,
           con el formato: "Revisados: A, B, C." Es la prueba de tu cobertura y queda en el informe.
           Si la unidad trae PATRONES SILENCIADOS y te has callado algo por uno de ellos, declara
           cuántos en el argumento suppressedByPattern de unit_done.
