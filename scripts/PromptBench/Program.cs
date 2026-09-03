@@ -33,6 +33,9 @@ AuditTheme theme = Enum.TryParse(Flag(argv, "--tema"), true, out AuditTheme t) ?
 // pasada, que es el caso barato: en una segunda el auditor además tiene que reconciliar, y es ahí
 // donde se ve si agrupa sus herramientas en un turno o gasta una vuelta por cada cosa (F19 §1).
 int existing = int.TryParse(Flag(argv, "--existentes"), out int n) ? Math.Max(0, n) : 0;
+// Cuántas pasadas del barrido se simulan por unidad (F20). Una sola mide la primera pasada, que es
+// el caso barato; el gasto de F20 está en las siguientes, donde el prefijo se vuelve a escribir.
+int passes = int.TryParse(Flag(argv, "--pasadas"), out int pn) ? Math.Max(1, pn) : 1;
 
 string root = RepoRoot();
 // Los valores de las opciones (--model sonnet) NO son unidades: sin esto, «sonnet» acabaría
@@ -40,7 +43,7 @@ string root = RepoRoot();
 var reserved = new HashSet<string>(StringComparer.Ordinal);
 for (int k = 0; k < argv.Length; k++)
 {
-    if (argv[k] is "--model" or "--tema" or "--existentes" && k + 1 < argv.Length)
+    if (argv[k] is "--model" or "--tema" or "--existentes" or "--pasadas" && k + 1 < argv.Length)
     {
         reserved.Add(argv[k + 1]);
     }
@@ -58,9 +61,11 @@ if (units.Count == 0)
     };
 }
 
-Console.WriteLine($"Banco de medida · modo {mode}{(mode == "claude" ? (split ? " --split" : " --whole") : "")}");
+Console.WriteLine($"Banco de medida · modo {mode}"
+    + (mode == "claude" ? (split ? " --split" : " --whole") : string.Empty));
 Console.WriteLine($"Raíz: {root}");
-Console.WriteLine($"Temática: {theme} · unidades: {units.Count} · hallazgos conocidos: {existing}");
+Console.WriteLine(
+    $"Temática: {theme} · unidades: {units.Count} · hallazgos conocidos: {existing} · pasadas: {passes}");
 Console.WriteLine();
 
 AuditorBrief brief = PillarBrief.Parts(TechStack.DotNet);
@@ -92,14 +97,15 @@ foreach (string relative in units)
 return mode switch
 {
     "composicion" => Composicion(composed),
-    "claude" => await ClaudeAsync(composed, split, model),
+    "claude" => await ClaudeAsync(composed, split, model, passes, known, brief, theme),
     _ => Uso(),
 };
 
 static int Uso()
 {
     Console.Error.WriteLine(
-        "Uso: PromptBench [composicion|claude] [--split|--whole] [--model X] [--tema X] [--existentes N] [unidades...]");
+        "Uso: PromptBench [composicion|claude] [--split|--whole] "
+        + "[--model X] [--tema X] [--existentes N] [--pasadas N] [unidades...]");
     return 2;
 }
 
@@ -144,7 +150,8 @@ static int Composicion(List<(string Path, string Content, ComposedUnitPrompt Pro
 // Modo CLAUDE: una pasada REAL por unidad, con el CLI de verdad y el toolbox de verdad.
 // ---------------------------------------------------------------------------------------------
 static async Task<int> ClaudeAsync(
-    List<(string Path, string Content, ComposedUnitPrompt Prompt)> composed, bool split, string? model)
+    List<(string Path, string Content, ComposedUnitPrompt Prompt)> composed, bool split, string? model,
+    int passes, IReadOnlyList<ExistingFinding> seeded, AuditorBrief brief, AuditTheme theme)
 {
     string bridge = Path.Combine(AppContext.BaseDirectory, "Atalaya.Mcp.exe");
     if (!File.Exists(bridge))
@@ -153,6 +160,10 @@ static async Task<int> ClaudeAsync(
     }
 
     string work = Path.Combine(Path.GetTempPath(), "atalaya-bench");
+    // Lo que el auditor DICE. En una auditoría normal no interesa —los hallazgos viajan por
+    // herramienta—, pero cuando una pasada no llama a ninguna, su texto es la única pista de por
+    // qué (F20 §3).
+    var said = new System.Text.StringBuilder();
     // --split arma la palanca que F18 midió y dejó apagada en producción: el prefijo estable por
     // el system prompt del CLI. Es la única forma de volver a comprobar el resultado el día que el
     // CLI cambie dónde corta su caché.
@@ -167,6 +178,7 @@ static async Task<int> ClaudeAsync(
 
     var samples = new List<UsageSample>();
     CallTrace? trace = null;
+    provider.TextStreamed += t => said.Append(t);
     provider.UsageReported += s =>
     {
         samples.Add(s);
@@ -175,56 +187,96 @@ static async Task<int> ClaudeAsync(
 
     var traces = new List<string>();
 
-    Console.WriteLine("| Unidad | Llamadas | In | Out | CacheRead | CacheWrite | Total entrada | Duración | Tools |");
+    Console.WriteLine("| Unidad | Pasada | Llamadas | Fresca | Leída | ESCRITA | Salida | Duración | Tools |");
     Console.WriteLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
 
     long totIn = 0, totOut = 0, totRead = 0, totWrite = 0;
     int totCalls = 0;
-    var first = new List<(string Path, UsageSample Sample)>();
-    foreach ((string path, string content, ComposedUnitPrompt prompt) in composed)
+    int lateFindings = 0;
+    var first = new List<(string Path, int Pass, UsageSample Sample)>();
+    foreach ((string path, string content, ComposedUnitPrompt _) in composed)
     {
-        samples.Clear();
-        var bench = new BenchToolbox(path);
-        trace = new CallTrace();
-        var toolbox = new TracingToolbox(bench, trace);
-        var clock = Stopwatch.StartNew();
+        // El barrido del banco, pasada a pasada: cada una ve como CONOCIDO lo que reportaron las
+        // anteriores, igual que en la aplicación. Sin eso, la pasada 2 volvería a descubrir lo
+        // mismo y no mediría un barrido sino dos primeras pasadas.
+        var known = seeded.ToList();
 
-        var request = new AuditUnitRequest(
-            path, content, prompt.Text, TechStack.DotNet, AuditMode.Lotes,
-            Array.Empty<ExistingFinding>(), null,   // el toolbox del banco acepta lo que llegue
-            split ? prompt.StablePrefix : null,
-            split ? prompt.UnitPart : null);
-
-        try
+        for (int pass = 1; pass <= passes; pass++)
         {
-            await provider.AuditUnitAsync(request, toolbox, CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"  ({path}) falló: {ex.Message}");
-        }
+            ComposedUnitPrompt prompt = PromptComposer.Compose(
+                path, content, brief, AuditMode.Lotes, known, null, null, theme, null);
 
-        clock.Stop();
-        long i = samples.Sum(s => s.InputTokens);
-        long o = samples.Sum(s => s.OutputTokens);
-        long r = samples.Sum(s => s.CacheReadTokens);
-        long w = samples.Sum(s => s.CacheWriteTokens);
-        int calls = samples.Sum(s => s.Calls);
-        totIn += i; totOut += o; totRead += r; totWrite += w; totCalls += calls;
+            samples.Clear();
+            said.Clear();
+            var bench = new BenchToolbox(path);
+            trace = new CallTrace();
+            var toolbox = new TracingToolbox(bench, trace);
+            var clock = Stopwatch.StartNew();
 
-        Console.WriteLine($"| {path} | {calls} | {i} | {o} | {r} | {w} | {i + r + w} "
-            + $"| {(clock.ElapsedMilliseconds / 1000.0).ToString("0.#", CultureInfo.InvariantCulture)} s "
-            + $"| {bench.Describe()} |");
-        traces.Add(trace.Render(path));
+            var request = new AuditUnitRequest(
+                path, content, prompt.Text, TechStack.DotNet, AuditMode.Lotes,
+                known, null,
+                split ? prompt.StablePrefix : null,
+                split ? prompt.UnitPart : null);
 
-        // LA PRIMERA LLAMADA es la única medida DETERMINISTA de la serie: su prompt lo fijan
-        // nuestros bytes y nada más. De la segunda en adelante el prompt lleva dentro lo que
-        // contestó el modelo, que cambia en cada ejecución — y con ello la escritura de caché.
-        // Comparar totales entre dos ejecuciones mide sobre todo esa varianza; comparar primeras
-        // llamadas mide el prompt, que es lo que esta fase cambia.
-        if (samples.Count > 0)
-        {
-            first.Add((path, samples[0]));
+            try
+            {
+                await provider.AuditUnitAsync(request, toolbox, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"  ({path}, pasada {pass}) falló: {ex.Message}");
+            }
+
+            clock.Stop();
+            long i = samples.Sum(x => x.InputTokens);
+            long o = samples.Sum(x => x.OutputTokens);
+            long r = samples.Sum(x => x.CacheReadTokens);
+            long w = samples.Sum(x => x.CacheWriteTokens);
+            int calls = samples.Sum(x => x.Calls);
+            totIn += i; totOut += o; totRead += r; totWrite += w; totCalls += calls;
+
+            // LA VARIABLE DE CONTROL de F20: lo que se encuentra en pasadas >= 2. Un cambio que
+            // ahorre tokens y seque las pasadas tardías no ahorra, degrada.
+            if (pass >= 2)
+            {
+                lateFindings += bench.Findings;
+            }
+
+            Console.WriteLine($"| {path} | {pass} | {calls} | {i} | {r} | {w} | {o} "
+                + $"| {(clock.ElapsedMilliseconds / 1000.0).ToString("0.#", CultureInfo.InvariantCulture)} s "
+                + $"| {bench.Describe()} |");
+            traces.Add(trace.Render($"{path} · pasada {pass}"));
+
+            // Una pasada MUDA —sin una sola herramienta— es el fallo que hay que diagnosticar, no
+            // contar: su texto dice si el modelo se creyó que había terminado o si le pasó otra cosa.
+            if (trace.CallsWithoutTools == trace.Calls && said.Length > 0)
+            {
+                string texto = said.ToString().Trim();
+                Console.WriteLine($"  PASADA MUDA ({path}, pasada {pass}) — lo que dijo el auditor:");
+                Console.WriteLine("  «" + (texto.Length > 900 ? texto[..900] + "…" : texto) + "»");
+            }
+
+            // LA PRIMERA LLAMADA es la única medida DETERMINISTA de la serie: su prompt lo fijan
+            // nuestros bytes y nada más. De la segunda en adelante el prompt lleva dentro lo que
+            // contestó el modelo, que cambia en cada ejecución.
+            if (samples.Count > 0)
+            {
+                first.Add((path, pass, samples[0]));
+            }
+
+            // Lo reportado pasa a ser conocido para la pasada siguiente.
+            foreach (string title in bench.Titles)
+            {
+                known.Add(new ExistingFinding(
+                    $"01JBENCHP{pass:D1}{known.Count:D14}",
+                    $"BUG-{known.Count + 1:D4}",
+                    title,
+                    "media",
+                    $"{path}:1",
+                    "activo",
+                    "General"));
+            }
         }
     }
 
@@ -236,12 +288,12 @@ static async Task<int> ClaudeAsync(
     }
 
     Console.WriteLine();
-    Console.WriteLine("Primera llamada de cada unidad (determinista: el prompt lo fijan nuestros bytes)");
-    Console.WriteLine("| Unidad | In | CacheRead | CacheWrite | Entrada |");
-    Console.WriteLine("|---|---:|---:|---:|---:|");
-    foreach ((string path, UsageSample f) in first)
+    Console.WriteLine("Primera llamada de cada pasada (determinista: el prompt lo fijan nuestros bytes)");
+    Console.WriteLine("| Unidad | Pasada | Fresca | Leída | ESCRITA | Entrada |");
+    Console.WriteLine("|---|---:|---:|---:|---:|---:|");
+    foreach ((string path, int pass, UsageSample f) in first)
     {
-        Console.WriteLine($"| {path} | {f.InputTokens} | {f.CacheReadTokens} | {f.CacheWriteTokens} "
+        Console.WriteLine($"| {path} | {pass} | {f.InputTokens} | {f.CacheReadTokens} | {f.CacheWriteTokens} "
             + $"| {f.InputTokens + f.CacheReadTokens + f.CacheWriteTokens} |");
     }
 
@@ -251,9 +303,15 @@ static async Task<int> ClaudeAsync(
         + $"· salida {totOut}");
     if (totCalls > 0)
     {
-        long codigo = composed.Sum(x => (long)x.Prompt.Composition.Unidad);
-        Console.WriteLine($"Entrada por llamada ≈ {entrada / totCalls} · código auditado ≈ {codigo} tokens en total "
-            + $"· llamadas por unidad ≈ {(double)totCalls / composed.Count:0.#}");
+        int prompts = composed.Count * passes;
+        Console.WriteLine($"Entrada por llamada ~ {entrada / totCalls}"
+            + $" · llamadas por pasada ~ {(double)totCalls / prompts:0.##}"
+            + $" · ESCRITURA DE CACHE por pasada ~ {totWrite / prompts}"
+            + $" · lectura por pasada ~ {totRead / prompts}");
+        if (passes > 1)
+        {
+            Console.WriteLine($"Hallazgos en pasadas >= 2 (variable de control): {lateFindings}");
+        }
     }
 
     return 0;

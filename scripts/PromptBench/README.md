@@ -30,6 +30,10 @@ Opciones: `--model <alias|id>` (por defecto `sonnet`), `--tema <General|Segurida
 `--existentes N` y las unidades a medir como argumentos sueltos (rutas relativas a la raíz del
 repositorio).
 
+`--pasadas N` simula el barrido: N pasadas sobre la misma unidad, cada una viendo como conocido lo
+que reportaron las anteriores. **Una sola pasada mide el caso barato**; el gasto de F20 estaba en
+las siguientes, donde el prefijo se vuelve a escribir entero.
+
 `--existentes N` siembra N hallazgos conocidos en la unidad. **Sin él todas las medidas son de una
 PRIMERA pasada**, que es el caso barato: en una segunda el auditor además tiene que reconciliar, y
 es ahí donde se ve si agrupa sus herramientas en un turno o gasta una vuelta por cada cosa (F19).
@@ -58,10 +62,13 @@ dar otras; lo que **no** se puede es comparar dos ejecuciones con unidades disti
 En el modo `claude`, después de la tabla sale **qué pidió cada llamada**:
 
 ```
-llamada 1: entrada 19.605 · salida 7   → report_verdicts × 3 + submit_findings × 2
-llamada 2: entrada 29.782 · salida 32  → unit_done
-llamada 3: entrada 30.171 · salida 2   → (sin herramienta: solo texto)
+llamada 1: fresca 2 · leída 11.322 · ESCRITA 13.681 · salida 2 → submit_findings × 5 + unit_done
+llamada 2: fresca 2 · leída 25.003 · ESCRITA 29.786 · salida 2 → (sin herramienta: solo texto)
 ```
+
+**Lectura y escritura van separadas, y no es cosmético** (F20): escribir en caché cuesta doce veces
+leerla, así que dos llamadas con la misma «entrada» pueden costar trece veces distinto. La columna
+que decide es **ESCRITA**.
 
 Es el diagnóstico que ordenó F19. Una llamada sin herramienta detrás es texto, y en una auditoría
 el texto no entra en ningún dato: los hallazgos viajan por herramienta. Si una tanda enseña muchas
@@ -69,7 +76,7 @@ llamadas «solo texto», o una herramienta por llamada en vez de agrupadas, ahí
 
 ## Qué se midió con esto
 
-Ver `DECISIONS.md` § F18 (D-850…D-858) y § F19 (D-861…D-869). El resumen: `--split` salió **neutro** —las dos formas
+Ver `DECISIONS.md` § F18 (D-850…D-858), § F19 (D-861…D-869) y § F20 (D-871…D-876). El resumen: `--split` salió **neutro** —las dos formas
 producen la misma clave de caché y ninguna reutiliza el prefijo entre unidades—, así que no entró en
 producción. La palanca sigue aquí, desarmada, para poder repetir la medida el día que el CLI cambie
 sus cortes de caché.

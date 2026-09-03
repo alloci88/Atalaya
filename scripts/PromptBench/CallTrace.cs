@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Atalaya.Agents;
 
 namespace Atalaya.PromptBench;
@@ -60,6 +60,12 @@ internal sealed class CallTrace
     public int CallsWithoutTools => _calls.Count(c => c.Index > 0 && c.Tools.Count == 0);
 
     /// <summary>El mapa, una línea por llamada.</summary>
+    /// <summary>Tokens escritos en caché por esta pasada: el número que vigila F20.</summary>
+    public long CacheWritten => _calls.Sum(c => c.CacheWriteTokens);
+
+    /// <summary>Y los leídos, que es lo que debería crecer si la caché sirve de algo.</summary>
+    public long CacheRead => _calls.Sum(c => c.CacheReadTokens);
+
     public string Render(string unit)
     {
         var sb = new StringBuilder();
@@ -69,9 +75,13 @@ internal sealed class CallTrace
             string tools = c.Tools.Count == 0
                 ? "(sin herramienta: solo texto)"
                 : string.Join(" + ", c.Tools);
+            // F20 §2 — la lectura y la escritura VAN SEPARADAS. Sumadas no dicen nada: con Opus
+            // escribir cuesta doce veces leer, así que dos llamadas con la misma «entrada» pueden
+            // costar trece veces distinto. El síntoma que esta fase persigue —un prefijo que se
+            // reescribe en vez de leerse— solo se ve en estas dos columnas.
             sb.AppendLine(
-                $"    llamada {c.Index}: entrada {c.InputTokens + c.CacheReadTokens + c.CacheWriteTokens}"
-                + $" · salida {c.OutputTokens} → {tools}");
+                $"    llamada {c.Index}: fresca {c.InputTokens} · leída {c.CacheReadTokens}"
+                + $" · ESCRITA {c.CacheWriteTokens} · salida {c.OutputTokens} → {tools}");
         }
 
         return sb.ToString().TrimEnd();

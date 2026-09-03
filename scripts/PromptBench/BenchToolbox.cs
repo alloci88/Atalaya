@@ -1,4 +1,4 @@
-using Atalaya.Agents;
+﻿using Atalaya.Agents;
 
 namespace Atalaya.PromptBench;
 
@@ -15,12 +15,23 @@ namespace Atalaya.PromptBench;
 internal sealed class BenchToolbox : IAuditToolbox
 {
     private readonly string _unit;
+    private readonly List<string> _titles = new();
     private int _findings;
     private int _verdicts;
     private int _locations;
     private bool _done;
 
     public BenchToolbox(string unit) => _unit = unit;
+
+    /// <summary>
+    /// Los títulos de lo reportado en esta pasada. Es lo que la pasada siguiente tiene que ver como
+    /// «ya conocido» para que el barrido del banco se parezca al de verdad (F20 §3): sin eso, la
+    /// segunda pasada re-descubriría lo mismo y la medida no sería de un barrido, sería de dos
+    /// primeras pasadas.
+    /// </summary>
+    public IReadOnlyList<string> Titles => _titles;
+
+    public int Findings => _findings;
 
     public string Describe()
         => $"{_findings} hallazgo(s), {_verdicts} veredicto(s), {_locations} ubicación(es)"
@@ -29,12 +40,14 @@ internal sealed class BenchToolbox : IAuditToolbox
     public SubmitFindingResult SubmitFinding(SubmitFindingArgs args)
     {
         _findings++;
+        _titles.Add(args.Title);
         return new SubmitFindingResult(true);
     }
 
     public SubmitFindingsResult SubmitFindings(SubmitFindingArgs[] findings)
     {
         _findings += findings.Length;
+        _titles.AddRange(findings.Select(f => f.Title));
         return new SubmitFindingsResult(findings.Select(_ => new SubmitFindingResult(true)).ToList());
     }
 
