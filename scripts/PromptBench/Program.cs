@@ -40,10 +40,6 @@ int passes = int.TryParse(Flag(argv, "--pasadas"), out int pn) ? Math.Max(1, pn)
 // tanda SIN corte es la línea contra la que se compara. No hay otra forma de enseñar que la
 // escritura de caché baja y que los hallazgos no se mueven.
 bool noCut = argv.Contains("--sin-corte");
-// F24 — la regla de las variantes va encendida en producción; el banco la apaga para tener la
-// línea contra la que comparar. Apaga las DOS capas a la vez (contrato del prompt y filtro de la
-// puerta): media medida diría que una hace el trabajo de la otra.
-bool noVariants = argv.Contains("--sin-variantes");
 // El clon sobre el que corre el barrido real. Por defecto, el propio repositorio.
 string? cloneRoot = Flag(argv, "--clon");
 int maxPasses = int.TryParse(Flag(argv, "--tope"), out int mp) ? Math.Max(1, mp) : 6;
@@ -87,13 +83,7 @@ Console.WriteLine();
 // el clon que se le pase.
 if (mode == "barrido")
 {
-    // --media-regla manda SOLO la primera mitad del contrato: la definición de variante y qué hacer,
-    // sin el permiso para cerrar la unidad vacía. Es la tercera medida de F24 (rama de D-902).
-    VariantContractLevel nivel = argv.Contains("--media-regla")
-        ? VariantContractLevel.Core
-        : VariantContractLevel.Full;
-    return await SweepBench.RunAsync(
-        units, cloneRoot ?? root, model, !noVariants, maxPasses, tandas, !noCut, nivel);
+    return await SweepBench.RunAsync(units, cloneRoot ?? root, model, maxPasses, tandas, !noCut);
 }
 
 AuditorBrief brief = PillarBrief.Parts(TechStack.DotNet);
@@ -135,7 +125,7 @@ static int Uso()
         "Uso: PromptBench [composicion|claude|barrido] [--split|--whole] "
         + "[--model X] [--tema X] [--existentes N] [--pasadas N] [unidades...]");
     Console.Error.WriteLine(
-        "     barrido: [--clon RUTA] [--tope N] [--tandas N] [--sin-variantes] [unidades...]");
+        "     barrido: [--clon RUTA] [--tope N] [--tandas N] [--sin-corte] [unidades...]");
     return 2;
 }
 

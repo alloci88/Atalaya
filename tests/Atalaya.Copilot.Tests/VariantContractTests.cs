@@ -6,23 +6,25 @@ using Xunit;
 namespace Atalaya.Copilot.Tests;
 
 /// <summary>
-/// F24 §1 — <b>el contrato: una variante no es un hallazgo nuevo</b>.
+/// F24, RETIRADA — <b>el prompt vuelve a ser el de antes, y esto lo fija</b>.
 /// <para>
-/// El contrato de F4 decía «si es el mismo problema, no lo reportes como nuevo». Lo que no decía es
-/// <b>qué es el mismo problema cuando se le pide más y no hay más</b>, y ahí es donde el auditor
-/// reformulaba: el mismo defecto con otro título, bajo otra regla, por su consecuencia. Cinco pares
-/// del informe de referencia son eso, y cuatro de los nueve hallazgos tardíos de ClienteRemoto.
+/// F24 metió en la zona estable un contrato de variantes: «una reformulación, una ampliación o una
+/// consecuencia de algo ya reportado no es un hallazgo nuevo», más la instrucción de buscar lo que
+/// falta y cerrar la unidad vacía cuando no quedara nada. Se midió con nueve tandas y se retiró
+/// (D-907): hacía converger el barrido, sí, pero las tandas que convergían eran las que menos
+/// encontraban, y lo que dejaba de salir no eran solo variantes.
 /// </para>
 /// <para>
-/// <b>Por qué se prueba el TEXTO.</b> Dos de los cinco pares —reglas distintas, y símbolos a
-/// alturas distintas del código— el filtro de la puerta no los puede ver por construcción: quedan a
-/// cargo de esto y solo de esto. Un párrafo que desaparece en una reescritura no rompe nada
-/// visible; simplemente vuelven a pagarse pasadas.
+/// <b>Por qué un test y no borrarlo y ya.</b> El contrato son ~390 tokens en el prefijo estable, que
+/// viaja en TODAS las llamadas de la sesión. Un trozo de texto que vuelve a colarse ahí no rompe
+/// nada: gasta, y encima cambia lo que el auditor busca. Esto fija que no está, y el guardarraíl de
+/// F19 —<c>El_prefijo_estable_no_puede_engordar_sin_que_salte_un_rojo</c>— fija el tamaño.
 /// </para>
 /// <para>
-/// Y va en la ZONA ESTABLE, que es donde vive todo lo que no cambia entre unidades ni entre
-/// pasadas. El orden lo fija <see cref="PromptCacheOrderTests"/>; aquí se fija que el texto está y
-/// que está en ese lado de la costura.
+/// <b>Lo único que F24 dejó en el prefijo</b> es la línea que pide el <c>symbol</c> siempre, y se
+/// queda a propósito: sin ella la marca de posibles duplicados del §5 de F23 se apaga en silencio
+/// con los proveedores que no lo rellenan (D-898). Por eso el prefijo NO es byte a byte el de antes
+/// de F24 — es el de antes más esa línea, y nada más.
 /// </para>
 /// </summary>
 public class VariantContractTests
@@ -31,122 +33,78 @@ public class VariantContractTests
         => PromptComposer.Compose(
             "src/A.cs", "class A { }", PillarBrief.Parts(TechStack.DotNet), AuditMode.Lotes);
 
+    /// <summary>Ni una frase del contrato retirado, en ninguna parte del prompt.</summary>
     [Theory]
     [InlineData("UNA VARIANTE NO ES UN HALLAZGO NUEVO")]
-    [InlineData("MISMO defecto en el MISMO sitio")]
-    [InlineData("MISMO defecto en OTRO punto de la unidad")]
-    public void El_contrato_de_las_variantes_esta_en_el_prompt(string frase)
-        => Compose().Text.Should().Contain(frase);
-
-    /// <summary>
-    /// Los dos casos, y ninguno más. «No emitas nada» es el que faltaba: no hay herramienta para
-    /// retocar el título de un hallazgo y no se añade ninguna, así que el auditor tiene que saber
-    /// que la respuesta correcta a «esto ya está» es el silencio.
-    /// </summary>
-    [Fact]
-    public void Dice_que_el_mismo_defecto_en_el_mismo_sitio_no_se_emite()
-        => Compose().Text.Should().Contain("NO emitas nada");
-
-    /// <summary>Y que el mismo defecto en otro punto es <c>add_locations</c>, no un hallazgo.</summary>
-    [Fact]
-    public void Dice_que_el_mismo_defecto_en_otro_punto_es_add_locations()
-        => Compose().Text.Should().Contain("add_locations(findingId, locations) sobre el");
-
-    /// <summary>
-    /// «Existente» son las DOS cosas: la lista de la unidad y lo creado en el barrido en curso
-    /// (D-088, D-091). Sin la segunda mitad, el auditor podría duplicar dentro de la misma pasada
-    /// sin salirse de la letra del contrato.
-    /// </summary>
-    [Fact]
-    public void Existente_incluye_lo_reportado_en_esta_misma_unidad()
-        => Compose().Text.Should().Contain("mismo hayas reportado en esta unidad");
-
-    /// <summary>
-    /// Los dos pares que el filtro no ve, nombrados en el propio prompt. Son ejemplos, no una
-    /// taxonomía: lo que enseñan es que «otra regla» y «otra consecuencia» siguen siendo el mismo
-    /// defecto.
-    /// </summary>
-    [Theory]
-    [InlineData("sin Timeout")]
-    [InlineData("sin CancellationToken")]
-    [InlineData("no valida signos")]
-    [InlineData("no es otra por ocurrir")]
-    public void Nombra_los_casos_que_el_filtro_no_puede_ver(string ejemplo)
-        => Compose().Text.Should().Contain(ejemplo);
-
-    /// <summary>
-    /// <b>«Busca lo que falta», no «busca más»</b>. Es la mitad que explica el fenómeno: un modelo
-    /// al que se le pide más cuando no queda más, reformula. Que una pasada vacía sea una respuesta
-    /// CORRECTA tiene que estar escrito, porque es lo que termina el barrido.
-    /// </summary>
-    [Theory]
-    [InlineData("BUSCA LO QUE FALTA, NO \"MÁS\"")]
+    [InlineData("BUSCA LO QUE FALTA")]
     [InlineData("submit_findings vacío y unit_done")]
-    [InlineData("CORRECTA y COMPLETA")]
-    public void Pide_lo_que_falta_y_no_mas(string frase)
+    [InlineData("distinctFrom")]
+    [InlineData("distinctReason")]
+    [InlineData("queda registrado como insistido")]
+    public void El_contrato_de_variantes_no_esta_en_el_prompt(string frase)
+        => Compose().Text.Should().NotContain(frase);
+
+    /// <summary>
+    /// Y lo de siempre sigue entero: el contrato se metió EN MEDIO de las reglas del auditor, así
+    /// que al sacarlo había que volver a unir las dos mitades. Si esto falla, el corte se llevó algo
+    /// que no era suyo.
+    /// </summary>
+    [Theory]
+    [InlineData("Eres un auditor de código.")]
+    [InlineData("MÉTODO DE BARRIDO")]
+    [InlineData("UN DEFECTO SISTÉMICO ES UN SOLO HALLAZGO")]
+    [InlineData("Tienes dos cosas que entregar en cada unidad:")]
+    [InlineData("ECONOMÍA DE TURNOS")]
+    [InlineData("Cierra con unit_done")]
+    public void Las_reglas_de_siempre_siguen_enteras(string frase)
         => Compose().Text.Should().Contain(frase);
 
     /// <summary>
-    /// El reintento, dicho en el prompt: si de verdad es otro defecto, se reenvía con
-    /// <c>distinctFrom</c>. Sin esto el filtro sería un muro — el auditor no tendría cómo sostener
-    /// una discrepancia legítima.
+    /// El orden también: el defecto sistémico y las dos entregas quedaron pegados otra vez, sin el
+    /// bloque que se metió entre ellos.
     /// </summary>
     [Fact]
-    public void Explica_el_reintento_con_distinctFrom()
-        => Compose().Text.Should().Contain("distinctFrom");
-
-    /// <summary>
-    /// <b>La palanca de medida</b>, y solo eso: apagada, el prompt es el de antes de F24. Existe
-    /// para poder correr la misma tanda con la regla y sin ella y enseñar la diferencia en pasadas y
-    /// llamadas — el mismo patrón que <c>CutOnUnitDone</c> en F21. En producción va siempre puesta.
-    /// </summary>
-    [Fact]
-    public void Sin_el_contrato_el_prompt_es_el_de_antes()
+    public void El_defecto_sistemico_y_las_entregas_vuelven_a_ir_seguidos()
     {
-        string sin = Nivel(VariantContractLevel.None);
+        string p = Compose().Text;
+        int sistemico = p.IndexOf("defecto por miembro infla el baseline", StringComparison.Ordinal);
+        int entregas = p.IndexOf("Tienes dos cosas que entregar", StringComparison.Ordinal);
 
-        sin.Should().NotContain("UNA VARIANTE NO ES UN HALLAZGO NUEVO").And.NotContain("BUSCA LO QUE FALTA");
-        sin.Should().Contain("UN DEFECTO SISTÉMICO ES UN SOLO HALLAZGO", "lo demás sigue entero");
-        sin.Should().Contain("Tienes dos cosas que entregar en cada unidad:");
-        sin.Length.Should().BeLessThan(Compose().Text.Length);
+        sistemico.Should().BeGreaterThan(0);
+        entregas.Should().BeGreaterThan(sistemico);
+        p[sistemico..entregas].Should().NotContain("VARIANTE", "entre los dos no queda nada de F24");
     }
 
     /// <summary>
-    /// <b>La media regla</b> (F24, rama de D-902): solo la mitad que define qué es una variante y qué
-    /// hacer con ella, sin la que le dice al auditor que puede cerrar la unidad vacía. Las dos
-    /// mitades hacen cosas distintas y solo separándolas se puede saber cuál se cobra cobertura.
+    /// <b>Lo único que F24 deja en la zona estable</b>: el miembro, pedido siempre. Es lo que hace
+    /// que el criterio de posibles duplicados de F23 pueda distinguir dos métodos vecinos.
     /// </summary>
     [Fact]
-    public void Con_media_regla_va_la_definicion_y_no_el_permiso_para_terminar()
-    {
-        string medio = Nivel(VariantContractLevel.Core);
-
-        medio.Should().Contain("UNA VARIANTE NO ES UN HALLAZGO NUEVO");
-        medio.Should().Contain("MISMO defecto en OTRO punto de la unidad");
-        medio.Should().Contain("distinctFrom");
-        medio.Should().NotContain("BUSCA LO QUE FALTA");
-        medio.Should().NotContain("submit_findings vacío y unit_done");
-        medio.Length.Should().BeGreaterThan(Nivel(VariantContractLevel.None).Length);
-        medio.Length.Should().BeLessThan(Compose().Text.Length);
-    }
-
-    private static string Nivel(VariantContractLevel nivel)
-        => PromptComposer.Compose(
-                "src/A.cs", "class A { }", PillarBrief.Parts(TechStack.DotNet), AuditMode.Lotes,
-                variantContract: nivel)
-            .Text;
-
-    /// <summary>
-    /// Y todo ello del lado ESTABLE de la costura de caché (F18 §2). Un contrato que viajara en la
-    /// parte variable se re-escribiría en caché en cada unidad y en cada pasada: costaría dinero por
-    /// decir siempre lo mismo.
-    /// </summary>
-    [Fact]
-    public void El_contrato_viaja_en_la_zona_estable()
+    public void Lo_unico_que_queda_de_F24_es_pedir_el_simbolo_siempre()
     {
         ComposedUnitPrompt composed = Compose();
 
-        composed.StablePrefix.Should().Contain("UNA VARIANTE NO ES UN HALLAZGO NUEVO");
-        composed.UnitPart.Should().NotContain("UNA VARIANTE NO ES UN HALLAZGO NUEVO");
+        composed.StablePrefix.Should().Contain("symbol: SIEMPRE, el miembro que contiene el defecto");
+        composed.UnitPart.Should().NotContain("symbol: SIEMPRE");
+    }
+
+    /// <summary>
+    /// <b>Y el tamaño vuelve al de antes</b>, que es lo que se paga: el prefijo estable viaja en
+    /// todas las llamadas de la sesión. Antes de F24 eran ~3.056 tokens; el contrato lo subió a
+    /// ~3.486 y su retirada lo deja en ~3.094. La diferencia que queda —unos 40 tokens— es la línea
+    /// del <c>symbol</c>, y no hay más.
+    /// <para>
+    /// El margen es estrecho a propósito: el guardarraíl de F19 salta a partir de 3.500 y avisa de
+    /// un engorde grande, pero no habría dicho nada de que el contrato volviera a colarse aquí.
+    /// Esto sí.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void El_prefijo_estable_vuelve_al_tamano_de_antes_de_F24()
+    {
+        int estable = Compose().Composition.Estable;
+
+        estable.Should().BeLessThan(3_150, "sin el contrato de variantes solo sobra la línea del symbol");
+        estable.Should().BeGreaterThan(3_000, "y si se desplomara sería que se ha caído un bloque");
     }
 }

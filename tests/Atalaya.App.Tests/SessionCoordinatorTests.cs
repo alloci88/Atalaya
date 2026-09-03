@@ -84,9 +84,9 @@ public sealed class SessionCoordinatorTests : IDisposable
             new[] { new SubmitLocation(path, 1, "snippet") }, "A.M");
 
     /// <summary>
-    /// Un hallazgo que NO es una variante de los demás (F24): otro miembro y otra línea. Los tests
-    /// del barrido prueban la regla de parada, no la puerta de las variantes, así que sus hallazgos
-    /// tienen que ser defectos distintos de verdad — antes bastaba con cambiarles el título.
+    /// Un hallazgo distinto de los demás: otro miembro y otra línea. Los tests del barrido prueban
+    /// la regla de parada, y sus hallazgos son defectos distintos de verdad y no el mismo con otro
+    /// título — que es lo que la marca de posibles duplicados de F23 sabe distinguir.
     /// </summary>
     private static SubmitFindingArgs Distinct(string title, string symbol, int line)
         => SampleFinding() with
@@ -427,11 +427,9 @@ public sealed class SessionCoordinatorTests : IDisposable
     /// pero tampoco duplica, porque el auditor lo ve en la lista y lo reconcilia. Un agente que
     /// ignora la reconciliación no resuelve NADA, y la unidad queda incompleta a la vista.
     /// <para>
-    /// <b>Y sigue siendo así después de F24</b>, porque la regla de variantes va **apagada de
-    /// fábrica** (D-902): con los ajustes de serie, la puerta no mira y el duplicado se crea, igual
-    /// que siempre. Encendida lo rebotaría — eso lo prueba <c>VariantGateTests</c>, que la enciende
-    /// explícitamente. Lo que no cambia en ningún caso es lo de fondo: la app no decide que dos
-    /// hallazgos sean el mismo, y no resuelve nada por omisión.
+    /// <b>Y sigue siendo así</b>: F24 probó una puerta que lo rebotaba y se retiró tras medirla
+    /// (D-907), así que el precio explícito y autocorregible del modelo es otra vez lo que hay. La
+    /// app no decide que dos hallazgos sean el mismo, y no resuelve nada por omisión.
     /// </para>
     /// </summary>
     [Fact]
@@ -445,30 +443,8 @@ public sealed class SessionCoordinatorTests : IDisposable
             reconcileScript: _ => Array.Empty<VerdictArgs>()));
 
         second.Counters.New.Should().Be(1);
-        second.Counters.VariantsRejected.Should().Be(0, "con los ajustes de serie la puerta no mira");
         second.Counters.Resolved.Should().Be(0);           // lo que importa: NADA se resolvió
         second.IncompleteUnits.Should().Be(1);             // y el fallo es visible
-        _hub.Store.ListFindings("app").Should().HaveCount(2)
-            .And.OnlyContain(f => f.Status == FindingStatus.Activo);
-    }
-
-    /// <summary>
-    /// <b>Y el precio del modelo sigue ahí donde la puerta no llega</b> (D-077). Re-reportar el
-    /// mismo problema bajo OTRA regla es exactamente lo que el criterio no puede ver —lo dijo F23 al
-    /// medirlo— así que se crea el duplicado, como antes. Es el precio explícito y autocorregible:
-    /// lo evita el contrato del prompt, no la aplicación.
-    /// </summary>
-    [Fact]
-    public async Task Re_reportado_bajo_otra_regla_la_puerta_no_lo_ve_y_el_duplicado_se_crea()
-    {
-        await RunLotes(new FakeCopilotAgent(_ => new[] { SampleFinding() }));
-
-        SessionResult second = await RunLotes(new FakeCopilotAgent(
-            auditScript: _ => new[] { SampleFinding() with { RuleId = "criterio.arquitectura" } },
-            reconcileScript: _ => Array.Empty<VerdictArgs>()));
-
-        second.Counters.New.Should().Be(1);
-        second.Counters.VariantsRejected.Should().Be(0, "reglas distintas: el criterio no lo ve");
         _hub.Store.ListFindings("app").Should().HaveCount(2)
             .And.OnlyContain(f => f.Status == FindingStatus.Activo);
     }

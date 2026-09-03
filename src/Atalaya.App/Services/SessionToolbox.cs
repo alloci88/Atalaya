@@ -149,14 +149,6 @@ public sealed class SessionToolbox : IAuditToolbox
 
     private readonly Dictionary<string, string> _exemplars = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// <b>La puerta de las variantes, abierta</b> (F24). En producción es siempre <c>true</c>; la
-    /// pone a <c>false</c> el banco de medida para poder correr la misma tanda sin la regla y
-    /// enseñar la diferencia (mismo patrón que <c>CutOnUnitDone</c> en F21). Con la puerta cerrada
-    /// el comportamiento es exactamente el de antes de F24: todo lo que valide entra.
-    /// </summary>
-    public bool VariantGate { get; init; } = true;
-
     /// <summary>How many <c>submit_finding(s)</c> invocations landed in this unit (F3 Hito 1c).</summary>
     public int SubmitInvocations { get; private set; }
 
@@ -231,13 +223,11 @@ public sealed class SessionToolbox : IAuditToolbox
         RejectionReasons.Clear();
         DegradedVerdicts.Clear();
         SuppressedByPattern.Clear();
-        InsistedVariants.Clear();
         _exemplars.Clear();
         LastUnitSummary = null;
         PassNew = PassConfirmed = PassResolved = PassNonVerifiable = PassRejected = PassDisputed = 0;
         PassSuppressedByPattern = 0;
         PassLocationsAdded = 0;
-        PassVariantsRejected = PassVariantsInsisted = 0;
         PassHasNonPresentVerdict = false;
     }
 
@@ -269,33 +259,6 @@ public sealed class SessionToolbox : IAuditToolbox
 
     /// <summary>Algún veredicto de la pasada no fue «presente» (ni silencio respetado).</summary>
     public bool PassHasNonPresentVerdict { get; private set; }
-
-    /// <summary>
-    /// Hallazgos que la pasada rebotó por parecerse a uno que ya existe (F24). Cuentan también en
-    /// <see cref="PassRejected"/> —la app devolvió un error tipado y no guardó nada, que es lo que
-    /// es un rechazo— y van además por su cuenta propia para que el anexo pueda decir cuántos de los
-    /// rechazos fueron variantes.
-    /// <para>
-    /// <b>No cuentan como aportación</b>, y ése es el punto: una pasada cuya única producción fue
-    /// una variante rebotada queda SECA, así que el barrido converge en vez de pagar otra vuelta.
-    /// </para>
-    /// </summary>
-    public int PassVariantsRejected { get; private set; }
-
-    /// <summary>
-    /// Variantes que el auditor reenvió con <c>distinctFrom</c> y entraron (F24). Son hallazgos
-    /// normales a todos los efectos —cuentan en <see cref="PassNew"/> y el barrido sigue vivo, como
-    /// con cualquier nuevo—; esto solo dice cuántos pasaron por la puerta insistiendo.
-    /// </summary>
-    public int PassVariantsInsisted { get; private set; }
-
-    /// <summary>
-    /// Lo que entró insistido en la pasada, con su motivo (F24). Canal propio, como
-    /// <see cref="DegradedVerdicts"/>: no es un rechazo —el hallazgo está guardado— y desaparecer
-    /// sin dejar rastro sería peor, porque nadie sabría que la app había dicho «esto se parece a
-    /// aquello» y que el auditor dijo que no. El coordinador lo vuelca en las notas de la sesión.
-    /// </summary>
-    public List<string> InsistedVariants { get; } = new();
 
     /// <summary>
     /// La pasada queda SECA cuando no aportó nada nuevo y todos sus veredictos fueron «presente».
@@ -645,105 +608,13 @@ public sealed class SessionToolbox : IAuditToolbox
             return Reject("duplicado exacto dentro de esta sesión (mismo título y misma ubicación).", args);
         }
 
-        // F24 — LA PUERTA DE LAS VARIANTES. Ver VariantTwin.
-        bool insisting = !VariantGate || !string.IsNullOrWhiteSpace(args.DistinctFrom);
-        var key = new DuplicateHints.VariantKey(
-            args.RuleId, locations[0].Path, locations[0].Line, args.Symbol);
-        Finding? twin = insisting ? null : VariantTwin(key);
-        if (twin is not null)
-        {
-            _submittedKeys.Remove(submitted.SessionDuplicateKey);
-            PassVariantsRejected++;
-            Counters.VariantsRejected++;
-            // El motivo empieza por su RAÍZ y sigue tras los dos puntos, porque el motivo dominante
-            // por unidad se colapsa por la primera frase (F3.1 Bloque 0): sin esto, dos variantes
-            // contra hallazgos distintos contarían como dos motivos distintos y el informe no
-            // podría decir «lo que rebotó esta unidad fueron variantes».
-            return Reject(
-                "posible variante de un hallazgo ya reportado: se parece a "
-                + $"{Name(twin)} «{twin.Title}» (línea {twin.Locations[0].Line}, misma regla y mismo símbolo). "
-                + "Si es el MISMO defecto, no lo reportes; si es el mismo defecto en otro punto de la unidad, "
-                + $"usa add_locations({twin.Id}, locations). Si de verdad es OTRO defecto, reenvíalo con "
-                + $"distinctFrom={twin.Id} y distinctReason explicando en qué se diferencia.",
-                args);
-        }
-
         Finding created = _ingestion.Create(submitted, _slug, _mode, Stamp, _theme);
         _createdInSweep[created.Id.ToString()] = created;
         Counters.New++;
         PassNew++;
-        if (VariantGate && insisting)
-        {
-            RecordInsistence(created, args);
-        }
-
         _onFinding?.Invoke(created, "nuevo");
         return new SubmitFindingResult(true);
     }
-
-    /// <summary>
-    /// <b>El hallazgo al que éste se parece demasiado</b>, o null si no se parece a ninguno (F24).
-    /// <para>
-    /// <b>Por qué existe.</b> El contrato del prompt le dice al auditor que una reformulación no es
-    /// un hallazgo nuevo; esto hace que reportarla de todas formas <b>no sea gratis ni silencioso</b>.
-    /// En el informe de referencia cinco pares eran el mismo defecto dicho dos veces, y no era solo
-    /// ruido de lectura: un «nuevo» impide que la pasada sea seca (D-092), así que cada variante
-    /// mantenía vivo el barrido y pagaba una pasada entera — ClienteRemoto llegó al tope de 6.
-    /// </para>
-    /// <para>
-    /// <b>El criterio es el del informe, y es el mismo código</b>: <see cref="DuplicateHints"/>.
-    /// No una copia con su propio umbral — si divergieran, el informe marcaría lo que el filtro dejó
-    /// pasar y al revés.
-    /// </para>
-    /// <para>
-    /// <b>Se mira contra lo que el auditor tiene delante</b>, que es lo mismo que acepta
-    /// <c>add_locations</c>: la lista de existentes de la unidad y lo que él mismo haya reportado en
-    /// este barrido (D-088, D-091). Contra el resto del hub no se compara nada: el auditor no lo ha
-    /// visto y no puede pronunciarse sobre ello.
-    /// </para>
-    /// <para>
-    /// El orden es por ULID —que es el de creación—, así que se devuelve siempre el MÁS ANTIGUO de
-    /// los parecidos. Es la misma regla que la marca del informe (cada hallazgo se compara contra el
-    /// primero al que se parece) y hace la respuesta reproducible: sin ella, dos ejecuciones podrían
-    /// nombrar hallazgos distintos en el error.
-    /// </para>
-    /// </summary>
-    private Finding? VariantTwin(DuplicateHints.VariantKey key)
-        => _listed.Values.Concat(_createdInSweep.Values)
-            .OrderBy(f => f.Id.ToString(), StringComparer.Ordinal)
-            .FirstOrDefault(f => DuplicateHints.KeyOf(f) is { } other && DuplicateHints.AreSimilar(key, other));
-
-    /// <summary>
-    /// Deja constancia de que este hallazgo entró <b>insistido</b> (F24): el auditor sostuvo que es
-    /// otro defecto pese al parecido. Va al historial de la ficha —que es donde sobrevive a la
-    /// sesión— y a las notas, y NO toca nada más: ni la confianza, ni la gravedad, ni la identidad.
-    /// La app no ha decidido que sean el mismo problema; ha obligado a que alguien lo diga.
-    /// <para>
-    /// Un reintento SIN motivo entra igual, y se registra diciendo que vino sin él. Bloquearlo sería
-    /// convertir el filtro en un muro por una casilla vacía; tragárselo dejaría una insistencia sin
-    /// causa, que es lo que esta aplicación no hace.
-    /// </para>
-    /// </summary>
-    private void RecordInsistence(Finding created, SubmitFindingArgs args)
-    {
-        string cited = args.DistinctFrom!.Trim();
-        string known = _listed.TryGetValue(cited, out Finding? twin) || _createdInSweep.TryGetValue(cited, out twin)
-            ? Name(twin)
-            : $"{cited} (no está en la lista de esta unidad)";
-        string why = string.IsNullOrWhiteSpace(args.DistinctReason)
-            ? "sin motivo declarado"
-            : AuditorText.Clean(args.DistinctReason)!.Trim();
-
-        string note = $"insistido · «{created.Title}» se parecía a {known} y el auditor lo sostiene como distinto: {why}";
-        InsistedVariants.Add(note);
-        PassVariantsInsisted++;
-        Counters.VariantsInsisted++;
-        created.History.Add(new HistoryEntry(Stamp.Utc, FindingEvent.Commented, Stamp.By, note));
-        _hub.WriteFinding(_slug, created);
-    }
-
-    /// <summary>Cómo nombrar a otro hallazgo en un mensaje al auditor: su alias legible si lo tiene.</summary>
-    private static string Name(Finding f) => string.IsNullOrEmpty(f.DisplayId) ? f.Id.ToString() : f.DisplayId!;
 
     /// <summary>
     /// Una ubicación reportada, con su ancla ya <b>corregida contra el clon</b> (F5.6, D-226).

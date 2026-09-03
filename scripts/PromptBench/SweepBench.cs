@@ -3,7 +3,6 @@ using System.Globalization;
 using Atalaya.Agents;
 using Atalaya.App.Services;
 using Atalaya.ClaudeCode;
-using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Ids;
@@ -29,17 +28,16 @@ namespace Atalaya.PromptBench;
 /// nadie—; el resto es producción. Medir esto con una maqueta sería medir la maqueta.
 /// </para>
 /// <para>
-/// <b>Y la línea contra la que se compara</b> es <c>--sin-variantes</c>, que apaga las DOS capas de
-/// F24 a la vez (el contrato del prompt y el filtro de la puerta). Media medida diría que una capa
-/// hace el trabajo de la otra. Es el mismo patrón que <c>--sin-corte</c> en F21.
+/// <b>Se construyó para F24</b> y aquella regla se retiró (D-907), pero el banco se queda: es lo
+/// único que sabe contestar «cuántas pasadas hacen falta» con la aplicación de verdad delante, y esa
+/// pregunta sigue viva. <c>--sin-corte</c> apaga el corte de F21, que con <c>opus</c> se cae a veces.
 /// </para>
 /// </summary>
 internal static class SweepBench
 {
     public static async Task<int> RunAsync(
-        IReadOnlyList<string> units, string cloneRoot, string? model, bool variantRule,
-        int maxPasses, int tandas, bool cut = true,
-        VariantContractLevel nivel = VariantContractLevel.Full)
+        IReadOnlyList<string> units, string cloneRoot, string? model,
+        int maxPasses, int tandas, bool cut = true)
     {
         if (!Directory.Exists(cloneRoot))
         {
@@ -63,18 +61,17 @@ internal static class SweepBench
             bridge = Path.Combine(AppContext.BaseDirectory, "Atalaya.Mcp");
         }
 
-        Console.WriteLine($"BARRIDO REAL · regla de variantes: {(variantRule ? "PUESTA" : "QUITADA")} "
-            + $"· tope {maxPasses} pasadas · {tandas} tanda(s) · modelo {model ?? "(por defecto)"}"
-            + (cut ? " · con corte" : " · SIN corte")
-            + (variantRule ? $" · contrato {nivel}" : string.Empty));
+        Console.WriteLine($"BARRIDO REAL · tope {maxPasses} pasadas · {tandas} tanda(s) "
+            + $"· modelo {model ?? "(por defecto)"}"
+            + (cut ? " · con corte" : " · SIN corte"));
         Console.WriteLine($"Clon: {cloneRoot}");
         Console.WriteLine();
-        Console.WriteLine("| Tanda | Unidad | Pasadas | Llamadas | Nuevos | Ubic. | Rebotadas | Insistidas | Veredicto | Duración |");
-        Console.WriteLine("|---:|---|---:|---:|---:|---:|---:|---:|---|---:|");
+        Console.WriteLine("| Tanda | Unidad | Pasadas | Llamadas | Nuevos | Ubic. | Veredicto | Duración |");
+        Console.WriteLine("|---:|---|---:|---:|---:|---:|---|---:|");
 
         for (int tanda = 1; tanda <= tandas; tanda++)
         {
-            int code = await OneAsync(units, cloneRoot, model, variantRule, maxPasses, bridge, tanda, cut, nivel);
+            int code = await OneAsync(units, cloneRoot, model, maxPasses, bridge, tanda, cut);
             if (code != 0)
             {
                 return code;
@@ -85,8 +82,8 @@ internal static class SweepBench
     }
 
     private static async Task<int> OneAsync(
-        IReadOnlyList<string> units, string cloneRoot, string? model, bool variantRule,
-        int maxPasses, string bridge, int tanda, bool cut, VariantContractLevel nivel)
+        IReadOnlyList<string> units, string cloneRoot, string? model,
+        int maxPasses, string bridge, int tanda, bool cut)
     {
         // Un hub NUEVO por tanda. Es la condición para que dos tandas sean dos muestras y no una
         // segunda auditoría: con el hub de la anterior, la tanda 2 vería sus hallazgos como
@@ -140,11 +137,7 @@ internal static class SweepBench
         }
 
         var coordinator = new SessionCoordinator(
-            hub, ingestion, reconciliation, machines, ulids, provider, settings)
-        {
-            VariantRuleOverride = variantRule,
-            ContractLevel = nivel,
-        };
+            hub, ingestion, reconciliation, machines, ulids, provider, settings);
 
         var clock = Stopwatch.StartNew();
         SessionResult result = await coordinator.RunAsync(
@@ -160,14 +153,12 @@ internal static class SweepBench
             Console.WriteLine(
                 $"| {tanda} | {Short(unit.Unit)} | {passes.Count} | {usage?.Calls ?? 0} "
                 + $"| {passes.Sum(p => p.New)} | {passes.Sum(p => p.LocationsAdded)} "
-                + $"| {passes.Sum(p => p.VariantsRejected)} | {passes.Sum(p => p.VariantsInsisted)} "
                 + $"| {unit.Verdict}{(unit.CoverageIncomplete ? " (incompleta)" : string.Empty)} "
                 + $"| {(usage?.DurationMs ?? 0) / 1000.0:0.#} s |");
         }
 
         Console.WriteLine();
         Console.WriteLine($"  tanda {tanda}: {result.Counters.New} nuevos · "
-            + $"{result.Counters.VariantsRejected} rebotadas · {result.Counters.VariantsInsisted} insistidas · "
             + $"{result.Counters.LocationsAdded} ubicaciones · {clock.Elapsed.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)} s");
 
         // El barrido pasada a pasada, que es el dato de F24: dónde deja de aportar.
@@ -176,8 +167,7 @@ internal static class SweepBench
             string trace = string.Join(" · ", (unit.Passes ?? new List<UnitPassRecord>()).Select(p =>
                 $"p{p.Index}: {(p.Dry ? "seca" : $"{p.New}n")}"
                 + (p.LocationsAdded > 0 ? $"+{p.LocationsAdded}u" : string.Empty)
-                + (p.VariantsRejected > 0 ? $" [{p.VariantsRejected} reb]" : string.Empty)
-                + (p.VariantsInsisted > 0 ? $" [{p.VariantsInsisted} ins]" : string.Empty)));
+));
             Console.WriteLine($"  {Short(unit.Unit)}: {trace}");
         }
 

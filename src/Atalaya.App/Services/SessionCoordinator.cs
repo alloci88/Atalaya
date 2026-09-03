@@ -196,23 +196,6 @@ public sealed class SessionCoordinator
     /// de la otra.
     /// </para>
     /// </summary>
-    /// <summary>
-    /// <b>La regla de variantes de esta sesión</b> (F24). Null —lo normal— significa «lo que digan
-    /// los ajustes», donde va <b>apagada</b> de fábrica por lo medido en D-902. El banco la fuerza
-    /// para poder correr los dos brazos sin tocar los ajustes de nadie.
-    /// </summary>
-    public bool? VariantRuleOverride { get; init; }
-
-    /// <summary>
-    /// <b>Cuánto del contrato viaja en el prompt</b> (F24). Palanca de MEDIDA, como
-    /// <see cref="VariantRuleOverride"/>: en producción va siempre entera. Existe para mandar solo la
-    /// primera mitad —la que define qué es una variante y qué hacer— sin la segunda —la que le dice
-    /// al auditor que puede cerrar la unidad vacía—, que es la única forma de saber cuál de las dos
-    /// se cobra cobertura si alguna lo hace (D-902). Se ignora con la regla en
-    /// <c>false</c>: sin regla no hay contrato que graduar.
-    /// </summary>
-    public VariantContractLevel ContractLevel { get; init; } = VariantContractLevel.Full;
-
     public event Action<string, string>? UnitPhaseChanged;   // (path, phase)
 
     // ---- Superficie de OBSERVACIÓN (F5.2) ----
@@ -512,18 +495,9 @@ public sealed class SessionCoordinator
         // como los patrones y las directivas: la misma en todas las unidades. Decide con qué
         // temática nacen los hallazgos nuevos, qué existentes se reconcilian y qué dice el prompt.
         AuditTheme theme = inventory.Theme;
-
-        // F24 — la regla de variantes sale de los AJUSTES, donde va apagada de fábrica (D-902), y el
-        // banco la fuerza para medir sin tocar los ajustes de nadie. Se resuelve UNA vez y vale para
-        // toda la sesión, como la temática y los patrones: cambiarla a mitad de un barrido haría que
-        // unas pasadas jugaran con unas reglas y otras con otras.
-        bool variantRule = VariantRuleOverride ?? _settings.Current.VariantRule;
         var toolbox = new SessionToolbox(
             request.Slug, request.Mode, stamp, _ingestion, _reconciliation, _hub.Store, clone!, OnFinding,
-            patterns, theme)
-        {
-            VariantGate = variantRule,
-        };
+            patterns, theme);
         var auditedPaths = new HashSet<string>(StringComparer.Ordinal);
         int incompleteUnits = 0;
 
@@ -601,8 +575,7 @@ public sealed class SessionCoordinator
                     // que varíe por unidad ni por pasada, y lo variable detrás. Concatenarlo da el
                     // prompt de siempre byte a byte; quien sepa marcar el prefijo lo marca.
                     ComposedUnitPrompt composed = PromptComposer.Compose(
-                        unit.Path, content, brief, request.Mode, listed, patterns, directives, theme, offTheme,
-                        variantRule ? ContractLevel : VariantContractLevel.None);
+                        unit.Path, content, brief, request.Mode, listed, patterns, directives, theme, offTheme);
                     string prompt = composed.Text;
                     breakdown.PromptTokensEstimate += EstimateTokens(prompt);
 
@@ -659,8 +632,7 @@ public sealed class SessionCoordinator
                     var passRecord = new UnitPassRecord(
                         pass, toolbox.PassNew, toolbox.PassConfirmed, toolbox.PassResolved,
                         toolbox.PassNonVerifiable, toolbox.PassRejected, dry, toolbox.LastUnitSummary,
-                        toolbox.PassLocationsAdded, toolbox.PassDisputed,
-                        toolbox.PassVariantsRejected, toolbox.PassVariantsInsisted);
+                        toolbox.PassLocationsAdded, toolbox.PassDisputed);
                     passes.Add(passRecord);
                     PassFinished?.Invoke(unit.Path, passRecord);
 
@@ -678,15 +650,6 @@ public sealed class SessionCoordinator
                     foreach (string degraded in toolbox.DegradedVerdicts)
                     {
                         session.Notes.Add($"{unit.Path} (pasada {pass}): veredicto degradado · {degraded}");
-                    }
-
-                    // F24: lo que entró INSISTIDO queda con su motivo. La app no ha decidido que dos
-                    // hallazgos sean el mismo problema —eso lo decide el auditor y dispone la
-                    // persona—; lo que no puede pasar es que haya dicho «esto se parece a aquello»,
-                    // que le contesten que no, y que de ese cruce no quede rastro.
-                    foreach (string insisted in toolbox.InsistedVariants)
-                    {
-                        session.Notes.Add($"{unit.Path} (pasada {pass}): {insisted}");
                     }
 
                     // F5.12: lo que el auditor declaró haberse callado, con nombre y apellidos. Una
@@ -741,7 +704,6 @@ public sealed class SessionCoordinator
                     toolbox.RejectedPayloads.Clear();
                     toolbox.RejectionReasons.Clear();
                     toolbox.DegradedVerdicts.Clear();
-                    toolbox.InsistedVariants.Clear();
                     toolbox.SuppressedByPattern.Clear();
                     toolbox.ToolCallLog.Clear();
                 }

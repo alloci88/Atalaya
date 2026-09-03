@@ -12107,3 +12107,55 @@ la marca de posibles duplicados de F23, que no cuesta nada.
 mecanismo tiene una explicación causal —secar antes es dejar de mirar antes—, pero esto no es una
 demostración: es lo suficiente para no encender algo por defecto, que es precisamente la decisión que
 se ha tomado.
+
+### D-907 — La regla se RETIRA. No es consistente y no aporta
+
+Sustituye a D-906, que la dejaba detrás de un interruptor apagado. Se quita del todo: las dos capas,
+`distinctFrom`, los contadores y el ajuste. El registro de la medida se queda entero —D-895 a D-905—
+porque lo que costó averiguar no se tira; lo que se tira es el código.
+
+**Por qué no vale ni apagada.** Un interruptor apagado no es gratis: es superficie de producto que
+hay que explicar en el MANUAL, mantener en el prompt, arrastrar en el payload de la tool y probar en
+cada fase. Se paga siempre y solo serviría si alguien lo encendiera — y lo medido dice que no debería
+encenderlo nadie:
+
+- **No es consistente.** Con `sonnet` el fenómeno ni siquiera se reproduce: los cinco pares del caso
+  de referencia no reaparecen con la regla ni sin ella (D-902). Con `opus` sí se reproduce, pero la
+  regla convergió en 2 de 3 tandas y en la tercera se comportó igual que sin ella (D-904). Una regla
+  cuyo efecto depende del modelo y falla una de cada tres veces no es una regla, es una tendencia.
+- **No aporta lo que prometía.** El filtro **rebotó una sola vez en nueve tandas**, y esa vez fue un
+  **falso positivo** (D-905). Los cinco pares que motivaron la fase los evitaba —cuando los
+  evitaba— el contrato, no el filtro; y dos de los cinco el filtro no podía verlos por construcción.
+- **Y lo que sí hacía, se pagaba.** La convergencia venía de la segunda mitad del contrato, y con
+  ella se iban defectos reales: «sin Timeout» de 3/3 a 1/3, el `Content-Type` sin validar de 3/3 a
+  ninguna. Las tandas que convergieron son las que menos encontraron.
+
+**La norma que decide es la de siempre**: lo que ahorra pasadas y se paga en hallazgos que no
+aparecen no entra. Es la que tumbó la hipótesis B de F20 (D-874), y aquí se aplica igual — con la
+diferencia de que allí la caída fue clara y aquí ha hecho falta medirla tres veces para verla.
+
+**Lo que SÍ se queda, porque no se paga en cobertura y arregla cosas que estaban mal:**
+
+- **El `symbol` obligatorio** (D-898). Era optativo y había proveedores que no lo mandaban, así que
+  la marca de posibles duplicados del §5 de F23 se apagaba en silencio. Medido después del arreglo:
+  0 de 15 hallazgos sin símbolo, contra 15 de 16 antes. Es la mejora más sólida de toda la fase y no
+  tiene nada que ver con la regla que se retira.
+- **El criterio por conjuntos** (D-899b). Un defecto sistémico llega con varios miembros en el mismo
+  campo —6 de 60 medidos— y comparando cadenas eran dos sitios distintos siendo el mismo. Con dos
+  miembros sueltos la intersección es la igualdad de antes, así que lo que F23 midió sigue valiendo.
+- **El modo `barrido` del banco.** Es lo único que sabe contestar «cuántas pasadas hacen falta» con
+  la aplicación de verdad delante —coordinador, toolbox, reconciliación y regla de parada— y esa
+  pregunta sigue viva aunque esta respuesta se haya caído.
+- **El registro de la medida**, D-895 a D-905, con su lista de los ~20 defectos, sus tablas y sus dos
+  correcciones. Quien vuelva a esto empieza sabiendo lo que ya se probó y lo que costó.
+
+**Y el prompt vuelve al de antes**, con un test que lo fija frase a frase y por tamaño: ~3.094 tokens
+de prefijo estable contra los ~3.056 de antes de F24, y esos 38 de diferencia son la línea del
+`symbol`. El contrato eran ~390 tokens en cada llamada de cada sesión; que vuelva a colarse ahí no
+rompería nada, solo gastaría — por eso hay un rojo que lo impide.
+
+> **Lo que esta fase deja aprendido, que no es poco.** Que la reconciliación de F4 y `add_locations`
+> de F4.1 no cubren el caso de la variante, y sigue sin cubrirse. Que el criterio de F23 dependía de
+> un campo que no siempre llegaba. Que el corte de F21 se cae a veces con `opus`. Y que un cambio de
+> prompt que hace converger el barrido hay que mirarlo con la lista de defectos en la mano, porque
+> converger antes y mirar menos son lo mismo visto desde dos sitios.

@@ -108,27 +108,6 @@ public sealed record ComposedUnitPrompt(
     public string Text => StablePrefix + UnitPart;
 }
 
-/// <summary>
-/// <b>Cuánto del contrato de variantes se le manda al auditor</b> (F24). Es una palanca de MEDIDA:
-/// en producción va siempre <see cref="Full"/>. Existe porque el contrato tiene dos mitades que
-/// hacen cosas distintas —una define qué es una variante, la otra le dice que puede terminar— y
-/// medirlas juntas no permite saber cuál de las dos se cobra cobertura, si es que alguna lo hace.
-/// </summary>
-public enum VariantContractLevel
-{
-    /// <summary>Nada: el prompt es exactamente el de antes de F24. La línea base.</summary>
-    None,
-
-    /// <summary>
-    /// Solo la definición y qué hacer —mismo sitio no se emite, otro punto es <c>add_locations</c>—
-    /// sin decirle que puede cerrar la unidad vacía. Es la mitad que no toca lo que busca.
-    /// </summary>
-    Core,
-
-    /// <summary>El contrato entero. Lo que va en producción.</summary>
-    Full,
-}
-
 /// <summary>Composes the exact prompts sent to the agent (§5.1.3, §5.4, §6.4).</summary>
 public static class PromptComposer
 {
@@ -175,16 +154,7 @@ public static class PromptComposer
         —está en la lista de abajo, o lo acabas de reportar en esta unidad— no crees otro: llama a
         add_locations(findingId, locations) para extenderlo con los sitios nuevos. Fragmentar un
         defecto por miembro infla el baseline y no aporta información.
-        """;
 
-    /// <summary>
-    /// Lo que hay que ENTREGAR y en qué forma. Se separa de <see cref="AuditorRules"/> solo para que
-    /// <see cref="VariantContract"/> pueda ir en medio, que es su sitio: cierra el argumento del
-    /// defecto sistémico —un defecto en N sitios es UN hallazgo— antes de decir con qué
-    /// herramientas se entrega. Concatenadas dan el texto de siempre.
-    /// </summary>
-    private const string AuditorDeliverables =
-        """
         Tienes dos cosas que entregar en cada unidad:
 
         1) RECONCILIAR los hallazgos que ya existen en esta unidad (se te listan abajo). Llama UNA vez a
@@ -270,50 +240,6 @@ public static class PromptComposer
     /// quedan a cargo SOLO de este texto.
     /// </para>
     /// </summary>
-    private const string VariantContractCore =
-        """
-        UNA VARIANTE NO ES UN HALLAZGO NUEVO. Volver a contar un defecto que YA está reportado —con
-        otro título, bajo otra regla, por su consecuencia o ampliándolo— no lo convierte en otro.
-        "Existente" es la lista de abajo Y lo que tú mismo hayas reportado en esta unidad. Solo hay
-        dos casos, y ninguno es submit_findings:
-          - MISMO defecto en el MISMO sitio: ya está reportado, NO emitas nada. No hay forma de
-            retocar su título ni su descripción, y no hace falta.
-          - MISMO defecto en OTRO punto de la unidad: add_locations(findingId, locations) sobre el
-            que ya existe.
-        Es el MISMO defecto aunque lo enfoques de otra manera: un `.Result` bloqueante y "síncrono
-        sobre API async"; "sin Timeout" y "sin CancellationToken" en la misma llamada; "división por
-        cero" y "no valida signos" sobre el mismo argumento; y una desreferencia nula ya reportada
-        no es otra por ocurrir además en otro método — eso es add_locations.
-        Si de verdad es OTRO defecto y la aplicación te lo devuelve por parecido, reenvíalo con
-        distinctFrom = el ULID al que se parece y distinctReason = en qué se diferencia: entra
-        siempre y queda registrado como insistido.
-        """;
-
-    /// <summary>
-    /// <b>La segunda mitad del contrato</b> (F24 §1): que en cada vuelta se busca lo que FALTA, y que
-    /// una unidad agotada se cierra vacía.
-    /// <para>
-    /// <b>Va aparte porque es la mitad sospechosa.</b> La primera mitad define qué es una variante y
-    /// qué hacer con ella —es una regla de forma y no toca lo que el auditor busca—; ésta le dice
-    /// que puede terminar, y ahí es donde un modelo puede dejar de mirar antes de tiempo. Con
-    /// `opus`, la tanda con el contrato entero perdió cinco defectos distintos frente a la tanda sin
-    /// contrato, uno de ellos de los tardíos reales (D-902), y la hipótesis a descartar es
-    /// justamente ésta.
-    /// </para>
-    /// <para>
-    /// Separarlas permite medir la mitad sin la otra, que es la única forma de saber cuál cuesta
-    /// cobertura. Ver <see cref="VariantContractLevel"/>.
-    /// </para>
-    /// </summary>
-    private const string VariantContractSearch =
-        """
-        BUSCA LO QUE FALTA, NO "MÁS". Esta unidad se te pedirá varias veces y lo que se te pide en
-        cada vuelta es lo que aún NO está reportado. Una unidad de la que ya has sacado todo se
-        cierra con submit_findings vacío y unit_done: es una respuesta CORRECTA y COMPLETA, y es la
-        que termina el barrido. Rellenarla con reformulaciones no añade cobertura: mantiene vivo el
-        barrido y hace que se pague otra pasada entera.
-        """;
-
     /// <param name="directives">
     /// Las convenciones intencionales del proyecto, ya recortadas al presupuesto (F7). Van
     /// DESPUÉS del brief y antes de todo lo demás: el brief dice qué se busca, y las directivas
@@ -336,10 +262,8 @@ public static class PromptComposer
         PatternSilenceSet? patterns = null,
         DirectiveBundle? directives = null,
         AuditTheme theme = AuditTheme.General,
-        IReadOnlyList<ExistingFinding>? offTheme = null,
-        VariantContractLevel variantContract = VariantContractLevel.Full)
-        => Compose(unitPath, unitContent, brief, mode, existing, patterns, directives, theme, offTheme,
-            variantContract).Text;
+        IReadOnlyList<ExistingFinding>? offTheme = null)
+        => Compose(unitPath, unitContent, brief, mode, existing, patterns, directives, theme, offTheme).Text;
 
     /// <summary>
     /// El mismo prompt, <b>partido por donde la caché lo parte</b> y con la cuenta de lo que aporta
@@ -364,26 +288,11 @@ public static class PromptComposer
         PatternSilenceSet? patterns = null,
         DirectiveBundle? directives = null,
         AuditTheme theme = AuditTheme.General,
-        IReadOnlyList<ExistingFinding>? offTheme = null,
-        VariantContractLevel variantContract = VariantContractLevel.Full)
+        IReadOnlyList<ExistingFinding>? offTheme = null)
     {
         // ------------------------------ ESTABLE (cacheable) ------------------------------
         var reglas = new StringBuilder();
         reglas.AppendLine(AuditorRules);
-        reglas.AppendLine();
-        if (variantContract != VariantContractLevel.None)
-        {
-            reglas.AppendLine(VariantContractCore);
-            if (variantContract == VariantContractLevel.Full)
-            {
-                reglas.AppendLine();
-                reglas.AppendLine(VariantContractSearch);
-            }
-
-            reglas.AppendLine();
-        }
-
-        reglas.AppendLine(AuditorDeliverables);
         reglas.AppendLine($"MODO: {mode}. Los hallazgos nuevos nacen con la confianza que la app asigne.");
         reglas.AppendLine();
 

@@ -182,48 +182,6 @@ public static class ReportBuilder
         sb.AppendLine();
     }
 
-    /// <summary>
-    /// <b>Lo que costó la puerta de las variantes</b> (F24), en el anexo y no en el cuerpo: quien
-    /// viene a arreglar su código no necesita saber cuántas veces el auditor volvió a contar lo
-    /// mismo, y quien mantiene Atalaya no puede saberlo de otra manera.
-    /// <para>
-    /// Los dos números dicen cosas distintas. Los <b>rebotados</b> son variantes que no llegaron a
-    /// entrar: cada uno costó una llamada de más dentro de la pasada y ahorró la pasada entera que
-    /// habría mantenido vivo el barrido. Los <b>insistidos</b> son los que el auditor sostuvo como
-    /// defectos distintos y por eso entraron: si ese número creciera hasta igualar al otro, el
-    /// filtro estaría cobrando la llamada sin evitar nada, y se vería aquí antes que en la factura.
-    /// </para>
-    /// <para>
-    /// Cuando no hubo ninguno no se escribe la línea: un cero permanente enseña el hueco de un
-    /// problema que no ha ocurrido.
-    /// </para>
-    /// </summary>
-    private static void AppendVariantLine(StringBuilder sb, AuditSession session)
-    {
-        int rejected = session.Counters.VariantsRejected;
-        int insisted = session.Counters.VariantsInsisted;
-        if (rejected == 0 && insisted == 0)
-        {
-            return;
-        }
-
-        sb.AppendLine($"- **Variantes** (F24): {rejected} rebotada(s) en la puerta · {insisted} insistida(s) "
-            + "con `distinctFrom`");
-
-        var perUnit = session.Units
-            .Select(u => (u.Unit, Passes: u.Passes ?? new List<UnitPassRecord>()))
-            .Where(u => u.Passes.Any(p => p.VariantsRejected > 0 || p.VariantsInsisted > 0))
-            .ToList();
-        foreach ((string unit, List<UnitPassRecord> passes) in perUnit)
-        {
-            string detail = string.Join(" · ", passes
-                .Where(p => p.VariantsRejected > 0 || p.VariantsInsisted > 0)
-                .Select(p => $"pasada {p.Index}: {p.VariantsRejected} rebotada(s)"
-                    + (p.VariantsInsisted > 0 ? $", {p.VariantsInsisted} insistida(s)" : string.Empty)));
-            sb.AppendLine($"  - {unit}: {detail}");
-        }
-    }
-
     /// <summary>Milisegundos leídos como segundos con un decimal. «—» cuando no se midió.</summary>
     private static string Seconds(long ms)
         => ms <= 0 ? "—" : (ms / 1000.0).ToString("0.#", Culture) + " s";
@@ -743,7 +701,6 @@ public static class ReportBuilder
         }
 
         sb.AppendLine($"- **Inventario**: {pendingUnits} pendiente(s) · {largeUnits} grande(s)");
-        AppendVariantLine(sb, session);
         sb.AppendLine();
 
         if (session.UsageBreakdown.Count > 0)
