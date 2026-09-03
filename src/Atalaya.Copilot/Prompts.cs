@@ -4,11 +4,35 @@ using Atalaya.Domain.Model;
 
 namespace Atalaya.Copilot;
 
+/// <summary>
+/// El brief del auditor, partido por donde se mide (F18 §1). Las dos piezas siempre viajan
+/// juntas y en este orden; se separan para poder decir cuánto cuesta cada una sin volver a
+/// componer el texto por otro camino — que es como se acaba teniendo dos versiones del prompt.
+/// </summary>
+/// <param name="Rubric">La cabecera y la rúbrica de severidad citada del fichero versionado.</param>
+/// <param name="Catalog">Los pilares del catálogo, las áreas de criterio y las notas del stack.</param>
+public sealed record AuditorBrief(string Rubric, string Catalog)
+{
+    public string Text => Rubric + Catalog;
+
+    public override string ToString() => Text;
+
+    /// <summary>
+    /// Un brief que llega como texto suelto —los tests, y cualquier llamada que no distinga las
+    /// piezas— se cuenta entero como catálogo. No se parte adivinando dónde acaba la rúbrica:
+    /// una heurística sobre el propio prompt sería un dato inventado (N-2).
+    /// </summary>
+    public static implicit operator AuditorBrief(string text) => new(string.Empty, text);
+}
+
 /// <summary>Builds the auditor brief per stack (§6.4) from the versioned rule catalog.</summary>
 public static class PillarBrief
 {
+    /// <inheritdoc cref="Parts"/>
+    public static string For(TechStack stack) => Parts(stack).Text;
+
     /// <summary>
-    /// El brief del stack, con el catálogo ENTERO.
+    /// El brief del stack, con el catálogo ENTERO, en sus dos piezas.
     /// <para>
     /// F5.12 devolvió el catálogo a su sitio: es metadato informativo (búsqueda, métricas, «qué
     /// busca» en la ficha) y ya no una superficie de gobernanza. Lo que esta aplicación ha decidido
@@ -17,7 +41,7 @@ public static class PillarBrief
     /// semántica, y las semánticas las contesta el modelo, no un diccionario mantenido a mano.
     /// </para>
     /// </summary>
-    public static string For(TechStack stack)
+    public static AuditorBrief Parts(TechStack stack)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"BRIEF DE AUDITOR — stack {stack}.");
@@ -28,7 +52,9 @@ public static class PillarBrief
         // críticas donde había una.
         sb.AppendLine(SeverityRubric.Text);
         sb.AppendLine();
+        string rubric = sb.ToString();
 
+        sb = new StringBuilder();
         foreach (Pillar pillar in new[] { Pillar.Errores, Pillar.Optimizacion, Pillar.Mejoras })
         {
             var rules = RuleCatalog.Rules.Where(r => r.Pillar == pillar).ToList();
@@ -50,7 +76,7 @@ public static class PillarBrief
         sb.AppendLine("  " + string.Join(", ", RuleCatalog.CriterioAreas));
         sb.AppendLine();
         sb.AppendLine(StackNotes(stack));
-        return sb.ToString();
+        return new AuditorBrief(rubric, sb.ToString());
     }
 
     private static string StackNotes(TechStack stack) => stack switch
@@ -64,6 +90,22 @@ public static class PillarBrief
         TechStack.CCpp => "Notas C/C++: gestión de memoria, desbordamientos, UB, RAII.",
         _ => "Notas: revisa gestión de recursos, concurrencia, entrada no confiable y rendimiento en caliente.",
     };
+}
+
+/// <summary>
+/// Un prompt de unidad ya compuesto, con la costura entre lo que se puede cachear y lo que no
+/// (F18 §2), y con la cuenta de lo que aporta cada bloque.
+/// </summary>
+/// <param name="StablePrefix">
+/// Idéntico byte a byte en todas las unidades y en todas las pasadas de una sesión. Si algo que
+/// varía se colara aquí, cada unidad invalidaría la caché entera — y la factura no lo diría.
+/// </param>
+/// <param name="UnitPart">Lo que cambia: los hallazgos conocidos de la unidad y su código.</param>
+public sealed record ComposedUnitPrompt(
+    string StablePrefix, string UnitPart, PromptComposition Composition)
+{
+    /// <summary>El prompt entero, tal y como se manda cuando el proveedor no sabe partirlo.</summary>
+    public string Text => StablePrefix + UnitPart;
 }
 
 /// <summary>Composes the exact prompts sent to the agent (§5.1.3, §5.4, §6.4).</summary>
@@ -178,37 +220,94 @@ public static class PromptComposer
     /// una temática concreta; en un ciclo General todo se reconcilia y esta lista va vacía.
     /// </param>
     public static string ComposeUnitPrompt(
-        string unitPath, string unitContent, string brief, AuditMode mode,
+        string unitPath, string unitContent, AuditorBrief brief, AuditMode mode,
+        IReadOnlyList<ExistingFinding>? existing = null,
+        PatternSilenceSet? patterns = null,
+        DirectiveBundle? directives = null,
+        AuditTheme theme = AuditTheme.General,
+        IReadOnlyList<ExistingFinding>? offTheme = null)
+        => Compose(unitPath, unitContent, brief, mode, existing, patterns, directives, theme, offTheme).Text;
+
+    /// <summary>
+    /// El mismo prompt, <b>partido por donde la caché lo parte</b> y con la cuenta de lo que aporta
+    /// cada bloque (F18 §§1–2).
+    /// <para>
+    /// <b>El orden ya era el correcto y esto lo fija.</b> Lo estable —reglas, rúbrica, catálogo,
+    /// temática, directivas y patrones silenciados— va primero y no cambia ni entre unidades ni
+    /// entre pasadas de una sesión; lo variable —los hallazgos conocidos de la unidad y su código—
+    /// va después. Un proveedor cuya caché se dirija por prefijo puede así reutilizar el primer
+    /// tramo entero; uno que sepa marcarlo explícitamente sabe dónde poner la marca.
+    /// </para>
+    /// <para>
+    /// <b>Concatenar las dos piezas da byte a byte el prompt de siempre.</b> Eso no es una
+    /// casualidad que haya que cuidar a mano: hay un test que lo fija, y otro que comprueba que en
+    /// la pieza estable no se cuela nada que varíe por unidad ni por pasada. Un prefijo que se
+    /// contamina no falla: gasta, en silencio.
+    /// </para>
+    /// </summary>
+    public static ComposedUnitPrompt Compose(
+        string unitPath, string unitContent, AuditorBrief brief, AuditMode mode,
         IReadOnlyList<ExistingFinding>? existing = null,
         PatternSilenceSet? patterns = null,
         DirectiveBundle? directives = null,
         AuditTheme theme = AuditTheme.General,
         IReadOnlyList<ExistingFinding>? offTheme = null)
     {
-        var sb = new StringBuilder();
-        sb.AppendLine(AuditorRules);
-        sb.AppendLine($"MODO: {mode}. Los hallazgos nuevos nacen con la confianza que la app asigne.");
-        sb.AppendLine();
-        sb.AppendLine(brief);
+        // ------------------------------ ESTABLE (cacheable) ------------------------------
+        var reglas = new StringBuilder();
+        reglas.AppendLine(AuditorRules);
+        reglas.AppendLine($"MODO: {mode}. Los hallazgos nuevos nacen con la confianza que la app asigne.");
+        reglas.AppendLine();
+
+        // El brief entra en dos trozos por el mismo AppendLine de siempre: la rúbrica arrastra el
+        // salto que separaba las piezas, así que el texto resultante no cambia ni un byte.
+        var rubrica = new StringBuilder();
+        rubrica.Append(brief.Rubric);
+        var catalogo = new StringBuilder();
+        catalogo.AppendLine(brief.Catalog);
+
+        var tematica = new StringBuilder();
         if (theme != AuditTheme.General)
         {
-            sb.AppendLine(ThemeSection.Render(theme));
+            tematica.AppendLine(ThemeSection.Render(theme));
         }
 
-        sb.AppendLine(DirectiveSection.Render(directives ?? DirectiveBundle.Empty, DirectivePurpose.Auditoria));
-        sb.AppendLine(PatternBlock(patterns));
-        sb.AppendLine(ExistingBlock(unitPath, existing, theme));
+        var directivas = new StringBuilder();
+        directivas.AppendLine(DirectiveSection.Render(directives ?? DirectiveBundle.Empty, DirectivePurpose.Auditoria));
+
+        var patrones = new StringBuilder();
+        patrones.AppendLine(PatternBlock(patterns));
+
+        // ------------------------------ VARIABLE (por unidad) ----------------------------
+        var existentes = new StringBuilder();
+        existentes.AppendLine(ExistingBlock(unitPath, existing, theme));
         if (theme != AuditTheme.General)
         {
-            sb.Append(OffThemeBlock(unitPath, offTheme));
+            existentes.Append(OffThemeBlock(unitPath, offTheme));
         }
 
-        sb.AppendLine($"UNIDAD: {unitPath}");
-        sb.AppendLine("CONTENIDO ÍNTEGRO DE LA UNIDAD (entre marcadores):");
-        sb.AppendLine("<<<UNIT");
-        sb.AppendLine(unitContent);
-        sb.AppendLine("UNIT>>>");
-        return sb.ToString();
+        var unidad = new StringBuilder();
+        unidad.AppendLine($"UNIDAD: {unitPath}");
+        unidad.AppendLine("CONTENIDO ÍNTEGRO DE LA UNIDAD (entre marcadores):");
+        unidad.AppendLine("<<<UNIT");
+        unidad.AppendLine(unitContent);
+        unidad.AppendLine("UNIT>>>");
+
+        string stable = reglas.ToString() + rubrica + catalogo + tematica + directivas + patrones;
+        string variable = existentes.ToString() + unidad;
+
+        return new ComposedUnitPrompt(
+            stable,
+            variable,
+            new PromptComposition(
+                Reglas: PromptTokens.Estimate(reglas.ToString()),
+                Rubrica: PromptTokens.Estimate(rubrica.ToString()),
+                Catalogo: PromptTokens.Estimate(catalogo.ToString()),
+                Tematica: PromptTokens.Estimate(tematica.ToString()),
+                Directivas: PromptTokens.Estimate(directivas.ToString()),
+                Patrones: PromptTokens.Estimate(patrones.ToString()),
+                Existentes: PromptTokens.Estimate(existentes.ToString()),
+                Unidad: PromptTokens.Estimate(unidad.ToString())));
     }
 
     /// <summary>
