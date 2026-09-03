@@ -12159,3 +12159,131 @@ rompería nada, solo gastaría — por eso hay un rojo que lo impide.
 > un campo que no siempre llegaba. Que el corte de F21 se cae a veces con `opus`. Y que un cambio de
 > prompt que hace converger el barrido hay que mirarlo con la lista de defectos en la mano, porque
 > converger antes y mirar menos son lo mismo visto desde dos sitios.
+
+## M1 — Medida: la auditoría estructurada frente a la libre
+
+### D-908 — El brazo estructurado se midió y NO se hace fase: cumple tres de cuatro y falla la suya
+
+**Qué se midió y por qué.** F24 dejó dos hechos (D-907): el núcleo de defectos sale siempre, en la
+pasada 1 y con los mismos nombres; la cola varía de tanda a tanda, produce variantes en las pasadas
+tardías y es la mitad del coste. La hipótesis de M1 es que eso viene de **cómo se pregunta** —«audita
+esta clase» deja al modelo elegir qué contar y cómo llamarlo— y que un recorrido **miembro × familia**
+con la identidad fijada en `(regla, miembro)` no dejaría hueco donde poner una variante.
+
+**El brazo, y dónde vive.** Una palanca del banco (`--estructurado`) que sustituye el bloque
+`MÉTODO DE BARRIDO` —y solo ese bloque— por el recorrido estructurado. El resto del prompt no se
+toca; apagada, el prompt es byte a byte el de producción y hay test que lo compara carácter a
+carácter. Nada del producto cambia: esto es una medida.
+
+**Escenario**: `CalculadoraCarga.cs` y `ClienteRemoto.cs`, modo `barrido`, sin el corte de F21 (que
+con `opus` se cae 1 de 2), tope 6 y regla de parada como en producción. **Claude Code con `opus`**,
+tres tandas por brazo, brazos alternados para que la deriva temporal caiga igual en los dos.
+
+#### La pregunta que decide: con qué tope alcanza cada brazo la cobertura
+
+De los 19 defectos de D-895 presentes en las dos clases, media de tres tandas:
+
+| tope | libre (min/med/max) | estructurado (min/med/max) |
+|---:|---|---|
+| 1 | 15 / 15,3 / 16 | 15 / 15,3 / 16 |
+| 2 | 16 / 16,7 / 17 | 16 / 16,7 / 18 |
+| 3 | 16 / 17,0 / 18 | 17 / 17,3 / 18 |
+| **4** | 17 / 17,3 / 18 | 17 / **18,0** / 19 |
+| 5 | 17 / 17,3 / 18 | 17 / 18,0 / 19 |
+| 6 | 17 / **18,0** / 19 | 17 / 18,0 / 19 |
+
+**El estructurado alcanza con tope 4 la cobertura que el libre alcanza con tope 6**, y de ahí no
+sube ninguno de los dos. Es el hallazgo aprovechable de la medida, y es sobre el TOPE —el
+presupuesto— no sobre la regla de parada, que no se ha tocado.
+
+#### Núcleo, cola y estabilidad
+
+**Núcleo intacto en los dos.** Los 11 defectos que D-907 llamó núcleo salen **3 de 3 en ambos
+brazos**, casi todos en la pasada 1. Ningún brazo lo pierde, que era la condición de que la medida
+sirviera para algo (D-874, D-907).
+
+**Estabilidad**: el libre saca 16 de 19 defectos en las tres tandas; el estructurado, 17. La
+diferencia son cuatro defectos que se mueven, dos a cada lado: el estructurado gana «endpoint
+hardcodeado» y «respuesta sin parsear» (2/3 → 3/3) y pierde «sin logging» (3/3 → 2/3) y «lectura sin
+límite» (2/3 → 1/3). Es una mejora marginal, no un cambio de régimen.
+
+#### Variantes: la condición que falla, y es la suya
+
+Contadas a mano, con el marcador de F23 como ayuda y no como juez:
+
+- **La variante recurrente del caso real desaparece.** El `.Result` y su consecuencia
+  («`Task.Result` envuelve el fallo en `AggregateException`») salen como **dos fichas en las 3 tandas
+  del libre** y como **una sola en las 3 del estructurado**. Es exactamente el par P2 de D-895, y ahí
+  la estructura hace lo que prometía.
+- **Pero no es cero por construcción.** El estructurado generó un racimo nuevo de **tres
+  `criterio.dominio` solapadas** sobre `CargaEspecifica` («uso de double sin unidades», «precondiciones
+  no validadas», «queda fuera del modelo de dominio»). Contando pares de misma regla con miembros que
+  se cortan: **libre 15, estructurado 13** en tres tandas — empate dentro del ruido.
+
+**La variante se muda del catálogo al criterio, no desaparece.** Y la causa se ve en el propio
+brazo: la identidad `(regla, miembro)` es nítida mientras la regla viene del catálogo, y se deshace
+en `criterio.<área>`, donde «dominio» cabe todo. Un recorrido no puede agotar una familia que no
+tiene bordes.
+
+#### Fuera de catálogo: al revés de lo esperado
+
+La hipótesis decía que el 78 % de los hallazgos vienen del catálogo y que el hueco libre sería
+pequeño. Medido: el estructurado produce **más** fuera de catálogo, no menos — **56 % contra 44 %**.
+La causa está escrita en el propio brazo: el paso 4 («al final, lo que no encaje en ninguna regla»)
+convierte en **etapa obligatoria** lo que en el libre era residuo. Se le hizo un sitio y lo llenó.
+
+#### Coste
+
+Empatado o algo mejor: **30,3 hallazgos por tanda contra 32,7**, **81,3 k tokens de salida contra
+85,2 k**, y los dos agotan el tope de 6 en 11 de las 12 unidades. Las llamadas se solapan (libre
+12–19, estructurado 12–20). La estructura **no** cierra el barrido antes.
+
+#### Miembros enumerados frente a los reales
+
+Los dos brazos nombran los **10 miembros reales** (4 de `CalculadoraCarga`, 6 de `ClienteRemoto`) en
+las **6 tandas**. La enumeración no era el problema y darla hecha no habría cambiado nada — y el
+inventario no la tiene: solo guarda ruta, módulo, LOC y hash, y `MethodBoundary` es una consulta
+puntual, no un enumerador.
+
+#### Control temático (F17, D-825)
+
+Con la lupa de Seguridad sobre `ClienteRemoto`, una tanda por brazo. **Ninguno se sale de la lupa**:
+las únicas reglas emitidas son `criterio.seguridad`, `errores.seguridad.inyeccion` y
+`errores.seguridad.secreto-en-codigo` en los dos. El recorrido miembro × familia **no abre la puerta
+que el enfoque cerró**, que era el riesgo declarado del brazo.
+
+Con un matiz de coste que conviene anotar: el libre cierra en **3 pasadas, 6 llamadas y 4 hallazgos**
+(veredicto `auditada`), y el estructurado sigue excavando hasta **6 pasadas, 12 llamadas y 9
+hallazgos** sin converger. Bajo lupa, la exhaustividad del recorrido cuesta el doble y encuentra más;
+cuál de las dos cosas se quiere es una decisión de producto que esta medida no toma.
+
+#### La respuesta del §3
+
+De las cuatro condiciones que harían del estructurado una fase, cumple **tres**: mismo núcleo, más
+defectos en 3 de 3 (17 contra 16) y coste igual o menor. **Falla la de menos variantes, que era su
+razón de ser**: las quita del catálogo y las pone en el criterio, con el total sin mover.
+
+**No se hace fase.** Lo que queda escrito es el hallazgo del tope, que es aprovechable sin cambiar
+nada de cómo se pregunta, y la causa de que el brazo no cumpliera: **una identidad solo es identidad
+mientras la familia tenga bordes**, y `criterio.<área>` no los tiene.
+
+### D-909 — Encontrado midiendo: el guardarraíl del prefijo estable lleva roto desde F17
+
+No es de M1 y por eso va aparte. Midiendo lo que ocupaba el brazo se vio que **el prefijo estable de
+PRODUCCIÓN ya se pasa del techo de F19 en cuanto el ciclo es temático**:
+
+| brazo · lupa | prefijo estable |
+|---|---:|
+| libre · General | 3.096 |
+| **libre · Seguridad** | **3.645** |
+| estructurado · General | 3.189 |
+| estructurado · Seguridad | 3.767 |
+
+El techo son 3.500 y el bloque `ENFOQUE DEL CICLO` de F17 pesa **549 tokens**. No se había visto
+porque el test del guardarraíl —`El_prefijo_estable_no_puede_engordar_sin_que_salte_un_rojo`— compone
+en **General**, donde ese bloque no existe. El brazo de M1 suma 93 tokens y no es la causa.
+
+No se sube el techo ni se toca el prompt: se anota, y el test de M1 afirma lo que es cierto —que el
+brazo cuesta poco— en vez de una cifra cómoda. Quien lo arregle tiene dos caminos y ninguno es
+gratis: recortar el bloque de enfoque, o aceptar que un ciclo temático paga 550 tokens más en cada
+llamada y decirlo en el guardarraíl.

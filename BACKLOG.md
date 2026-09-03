@@ -22,6 +22,50 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   - **No se hace en F24**: toca el modelo del dominio y el formato en disco de todo lo guardado, y
     esta fase no cambia nada de lo que ya está en el hub. Con el conjunto, el caso medido queda
     cubierto.
+- **M1 — la auditoría estructurada se midió y NO se hace fase.** Recorrido miembro × familia con la
+  identidad del hallazgo fijada en `(regla, miembro)`, medido con `opus` en tres tandas por brazo
+  (D-908). Cumple tres de las cuatro condiciones —mismo núcleo, más defectos en 3 de 3, coste igual
+  o menor— y **falla la suya**: quita la variante del catálogo y la pone en el criterio, con el total
+  sin mover. La causa, escrita para que no se vuelva a intentar igual: **una identidad solo es
+  identidad mientras la familia tenga bordes**, y `criterio.<área>` no los tiene. La palanca se queda
+  en el banco (`--estructurado`), desarmada, por si alguien la retoma con otra idea para el criterio.
+- **M1-b — segunda versión del brazo estructurado, con UN solo cambio, y es la ÚLTIMA.** Se declara
+  aquí antes de medirla, como pide el anti-objetivo de M1: no se ajusta un brazo sobre la marcha
+  para que gane, se declara la versión siguiente y se mide aparte.
+  - **El cambio, uno y nada más**: el criterio del auditor **deja de ser una etapa**. En la v1 el
+    paso 4 decía «al final, lo que no encaje en ninguna regla», y eso convirtió el residuo en
+    trabajo obligatorio: el estructurado produjo **más** fuera de catálogo que el libre (56 % contra
+    44 %) y ahí es donde se le fueron las variantes que había quitado del catálogo (D-908). En la v2
+    el criterio solo admite un hallazgo **con una consecuencia que ninguna regla del catálogo
+    cubra**, y **uno por miembro** como mucho.
+  - **Todo lo demás igual**: mismo recorrido miembro × familia, misma identidad `(regla, miembro)`,
+    mismo escenario (las dos clases del banco, `opus`, tope 6, sin corte), tres tandas por brazo y
+    el mismo control temático. Si cambia algo más, no es la v2: es otra medida.
+  - **La condición de fase es la de M1 §3, sin rebajarla**: mismo núcleo, menos variantes, más
+    defectos en 3 de 3 y coste igual o menor. Con las cuatro se propone la fase; con menos se anota.
+  - **Y es la última.** Si la v2 tampoco quita variantes, la conclusión no es probar una v3: es que
+    la identidad del hallazgo no se arregla desde el prompt, y el sitio de esa pregunta es el modelo
+    de dominio —lo que ya apunta la deuda del símbolo por ubicación, más arriba en esta lista—.
+- **M1-c — el mismo retoque, pero sobre el prompt LIBRE, que es el que corre.** La v2 de arriba mide
+  el brazo estructurado; esto mide si el hallazgo se puede aprovechar sin cambiar cómo se pregunta.
+  - **El cambio**: acotar el criterio del auditor en el prompt de producción igual que en M1-b —solo
+    con una consecuencia que ninguna regla cubra, uno por miembro—, sin tocar el método de barrido.
+  - **Contra qué se mide, y esto es lo que lo hace barato**: las **tres tandas libres de M1 ya están
+    grabadas** y son la línea base —32,7 hallazgos por tanda, 44 % de criterio, 85,2 k tokens de
+    salida, 16 de 19 defectos en 3 de 3, y los 11 del núcleo en 3 de 3—. Basta con tres tandas
+    nuevas del prompt retocado y compararlas contra esas cifras.
+  - **Lo que decide**: que el núcleo siga en 3 de 3 y que baje el fuera de catálogo sin perder
+    defectos de la cola. Si pierde cola, se descarta — es la vara de D-874 y D-907.
+- **M1 — lo aprovechable de la medida: el TOPE, no el prompt.** El brazo estructurado alcanza con
+  **tope 4** la cobertura que el libre alcanza con **tope 6**, y de ahí no sube ninguno (D-908). Es
+  una palanca sobre el presupuesto, no sobre la regla de parada. Antes de tocar el tope de fábrica
+  hace falta la misma medida con Copilot y sobre unidades que no sean las dos del banco: con dos
+  clases de 34 líneas, «no sube de 18 de 19» puede ser del escenario y no del método.
+- **DEFECTO (fuera de M1) — el guardarraíl del prefijo estable lleva roto desde F17.** Con lupa el
+  prefijo de producción vale **3.645** contra un techo de **3.500**, porque el bloque `ENFOQUE DEL
+  CICLO` pesa 549 tokens (D-909). No se había visto porque el test compone en General, donde ese
+  bloque no existe. Dos caminos, ninguno gratis: recortar el bloque, o aceptar que un ciclo temático
+  paga ~550 tokens más por llamada y **decirlo en el guardarraíl** en vez de que salte por sorpresa.
 - **Variantes: observadas con `opus`, y si se retoma se empieza por el banco.** El mismo defecto
   contado dos veces —otra regla, otra consecuencia, otro título— existe: se vio en el informe de
   referencia con Copilot y se reprodujo con `opus` (mismo sitio y mismo miembro bajo reglas
