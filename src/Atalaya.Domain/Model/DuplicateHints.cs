@@ -41,6 +41,16 @@ namespace Atalaya.Domain.Model;
 /// ausente) no comparten regla. Los dos casos existen en el informe de referencia y los dos se
 /// quedan sin marcar. Es el precio de no inventar.
 /// </para>
+/// <para>
+/// <b>Y desde F24 este criterio se aplica DOS veces</b>, con esta misma implementación y no con una
+/// copia: aquí, al escribir el informe, y en la puerta de <c>submit_findings</c>, donde un hallazgo
+/// que se parece a uno que ya existe se le devuelve al auditor para que diga si de verdad es otro.
+/// Son la misma pregunta en dos momentos, así que tienen que dar la misma respuesta — si el filtro
+/// tuviera su propio umbral, el informe marcaría cosas que el filtro dejó pasar y al revés, y nadie
+/// sabría cuál de los dos números mirar. El criterio vive en
+/// <see cref="AreSimilar(VariantKey, VariantKey)"/>, las dos capas lo llaman, y hay un test que lo
+/// fija.
+/// </para>
 /// </summary>
 public static class DuplicateHints
 {
@@ -48,6 +58,28 @@ public static class DuplicateHints
     /// A cuántas líneas puede estar un duplicado. Medido, no elegido: ver la tabla de arriba.
     /// </summary>
     public const int MaxLineDistance = 5;
+
+    /// <summary>
+    /// Lo ÚNICO que el criterio mira de un hallazgo: su regla, su ubicación principal y su símbolo
+    /// (F24). Existe para poder hacer la pregunta sobre algo que <b>todavía no es</b> un
+    /// <see cref="Finding"/> — el payload que el auditor acaba de entregar y que la app aún no ha
+    /// aceptado. Sin esta forma, el filtro de la puerta habría tenido que reimplementar el criterio
+    /// sobre el payload, que es exactamente lo que no puede pasar.
+    /// </summary>
+    /// <param name="RuleId">La regla declarada. Se compara sin distinguir mayúsculas.</param>
+    /// <param name="Path">La ruta de la ubicación PRINCIPAL (ver <see cref="AreSimilar(Finding, Finding)"/>).</param>
+    /// <param name="Line">La línea de esa misma ubicación.</param>
+    /// <param name="Symbol">El miembro, tal y como lo escribió el auditor; puede venir cualificado.</param>
+    public readonly record struct VariantKey(string RuleId, string Path, int Line, string? Symbol);
+
+    /// <summary>
+    /// La clave de un hallazgo ya guardado. <c>null</c> cuando no tiene ubicación: sin un sitio no
+    /// hay nada que comparar, y el criterio no adivina.
+    /// </summary>
+    public static VariantKey? KeyOf(Finding f)
+        => f.Locations.Count == 0
+            ? null
+            : new VariantKey(f.RuleId, f.Locations[0].Path, f.Locations[0].Line, f.Symbol);
 
     /// <summary>
     /// Los pares sospechosos de <paramref name="findings"/>, en el orden en que se le pasan — que
@@ -75,27 +107,32 @@ public static class DuplicateHints
         return hints;
     }
 
-    /// <summary>¿Son estos dos el mismo defecto contado dos veces? Ver el criterio de la clase.</summary>
+    /// <summary>
+    /// ¿Son estos dos el mismo defecto contado dos veces? Ver el criterio de la clase.
+    /// <para>
+    /// La ubicación que se compara es la <b>PRINCIPAL</b>, no todas. Un hallazgo con varias
+    /// ubicaciones es un defecto sistémico —el mismo problema en sitios distintos—, y es justo el
+    /// que menos probable es que duplique a un defecto puntual. Cruzando todas contra todas bastaba
+    /// con que dos ubicaciones cualesquiera cayeran cerca para marcar dos cosas que no tienen que
+    /// ver.
+    /// </para>
+    /// </summary>
     public static bool AreSimilar(Finding a, Finding b)
+        => KeyOf(a) is { } ka && KeyOf(b) is { } kb && AreSimilar(ka, kb);
+
+    /// <summary>
+    /// <b>El criterio, y el único sitio donde está escrito</b> (F24). Lo llaman la marca del informe
+    /// y el filtro de <c>submit_findings</c>; ver la explicación y la tabla de medida en la clase.
+    /// </summary>
+    public static bool AreSimilar(VariantKey a, VariantKey b)
     {
         if (!string.Equals(a.RuleId, b.RuleId, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        if (a.Locations.Count == 0 || b.Locations.Count == 0)
-        {
-            return false;
-        }
-
-        // La ubicación PRINCIPAL, no todas. Un hallazgo con varias ubicaciones es un defecto
-        // sistémico —el mismo problema en sitios distintos—, y es justo el que menos probable es
-        // que duplique a un defecto puntual. Cruzando todas contra todas bastaba con que dos
-        // ubicaciones cualesquiera cayeran cerca para marcar dos cosas que no tienen que ver.
-        Location la = a.Locations[0];
-        Location lb = b.Locations[0];
-        if (!string.Equals(la.Path, lb.Path, StringComparison.OrdinalIgnoreCase)
-            || Math.Abs(la.Line - lb.Line) > MaxLineDistance)
+        if (!string.Equals(a.Path, b.Path, StringComparison.OrdinalIgnoreCase)
+            || Math.Abs(a.Line - b.Line) > MaxLineDistance)
         {
             return false;
         }
@@ -109,7 +146,7 @@ public static class DuplicateHints
         // Y el símbolo tiene que ser un MIEMBRO, no la clase. Cuando el auditor ancla un hallazgo
         // a la clase entera solo está diciendo «en algún sitio de este fichero», que no distingue
         // nada: medido, era la mitad de las marcas falsas del caso de referencia.
-        return !IsTypeItself(member, la.Path) && !IsTypeItself(Member(b.Symbol), lb.Path);
+        return !IsTypeItself(member, a.Path) && !IsTypeItself(Member(b.Symbol), b.Path);
     }
 
     /// <summary>

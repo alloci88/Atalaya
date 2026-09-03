@@ -155,6 +155,28 @@ public static class PromptComposer
         add_locations(findingId, locations) para extenderlo con los sitios nuevos. Fragmentar un
         defecto por miembro infla el baseline y no aporta información.
 
+        UNA VARIANTE NO ES UN HALLAZGO NUEVO. Volver a contar un defecto que YA está reportado —con
+        otro título, bajo otra regla, por su consecuencia o ampliándolo— no lo convierte en otro.
+        "Existente" es la lista de abajo Y lo que tú mismo hayas reportado en esta unidad. Solo hay
+        dos casos, y ninguno es submit_findings:
+          - MISMO defecto en el MISMO sitio: ya está reportado, NO emitas nada. No hay forma de
+            retocar su título ni su descripción, y no hace falta.
+          - MISMO defecto en OTRO punto de la unidad: add_locations(findingId, locations) sobre el
+            que ya existe.
+        Es el MISMO defecto aunque lo enfoques de otra manera: un `.Result` bloqueante y "síncrono
+        sobre API async"; "sin Timeout" y "sin CancellationToken" en la misma llamada; "división por
+        cero" y "no valida signos" sobre el mismo argumento; y una desreferencia nula ya reportada
+        no es otra por ocurrir además en otro método — eso es add_locations.
+        Si de verdad es OTRO defecto y la aplicación te lo devuelve por parecido, reenvíalo con
+        distinctFrom = el ULID al que se parece y distinctReason = en qué se diferencia: entra
+        siempre y queda registrado como insistido.
+
+        BUSCA LO QUE FALTA, NO "MÁS". Esta unidad se te pedirá varias veces y lo que se te pide en
+        cada vuelta es lo que aún NO está reportado. Una unidad de la que ya has sacado todo se
+        cierra con submit_findings vacío y unit_done: es una respuesta CORRECTA y COMPLETA, y es la
+        que termina el barrido. Rellenarla con reformulaciones no añade cobertura: mantiene vivo el
+        barrido y hace que se pague otra pasada entera.
+
         Tienes dos cosas que entregar en cada unidad:
 
         1) RECONCILIAR los hallazgos que ya existen en esta unidad (se te listan abajo). Llama UNA vez a

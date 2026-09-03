@@ -17,7 +17,26 @@ namespace Atalaya.Agents;
 /// sola unidad). Menos superficie de tool, menos tokens, cero oportunidad de que el modelo la
 /// rellene mal. La ingestión sigue tolerando payloads legados que la traigan (se ignora).
 /// </para>
+/// <para>
+/// <b>F24 — <see cref="DistinctFrom"/> es el reintento, no un campo más.</b> La app rebota en la
+/// puerta lo que se parece demasiado a un hallazgo que ya existe; el auditor lo reenvía diciendo de
+/// cuál se distingue y por qué, y entonces entra. Es el mismo reparto de F4: la app no decide que
+/// dos cosas son la misma, obliga a que lo diga quien mira el código.
+/// </para>
 /// </summary>
+/// <param name="DistinctFrom">
+/// El ULID del hallazgo del que la app dijo que éste parecía una variante, cuando el auditor
+/// sostiene que son defectos DISTINTOS (F24). Null en el caso normal, que es el de un hallazgo que
+/// no se parece a nada. Enviarlo <b>siempre</b> hace pasar el filtro, así que no es un campo para
+/// rellenar por costumbre: lo que entra con él queda registrado como insistido, con su motivo, y el
+/// informe lo marca como posible duplicado.
+/// </param>
+/// <param name="DistinctReason">
+/// En qué se diferencia de aquél, con las palabras del auditor. Es lo único que hace revisable la
+/// insistencia: un reintento sin motivo entra igual —un reintento justificado no puede quedar
+/// bloqueado por una casilla vacía— pero se registra diciendo que vino sin motivo, que es un dato
+/// con su causa y no un hueco.
+/// </param>
 public sealed record SubmitFindingArgs(
     string RuleId,
     string Pillar,
@@ -27,7 +46,9 @@ public sealed record SubmitFindingArgs(
     string Impact,
     string Recommendation,
     SubmitLocation[] Locations,
-    string? Symbol);
+    string? Symbol,
+    string? DistinctFrom = null,
+    string? DistinctReason = null);
 
 public sealed record SubmitLocation(string Path, int Line, string? Snippet);
 

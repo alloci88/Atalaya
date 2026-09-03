@@ -116,9 +116,15 @@ public sealed class LiveNarrationTests : IDisposable
         return f;
     }
 
-    private static SubmitFindingArgs NewFinding(string title)
+    /// <summary>
+    /// Un hallazgo nuevo. <paramref name="symbol"/> y <paramref name="line"/> se separan a propósito
+    /// entre llamadas: desde F24 dos hallazgos con la misma regla, el mismo miembro y la misma línea
+    /// son una variante y la puerta rebota el segundo. Aquí lo que se narra son hallazgos
+    /// DISTINTOS, así que se escriben distintos.
+    /// </summary>
+    private static SubmitFindingArgs NewFinding(string title, string symbol = "M", int line = 1)
         => new("errores.recursos.no-liberado", "errores", "media", title, "desc", "impacto", "reco",
-            new[] { new SubmitLocation(UnitPath, 1, null) }, "M");
+            new[] { new SubmitLocation(UnitPath, line, null) }, symbol);
 
     /// <summary>
     /// Corre una sesión de verdad a través del servicio en vivo, de modo que la narración se puebla
@@ -169,7 +175,11 @@ public sealed class LiveNarrationTests : IDisposable
     public async Task Sin_disputas_no_se_narra_ninguna_disputa()
     {
         (LiveSessionService live, SessionResult result) = await Run(
-            audit: _ => new[] { NewFinding("fuga de stream"), NewFinding("handle sin cerrar") });
+            audit: _ => new[]
+            {
+                NewFinding("fuga de stream"),
+                NewFinding("handle sin cerrar", symbol: "N", line: 20),
+            });
 
         result.Counters.Disputed.Should().Be(0, "nadie ha disputado nada");
         result.Counters.New.Should().Be(2);

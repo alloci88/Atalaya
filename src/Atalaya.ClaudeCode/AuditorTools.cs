@@ -51,7 +51,12 @@ public static class AuditorTools
             ("impact", Schema.Text("Qué puede pasar si no se arregla."), true),
             ("recommendation", Schema.Text("Qué hacer para arreglarlo."), true),
             ("locations", Schema.Array(location, "Dónde ocurre. Al menos una."), true),
-            ("symbol", Schema.Text("Miembro que lo contiene, si aplica."), false));
+            ("symbol", Schema.Text("Miembro que lo contiene, si aplica."), false),
+            ("distinctFrom", Schema.Text(
+                "SOLO para reenviar un hallazgo que la aplicación te devolvió por parecerse a otro: el "
+                + "ULID de aquél. Si es el mismo defecto, no lo reenvíes; si está en otro punto de la "
+                + "unidad, usa add_locations."), false),
+            ("distinctReason", Schema.Text("Con distinctFrom: en qué se diferencia de aquél."), false));
 
         JsonObject verdict = Schema.Object(
             ("findingId", Schema.Text("El ULID EXACTO de la lista de existentes."), true),
@@ -67,7 +72,10 @@ public static class AuditorTools
             new(
                 "submit_findings",
                 "PREFERIDA. Reporta TODOS los hallazgos de la unidad en UNA sola llamada, pasando un array. "
-                + "Devuelve un array de {accepted, duplicateOf, error} en el mismo orden.",
+                + "Devuelve un array de {accepted, duplicateOf, error} en el mismo orden. Un hallazgo que se "
+                + "parezca demasiado a uno ya existente se devuelve sin aceptar, nombrándolo: si es el mismo "
+                + "defecto no lo reportes (o extiéndelo con add_locations), y si de verdad es otro reenvíalo con "
+                + "distinctFrom = ese ULID y distinctReason.",
                 Schema.Object(("findings", Schema.Array(finding, "Los hallazgos de esta unidad."), true)),
                 args => toolbox.SubmitFindings(ReadFindings(args, "findings"))),
 
@@ -193,7 +201,9 @@ public static class AuditorTools
             Text(e, "impact"),
             Text(e, "recommendation"),
             ReadLocations(e, "locations"),
-            Text(e, "symbol") is { Length: > 0 } symbol ? symbol : null);
+            Text(e, "symbol") is { Length: > 0 } symbol ? symbol : null,
+            Text(e, "distinctFrom") is { Length: > 0 } distinctFrom ? distinctFrom : null,
+            Text(e, "distinctReason") is { Length: > 0 } distinctReason ? distinctReason : null);
 
     private static SubmitFindingArgs[] ReadFindings(JsonElement args, string name)
         => Items(args, name).Select(ReadFinding).ToArray();

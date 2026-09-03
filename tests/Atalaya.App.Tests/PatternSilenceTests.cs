@@ -420,7 +420,15 @@ public sealed class PatternSilenceTests : IDisposable
         SeedApp("alpha");
         SeedPattern("alpha", "nombres poco claros");
 
-        SessionResult result = await Audit("alpha", Payload(title: "nombre poco claro"));
+        // En otro miembro que el hallazgo «origen» que arrastra SeedPattern: desde F24 la puerta
+        // rebota lo que cae en la misma regla, el mismo miembro y la misma línea que uno existente,
+        // y lo que este test comprueba es que el PATRÓN no filtra nada — no el parecido.
+        SessionResult result = await Audit(
+            "alpha", Payload(title: "nombre poco claro") with
+            {
+                Symbol = "Otro",
+                Locations = new[] { new SubmitLocation("A.cs", 20, null) },
+            });
 
         result.Counters.New.Should().Be(1);
         result.Counters.SuppressedByPattern.Should().Be(0);

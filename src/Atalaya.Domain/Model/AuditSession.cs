@@ -53,7 +53,9 @@ public sealed record UnitPassRecord(
     bool Dry,
     string? Summary,
     int LocationsAdded = 0,
-    int Disputed = 0);
+    int Disputed = 0,
+    int VariantsRejected = 0,
+    int VariantsInsisted = 0);
 
 /// <summary>Session tallies (§2).</summary>
 public sealed class SessionCounters
@@ -107,6 +109,27 @@ public sealed class SessionCounters
     /// causa está en los payloads del agente, no en la ausencia de hallazgos.
     /// </summary>
     public int Rejected { get; set; }
+
+    /// <summary>
+    /// Hallazgos rebotados en la puerta por parecerse a uno que ya existía (F24): misma unidad,
+    /// misma regla, mismo símbolo y a cinco líneas o menos. Es un subconjunto de
+    /// <see cref="Rejected"/> —la app devolvió un error tipado y no guardó nada— contado aparte
+    /// porque su causa no es un payload malformado sino un defecto ya reportado con otras palabras,
+    /// y el remedio es otro.
+    /// <para>
+    /// Es el número que dice si el contrato del prompt está funcionando: si baja solo, el auditor ha
+    /// dejado de reformular; si sube, la variante se está reportando igual y se está pagando.
+    /// </para>
+    /// </summary>
+    public int VariantsRejected { get; set; }
+
+    /// <summary>
+    /// Variantes que el auditor reenvió con <c>distinctFrom</c> sosteniendo que eran otro defecto, y
+    /// que por eso entraron (F24). No son rechazos: están guardadas y cuentan como
+    /// <see cref="New"/>. Se cuentan aparte porque son el coste declarado del filtro —una llamada de
+    /// más— y porque el informe las marca como posible duplicado para que decida una persona.
+    /// </summary>
+    public int VariantsInsisted { get; set; }
 }
 
 /// <summary>

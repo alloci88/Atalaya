@@ -201,9 +201,11 @@ public sealed class RealCopilotAgent : IAssistedFixProvider, IAsyncDisposable
 
         SubmitFindingResult SubmitFinding(
             string ruleId, string pillar, string severity, string title,
-            string description, string impact, string recommendation, SubmitLocation[] locations, string? symbol)
+            string description, string impact, string recommendation, SubmitLocation[] locations, string? symbol,
+            string? distinctFrom = null, string? distinctReason = null)
             => toolbox.SubmitFinding(new SubmitFindingArgs(
-                ruleId, pillar, severity, title, description, impact, recommendation, locations, symbol));
+                ruleId, pillar, severity, title, description, impact, recommendation, locations, symbol,
+                distinctFrom, distinctReason));
 
         SubmitFindingsResult SubmitFindings(SubmitFindingArgs[] findings)
             => toolbox.SubmitFindings(findings ?? Array.Empty<SubmitFindingArgs>());
@@ -222,7 +224,10 @@ public sealed class RealCopilotAgent : IAssistedFixProvider, IAsyncDisposable
         var config = NewSessionConfig();
         AddTool(config, SubmitFindings, "submit_findings",
             "PREFERIDA. Reporta TODOS los hallazgos de la unidad en UNA sola llamada, pasando un array. "
-            + "Devuelve un array de {accepted, duplicateOf, error} en el mismo orden.");
+            + "Devuelve un array de {accepted, duplicateOf, error} en el mismo orden. Un hallazgo que se "
+            + "parezca demasiado a uno ya existente se devuelve sin aceptar, nombrándolo: si es el mismo "
+            + "defecto no lo reportes (o extiéndelo con add_locations), y si de verdad es otro reenvíalo con "
+            + "distinctFrom = ese ULID y distinctReason.");
         AddTool(config, SubmitFinding, "submit_finding",
             "Fallback singular. Úsala solo si por alguna razón no puedes agrupar; cada llamada añade un turno.");
         AddTool(config, ReportVerdicts, "report_verdicts",

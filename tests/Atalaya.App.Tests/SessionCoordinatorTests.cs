@@ -83,6 +83,19 @@ public sealed class SessionCoordinatorTests : IDisposable
             "Conn leaked", "desc", "impact", "reco",
             new[] { new SubmitLocation(path, 1, "snippet") }, "A.M");
 
+    /// <summary>
+    /// Un hallazgo que NO es una variante de los demás (F24): otro miembro y otra línea. Los tests
+    /// del barrido prueban la regla de parada, no la puerta de las variantes, así que sus hallazgos
+    /// tienen que ser defectos distintos de verdad — antes bastaba con cambiarles el título.
+    /// </summary>
+    private static SubmitFindingArgs Distinct(string title, string symbol, int line)
+        => SampleFinding() with
+        {
+            Title = title,
+            Symbol = symbol,
+            Locations = new[] { new SubmitLocation("A.cs", line, null) },
+        };
+
     private SessionCoordinator NewCoordinator(IAuditorProvider agent)
         => new(_hub, _ingestion, _reconciliation, _machines, _ulids, agent, _settings);
 
@@ -411,12 +424,17 @@ public sealed class SessionCoordinatorTests : IDisposable
 
     /// <summary>
     /// Y el reverso: el MISMO payload en dos sesiones distintas NO se deduplica en la ingestión —
-    /// pero tampoco duplica, porque el auditor lo ve en la lista y lo reconcilia. Sin la lista
-    /// (agente que ignora la reconciliación) sí se crearía un duplicado: es el precio explícito y
-    /// autocorregible del modelo (ver D-077).
+    /// pero tampoco duplica, porque el auditor lo ve en la lista y lo reconcilia. Un agente que
+    /// ignora la reconciliación no resuelve NADA, y la unidad queda incompleta a la vista.
+    /// <para>
+    /// <b>Lo que cambió en F24</b>: cuando el re-reporte cae en la misma regla, el mismo miembro y
+    /// la misma línea que el existente, la puerta lo rebota y ya no se crea el duplicado. Lo que NO
+    /// cambia es lo de fondo: la app no ha decidido que sean el mismo problema, y no resuelve nada
+    /// por omisión.
+    /// </para>
     /// </summary>
     [Fact]
-    public async Task Agent_ignoring_the_existing_list_creates_a_duplicate_but_resolves_nothing()
+    public async Task Agent_ignoring_the_existing_list_resolves_nothing_and_the_gate_stops_the_duplicate()
     {
         await RunLotes(new FakeCopilotAgent(_ => new[] { SampleFinding() }));
 
@@ -425,9 +443,31 @@ public sealed class SessionCoordinatorTests : IDisposable
             auditScript: _ => new[] { SampleFinding() },
             reconcileScript: _ => Array.Empty<VerdictArgs>()));
 
-        second.Counters.New.Should().Be(1);
+        second.Counters.New.Should().Be(0, "la puerta de F24 lo reconoce como el mismo defecto");
+        second.Counters.VariantsRejected.Should().Be(1);
         second.Counters.Resolved.Should().Be(0);           // lo que importa: NADA se resolvió
         second.IncompleteUnits.Should().Be(1);             // y el fallo es visible
+        _hub.Store.ListFindings("app").Should().ContainSingle()
+            .And.OnlyContain(f => f.Status == FindingStatus.Activo);
+    }
+
+    /// <summary>
+    /// <b>Y el precio del modelo sigue ahí donde la puerta no llega</b> (D-077). Re-reportar el
+    /// mismo problema bajo OTRA regla es exactamente lo que el criterio no puede ver —lo dijo F23 al
+    /// medirlo— así que se crea el duplicado, como antes. Es el precio explícito y autocorregible:
+    /// lo evita el contrato del prompt, no la aplicación.
+    /// </summary>
+    [Fact]
+    public async Task Re_reportado_bajo_otra_regla_la_puerta_no_lo_ve_y_el_duplicado_se_crea()
+    {
+        await RunLotes(new FakeCopilotAgent(_ => new[] { SampleFinding() }));
+
+        SessionResult second = await RunLotes(new FakeCopilotAgent(
+            auditScript: _ => new[] { SampleFinding() with { RuleId = "criterio.arquitectura" } },
+            reconcileScript: _ => Array.Empty<VerdictArgs>()));
+
+        second.Counters.New.Should().Be(1);
+        second.Counters.VariantsRejected.Should().Be(0, "reglas distintas: el criterio no lo ve");
         _hub.Store.ListFindings("app").Should().HaveCount(2)
             .And.OnlyContain(f => f.Status == FindingStatus.Activo);
     }
@@ -452,8 +492,10 @@ public sealed class SessionCoordinatorTests : IDisposable
             pass++;
             return pass switch
             {
-                1 => new[] { SampleFinding() with { Title = "Uno" }, SampleFinding() with { Title = "Dos" } },
-                2 => new[] { SampleFinding() with { Title = "Tres" } },
+                // Miembros distintos: son tres defectos DISTINTOS, y desde F24 hay que escribirlos
+                // así o la puerta los rebota como variantes del primero (que es lo suyo).
+                1 => new[] { Distinct("Uno", "A.Uno", 10), Distinct("Dos", "A.Dos", 20) },
+                2 => new[] { Distinct("Tres", "A.Tres", 30) },
                 _ => Array.Empty<SubmitFindingArgs>(),
             };
         });
@@ -495,8 +537,8 @@ public sealed class SessionCoordinatorTests : IDisposable
             pass++;
             return pass switch
             {
-                1 => new[] { SampleFinding() with { Title = "El que vio la primera" } },
-                3 => new[] { SampleFinding() with { Title = "El que la seca no vio" } },
+                1 => new[] { Distinct("El que vio la primera", "A.Uno", 10) },
+                3 => new[] { Distinct("El que la seca no vio", "A.Dos", 30) },
                 _ => Array.Empty<SubmitFindingArgs>(),
             };
         });

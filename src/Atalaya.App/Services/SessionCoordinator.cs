@@ -620,7 +620,8 @@ public sealed class SessionCoordinator
                     var passRecord = new UnitPassRecord(
                         pass, toolbox.PassNew, toolbox.PassConfirmed, toolbox.PassResolved,
                         toolbox.PassNonVerifiable, toolbox.PassRejected, dry, toolbox.LastUnitSummary,
-                        toolbox.PassLocationsAdded, toolbox.PassDisputed);
+                        toolbox.PassLocationsAdded, toolbox.PassDisputed,
+                        toolbox.PassVariantsRejected, toolbox.PassVariantsInsisted);
                     passes.Add(passRecord);
                     PassFinished?.Invoke(unit.Path, passRecord);
 
@@ -638,6 +639,15 @@ public sealed class SessionCoordinator
                     foreach (string degraded in toolbox.DegradedVerdicts)
                     {
                         session.Notes.Add($"{unit.Path} (pasada {pass}): veredicto degradado · {degraded}");
+                    }
+
+                    // F24: lo que entró INSISTIDO queda con su motivo. La app no ha decidido que dos
+                    // hallazgos sean el mismo problema —eso lo decide el auditor y dispone la
+                    // persona—; lo que no puede pasar es que haya dicho «esto se parece a aquello»,
+                    // que le contesten que no, y que de ese cruce no quede rastro.
+                    foreach (string insisted in toolbox.InsistedVariants)
+                    {
+                        session.Notes.Add($"{unit.Path} (pasada {pass}): {insisted}");
                     }
 
                     // F5.12: lo que el auditor declaró haberse callado, con nombre y apellidos. Una
@@ -692,6 +702,7 @@ public sealed class SessionCoordinator
                     toolbox.RejectedPayloads.Clear();
                     toolbox.RejectionReasons.Clear();
                     toolbox.DegradedVerdicts.Clear();
+                    toolbox.InsistedVariants.Clear();
                     toolbox.SuppressedByPattern.Clear();
                     toolbox.ToolCallLog.Clear();
                 }
