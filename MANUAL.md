@@ -1011,6 +1011,88 @@ aplicación**.
 
 ---
 
+## El coste: qué compone una llamada, y qué puedes hacer
+
+Una auditoría se paga **por tokens**, y casi todos son de **entrada**: en una sesión medida sobre
+el banco de pruebas, 628.170 tokens de entrada contra 24.506 de salida. Lo que decide la factura,
+por tanto, no es lo que el modelo escribe: es lo que se le manda, y cuántas veces.
+
+### De qué está hecha una llamada
+
+Cada vez que Atalaya habla con el modelo le manda el prompt **entero**, en este orden:
+
+| Bloque | Cambia | Cuánto pesa (orden de magnitud) |
+| --- | --- | --- |
+| Reglas del auditor y modo | Nunca | ~1.400 tokens |
+| Rúbrica de severidad | Nunca | ~700 |
+| Catálogo de pilares y áreas | Nunca | ~700 |
+| Temática del ciclo | Por ciclo | ~300 (0 en un ciclo General) |
+| Directivas del proyecto | Por aplicación | hasta el presupuesto que fijes |
+| Tipos de problema silenciados | Por aplicación | unas decenas |
+| Hallazgos ya conocidos de la unidad | **Por unidad y por pasada** | decenas o cientos |
+| **El código de la unidad** | **Por unidad** | **es lo único que se está auditando** |
+
+A eso se le suma lo que pone el proveedor por su cuenta —sus herramientas, su propio mensaje de
+sistema— y la conversación que se va acumulando dentro de la unidad. Para una clase de cuarenta
+líneas, **el código auditado es alrededor del 3 % de lo que viaja**. El resto es andamiaje.
+
+El orden no es casual: lo que **nunca cambia** va delante y lo que cambia con la unidad va detrás,
+que es la única forma de que la caché del proveedor pueda reutilizar el principio. Hay un test que
+impide que algo variable —una ruta, un identificador, el número de pasada— se cuele en ese tramo:
+un prefijo contaminado no falla, gasta.
+
+### Dónde se lee
+
+No hace falta calcularlo a mano. El número está en tres sitios:
+
+- **Mientras la sesión corre**, en el pie: «código 2,1 % · 11 llamadas/unidad». Es donde se nota
+  que algo se ha disparado; en el informe se lee cuando ya está pagado.
+- **En el informe de la sesión**, en una línea bajo los tokens:
+  *«andamiaje ≈ 27.900 tokens/llamada · código auditado ≈ 600 (2,1 %) · 11 llamadas por unidad»*,
+  más el desglose **pasada a pasada** con lo que aportó cada bloque y cuánto tardó.
+- **En Métricas**, bajo el coste del periodo: el reparto por **fase** —descubrimiento,
+  verificación y arreglo—, con sus sesiones, sus llamadas, sus tokens y su coste. Es la respuesta a
+  «¿en qué se me va el dinero?» sin abrir informes uno a uno.
+
+El informe añade además el diagnóstico de la **caché**: cuánto se escribió, cuánto era inevitable
+—una vez el prefijo estable, una vez la parte variable de cada prompt— y cuánto son
+**re-escrituras**. Escribir en caché cuesta más que la entrada normal; leerla cuesta una décima
+parte. Una cifra de re-escrituras parecida al prefijo multiplicado por el número de prompts
+significa que el prefijo se está reescribiendo entero cada vez.
+
+> **Los tokens son el hecho; el coste, un derivado.** Los informes guardan los tokens enteros, así
+> que dentro de un año se puede recalcular el coste con otra tarifa a partir de los mismos números.
+
+### Las palancas que tienes
+
+En orden de cuánto mueven la aguja:
+
+1. **Cuántas unidades auditas.** El coste escala con las unidades, no con su tamaño: una clase de
+   cuarenta líneas cuesta casi lo mismo que una de cuatrocientas, porque el andamiaje es el mismo.
+   Auditar por lotes lo que de verdad ha cambiado —y usar la **deriva** en vez de re-auditar todo—
+   es lo que más ahorra.
+2. **El tope de pasadas del barrido** (Ajustes). Es el multiplicador directo del gasto por unidad:
+   cada pasada manda el prompt entero otra vez. **Bajarlo ahorra hoy y cuesta mañana**: está
+   comprobado que hay hallazgos reales en la 4.ª y la 5.ª pasada, así que recortarlo no elimina
+   trabajo, lo aplaza. Tócalo sabiendo eso.
+3. **El presupuesto de directivas** (Inventario → Directivas). Va en el prefijo estable de *todas*
+   las llamadas de la sesión: 8.000 tokens de directivas son 8.000 tokens en cada una. Ponerlo a 0
+   las apaga.
+4. **El modelo** (Ajustes). La tarifa por token cambia mucho de un modelo a otro, y el coste de
+   cada sesión se calcula con la tarifa **del suyo**.
+5. **Excluir del inventario** lo que no aporta: generado, migraciones, ficheros de recursos. Cada
+   unidad del inventario es una factura potencial.
+
+### Lo que NO es una palanca
+
+- **Pedirle brevedad al modelo.** La salida es el 4 % del gasto y es donde está todo el valor.
+- **Mandar menos código.** El código auditado es el 3 %: recortarlo no ahorra nada apreciable y
+  degrada la auditoría.
+- **Colocar la caché tú.** El orden ya está puesto y probado; dónde corta su caché lo decide el
+  proveedor, y se comprobó midiendo que con el CLI de Claude Code no hay forma de pedírselo.
+
+---
+
 ## Si una sesión falla: qué significa cada error
 
 Cuando Copilot rechaza una sesión, Atalaya la deja en un estado terminal **visible** —con

@@ -10469,3 +10469,274 @@ app con cuatro ciclos y dos huecos (uno de ellos de cinco horas, que como capít
 que los de semanas), una con un solo ciclo de dos lupas, una sin ninguno, y un ciclo partido en
 la fila larga; a 1124 y 441 px de página, en claro y oscuro, con la vista arrancando por el
 final. Las capturas se entregaron con el parte. Verlo sobre el hub real sigue en BACKLOG.
+## F18 — Saber a dónde va cada token, y dejar de tirarlos
+
+El punto de partida era una cifra sin diagnóstico: 96,65 credits por unidad × 925 unidades de
+XBLAST ≈ **894 $ por ciclo completo**. Y la única forma de saber en qué se iban era abrir un
+informe y hacer cuentas a mano.
+
+Esta fase **no recorta nada**. Instrumenta —para que el coste se pueda diagnosticar solo—, audita
+el orden del prompt en los dos proveedores y lo fija con un test, y mide la única palanca de caché
+que un proveedor ofrecía. De las dos cosas que se pretendían, **una entra y la otra no**, y las dos
+se cuentan con sus números.
+
+### D-850 — El banco de medida: `scripts/PromptBench`, y por qué existe
+
+Una fase que se juzga con números necesita que esos números se puedan volver a sacar. El banco vive
+en `scripts/PromptBench` —fuera de `Atalaya.sln`, como `IconGen`: no es producto y no tiene por qué
+alargar cada build— y **reutiliza el código de producción**: `PromptComposer` y
+`ClaudeCodeProvider`, los mismos que usa la aplicación. Una maqueta con su propia copia del prompt
+se queda vieja a la primera y mide otra cosa.
+
+```
+PromptBench composicion [unidades...]      offline y gratis: de qué está hecho cada prompt
+PromptBench claude --whole  [unidades...]  una pasada real con el prompt entero por stdin
+PromptBench claude --split  [unidades...]  una pasada real con el prefijo por el system prompt
+```
+
+El escenario por defecto son **dos unidades pequeñas de este mismo repositorio**, del tamaño de las
+del banco de pruebas de la línea base. Se pueden dar otras; lo que no se puede es comparar dos
+ejecuciones con unidades distintas.
+
+**El banco cuenta las tools que el agente llegó a llamar**, junto a los tokens. Una medición sobre
+una sesión en la que el modelo nunca llamó a nada mide otra cosa —un modelo confundido gasta
+distinto— y se leería como comparable.
+
+### D-851 — Lo que hay que medir es la PRIMERA llamada, no el total
+
+El primer intento comparó totales de sesión, y **no concluía nada**: dos tandas del mismo escenario
+daban 40.585 y 18.245 tokens de escritura de caché. La causa es que a partir de la segunda llamada
+el prompt lleva dentro lo que contestó el modelo —texto, razonamiento, resultados de tool—, que
+cambia en cada ejecución; comparar totales mide sobre todo esa varianza.
+
+**La primera llamada de cada unidad es la única medida determinista de la serie**: su prompt lo
+fijan nuestros bytes y nada más. Y se comprueba solo — el `In` fresco salió idéntico al token en
+todas las tandas (10.852 con un par de unidades, 11.047 con otro). Es lo que el banco imprime
+aparte, y es lo que decidió esta fase.
+
+Es la misma lección que D-785 con la semántica de la caché: el dato manda sobre la intuición, pero
+hay que medir la cosa correcta.
+
+### D-852 — El orden del prompt ya era el bueno. Ahora está fijado con un test
+
+**Auditado en los dos proveedores.** El prompt de unidad se compone en un solo sitio
+(`PromptComposer`) y viaja igual a las dos casas, así que el orden es uno:
+
+```
+[ESTABLE]   reglas del auditor + modo → rúbrica de severidad → catálogo de pilares y áreas
+            → temática del ciclo → directivas → tipos de problema silenciados
+[VARIABLE]  hallazgos conocidos de la unidad → hallazgos de otras temáticas → código de la unidad
+```
+
+**No había nada variable colado en la zona estable** — ni la ruta, ni el contador de pasada, ni
+fechas, ni identificadores. La línea `MODO:` es lo más cercano a una variable y es constante durante
+toda la sesión.
+
+Lo que sí faltaba era que **no pudiera volver a torcerse**. `PromptComposer.Compose` devuelve ahora
+el prompt partido por esa costura (`ComposedUnitPrompt`), y hay tests que fijan:
+
+- que el prefijo es **idéntico byte a byte** entre unidades y entre pasadas;
+- que **nada de la unidad** aparece dentro (ruta, código, ULIDs, alias);
+- que **concatenar las dos piezas da el prompt de siempre**.
+
+Lo último se comprobó, además, contra la implementación anterior: **432 combinaciones** (todos los
+stacks × modos × temáticas × con y sin patrones × con y sin existentes) salieron idénticas carácter
+a carácter. El corte es un refactor, no un cambio de prompt.
+
+> **Por qué con un test y no con una nota.** Un prefijo contaminado no falla: no hay excepción, ni
+> error, ni cifra fuera de sitio. Solo una factura un poco más alta cada mes. Es justo la clase de
+> regresión que solo un rojo puede impedir.
+
+### D-853 — Mandar el prefijo por el system prompt del CLI: medido, y FUERA
+
+La idea de §2 era aprovechar que el CLI de Claude Code cachea su prefijo entre procesos: mandar el
+tramo estable por `--append-system-prompt-file` en vez de dentro del mensaje, para que la unidad
+siguiente lo leyera de caché en vez de reescribirlo.
+
+**Empezó bien.** Contra el CLI real (2.1.259, 2026-09-03), sin servidor MCP, un bloque de 12.500
+caracteres pasado así se escribe una vez (8.974 tokens de escritura) y se lee de caché en todas las
+invocaciones siguientes: **26.973 de lectura, 0 de escritura**, en procesos distintos.
+
+**Y se cayó con las herramientas puestas.** Con el servidor MCP de Atalaya declarado, que es la
+situación real:
+
+| Primera llamada de cada unidad (sonnet, 1 pasada, ciclo General) | In | Caché leída | Caché escrita | Entrada |
+| --- | ---: | ---: | ---: | ---: |
+| `--whole` · `PercentText.cs` | 2 | 19.217 | 0 | 19.219 |
+| `--whole` · `DisplayId.cs` | 2 | 17.412 | 0 | 17.414 |
+| `--split` · `PercentText.cs` | 2 | 19.217 | 0 | 19.219 |
+| `--split` · `DisplayId.cs` | 2 | 17.412 | 0 | 17.414 |
+
+Las dos formas producen **la misma clave de caché**: una tanda con el prompt entero leyó de caché el
+**100 %** de lo que había escrito la tanda partida, con la entrada idéntica al token. Y sobre
+unidades nunca enviadas, las dos escriben lo mismo (7.895 y 6.090 tokens en `--split`; 7.993 y 6.313
+en `--whole`, con otro par de unidades del mismo tamaño).
+
+**El hallazgo de verdad está en la columna de lectura**: la primera llamada de la unidad 2 lee
+exactamente lo mismo que la de la unidad 1 —11.322 tokens, siempre el mismo número— y escribe todo
+lo nuestro. Es decir: **no hay un punto de corte de caché entre nuestro prefijo y el código de la
+unidad**, y dónde ponerlo no lo decidimos nosotros. El prefijo estable se reescribe una vez por
+unidad y por pasada, se mande por donde se mande.
+
+**Veredicto: neutro. No entra** (§0: «si un cambio no mejora, dilo y déjalo fuera en vez de
+defenderlo»). El driver sigue mandando el prompt entero por stdin, exactamente como antes.
+
+Lo que queda es la palanca **desarmada** —`ClaudeCodeProvider.UseSystemPromptPrefix`, en `false`, y
+`ClaudeRun.SystemPromptFile`— para que el banco pueda **repetir la medida** el día que el CLI cambie
+sus cortes de caché, que es cuando esta decisión habría que revisarla. Hay un test que fija que la
+opción **no aparece** en la línea de órdenes de una auditoría normal: un cambio de opinión
+silencioso en el driver tiene que verse como un rojo, no como una factura.
+
+**Medido de paso, y descartado por otra razón:** `--system-prompt` (sustituir el mensaje de sistema
+del CLI, en vez de añadirle) quita **6.132 tokens por llamada** —22.808 → 16.676, medido con dos
+tandas de tres invocaciones—. No entra porque cambia las instrucciones con las que el modelo
+trabaja, y eso no se toca sin una comparación de **calidad** delante. Además esos tokens están
+cacheados: su coste marginal es una décima parte. Queda escrito para quien vuelva.
+
+### D-854 — Copilot sí ofrece dónde poner el prefijo, y no se toca porque no se ha podido medir
+
+Verificado **por reflexión** sobre `GitHub.Copilot.SDK 1.0.11`, que es como se verificó su
+superficie en D-016. Existe `SessionConfig.SystemMessage` → `SystemMessageConfig { Content, Mode,
+Sections }`, con secciones nombradas: `Preamble`, `Identity`, `Tone`, `Guidelines`, `Safety`,
+`CodeChangeRules`, `ToolEfficiency`, `ToolInstructions`, **`EnvironmentContext`**,
+`CustomInstructions`, `RuntimeInstructions`, `LastInstructions`. Y, al lado,
+`SkipCustomInstructions`, `ExcludedBuiltInAgents`, `DisabledSkills`, `SkipEmbeddingRetrieval` y
+`ToolSearch { Enabled, DeferThreshold }`.
+
+`EnvironmentContext` es exactamente el tipo de sección per-máquina que contaminaría un prefijo
+cacheable, y `Mode` permite decidir si se sustituye o se añade. Es **la** palanca del proveedor que
+factura.
+
+**Y no se toca en esta fase**, por el anti-objetivo de §0: aquí no hay asiento de Copilot con el que
+medir, y tocar el mensaje de sistema de un auditor a ciegas es cambiar su criterio sin comparación
+de calidad delante. Queda escrito con nombres y apellidos para que la fase que tenga el asiento
+delante empiece por ahí en vez de por una búsqueda.
+
+### D-855 — La instrumentación: por unidad, por pasada, por fase, y por bloque del prompt
+
+Todo lo que sigue es **derivado**: no se ha añadido ni un fichero al hub, y no se ha migrado nada.
+Los datos primarios —tokens, llamadas, y ahora la composición estimada de cada prompt— se escriben
+en la sesión; el reparto se recalcula en cada lectura, como el coste desde D-788.
+
+- **`PromptComposition`** — de qué está hecho un prompt, bloque a bloque: reglas, rúbrica, catálogo,
+  temática, directivas, patrones, hallazgos existentes y **código de la unidad**. Su corte
+  `Estable`/`Variable` **es** la costura de la caché, no una etiqueta descriptiva.
+- **`PassUsage`** — el consumo de una PASADA: llamadas, los cuatro tipos de token, la composición de
+  su prompt y su duración. El desglose por unidad existía desde Hito 1a y no distingue «abrir la
+  unidad cuesta» de «insistir sobre ella cuesta», que es justo la diferencia que decide.
+- **`PromptBudget`** — la lectura: entrada por llamada, código por llamada, andamiaje, fracción de
+  código y llamadas por unidad.
+
+**El andamiaje se obtiene por RESTA** —entrada real menos código— y no sumando piezas. Así lo que no
+sepamos nombrar sigue contando: las herramientas del proveedor, su propio mensaje de sistema y la
+conversación acumulada entran en la cuenta sin que haya que enumerarlas.
+
+**El código de una pasada pesa por sus llamadas.** El prompt se reenvía entero en cada vuelta del
+bucle de tools, así que una pasada de ocho llamadas mandó su código ocho veces. Promediar sin eso
+repartiría el código de una pasada corta entre las llamadas de una larga.
+
+**La entrada se lee con la semántica de su proveedor** (D-785: Copilot mete la caché dentro de `In`,
+Claude Code la deja fuera), reusando `CreditCalculator.AccountingOf`. Dos reglas parecidas para el
+mismo número acaban discrepando.
+
+**Sin composición no hay línea.** Una sesión anterior a F18 no lleva desglose por pasada, y escribir
+«código 0 %» afirmaría que no viajó código. Se calla, y sigue diciendo lo que sí sabe.
+
+Dónde se lee:
+
+- **Informe de sesión**: la línea *«andamiaje ≈ X tokens/llamada · código auditado ≈ Y (Z %) · N
+  llamadas por unidad»* justo debajo de los tokens, el diagnóstico de caché, y una tabla **pasada a
+  pasada** con la composición y la duración.
+- **Sesión en vivo**: un trozo más en el pie —«código 2,1 % · 20 llamadas/unidad»—, con la
+  prioridad más alta de cesión: es una *lectura* de los tokens, así que cede antes que ellos, y
+  agotado el sitio queda solo la fracción de código, que es la cifra que decide.
+- **Métricas**: el reparto por **fase** bajo el coste del periodo —descubrimiento, verificación,
+  arreglo—, con sesiones, llamadas, tokens y coste. Sale del modo de la sesión, que ya estaba
+  escrito: no hay dato nuevo en el hub. Los modos de gestión (cierre, reset) no aparecen: no llaman
+  a ningún modelo y una fila a cero solo ocupa sitio. **Los tokens van siempre; el coste, solo
+  cuando lo hay**: una fase hecha con una casa que no factura tiene peso pero no tiene precio, y un
+  0 diría que salió gratis.
+
+### D-856 — El termómetro de la caché: un SUELO declarado, no una predicción
+
+El informe dice, cuando hay escritura de caché que interpretar:
+
+```
+Caché: N escritos, M leídos · suelo inevitable ≈ S (prefijo estable P × 1 + parte variable de K
+prompts) · re-escrituras ≈ N − S
+```
+
+Con un prefijo estable de verdad, escribir es inevitable **una vez por contenido nuevo**: una por el
+prefijo de la sesión y una por la parte variable de cada prompt. Todo lo demás son re-escrituras a
+1,25 × la entrada.
+
+**Es un suelo, y se dice que lo es.** Cada turno añade la respuesta del modelo y los resultados de
+tool, y eso también se escribe legítimamente; por eso las re-escrituras van con «≈» y no se
+presentan como una cuenta exacta. Lo concluyente es el orden de magnitud: si se parecen al prefijo
+multiplicado por el número de prompts, el prefijo se está reescribiendo entero cada vez — que es
+justo lo que D-853 midió que pasa con el CLI de Claude Code, y que no está en nuestra mano arreglar.
+
+### D-857 — Lo que se midió y NO se cambió, para que no se vuelva a proponer
+
+- **La estimación de tokens sigue siendo `caracteres / 4`.** Medido contra el CLI real, el texto en
+  español de este prompt sale a **≈3,0 caracteres por token** (12.500 caracteres → ~4.150 tokens),
+  así que la regla **subestima en torno a un 25 %**. No se cambia aquí por dos razones: la misma
+  regla gobierna el presupuesto de directivas (F7), que está calibrado con ella y se enseña en un
+  panel; y lo que se decide con la composición —«el andamiaje es el 97 %»— no cambia porque la
+  cuenta se desvíe un 25 %. **Queda escrito** para que quien lo toque toque las dos cosas a la vez.
+- **`--disable-slash-commands` no cambia nada** en una sesión de auditoría (22.808 tokens con y sin
+  él, medido dos veces). Se probó porque parecía obvio; no lo era.
+- **El tope de pasadas, la salida y las directivas** no se tocan: son los anti-objetivos de la fase.
+
+### D-858 — La tabla del §0, con su veredicto
+
+Escenario: **2 unidades** de este repositorio, **1 pasada**, ciclo **General**, sin hallazgos
+previos, modelo **sonnet**, con el servidor MCP de Atalaya y las cinco tools de auditoría. Reproduce
+`scripts/PromptBench claude --whole` y `--split`.
+
+| Cambio | Qué mueve | Veredicto |
+| --- | --- | --- |
+| Composición del prompt medida y persistida (D-855) | Dato nuevo: lo que antes se calculaba a mano | **Mejora** (visibilidad; no toca la factura) |
+| Orden del prompt fijado con test (D-852) | Nada hoy: ya era correcto | **Neutro por diseño** — es una guarda |
+| Prefijo por `--append-system-prompt-file` (D-853) | Entrada por llamada idéntica al token; misma clave de caché | **Neutro → fuera** |
+| `--system-prompt` (sustituir el del CLI) | −6.132 tokens/llamada, cacheados | **No evaluado en calidad → fuera** |
+| `SystemMessage` de Copilot (D-854) | Sin asiento con el que medir | **Sin medir → fuera** |
+
+**La composición del escenario**, que es el número que esta fase pone encima de la mesa:
+
+| | Reglas | Rúbrica | Catálogo | Existentes | **Unidad** | Estable | Total | **Código %** |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Hashing.cs` | 1.413 | 710 | 714 | 42 | **688** | 2.839 | 3.569 | **19,3 %** |
+| `AxisScale.cs` | 1.413 | 710 | 714 | 42 | **625** | 2.839 | 3.506 | **17,8 %** |
+
+Con la entrada **real** medida —24.421 tokens por llamada— ese mismo código auditado es el **2,7 %**
+de lo que viaja: el resto es el prefijo de Atalaya (≈2.839), lo que pone el CLI por su cuenta
+(≈11.300 cacheados, más sus herramientas) y la conversación del turno. **Ese 2,7 % es el número que
+esta fase existía para poder decir.**
+
+### D-859 — Lo que queda para la fase siguiente, ya medible
+
+Con la instrumentación puesta, estas tres cosas ya se pueden decidir con la tabla delante en vez de
+por intuición, y son las que de verdad mueven los 894 $:
+
+1. **Las llamadas por unidad** (11 en la línea base, 3,5 en el escenario del banco). Cada llamada
+   reenvía el prompt entero: es el multiplicador más grande que queda.
+2. **El modelo por fase**: descubrir y verificar no son la misma tarea, y Métricas ya dice lo que
+   cuesta cada una por separado.
+3. **Las exclusiones de inventario**: el coste escala con las unidades, no con su tamaño.
+
+### D-860 — Cobertura (33 tests nuevos, 2.030 en total, todo en verde)
+
+- **El orden del prompt**: prefijo idéntico entre unidades y entre pasadas, nada de la unidad
+  dentro, las posiciones de los siete bloques, la costura exactamente donde empieza lo variable, y
+  que la composición cuadra con el prompt que se manda.
+- **La aritmética**: la línea del informe carácter a carácter, la semántica de entrada de cada
+  proveedor, el peso de cada pasada por sus llamadas, el suelo de caché y que las re-escrituras
+  nunca salen negativas.
+- **Que no se inventa**: una sesión legada no gana línea, un pie sin composición no gana trozo, una
+  sesión sin llamadas no divide por cero, y una fase sin factura enseña tokens y calla el coste.
+- **De punta a punta**, con una sesión de verdad conducida por el agente falso: cada pasada deja su
+  composición escrita, un barrido de tres pasadas deja tres filas, el prefijo no cambia entre las
+  dos unidades de la sesión, la duración se registra y el informe sale con su línea.
+- **La palanca desarmada**: `--append-system-prompt-file` no aparece en la línea de órdenes de una
+  auditoría normal.

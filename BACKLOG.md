@@ -4,9 +4,26 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-02 (F17.2 — la cinta deja el calendario: los ciclos son capítulos).
+Última revisión: 2026-09-03 (F18 — saber a dónde va cada token).
 
 ## En vuelo
+
+- **F18 — la línea de composición, con una sesión real delante.** Toda la aritmética está fijada
+  con tests y la medida contra el CLI de Claude Code está hecha y escrita (D-850…D-858), pero
+  quedan dos cosas que solo se ven usando la aplicación: **el pie en vivo** con el trozo nuevo
+  («código 2,1 % · 11 llamadas/unidad») en una sesión de verdad, a 1366×768 y con la ventana a la
+  mitad —tiene que ceder ANTES que los tokens—, y el bloque **por fase** de Métricas con
+  descubrimiento, verificación y arreglo del hub real. Y comparar la línea del informe de una
+  sesión de Copilot con lo que dice el panel de la organización.
+- **F18 — la palanca de Copilot, cuando haya asiento.** `SessionConfig.SystemMessage` existe y
+  tiene secciones nombradas, con `EnvironmentContext` entre ellas: es donde vive lo per-máquina que
+  contaminaría un prefijo cacheable (D-854). Verificado por reflexión, **sin medir**: aquí no hay
+  asiento. Quien lo tenga empieza por ahí, midiendo con `PromptBench` antes y después, y sin tocar
+  el mensaje de sistema sin una comparación de calidad delante.
+- **F18 — la calibración de `caracteres / 4`.** Medido: el texto en español de estos prompts sale a
+  ~3,0 caracteres por token, así que la regla subestima ~25 % (D-857). Cambiarla mueve a la vez la
+  composición y el **presupuesto de directivas** de F7, que está calibrado con ella y se enseña en
+  un panel. Se toca entero o no se toca.
 
 - **F17 — la aceptación humana, sobre el banco.** Todo lo que se puede fijar sin un modelo delante
   está fijado —el prompt lleva la lupa y sus exclusiones, la reconciliación acotada, la siembra,
@@ -250,6 +267,19 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **F18 · Saber a dónde va cada token** — el banco de medida reutiliza el código de producción y
+  deja el escenario repetible (D-850), y la lección de método: lo determinista es la PRIMERA
+  llamada, no el total (D-851). El orden del prompt, auditado en las dos casas, ya era correcto y
+  queda fijado con test —prefijo idéntico entre unidades y pasadas, nada de la unidad dentro, y las
+  432 combinaciones idénticas carácter a carácter a la implementación anterior (D-852)—. La palanca
+  del system prompt del CLI se midió y salió **neutra**: misma clave de caché, y no hay corte entre
+  el prefijo y el código; no entra, y queda desarmada para poder repetir la medida (D-853). La de
+  Copilot existe, está nombrada y no se toca sin asiento con el que medir (D-854). Y la
+  instrumentación: composición por bloque, consumo por pasada, reparto por fase y duración, todo
+  derivado y sin un fichero nuevo en el hub (D-855), con el termómetro de caché declarado como
+  suelo y no como predicción (D-856). Lo medido y no cambiado, escrito para que no se vuelva a
+  proponer (D-857); la tabla del protocolo con el veredicto de cada cambio (D-858).
 
 - **F17.2 · La cinta deja el calendario: los ciclos son capítulos** — la forma sale de la
   naturaleza del dato: eventos escasos y de duración dispar necesitan orden, no calendario
