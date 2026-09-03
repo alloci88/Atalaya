@@ -422,6 +422,54 @@ public sealed class VariantGateTests : IDisposable
         result.Counters.VariantsInsisted.Should().Be(0, "no hubo nada que insistir");
     }
 
+    /// <summary>
+    /// <b>Sin símbolo la puerta no puede juzgar, y eso se fija aquí</b> (D-898). No es un capricho
+    /// del criterio: el símbolo es lo que impide confundir dos métodos vecinos, y sin él F23 medía
+    /// once marcas falsas. La consecuencia —dos hallazgos idénticos entran los dos— es fea y es la
+    /// correcta; lo que no puede ser es que se arregle ignorando el símbolo.
+    /// <para>
+    /// Costó una tanda entera descubrirlo: `symbol` era opcional, Claude Code lo rellenaba a ratos
+    /// y la puerta salía con cero rechazos que parecían un éxito del contrato. Este test existe para
+    /// que la dependencia esté escrita en rojo y no se redescubra midiendo.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Sin_simbolo_la_puerta_no_puede_juzgar_y_entran_los_dos()
+    {
+        var agent = new ScriptedAgent((toolbox, _) => toolbox.SubmitFindings(new[]
+        {
+            Race("Mutación de DefaultRequestHeaders") with { Symbol = null },
+            Race("Mutación no atómica de Authorization") with { Symbol = null },
+        }));
+
+        SessionResult result = await Run(agent);
+
+        result.Counters.New.Should().Be(2);
+        result.Counters.VariantsRejected.Should().Be(0,
+            "el criterio exige un MIEMBRO; sin él no distingue dos métodos vecinos y no juzga");
+    }
+
+    /// <summary>
+    /// Y el símbolo que es el TIPO tampoco vale: solo dice «en algún sitio de este fichero». Es la
+    /// otra mitad de lo mismo, y la que salvó un falso positivo en la tanda medida — «URLs
+    /// hardcodeadas» (símbolo `ClienteRemoto`) y «no comprueba el código de estado» (símbolo
+    /// `EnviarParteAsync`) caen a dos líneas y son dos defectos distintos.
+    /// </summary>
+    [Fact]
+    public async Task El_simbolo_que_es_el_tipo_no_basta_para_rebotar()
+    {
+        var agent = new ScriptedAgent((toolbox, _) => toolbox.SubmitFindings(new[]
+        {
+            Race("URLs hardcodeadas", 25, "ClienteRemoto"),
+            Race("No se comprueba el código de estado", 27, "ClienteRemoto"),
+        }));
+
+        SessionResult result = await Run(agent);
+
+        result.Counters.New.Should().Be(2);
+        result.Counters.VariantsRejected.Should().Be(0);
+    }
+
     // ---------------------------------------------------------------- el criterio compartido
 
     /// <summary>

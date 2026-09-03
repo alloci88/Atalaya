@@ -11804,3 +11804,65 @@ cuerpo**, porque su gemelo no está en el informe con el que compararlo.
 No se arregla metiendo hallazgos viejos en el cuerpo: el informe es de lo que ha pasado en esta
 sesión (F23 §1), y engordarlo con contexto es lo que aquella fase deshizo. El rastro existe, está en
 el sitio donde se busca —la ficha— y el anexo dice cuántos hubo.
+
+### D-899b — El símbolo se compara como CONJUNTO, porque la lista es el caso, no la excepción
+
+Medido sobre los 60 hallazgos de los brazos A y B, ya con `symbol` exigido: **44 traen un miembro,
+10 traen el tipo y 6 traen una lista** («CargaMediaPorMetro / CargaEspecifica», con coma o con
+barra). Las tres formas son legítimas y el prompt pide dos de ellas explícitamente — el miembro
+siempre, y el tipo cuando el defecto no está dentro de ninguno.
+
+**La lista no es una rareza que tolerar: es el caso del criterio.** Un defecto sistémico es UN
+hallazgo con N ubicaciones (D-090), y el auditor lo dice metiendo los N miembros en el campo. Con la
+comparación de cadenas de F23, «división por cero en `CargaMediaPorMetro`» y «división por cero en
+`CargaMediaPorMetro / CargaEspecifica`» eran dos sitios distintos siendo el mismo — exactamente lo
+que el criterio existe para no hacer.
+
+**Ahora se comparan como conjuntos**: se parte por coma, barra o punto y coma; de cada trozo se toma
+lo de detrás del último punto (el auditor escribe `EnviarParteAsync` y `ClienteRemoto.EnviarParteAsync`
+en el mismo informe); se descarta el que sea el tipo del fichero; y dos hallazgos se parecen si sus
+conjuntos **se cortan**.
+
+**Y lo que F23 midió sigue intacto**, que es la condición para no estar cambiando el criterio por la
+puerta de atrás: con dos miembros sueltos la intersección **es** la igualdad de antes. Lo único que
+cambia es el caso que antes no se sabía leer. El tipo dentro de una lista se descarta sin anular el
+resto —«ClienteRemoto, EnviarParteAsync» sigue localizando el método—, porque si no bastaría con
+citar la clase de paso para dejar el criterio ciego.
+
+### D-899c — El segundo criterio se midió y NO entra: 2 aciertos contra 8 falsos
+
+Propuesto: **línea EXACTA + mismo símbolo, con la regla libre**. La idea es buena a primera vista —
+dos de los cinco pares del caso de referencia se escapan por la regla (P3 y P5), y el filtro no los
+puede ver por construcción—. Se midió como se midió el de F23: enumerando los pares que marcaría y
+etiquetándolos uno a uno.
+
+Se cuentan solo los pares **nuevos**, los que el criterio actual no coge ya:
+
+| Fuente | Nuevos | Ciertos | Falsos | Dudosos |
+|---|---:|---:|---:|---:|
+| Banco de referencia (Copilot, 25) | 2 | **0** | 2 | 0 |
+| C2 (opus sin regla, 22) | 9 | 2 | 6 | 1 |
+| **Total** | **11** | **2** | **8** | **1** |
+
+**Sobre el caso de referencia no aporta ni un acierto**, y sus dos marcas son falsas: «división por
+cero en `CargaMediaPorMetro`» contra «doble recorrido innecesario» (corrección contra rendimiento), y
+«falta `EnsureSuccessStatusCode`» contra «cuerpo devuelto sin parseo». La segunda es **cara**: el
+cuerpo sin parsear es uno de los cinco hallazgos tardíos REALES de D-895, y marcarlo invitaría a
+fusionar un hallazgo legítimo.
+
+En C2 acierta dos veces, y las dos son consecuencias —`.Result` contra «lo envuelve en
+`AggregateException`», y la mutación de `DefaultRequestHeaders` contra «las credenciales quedan
+pegadas al cliente»—, que es justo lo que el contrato llama variante. Pero paga seis falsos:
+«argumentos sin validar» contra «sin `CancellationToken`», «Basic sobre HTTP» contra «falta
+`ConfigureAwait`», «inyección de ruta» contra «envía sin credenciales», y tres más.
+
+**Falla cuatro veces más de lo que acierta, así que no entra** — ni como OR en el marcador ni en el
+filtro. Es la misma decisión que tomó F23 al descartar «regla + línea ≤ 12»: 4 de 4 a cambio de once
+falsos. Queda escrito aquí como límite: **P3 y P5 siguen siendo territorio del contrato, y no hay un
+criterio programático barato que los alcance sin ensuciar el informe.**
+
+> **Y un falso del criterio ACTUAL, dicho porque salió en la misma medida.** Sobre C2 el criterio
+> vigente marca un par —«las credenciales quedan pegadas al cliente» contra «Basic sobre HTTP», misma
+> regla, cuatro líneas, mismo símbolo— y es **falso**. Con la regla puesta ese par se rebotaría y
+> haría falta un `distinctFrom`. Es el falso positivo que F23 aceptó al elegir el criterio, visto
+> ahora en otro modelo.

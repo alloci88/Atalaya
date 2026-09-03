@@ -87,7 +87,8 @@ Console.WriteLine();
 // el clon que se le pase.
 if (mode == "barrido")
 {
-    return await SweepBench.RunAsync(units, cloneRoot ?? root, model, !noVariants, maxPasses, tandas);
+    return await SweepBench.RunAsync(
+        units, cloneRoot ?? root, model, !noVariants, maxPasses, tandas, !noCut);
 }
 
 AuditorBrief brief = PillarBrief.Parts(TechStack.DotNet);

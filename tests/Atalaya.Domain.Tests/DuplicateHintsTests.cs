@@ -42,6 +42,69 @@ public sealed class DuplicateHintsTests
                 New("errores.async.mal-usado", "ClienteRemoto.cs", 33, "DescargarPlantilla"))
             .Should().BeTrue();
 
+    // --------------------------------------------------- las tres formas del símbolo (F24)
+
+    /// <summary>
+    /// <b>UN MIEMBRO</b> — el caso corriente: 44 de los 60 hallazgos medidos en el banco. Dos
+    /// singletons se cortan cuando son iguales, que es exactamente el criterio que midió F23.
+    /// </summary>
+    [Fact]
+    public void Un_miembro_contra_el_mismo_miembro_se_marca()
+        => DuplicateHints.AreSimilar(
+                New("errores.calculo.negocio", "CalculadoraCarga.cs", 28, "CargaMediaPorMetro"),
+                New("errores.calculo.negocio", "CalculadoraCarga.cs", 28, "CargaMediaPorMetro"))
+            .Should().BeTrue();
+
+    /// <summary>
+    /// <b>EL TIPO</b> — 10 de los 60. Es lo que el auditor manda cuando el defecto es del fichero
+    /// entero, y es lo que el prompt le pide en ese caso. No localiza nada, así que deja el
+    /// conjunto vacío y no se parece a nada — ni siquiera a otro igual.
+    /// </summary>
+    [Fact]
+    public void El_tipo_deja_el_conjunto_vacio_y_no_se_marca()
+        => DuplicateHints.AreSimilar(
+                New("criterio.arquitectura", "ClienteRemoto.cs", 25, "ClienteRemoto"),
+                New("criterio.arquitectura", "ClienteRemoto.cs", 27, "ClienteRemoto"))
+            .Should().BeFalse("«en ClienteRemoto.cs» no distingue dos defectos de ese fichero");
+
+    /// <summary>
+    /// <b>UNA LISTA</b> — 6 de los 60, y no es una rareza que tolerar: es el caso del criterio. Un
+    /// defecto sistémico llega con varios miembros en el mismo campo, y comparando la cadena entera
+    /// «división por cero en CargaMediaPorMetro» y «división por cero en CargaMediaPorMetro /
+    /// CargaEspecifica» serían dos sitios distintos siendo el mismo. Basta con que los conjuntos se
+    /// CORTEN.
+    /// </summary>
+    [Theory]
+    [InlineData("CargaMediaPorMetro / CargaEspecifica", "CargaMediaPorMetro")]
+    [InlineData("CargaMediaPorMetro, CargaEspecifica", "CargaEspecifica")]
+    [InlineData("CargaMediaPorMetro, CargaEspecifica", "CargaEspecifica, CargaMediaPorMetro")]
+    [InlineData("Calculadora.CargaEspecifica, Otro", "CargaEspecifica")]
+    public void Una_lista_de_miembros_se_corta_con_cualquiera_de_los_suyos(string lista, string otro)
+        => DuplicateHints.AreSimilar(
+                New("errores.calculo.negocio", "CalculadoraCarga.cs", 28, lista),
+                New("errores.calculo.negocio", "CalculadoraCarga.cs", 30, otro))
+            .Should().BeTrue();
+
+    /// <summary>Y dos listas que NO comparten ningún miembro siguen siendo dos defectos.</summary>
+    [Fact]
+    public void Dos_listas_sin_miembros_comunes_no_se_marcan()
+        => DuplicateHints.AreSimilar(
+                New("errores.calculo.negocio", "CalculadoraCarga.cs", 28, "Uno, Dos"),
+                New("errores.calculo.negocio", "CalculadoraCarga.cs", 30, "Tres / Cuatro"))
+            .Should().BeFalse();
+
+    /// <summary>
+    /// El tipo dentro de una lista se descarta pero no la anula: «ClienteRemoto, EnviarParteAsync»
+    /// sigue localizando el método. Si no, bastaría con que el auditor citara la clase de paso para
+    /// dejar el criterio ciego.
+    /// </summary>
+    [Fact]
+    public void El_tipo_dentro_de_una_lista_se_descarta_y_el_resto_vale()
+        => DuplicateHints.AreSimilar(
+                New("errores.concurrencia.race", "ClienteRemoto.cs", 23, "ClienteRemoto, EnviarParteAsync"),
+                New("errores.concurrencia.race", "ClienteRemoto.cs", 23, "EnviarParteAsync"))
+            .Should().BeTrue();
+
     // ------------------------------------------------------------------ los negativos
 
     /// <summary>Regla distinta: son dos defectos, aunque estén encima del otro.</summary>

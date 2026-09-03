@@ -8,6 +8,27 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## En vuelo
 
+- **F24 — el símbolo debería ir por UBICACIÓN, no por hallazgo.** Hoy `Finding.Symbol` es **uno para
+  todo el hallazgo**, y un defecto sistémico tiene N ubicaciones en N miembros distintos. El auditor
+  resuelve el desajuste como puede —metiendo una lista en el campo: «CargaMediaPorMetro /
+  CargaEspecifica», 6 de 60 hallazgos medidos—, y F24 ha tenido que enseñarle al criterio a leer esa
+  lista como un conjunto para no tratar el mismo defecto como dos sitios distintos. **Funciona, y es
+  un parche sobre un modelo que no encaja**: el sitio natural del miembro es la ubicación, junto a
+  la ruta y la línea, que es donde ya vive todo lo demás que localiza.
+  - Lo que arreglaría de verdad: `add_locations` podría declarar el miembro de cada punto nuevo (hoy
+    extiende ubicaciones y deja el símbolo del hallazgo intacto, así que un defecto extendido a otro
+    método queda con el símbolo del primero), y el criterio compararía ubicación contra ubicación en
+    vez de una cadena contra otra.
+  - **No se hace en F24**: toca el modelo del dominio y el formato en disco de todo lo guardado, y
+    esta fase no cambia nada de lo que ya está en el hub. Con el conjunto, el caso medido queda
+    cubierto.
+- **F24 — `symbol` en el hub: comprobado hoy, y por qué hay que volver a mirarlo.** El criterio de
+  duplicados (F23) y el filtro (F24) se apoyan en `symbol`, que era optativo. Comprobado en el hub
+  real el 2026-09-03: **AtalayaBanco 25/25 con símbolo** (Copilot), y los **34 sin símbolo de
+  XBLAST son todos `mejoras.mantenibilidad.unidad-grande`** —los genera la aplicación midiendo el
+  fichero, no el auditor, y por naturaleza no tienen miembro—. O sea: **cero hallazgos de auditor
+  sin símbolo** en el hub. El agujero era latente y solo se materializaba con Claude Code. Con el
+  prompt arreglado hay que confirmar en la primera sesión real de cada casa que sigue llegando.
 - **F24 — repetir la tanda sobre las dos clases con Copilot y comprobar que los cinco pares tampoco
   reaparecen allí.** Los duplicados salieron con **Copilot** (AtalayaBanco, 2026-09-03,
   claude-opus-4.7); las dos capas de F24 se han medido con **Claude Code**, porque aquí no hay
@@ -18,6 +39,41 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   particular los **cinco tardíos reales**— sigan saliendo, y las pasadas por clase frente a las 6 del
   caso de referencia. Los contadores de variantes del anexo técnico dan la respuesta sin leer el
   informe entero.
+- **DEFECTO (fuera de F24) — «detenida por el usuario» se dice de cualquier cancelación, con la
+  causa de la cancelación del proveedor no identificada.** Medido en el banco de F24: en una tanda,
+  la pasada 3 de `ClienteRemoto` murió con una `OperationCanceledException` que NO venía del token
+  del usuario —se pasó `CancellationToken.None`— ni del presupuesto. El `catch (OperationCanceledException)` de
+  `SessionCoordinator.RunAsync` la trata como parada del usuario: `stopped = true`, la unidad se
+  queda **sin `UnitVerdictRecord`** y el informe dice «⚠ Sesión detenida por el usuario».
+  - **La evidencia**: la sesión guardada trae `interrupted: true` y una sola unidad en `units`
+    (`CalculadoraCarga.cs`), mientras que en el hub están los **11 hallazgos de `ClienteRemoto`**
+    que sus pasadas 1 y 2 sí llegaron a reportar; las notas enseñan las herramientas de esas dos
+    pasadas y nada de la tercera.
+  - **Por qué importa**: es un dato con la causa cambiada. Solo el token del usuario significa
+    «detenida por el usuario»; una cancelación que viene del proveedor —el CLI que se cae, una
+    lectura que se corta— es un fallo del proveedor y debería nombrarse como tal, igual que
+    BUGFIX-CUOTA hizo con `AuditorProviderException`. Además la unidad desaparece del informe
+    aunque sus hallazgos estén guardados, que es la peor mezcla: trabajo pagado y sin fila.
+  - **La causa de la cancelación del proveedor no identificada.** Con esas palabras: se sabe de
+    dónde NO vino (ni del usuario, ni del presupuesto, ni del techo de llamadas) y no se sabe de
+    dónde vino. Hay una **hipótesis con nombre y sin confirmar**: el corte en `unit_done` de F21,
+    porque el otro abort de la misma fase —el brazo de `opus`— sí dijo su motivo y era del corte
+    («la pasada se cortó en unit_done pero el CLI terminó por `aborted_streaming` en vez de
+    `aborted_tools`»). Son dos caras distintas del mismo mecanismo, pero eso está por comprobar y
+    no se escribe como causa.
+  - **No se arregla dentro de F24**: no es de esta fase y tocar el cierre ordenado del coordinador
+    sin reproducirlo aparte sería exactamente lo que N-2 prohíbe. Lo que hace falta es reproducirlo
+    —matar el CLI a mitad de pasada— y decidir la clasificación.
+- **DEFECTO (fuera de F24) — el corte de F21 se cae A VECES con `opus`.** Medido, y con la
+  frecuencia dicha: **1 de 2 tandas**. Una se cayó con `AuditorProviderException` — «la pasada se
+  cortó en `unit_done` pero el CLI terminó por `aborted_streaming` en vez de `aborted_tools`»— y la
+  otra, mismo modelo y mismo corte puesto, terminó entera. Es intermitente, no determinista, y así
+  hay que reproducirlo. Al ocurrir en la PRIMERA unidad, el
+  guardia `when (session.Units.Count > 0)` no la atrapa y la excepción se lleva la sesión entera:
+  sin registro, sin informe y sin una fila que diga que no se hizo nada. Es el comportamiento que
+  F5.15 dejó probado, pero la causa de fondo es que el corte espera un motivo de terminación que
+  este modelo no da. Hasta arreglarlo, **una tanda con `opus` hay que tomarla con `--sin-corte`**, y
+  el banco ya lo permite en el modo `barrido`.
 - **F21 — el corte, con Copilot delante.** Aquí no hay asiento, así que §4 se resolvió leyendo el
   contrato del SDK y no midiéndolo (D-883): `CopilotToolOptions.IsTerminal` dice que una llamada
   con éxito **termina el turno en vez de devolverle el resultado al modelo**, y `unit_done` lo lleva

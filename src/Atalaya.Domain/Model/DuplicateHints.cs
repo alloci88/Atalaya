@@ -137,16 +137,15 @@ public static class DuplicateHints
             return false;
         }
 
-        string member = Member(a.Symbol);
-        if (member.Length == 0 || !string.Equals(member, Member(b.Symbol), StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        // Y el símbolo tiene que ser un MIEMBRO, no la clase. Cuando el auditor ancla un hallazgo
-        // a la clase entera solo está diciendo «en algún sitio de este fichero», que no distingue
-        // nada: medido, era la mitad de las marcas falsas del caso de referencia.
-        return !IsTypeItself(member, a.Path) && !IsTypeItself(Member(b.Symbol), b.Path);
+        // Los símbolos se comparan como CONJUNTOS y basta con que se corten. Un defecto sistémico
+        // llega con varios miembros en el mismo campo —«CargaMediaPorMetro / CargaEspecifica»— y
+        // eso no es una rareza que haya que tolerar: es el caso normal del criterio. Comparando la
+        // cadena entera, «división por cero en CargaMediaPorMetro» y «división por cero en
+        // CargaMediaPorMetro / CargaEspecifica» serían dos sitios distintos siendo el mismo.
+        // Con dos miembros sueltos la intersección es la igualdad de antes, así que lo que F23
+        // midió sigue valiendo tal cual.
+        var ma = Members(a.Symbol, a.Path);
+        return ma.Count > 0 && ma.Overlaps(Members(b.Symbol, b.Path));
     }
 
     /// <summary>
@@ -160,19 +159,42 @@ public static class DuplicateHints
             StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// El miembro al que apunta un símbolo, sin la clase. El auditor lo escribe de las dos maneras
-    /// —<c>EnviarParteAsync</c> y <c>ClienteRemoto.EnviarParteAsync</c> conviven en el mismo
-    /// informe—, así que compararlos enteros diría que son sitios distintos cuando son el mismo.
+    /// <b>Los miembros a los que apunta un símbolo</b>, sin la clase y sin el tipo. Son tres formas
+    /// y las tres se ven en el banco (60 hallazgos medidos: 44 con un miembro, 10 con el tipo, 6 con
+    /// una lista):
+    /// <list type="bullet">
+    /// <item><description><c>EnviarParteAsync</c> — un miembro. El caso corriente.</description></item>
+    /// <item><description><c>ClienteRemoto.EnviarParteAsync</c> — cualificado. El auditor escribe de
+    /// las dos maneras en el mismo informe, así que se compara solo lo de detrás del punto.</description></item>
+    /// <item><description><c>CargaMediaPorMetro / CargaEspecifica</c> — un defecto sistémico en
+    /// varios miembros, separados por coma o por barra.</description></item>
+    /// </list>
+    /// <para>
+    /// <b>Y el tipo se descarta.</b> Cuando el auditor ancla el hallazgo a la clase entera —10 de
+    /// los 60— solo está diciendo «en algún sitio de este fichero», que no distingue nada: medido,
+    /// era la mitad de las marcas falsas del caso de referencia. Un símbolo que sea SOLO el tipo
+    /// deja el conjunto vacío, y un conjunto vacío no se parece a nada.
+    /// </para>
     /// </summary>
-    private static string Member(string? symbol)
+    private static HashSet<string> Members(string? symbol, string path)
     {
+        var members = new HashSet<string>(StringComparer.Ordinal);
         if (string.IsNullOrWhiteSpace(symbol))
         {
-            return string.Empty;
+            return members;
         }
 
-        string trimmed = symbol.Trim();
-        int dot = trimmed.LastIndexOf('.');
-        return dot >= 0 && dot < trimmed.Length - 1 ? trimmed[(dot + 1)..] : trimmed;
+        foreach (string part in symbol.Split(new[] { ',', '/', ';' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            string trimmed = part.Trim();
+            int dot = trimmed.LastIndexOf('.');
+            string member = dot >= 0 && dot < trimmed.Length - 1 ? trimmed[(dot + 1)..] : trimmed;
+            if (member.Length > 0 && !IsTypeItself(member, path))
+            {
+                members.Add(member);
+            }
+        }
+
+        return members;
     }
 }
