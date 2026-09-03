@@ -4,9 +4,26 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-03 (F19 — menos llamadas por unidad).
+Última revisión: 2026-09-03 (F20 — la escritura de caché, que es el 60 % de la factura).
 
 ## En vuelo
+
+- **F20 — el reparto del coste, con una sesión real delante.** La aritmética está fijada con tests
+  y reproduce al credit la aceptación de F19 (D-871), pero falta verlo: la línea «Reparto del coste»
+  en el informe de una sesión de Copilot, y el trozo del pie en vivo a 1366×768 —tiene que ceder
+  antes que el coste y quedarse en «escritura de caché 61 %»—.
+- **F20 — la conversación compartida, si el modelo cambia.** Se implementó, se midió y se cayó: la
+  escritura de la llamada que abre cada pasada bajaba un 91 %, pero el auditor dejaba de usar
+  herramientas por completo a partir de la segunda pasada (D-874). Dos unidades, dos redacciones,
+  cero hallazgos tardíos. El día que se vuelva a intentar, **la prueba no es que ahorre**: es que
+  las pasadas ≥ 2 sigan encontrando lo que encuentran hoy. La medida y los dos prompts que se
+  probaron están en DECISIONS.
+- **F20 — la escritura de caché sigue siendo el frente abierto.** Es el 60 % de la factura y ninguna
+  de las dos hipótesis la ha movido: A porque no hay corte de caché que podamos pedir (D-872), B
+  porque el modelo deja de trabajar (D-874). Lo que queda medido y sin explotar es que la llamada de
+  cortesía **escribe el razonamiento de la anterior** —~30.000 tokens, cerca del 70 % del coste de
+  entrada de una pasada (D-873)—; quitarla sigue costando las cuentas de consumo (D-865), y ése es
+  el nudo que hay que deshacer.
 
 - **F19 — la economía de turnos, con Copilot delante.** Todo lo de la fase es prompt y coordinador,
   así que vale para las dos casas sin una línea por proveedor, pero **solo se ha medido con Claude
@@ -283,6 +300,18 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **F20 · El 60 % de la factura era reescribir el prefijo en cada pasada** — el coste se reparte
+  ahora por concepto en credits, no en tokens, porque escribir caché cuesta doce veces leerla y dos
+  cifras parecidas costaban trece veces distinto (D-871). El diagnóstico de por qué el prefijo no se
+  reutiliza entre procesos: la lectura es exactamente la misma cifra en las tres pasadas de una
+  unidad —cero reutilización, frontera fija en el bloque del propio CLI—, lo que descarta por
+  construcción que se cuele nada nuestro y lo deja como límite del proveedor (D-872). Separar
+  lectura de escritura llamada a llamada destapó además que la llamada de cortesía escribe el
+  razonamiento de la anterior y es la más cara de la pasada (D-873). La conversación compartida se
+  implementó, se midió y se cayó por cobertura (D-874) — y al medirla apareció el agujero que sí
+  entra: una pasada en la que el auditor no llama a ninguna herramienta ya no cuenta como seca, así
+  que dos turnos mudos no pueden volver a cerrar una unidad que nadie ha barrido (D-875).
 
 - **F19 · Menos llamadas por unidad, sin tocar la cobertura** — primero el desglose, que era el
   trabajo: una pasada son tres llamadas y la tercera no hace nada (D-861). La hipótesis de que las

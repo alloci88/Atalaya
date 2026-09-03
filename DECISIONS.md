@@ -10934,3 +10934,203 @@ Dos cosas concretas que solo se ven allí, y que van a la aceptación del usuari
   turno, y **no contradice la cobertura** — se comprueba que el «tómate los turnos que necesites»
   de F4.1 sigue entero al lado del «entrega todo en un turno».
 - **El guardarraíl del prefijo**: salta por arriba si engorda y por abajo si se cae un bloque.
+## F20 — El 60 % de la factura era reescribir el prefijo en cada pasada
+
+La aceptación de F19 con Copilot dejó una asimetría que pedía explicación: las llamadas cayeron un
+59 % y el coste solo un 32 %. La causa, valorada en credits en vez de en tokens, es que F19 quitó
+sobre todo **lectura** de caché —que se paga a 0,1 ×— y lo que quedó es lo caro.
+
+### D-871 — El coste, repartido por concepto: los tokens engañan y los credits no
+
+Con las tarifas de Opus (5 / 25 / 0,50 / 6,25 $ por millón: entrada, salida, lectura y escritura de
+caché) el total de aquella sesión se reproduce **al credit**, y el reparto es éste:
+
+| Concepto | Tokens | Credits | % |
+| --- | ---: | ---: | ---: |
+| **Escritura de caché** | 126.904 | 79,3 | **61 %** |
+| Salida | 18.139 | 45,3 | 35 % |
+| Lectura de caché | 119.583 | 6,0 | 4,6 % |
+| Entrada fresca | ~0 | < 0,1 | — |
+
+**119.583 leídos y 126.904 escritos son números casi iguales que cuestan trece veces distinto.** Un
+desglose en tokens —que es lo que había desde F18— no permite decidir nada con eso delante; en
+credits, la frase se escribe sola.
+
+Así que el reparto entra donde ya estaba el total: **una línea en el informe** de sesión, pegada al
+coste porque es su lectura, y **un trozo en el pie en vivo**, que cede antes que el coste y se queda
+en el concepto que manda cuando falta sitio.
+
+**Una sola aritmética**, como manda D-788: el reparto no es una segunda cuenta que pueda discrepar
+del total, es el total desglosado — `CreditCalculator` valora cada concepto por separado y el total
+es su suma, con un test que lo fija. Y sin coste no hay reparto: una casa que no factura, un modelo
+sin tarifa o una sesión sin tokens no producen un desglose de ceros, no producen desglose.
+
+El orden es **fijo** —escritura, salida, lectura, fresca— y no por tamaño: así dos informes se
+comparan de un vistazo. Cuál manda se ve en el porcentaje.
+
+### D-872 — Hipótesis A: no hay reutilización, y la frontera está medida al token
+
+La pregunta era si un prefijo byte a byte idéntico se lee o se escribe cuando la pasada siguiente
+llega en otro proceso. Se midió con el banco: **la misma unidad, tres pasadas, un proceso cada una**.
+
+| Pasada | Fresca | Leída | **Escrita** | Entrada |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 2 | **11.322** | 13.681 | 25.005 |
+| 2 | 2 | **11.322** | 14.181 | 25.505 |
+| 3 | 2 | **11.322** | 14.492 | 25.816 |
+
+**La lectura es exactamente la misma cifra en las tres.** No es reutilización parcial —que habría
+señalado a qué altura se contamina el prefijo—: es **cero** reutilización de nada nuestro. Los
+11.322 son el bloque del propio CLI, y coinciden al token con lo que F18 midió entre unidades
+distintas. La frontera de caché no se mueve porque no depende de nuestro contenido: termina antes.
+
+Con eso, las sospechas del encargo quedan **descartadas por construcción**, no por inspección: no
+hay fecha, ni id de sesión, ni directorio, ni contador de pasada colándose en la zona estable,
+porque si lo hubiera la lectura variaría entre pasadas y no varía ni un token. El test de F18 ya
+fija que nuestro prefijo es idéntico; lo que esta medida añade es que **el que no lo reutiliza es el
+proveedor**, y que no hay nada nuestro que arreglar.
+
+**Marcado explícito: no lo hay, y está comprobado.** F18 ya midió que pasar el prefijo por
+`--append-system-prompt-file` produce la misma clave de caché (D-853). Aquí se confirma desde el
+otro lado: si existiera un corte que pudiéramos mover, la lectura de la pasada 2 sería mayor que la
+de la pasada 1. Es un **límite del CLI**, documentado con su medida, y no una tarea pendiente.
+
+### D-873 — Lo que descubrió el desglose por llamada: el turno de cortesía escribe el razonamiento
+
+Al separar lectura de escritura llamada a llamada apareció algo que F19 no podía ver, porque F19
+sumaba las dos en una sola columna de «entrada»:
+
+```
+pasada 1, llamada 1: leída 11.322 · ESCRITA 13.681 · salida 2   → submit_findings × 5 + unit_done
+pasada 1, llamada 2: leída 25.003 · ESCRITA 29.786 · salida 2   → (sin herramienta: solo texto)
+```
+
+La segunda llamada —la de cortesía que F19 no pudo quitar— **escribe 29.786 tokens**: más que el
+prompt entero. Lo que escribe es el razonamiento de la llamada anterior, que viaja dentro de la
+conversación en el turno siguiente. Es decir: la llamada que no hace nada es, en credits, **la más
+cara de la pasada** (~37 k de equivalente contra ~17 k de la que sí trabaja).
+
+Eso recalifica lo que F19 dejó escrito. Allí la llamada de cortesía era «una de dos»; aquí resulta
+ser cerca del **70 % del coste de entrada de una pasada**. La decisión de F19 no cambia —matarla
+sigue costando las cuentas de consumo (D-865), y una sesión que declara 43 tokens de salida donde se
+consumieron 51.451 no es una sesión más barata, es una sesión que miente—, pero el precio de ese
+límite ahora se sabe, y es alto.
+
+### D-874 — Hipótesis B: la aritmética acierta, el modelo deja de trabajar. SE CAE
+
+La idea era la inversa de la hipótesis (falsa) de F19 §2, y con la aritmética a favor por un factor
+de doce: si las pasadas 2..N de una unidad continúan la conversación de la pasada 1, lo anterior se
+**lee** a 0,1 × en vez de **escribirse** a 1,25 ×, y la pasada siguiente solo manda lo que cambia.
+
+Se implementó entera —costura `IUnitSweepSession`, conversación viva con el CLI, sesión persistente
+del SDK de Copilot, prompt de continuación, guardarraíl de contexto— y se midió.
+
+**La mitad del coste salió exactamente como se predijo.** La primera llamada de cada pasada, que es
+la medida determinista:
+
+| Pasada | Proceso por pasada (escrita) | Conversación compartida (escrita) |
+| ---: | ---: | ---: |
+| 1 | 13.681 | 12.564 |
+| 2 | 14.181 | **1.248** |
+| 3 | 14.492 | **1.301** |
+
+**Un 91 % menos de escritura** en la llamada que abre cada pasada a partir de la segunda. El
+mecanismo funciona: el prefijo se lee (41.659 y 55.319 tokens leídos) en vez de reescribirse.
+
+**Y la otra mitad se hundió.** La variable de control:
+
+| | Proceso por pasada | Conversación compartida |
+| --- | ---: | ---: |
+| Hallazgos en pasadas ≥ 2 | 4 | **0** |
+| Pasadas que cerraron con `unit_done` | 3 de 3 | **1 de 3** |
+| Llamadas a herramienta en pasadas ≥ 2 | todas | **ninguna** |
+
+En la conversación compartida el auditor **deja de usar herramientas por completo** a partir de la
+segunda pasada: ni reporta, ni reconcilia, ni cierra la unidad. No es que encuentre menos: es que no
+entrega nada, y gasta el turno igual (12.000 y 21.000 tokens de salida, casi todo razonamiento).
+
+**No es un problema de redacción, y se comprobó.** La primera sospecha fue la regla de F19 —«después
+de `unit_done` no digas nada más: has terminado»—, que en una conversación compartida se puede leer
+como el fin del encargo. Se reescribió esa regla para que cierre **la pasada** y no la unidad, y el
+prompt de continuación pasó a abrir con «LA UNIDAD NO ESTÁ CERRADA», «tiene que terminar con SU
+PROPIO `unit_done`» y «CONTESTA SOLO CON HERRAMIENTAS». **Mismo resultado, en otra unidad**: cero
+herramientas en las pasadas 2 y 3.
+
+Dos unidades, dos redacciones, el mismo desenlace. **Se cae.** Lo que se compraba —un 91 % menos de
+escritura en la llamada de apertura— no vale una unidad que nadie audita, y el anti-objetivo de la
+fase lo dice con esas palabras: la cobertura es la variable de control, no una víctima aceptable.
+
+**Lo que NO se ha podido determinar, y hay que decirlo (N-2): POR QUÉ deja de llamar.** Las dos
+explicaciones compatibles con lo medido son que el modelo dé la unidad por terminada, o que en un
+turno continuado no le lleguen las herramientas. La medida que lo habría separado —capturar el texto
+del auditor en una pasada muda— se preparó y se lanzó, y se quedó sin cuota a mitad: el CLI contestó
+«You've hit your session limit». Queda pendiente, y es la primera pregunta del día que se reintente.
+
+**Lo que sí se descarta es que las dos tandas anteriores fueran cuota.** Una pasada cortada por
+límite dura 2,3 segundos y produce **0** tokens de salida; las pasadas mudas de las dos tandas
+duraron entre 126 y 192 segundos y produjeron entre 12.000 y 21.000. El modelo estaba trabajando —
+razonando largo y tendido— y no llamaba a nada.
+
+Todo lo de la hipótesis sale del código: la costura, las dos implementaciones, el prompt de
+continuación, el umbral y el modo del banco. Queda la medida escrita, que es lo que permitirá
+volver a intentarlo el día que el comportamiento del modelo cambie — y queda una condición para
+ese día: **la prueba no es que ahorre, es que las pasadas ≥ 2 sigan encontrando lo que encuentran
+hoy.**
+
+### D-875 — Lo que la hipótesis destapó y sí entra: una pasada MUDA no es una pasada seca
+
+Mientras se medía B apareció un agujero que no tenía nada que ver con B y que llevaba ahí desde
+F4.1.
+
+Una pasada «seca» —0 hallazgos nuevos, 0 ubicaciones, ningún veredicto distinto de «presente»— es
+la señal de que el barrido ha convergido, y **dos seguidas lo terminan** (F12 §E). Pero la
+definición no exigía que el auditor hubiera hecho nada: una pasada en la que el modelo no llamó a
+**ninguna** herramienta —ni siquiera a `unit_done`— cumplía las tres condiciones y contaba como
+seca.
+
+O sea: dos turnos mudos seguidos cerraban una unidad que nadie había barrido, con el veredicto
+«auditada», sin un solo número fuera de sitio y sin nada que mirar en el informe.
+
+No es hipotético: es exactamente lo que produjeron las dos tandas de B. Con la regla anterior, esas
+unidades habrían quedado marcadas como barridas.
+
+Ahora `PassIsDry` exige al menos una llamada a herramienta, y una pasada muda:
+
+- **no cuenta como seca**, así que el barrido sigue en vez de darse por convergido;
+- **se nombra en el informe** —«el auditor no llamó a ninguna herramienta»—, porque es gasto sin
+  trabajo y eso tiene que verse.
+
+Es la clase de defecto que solo aparece cuando algo hace fallar al modelo de una forma nueva. La
+hipótesis se cayó; el agujero que destapó vale más que lo que se buscaba.
+
+### D-876 — La tabla del §0, con el veredicto de cada cambio
+
+Escenario: **una unidad** de este repositorio (`BuildScope.cs`, y `CloneLink.cs` para la
+comprobación), **tres pasadas**, ciclo General, modelo **sonnet**, con el servidor MCP y las cinco
+tools de auditoría. Reproduce `PromptBench claude --pasadas 3`.
+
+| Cambio | Escritura de caché por pasada | Hallazgos en pasadas ≥ 2 | Veredicto |
+| --- | ---: | ---: | --- |
+| Reparto del coste en credits (D-871) | — | — | **Entra** (visibilidad; no toca la factura) |
+| Prefijo cacheado entre procesos (A, D-872) | sin cambio: la lectura es constante | — | **Imposible → fuera** |
+| Conversación compartida (B, D-874) | 42.775 → 22.157 | **4 → 0** | **Se cae por cobertura** |
+| Pasada muda ≠ pasada seca (D-875) | — | protege | **Entra** |
+
+**Lo que esta fase NO ha conseguido, dicho con todas las letras:** la escritura de caché sigue
+siendo el 60 % de la factura y sigue ahí. Las dos hipótesis del encargo se han medido y ninguna la
+mueve — la primera porque el corte de caché no es nuestro, la segunda porque el modelo deja de
+trabajar cuando se le continúa la conversación. Lo que sí deja la fase es **el termómetro** (ahora
+el reparto se lee en credits, que es donde se ve), **el diagnóstico** de por qué no se puede desde
+aquí, y **un agujero de cobertura cerrado** que llevaba abierto desde F4.1 y que solo apareció
+porque algo hizo fallar al modelo de una forma nueva.
+
+### D-877 — Cobertura (15 tests nuevos, 2.052 en total, todo en verde)
+
+- **El reparto en credits**: reproduce la aceptación de F19 al credit, suma exactamente el total
+  —una sola aritmética—, no enumera conceptos a cero, mantiene el orden fijo, y no existe cuando no
+  hay coste (casa que no factura, modelo sin tarifa, sesión sin tokens). Y un modelo que no cobra la
+  escritura aparte no puede producir un concepto «escritura».
+- **Dónde se lee**: la línea del informe con sus porcentajes, pegada al coste; el trozo del pie con
+  su prioridad de cesión y su forma mínima; y que sin factura no aparece en ninguno de los dos.
+- **La pasada muda**: no cuenta como seca, se nombra en el informe, y una pasada honesta —que sí
+  llama a `unit_done`— sigue contando como seca de toda la vida.

@@ -1063,6 +1063,36 @@ significa que el prefijo se está reescribiendo entero cada vez.
 > **Los tokens son el hecho; el coste, un derivado.** Los informes guardan los tokens enteros, así
 > que dentro de un año se puede recalcular el coste con otra tarifa a partir de los mismos números.
 
+### Lo que de verdad se paga: escribir caché, no leerla
+
+Un token no cuesta lo mismo según de dónde venga. Con las tarifas de Opus, por millón de tokens:
+
+| | $/M | Frente a la entrada |
+| --- | ---: | --- |
+| Entrada fresca | 5,00 | × 1 |
+| **Escribir en caché** | **6,25** | **× 1,25** |
+| Leer de caché | 0,50 | × 0,1 |
+| Salida | 25,00 | × 5 |
+
+**Escribir en caché cuesta doce veces leerla.** Por eso los tokens, a secas, engañan: en una sesión
+real se leyeron 119.583 y se escribieron 126.904 —números casi iguales— y lo escrito fue el **60 %**
+de la factura contra el **5 %** de lo leído.
+
+Por eso el informe y el pie no dicen solo cuánto costó, sino **de qué**:
+
+> **Reparto del coste**: escritura de caché 79,3 (61 %) · salida 45,3 (35 %) · lectura de caché
+> 6,0 (4,6 %) · entrada fresca < 0,1
+
+Cómo se lee:
+
+- **Manda la escritura de caché.** Es lo normal cuando cada pasada empieza de cero: todo lo que se
+  manda es contenido nuevo para el proveedor, y se paga a 1,25 ×. Es el frente de ahorro.
+- **Manda la salida.** Está bien: es donde está el valor, y no se toca.
+- **Manda la lectura.** Es la mejor noticia posible: significa que el proveedor está reutilizando
+  lo que ya le mandaste, a una décima parte del precio.
+- **Manda la entrada fresca.** Es que no hay caché en juego — sesiones muy cortas, o un proveedor
+  que no la usa.
+
 ### Cuántas llamadas hace falta, y por qué
 
 El gasto no escala con el tamaño de la unidad: escala con las **llamadas**. Cada una reenvía el
@@ -1083,6 +1113,10 @@ que es su única lectura extra.
 
 Si en el desglose por pasada del informe ves muchas más, algo va mal: o el modelo está dando
 vueltas, o está soltando los hallazgos de uno en uno en vez de agruparlos. Para eso está el techo.
+
+Y si ves **«el auditor no llamó a ninguna herramienta»**, esa pasada se gastó sin entregar nada: ni
+hallazgos, ni veredictos, ni cierre. No cuenta como pasada seca —así que el barrido sigue en vez de
+darse por terminado—, pero es gasto sin trabajo y por eso aparece nombrada.
 
 ### El techo de llamadas
 
