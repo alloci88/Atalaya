@@ -214,7 +214,7 @@ public sealed class PromptInstrumentationTests : IDisposable
 
         report.Should().Contain("- **Composición**: andamiaje ≈ ");
         report.Should().Contain("llamadas por unidad");
-        report.Should().Contain("### Por pasada, y de qué se compone el prompt (F18)");
+        report.Should().Contain("### Por pasada, y de qué se compone el prompt");
     }
 
     /// <summary>Un agente que solo apunta lo que le mandan: es lo que estos tests miran.</summary>

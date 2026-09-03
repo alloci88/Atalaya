@@ -11437,3 +11437,194 @@ prompt compartido se gobierna por la casa más exigente.
 - **El desenlace**: un corte nuestro no se lee como avería, pero **solo con el sello del CLI**
   (`aborted_tools`); con cualquier otro motivo terminal la pasada se denuncia nombrándolo. Y sin
   corte, una sesión interrumpida sigue siendo un fallo: por ahí no se ha tocado nada.
+## F23 — El informe de sesión es para quien tiene que actuar
+
+El informe tenía **dos lectores y un solo documento**, y llevaba tres fases ganándolas el segundo.
+F18-F21 lo fueron llenando de la telemetría que hizo posible bajar el coste —y que hay que poder
+seguir leyendo—, pero eso dejó al primer lector, el que tiene que arreglar su código, atravesando
+cinco líneas de caché con nombres de fase dentro («re-escrituras ≈ 177369», «suelo inevitable»,
+«instrumentación Hito 1a»), dos tablas de tokens y una narrativa que repetía **siete veces** la
+misma lista de símbolos, antes de llegar a los hallazgos.
+
+**Esta fase no borra un solo dato: los mueve.** Todo lo que se registraba se sigue registrando, y
+todo lo que se escribía se sigue escribiendo. Lo que cambia es dónde.
+
+### D-886 — Dos lectores, un documento: cuerpo y anexo
+
+El criterio que decide en qué mitad va cada cosa es una sola pregunta: **¿sirve para actuar sobre
+los hallazgos, o para diagnosticar lo que cuesta Atalaya?**
+
+- **El cuerpo** —cabecera, resumen, cobertura, hallazgos— no lleva **un solo token**, ni caché, ni
+  composición, ni reparto por conceptos.
+- **El anexo técnico**, tras un separador y con su título, lleva todo eso tal cual estaba.
+
+**Y no es una preferencia estética: es lo que permite que el dato siga existiendo.** La alternativa
+que se pide siempre en esta situación —«quita lo que no se entiende»— habría borrado la
+instrumentación que costó tres fases construir. Moverla la conserva entera y encima la mejora de
+sitio: junta lo que antes estaba repartido entre la cabecera y dos secciones sueltas.
+
+El mismo criterio se aplica **al pie de la sesión en vivo**: la línea lleva progreso, tiempo,
+llamadas y coste; los tokens, el reparto y la composición pasan al **tooltip**. `FooterSegment`
+gana un `TooltipOnly` — no es «prioridad muy alta», es **no se pinta nunca**, porque un trozo que
+solo cede cuando falta sitio vuelve a aparecer en cuanto hay pantalla de sobra.
+
+**Una excepción, y se dice:** el criterio del encargo para el pie era «unidad n de m, tiempo, coste
+acumulado», y **las llamadas se quedan en la línea**. Son la primera señal de un agente en bucle
+(F19 §3), y el único sitio donde eso se ve a tiempo es el pie mientras la sesión corre; en el
+informe ya está pagado. Va en la línea, no en el tooltip, por eso.
+
+### D-887 — Lo que el resumen no contestaba
+
+**La gravedad no estaba en ninguna parte.** «Nuevos: 25» y luego 25 cabeceras que hay que contar a
+mano para saber si hay una Crítica. Ahora la primera línea del resumen es
+«**1 Crítica · 10 Altas · 9 Medias · 5 Bajas**».
+
+**«% criterio (informativo)» no lo entendía nadie**, y no por culpa del lector: no hay forma de
+saber qué es sin que alguien te lo explique. Dice de dónde salen los hallazgos, así que ahora lo
+dice: «Origen: 17 del catálogo de reglas · 8 del criterio del auditor (32 %)».
+
+**Y las unidades no decían cómo cerraron.** «2 auditadas» tapa la diferencia que más importa: una
+unidad que convergió está barrida y otra que agotó el tope **seguía encontrando**. El resumen las
+separa y la línea de cobertura de cada una dice por qué paró, con el dato que lo hace legible:
+«cerrada por tope: seguía encontrando, 1 en la última».
+
+**El motivo se DEDUCE de lo que ya se registra** —el veredicto de presupuesto, la marca de
+cobertura incompleta, y el resto es convergencia—, no se añade un campo nuevo. Con dos excepciones
+que conviene dejar escritas porque el encargo las pedía como motivos de cierre y **no lo son**: una
+pasada **muda** no cierra una unidad (desde F20 hace lo contrario — no cuenta como seca, así que el
+barrido sigue), y el **corte** de F21 termina una llamada, no un barrido. La muda se nombra en la
+línea de la unidad, que es donde significa algo: gasto sin trabajo.
+
+### D-888 — Una línea por unidad, no una por pasada
+
+La cobertura repetía «Revisados: CargaTotalKg, CargaMediaPorMetro, CargaEspecifica» **siete veces**
+en la misma unidad: una por pasada, más el resumen final que era un calco de la última. La lista
+importa; repetirla no.
+
+Ahora se **unen** las de todas las pasadas y se escribe una vez. Se puede leer porque **hay
+contrato**: el prompt le pide al auditor que su resumen empiece exactamente por
+«Revisados: A, B, C.» (F4.1), así que esto no adivina un formato, lee el que se pidió. Lo que no
+encaje se ignora y la unidad se queda sin esa línea, en vez de enseñar media frase cortada.
+
+De los tres adornos con los que el modelo escribe la misma lista —«Http (campo estático)», «campo
+estático Http», «constantes UsuarioServicio/ClaveServicio»— sale lo mismo, quedándose con lo que
+empieza por mayúscula: los identificadores lo hacen y los adornos en español no. Un miembro que
+empiece por minúscula se pierde; a cambio no se cuela media frase como si fuera código.
+
+Las narrativas pasada a pasada **siguen enteras**, en el anexo, que es donde sirven: comparadas
+entre sí enseñan qué zonas revisita el modelo.
+
+### D-889 — La confianza era una constante, y por construcción
+
+El informe escribía «confianza Media» en los 25 hallazgos. Se comprobó en el hub: **59 de 59**. Y
+no es que el modelo no la varíe — es que **no se le pregunta**: el prompt dice literalmente «NO
+asignes IDs ni confianza (eso es de la app)», y la app la deriva del modo
+(`ConfidenceMachine.ForNew`: Integral → Alta, Lotes → Media, Superficial → Baja).
+
+Así que en un barrido por lotes «confianza Media» es tanto como no decir nada. Se sigue guardando
+—sube al reconfirmar, y ahí sí informa— y se escribe **solo cuando difiere de lo que el modo
+reparte a todo lo que nace en esa sesión**. «La habitual» se define contra el modo, no contra una
+constante: así la regla sigue valiendo el día que se audite en Integral.
+
+### D-890 — Posibles duplicados: se marcan, y el criterio se MIDIÓ
+
+El caso de referencia tiene 25 hallazgos y unos 20 defectos. La aplicación **no fusiona**: decidir
+que dos descripciones son el mismo defecto es un juicio sobre el código y equivocarse borra un
+hallazgo real. Marca, y decide la persona.
+
+El criterio no se eligió a ojo. Se probó contra los pares que un humano señaló como duplicados de
+verdad en ese informe:
+
+| Criterio | Ciertos (de 4) | Falsos |
+| --- | ---: | ---: |
+| regla + línea ≤ 0 | 2 | 0 |
+| regla + línea ≤ 3 | 3 | 3 |
+| regla + línea ≤ 12 | **4** | **11** |
+| regla + símbolo + línea ≤ 5 | 3 | 2 |
+| **regla + símbolo (que no sea la clase) + línea ≤ 5** | **3** | **1** |
+
+**El símbolo es lo que hace el trabajo.** Sin él, «división por cero en CargaMediaPorMetro» (28) y
+«división por cero en CargaEspecifica» (33) caen a cinco líneas con la misma regla y se marcarían
+como el mismo defecto: son dos métodos. Y un símbolo que es la **clase** no vale como señal —solo
+dice «en algún sitio de este fichero»—: era la mitad de las marcas falsas.
+
+**Ampliar la distancia no gana cobertura, gana ruido**: para pillar el cuarto par hay que aceptar
+once falsos, y una marca que falla más de lo que acierta se deja de mirar a la tercera. Se prefiere
+precisión: un falso cuesta una mirada, y un duplicado no marcado deja el recuento como estaba, que
+es de donde se venía.
+
+**Lo que este criterio NO pilla, dicho:** dos hallazgos que el auditor ancló a alturas distintas
+—uno a la clase, otro al método— no comparten símbolo; y el mismo defecto bajo dos reglas distintas
+(un `Timeout` ausente y un `CancellationToken` ausente) no comparte regla. Los dos casos están en
+el informe de referencia y los dos se quedan sin marcar. Es el precio de no inventar.
+
+### D-891 — El `ó` que llegaba al informe, y dónde estaba de verdad
+
+El informe de referencia decía «falta de validación de argumentos». La tentación era arreglarlo al
+escribir; **el hub guarda exactamente esos doce caracteres**, así que el destrozo ocurría al
+ENTRAR: el modelo emitió su argumento con la `ó` ya escapada y nadie lo volvió a leer como JSON.
+
+Se arregla **en el toolbox**, que es la puerta por la que pasa todo el texto libre del auditor
+venga de la casa que venga —ponerlo en cada driver sería arreglarlo dos veces y olvidarlo a la
+tercera— y se aplica al resumen de cobertura y a los cuatro textos de un hallazgo.
+
+**Se decodifica poco a propósito**: solo `\uXXXX` bien formados que den un carácter imprimible por
+encima del ASCII. Un `\n`, un `	` o una barra invertida suelta se dejan intactos, porque el
+texto de un hallazgo lleva **código** dentro y ahí una barra invertida suele ser lo que el autor
+quería decir. Se acepta el caso raro que esto no arregla antes que estropear un fragmento que
+alguien va a copiar y pegar.
+
+**Y también al escribir**, además de al ingerir: lo ya guardado sigue llevando el escape dentro y
+un informe de una sesión vieja se regenera desde el hub. El arreglo de origen impide que vuelva a
+pasar; el del render hace legible lo que ya pasó.
+
+### D-892 — La fecha era UTC y no lo decía
+
+«2026-09-03 14:14 UTC» para una sesión de las 16:14 en España. Una hora que no es la del reloj de
+nadie **y que además no avisa** es peor que ninguna: se lee como local y son dos horas menos. Ahora
+va en hora local con su desplazamiento — «2026-09-03 16:14 (UTC+02:00)».
+
+**El desplazamiento y no el nombre de la zona**: Windows en español la llama «Hora de verano
+romance», que no ayuda a nadie y además cambia con el idioma de la máquina.
+
+Esto **rompe a propósito** la propiedad que fijaba `ReportCultureTests`: el mismo informe generado
+en dos husos ya no da el mismo texto. Lo que no puede depender de la máquina es la **forma**, y eso
+es lo que el test fija ahora — un informe se lee en el reloj de quien lo lee.
+
+### D-893 — El informe de referencia, antes y después
+
+Mismo hub, mismo generador, la sesión de AtalayaBanco del 2026-09-03 (Copilot, Opus 4.7, dos
+unidades, 25 hallazgos):
+
+| | Antes | Después |
+| --- | --- | --- |
+| **Líneas hasta el primer hallazgo** | 71 | **26** |
+| Líneas de cabecera | 14 | **6** |
+| «Revisados: …» repetido en el cuerpo | 14 | **2** (una por unidad) |
+| Tokens, caché, composición y reparto en el cuerpo | 5 líneas + 2 tablas | **0** (todo en el anexo) |
+| Gravedad de lo encontrado | no aparecía | **primera línea del resumen** |
+| Motivo de cierre de cada unidad | había que deducirlo | **escrito** |
+| «confianza Media» repetida | 25 veces | **0** |
+| La ruta del fichero, escrita | 41 veces | **20** |
+| Posibles duplicados marcados | ninguno | **4** (3 ciertos, 1 falso) |
+| Nombres de fase visibles | 2 | **0** |
+
+**El informe entero es más largo, no más corto: 197 → 219 líneas.** Es lo que tenía que pasar y
+conviene decirlo, porque el instinto al leer «limpiar un informe» es contar líneas. No se ha quitado
+información —el anexo la lleva entera, y encima con títulos y una frase que explica para quién es—:
+lo que baja, de 71 a 26, es **lo que hay que atravesar para llegar a lo que se venía a leer**.
+
+### D-894 — Cobertura (33 tests nuevos, 2.103 en total, todo en verde)
+
+- **El escape**: el caso exacto del informe real; los acentos, la eñe y las mayúsculas acentuadas;
+  y **lo que NO se toca** — saltos de línea, escapes de control, ASCII, barras dobles de un ejemplo
+  de código, hexadecimal inválido y rutas de Windows.
+- **Los duplicados**: el par positivo con el símbolo cualificado de las dos formas; y los cuatro
+  negativos que sostienen el criterio — regla distinta, distancia, **método distinto aunque estén
+  cerca**, y **símbolo de clase**. Más el conjunto: se marca el segundo y una sola vez.
+- **Ningún nombre de fase**: recorre el informe entero —anexo incluido—, el pie en vivo, los textos
+  de cuatro vistas y los literales de Métricas, saltándose los comentarios, que es donde esas
+  referencias tienen que seguir estando.
+- **Y los que ya existían, actualizados en vez de relajados**: el reparto ahora se afirma **dentro
+  del anexo** y ausente de la cabecera; el pie afirma que el desglose **no se pinta y sí está en el
+  tooltip**; la fecha afirma la forma en vez del valor.

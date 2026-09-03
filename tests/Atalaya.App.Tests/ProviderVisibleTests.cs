@@ -62,8 +62,9 @@ public sealed class ProviderVisibleTests : IDisposable
         string report = ReportBuilder.BuildSessionReport(
             App(), Session(ClaudeCodeProvider.Id, "opus"), Array.Empty<Finding>(), 0, 0, "Org");
 
-        report.Should().Contain("- **Proveedor**: Claude Code");
-        report.Should().Contain("- **Modelo**: opus");
+        // Desde F23 la casa y el modelo comparten línea: son la misma pregunta («con qué se
+        // auditó») y separarlos gastaba dos renglones de cabecera para dos palabras.
+        report.Should().Contain("- **Proveedor**: Claude Code · **Modelo**: opus");
     }
 
     /// <summary>Sitio 2: los metadatos de la ficha del hallazgo.</summary>

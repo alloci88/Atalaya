@@ -91,6 +91,13 @@ public sealed class FooterLine : FrameworkElement
         int[] level = new int[segments.Count];
         bool[] hidden = new bool[segments.Count];
 
+        // Los trozos que son solo para el tooltip nacen ocultos y no vuelven: no compiten por el
+        // sitio de la línea ni cuando sobra (F23 §6).
+        for (int i = 0; i < segments.Count; i++)
+        {
+            hidden[i] = segments[i].TooltipOnly;
+        }
+
         double Total()
         {
             double total = 0;

@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using System.Text;
 using Atalaya.Domain;
+using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 
 using Atalaya.Copilot;
@@ -157,7 +158,7 @@ public static class ReportBuilder
             return;
         }
 
-        sb.AppendLine("### Por pasada, y de qué se compone el prompt (F18)");
+        sb.AppendLine("### Por pasada, y de qué se compone el prompt");
         sb.AppendLine();
         sb.AppendLine("Los tokens de composición son estimados (~4 caracteres por token); los de consumo, medidos.");
         sb.AppendLine();
@@ -197,86 +198,41 @@ public static class ReportBuilder
         var sb = new StringBuilder();
         sb.AppendLine($"# Informe de sesión — {app.Name}");
         sb.AppendLine();
-        sb.AppendLine($"- **Modo**: {session.Mode}");
-        sb.AppendLine(Culture, $"- **Fecha**: {session.StartedUtc:yyyy-MM-dd HH:mm} UTC");
+
+        // LA CABECERA: qué, cuándo, quién, sobre qué, con qué y cuánto. Nada más (F23 §2). Todo lo
+        // que había aquí de tokens, caché y composición vive ahora en el anexo — sigue registrado
+        // y sigue escrito, pero no delante de quien viene a arreglar su código.
+        sb.AppendLine(LocalStampLine(session));
         sb.AppendLine($"- **Autor**: {session.By} ({session.Machine})");
         sb.AppendLine($"- **Commit auditado**: {session.Commit}");
-        sb.AppendLine(ProviderLine(session));
-        sb.AppendLine($"- **Modelo**: {session.Model ?? "n/d"}");
-        // F5.1: el tope del barrido va en el informe porque sin él «cobertura posiblemente
-        // incompleta» no se puede interpretar: no es lo mismo agotar 5 pasadas que agotar 1.
-        // 0 = sesión anterior a F5.1, donde el tope no se registraba.
-        if (session.MaxPassesPerUnit > 0)
-        {
-            sb.AppendLine($"- **Pasadas del barrido (tope)**: {session.MaxPassesPerUnit} por unidad");
-        }
-
-        sb.AppendLine($"- **Ciclo**: {session.CycleN}");
-        // F17 — con qué lupa se auditó. Sin ella, «esta unidad salió limpia» no se puede leer
-        // dentro de un mes: limpia de todo, o limpia de defectos de rendimiento.
-        sb.AppendLine($"- **Temática del ciclo**: {ThemeCatalog.Display(session.Theme)}");
-        // F15 — los TOKENS son el hecho primario y se escriben enteros; el coste es un derivado y
-        // va detrás. Un informe es inmutable, así que dentro de un año alguien podrá recalcular ese
-        // coste con otra tarifa a partir de estos mismos números.
-        sb.AppendLine(UsageLine(session));
-        AppendBudgetLine(sb, session);
+        sb.AppendLine($"{ProviderLine(session)} · **Modelo**: {session.Model ?? "n/d"}");
+        sb.AppendLine($"- **Ciclo**: {session.CycleN} · **Temática**: {ThemeCatalog.Display(session.Theme)}"
+            + $" · **Modo**: {session.Mode}");
 
         CostResult cost = CreditCalculator.Calculate(session, rates);
-        sb.AppendLine($"- **Coste**: {CreditText.OfSession(cost, session.Provider)}");
-        AppendCostSplit(sb, cost);
-        AppendDeclaredCost(sb, session);
+        sb.AppendLine(CostHeadline(session, cost));
         sb.AppendLine();
 
-        sb.AppendLine("## Cobertura");
+        // EL RESUMEN VA PRIMERO, y contesta lo que se pregunta primero (F23 §3). Antes había que
+        // atravesar cinco líneas de caché y dos tablas de tokens para llegar a «cuántos y de qué
+        // gravedad» — que además no estaba: había que contarlos a mano.
+        SessionCounters cn = session.Counters;
+        sb.AppendLine("## Resumen");
         if (session.Interrupted)
         {
             sb.AppendLine("- ⚠ **Sesión detenida por el usuario**: no cubrió todas sus unidades. "
                 + "Lo auditado hasta la parada sí está registrado aquí.");
         }
 
-        sb.AppendLine($"- Unidades procesadas: {session.Units.Count}");
-        sb.AppendLine($"- Pendientes tras la sesión: {pendingUnits}");
-        sb.AppendLine($"- Grandes: {largeUnits}");
-        // Lo que el auditor declara haber revisado, unidad por unidad. Sin esto la cobertura
-        // solo existia dentro del JSON de la sesion y no habia forma de juzgarla de un vistazo.
-        foreach (UnitVerdictRecord u in session.Units.Where(u => !string.IsNullOrWhiteSpace(u.Summary) || u.Passes is { Count: > 0 }))
+        if (SeverityLine(newFindings) is { Length: > 0 } gravedad)
         {
-            sb.AppendLine($"  - **{u.Unit}** ({u.Verdict})");
-            // Desglose del barrido (F4.1). Las pasadas son internas para el usuario, pero tienen
-            // que ser auditables: son la prueba de si la unidad llego a cubrirse o no.
-            if (u.Passes is { Count: > 0 })
-            {
-                string trace = string.Join(" · ", u.Passes.Select(pp =>
-                    pp.Dry
-                        ? $"pasada {pp.Index}: seca"
-                        : $"pasada {pp.Index}: {pp.New} nuevos"
-                          + (pp.LocationsAdded > 0 ? $", {pp.LocationsAdded} ubicaciones" : "")));
-                sb.AppendLine($"    - Barrido: {trace}");
-            }
-
-            if (!string.IsNullOrWhiteSpace(u.Summary))
-            {
-                sb.AppendLine($"    - {u.Summary}");
-            }
-
-            // La cobertura declarada por pasada: es una afirmacion del modelo, no una prueba
-            // (2026-08-25), pero comparada entre pasadas ensena que zonas revisita.
-            foreach (UnitPassRecord pp in (u.Passes ?? new List<UnitPassRecord>()).Where(pp => !string.IsNullOrWhiteSpace(pp.Summary)))
-            {
-                sb.AppendLine($"    - Pasada {pp.Index}: {pp.Summary}");
-            }
+            sb.AppendLine($"- **Gravedad**: {gravedad}");
         }
 
-        sb.AppendLine();
+        sb.AppendLine($"- Nuevos: {cn.New} · Confirmados: {cn.Confirmed} · Resueltos: {cn.Resolved}"
+            + $" · Silenciados respetados: {cn.SilencedRespected}");
+        sb.AppendLine($"- Unidades: {UnitsLine(session, pendingUnits)}");
 
-        SessionCounters cn = session.Counters;
-        int total = cn.New + cn.Confirmed + cn.Resolved + cn.SilencedRespected + cn.NoVerificables;
-        // BUGFIX-REDONDEO: se guardan los ENTEROS, no el porcentaje ya calculado. 1 de 500 es
-        // «0,2 %», no «0%» — y el informe es justo donde peor sienta un número redondeado a nada.
-        int criterioShare = newFindings.Count(f => f.Tag == FindingTag.Criterio);
-        sb.AppendLine("## Resumen de hallazgos");
-        sb.AppendLine($"- Nuevos: {cn.New}  · Confirmados: {cn.Confirmed}  · Resueltos: {cn.Resolved}"
-            + $"  · Silenciados respetados: {cn.SilencedRespected}");
         // F4: números con causa. Solo aparecen si los hay, y siempre acompañados del detalle de
         // qué unidades y qué hallazgos los produjeron (secciones de abajo).
         if (cn.LocationsAdded > 0)
@@ -292,8 +248,7 @@ public static class ReportBuilder
 
         // F5.12: lo que costó tener tipos de problema silenciados en esta app. No es un aviso —el
         // silencio es una decisión tomada a conciencia— pero tiene que verse: un número que no sale
-        // es una decisión que nadie revisa. El desglose por patrón va en la misma línea, y la
-        // sección de abajo dice qué patrón era cada uno.
+        // es una decisión que nadie revisa.
         if (cn.SuppressedByPattern > 0)
         {
             string breakdown = session.SuppressionsByPattern.Count == 0
@@ -305,7 +260,6 @@ public static class ReportBuilder
         }
 
         // F5.1b: los dos números que impiden que un desacuerdo del modelo pase por resolución.
-        // Nunca aparecen sin la sección que los detalla, más abajo.
         if (cn.ResolutionsRefused > 0)
         {
             sb.AppendLine($"- ⚠ «Arreglado» sin evidencia de cambio, degradados a presente: {cn.ResolutionsRefused}"
@@ -324,10 +278,36 @@ public static class ReportBuilder
             sb.AppendLine($"- ⚠ Unidades incompletas: {incompletas.Count}"
                 + $" ({incompletas.Sum(u => u.MissingVerdicts)} hallazgo(s) sin veredicto del auditor, intactos)");
         }
-        sb.AppendLine($"- % criterio (informativo): {PercentText.Of(criterioShare, newFindings.Count)}");
+
+        // Antes se llamaba «% criterio (informativo)», que no se entiende sin que alguien te lo
+        // explique. Dice de dónde salen los hallazgos: de una regla del catálogo, o del juicio del
+        // auditor sin regla detrás. Escrito así se lee sin nota al pie (F23 §3).
+        if (newFindings.Count > 0)
+        {
+            int criterio = newFindings.Count(f => f.Tag == FindingTag.Criterio);
+            sb.AppendLine($"- Origen: {newFindings.Count - criterio} del catálogo de reglas · "
+                + $"{criterio} del criterio del auditor ({PercentText.Of(criterio, newFindings.Count)})");
+        }
+
         if (cn.Rejected > 0)
         {
             sb.AppendLine($"- ⚠ Payloads rechazados por validación: {cn.Rejected}");
+        }
+
+        sb.AppendLine();
+
+        // COBERTURA: UNA LÍNEA POR UNIDAD, no una por pasada (F23 §4). La narrativa pasada a pasada
+        // es trazabilidad —repetía siete veces la misma lista de símbolos— y se ha ido al anexo.
+        sb.AppendLine("## Cobertura");
+        foreach (UnitVerdictRecord u in session.Units)
+        {
+            sb.AppendLine($"- **{Path.GetFileName(u.Unit)}**{Folder(u.Unit)} — {CoverageLine(u, session)}");
+            IReadOnlyList<string> reviewed = ReviewedMembers.From(
+                (u.Passes ?? new List<UnitPassRecord>()).Select(p => AuditorText.Clean(p.Summary)));
+            if (reviewed.Count > 0)
+            {
+                sb.AppendLine($"  - Revisados: {string.Join(", ", reviewed)}");
+            }
         }
 
         sb.AppendLine();
@@ -413,9 +393,320 @@ public static class ReportBuilder
             sb.AppendLine();
         }
 
+        if (newFindings.Count > 0)
+        {
+            AppendFindings(sb, session, newFindings);
+        }
+
+        AppendAnnex(sb, session, cost, pendingUnits, largeUnits);
+
+        Sign(sb, organization);
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// <b>La fecha, en la hora de quien lee</b> (F23 §6). El informe la escribía en UTC y sin
+    /// decirlo: «14:14» para una sesión de las 16:14 en España. Una hora que no es la del reloj de
+    /// nadie y que además no avisa es peor que ninguna — se lee como local y son dos horas menos.
+    /// Va con la zona puesta para que también se entienda leyéndolo desde otro sitio.
+    /// </summary>
+    private static string LocalStampLine(AuditSession session)
+    {
+        DateTimeOffset local = session.StartedUtc.ToLocalTime();
+
+        // El DESPLAZAMIENTO, no el nombre de la zona: Windows en español lo llama «Hora de verano
+        // romance», que no ayuda a nadie y además cambia con el idioma de la máquina. «UTC+02:00»
+        // lo entiende quien lo lee aquí y quien lo lee desde otro huso.
+        string zone = local.Offset == TimeSpan.Zero
+            ? "UTC"
+            : "UTC" + (local.Offset < TimeSpan.Zero ? "-" : "+")
+              + local.Offset.ToString(@"hh\:mm", Culture);
+        return string.Create(Culture, $"- **Fecha**: {local:yyyy-MM-dd HH:mm} ({zone})");
+    }
+
+    /// <summary>
+    /// <b>El coste en UNA línea</b> (F23 §2): total, por unidad y cuánto duró. El reparto por
+    /// conceptos, los tokens y las llamadas son diagnóstico y viven en el anexo.
+    /// <para>
+    /// El coste por unidad es lo que hace comparables dos sesiones de tamaños distintos, y es la
+    /// cifra con la que se decide si una auditoría sale a cuenta. Con una casa que no factura no
+    /// hay importe que repartir y la línea dice lo que hay: la duración.
+    /// </para>
+    /// </summary>
+    private static string CostHeadline(AuditSession session, CostResult cost)
+    {
+        var parts = new List<string> { CreditText.OfSession(cost, session.Provider) };
+
+        int units = session.Units.Count;
+        if (cost.Credits is { } credits && units > 0)
+        {
+            parts.Add(string.Create(Culture, $"{credits / units:0.#} por unidad"));
+        }
+
+        if (Elapsed(session) is { Length: > 0 } elapsed)
+        {
+            parts.Add(elapsed);
+        }
+
+        return $"- **Coste**: {string.Join(" · ", parts)}";
+    }
+
+    /// <summary>
+    /// «1 pasada» y «6 pasadas». Se escribe en español y no con «(s)»: un informe que alguien va a
+    /// leer entero no puede estar salpicado de plantillas sin resolver.
+    /// </summary>
+    private static string Plural(int n, string one, string many)
+        => string.Create(Culture, $"{n} {(n == 1 ? one : many)}");
+
+    /// <summary>Lo que duró la sesión, de reloj de pared. Vacío si no se registró el final.</summary>
+    private static string Elapsed(AuditSession session)
+    {
+        if (session.EndedUtc is not { } ended || ended <= session.StartedUtc)
+        {
+            return string.Empty;
+        }
+
+        TimeSpan span = ended - session.StartedUtc;
+        return span.TotalMinutes >= 1
+            ? string.Create(Culture, $"{(int)span.TotalMinutes} min {span.Seconds} s")
+            : string.Create(Culture, $"{span.Seconds} s");
+    }
+
+    /// <summary>
+    /// <b>Cuántos hallazgos y de qué gravedad</b> (F23 §3). Es la primera pregunta de quien tiene
+    /// que actuar y no estaba en ningún sitio: había que contar a mano las cabeceras de la lista.
+    /// Solo se nombran las gravedades que existen — «0 Críticas» ocupa sitio para no decir nada.
+    /// </summary>
+    internal static string SeverityLine(IReadOnlyList<Finding> findings)
+    {
+        (Severity Severity, string One, string Many)[] names =
+        {
+            (Severity.Critica, "Crítica", "Críticas"),
+            (Severity.Alta, "Alta", "Altas"),
+            (Severity.Media, "Media", "Medias"),
+            (Severity.Baja, "Baja", "Bajas"),
+        };
+
+        var parts = new List<string>();
+        foreach ((Severity severity, string one, string many) in names)
+        {
+            int n = findings.Count(f => f.Severity == severity);
+            if (n > 0)
+            {
+                parts.Add($"{n} {(n == 1 ? one : many)}");
+            }
+        }
+
+        return string.Join(" · ", parts);
+    }
+
+    /// <summary>
+    /// Cuántas unidades se auditaron y <b>cómo cerraron</b> (F23 §3). «2 auditadas» no dice si el
+    /// barrido convergió o se quedó a medias, que es lo que decide si hay que volver.
+    /// </summary>
+    private static string UnitsLine(AuditSession session, int pendingUnits)
+    {
+        int total = session.Units.Count;
+        int incompletas = session.Units.Count(u => u.CoverageIncomplete);
+        int cortadas = session.Units.Count(u => u.Verdict == "presupuesto-superado");
+        int completas = total - incompletas - cortadas;
+
+        var parts = new List<string>();
+        if (completas > 0)
+        {
+            parts.Add(Plural(completas, "completa", "completas"));
+        }
+
+        if (incompletas > 0)
+        {
+            parts.Add($"{incompletas} con cobertura posiblemente incompleta");
+        }
+
+        if (cortadas > 0)
+        {
+            parts.Add(Plural(cortadas, "cortada por presupuesto", "cortadas por presupuesto"));
+        }
+
+        string detail = parts.Count > 0 ? ": " + string.Join(", ", parts) : string.Empty;
+        string pending = pendingUnits > 0
+            ? " · " + Plural(pendingUnits, "pendiente", "pendientes") + " en el inventario"
+            : string.Empty;
+        return $"{Plural(total, "auditada", "auditadas")}{detail}{pending}";
+    }
+
+    /// <summary>
+    /// La línea de una unidad: estado, pasadas, <b>por qué dejó de barrerse</b> y qué aportó
+    /// (F23 §4).
+    /// <para>
+    /// El motivo de cierre se deduce de lo que la sesión ya registra: un veredicto de presupuesto
+    /// es un corte; <c>CoverageIncomplete</c> es haberse quedado sin pasadas; y lo demás es haber
+    /// convergido. <b>Importa distinguirlos</b>: una unidad que agotó el tope <i>seguía
+    /// encontrando</i>, y decir solo «6 pasadas» deja al lector creyendo que se miró entera.
+    /// </para>
+    /// </summary>
+    private static string CoverageLine(UnitVerdictRecord u, AuditSession session)
+    {
+        List<UnitPassRecord> passes = u.Passes ?? new List<UnitPassRecord>();
+        var parts = new List<string> { u.Verdict };
+
+        if (passes.Count > 0)
+        {
+            string why;
+            if (u.Verdict == "presupuesto-superado")
+            {
+                why = "cortada por presupuesto";
+            }
+            else if (u.CoverageIncomplete)
+            {
+                UnitPassRecord last = passes[^1];
+                why = last.New > 0
+                    ? $"cerrada por tope: seguía encontrando, {last.New} en la última"
+                    : "cerrada por tope sin converger";
+            }
+            else
+            {
+                why = "cerrada por dos pasadas secas";
+            }
+
+            parts.Add($"{Plural(passes.Count, "pasada", "pasadas")}, {why}");
+
+            // Una pasada en la que el auditor no llamó a NINGUNA herramienta se gastó sin entregar
+            // nada. No cierra la unidad —desde F20 ni siquiera cuenta como seca—, pero es gasto sin
+            // trabajo y en el informe tiene que verse.
+            int mudas = session.Notes.Count(n =>
+                n.StartsWith(u.Unit, StringComparison.Ordinal)
+                && n.Contains("no llamó a ninguna herramienta", StringComparison.Ordinal));
+            if (mudas > 0)
+            {
+                parts.Add(Plural(mudas, "pasada muda", "pasadas mudas"));
+            }
+        }
+
+        int nuevos = passes.Sum(p => p.New);
+        if (nuevos > 0)
+        {
+            parts.Add(Plural(nuevos, "nuevo", "nuevos"));
+        }
+
+        // Los confirmados NO se suman entre pasadas: cada pasada reconcilia los MISMOS hallazgos
+        // existentes, así que sumarlos daba «70 confirmados» sobre 18 hallazgos. El recuento que
+        // significa algo es el de la sesión, y está en el resumen.
+        return string.Join(" · ", parts);
+    }
+
+    /// <summary>
+    /// La carpeta de una unidad, entre paréntesis. El nombre del fichero es lo que se lee, pero sin
+    /// la carpeta dos <c>Common.cs</c> de módulos distintos son la misma línea — y una unidad que
+    /// no aportó hallazgos no aparece en ningún otro sitio del cuerpo donde mirar la ruta.
+    /// </summary>
+    private static string Folder(string unit)
+    {
+        string folder = Path.GetDirectoryName(unit)?.Replace('\\', '/') ?? string.Empty;
+        return folder.Length == 0 ? string.Empty : $" ({folder}/)";
+    }
+
+    /// <summary>
+    /// <b>Los hallazgos, agrupados por unidad y ordenados por gravedad</b> (F23 §5). La ruta iba
+    /// repetida en los 25 hallazgos del caso de referencia; ahora es el título del grupo y en cada
+    /// hallazgo queda la línea, que es lo que cambia entre uno y otro.
+    /// </summary>
+    private static void AppendFindings(
+        StringBuilder sb, AuditSession session, IReadOnlyList<Finding> findings)
+    {
+        sb.AppendLine("## Hallazgos nuevos");
+        sb.AppendLine();
+
+        // La confianza NO se escribe cuando es la que el modo reparte a todo lo que nace en esta
+        // sesión: en el caso de referencia salía «confianza Media» en los 25, que es tanto como no
+        // decir nada. El prompt le prohíbe al auditor asignarla —«eso es de la app»— así que es
+        // función del modo, no un juicio. Se sigue guardando; se enseña solo cuando dice algo.
+        Confidence usual = Domain.Rules.ConfidenceMachine.ForNew(session.Mode);
+
+        List<Finding> ordered = findings
+            .OrderBy(f => UnitOf(f), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(f => f.Severity)
+            .ToList();
+
+        IReadOnlyDictionary<Ulid, Finding> duplicates = DuplicateHints.Of(ordered);
+
+        string? unit = null;
+        foreach (Finding f in ordered)
+        {
+            string current = UnitOf(f);
+            if (!string.Equals(current, unit, StringComparison.Ordinal))
+            {
+                unit = current;
+                sb.AppendLine($"### {current}");
+                sb.AppendLine();
+            }
+
+            string line = f.Locations.Count > 0 ? $" — línea {f.Locations[0].Line}" : string.Empty;
+            sb.AppendLine($"#### [{f.Severity}] {Alias(f)}{f.Title}{line}");
+            sb.AppendLine($"- `{f.RuleId}` · {f.Pillar}"
+                + (f.Confidence == usual ? string.Empty : $" · confianza {f.Confidence}"));
+            sb.AppendLine($"- {f.Description}");
+            if (!string.IsNullOrWhiteSpace(f.Recommendation))
+            {
+                sb.AppendLine($"- **Recomendación**: {f.Recommendation}");
+            }
+
+            // La marca de posible duplicado. La aplicación NO fusiona: dice a qué se parece y
+            // decide quien conoce el código (F23 §5).
+            if (duplicates.TryGetValue(f.Id, out Finding? twin))
+            {
+                sb.AppendLine($"- ⚠ Posible duplicado de {Name(twin)} — mismo sitio y misma regla, "
+                    + "descrito con otras palabras. No se han fusionado.");
+            }
+
+            sb.AppendLine();
+        }
+    }
+
+    /// <summary>La unidad de un hallazgo: su primera ubicación, que es por donde se agrupa.</summary>
+    private static string UnitOf(Finding f)
+        => f.Locations.Count > 0 ? f.Locations[0].Path : "(sin ubicación)";
+
+    /// <summary>Cómo nombrar a otro hallazgo dentro del informe: su alias si lo tiene.</summary>
+    private static string Name(Finding f)
+        => string.IsNullOrEmpty(f.DisplayId) ? $"«{f.Title}»" : f.DisplayId!;
+
+    /// <summary>
+    /// <b>El anexo técnico</b> (F23 §1): todo lo que sirve para diagnosticar el COSTE de Atalaya,
+    /// junto y al final.
+    /// <para>
+    /// <b>No se ha borrado nada</b>, y ése es el punto. F18-F21 llenaron la cabecera de telemetría
+    /// que sirvió para tres fases de ahorro y que hay que poder seguir leyendo; lo que no tiene
+    /// sentido es ponérsela delante a quien viene a arreglar su código y no sabe —ni tiene por qué—
+    /// qué es una re-escritura de caché. Dos lectores, un documento, y cada uno con su parte.
+    /// </para>
+    /// </summary>
+    private static void AppendAnnex(
+        StringBuilder sb, AuditSession session, CostResult cost, int pendingUnits, int largeUnits)
+    {
+        sb.AppendLine("---");
+        sb.AppendLine();
+        sb.AppendLine("## Anexo técnico — diagnóstico");
+        sb.AppendLine();
+        sb.AppendLine("Instrumentación del coste de la propia auditoría. No hace falta para actuar sobre los");
+        sb.AppendLine("hallazgos: está aquí para quien mantiene Atalaya.");
+        sb.AppendLine();
+
+        sb.AppendLine(UsageLine(session));
+        AppendCostSplit(sb, cost);
+        AppendDeclaredCost(sb, session);
+        AppendBudgetLine(sb, session);
+        if (session.MaxPassesPerUnit > 0)
+        {
+            sb.AppendLine($"- **Pasadas del barrido (tope)**: {session.MaxPassesPerUnit} por unidad");
+        }
+
+        sb.AppendLine($"- **Inventario**: {pendingUnits} pendiente(s) · {largeUnits} grande(s)");
+        sb.AppendLine();
+
         if (session.UsageBreakdown.Count > 0)
         {
-            sb.AppendLine("## Desglose por unidad (instrumentación Hito 1a)");
+            sb.AppendLine("### Consumo por unidad");
+            sb.AppendLine();
             sb.AppendLine("| Unidad | Prompt~ | Llamadas | ToolCalls | In | Out | CacheRead | CacheWrite | Duración |");
             sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
             foreach (UnitUsageBreakdown b in session.UsageBreakdown)
@@ -429,26 +720,54 @@ public static class ReportBuilder
             AppendPassBreakdown(sb, session);
         }
 
-        if (newFindings.Count > 0)
-        {
-            sb.AppendLine("## Hallazgos nuevos");
-            foreach (Finding f in newFindings.OrderBy(f => f.Severity))
-            {
-                string loc = f.Locations.Count > 0 ? $"{f.Locations[0].Path}:{f.Locations[0].Line}" : "";
-                sb.AppendLine($"### [{f.Severity}] {Alias(f)}{f.Title}");
-                sb.AppendLine($"- `{f.RuleId}` · {f.Pillar} · confianza {f.Confidence} · {loc}");
-                sb.AppendLine($"- {f.Description}");
-                if (!string.IsNullOrWhiteSpace(f.Recommendation))
-                {
-                    sb.AppendLine($"- **Recomendación**: {f.Recommendation}");
-                }
+        AppendPassNarrative(sb, session);
+    }
 
-                sb.AppendLine();
+    /// <summary>
+    /// Lo que el auditor declaró haber revisado en CADA pasada. Es trazabilidad —permite ver qué
+    /// zonas revisita— y no lectura: en el caso de referencia repetía siete veces la misma lista de
+    /// símbolos delante de quien solo quería la lista de defectos.
+    /// </summary>
+    private static void AppendPassNarrative(StringBuilder sb, AuditSession session)
+    {
+        bool any = session.Units.Any(u =>
+            (u.Passes ?? new List<UnitPassRecord>()).Any(p => !string.IsNullOrWhiteSpace(p.Summary)));
+        if (!any)
+        {
+            return;
+        }
+
+        sb.AppendLine("### Cobertura declarada, pasada a pasada");
+        sb.AppendLine();
+        sb.AppendLine("Lo que el auditor dice haber mirado. Es una afirmación suya, no una prueba.");
+        sb.AppendLine();
+        foreach (UnitVerdictRecord u in session.Units)
+        {
+            List<UnitPassRecord> passes = (u.Passes ?? new List<UnitPassRecord>())
+                .Where(p => !string.IsNullOrWhiteSpace(p.Summary))
+                .ToList();
+            if (passes.Count == 0)
+            {
+                continue;
+            }
+
+            sb.AppendLine($"- **{u.Unit}**");
+            string trace = string.Join(" · ", (u.Passes ?? new List<UnitPassRecord>()).Select(pp =>
+                pp.Dry
+                    ? $"pasada {pp.Index}: seca"
+                    : $"pasada {pp.Index}: {pp.New} nuevos"
+                      + (pp.LocationsAdded > 0 ? $", {pp.LocationsAdded} ubicaciones" : "")));
+            sb.AppendLine($"  - Barrido: {trace}");
+            foreach (UnitPassRecord pp in passes)
+            {
+                // También al ESCRIBIR, y no solo al ingerir (F23 §6): el arreglo de origen impide
+                // que vuelva a pasar, pero lo que ya está guardado sigue llevando el escape dentro
+                // y un informe de una sesión vieja se sigue regenerando desde el hub.
+                sb.AppendLine($"  - Pasada {pp.Index}: {AuditorText.Clean(pp.Summary)}");
             }
         }
 
-        Sign(sb, organization);
-        return sb.ToString();
+        sb.AppendLine();
     }
 
     /// <summary>

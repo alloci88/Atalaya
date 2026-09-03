@@ -552,6 +552,17 @@ public sealed class SessionToolbox : IAuditToolbox
             return Reject("submit_finding con args nulo", args: null);
         }
 
+        // F23 §6 — el texto del auditor llega a veces con sus propios escapes dentro («validación»
+        // se guardaba con esos doce caracteres y así salía en el informe). Se limpia AQUÍ, que es la
+        // puerta por la que entra todo el texto libre venga de la casa que venga.
+        args = args with
+        {
+            Title = AuditorText.Clean(args.Title) ?? args.Title,
+            Description = AuditorText.Clean(args.Description) ?? args.Description,
+            Impact = AuditorText.Clean(args.Impact) ?? args.Impact,
+            Recommendation = AuditorText.Clean(args.Recommendation) ?? args.Recommendation,
+        };
+
         // 1. ruleId must be a catalog rule or criterio.* (§6.2).
         if (!RuleCatalog.IsValid(args.RuleId))
         {
@@ -651,7 +662,7 @@ public sealed class SessionToolbox : IAuditToolbox
         int declared = suppressedByPattern?.Length ?? 0;
         ToolCallLog.Add($"unit_done · unit='{unitPath}' summary='{Truncate(summary, 80)}'"
             + (declared > 0 ? $" suprimidos={declared} patrón(es)" : ""));
-        LastUnitSummary = summary;
+        LastUnitSummary = AuditorText.Clean(summary);
 
         foreach (SuppressedByPatternArgs s in suppressedByPattern ?? Array.Empty<SuppressedByPatternArgs>())
         {

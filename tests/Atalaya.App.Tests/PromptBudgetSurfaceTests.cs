@@ -104,7 +104,7 @@ public sealed class PromptBudgetSurfaceTests
         string report = ReportBuilder.BuildSessionReport(
             App(), Session(withComposition: true), Array.Empty<Finding>(), 0, 0, "Org", TestRates.Table());
 
-        report.Should().Contain("### Por pasada, y de qué se compone el prompt (F18)");
+        report.Should().Contain("### Por pasada, y de qué se compone el prompt");
         report.Should().Contain("| src/A.cs | 1 | 20 | 570000 | 24000 | 450000 | 100000 | 95,4 s | 2837 | 0 | 600 | 17,5 % |");
     }
 
@@ -139,10 +139,11 @@ public sealed class PromptBudgetSurfaceTests
         IReadOnlyList<FooterSegment> segments = CreditText.UsageSegments(
             20, 570_000, 24_000, 450_000, 100_000, new CostResult(193.3m), RealCopilotAgent.Id, budget);
 
+        // F23 §6 — la composición es diagnóstico y pasa al TOOLTIP, entera. Ya no hace falta una
+        // forma abreviada para cuando falta sitio: no compite por el sitio de la línea.
         FooterSegment last = segments[^1];
         last.Full.Should().Be("código 2,1 % · 20 llamadas/unidad");
-        last.Candidates[^1].Should().Be("código 2,1 %", "cuando falta sitio queda la cifra que decide");
-        last.Priority.Should().Be(4, "es una lectura de los tokens: cede antes que ellos");
+        last.TooltipOnly.Should().BeTrue("no se pinta en la línea; se lee en el tooltip");
     }
 
     /// <summary>Sin composición, el pie no gana un trozo con un cero.</summary>
@@ -187,7 +188,8 @@ public sealed class PromptBudgetSurfaceTests
 
             var view = new SessionViewModel(live);
 
-            view.Footer.Should().Contain(s => s.Full == "código 2,1 % · 20 llamadas/unidad");
+            view.Footer.Should().Contain(s =>
+                s.Full == "código 2,1 % · 20 llamadas/unidad" && s.TooltipOnly);
         }
         finally
         {

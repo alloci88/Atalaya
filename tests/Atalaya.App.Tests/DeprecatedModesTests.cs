@@ -125,8 +125,10 @@ public sealed class DeprecatedModesTests : IDisposable
             _hub.Store.TryReadApp("app")!, session, Array.Empty<Finding>(),
             pendingUnits: 4, largeUnits: 1, organization: null, rates: TestRates.Table());
 
+        // Desde F23 la unidad se nombra por su fichero, con la carpeta al lado: el nombre es lo que
+        // se lee y la carpeta lo que desambigua dos «Common.cs» de módulos distintos.
         report2.Should().Contain("**Modo**: Integral")
-            .And.Contain("src/Common.cs")
+            .And.Contain("**Common.cs** (src/)")
             .And.Contain("4,0 AI credits");
         report2.Should().NotContain("premium requests",
             "la unidad retirada desaparece del frontal; los tokens, que son el hecho, se quedan");

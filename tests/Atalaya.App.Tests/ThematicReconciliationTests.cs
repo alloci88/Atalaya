@@ -233,7 +233,7 @@ public sealed class ThematicReconciliationTests : IDisposable
 
         _hub.Store.ListSessions("app").Single().Theme.Should().Be(AuditTheme.Fiabilidad);
         File.ReadAllText(_hub.HubPaths.ReportFile("app", result.SessionId.ToString()))
-            .Should().Contain("**Temática del ciclo**: Fiabilidad");
+            .Should().Contain("**Temática**: Fiabilidad");
     }
 
     /// <summary>

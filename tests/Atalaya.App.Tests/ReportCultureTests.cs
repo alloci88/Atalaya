@@ -92,7 +92,14 @@ public sealed class ReportCultureTests
 
         // El «:» de HH:mm es el separador de hora de la CULTURA, no un literal: en una cultura con
         // separador «.» esta línea saldría «09.05» sin que nadie lo hubiera pedido.
-        report.Should().Contain("**Fecha**: 2026-08-28 09:05 UTC");
+        //
+        // Desde F23 la fecha va en hora LOCAL con su desplazamiento, así que la hora exacta depende
+        // de la máquina —a propósito: un informe se lee en el reloj de quien lo lee—. Lo que no
+        // puede depender de la máquina es la FORMA, y eso es lo que se fija aquí.
+        report.Should().MatchRegex(
+            @"\*\*Fecha\*\*: \d{4}-\d{2}-\d{2} \d{2}:\d{2} \(UTC([+-]\d{2}:\d{2})?\)");
+        report.Should().NotContain("**Fecha**: 2026-08-28 09:05 UTC",
+            "la hora ya no se escribe en UTC sin avisar: era la del reloj de nadie");
     }
 
     /// <summary>

@@ -68,21 +68,25 @@ public sealed class CostSplitSurfaceTests
     }
 
     /// <summary>
-    /// Y va pegado al coste, no en otra sección: es su lectura, y separarlos obligaría a cruzar dos
-    /// sitios del informe para entender una cifra.
+    /// <b>El reparto vive en el ANEXO</b> (F23 §1), no pegado al coste de la cabecera. Sigue
+    /// escrito y sigue completo; lo que cambia es para quién: la cabecera contesta «cuánto» a quien
+    /// tiene que arreglar su código, y «de qué» es diagnóstico de Atalaya.
     /// </summary>
     [Fact]
-    public void El_reparto_va_justo_debajo_del_coste()
+    public void El_reparto_vive_en_el_anexo_tecnico()
     {
         string report = ReportBuilder.BuildSessionReport(
             App(), Session(), Array.Empty<Finding>(), 0, 0, "Org", Opus());
 
         int coste = report.IndexOf("- **Coste**:", StringComparison.Ordinal);
+        int anexo = report.IndexOf("## Anexo técnico", StringComparison.Ordinal);
         int reparto = report.IndexOf("- **Reparto del coste**:", StringComparison.Ordinal);
 
         coste.Should().BeGreaterThan(0);
-        reparto.Should().BeGreaterThan(coste);
-        report[coste..reparto].Should().NotContain("- **Tokens", "no hay nada en medio");
+        anexo.Should().BeGreaterThan(coste, "el anexo va al final, después del cuerpo");
+        reparto.Should().BeGreaterThan(anexo, "el reparto es diagnóstico y va dentro del anexo");
+        report[coste..anexo].Should().NotContain("Reparto del coste",
+            "la cabecera dice cuánto costó, no de qué se compone");
     }
 
     /// <summary>
@@ -110,11 +114,14 @@ public sealed class CostSplitSurfaceTests
         IReadOnlyList<FooterSegment> segments = CreditText.UsageSegments(
             9, 246_541, 18_139, 119_583, 126_904, cost, RealCopilotAgent.Id);
 
+        // F23 §6 — el pie en vivo se rige por el criterio del cuerpo: el reparto es diagnóstico y
+        // pasa al TOOLTIP. Sigue estando entero y a un gesto de distancia; lo que ya no hace es
+        // competir por una línea que se lee de reojo mientras la auditoría corre.
         FooterSegment reparto = segments.Single(s => s.Full.StartsWith("escritura", StringComparison.Ordinal));
-        reparto.Candidates[^1].Should().Be("escritura de caché 61 %", "la forma mínima es el que manda");
+        reparto.TooltipOnly.Should().BeTrue();
 
         FooterSegment coste = segments.Single(s => s.Full.Contains("AI credits", StringComparison.Ordinal));
-        reparto.Priority.Should().BeGreaterThan(coste.Priority, "el coste no cede antes que su lectura");
+        coste.TooltipOnly.Should().BeFalse("el coste sí se lee en la línea");
     }
 
     /// <summary>Sin coste no hay trozo de reparto en el pie: no se pinta un cero.</summary>

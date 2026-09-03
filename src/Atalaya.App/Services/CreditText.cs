@@ -250,11 +250,14 @@ public static class CreditText
         // forma abreviada con acceso al detalle —el tooltip lleva el desglose y el informe también—;
         // una frase como «tokens: ver informe» mide MÁS que el total con su número, así que nunca
         // sería la forma que cabe cuando el total no cabe. Agotado el total, el trozo se retira.
+        // F23 §6 — el pie en vivo se rige por el mismo criterio que el cuerpo del informe: unidad,
+        // tiempo y coste. Los tokens, el reparto y la composición son diagnóstico —lo que el
+        // informe manda al anexo— y viven en el TOOLTIP: siguen a un gesto de distancia y dejan de
+        // competir por una línea que se lee de reojo mientras la auditoría corre.
         string tokens = Tokens(input, output, cacheRead, cacheWrite);
         if (tokens.Length > 0)
         {
-            segments.Add(new FooterSegment(
-                new[] { tokens, TokensTotal(input, output, cacheRead, cacheWrite) }, Priority: 2, Opacity: 0.7));
+            segments.Add(FooterSegment.Hidden(tokens));
         }
 
         // F20 §1 — el reparto del coste, detrás del coste y delante de los tokens en importancia:
@@ -263,8 +266,7 @@ public static class CreditText
         string reparto = CostSplitLine(cost);
         if (reparto.Length > 0)
         {
-            segments.Add(new FooterSegment(
-                new[] { reparto, CostSplitShort(cost) }, Priority: 3, Opacity: 0.7));
+            segments.Add(FooterSegment.Hidden(reparto));
         }
 
         // F18 — la composición va la ÚLTIMA en el orden y la primera en ceder: es una lectura de los
@@ -273,8 +275,7 @@ public static class CreditText
         string composicion = BudgetShort(budget);
         if (composicion.Length > 0)
         {
-            segments.Add(new FooterSegment(
-                new[] { composicion, BudgetTiny(budget) }, Priority: 4, Opacity: 0.7));
+            segments.Add(FooterSegment.Hidden(composicion));
         }
 
         return segments;

@@ -71,18 +71,31 @@ public sealed class SessionFooterLayoutTests
         Count(full, "28.050").Should().Be(1);
     }
 
+    /// <summary>
+    /// <b>La línea lleva llamadas y coste; los tokens, el tooltip</b> (F23 §6). El pie en vivo se
+    /// rige por el mismo criterio que el cuerpo del informe: lo que hace falta para saber cómo va,
+    /// y el diagnóstico del consumo a un gesto de distancia.
+    /// <para>
+    /// <b>Las llamadas se quedan en la línea a propósito</b>, aunque no sean una de las tres cosas
+    /// que pide el criterio: son la primera señal de un agente en bucle (F19), y el sitio donde eso
+    /// se ve es aquí, mientras corre — en el informe ya está pagado.
+    /// </para>
+    /// </summary>
     [Fact]
-    public void El_orden_es_llamadas_coste_tokens_en_las_dos_casas()
+    public void La_linea_lleva_llamadas_y_coste_y_los_tokens_van_al_tooltip()
     {
         foreach (IReadOnlyList<FooterSegment> segments in new[] { Claude(), Copilot() })
         {
-            segments.Should().HaveCount(3);
             segments[0].Full.Should().Be("20 llamadas");
             segments[0].Priority.Should().Be(0, "las llamadas no ceden nunca");
-            segments[1].Priority.Should().Be(1, "el coste cede después de los tokens");
-            segments[2].Priority.Should().Be(2, "los tokens ceden primero");
-            segments[2].Candidates.Last().Should().EndWith(" tokens",
-                "lo desglosado colapsa al total con su unidad, nunca a un texto cortado; el desglose sigue en el tooltip y en el informe");
+            segments[0].TooltipOnly.Should().BeFalse();
+
+            segments[1].Priority.Should().Be(1, "el coste cede, pero el último");
+            segments[1].TooltipOnly.Should().BeFalse();
+
+            segments.Skip(2).Should().OnlyContain(s => s.TooltipOnly,
+                "tokens, reparto y composición son diagnóstico: viven en el tooltip");
+            segments.Skip(2).Should().NotBeEmpty("y siguen existiendo: no se ha borrado nada");
         }
     }
 
@@ -119,29 +132,29 @@ public sealed class SessionFooterLayoutTests
     /// las llamadas siempre.
     /// </summary>
     [Fact]
-    public void Al_faltar_sitio_ceden_los_tokens_luego_el_coste_y_las_llamadas_nunca()
+    public void Al_faltar_sitio_cede_el_coste_y_las_llamadas_nunca()
     {
         IReadOnlyList<FooterSegment> segments = Claude();
         static double Chars(string t, bool _) => t.Length;
         const double sep = 3;
-        int full = segments.Sum(s => s.Full.Length) + 2 * (int)sep;
 
-        FooterLine.Choose(segments, double.PositiveInfinity, Chars, sep).Should().Equal(segments.Select(s => s.Full));
-        FooterLine.Choose(segments, full, Chars, sep).Should().Equal(segments.Select(s => s.Full));
-
-        IReadOnlyList<string?> tight = FooterLine.Choose(segments, full - 1, Chars, sep);
-        tight[0].Should().Be("20 llamadas");
-        tight[1].Should().Be(segments[1].Full, "el coste no cede mientras los tokens puedan ceder");
-        tight[2].Should().Be(segments[2].Candidates[1], "los tokens pasan a su total");
-
-        IReadOnlyList<string?> tighter = FooterLine.Choose(segments, 70, Chars, sep);
-        tighter[2].Should().BeNull("sin sitio ni para el total, los tokens se retiran antes de tocar el coste");
-        tighter[1].Should().Be(segments[1].Full);
+        // Lo que es solo del tooltip NO se pinta jamás, ni sobrando el sitio del mundo.
+        IReadOnlyList<string?> roomy = FooterLine.Choose(segments, double.PositiveInfinity, Chars, sep);
+        for (int i = 0; i < segments.Count; i++)
+        {
+            if (segments[i].TooltipOnly)
+            {
+                roomy[i].Should().BeNull("es diagnóstico: vive en el tooltip, no en la línea");
+            }
+            else
+            {
+                roomy[i].Should().Be(segments[i].Full);
+            }
+        }
 
         IReadOnlyList<string?> minimal = FooterLine.Choose(segments, 35, Chars, sep);
         minimal[0].Should().Be("20 llamadas");
-        minimal[1].Should().Be("coste: suscripción");
-        minimal[2].Should().BeNull("agotadas sus formas, los tokens se retiran: siguen en el tooltip y en el informe");
+        minimal[1].Should().Be("coste: suscripción", "el coste se abrevia antes que desaparecer");
 
         IReadOnlyList<string?> impossible = FooterLine.Choose(segments, 5, Chars, sep);
         impossible[0].Should().Be("20 llamadas", "lo que no cede se pinta entero aunque no quepa: nunca cortado");
@@ -201,6 +214,10 @@ public sealed class SessionFooterLayoutTests
             line.Chosen[0].Should().Be("Unidad 12 de 40");
             line.Chosen[2].Should().Be("20 llamadas", "las llamadas no ceden nunca");
             line.Chosen[3].Should().NotBeNull("el coste se abrevia pero no desaparece");
+
+            // El detalle del consumo NO se pinta y SÍ está en el tooltip: es la mitad del cambio.
+            string pintado = string.Join(" · ", line.Chosen.Where(c => c is not null));
+            pintado.Should().NotContain("28.050 entrada", "el desglose no ocupa la línea");
             line.FullText.Should().Contain("28.050 entrada", "el detalle entero está en el tooltip");
             line.ToolTip.Should().Be(line.FullText);
         });
@@ -216,7 +233,8 @@ public sealed class SessionFooterLayoutTests
             var line = new FooterLine { Segments = segments };
             ViewLayout.Layout(line, 1100, 40);
 
-            line.Chosen.Should().Equal(segments.Select(s => s.Full));
+            line.Chosen.Should().Equal(segments.Select(s => s.TooltipOnly ? null : s.Full),
+                "todo lo que va en la línea cabe entero; lo del tooltip no se pinta");
         });
 
     /// <summary>Con la ventana a la mitad (441) ceden los tokens antes que el coste, y nada se corta.</summary>
@@ -230,11 +248,7 @@ public sealed class SessionFooterLayoutTests
             var line = new FooterLine { Segments = segments };
             ViewLayout.Layout(line, 441 - 24, 40);
 
-            line.Chosen[4].Should().NotBe(segments[4].Full, "los tokens desglosados no caben a media pantalla");
-            line.Chosen[3].Should().NotBeNull();
-            if (line.Chosen[3] != segments[3].Full)
-            {
-                line.Chosen[4].Should().BeNull("el coste solo se abrevia cuando los tokens ya han cedido del todo");
-            }
+            line.Chosen[4].Should().BeNull("los tokens ya no se pintan: están en el tooltip");
+            line.Chosen[3].Should().NotBeNull("el coste se abrevia pero no desaparece");
         });
 }

@@ -586,6 +586,64 @@ listas y su código legibles, y con su scroll propio. Desde ahí:
 Los informes son **inmutables**: esta vista solo lee. Los enlaces que un informe
 contenga se abren en tu navegador, nunca dentro de la ventana.
 
+#### Cómo está montado un informe de sesión
+
+Un informe de sesión tiene **dos lectores**: quien tiene que arreglar los hallazgos de su código,
+y quien mantiene Atalaya y vigila lo que cuesta. Son dos preguntas distintas, así que el documento
+va en dos partes.
+
+**El cuerpo es para actuar**, y no lleva un solo token:
+
+- **La cabecera** dice qué, cuándo, quién, sobre qué, con qué y cuánto: aplicación, fecha **en tu
+  hora con la zona puesta**, autor, commit auditado, proveedor y modelo, ciclo, temática, modo, y el
+  coste en una línea — *«185,3 AI credits · 92,6 por unidad · 5 min 36 s»*. El coste **por unidad**
+  es lo que hace comparables dos sesiones de tamaños distintos.
+- **El resumen** contesta primero lo que se pregunta primero: **cuántos hallazgos y de qué
+  gravedad** (*«1 Crítica · 10 Altas · 9 Medias · 5 Bajas»*), qué es nuevo y qué se reconcilió, y
+  **cuántas unidades y cómo cerraron**. Debajo, solo si los hay, los números que necesitan causa:
+  supresiones por patrón, resoluciones degradadas, disputas, unidades incompletas.
+- **La cobertura**, una línea por unidad y no una por pasada: estado, cuántas pasadas, **por qué
+  dejó de barrerse** y qué revisó el auditor, dicho una sola vez.
+- **Los hallazgos**, agrupados por fichero —la ruta va una vez, como título— y ordenados por
+  gravedad dentro de cada uno.
+
+**El anexo técnico va al final**, tras un separador, y es diagnóstico del coste de la propia
+auditoría: tokens, reparto por conceptos, caché, consumo por unidad y por pasada, y la cobertura
+que el auditor declaró pasada a pasada. **No se ha quitado nada del informe**: se ha movido.
+
+#### Por qué dejó de barrerse una unidad
+
+Es la parte de la cobertura que más decide, porque «6 pasadas» no dice si se miró entera:
+
+- **Cerrada por dos pasadas secas** — convergió: el auditor no saca más de ahí. Es lo más parecido
+  a «barrida» que existe.
+- **Cerrada por tope** — se acabaron las pasadas antes de converger, y el informe dice **si la
+  última todavía aportaba**: *«cerrada por tope: seguía encontrando, 1 en la última»*. Esa unidad
+  **no** está barrida.
+- **Cortada por presupuesto** — saltó un techo de gasto.
+- Y si alguna pasada fue **muda** —el auditor no llamó a ninguna herramienta— se dice ahí mismo: es
+  gasto sin trabajo.
+
+#### Posibles duplicados
+
+El auditor describe a veces el mismo defecto dos veces con otras palabras, en pasadas distintas. El
+informe **no fusiona nada** —decidir que dos descripciones son el mismo defecto es un juicio sobre
+el código, y equivocarse borra un hallazgo— pero **marca**: cuando dos hallazgos comparten regla,
+miembro y caen a cinco líneas o menos uno de otro, el segundo sale con *«⚠ Posible duplicado de
+BUG-xxxx»*. Sirve para que quien no conoce el código no cuente 25 defectos donde hay veinte.
+
+La marca es una **pista, no un veredicto**: está calibrada para equivocarse poco, así que deja
+pasar duplicados que un humano sí ve —dos hallazgos anclados a alturas distintas del código, o el
+mismo problema bajo dos reglas—. Los que marca, mirados de dos en dos, se resuelven de un vistazo.
+
+#### Lo que no verás
+
+- **La confianza** no se escribe cuando es la que el modo reparte a todo lo que nace en la sesión
+  —en un barrido por lotes son todos «Media»—. Se sigue guardando, y aparece cuando dice algo.
+- **Nombres de fase ni de hito.** El informe no lleva referencias internas del desarrollo de
+  Atalaya en ningún sitio, ni en el anexo: viven en el repositorio, que es donde se pueden buscar.
+
+
 ### Nueva aplicación
 
 El asistente de alta: repositorio, clon local, escaneo inicial y —si procede—
