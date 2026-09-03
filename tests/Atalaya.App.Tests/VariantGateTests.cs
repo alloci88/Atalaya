@@ -99,8 +99,15 @@ public sealed class VariantGateTests : IDisposable
         => new("errores.concurrencia.race", "errores", "alta", title, "desc", "impacto", "reco",
             new[] { new SubmitLocation(Unit, line, null) }, symbol);
 
+    /// <summary>
+    /// Una sesión con la regla ENCENDIDA. Se enciende aquí a propósito: desde D-902 va apagada de
+    /// fábrica, así que esta suite —que prueba lo que hace la regla— tiene que decir que la quiere.
+    /// Que estos tests fallaran al cambiar el valor de fábrica es la prueba de que el interruptor
+    /// manda de verdad; lo que NO puede pasar es que se enciendan solos.
+    /// </summary>
     private Task<SessionResult> Run(IAuditorProvider agent)
         => new SessionCoordinator(_hub, _ingestion, _reconciliation, _machines, _ulids, agent, _settings)
+            { VariantRuleOverride = true }
             .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { Unit }), CancellationToken.None);
 
     private AuditSession Session() => _hub.Store.ListSessions("app").Single();
@@ -414,7 +421,7 @@ public sealed class VariantGateTests : IDisposable
 
         SessionResult result = await new SessionCoordinator(
                 _hub, _ingestion, _reconciliation, _machines, _ulids, agent, _settings)
-            { VariantRule = false }
+            { VariantRuleOverride = false }
             .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { Unit }), CancellationToken.None);
 
         result.Counters.New.Should().Be(2);

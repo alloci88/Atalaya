@@ -237,6 +237,31 @@ public sealed class AppSettings
     public int MaxPassesPerUnit { get; set; } = SettingsLimits.DefaultMaxPassesPerUnit;
 
     /// <summary>
+    /// <b>La regla de variantes (F24), APAGADA por defecto.</b> Encendida, el auditor recibe el
+    /// contrato —una reformulación, una ampliación o una consecuencia de algo ya reportado no es un
+    /// hallazgo nuevo— y la aplicación rebota en la puerta lo que se parece demasiado a un hallazgo
+    /// existente, dejándole reenviarlo con <c>distinctFrom</c> si sostiene que es otro.
+    /// <para>
+    /// <b>Por qué apagada, si hace lo que promete.</b> Porque hace dos cosas y solo una es buena.
+    /// Medido con `opus` sobre `ClienteRemoto`, tres tandas por brazo: sin la regla el barrido nunca
+    /// converge (0 de 3) y encuentra 22·21·20 hallazgos; con ella converge 2 de 3 y encuentra
+    /// 15·16·20. La convergencia es real y el ahorro también — pero **las dos tandas que
+    /// convergieron son las que menos encontraron**, y lo que dejó de salir no eran solo variantes:
+    /// «sin Timeout» pasa de 3 de 3 a 1 de 3, y el <c>Content-Type</c> sin validar, de 3 de 3 a
+    /// ninguna. Se probó también con media regla —la definición sin el permiso para cerrar la unidad
+    /// vacía— y queda en medio: 19 de media, y sigue sin recuperar los dos.
+    /// </para>
+    /// <para>
+    /// <b>La norma de la casa decide.</b> Un cambio que ahorra pasadas y se paga en hallazgos que no
+    /// se encuentran no se enciende solo: es la variable de control que tumbó la hipótesis B de F20
+    /// (D-874). Queda entera, probada y a un clic, para quien prefiera un informe más corto sabiendo
+    /// lo que cuesta; y se enciende de fábrica el día que la medida con Copilot —la casa donde
+    /// salieron los duplicados— diga que allí no se cobra cobertura.
+    /// </para>
+    /// </summary>
+    public bool VariantRule { get; set; }
+
+    /// <summary>
     /// Modelo de Copilot con el que se lanzan las sesiones nuevas (<c>SessionConfig.Model</c>).
     /// La lista de opciones se pide al SDK (<c>ListModelsAsync</c>), nunca se codifica a mano; esto
     /// solo guarda el id elegido.

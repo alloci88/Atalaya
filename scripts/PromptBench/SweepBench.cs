@@ -3,6 +3,7 @@ using System.Globalization;
 using Atalaya.Agents;
 using Atalaya.App.Services;
 using Atalaya.ClaudeCode;
+using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Ids;
@@ -37,7 +38,8 @@ internal static class SweepBench
 {
     public static async Task<int> RunAsync(
         IReadOnlyList<string> units, string cloneRoot, string? model, bool variantRule,
-        int maxPasses, int tandas, bool cut = true)
+        int maxPasses, int tandas, bool cut = true,
+        VariantContractLevel nivel = VariantContractLevel.Full)
     {
         if (!Directory.Exists(cloneRoot))
         {
@@ -63,7 +65,8 @@ internal static class SweepBench
 
         Console.WriteLine($"BARRIDO REAL · regla de variantes: {(variantRule ? "PUESTA" : "QUITADA")} "
             + $"· tope {maxPasses} pasadas · {tandas} tanda(s) · modelo {model ?? "(por defecto)"}"
-            + (cut ? " · con corte" : " · SIN corte"));
+            + (cut ? " · con corte" : " · SIN corte")
+            + (variantRule ? $" · contrato {nivel}" : string.Empty));
         Console.WriteLine($"Clon: {cloneRoot}");
         Console.WriteLine();
         Console.WriteLine("| Tanda | Unidad | Pasadas | Llamadas | Nuevos | Ubic. | Rebotadas | Insistidas | Veredicto | Duración |");
@@ -71,7 +74,7 @@ internal static class SweepBench
 
         for (int tanda = 1; tanda <= tandas; tanda++)
         {
-            int code = await OneAsync(units, cloneRoot, model, variantRule, maxPasses, bridge, tanda, cut);
+            int code = await OneAsync(units, cloneRoot, model, variantRule, maxPasses, bridge, tanda, cut, nivel);
             if (code != 0)
             {
                 return code;
@@ -83,7 +86,7 @@ internal static class SweepBench
 
     private static async Task<int> OneAsync(
         IReadOnlyList<string> units, string cloneRoot, string? model, bool variantRule,
-        int maxPasses, string bridge, int tanda, bool cut)
+        int maxPasses, string bridge, int tanda, bool cut, VariantContractLevel nivel)
     {
         // Un hub NUEVO por tanda. Es la condición para que dos tandas sean dos muestras y no una
         // segunda auditoría: con el hub de la anterior, la tanda 2 vería sus hallazgos como
@@ -139,7 +142,8 @@ internal static class SweepBench
         var coordinator = new SessionCoordinator(
             hub, ingestion, reconciliation, machines, ulids, provider, settings)
         {
-            VariantRule = variantRule,
+            VariantRuleOverride = variantRule,
+            ContractLevel = nivel,
         };
 
         var clock = Stopwatch.StartNew();

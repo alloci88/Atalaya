@@ -427,14 +427,15 @@ public sealed class SessionCoordinatorTests : IDisposable
     /// pero tampoco duplica, porque el auditor lo ve en la lista y lo reconcilia. Un agente que
     /// ignora la reconciliación no resuelve NADA, y la unidad queda incompleta a la vista.
     /// <para>
-    /// <b>Lo que cambió en F24</b>: cuando el re-reporte cae en la misma regla, el mismo miembro y
-    /// la misma línea que el existente, la puerta lo rebota y ya no se crea el duplicado. Lo que NO
-    /// cambia es lo de fondo: la app no ha decidido que sean el mismo problema, y no resuelve nada
-    /// por omisión.
+    /// <b>Y sigue siendo así después de F24</b>, porque la regla de variantes va **apagada de
+    /// fábrica** (D-902): con los ajustes de serie, la puerta no mira y el duplicado se crea, igual
+    /// que siempre. Encendida lo rebotaría — eso lo prueba <c>VariantGateTests</c>, que la enciende
+    /// explícitamente. Lo que no cambia en ningún caso es lo de fondo: la app no decide que dos
+    /// hallazgos sean el mismo, y no resuelve nada por omisión.
     /// </para>
     /// </summary>
     [Fact]
-    public async Task Agent_ignoring_the_existing_list_resolves_nothing_and_the_gate_stops_the_duplicate()
+    public async Task Agent_ignoring_the_existing_list_creates_a_duplicate_but_resolves_nothing()
     {
         await RunLotes(new FakeCopilotAgent(_ => new[] { SampleFinding() }));
 
@@ -443,11 +444,11 @@ public sealed class SessionCoordinatorTests : IDisposable
             auditScript: _ => new[] { SampleFinding() },
             reconcileScript: _ => Array.Empty<VerdictArgs>()));
 
-        second.Counters.New.Should().Be(0, "la puerta de F24 lo reconoce como el mismo defecto");
-        second.Counters.VariantsRejected.Should().Be(1);
+        second.Counters.New.Should().Be(1);
+        second.Counters.VariantsRejected.Should().Be(0, "con los ajustes de serie la puerta no mira");
         second.Counters.Resolved.Should().Be(0);           // lo que importa: NADA se resolvió
         second.IncompleteUnits.Should().Be(1);             // y el fallo es visible
-        _hub.Store.ListFindings("app").Should().ContainSingle()
+        _hub.Store.ListFindings("app").Should().HaveCount(2)
             .And.OnlyContain(f => f.Status == FindingStatus.Activo);
     }
 

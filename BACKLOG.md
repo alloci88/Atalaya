@@ -39,8 +39,12 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   particular los **cinco tardíos reales**— sigan saliendo, y las pasadas por clase frente a las 6 del
   caso de referencia. Los contadores de variantes del anexo técnico dan la respuesta sin leer el
   informe entero.
-  - **Y lo que hay que mirar con lupa: la COBERTURA.** La fase queda *desplegada, no acreditada*
-    (D-902) y con una señal en contra sin descartar. Con `opus`, poner la regla quitó 7 hallazgos y
+  - **Y es lo que decide si la regla se enciende de fábrica.** Queda **apagada** por lo medido
+    (D-906): con `opus`, tres tandas por brazo, la regla hace converger el barrido (2 de 3 frente a
+    0 de 3) y encuentra menos (17 de media frente a 21), perdiendo «sin Timeout» (3/3 → 1/3) y el
+    `Content-Type` sin validar (3/3 → 0/3). Si con Copilot la cobertura NO baja, se enciende de
+    fábrica; si baja, se queda apagada y basta con la marca de posibles duplicados de F23.
+  - **Y lo que hay que mirar con lupa: la COBERTURA.** Con `opus`, poner la regla quitó 7 hallazgos y
     **solo uno era demostrablemente una variante**; cinco eran defectos distintos, entre ellos
     «respuestas leídas en memoria sin límite de tamaño», que es uno de los **cinco tardíos reales**
     de D-895. Con `sonnet`, «doble recorrido» sale sin la regla en 1 de 2 tandas y no sale con ella.

@@ -103,16 +103,38 @@ public class VariantContractTests
     [Fact]
     public void Sin_el_contrato_el_prompt_es_el_de_antes()
     {
-        string sin = PromptComposer.Compose(
-                "src/A.cs", "class A { }", PillarBrief.Parts(TechStack.DotNet), AuditMode.Lotes,
-                variantContract: false)
-            .Text;
+        string sin = Nivel(VariantContractLevel.None);
 
         sin.Should().NotContain("UNA VARIANTE NO ES UN HALLAZGO NUEVO").And.NotContain("BUSCA LO QUE FALTA");
         sin.Should().Contain("UN DEFECTO SISTÉMICO ES UN SOLO HALLAZGO", "lo demás sigue entero");
         sin.Should().Contain("Tienes dos cosas que entregar en cada unidad:");
         sin.Length.Should().BeLessThan(Compose().Text.Length);
     }
+
+    /// <summary>
+    /// <b>La media regla</b> (F24, rama de D-902): solo la mitad que define qué es una variante y qué
+    /// hacer con ella, sin la que le dice al auditor que puede cerrar la unidad vacía. Las dos
+    /// mitades hacen cosas distintas y solo separándolas se puede saber cuál se cobra cobertura.
+    /// </summary>
+    [Fact]
+    public void Con_media_regla_va_la_definicion_y_no_el_permiso_para_terminar()
+    {
+        string medio = Nivel(VariantContractLevel.Core);
+
+        medio.Should().Contain("UNA VARIANTE NO ES UN HALLAZGO NUEVO");
+        medio.Should().Contain("MISMO defecto en OTRO punto de la unidad");
+        medio.Should().Contain("distinctFrom");
+        medio.Should().NotContain("BUSCA LO QUE FALTA");
+        medio.Should().NotContain("submit_findings vacío y unit_done");
+        medio.Length.Should().BeGreaterThan(Nivel(VariantContractLevel.None).Length);
+        medio.Length.Should().BeLessThan(Compose().Text.Length);
+    }
+
+    private static string Nivel(VariantContractLevel nivel)
+        => PromptComposer.Compose(
+                "src/A.cs", "class A { }", PillarBrief.Parts(TechStack.DotNet), AuditMode.Lotes,
+                variantContract: nivel)
+            .Text;
 
     /// <summary>
     /// Y todo ello del lado ESTABLE de la costura de caché (F18 §2). Un contrato que viajara en la

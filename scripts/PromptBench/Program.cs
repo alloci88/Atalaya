@@ -87,8 +87,13 @@ Console.WriteLine();
 // el clon que se le pase.
 if (mode == "barrido")
 {
+    // --media-regla manda SOLO la primera mitad del contrato: la definición de variante y qué hacer,
+    // sin el permiso para cerrar la unidad vacía. Es la tercera medida de F24 (rama de D-902).
+    VariantContractLevel nivel = argv.Contains("--media-regla")
+        ? VariantContractLevel.Core
+        : VariantContractLevel.Full;
     return await SweepBench.RunAsync(
-        units, cloneRoot ?? root, model, !noVariants, maxPasses, tandas, !noCut);
+        units, cloneRoot ?? root, model, !noVariants, maxPasses, tandas, !noCut, nivel);
 }
 
 AuditorBrief brief = PillarBrief.Parts(TechStack.DotNet);

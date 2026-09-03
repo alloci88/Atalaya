@@ -12019,3 +12019,91 @@ filtro, del criterio compartido, del reintento, de la dependencia del símbolo y
 **no acreditadas**: el fenómeno solo se reproduce con `opus`, con una muestra por brazo, y en esa
 misma muestra aparece un coste de cobertura sin descartar. La acreditación es la tanda del backlog
 con Copilot, que es donde salieron los duplicados y donde la lista de ~20 se puede juzgar de verdad.
+
+### D-904 — Tres tandas por brazo con `opus`: la regla compra convergencia y la paga en cobertura
+
+La medida que decide, sobre `ClienteRemoto`, sin el corte de F21 (que con `opus` se cae 1 de 2):
+
+| Brazo | Hallazgos | Media | Convergió (2 secas) |
+|---|---|---:|:--:|
+| Sin regla | 22 · 21 · 20 | 21,0 | **0 de 3** |
+| Regla entera | 15 · 16 · 20 | 17,0 | **2 de 3** |
+| Media regla | 16 · 22 · 19 | 19,0 | **0 de 3** |
+
+**La convergencia la compra la SEGUNDA mitad del contrato.** Con la regla entera el barrido seca en
+2 de 3 tandas; con media regla —la definición de variante y qué hacer, sin «busca lo que falta» ni
+«submit vacío cierra la unidad»— seca en 0 de 3, igual que sin regla. Es la frase que le da permiso
+al auditor para terminar la que hace converger, no la que le explica qué es una variante.
+
+**Y es la misma frase la que se cobra la cobertura.** Las dos tandas que convergieron son las dos que
+menos encontraron. Concepto a concepto, sobre las nueve tandas:
+
+| Concepto | Sin regla | Regla entera | Media regla |
+|---|:--:|:--:|:--:|
+| Sin `Timeout` | 3/3 | **1/3** | 1/3 |
+| `Content-Type` sin validar | 3/3 | **0/3** | 1/3 |
+| Documentación XML ausente | 3/3 | 1/3 | 2/3 |
+| `AggregateException` / excepciones crudas | 2/3 | 0/3 | 0/3 |
+| `CancellationToken` | 3/3 | 2/3 | 3/3 |
+| Lectura sin límite de tamaño | 1/3 | 1/3 | **3/3** |
+| logging · `ConfigureAwait` · estado HTTP · `IDisposable` · path traversal | 3/3 | 3/3 | 3/3 |
+
+**El núcleo duro no se toca**: los cinco defectos de siempre salen en las nueve tandas. Lo que se cae
+es la periferia, y ahí hay al menos uno que está en la lista de los ~20: **«sin Timeout», de 3 de 3 a
+1 de 3**. `AggregateException` sí es la variante legítima —consecuencia del `.Result` ya reportado— y
+que desaparezca es un acierto.
+
+> **Una corrección, porque se dijo mal antes de comprobarlo.** En una lectura anterior se afirmó que
+> «lectura sin límite de tamaño» —uno de los cinco tardíos reales de D-895— se perdía con la regla
+> (3/3 → 1/3). Era un artefacto del patrón de búsqueda, que casaba también con «sin liberar» y «sin
+> logging». Verificado título a título: sale en **1 de 3** sin regla y **1 de 3** con regla, y en
+> **3 de 3** con media regla. Ese hallazgo NO lo pierde la regla. Lo que sí se pierde, medido bien,
+> es `Timeout` y `Content-Type`.
+
+### D-905 — El coste del rechazo, por fin medido: una llamada
+
+En ocho de los nueve brazos el filtro no rebotó nada. En el noveno —media regla, tanda 2— **rebotó
+una vez**, y la aritmética del diseño se puede por fin contrastar en vez de suponer:
+
+- Pasadas 1 a 5: **2 llamadas** cada una. Pasada 6, la del rechazo: **3**.
+- **Un rechazo cuesta exactamente una llamada más**, como se dijo. Ya no es una previsión.
+
+La secuencia completa quedó registrada: la puerta rebota → el auditor reenvía con `distinctFrom` y
+motivo → entra. El bucle de **un** reintento funciona de punta a punta en real.
+
+**Y la otra mitad, que hay que decir.** Ese único rechazo fue un **falso positivo**: rebotó «el
+cliente expone JSON crudo como string en lugar de un contrato tipado» por parecerse a «operaciones de
+red sin `CancellationToken`» —misma regla, mismo símbolo, línea 16—, y son dos defectos distintos. El
+reintento lo resolvió, que es exactamente para lo que está. Es el falso positivo que F23 aceptó al
+elegir el criterio, cobrado aquí a una llamada.
+
+El auditor además usó `distinctFrom` **preventivamente** en varias tandas, sin que la puerta le
+devolviera nada (7 insistidas en total, 1 rechazo). Eso cuesta cero llamadas y no estaba diseñado.
+
+### D-906 — La regla se entrega detrás de un interruptor APAGADO, y el resto se entrega encendido
+
+**La decisión, y por qué es ésta.** La regla hace dos cosas y solo una es buena: seca el barrido —lo
+que ahorra pasadas y arregla el informe— y deja de encontrar defectos que sin ella se encuentran. Un
+cambio que ahorra y se paga en hallazgos que no aparecen **no se enciende solo**: es la misma
+variable de control que tumbó la hipótesis B de F20 (D-874), y se juzga con el mismo rigor.
+
+`AppSettings.VariantRule`, **falso de fábrica**. Apagada, el prompt y la puerta son exactamente los
+de antes de F24 — hay test que lo fija. Encendida, van las dos capas juntas.
+
+**Lo que SÍ se entrega encendido**, porque nada de esto se paga en cobertura:
+
+- El arreglo de `symbol` (D-898), que además destapaba un agujero en la marca del §5 de F23.
+- El criterio por conjuntos (D-899b), que arregla el caso del defecto sistémico con varios miembros.
+- Los contadores de variantes y su línea en el anexo técnico.
+- El modo `barrido` del banco y sus palancas, que es lo que ha permitido medir esto.
+
+**Lo que hace falta para encenderla de fábrica**, escrito para que no se olvide: la tanda con Copilot
+—la casa donde salieron los duplicados— y la comprobación de que allí la cobertura no baja. Si allí
+tampoco se cobra cobertura, se enciende; si se cobra, se queda como está y al menos el informe tiene
+la marca de posibles duplicados de F23, que no cuesta nada.
+
+**Honestidad estadística.** Tres tandas por brazo, un modelo no determinista y rangos que se tocan
+(sin regla 20–22, con regla 15–20). La dirección es consistente en las tres comparaciones y el
+mecanismo tiene una explicación causal —secar antes es dejar de mirar antes—, pero esto no es una
+demostración: es lo suficiente para no encender algo por defecto, que es precisamente la decisión que
+se ha tomado.
