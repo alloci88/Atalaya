@@ -264,7 +264,27 @@ public sealed class SessionToolbox : IAuditToolbox
     /// La pasada queda SECA cuando no aportó nada nuevo y todos sus veredictos fueron «presente».
     /// Es la condición de parada del barrido (F4.1).
     /// </summary>
-    public bool PassIsDry => PassNew == 0 && PassLocationsAdded == 0 && !PassHasNonPresentVerdict;
+    /// <summary>
+    /// <b>Una pasada MUDA no es una pasada seca</b> (F20). Seca significa «el auditor miró y no
+    /// sacó nada más», y eso es un resultado: dos seguidas terminan el barrido (F12 §E). Una pasada
+    /// en la que el modelo no llamó a NINGUNA herramienta —ni siquiera a <c>unit_done</c>— no dice
+    /// eso: dice que no trabajó. Contarla como seca cerraría la unidad antes de tiempo.
+    /// <para>
+    /// No es hipotético: midiendo la conversación compartida de F20 §3 aparecieron dos pasadas
+    /// seguidas con cero llamadas a tool, y con la regla anterior habrían pasado por convergencia.
+    /// La unidad habría quedado «barrida» sin que nadie la barriera, y sin una sola cifra fuera de
+    /// sitio que lo delatara.
+    /// </para>
+    /// </summary>
+    public bool PassIsDry =>
+        ToolCallCount > 0 && PassNew == 0 && PassLocationsAdded == 0 && !PassHasNonPresentVerdict;
+
+    /// <summary>
+    /// El auditor no llamó a ninguna herramienta en esta pasada. Se nombra aparte de
+    /// <see cref="PassIsDry"/> porque el remedio es otro: una seca converge, una muda es un turno
+    /// perdido que hay que ver en el informe.
+    /// </summary>
+    public bool PassWasMute => ToolCallCount == 0;
 
     // ---------- F4.1 · extensión de ubicaciones ----------
 

@@ -513,6 +513,7 @@ public sealed class SessionCoordinator
                 // reportó la anterior y lo reconcilia por ULID en vez de duplicarlo — es la misma
                 // maquinaria de F4, aplicada dentro de la sesión.
                 var passes = new List<UnitPassRecord>();
+
                 int rejectedInUnit = 0;
                 var reasonsInUnit = new List<string>();
                 string? coverageSummary = null;
@@ -560,14 +561,13 @@ public sealed class SessionCoordinator
                     // por la fila con sus tokens.
                     breakdown.Passes.Add(new PassUsage(pass, Composition: composed.Composition));
                     int passRow = breakdown.Passes.Count - 1;
+                    var unitRequest = new AuditUnitRequest(
+                        unit.Path, content, prompt, app.Stack, request.Mode, listed, patterns,
+                        composed.StablePrefix, composed.UnitPart);
                     unitCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     try
                     {
-                        await _agent.AuditUnitAsync(
-                            new AuditUnitRequest(
-                                unit.Path, content, prompt, app.Stack, request.Mode, listed, patterns,
-                                composed.StablePrefix, composed.UnitPart),
-                            toolbox, unitCts.Token);
+                        await _agent.AuditUnitAsync(unitRequest, toolbox, unitCts.Token);
                     }
                     catch (OperationCanceledException) when (budgetTripped && !ct.IsCancellationRequested)
                     {
@@ -639,7 +639,16 @@ public sealed class SessionCoordinator
                         session.Notes.Add($"{unit.Path} (pasada {pass}): tool · {entry}");
                     }
 
-                    if (toolbox.SubmitInvocations == 0 && toolbox.PassNew == 0 && !dry)
+                    if (toolbox.PassWasMute)
+                    {
+                        // F20 — el turno se gastó y no llegó ni un `unit_done`. NO cuenta como
+                        // pasada seca (eso lo garantiza PassIsDry), así que el barrido sigue; pero
+                        // hay que nombrarlo, porque es gasto sin trabajo.
+                        session.Notes.Add(
+                            $"{unit.Path} (pasada {pass}): el auditor no llamó a ninguna herramienta — "
+                            + "la pasada no cuenta como seca y el barrido continúa.");
+                    }
+                    else if (toolbox.SubmitInvocations == 0 && toolbox.PassNew == 0 && !dry)
                     {
                         session.Notes.Add(
                             $"{unit.Path} (pasada {pass}): sin invocaciones a submit_finding(s) — el agente terminó sin reportar hallazgos por tool.");
