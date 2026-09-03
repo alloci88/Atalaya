@@ -174,6 +174,91 @@ public sealed record CallSample(
     decimal? Cost,
     string? Model);
 
+/// <summary>
+/// De qué está hecho UN prompt de unidad, bloque a bloque, en tokens estimados (F18 §1).
+/// <para>
+/// <b>Por qué existe.</b> Hasta F18 se sabía cuánto costaba una sesión y nada más. La pregunta que
+/// no se podía contestar es la única que sirve para decidir: <i>¿qué parte de lo que se paga es el
+/// código que se está auditando, y qué parte es andamiaje?</i> En la línea base de F18 —una clase
+/// de 40 líneas— el código eran ~600 tokens dentro de ~28.500. Sin este desglose eso hay que
+/// calcularlo a mano leyendo un informe.
+/// </para>
+/// <para>
+/// <b>No pretende exactitud al token</b> y no la necesita: se estima con
+/// <c>PromptTokens.Estimate</c>, la misma regla que gobierna el presupuesto de directivas, para
+/// que el panel y el prompt no digan cosas distintas del mismo texto. Lo que se decide con esto
+/// —«el andamiaje es el 97 %»— no cambia porque la cuenta se desvíe un 20 %.
+/// </para>
+/// <para>
+/// <b>El corte estable/variable es el de la caché.</b> <see cref="Estable"/> es exactamente el
+/// prefijo que no cambia entre unidades ni entre pasadas de una misma sesión, y
+/// <see cref="Variable"/> lo que sí. Ese corte no es decorativo: es el que decide si la caché del
+/// proveedor sirve para algo (F18 §2).
+/// </para>
+/// </summary>
+/// <param name="Reglas">Las reglas del auditor y la línea de MODO: constantes del programa.</param>
+/// <param name="Rubrica">La rúbrica de severidad, citada del fichero versionado.</param>
+/// <param name="Catalogo">Los pilares del catálogo, las áreas de criterio y las notas del stack.</param>
+/// <param name="Tematica">El bloque de enfoque del ciclo temático. 0 en un ciclo General.</param>
+/// <param name="Directivas">Las convenciones del proyecto, ya recortadas a su presupuesto (F7).</param>
+/// <param name="Patrones">Los tipos de problema silenciados de la aplicación (F5.12).</param>
+/// <param name="Existentes">Los hallazgos ya conocidos de la unidad, los de su temática y los de otras.</param>
+/// <param name="Unidad">El código de la unidad. <b>Es lo único que se está auditando.</b></param>
+public sealed record PromptComposition(
+    int Reglas = 0,
+    int Rubrica = 0,
+    int Catalogo = 0,
+    int Tematica = 0,
+    int Directivas = 0,
+    int Patrones = 0,
+    int Existentes = 0,
+    int Unidad = 0)
+{
+    /// <summary>El prefijo que NO cambia entre unidades ni entre pasadas: lo cacheable.</summary>
+    public int Estable => Reglas + Rubrica + Catalogo + Tematica + Directivas + Patrones;
+
+    /// <summary>Lo que cambia con la unidad: sus hallazgos conocidos y su código.</summary>
+    public int Variable => Existentes + Unidad;
+
+    public int Total => Estable + Variable;
+
+    /// <summary>Todo lo que no es el código auditado: el andamiaje que pone Atalaya.</summary>
+    public int Andamiaje => Total - Unidad;
+
+    public static PromptComposition operator +(PromptComposition a, PromptComposition b)
+        => new(
+            a.Reglas + b.Reglas,
+            a.Rubrica + b.Rubrica,
+            a.Catalogo + b.Catalogo,
+            a.Tematica + b.Tematica,
+            a.Directivas + b.Directivas,
+            a.Patrones + b.Patrones,
+            a.Existentes + b.Existentes,
+            a.Unidad + b.Unidad);
+
+    /// <summary>El mismo desglose multiplicado por N. Sirve para pesar un prompt por sus llamadas.</summary>
+    public PromptComposition Times(int n)
+        => new(Reglas * n, Rubrica * n, Catalogo * n, Tematica * n,
+               Directivas * n, Patrones * n, Existentes * n, Unidad * n);
+}
+
+/// <summary>
+/// El consumo de UNA pasada del barrido (F18 §1). El desglose por unidad existía desde Hito 1a,
+/// pero una unidad son N pasadas y cada una manda su propio prompt: sin este nivel no se puede
+/// saber si el gasto está en abrir la unidad o en insistir sobre ella.
+/// </summary>
+/// <param name="Composition">De qué estaba hecho el prompt de esta pasada. Null en lo legado.</param>
+/// <param name="DurationMs">Lo que tardó la pasada, de pared. 0 cuando no se midió.</param>
+public sealed record PassUsage(
+    int Pass,
+    int Calls = 0,
+    long InputTokens = 0,
+    long OutputTokens = 0,
+    long CacheReadTokens = 0,
+    long CacheWriteTokens = 0,
+    PromptComposition? Composition = null,
+    long DurationMs = 0);
+
 /// <summary>Per-unit token/cost breakdown (Hito 1a).</summary>
 public sealed class UnitUsageBreakdown
 {
@@ -195,6 +280,15 @@ public sealed class UnitUsageBreakdown
     public decimal? Cost { get; set; }
 
     public List<CallSample> Samples { get; set; } = new();
+
+    /// <summary>
+    /// El consumo pasada a pasada (F18 §1). Vacía en las sesiones anteriores a F18: el dato no
+    /// existía y no se inventa a posteriori repartiendo el total de la unidad entre sus pasadas.
+    /// </summary>
+    public List<PassUsage> Passes { get; set; } = new();
+
+    /// <summary>Lo que tardó la unidad entera, de pared. 0 en lo legado.</summary>
+    public long DurationMs { get; set; }
 }
 
 /// <summary>
