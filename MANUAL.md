@@ -235,7 +235,15 @@ duplicado**, con a qué se parece, y decide una persona.
 Y hay dos casos que este filtro **no puede ver**, dichos de antemano: dos hallazgos bajo reglas
 distintas, y dos anclados a alturas distintas del código —uno a la clase, otro al método—. Ahí actúa
 solo lo que se le dice al auditor. Ampliar el criterio para pillarlos marcaría once cosas que no
-tienen que ver: se midió.
+tienen que ver: se midió. Y se midió también la alternativa evidente —misma línea exacta y mismo
+miembro, sin mirar la regla—: acierta dos veces y falla ocho, así que tampoco entra.
+
+**En qué se apoya, y por qué se le pide al auditor.** El criterio necesita saber **en qué miembro**
+está el defecto, porque es lo único que distingue dos problemas parecidos en métodos vecinos. Por eso
+al auditor se le pide el miembro **siempre**: el método, la propiedad o el campo, y el nombre del
+tipo cuando el defecto es del fichero entero. Un hallazgo anclado a la clase no se marca nunca —«en
+algún sitio de este fichero» no localiza nada— y uno sin miembro tampoco. Cuando el mismo defecto
+está en varios miembros, el auditor los nombra todos y basta con que dos hallazgos compartan uno.
 
 Cuántas se rebotaron y cuántas entraron insistidas está en el **anexo técnico** del informe, no en el
 cuerpo: quien viene a arreglar su código no necesita ese número, y quien mantiene Atalaya no puede

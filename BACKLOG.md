@@ -39,6 +39,14 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   particular los **cinco tardíos reales**— sigan saliendo, y las pasadas por clase frente a las 6 del
   caso de referencia. Los contadores de variantes del anexo técnico dan la respuesta sin leer el
   informe entero.
+  - **Y lo que hay que mirar con lupa: la COBERTURA.** La fase queda *desplegada, no acreditada*
+    (D-902) y con una señal en contra sin descartar. Con `opus`, poner la regla quitó 7 hallazgos y
+    **solo uno era demostrablemente una variante**; cinco eran defectos distintos, entre ellos
+    «respuestas leídas en memoria sin límite de tamaño», que es uno de los **cinco tardíos reales**
+    de D-895. Con `sonnet`, «doble recorrido» sale sin la regla en 1 de 2 tandas y no sale con ella.
+    Una muestra por brazo no distingue ruido de efecto. **La tanda con Copilot no es una formalidad:
+    es la que decide si la regla se cobra cobertura**, y es la misma variable que tumbó la
+    hipótesis B de F20 (D-874). Si allí también se pierden defectos reales, la regla se revisa.
 - **DEFECTO (fuera de F24) — «detenida por el usuario» se dice de cualquier cancelación, con la
   causa de la cancelación del proveedor no identificada.** Medido en el banco de F24: en una tanda,
   la pasada 3 de `ClienteRemoto` murió con una `OperationCanceledException` que NO venía del token

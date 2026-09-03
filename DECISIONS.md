@@ -11866,3 +11866,156 @@ criterio programático barato que los alcance sin ensuciar el informe.**
 > regla, cuatro líneas, mismo símbolo— y es **falso**. Con la regla puesta ese par se rebotaría y
 > haría falta un `distinctFrom`. Es el falso positivo que F23 aceptó al elegir el criterio, visto
 > ahora en otro modelo.
+
+### D-903 — La tabla de correspondencia: los ~20 defectos, hallazgo a hallazgo
+
+Contra la lista fijada en D-895, sobre los brazos con la regla puesta (A, dos tandas, Claude Code +
+`sonnet`) y con opus donde lo hay. «✓» = sale; «—» = no sale en ese brazo.
+
+**CalculadoraCarga (5 defectos distintos):**
+
+| Defecto de referencia | A (con regla) | B (sin regla) |
+|---|:--:|:--:|
+| Off-by-one en `CargaTotalKg` | ✓ | ✓ |
+| División por cero en `CargaMediaPorMetro` | ✓ | ✓ |
+| División por cero en `CargaEspecifica` | ✓ (misma ficha, dos símbolos) | ✓ |
+| Desreferencia nula de `voladura`/`Barrenos` | ✓ | ✓ |
+| Doble recorrido | — | ✓ (1 de 2 tandas) |
+
+Las dos divisiones por cero llegan **consolidadas en un solo hallazgo** con símbolo
+«`CargaMediaPorMetro` / `CargaEspecifica`», y las dos desreferencias igual. Es el contrato haciendo
+lo que dice: un defecto en dos sitios es un hallazgo con dos sitios, no dos hallazgos. En la
+referencia eran cuatro fichas y dos de ellas formaban el par P4.
+
+**ClienteRemoto (15 defectos distintos):**
+
+| Defecto de referencia | A (con regla) | B (sin regla) | C2 (opus, sin regla) |
+|---|:--:|:--:|:--:|
+| Credenciales embebidas | ✓ | ✓ | ✓ |
+| Basic sobre HTTP | ✓ | ✓ | ✓ |
+| Inyección de ruta | ✓ | ✓ | ✓ |
+| Mutación de `DefaultRequestHeaders` | ✓ | ✓ | ✓ |
+| `.Result` bloqueante | ✓ | ✓ | ✓ |
+| `IDisposable` no liberados | ✓ | ✓ | ✓ |
+| Argumentos sin validar | ✓ | ✓ | ✓ |
+| Falta `EnsureSuccessStatusCode` | ✓ | ✓ | ✓ |
+| Endpoint hardcodeado | ✓ | ✓ | ✓ |
+| Sin `Timeout` | ✓ (t1) | ✓ (t2, fusionado con el token) | ✓ (en la ficha del cliente estático) |
+| Lectura sin límite ni Content-Type | — | — | ✓ |
+| `HttpClient` estático vs `IHttpClientFactory` | ✓ | ✓ | ✓ |
+| Falta `ConfigureAwait(false)` | ✓ | ✓ | ✓ |
+| Sin logging | ✓ | ✓ | ✓ |
+| Respuesta devuelta sin parseo | — | — | ✓ (como «no controla los fallos») |
+
+**Los cinco pares, uno a uno, y qué capa los evitó:**
+
+| Par | ¿Reaparece con la regla? | ¿Y sin ella? | Qué capa |
+|---|---|---|---|
+| P1 · `DefaultRequestHeaders` / race en Authorization | No | **No** | Ninguna: no se reprodujo con `sonnet` |
+| P2 · `.Result` / síncrono sobre async | No | **No** | Ninguna: no se reprodujo con `sonnet` |
+| P3 · `Timeout` / `CancellationToken` | No | **No** (sale fusionado en un título) | Ninguna: no se reprodujo con `sonnet` |
+| P4 · división por cero / no valida signos | No | **No** | Ninguna: no se reprodujo con `sonnet` |
+| P5 · dos desreferencias de `voladura` | No | **No** | Ninguna: no se reprodujo con `sonnet` |
+
+**Ésta es la columna que importa y por eso va entera**: sin la regla tampoco reaparecen. Con
+`sonnet` el fenómeno no se da, así que estos cinco «No» **no acreditan nada** — es lo que se explica
+en D-902.
+
+**Las dos ausencias que no son de la regla.** «Lectura sin límite ni Content-Type» y «respuesta
+devuelta sin parseo» faltan en los DOS brazos de `sonnet` y **salen en opus**: son del modelo, no de
+la regla. «Doble recorrido» falta con la regla y sale sin ella en una tanda de dos — 1 de 4 tandas,
+que no distingue ruido de efecto; se deja anotado para la verificación con Copilot, donde la variable
+de control de D-874 se puede juzgar de verdad.
+
+### D-900 — Lo medido: pasadas, llamadas y cobertura, con la regla y sin ella
+
+**Proveedor declarado, y no es el del caso de referencia.** Los duplicados salieron con **Copilot
+(claude-opus-4.7)**; aquí se mide con **Claude Code** en `PromptBench barrido` (D-850) porque no hay
+asiento de Copilot (D-017, D-883). El banco corre la aplicación de verdad —`SessionCoordinator`, su
+toolbox, su reconciliación y su regla de dos secas— sobre un hub temporal.
+
+**Con `sonnet`, dos tandas por brazo** (D-755: una sola no es convergencia), tope 6:
+
+| Clase | Sin regla | Con regla |
+|---|---|---|
+| CalculadoraCarga | 4 y 5 pasadas · 5 y 8 llamadas | **3 y 3 pasadas · 5 y 5 llamadas** |
+| ClienteRemoto | (abortada) y 6 pasadas · — y 8 llamadas | 6 y 6 pasadas · 6 y 9 llamadas |
+
+**Con `opus`, una tanda por brazo, sobre ClienteRemoto** — muestra única, y los dos sin el corte de
+F21 porque con `opus` se cae a veces:
+
+| Brazo | Pasadas | Llamadas | Nuevos | Ubic. | Rebotadas | Insistidas | Veredicto |
+|---|---:|---:|---:|---:|---:|---:|---|
+| Sin regla | 6 | 12 | 22 | 2 | 0 | 0 | **incompleta** |
+| Con regla | 6 | 12 | **15** | 2 | 0 | 1 | **auditada** |
+
+Referencia (Copilot): 6 pasadas y 7 llamadas en las dos clases.
+
+**Lo que el dato sostiene.** Con `sonnet`, CalculadoraCarga converge en 3 pasadas con la regla y en
+4–5 sin ella, en las cuatro tandas. Con `opus`, el brazo con regla **secó** —dos pasadas secas
+seguidas, veredicto `auditada`— y el brazo sin regla agotó el tope sin secar nunca. Esa es la
+diferencia grande, y es exactamente el mecanismo que se buscaba: un «nuevo» impide la sequedad
+(D-092), así que dejar de emitir variantes es lo que deja converger al barrido.
+
+**Lo que NO sostiene.** Las llamadas no bajan: 12 en los dos brazos de `opus`, y en `sonnet` se
+mueven entre 5 y 9 sin patrón. Y en ClienteRemoto con `sonnet` la regla no mueve las pasadas — agota
+el tope de 6 en los dos brazos.
+
+**Las llamadas no las mueve el filtro, y hay registro.** En la tanda de `sonnet` con 9 llamadas sobre
+seis pasadas, tres pasadas costaron dos: la 1 (`submit_findings` + `unit_done` en dos vueltas), la 3
+(seis herramientas agrupadas en dos vueltas) y la 6, la única con causa escrita — «no se pudo cerrar
+la pasada en unit_done —el CLI no publicó el consumo de todas sus llamadas—, así que costó una
+llamada de cortesía más» (F21). Las otras dos son turnos partidos por el modelo, visibles en el
+registro y **sin causa declarada**. Cero rechazos y cero payloads rebotados: el filtro no aportó
+ninguna.
+
+### D-901 — El coste del rechazo NO está medido, y se dice con esas palabras
+
+Lo esperable por diseño es que un rechazo cueste **una llamada más dentro de la pasada** y ahorre
+**una pasada entera**, porque una variante que entra impide la sequedad (D-092). **Eso no se ha
+comprobado.** El filtro **no ha rebotado nada en ninguna tanda real** —0 rebotadas en los seis brazos
+medidos—, así que no hay ni una llamada de rechazo contra la que contrastar la aritmética. La cifra
+sigue siendo una previsión del diseño, no un número verificado.
+
+Lo único medido del coste del filtro es lo que **no** cuesta: 0 rechazos → 0 llamadas añadidas.
+
+**Sí se ha ejercitado el reintento, y no como se esperaba.** En el brazo de `opus` con regla hay
+**1 insistida y 0 rebotadas**: el auditor mandó `distinctFrom` **por su cuenta**, sin que la puerta le
+hubiera devuelto nada, sobre «HttpClient estático de por vida sin `PooledConnectionLifetime`», y con
+un motivo que se sostiene — «aquel hallazgo trata de acoplamiento y configurabilidad; éste es un
+defecto de comportamiento en runtime del singleton». O sea que el camino del reintento funciona de
+punta a punta en real, y el modelo lo usa preventivamente en cuanto se le explica. No es lo que se
+diseñó —se diseñó como respuesta a un rechazo— y es mejor: cuesta cero llamadas.
+
+### D-902 — Desplegado, NO acreditado, y con una señal de coste en cobertura
+
+**Con `sonnet` el fenómeno no se reproduce, ni con la regla ni sin ella.** Los cinco pares del caso de
+referencia no reaparecen en ninguno de los dos brazos: la mutación de `DefaultRequestHeaders` sale
+una vez; el `.Result` sale sin su gemelo; `Timeout` y `CancellationToken` salen **fusionados en un
+título** incluso con la regla quitada; la división por cero, una vez; la desreferencia nula, una vez.
+Un experimento cuyo grupo de control tampoco presenta la enfermedad no demuestra que el tratamiento
+cure.
+
+**Con `opus` sí se reproduce**, y ahí está la única evidencia a favor: sin la regla aparecen pares en
+la misma línea y el mismo miembro —`.Result` contra «lo convierte en `AggregateException`»,
+`DefaultRequestHeaders` contra «las credenciales quedan pegadas al cliente», testabilidad contra API
+obsoleta sobre `Http`—, y con la regla puesta **el par del `.Result` no reaparece** y el barrido
+**seca**. Es una muestra única por brazo.
+
+**Y la señal que va en contra, dicha entera.** De los 7 hallazgos que desaparecen al poner la regla en
+`opus`, **solo uno es demostrablemente una variante** (el del `AggregateException`); uno queda
+absorbido en un hallazgo más ancho (la cancelación); y **cinco son defectos distintos que se pierden**:
+sin compresión automática, sin documentación XML, `Content-Type` con charset, excepciones de
+infraestructura sin traducir, y **«respuestas leídas en memoria sin límite de tamaño»** — que es uno
+de los cinco hallazgos tardíos REALES de D-895. Con `sonnet` la señal equivalente es «doble
+recorrido», que sale sin la regla en 1 de 2 tandas y no sale con ella.
+
+Una muestra por brazo no distingue ruido de efecto, y el modelo no es determinista. Pero es la
+variable de control que tumbó la hipótesis B de F20 (D-874) y se juzga con el mismo rigor: **hay
+indicio de que la regla se cobra cobertura, y no está descartado.**
+
+**Cómo queda la fase.** Las dos capas están **desplegadas y probadas** —tests del contrato, del
+filtro, del criterio compartido, del reintento, de la dependencia del símbolo y de los contadores— y
+**no acreditadas**: el fenómeno solo se reproduce con `opus`, con una muestra por brazo, y en esa
+misma muestra aparece un coste de cobertura sin descartar. La acreditación es la tanda del backlog
+con Copilot, que es donde salieron los duplicados y donde la lista de ~20 se puede juzgar de verdad.
