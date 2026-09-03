@@ -196,6 +196,15 @@ public sealed class SessionCoordinator
     /// de la otra.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// <b>Cómo se le pide al auditor que mire</b> (M1). Palanca de MEDIDA del banco: en producción
+    /// vale <see cref="AuditStyle.Libre"/> y el prompt sale byte a byte como siempre. Existe para
+    /// poder correr el brazo estructurado —recorrido miembro × familia, identidad
+    /// <c>(regla, miembro)</c>— sin tocar nada del producto, que es la condición de que M1 sea una
+    /// medida y no una fase.
+    /// </summary>
+    public AuditStyle Style { get; init; } = AuditStyle.Libre;
+
     public event Action<string, string>? UnitPhaseChanged;   // (path, phase)
 
     // ---- Superficie de OBSERVACIÓN (F5.2) ----
@@ -575,7 +584,8 @@ public sealed class SessionCoordinator
                     // que varíe por unidad ni por pasada, y lo variable detrás. Concatenarlo da el
                     // prompt de siempre byte a byte; quien sepa marcar el prefijo lo marca.
                     ComposedUnitPrompt composed = PromptComposer.Compose(
-                        unit.Path, content, brief, request.Mode, listed, patterns, directives, theme, offTheme);
+                        unit.Path, content, brief, request.Mode, listed, patterns, directives, theme, offTheme,
+                        Style);
                     string prompt = composed.Text;
                     breakdown.PromptTokensEstimate += EstimateTokens(prompt);
 

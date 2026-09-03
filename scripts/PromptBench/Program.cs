@@ -83,7 +83,10 @@ Console.WriteLine();
 // el clon que se le pase.
 if (mode == "barrido")
 {
-    return await SweepBench.RunAsync(units, cloneRoot ?? root, model, maxPasses, tandas, !noCut);
+    // M1 — el brazo estructurado, solo aquí. Sin la bandera, el prompt es el de producción.
+    AuditStyle style = argv.Contains("--estructurado") ? AuditStyle.Estructurado : AuditStyle.Libre;
+    return await SweepBench.RunAsync(
+        units, cloneRoot ?? root, model, maxPasses, tandas, !noCut, style, theme);
 }
 
 AuditorBrief brief = PillarBrief.Parts(TechStack.DotNet);
@@ -125,7 +128,8 @@ static int Uso()
         "Uso: PromptBench [composicion|claude|barrido] [--split|--whole] "
         + "[--model X] [--tema X] [--existentes N] [--pasadas N] [unidades...]");
     Console.Error.WriteLine(
-        "     barrido: [--clon RUTA] [--tope N] [--tandas N] [--sin-corte] [unidades...]");
+        "     barrido: [--clon RUTA] [--tope N] [--tandas N] [--sin-corte] [--estructurado] "
+        + "[--tema X] [unidades...]");
     return 2;
 }
 

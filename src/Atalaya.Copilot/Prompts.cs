@@ -108,6 +108,29 @@ public sealed record ComposedUnitPrompt(
     public string Text => StablePrefix + UnitPart;
 }
 
+/// <summary>
+/// <b>Cómo se le pide al auditor que mire</b> (M1). Es una palanca de MEDIDA del banco: en
+/// producción vale siempre <see cref="Libre"/> y el prompt sale byte a byte como siempre.
+/// <para>
+/// Existe para contestar una pregunta que F24 dejó abierta (D-907): el núcleo de defectos sale
+/// siempre y con los mismos nombres, pero la cola varía de tanda a tanda y produce variantes en las
+/// pasadas tardías. La hipótesis es que eso viene de <b>cómo se pregunta</b> — «audita esta clase»
+/// deja al modelo elegir qué contar y cómo llamarlo—, y que dar la estructura le da al hallazgo una
+/// identidad que él no inventa. No se sabe si funciona: por eso se mide antes de decidir nada.
+/// </para>
+/// </summary>
+public enum AuditStyle
+{
+    /// <summary>El método de barrido de siempre. Lo que corre en producción.</summary>
+    Libre,
+
+    /// <summary>
+    /// Recorrido <b>miembro × familia</b> con identidad fijada en <c>(regla, miembro)</c>. Solo el
+    /// banco lo enciende.
+    /// </summary>
+    Estructurado,
+}
+
 /// <summary>Composes the exact prompts sent to the agent (§5.1.3, §5.4, §6.4).</summary>
 public static class PromptComposer
 {
@@ -215,6 +238,78 @@ public static class PromptComposer
           cuántos en el argumento suppressedByPattern de unit_done.
         """;
 
+/// <summary>
+    /// <b>El bloque del método de barrido, aparte</b> (M1). Es EXACTAMENTE el trozo de
+    /// <see cref="AuditorRules"/> que el brazo estructurado sustituye, y está aquí solo para poder
+    /// nombrarlo: <see cref="AuditorRules"/> lo sigue llevando dentro y en producción no se compone
+    /// de piezas. Si los dos textos dejaran de coincidir, la sustitución falla en voz alta.
+    /// </summary>
+    private const string SweepMethodLibre =
+        """
+        MÉTODO DE BARRIDO — síguelo en este orden, no lo abrevies:
+        1. Enumera TODOS los miembros de la unidad: cada método, constructor, propiedad, campo y
+           bloque de nivel superior. Trabaja sobre esa lista; es tu lista de comprobación.
+        2. Recorre los miembros UNO A UNO. Para cada uno, contrasta los tres pilares del brief
+           (errores, optimizacion, mejoras) y las áreas de criterio. Un miembro puede tener varios
+           defectos independientes, o ninguno.
+        3. Presta atención a lo que es fácil pasar por alto: argumentos sin validar (nulos, vacíos,
+           longitudes), casos límite (cero, uno, impar, desbordamiento), valores de retorno y
+           excepciones sin controlar, recursos sin liberar, materialización innecesaria de
+           colecciones, dependencias de cultura o de endianness, y comentarios o contratos que ya
+           no describen lo que hace el código.
+        4. Antes de cerrar, repasa tu lista del paso 1 y comprueba que ningún miembro quedó sin
+           revisar. Si alguno quedó, revísalo ahora.
+        """;
+
+    /// <summary>
+    /// <b>El método estructurado</b> (M1), que sustituye al de barrido y solo al de barrido: el
+    /// resto del prompt —encabezado, rúbrica, catálogo, entregas, herramientas— no se toca.
+    /// <para>
+    /// La idea que se mide: si la identidad del hallazgo es <c>(regla, miembro)</c> y el recorrido
+    /// la agota, no queda hueco donde poner una variante. En la sesión real el 78 % de los hallazgos
+    /// venían del catálogo, así que el hueco libre sería pequeño.
+    /// </para>
+    /// <para>
+    /// <b>Y la temática sigue mandando</b> (F17, D-825). Bajo una lupa, el recorrido es sobre las
+    /// familias de QUÉ BUSCAS y ninguna más: el catálogo entero se ve en el brief —eso no cambió en
+    /// F5.12— pero verlo no es recorrerlo. Un recorrido que enumerase el catálogo bajo una lupa
+    /// abriría la puerta que el enfoque cerró, y el brazo estaría mal construido.
+    /// </para>
+    /// </summary>
+    private const string SweepMethodEstructurado =
+        """
+        MÉTODO ESTRUCTURADO — síguelo en este orden, no lo abrevies:
+        1. Enumera los miembros de la unidad CON SU LÍNEA: el tipo, sus campos y constantes, y cada
+           método, constructor y propiedad. Esa lista es tu eje; escríbela antes de juzgar nada.
+        2. Recorre MIEMBRO × FAMILIA. Para cada miembro de tu lista y cada familia de reglas que te
+           toque recorrer (ver abajo), decide si aplica. Si no aplica, no escribas nada.
+           Si aplica, emite UN hallazgo cuya identidad es (regla, miembro):
+             - UN SOLO hallazgo por pareja (regla, miembro). Si ya emitiste esa pareja, ya está.
+             - Si el MISMO defecto de la MISMA regla está en varios miembros, es UN hallazgo con
+               varias ubicaciones, no uno por miembro.
+        3. El título NO se inventa: es la regla y el miembro, en ese orden. La descripción es la
+           EVIDENCIA — qué línea y por qué—, no una segunda redacción del título.
+        4. AL FINAL, y solo al final, lo que no encaje en NINGUNA regla del catálogo: criterio del
+           auditor, con la misma identidad (criterio.<área>, miembro) y las mismas dos condiciones
+           del paso 2.
+        5. Lo que YA existe se juzga con report_verdicts, como siempre, y no se vuelve a emitir bajo
+           otro título ni bajo otra regla.
+        """;
+
+    /// <summary>Qué familias recorre el paso 2, que es lo único que cambia con la lupa (F17).</summary>
+    private const string FamiliesGeneral =
+        """
+        FAMILIAS QUE RECORRES en el paso 2: todas las reglas del catálogo del brief (las listadas
+        como [regla.id]), y después las áreas de criterio.
+        """;
+
+    private const string FamiliesTematica =
+        """
+        FAMILIAS QUE RECORRES en el paso 2: SOLO las de QUÉ BUSCAS del ENFOQUE DEL CICLO, y ninguna
+        más. El brief te enseña el catálogo entero, pero verlo no es recorrerlo: una familia que no
+        esté en tu enfoque no se recorre ni se reporta, por grave que te parezca.
+        """;
+
     /// <summary>
     /// <b>El contrato de las variantes</b> (F24 §1). Va en la zona estable, entre el defecto
     /// sistémico y las dos entregas, porque es la continuación del mismo argumento: aquél dice que
@@ -262,8 +357,10 @@ public static class PromptComposer
         PatternSilenceSet? patterns = null,
         DirectiveBundle? directives = null,
         AuditTheme theme = AuditTheme.General,
-        IReadOnlyList<ExistingFinding>? offTheme = null)
-        => Compose(unitPath, unitContent, brief, mode, existing, patterns, directives, theme, offTheme).Text;
+        IReadOnlyList<ExistingFinding>? offTheme = null,
+        AuditStyle style = AuditStyle.Libre)
+        => Compose(unitPath, unitContent, brief, mode, existing, patterns, directives, theme, offTheme,
+            style).Text;
 
     /// <summary>
     /// El mismo prompt, <b>partido por donde la caché lo parte</b> y con la cuenta de lo que aporta
@@ -288,11 +385,12 @@ public static class PromptComposer
         PatternSilenceSet? patterns = null,
         DirectiveBundle? directives = null,
         AuditTheme theme = AuditTheme.General,
-        IReadOnlyList<ExistingFinding>? offTheme = null)
+        IReadOnlyList<ExistingFinding>? offTheme = null,
+        AuditStyle style = AuditStyle.Libre)
     {
         // ------------------------------ ESTABLE (cacheable) ------------------------------
         var reglas = new StringBuilder();
-        reglas.AppendLine(AuditorRules);
+        reglas.AppendLine(Rules(style, theme));
         reglas.AppendLine($"MODO: {mode}. Los hallazgos nuevos nacen con la confianza que la app asigne.");
         reglas.AppendLine();
 
@@ -345,6 +443,39 @@ public static class PromptComposer
                 Patrones: PromptTokens.Estimate(patrones.ToString()),
                 Existentes: PromptTokens.Estimate(existentes.ToString()),
                 Unidad: PromptTokens.Estimate(unidad.ToString())));
+    }
+
+    /// <summary>
+    /// Las reglas del auditor, con el método que toque (M1).
+    /// <para>
+    /// <b>Con <see cref="AuditStyle.Libre"/> devuelve <see cref="AuditorRules"/> TAL CUAL</b>, sin
+    /// tocar un byte: es lo que corre en producción y lo que un test compara carácter a carácter.
+    /// Con el estructurado se sustituye <b>solo</b> el bloque del método de barrido —el resto del
+    /// prompt es el mismo— y se añade qué familias recorre, que es lo único que la lupa cambia.
+    /// </para>
+    /// <para>
+    /// La sustitución se COMPRUEBA: si el bloque que se busca dejara de estar ahí porque alguien
+    /// reescribió las reglas, el reemplazo silencioso dejaría el brazo estructurado midiendo el
+    /// libre sin que nada fallara. Un brazo de medida que mide otra cosa es peor que no tenerlo.
+    /// </para>
+    /// </summary>
+    private static string Rules(AuditStyle style, AuditTheme theme)
+    {
+        if (style == AuditStyle.Libre)
+        {
+            return AuditorRules;
+        }
+
+        string rules = AuditorRules.Replace(SweepMethodLibre, SweepMethodEstructurado, StringComparison.Ordinal);
+        if (rules == AuditorRules)
+        {
+            throw new InvalidOperationException(
+                "El brazo estructurado no encontró el bloque del método de barrido en AuditorRules. "
+                + "Se ha reescrito el prompt y la palanca de M1 estaría midiendo el libre.");
+        }
+
+        return rules + Environment.NewLine + Environment.NewLine
+            + (theme == AuditTheme.General ? FamiliesGeneral : FamiliesTematica);
     }
 
     /// <summary>
