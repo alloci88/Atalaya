@@ -29,6 +29,10 @@ string mode = argv.Length > 0 && !argv[0].StartsWith("--", StringComparison.Ordi
 bool split = argv.Contains("--split");
 string? model = Flag(argv, "--model") ?? "sonnet";
 AuditTheme theme = Enum.TryParse(Flag(argv, "--tema"), true, out AuditTheme t) ? t : AuditTheme.General;
+// Cuántos hallazgos conocidos lleva la unidad. Sin esto todas las medidas serían de una PRIMERA
+// pasada, que es el caso barato: en una segunda el auditor además tiene que reconciliar, y es ahí
+// donde se ve si agrupa sus herramientas en un turno o gasta una vuelta por cada cosa (F19 §1).
+int existing = int.TryParse(Flag(argv, "--existentes"), out int n) ? Math.Max(0, n) : 0;
 
 string root = RepoRoot();
 // Los valores de las opciones (--model sonnet) NO son unidades: sin esto, «sonnet» acabaría
@@ -36,7 +40,7 @@ string root = RepoRoot();
 var reserved = new HashSet<string>(StringComparer.Ordinal);
 for (int k = 0; k < argv.Length; k++)
 {
-    if (argv[k] is "--model" or "--tema" && k + 1 < argv.Length)
+    if (argv[k] is "--model" or "--tema" or "--existentes" && k + 1 < argv.Length)
     {
         reserved.Add(argv[k + 1]);
     }
@@ -54,12 +58,22 @@ if (units.Count == 0)
     };
 }
 
-Console.WriteLine($"Banco de medida F18 · modo {mode}{(mode == "claude" ? (split ? " --split" : " --whole") : "")}");
+Console.WriteLine($"Banco de medida · modo {mode}{(mode == "claude" ? (split ? " --split" : " --whole") : "")}");
 Console.WriteLine($"Raíz: {root}");
-Console.WriteLine($"Temática: {theme} · unidades: {units.Count}");
+Console.WriteLine($"Temática: {theme} · unidades: {units.Count} · hallazgos conocidos: {existing}");
 Console.WriteLine();
 
 AuditorBrief brief = PillarBrief.Parts(TechStack.DotNet);
+var known = Enumerable.Range(1, existing)
+    .Select(i => new ExistingFinding(
+        $"01JBENCH00000000000000000{i:D1}",
+        $"BUG-{i:D4}",
+        $"Hallazgo conocido {i} sembrado por el banco de medida",
+        i % 2 == 0 ? "alta" : "media",
+        $"{units[0]}:{i}",
+        "activo",
+        "General"))
+    .ToList();
 var composed = new List<(string Path, string Content, ComposedUnitPrompt Prompt)>();
 foreach (string relative in units)
 {
@@ -72,7 +86,7 @@ foreach (string relative in units)
 
     string content = File.ReadAllText(absolute);
     composed.Add((relative, content, PromptComposer.Compose(
-        relative, content, brief, AuditMode.Lotes, Array.Empty<ExistingFinding>(), null, null, theme, null)));
+        relative, content, brief, AuditMode.Lotes, known, null, null, theme, null)));
 }
 
 return mode switch
@@ -84,7 +98,8 @@ return mode switch
 
 static int Uso()
 {
-    Console.Error.WriteLine("Uso: PromptBench [composicion|claude] [--split|--whole] [--model X] [--tema X] [unidades...]");
+    Console.Error.WriteLine(
+        "Uso: PromptBench [composicion|claude] [--split|--whole] [--model X] [--tema X] [--existentes N] [unidades...]");
     return 2;
 }
 
@@ -151,7 +166,14 @@ static async Task<int> ClaudeAsync(
     }
 
     var samples = new List<UsageSample>();
-    provider.UsageReported += s => samples.Add(s);
+    CallTrace? trace = null;
+    provider.UsageReported += s =>
+    {
+        samples.Add(s);
+        trace?.Model(s);
+    };
+
+    var traces = new List<string>();
 
     Console.WriteLine("| Unidad | Llamadas | In | Out | CacheRead | CacheWrite | Total entrada | Duración | Tools |");
     Console.WriteLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
@@ -162,12 +184,14 @@ static async Task<int> ClaudeAsync(
     foreach ((string path, string content, ComposedUnitPrompt prompt) in composed)
     {
         samples.Clear();
-        var toolbox = new BenchToolbox(path);
+        var bench = new BenchToolbox(path);
+        trace = new CallTrace();
+        var toolbox = new TracingToolbox(bench, trace);
         var clock = Stopwatch.StartNew();
 
         var request = new AuditUnitRequest(
             path, content, prompt.Text, TechStack.DotNet, AuditMode.Lotes,
-            Array.Empty<ExistingFinding>(), null,
+            Array.Empty<ExistingFinding>(), null,   // el toolbox del banco acepta lo que llegue
             split ? prompt.StablePrefix : null,
             split ? prompt.UnitPart : null);
 
@@ -190,7 +214,8 @@ static async Task<int> ClaudeAsync(
 
         Console.WriteLine($"| {path} | {calls} | {i} | {o} | {r} | {w} | {i + r + w} "
             + $"| {(clock.ElapsedMilliseconds / 1000.0).ToString("0.#", CultureInfo.InvariantCulture)} s "
-            + $"| {toolbox.Describe()} |");
+            + $"| {bench.Describe()} |");
+        traces.Add(trace.Render(path));
 
         // LA PRIMERA LLAMADA es la única medida DETERMINISTA de la serie: su prompt lo fijan
         // nuestros bytes y nada más. De la segunda en adelante el prompt lleva dentro lo que
@@ -201,6 +226,13 @@ static async Task<int> ClaudeAsync(
         {
             first.Add((path, samples[0]));
         }
+    }
+
+    Console.WriteLine();
+    Console.WriteLine("Por qué cada llamada (F19 §1): qué herramienta pidió, o si fue solo texto");
+    foreach (string t in traces)
+    {
+        Console.WriteLine(t);
     }
 
     Console.WriteLine();
