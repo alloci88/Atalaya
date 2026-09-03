@@ -206,6 +206,41 @@ incompleta**, con todas las letras.
 > Y una unidad barrida **no es** una unidad sin defectos: es una unidad de la que el
 > auditor no saca más con este criterio.
 
+**Una variante no es un hallazgo nuevo.** Pasadas adentro, el auditor a veces vuelve a contar un
+defecto que ya había reportado, con otro título, bajo otra regla o por su consecuencia — «`.Result`
+bloqueante» y «síncrono sobre API async» son el mismo defecto; «sin Timeout» y «sin
+CancellationToken» sobre la misma llamada, también. En el informe que motivó esto había 25 hallazgos
+y unos 20 defectos.
+
+No es solo ruido al leer. Una variante entra como **nuevo**, y un nuevo impide que la pasada sea
+seca: cada una mantiene vivo el barrido y **se paga una pasada entera**. Por eso hay dos cosas
+puestas:
+
+- **Se le dice al auditor**, en su prompt: reformular, ampliar o contar la consecuencia de algo que
+  ya está reportado no es un hallazgo nuevo. Si es el mismo defecto en el mismo sitio, no emite
+  nada; si es el mismo defecto en otro punto de la unidad, lo extiende con `add_locations`. Y en las
+  vueltas siguientes se le pide **lo que falta**, no «más»: a un modelo al que se le pide más cuando
+  no queda más, reformula.
+- **La aplicación no lo acepta a la primera.** Cuando un hallazgo nuevo cae en la misma unidad, la
+  misma regla, el mismo miembro y a cinco líneas o menos de uno que ya existe, se le devuelve al
+  auditor nombrándole cuál —«se parece a HAL-0042»— con las tres salidas: no lo reportes, extiéndelo
+  con `add_locations`, o **reenvíalo diciendo en qué se diferencia**. Si lo reenvía, entra. Siempre.
+  Un reintento, nunca un bucle.
+
+**La aplicación no fusiona nada, y no decide que dos hallazgos sean el mismo.** No puede: eso es un
+juicio sobre el código, y equivocarse borraría un hallazgo real. Lo que hace es obligar a que lo diga
+quien está mirando el código. Lo que entra insistido queda marcado en el informe como **posible
+duplicado**, con a qué se parece, y decide una persona.
+
+Y hay dos casos que este filtro **no puede ver**, dichos de antemano: dos hallazgos bajo reglas
+distintas, y dos anclados a alturas distintas del código —uno a la clase, otro al método—. Ahí actúa
+solo lo que se le dice al auditor. Ampliar el criterio para pillarlos marcaría once cosas que no
+tienen que ver: se midió.
+
+Cuántas se rebotaron y cuántas entraron insistidas está en el **anexo técnico** del informe, no en el
+cuerpo: quien viene a arreglar su código no necesita ese número, y quien mantiene Atalaya no puede
+saberlo de otra manera.
+
 El resumen de cierre agrupa sus hallazgos **por clase**, con el recuento por severidad al
 lado, igual que la vista de Hallazgos. Cada línea se despliega de un clic.
 

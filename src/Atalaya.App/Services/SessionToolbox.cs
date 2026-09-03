@@ -149,6 +149,14 @@ public sealed class SessionToolbox : IAuditToolbox
 
     private readonly Dictionary<string, string> _exemplars = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// <b>La puerta de las variantes, abierta</b> (F24). En producción es siempre <c>true</c>; la
+    /// pone a <c>false</c> el banco de medida para poder correr la misma tanda sin la regla y
+    /// enseñar la diferencia (mismo patrón que <c>CutOnUnitDone</c> en F21). Con la puerta cerrada
+    /// el comportamiento es exactamente el de antes de F24: todo lo que valide entra.
+    /// </summary>
+    public bool VariantGate { get; init; } = true;
+
     /// <summary>How many <c>submit_finding(s)</c> invocations landed in this unit (F3 Hito 1c).</summary>
     public int SubmitInvocations { get; private set; }
 
@@ -638,7 +646,7 @@ public sealed class SessionToolbox : IAuditToolbox
         }
 
         // F24 — LA PUERTA DE LAS VARIANTES. Ver VariantTwin.
-        bool insisting = !string.IsNullOrWhiteSpace(args.DistinctFrom);
+        bool insisting = !VariantGate || !string.IsNullOrWhiteSpace(args.DistinctFrom);
         var key = new DuplicateHints.VariantKey(
             args.RuleId, locations[0].Path, locations[0].Line, args.Symbol);
         Finding? twin = insisting ? null : VariantTwin(key);
@@ -647,11 +655,16 @@ public sealed class SessionToolbox : IAuditToolbox
             _submittedKeys.Remove(submitted.SessionDuplicateKey);
             PassVariantsRejected++;
             Counters.VariantsRejected++;
+            // El motivo empieza por su RAÍZ y sigue tras los dos puntos, porque el motivo dominante
+            // por unidad se colapsa por la primera frase (F3.1 Bloque 0): sin esto, dos variantes
+            // contra hallazgos distintos contarían como dos motivos distintos y el informe no
+            // podría decir «lo que rebotó esta unidad fueron variantes».
             return Reject(
-                $"se parece a {Name(twin)} «{twin.Title}» ({key.Path}:{twin.Locations[0].Line}, misma regla y "
-                + "mismo símbolo). Si es el MISMO defecto, no lo reportes; si es el mismo defecto en otro punto "
-                + $"de la unidad, usa add_locations({twin.Id}, locations). Si de verdad es OTRO defecto, "
-                + $"reenvíalo con distinctFrom='{twin.Id}' y distinctReason explicando en qué se diferencia.",
+                "posible variante de un hallazgo ya reportado: se parece a "
+                + $"{Name(twin)} «{twin.Title}» (línea {twin.Locations[0].Line}, misma regla y mismo símbolo). "
+                + "Si es el MISMO defecto, no lo reportes; si es el mismo defecto en otro punto de la unidad, "
+                + $"usa add_locations({twin.Id}, locations). Si de verdad es OTRO defecto, reenvíalo con "
+                + $"distinctFrom={twin.Id} y distinctReason explicando en qué se diferencia.",
                 args);
         }
 
@@ -659,7 +672,7 @@ public sealed class SessionToolbox : IAuditToolbox
         _createdInSweep[created.Id.ToString()] = created;
         Counters.New++;
         PassNew++;
-        if (insisting)
+        if (VariantGate && insisting)
         {
             RecordInsistence(created, args);
         }

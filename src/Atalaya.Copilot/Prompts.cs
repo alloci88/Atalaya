@@ -154,29 +154,16 @@ public static class PromptComposer
         —está en la lista de abajo, o lo acabas de reportar en esta unidad— no crees otro: llama a
         add_locations(findingId, locations) para extenderlo con los sitios nuevos. Fragmentar un
         defecto por miembro infla el baseline y no aporta información.
+        """;
 
-        UNA VARIANTE NO ES UN HALLAZGO NUEVO. Volver a contar un defecto que YA está reportado —con
-        otro título, bajo otra regla, por su consecuencia o ampliándolo— no lo convierte en otro.
-        "Existente" es la lista de abajo Y lo que tú mismo hayas reportado en esta unidad. Solo hay
-        dos casos, y ninguno es submit_findings:
-          - MISMO defecto en el MISMO sitio: ya está reportado, NO emitas nada. No hay forma de
-            retocar su título ni su descripción, y no hace falta.
-          - MISMO defecto en OTRO punto de la unidad: add_locations(findingId, locations) sobre el
-            que ya existe.
-        Es el MISMO defecto aunque lo enfoques de otra manera: un `.Result` bloqueante y "síncrono
-        sobre API async"; "sin Timeout" y "sin CancellationToken" en la misma llamada; "división por
-        cero" y "no valida signos" sobre el mismo argumento; y una desreferencia nula ya reportada
-        no es otra por ocurrir además en otro método — eso es add_locations.
-        Si de verdad es OTRO defecto y la aplicación te lo devuelve por parecido, reenvíalo con
-        distinctFrom = el ULID al que se parece y distinctReason = en qué se diferencia: entra
-        siempre y queda registrado como insistido.
-
-        BUSCA LO QUE FALTA, NO "MÁS". Esta unidad se te pedirá varias veces y lo que se te pide en
-        cada vuelta es lo que aún NO está reportado. Una unidad de la que ya has sacado todo se
-        cierra con submit_findings vacío y unit_done: es una respuesta CORRECTA y COMPLETA, y es la
-        que termina el barrido. Rellenarla con reformulaciones no añade cobertura: mantiene vivo el
-        barrido y hace que se pague otra pasada entera.
-
+    /// <summary>
+    /// Lo que hay que ENTREGAR y en qué forma. Se separa de <see cref="AuditorRules"/> solo para que
+    /// <see cref="VariantContract"/> pueda ir en medio, que es su sitio: cierra el argumento del
+    /// defecto sistémico —un defecto en N sitios es UN hallazgo— antes de decir con qué
+    /// herramientas se entrega. Concatenadas dan el texto de siempre.
+    /// </summary>
+    private const string AuditorDeliverables =
+        """
         Tienes dos cosas que entregar en cada unidad:
 
         1) RECONCILIAR los hallazgos que ya existen en esta unidad (se te listan abajo). Llama UNA vez a
@@ -235,6 +222,56 @@ public static class PromptComposer
           cuántos en el argumento suppressedByPattern de unit_done.
         """;
 
+    /// <summary>
+    /// <b>El contrato de las variantes</b> (F24 §1). Va en la zona estable, entre el defecto
+    /// sistémico y las dos entregas, porque es la continuación del mismo argumento: aquél dice que
+    /// un defecto en N sitios es UN hallazgo, y éste que un defecto contado de N maneras también.
+    /// <para>
+    /// <b>Por qué hace falta decirlo.</b> El contrato de F4 ya decía «si es el mismo problema, no lo
+    /// reportes como nuevo». Lo que no decía es qué es el mismo problema <b>cuando se le pide más y
+    /// no hay más</b>: en el informe de referencia el modelo marcaba «presente» todo lo que había
+    /// reportado antes —la reconciliación funcionaba— y aun así volvía a emitir el mismo defecto
+    /// cortado por otro sitio, con otro título y a veces bajo otra regla. Cuatro de los nueve
+    /// hallazgos tardíos de ClienteRemoto son eso.
+    /// </para>
+    /// <para>
+    /// <b>Y por qué la segunda mitad.</b> Un modelo al que se le pide «más» cuando no queda más,
+    /// reformula. Lo que se le pide en cada vuelta es lo que FALTA, y que una pasada vacía sea una
+    /// respuesta correcta tiene que estar escrito: es la que termina el barrido.
+    /// </para>
+    /// <para>
+    /// <b>Es una de las dos capas y no fusiona nada.</b> La otra es el filtro de
+    /// <c>submit_findings</c>, que rebota lo que se parece demasiado; ninguna decide que dos
+    /// hallazgos sean el mismo, eso lo decide el auditor (D-077). Dos de los cinco pares del caso de
+    /// referencia —reglas distintas, y símbolos a alturas distintas— el filtro no los puede ver, y
+    /// quedan a cargo SOLO de este texto.
+    /// </para>
+    /// </summary>
+    private const string VariantContract =
+        """
+        UNA VARIANTE NO ES UN HALLAZGO NUEVO. Volver a contar un defecto que YA está reportado —con
+        otro título, bajo otra regla, por su consecuencia o ampliándolo— no lo convierte en otro.
+        "Existente" es la lista de abajo Y lo que tú mismo hayas reportado en esta unidad. Solo hay
+        dos casos, y ninguno es submit_findings:
+          - MISMO defecto en el MISMO sitio: ya está reportado, NO emitas nada. No hay forma de
+            retocar su título ni su descripción, y no hace falta.
+          - MISMO defecto en OTRO punto de la unidad: add_locations(findingId, locations) sobre el
+            que ya existe.
+        Es el MISMO defecto aunque lo enfoques de otra manera: un `.Result` bloqueante y "síncrono
+        sobre API async"; "sin Timeout" y "sin CancellationToken" en la misma llamada; "división por
+        cero" y "no valida signos" sobre el mismo argumento; y una desreferencia nula ya reportada
+        no es otra por ocurrir además en otro método — eso es add_locations.
+        Si de verdad es OTRO defecto y la aplicación te lo devuelve por parecido, reenvíalo con
+        distinctFrom = el ULID al que se parece y distinctReason = en qué se diferencia: entra
+        siempre y queda registrado como insistido.
+
+        BUSCA LO QUE FALTA, NO "MÁS". Esta unidad se te pedirá varias veces y lo que se te pide en
+        cada vuelta es lo que aún NO está reportado. Una unidad de la que ya has sacado todo se
+        cierra con submit_findings vacío y unit_done: es una respuesta CORRECTA y COMPLETA, y es la
+        que termina el barrido. Rellenarla con reformulaciones no añade cobertura: mantiene vivo el
+        barrido y hace que se pague otra pasada entera.
+        """;
+
     /// <param name="directives">
     /// Las convenciones intencionales del proyecto, ya recortadas al presupuesto (F7). Van
     /// DESPUÉS del brief y antes de todo lo demás: el brief dice qué se busca, y las directivas
@@ -257,8 +294,10 @@ public static class PromptComposer
         PatternSilenceSet? patterns = null,
         DirectiveBundle? directives = null,
         AuditTheme theme = AuditTheme.General,
-        IReadOnlyList<ExistingFinding>? offTheme = null)
-        => Compose(unitPath, unitContent, brief, mode, existing, patterns, directives, theme, offTheme).Text;
+        IReadOnlyList<ExistingFinding>? offTheme = null,
+        bool variantContract = true)
+        => Compose(unitPath, unitContent, brief, mode, existing, patterns, directives, theme, offTheme,
+            variantContract).Text;
 
     /// <summary>
     /// El mismo prompt, <b>partido por donde la caché lo parte</b> y con la cuenta de lo que aporta
@@ -283,11 +322,20 @@ public static class PromptComposer
         PatternSilenceSet? patterns = null,
         DirectiveBundle? directives = null,
         AuditTheme theme = AuditTheme.General,
-        IReadOnlyList<ExistingFinding>? offTheme = null)
+        IReadOnlyList<ExistingFinding>? offTheme = null,
+        bool variantContract = true)
     {
         // ------------------------------ ESTABLE (cacheable) ------------------------------
         var reglas = new StringBuilder();
         reglas.AppendLine(AuditorRules);
+        reglas.AppendLine();
+        if (variantContract)
+        {
+            reglas.AppendLine(VariantContract);
+            reglas.AppendLine();
+        }
+
+        reglas.AppendLine(AuditorDeliverables);
         reglas.AppendLine($"MODO: {mode}. Los hallazgos nuevos nacen con la confianza que la app asigne.");
         reglas.AppendLine();
 

@@ -96,6 +96,25 @@ public class VariantContractTests
         => Compose().Text.Should().Contain("distinctFrom");
 
     /// <summary>
+    /// <b>La palanca de medida</b>, y solo eso: apagada, el prompt es el de antes de F24. Existe
+    /// para poder correr la misma tanda con la regla y sin ella y enseñar la diferencia en pasadas y
+    /// llamadas — el mismo patrón que <c>CutOnUnitDone</c> en F21. En producción va siempre puesta.
+    /// </summary>
+    [Fact]
+    public void Sin_el_contrato_el_prompt_es_el_de_antes()
+    {
+        string sin = PromptComposer.Compose(
+                "src/A.cs", "class A { }", PillarBrief.Parts(TechStack.DotNet), AuditMode.Lotes,
+                variantContract: false)
+            .Text;
+
+        sin.Should().NotContain("UNA VARIANTE NO ES UN HALLAZGO NUEVO").And.NotContain("BUSCA LO QUE FALTA");
+        sin.Should().Contain("UN DEFECTO SISTÉMICO ES UN SOLO HALLAZGO", "lo demás sigue entero");
+        sin.Should().Contain("Tienes dos cosas que entregar en cada unidad:");
+        sin.Length.Should().BeLessThan(Compose().Text.Length);
+    }
+
+    /// <summary>
     /// Y todo ello del lado ESTABLE de la costura de caché (F18 §2). Un contrato que viajara en la
     /// parte variable se re-escribiría en caché en cada unidad y en cada pasada: costaría dinero por
     /// decir siempre lo mismo.

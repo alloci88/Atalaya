@@ -139,6 +139,8 @@ public sealed class VariantGateTests : IDisposable
         error.Should().NotBeNull();
         error.Should().Contain(first.DisplayId ?? first.Id.ToString(), "el rechazo nombra contra qué chocó");
         error.Should().Contain("add_locations").And.Contain("distinctFrom");
+        error.Should().StartWith("posible variante de un hallazgo ya reportado:",
+            "el motivo dominante por unidad se colapsa por la primera frase (F3.1 Bloque 0)");
     }
 
     /// <summary>
@@ -396,6 +398,30 @@ public sealed class VariantGateTests : IDisposable
         result.Counters.VariantsRejected.Should().Be(1);
     }
 
+    /// <summary>
+    /// <b>La palanca de medida</b> (F24 §3): apagada, el comportamiento es el de antes — la variante
+    /// entra y el barrido sigue vivo, que es justo lo que se quería enseñar con números. En
+    /// producción va siempre puesta; existe por la misma razón que <c>CutOnUnitDone</c> en F21.
+    /// </summary>
+    [Fact]
+    public async Task Con_la_regla_apagada_la_variante_entra_como_antes()
+    {
+        var agent = new ScriptedAgent((toolbox, _) => toolbox.SubmitFindings(new[]
+        {
+            Race("Mutación de DefaultRequestHeaders"),
+            Race("Mutación no atómica de Authorization"),
+        }));
+
+        SessionResult result = await new SessionCoordinator(
+                _hub, _ingestion, _reconciliation, _machines, _ulids, agent, _settings)
+            { VariantRule = false }
+            .RunAsync(new SessionRequest("app", AuditMode.Lotes, new[] { Unit }), CancellationToken.None);
+
+        result.Counters.New.Should().Be(2);
+        result.Counters.VariantsRejected.Should().Be(0);
+        result.Counters.VariantsInsisted.Should().Be(0, "no hubo nada que insistir");
+    }
+
     // ---------------------------------------------------------------- el criterio compartido
 
     /// <summary>
@@ -460,6 +486,36 @@ public sealed class VariantGateTests : IDisposable
         line.Should().BeGreaterThan(annex, "el cuerpo del informe no cambia");
         report.Should().Contain("1 rebotada(s) en la puerta");
         report.Should().Contain($"{Unit}: pasada 1: 1 rebotada(s)");
+    }
+
+    /// <summary>
+    /// Y los contadores quedan EN EL HUB, no solo en el resultado en memoria: por sesión y por
+    /// pasada. Un informe se regenera meses después desde el hub (F23 §6), así que un contador que
+    /// solo viviera en el objeto de la sesión desaparecería en cuanto se cerrara la aplicación.
+    /// </summary>
+    [Fact]
+    public async Task Los_contadores_quedan_guardados_por_sesion_y_por_pasada()
+    {
+        var agent = new ScriptedAgent((toolbox, _) =>
+        {
+            toolbox.SubmitFindings(new[] { Race("Mutación de DefaultRequestHeaders") });
+            toolbox.SubmitFindings(new[] { Race("Race en Authorization") });
+            string twin = _hub.Store.ListFindings("app").Single().Id.ToString();
+            toolbox.SubmitFindings(new[]
+            {
+                Race("Race en Authorization") with { DistinctFrom = twin, DistinctReason = "es otra cosa" },
+            });
+        });
+
+        await Run(agent);
+
+        AuditSession stored = Session();
+        stored.Counters.VariantsRejected.Should().Be(1);
+        stored.Counters.VariantsInsisted.Should().Be(1);
+
+        UnitPassRecord pass = stored.Units.Single().Passes!.Single();
+        pass.VariantsRejected.Should().Be(1);
+        pass.VariantsInsisted.Should().Be(1);
     }
 
     /// <summary>Sin variantes no se escribe la línea: un cero permanente enseña un hueco.</summary>

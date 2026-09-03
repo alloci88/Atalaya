@@ -8,6 +8,16 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
 
 ## En vuelo
 
+- **F24 — repetir la tanda sobre las dos clases con Copilot y comprobar que los cinco pares tampoco
+  reaparecen allí.** Los duplicados salieron con **Copilot** (AtalayaBanco, 2026-09-03,
+  claude-opus-4.7); las dos capas de F24 se han medido con **Claude Code**, porque aquí no hay
+  asiento de Copilot (D-017, D-883). Las dos capas son prompt y coordinador —ni una línea por
+  proveedor—, así que deberían valer igual, pero eso es un razonamiento y no una medida. Lo que hay
+  que ver con un asiento delante, sobre `CalculadoraCarga.cs` y `ClienteRemoto.cs`: que **los cinco
+  pares de D-895 no reaparezcan como hallazgos separados**, que los ~20 defectos distintos —y en
+  particular los **cinco tardíos reales**— sigan saliendo, y las pasadas por clase frente a las 6 del
+  caso de referencia. Los contadores de variantes del anexo técnico dan la respuesta sin leer el
+  informe entero.
 - **F21 — el corte, con Copilot delante.** Aquí no hay asiento, así que §4 se resolvió leyendo el
   contrato del SDK y no midiéndolo (D-883): `CopilotToolOptions.IsTerminal` dice que una llamada
   con éxito **termina el turno en vez de devolverle el resultado al modelo**, y `unit_done` lo lleva

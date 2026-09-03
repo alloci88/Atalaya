@@ -40,6 +40,14 @@ int passes = int.TryParse(Flag(argv, "--pasadas"), out int pn) ? Math.Max(1, pn)
 // tanda SIN corte es la línea contra la que se compara. No hay otra forma de enseñar que la
 // escritura de caché baja y que los hallazgos no se mueven.
 bool noCut = argv.Contains("--sin-corte");
+// F24 — la regla de las variantes va encendida en producción; el banco la apaga para tener la
+// línea contra la que comparar. Apaga las DOS capas a la vez (contrato del prompt y filtro de la
+// puerta): media medida diría que una hace el trabajo de la otra.
+bool noVariants = argv.Contains("--sin-variantes");
+// El clon sobre el que corre el barrido real. Por defecto, el propio repositorio.
+string? cloneRoot = Flag(argv, "--clon");
+int maxPasses = int.TryParse(Flag(argv, "--tope"), out int mp) ? Math.Max(1, mp) : 6;
+int tandas = int.TryParse(Flag(argv, "--tandas"), out int td) ? Math.Max(1, td) : 1;
 
 string root = RepoRoot();
 // Los valores de las opciones (--model sonnet) NO son unidades: sin esto, «sonnet» acabaría
@@ -47,7 +55,9 @@ string root = RepoRoot();
 var reserved = new HashSet<string>(StringComparer.Ordinal);
 for (int k = 0; k < argv.Length; k++)
 {
-    if (argv[k] is "--model" or "--tema" or "--existentes" or "--pasadas" && k + 1 < argv.Length)
+    if (argv[k] is "--model" or "--tema" or "--existentes" or "--pasadas" or "--clon" or "--tope"
+            or "--tandas"
+        && k + 1 < argv.Length)
     {
         reserved.Add(argv[k + 1]);
     }
@@ -71,6 +81,14 @@ Console.WriteLine($"Raíz: {root}");
 Console.WriteLine(
     $"Temática: {theme} · unidades: {units.Count} · hallazgos conocidos: {existing} · pasadas: {passes}");
 Console.WriteLine();
+
+// El barrido real no compone nada por su cuenta: lo compone el coordinador, como en producción.
+// Por eso se atiende ANTES de resolver las unidades contra este repositorio — las suyas viven en
+// el clon que se le pase.
+if (mode == "barrido")
+{
+    return await SweepBench.RunAsync(units, cloneRoot ?? root, model, !noVariants, maxPasses, tandas);
+}
 
 AuditorBrief brief = PillarBrief.Parts(TechStack.DotNet);
 var known = Enumerable.Range(1, existing)
@@ -108,8 +126,10 @@ return mode switch
 static int Uso()
 {
     Console.Error.WriteLine(
-        "Uso: PromptBench [composicion|claude] [--split|--whole] "
+        "Uso: PromptBench [composicion|claude|barrido] [--split|--whole] "
         + "[--model X] [--tema X] [--existentes N] [--pasadas N] [unidades...]");
+    Console.Error.WriteLine(
+        "     barrido: [--clon RUTA] [--tope N] [--tandas N] [--sin-variantes] [unidades...]");
     return 2;
 }
 

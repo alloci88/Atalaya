@@ -184,6 +184,20 @@ public sealed class SessionCoordinator
         _directives = directives;
     }
 
+    /// <summary>
+    /// <b>La regla de las variantes, encendida</b> (F24). Es una palanca de MEDIDA, no un ajuste:
+    /// en producción vale siempre <c>true</c> y nadie la toca. Existe por la misma razón que
+    /// <c>CutOnUnitDone</c> en F21 —para poder correr la misma tanda con la regla puesta y quitada
+    /// y enseñar la diferencia en pasadas y llamadas—, y vive aquí y no en los ajustes porque no es
+    /// una decisión del usuario: es la línea contra la que se compara.
+    /// <para>
+    /// Apagarla quita las DOS capas a la vez —el contrato del prompt y el filtro de la puerta—,
+    /// que es lo que hace la comparación honesta: media medida diría que una capa hace el trabajo
+    /// de la otra.
+    /// </para>
+    /// </summary>
+    public bool VariantRule { get; init; } = true;
+
     public event Action<string, string>? UnitPhaseChanged;   // (path, phase)
 
     // ---- Superficie de OBSERVACIÓN (F5.2) ----
@@ -485,7 +499,10 @@ public sealed class SessionCoordinator
         AuditTheme theme = inventory.Theme;
         var toolbox = new SessionToolbox(
             request.Slug, request.Mode, stamp, _ingestion, _reconciliation, _hub.Store, clone!, OnFinding,
-            patterns, theme);
+            patterns, theme)
+        {
+            VariantGate = VariantRule,
+        };
         var auditedPaths = new HashSet<string>(StringComparer.Ordinal);
         int incompleteUnits = 0;
 
@@ -563,7 +580,8 @@ public sealed class SessionCoordinator
                     // que varíe por unidad ni por pasada, y lo variable detrás. Concatenarlo da el
                     // prompt de siempre byte a byte; quien sepa marcar el prefijo lo marca.
                     ComposedUnitPrompt composed = PromptComposer.Compose(
-                        unit.Path, content, brief, request.Mode, listed, patterns, directives, theme, offTheme);
+                        unit.Path, content, brief, request.Mode, listed, patterns, directives, theme, offTheme,
+                        VariantRule);
                     string prompt = composed.Text;
                     breakdown.PromptTokensEstimate += EstimateTokens(prompt);
 

@@ -5,7 +5,9 @@
        ejecutable que solo se usa a mano. Se compila y se corre por su ruta, como IconGen. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- F24: el modo `barrido` corre el coordinador de verdad, y ése vive en Atalaya.App
+         (WPF). El banco no abre ninguna ventana; solo necesita el mismo TFM. -->
+    <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>PromptBench</AssemblyName>
@@ -15,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Atalaya.Agents\Atalaya.Agents.csproj" />
+    <ProjectReference Include="..\..\src\Atalaya.App\Atalaya.App.csproj" />
     <ProjectReference Include="..\..\src\Atalaya.ClaudeCode\Atalaya.ClaudeCode.csproj" />
     <ProjectReference Include="..\..\src\Atalaya.Copilot\Atalaya.Copilot.csproj" />
     <ProjectReference Include="..\..\src\Atalaya.Domain\Atalaya.Domain.csproj" />

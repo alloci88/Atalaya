@@ -11628,3 +11628,127 @@ lo que baja, de 71 a 26, es **lo que hay que atravesar para llegar a lo que se v
 - **Y los que ya existían, actualizados en vez de relajados**: el reparto ahora se afirma **dentro
   del anexo** y ausente de la cabecera; el pie afirma que el desglose **no se pinta y sí está en el
   tooltip**; la fecha afirma la forma en vez del valor.
+
+## F24 — Una variante no es un hallazgo nuevo
+
+### D-895 — Los 25 hallazgos del caso de referencia son ~20 defectos: la lista, ANTES de tocar nada
+
+Se fija primero, y por escrito, porque es el patrón de medida de toda la fase: sin la lista de antes,
+«ha bajado el ruido» y «el modelo ha dejado de trabajar» se leen igual. Es la variable que tumbó la
+hipótesis B de F20 (D-874) y se juzga con el mismo rigor.
+
+El informe: **AtalayaBanco, 2026-09-03, GitHub Copilot (claude-opus-4.7), dos unidades, 25 hallazgos,
+14 llamadas, 185,3 créditos.**
+
+**Los cinco pares — el mismo defecto dicho dos veces:**
+
+| # | Primero (pasada) | Segundo (pasada) | Regla(s) | ¿Lo ve el filtro? |
+|---|---|---|---|---|
+| P1 | Mutación de `DefaultRequestHeaders` (1) | «Mutación no atómica de Authorization» (5) | `errores.concurrencia.race` · ambas l. 23 | **Sí** |
+| P2 | `.Result` bloqueante (1), l. 33 | «Método síncrono envuelve API asíncrona» (3), l. 30 | `errores.async.mal-usado` · distancia 3 | **Sí** |
+| P3 | «HttpClient sin Timeout» (2), l. 14 | «Métodos async sin CancellationToken» (4), l. 16 | `criterio.rendimiento` / `criterio.arquitectura` | **No** (reglas distintas) |
+| P4 | «División por cero en CargaEspecifica» (1) | «CargaEspecifica no valida signos» (4) | `errores.calculo.negocio` · ambas l. 33 | **Sí** |
+| P5 | «Desreferencia nula de Voladura/Barrenos» (1), l. 11 | «Desreferencia nula del parámetro voladura en CargaMediaPorMetro» (2), l. 23 | `errores.null.desreferencia` · distancia 12, símbolos a alturas distintas | **No** |
+
+El segundo de P2 lo dice en su propio texto: *«además del `.Result` ya reportado»*. Reconoce el
+hallazgo y lo reporta igual.
+
+**Los ~20 defectos distintos** (los 25 menos el segundo de cada par). CalculadoraCarga, 5:
+off-by-one en `CargaTotalKg`; división por cero en `CargaMediaPorMetro`; división por cero en
+`CargaEspecifica`; desreferencia nula de `voladura`/`Barrenos`; doble recorrido. ClienteRemoto, 15:
+credenciales embebidas; Basic sobre HTTP; path injection; mutación de `DefaultRequestHeaders`;
+`.Result` bloqueante; `IDisposable` no liberados; argumentos sin validar; falta
+`EnsureSuccessStatusCode`; endpoint hardcodeado; sin `Timeout`; lectura sin límite ni Content-Type;
+`HttpClient` estático vs `IHttpClientFactory`; falta `ConfigureAwait(false)`; sin logging; respuesta
+devuelta sin parsear.
+
+**Y los tardíos, que son el control.** ClienteRemoto produjo **9 hallazgos en las pasadas 2..6**.
+Cuatro de ellos pertenecen a un par duplicado — el de `Timeout` (p2) y el de `CancellationToken`
+(p4), que son P3 con sus **dos** mitades tardías; el «síncrono sobre async» (p3) y la «race en
+Authorization» (p5). Los **cinco restantes son defectos reales que ninguna pasada temprana vio**:
+
+1. Endpoint HTTP hardcodeado (pasada 2)
+2. Falta `ConfigureAwait(false)` en librería (pasada 2)
+3. Ausencia de logging/trazas (pasada 2)
+4. Respuesta leída sin límite de tamaño ni validación de Content-Type (pasada 3)
+5. Cuerpo de la respuesta devuelto sin parseo ni validación (pasada 6 — **la última del tope**)
+
+Son el motivo del tope de 6 (D-812) y el control de esta fase: **una regla que enseñe al modelo a
+callarse antes haría desaparecer estos cinco, y eso sería una degradación disfrazada de ahorro.**
+Que el quinto saliera en la pasada 6 es el dato incómodo y por eso se escribe: recortar el tope no
+elimina trabajo, lo aplaza.
+
+### D-896 — Dos capas, y ninguna fusiona nada
+
+**Qué falló, que no es lo que parecía.** No es la reconciliación: en las pasadas 3, 4 y 5 el modelo
+marcó «presente» **todo** lo que había reportado antes (F4, D-087). Tampoco es fragmentación por
+miembro: eso lo cerró `add_locations` (D-090, D-091). Es un tercer caso que ninguna de las dos
+cubría — **el modelo reconoce el hallazgo y lo vuelve a reportar cortado por otro sitio**: otro
+título, a veces otra regla, una consecuencia, una ampliación. Y lo hace cuando ya no queda nada: de
+los 9 hallazgos tardíos de ClienteRemoto, 4 son eso.
+
+**Y no es solo ruido en el informe.** Una variante entra como «nuevo», y un nuevo impide que la
+pasada sea seca (D-087, D-092): cada variante mantiene vivo el barrido y **paga otra pasada entera**.
+ClienteRemoto llegó al tope de 6.
+
+**Capa 1 — el contrato, en la zona estable del prompt** (`PromptComposer.VariantContract`). El
+contrato de F4 decía «si es el mismo problema, no lo reportes como nuevo»; lo que no decía es **qué
+es el mismo problema cuando se le pide más y no hay más**. Ahora lo dice, con esta distinción y no
+otra:
+
+- **Mismo defecto en el mismo sitio** → ya está reportado, **no se emite nada**. No hay herramienta
+  para retocar título ni descripción, y no se añade ninguna: un vocabulario nuevo para reescribir un
+  hallazgo sería otra manera de contarlo dos veces.
+- **Mismo defecto en otro punto de la unidad** → `add_locations` sobre el existente (D-091).
+
+«Existente» son las dos cosas: la lista de la unidad y lo creado en el barrido en curso — el conjunto
+que `SessionToolbox` ya llevaba (D-088).
+
+**Y la segunda mitad, que es la que explica el fenómeno.** A las pasadas 2..N no se les manda ningún
+texto de continuación: se recompone **el mismo prompt** con la lista de existentes actualizada. Así
+que lo que había que cambiar es el prompt entero, y lo que decía era «busca» sin decir qué. Ahora
+dice **busca lo que FALTA, no «más»**, y dice que una unidad agotada se cierra con `submit_findings`
+vacío y `unit_done`, que eso es una respuesta **correcta y completa** y es la que termina el barrido.
+A un modelo al que se le pide más cuando no hay más, reformula.
+
+**Capa 2 — el filtro en la puerta de `submit_findings`** (`SessionToolbox.VariantTwin`). Mismo
+criterio que el marcador del §5 de F23 —misma unidad, misma regla, mismo símbolo que no sea la clase,
+línea a ≤ 5— y **la misma implementación**: `DuplicateHints.AreSimilar(VariantKey, VariantKey)`, que
+es donde vive el criterio y a donde llaman las dos capas. No una copia con su propio umbral: si
+divergieran, el informe marcaría lo que el filtro dejó pasar y al revés, y nadie sabría cuál de los
+dos números mirar. Hay un test que recorre los casos de decisión y exige que la puerta conteste lo
+mismo que el criterio.
+
+- **Primer intento** → no se acepta. Error tipado que **nombra el hallazgo**, como los ULID
+  desconocidos de D-077, con las tres salidas: no lo reportes, `add_locations`, o reenvíalo con
+  `distinctFrom` y `distinctReason`.
+- **Reintento con `distinctFrom`** → entra. Queda registrado como insistido con su motivo —en el
+  historial de la ficha, que sobrevive a la sesión, y en las notas— y el informe lo marca como
+  posible duplicado (§5 de F23). **Un reintento, nunca un segundo rechazo**: con `distinctFrom`
+  puesto el filtro no vuelve a mirar. Un reintento sin motivo entra igual y se registra diciendo que
+  vino sin él; bloquearlo sería un muro por una casilla vacía.
+
+**Ninguna de las dos fusiona nada.** La identidad de un hallazgo la decide el auditor (D-077) y la
+persona dispone. La app no dice «esto es lo mismo que aquello»: dice «esto se parece a aquello, dime
+tú». Es la filosofía de F4 aplicada a un caso que F4 no había nombrado.
+
+**Lo que el filtro no atrapa, dicho de antemano**: P3 (reglas distintas) y P5 (símbolos a alturas
+distintas del código). Por construcción, no por descuido — F23 lo midió: ampliar la distancia pilla
+uno más a cambio de **once falsos**. Los dos quedan a cargo del contrato, y los dos están nombrados
+en el propio prompt como ejemplos.
+
+### D-897 — La palanca de medida, y por qué existe una
+
+`SessionCoordinator.VariantRule` apaga **las dos capas a la vez** — el contrato del prompt y el
+filtro de la puerta. En producción vale siempre `true` y no hay ajuste que la toque: no es una
+decisión del usuario, es la línea contra la que se compara.
+
+Es el patrón de `CutOnUnitDone` en F21, y la razón es la misma: sin una tanda sin la regla, «bajaron
+las pasadas» es una impresión. Apagar **media** medida —solo el filtro, o solo el contrato— diría que
+una capa hace el trabajo de la otra, así que la palanca es una y apaga las dos.
+
+Y una nota de coste que no se esconde: el contrato ocupa sitio en el **prefijo estable**, que viaja
+en todas las llamadas de la sesión. El guardarraíl de F19 (`El_prefijo_estable_no_puede_engordar_sin_que_salte_un_rojo`)
+saltó con el primer borrador — 3.502 tokens contra un techo de 3.500 —, así que el texto se apretó
+hasta caber sin perder ninguna de las dos mitades. **No se subió el techo**: un techo que se sube
+cada vez que estorba no es un techo.
