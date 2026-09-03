@@ -51,7 +51,10 @@ public static class AuditorTools
             ("impact", Schema.Text("Qué puede pasar si no se arregla."), true),
             ("recommendation", Schema.Text("Qué hacer para arreglarlo."), true),
             ("locations", Schema.Array(location, "Dónde ocurre. Al menos una."), true),
-            ("symbol", Schema.Text("Miembro que lo contiene, si aplica."), false),
+            ("symbol", Schema.Text(
+                "El miembro que contiene el defecto (método, propiedad, campo). Ponlo SIEMPRE: es lo que "
+                + "distingue dos defectos parecidos en miembros distintos. Si de verdad no está dentro de "
+                + "ninguno, pon el tipo."), false),
             ("distinctFrom", Schema.Text(
                 "SOLO para reenviar un hallazgo que la aplicación te devolvió por parecerse a otro: el "
                 + "ULID de aquél. Si es el mismo defecto, no lo reenvíes; si está en otro punto de la "

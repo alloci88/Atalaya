@@ -11752,3 +11752,55 @@ en todas las llamadas de la sesión. El guardarraíl de F19 (`El_prefijo_estable
 saltó con el primer borrador — 3.502 tokens contra un techo de 3.500 —, así que el texto se apretó
 hasta caber sin perder ninguna de las dos mitades. **No se subió el techo**: un techo que se sube
 cada vez que estorba no es un techo.
+
+### D-898 — El filtro estaba apoyado en un campo que el auditor no rellenaba
+
+**Encontrado midiendo, no razonando.** La primera tanda con la regla puesta salió con **0 rebotadas
+y 0 insistidas**, y la lectura cómoda era «el contrato funciona tan bien que el filtro no hace
+falta». Es falsa: el volcado enseña que **15 de los 16 hallazgos venían con `symbol` vacío**.
+
+El criterio exige un símbolo que sea un MIEMBRO —es lo que hace el trabajo, y sin él «división por
+cero en `CargaMediaPorMetro`» y «división por cero en `CargaEspecifica`» se marcarían como el mismo
+defecto (F23)—, y `DuplicateHints` devuelve `false` en cuanto falta. Con el símbolo vacío **la puerta
+no puede disparar nunca**: no es que no hubiera variantes, es que estaba mirando un campo en blanco.
+
+**Y había exactamente un candidato.** Reaplicando el criterio sobre la tanda grabada: un par con la
+misma regla y a 2 líneas —`criterio.arquitectura` en ClienteRemoto, «URLs hardcodeadas» (l. 25) y «no
+comprueba el código de estado HTTP» (l. 27)—. El símbolo vacío lo bloqueó. Conviene decir la otra
+mitad: **son dos defectos distintos**, así que de haber saltado habría sido un **falso positivo** —
+justo el «1 falso» que F23 midió y aceptó.
+
+**La causa: `symbol` era opcional y se pedía a media voz.** El esquema decía «Miembro que lo
+contiene, **si aplica**» y el prompt no lo listaba entre los campos obligatorios. Copilot lo
+rellenaba casi siempre —de ahí que F23 pudiera medir el criterio contra su informe— y Claude Code lo
+rellena a ratos. Un criterio que depende de un campo optativo funciona en la casa donde se midió y se
+apaga en silencio en la otra.
+
+**El arreglo y su comprobación.** `symbol` entra en la lista de campos obligatorios del prompt
+—«SIEMPRE, el miembro que contiene el defecto; si no está dentro de ninguno, pon el tipo»— y la
+descripción del esquema dice lo mismo. No pasa a `required` del JSON Schema: un defecto que de verdad
+es del fichero entero existe, y forzar un valor daría el nombre de la clase, que es justo lo que el
+criterio descarta (`IsTypeItself`). Medido después: **0 de 15 hallazgos sin símbolo**, en las dos
+tandas, contra 15/16 y 6/14 antes. Y el par de arriba vuelve a aparecer, ahora con símbolos
+`EnviarParteAsync` y `ClienteRemoto`: el criterio **lo declina a propósito** —uno es el tipo— y no
+paga el falso positivo.
+
+**Esto arregla también la marca del §5 de F23**, que se apoya en el mismo campo y tenía el mismo
+agujero con este proveedor. Se descubrió aquí porque F24 es la primera vez que el criterio se ejecuta
+**durante** la sesión y no solo al escribir el informe.
+
+> **Lo que dice del método.** El criterio se midió contra un informe de Copilot y se dio por bueno;
+> nadie comprobó que sus entradas existieran con el otro proveedor. Misma clase de agujero que
+> D-883: dar por hecho el comportamiento de la casa que no se tiene delante.
+
+### D-899 — Lo que el informe marca es lo de ESTA sesión, y se dice
+
+La marca de posible duplicado del §5 de F23 se calcula sobre los **hallazgos nuevos de la sesión**,
+que son los que el informe lista. De ahí se sigue algo que conviene tener escrito: un hallazgo que
+entre **insistido** contra un gemelo de una sesión ANTERIOR queda registrado como insistido —en el
+historial de la ficha, en las notas y en los contadores del anexo— pero **no lleva la marca ⚠ en el
+cuerpo**, porque su gemelo no está en el informe con el que compararlo.
+
+No se arregla metiendo hallazgos viejos en el cuerpo: el informe es de lo que ha pasado en esta
+sesión (F23 §1), y engordarlo con contexto es lo que aquella fase deshizo. El rastro existe, está en
+el sitio donde se busca —la ficha— y el anexo dice cuántos hubo.

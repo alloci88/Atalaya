@@ -209,6 +209,8 @@ public static class PromptComposer
             * severity: exactamente uno de {critica, alta, media, baja}, aplicando la RÚBRICA DE
               SEVERIDAD del brief — incluidas sus reglas de desempate.
             * locations: al menos una con {path, line} y opcionalmente snippet.
+            * symbol: SIEMPRE, el miembro que contiene el defecto. Es lo que distingue dos defectos
+              parecidos en miembros distintos; si no está dentro de ninguno, pon el tipo.
         - NO envíes tag: la app lo deriva de ruleId (criterio.* → criterio; resto → checklist).
         - NO asignes IDs ni confianza (eso es de la app). NO filtres silenciados: los verás en la lista
           con estado 'silenciado' y debes pronunciarte sobre ellos igual; decir 'presente' NO los reactiva.
