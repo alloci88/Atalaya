@@ -143,6 +143,43 @@ public static class CreditText
     private static string N(long value) => value.ToString("N0", AppCulture.Display);
 
     /// <summary>
+    /// <b>En qué se reparte el coste, por concepto</b> (F20 §1): «escritura de caché 79,2 (60 %) ·
+    /// salida 45,3 (35 %) · lectura de caché 6,0 (5 %)».
+    /// <para>
+    /// Los tokens no bastan para decidir dónde apretar cuando las tarifas difieren doce veces entre
+    /// sí. Un desglose en tokens dice que se leyeron 119.583 y se escribieron 126.904 —números
+    /// parecidos—; en credits dice que lo escrito cuesta trece veces lo leído, que es la frase con
+    /// la que se decide algo.
+    /// </para>
+    /// <para>
+    /// Vacía cuando no hay coste que repartir: sin factura no hay conceptos, y una fila de ceros
+    /// sugeriría que se midió y salió cero.
+    /// </para>
+    /// </summary>
+    public static string CostSplitLine(CostResult cost)
+    {
+        if (cost.Split is not { } split || split.Total <= 0m)
+        {
+            return string.Empty;
+        }
+
+        return string.Join(" · ", split.Items.Select(
+            i => $"{i.Concepto} {Number(i.Credits)} ({PercentText.Of(split.ShareOf(i.Credits))})"));
+    }
+
+    /// <summary>El concepto que más pesa, para un pie que no tiene sitio para los cuatro.</summary>
+    public static string CostSplitShort(CostResult cost)
+    {
+        if (cost.Split is not { } split || split.Total <= 0m || split.Items.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        (string concepto, decimal credits) = split.Items.OrderByDescending(i => i.Credits).First();
+        return $"{concepto} {PercentText.Of(split.ShareOf(credits))}";
+    }
+
+    /// <summary>
     /// <b>El resumen de adónde van los tokens, en una frase</b> (F18 §1): «código 2 % · 11
     /// llamadas/unidad». Es lo mismo que dice la línea de composición del informe, recortado a lo
     /// que cabe en un pie — y va en vivo porque es mientras la sesión corre cuando se nota que algo
@@ -218,6 +255,16 @@ public static class CreditText
         {
             segments.Add(new FooterSegment(
                 new[] { tokens, TokensTotal(input, output, cacheRead, cacheWrite) }, Priority: 2, Opacity: 0.7));
+        }
+
+        // F20 §1 — el reparto del coste, detrás del coste y delante de los tokens en importancia:
+        // es lo que dice DÓNDE apretar. Cede antes que el coste y después que los tokens, y su
+        // forma mínima es el concepto que manda con su porcentaje.
+        string reparto = CostSplitLine(cost);
+        if (reparto.Length > 0)
+        {
+            segments.Add(new FooterSegment(
+                new[] { reparto, CostSplitShort(cost) }, Priority: 3, Opacity: 0.7));
         }
 
         // F18 — la composición va la ÚLTIMA en el orden y la primera en ceder: es una lectura de los

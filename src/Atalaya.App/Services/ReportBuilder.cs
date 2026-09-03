@@ -103,6 +103,21 @@ public static class ReportBuilder
     /// desglose por pasada, y una línea con un 0 % afirmaría que no viajó código.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// <b>En qué se reparte el coste</b> (F20 §1). Va pegada al coste porque es su lectura: el
+    /// total dice cuánto y esto dice de qué. Con tarifas que difieren doce veces entre leer caché y
+    /// escribirla, el desglose en tokens que ya estaba arriba no permite decidir nada — dos cifras
+    /// parecidas pueden costar trece veces distinto.
+    /// </summary>
+    private static void AppendCostSplit(StringBuilder sb, CostResult cost)
+    {
+        string line = CreditText.CostSplitLine(cost);
+        if (line.Length > 0)
+        {
+            sb.AppendLine($"- **Reparto del coste**: {line}");
+        }
+    }
+
     private static void AppendBudgetLine(StringBuilder sb, AuditSession session)
     {
         PromptBudget budget = PromptBudget.From(session);
@@ -208,6 +223,7 @@ public static class ReportBuilder
 
         CostResult cost = CreditCalculator.Calculate(session, rates);
         sb.AppendLine($"- **Coste**: {CreditText.OfSession(cost, session.Provider)}");
+        AppendCostSplit(sb, cost);
         AppendDeclaredCost(sb, session);
         sb.AppendLine();
 

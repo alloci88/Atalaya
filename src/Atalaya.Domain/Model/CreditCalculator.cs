@@ -1,4 +1,4 @@
-namespace Atalaya.Domain.Model;
+﻿namespace Atalaya.Domain.Model;
 
 /// <summary>
 /// Cómo cuenta un proveedor sus tokens de entrada (F15). <b>No es un detalle: invertirlo desvía
@@ -43,6 +43,36 @@ public enum CostUnavailable
 }
 
 /// <summary>
+/// <b>En qué se reparte el coste, por concepto</b> (F20 §1). Los tokens engañan cuando las tarifas
+/// difieren doce veces entre sí: con Opus, escribir en caché cuesta 6,25 $/M y leerla 0,50 $/M, así
+/// que 126.904 tokens escritos pesan trece veces más que 119.583 leídos aunque el número se
+/// parezca. Hasta F20 esto había que calcularlo a mano para poder decidir dónde apretar.
+/// <para>
+/// El orden es FIJO —escritura, salida, lectura, fresca— y no por tamaño: así dos informes se
+/// comparan de un vistazo. Cuál manda se ve en el porcentaje.
+/// </para>
+/// </summary>
+public sealed record CostSplit(decimal CacheWrite, decimal Output, decimal Cached, decimal Fresh)
+{
+    public decimal Total => CacheWrite + Output + Cached + Fresh;
+
+    /// <summary>Los cuatro conceptos con su nombre, en el orden de la casa. Sin los que son cero.</summary>
+    public IReadOnlyList<(string Concepto, decimal Credits)> Items
+        => new[]
+            {
+                ("escritura de caché", CacheWrite),
+                ("salida", Output),
+                ("lectura de caché", Cached),
+                ("entrada fresca", Fresh),
+            }
+            .Where(x => x.Item2 > 0m)
+            .ToList();
+
+    /// <summary>Qué fracción del total es ese concepto. 0 cuando no hay total que repartir.</summary>
+    public double ShareOf(decimal credits) => Total <= 0m ? 0 : (double)(credits / Total);
+}
+
+/// <summary>
 /// El coste de algo, con su procedencia. Nunca es solo un número: o hay credits, o hay un motivo.
 /// </summary>
 /// <param name="Credits">Los AI credits. Null cuando no se puede calcular.</param>
@@ -55,7 +85,8 @@ public sealed record CostResult(
     long CachedInputTokens = 0,
     long CacheWriteTokens = 0,
     long OutputTokens = 0,
-    string? Model = null)
+    string? Model = null,
+    CostSplit? Split = null)
 {
     /// <summary>Se ha podido calcular.</summary>
     public bool HasValue => Credits is not null;
@@ -210,11 +241,15 @@ public static class CreditCalculator
         // sin que nadie lo notara— se reparte lo que se puede y se cobra cero por lo que no.
         billableInput = Math.Max(0, billableInput);
 
-        decimal usd =
-            PerMillion(billableInput, rate.InputPerMillion)
-            + PerMillion(cacheReadTokens, rate.CachedInputPerMillion)
-            + PerMillion(cacheWriteTokens, rate.CacheWritePerMillion ?? 0m)
-            + PerMillion(outputTokens, rate.OutputPerMillion);
+        // F20 §1 — cada concepto se valora por separado y el total es su suma. UNA sola
+        // aritmética: el reparto no es una segunda cuenta que pueda discrepar del total, es el
+        // total desglosado. Sumarlos tiene que dar exactamente lo que devuelve esta función.
+        decimal fresh = PerMillion(billableInput, rate.InputPerMillion);
+        decimal cached = PerMillion(cacheReadTokens, rate.CachedInputPerMillion);
+        decimal written = PerMillion(cacheWriteTokens, rate.CacheWritePerMillion ?? 0m);
+        decimal output = PerMillion(outputTokens, rate.OutputPerMillion);
+
+        decimal usd = fresh + cached + written + output;
 
         return new CostResult(
             usd / UsdPerCredit,
@@ -223,7 +258,12 @@ public static class CreditCalculator
             cacheReadTokens,
             cacheWriteTokens,
             outputTokens,
-            model);
+            model,
+            new CostSplit(
+                written / UsdPerCredit,
+                output / UsdPerCredit,
+                cached / UsdPerCredit,
+                fresh / UsdPerCredit));
     }
 
     /// <summary>El coste de una sesión entera, con el modelo y el proveedor que ella misma registró.</summary>
