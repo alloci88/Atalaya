@@ -121,27 +121,29 @@ public class StructuredArmTests
     }
 
     /// <summary>
-    /// El brazo no sube el guardarraíl de F19 (3.500), que no se toca por una medida: en General
-    /// los dos brazos caben —3.096 el libre, 3.189 el estructurado—.
+    /// El brazo no rompe el guardarraíl de F19, que es lo que había que poder afirmar: en General
+    /// los dos caben —3.096 el libre, 3.189 el estructurado— y lo que el método añade son ~90
+    /// tokens.
     /// <para>
-    /// <b>Y lo que se encontró midiendo esto, que no es de M1</b>: bajo una temática el prefijo de
-    /// PRODUCCIÓN ya vale 3.645, porque el bloque de enfoque de F17 pesa 549 tokens. El guardarraíl
-    /// lleva roto desde F17 y no se había visto porque su test solo mide General. Aquí se afirma lo
-    /// que es cierto —que el brazo cuesta ~90 tokens y no es la causa— y el agujero queda anotado
-    /// en el parte y en el BACKLOG; taparlo con una cifra más alta sería justo lo que no se hace.
+    /// <b>Lo que se encontró midiendo esto, y ya está cerrado (R1).</b> Bajo una temática el
+    /// prefijo de PRODUCCIÓN valía 3.645 con un techo de 3.500: el bloque de enfoque de F17 pesaba
+    /// 549 tokens y el guardarraíl llevaba roto desde F17 sin que nadie lo viera, porque su test
+    /// solo medía General. R1 apretó el bloque (549 → 451), puso el techo donde caben las seis
+    /// lupas medidas y le hizo recorrer el catálogo. Aquí se sigue afirmando lo único que es de
+    /// M1: que el brazo cuesta poco y no era la causa.
     /// </para>
     /// </summary>
     [Fact]
     public void El_brazo_cuesta_poco_y_no_es_quien_rompe_el_guardarrail()
     {
-        Compose().Composition.Estable.Should().BeLessThan(3_500);
-        Compose(AuditStyle.Estructurado).Composition.Estable.Should().BeLessThan(3_500);
+        Compose().Composition.Estable.Should().BeLessThan(PromptComposition.TechoEstable);
+        Compose(AuditStyle.Estructurado).Composition.Estable.Should().BeLessThan(PromptComposition.TechoEstable);
 
         int libreTema = Compose(AuditStyle.Libre, AuditTheme.Seguridad).Composition.Estable;
         int estructuradoTema = Compose(AuditStyle.Estructurado, AuditTheme.Seguridad).Composition.Estable;
 
-        libreTema.Should().BeGreaterThan(3_500,
-            "el prefijo de producción bajo una lupa YA se pasa: es un agujero de F17, no de M1");
+        libreTema.Should().BeLessThan(PromptComposition.TechoEstable,
+            "el agujero de F17 lo cerró R1: la lupa más cara del catálogo ya cabe");
         (estructuradoTema - libreTema).Should().BeLessThan(150,
             "lo que añade el brazo es el método, y es barato");
     }

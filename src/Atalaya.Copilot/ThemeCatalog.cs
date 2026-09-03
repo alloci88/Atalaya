@@ -200,6 +200,13 @@ public static class ThemeCatalog
 /// El bloque de temática del prompt del auditor (F17 §1). Con General no escribe NADA: el prompt
 /// de un ciclo General es, byte a byte, el mismo que antes de F17 — es lo que garantiza que el
 /// ciclo General se comporte exactamente como hoy.
+/// <para>
+/// <b>Apretado en R1, como F24 apretó el suyo.</b> Este bloque viaja en el prefijo estable, o sea
+/// en TODAS las llamadas de la sesión: pesaba 549 tokens bajo Seguridad y pesa 451. Lo que se
+/// recortó son PALABRAS, no criterio — las dos listas del catálogo (D-824) y la regla dura del
+/// enfoque (D-825) siguen enteras, y la de reconciliación se dice una vez aquí en lugar de dos,
+/// porque el bloque de hallazgos de otras temáticas la repite justo donde está la lista.
+/// </para>
 /// </summary>
 public static class ThemeSection
 {
@@ -215,10 +222,9 @@ public static class ThemeSection
 
         var sb = new StringBuilder();
         sb.AppendLine($"{Heading}: {ThemeCatalog.Display(theme).ToUpperInvariant()}.");
-        sb.AppendLine("Este ciclo es TEMÁTICO. Tu encargo se acota a esta única familia de defectos, y fuera de");
-        sb.AppendLine("ella NO SE REPORTA NADA: ni con submit_findings ni con add_locations, por grave que te");
-        sb.AppendLine("parezca. La mirada completa la hace el ciclo General; la tuya es esta. La rúbrica de");
-        sb.AppendLine("severidad no cambia: un defecto de esta familia se clasifica igual que en un ciclo General.");
+        sb.AppendLine("Ciclo TEMÁTICO. Fuera de esta familia NO SE REPORTA NADA —ni con submit_findings ni con");
+        sb.AppendLine("add_locations, por grave que te parezca—: la mirada completa la hace el ciclo General. La");
+        sb.AppendLine("rúbrica de severidad no cambia.");
         sb.AppendLine();
         sb.AppendLine("QUÉ BUSCAS:");
         sb.AppendLine(ThemeCatalog.Looks(theme).TrimEnd());
@@ -226,11 +232,8 @@ public static class ThemeSection
         sb.AppendLine("QUÉ NO ES TUYO:");
         sb.AppendLine(ThemeCatalog.Excludes(theme).TrimEnd());
         sb.AppendLine();
-        sb.AppendLine("RECONCILIACIÓN ACOTADA: en report_verdicts te pronuncias SOLO sobre los hallazgos existentes");
-        sb.AppendLine("de tu temática (la lista de abajo). Los de otras temáticas se te enseñan aparte para que no");
-        sb.AppendLine("los re-reportes como nuevos, pero NO los juzgas: ni presente, ni arreglado, ni no-es-defecto.");
-        sb.AppendLine("Pedirle un veredicto de seguridad a una pasada de rendimiento contradice su encargo, y la");
-        sb.AppendLine("aplicación lo rechaza.");
+        sb.AppendLine("RECONCILIACIÓN ACOTADA: en report_verdicts te pronuncias SOLO sobre los existentes de tu");
+        sb.AppendLine("temática (la lista de abajo); un veredicto sobre uno de otra se rechaza.");
         return sb.ToString();
     }
 }

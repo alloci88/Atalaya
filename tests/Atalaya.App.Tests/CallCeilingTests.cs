@@ -212,9 +212,9 @@ public sealed class CallCeilingTests : IDisposable
 /// </summary>
 public class TurnEconomyPromptTests
 {
-    private static ComposedUnitPrompt Compose()
+    private static ComposedUnitPrompt Compose(AuditTheme theme = AuditTheme.General)
         => PromptComposer.Compose(
-            "src/A.cs", "class A {}", PillarBrief.Parts(TechStack.DotNet), AuditMode.Lotes);
+            "src/A.cs", "class A {}", PillarBrief.Parts(TechStack.DotNet), AuditMode.Lotes, theme: theme);
 
     /// <summary>
     /// La regla, con sus cuatro herramientas nombradas y el orden dentro del turno. Sin nombrarlas
@@ -248,21 +248,41 @@ public class TurnEconomyPromptTests
     }
 
     /// <summary>
-    /// <b>El guardarraíl del §3.</b> Menos llamadas no puede significar prompts gigantes: el
-    /// prefijo estable viaja en TODAS las llamadas de la sesión, así que cada token que se le añade
-    /// se paga tantas veces como llamadas haya.
+    /// <b>El guardarraíl del §3, con TODAS las lupas.</b> Menos llamadas no puede significar
+    /// prompts gigantes: el prefijo estable viaja en TODAS las llamadas de la sesión, así que cada
+    /// token que se le añade se paga tantas veces como llamadas haya.
     /// <para>
-    /// El techo es holgado a propósito —no es un presupuesto, es una alarma—: lo medido en F19 son
-    /// 3.039 tokens y esto salta a partir de 3.500. Quien necesite pasar de ahí tiene que venir a
-    /// cambiar el número y explicarlo, que es exactamente lo que se busca.
+    /// <b>El defecto que R1 arregla no es el número: es el recorrido.</b> Esto medía solo General
+    /// —el único ciclo que existía cuando se escribió— y por eso no vio que desde F17 cualquier
+    /// ciclo temático se pasaba del techo: el bloque de enfoque pesaba 549 tokens y el prefijo bajo
+    /// Seguridad valía 3.631. Un guardarraíl que no recorre el catálogo no protege lo que dice
+    /// proteger. Ahora recorre las seis, y el techo (<see cref="PromptComposition.TechoEstable"/>)
+    /// se decidió con las seis medidas delante.
     /// </para>
     /// </summary>
-    [Fact]
-    public void El_prefijo_estable_no_puede_engordar_sin_que_salte_un_rojo()
+    /// <summary>
+    /// El recorrido sale del CATÁLOGO, no de una lista escrita a mano: el día que se añada una
+    /// séptima temática se mide sola, sin que nadie tenga que acordarse. Esa es la mitad del
+    /// arreglo que importa.
+    /// </summary>
+    public static TheoryData<AuditTheme> Tematicas()
     {
-        PromptComposition c = Compose().Composition;
+        var data = new TheoryData<AuditTheme>();
+        foreach (AuditTheme theme in ThemeCatalog.All)
+        {
+            data.Add(theme);
+        }
 
-        c.Estable.Should().BeLessThan(3_500,
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(Tematicas))]
+    public void El_prefijo_estable_no_puede_engordar_sin_que_salte_un_rojo(AuditTheme theme)
+    {
+        PromptComposition c = Compose(theme).Composition;
+
+        c.Estable.Should().BeLessThan(PromptComposition.TechoEstable,
             "el prefijo se paga en cada llamada; si hace falta más sitio, se decide a conciencia");
         c.Estable.Should().BeGreaterThan(2_000, "y si se desplomara sería que se ha caído un bloque");
     }

@@ -12329,3 +12329,56 @@ desviación que F23 dejó a propósito. El desglose de caché —«28.050 entrad
 235.327 leída / 51.077 escrita»— sigue en el tooltip y no compite por la línea. **No se toca nada
 del pie**: lo que había que hacer era comprobarlo, y está comprobado.
 
+### D-911 — El guardarraíl del prefijo estable solo miraba General, y llevaba así desde F17
+
+Lo destapó M1 midiendo otra cosa (D-909). **El defecto no es que el número estuviera bajo: es que
+nadie lo medía.** El techo de F19 existe porque el prefijo estable viaja en TODAS las llamadas de la
+sesión, así que cada token se paga tantas veces como llamadas haya — y su test componía en
+**General**, la única lupa en la que el bloque `ENFOQUE DEL CICLO` no existe. Desde F17, cualquier
+ciclo temático real pagaba reescritura de caché por encima del techo sin que ningún test lo viera.
+
+**Primero se aprieta el texto, como F24 apretó el suyo (D-897).** El bloque de enfoque decía dos
+veces lo mismo: la regla de la reconciliación acotada se explicaba aquí en cinco líneas y se vuelve a
+decir, entera, en la cabecera del bloque de hallazgos de otras temáticas, que es donde está la lista
+a la que se refiere. Se dice una vez. Lo demás son palabras: «Este ciclo es TEMÁTICO. Tu encargo se
+acota a esta única familia de defectos» → «Ciclo TEMÁTICO». **Las dos listas del catálogo (D-824) no
+se tocan ni un byte y la regla dura de D-825 sigue entera**, con sus dos herramientas nombradas: lo
+que se recortó son palabras, no criterio.
+
+**Las seis lupas, antes y después** (`PromptComposer.Compose` con el brief de .NET, que es lo que
+compone el guardarraíl):
+
+| Lupa | Bloque de enfoque | Prefijo antes | Prefijo después |
+|---|---:|---:|---:|
+| General | 0 | 3.085 | 3.085 |
+| **Seguridad** | 546 → **451** | **3.631** | **3.536** |
+| Rendimiento | 499 → 405 | 3.584 | 3.490 |
+| Fiabilidad | 499 → 405 | 3.584 | 3.490 |
+| Concurrencia y asincronía | 490 → 396 | 3.575 | 3.481 |
+| Mantenibilidad | 467 → 373 | 3.552 | 3.458 |
+
+(D-909 anotó 3.096 y 3.645 para las dos primeras filas; la diferencia de once tokens es de cómo
+compuso aquella medida y no mueve el cuadro. Las de aquí son las que el test afirma.)
+
+**Cuatro de las seis ya caben bajo 3.500. Seguridad no**, y se queda a 36 tokens. Ahí es donde había
+que decidir, y la decisión es **subir el techo a 3.600** en vez de seguir recortando: lo único que
+queda por apretar en Seguridad es su lista de «qué buscas», que **es el criterio** — recortarla no
+haría el prompt más barato, haría la auditoría de seguridad más ciega. Un guardarraíl que no cabe y
+se aprieta a martillazos deja de proteger el prompt y pasa a protegerse a sí mismo.
+
+**3.600, y por qué ese número.** Es el múltiplo de cien más bajo que cubre la lupa más cara medida
+(3.536), igual que 3.500 era el que cubría los 3.039 de F19. Deja 64 tokens de margen: bastante para
+un retoque de redacción, poco para que quepa un bloque nuevo sin que salte. El techo vive ahora en un
+solo sitio, `PromptComposition.TechoEstable`, junto a `Estable`, y no repetido en tres suites — que
+era la otra mitad de por qué nadie se enteraba.
+
+**Y el test recorre el catálogo, no una lista escrita a mano.** El `[Theory]` se alimenta de
+`ThemeCatalog.All`, así que una séptima temática se mide sola el día que se añada, sin que nadie
+tenga que acordarse. Esa es la parte del arreglo que importa: el número se puede volver a discutir,
+el recorrido no.
+
+**Lo que este techo cubre y lo que no.** Cubre el prefijo de PRODUCCIÓN (brazo libre, las seis
+lupas), sin directivas ni patrones silenciados — que son por aplicación y se suman encima, con su
+propio presupuesto desde F7. El brazo estructurado de M1 es del banco y no entra: su test sigue
+afirmando lo suyo, que cuesta ~90 tokens y no es quien rompía nada.
+

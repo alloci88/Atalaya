@@ -61,11 +61,6 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   una palanca sobre el presupuesto, no sobre la regla de parada. Antes de tocar el tope de fábrica
   hace falta la misma medida con Copilot y sobre unidades que no sean las dos del banco: con dos
   clases de 34 líneas, «no sube de 18 de 19» puede ser del escenario y no del método.
-- **DEFECTO (fuera de M1) — el guardarraíl del prefijo estable lleva roto desde F17.** Con lupa el
-  prefijo de producción vale **3.645** contra un techo de **3.500**, porque el bloque `ENFOQUE DEL
-  CICLO` pesa 549 tokens (D-909). No se había visto porque el test compone en General, donde ese
-  bloque no existe. Dos caminos, ninguno gratis: recortar el bloque, o aceptar que un ciclo temático
-  paga ~550 tokens más por llamada y **decirlo en el guardarraíl** en vez de que salte por sorpresa.
 - **Variantes: observadas con `opus`, y si se retoma se empieza por el banco.** El mismo defecto
   contado dos veces —otra regla, otra consecuencia, otro título— existe: se vio en el informe de
   referencia con Copilot y se reprodujo con `opus` (mismo sitio y mismo miembro bajo reglas
@@ -374,6 +369,14 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **R1 · El guardarraíl del prefijo estable no medía las lupas** — el defecto que M1 destapó (D-909)
+  y que llevaba abierto desde F17: el techo de F19 se comprobaba solo con General, la única lupa sin
+  bloque `ENFOQUE DEL CICLO`, mientras cualquier ciclo temático real se pasaba. Se tomaron los dos
+  caminos por orden: primero **apretar el bloque** —549 → 451 tokens, sin tocar las dos listas del
+  catálogo ni la regla dura de D-825—, y como Seguridad seguía 36 tokens por encima, **subir el techo
+  a 3.600** con las seis medidas escritas (D-911). Y lo que de verdad estaba roto: el test recorre
+  ahora `ThemeCatalog.All`, así que una temática nueva se mide sola.
 
 - **F21 · Cortar en `unit_done` sin perder las cuentas** — la llamada de cortesía que F19 midió y no
   pudo quitar (D-865) y que F20 valoró en cerca del 70 % de la entrada de una pasada (D-873) ya no

@@ -214,6 +214,19 @@ public sealed record PromptComposition(
     int Existentes = 0,
     int Unidad = 0)
 {
+    /// <summary>
+    /// <b>El techo del prefijo estable</b> (F19 §3, revisado en R1). No es un presupuesto: es una
+    /// alarma. El prefijo viaja en TODAS las llamadas de la sesión, así que cada token que se le
+    /// añade se paga tantas veces como llamadas haya; quien necesite pasar de aquí tiene que venir
+    /// a cambiar este número y explicarlo.
+    /// <para>
+    /// Vive aquí, junto a <see cref="Estable"/>, y no repetido en cada suite: el defecto que R1
+    /// destapó no fue que el número estuviera bajo, sino que solo se medía con General mientras los
+    /// ciclos temáticos llevaban desde F17 pasándose sin que nadie lo viera.
+    /// </para>
+    /// </summary>
+    public const int TechoEstable = 3_600;
+
     /// <summary>El prefijo que NO cambia entre unidades ni entre pasadas: lo cacheable.</summary>
     public int Estable => Reglas + Rubrica + Catalogo + Tematica + Directivas + Patrones;
 

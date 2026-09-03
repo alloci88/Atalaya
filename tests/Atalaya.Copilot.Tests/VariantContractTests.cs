@@ -1,4 +1,4 @@
-using Atalaya.Domain;
+﻿using Atalaya.Domain;
 using Atalaya.Domain.Model;
 using FluentAssertions;
 using Xunit;
@@ -94,9 +94,9 @@ public class VariantContractTests
     /// ~3.486 y su retirada lo deja en ~3.094. La diferencia que queda —unos 40 tokens— es la línea
     /// del <c>symbol</c>, y no hay más.
     /// <para>
-    /// El margen es estrecho a propósito: el guardarraíl de F19 salta a partir de 3.500 y avisa de
-    /// un engorde grande, pero no habría dicho nada de que el contrato volviera a colarse aquí.
-    /// Esto sí.
+    /// El margen es estrecho a propósito: el guardarraíl de F19 (<c>PromptComposition.TechoEstable</c>)
+    /// avisa de un engorde grande, pero no habría dicho nada de que el contrato volviera a colarse
+    /// aquí. Esto sí.
     /// </para>
     /// </summary>
     [Fact]
