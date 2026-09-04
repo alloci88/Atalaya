@@ -84,6 +84,20 @@
     <Thickness x:Key="Pad.M.Top">0,16,0,0</Thickness>
     <Thickness x:Key="Pad.S.Left">12,0,0,0</Thickness>
     <Thickness x:Key="Pad.M.Left">16,0,0,0</Thickness>
+    <Thickness x:Key="Pad.XS.Left">8,0,0,0</Thickness>
+    <Thickness x:Key="Pad.XS.Right">0,0,8,0</Thickness>
+    <Thickness x:Key="Pad.XXS.Right">0,0,4,0</Thickness>
+    <Thickness x:Key="Pad.XXS.Bottom">0,0,0,4</Thickness>
+    <Thickness x:Key="Pad.S.Bottom">0,0,0,12</Thickness>
+    <Thickness x:Key="Pad.XS.Top">0,8,0,0</Thickness>
+
+    <!-- El pelo que separa los bloques de un panel: aire arriba, un poco menos abajo — el
+         microtítulo que viene detrás ya trae el suyo. -->
+    <Thickness x:Key="Pad.PanelDivider">0,16,0,10</Thickness>
+
+    <!-- La sangría de una fila de unidad bajo su módulo. El margen derecho reserva el ancho de la
+         barra de desplazamiento: sin él, «🔒 alguien» se corta contra ella en las filas reclamadas. -->
+    <Thickness x:Key="Pad.UnitRow">32,4,16,8</Thickness>
 
     <!-- Y los asimétricos, con NOMBRE DE INTENCIÓN en vez de con sus números. «El relleno de un
          botón» se puede reajustar una vez para todos los botones; `12,8` repetido cuarenta veces,
@@ -170,6 +184,12 @@
     <!-- Y el tope de alto de su código: 260 son unas trece líneas, que es lo que hace falta para
          ver el defecto con su contexto. Más, y las acciones se van por debajo del borde. -->
     <sys:Double x:Key="Preview.CodeHeight">220</sys:Double>
+
+    <!-- El resumen del ciclo del Inventario. 320 y no 260: a 260 su línea más larga —«Patrones
+         silenciados: 0 · Gestionar»— se cortaba a media palabra, y nadie lo dijo porque un texto
+         recortado no falla, solo miente. -->
+    <sys:Double x:Key="Cycle.PanelWidth">320</sys:Double>
+    <sys:Double x:Key="Cycle.PanelHeight">720</sys:Double>
     <sys:Double x:Key="Control.MinHeight">36</sys:Double>
 
     <!-- 24, que es el tamaño al que un icono de línea se lee sin mirarlo fijo. Antes 18-19, que

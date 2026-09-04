@@ -2,26 +2,42 @@
     x:Class="Atalaya.App.Views.InventoryView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:c="clr-namespace:Atalaya.App.Controls">
+
+    <!--
+        INVENTARIO (F26 Parte B, D-975).
+
+        Lo que había: los seis botones de acción metidos en la misma línea que la caja de búsqueda,
+        todos del mismo peso; el árbol ocupando media pantalla y el resto vacío; y un panel del
+        ciclo de 260 px donde el texto se cortaba a media palabra —«Gestiona», «Aquí r»— porque no
+        cabía. Los estados de unidad eran pastillas grises: todas iguales, sin decir nada de un
+        vistazo.
+
+        Lo que hay: las acciones de la VISTA en su cabecera, con «Auditar selección» como único
+        primario; los gestos que tocan la LISTA (buscar, filtrar deriva, seleccionar pendientes o
+        cambiadas) en la barra de la lista, que es donde actúan; el árbol al ancho; y el panel del
+        ciclo a 320 px, que es lo que su contenido necesita, plegándose en cuanto no cabe.
+    -->
 
     <UserControl.Resources>
         <!-- La cabecera de módulo es un enlace de fila, como en V3: mismo gesto, mismo aspecto. -->
         <Style x:Key="ModuleHeaderLink" TargetType="Button">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <!-- OBLIGATORIO en un Style de Button sin BasedOn: al no heredar del implícito de
-                 WPF-UI, el Foreground cae al de serie de WPF, que es NEGRO. Sobre el fondo oscuro
-                 del tema eso es texto invisible (0,0,0 sobre 32,32,32). -->
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="BorderThickness" Value="{StaticResource Pad.Zero}" />
+            <!-- OBLIGATORIO en un Style de Button sin BasedOn: al no heredar del implícito, el
+                 Foreground cae al de serie de WPF, que es NEGRO. Sobre el fondo oscuro del tema
+                 eso es texto invisible. -->
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Padding" Value="{StaticResource Pad.XS}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Chrome"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="6"
+                                CornerRadius="{StaticResource Radius.M}"
                                 Padding="{TemplateBinding Padding}"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center" />
@@ -29,11 +45,11 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Chrome" Property="Background"
-                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                        Value="{DynamicResource Brush.Surface2}" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="Chrome" Property="Background"
-                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                        Value="{DynamicResource Brush.Surface2}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -41,22 +57,32 @@
             </Setter>
         </Style>
 
-        <!-- El pelo que separa los tres bloques del panel del ciclo (F9.1 §2). Mismo recurso y
-             mismo grosor que el divisor de la ficha de hallazgo: un pelo, no una raya. -->
+        <!-- El pelo que separa los tres bloques del panel del ciclo (F9.1 §2): un pelo, no una raya. -->
         <Style x:Key="PanelDivider" TargetType="Border">
             <Setter Property="Height" Value="1" />
-            <Setter Property="Background" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-            <Setter Property="Margin" Value="0,14,0,10" />
+            <Setter Property="Background" Value="{DynamicResource Brush.Line}" />
+            <Setter Property="Margin" Value="{StaticResource Pad.PanelDivider}" />
+        </Style>
+
+        <!-- El microtítulo de cada bloque del panel. -->
+        <Style x:Key="PanelSection" TargetType="TextBlock" BasedOn="{StaticResource Text.Small}">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+        </Style>
+
+        <!-- Una línea «etiqueta: valor» del panel. -->
+        <Style x:Key="PanelLine" TargetType="TextBlock" BasedOn="{StaticResource Text.Small}">
+            <Setter Property="Margin" Value="{StaticResource Pad.XXS.Top}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
     </UserControl.Resources>
 
-    <Grid>
+    <Grid x:Name="Split" SizeChanged="OnSplitSizeChanged">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="260" />
+            <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -64,371 +90,482 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- · Cabecera: título y plegado de todos los módulos (F5.6 §1, igual que V3) · -->
-        <Grid Grid.Row="0" Grid.Column="0" Margin="0,0,0,12">
-            <TextBlock Text="{Binding Title}" FontSize="24" FontWeight="SemiBold" />
-            <ui:Button Content="{Binding ToggleAllLabel}"
-                       Command="{Binding ToggleAllGroupsCommand}"
-                       Appearance="Secondary"
-                       Padding="10,3" FontSize="11.5"
-                       HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                       Margin="0,0,0,2"
-                       ToolTip="Con todo plegado, las cabeceras son el resumen: módulo y cuántas de sus unidades están auditadas."
-                       Visibility="{Binding HasGroups, Converter={StaticResource BoolToVisibility}}" />
+        <!-- ==================================================== Cabecera de vista
+
+             Las acciones de la VISTA van aquí, y «Auditar selección» es el único primario: es lo
+             que esta pantalla existe para hacer. Lo que toca la LISTA —buscar, filtrar, seleccionar
+             pendientes o cambiadas— baja a la barra de la lista, que es donde actúa.
+        -->
+        <Grid Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Margin="{StaticResource Pad.M.Bottom}">
+            <StackPanel>
+                <TextBlock Text="Inventario" Style="{StaticResource Text.H1}" />
+                <TextBlock Text="{Binding CycleLabel}" Style="{StaticResource Text.Small}"
+                           Margin="{StaticResource Pad.XXS.Top}"
+                           ToolTip="{Binding CycleTooltip}" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
+                        c:Stack.Gap="{StaticResource Space.XS}">
+                <ToggleButton x:Name="MoreActions" Style="{StaticResource Button.More}"
+                              ToolTip="Más acciones" />
+                <Popup IsOpen="{Binding IsChecked, ElementName=MoreActions}"
+                       PlacementTarget="{Binding ElementName=MoreActions}"
+                       Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+                    <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.XXS}"
+                            Margin="{StaticResource Pad.XXS}">
+                        <StackPanel c:Stack.Gap="{StaticResource Space.XXS}">
+                            <Button Content="Re-escanear" Command="{Binding RescanCommand}"
+                                    IsEnabled="{Binding CanAudit}" ToolTip="{Binding AuditDisabledTooltip}"
+                                    BorderBrush="Transparent" Background="Transparent"
+                                    HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" />
+                            <Button Content="Reset ciclo" Command="{Binding ResetCycleCommand}"
+                                    Style="{StaticResource Button.Danger}" BorderBrush="Transparent"
+                                    HorizontalContentAlignment="Left" HorizontalAlignment="Stretch" />
+                        </StackPanel>
+                    </Border>
+                </Popup>
+
+                <Button Content="Ver hallazgos" Command="{Binding ShowFindingsCommand}" />
+
+                <Button Content="Auditar selección" Command="{Binding AuditSelectionCommand}"
+                        Style="{StaticResource Button.Primary}"
+                        IsEnabled="{Binding CanAudit}" ToolTip="{Binding AuditDisabledTooltip}" />
+            </StackPanel>
         </Grid>
 
-        <!-- · Barra de acciones · -->
-        <WrapPanel Grid.Row="1" Grid.Column="0" Margin="0,0,0,10">
-            <ui:TextBox
-                PlaceholderText="Buscar unidad…"
-                ToolTip="Filtra por ruta. Filtrar NO deselecciona: lo que queda fuera de la vista sigue marcado."
-                Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
-                Width="220"
-                Margin="0,0,8,8" />
-            <!-- F5.8 §3: lo que LANZA una auditoría o lee el clon se deshabilita sin vínculo local,
-                 y dice por qué. Lo demás —seleccionar, resetear el ciclo, ver hallazgos— sigue
-                 entero: el inventario se abre siempre. -->
-            <ui:Button Content="Auditar selección" Command="{Binding AuditSelectionCommand}" Appearance="Primary"
-                       IsEnabled="{Binding CanAudit}" ToolTip="{Binding AuditDisabledTooltip}" Margin="0,0,8,8" />
-            <ui:Button Content="{Binding PendingToggleLabel}" Command="{Binding SelectPendingCommand}"
-                       ToolTip="{Binding PendingToggleTooltip}" Margin="0,0,8,8" />
-            <!-- F9 §3: hace pareja con «Seleccionar pendientes» y desemboca en el MISMO flujo —
-                 mismo diálogo, misma estimación de coste, mismo barrido, misma reconciliación. La
-                 re-auditoría no estrena ningún camino nuevo de resolución. -->
-            <ui:Button Content="{Binding ChangedToggleLabel}" Command="{Binding SelectChangedCommand}"
-                       ToolTip="{Binding ChangedToggleTooltip}" Margin="0,0,8,8" />
-            <!-- El filtro de deriva es PROPIO y aparte del estado de auditoría: son dos dimensiones
-                 distintas, y una unidad puede estar «auditada» y «cambiada» a la vez. -->
-            <ComboBox SelectedIndex="{Binding DriftFilter}" Width="210" Margin="0,0,8,8"
-                      VerticalAlignment="Center"
-                      ToolTip="Filtra por lo que le ha pasado al código desde que se auditó. Es una dimensión aparte del estado de auditoría.">
-                <ComboBoxItem Content="Deriva: todas" />
-                <ComboBoxItem Content="Solo cambiadas" />
-                <ComboBoxItem Content="Solo arregladas sin verificar" />
-                <ComboBoxItem Content="Solo sin historial" />
-            </ComboBox>
-            <ui:Button Content="Re-escanear" Command="{Binding RescanCommand}"
-                       IsEnabled="{Binding CanAudit}" ToolTip="{Binding AuditDisabledTooltip}" Margin="0,0,8,8" />
-            <ui:Button Content="Reset ciclo" Command="{Binding ResetCycleCommand}" Margin="0,0,8,8" />
-            <ui:Button Content="Ver hallazgos" Command="{Binding ShowFindingsCommand}" Margin="0,0,8,8" />
-        </WrapPanel>
+        <!-- ==================================================== Avisos
 
-        <!-- · Solo lectura (F5.8 §3): por qué no se puede auditar y el acceso directo a
-             arreglarlo. Va arriba y no al pie: es la explicación de los botones grises que se
-             tienen justo encima. · -->
-        <Border Grid.Row="2" Grid.Column="0"
-                Background="#22D2B036" BorderBrush="#55D2B036"
-                BorderThickness="1" CornerRadius="6" Padding="12,8" Margin="0,0,0,10"
-                Visibility="{Binding IsReadOnly, Converter={StaticResource BoolToVisibility}}">
-            <StackPanel Orientation="Horizontal">
-                <Ellipse Width="9" Height="9" VerticalAlignment="Center"
-                         Fill="{Binding Link.State, Converter={StaticResource CloneLinkStateToBrush}}" />
-                <TextBlock Text="{Binding ReadOnlyNotice}" TextWrapping="Wrap" Margin="8,0,0,0"
-                           VerticalAlignment="Center" MaxWidth="620" />
-                <ui:Button Content="{Binding LinkActionLabel}"
-                           Command="{Binding LinkCloneCommand}"
-                           Appearance="Primary"
-                           Padding="10,3" FontSize="11.5"
-                           Margin="12,0,0,0"
-                           VerticalAlignment="Center" />
-            </StackPanel>
-        </Border>
+             Solo lectura (F5.8 §3): por qué no se puede auditar y el acceso directo a arreglarlo.
+             Va arriba porque explica los botones grises que tiene encima.
+        -->
+        <StackPanel Grid.Row="1" Grid.Column="0" c:Stack.Gap="{StaticResource Space.XS}"
+                    Margin="{StaticResource Pad.S.Bottom}">
+            <Border Style="{StaticResource Notice.Warning}"
+                    Visibility="{Binding IsReadOnly, Converter={StaticResource BoolToVisibility}}">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right"
+                            Content="{Binding LinkActionLabel}"
+                            Command="{Binding LinkCloneCommand}"
+                            Style="{StaticResource Button.Primary}"
+                            Margin="{StaticResource Pad.S.Left}"
+                            VerticalAlignment="Center" />
+                    <Ellipse DockPanel.Dock="Left" Width="9" Height="9" VerticalAlignment="Center"
+                             Margin="{StaticResource Pad.XS.Right}"
+                             Fill="{Binding Link.State, Converter={StaticResource CloneLinkStateToBrush}}" />
+                    <TextBlock Text="{Binding ReadOnlyNotice}" TextWrapping="Wrap"
+                               Foreground="{DynamicResource Brush.Text}"
+                               VerticalAlignment="Center" />
+                </DockPanel>
+            </Border>
 
-        <!-- · Deriva: contra qué se ha medido y qué NO ve este análisis (F9 §1.1). Va arriba
-             porque condiciona la lectura de todos los indicadores de abajo. · -->
-        <ItemsControl Grid.Row="2" Grid.Column="0" ItemsSource="{Binding DriftWarnings}"
-                      Margin="0,0,0,10"
-                      Visibility="{Binding HasDriftWarnings, Converter={StaticResource BoolToVisibility}}">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                    <Border Background="#18808080" CornerRadius="6" Padding="12,7" Margin="0,0,0,6">
-                        <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                    </Border>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
-
-        <!-- · Barra de selección: solo cuando hay algo marcado. El contador es lo que se va a
-             gastar, así que se lee antes de pulsar «Auditar selección» (F5.6 §3). · -->
-        <Border Grid.Row="4" Grid.Column="0"
-                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1" CornerRadius="6" Padding="12,7" Margin="0,0,0,10"
-                Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding SelectionLabel}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                <TextBlock Text="·" Margin="10,0" Opacity="0.5" VerticalAlignment="Center" />
-                <ui:Button Content="Deseleccionar todo"
-                           Command="{Binding ClearSelectionCommand}"
-                           Appearance="Secondary"
-                           Padding="10,3" FontSize="11.5"
-                           VerticalAlignment="Center" />
-            </StackPanel>
-        </Border>
-
-        <!-- · Árbol de módulos · -->
-        <ScrollViewer Grid.Row="5" Grid.Column="0" VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding Modules}">
+            <!-- Deriva: contra qué se ha medido y qué NO ve este análisis (F9 §1.1). Va arriba
+                 porque condiciona la lectura de todos los indicadores de abajo. -->
+            <ItemsControl ItemsSource="{Binding DriftWarnings}"
+                          Visibility="{Binding HasDriftWarnings, Converter={StaticResource BoolToVisibility}}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <StackPanel Margin="0,0,0,4">
-
-                            <!-- Cabecera: la casilla tri-estado selecciona el módulo entero; el
-                                 resto de la fila pliega y despliega. Dos gestos, dos zonas. -->
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-
-                                <!-- La casilla es de DOS estados a propósito (F5.13): marcada si y
-                                     solo si TODAS las unidades del módulo lo están. La plantilla de
-                                     WPF-UI pinta el indeterminado con el MISMO relleno de acento
-                                     que el marcado —solo cambia el glifo, un guion en vez de la
-                                     marca—, así que enviarle un nulo hacía que marcar UNA clase
-                                     pareciera marcar el módulo entero. La selección parcial se dice
-                                     con palabras, al lado del nombre. El clic llega por comando
-                                     porque IsChecked ya solo entra, no sale. -->
-                                <CheckBox Grid.Column="0"
-                                          IsChecked="{Binding IsAllSelected, Mode=OneWay}"
-                                          IsThreeState="False"
-                                          Command="{Binding DataContext.ToggleModuleCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                          CommandParameter="{Binding}"
-                                          VerticalAlignment="Center"
-                                          Margin="0,0,2,0"
-                                          ToolTip="Marca o quita todas las unidades de este módulo." />
-
-                                <Button Grid.Column="1"
-                                        Style="{StaticResource ModuleHeaderLink}"
-                                        Command="{Binding DataContext.ToggleGroupCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                        CommandParameter="{Binding}">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding ExpandGlyph}"
-                                                   Width="18" FontSize="12"
-                                                   VerticalAlignment="Center"
-                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                                        <TextBlock Text="{Binding Header}"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                                   VerticalAlignment="Center" />
-                                        <!-- Lo que el guion del tri-estado nunca llegó a decir: cuántas. -->
-                                        <Border CornerRadius="8" Padding="7,1" Margin="8,0,0,0"
-                                                VerticalAlignment="Center"
-                                                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
-                                                Visibility="{Binding HasSelectionNote, Converter={StaticResource BoolToVisibility}}">
-                                            <TextBlock Text="{Binding SelectionNote}" FontSize="11"
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                        </Border>
-                                    </StackPanel>
-                                </Button>
-                            </Grid>
-
-                            <!-- El margen derecho reserva el ancho de la barra de desplazamiento:
-                                 sin él, «🔒 alguien» se corta contra ella en las filas reclamadas. -->
-                            <ItemsControl ItemsSource="{Binding Units}" Margin="34,2,16,6"
-                                          Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="0,2">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}" VerticalAlignment="Center" />
-                                            <TextBlock Grid.Column="1" Text="{Binding FileName}" VerticalAlignment="Center" Margin="6,0,0,0" />
-                                            <Border Grid.Column="2" Background="#22808080" CornerRadius="8" Padding="8,2" Margin="6,0"
-                                                    VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding StateLabel}" FontSize="11"
-                                                           VerticalAlignment="Center" />
-                                            </Border>
-                                            <!-- F9 §3: la deriva es una dimensión APARTE del estado
-                                                 de auditoría, así que lleva su propio indicador al
-                                                 lado del otro y no lo sustituye: una unidad puede
-                                                 estar «Auditada» y «Cambiada» a la vez. El color
-                                                 nunca es el único canal — el texto va siempre. -->
-                                            <!-- F12 §H.3 — TODO va centrado en la fila: la píldora,
-                                                 el punto de color y su texto. Sin el centrado, la
-                                                 píldora se estiraba a lo alto de la fila y su texto
-                                                 quedaba pegado arriba mientras el punto sí estaba
-                                                 centrado: el indicador se leía descolgado del
-                                                 nombre de la unidad y de la píldora de estado. Vale
-                                                 para los DOS indicadores —«Cambiada desde su
-                                                 auditoría» y «Arreglada — pendiente de verificar»—
-                                                 porque los dos salen de esta misma plantilla. -->
-                                            <Border Grid.Column="3" CornerRadius="8" Padding="8,2" Margin="0,0,6,0"
-                                                    Background="#18808080"
-                                                    VerticalAlignment="Center"
-                                                    ToolTip="{Binding DriftTooltip}"
-                                                    Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}">
-                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <Ellipse Width="7" Height="7" VerticalAlignment="Center"
-                                                             Fill="{Binding DriftInk}" Margin="0,0,6,0" />
-                                                    <TextBlock Text="{Binding DriftLabel}" FontSize="11"
-                                                               VerticalAlignment="Center" />
-                                                </StackPanel>
-                                            </Border>
-                                            <TextBlock Grid.Column="4" Text="{Binding ClaimedBy, StringFormat='🔒 {0}'}" FontSize="11" Opacity="0.7" VerticalAlignment="Center" Margin="6,0,0,0" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
+                        <Border Style="{StaticResource Notice}" Margin="{StaticResource Pad.XXS.Bottom}">
+                            <TextBlock Text="{Binding}" Style="{StaticResource Text.Small}" />
+                        </Border>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
-        </ScrollViewer>
+        </StackPanel>
 
-        <!-- Empty state -->
-        <TextBlock
-            Grid.Row="5"
-            Grid.Column="0"
-            Text="Sin inventario. Vincula tu clon local y pulsa «Re-escanear»."
-            Opacity="0.6"
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
+        <!-- ==================================================== La barra de la lista
 
-        <!-- · Resumen del ciclo · Cada dato lleva una frase que lo explica a quien abre la
-             aplicación por primera vez: el usuario no distinguía ciclo de sesión (F5.6 §5).
-             «Grandes» ya no sale aquí por decisión del usuario — no aporta a este nivel, y el
-             estado sigue visible como badge en la fila de cada unidad, que es donde se actúa. -->
-        <Border Grid.Row="1" Grid.Column="1" Grid.RowSpan="5" Margin="14,0,0,0" Padding="14"
-                Background="#18808080" CornerRadius="8" VerticalAlignment="Top">
-            <StackPanel>
-                <TextBlock Text="Resumen del ciclo" FontWeight="SemiBold" Margin="0,0,0,4"
-                           ToolTip="Lo que hay en la vuelta actual del inventario de esta aplicación." />
+             Lo que TOCA la lista: buscar, filtrar por deriva, seleccionar por estado y plegar. No
+             son acciones de la vista —no lanzan nada, no escriben— y por eso no están arriba.
+        -->
+        <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource Panel}"
+                Padding="{StaticResource Pad.S}" Margin="{StaticResource Pad.S.Bottom}">
+            <DockPanel LastChildFill="True">
+                <Button DockPanel.Dock="Right"
+                        Content="{Binding ToggleAllLabel}"
+                        Command="{Binding ToggleAllGroupsCommand}"
+                        Style="{StaticResource Button.Link}"
+                        Margin="{StaticResource Pad.S.Left}"
+                        VerticalAlignment="Center"
+                        ToolTip="Con todo plegado, las cabeceras son el resumen: módulo y cuántas de sus unidades están auditadas."
+                        Visibility="{Binding HasGroups, Converter={StaticResource BoolToVisibility}}" />
 
-                <!-- · Bloque 1 · CICLO — dónde va la vuelta actual del inventario.
-                     Los tres bloques van separados por un pelo y un microtítulo (F9.1 §2): en la
-                     lista corrida anterior, «deriva» quedaba como una línea perdida en el medio y
-                     los patrones y las directivas parecían parte de ella, cuando no tienen nada
-                     que ver. Lo que agrupa es el aire; el pelo solo lo confirma. · -->
-                <TextBlock Text="{Binding CycleLabel}" FontWeight="SemiBold" TextWrapping="Wrap"
-                           Margin="0,6,0,0"
-                           ToolTip="{Binding CycleTooltip}" />
-                <!-- F17: la lupa del ciclo, como distintivo con su color de temática, y el
-                     acceso a cambiarla. Va pegado al ciclo porque ES del ciclo: con otra lupa,
-                     «auditada» significa otra cosa. -->
-                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                    <Border CornerRadius="9" Padding="8,2" VerticalAlignment="Center"
-                            Background="{Binding CycleTheme, Converter={StaticResource ThemeToBrush}, ConverterParameter=soft}"
-                            ToolTip="{Binding CycleThemeTooltip}">
-                        <TextBlock Text="{Binding CycleThemeLabel}" FontSize="11" FontWeight="SemiBold"
-                                   ToolTip="{Binding CycleThemeTooltip}"
-                                   Foreground="{Binding CycleTheme, Converter={StaticResource ThemeToBrush}}" />
-                    </Border>
-                    <ui:HyperlinkButton Content="Configurar ciclo" Padding="0" Margin="8,0,0,0" FontSize="12"
-                                        VerticalAlignment="Center"
-                                        Command="{Binding ConfigureCycleCommand}"
-                                        ToolTip="Elegir la temática del ciclo y el modelo preferido. Cambiar de temática con unidades auditadas las devuelve a pendientes; los hallazgos no se tocan." />
-                </StackPanel>
-                <TextBlock Margin="0,4,0,0" FontSize="12" Opacity="0.8"
-                           ToolTip="El modelo con el que el equipo prefiere auditar este ciclo. Es una preferencia: lanzar con otro avisa y deja continuar."><Run Text="Modelo preferido: " /><Run Text="{Binding PreferredModelLabel}" /></TextBlock>
-                <!-- F17.1: el ciclo no olvida con qué lupa se trabajó antes del cambio. -->
-                <TextBlock Margin="0,4,0,0" FontSize="11.5" Opacity="0.75" TextWrapping="Wrap"
-                           Text="{Binding CycleThemeHistory}"
-                           ToolTip="Las temáticas por las que ha pasado este ciclo, con quién las cambió y cuándo. Los hallazgos de cada lupa siguen llevando la suya."
-                           Visibility="{Binding HasCycleThemeHistory, Converter={StaticResource BoolToVisibility}}" />
-                <TextBlock Margin="0,4,0,0" ToolTip="{Binding UnitsTooltip}"><Run Text="Unidades: " /><Run Text="{Binding TotalUnits}" FontWeight="Bold" /></TextBlock>
-                <TextBlock Margin="0,4,0,0" ToolTip="Ya revisadas en este ciclo. Puedes volver sobre ellas marcándolas a mano."><Run Text="Auditadas: " /><Run Text="{Binding AuditedUnits}" FontWeight="Bold" /></TextBlock>
-                <TextBlock Margin="0,4,0,0" ToolTip="Aún sin revisar en este ciclo. Es lo que queda para que se cierre."><Run Text="Pendientes: " /><Run Text="{Binding PendingUnits}" FontWeight="Bold" /></TextBlock>
-                <TextBlock Margin="0,4,0,0" ToolTip="Cada lanzamiento de auditoría es una sesión. Los cierres de ciclo y los resets no cuentan."><Run Text="Sesiones este ciclo: " /><Run Text="{Binding SessionCount}" FontWeight="Bold" /></TextBlock>
-                <TextBlock Margin="0,4,0,0"
-                           ToolTip="Las unidades que se auditarán al pulsar «Auditar selección»."
-                           Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}"><Run Text="Seleccionadas: " /><Run Text="{Binding SelectedCount}" FontWeight="Bold" /></TextBlock>
+                <WrapPanel Orientation="Horizontal">
+                    <ui:TextBox PlaceholderText="Buscar unidad…"
+                                ToolTip="Filtra por ruta. Filtrar NO deselecciona: lo que queda fuera de la vista sigue marcado."
+                                Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                FontSize="{StaticResource FontSize.Body}"
+                                Padding="{StaticResource Pad.Field}"
+                                Width="240" Margin="{StaticResource Pad.XXS}" VerticalAlignment="Center" />
 
-                <!-- · Bloque 2 · DERIVA — qué ha cambiado desde que se auditó (F9). · -->
-                <Border Style="{StaticResource PanelDivider}" />
-                <TextBlock Text="Deriva" FontWeight="SemiBold" FontSize="12"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           ToolTip="Lo que le ha pasado al código desde que se auditó. Se calcula del historial de tu clon y no se guarda en ninguna parte." />
-                <!-- Contra qué se ha medido, como SUBTÍTULO del grupo y no como línea suelta: es
-                     el alcance de los tres números de abajo, no un dato más. -->
-                <TextBlock Text="{Binding DriftBranchLabel}" FontSize="11" Opacity="0.7"
-                           TextWrapping="Wrap" Margin="0,1,0,0"
-                           ToolTip="La rama de tu clon y su HEAD. Medir contra otra rama es legítimo, pero lo que veas será la deriva de esa rama."
-                           Visibility="{Binding DriftIsKnown, Converter={StaticResource BoolToVisibility}}" />
-                <TextBlock Margin="0,6,0,0" Text="Calculando…" FontSize="11.5" Opacity="0.6"
-                           ToolTip="Se está comparando el commit de cada auditoría con HEAD de tu clon. Va fuera del hilo de la interfaz: puedes seguir usando la vista."
-                           Visibility="{Binding IsDriftLoading, Converter={StaticResource BoolToVisibility}}" />
-                <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" FontSize="11.5" Opacity="0.75"
-                           Text="{Binding DriftProblem}"
-                           ToolTip="Por qué no hay deriva que enseñar. No saber no es lo mismo que saber que no ha cambiado nada, así que en vez de un cero se dice qué falta."
-                           Visibility="{Binding HasDriftProblem, Converter={StaticResource BoolToVisibility}}" />
-                <!-- Tres ceros seguidos ocupan lo mismo que un dato y no dicen más que una frase. -->
-                <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Text="{Binding NoDriftLabel}"
-                           ToolTip="Ninguna unidad auditada ha cambiado, ninguna está pendiente de verificar y de todas se ha podido leer el historial."
-                           Visibility="{Binding HasNoDrift, Converter={StaticResource BoolToVisibility}}" />
-                <TextBlock Margin="0,6,0,0"
-                           ToolTip="Auditadas cuyo código ha cambiado por mano ajena desde su auditoría. Son las candidatas de «Seleccionar cambiadas»."
-                           Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"><Run Text="Cambiadas: " /><Run Text="{Binding ChangedUnits}" FontWeight="Bold" /></TextBlock>
-                <TextBlock Margin="0,4,0,0"
-                           ToolTip="Arregladas desde Atalaya y todavía sin comprobar. Se cierran verificando, que es el instrumento que detectó el hallazgo; al verificar en verde dejan de contar."
-                           Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"><Run Text="Arregladas sin verificar: " /><Run Text="{Binding FixedPendingVerify}" FontWeight="Bold" /></TextBlock>
-                <TextBlock Margin="0,4,0,0"
-                           ToolTip="Auditadas cuyo historial no se puede comparar: el commit de su auditoría no está en este clon, se reescribió la historia, o tu clon va por detrás. Ni «sin cambios» ni «cambiada» serían ciertas."
-                           Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"><Run Text="Sin historial: " /><Run Text="{Binding NoHistoryUnits}" FontWeight="Bold" /></TextBlock>
-                <!-- F9 §4: los hallazgos que se quedaron sin código. Nada se resuelve solo. -->
-                <StackPanel Orientation="Horizontal" Margin="0,4,0,0"
-                            Visibility="{Binding HasOrphans, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock VerticalAlignment="Center"
-                               ToolTip="Hallazgos activos cuyo fichero ya no está en el repositorio. No se verifican ni se resuelven solos."><Run Text="Sin código: " /><Run Text="{Binding OrphanFindings}" FontWeight="Bold" /><Run Text=" · " /></TextBlock>
-                    <ui:HyperlinkButton Content="Revisar" Padding="0" Margin="0" VerticalAlignment="Center"
-                                        Command="{Binding ShowDeletedUnitsCommand}"
-                                        ToolTip="Ver esos hallazgos, con el commit que borró cada fichero, y resolverlos por código eliminado si procede. La decisión es tuya." />
-                </StackPanel>
-
-                <!-- · Bloque 3 · GOBERNANZA — lo que condiciona QUÉ se reporta en esta aplicación.
-                     No tiene nada que ver con la deriva, y pegado a ella lo parecía. · -->
-                <Border Style="{StaticResource PanelDivider}" />
-                <TextBlock Text="Gobernanza" FontWeight="SemiBold" FontSize="12" Margin="0,0,0,2"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                           ToolTip="Lo que esta aplicación ha decidido callar y lo que ha decidido contarle al auditor. Condiciona la lectura de todo lo de arriba." />
-                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                    <TextBlock VerticalAlignment="Center" ToolTip="{Binding PatternsTooltip}"><Run Text="Patrones silenciados: " /><Run Text="{Binding SilencedPatterns}" FontWeight="Bold" /><Run Text=" · " /></TextBlock>
-                    <ui:HyperlinkButton Content="Gestionar" Padding="0" Margin="0" VerticalAlignment="Center"
-                                        Command="{Binding ManagePatternSilencesCommand}"
-                                        ToolTip="Ver cuánto suprime cada patrón, afinar su ejemplar, des-silenciarlo o cambiar su caducidad." />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                    <TextBlock VerticalAlignment="Center" ToolTip="{Binding DirectivesTooltip}"><Run Text="Directivas: " /><Run Text="{Binding ActiveDirectives}" FontWeight="Bold" /><Run Text=" · " /></TextBlock>
-                    <ui:HyperlinkButton Content="Gestionar" Padding="0" Margin="0" VerticalAlignment="Center"
-                                        Command="{Binding ManageDirectivesCommand}"
-                                        ToolTip="Activar los ficheros de convenciones del proyecto, decidir a qué flujo aplica cada uno, ordenarlos y ver cuánto presupuesto consumen." />
-                </StackPanel>
-                <!-- F13: el umbral de tamaño es política de la aplicación y se edita aquí, junto a
-                     lo demás que gobierna qué se reporta. En Ajustes no está: aquello es de esta
-                     máquina, y esto clasifica el inventario que comparte el equipo. -->
-                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                    <TextBlock VerticalAlignment="Center" ToolTip="{Binding ThresholdsTooltip}"><Run Text="Umbrales: " /><Run Text="{Binding LargeUnitLoc}" FontWeight="Bold" /><Run Text=" LOC · " /></TextBlock>
-                    <ui:HyperlinkButton Content="Gestionar" Padding="0" Margin="0" VerticalAlignment="Center"
-                                        Command="{Binding ManageThresholdsCommand}"
-                                        ToolTip="Fijar a partir de cuántas líneas —o de cuántos caracteres— una unidad es demasiado grande para auditarla de una vez. Es política de la aplicación: vale para todo el equipo y aplica en el próximo re-escaneo." />
-                </StackPanel>
-                <!-- La mudanza del umbral personal, ofrecida UNA vez por aplicación. -->
-                <Border CornerRadius="6" Padding="10,8" Margin="0,8,0,0"
-                        Background="{DynamicResource SubtleFillColorTertiaryBrush}"
-                        Visibility="{Binding HasLargeUnitOffer, Converter={StaticResource BoolToVisibility}}">
-                    <StackPanel>
-                        <TextBlock Text="{Binding LargeUnitOfferLabel}" TextWrapping="Wrap" FontSize="11.5"
-                                   ToolTip="Este umbral era un ajuste de tu máquina y ahora es política de cada aplicación. Se te pregunta una vez por aplicación: lo que decidas queda en el hub, para todo el equipo." />
-                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                            <ui:HyperlinkButton Content="Aplicar a la aplicación" Padding="0" Margin="0"
-                                                Command="{Binding AcceptLargeUnitOfferCommand}"
-                                                ToolTip="Escribe ese umbral en la política de esta aplicación y lo publica en el hub, para todo el equipo." />
-                            <ui:HyperlinkButton Content="Aquí no" Padding="0" Margin="14,0,0,0"
-                                                Command="{Binding DismissLargeUnitOfferCommand}"
-                                                ToolTip="Deja esta aplicación con su política y no vuelve a preguntar por ella." />
-                        </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.XXS}"
+                                VerticalAlignment="Center">
+                        <TextBlock Text="Deriva:" Style="{StaticResource Text.Small}"
+                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS}" />
+                        <!-- El filtro de deriva es PROPIO y aparte del estado de auditoría: son dos
+                             dimensiones distintas, y una unidad puede estar «auditada» y «cambiada»
+                             a la vez. -->
+                        <ComboBox SelectedIndex="{Binding DriftFilter}" MinWidth="190"
+                                  VerticalAlignment="Center"
+                                  ToolTip="Filtra por lo que le ha pasado al código desde que se auditó. Es una dimensión aparte del estado de auditoría.">
+                            <ComboBoxItem Content="Todas" />
+                            <ComboBoxItem Content="Solo cambiadas" />
+                            <ComboBoxItem Content="Solo arregladas sin verificar" />
+                            <ComboBoxItem Content="Solo sin historial" />
+                        </ComboBox>
                     </StackPanel>
-                </Border>
-                <!-- F5.7 §4: el resultado de la última acción va por el toast global, no
-                     incrustado al fondo de este panel, donde se quedaba pegado. -->
+
+                    <Button Content="{Binding PendingToggleLabel}" Command="{Binding SelectPendingCommand}"
+                            ToolTip="{Binding PendingToggleTooltip}"
+                            Margin="{StaticResource Pad.XXS}" VerticalAlignment="Center" />
+                    <!-- F9 §3: hace pareja con «Seleccionar pendientes» y desemboca en el MISMO
+                         flujo — mismo diálogo, misma estimación de coste, mismo barrido, misma
+                         reconciliación. La re-auditoría no estrena ningún camino de resolución. -->
+                    <Button Content="{Binding ChangedToggleLabel}" Command="{Binding SelectChangedCommand}"
+                            ToolTip="{Binding ChangedToggleTooltip}"
+                            Margin="{StaticResource Pad.XXS}" VerticalAlignment="Center" />
+                </WrapPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ==================================================== La selección
+
+             Solo cuando hay algo marcado. El contador es lo que se va a gastar, así que se lee
+             antes de pulsar «Auditar selección» (F5.6 §3).
+        -->
+        <Border Grid.Row="3" Grid.Column="0" Style="{StaticResource Notice}"
+                Background="{DynamicResource Brush.Primary.Soft}"
+                BorderBrush="{DynamicResource Brush.Primary.Fill}"
+                Margin="{StaticResource Pad.S.Bottom}"
+                Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
+                <TextBlock Text="{Binding SelectionLabel}" FontWeight="SemiBold"
+                           Foreground="{DynamicResource Brush.Text}" VerticalAlignment="Center" />
+                <Button Content="Deseleccionar todo"
+                        Command="{Binding ClearSelectionCommand}"
+                        Style="{StaticResource Button.Link}"
+                        VerticalAlignment="Center" />
             </StackPanel>
+        </Border>
+
+        <!-- ==================================================== El árbol de módulos -->
+        <Border Grid.Row="4" Grid.Column="0" Style="{StaticResource Panel}"
+                Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="{StaticResource Pad.XS}">
+                <ItemsControl ItemsSource="{Binding Modules}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="{StaticResource Pad.XXS.Bottom}">
+
+                                <!-- Cabecera: la casilla tri-estado selecciona el módulo entero; el
+                                     resto de la fila pliega y despliega. Dos gestos, dos zonas. -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- La casilla es de DOS estados a propósito (F5.13): marcada
+                                         si y solo si TODAS las unidades del módulo lo están. La
+                                         plantilla de WPF-UI pinta el indeterminado con el MISMO
+                                         relleno de acento que el marcado, así que enviarle un nulo
+                                         hacía que marcar UNA clase pareciera marcar el módulo
+                                         entero. La selección parcial se dice con palabras. -->
+                                    <CheckBox Grid.Column="0"
+                                              IsChecked="{Binding IsAllSelected, Mode=OneWay}"
+                                              IsThreeState="False"
+                                              Command="{Binding DataContext.ToggleModuleCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                              CommandParameter="{Binding}"
+                                              VerticalAlignment="Center"
+                                              ToolTip="Marca o quita todas las unidades de este módulo." />
+
+                                    <Button Grid.Column="1"
+                                            Style="{StaticResource ModuleHeaderLink}"
+                                            Command="{Binding DataContext.ToggleGroupCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding ExpandGlyph}"
+                                                       Width="18"
+                                                       Style="{StaticResource Text.Meta}"
+                                                       VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding Header}"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource Brush.Text}"
+                                                       VerticalAlignment="Center" />
+                                            <!-- Lo que el guion del tri-estado nunca llegó a decir. -->
+                                            <Border Style="{StaticResource Pill}"
+                                                    Margin="{StaticResource Pad.XS.Left}"
+                                                    Visibility="{Binding HasSelectionNote, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="{Binding SelectionNote}"
+                                                           Style="{StaticResource Pill.Text}" />
+                                            </Border>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+
+                                <ItemsControl ItemsSource="{Binding Units}"
+                                              Margin="{StaticResource Pad.UnitRow}"
+                                              Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="{StaticResource Pad.XXS.Bottom}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}"
+                                                          VerticalAlignment="Center" />
+
+                                                <TextBlock Grid.Column="1" Text="{Binding FileName}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="{StaticResource Pad.XS.Left}"
+                                                           TextTrimming="CharacterEllipsis" />
+
+                                                <!-- El estado, con COLOR (D-975): auditada en
+                                                     verde, pendiente en neutro, excluida apagada.
+                                                     Antes las tres eran la misma pastilla gris, así
+                                                     que había que leer cada fila para saber por
+                                                     dónde iba el módulo. -->
+                                                <Border Grid.Column="2" Style="{StaticResource Pill.UnitState}"
+                                                        Margin="{StaticResource Pad.XS.Left}"
+                                                        VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding StateLabel}"
+                                                               Style="{StaticResource Pill.UnitState.Text}"
+                                                               VerticalAlignment="Center" />
+                                                </Border>
+
+                                                <!-- F9 §3: la deriva es una dimensión APARTE del
+                                                     estado, así que lleva su propio indicador al
+                                                     lado y no lo sustituye: una unidad puede estar
+                                                     «Auditada» y «Cambiada» a la vez. El color
+                                                     nunca es el único canal — el texto va siempre.
+                                                     F12 §H.3: TODO centrado en la fila. -->
+                                                <Border Grid.Column="3" Style="{StaticResource Pill}"
+                                                        Margin="{StaticResource Pad.XS.Left}"
+                                                        VerticalAlignment="Center"
+                                                        ToolTip="{Binding DriftTooltip}"
+                                                        Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}">
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                                                                 Fill="{Binding DriftInk}"
+                                                                 Margin="{StaticResource Pad.XXS.Right}" />
+                                                        <TextBlock Text="{Binding DriftLabel}"
+                                                                   Style="{StaticResource Pill.Text}"
+                                                                   VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                </Border>
+
+                                                <TextBlock Grid.Column="4"
+                                                           Text="{Binding ClaimedBy, StringFormat='🔒 {0}'}"
+                                                           Style="{StaticResource Text.Meta}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="{StaticResource Pad.XS.Left}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <!-- ==================================================== Sin inventario -->
+        <Border Grid.Row="4" Grid.Column="0" Style="{StaticResource Card}" VerticalAlignment="Top"
+                Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
+            <StackPanel HorizontalAlignment="Center" c:Stack.Gap="{StaticResource Space.S}"
+                        Margin="{StaticResource Pad.XL}">
+                <Path Style="{StaticResource Icon}" Data="{x:Static c:Icons.Inventory}"
+                      Width="32" Height="32" HorizontalAlignment="Center" />
+                <TextBlock Text="Sin inventario" Style="{StaticResource Text.H3}" HorizontalAlignment="Center" />
+                <TextBlock Text="Vincula tu clon local y vuelve a escanear."
+                           Style="{StaticResource Text.Small}" HorizontalAlignment="Center" />
+                <Button Content="Re-escanear" Command="{Binding RescanCommand}"
+                        IsEnabled="{Binding CanAudit}" ToolTip="{Binding AuditDisabledTooltip}"
+                        Style="{StaticResource Button.Primary}" HorizontalAlignment="Center" />
+            </StackPanel>
+        </Border>
+
+        <!-- ==================================================== El resumen del ciclo
+
+             Panel fijo a la derecha, y se PLIEGA cuando no cabe (principio 1). A 260 px su texto
+             se cortaba a media palabra —«Gestiona», «Aquí r»—: el ancho no daba y nadie lo dijo.
+             320 es lo que necesita su línea más larga.
+
+             Cada dato lleva una frase que lo explica: el usuario no distinguía ciclo de sesión
+             (F5.6 §5). «Grandes» no sale aquí por decisión suya — no aporta a este nivel, y el
+             estado sigue visible en la fila de cada unidad, que es donde se actúa.
+        -->
+        <Border Grid.Row="1" Grid.Column="1" Grid.RowSpan="4"
+                Style="{StaticResource Card}"
+                Width="{StaticResource Cycle.PanelWidth}"
+                Margin="{StaticResource Pad.M.Left}"
+                VerticalAlignment="Top"
+                Visibility="{Binding Wide, Converter={StaticResource BoolToVisibility}}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="{StaticResource Cycle.PanelHeight}">
+                <StackPanel>
+                    <TextBlock Text="Resumen del ciclo" Style="{StaticResource Text.Lead}"
+                               FontWeight="SemiBold"
+                               ToolTip="Lo que hay en la vuelta actual del inventario de esta aplicación." />
+
+                    <!-- · Bloque 1 · CICLO — dónde va la vuelta actual del inventario.
+                         Los tres bloques van separados por un pelo y un microtítulo (F9.1 §2): en
+                         la lista corrida anterior, «deriva» quedaba como una línea perdida en el
+                         medio y los patrones parecían parte de ella. Lo que agrupa es el aire; el
+                         pelo solo lo confirma. · -->
+                    <TextBlock Text="{Binding CycleLabel}" Style="{StaticResource PanelLine}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource Brush.Text}"
+                               ToolTip="{Binding CycleTooltip}" />
+
+                    <!-- F17: la lupa del ciclo, con su color, y el acceso a cambiarla. Va pegado al
+                         ciclo porque ES del ciclo: con otra lupa, «auditada» significa otra cosa. -->
+                    <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.XS.Top}"
+                                c:Stack.Gap="{StaticResource Space.XS}">
+                        <Border Style="{StaticResource Pill}" VerticalAlignment="Center"
+                                Background="{Binding CycleTheme, Converter={StaticResource ThemeToBrush}, ConverterParameter=soft}"
+                                ToolTip="{Binding CycleThemeTooltip}">
+                            <TextBlock Text="{Binding CycleThemeLabel}" Style="{StaticResource Pill.Text}"
+                                       ToolTip="{Binding CycleThemeTooltip}"
+                                       Foreground="{Binding CycleTheme, Converter={StaticResource ThemeToBrush}}" />
+                        </Border>
+                        <Button Content="Configurar ciclo" Style="{StaticResource Button.Link}"
+                                VerticalAlignment="Center"
+                                Command="{Binding ConfigureCycleCommand}"
+                                ToolTip="Elegir la temática del ciclo y el modelo preferido. Cambiar de temática con unidades auditadas las devuelve a pendientes; los hallazgos no se tocan." />
+                    </StackPanel>
+
+                    <TextBlock Style="{StaticResource PanelLine}"
+                               ToolTip="El modelo con el que el equipo prefiere auditar este ciclo. Es una preferencia: lanzar con otro avisa y deja continuar."><Run Text="Modelo preferido: " /><Run Text="{Binding PreferredModelLabel, Mode=OneWay}" /></TextBlock>
+
+                    <!-- F17.1: el ciclo no olvida con qué lupa se trabajó antes del cambio. -->
+                    <TextBlock Style="{StaticResource PanelLine}"
+                               Text="{Binding CycleThemeHistory}"
+                               ToolTip="Las temáticas por las que ha pasado este ciclo, con quién las cambió y cuándo. Los hallazgos de cada lupa siguen llevando la suya."
+                               Visibility="{Binding HasCycleThemeHistory, Converter={StaticResource BoolToVisibility}}" />
+
+                    <TextBlock Style="{StaticResource PanelLine}" ToolTip="{Binding UnitsTooltip}"><Run Text="Unidades: " /><Run Text="{Binding TotalUnits, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                    <TextBlock Style="{StaticResource PanelLine}" ToolTip="Ya revisadas en este ciclo. Puedes volver sobre ellas marcándolas a mano."><Run Text="Auditadas: " /><Run Text="{Binding AuditedUnits, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                    <TextBlock Style="{StaticResource PanelLine}" ToolTip="Aún sin revisar en este ciclo. Es lo que queda para que se cierre."><Run Text="Pendientes: " /><Run Text="{Binding PendingUnits, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                    <TextBlock Style="{StaticResource PanelLine}" ToolTip="Cada lanzamiento de auditoría es una sesión. Los cierres de ciclo y los resets no cuentan."><Run Text="Sesiones este ciclo: " /><Run Text="{Binding SessionCount, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                    <TextBlock Style="{StaticResource PanelLine}"
+                               ToolTip="Las unidades que se auditarán al pulsar «Auditar selección»."
+                               Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}"><Run Text="Seleccionadas: " /><Run Text="{Binding SelectedCount, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+
+                    <!-- · Bloque 2 · DERIVA — qué ha cambiado desde que se auditó (F9). · -->
+                    <Border Style="{StaticResource PanelDivider}" />
+                    <TextBlock Text="Deriva" Style="{StaticResource PanelSection}"
+                               ToolTip="Lo que le ha pasado al código desde que se auditó. Se calcula del historial de tu clon y no se guarda en ninguna parte." />
+                    <!-- Contra qué se ha medido, como SUBTÍTULO del grupo y no como línea suelta:
+                         es el alcance de los tres números de abajo, no un dato más. -->
+                    <TextBlock Text="{Binding DriftBranchLabel}" Style="{StaticResource Text.Meta}"
+                               TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}"
+                               ToolTip="La rama de tu clon y su HEAD. Medir contra otra rama es legítimo, pero lo que veas será la deriva de esa rama."
+                               Visibility="{Binding DriftIsKnown, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Text="Calculando…" Style="{StaticResource PanelLine}"
+                               ToolTip="Se está comparando el commit de cada auditoría con HEAD de tu clon. Va fuera del hilo de la interfaz: puedes seguir usando la vista."
+                               Visibility="{Binding IsDriftLoading, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Text="{Binding DriftProblem}" Style="{StaticResource PanelLine}"
+                               ToolTip="Por qué no hay deriva que enseñar. No saber no es lo mismo que saber que no ha cambiado nada, así que en vez de un cero se dice qué falta."
+                               Visibility="{Binding HasDriftProblem, Converter={StaticResource BoolToVisibility}}" />
+                    <!-- Tres ceros seguidos ocupan lo mismo que un dato y no dicen más que una frase. -->
+                    <TextBlock Text="{Binding NoDriftLabel}" Style="{StaticResource PanelLine}"
+                               ToolTip="Ninguna unidad auditada ha cambiado, ninguna está pendiente de verificar y de todas se ha podido leer el historial."
+                               Visibility="{Binding HasNoDrift, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Style="{StaticResource PanelLine}"
+                               ToolTip="Auditadas cuyo código ha cambiado por mano ajena desde su auditoría. Son las candidatas de «Seleccionar cambiadas»."
+                               Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"><Run Text="Cambiadas: " /><Run Text="{Binding ChangedUnits, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                    <TextBlock Style="{StaticResource PanelLine}"
+                               ToolTip="Arregladas desde Atalaya y todavía sin comprobar. Se cierran verificando, que es el instrumento que detectó el hallazgo; al verificar en verde dejan de contar."
+                               Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"><Run Text="Arregladas sin verificar: " /><Run Text="{Binding FixedPendingVerify, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                    <TextBlock Style="{StaticResource PanelLine}"
+                               ToolTip="Auditadas cuyo historial no se puede comparar: el commit de su auditoría no está en este clon, se reescribió la historia, o tu clon va por detrás. Ni «sin cambios» ni «cambiada» serían ciertas."
+                               Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"><Run Text="Sin historial: " /><Run Text="{Binding NoHistoryUnits, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+
+                    <!-- F9 §4: los hallazgos que se quedaron sin código. Nada se resuelve solo. -->
+                    <StackPanel Margin="{StaticResource Pad.XXS.Top}"
+                                Visibility="{Binding HasOrphans, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Style="{StaticResource PanelLine}"
+                                   ToolTip="Hallazgos activos cuyo fichero ya no está en el repositorio. No se verifican ni se resuelven solos."><Run Text="Sin código: " /><Run Text="{Binding OrphanFindings, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                        <Button Content="Revisar" Style="{StaticResource Button.Link}"
+                                HorizontalAlignment="Left"
+                                Command="{Binding ShowDeletedUnitsCommand}"
+                                ToolTip="Ver esos hallazgos, con el commit que borró cada fichero, y resolverlos por código eliminado si procede. La decisión es tuya." />
+                    </StackPanel>
+
+                    <!-- · Bloque 3 · GOBERNANZA — lo que condiciona QUÉ se reporta en esta
+                         aplicación. No tiene nada que ver con la deriva, y pegado a ella lo
+                         parecía. · -->
+                    <Border Style="{StaticResource PanelDivider}" />
+                    <TextBlock Text="Gobernanza" Style="{StaticResource PanelSection}"
+                               ToolTip="Lo que esta aplicación ha decidido callar y lo que ha decidido contarle al auditor. Condiciona la lectura de todo lo de arriba." />
+
+                    <Grid Margin="{StaticResource Pad.XXS.Top}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Style="{StaticResource PanelLine}" VerticalAlignment="Center"
+                                   ToolTip="{Binding PatternsTooltip}"><Run Text="Patrones silenciados: " /><Run Text="{Binding SilencedPatterns, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                        <Button Grid.Column="1" Content="Gestionar" Style="{StaticResource Button.Link}"
+                                VerticalAlignment="Center"
+                                Command="{Binding ManagePatternSilencesCommand}"
+                                ToolTip="Ver cuánto suprime cada patrón, afinar su ejemplar, des-silenciarlo o cambiar su caducidad." />
+                    </Grid>
+
+                    <Grid Margin="{StaticResource Pad.XXS.Top}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Style="{StaticResource PanelLine}" VerticalAlignment="Center"
+                                   ToolTip="{Binding DirectivesTooltip}"><Run Text="Directivas: " /><Run Text="{Binding ActiveDirectives, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                        <Button Grid.Column="1" Content="Gestionar" Style="{StaticResource Button.Link}"
+                                VerticalAlignment="Center"
+                                Command="{Binding ManageDirectivesCommand}"
+                                ToolTip="Activar los ficheros de convenciones del proyecto, decidir a qué flujo aplica cada uno, ordenarlos y ver cuánto presupuesto consumen." />
+                    </Grid>
+
+                    <!-- F13: el umbral de tamaño es política de la aplicación y se edita aquí,
+                         junto a lo demás que gobierna qué se reporta. En Ajustes no está: aquello
+                         es de esta máquina, y esto clasifica el inventario que comparte el equipo. -->
+                    <Grid Margin="{StaticResource Pad.XXS.Top}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Style="{StaticResource PanelLine}" VerticalAlignment="Center"
+                                   ToolTip="{Binding ThresholdsTooltip}"><Run Text="Umbrales: " /><Run Text="{Binding LargeUnitLoc, Mode=OneWay}" FontWeight="Bold" /><Run Text=" LOC" /></TextBlock>
+                        <Button Grid.Column="1" Content="Gestionar" Style="{StaticResource Button.Link}"
+                                VerticalAlignment="Center"
+                                Command="{Binding ManageThresholdsCommand}"
+                                ToolTip="Fijar a partir de cuántas líneas —o de cuántos caracteres— una unidad es demasiado grande para auditarla de una vez. Es política de la aplicación: vale para todo el equipo y aplica en el próximo re-escaneo." />
+                    </Grid>
+
+                    <!-- La mudanza del umbral personal, ofrecida UNA vez por aplicación. -->
+                    <Border Style="{StaticResource Notice}" Margin="{StaticResource Pad.XS.Top}"
+                            Visibility="{Binding HasLargeUnitOffer, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel c:Stack.Gap="{StaticResource Space.XS}">
+                            <TextBlock Text="{Binding LargeUnitOfferLabel}" Style="{StaticResource Text.Small}"
+                                       ToolTip="Este umbral era un ajuste de tu máquina y ahora es política de cada aplicación. Se te pregunta una vez por aplicación: lo que decidas queda en el hub, para todo el equipo." />
+                            <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
+                                <Button Content="Aplicar a la aplicación" Style="{StaticResource Button.Link}"
+                                        Command="{Binding AcceptLargeUnitOfferCommand}"
+                                        ToolTip="Escribe ese umbral en la política de esta aplicación y lo publica en el hub, para todo el equipo." />
+                                <Button Content="Aquí no" Style="{StaticResource Button.Link}"
+                                        Command="{Binding DismissLargeUnitOfferCommand}"
+                                        ToolTip="Deja esta aplicación con su política y no vuelve a preguntar por ella." />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <!-- F5.7 §4: el resultado de la última acción va por el toast global, no
+                         incrustado al fondo de este panel, donde se quedaba pegado. -->
+                </StackPanel>
+            </ScrollViewer>
         </Border>
     </Grid>
 </UserControl>

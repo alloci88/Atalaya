@@ -178,7 +178,7 @@ public sealed class ThemeSurfaceTests : IDisposable
         xaml.Should().Contain("{Binding CycleThemeLabel}")
             .And.Contain("ConfigureCycleCommand")
             .And.Contain("Configurar ciclo")
-            .And.Contain("{Binding PreferredModelLabel}");
+            .And.Contain("{Binding PreferredModelLabel, Mode=OneWay}");
     }
 
     /// <summary>Los dos convertidores del distintivo existen y están registrados en la aplicación.</summary>

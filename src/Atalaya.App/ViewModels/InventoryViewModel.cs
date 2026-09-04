@@ -271,6 +271,13 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
     [ObservableProperty] private bool _isEmpty;
 
     /// <summary>
+    /// Hay sitio para el resumen del ciclo a la derecha (F26 §B, D-975). Lo pone la VISTA al
+    /// medirse: es lo único que sabe cuánto ancho le ha tocado — la ventana no basta, porque el
+    /// raíl se pliega y se despliega.
+    /// </summary>
+    [ObservableProperty] private bool _wide = true;
+
+    /// <summary>
     /// Si esta máquina tiene el clon de la app (F5.8 §3). El inventario se ABRE siempre —ver
     /// estados, quién audita y el resumen del ciclo no necesita el código—, pero lo que LANZA
     /// una auditoría o lee ficheros del clon queda deshabilitado y dice por qué.

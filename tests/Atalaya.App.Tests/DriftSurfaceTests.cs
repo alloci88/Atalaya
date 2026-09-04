@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
@@ -73,13 +73,19 @@ public sealed class DriftSurfaceTests
         string xaml = Source("src/Atalaya.App/Views/InventoryView.xaml");
 
         xaml.Should().Contain("{Binding DriftFilter}");
+
+        // Desde F26 §B el «Deriva:» va como ETIQUETA del control y no repetido dentro de su
+        // primera opción: cada filtro dice qué filtra, y decirlo dos veces en la misma línea era
+        // exactamente lo que hacía ilegible la barra («Todas · Todas · Activos · Todas»). Las
+        // cuatro opciones siguen siendo cuatro, que es lo que esta regla protege.
+        xaml.Should().Contain("Text=\"Deriva:\"");
         foreach (string option in new[]
                  {
-                     "Deriva: todas", "Solo cambiadas",
+                     "Todas", "Solo cambiadas",
                      "Solo arregladas sin verificar", "Solo sin historial",
                  })
         {
-            xaml.Should().Contain(option);
+            xaml.Should().Contain($"<ComboBoxItem Content=\"{option}\" />");
         }
     }
 
@@ -88,10 +94,10 @@ public sealed class DriftSurfaceTests
     {
         string xaml = Source("src/Atalaya.App/Views/InventoryView.xaml");
 
-        xaml.Should().Contain("{Binding ChangedUnits}");
-        xaml.Should().Contain("{Binding FixedPendingVerify}");
-        xaml.Should().Contain("{Binding NoHistoryUnits}");
-        Regex.Matches(xaml, @"Binding (ChangedUnits|FixedPendingVerify)\}").Count
+        xaml.Should().Contain("{Binding ChangedUnits, Mode=OneWay}");
+        xaml.Should().Contain("{Binding FixedPendingVerify, Mode=OneWay}");
+        xaml.Should().Contain("{Binding NoHistoryUnits, Mode=OneWay}");
+        Regex.Matches(xaml, @"Binding (ChangedUnits|FixedPendingVerify), Mode=OneWay\}").Count
             .Should().Be(2, "cada una en su línea: no se suman nunca");
     }
 
@@ -124,11 +130,16 @@ public sealed class DriftSurfaceTests
 
         int titulo = panel.IndexOf("Text=\"Deriva\"", StringComparison.Ordinal);
         int rama = panel.IndexOf("{Binding DriftBranchLabel}", StringComparison.Ordinal);
-        int cambiadas = panel.IndexOf("{Binding ChangedUnits}", StringComparison.Ordinal);
+        int cambiadas = panel.IndexOf("{Binding ChangedUnits, Mode=OneWay}", StringComparison.Ordinal);
 
         rama.Should().BeGreaterThan(titulo, "va pegada al título del grupo");
         cambiadas.Should().BeGreaterThan(rama, "y por delante de los números que acota");
-        panel[rama..(rama + 200)].Should().Contain("FontSize=\"11\"",
+
+        // Desde F26 §B el peso no se escribe con un número: la rama usa `Text.Meta` —el estilo de
+        // metadatos, el más pequeño del sistema— y las líneas de abajo `PanelLine`, que es el de
+        // texto secundario. La regla es la misma —el subtítulo pesa menos que sus datos— dicha con
+        // la escala en vez de con un 11 suelto.
+        panel[rama..(rama + 200)].Should().Contain("Style=\"{StaticResource Text.Meta}\"",
             "es un subtítulo, no un dato: pesa menos que las líneas de abajo");
     }
 
@@ -147,11 +158,16 @@ public sealed class DriftSurfaceTests
     {
         // Los dos microtítulos se pintan igual: si uno pesara más que el otro, el panel volvería a
         // parecer que tiene un grupo principal y dos apéndices.
+        // Desde F26 §B el tamaño no se escribe en cada rótulo: los dos usan el MISMO estilo
+        // (`PanelSection`), que es una forma más fuerte de la misma regla — no pueden divergir
+        // aunque alguien lo intente. Lo que se comprueba es que sigan compartiéndolo.
         string xaml = Source("src/Atalaya.App/Views/InventoryView.xaml");
-        var titles = Regex.Matches(xaml, @"<TextBlock Text=""(Deriva|Gobernanza)"" ([^>]*?)FontSize=""(?<size>[\d.]+)""");
+        var titles = Regex.Matches(
+            xaml,
+            @"<TextBlock Text=""(Deriva|Gobernanza)"" Style=""\{StaticResource (?<style>[\w.]+)\}""");
 
         titles.Should().HaveCount(2);
-        titles.Select(m => m.Groups["size"].Value).Distinct().Should().ContainSingle();
+        titles.Select(m => m.Groups["style"].Value).Distinct().Should().ContainSingle();
     }
 
     [Fact]

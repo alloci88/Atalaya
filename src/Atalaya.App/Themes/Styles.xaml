@@ -619,4 +619,36 @@
         </Setter>
     </Style>
 
+    <!-- ================================================================ Estado de una unidad
+
+         Auditada en verde, pendiente en neutro, «Grande» —la que no se audita de una vez— en
+         ámbar (D-975). Antes las tres eran la
+         misma pastilla gris: había que leer fila por fila para saber por dónde iba un módulo, que
+         es justo lo que una lista de novecientas unidades no permite.
+
+         Se enlaza a `StateLabel` —el texto que ya se enseña— y no al enum: es lo que la fila tiene
+         a mano, y así la pastilla no obliga a exponer el modelo en la vista.
+    -->
+    <Style x:Key="Pill.UnitState" TargetType="Border" BasedOn="{StaticResource Pill}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding StateLabel}" Value="Auditada">
+                <Setter Property="Background" Value="{DynamicResource Brush.Success.Soft}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding StateLabel}" Value="Grande">
+                <Setter Property="Background" Value="{DynamicResource Brush.Warning.Soft}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Pill.UnitState.Text" TargetType="TextBlock" BasedOn="{StaticResource Pill.Text}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding StateLabel}" Value="Auditada">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Success.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding StateLabel}" Value="Grande">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.Ink}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
 </ResourceDictionary>
