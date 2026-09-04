@@ -34,7 +34,17 @@ public static class AuditorTools
     /// <summary>El nombre cualificado de una tool, tal y como el CLI se lo enseña al modelo.</summary>
     public static string Qualified(string toolName) => $"mcp__{ServerName}__{toolName}";
 
-    /// <summary>Las tools de una sesión de AUDITORÍA, sobre el toolbox que persiste de verdad.</summary>
+    /// <summary>
+    /// Las tools de una sesión de AUDITORÍA, sobre el toolbox que persiste de verdad.
+    /// <para>
+    /// <b>Los dos <c>submit</c> devuelven el ULID de lo que crean</b> (F25 §4, D-916). Nació en el
+    /// brazo de medida de M2 y ahora es producción, porque en un hilo es la ÚNICA forma de que el
+    /// auditor pueda pronunciarse sobre lo que él mismo reportó: no hay pasada siguiente que le
+    /// vuelva a listar la unidad entera. Y de paso hace alcanzable la rama que <c>add_locations</c>
+    /// tenía desde F4.1 para «un ULID que hayas reportado en esta unidad», que hasta hoy no se podía
+    /// usar dentro de la pasada que lo creó porque nadie le decía el nombre.
+    /// </para>
+    /// </summary>
     public static IReadOnlyList<McpTool> ForAudit(IAuditToolbox toolbox)
     {
         JsonObject location = Schema.Object(
@@ -65,18 +75,20 @@ public static class AuditorTools
             ("patternId", Schema.Text("El id EXACTO del prompt, p. ej. P-2."), true),
             ("count", Schema.Integer("Cuántas detecciones te callaste por él."), true));
 
-        return new List<McpTool>
+        var tools = new List<McpTool>
         {
             new(
                 "submit_findings",
                 "PREFERIDA. Reporta TODOS los hallazgos de la unidad en UNA sola llamada, pasando un array. "
-                + "Devuelve un array de {accepted, duplicateOf, error} en el mismo orden.",
+                + "Devuelve un array de {accepted, duplicateOf, error, id} en el mismo orden; el id es el ULID "
+                + "del hallazgo creado, y es con el que luego le das veredicto o le añades ubicaciones.",
                 Schema.Object(("findings", Schema.Array(finding, "Los hallazgos de esta unidad."), true)),
                 args => toolbox.SubmitFindings(ReadFindings(args, "findings"))),
 
             new(
                 "submit_finding",
-                "Fallback singular. Úsala solo si por alguna razón no puedes agrupar; cada llamada añade un turno.",
+                "Fallback singular. Úsala solo si por alguna razón no puedes agrupar; cada llamada añade un turno. "
+                + "Devuelve {accepted, duplicateOf, error, id}, con el ULID del hallazgo creado.",
                 finding,
                 args => toolbox.SubmitFinding(ReadFinding(args))),
 
@@ -126,92 +138,37 @@ public static class AuditorTools
                 Schema.Object(("path", Schema.Text("Ruta de la dependencia."), true)),
                 args => new { signatures = toolbox.ReadSignatures(Text(args, "path")) }),
         };
+
+        // Y si el toolbox no sabe decir qué ha creado, no se inventa: van las tools tal cual y el
+        // resultado de los `submit` es el de antes de F25, sin id.
+        return toolbox is ISweepCreations creations ? WithCreatedIds(tools, creations) : tools;
     }
 
     /// <summary>
-    /// <b>Las mismas tools, con el ULID de vuelta</b> — el brazo `--hilo` del banco (M2).
-    /// <para>
-    /// Cambia UNA cosa y solo una: <c>submit_finding</c> y <c>submit_findings</c> contestan además
-    /// el <c>id</c> de lo que acaban de crear. En producción no hace falta porque la pasada
-    /// siguiente vuelve a listar todo lo de la unidad —incluido lo que reportó la pasada anterior—
-    /// y el auditor recupera ahí el ULID. En un hilo no hay lista que reenviar: sin el id, el
-    /// auditor no puede dar veredicto sobre lo que creó él, y la reconciliación de F4 —que es la
-    /// variable que M2 no puede degradar— se quedaría coja por una tontería.
-    /// </para>
-    /// <para>
-    /// <b>Nada de esto toca producción.</b> El catálogo de producción es
-    /// <see cref="ForAudit"/> y sale de aquí intacto; esto es otro catálogo, que solo construye el
-    /// brazo. Y si el toolbox no sabe decir qué ha creado (<see cref="ISweepCreations"/>), no se
-    /// inventa: se devuelven las tools de siempre.
-    /// </para>
+    /// Los dos <c>submit</c>, contestando además el ULID de lo que acaban de crear. El casado
+    /// —por orden, y un rechazado no consume ninguno— vive en <see cref="SweepReceipts"/>, que es
+    /// el mismo que usa Copilot: dos copias de ese criterio serían dos auditorías distintas.
     /// </summary>
-    public static IReadOnlyList<McpTool> ForThreadedAudit(IAuditToolbox toolbox)
-    {
-        IReadOnlyList<McpTool> tools = ForAudit(toolbox);
-        if (toolbox is not ISweepCreations creations)
-        {
-            return tools;
-        }
-
-        return tools
-            .Select(t => t.Name switch
-            {
-                "submit_findings" => t with
-                {
-                    Description = t.Description.Replace(
-                        "Devuelve un array de {accepted, duplicateOf, error} en el mismo orden.",
-                        "Devuelve un array de {accepted, duplicateOf, error, id} en el mismo orden; "
-                        + "el id es el ULID del hallazgo creado y es con el que luego le das veredicto.",
-                        StringComparison.Ordinal),
-                    Handler = WithIds(t.Handler, creations),
-                },
-                "submit_finding" => t with { Handler = WithIds(t.Handler, creations) },
-                _ => t,
-            })
+    private static IReadOnlyList<McpTool> WithCreatedIds(
+        IReadOnlyList<McpTool> tools, ISweepCreations creations)
+        => tools
+            .Select(t => t.Name is "submit_findings" or "submit_finding"
+                ? t with { Handler = WithIds(t.Handler, creations) }
+                : t)
             .ToList();
-    }
 
-    /// <summary>
-    /// Envuelve el handler de un submit para que el resultado lleve el ULID de lo creado.
-    /// <para>
-    /// La correspondencia se hace por <b>orden</b> y no por título: los ULIDs nuevos aparecen en
-    /// <see cref="ISweepCreations.CreatedInSweep"/> en el mismo orden en que el lote se procesó, así
-    /// que el i-ésimo aceptado se casa con el i-ésimo id nuevo. Un rechazado no consume ninguno.
-    /// </para>
-    /// </summary>
     private static Func<JsonElement, object?> WithIds(
         Func<JsonElement, object?> inner, ISweepCreations creations)
         => args =>
         {
-            int before = creations.CreatedInSweep.Count;
-            object? result = inner(args);
-            IReadOnlyList<string> created = creations.CreatedInSweep;
-
-            int next = before;
-            string? Take() => next < created.Count ? created[next++] : null;
-
-            return result switch
+            int before = SweepReceipts.Mark(creations);
+            return inner(args) switch
             {
-                SubmitFindingResult one => Describe(one, one.Accepted ? Take() : null),
-                SubmitFindingsResult many => new
-                {
-                    Results = many.Results.Select(r => Describe(r, r.Accepted ? Take() : null)).ToList(),
-                },
-                _ => result,
+                SubmitFindingResult one => SweepReceipts.Of(creations, one, before),
+                SubmitFindingsResult many => SweepReceipts.Of(creations, many, before),
+                var other => other,
             };
         };
-
-    /// <summary>
-    /// El resultado de siempre más el id. Los nombres de campo son los de PRODUCCIÓN
-    /// —<c>Accepted</c>, <c>DuplicateOf</c>, <c>Error</c>: los del récord, que es lo que el
-    /// servidor MCP serializa sin política de nombres— para que la única diferencia entre los dos
-    /// brazos sea el id y no además el formato. Un id nulo no se enseña, igual que el servidor
-    /// omite los nulos.
-    /// </summary>
-    private static object Describe(SubmitFindingResult r, string? id)
-        => id is null
-            ? new { r.Accepted, r.DuplicateOf, r.Error }
-            : new { r.Accepted, r.DuplicateOf, r.Error, Id = id };
 
     /// <summary>La única tool de una sesión de VERIFICACIÓN.</summary>
     public static IReadOnlyList<McpTool> ForVerify(IVerifyToolbox toolbox)

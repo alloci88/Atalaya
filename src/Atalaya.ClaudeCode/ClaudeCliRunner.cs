@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text;
 using System.Threading.Channels;
 using System.Text.Json;
@@ -438,6 +438,13 @@ public sealed class ClaudeCliRunner
     /// </param>
     /// <param name="closed">El agente ya cerró el arreglo: no se le da otro turno.</param>
     /// <param name="ready">El mando a distancia, en cuanto el proceso existe.</param>
+    /// <param name="cut">
+    /// <b>El corte de F21, dentro de una conversación</b> — y hay que saber lo que se pide. El
+    /// corte interrumpe la INVOCACIÓN en cuanto el auditor entrega <c>unit_done</c>, y en una
+    /// conversación la invocación es la conversación entera: cortar la mata. Se corta como mucho
+    /// una vez, y lo que quede por hablar habrá que hablarlo en otra. Null —lo normal— es una
+    /// conversación que sobrevive a sus turnos.
+    /// </param>
     public async Task<ClaudeRunOutcome> RunConversationAsync(
         ClaudeRun run,
         Action<string>? onText,
@@ -445,7 +452,8 @@ public sealed class ClaudeCliRunner
         Func<CancellationToken, Task<string?>> nextTurn,
         Func<bool> closed,
         Action<IFixSteering>? ready,
-        CancellationToken ct)
+        CancellationToken ct,
+        ClaudeCut? cut = null)
     {
         using Process process = Start(Describe(run with { Conversational = true }));
 
@@ -462,9 +470,16 @@ public sealed class ClaudeCliRunner
 
         Task<ClaudeRunOutcome> reading = ReadAndCloseAsync(reader, process, turns, ct);
 
+        using var finished = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        Task? cutting = null;
+
         try
         {
             await SendUserMessageAsync(process, pen, run.Prompt, ct);
+            if (cut is not null)
+            {
+                cutting = CutWhenDeliveredAsync(process, pen, reader, cut, finished.Token);
+            }
 
             while (await turns.Reader.WaitToReadAsync(ct))
             {
@@ -499,7 +514,7 @@ public sealed class ClaudeCliRunner
             _trace?.Invoke(
                 $"claude (conversación) terminó con {process.ExitCode}; mcp={outcome.McpConnected}");
 
-            return Explain(outcome, process.ExitCode, stderr);
+            return Explain(outcome, process.ExitCode, stderr, cut);
         }
         catch (OperationCanceledException)
         {
@@ -508,6 +523,15 @@ public sealed class ClaudeCliRunner
         }
         finally
         {
+            // Igual que en una pasada suelta: si nadie suelta la retención, el relay se queda
+            // esperando una liberación que ya no va a llegar y con él la tubería entera.
+            cut?.Retention.Release();
+            finished.Cancel();
+            if (cutting is not null)
+            {
+                await SafeAsync(cutting);
+            }
+
             pen.Dispose();
         }
     }

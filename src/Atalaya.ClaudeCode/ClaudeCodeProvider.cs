@@ -67,6 +67,20 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider, IThreadedAuditor
     /// </summary>
     public bool CutOnUnitDone { get; init; } = true;
 
+    /// <summary>
+    /// <b>Cortar también dentro de un hilo</b> (F25 §6). Apagado, y así se queda en producción.
+    /// <para>
+    /// El corte y el hilo son <b>alternativos dentro de una unidad</b>: el corte interrumpe la
+    /// invocación en cuanto llega <c>unit_done</c>, y en un hilo la invocación es la conversación
+    /// entera, así que cortar la mata. Encendido, cada pasada corta, cada corte cierra el hilo y la
+    /// siguiente abre otro desde cero — es decir, el barrido degenera exactamente en el de antes de
+    /// F25, con su prompt recompuesto por pasada y su corte. <b>Para eso existe</b>: es la única
+    /// forma de medir el margen del hilo contra la producción real —la que llevaba el corte
+    /// puesto— sin conservar un segundo camino que nadie usaría.
+    /// </para>
+    /// </summary>
+    public bool CutInThread { get; init; }
+
     /// <summary>El flag del CLI sin el que no hay cuentas por llamada, y por tanto no hay corte.</summary>
     private const string PartialMessagesFlag = "include-partial-messages";
 
@@ -274,19 +288,19 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider, IThreadedAuditor
         => RunSessionAsync(request.Prompt, AuditorTools.ForVerify(toolbox), ct);
 
     /// <summary>
-    /// <b>El hilo de una unidad</b> (M2, palanca de medida). Abre UNA conversación con el CLI y la
-    /// deja viva: la pasada 1 manda el prompt entero y las siguientes, la continuación.
+    /// <b>El hilo de una unidad</b> (F25). Abre UNA conversación con el CLI y la deja viva: la
+    /// pasada 1 manda el prompt entero y las siguientes, la continuación.
     /// <para>
     /// <b>Sin el corte de F21, y a propósito.</b> El corte interrumpe la invocación en cuanto el
     /// auditor entrega <c>unit_done</c>, y aquí la invocación tiene que sobrevivir a la pasada para
-    /// poder recibir la siguiente. La medida compara contra el brazo de producción corriendo
-    /// también sin corte, que es lo que el banco llama <c>--sin-corte</c>.
+    /// poder recibir la siguiente. Los dos mecanismos son alternativos y el hilo es el que se
+    /// eligió; <see cref="CutInThread"/> arma el otro, y solo para medirlo.
     /// </para>
     /// <para>
     /// <b>Los eventos crudos sí se piden</b> (<c>--include-partial-messages</c>): no son solo cómo
     /// se corta, son cómo se MIDE una llamada (D-878). Sin ellos el consumo por llamada sería el
-    /// anticipo parcial del evento <c>assistant</c>, y esta medida se decide con la escritura de
-    /// caché de las pasadas 2..N.
+    /// anticipo parcial del evento <c>assistant</c>, y el informe no podría decir lo que escribe
+    /// en caché cada turno — que es donde se ve lo que el hilo ahorra.
     /// </para>
     /// </summary>
     public async Task<IUnitThread> OpenUnitThreadAsync(IAuditToolbox toolbox, CancellationToken ct)
@@ -303,11 +317,16 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider, IThreadedAuditor
         string cli = ResolveCli()!;
         string workDirectory = _workDirectory();
 
-        IReadOnlyList<McpTool> tools = AuditorTools.ForThreadedAudit(toolbox);
-        var host = new McpPipeHost(tools, message => _logger.LogDebug("{Message}", message));
+        IReadOnlyList<McpTool> tools = AuditorTools.ForAudit(toolbox);
+
+        // El corte solo se arma cuando el banco lo pide, y con las cuentas por llamada puestas:
+        // sin ellas sería un ahorro con un hueco dentro, igual que en una pasada suelta.
+        var retention = CutInThread && partial ? new ToolRetention("unit_done") : null;
+        var host = new McpPipeHost(tools, message => _logger.LogDebug("{Message}", message), retention);
         host.Start();
 
         string configPath = ClaudeCliRunner.WriteMcpConfig(workDirectory, _bridgeExecutable, host.PipeName);
+        ClaudeCut? cut = retention is null ? null : new ClaudeCut(retention, () => host.Busy == 0);
 
         return new ClaudeUnitThread(
             new ClaudeCliRunner(cli, message => _logger.LogDebug("{Message}", message), workDirectory),
@@ -323,7 +342,8 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider, IThreadedAuditor
             text => TextStreamed?.Invoke(text),
             usage => UsageReported?.Invoke(usage with { Model = usage.Model ?? ModelName }),
             Explain,
-            _logger);
+            _logger,
+            cut);
     }
 
     /// <summary>El mismo desenlace que una pasada suelta: un fallo del CLI es una excepción tipada.</summary>

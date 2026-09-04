@@ -363,4 +363,5 @@ public sealed record LiveUsage(
     CostResult Cost,
     string? Provider,
     int Calls,
-    PromptBudget? Budget = null);
+    PromptBudget? Budget = null,
+    int Turns = 0);

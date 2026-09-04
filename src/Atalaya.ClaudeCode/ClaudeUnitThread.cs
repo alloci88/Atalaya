@@ -1,18 +1,18 @@
-using System.Threading.Channels;
+﻿using System.Threading.Channels;
 using Atalaya.Agents;
 using Microsoft.Extensions.Logging;
 
 namespace Atalaya.ClaudeCode;
 
 /// <summary>
-/// <b>El hilo de una unidad</b> (M2): un solo proceso del CLI vivo mientras dura el barrido, y una
-/// pasada por turno de la conversación.
+/// <b>El hilo de una unidad</b> (F25): un solo proceso del CLI vivo mientras dura el barrido de la
+/// unidad, y una pasada por turno de la conversación.
 /// <para>
 /// <b>La mecánica no es nueva y por eso se puede intentar.</b> Es la misma que el arreglo asistido
 /// usa desde F16 (<see cref="ClaudeCliRunner.RunConversationAsync"/>): la entrada
 /// <c>--input-format stream-json</c>, un mensaje de usuario por turno, y la aplicación decidiendo
-/// cuándo se acabó cerrando stdin. Lo verificado allí contra el CLI real es justo lo que esta
-/// medida necesita: el <c>session_id</c> se conserva entre turnos y el modelo recuerda lo
+/// cuándo se acabó cerrando stdin. Lo verificado allí contra el CLI real es justo lo que el
+/// barrido necesita: el <c>session_id</c> se conserva entre turnos y el modelo recuerda lo
 /// anterior, también con <c>--no-session-persistence</c>.
 /// </para>
 /// <para>
@@ -23,9 +23,12 @@ namespace Atalaya.ClaudeCode;
 /// está el que espera.
 /// </para>
 /// <para>
-/// <b>Sin corte.</b> El corte de F21 vive dentro de una invocación de una sola pasada; aquí el
-/// turno siguiente es trabajo, no cortesía, y la conversación tiene que seguir viva para poder
-/// recibirlo. Es la misma razón por la que el arreglo asistido tampoco corta.
+/// <b>El corte de F21 y el hilo son alternativos</b>, y aquí se ve por qué: el corte interrumpe la
+/// invocación en cuanto el auditor entrega <c>unit_done</c>, y la invocación es la conversación
+/// entera. Cortar la mata. Así que en producción el hilo no lleva corte —el turno siguiente es
+/// trabajo, no cortesía—, y cuando el banco lo arma para medirlo, el turno cortado sigue contando
+/// como pasada y el hilo queda <see cref="Closed"/>: la pasada siguiente abrirá uno nuevo. Lo que
+/// no se hace nunca es intentar reanudar un hilo cortado.
 /// </para>
 /// </summary>
 internal sealed class ClaudeUnitThread : IUnitThread
@@ -57,6 +60,13 @@ internal sealed class ClaudeUnitThread : IUnitThread
 
     private Task<ClaudeRunOutcome>? _conversation;
     private bool _disposed;
+    private bool _closed;
+
+    /// <summary>
+    /// El corte de F21, si el banco lo ha armado. Se arma UNA vez para toda la conversación y no
+    /// por turno, porque más de una no puede haber: en cuanto cae, la conversación termina.
+    /// </summary>
+    private readonly ClaudeCut? _cut;
 
     internal ClaudeUnitThread(
         ClaudeCliRunner runner,
@@ -66,7 +76,8 @@ internal sealed class ClaudeUnitThread : IUnitThread
         Action<string>? onText,
         Action<UsageSample>? onUsage,
         Func<ClaudeRunOutcome, Exception?> explain,
-        ILogger logger)
+        ILogger logger,
+        ClaudeCut? cut = null)
     {
         _runner = runner;
         _template = template;
@@ -76,11 +87,15 @@ internal sealed class ClaudeUnitThread : IUnitThread
         _onUsage = onUsage;
         _explain = explain;
         _logger = logger;
+        _cut = cut;
     }
+
+    /// <inheritdoc/>
+    public bool Closed => _closed || _disposed;
 
     /// <summary>
     /// Una pasada. Vuelve cuando el auditor cierra SU turno, que es exactamente lo que hace
-    /// <c>AuditUnitAsync</c> en el brazo de producción: así el coordinador aplica su regla de
+    /// <c>AuditUnitAsync</c> en el camino de respaldo: así el coordinador aplica su regla de
     /// parada sobre lo mismo, sin enterarse de por dónde viajó el prompt.
     /// </summary>
     public async Task TurnAsync(string prompt, CancellationToken ct)
@@ -124,13 +139,31 @@ internal sealed class ClaudeUnitThread : IUnitThread
         {
             // Un turno no se puede abandonar a medias dejando la conversación viva: se corta
             // entera, y el coordinador lo lee como lo que es, una pasada cortada.
+            _closed = true;
             _lifetime?.Cancel();
             ct.ThrowIfCancellationRequested();
         }
 
         if (done == _conversation)
         {
+            // La conversación se acabó dentro del turno. No queda hilo, pase lo que pase.
+            _closed = true;
+
+            // Y si se acabó porque LA CORTAMOS nosotros, la pasada está servida: el auditor ya
+            // había entregado su `unit_done` —eso es lo que dispara el corte— y lo único que se
+            // interrumpió fue la vuelta de cortesía. Cuenta como pasada, y la siguiente abrirá
+            // otro hilo.
+            if (_cut is { Cut: true })
+            {
+                return;
+            }
+
             Fail(await _conversation);
+        }
+        else if (_conversation.IsCompleted)
+        {
+            // El turno cerró y la conversación se fue justo detrás: sirvió, pero no hay siguiente.
+            _closed = true;
         }
     }
 
@@ -148,6 +181,7 @@ internal sealed class ClaudeUnitThread : IUnitThread
         }
 
         _disposed = true;
+        _closed = true;
         _prompts.Writer.TryComplete();
 
         try
@@ -183,7 +217,8 @@ internal sealed class ClaudeUnitThread : IUnitThread
             NextTurnAsync,
             closed: () => false,
             ready: null,
-            ct);
+            ct,
+            _cut);
 
     /// <summary>
     /// Lo llama el runner justo cuando un turno acaba. Dos cosas, en este orden: relevar a quien
@@ -215,10 +250,12 @@ internal sealed class ClaudeUnitThread : IUnitThread
             throw problem;
         }
 
-        // Terminó bien pero sin cerrar el turno que se esperaba: el CLI se fue por su cuenta.
-        throw new AuditorProviderException(
+        // Terminó bien pero sin cerrar el turno que se esperaba: el CLI se fue por su cuenta y la
+        // pasada NO se ha servido. No es una avería del proveedor —una petición nueva funcionaría
+        // ahora mismo—, así que se dice con el tipo que lleva ese remedio dentro y el barrido
+        // rehace la pasada como se hacía antes.
+        throw new UnitThreadBrokenException(
             "Claude Code cerró la conversación de la unidad sin terminar la pasada.",
-            AgentProblem.Unknown,
             outcome.Message);
     }
 

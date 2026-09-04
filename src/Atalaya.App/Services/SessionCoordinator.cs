@@ -205,30 +205,13 @@ public sealed class SessionCoordinator
     /// </summary>
     public AuditStyle Style { get; init; } = AuditStyle.Libre;
 
-    /// <summary>
-    /// <b>Auditar la unidad como una CONVERSACIÓN</b> (M2). Palanca de MEDIDA del banco: en
-    /// producción es <c>false</c> y cada pasada sale como una petición nueva, tal cual.
-    /// <para>
-    /// Encendida, la unidad abre un hilo con el proveedor: la pasada 1 manda el prompt de
-    /// producción entero —byte a byte el mismo— y las pasadas 2..N mandan solo
-    /// <see cref="PromptComposer.ContinuationTurn"/>, sin reenviar reglas, código ni la lista de
-    /// existentes. Lo que se espera medir es que esas pasadas pasen de ESCRIBIR caché a LEERLA
-    /// (F20, D-871: la escritura es el 63 % de la factura). Lo que decide si sirve es lo otro, y
-    /// es la condición que tumbó la hipótesis B de F20 (D-874): que las pasadas ≥ 2 sigan
-    /// encontrando lo que encuentran hoy.
-    /// </para>
-    /// <para>
-    /// <b>No toca ni la regla de parada ni el tope</b>: un turno es una pasada y se juzga con lo
-    /// mismo. Y si el proveedor no sabe hilar (no implementa <see cref="IThreadedAuditor"/>), no
-    /// se simula nada: la unidad corre como siempre y <see cref="ThreadUnavailable"/> lo dice.
-    /// </para>
-    /// </summary>
-    public bool Hilo { get; init; }
+    private bool _threadWarned;
 
     /// <summary>
-    /// Se avisa una vez por sesión cuando se pidió <see cref="Hilo"/> y el proveedor no lo
-    /// implementa. Existe para que una tanda del banco no pueda pasar por «hilo» sin serlo: una
-    /// medida que mide otra cosa es peor que no medir.
+    /// Se avisa una vez por sesión cuando el proveedor no sabe hilar
+    /// (<see cref="IThreadedAuditor"/>) y la unidad ha corrido por el camino de respaldo, una
+    /// petición por pasada. Existe para que un barrido caro no lo parezca por casualidad: la
+    /// diferencia entre los dos caminos es pagar el andamiaje una vez o tantas veces como pasadas.
     /// </summary>
     public event Action<string>? ThreadUnavailable;
 
@@ -419,6 +402,11 @@ public sealed class SessionCoordinator
         int passCalls = 0;
         long passCacheRead = 0;
         long passCacheWrite = 0;
+
+        // Turnos de conversación de la sesión entera. El pie en vivo desglosa la caché POR TURNO, que
+        // es la unidad en la que ahora se paga: una pasada ya no es una petición con su prefijo
+        // dentro, es un turno de una conversación que el proveedor ya tiene cacheada.
+        int sessionTurns = 0;
         void OnUsage(UsageSample u)
         {
             session.Usage.Add(
@@ -478,7 +466,8 @@ public sealed class SessionCoordinator
                 live,
                 session.Provider,
                 session.Usage.Calls,
-                PromptBudget.From(session)));
+                PromptBudget.From(session),
+                sessionTurns));
         }
 
         _agent.TextStreamed += OnText;
@@ -594,20 +583,54 @@ public sealed class SessionCoordinator
                 toolbox.BeginUnitSweep(unit.Path, unitContentHash);
                 int locationsInUnit = 0;
 
-                // M2 (palanca del banco) — la unidad como una conversación. Apagada, `hilo` es null
-                // y todo lo de abajo es exactamente lo de siempre. Encendida, se abre UNA sesión de
-                // proveedor para la unidad entera y cada pasada es un turno suyo.
+                // F25 — la unidad se audita como UNA conversación con el proveedor, y cada pasada es
+                // un turno suyo. El hilo puede tener que reabrirse a mitad de unidad: porque el
+                // proveedor no pudo continuar la sesión, porque la pasada se cortó —cortar mata la
+                // conversación— o porque llegó al techo de contexto. En los tres casos la unidad NO
+                // se pierde: la pasada siguiente arranca un hilo nuevo con el prompt recompuesto, y
+                // el reinicio queda contado con su motivo.
+                //
                 // El `await using` es la RED: pase lo que pase —una excepción del proveedor, una
-                // cancelación—, la conversación se cierra; un proveedor esperando un turno que ya no
-                // va a llegar es una sesión colgada gastando cuota. Pero el cierre normal se pide
-                // más abajo y a mano, y no es un capricho: cerrar la conversación es lo que hace
+                // cancelación—, la conversación que esté viva se cierra; un proveedor esperando un
+                // turno que ya no va a llegar es una sesión colgada gastando cuota. Guarda el hilo
+                // VIVO y no «el hilo», que es la diferencia que importa cuando puede haber varios a
+                // lo largo de la unidad. Pero el cierre normal se pide más abajo y a mano, y no es
+                // un capricho: cerrar la conversación es lo que hace
                 // llegar el evento final del CLI con las cuentas de todo lo consumido (D-879), y ese
                 // consumo tiene que entrar en el desglose de la unidad ANTES de que se cierre.
-                await using IUnitThread? hilo = await OpenThreadAsync(session, unit.Path, toolbox, ct);
+                await using var conversation = new UnitConversation();
+
+                // Turnos servidos por el hilo VIVO. Se pone a cero al reabrir, porque el turno 1 de
+                // un hilo nuevo lleva el prompt entero: la conversación no se hereda.
+                int turnsInThread = 0;
+
+                // Por qué murió el hilo anterior. Se apunta cuando de verdad se abre otro: cerrar el
+                // último hilo de una unidad no es reiniciar nada.
+                string? pendingRestart = null;
+                bool threadless = false;
 
                 for (int pass = 1; pass <= maxPasses && dryStreak < dryToFinish && !overBudget; pass++)
                 {
                     ct.ThrowIfCancellationRequested();
+
+                    if (conversation.Thread is null && !threadless)
+                    {
+                        conversation.Thread = await OpenThreadAsync(session, unit.Path, toolbox, ct);
+                        turnsInThread = 0;
+                        if (conversation.Thread is null)
+                        {
+                            threadless = true;
+                        }
+                        else if (pendingRestart is not null)
+                        {
+                            breakdown.ThreadRestarts++;
+                            breakdown.ThreadRestartReasons.Add(pendingRestart);
+                            session.Notes.Add(
+                                $"{unit.Path} (pasada {pass}): la conversación de la unidad se reabre desde cero "
+                                + $"—{pendingRestart}—, así que esta pasada vuelve a mandar el prompt entero.");
+                            pendingRestart = null;
+                        }
+                    }
 
                     PassStarted?.Invoke(unit.Path, pass);
                     IReadOnlyList<Finding> existing = _reconciliation.ExistingForUnit(request.Slug, unit.Path);
@@ -630,7 +653,7 @@ public sealed class SessionCoordinator
                     // siempre; encendido, a partir de la segunda es solo la continuación — y el
                     // censo tiene que decir eso, no lo que se compuso y no se mandó. Un informe de
                     // una medida que declarara 30.000 tokens donde viajaron 150 no valdría nada.
-                    bool continuacion = hilo is not null && pass > 1;
+                    bool continuacion = conversation.Thread is not null && turnsInThread > 0;
                     string sent = continuacion ? PromptComposer.ContinuationTurn : prompt;
                     PromptComposition census = continuacion
                         ? new PromptComposition(Reglas: EstimateTokens(sent))
@@ -658,17 +681,42 @@ public sealed class SessionCoordinator
                     unitCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     try
                     {
-                        if (hilo is null)
+                        if (conversation.Thread is null)
                         {
                             await _agent.AuditUnitAsync(unitRequest, toolbox, unitCts.Token);
                         }
                         else
                         {
-                            // El turno 1 lleva el prompt de producción ENTERO, byte a byte el mismo
-                            // que se acaba de componer. Los siguientes, solo la continuación: ni
-                            // reglas, ni código, ni lista de existentes — todo eso sigue delante del
-                            // modelo porque es la misma conversación.
-                            await hilo.TurnAsync(sent, unitCts.Token);
+                            try
+                            {
+                                // El turno 1 lleva el prompt ENTERO. Los siguientes, solo la
+                                // continuación: ni reglas, ni código, ni lista de existentes — todo
+                                // eso sigue delante del modelo porque es la misma conversación.
+                                await conversation.Thread.TurnAsync(sent, unitCts.Token);
+                                turnsInThread++;
+                                breakdown.ThreadTurns++;
+                                sessionTurns++;
+                            }
+                            catch (UnitThreadBrokenException broken)
+                            {
+                                // Primer respaldo: el proveedor no pudo continuar la sesión y esta
+                                // pasada NO se ha servido. Se rehace como se hacía antes —una
+                                // petición nueva, con el prompt recompuesto y la lista de
+                                // existentes—, que es el mecanismo que sigue estando aquí para esto.
+                                session.Notes.Add(
+                                    $"{unit.Path} (pasada {pass}): la conversación de la unidad no pudo continuar "
+                                    + $"—{broken.Message}—, así que la pasada se ha hecho con una petición nueva.");
+                                pendingRestart = "no se pudo continuar la conversación";
+                                await conversation.DisposeAsync();
+                                turnsInThread = 0;
+
+                                // Y el censo dice lo que SALIÓ: aquí viajó el prompt entero, no la
+                                // continuación que se había compuesto y no llegó a mandarse.
+                                breakdown.PromptTokensEstimate += EstimateTokens(prompt) - EstimateTokens(sent);
+                                census = composed.Composition;
+
+                                await _agent.AuditUnitAsync(unitRequest, toolbox, unitCts.Token);
+                            }
                         }
                     }
                     catch (OperationCanceledException) when (budgetTripped && !ct.IsCancellationRequested)
@@ -684,6 +732,32 @@ public sealed class SessionCoordinator
                             census, passClock.ElapsedMilliseconds);
                         unitCts.Dispose();
                         unitCts = null;
+                    }
+
+                    // ¿Sigue sirviendo este hilo para la pasada siguiente? Dos motivos para que no,
+                    // y los dos se deciden AQUÍ, con la pasada ya contada.
+                    if (conversation.Thread is { } live && !overBudget)
+                    {
+                        if (live.Closed)
+                        {
+                            // Segundo respaldo: la pasada se cortó en `unit_done` y cortar mata la
+                            // conversación. La pasada cuenta igual que siempre; lo que no se hace
+                            // NUNCA es intentar reanudar un hilo cortado.
+                            pendingRestart = "la pasada se cortó en unit_done";
+                            await conversation.DisposeAsync();
+                            turnsInThread = 0;
+                        }
+                        else if (passCacheRead + passInput >= UnitThreadLimits.TechoContexto)
+                        {
+                            // Tercer respaldo: el contexto. Una conversación que desborda la ventana
+                            // del modelo no falla con elegancia — empieza a perder lo de antes sin
+                            // decirlo, y todo el argumento del hilo es que el modelo tiene delante
+                            // lo que ya se dijo.
+                            pendingRestart =
+                                $"techo de contexto ({UnitThreadLimits.TechoContexto} tokens)";
+                            await conversation.DisposeAsync();
+                            turnsInThread = 0;
+                        }
                     }
 
                     dry = !overBudget && toolbox.PassIsDry;
@@ -777,13 +851,10 @@ public sealed class SessionCoordinator
                     toolbox.ToolCallLog.Clear();
                 }
 
-                // Aquí, y no en el `await using` de arriba: lo que el CLI declara al cerrar es el
-                // cuadre del final, y si llegara después de soltar `currentBreakdown` se perdería.
-                // Cerrar dos veces no hace nada — el hilo se cierra una sola vez.
-                if (hilo is not null)
-                {
-                    await hilo.DisposeAsync();
-                }
+                // Aquí, y no en el `finally`: lo que el proveedor declara al cerrar es el cuadre del
+                // final, y si llegara después de soltar `currentBreakdown` se perdería. Cerrar dos
+                // veces no hace nada — el hilo se cierra una sola vez.
+                await conversation.DisposeAsync();
 
                 currentBreakdown = null;
                 unitClock.Stop();
@@ -1151,31 +1222,55 @@ public sealed class SessionCoordinator
     /// inválido 'Y'" cuenten como el mismo motivo raíz. Devuelve null si no hay rechazos.
     /// </summary>
     /// <summary>
-    /// <b>Abre el hilo de la unidad, si es que hay que abrirlo</b> (M2). Devuelve <c>null</c> —y
-    /// entonces la unidad corre como siempre, una petición por pasada— cuando la palanca está
-    /// apagada, que es producción, o cuando el proveedor no sabe hilar.
+    /// <b>El hilo VIVO de la unidad</b>, sea el primero o el cuarto (F25 §2).
     /// <para>
-    /// Lo segundo se DICE, por evento y en las notas de la sesión: una tanda del banco apuntada
-    /// como «hilo» que no lo fuera mediría el otro brazo, y ninguna tabla lo delataría.
+    /// Existe para que el <c>await using</c> siga siendo la red de siempre ahora que lo que hay
+    /// dentro puede cambiar a mitad de unidad: atar la red al primer hilo dejaría sin cerrar
+    /// justamente al que quedó abierto. Cerrar dos veces no hace nada.
+    /// </para>
+    /// </summary>
+    private sealed class UnitConversation : IAsyncDisposable
+    {
+        public IUnitThread? Thread { get; set; }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (Thread is { } thread)
+            {
+                Thread = null;
+                await thread.DisposeAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// <b>Abre el hilo de la unidad</b> (F25). Devuelve <c>null</c> —y entonces la unidad corre por
+    /// el camino de respaldo, una petición por pasada— solo cuando el proveedor no sabe hilar.
+    /// <para>
+    /// Y eso se DICE, por evento y en las notas de la sesión. Un barrido que costara el triple sin
+    /// que nada lo nombrara sería indistinguible de uno caro por otro motivo.
     /// </para>
     /// </summary>
     private async Task<IUnitThread?> OpenThreadAsync(
         AuditSession session, string unitPath, IAuditToolbox toolbox, CancellationToken ct)
     {
-        if (!Hilo)
-        {
-            return null;
-        }
-
         if (_agent is IThreadedAuditor threaded)
         {
             return await threaded.OpenUnitThreadAsync(toolbox, ct);
         }
 
-        ThreadUnavailable?.Invoke(_agent.ProviderName);
+        // El aviso, UNA vez por sesión: es una propiedad del proveedor y no de la unidad, y
+        // repetirlo cuarenta veces lo convertiría en ruido. La nota sí va por unidad, porque el
+        // informe se lee unidad a unidad.
+        if (!_threadWarned)
+        {
+            _threadWarned = true;
+            ThreadUnavailable?.Invoke(_agent.ProviderName);
+        }
+
         session.Notes.Add(
-            $"{unitPath}: se pidió el brazo `hilo` y {_agent.ProviderName} no lo implementa; "
-            + "la unidad se ha barrido como siempre, una petición por pasada.");
+            $"{unitPath}: {_agent.ProviderName} no audita la unidad como una conversación; "
+            + "se ha barrido con una petición por pasada, y cada una vuelve a mandar el prompt entero.");
         return null;
     }
 

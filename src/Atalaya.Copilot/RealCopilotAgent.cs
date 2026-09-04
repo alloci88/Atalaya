@@ -22,7 +22,7 @@ namespace Atalaya.Copilot;
 /// The agent only ever calls our registered tools; the permission handler rejects everything else
 /// (shell, files, network), so it can touch nothing. Compiled against SDK 1.0.11.
 /// </summary>
-public sealed class RealCopilotAgent : IAssistedFixProvider, IAsyncDisposable
+public sealed class RealCopilotAgent : IAssistedFixProvider, IThreadedAuditor, IAsyncDisposable
 {
     private readonly string? _baseDirectory;
     private readonly ILogger _logger;
@@ -198,15 +198,79 @@ public sealed class RealCopilotAgent : IAssistedFixProvider, IAsyncDisposable
     public async Task AuditUnitAsync(AuditUnitRequest request, IAuditToolbox toolbox, CancellationToken ct)
     {
         await EnsureStartedAsync(ct);
+        await RunAsync(BuildAuditSessionConfig(toolbox), request.Prompt, ct);
+    }
 
-        SubmitFindingResult SubmitFinding(
+    /// <summary>
+    /// <b>El hilo de una unidad</b> (F25): UNA sesión de Copilot viva mientras dure el barrido de la
+    /// unidad, y una pasada por turno suyo.
+    /// <para>
+    /// <b>La mecánica no es nueva.</b> Es exactamente la del arreglo asistido desde F16
+    /// (<see cref="FixAsync"/>): una <c>CreateSessionAsync</c>, N <c>SendAndWaitAsync</c> sobre la
+    /// misma sesión, y un <c>DisposeAsync</c> al final. Lo único que cambia es quién decide el turno
+    /// siguiente — allí tira el usuario, aquí empuja el barrido—, y por eso aquí no hace falta ni
+    /// canal ni bomba: <c>SendAndWaitAsync</c> ya vuelve cuando el turno queda en reposo.
+    /// </para>
+    /// <para>
+    /// <b>Y aquí no está verificado contra una sesión real.</b> El SDK publica
+    /// <c>CacheReadTokens</c> / <c>CacheWriteTokens</c> y documenta que una sesión mantiene su
+    /// historia, pero esta máquina no tiene asiento (<c>models.list</c> contesta 403), así que lo
+    /// que se afirma es la forma, no el ahorro. La comprobación es del usuario, con una sesión suya,
+    /// y lo que la enseñaría es la escritura de caché por pasada del anexo técnico.
+    /// </para>
+    /// </summary>
+    public async Task<IUnitThread> OpenUnitThreadAsync(IAuditToolbox toolbox, CancellationToken ct)
+    {
+        await EnsureStartedAsync(ct);
+
+        AgentReadiness readiness = await CheckAsync(ct);
+        if (!readiness.Ready)
+        {
+            throw new AuditorAuthenticationException(readiness.Message);
+        }
+
+        try
+        {
+            CopilotSession session = await _client!.CreateSessionAsync(BuildAuditSessionConfig(toolbox), ct);
+            return new CopilotUnitThread(new LiveCopilotTurns(session), () => SendTimeout, Translate, _logger);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw Translate(ex);
+        }
+    }
+
+    /// <summary>
+    /// El catálogo de la auditoría, montado sobre el toolbox que persiste de verdad. Está aparte
+    /// —como <see cref="BuildFixSessionConfig"/>— porque es lo único de una sesión de Copilot que se
+    /// puede comprobar sin asiento: los nombres, las descripciones y lo que contesta cada
+    /// herramienta.
+    /// </summary>
+    internal SessionConfig BuildAuditSessionConfig(IAuditToolbox toolbox)
+    {
+        // F25 §4 (D-916) — los dos `submit` devuelven el ULID de lo que crean. En un hilo es la
+        // única forma de que el auditor pueda dar veredicto sobre lo suyo: no hay pasada siguiente
+        // que le vuelva a listar la unidad entera. El casado es el común de las dos casas.
+        var creations = toolbox as ISweepCreations;
+
+        SubmitFindingReceipt SubmitFinding(
             string ruleId, string pillar, string severity, string title,
             string description, string impact, string recommendation, SubmitLocation[] locations, string? symbol)
-            => toolbox.SubmitFinding(new SubmitFindingArgs(
-                ruleId, pillar, severity, title, description, impact, recommendation, locations, symbol));
+        {
+            int before = SweepReceipts.Mark(creations);
+            return SweepReceipts.Of(
+                creations,
+                toolbox.SubmitFinding(new SubmitFindingArgs(
+                    ruleId, pillar, severity, title, description, impact, recommendation, locations, symbol)),
+                before);
+        }
 
-        SubmitFindingsResult SubmitFindings(SubmitFindingArgs[] findings)
-            => toolbox.SubmitFindings(findings ?? Array.Empty<SubmitFindingArgs>());
+        SubmitFindingsReceipt SubmitFindings(SubmitFindingArgs[] findings)
+        {
+            int before = SweepReceipts.Mark(creations);
+            return SweepReceipts.Of(
+                creations, toolbox.SubmitFindings(findings ?? Array.Empty<SubmitFindingArgs>()), before);
+        }
 
         ReportVerdictsResult ReportVerdicts(VerdictArgs[] verdicts)
             => toolbox.ReportVerdicts(verdicts ?? Array.Empty<VerdictArgs>());
@@ -222,9 +286,11 @@ public sealed class RealCopilotAgent : IAssistedFixProvider, IAsyncDisposable
         var config = NewSessionConfig();
         AddTool(config, SubmitFindings, "submit_findings",
             "PREFERIDA. Reporta TODOS los hallazgos de la unidad en UNA sola llamada, pasando un array. "
-            + "Devuelve un array de {accepted, duplicateOf, error} en el mismo orden.");
+            + "Devuelve un array de {accepted, duplicateOf, error, id} en el mismo orden; el id es el ULID "
+            + "del hallazgo creado, y es con el que luego le das veredicto o le añades ubicaciones.");
         AddTool(config, SubmitFinding, "submit_finding",
-            "Fallback singular. Úsala solo si por alguna razón no puedes agrupar; cada llamada añade un turno.");
+            "Fallback singular. Úsala solo si por alguna razón no puedes agrupar; cada llamada añade un turno. "
+            + "Devuelve {accepted, duplicateOf, error, id}, con el ULID del hallazgo creado.");
         AddTool(config, ReportVerdicts, "report_verdicts",
             "OBLIGATORIA cuando la unidad tiene hallazgos existentes. Un array con un veredicto por CADA "
             + "hallazgo listado: {findingId (ULID exacto de la lista), verdict "
@@ -246,7 +312,7 @@ public sealed class RealCopilotAgent : IAssistedFixProvider, IAsyncDisposable
         AddTool(config, ReadSignatures, "read_signatures",
             "Devuelve las firmas (no cuerpos) de las dependencias directas de la unidad.");
 
-        await RunAsync(config, request.Prompt, ct);
+        return config;
     }
 
     public async Task VerifyAsync(VerifyRequest request, IVerifyToolbox toolbox, CancellationToken ct)

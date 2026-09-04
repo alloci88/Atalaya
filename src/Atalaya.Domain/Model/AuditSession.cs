@@ -302,6 +302,52 @@ public sealed class UnitUsageBreakdown
 
     /// <summary>Lo que tardó la unidad entera, de pared. 0 en lo legado.</summary>
     public long DurationMs { get; set; }
+
+    /// <summary>
+    /// <b>Cuántas pasadas de esta unidad viajaron como turnos de una conversación</b> (F25). Cero
+    /// significa que la unidad se barrió con una petición por pasada — el camino de respaldo—, y
+    /// eso también es un dato: es la diferencia entre pagar el andamiaje una vez o tantas veces
+    /// como pasadas.
+    /// </summary>
+    public int ThreadTurns { get; set; }
+
+    /// <summary>
+    /// <b>Cuántas veces hubo que abrir un hilo NUEVO en esta unidad</b>, sin contar el primero.
+    /// Un hilo se reinicia por tres motivos y solo tres: el proveedor no pudo continuar la sesión,
+    /// la pasada se cortó —cortar mata la conversación— o el hilo llegó al techo de contexto.
+    /// </summary>
+    public int ThreadRestarts { get; set; }
+
+    /// <summary>
+    /// Por qué se reinició, en orden. Es lo que hace que <see cref="ThreadRestarts"/> se pueda
+    /// leer: «2 reinicios» sin motivo obliga a adivinar si el proveedor falla o si la unidad es
+    /// tan grande que no cabe en un hilo, y son problemas distintos.
+    /// </summary>
+    public List<string> ThreadRestartReasons { get; set; } = new();
+}
+
+/// <summary>
+/// <b>El hilo de una unidad</b> (F25): el barrido audita cada unidad como UNA conversación con el
+/// proveedor, y cada pasada es un turno suyo.
+/// </summary>
+public static class UnitThreadLimits
+{
+    /// <summary>
+    /// <b>El techo de contexto de un hilo</b>, y el único sitio donde está escrito el número.
+    /// Cuando el contexto que el hilo arrastra lo alcanza, el turno siguiente abre un hilo nuevo:
+    /// una conversación que desborda la ventana del modelo no falla con elegancia, empieza a
+    /// perder lo de antes sin decirlo — y todo el argumento del hilo es que el modelo tiene
+    /// delante lo que ya se dijo.
+    /// <para>
+    /// <b>De dónde sale.</b> Medido sobre las dos clases de referencia, el contexto de una unidad
+    /// crece 18.574 → 45.694 → 56.764 → 63.564 tokens turno a turno, y extrapolado a los seis del
+    /// tope son ~80.000 contra los 200.000 de la ventana. 120.000 es una vez y media el peor caso
+    /// observado y deja el 40 % de la ventana libre para el turno en curso. No es un presupuesto,
+    /// es una alarma con salida: quien necesite pasar de aquí tiene que venir a cambiar este
+    /// número y explicarlo.
+    /// </para>
+    /// </summary>
+    public const int TechoContexto = 120_000;
 }
 
 /// <summary>
