@@ -96,6 +96,7 @@ public sealed partial class OnboardingViewModel : ViewModelBase
 
     /// <summary>False mientras no haya repositorio: la etiqueta del nombre nace vacía.</summary>
     public bool HasName => Name.Length > 0;
+
     [ObservableProperty] private string _clonePath = string.Empty;
     [ObservableProperty] private TechStack _detectedStack = TechStack.Unknown;
 
@@ -246,7 +247,7 @@ public sealed partial class OnboardingViewModel : ViewModelBase
                 _allRepositories.Add(new RepoOption(repo.Name, repo.CloneUrl, _links.FindByRepoUrl(repo.CloneUrl)));
             }
 
-            ApplyRepoFilter();
+            ApplyRepoFilter(RepoQuery);
             RepoListState = RepoListState.Loaded;
             RepoListNotice = _allRepositories.Count == 0
                 ? "Esta cuenta no ve ningún repositorio en la organización."
@@ -276,29 +277,66 @@ public sealed partial class OnboardingViewModel : ViewModelBase
 
     partial void OnRepoQueryChanged(string value)
     {
-        ApplyRepoFilter();
+        // Al elegir de la lista, WPF devuelve el NOMBRE del repositorio al mismo cuadro de texto.
+        // Eso no es teclear: no filtra —el desplegable tiene que volver a abrirse entero, con el
+        // elegido dentro— y no puede pisar la URL que se acaba de resolver.
+        if (SelectedRepository is { } chosen
+            && string.Equals(value.Trim(), chosen.Name, StringComparison.Ordinal))
+        {
+            ApplyRepoFilter(string.Empty);
+            return;
+        }
 
-        // Lo escrito solo se toma por URL cuando lo parece. Al elegir de la lista, WPF escribe el
-        // NOMBRE del repositorio en el mismo cuadro, y eso no puede pisar la URL que se acaba de
-        // resolver.
+        ApplyRepoFilter(value);
+
+        // Lo escrito solo se toma por URL cuando lo parece; si no, es el filtro de la lista.
         if (LooksLikeUrl(value))
         {
             RepoUrl = value.Trim();
         }
     }
 
-    private void ApplyRepoFilter()
+    /// <summary>
+    /// Deja en <see cref="Repositories"/> los que casan con lo escrito, EN SITIO.
+    /// <para>
+    /// Sin <c>Clear()</c> a propósito: vaciar la colección se lleva por delante el elemento
+    /// seleccionado, y a un <c>ComboBox</c> al que le desaparece el seleccionado se le queda el
+    /// cuadro en blanco. La primera versión hacía justo eso y elegir un repositorio parecía no
+    /// haber elegido nada.
+    /// </para>
+    /// </summary>
+    private void ApplyRepoFilter(string query)
     {
-        string needle = RepoQuery.Trim();
-        Repositories.Clear();
-        foreach (RepoOption option in _allRepositories)
+        string needle = query.Trim();
+
+        for (int i = Repositories.Count - 1; i >= 0; i--)
         {
-            if (needle.Length == 0 || option.Name.Contains(needle, StringComparison.OrdinalIgnoreCase))
+            if (!Matches(Repositories[i], needle))
             {
-                Repositories.Add(option);
+                Repositories.RemoveAt(i);
             }
         }
+
+        int at = 0;
+        foreach (RepoOption option in _allRepositories)
+        {
+            if (!Matches(option, needle))
+            {
+                continue;
+            }
+
+            if (at < Repositories.Count && ReferenceEquals(Repositories[at], option))
+            {
+                at++;
+                continue;
+            }
+
+            Repositories.Insert(at++, option);
+        }
     }
+
+    private static bool Matches(RepoOption option, string needle)
+        => needle.Length == 0 || option.Name.Contains(needle, StringComparison.OrdinalIgnoreCase);
 
     private static bool LooksLikeUrl(string text)
     {

@@ -12,10 +12,11 @@ namespace Atalaya.App.Tests;
 /// <summary>
 /// R3 — «Nueva aplicación» ELIGE el repositorio, no lo escribe.
 /// <para>
-/// Cuatro reglas, y solo cuatro (norma <b>N-5</b>): el nombre sale del repositorio elegido; un
-/// repositorio que ya es una app del hub lleva a vincular y no a crear; sin lista cargada, escribir
-/// la URL a mano sigue dando de alta; y la lista se recuerda en la sesión pero el botón de recargar
-/// vuelve a preguntar de verdad. Ninguna toca la red: la API se sirve por <see cref="HttpStub"/>.
+/// Cinco reglas, y solo cinco (norma <b>N-5</b>): el nombre sale del repositorio elegido; elegirlo
+/// sobrevive a que el combo devuelva su nombre al cuadro de texto; un repositorio que ya es una app
+/// del hub lleva a vincular y no a crear; sin lista cargada, escribir la URL a mano sigue dando de
+/// alta; y la lista se recuerda en la sesión pero el botón de recargar vuelve a preguntar de verdad.
+/// Ninguna toca la red: la API se sirve por <see cref="HttpStub"/>.
 /// </para>
 /// </summary>
 public sealed class OnboardingRepoPickerTests : IDisposable
@@ -96,6 +97,36 @@ public sealed class OnboardingRepoPickerTests : IDisposable
 
         vm.Name.Should().Be("XBLAST");
         vm.HasName.Should().BeTrue();
+        vm.RepoUrl.Should().Be("https://github.com/Applied-Advanced-Solutions-AAS/XBLAST.git");
+    }
+
+    /// <summary>
+    /// La costura con WPF, que es donde esto se rompió de verdad: un <c>ComboBox</c> editable
+    /// devuelve el NOMBRE del repositorio elegido al mismo cuadro de texto que filtra la lista. Si
+    /// ese eco se toma por una búsqueda, el filtro deja la colección con un solo elemento —y al
+    /// control le desaparece el que tenía seleccionado, así que se queda en blanco—. No hay error
+    /// en ninguna parte: el desplegable simplemente pasa a enseñar un repositorio de los veinte.
+    /// </summary>
+    [Fact]
+    public async Task El_repositorio_elegido_sobrevive_a_que_el_combo_devuelva_su_nombre()
+    {
+        OnboardingViewModel vm = Wizard(Catalog(new HttpStub().Json(TwoRepos)));
+        await vm.LoadAsync();
+
+        RepoOption xblast = vm.Repositories.Single(r => r.Name == "XBLAST");
+        vm.SelectedRepository = xblast;
+
+        // Lo que hace WPF al elegir de la lista.
+        vm.RepoQuery = "XBLAST";
+
+        vm.Repositories.Should().HaveCount(2, "el eco no es una búsqueda: la lista no se recorta");
+        vm.Repositories.Should().Contain(xblast);
+        vm.SelectedRepository.Should().BeSameAs(xblast);
+        vm.RepoUrl.Should().Be("https://github.com/Applied-Advanced-Solutions-AAS/XBLAST.git");
+
+        // Y escribir de verdad sí filtra, sin perder por ello lo ya elegido.
+        vm.RepoQuery = "Ata";
+        vm.Repositories.Should().ContainSingle().Which.Name.Should().Be("Atalaya");
         vm.RepoUrl.Should().Be("https://github.com/Applied-Advanced-Solutions-AAS/XBLAST.git");
     }
 

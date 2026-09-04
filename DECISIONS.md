@@ -13392,13 +13392,64 @@ Lo que **no** se ha tocado: `machines.json` y el modelo de la app en el hub (§4
 duplicados (D-303), el diálogo de vincular (D-304), el escaneo, el registro y el paso opcional del
 baseline v4.
 
-### D-937 — Cobertura (4 tests nuevos, 2.215 en total, todo en verde)
+### D-938 — El eco del combo NO es una búsqueda (defecto reportado con la app en la mano)
 
-Cuatro, y se justifican uno a uno como pide N-5:
+Elegir un repositorio parecía no elegir nada: el desplegable se quedaba en blanco. Medido, la causa
+(N-2): un `ComboBox` editable **devuelve el nombre del elemento elegido al mismo cuadro de texto**
+que sirve de filtro. Ese eco entraba por `RepoQuery`, se tomaba por una búsqueda y el filtro
+reconstruía la colección con `Clear()` + volver a añadir — y al vaciarla desaparecía de ella el
+elemento seleccionado, así que el control perdía la selección y borraba su texto.
+
+Dos arreglos, porque eran dos fallos encadenados:
+
+- **El eco se reconoce y no filtra.** Cuando lo escrito coincide exactamente con el nombre del
+  repositorio ya seleccionado, se restaura la lista entera —para que volver a abrir el desplegable
+  la enseñe completa, con el elegido dentro— y no se toca la URL.
+- **El filtro trabaja EN SITIO, sin `Clear()`.** Quita lo que ya no casa e inserta lo que falta en
+  su posición. Un `Clear()` sobre la colección que alimenta un selector siempre se lleva por delante
+  lo seleccionado, y eso no es un detalle de este control: es la forma de romper cualquier lista con
+  selección.
+
+Un test lo fija (N-5): tras elegir, el eco no recorta la lista, la selección sigue en pie y la URL
+no se mueve; y escribir de verdad sí filtra sin perder lo ya elegido. Es la costura con WPF, la
+única que ningún otro test tocaba, y su regresión no da error en ninguna parte — solo deja el
+desplegable enseñando un repositorio de veinte.
+
+### D-939 — El alta se lee como el resto de la aplicación
+
+La primera versión apilaba etiquetas y controles sin más, y al elegir repositorio el nombre y la
+URL caían uno debajo de otro sin que nada dijera que eran lo mismo. Se adopta el ritmo que ya tenía
+Ajustes (F5.7 §1): **cada dato es una fila con la misma rejilla —etiqueta de 140 · control— y su
+línea de ayuda colgando bajo el control, alineada con él**.
+
+- **Dos tarjetas, porque son dos preguntas distintas**: «El repositorio» (qué se audita — de la
+  organización, lo ve todo el equipo) y «El clon en esta máquina» (dónde está aquí — es de este
+  puesto, §4). El baseline v4 se queda en la suya, que ya la tenía.
+- **El nombre y la URL van juntos en un solo bloque**, bajo una etiqueta «Aplicación», con el
+  nombre grande y la URL pequeña debajo. Se leen como el **resultado** de haber elegido, no como
+  dos campos más que rellenar, que era justo el problema.
+- **Una sola línea de ayuda a la vez.** Si la lista falló, se enseña el fallo —en ámbar, con el
+  mismo `SystemFillColorCautionBrush` que el resto de la aplicación— y se calla la explicación de
+  cómo filtrar una lista que no está.
+- **La marca «ya en el hub» es una etiqueta escrita** dentro de cada fila del desplegable, no un
+  color (D-296).
+- **El registro del importador no ocupa nada cuando está vacío**, que es el caso normal: llevaba un
+  margen propio y dejaba un hueco al pie de la tarjeta.
+
+Verificado renderizando la vista a PNG en sus cuatro estados —vacía, con repositorio elegido, con
+duplicado detectado y con la lista caída— antes de darlo por bueno.
+
+### D-937 — Cobertura (5 tests nuevos, 2.216 en total, todo en verde)
+
+Cinco, y se justifican uno a uno como pide N-5:
 
 - **El nombre sale del repositorio elegido** — la etiqueta nace vacía y, al elegir, dice el nombre
   del repo y guarda su URL. Sin él, el alta podría registrar el slug de un texto vacío y la
   aplicación entraría en el hub con un nombre que no es el suyo, sin que la pantalla lo delate.
+- **El repositorio elegido sobrevive al eco del combo** (D-938) — el nombre que WPF devuelve al
+  cuadro de texto no recorta la lista, no pierde la selección y no mueve la URL. Es la costura con
+  el control, y su regresión no levanta ningún error: solo deja el desplegable con un repositorio
+  de veinte.
 - **Elegir un repo que ya está en el hub lleva a vincular, no a crear** — sale marcado, apaga el
   botón de crear y nombra la app existente; y `Create` forzado a mano **no** escribe una segunda
   app. Es D-303 vista desde la lista, que es por donde ahora se entra.

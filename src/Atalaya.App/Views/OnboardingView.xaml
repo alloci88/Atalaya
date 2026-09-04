@@ -3,77 +3,169 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    <!--
+        R3 — El alta sigue el ritmo del resto de la aplicación (F5.7 §1): cada dato es una FILA con
+        la misma rejilla (etiqueta de 140 · control) y su línea de ayuda colgando bajo el control,
+        alineada con él. Antes eran etiquetas y cuadros apilados sin más, y al elegir repositorio el
+        nombre y la URL caían uno debajo de otro sin que nada dijera que eran lo mismo.
+
+        Y en dos tarjetas, porque son dos preguntas distintas: QUÉ se audita (el repositorio, que es
+        de la organización y lo ve todo el equipo) y DÓNDE está en ESTA máquina (el clon, que es de
+        este puesto — §4).
+    -->
+    <UserControl.Resources>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="16,14" />
+            <Setter Property="Margin" Value="0,0,0,14" />
+        </Style>
+
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="Margin" Value="0,0,0,14" />
+        </Style>
+
+        <Style x:Key="FieldRow" TargetType="Grid">
+            <Setter Property="Margin" Value="0,0,0,16" />
+        </Style>
+
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Opacity" Value="0.85" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+        </Style>
+
+        <Style x:Key="FieldHelp" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Opacity" Value="0.65" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Margin" Value="0,6,0,0" />
+        </Style>
+    </UserControl.Resources>
+
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel MaxWidth="620" HorizontalAlignment="Left">
-            <TextBlock Text="Nueva aplicación" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,6" />
+        <StackPanel MaxWidth="660" HorizontalAlignment="Left" Margin="0,0,0,20">
+            <TextBlock Text="Nueva aplicación" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,4" />
             <TextBlock Text="Registra un repo auditable: detecta el stack y construye el inventario del primer ciclo."
-                       Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,16" />
+                       Opacity="0.65" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,20" />
 
-            <!-- R3: el repositorio se ELIGE. La organización ya está identificada —es la de la
-                 cuenta conectada— así que los repositorios donde puede vivir una app son una
-                 lista, no un texto. El combo es editable a propósito: escribir filtra la lista, y
-                 si la lista no cargó, lo escrito vale como URL y el alta sigue siendo posible. -->
-            <TextBlock Text="Repositorio" FontWeight="SemiBold" Margin="0,4,0,4" />
-            <Grid Margin="0,0,0,4">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <ComboBox Grid.Column="0"
-                          IsEditable="True"
-                          IsTextSearchEnabled="False"
-                          ItemsSource="{Binding Repositories}"
-                          SelectedItem="{Binding SelectedRepository}"
-                          TextSearch.TextPath="Name"
-                          Text="{Binding RepoQuery, UpdateSourceTrigger=PropertyChanged}">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding Name}" />
-                                <TextBlock Text="· ya en el hub" Opacity="0.65" Margin="8,0,0,0"
-                                           Visibility="{Binding AlreadyInHub, Converter={StaticResource BoolToVisibility}}" />
+            <!-- ==================================================== Qué se audita -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="El repositorio" Style="{StaticResource SectionTitle}" />
+
+                    <!-- R3: el repositorio se ELIGE. La organización ya está identificada —es la de
+                         la cuenta conectada— así que los repositorios donde puede vivir una app son
+                         una lista, no un texto. El combo es editable a propósito: escribir filtra la
+                         lista, y si la lista no cargó, lo escrito vale como URL. -->
+                    <Grid Style="{StaticResource FieldRow}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Repositorio"
+                                   Style="{StaticResource FieldLabel}" />
+                        <Grid Grid.Row="0" Grid.Column="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ComboBox Grid.Column="0"
+                                      IsEditable="True"
+                                      IsTextSearchEnabled="False"
+                                      MaxDropDownHeight="320"
+                                      ItemsSource="{Binding Repositories}"
+                                      SelectedItem="{Binding SelectedRepository}"
+                                      TextSearch.TextPath="Name"
+                                      Text="{Binding RepoQuery, UpdateSourceTrigger=PropertyChanged}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid MinWidth="260">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <!-- La marca va ESCRITA, no en un color (D-296). -->
+                                            <Border Grid.Column="1" Margin="12,0,0,0"
+                                                    Padding="6,1" CornerRadius="4"
+                                                    Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                                    Visibility="{Binding AlreadyInHub, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="ya en el hub" FontSize="10.5" Opacity="0.8" />
+                                            </Border>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <ui:Button Grid.Column="1" Content="Recargar"
+                                       Command="{Binding ReloadRepositoriesCommand}"
+                                       ToolTip="Vuelve a pedirle la lista a GitHub. Úsalo si acabas de crear el repositorio."
+                                       MinWidth="96" Margin="8,0,0,0" />
+                        </Grid>
+
+                        <!-- Una sola línea de ayuda a la vez: cuando la lista falla, lo que hay que
+                             leer es el fallo y su salida, no cómo se filtra una lista que no está. -->
+                        <TextBlock Grid.Row="1" Grid.Column="1"
+                                   Text="Los repositorios de tu organización. Escribe para filtrar; los que ya están en el hub salen marcados y te llevan a vincular tu clon."
+                                   Style="{StaticResource FieldHelp}"
+                                   Visibility="{Binding RepositoriesFailed, Converter={StaticResource InverseBoolToVisibility}}" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="1"
+                                   Text="{Binding RepoListNotice}"
+                                   Style="{StaticResource FieldHelp}"
+                                   Opacity="1"
+                                   Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                   Visibility="{Binding RepoListNotice, Converter={StaticResource NotEmptyToVisibility}}" />
+                    </Grid>
+
+                    <!-- El nombre ya no se teclea: es el del repositorio elegido. Va con su URL en
+                         un solo bloque para que se lean como lo que son —el RESULTADO de la
+                         elección— y no como dos campos más que rellenar. -->
+                    <Grid Style="{StaticResource FieldRow}" Margin="0,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Aplicación" Style="{StaticResource FieldLabel}"
+                                   VerticalAlignment="Top" Margin="0,12,12,0" />
+                        <Border Grid.Column="1" CornerRadius="6" Padding="12,9"
+                                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Text="Se toma del repositorio que elijas." Opacity="0.55"
+                                           FontStyle="Italic" FontSize="12"
+                                           Visibility="{Binding HasName, Converter={StaticResource InverseBoolToVisibility}}" />
+                                <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis"
+                                           Visibility="{Binding HasName, Converter={StaticResource BoolToVisibility}}" />
+                                <TextBlock Text="{Binding RepoUrl}" FontSize="11" Opacity="0.6"
+                                           TextTrimming="CharacterEllipsis" Margin="0,2,0,0"
+                                           ToolTip="{Binding RepoUrl}"
+                                           Visibility="{Binding RepoUrl, Converter={StaticResource NotEmptyToVisibility}}" />
                             </StackPanel>
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-                <ui:Button Grid.Column="1" Content="Recargar" Command="{Binding ReloadRepositoriesCommand}"
-                           Margin="8,0,0,0" />
-            </Grid>
-            <TextBlock Text="{Binding RepoListNotice}" FontSize="12" Opacity="0.8" TextWrapping="Wrap"
-                       Margin="0,0,0,12"
-                       Visibility="{Binding RepoListNotice, Converter={StaticResource NotEmptyToVisibility}}" />
-
-            <!-- El nombre ya no se teclea: es el del repositorio elegido. -->
-            <TextBlock Text="Nombre" FontWeight="SemiBold" Margin="0,4,0,4" />
-            <TextBlock Text="{Binding Name}" FontSize="16"
-                       Visibility="{Binding HasName, Converter={StaticResource BoolToVisibility}}" />
-            <TextBlock Text="Se toma del repositorio que elijas." Opacity="0.6" FontStyle="Italic"
-                       Visibility="{Binding HasName, Converter={StaticResource InverseBoolToVisibility}}" />
-            <TextBlock Text="{Binding RepoUrl}" FontSize="11" Opacity="0.6" TextWrapping="Wrap"
-                       Margin="0,2,0,12"
-                       Visibility="{Binding RepoUrl, Converter={StaticResource NotEmptyToVisibility}}" />
-
-            <TextBlock Text="Ruta del clon local (en esta máquina)" FontWeight="SemiBold" Margin="0,4,0,4" />
-            <Grid Margin="0,0,0,12">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <ui:TextBox Grid.Column="0" Text="{Binding ClonePath, UpdateSourceTrigger=PropertyChanged}" />
-                <ui:Button Grid.Column="1" Content="Examinar…" Command="{Binding PickClonePathCommand}" Margin="8,0,0,0" />
-                <ui:Button Grid.Column="2" Content="Detectar stack" Command="{Binding DetectCommand}" Margin="8,0,0,0" />
-            </Grid>
-
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                <TextBlock Text="Stack detectado: " Opacity="0.7" />
-                <TextBlock Text="{Binding DetectedStack}" FontWeight="SemiBold" />
-            </StackPanel>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+            </Border>
 
             <!-- F5.8 §2: el repo elegido ya está en el portafolio. El asistente no crea un
                  duplicado: redirige al gesto correcto, que es vincular el clon. -->
             <Border Background="#22D2B036" BorderBrush="#55D2B036" BorderThickness="1"
-                    CornerRadius="6" Padding="12,10" Margin="0,0,0,16"
+                    CornerRadius="8" Padding="16,14" Margin="0,0,0,14"
                     Visibility="{Binding IsDuplicate, Converter={StaticResource BoolToVisibility}}">
                 <StackPanel>
                     <TextBlock Text="{Binding DuplicateNotice}" TextWrapping="Wrap" />
@@ -81,7 +173,65 @@
                                Command="{Binding LinkExistingCommand}"
                                Appearance="Primary"
                                HorizontalAlignment="Left"
-                               Margin="0,10,0,0" />
+                               Margin="0,12,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- ============================================ Dónde está en esta máquina -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="El clon en esta máquina" Style="{StaticResource SectionTitle}" />
+
+                    <Grid Style="{StaticResource FieldRow}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Carpeta"
+                                   Style="{StaticResource FieldLabel}" />
+                        <Grid Grid.Row="0" Grid.Column="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox Grid.Column="0"
+                                        Text="{Binding ClonePath, UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="C:\ruta\a\tu\clon" />
+                            <ui:Button Grid.Column="1" Content="Examinar…"
+                                       Command="{Binding PickClonePathCommand}"
+                                       MinWidth="96" Margin="8,0,0,0" />
+                        </Grid>
+                        <TextBlock Grid.Row="1" Grid.Column="1"
+                                   Text="Dónde tienes clonado ese repositorio en este equipo. La ruta es de esta máquina y no viaja al hub."
+                                   Style="{StaticResource FieldHelp}" />
+                    </Grid>
+
+                    <Grid Style="{StaticResource FieldRow}" Margin="0,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Stack"
+                                   Style="{StaticResource FieldLabel}" />
+                        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
+                            <TextBlock Text="{Binding DetectedStack}" FontWeight="SemiBold"
+                                       VerticalAlignment="Center" MinWidth="90" />
+                            <ui:Button Content="Detectar stack" Command="{Binding DetectCommand}" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="1" Grid.Column="1"
+                                   Text="Lo deduce de los ficheros del clon. Si dejaste el repositorio sin elegir, lo toma del «origin» de la carpeta."
+                                   Style="{StaticResource FieldHelp}" />
+                    </Grid>
                 </StackPanel>
             </Border>
 
@@ -89,43 +239,62 @@
                  esta alta, porque traerse lo que el sistema anterior sabía de la app y dar la app
                  de alta son el mismo gesto y se hace una sola vez por aplicación. El asistente
                  busca la carpeta solo; si no está donde debería, se señala a mano. -->
-            <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="6"
-                    Padding="12,10"
-                    Margin="0,0,0,16">
+            <Border Style="{StaticResource Card}">
                 <StackPanel>
-                    <TextBlock Text="Baseline del sistema v4 (opcional)" FontWeight="SemiBold" />
+                    <TextBlock Text="Baseline del sistema v4 (opcional)" Style="{StaticResource SectionTitle}"
+                               Margin="0,0,0,4" />
                     <TextBlock Text="Si esta aplicación ya se auditaba con el sistema v4, su carpeta CodeAudit/ se puede importar ahora: hallazgos, silencios, histórico e informes entran con el alta."
-                               Opacity="0.7" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,10" />
+                               Opacity="0.65" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,14" />
 
-                    <Grid Margin="0,0,0,8">
+                    <Grid Style="{StaticResource FieldRow}">
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140" />
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <ui:TextBox Grid.Column="0" Text="{Binding CodeAuditPath, UpdateSourceTrigger=PropertyChanged}"
-                                    PlaceholderText="Ruta de la carpeta CodeAudit/" />
-                        <ui:Button Grid.Column="1" Content="Elegir carpeta…" Command="{Binding PickBaselineCommand}"
-                                   Margin="8,0,0,0" />
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Carpeta CodeAudit/"
+                                   Style="{StaticResource FieldLabel}" />
+                        <Grid Grid.Row="0" Grid.Column="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox Grid.Column="0"
+                                        Text="{Binding CodeAuditPath, UpdateSourceTrigger=PropertyChanged}"
+                                        PlaceholderText="Se busca sola dentro del clon" />
+                            <ui:Button Grid.Column="1" Content="Elegir…" Command="{Binding PickBaselineCommand}"
+                                       MinWidth="96" Margin="8,0,0,0" />
+                        </Grid>
+                        <TextBlock Grid.Row="1" Grid.Column="1"
+                                   Text="{Binding BaselineNotice}"
+                                   Style="{StaticResource FieldHelp}"
+                                   Visibility="{Binding BaselineNotice, Converter={StaticResource NotEmptyToVisibility}}" />
                     </Grid>
 
-                    <TextBlock Text="{Binding BaselineNotice}" FontSize="12" Opacity="0.8" TextWrapping="Wrap"
-                               Margin="0,0,0,8"
-                               Visibility="{Binding BaselineNotice, Converter={StaticResource NotEmptyToVisibility}}" />
-
-                    <CheckBox Content="Importar el baseline del sistema v4 al crear la aplicación"
-                              IsChecked="{Binding ImportBaseline}"
-                              IsEnabled="{Binding HasBaseline}" />
+                    <Grid Margin="0,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="140" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <CheckBox Grid.Column="1"
+                                  Content="Importar el baseline al crear la aplicación"
+                                  IsChecked="{Binding ImportBaseline}"
+                                  IsEnabled="{Binding HasBaseline}" />
+                    </Grid>
 
                     <!-- La salida del importador se queda a la vista: no es el aviso de una
                          acción (eso va por toast, F5.7 §4) sino lo que no se pudo importar. -->
-                    <ItemsControl ItemsSource="{Binding ImportLog}" Margin="0,10,0,0">
+                    <!-- Sin margen propio: vacío tiene que ocupar CERO, o la tarjeta se queda con
+                         un hueco al pie en el caso normal, que es el de no importar nada. -->
+                    <ItemsControl ItemsSource="{Binding ImportLog}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="11"
-                                           TextWrapping="Wrap" Margin="0,1" Opacity="0.85" />
+                                           TextWrapping="Wrap" Margin="0,4,0,0" Opacity="0.85" />
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -133,7 +302,8 @@
             </Border>
 
             <ui:Button Content="Crear e inventariar" Command="{Binding CreateCommand}" Appearance="Primary"
-                       IsEnabled="{Binding CanCreate}" HorizontalAlignment="Left" />
+                       IsEnabled="{Binding CanCreate}" HorizontalAlignment="Left"
+                       MinWidth="180" Margin="0,4,0,0" />
             <!-- F5.7 §4: sin texto de estado al pie. El resultado va por el toast global. -->
         </StackPanel>
     </ScrollViewer>
