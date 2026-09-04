@@ -51,14 +51,17 @@
             <Border Grid.Column="0"
                     Background="{DynamicResource Brush.Surface}"
                     BorderBrush="{DynamicResource Brush.Line}"
-                    BorderThickness="{StaticResource Border.Right}"
-                    Padding="{StaticResource Pad.Rail}">
+                    BorderThickness="{StaticResource Border.Right}">
                 <Border.Style>
                     <Style TargetType="Border">
                         <Setter Property="Width" Value="{StaticResource Rail.Width}" />
+                        <Setter Property="Padding" Value="{StaticResource Pad.Rail}" />
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding RailCollapsed}" Value="True">
                                 <Setter Property="Width" Value="{StaticResource Rail.CollapsedWidth}" />
+                                <!-- El relleno se estrecha con el raíl (D-963). Si no, los 24 px
+                                     de relleno horizontal se comen el sitio del icono. -->
+                                <Setter Property="Padding" Value="{StaticResource Pad.RailCollapsed}" />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
@@ -71,35 +74,70 @@
                             Command="{Binding ToggleRailCommand}"
                             HorizontalAlignment="Left"
                             Margin="{StaticResource Pad.XXS}"
-                            ToolTip="Plegar o desplegar el menú">
+                            AutomationProperties.Name="Plegar o desplegar el menú">
+                        <Button.ToolTip>
+                            <Binding Path="RailCollapsed" Converter="{StaticResource RailToggleTip}" />
+                        </Button.ToolTip>
                         <Path Style="{StaticResource Icon}" Data="{x:Static c:Icons.RailToggle}" />
                     </Button>
 
                     <!-- El pie del raíl: la cuenta. Es «quién eres», que es información de sistema
                          y no de trabajo; abajo, fuera del camino, y siempre a un clic. -->
                     <Button DockPanel.Dock="Bottom"
-                            Style="{StaticResource Button.Ghost}"
                             Command="{Binding ShowAccountCommand}"
                             HorizontalContentAlignment="Left"
-                            Padding="{StaticResource Pad.RailItem}"
-                            ToolTip="{Binding AccountLabel}">
-                        <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
-                            <Border Width="24" Height="24" CornerRadius="{StaticResource Radius.Pill}">
+                            ToolTip="{Binding AccountTooltip}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource Button.Ghost}">
+                                <Setter Property="Padding" Value="{StaticResource Pad.RailItem}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding RailCollapsed}" Value="True">
+                                        <!-- D-963: con el relleno ancho, el avatar salía cortado
+                                             por la mitad — 24 px de avatar en 12 px de hueco. -->
+                                        <Setter Property="Padding" Value="{StaticResource Pad.RailItemCollapsed}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Grid.Column="0" Width="24" Height="24"
+                                    CornerRadius="{StaticResource Radius.Pill}">
                                 <Border.Background>
                                     <ImageBrush ImageSource="{Binding AccountAvatarUrl}" Stretch="UniformToFill" />
                                 </Border.Background>
                             </Border>
-                            <TextBlock Text="{Binding AccountLabel}"
+
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding AccountLabel}"
                                        Style="{StaticResource Text.Small}"
+                                       Margin="{StaticResource Pad.XS}"
                                        VerticalAlignment="Center"
                                        TextTrimming="CharacterEllipsis"
                                        Visibility="{Binding RailCollapsed, Converter={StaticResource InverseBoolToVisibility}}" />
-                            <TextBlock Text="⚠"
+
+                            <!-- EL PILOTO DEL HUB (D-964). Aquí y no en la barra de arriba: es
+                                 estado de la conexión, igual que la cuenta, y las dos cosas juntas
+                                 responden a «¿puedo trabajar?» de un vistazo. Sin la palabra
+                                 «Green» al lado —que era el nombre interno del estado, en inglés y
+                                 sin decir de qué—: lo que significa está en el tooltip, que es
+                                 donde se va a mirar cuando deje de estar verde. -->
+                            <Ellipse Grid.Column="2" Width="9" Height="9"
+                                     VerticalAlignment="Center"
+                                     Fill="{Binding SyncHealth, Converter={StaticResource SyncHealthToBrush}}"
+                                     ToolTip="{Binding SyncTooltip}" />
+
+                            <TextBlock Grid.Column="2" Text="⚠"
                                        Foreground="{DynamicResource Brush.Warning.Ink}"
                                        VerticalAlignment="Center"
                                        ToolTip="Reconecta tu cuenta de GitHub"
                                        Visibility="{Binding AccountNeedsAttention, Converter={StaticResource BoolToVisibility}}" />
-                        </StackPanel>
+                        </Grid>
                     </Button>
 
                     <ItemsControl ItemsSource="{Binding NavGroups}" DockPanel.Dock="Top">
@@ -159,16 +197,11 @@
                             <Path Style="{StaticResource Icon}" Data="{x:Static c:Icons.Back}" />
                         </Button>
 
-                        <!-- El estado del hub, a la derecha: es de la ventana entera, no de la
-                             página, y por eso vive en la barra y no dentro del contenido. -->
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
-                                    c:Stack.Gap="{StaticResource Space.XS}"
-                                    VerticalAlignment="Center">
-                            <Ellipse Width="8" Height="8" VerticalAlignment="Center"
-                                     Fill="{Binding SyncHealth, Converter={StaticResource SyncHealthToBrush}}" />
-                            <TextBlock Text="{Binding SyncHealth}" Style="{StaticResource Text.Small}"
-                                       VerticalAlignment="Center" />
-                        </StackPanel>
+                        <!-- Aquí NO va el piloto del hub (D-964). Estuvo, con la palabra «Green»
+                             al lado, y sobraban las dos cosas: la palabra era el nombre interno
+                             del estado —en inglés, y sin decir de qué—, y el punto estaba lejos de
+                             la otra mitad de la misma pregunta. Los dos se han mudado al pie del
+                             raíl, junto a la cuenta. Esta barra dice solo dónde estás. -->
 
                         <ItemsControl ItemsSource="{Binding Crumbs}" VerticalAlignment="Center"
                                       Margin="{StaticResource Pad.XS}">

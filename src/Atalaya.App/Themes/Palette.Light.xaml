@@ -4,17 +4,29 @@
     Las MISMAS CLAVES que `Palette.Dark.xaml`. Ver la cabecera de aquel fichero para qué significa
     cada papel (`.Fill`, `.OnFill`, `.Ink`, `.Soft`) y por qué son cuatro y no uno.
 
-    POR QUÉ CREMA Y NO BLANCO (D-948). El modo claro de antes era el de fábrica de WPF-UI: blanco
-    puro, #FFFFFF. Sobre un monitor a brillo de oficina, una pantalla llena de blanco puro con
-    texto negro es la combinación que más cansa la vista de todas las posibles —es la queja
-    literal del usuario, «el fondo es blanco nuclear y quema»—. El fondo baja a #F3EFE7, un crema
-    de la misma familia cálida, y las superficies suben a #FBF8F2: se conserva la jerarquía
-    (fondo < superficie) sin llegar a ninguno de los dos extremos. El texto es un casi negro
-    CÁLIDO (#1E2229) y no un negro puro, por la misma razón por el otro lado.
+    POR QUÉ CREMA Y NO BLANCO (D-948, calentado en D-961). El modo claro de antes era el de fábrica
+    de WPF-UI: blanco puro, #FFFFFF. Sobre un monitor a brillo de oficina, una pantalla llena de
+    blanco puro con texto negro es la combinación que más cansa la vista de todas las posibles —es
+    la queja literal del usuario, «el fondo es blanco nuclear y quema»—.
+
+    El fondo es #F2EBDD y las superficies #FAF5EC: se conserva la jerarquía (fondo < superficie)
+    sin llegar a ninguno de los dos extremos. El texto es un casi negro CÁLIDO (#1E2229) y no un
+    negro puro, por la misma razón por el otro lado.
+
+    TODA la rampa neutra comparte el tono 40°, que es el de esas dos referencias. Es lo que hace
+    que el crema se lea como una decisión y no como un blanco sucio: si las líneas y la superficie
+    intermedia se quedaran en un gris neutro, cada borde de tarjeta metería un tono frío en una
+    pantalla cálida, y eso se ve aunque no se sepa nombrar.
 
     LOS SEMÁNTICOS SON MÁS OSCUROS QUE EN LA MAQUETA, lo justo para AA sobre crema (D-947): en modo
     claro el problema es el contrario que en oscuro —aquí el color vivo es el que no se lee—, así
     que verde, ámbar y rojo bajan de luminosidad y la tinta que llevan encima es blanca.
+
+    Y LOS FONDOS TEÑIDOS SE CALENTARON CON EL RESTO (D-961). Un menta #DFF2E3 sobre un crema de 45
+    de saturación se ve azulado por contraste simultáneo: el ojo lee cada color contra su vecino,
+    no contra el blanco. Las cuatro pastillas están ahora en la misma familia cálida, y sus tintas
+    se han vuelto a resolver contra ellas — bajar el fondo sin bajar la tinta habría comprado
+    calidez con contraste.
 -->
 <ResourceDictionary
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -24,11 +36,11 @@
     <sys:String x:Key="Palette.Name">light</sys:String>
 
     <!-- ============================================================ Superficies y líneas -->
-    <Color x:Key="Color.Bg">#F3EFE7</Color>
-    <Color x:Key="Color.Surface">#FBF8F2</Color>
-    <Color x:Key="Color.Surface2">#F5F1E9</Color>
-    <Color x:Key="Color.Line">#E1DBD0</Color>
-    <Color x:Key="Color.LineStrong">#CFC7B9</Color>
+    <Color x:Key="Color.Bg">#F2EBDD</Color>
+    <Color x:Key="Color.Surface">#FAF5EC</Color>
+    <Color x:Key="Color.Surface2">#F6F0E4</Color>
+    <Color x:Key="Color.Line">#E6DDCC</Color>
+    <Color x:Key="Color.LineStrong">#CFC1AB</Color>
 
     <SolidColorBrush x:Key="Brush.Bg" Color="{StaticResource Color.Bg}" />
     <SolidColorBrush x:Key="Brush.Surface" Color="{StaticResource Color.Surface}" />
@@ -41,7 +53,7 @@
          ve bien sobre crema; hay que elegirlo dos veces. -->
     <Color x:Key="Color.Text">#1E2229</Color>
     <Color x:Key="Color.TextMuted">#4F5761</Color>
-    <Color x:Key="Color.TextFaint">#666E78</Color>
+    <Color x:Key="Color.TextFaint">#646B75</Color>
 
     <SolidColorBrush x:Key="Brush.Text" Color="{StaticResource Color.Text}" />
     <SolidColorBrush x:Key="Brush.TextMuted" Color="{StaticResource Color.TextMuted}" />
@@ -54,8 +66,8 @@
          pinta no debe tener que saber en qué tema está. -->
     <Color x:Key="Color.Primary.Fill">#2F62C9</Color>
     <Color x:Key="Color.Primary.OnFill">#FFFFFF</Color>
-    <Color x:Key="Color.Primary.Ink">#2F62C9</Color>
-    <Color x:Key="Color.Primary.Soft">#E2E9F8</Color>
+    <Color x:Key="Color.Primary.Ink">#2E5FC3</Color>
+    <Color x:Key="Color.Primary.Soft">#D6E1F5</Color>
 
     <SolidColorBrush x:Key="Brush.Primary.Fill" Color="{StaticResource Color.Primary.Fill}" />
     <SolidColorBrush x:Key="Brush.Primary.OnFill" Color="{StaticResource Color.Primary.OnFill}" />
@@ -69,34 +81,34 @@
     <Color x:Key="Color.Danger.OnFill">#FFFFFF</Color>
 
     <Color x:Key="Color.Success.Fill">#1C7C35</Color>
-    <Color x:Key="Color.Success.Ink">#1C7C35</Color>
-    <Color x:Key="Color.Success.Soft">#DFF2E3</Color>
+    <Color x:Key="Color.Success.Ink">#1B7934</Color>
+    <Color x:Key="Color.Success.Soft">#D7EFDF</Color>
     <SolidColorBrush x:Key="Brush.Success.Fill" Color="{StaticResource Color.Success.Fill}" />
     <SolidColorBrush x:Key="Brush.Success.OnFill" Color="{StaticResource Color.Success.OnFill}" />
     <SolidColorBrush x:Key="Brush.Success.Ink" Color="{StaticResource Color.Success.Ink}" />
     <SolidColorBrush x:Key="Brush.Success.Soft" Color="{StaticResource Color.Success.Soft}" />
 
     <Color x:Key="Color.Warning.Fill">#906400</Color>
-    <Color x:Key="Color.Warning.Ink">#906400</Color>
-    <Color x:Key="Color.Warning.Soft">#FBEFC7</Color>
+    <Color x:Key="Color.Warning.Ink">#8D6200</Color>
+    <Color x:Key="Color.Warning.Soft">#F7ECC9</Color>
     <SolidColorBrush x:Key="Brush.Warning.Fill" Color="{StaticResource Color.Warning.Fill}" />
     <SolidColorBrush x:Key="Brush.Warning.OnFill" Color="{StaticResource Color.Warning.OnFill}" />
     <SolidColorBrush x:Key="Brush.Warning.Ink" Color="{StaticResource Color.Warning.Ink}" />
     <SolidColorBrush x:Key="Brush.Warning.Soft" Color="{StaticResource Color.Warning.Soft}" />
 
     <Color x:Key="Color.Danger.Fill">#BA3630</Color>
-    <Color x:Key="Color.Danger.Ink">#BA3630</Color>
-    <Color x:Key="Color.Danger.Soft">#F9DEDC</Color>
+    <Color x:Key="Color.Danger.Ink">#B8352F</Color>
+    <Color x:Key="Color.Danger.Soft">#F7DCD9</Color>
     <SolidColorBrush x:Key="Brush.Danger.Fill" Color="{StaticResource Color.Danger.Fill}" />
     <SolidColorBrush x:Key="Brush.Danger.OnFill" Color="{StaticResource Color.Danger.OnFill}" />
     <SolidColorBrush x:Key="Brush.Danger.Ink" Color="{StaticResource Color.Danger.Ink}" />
     <SolidColorBrush x:Key="Brush.Danger.Soft" Color="{StaticResource Color.Danger.Soft}" />
 
     <!-- ============================================================ Gravedad -->
-    <Color x:Key="Color.Sev.Crit">#BA3630</Color>
-    <Color x:Key="Color.Sev.High">#A04F17</Color>
-    <Color x:Key="Color.Sev.Med">#906400</Color>
-    <Color x:Key="Color.Sev.Low">#2F62C9</Color>
+    <Color x:Key="Color.Sev.Crit">#B8352F</Color>
+    <Color x:Key="Color.Sev.High">#9E4E17</Color>
+    <Color x:Key="Color.Sev.Med">#8D6200</Color>
+    <Color x:Key="Color.Sev.Low">#2E5FC3</Color>
 
     <SolidColorBrush x:Key="Brush.Sev.Crit" Color="{StaticResource Color.Sev.Crit}" />
     <SolidColorBrush x:Key="Brush.Sev.High" Color="{StaticResource Color.Sev.High}" />

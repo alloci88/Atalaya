@@ -93,6 +93,12 @@ public partial class App : Application
         window.Show();
 
         MainViewModel main = _host.Services.GetRequiredService<MainViewModel>();
+
+        // F26 §A (D-963): cómo dejaste el raíl. Va DESPUÉS de enseñar la ventana, no antes: el
+        // primer `SizeChanged` llega al mostrarla y decidiría por su cuenta, pisando lo que
+        // hubieras elegido.
+        main.RestoreRail();
+
         await main.InitializeAsync();
 
         // F11: ¿venimos de una actualización? Lo cuenta la versión NUEVA, ya arrancada — que es

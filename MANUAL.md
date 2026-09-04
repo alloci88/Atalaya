@@ -59,14 +59,16 @@ La ventana tiene tres piezas fijas, y las tres están siempre en el mismo sitio.
   **Inventario**, más **Sesión en vivo** y **Arreglo asistido** cuando los hay. Este grupo aparece
   en cuanto entras en algo de una aplicación y te sigue mientras estés dentro: el inventario está
   **a un clic desde cualquier página**, sin pasar por Portafolio.
-- **Sistema** — Cuenta y Ajustes. Tu cuenta también está abajo del todo, con tu avatar.
+- **Sistema** — Cuenta y Ajustes. Tu cuenta también está abajo del todo, con tu avatar — y a su
+  lado, **el piloto del hub**.
 
 La entrada donde estás va resaltada, con una barra de color a su izquierda. Un punto que late
 sustituye al icono cuando algo está corriendo — una auditoría o un arreglo.
 
 Si estrechas mucho la ventana, el raíl **se pliega a solo iconos** para devolverle el sitio al
-contenido. El botón de arriba lo pliega y lo despliega a mano; a partir de que lo toques, manda lo
-que tú digas.
+contenido. El botón de arriba lo pliega y lo despliega a mano; a partir de que lo toques manda lo
+que tú digas, y **Atalaya lo recuerda** para la próxima vez. Plegado, cada icono lleva su nombre en
+el tooltip.
 
 > **«Nueva aplicación» ya no está en el raíl.** Es una acción, no un sitio: se da de alta desde el
 > botón **+ Nueva aplicación** de Portafolio, que es donde siempre estuvo el mismo botón.
@@ -75,13 +77,23 @@ que tú digas.
 `Portafolio › XBLAST › Inventario`. El nombre de la aplicación lleva a su inventario, que es la
 portada de una aplicación en Atalaya. La flecha de su izquierda **deshace un paso**, como en un
 navegador: la página anterior vuelve **tal cual la dejaste**, con su filtro y su selección puestos.
-A la derecha, el estado del hub.
+Y no dice nada más: esa barra tiene un solo trabajo.
 
 Esa misma regla vale para el raíl: pulsar **Hallazgos** te devuelve *tus* hallazgos, con el filtro
 que tenían, no una lista virgen de todo el portafolio.
 
 **El pie**, abajo, aparece **solo cuando hay algo corriendo** y dice qué: la sesión y el arreglo,
 con su progreso y un clic para ir a verlos.
+
+### El piloto del hub
+
+El punto de color del pie del raíl, al lado de tu avatar. **Verde**: conectado a GitHub y al hub,
+todo publicado. **Ámbar**: sin conexión con el hub, o con cambios tuyos sin publicar — puedes
+seguir trabajando, y lo que escribas se publica en cuanto vuelva la conexión. **Rojo**: la última
+sincronización falló, y lo que escribas se queda en esta máquina hasta que se arregle.
+
+Pasa el ratón por encima y lo dice con palabras, con la hora de la última sincronización y —en
+rojo— el error concreto.
 
 ### La ventana
 
@@ -99,6 +111,9 @@ En **Ajustes → Tema claro**. El cambio se aplica al guardar, sin reiniciar, y 
 entera: fondos, textos, botones, pastillas de gravedad y avisos. El modo claro es **crema**, no
 blanco: un blanco puro a pantalla completa cansa la vista, y esto es una herramienta de mirar
 código durante horas.
+
+El texto de trabajo va a 15 px, el secundario a 14 y los metadatos —rutas, horas, contadores— a
+13, que es el tamaño más pequeño que Atalaya usa para nada.
 
 Los colores significan siempre lo mismo, en los dos temas: **azul** la acción principal (hay una
 sola por pantalla), **verde** lo que adelanta trabajo y lo que ha ido bien, **ámbar** lo que hay

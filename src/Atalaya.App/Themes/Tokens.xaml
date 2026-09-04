@@ -21,26 +21,33 @@
 
     <!-- ============================================================ Tipografía
 
-         Base 14 para el texto de trabajo. Antes la base real era 12-13 heredada del tema de
-         WPF-UI, con ayudas a 11: por debajo de 13 el texto de ayuda dejó de leerse, que es
-         literalmente lo que reportó quien usa Atalaya. 12 se queda como MÍNIMO ABSOLUTO y solo
-         para metadatos (rutas, sellos de tiempo, contadores); nada que haya que leer para decidir
-         algo se escribe a 12.
-    -->
-    <sys:Double x:Key="FontSize.Meta">12</sys:Double>
-    <sys:Double x:Key="FontSize.Small">13</sys:Double>
-    <sys:Double x:Key="FontSize.Body">14</sys:Double>
-    <sys:Double x:Key="FontSize.Lead">16</sys:Double>
-    <sys:Double x:Key="FontSize.H3">20</sys:Double>
-    <sys:Double x:Key="FontSize.H2">24</sys:Double>
-    <sys:Double x:Key="FontSize.H1">28</sys:Double>
+         Base 15 para el texto de trabajo (D-962). La escala nació en 14 y subió entera tras ver la
+         Parte A en pantalla: 14 arreglaba el «no se lee» de las ayudas a 11, pero seguía siendo el
+         tamaño de una página web, no el de una herramienta que se mira durante horas y de cerca.
 
-    <!-- Interlineado 1.4 sobre la base. WPF no tiene «line-height relativo»: `LineHeight` es
+         El suelo sube con ella. **13 es el MÍNIMO ABSOLUTO** y solo para metadatos —rutas, sellos
+         de tiempo, contadores—; nada que haya que leer para decidir algo se escribe a 13, y por
+         debajo de 13 no se escribe nada. Ya no existe el 12: el tamaño más pequeño de una interfaz
+         es el que acaba llevándose la información que nadie mira, y si es demasiado pequeño, esa
+         información deja de existir.
+
+         Los títulos suben en proporción (×15/14, redondeado a entero par de la escala) para que la
+         jerarquía se conserve: un título que no crece con el cuerpo deja de parecer un título.
+    -->
+    <sys:Double x:Key="FontSize.Meta">13</sys:Double>
+    <sys:Double x:Key="FontSize.Small">14</sys:Double>
+    <sys:Double x:Key="FontSize.Body">15</sys:Double>
+    <sys:Double x:Key="FontSize.Lead">17</sys:Double>
+    <sys:Double x:Key="FontSize.H3">21</sys:Double>
+    <sys:Double x:Key="FontSize.H2">26</sys:Double>
+    <sys:Double x:Key="FontSize.H1">30</sys:Double>
+
+    <!-- Interlineado 1.4 sobre cada tamaño. WPF no tiene «line-height relativo»: `LineHeight` es
          absoluto, así que se declara ya multiplicado para cada tamaño que lo necesita. -->
-    <sys:Double x:Key="LineHeight.Meta">17</sys:Double>
-    <sys:Double x:Key="LineHeight.Small">18</sys:Double>
-    <sys:Double x:Key="LineHeight.Body">20</sys:Double>
-    <sys:Double x:Key="LineHeight.Lead">22</sys:Double>
+    <sys:Double x:Key="LineHeight.Meta">18</sys:Double>
+    <sys:Double x:Key="LineHeight.Small">20</sys:Double>
+    <sys:Double x:Key="LineHeight.Body">21</sys:Double>
+    <sys:Double x:Key="LineHeight.Lead">24</sys:Double>
 
     <FontFamily x:Key="Font.Ui">Segoe UI Variable Text, Segoe UI</FontFamily>
     <FontFamily x:Key="Font.Mono">Cascadia Code, Consolas, Courier New</FontFamily>
@@ -81,6 +88,13 @@
     <Thickness x:Key="Pad.Page">32,24</Thickness>
     <Thickness x:Key="Pad.Rail">12,16</Thickness>
     <Thickness x:Key="Pad.RailItem">12,8</Thickness>
+
+    <!-- PLEGADO: los rellenos se estrechan, y no es cosmética (D-963). Con el raíl a 60 px y los
+         rellenos de 12, el icono se quedaba con CERO píxeles de ancho —medido: el chip azul de la
+         entrada activa medía exactamente 24 px, que son 12+12 de relleno y nada dentro— y se veía
+         un marcador vacío. El relleno de una entrada ancha no vale para una de 68. -->
+    <Thickness x:Key="Pad.RailCollapsed">8,16</Thickness>
+    <Thickness x:Key="Pad.RailItemCollapsed">8</Thickness>
     <Thickness x:Key="Pad.RailGroup">12,12,12,4</Thickness>
     <Thickness x:Key="Pad.RailItemGap">0,0,0,2</Thickness>
     <Thickness x:Key="Pad.TopBar">32,10</Thickness>
@@ -108,10 +122,20 @@
          la sesión en vivo) declaran el suyo y pueden ir más anchos.
     -->
     <sys:Double x:Key="Rail.Width">232</sys:Double>
-    <sys:Double x:Key="Rail.CollapsedWidth">60</sys:Double>
+
+    <!-- 68 y no 60: es lo que hace falta para que el icono quepa ENTERO. La cuenta, que es la que
+         faltó la primera vez: 68 de raíl − 16 de relleno del raíl = 52; − 11 de la barra de «estás
+         aquí» con su margen = 41; − 16 de relleno de la entrada = 25 para un icono de 19. Y el
+         avatar de la cuenta, que no lleva barra, tiene 52 − 16 = 36 para sus 24. -->
+    <sys:Double x:Key="Rail.CollapsedWidth">68</sys:Double>
     <sys:Double x:Key="Content.MaxWidth">1480</sys:Double>
-    <sys:Double x:Key="Control.MinHeight">34</sys:Double>
-    <sys:Double x:Key="Icon.Size">18</sys:Double>
+    <sys:Double x:Key="Control.MinHeight">36</sys:Double>
+    <sys:Double x:Key="Icon.Size">19</sys:Double>
+
+    <!-- La barra de «estás aquí» del raíl, y el margen que la separa de la entrada. Están aquí y
+         no sueltas en el estilo porque `RailCollapsedFitsTheIcon` hace la cuenta con ellas: lo que
+         se rompió en la Parte A fue justamente esa cuenta. -->
+    <sys:Double x:Key="Rail.MarkerWidth">3</sys:Double>
     <sys:Double x:Key="Icon.Stroke">1.6</sys:Double>
 
     <!-- El ancho por debajo del cual el raíl se pliega a solo iconos. 1120 es el punto en el que,

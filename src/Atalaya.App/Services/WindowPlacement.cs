@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 
 namespace Atalaya.App.Services;
 
@@ -35,6 +35,19 @@ public sealed class WindowPlacement
     public double Width { get; set; }
 
     public double Height { get; set; }
+
+    /// <summary>
+    /// El raíl plegado a solo iconos (D-963). Va aquí y no en un ajuste aparte porque es lo mismo
+    /// que lo de arriba: cómo tienes puesta TU ventana en ESTA máquina.
+    /// </summary>
+    public bool RailCollapsed { get; set; }
+
+    /// <summary>
+    /// True en cuanto has tocado el botón de plegar. A partir de ahí manda lo que tú digas y el
+    /// raíl deja de plegarse solo al estrechar la ventana: una preferencia que el programa
+    /// deshace en cuanto arrastras un borde no es una preferencia.
+    /// </summary>
+    public bool RailPinned { get; set; }
 }
 
 /// <summary>

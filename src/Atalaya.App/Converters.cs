@@ -10,6 +10,19 @@ using Atalaya.Storage.Sync;
 namespace Atalaya.App;
 
 /// <summary>Sync indicator colour (§3): green/amber/red.</summary>
+/// <summary>
+/// El tooltip del botón de plegar el raíl: dice lo que va a HACER, no cómo está (F26 §A retoque).
+/// «Plegar o desplegar» describe un interruptor, y quien lo mira quiere saber qué pasa si lo pulsa.
+/// </summary>
+public sealed class RailToggleTipConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is true ? "Desplegar el menú" : "Plegar el menú a solo iconos";
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
 public sealed class SyncHealthToBrushConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch

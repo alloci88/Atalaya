@@ -13605,8 +13605,15 @@ La referencia es `docs/design/atalaya-mockup-A.html`, la maqueta aprobada por el
 copiada al repositorio a propósito: los tokens de la aplicación son sus variables CSS, uno a uno, y
 sin la maqueta al lado no hay forma de saber si algo se ha desviado.
 
-Las capturas del antes y el después, a 1920×1080 y a 1280×720 y en los dos temas, están en
+Las capturas del antes y el después, a pantalla completa y a 1280×720 y en los dos temas, están en
 `docs/design/f26-parte-a/`.
+
+> **La Parte A pasó por una revisión del usuario y volvió con cuatro correcciones**, que están al
+> final de esta sección: **D-961** (el crema, más cálido, con los 49 pares recalculados), **D-962**
+> (la escala sube a 15 de base y el suelo a 13), **D-963** (el raíl plegado no pintaba los iconos —
+> con la cuenta que faltó) y **D-964** (el piloto del hub, sin la palabra «Green» y en el pie del
+> raíl). Lo que sigue describe el sistema **ya corregido**; donde un número cambió, se dice cuál
+> era.
 
 ### D-944 — Los ocho principios, y por qué son decisiones y no gustos
 
@@ -13930,3 +13937,143 @@ se queda exactamente como estaba: las capturas del después enseñan el sistema 
 disposición vieja a propósito, para que el usuario pueda corregir paleta, tamaños y raíl **antes**
 de que se construya encima. Métricas sigue desalineada, Ajustes sigue siendo un scroll y Portafolio
 sigue siendo una tarjeta de 330 px con el resto vacío; eso es la Parte B y la Parte C.
+
+### D-961 — El crema se calienta, y el contraste se vuelve a resolver entero
+
+Revisión del usuario sobre la Parte A en el dist: el crema de D-948 (`#F3EFE7` / `#FBF8F2`) se
+quedaba corto — leído al lado de un blanco seguía pareciendo un blanco. Las referencias nuevas son
+`#F2EBDD` de fondo y `#FAF5EC` de superficie: mismo tono (40°), **más saturación y un punto menos
+de luz**.
+
+**Lo que se hizo además de cambiar dos hexadecimales**, que es donde está la decisión:
+
+- **Toda la rampa neutra se recalculó al tono 40°**, no solo los dos valores dados: `Surface2`,
+  `Line` y `LineStrong` estaban en un gris casi neutro que sobre el crema anterior pasaba
+  desapercibido y sobre éste no. Un borde de tarjeta frío en una pantalla cálida se ve aunque no se
+  sepa nombrar; y son los bordes los que dibujan la mitad de la interfaz.
+- **Los cuatro fondos teñidos se calentaron con ella.** Un menta `#DFF2E3` sobre un crema de 45 de
+  saturación se lee azulado: el ojo compara cada color con su vecino, no con el blanco. Las
+  pastillas están ahora en la misma familia.
+- **Y las tintas se volvieron a resolver contra los fondos nuevos.** Ésta es la parte que no se
+  puede saltar: bajar la luz del fondo y dejar las tintas donde estaban habría comprado calidez con
+  contraste. Siete tintas bajan entre 1 y 3 puntos de luminosidad (`TextFaint` `#666E78`→`#646B75`,
+  `Primary.Ink` `#2F62C9`→`#2E5FC3`, y así). Los 49 pares vuelven a pasar AA con margen: el peor
+  del tema claro es 4,50:1.
+
+La regla que esto deja escrita: **un cambio de fondo no es un cambio de fondo.** Es un cambio de
+todas las parejas en las que ese fondo participa, y son cuarenta y nueve.
+
+### D-962 — La escala tipográfica sube a 15 de base, y el suelo a 13
+
+La Parte A subió la base de 12-13 a 14 y arregló el «no se lee» de las ayudas a 11. Visto en
+pantalla, seguía siendo el tamaño de una página web y no el de una herramienta que se mira de cerca
+durante horas. Sube toda la escala:
+
+| | Antes de F26 | Parte A | Ahora |
+|---|---|---|---|
+| Metadatos | 11-12 | 12 | **13** |
+| Secundario | 12-13 | 13 | **14** |
+| Cuerpo | 12-13 | 14 | **15** |
+| Destacado | 14-16 | 16 | **17** |
+| Títulos | 16/20/24 | 20/24/28 | **21/26/30** |
+
+**Los títulos suben en proporción**, no se quedan donde estaban: un título que no crece con el
+cuerpo deja de parecer un título, y la jerarquía se pierde por arriba en vez de por abajo.
+
+**Y el 12 desaparece del sistema.** No es que ya no se use: es que **ya no existe como token**. El
+tamaño más pequeño de una interfaz es el que acaba llevándose la información que nadie mira; si es
+demasiado pequeño, esa información deja de existir. 13 es ahora el suelo, y sigue siendo solo para
+metadatos.
+
+Suben con ellos la altura mínima de un control (34→36) y el icono (18→19): una letra más grande en
+una caja del mismo alto no se lee mejor, se lee más apretada.
+
+### D-963 — El raíl plegado no pintaba los iconos: la cuenta que faltó
+
+**El síntoma**, en la captura del usuario en ventana reducida: el menú plegado enseñaba **el chip
+azul de la entrada activa, vacío**, y el avatar de la cuenta **cortado por la mitad**. Ningún
+icono.
+
+**La causa, medida y no supuesta** (norma N-2). Muestreando la fila de píxeles del raíl en la
+captura de reproducción: el chip azul iba de x=23 a x=46, **exactamente 24 px**, que son los 12+12
+del relleno de la entrada — y **nada dentro**. La cuenta completa:
+
+```
+  60  ancho del raíl plegado
+− 24  su relleno horizontal (Pad.Rail = 12,16)
+────
+  36
+− 11  la barra de «estás aquí» (3) con su margen (4+4)
+────
+  25
+− 24  el relleno de la entrada (Pad.RailItem = 12,8)
+────
+   1  px para un icono de 18
+```
+
+Y el avatar, que no lleva barra: 36 − 24 = **12 px de hueco para 24 de avatar**. Cortado justo por
+la mitad, que es lo que se veía.
+
+**No era una fuente ausente.** Los iconos son geometrías vectoriales (D-950), no glifos: no hay
+fuente que pueda faltar, y se dibujan bien con el raíl desplegado. Era geometría.
+
+**Por qué se coló.** Un `Width` fijo dentro de una columna demasiado estrecha **se recorta en
+silencio**: WPF no falla, no avisa y no registra nada — el icono simplemente no está, y es
+indistinguible de «aquí no hay icono». Es la forma más difícil de cazar de todas, porque no deja
+rastro en ningún sitio salvo en la pantalla.
+
+**El arreglo**, en tres piezas:
+
+- El raíl plegado pasa a **68 px** y estrena sus propios rellenos (`Pad.RailCollapsed`,
+  `Pad.RailItemCollapsed`): el relleno de una entrada de 232 px no vale para una de 68. La cuenta
+  queda 68 − 16 − 11 − 16 = **25 px para un icono de 19**, y 52 − 16 = **36 para el avatar de 24**.
+- El icono pide su tamaño con **`MinWidth` y no con `Width`**: si algún día no cupiera, empujaría en
+  vez de recortarse. Un fallo que se ve es infinitamente mejor que uno que no.
+- Los números del raíl (incluido el ancho de la barra activa) viven ahora en `Tokens.xaml`, porque
+  hay un test que hace la cuenta con ellos.
+
+**El interruptor, además, es un interruptor.** Pliega y despliega —un raíl que se pliega y no se
+puede volver a abrir sin redimensionar la ventana no es plegable, es un raíl roto—, su tooltip dice
+lo que va a hacer y no cómo está, y **el estado se recuerda** entre arranques
+(`WindowPlacement.RailCollapsed` / `RailPinned`, en los ajustes de esta máquina). Comprobado de
+punta a punta: plegar → cerrar → el ajuste queda escrito → abrir → sigue plegado a 1920 de ancho →
+pulsar → despliega. Las capturas están en `docs/design/f26-parte-a/rail-plegado/`.
+
+Detalle que costó un arreglo aparte: `WindowPlacementService.Capture` construye un
+`WindowPlacement` NUEVO al cerrar la ventana, así que **borraba el plegado que acababas de
+elegir**. El estado del raíl se arrastra explícitamente: no es geometría, es preferencia.
+
+### D-964 — El piloto del hub: un punto donde se mira, y sin la palabra «Green»
+
+La barra superior ponía un punto de color y, al lado, la palabra **«Green»** — el nombre interno
+del estado, en inglés, en una aplicación en español, y sin decir de qué era. Sobraban las dos
+cosas.
+
+- **La palabra se va.** Un piloto no necesita etiqueta: necesita **significar algo cuando se
+  pregunta por él**. Lo que significa está ahora en su tooltip, entero y en español: «Conectado a
+  GitHub y al hub · sincronizado 12:41». En ámbar y en rojo dice además **qué puedes seguir
+  haciendo** —«puedes seguir trabajando: lo que escribas se publica en cuanto vuelva la
+  conexión»—, que es lo que de verdad quiere saber quien lo mira preocupado, y en rojo lleva el
+  error concreto.
+- **El punto baja al pie del raíl, junto a la cuenta.** Es estado de la conexión, igual que la
+  cuenta: las dos juntas responden a «¿puedo trabajar?» de un vistazo. En la barra de arriba estaba
+  separado de su otra mitad, y esa barra tiene un solo trabajo — decir dónde estás.
+
+### D-965 — Cobertura de las correcciones (2 tests nuevos, 1.821 en total, todo en verde)
+
+Dos, y los dos son la misma regla vista por sus dos lados: **con el raíl plegado, a lo que va
+dentro le queda sitio** — al icono de una entrada y al avatar de la cuenta.
+
+Son de regla y no de forma por lo que dice D-963: un ancho que no cabe **se recorta sin protestar**.
+No hay excepción que saltar, ni log que mirar, ni test existente que se ponga rojo. Los dos hacen
+la aritmética con los tokens reales, así que cualquiera que estreche el raíl plegado, engorde un
+relleno o agrande el icono los pone rojos **con los números en el mensaje**. Comprobado: con los
+valores de la Parte A puestos, fallan diciendo «deja 1 px para un icono de 19» y «12 px de hueco
+para 24 de avatar» — que es exactamente lo que se veía en la captura.
+
+**Lo que NO se ha escrito, y por qué** (N-5): ni un test de que el piloto esté en el pie del raíl,
+ni de que el tooltip diga tal cosa, ni de que la escala sea 15/14/13. Los tres son forma o son
+datos que ya vigila otro: los tamaños los guarda `DesignTokenTests` —da igual cuáles sean mientras
+nadie escriba uno a mano—, y el piloto y su frase se ven en la primera captura. El contraste del
+crema nuevo **no necesitó test nuevo**: `PaletteContrastTests` ya recorre los 49 pares y los
+recalculó solo.

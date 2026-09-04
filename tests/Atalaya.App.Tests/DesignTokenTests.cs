@@ -1,4 +1,5 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
+using System.Windows;
 using FluentAssertions;
 using Xunit;
 
@@ -109,7 +110,102 @@ public sealed class DesignTokenTests
         faltan.Should().BeEmpty("un pendiente que ya no existe hay que tacharlo de la lista, no dejarlo");
     }
 
+    /// <summary>
+    /// <b>Con el raíl plegado, al icono le queda sitio.</b> Es la cuenta que falló en la Parte A y
+    /// que dejó el menú sin iconos: solo se veía el chip azul de la entrada activa, vacío, y el
+    /// avatar cortado por la mitad.
+    /// <para>
+    /// <b>La causa, medida.</b> El raíl plegado tenía 60 px; menos 24 de su propio relleno
+    /// horizontal quedan 36; menos 11 de la barra de «estás aquí» con su margen quedan 25; menos
+    /// los 24 del relleno de la entrada queda <b>1 px</b> para un icono de 18. En la captura, el
+    /// chip azul medía exactamente 24 px —12+12 de relleno y nada dentro—.
+    /// </para>
+    /// <para>
+    /// <b>Por qué es una regla y no forma.</b> Un ancho fijo dentro de una columna demasiado
+    /// estrecha <b>se recorta en silencio</b>: no falla nada, no avisa nadie, y el icono
+    /// simplemente no está. Es indistinguible de «no hay icono». Cualquiera que estreche el raíl
+    /// plegado, engorde un relleno o agrande el icono vuelve a romperlo sin enterarse — y esto se
+    /// pone rojo con los números delante.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Con_el_rail_plegado_al_icono_le_queda_sitio()
+    {
+        double rail = Token("Rail.CollapsedWidth");
+        double icon = Token("Icon.Size");
+        double marker = Token("Rail.MarkerWidth");
+
+        var railPad = Pad("Pad.RailCollapsed");
+        var itemPad = Pad("Pad.RailItemCollapsed");
+        var markerMargin = Pad("Pad.XXS");
+
+        double markerCost = marker + H(markerMargin);
+        double disponible = rail - H(railPad) - markerCost - H(itemPad);
+
+        disponible.Should().BeGreaterThanOrEqualTo(
+            icon,
+            "un raíl de {0} px, con {1} de su relleno, {2} de la barra activa y {3} del relleno de "
+            + "la entrada, deja {4} px para un icono de {5}. Un icono que no cabe NO protesta: se "
+            + "recorta en silencio y el menú se queda con marcadores vacíos",
+            rail, H(railPad), markerCost, H(itemPad), disponible, icon);
+    }
+
+    /// <summary>Y al avatar de la cuenta, que no lleva barra pero mide más que un icono.</summary>
+    [Fact]
+    public void Con_el_rail_plegado_al_avatar_le_queda_sitio()
+    {
+        const double avatar = 24;
+
+        double disponible = Token("Rail.CollapsedWidth")
+            - H(Pad("Pad.RailCollapsed"))
+            - H(Pad("Pad.RailItemCollapsed"));
+
+        disponible.Should().BeGreaterThanOrEqualTo(
+            avatar,
+            "el avatar salía cortado por la mitad: {0} px de hueco para {1} de avatar",
+            disponible, avatar);
+    }
+
     // ================================================================ el andamiaje
+
+    /// <summary>Lo que un relleno se come A LO ANCHO. `Thickness` de WPF no lo trae hecho.</summary>
+    private static double H(Thickness t) => t.Left + t.Right;
+
+    /// <summary>Un `sys:Double` de `Tokens.xaml`, leído del repositorio.</summary>
+    private static double Token(string key)
+    {
+        var m = Regex.Match(
+            Tokens(),
+            $"<sys:Double x:Key=\"{Regex.Escape(key)}\">\\s*([0-9.]+)\\s*</sys:Double>");
+
+        m.Success.Should().BeTrue($"`Tokens.xaml` declara {key}");
+        return double.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>Un `Thickness` de `Tokens.xaml`, con la sintaxis abreviada de WPF (1, «h,v» o los cuatro).</summary>
+    private static Thickness Pad(string key)
+    {
+        var m = Regex.Match(
+            Tokens(),
+            $"<Thickness x:Key=\"{Regex.Escape(key)}\">\\s*([-0-9.,]+)\\s*</Thickness>");
+
+        m.Success.Should().BeTrue($"`Tokens.xaml` declara {key}");
+
+        double[] n = m.Groups[1].Value
+            .Split(',')
+            .Select(v => double.Parse(v, System.Globalization.CultureInfo.InvariantCulture))
+            .ToArray();
+
+        return n.Length switch
+        {
+            1 => new Thickness(n[0]),
+            2 => new Thickness(n[0], n[1], n[0], n[1]),
+            _ => new Thickness(n[0], n[1], n[2], n[3]),
+        };
+    }
+
+    private static string Tokens()
+        => File.ReadAllText(Path.Combine(XamlRoot(), "Themes", "Tokens.xaml"));
 
     private static List<string> Escanear(string patron)
     {

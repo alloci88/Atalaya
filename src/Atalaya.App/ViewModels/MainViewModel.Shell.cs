@@ -1,5 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 using Atalaya.App.Controls;
+using Atalaya.App.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -51,11 +52,37 @@ public sealed partial class MainViewModel
 
     private bool _railPinnedByUser;
 
+    /// <summary>
+    /// Lee del ajuste cómo estaba el raíl la última vez (D-963). Lo llama el arranque, después de
+    /// construir la carcasa: si se leyera en el constructor, el primer `SizeChanged` de la ventana
+    /// —que llega antes de que nadie haya podido tocar nada— lo pisaría.
+    /// </summary>
+    public void RestoreRail()
+    {
+        WindowPlacement saved = _settings.Current.Window;
+        _railPinnedByUser = saved.RailPinned;
+        RailCollapsed = saved.RailCollapsed;
+    }
+
+    /// <summary>
+    /// Pliega y despliega. Los dos sentidos: el botón es un interruptor, no un «plegar» — un raíl
+    /// que se pliega y no se puede volver a abrir sin redimensionar la ventana no es plegable, es
+    /// un raíl roto.
+    /// </summary>
     [RelayCommand]
     private void ToggleRail()
     {
         RailCollapsed = !RailCollapsed;
         _railPinnedByUser = true;
+        SaveRail();
+    }
+
+    private void SaveRail()
+    {
+        AppSettings settings = _settings.Current;
+        settings.Window.RailCollapsed = RailCollapsed;
+        settings.Window.RailPinned = _railPinnedByUser;
+        _settings.Save(settings);
     }
 
     /// <summary>
@@ -78,6 +105,37 @@ public sealed partial class MainViewModel
     /// justo de eso iba la queja (principio 2).
     /// </summary>
     public bool HasFooter => SessionProgress.Length > 0 || FixProgress.Length > 0;
+
+    /// <summary>
+    /// EL PILOTO, DICHO CON PALABRAS (D-964). Antes la barra superior ponía «Green» al lado del
+    /// punto — el nombre interno del estado, en inglés, en una aplicación en español y sin decir
+    /// de qué. Un piloto no necesita etiqueta: necesita <b>significar algo cuando se pregunta por
+    /// él</b>. El punto se queda (es lo que se ve de reojo) y la frase entera vive en su tooltip,
+    /// que es donde se va a buscar cuando el color deje de ser verde.
+    /// </summary>
+    public string SyncTooltip => SyncHealth switch
+    {
+        Atalaya.Storage.Sync.SyncHealth.Green =>
+            "Conectado a GitHub y al hub" + SyncStampSuffix,
+        Atalaya.Storage.Sync.SyncHealth.Amber =>
+            "Sin conexión con el hub, o con cambios tuyos sin publicar. Puedes seguir trabajando: "
+            + "lo que escribas se publica en cuanto vuelva la conexión." + SyncStampSuffix,
+        _ =>
+            "La última sincronización con el hub falló"
+            + (_hub.LastSyncError is { Length: > 0 } e ? $": {e}" : ".")
+            + " Lo que escribas se queda en esta máquina hasta que se arregle." + SyncStampSuffix,
+    };
+
+    /// <summary>
+    /// El tooltip de la cuenta. Lleva el nombre SIEMPRE, también con el raíl desplegado: ahí el
+    /// nombre se ve, pero puede venir recortado si es largo, y el tooltip es donde se lee entero.
+    /// Con el raíl plegado es lo único que hay.
+    /// </summary>
+    public string AccountTooltip => $"{AccountLabel} · abrir Cuenta";
+
+    /// <summary>« · sincronizado 12:41», o nada si todavía no ha sincronizado nunca.</summary>
+    private string SyncStampSuffix
+        => _hub.LastSync is { } t ? $" · sincronizado {t:HH:mm}" : string.Empty;
 
     /// <summary>Deshace un paso. La página vuelve como la dejaste, no reconstruida (D-952).</summary>
     [RelayCommand(CanExecute = nameof(CanGoBack))]

@@ -119,6 +119,7 @@ public sealed partial class MainViewModel : ObservableObject
     public void SweepToasts() => _toasts.Sweep();
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SyncTooltip))]
     private SyncHealth _syncHealth = SyncHealth.Amber;
 
     [ObservableProperty]
@@ -128,6 +129,7 @@ public sealed partial class MainViewModel : ObservableObject
     private string? _accountAvatarUrl;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AccountTooltip))]
     private string _accountLabel = "Sin cuenta";
 
     /// <summary>Amber in the status bar: connected, but GitHub rejected the token (D3).</summary>
@@ -198,6 +200,13 @@ public sealed partial class MainViewModel : ObservableObject
     public void SaveWindowPlacement(WindowPlacement placement)
     {
         var settings = _settings.Current;
+
+        // El raíl NO viene en lo que captura la ventana —es una preferencia, no una geometría— así
+        // que se arrastra. Sin esto, cerrar la aplicación borraba el plegado que acababas de
+        // elegir: se guardaba un `WindowPlacement` recién hecho encima del que lo tenía.
+        placement.RailCollapsed = settings.Window.RailCollapsed;
+        placement.RailPinned = settings.Window.RailPinned;
+
         settings.Window = placement;
         _settings.Save(settings);
     }

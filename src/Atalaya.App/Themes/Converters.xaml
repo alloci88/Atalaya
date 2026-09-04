@@ -13,6 +13,7 @@
     xmlns:local="clr-namespace:Atalaya.App">
 
     <local:SyncHealthToBrushConverter x:Key="SyncHealthToBrush" />
+    <local:RailToggleTipConverter x:Key="RailToggleTip" />
     <local:CloneLinkStateToBrushConverter x:Key="CloneLinkStateToBrush" />
     <local:SeverityToBrushConverter x:Key="SeverityToBrush" />
     <local:ThemeToBrushConverter x:Key="ThemeToBrush" />
