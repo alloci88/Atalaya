@@ -13590,3 +13590,343 @@ defecto de producción.
 `Atalaya.App.Tests` seguidas, 1.708 tests, cero fallos. No es una prueba de ausencia —era
 intermitente— pero es la evidencia que hay, y la causa está reproducida y cerrada con un test
 determinista, que es lo que R1 no tenía.
+
+## F26 — Atalaya se ve como lo que hace · Parte A: el sistema visual
+
+Esta fase no arregla pantallas: construye el **sistema** con el que se van a arreglar. El
+diagnóstico, en una frase de quien usa Atalaya: *«se ha desarrollado y probado con la ventana
+reducida; a pantalla completa los elementos se apelotonan arriba a la izquierda y dejan enormes
+espacios vacíos»*, *«elementos y fuentes demasiado pequeños»*, *«en modo claro el fondo es blanco
+nuclear y quema»*, *«pocos colores: todo plano, nada resalta»*, *«el menú lateral está apelotonado
+y no marca dónde estás»*. Todo eso es un mismo defecto: **la aplicación no tenía un sistema
+visual, tenía controles puestos uno detrás de otro.**
+
+La referencia es `docs/design/atalaya-mockup-A.html`, la maqueta aprobada por el usuario. Está
+copiada al repositorio a propósito: los tokens de la aplicación son sus variables CSS, uno a uno, y
+sin la maqueta al lado no hay forma de saber si algo se ha desviado.
+
+Las capturas del antes y el después, a 1920×1080 y a 1280×720 y en los dos temas, están en
+`docs/design/f26-parte-a/`.
+
+### D-944 — Los ocho principios, y por qué son decisiones y no gustos
+
+Se escriben aquí numerados porque **gobiernan las tres partes**: una vista que no los cumpla no
+está hecha, y cada uno se puede señalar con el dedo en una revisión.
+
+1. **Pantalla completa por defecto, y usable a 1280×720.** La ventana arranca maximizada la primera
+   vez y recuerda su estado después. Se diseña para 1920×1080 al 100 % y se comprueba a 1280×720 y
+   al 150 %. Lo que no cabe **se reorganiza** (columnas que se apilan, paneles que se pliegan); no
+   se encoge.
+2. **El espacio se reparte, no se deja.** Cada vista tiene rejilla y un ancho máximo legible
+   (~1480 px para listas y texto; los paneles densos pueden ir más anchos). No hay vistas donde el
+   60 % de la pantalla esté vacío.
+3. **Una escala tipográfica, una escala de espaciado.** 14 de base, 13 secundario, 12 como mínimo
+   absoluto y solo para metadatos; títulos 20/24/28. Espaciado en múltiplos de 4. Interlineado 1,4.
+   Nada se escribe con un tamaño ad hoc.
+4. **Color con significado, y solo con significado.** Paleta semántica —primario, éxito, aviso,
+   peligro, neutro— aplicada a botones, estados, pastillas y avisos. **Un solo botón primario por
+   vista.** Un botón deshabilitado por una razón lleva la razón al lado, visible sin tooltip.
+5. **Dos temas, los dos legibles.** Claro sobre crema, no sobre blanco. Contraste AA **comprobado
+   con los pares de recursos**, no a ojo. El tema cambia todos los recursos, no solo el fondo.
+6. **La navegación conserva el estado.** Cada vista vuelve como se dejó. El inventario es alcanzable
+   en un paso desde cualquier sitio. Hay miga de pan dentro de una aplicación.
+7. **El menú lateral es un raíl.** Icono y texto, agrupado por sentido, la entrada activa
+   resaltada, colapsable a solo iconos.
+8. **Lo que se ve primero es lo que importa.** Lo accionable arriba y a la izquierda; los
+   metadatos después; las descripciones largas plegadas.
+
+**Por qué el sistema primero y las vistas después.** La tentación era empezar por Portafolio, que
+es la pantalla que peor se ve. Habría salido una vista bonita y siete que no se le parecen — que
+es exactamente cómo se llega a no tener sistema. El orden A→B→C es la decisión.
+
+### D-945 — El tema es una PALETA que se sustituye, no una llamada a la librería
+
+Antes, cambiar de tema era una línea: `ApplicationThemeManager.Apply(Light|Dark)`. Eso cambia los
+colores de fábrica de WPF-UI **y nada más**, así que el modo claro era el blanco puro de la
+librería y todo lo que Atalaya pintaba con brochas propias —gravedades, estados, avisos— se quedaba
+con los colores del modo oscuro encima del blanco. El tema cambiaba el fondo, no la aplicación.
+
+Ahora hay dos diccionarios con **exactamente las mismas claves** (`Themes/Palette.Dark.xaml` y
+`Themes/Palette.Light.xaml`) y `ThemeService` sustituye el que está montado, **en su sitio** dentro
+de la lista de diccionarios fusionados. El orden importa y está documentado en `App.xaml`: WPF-UI
+primero, la paleta después —parte de su trabajo es reescribir las claves de la librería—, los
+estilos al final. Todo lo que consume color lo hace con `DynamicResource`, así que el cambio se ve
+al instante sin reconstruir una sola vista.
+
+**Un test fija que las dos paletas declaren las mismas claves.** Una clave que solo existe en un
+tema revienta —o peor, se queda con el color del otro— justo al cambiar, que es cuando nadie está
+mirando el log.
+
+**Y el suelo se pinta en la rejilla raíz, no en `Window.Background`.** `FluentWindow` aplica su
+propio telón (el *backdrop* de Windows 11) por debajo de lo que declare la ventana; con él, el
+fondo seguía siendo el `#202020`/`#FAFAFA` de fábrica aunque la paleta dijera otra cosa. Se
+descubrió midiendo el píxel de una captura, no mirándola: a ojo, un `#202020` y un `#171B22` son
+«oscuro».
+
+### D-946 — Los tamaños y los espacios se escriben una vez (`Themes/Tokens.xaml`)
+
+Había **285 `FontSize` y unos 700 `Margin`/`Padding` literales** repartidos por 25 XAML. Con eso no
+existe «el texto pequeño»: existen veintitantos tamaños pequeños distintos, y el más pequeño acaba
+en la pantalla que más texto tiene —que es justo lo que pasaba en Ajustes y en Métricas—.
+
+La escala son siete tamaños y siete espacios, y nada más. Los espacios asimétricos se declaran con
+**nombre de intención** (`Pad.Button`, `Pad.Row`, `Pad.Page`) y no con sus números: «el relleno de
+un botón» se reajusta una vez para todos los botones; `12,8` repetido cuarenta veces, no.
+
+`DesignTokenTests` recorre los XAML y falla si alguno escribe un tamaño o un margen a mano. Lleva
+una **lista de pendientes que solo puede encoger**: las vistas que aún no han pasado por el sistema
+están nombradas ahí y las tacha su parte (B o C). Sin ese segundo test —que la lista no crezca—,
+un fichero nuevo escrito a la antigua se «arreglaría» añadiéndolo a la lista.
+
+### D-947 — La maqueta aprobada no llegaba a AA, y se ha corregido con el mínimo retoque
+
+Medidos los 49 pares de color que la aplicación pinta de verdad, **siete no llegaban a 4,5:1** en
+la maqueta. No es un descuido de quien la dibujó: son los pares que solo se ven midiendo.
+
+| Tema | Token | Maqueta | Ahora | Por qué |
+|---|---|---|---|---|
+| Oscuro | `TextFaint` | `#7C8494` | `#8C93A1` | 3,73:1 sobre `Surface2`, y es el color de las rutas y los sellos a 12 px |
+| Oscuro | `Primary.Fill` | `#4C7FE0` | `#3A72DD` | blanco encima daba 3,87:1 |
+| Oscuro | `Primary.Ink` | `#4C7FE0` | `#759DE8` | como TEXTO sobre el gris daba 4,02:1 |
+| Oscuro | `Danger.Ink` / `Sev.Crit` | `#F2615B` | `#F2645E` | 4,43:1 sobre la fila resaltada |
+| Oscuro | `Sev.Low` | `#6E93E8` | `#799CEA` | 4,09:1 sobre la pastilla azul |
+| Claro | `TextFaint` | `#7B838E` | `#666E78` | 3,34:1 sobre el crema |
+| Claro | `Success`/`Warning`/`Danger`/`Sev.*` | varios | más oscuros | entre 3,25:1 y 4,42:1 sobre crema |
+
+**El hallazgo de diseño, que vale más que los números:** un color semántico no tiene un valor, tiene
+**cuatro papeles**, y no son intercambiables — `.Fill` (el relleno), `.OnFill` (la tinta que va
+encima), `.Ink` (el color como texto sobre una superficie) y `.Soft` (el fondo teñido). Confundirlos
+es lo que rompe el contraste: el verde vivo que se lee estupendamente sobre el gris oscuro **no
+aguanta texto blanco encima** (2,54:1), y sí aguanta texto casi negro (6,8:1). Por eso en tema
+oscuro los botones de éxito, aviso y peligro llevan tinta oscura y en tema claro la llevan blanca.
+El primario azul necesita además **dos azules** en tema oscuro, porque relleno y tinta son trabajos
+incompatibles para un solo valor.
+
+`PaletteContrastTests` recorre los 49 pares × 2 temas. **Lo que no mide, a propósito:** los bordes
+y separadores decorativos. WCAG les pediría 3:1 si identificaran un control, pero la línea de una
+tarjeta no lo hace, y exigírselo obligaría a bordes duros que no se parecerían a nada de lo
+aprobado. Lo que se mide es TEXTO, que es de lo que iba la queja.
+
+### D-948 — El modo claro es crema (`#F3EFE7`), no blanco
+
+*«En modo claro, peor: el fondo es blanco nuclear y quema.»* Una pantalla llena de `#FFFFFF` con
+texto negro es la combinación que más cansa la vista de todas las posibles. El fondo baja a
+`#F3EFE7` y las superficies **suben** a `#FBF8F2`: se conserva la jerarquía (fondo < superficie)
+sin llegar a ninguno de los dos extremos. El texto es un casi negro **cálido** (`#1E2229`) y no un
+negro puro, por la misma razón en el otro sentido.
+
+### D-949 — Cuatro variantes de botón, y ninguna más
+
+Los botones de WPF-UI traen su relleno, su radio y sus colores de acento; con ellos, «el botón
+primario de Atalaya» sería el que WPF-UI considere primario. Se escriben plantillas propias para
+las variantes que el sistema reconoce —primario, éxito, secundario, peligro (perfilado y macizo),
+enlace y fantasma— porque **la regla de un solo primario por vista no se puede sostener si hay
+siete formas de parecer el botón importante**.
+
+Dos decisiones dentro de esto:
+
+- **Un botón deshabilitado se sigue leyendo.** El 0,4 de opacidad de fábrica dejaba la etiqueta por
+  debajo de cualquier contraste útil. Y la razón va **al lado** (`Reason.Chip`), no en un tooltip:
+  hay que saber que un tooltip existe para verlo, y quien mira un botón apagado no sabe que hay
+  nada que ver. Es el caso literal del prompt: «Arreglo asistido · hay 2 commits sin subir».
+- **Peligro va perfilado, no macizo.** Un rojo relleno en una barra de acciones atrae el ojo antes
+  que el primario, y lo que hay que pulsar no es «Cerrar como falso positivo». Hay una variante
+  maciza para cuando destruir ES la acción de la vista (el «Detener» de la sesión).
+
+**El estilo implícito de `TextBlock` NO fija el color del texto.** Un estilo implícito alcanza
+también a los `TextBlock` de dentro de las plantillas de los controles, así que fijar ahí el
+`Foreground` pintaría de gris la etiqueta blanca de un botón primario. Fija tamaño y familia; el
+color se hereda del control, que es de donde tiene que venir.
+
+### D-950 — Los iconos son geometrías, no una fuente ni PNG
+
+Un trazo vectorial hereda el color del texto al que acompaña —y por tanto **cambia con el tema**,
+que es el principio 5— y se dibuja nítido a cualquier escala de Windows, que es el principio 1. Una
+fuente de iconos obliga a desplegar un TTF y a recordar puntos de código; un PNG hay que tenerlo
+dos veces, uno por tema, y a 150 % se ve borroso.
+
+Van en C# (`Controls/Icons.cs`) y no en un diccionario XAML porque el raíl construye sus entradas
+desde el view-model, y un `DataTemplate` no puede resolver una clave de recurso variable sin meter
+un converter por el medio. Como propiedades estáticas, los tests las leen sin levantar una
+`Application`.
+
+### D-951 — `Stack.Gap`: la separación se declara en el padre
+
+WPF no tiene `gap`: la única forma de separar los hijos de un `StackPanel` es poner un `Margin` en
+cada uno. En cuanto hay dos, hay dos números distintos —en el raíl los botones iban a `0,2` y en
+las cabeceras a `0,0,0,6`, sin que nadie lo decidiera—. Con la propiedad adjunta, el padre dice
+«mis hijos van separados por `{StaticResource Space.S}`» y ya no hay dónde equivocarse.
+
+El margen va del lado que mira al siguiente, y el **último visible** no lleva ninguno: un hueco
+colgando al final desalinea el panel contra lo que tenga debajo, que es de las cosas que se ven y
+no se saben explicar.
+
+### D-952 — La navegación recuerda por dónde has pasado
+
+`NavigationService` apila la página que dejas, y volver devuelve **la misma instancia**, con su
+filtro, su selección y su desplazamiento puestos. No se resuelve otra del contenedor, que es lo que
+hacía que *«volver a Hallazgos pierda el filtro y enseñe todo, de todas las aplicaciones»*: una
+página nueva no tiene por qué parecerse a la que dejaste. El raíl usa `NavigateOrResumeAsync`, así
+que pulsar «Hallazgos» te devuelve **tus** hallazgos.
+
+La pila tiene tope (20). Un historial sin límite en una aplicación que se deja abierta toda la
+semana mantiene vivos view-models que ya nadie va a mirar, con sus suscripciones al hub dentro.
+
+**La navegación avisa DOS veces por salto**: antes de cargar, para que el raíl y la miga pinten ya
+la página nueva sin esperar al hub; y después, porque hasta que la página no carga no se sabe **de
+qué aplicación es** —el filtro que trae `SetApp` no se aplica hasta `LoadAsync`—. Sin el segundo
+aviso, el raíl se quedaba sin el grupo de la aplicación en la que acabas de entrar.
+
+### D-953 — «La aplicación activa» es un dato de la ventana, no de cada vista
+
+Hasta aquí, «la aplicación» era algo que cada vista se guardaba para sí: el inventario tenía su
+`Slug`, los hallazgos el suyo, y la carcasa no sabía ninguno. Consecuencia directa, y es la queja:
+*«salir del inventario y volver son dos pasos»* — el raíl no tenía forma de saber a qué inventario
+llevar.
+
+`ActiveApp` es memoria de la sesión de ventana; no se guarda en ningún sitio y nadie la lee para
+decidir nada que se escriba. **Sale de la PÁGINA que está delante** (interfaz `IAppScoped`), no de
+quien navegó, así que da igual por dónde hayas llegado. Y una página que no es de ninguna
+aplicación **no la borra**: mirar las métricas de todo el portafolio no es «salir» de tu
+aplicación, y si lo borrara, el camino de vuelta se perdería justo cuando se necesita. Solo el
+portafolio la borra, porque el portafolio es literalmente el sitio donde eliges otra.
+
+### D-954 — El raíl son datos, no ocho botones escritos a mano
+
+Lo que había: ocho botones con borde, todos iguales, sin icono y sin ninguna señal de dónde
+estabas. **Un menú así no es un mapa, es una lista.**
+
+Ahora: icono y texto, agrupados por sentido —trabajo · aplicación activa · sistema—, la entrada
+activa con fondo y barra de color primario, y plegable a solo iconos por debajo de 1120 px de
+carcasa. Se construye desde `MainViewModel.NavGroups` porque el raíl **cambia**: la sesión y el
+arreglo aparecen y desaparecen, el grupo de la aplicación lleva su nombre, y algunas entradas traen
+contador. Con ocho botones sueltos, cada una de esas reglas se escribe en el XAML y ninguna se
+puede probar.
+
+Tres decisiones concretas:
+
+- **«Nueva aplicación» sale del raíl.** Es una **acción**, no un lugar — y ya era el botón primario
+  de Portafolio. Mientras dura el alta, el raíl sigue señalando Portafolio, que es de donde has
+  salido y adonde vuelves.
+- **La sesión y el arreglo cuelgan de la aplicación**, no del grupo de trabajo: no son sitios a los
+  que ir a diario, son cosas que están pasando sobre una aplicación concreta.
+- **La barra de «estás aquí» ocupa columna propia siempre**, encendida o apagada. Si apareciera solo
+  al activarse, la entrada activa se desplazaría tres píxeles respecto a las demás — un menú que
+  baila al cambiar de página se nota aunque no se sepa decir por qué.
+
+La cuenta se muda al **pie del raíl** («quién eres» es información de sistema) y el estado del hub
+**a la barra de la miga** (es de la ventana entera). Abajo queda solo lo que está corriendo, y por
+eso **el pie no se pinta cuando no corre nada**: una barra vacía en el borde inferior de todas las
+pantallas es espacio que se cobra sin dar nada.
+
+### D-955 — Miga de pan y vuelta atrás
+
+`Portafolio › XBLAST › Inventario`. Siempre empieza en Portafolio —es la raíz de todo lo que se
+audita—, mete la aplicación cuando la página es suya, y acaba en la página, sin enlace. El
+separador va **detrás** del enlace y no delante: delante del primero saldría un «›» suelto abriendo
+la miga, apuntando a un eslabón que no existe.
+
+El eslabón de la aplicación lleva a **su inventario**, que es la portada de una aplicación en
+Atalaya.
+
+### D-956 — La ventana arranca maximizada la primera vez, y luego recuerda
+
+Atalaya abría siempre a 1340×800 centrada, porque así se desarrolló y así se probó. En un monitor
+de 1920 eso deja media pantalla sin usar, y como el contenido estaba maquetado para caber en esa
+ventana pequeña, al maximizar los elementos se apelotonaban arriba a la izquierda.
+
+Las dos mitades importan. Arrancar **siempre** maximizada sería tan terco como arrancar siempre
+pequeña —hay quien trabaja con la ventana a un lado—; no arrancar maximizada la primera vez deja a
+todo el mundo estrenando la aplicación en el peor tamaño que tiene. Mínimo 1100×700 (principio 1).
+
+Dos detalles que solo aparecen en la vida real y están cubiertos:
+
+- De una ventana **maximizada** se apunta su `RestoreBounds`, no su tamaño actual. Guardar el
+  tamaño de la pantalla la dejaría, al restaurarla, del tamaño del monitor pero sin estar
+  maximizada — la forma más molesta de recordar mal una ventana.
+- Una **posición guardada que ya no existe** se descarta y la ventana se centra. Es el caso que
+  rompe estas funciones: se cierra Atalaya en el segundo monitor, se desconecta el monitor, y al
+  abrirla vuelve a unas coordenadas que no están en ninguna pantalla — la ventana existe, responde
+  y no se ve. El TAMAÑO sí se conserva: sigue siendo suyo.
+
+Esto **sustituye la regla del ancho de 1314** de F5.4 (que la barra de filtros cupiera en una línea
+al arrancar). El problema de aquel número es que un ancho escrito en el XAML no sabe en qué monitor
+va a abrir. La regla se cumple ahora mejor y por otro camino: la primera impresión es la pantalla
+entera.
+
+### D-957 — El aviso de versión nueva pasa a una tira fina
+
+Era una banda de dos líneas en la cabecera de **todas** las vistas: la primera cosa que se veía al
+abrir cualquier página era una noticia que no es urgente. Ahora es una línea con el color de aviso,
+y al descartar desaparece. El cierre de ciclo recibe el mismo tratamiento, en verde, porque es
+precisamente eso: una buena noticia.
+
+El icono de la tira **ya no es el de Atalaya**, es el triángulo de aviso. En una banda de dos
+líneas el icono de la aplicación firmaba el mensaje —«esto te lo dice Atalaya, no Windows»—; en una
+tira de 24 px no firma nada, solo ocupa, y el sitio lo aprovecha mejor el símbolo de lo que la tira
+dice. (Ver `IdentityTests`: los usos del icono en la carcasa bajan de tres a dos, y está
+justificado ahí.)
+
+### D-958 — Los converters se mudan a su propio diccionario
+
+Estaban sueltos en `App.xaml`, después de los diccionarios fusionados. Ahí funcionaban para las
+vistas —que son hijas de la aplicación— pero **no** para `Styles.xaml`: un diccionario fusionado no
+ve los recursos del que lo fusiona, así que el estilo del raíl no podía pedir el converter de
+visibilidad que necesita su contador. `Themes/Converters.xaml`, fusionado antes, los pone al
+alcance de todos sin duplicar ninguno.
+
+### D-959 — Cobertura de la Parte A (4 reglas, 10 tests nuevos, 6 migrados)
+
+**Las cuatro reglas nuevas**, una por test o familia, como pide N-5:
+
+- **Cada par de color de los dos temas llega a AA** (`PaletteContrastTests`, 98 casos). Protege lo
+  que se rompe en silencio: alguien afina un gris «para que quede más suave» y deja las rutas de
+  fichero en 3,4:1. Nadie lo ve en una captura hasta que lo sufre en una pantalla peor que la suya.
+  Se acompaña de **«las dos paletas declaran las mismas claves»**, que es la otra mitad: una clave
+  que falta en un tema revienta justo al cambiar.
+- **Ningún XAML ya convertido escribe un tamaño ni un margen a mano** (`DesignTokenTests`, 3 tests).
+  Lo que se rompe en silencio es que alguien añada un `FontSize="11"` a una vista nueva porque «ahí
+  no cabía», y la aplicación vuelva poco a poco a donde estaba — que es exactamente cómo llegó.
+- **El inventario está a un paso desde dentro de una aplicación** (`ShellNavigationTests`, 3 tests:
+  hay entrada, el comando deja el inventario delante, y fuera de toda aplicación no hay grupo). Se
+  rompe en silencio porque el raíl sigue pintándose igual.
+- **Hallazgos vuelve con su filtro, y «volver» deshace un paso** (`ShellNavigationTests`, 2 tests).
+  Se rompe en silencio porque la vista sigue abriendo — con otros datos.
+
+Y **tres reglas de F26 que se prueban donde caen naturalmente**, sin test propio: la ventana
+maximizada la primera vez, el respeto por lo que dejó el usuario, y el descarte de una posición
+fuera de pantalla, todas en `FindingsViewTests` — donde vivía la regla del ancho de arranque que
+sustituyen.
+
+**Seis tests existentes migrados, ninguno borrado.** Todos protegían reglas vivas escritas contra
+una carcasa que ha cambiado:
+
+- `EmergencyBrakeTests` y `AssistedFixViewTests` leían el XAML del raíl buscando cadenas. La regla
+  —«con una sesión corriendo tiene que haber camino de vuelta, y late»— **se mide ahora en los
+  datos** (`NavGroups`), que además es más fuerte: comprueba el comportamiento con y sin sesión, no
+  que exista una cadena de texto.
+- `ShellChromeTests` anclaba en el comentario `<!-- Status bar -->`. La regla —«un indicador de
+  proceso por cosa en proceso, y ninguno anónimo» (R1 §1), «los avisos no cuelgan de la barra»—
+  sigue entera; lo que cambió es el reparto. El corte del pie se limita ahora hasta los avisos
+  efímeros: sin ese límite el test se leería a sí mismo al revés y fallaría por la regla que viene
+  a proteger.
+- `ReportsViewTests` fijaba que Informes estuviera «justo debajo de Métricas» y que las claves
+  estuvieran en `App.xaml`. El ORDEN concreto es una decisión de diseño y la maqueta aprobada pone
+  Informes antes; lo invariante —que Informes viva en el grupo de trabajo y tenga página— se
+  conserva. Las claves se buscan ahora en los cinco diccionarios.
+- `IdentityTests` contaba tres usos del icono en la carcasa. Son dos desde D-957, y el test lo dice
+  con su razón al lado.
+
+**Lo que NO se ha escrito, y por qué** (N-5): ni un test de que el raíl se pliegue a 1120 px, ni de
+que la tira de versión sea fina, ni de que el pie desaparezca vacío. Los tres son **forma**: se ven
+en la primera captura y no hay forma de romperlos sin que salte a la vista. Tampoco un test de que
+los iconos se dibujen: una geometría mal escrita no compila o se ve torcida, y ninguna de las dos
+es silenciosa.
+
+### D-960 — Lo que la Parte A NO toca
+
+Ninguna regla de negocio, ningún dato, ningún prompt, nada del hub. El **contenido** de las vistas
+se queda exactamente como estaba: las capturas del después enseñan el sistema aplicado sobre la
+disposición vieja a propósito, para que el usuario pueda corregir paleta, tamaños y raíl **antes**
+de que se construya encima. Métricas sigue desalineada, Ajustes sigue siendo un scroll y Portafolio
+sigue siendo una tarjeta de 330 px con el resto vacío; eso es la Parte B y la Parte C.

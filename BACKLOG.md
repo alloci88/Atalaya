@@ -4,11 +4,25 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-04 (BUGFIX-RELEASE — la reentrada de la conversación, el tag mal escrito
-y el log de tests del run).
+Última revisión: 2026-09-04 (F26 Parte A — el sistema visual: tokens, paleta AA en dos temas,
+raíl, miga y ventana maximizada).
 
 ## En vuelo
 
+- **F26 — Atalaya se ve como lo que hace.** El sistema visual y las vistas pasadas por él. Se
+  entrega en tres partes, cada una con revisión visual del usuario antes de la siguiente.
+  - **Parte A — el sistema. ENTREGADA** (D-944…D-960): tokens de tipografía y espaciado, paleta
+    semántica en dos temas con contraste AA medido, estilos base, raíl nuevo con estado activo y
+    grupos, miga de pan y vuelta atrás, ventana maximizada la primera vez, modo claro crema.
+    Capturas en `docs/design/f26-parte-a/`. **Pendiente de la revisión visual del usuario.**
+  - **Parte B — las vistas de trabajo.** Portafolio, Inventario, Hallazgos (lista y detalle),
+    Sesión en vivo y Arreglo asistido. Incluye la auditoría con capturas de Inventario, la ficha,
+    el arreglo y el alta, que no la tenían.
+  - **Parte C — Ajustes, Cuenta, Métricas, Informes y Nueva aplicación.** Ajustes deja de ser un
+    scroll y pasa a secciones navegables.
+  - **La lista de pendientes de `DesignTokenTests` es el marcador.** Nombra las 17 vistas y
+    diálogos que aún escriben tamaños a mano; la B y la C la tachan hasta dejarla vacía. Si al
+    cerrar la C queda algo dentro, es que algo se quedó fuera del sistema.
 - **F24 — el símbolo debería ir por UBICACIÓN, no por hallazgo.** Hoy `Finding.Symbol` es **uno para
   todo el hallazgo**, y un defecto sistémico tiene N ubicaciones en N miembros distintos. El auditor
   resuelve el desajuste como puede —metiendo una lista en el campo: «CargaMediaPorMetro /

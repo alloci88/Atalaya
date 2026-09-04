@@ -47,6 +47,67 @@ algo está hecho como está, `DECISIONS.md`.
 
 ---
 
+## Moverse por Atalaya
+
+La ventana tiene tres piezas fijas, y las tres están siempre en el mismo sitio.
+
+**El raíl**, a la izquierda. Sus entradas van agrupadas por lo que son:
+
+- **Trabajo** — Portafolio, Hallazgos, Informes, Métricas. Lo que se hace a diario, esté donde
+  esté puesta la aplicación.
+- **La aplicación en la que estás** — el grupo lleva su nombre (`XBLAST`) y dentro va su
+  **Inventario**, más **Sesión en vivo** y **Arreglo asistido** cuando los hay. Este grupo aparece
+  en cuanto entras en algo de una aplicación y te sigue mientras estés dentro: el inventario está
+  **a un clic desde cualquier página**, sin pasar por Portafolio.
+- **Sistema** — Cuenta y Ajustes. Tu cuenta también está abajo del todo, con tu avatar.
+
+La entrada donde estás va resaltada, con una barra de color a su izquierda. Un punto que late
+sustituye al icono cuando algo está corriendo — una auditoría o un arreglo.
+
+Si estrechas mucho la ventana, el raíl **se pliega a solo iconos** para devolverle el sitio al
+contenido. El botón de arriba lo pliega y lo despliega a mano; a partir de que lo toques, manda lo
+que tú digas.
+
+> **«Nueva aplicación» ya no está en el raíl.** Es una acción, no un sitio: se da de alta desde el
+> botón **+ Nueva aplicación** de Portafolio, que es donde siempre estuvo el mismo botón.
+
+**La miga de pan**, arriba. Dice dónde estás y te devuelve por donde viniste:
+`Portafolio › XBLAST › Inventario`. El nombre de la aplicación lleva a su inventario, que es la
+portada de una aplicación en Atalaya. La flecha de su izquierda **deshace un paso**, como en un
+navegador: la página anterior vuelve **tal cual la dejaste**, con su filtro y su selección puestos.
+A la derecha, el estado del hub.
+
+Esa misma regla vale para el raíl: pulsar **Hallazgos** te devuelve *tus* hallazgos, con el filtro
+que tenían, no una lista virgen de todo el portafolio.
+
+**El pie**, abajo, aparece **solo cuando hay algo corriendo** y dice qué: la sesión y el arreglo,
+con su progreso y un clic para ir a verlos.
+
+### La ventana
+
+Atalaya **arranca maximizada la primera vez**. A partir de ahí recuerda cómo la dejaste —tamaño,
+posición y si estaba maximizada— y vuelve a abrirse así. Si la habías dejado en un monitor que ya
+no está conectado, conserva el tamaño y se centra en la pantalla que haya.
+
+Funciona a partir de 1100 × 700, y está diseñada para 1920 × 1080. A anchos pequeños las cosas se
+**reorganizan** —las columnas se apilan, los paneles se pliegan, el raíl se encoge— en vez de
+apretarse.
+
+### Tema claro y tema oscuro
+
+En **Ajustes → Tema claro**. El cambio se aplica al guardar, sin reiniciar, y cambia la aplicación
+entera: fondos, textos, botones, pastillas de gravedad y avisos. El modo claro es **crema**, no
+blanco: un blanco puro a pantalla completa cansa la vista, y esto es una herramienta de mirar
+código durante horas.
+
+Los colores significan siempre lo mismo, en los dos temas: **azul** la acción principal (hay una
+sola por pantalla), **verde** lo que adelanta trabajo y lo que ha ido bien, **ámbar** lo que hay
+que atender, **rojo** lo que destruye o lo que es crítico. Y cuando un botón está apagado por una
+razón, **la razón se lee al lado**, en ámbar — no hace falta pasar el ratón por encima para
+enterarse.
+
+---
+
 ## Las vistas
 
 ### Portafolio

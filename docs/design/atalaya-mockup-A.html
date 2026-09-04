@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="es" data-theme="dark" data-width="wide">
+<head>
+<meta charset="utf-8">
+<title>Atalaya · mockup del sistema visual (Parte A)</title>
+<style>
+  /* ===== Tokens: la única fuente de tamaños, espacios y colores ===== */
+  :root{
+    --fs-meta:12px; --fs-small:13px; --fs-body:14px; --fs-lead:16px; --fs-h3:20px; --fs-h2:24px; --fs-h1:28px;
+    --lh:1.4;
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+    --r:6px; --r-lg:10px;
+    --rail:232px; --content-max:1480px;
+    --font:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+    --mono:"Cascadia Code","Consolas",monospace;
+  }
+  [data-theme="dark"]{
+    --bg:#171B22; --surface:#1F242D; --surface-2:#262C37; --line:#313847; --line-strong:#3E4757;
+    --text:#E6E9EF; --text-2:#A8B0BD; --text-3:#7C8494;
+    --primary:#4C7FE0; --primary-ink:#FFFFFF; --primary-soft:#243554;
+    --success:#3FB950; --success-soft:#1C3324;
+    --warning:#E3B341; --warning-soft:#3A3014;
+    --danger:#F2615B; --danger-soft:#42211F;
+    --sev-crit:#F2615B; --sev-high:#F0883E; --sev-med:#E3B341; --sev-low:#6E93E8;
+    --shadow:0 1px 0 rgba(0,0,0,.35);
+  }
+  [data-theme="light"]{
+    --bg:#F3EFE7; --surface:#FBF8F2; --surface-2:#F5F1E9; --line:#E1DBD0; --line-strong:#CFC7B9;
+    --text:#1E2229; --text-2:#4F5761; --text-3:#7B838E;
+    --primary:#2F62C9; --primary-ink:#FFFFFF; --primary-soft:#E2E9F8;
+    --success:#1F8A3B; --success-soft:#DFF2E3;
+    --warning:#9A6B00; --warning-soft:#FBEFC7;
+    --danger:#C93A34; --danger-soft:#F9DEDC;
+    --sev-crit:#C93A34; --sev-high:#C4611C; --sev-med:#9A6B00; --sev-low:#2F62C9;
+    --shadow:0 1px 0 rgba(60,50,30,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:var(--fs-body)/var(--lh) var(--font)}
+  button{font:inherit;color:inherit}
+
+  /* ===== Marco de la maqueta (no forma parte de la app) ===== */
+  .frame{display:flex;flex-direction:column;height:100vh}
+  .demo-bar{display:flex;gap:var(--s3);align-items:center;padding:var(--s2) var(--s4);background:#000;color:#ddd;font-size:var(--fs-small)}
+  .demo-bar b{color:#fff}
+  .demo-bar button{background:#222;border:1px solid #444;color:#eee;border-radius:var(--r);padding:var(--s1) var(--s3);cursor:pointer}
+  .demo-bar button[aria-pressed="true"]{background:#4C7FE0;border-color:#4C7FE0}
+  .viewport{flex:1;display:flex;justify-content:center;background:#000;overflow:auto}
+  .app{display:grid;grid-template-columns:var(--rail) 1fr;grid-template-rows:1fr;height:100%;width:100%;background:var(--bg)}
+  [data-width="narrow"] .app{width:1280px;min-width:1280px;max-height:720px}
+  [data-width="narrow"] .viewport{align-items:flex-start;padding:var(--s4)}
+
+  /* ===== Raíl ===== */
+  .rail{display:flex;flex-direction:column;background:var(--surface);border-right:1px solid var(--line);padding:var(--s4) var(--s3)}
+  .brand{display:flex;align-items:center;gap:var(--s3);padding:var(--s2) var(--s3) var(--s5)}
+  .brand .logo{width:28px;height:28px;border-radius:7px;background:linear-gradient(160deg,#5B8AE8,#2E4E93);display:grid;place-items:center;color:#fff;font-weight:700;font-size:15px}
+  .brand .name{font-size:var(--fs-lead);font-weight:600}
+  .group{font-size:var(--fs-meta);color:var(--text-3);padding:var(--s3) var(--s3) var(--s1)}
+  .nav{list-style:none;margin:0;padding:0}
+  .nav a{display:flex;align-items:center;gap:var(--s3);padding:var(--s2) var(--s3);border-radius:var(--r);color:var(--text-2);text-decoration:none;position:relative;font-size:var(--fs-body)}
+  .nav a:hover{background:var(--surface-2);color:var(--text)}
+  .nav a[aria-current="page"]{background:var(--primary-soft);color:var(--text);font-weight:600}
+  .nav a[aria-current="page"]::before{content:"";position:absolute;left:-12px;top:6px;bottom:6px;width:3px;border-radius:2px;background:var(--primary)}
+  .nav svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .nav .count{margin-left:auto;font-size:var(--fs-meta);color:var(--text-3)}
+  .rail .spacer{flex:1}
+  .rail .user{display:flex;align-items:center;gap:var(--s3);padding:var(--s3);border-top:1px solid var(--line);color:var(--text-2);font-size:var(--fs-small)}
+  .rail .user .avatar{width:26px;height:26px;border-radius:50%;background:var(--success)}
+
+  /* ===== Área principal ===== */
+  .main{display:flex;flex-direction:column;min-width:0;min-height:0}
+  .topbar{display:flex;align-items:center;gap:var(--s3);padding:var(--s3) var(--s6);border-bottom:1px solid var(--line);background:var(--surface);font-size:var(--fs-small);color:var(--text-2)}
+  .topbar .back{border:1px solid var(--line-strong);background:transparent;border-radius:var(--r);width:30px;height:30px;display:grid;place-items:center;cursor:pointer;color:var(--text-2)}
+  .crumb a{color:var(--text-2);text-decoration:none}
+  .crumb span{color:var(--text-3);margin:0 var(--s2)}
+  .crumb b{color:var(--text);font-weight:600}
+  .topbar .status{margin-left:auto;display:flex;align-items:center;gap:var(--s2)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--success);display:inline-block}
+
+  .content{flex:1;min-height:0;overflow:auto;padding:var(--s5) var(--s6)}
+  .page{max-width:var(--content-max);margin:0 auto;display:flex;flex-direction:column;gap:var(--s5)}
+  .page-head{display:flex;align-items:flex-end;gap:var(--s4);flex-wrap:wrap}
+  .page-head h1{font-size:var(--fs-h1);font-weight:600;margin:0;line-height:1.2}
+  .page-head .sub{color:var(--text-2)}
+  .page-head .actions{margin-left:auto;display:flex;gap:var(--s2)}
+
+  /* Botones */
+  .btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:var(--r);padding:var(--s2) var(--s4);cursor:pointer;font-size:var(--fs-body);display:inline-flex;align-items:center;gap:var(--s2);min-height:34px}
+  .btn:hover{background:var(--surface-2)}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-ink);font-weight:600}
+  .btn.success{background:var(--success);border-color:var(--success);color:#fff;font-weight:600}
+  .btn.danger{color:var(--danger);border-color:var(--danger)}
+  .btn[disabled]{opacity:.55;cursor:not-allowed}
+  .reason{display:inline-flex;align-items:center;gap:var(--s2);color:var(--warning);background:var(--warning-soft);border-radius:var(--r);padding:var(--s1) var(--s3);font-size:var(--fs-small)}
+  .reason svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+
+  /* Resumen por gravedad */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s3)}
+  .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s4) var(--s5);display:flex;align-items:center;gap:var(--s4);border-left-width:4px}
+  .stat .n{font-size:var(--fs-h1);font-weight:600;line-height:1}
+  .stat .l{color:var(--text-2);font-size:var(--fs-small)}
+  .stat.crit{border-left-color:var(--sev-crit)} .stat.high{border-left-color:var(--sev-high)} .stat.med{border-left-color:var(--sev-med)} .stat.low{border-left-color:var(--sev-low)}
+
+  /* Barra de filtros */
+  .filters{display:flex;gap:var(--s2);align-items:center;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s2) var(--s3)}
+  .filters input,.filters select{font:inherit;background:var(--bg);color:var(--text);border:1px solid var(--line-strong);border-radius:var(--r);padding:var(--s2) var(--s3);min-height:34px}
+  .filters input{flex:1;min-width:220px}
+  .chip{border:1px solid var(--line-strong);border-radius:999px;padding:3px var(--s3);font-size:var(--fs-small);color:var(--text-2);cursor:pointer;background:transparent}
+  .chip[aria-pressed="true"]{background:var(--primary-soft);border-color:var(--primary);color:var(--text)}
+  .filters .hint{margin-left:auto;color:var(--text-3);font-size:var(--fs-small)}
+
+  /* Lista + detalle */
+  .split{display:grid;grid-template-columns:minmax(520px,1fr) minmax(420px,.8fr);gap:var(--s5);align-items:start}
+  [data-width="narrow"] .split{grid-template-columns:1fr}
+  [data-width="narrow"] .detail{display:none}
+  .list{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden}
+  .row{display:grid;grid-template-columns:6px 96px 1fr auto;gap:var(--s3);align-items:center;padding:var(--s3) var(--s4) var(--s3) 0;border-bottom:1px solid var(--line);cursor:pointer}
+  .row:last-child{border-bottom:0}
+  .row:hover{background:var(--surface-2)}
+  .row[aria-selected="true"]{background:var(--primary-soft)}
+  .row .band{align-self:stretch;border-radius:0 3px 3px 0}
+  .row.crit .band{background:var(--sev-crit)} .row.high .band{background:var(--sev-high)} .row.med .band{background:var(--sev-med)} .row.low .band{background:var(--sev-low)}
+  .pill{display:inline-block;font-size:var(--fs-meta);font-weight:600;padding:2px var(--s2);border-radius:4px;text-align:center;min-width:64px}
+  .pill.crit{background:var(--danger-soft);color:var(--sev-crit)} .pill.high{background:var(--danger-soft);color:var(--sev-high)} .pill.med{background:var(--warning-soft);color:var(--sev-med)} .pill.low{background:var(--primary-soft);color:var(--sev-low)}
+  .row .t{font-weight:500}
+  .row .m{color:var(--text-3);font-size:var(--fs-small);margin-top:2px}
+  .row .m code{font-family:var(--mono);font-size:var(--fs-meta)}
+  .row .state{font-size:var(--fs-small);color:var(--text-2)}
+  .state.new{color:var(--success)}
+
+  .detail{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s5);display:flex;flex-direction:column;gap:var(--s4);position:sticky;top:0}
+  .detail h2{font-size:var(--fs-h3);margin:0;font-weight:600;line-height:1.3}
+  .detail .meta{display:flex;gap:var(--s3);flex-wrap:wrap;color:var(--text-2);font-size:var(--fs-small);align-items:center}
+  .detail .meta code{font-family:var(--mono);font-size:var(--fs-meta);background:var(--surface-2);padding:2px 6px;border-radius:4px}
+  .detail p{margin:0;color:var(--text);max-width:68ch}
+  .detail .code{white-space:pre;font-family:var(--mono);font-size:var(--fs-small);background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:var(--s3) var(--s4);overflow:auto;line-height:1.5}
+  .detail .code .hl{background:var(--danger-soft);display:block;margin:0 calc(-1*var(--s4));padding:0 var(--s4)}
+  .detail .rec{border-left:3px solid var(--success);padding-left:var(--s3);color:var(--text-2)}
+  .detail .actions{display:flex;gap:var(--s2);align-items:center;flex-wrap:wrap;padding-top:var(--s2);border-top:1px solid var(--line)}
+  .detail .actions .sep{flex:1}
+  .toast{display:flex;gap:var(--s3);align-items:flex-start;background:var(--warning-soft);border:1px solid var(--warning);border-radius:var(--r);padding:var(--s3) var(--s4);color:var(--text)}
+  .toast svg{width:18px;height:18px;flex:none;stroke:var(--warning);fill:none;stroke-width:2;margin-top:1px}
+  .toast b{color:var(--warning)}
+
+  /* Pie de sesión */
+  .footer{display:flex;align-items:center;gap:var(--s4);padding:var(--s2) var(--s6);border-top:1px solid var(--line);background:var(--surface);font-size:var(--fs-small);color:var(--text-2)}
+  .footer b{color:var(--text)}
+  .footer .right{margin-left:auto}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="demo-bar">
+    <b>Maqueta · Parte A</b>
+    <span>Tema:</span>
+    <button id="t-dark" aria-pressed="true" onclick="setTheme('dark')">Oscuro</button>
+    <button id="t-light" aria-pressed="false" onclick="setTheme('light')">Claro (crema)</button>
+    <span style="margin-left:16px">Ventana:</span>
+    <button id="w-wide" aria-pressed="true" onclick="setWidth('wide')">Pantalla completa</button>
+    <button id="w-narrow" aria-pressed="false" onclick="setWidth('narrow')">1280 × 720</button>
+    <span style="margin-left:auto;color:#888">Base 14 px · espaciado en múltiplos de 4 · color solo con significado</span>
+  </div>
+
+  <div class="viewport">
+  <div class="app">
+    <!-- Raíl -->
+    <aside class="rail">
+      <div class="brand"><div class="logo">A</div><div class="name">Atalaya</div></div>
+      <div class="group">Trabajo</div>
+      <ul class="nav">
+        <li><a href="#"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>Portafolio</a></li>
+        <li><a href="#" aria-current="page"><svg viewBox="0 0 24 24"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>Hallazgos<span class="count">147</span></a></li>
+        <li><a href="#"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg>Informes</a></li>
+        <li><a href="#"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 15v-4M12 15V8M16 15v-2"/></svg>Métricas</a></li>
+      </ul>
+      <div class="group">XBLAST</div>
+      <ul class="nav">
+        <li><a href="#"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Inventario<span class="count">3/11</span></a></li>
+        <li><a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Sesión en vivo</a></li>
+      </ul>
+      <div class="spacer"></div>
+      <div class="group">Sistema</div>
+      <ul class="nav">
+        <li><a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Cuenta</a></li>
+        <li><a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.5-2.4 1a7 7 0 0 0-1.7-1L14.5 3h-5l-.3 2.6a7 7 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a7 7 0 0 0 0 2l-2 1.5 2 3.5 2.4-1a7 7 0 0 0 1.7 1l.3 2.6h5l.3-2.6a7 7 0 0 0 1.7-1l2.4 1 2-3.5-2-1.5c.1-.3.1-.7.1-1z"/></svg>Ajustes</a></li>
+      </ul>
+      <div class="user"><div class="avatar"></div>alopezciller<span style="margin-left:auto"><span class="dot"></span> hub</span></div>
+    </aside>
+
+    <!-- Principal -->
+    <div class="main">
+      <div class="topbar">
+        <button class="back" title="Volver">←</button>
+        <div class="crumb"><a href="#">Portafolio</a><span>›</span><a href="#">XBLAST</a><span>›</span><b>Hallazgos</b></div>
+        <div class="status"><span class="dot"></span> Sincronizado 12:41 · <span>Copilot · claude-opus-4.7</span></div>
+      </div>
+
+      <div class="content">
+        <div class="page">
+          <div class="page-head">
+            <div>
+              <h1>Hallazgos</h1>
+              <div class="sub">XBLAST · ciclo 2 · 147 abiertos, 12 nuevos desde la última sesión</div>
+            </div>
+            <div class="actions">
+              <button class="btn">Exportar</button>
+              <button class="btn primary">Auditar cambios</button>
+            </div>
+          </div>
+
+          <div class="stats">
+            <div class="stat crit"><div class="n">3</div><div class="l">Críticas</div></div>
+            <div class="stat high"><div class="n">28</div><div class="l">Altas</div></div>
+            <div class="stat med"><div class="n">71</div><div class="l">Medias</div></div>
+            <div class="stat low"><div class="n">45</div><div class="l">Bajas</div></div>
+          </div>
+
+          <div class="filters">
+            <select><option>XBLAST</option><option>Todas las aplicaciones</option></select>
+            <input placeholder="Buscar por título, regla o fichero…">
+            <button class="chip" aria-pressed="true">Críticas</button>
+            <button class="chip" aria-pressed="true">Altas</button>
+            <button class="chip" aria-pressed="false">Medias</button>
+            <button class="chip" aria-pressed="false">Bajas</button>
+            <select><option>Abiertos</option><option>Todos</option><option>Silenciados</option></select>
+            <span class="hint">El filtro se recuerda al volver</span>
+          </div>
+
+          <div class="split">
+            <div class="list">
+              <div class="row crit" aria-selected="true">
+                <div class="band"></div><span class="pill crit">Crítica</span>
+                <div><div class="t">Credenciales de servicio embebidas en el código</div><div class="m"><code>Servicios/ClienteRemoto.cs:11</code> · errores.seguridad.secreto-en-codigo</div></div>
+                <span class="state new">Nuevo</span>
+              </div>
+              <div class="row high">
+                <div class="band"></div><span class="pill high">Alta</span>
+                <div><div class="t">Mutación de DefaultRequestHeaders en HttpClient estático compartido</div><div class="m"><code>Servicios/ClienteRemoto.cs:22</code> · errores.concurrencia.race</div></div>
+                <span class="state">Confirmado ×3</span>
+              </div>
+              <div class="row high">
+                <div class="band"></div><span class="pill high">Alta</span>
+                <div><div class="t">Off-by-one en CargaTotalKg provoca IndexOutOfRangeException</div><div class="m"><code>Servicios/CalculadoraCarga.cs:11</code> · errores.calculo.negocio</div></div>
+                <span class="state">Confirmado ×2</span>
+              </div>
+              <div class="row high">
+                <div class="band"></div><span class="pill high">Alta</span>
+                <div><div class="t">Uso de .Result bloqueante sobre operación async</div><div class="m"><code>Servicios/ClienteRemoto.cs:33</code> · errores.async.mal-usado · posible duplicado de HAL-0412</div></div>
+                <span class="state">Confirmado</span>
+              </div>
+              <div class="row med">
+                <div class="band"></div><span class="pill med">Media</span>
+                <div><div class="t">No se comprueba el código de estado HTTP</div><div class="m"><code>Servicios/ClienteRemoto.cs:27</code> · criterio.observabilidad</div></div>
+                <span class="state">En arreglo</span>
+              </div>
+              <div class="row low">
+                <div class="band"></div><span class="pill low">Baja</span>
+                <div><div class="t">URL base y HttpClient no inyectables dificultan pruebas</div><div class="m"><code>Servicios/ClienteRemoto.cs:14</code> · criterio.testabilidad</div></div>
+                <span class="state">Confirmado</span>
+              </div>
+            </div>
+
+            <aside class="detail">
+              <div class="meta"><span class="pill crit">Crítica</span><code>HAL-0401</code><span>Copilot · opus-4.7 · 3 sept 2026</span></div>
+              <h2>Credenciales de servicio embebidas en el código</h2>
+              <p><b>UsuarioServicio</b> y <b>ClaveServicio</b> son constantes con usuario y contraseña reales del servicio corporativo, versionadas en el fuente. Cualquiera con acceso al repositorio tiene las credenciales.</p>
+              <div class="code"><span>  9  public sealed class ClienteRemoto</span>
+<span> 10  {</span>
+<span class="hl"> 11      private const string UsuarioServicio = "svc_partes";</span>
+<span class="hl"> 12      private const string ClaveServicio   = "P4rt3s!2024";</span>
+<span> 13      private static readonly HttpClient Http = new();</span></div>
+              <div class="rec">Mover las credenciales a configuración segura (User Secrets, variables de entorno, Key Vault) e inyectarlas mediante IOptions/IConfiguration.</div>
+              <div class="toast"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M12 3l9 16H3z"/></svg><div><b>El arreglo asistido está bloqueado.</b> Hay 2 commits sin subir en tu clon de XBLAST. Súbelos o descártalos y vuelve a intentarlo.</div></div>
+              <div class="actions">
+                <button class="btn success" disabled>Arreglo asistido</button>
+                <span class="reason"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01M12 3l9 16H3z"/></svg>2 commits sin subir</span>
+                <span class="sep"></span>
+                <button class="btn">Silenciar…</button>
+                <button class="btn danger">Cerrar como falso positivo</button>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <span><span class="dot"></span> <b>Green</b></span>
+        <span>Última sesión: XBLAST · 2 unidades · <b>52 credits</b> · 4 min 12 s</span>
+        <span class="right">v1.4.2</span>
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+<script>
+  function setTheme(t){document.documentElement.dataset.theme=t;document.getElementById('t-dark').setAttribute('aria-pressed',t==='dark');document.getElementById('t-light').setAttribute('aria-pressed',t==='light');}
+  function setWidth(w){document.documentElement.dataset.width=w;document.getElementById('w-wide').setAttribute('aria-pressed',w==='wide');document.getElementById('w-narrow').setAttribute('aria-pressed',w==='narrow');}
+</script>
+</body>
+</html>
