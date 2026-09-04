@@ -140,7 +140,8 @@ internal static class TestFactory
         NavigationService navigation,
         IFolderPicker? picker = null,
         SettingsService? settings = null,
-        CycleConfigFlow? flow = null)
+        CycleConfigFlow? flow = null,
+        RepositoryCatalog? catalog = null)
     {
         settings ??= Settings(paths);
         return new OnboardingViewModel(
@@ -155,8 +156,17 @@ internal static class TestFactory
             new ImportService(hub),
             picker ?? new NoFolderPicker(),
             new MeasuredFindingService(hub, new FindingIngestionService(hub, ulids), machines),
+            catalog ?? OfflineCatalog(hub, paths),
             flow);
     }
+
+    /// <summary>
+    /// El catálogo de repositorios SIN cuenta conectada (R3): pedirle la lista falla, que es
+    /// exactamente el estado del que parte un test que no ejercita el desplegable. Ninguna llamada
+    /// sale a la red.
+    /// </summary>
+    public static RepositoryCatalog OfflineCatalog(HubContext hub, AppPaths paths)
+        => new(Account(paths), new GitHubApiClient(new System.Net.Http.HttpClient()), new DeployConfig(), hub);
 
     /// <summary>El panel de métricas (F5.9) sin nada que abra una ventana ni un fichero.</summary>
     public static MetricsViewModel Metrics(

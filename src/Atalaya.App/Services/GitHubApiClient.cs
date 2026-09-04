@@ -23,6 +23,13 @@ public sealed record GitHubUser(long Id, string Login, string? Name, string? Ava
 }
 
 /// <summary>
+/// Un repositorio del dueño de la cuenta conectada (R3): su NOMBRE corto y la URL con la que se
+/// clona. Nada más — el desplegable del alta enseña el nombre y guarda la URL, y cualquier otro
+/// campo sería un dato que Atalaya no usa y tendría que mantener.
+/// </summary>
+public sealed record GitHubRepository(string Name, string CloneUrl);
+
+/// <summary>
 /// Una Release publicada del repositorio de la propia aplicación (F8 §3): su tag, su página y su
 /// título. No se pide nada más — el aviso solo necesita saber QUÉ versión hay y ADÓNDE llevar al
 /// usuario; la descarga la hace él, en el navegador.
@@ -169,6 +176,73 @@ public sealed class GitHubApiClient
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Los repositorios de <paramref name="owner"/> que esta cuenta puede ver (R3).
+    /// <para>
+    /// Se pide a <c>/orgs/{owner}/repos</c> y, si eso responde 404, a <c>/users/{owner}/repos</c>:
+    /// el dueño del hub no siempre es una organización —mientras sea un repositorio personal es una
+    /// cuenta de usuario— y una lista vacía por preguntar al sitio equivocado se leería como «esta
+    /// organización no tiene repos», que es una mentira difícil de diagnosticar.
+    /// </para>
+    /// <para>
+    /// Pagina hasta agotar la lista. El tope de páginas está para que una respuesta inesperada no
+    /// deje el bucle pidiendo páginas para siempre, no para recortar organizaciones reales.
+    /// </para>
+    /// </summary>
+    public async Task<IReadOnlyList<GitHubRepository>> ListOwnerRepositoriesAsync(
+        string token, string owner, CancellationToken ct)
+    {
+        string escaped = Uri.EscapeDataString(owner);
+        try
+        {
+            return await ListRepositoryPagesAsync($"/orgs/{escaped}/repos", token, ct);
+        }
+        catch (GitHubApiException ex) when (ex.Problem == GitHubApiProblem.NotFound)
+        {
+            return await ListRepositoryPagesAsync($"/users/{escaped}/repos", token, ct);
+        }
+    }
+
+    private async Task<IReadOnlyList<GitHubRepository>> ListRepositoryPagesAsync(
+        string path, string token, CancellationToken ct)
+    {
+        const int perPage = 100;
+        const int maxPages = 20;
+
+        var repos = new List<GitHubRepository>();
+        for (int page = 1; page <= maxPages; page++)
+        {
+            using JsonDocument doc = await GetJsonAsync(
+                $"{path}?per_page={perPage}&sort=full_name&page={page}", token, ct);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                break;
+            }
+
+            int seen = 0;
+            foreach (JsonElement item in doc.RootElement.EnumerateArray())
+            {
+                seen++;
+                string? name = ReadString(item, "name");
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    continue;
+                }
+
+                string url = ReadString(item, "clone_url") ?? ReadString(item, "html_url") ?? string.Empty;
+                repos.Add(new GitHubRepository(name!, url));
+            }
+
+            // Una página incompleta es la última: GitHub no manda menos de lo pedido a medias.
+            if (seen < perPage)
+            {
+                break;
+            }
+        }
+
+        return repos;
     }
 
     /// <summary>

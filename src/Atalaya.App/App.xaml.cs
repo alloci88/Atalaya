@@ -213,6 +213,9 @@ public partial class App : Application
         services.AddSingleton<AccountStore>();
         services.AddSingleton<GitHubAccountService>();
         services.AddSingleton<ConnectionChecker>();
+        // R3: los repositorios de la organización, con el token de la cuenta y cacheados en la
+        // sesión. Singleton por la caché: uno por navegación volvería a pedir la lista cada vez.
+        services.AddSingleton<RepositoryCatalog>();
         // F8 §3: el aviso de versión nueva, con el MISMO token de cuenta. Cero credenciales nuevas.
         services.AddSingleton(sp => new UpdateCheckService(
             sp.GetRequiredService<DeployConfig>(),

@@ -6,6 +6,7 @@ using Atalaya.Domain.Ingestion;
 using Atalaya.Domain.Model;
 using Atalaya.Inventory;
 using Atalaya.Storage;
+using Atalaya.Storage.Sync;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -43,6 +44,12 @@ public sealed partial class OnboardingViewModel : ViewModelBase
 
     private readonly IFolderPicker _picker;
 
+    /// <summary>
+    /// R3: los repositorios de la organización. El alta ya no pide escribir la URL — la elige de
+    /// una lista, y de ella saca también el nombre de la aplicación.
+    /// </summary>
+    private readonly RepositoryCatalog _catalog;
+
     /// <summary>El diálogo del primer ciclo (F17 §4). Opcional: sin él, el ciclo 1 nace General.</summary>
     private readonly CycleConfigFlow? _configFlow;
 
@@ -58,6 +65,7 @@ public sealed partial class OnboardingViewModel : ViewModelBase
         ImportService import,
         IFolderPicker picker,
         MeasuredFindingService measured,
+        RepositoryCatalog catalog,
         CycleConfigFlow? configFlow = null)
     {
         _configFlow = configFlow;
@@ -72,11 +80,22 @@ public sealed partial class OnboardingViewModel : ViewModelBase
         _linkFlow = linkFlow;
         _import = import;
         _picker = picker;
+        _catalog = catalog;
     }
 
     public override string Title => "Nueva aplicación";
 
-    [ObservableProperty] private string _name = string.Empty;
+    /// <summary>
+    /// El nombre de la aplicación. Desde R3 NO se escribe: se deriva del repositorio elegido, y la
+    /// vista lo enseña como etiqueta. Un nombre distinto del repositorio no servía para nada y era
+    /// una tercera cosa que se podía teclear mal.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasName))]
+    private string _name = string.Empty;
+
+    /// <summary>False mientras no haya repositorio: la etiqueta del nombre nace vacía.</summary>
+    public bool HasName => Name.Length > 0;
     [ObservableProperty] private string _clonePath = string.Empty;
     [ObservableProperty] private TechStack _detectedStack = TechStack.Unknown;
 
@@ -159,8 +178,160 @@ public sealed partial class OnboardingViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Señalar a mano la carpeta del clon, en vez de escribir la ruta (R3).</summary>
+    [RelayCommand]
+    private void PickClonePath()
+    {
+        if (_picker.Pick("Elige la carpeta del clon local", ClonePath) is { } chosen)
+        {
+            ClonePath = chosen;
+        }
+    }
+
+    // ==================================================== R3 — El repositorio se elige, no se escribe
+
+    /// <summary>Todos los repositorios cargados; <see cref="Repositories"/> es lo que pasa el filtro.</summary>
+    private readonly List<RepoOption> _allRepositories = new();
+
+    /// <summary>Lo que enseña el desplegable ahora mismo.</summary>
+    public ObservableCollection<RepoOption> Repositories { get; } = new();
+
+    /// <summary>
+    /// El repositorio elegido. De él salen las dos cosas que antes se escribían: la URL, que se
+    /// guarda como siempre, y el NOMBRE de la aplicación, que es el del repositorio.
+    /// </summary>
+    [ObservableProperty] private RepoOption? _selectedRepository;
+
+    /// <summary>
+    /// El texto del combo, que hace dos oficios porque el control es uno solo: filtra la lista
+    /// mientras se escribe un nombre, y ES la URL cuando lo escrito es una URL. Ese segundo oficio
+    /// es el respaldo: sin lista —sin red, sin permiso para listar— dar de alta sigue siendo posible.
+    /// </summary>
+    [ObservableProperty] private string _repoQuery = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLoadingRepositories))]
+    [NotifyPropertyChangedFor(nameof(RepositoriesFailed))]
+    private RepoListState _repoListState = RepoListState.NotLoaded;
+
+    /// <summary>Lo que le pasa a la lista, dicho en el sitio de la lista.</summary>
+    [ObservableProperty] private string _repoListNotice = string.Empty;
+
+    public bool IsLoadingRepositories => RepoListState == RepoListState.Loading;
+
+    public bool RepositoriesFailed => RepoListState == RepoListState.Failed;
+
+    /// <summary>De qué organización es la lista. Vacío cuando el despliegue no lo dice.</summary>
+    public string RepoOwner => _catalog.Owner ?? string.Empty;
+
+    public override Task LoadAsync() => LoadRepositoriesAsync(refresh: false);
+
+    /// <summary>El botón de recargar, para cuando alguien acaba de crear el repositorio.</summary>
+    [RelayCommand]
+    private Task ReloadRepositories() => LoadRepositoriesAsync(refresh: true);
+
+    private async Task LoadRepositoriesAsync(bool refresh)
+    {
+        RepoListState = RepoListState.Loading;
+        RepoListNotice = string.Empty;
+        try
+        {
+            IReadOnlyList<GitHubRepository> repos = await _catalog.ListAsync(refresh, CancellationToken.None);
+            _allRepositories.Clear();
+            foreach (GitHubRepository repo in repos.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                // Los que ya son una app del hub SALEN, y salen marcados: esconderlos dejaría al
+                // usuario buscando un repositorio que está ahí, y enseñarlos sin marca lo mandaría
+                // a intentar crear el duplicado que D-303 tiene que parar más adelante.
+                _allRepositories.Add(new RepoOption(repo.Name, repo.CloneUrl, _links.FindByRepoUrl(repo.CloneUrl)));
+            }
+
+            ApplyRepoFilter();
+            RepoListState = RepoListState.Loaded;
+            RepoListNotice = _allRepositories.Count == 0
+                ? "Esta cuenta no ve ningún repositorio en la organización."
+                : string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _allRepositories.Clear();
+            Repositories.Clear();
+            RepoListState = RepoListState.Failed;
+            RepoListNotice = $"No se pudo cargar la lista · reintentar. {ex.Message} "
+                             + "Mientras tanto puedes escribir aquí mismo la URL del repositorio.";
+        }
+    }
+
+    partial void OnSelectedRepositoryChanged(RepoOption? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        // Una sola escritura: la URL. El nombre y la detección de duplicado cuelgan de ella, así
+        // que elegir de la lista y escribir la URL a mano acaban exactamente en el mismo sitio.
+        RepoUrl = value.Url;
+    }
+
+    partial void OnRepoQueryChanged(string value)
+    {
+        ApplyRepoFilter();
+
+        // Lo escrito solo se toma por URL cuando lo parece. Al elegir de la lista, WPF escribe el
+        // NOMBRE del repositorio en el mismo cuadro, y eso no puede pisar la URL que se acaba de
+        // resolver.
+        if (LooksLikeUrl(value))
+        {
+            RepoUrl = value.Trim();
+        }
+    }
+
+    private void ApplyRepoFilter()
+    {
+        string needle = RepoQuery.Trim();
+        Repositories.Clear();
+        foreach (RepoOption option in _allRepositories)
+        {
+            if (needle.Length == 0 || option.Name.Contains(needle, StringComparison.OrdinalIgnoreCase))
+            {
+                Repositories.Add(option);
+            }
+        }
+    }
+
+    private static bool LooksLikeUrl(string text)
+    {
+        string t = text.Trim();
+        return t.Contains("://", StringComparison.Ordinal)
+               || t.Contains('@', StringComparison.Ordinal)
+               || t.Contains('/', StringComparison.Ordinal)
+               || t.Contains('\\', StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// El nombre de la aplicación es el del repositorio, siempre. Se saca de la URL con la MISMA
+    /// normalización que decide si dos URLs son el mismo repo (<c>RemoteUrl</c>, D-295), para que
+    /// el https y el ssh del mismo repositorio den el mismo nombre.
+    /// </summary>
+    internal static string NameFromRepoUrl(string? url)
+    {
+        string normalized = RemoteUrl.Normalize(url);
+        if (normalized.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        int slash = normalized.LastIndexOf('/');
+        return slash < 0 ? normalized : normalized[(slash + 1)..];
+    }
+
     /// <summary>Escribir la URL ya basta para saber que la app existe: no hace falta llegar al final.</summary>
-    partial void OnRepoUrlChanged(string value) => DetectExistingApp();
+    partial void OnRepoUrlChanged(string value)
+    {
+        Name = NameFromRepoUrl(value);
+        DetectExistingApp();
+    }
 
     /// <summary>La app del hub que YA tiene este repo, si la hay.</summary>
     private AppConfig? _existing;
@@ -242,7 +413,7 @@ public sealed partial class OnboardingViewModel : ViewModelBase
     {
         if (string.IsNullOrWhiteSpace(Name) || string.IsNullOrWhiteSpace(RepoUrl) || !Directory.Exists(ClonePath))
         {
-            _toasts.Show("Rellena nombre, URL del repo y una ruta de clon válida.");
+            _toasts.Show("Elige el repositorio (o escribe su URL) y una ruta de clon válida.");
             return;
         }
 
@@ -380,4 +551,47 @@ public sealed partial class OnboardingViewModel : ViewModelBase
         string slug = sb.ToString().Trim('-');
         return slug.Length == 0 ? "app" : slug;
     }
+}
+
+/// <summary>En qué punto está la lista de repositorios (R3).</summary>
+public enum RepoListState
+{
+    /// <summary>Todavía no se ha pedido.</summary>
+    NotLoaded,
+
+    Loading,
+
+    Loaded,
+
+    /// <summary>GitHub no contestó, o no dejó listar. El alta sigue siendo posible a mano.</summary>
+    Failed,
+}
+
+/// <summary>
+/// Un repositorio en el desplegable del alta (R3): su nombre corto, la URL que se guardará, y si
+/// ya es una aplicación del hub.
+/// </summary>
+public sealed class RepoOption
+{
+    public RepoOption(string name, string url, AppConfig? existing = null)
+    {
+        Name = name;
+        Url = url;
+        Existing = existing;
+    }
+
+    public string Name { get; }
+
+    /// <summary>La URL entera, que es lo que se guarda. En pantalla solo se enseña el nombre.</summary>
+    public string Url { get; }
+
+    /// <summary>La aplicación del hub que ya tiene este repositorio, si la hay.</summary>
+    public AppConfig? Existing { get; }
+
+    public bool AlreadyInHub => Existing is not null;
+
+    /// <summary>Lo que se lee en la lista. La marca va escrita, no solo en un color.</summary>
+    public string Label => AlreadyInHub ? $"{Name} · ya en el hub" : Name;
+
+    public override string ToString() => Label;
 }
