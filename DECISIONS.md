@@ -13608,12 +13608,14 @@ sin la maqueta al lado no hay forma de saber si algo se ha desviado.
 Las capturas del antes y el después, a pantalla completa y a 1280×720 y en los dos temas, están en
 `docs/design/f26-parte-a/`.
 
-> **La Parte A pasó por una revisión del usuario y volvió con cuatro correcciones**, que están al
-> final de esta sección: **D-961** (el crema, más cálido, con los 49 pares recalculados), **D-962**
-> (la escala sube a 15 de base y el suelo a 13), **D-963** (el raíl plegado no pintaba los iconos —
-> con la cuenta que faltó) y **D-964** (el piloto del hub, sin la palabra «Green» y en el pie del
-> raíl). Lo que sigue describe el sistema **ya corregido**; donde un número cambió, se dice cuál
-> era.
+> **La Parte A pasó por DOS revisiones del usuario**, y sus correcciones están al final de esta
+> sección. La primera: **D-961** (el crema, más cálido, con los 49 pares recalculados), **D-962**
+> (la escala sube a 15 de base y el suelo a 13), **D-963** (el raíl plegado no pintaba los iconos)
+> y **D-964** (el piloto del hub, sin la palabra «Green» y en el pie del raíl). La segunda, sobre
+> el raíl: **D-966** (se mide por carriles y no por rellenos — una sola columna de iconos, la misma
+> x plegado o no), **D-967** (el piloto pasa a ser una insignia del avatar) y **D-968** (un defecto
+> de orden que la revisión destapó). Lo que sigue describe el sistema **ya corregido**; donde un
+> número cambió, se dice cuál era.
 
 ### D-944 — Los ocho principios, y por qué son decisiones y no gustos
 
@@ -14077,3 +14079,105 @@ datos que ya vigila otro: los tamaños los guarda `DesignTokenTests` —da igual
 nadie escriba uno a mano—, y el piloto y su frase se ven en la primera captura. El contraste del
 crema nuevo **no necesitó test nuevo**: `PaletteContrastTests` ya recorre los 49 pares y los
 recalculó solo.
+
+### D-966 — El raíl se mide por CARRILES, no por rellenos
+
+Segunda revisión del usuario. El raíl ya pintaba sus iconos (D-963), pero no estaban en columna:
+las tres rayas del botón de plegar, los iconos del menú y el avatar caían cada uno en una x, y el
+texto de las entradas, el de los rótulos de grupo y el nombre de usuario empezaban en tres sitios
+distintos. Un menú así se lee como tres listas pegadas.
+
+**Por qué pasaba, y por qué D-963 no lo arregló.** Aquel arreglo repartía el ancho con
+**rellenos**, y con un relleno distinto por estado (`Pad.RailCollapsed`, `Pad.RailItemCollapsed`).
+Funcionaba —el icono cabía— y estaba mal planteado: un relleno es «el aire que dejo a los lados»,
+no «dónde empieza esta columna». Con rellenos, cada fila que no fuera una entrada del menú tenía
+que repetir los mismos números a mano para cuadrar, y dos números que hay que mantener iguales a
+mano acaban siendo distintos.
+
+**Lo que hay ahora.** El relleno horizontal del raíl es **cero**, el de sus filas también, y quien
+reparte el ancho son columnas fijas que **todas** las filas declaran igual:
+
+```
+  0 …  8   carril del marcador de «estás aquí» (3 px de barra + 5 de aire)
+  8 … 48   CANAL DE ICONOS: 40 px, con el icono de 24 centrado → el icono ocupa 16…40
+ 48 … 60   el hueco antes del texto
+ 60 …      el texto, siempre
+```
+
+Las tres filas del raíl —el botón de plegar, cada entrada y la fila de usuario— comparten estilo
+(`RailRow`: altura, relleno y alineación) **y** carriles. No son «parecidas»: son la misma fila con
+distinto contenido. Y el plegado ya no toca ninguna medida: **solo esconde el texto**. El icono no
+se entera de que el raíl ha cambiado de ancho, que es lo que hace que la x sea la misma en los dos
+estados.
+
+Medido sobre las capturas, con el raíl a 1280 y a 1100: las tres rayas en 17…38, el icono de
+Portafolio empezando en 16, el de Informes en 17, la cabeza del icono de Cuenta centrada en 27, el
+avatar en 16…40 — **los mismos números plegado y desplegado**. El texto, en 60 en todas.
+
+De paso, el icono sube de 19 a **24**: iba con una base de 14, y un icono no puede quedarse quieto
+cuando la letra crece (D-962). Y el ancho plegado baja de 68 a **56**, que es exactamente la suma
+de los carriles sin el texto.
+
+**La regla que queda:** en el raíl, lo que coloca es una columna; el relleno solo pone aire.
+
+### D-967 — El piloto es una insignia del avatar, no un elemento más
+
+D-964 bajó el piloto del hub al pie del raíl, junto a la cuenta. Bien de sitio y mal de forma: era
+un punto **suelto al final de la fila**, o sea una cuarta cosa que alinear en una fila que ya tenía
+tres, y en el raíl plegado no cabía en ningún sitio razonable.
+
+Ahora es una **insignia del avatar**: 8 px de color en su esquina inferior derecha, con un anillo
+de 2 px del color del raíl. El anillo es lo que la despega del avatar sin pintarle un borde encima
+—es el patrón de «en línea» de cualquier aplicación de mensajería, y se reconoce sin explicarlo—.
+En WPF el trazo va centrado en el borde, así que un círculo de 12 con trazo de 2 deja exactamente
+8 de relleno visible: la insignia mide 8, el anillo 2, el conjunto 12.
+
+Lo que gana, además de una alineación menos: **funciona plegado sin cambiar nada**. El avatar sigue
+en su canal y la insignia viaja con él; antes, plegado, el punto no tenía dónde ir.
+
+El tooltip del estado va **en el avatar**, que es lo que se mira para saber quién eres y ahora dice
+además si puedes trabajar. El de la fila entera sigue siendo el de la cuenta.
+
+Y la fila de usuario pasa a tener **la misma altura, el mismo relleno y la misma alineación** que
+una entrada del menú —usa el mismo estilo, no una copia— con una **línea fina encima** que la
+separa sin meter un hueco. Un hueco la habría hecho bailar al plegar; una línea, no.
+
+### D-968 — La preferencia del raíl se lee ANTES de enseñar la ventana
+
+Defecto encontrado al comprobar lo anterior: con el raíl sin fijar por el usuario, abrir Atalaya en
+una ventana estrecha lo dejaba **desplegado**, en vez de plegarse solo por ancho.
+
+La causa es de orden. El plegado automático lo decide el primer `SizeChanged`, que llega al mostrar
+la ventana; `RestoreRail()` se llamaba **después** de `Show()` y escribía encima el valor guardado.
+D-963 lo puso ahí a propósito y el razonamiento era del revés: lo que hay que restaurar antes no es
+el plegado, es **la marca de si el usuario ha decidido** — con ella puesta, el ancho no manda; sin
+ella, manda el ancho. Leerla después deja siempre a uno pisando al otro.
+
+Es un buen recordatorio de por qué las capturas se miran: el ajuste se guardaba bien, se leía bien,
+y los tests que lo cubren seguían en verde. Lo único que estaba mal era **cuándo**.
+
+### D-969 — Cobertura del retoque del raíl (4 tests, sustituyen a los 2 de D-965)
+
+Los dos tests de D-965 comprobaban que, con los rellenos de cada estado, al icono y al avatar les
+quedara sitio. Esa cuenta ya no existe: no hay rellenos por estado. Se sustituyen por cuatro que
+miden **los carriles**, que es lo que ahora coloca:
+
+- **El canal cabe el icono y el avatar** — lo que se rompe en silencio: un ancho que no cabe se
+  recorta sin protestar, y el icono simplemente no está.
+- **El raíl plegado mide exactamente sus carriles** — ni uno más (sobraría hueco a un lado y el
+  icono dejaría de estar centrado respecto al desplegado) ni uno menos.
+- **El texto empieza donde acaban los carriles**, y el número que sangra los rótulos de grupo es esa
+  suma. Un rótulo que no cae en la columna de lo que rotula se lee como si fuera de otra cosa.
+- **El raíl no tiene relleno horizontal** — la regla estructural: en cuanto alguien le devuelva un
+  relleno, cambiarlo al plegar volverá a mover el icono, que es el defecto de partida.
+
+Los cuatro hacen la aritmética con los tokens reales, así que se ponen rojos con los números
+delante. 1.823 en verde.
+
+**Lo que NO se ha escrito, y por qué** (N-5): ni un test de que la insignia esté en la esquina del
+avatar, ni de que la fila de usuario lleve línea encima, ni del orden de `RestoreRail` respecto a
+`Show()`. Los dos primeros son forma —se ven en la primera captura—. El tercero **sí puede
+romperse en silencio**, y se ha dejado fuera a conciencia: probarlo pide levantar una ventana WPF
+de verdad con su ciclo de vida, que es un aparato desproporcionado para un orden de dos líneas que
+además está escrito en un comentario delante de ellas. Queda apuntado aquí como lo que es: una
+regla cubierta por la revisión visual y no por la suite.

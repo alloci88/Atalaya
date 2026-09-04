@@ -14,10 +14,11 @@ el raíl plegado arreglado y el piloto del hub en su sitio).
   - **Parte A — el sistema. ENTREGADA** (D-944…D-960): tokens de tipografía y espaciado, paleta
     semántica en dos temas con contraste AA medido, estilos base, raíl nuevo con estado activo y
     grupos, miga de pan y vuelta atrás, ventana maximizada la primera vez, modo claro crema.
-    **Revisada por el usuario y corregida** (D-961…D-965): crema más cálido con los 49 pares
+    **Revisada por el usuario DOS veces y corregida** (D-961…D-969): crema más cálido con los 49 pares
     recalculados, escala a 15 de base con suelo en 13, el raíl plegado que no pintaba los iconos
-    —con su causa medida— y el piloto del hub mudado al pie del raíl sin la palabra «Green».
-    Capturas en `docs/design/f26-parte-a/`.
+    —con su causa medida—, el raíl remedido por carriles (una sola columna de iconos, la misma x
+    plegado o no) y el piloto convertido en insignia del avatar. Capturas en
+    `docs/design/f26-parte-a/`, con el raíl plegado y desplegado en `rail/`.
   - **Parte B — las vistas de trabajo.** Portafolio, Inventario, Hallazgos (lista y detalle),
     Sesión en vivo y Arreglo asistido. Incluye la auditoría con capturas de Inventario, la ficha,
     el arreglo y el alta, que no la tenían.

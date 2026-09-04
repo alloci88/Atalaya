@@ -89,15 +89,16 @@ public partial class App : Application
         string? sweepNotice = settings.MigrateSweepCapDefault();
         ThemeService.Apply(settings.Current.Theme);
 
-        var window = _host.Services.GetRequiredService<MainWindow>();
-        window.Show();
-
         MainViewModel main = _host.Services.GetRequiredService<MainViewModel>();
 
-        // F26 §A (D-963): cómo dejaste el raíl. Va DESPUÉS de enseñar la ventana, no antes: el
-        // primer `SizeChanged` llega al mostrarla y decidiría por su cuenta, pisando lo que
-        // hubieras elegido.
+        // F26 §A (D-963): cómo dejaste el raíl, ANTES de enseñar la ventana. El primer
+        // `SizeChanged` llega al mostrarla, y es el que decide el plegado automático por ancho; si
+        // la preferencia se leyera después, o la pisaría el ancho, o ella pisaría al ancho — que
+        // es lo que pasaba: el raíl se quedaba desplegado en una ventana estrecha.
         main.RestoreRail();
+
+        var window = _host.Services.GetRequiredService<MainWindow>();
+        window.Show();
 
         await main.InitializeAsync();
 

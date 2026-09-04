@@ -86,16 +86,25 @@
     <Thickness x:Key="Pad.Row">16,12</Thickness>
     <Thickness x:Key="Pad.Card">20</Thickness>
     <Thickness x:Key="Pad.Page">32,24</Thickness>
-    <Thickness x:Key="Pad.Rail">12,16</Thickness>
-    <Thickness x:Key="Pad.RailItem">12,8</Thickness>
+    <!-- EL RAÍL SE MIDE POR CARRILES, no por rellenos (D-966). El relleno horizontal del raíl es
+         CERO y el de sus filas también: quien reparte el ancho son las columnas de cada fila, y
+         son las mismas para todas —el botón de las tres rayas, cada entrada y la fila de usuario—.
+         Ésa es la razón de que el icono caiga en la misma x en las tres, y plegado o desplegado.
 
-    <!-- PLEGADO: los rellenos se estrechan, y no es cosmética (D-963). Con el raíl a 60 px y los
-         rellenos de 12, el icono se quedaba con CERO píxeles de ancho —medido: el chip azul de la
-         entrada activa medía exactamente 24 px, que son 12+12 de relleno y nada dentro— y se veía
-         un marcador vacío. El relleno de una entrada ancha no vale para una de 68. -->
-    <Thickness x:Key="Pad.RailCollapsed">8,16</Thickness>
-    <Thickness x:Key="Pad.RailItemCollapsed">8</Thickness>
-    <Thickness x:Key="Pad.RailGroup">12,12,12,4</Thickness>
+         La cuenta, de izquierda a derecha:
+           ·  0 …  8   carril del marcador de «estás aquí» (3 px de barra + 5 de aire)
+           ·  8 … 48   CANAL DE ICONOS: 40 px, con el icono de 24 centrado → el icono ocupa 16…40
+           · 48 … 60   el hueco antes del texto
+           · 60 …      el texto, siempre
+
+         D-963 arregló que el icono no se pintara ajustando dos rellenos distintos, uno por estado.
+         Funcionaba y estaba mal planteado: dos números que hay que mantener iguales a mano acaban
+         siendo distintos. Con un canal fijo no hay nada que mantener. -->
+    <Thickness x:Key="Pad.Rail">0,16</Thickness>
+    <Thickness x:Key="Pad.RailItem">0,8</Thickness>
+    <Thickness x:Key="Pad.RailChip">0,0,8,0</Thickness>
+    <Thickness x:Key="Pad.RailLabel">12,0,0,0</Thickness>
+    <Thickness x:Key="Pad.RailGroup">60,16,12,4</Thickness>
     <Thickness x:Key="Pad.RailItemGap">0,0,0,2</Thickness>
     <Thickness x:Key="Pad.TopBar">32,10</Thickness>
     <Thickness x:Key="Pad.Footer">32,8</Thickness>
@@ -123,19 +132,37 @@
     -->
     <sys:Double x:Key="Rail.Width">232</sys:Double>
 
-    <!-- 68 y no 60: es lo que hace falta para que el icono quepa ENTERO. La cuenta, que es la que
-         faltó la primera vez: 68 de raíl − 16 de relleno del raíl = 52; − 11 de la barra de «estás
-         aquí» con su margen = 41; − 16 de relleno de la entrada = 25 para un icono de 19. Y el
-         avatar de la cuenta, que no lleva barra, tiene 52 − 16 = 36 para sus 24. -->
-    <sys:Double x:Key="Rail.CollapsedWidth">68</sys:Double>
+    <!-- Plegado = los carriles sin el texto: 8 del marcador + 40 del canal + 8 de aire a la
+         derecha. Nada que ajustar a mano; sale de la suma, y hay un test que la hace. -->
+    <sys:Double x:Key="Rail.CollapsedWidth">56</sys:Double>
+
+    <!-- El canal de iconos, y el carril del marcador que va delante. Los dos, iguales en los dos
+         estados: es lo que fija la x del icono. -->
+    <sys:Double x:Key="Rail.IconChannel">40</sys:Double>
+    <sys:Double x:Key="Rail.MarkerLane">8</sys:Double>
+
+    <!-- Dónde empieza el texto en el raíl: 8 + 40 + 12. Se escribe también como número porque las
+         etiquetas de grupo no van dentro de una fila y necesitan sangrarse solas. `RailLanesAddUp`
+         comprueba que este número siga siendo la suma. -->
+    <sys:Double x:Key="Rail.TextIndent">60</sys:Double>
+
+    <!-- La insignia del piloto sobre el avatar: 8 px de color y 2 de anillo del color del raíl, o
+         sea 12 de círculo (el trazo de WPF va centrado en el borde, así que 12 − 2·2 = 8 de
+         relleno visible). El anillo es lo que la separa del avatar sin pintar un borde encima. -->
+    <sys:Double x:Key="Rail.BadgeSize">12</sys:Double>
+    <sys:Double x:Key="Rail.BadgeRing">2</sys:Double>
     <sys:Double x:Key="Content.MaxWidth">1480</sys:Double>
     <sys:Double x:Key="Control.MinHeight">36</sys:Double>
-    <sys:Double x:Key="Icon.Size">19</sys:Double>
+
+    <!-- 24, que es el tamaño al que un icono de línea se lee sin mirarlo fijo. Antes 18-19, que
+         iba con una base de 14: un icono no puede quedarse quieto cuando la letra crece. -->
+    <sys:Double x:Key="Icon.Size">24</sys:Double>
 
     <!-- La barra de «estás aquí» del raíl, y el margen que la separa de la entrada. Están aquí y
          no sueltas en el estilo porque `RailCollapsedFitsTheIcon` hace la cuenta con ellas: lo que
          se rompió en la Parte A fue justamente esa cuenta. -->
     <sys:Double x:Key="Rail.MarkerWidth">3</sys:Double>
+    <sys:Double x:Key="Rail.AvatarSize">24</sys:Double>
     <sys:Double x:Key="Icon.Stroke">1.6</sys:Double>
 
     <!-- El ancho por debajo del cual el raíl se pliega a solo iconos. 1120 es el punto en el que,

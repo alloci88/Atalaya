@@ -111,59 +111,85 @@ public sealed class DesignTokenTests
     }
 
     /// <summary>
-    /// <b>Con el raíl plegado, al icono le queda sitio.</b> Es la cuenta que falló en la Parte A y
-    /// que dejó el menú sin iconos: solo se veía el chip azul de la entrada activa, vacío, y el
-    /// avatar cortado por la mitad.
+    /// <b>EL RAÍL SE MIDE POR CARRILES</b> (D-966), y aquí se comprueba que las cuentas cuadren.
     /// <para>
-    /// <b>La causa, medida.</b> El raíl plegado tenía 60 px; menos 24 de su propio relleno
-    /// horizontal quedan 36; menos 11 de la barra de «estás aquí» con su margen quedan 25; menos
-    /// los 24 del relleno de la entrada queda <b>1 px</b> para un icono de 18. En la captura, el
-    /// chip azul medía exactamente 24 px —12+12 de relleno y nada dentro—.
+    /// <b>De dónde viene.</b> El raíl plegado no pintaba los iconos: el chip azul de la entrada
+    /// activa medía exactamente 24 px —los 12+12 de su relleno— y no quedaba ni un píxel dentro
+    /// (D-963). Aquel arreglo ajustó un relleno distinto para cada estado; funcionaba, y estaba mal
+    /// planteado: dos números que hay que mantener iguales a mano acaban siendo distintos, y el
+    /// icono habría vuelto a moverse al siguiente retoque. Ahora hay un CANAL fijo, el mismo en los
+    /// dos estados, y estos tests son la cuenta escrita.
     /// </para>
     /// <para>
-    /// <b>Por qué es una regla y no forma.</b> Un ancho fijo dentro de una columna demasiado
-    /// estrecha <b>se recorta en silencio</b>: no falla nada, no avisa nadie, y el icono
-    /// simplemente no está. Es indistinguible de «no hay icono». Cualquiera que estreche el raíl
-    /// plegado, engorde un relleno o agrande el icono vuelve a romperlo sin enterarse — y esto se
-    /// pone rojo con los números delante.
+    /// <b>Por qué son de regla.</b> Lo que protegen no se cae con estruendo: un ancho que no cabe
+    /// se recorta en silencio —no falla nada, el icono simplemente no está— y una columna que se
+    /// desalinea unos píxeles no rompe nada en absoluto, solo se ve mal. Ninguna de las dos deja
+    /// rastro en ningún log.
     /// </para>
     /// </summary>
     [Fact]
-    public void Con_el_rail_plegado_al_icono_le_queda_sitio()
+    public void El_canal_de_iconos_cabe_el_icono_y_el_avatar()
     {
-        double rail = Token("Rail.CollapsedWidth");
-        double icon = Token("Icon.Size");
-        double marker = Token("Rail.MarkerWidth");
+        double canal = Token("Rail.IconChannel");
 
-        var railPad = Pad("Pad.RailCollapsed");
-        var itemPad = Pad("Pad.RailItemCollapsed");
-        var markerMargin = Pad("Pad.XXS");
+        canal.Should().BeGreaterThanOrEqualTo(
+            Token("Icon.Size"),
+            "un icono que no cabe en su canal no protesta: se recorta en silencio");
 
-        double markerCost = marker + H(markerMargin);
-        double disponible = rail - H(railPad) - markerCost - H(itemPad);
-
-        disponible.Should().BeGreaterThanOrEqualTo(
-            icon,
-            "un raíl de {0} px, con {1} de su relleno, {2} de la barra activa y {3} del relleno de "
-            + "la entrada, deja {4} px para un icono de {5}. Un icono que no cabe NO protesta: se "
-            + "recorta en silencio y el menú se queda con marcadores vacíos",
-            rail, H(railPad), markerCost, H(itemPad), disponible, icon);
+        canal.Should().BeGreaterThanOrEqualTo(
+            Token("Rail.AvatarSize"),
+            "y el avatar de la cuenta ocupa ese mismo canal — salía cortado por la mitad");
     }
 
-    /// <summary>Y al avatar de la cuenta, que no lleva barra pero mide más que un icono.</summary>
+    /// <summary>
+    /// El raíl plegado mide EXACTAMENTE sus carriles: el del marcador, el del icono y el aire de la
+    /// derecha. Ni uno más —sobraría hueco a un lado del icono y dejaría de estar centrado con el
+    /// desplegado— ni uno menos.
+    /// </summary>
     [Fact]
-    public void Con_el_rail_plegado_al_avatar_le_queda_sitio()
+    public void El_rail_plegado_mide_sus_carriles()
     {
-        const double avatar = 24;
+        double esperado = Token("Rail.MarkerLane") + Token("Rail.IconChannel") + Pad("Pad.RailChip").Right;
 
-        double disponible = Token("Rail.CollapsedWidth")
-            - H(Pad("Pad.RailCollapsed"))
-            - H(Pad("Pad.RailItemCollapsed"));
+        Token("Rail.CollapsedWidth").Should().Be(
+            esperado,
+            "plegado es el raíl SIN el texto: {0} del marcador + {1} del canal + {2} de aire",
+            Token("Rail.MarkerLane"), Token("Rail.IconChannel"), Pad("Pad.RailChip").Right);
+    }
 
-        disponible.Should().BeGreaterThanOrEqualTo(
-            avatar,
-            "el avatar salía cortado por la mitad: {0} px de hueco para {1} de avatar",
-            disponible, avatar);
+    /// <summary>
+    /// La x del texto es la suma de los carriles, y es la MISMA para las entradas y para los
+    /// rótulos de grupo. Un rótulo que no cae en la columna de lo que rotula se lee como si fuera
+    /// de otra cosa.
+    /// </summary>
+    [Fact]
+    public void El_texto_del_rail_empieza_donde_acaban_los_carriles()
+    {
+        double sangria = Token("Rail.MarkerLane") + Token("Rail.IconChannel") + Pad("Pad.RailLabel").Left;
+
+        Token("Rail.TextIndent").Should().Be(
+            sangria,
+            "el número que sangra los rótulos de grupo tiene que ser la suma de los carriles: "
+            + "{0} + {1} + {2}",
+            Token("Rail.MarkerLane"), Token("Rail.IconChannel"), Pad("Pad.RailLabel").Left);
+
+        Pad("Pad.RailGroup").Left.Should().Be(
+            Token("Rail.TextIndent"),
+            "y los rótulos de grupo se sangran con él");
+    }
+
+    /// <summary>
+    /// El raíl NO tiene relleno horizontal: el ancho lo reparten los carriles de cada fila. Es lo
+    /// que garantiza que el icono caiga en la misma x plegado y desplegado — con relleno en el
+    /// raíl, cambiarlo al plegar movía el icono, que es exactamente el defecto de partida.
+    /// </summary>
+    [Fact]
+    public void El_rail_no_tiene_relleno_horizontal()
+    {
+        var pad = Pad("Pad.Rail");
+
+        H(pad).Should().Be(0, "quien reparte el ancho del raíl son los carriles, no su relleno");
+        H(Pad("Pad.RailItem")).Should().Be(0, "ni el de sus filas");
     }
 
     // ================================================================ el andamiaje

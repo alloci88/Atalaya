@@ -59,11 +59,15 @@ La ventana tiene tres piezas fijas, y las tres están siempre en el mismo sitio.
   **Inventario**, más **Sesión en vivo** y **Arreglo asistido** cuando los hay. Este grupo aparece
   en cuanto entras en algo de una aplicación y te sigue mientras estés dentro: el inventario está
   **a un clic desde cualquier página**, sin pasar por Portafolio.
-- **Sistema** — Cuenta y Ajustes. Tu cuenta también está abajo del todo, con tu avatar — y a su
-  lado, **el piloto del hub**.
+- **Sistema** — Cuenta y Ajustes. Tu cuenta también está abajo del todo, con tu avatar — y en la
+  esquina del avatar, **el piloto del hub**.
 
 La entrada donde estás va resaltada, con una barra de color a su izquierda. Un punto que late
 sustituye al icono cuando algo está corriendo — una auditoría o un arreglo.
+
+Todos los iconos del raíl van en **una sola columna** —el botón de las tres rayas, cada entrada y
+tu avatar— y todos los textos empiezan en la misma vertical, incluidos los rótulos de los grupos.
+Plegado o desplegado, los iconos no se mueven de sitio: lo único que desaparece es el texto.
 
 Si estrechas mucho la ventana, el raíl **se pliega a solo iconos** para devolverle el sitio al
 contenido. El botón de arriba lo pliega y lo despliega a mano; a partir de que lo toques manda lo
@@ -87,12 +91,13 @@ con su progreso y un clic para ir a verlos.
 
 ### El piloto del hub
 
-El punto de color del pie del raíl, al lado de tu avatar. **Verde**: conectado a GitHub y al hub,
-todo publicado. **Ámbar**: sin conexión con el hub, o con cambios tuyos sin publicar — puedes
-seguir trabajando, y lo que escribas se publica en cuanto vuelva la conexión. **Rojo**: la última
-sincronización falló, y lo que escribas se queda en esta máquina hasta que se arregle.
+El puntito de color **en la esquina de tu avatar**, abajo del todo del raíl. **Verde**: conectado a
+GitHub y al hub, todo publicado. **Ámbar**: sin conexión con el hub, o con cambios tuyos sin
+publicar — puedes seguir trabajando, y lo que escribas se publica en cuanto vuelva la conexión.
+**Rojo**: la última sincronización falló, y lo que escribas se queda en esta máquina hasta que se
+arregle.
 
-Pasa el ratón por encima y lo dice con palabras, con la hora de la última sincronización y —en
+Pasa el ratón por el avatar y lo dice con palabras, con la hora de la última sincronización y —en
 rojo— el error concreto.
 
 ### La ventana

@@ -332,86 +332,97 @@
 
     <!-- ================================================================ El raíl
 
-         UNA entrada del raíl, con todo lo que una entrada puede tener: la barra de color que dice
-         «estás aquí», el icono, el texto, un contador y el punto que late cuando algo corre. Se
-         escribe una vez porque son ocho y porque aparecen y desaparecen: ocho copias de esto en el
-         XAML serían ocho sitios donde se puede olvidar el estado activo, que es exactamente lo que
-         pasaba antes.
+         UNA fila del raíl, y de ella salen las tres que hay: el botón de plegar, cada entrada del
+         menú y la fila de usuario. Comparten estilo —altura, relleno y alineación— y comparten
+         carriles, que es lo que hace que el icono de las tres caiga en la MISMA x, plegado o
+         desplegado (D-966). Si cada una se maquetara por su cuenta, «igual» duraría hasta el
+         siguiente retoque.
 
-         El DataContext de la plantilla es un `NavItem`, así que se enlaza directo contra él; el
-         plegado viene de la ventana, que es de quien es.
+         Los carriles están dibujados en `Tokens.xaml`, con la cuenta. Aquí solo se consumen.
     -->
-    <Style x:Key="RailItem" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
+    <Style x:Key="RailRow" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="{StaticResource Pad.Zero}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
         <Setter Property="Padding" Value="{StaticResource Pad.RailItem}" />
         <Setter Property="Margin" Value="{StaticResource Pad.RailItemGap}" />
+        <Setter Property="MinHeight" Value="{StaticResource Control.MinHeight}" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <!-- Los carriles, para que las tres filas los declaren igual sin copiarlos. -->
+    <ItemsPanelTemplate x:Key="RailStack">
+        <StackPanel />
+    </ItemsPanelTemplate>
+
+    <Style x:Key="RailItem" TargetType="Button" BasedOn="{StaticResource RailRow}">
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
+                            <!-- El carril del marcador. Existe SIEMPRE, con barra o sin ella: si
+                                 apareciera solo al activarse, la entrada activa se desplazaría
+                                 respecto a las demás y el menú bailaría al cambiar de página. -->
+                            <ColumnDefinition Width="{Binding Source={StaticResource Rail.MarkerLane}}" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
-                        <!-- La barra de «estás aquí». Ocupa columna propia SIEMPRE, encendida o
-                             apagada, para que la entrada activa no se desplace tres píxeles
-                             respecto a las demás — un menú que baila al cambiar de página se nota
-                             aunque no se sepa decir por qué. -->
                         <Border x:Name="Marker" Grid.Column="0"
                                 Width="{StaticResource Rail.MarkerWidth}"
+                                HorizontalAlignment="Left"
                                 Margin="{StaticResource Pad.XXS}"
                                 CornerRadius="{StaticResource Radius.Pill}"
                                 Background="Transparent" />
 
                         <Border x:Name="Chrome" Grid.Column="1"
                                 Background="{TemplateBinding Background}"
+                                Margin="{StaticResource Pad.RailChip}"
                                 CornerRadius="{StaticResource Radius.M}"
                                 Padding="{TemplateBinding Padding}"
                                 SnapsToDevicePixels="True">
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="{Binding Source={StaticResource Rail.IconChannel}}" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
 
-                                <!-- MinWidth y no Width: un ancho FIJO dentro de una columna
-                                     demasiado estrecha se recorta en silencio, que es justo cómo
-                                     el icono desapareció sin que nada fallara. Con el mínimo, si
-                                     algún día no cupiera, empujaría — y se vería. -->
-                                <Grid Grid.Column="0" MinWidth="{StaticResource Icon.Size}">
-                                    <Path x:Name="Glyph"
-                                          Style="{StaticResource Icon}"
-                                          Data="{Binding Icon}"
-                                          Stroke="{TemplateBinding Foreground}" />
-                                    <!-- Lo que late sustituye al icono en vez de sumarse: dos
-                                         señales de lo mismo, una al lado de la otra, en 232 px. -->
-                                    <Ellipse x:Name="Pulse" Width="9" Height="9"
-                                             Fill="{DynamicResource Brush.Success.Fill}"
-                                             Visibility="Collapsed">
-                                        <Ellipse.Triggers>
-                                            <EventTrigger RoutedEvent="Loaded">
-                                                <BeginStoryboard>
-                                                    <Storyboard>
-                                                        <DoubleAnimation
-                                                            Storyboard.TargetProperty="Opacity"
-                                                            From="1.0" To="0.15" Duration="0:0:0.9"
-                                                            AutoReverse="True" RepeatBehavior="Forever" />
-                                                    </Storyboard>
-                                                </BeginStoryboard>
-                                            </EventTrigger>
-                                        </Ellipse.Triggers>
-                                    </Ellipse>
-                                </Grid>
+                                <!-- El icono, centrado en su canal. Ni ancho fijo que se recorte ni
+                                     alineación a la izquierda: centrado en un canal de ancho fijo
+                                     es lo único que da la misma x en las tres filas. -->
+                                <Path x:Name="Glyph" Grid.Column="0"
+                                      Style="{StaticResource Icon}"
+                                      Data="{Binding Icon}"
+                                      HorizontalAlignment="Center"
+                                      Stroke="{TemplateBinding Foreground}" />
+
+                                <!-- Lo que late sustituye al icono en vez de sumarse: dos señales
+                                     de lo mismo, una al lado de la otra, en un canal de 40 px. -->
+                                <Ellipse x:Name="Pulse" Grid.Column="0"
+                                         Width="9" Height="9"
+                                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                                         Fill="{DynamicResource Brush.Success.Fill}"
+                                         Visibility="Collapsed">
+                                    <Ellipse.Triggers>
+                                        <EventTrigger RoutedEvent="Loaded">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation
+                                                        Storyboard.TargetProperty="Opacity"
+                                                        From="1.0" To="0.15" Duration="0:0:0.9"
+                                                        AutoReverse="True" RepeatBehavior="Forever" />
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </Ellipse.Triggers>
+                                </Ellipse>
 
                                 <TextBlock x:Name="Label" Grid.Column="1"
                                            Text="{Binding Label}"
-                                           Margin="{StaticResource Pad.RailItem}"
+                                           Margin="{StaticResource Pad.RailLabel}"
                                            Foreground="{TemplateBinding Foreground}"
                                            VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis" />
@@ -436,14 +447,12 @@
                             <Setter TargetName="Glyph" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="Pulse" Property="Visibility" Value="Visible" />
                         </DataTrigger>
-                        <!-- Plegado: solo iconos. El texto no se encoge — desaparece (principio 1).
-                             Y el RELLENO se estrecha con él (D-963): con el de 12 puesto, los
-                             12+12 se comían los 25 px que quedaban y el icono se quedaba con cero.
-                             Se veía el chip azul de la entrada activa, vacío. -->
+                        <!-- Plegado: se va el TEXTO y nada más. Los carriles no se tocan, que es
+                             justamente el arreglo: el icono no se entera de que el raíl ha
+                             cambiado de ancho. -->
                         <DataTrigger Binding="{Binding DataContext.RailCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
                             <Setter TargetName="Label" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="Badge" Property="Visibility" Value="Collapsed" />
-                            <Setter Property="Padding" Value="{StaticResource Pad.RailItemCollapsed}" />
                         </DataTrigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Surface2}" />

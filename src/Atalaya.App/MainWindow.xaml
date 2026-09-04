@@ -55,90 +55,108 @@
                 <Border.Style>
                     <Style TargetType="Border">
                         <Setter Property="Width" Value="{StaticResource Rail.Width}" />
+                        <!-- El relleno es EL MISMO plegado y desplegado, y horizontalmente cero:
+                             quien reparte el ancho son los carriles de cada fila (D-966). Cuando
+                             el relleno cambiaba con el estado, el icono cambiaba de sitio con él. -->
                         <Setter Property="Padding" Value="{StaticResource Pad.Rail}" />
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding RailCollapsed}" Value="True">
                                 <Setter Property="Width" Value="{StaticResource Rail.CollapsedWidth}" />
-                                <!-- El relleno se estrecha con el raíl (D-963). Si no, los 24 px
-                                     de relleno horizontal se comen el sitio del icono. -->
-                                <Setter Property="Padding" Value="{StaticResource Pad.RailCollapsed}" />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
                 </Border.Style>
 
                 <DockPanel>
-                    <!-- El plegado, arriba del todo y siempre en el mismo sitio, plegado o no. -->
+                    <!-- El plegado, arriba del todo. Va en los MISMOS carriles que las entradas
+                         (D-966): sus tres rayas caen exactamente en la x de los iconos de abajo,
+                         plegado o no. Antes iba alineado a la izquierda con su propio margen, y por
+                         eso no cuadraba con nada. -->
                     <Button DockPanel.Dock="Top"
-                            Style="{StaticResource Button.Ghost}"
+                            Style="{StaticResource RailRow}"
                             Command="{Binding ToggleRailCommand}"
-                            HorizontalAlignment="Left"
-                            Margin="{StaticResource Pad.XXS}"
                             AutomationProperties.Name="Plegar o desplegar el menú">
                         <Button.ToolTip>
                             <Binding Path="RailCollapsed" Converter="{StaticResource RailToggleTip}" />
                         </Button.ToolTip>
-                        <Path Style="{StaticResource Icon}" Data="{x:Static c:Icons.RailToggle}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="{Binding Source={StaticResource Rail.MarkerLane}}" />
+                                <ColumnDefinition Width="{Binding Source={StaticResource Rail.IconChannel}}" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Path Grid.Column="1"
+                                  Style="{StaticResource Icon}"
+                                  HorizontalAlignment="Center"
+                                  Data="{x:Static c:Icons.RailToggle}" />
+                        </Grid>
                     </Button>
 
                     <!-- El pie del raíl: la cuenta. Es «quién eres», que es información de sistema
                          y no de trabajo; abajo, fuera del camino, y siempre a un clic. -->
-                    <Button DockPanel.Dock="Bottom"
-                            Command="{Binding ShowAccountCommand}"
-                            HorizontalContentAlignment="Left"
-                            ToolTip="{Binding AccountTooltip}">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource Button.Ghost}">
-                                <Setter Property="Padding" Value="{StaticResource Pad.RailItem}" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding RailCollapsed}" Value="True">
-                                        <!-- D-963: con el relleno ancho, el avatar salía cortado
-                                             por la mitad — 24 px de avatar en 12 px de hueco. -->
-                                        <Setter Property="Padding" Value="{StaticResource Pad.RailItemCollapsed}" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
+                    <!-- LA FILA DE USUARIO (D-966/D-967). Misma altura, mismo relleno y mismos
+                         carriles que una entrada del menú —usa el mismo estilo `RailRow`, así que
+                         no es «parecida»: es la misma fila—. La línea fina de encima la separa del
+                         menú sin meter un hueco, que es lo que la haría bailar al plegar. -->
+                    <Border DockPanel.Dock="Bottom"
+                            BorderBrush="{DynamicResource Brush.Line}"
+                            BorderThickness="{StaticResource Border.Top}">
+                        <Button Style="{StaticResource RailRow}"
+                                Command="{Binding ShowAccountCommand}"
+                                ToolTip="{Binding AccountTooltip}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="{Binding Source={StaticResource Rail.MarkerLane}}" />
+                                    <ColumnDefinition Width="{Binding Source={StaticResource Rail.IconChannel}}" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
 
-                            <Border Grid.Column="0" Width="24" Height="24"
-                                    CornerRadius="{StaticResource Radius.Pill}">
-                                <Border.Background>
-                                    <ImageBrush ImageSource="{Binding AccountAvatarUrl}" Stretch="UniformToFill" />
-                                </Border.Background>
-                            </Border>
+                                <!-- El avatar ocupa el canal de iconos, centrado como ellos: es el
+                                     icono de esta fila. Y EL PILOTO ES SU INSIGNIA, no un elemento
+                                     aparte (D-967) — 8 px de color en la esquina, con un anillo del
+                                     color del raíl que lo despega del avatar sin pintarle un borde.
+                                     Suelto al final de la fila era una cuarta cosa que alinear; en
+                                     la esquina del avatar es lo que ya se mira para saber quién
+                                     eres, diciendo además si puedes trabajar. -->
+                                <Grid Grid.Column="1" HorizontalAlignment="Center"
+                                      ToolTip="{Binding SyncTooltip}">
+                                    <Border Width="{StaticResource Rail.AvatarSize}"
+                                            Height="{StaticResource Rail.AvatarSize}"
+                                            CornerRadius="{StaticResource Radius.Pill}">
+                                        <Border.Background>
+                                            <ImageBrush ImageSource="{Binding AccountAvatarUrl}" Stretch="UniformToFill" />
+                                        </Border.Background>
+                                    </Border>
+                                    <Ellipse Width="{StaticResource Rail.BadgeSize}"
+                                             Height="{StaticResource Rail.BadgeSize}"
+                                             HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                             Fill="{Binding SyncHealth, Converter={StaticResource SyncHealthToBrush}}"
+                                             Stroke="{DynamicResource Brush.Surface}"
+                                             StrokeThickness="{StaticResource Rail.BadgeRing}" />
+                                </Grid>
 
-                            <TextBlock Grid.Column="1"
-                                       Text="{Binding AccountLabel}"
-                                       Style="{StaticResource Text.Small}"
-                                       Margin="{StaticResource Pad.XS}"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"
-                                       Visibility="{Binding RailCollapsed, Converter={StaticResource InverseBoolToVisibility}}" />
-
-                            <!-- EL PILOTO DEL HUB (D-964). Aquí y no en la barra de arriba: es
-                                 estado de la conexión, igual que la cuenta, y las dos cosas juntas
-                                 responden a «¿puedo trabajar?» de un vistazo. Sin la palabra
-                                 «Green» al lado —que era el nombre interno del estado, en inglés y
-                                 sin decir de qué—: lo que significa está en el tooltip, que es
-                                 donde se va a mirar cuando deje de estar verde. -->
-                            <Ellipse Grid.Column="2" Width="9" Height="9"
-                                     VerticalAlignment="Center"
-                                     Fill="{Binding SyncHealth, Converter={StaticResource SyncHealthToBrush}}"
-                                     ToolTip="{Binding SyncTooltip}" />
-
-                            <TextBlock Grid.Column="2" Text="⚠"
-                                       Foreground="{DynamicResource Brush.Warning.Ink}"
-                                       VerticalAlignment="Center"
-                                       ToolTip="Reconecta tu cuenta de GitHub"
-                                       Visibility="{Binding AccountNeedsAttention, Converter={StaticResource BoolToVisibility}}" />
-                        </Grid>
-                    </Button>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                            Margin="{StaticResource Pad.RailLabel}"
+                                            VerticalAlignment="Center"
+                                            Visibility="{Binding RailCollapsed, Converter={StaticResource InverseBoolToVisibility}}">
+                                    <!-- Del mismo tamaño que una entrada del menú: es una fila
+                                         más del raíl, y una letra distinta la delataría como
+                                         añadida aparte. El color sí es el apagado, porque no es
+                                         un sitio al que ir sino quién eres. -->
+                                    <TextBlock Text="{Binding AccountLabel}"
+                                               Foreground="{DynamicResource Brush.TextMuted}"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="⚠"
+                                               Foreground="{DynamicResource Brush.Warning.Ink}"
+                                               Margin="{StaticResource Pad.RailLabel}"
+                                               VerticalAlignment="Center"
+                                               ToolTip="Reconecta tu cuenta de GitHub"
+                                               Visibility="{Binding AccountNeedsAttention, Converter={StaticResource BoolToVisibility}}" />
+                                </StackPanel>
+                            </Grid>
+                        </Button>
+                    </Border>
 
                     <ItemsControl ItemsSource="{Binding NavGroups}" DockPanel.Dock="Top">
                         <ItemsControl.ItemTemplate>
@@ -146,6 +164,9 @@
                                 <StackPanel>
                                     <!-- El rótulo del grupo desaparece al plegar: a 60 px no cabe,
                                          y una etiqueta recortada a dos letras no es un rótulo. -->
+                                    <!-- Sangrada a la x del texto de las entradas (D-966): un
+                                         rótulo de grupo que no cae en la misma columna que lo que
+                                         rotula se lee como si fuera de otra cosa. -->
                                     <TextBlock Text="{Binding Title}"
                                                Style="{StaticResource Text.Meta}"
                                                Margin="{StaticResource Pad.RailGroup}"
