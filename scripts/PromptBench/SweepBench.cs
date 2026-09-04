@@ -39,7 +39,8 @@ internal static class SweepBench
     public static async Task<int> RunAsync(
         IReadOnlyList<string> units, string cloneRoot, string? model,
         int maxPasses, int tandas, bool cut = true,
-        AuditStyle style = AuditStyle.Libre, AuditTheme tema = AuditTheme.General, bool hilo = false)
+        AuditStyle style = AuditStyle.Libre, AuditTheme tema = AuditTheme.General,
+        bool corteEnHilo = false)
     {
         if (!Directory.Exists(cloneRoot))
         {
@@ -66,7 +67,8 @@ internal static class SweepBench
         Console.WriteLine($"BARRIDO REAL · tope {maxPasses} pasadas · {tandas} tanda(s) "
             + $"· modelo {model ?? "(por defecto)"}"
             + (cut ? " · con corte" : " · SIN corte")
-            + $" · brazo {(hilo ? "Hilo" : style.ToString())}"
+            + (corteEnHilo ? " · CORTE DENTRO DEL HILO" : string.Empty)
+            + $" · brazo {style}"
             + (tema == AuditTheme.General ? string.Empty : $" · lupa {tema}"));
         Console.WriteLine($"Clon: {cloneRoot}");
         Console.WriteLine();
@@ -75,7 +77,8 @@ internal static class SweepBench
 
         for (int tanda = 1; tanda <= tandas; tanda++)
         {
-            int code = await OneAsync(units, cloneRoot, model, maxPasses, bridge, tanda, cut, style, tema, hilo);
+            int code = await OneAsync(
+                units, cloneRoot, model, maxPasses, bridge, tanda, cut, style, tema, corteEnHilo);
             if (code != 0)
             {
                 return code;
@@ -87,7 +90,8 @@ internal static class SweepBench
 
     private static async Task<int> OneAsync(
         IReadOnlyList<string> units, string cloneRoot, string? model,
-        int maxPasses, string bridge, int tanda, bool cut, AuditStyle style, AuditTheme tema, bool hilo)
+        int maxPasses, string bridge, int tanda, bool cut, AuditStyle style, AuditTheme tema,
+        bool corteEnHilo)
     {
         // Un hub NUEVO por tanda. Es la condición para que dos tandas sean dos muestras y no una
         // segunda auditoría: con el hub de la anterior, la tanda 2 vería sus hallazgos como
@@ -132,6 +136,7 @@ internal static class SweepBench
         var provider = new ClaudeCodeProvider(bridge, () => model, () => Path.Combine(root, "work"))
         {
             CutOnUnitDone = cut,
+            CutInThread = corteEnHilo,
         };
         AgentReadiness ready = await provider.CheckAsync(CancellationToken.None);
         if (!ready.Ready)
@@ -144,13 +149,12 @@ internal static class SweepBench
             hub, ingestion, reconciliation, machines, ulids, provider, settings)
         {
             Style = style,
-            Hilo = hilo,
         };
 
         // Una tanda que se apunta como «hilo» sin serlo mediría el otro brazo y la tabla no lo
         // diría. Se ve en la consola, en el momento.
         coordinator.ThreadUnavailable += casa =>
-            Console.WriteLine($"  ⚠ {casa} no sabe hilar: la tanda ha corrido como producción.");
+            Console.WriteLine($"  ⚠ {casa} no sabe hilar: la tanda ha corrido con una petición por pasada.");
 
         // En qué PASADA nace cada hallazgo. Es lo que permite la tabla de cobertura por tope de M1
         // sin volver a lanzar la tanda con topes distintos: el hallazgo lleva su ULID y su título,

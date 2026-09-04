@@ -54,12 +54,15 @@ de parada, su tope y su reconciliación. Lo único fingido es el hub.
   una con un hub nuevo — con el de la anterior, la tanda 2 vería sus hallazgos como existentes.
 - `--estructurado` (M1) sustituye el bloque `MÉTODO DE BARRIDO` por el recorrido miembro × familia.
   Se midió y **no se hizo fase** (D-908); la palanca sigue aquí para poder repetirla.
-- **`--hilo` (M2)** corre la unidad como una **conversación**: una sola sesión del proveedor para
-  toda la unidad, la pasada 1 con el prompt de producción entero —byte a byte— y las pasadas 2..N
-  con un texto de continuación corto y fijo (`PromptComposer.ContinuationTurn`), sin reenviar
-  reglas, código ni la lista de existentes. Es incompatible con el corte de F21 por construcción —la
-  invocación tiene que sobrevivir a la pasada—, así que la comparación se hace con `--sin-corte` en
-  **los dos** brazos.
+- **El hilo ya no es una bandera: es el barrido** (F25). Cada unidad se audita como una
+  **conversación** —una sola sesión del proveedor para toda la unidad, la pasada 1 con el prompt
+  entero y las pasadas 2..N con un texto de continuación corto y fijo
+  (`PromptComposer.ContinuationTurn`)—, así que una tanda sin banderas mide eso.
+- **`--corte-en-hilo`** arma el corte de F21 dentro del hilo, y hay que saber lo que se pide: cortar
+  interrumpe la invocación, y en un hilo la invocación es la conversación entera. Con esto cada
+  pasada corta, cada corte cierra el hilo y la siguiente abre otro desde cero — es decir, **el
+  barrido degenera en el de antes de F25**, prompt entero por pasada y corte incluido. Es la única
+  forma de medir el margen del hilo contra la producción que llevaba el corte puesto (D-881).
 
 Después de la tabla, el barrido imprime lo que decide una medida de coste: el **consumo por
 pasada** (fresca / leída / ESCRITA / salida y una valoración en credits a tarifa Opus), la

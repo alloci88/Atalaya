@@ -85,11 +85,14 @@ if (mode == "barrido")
 {
     // M1 — el brazo estructurado, solo aquí. Sin la bandera, el prompt es el de producción.
     AuditStyle style = argv.Contains("--estructurado") ? AuditStyle.Estructurado : AuditStyle.Libre;
-    // M2 — la unidad como una conversación: la pasada 1 manda el prompt entero y las 2..N solo la
-    // continuación. Sin la bandera, cada pasada es una petición nueva, tal cual.
-    bool hilo = argv.Contains("--hilo");
+    // F25 — el hilo YA no es una bandera: es el barrido. Lo que sí se puede pedir aquí es armar el
+    // corte de F21 dentro de él, y hay que saber lo que se pide: cortar mata la conversación, así
+    // que con esto cada pasada corta y abre hilo nuevo — es decir, el barrido degenera en el de
+    // antes de F25, prompt entero por pasada y corte incluido. Es la única forma de medir el margen
+    // del hilo contra la producción que llevaba el corte puesto.
+    bool corteEnHilo = argv.Contains("--corte-en-hilo");
     return await SweepBench.RunAsync(
-        units, cloneRoot ?? root, model, maxPasses, tandas, !noCut, style, theme, hilo);
+        units, cloneRoot ?? root, model, maxPasses, tandas, !noCut, style, theme, corteEnHilo);
 }
 
 AuditorBrief brief = PillarBrief.Parts(TechStack.DotNet);
@@ -132,7 +135,7 @@ static int Uso()
         + "[--model X] [--tema X] [--existentes N] [--pasadas N] [unidades...]");
     Console.Error.WriteLine(
         "     barrido: [--clon RUTA] [--tope N] [--tandas N] [--sin-corte] [--estructurado] "
-        + "[--hilo] [--tema X] [unidades...]");
+        + "[--corte-en-hilo] [--tema X] [unidades...]");
     return 2;
 }
 
