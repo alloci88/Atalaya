@@ -62,7 +62,8 @@ public sealed record SessionStarted(
     string By,
     string Machine,
     DateTimeOffset StartedUtc,
-    IReadOnlyList<string> Units);
+    IReadOnlyList<string> Units,
+    bool Exhaustive = false);
 
 /// <summary>
 /// Por qué murió una sesión que ya había empezado a auditar (BUGFIX-CUOTA).
@@ -327,6 +328,11 @@ public sealed class SessionCoordinator
             Model = _agent.ModelName,
             Provider = _agent.ProviderId,
             MaxPassesPerUnit = Math.Max(1, _settings.Current.MaxPassesPerUnit),
+            // R2 §1 — la forma de barrer queda escrita en la sesión, como el tope: sin ella, un
+            // coste tres veces mayor no se puede distinguir de un modelo que se portó mal, y
+            // Métricas no podría separar el gasto de las dos formas. Se lee UNA vez, al arrancar:
+            // cambiar el interruptor a mitad de un barrido no toca la sesión en curso.
+            Exhaustive = _settings.Current.ExhaustiveSweep,
         };
 
         // «Detener» solo podia actuar dentro del bucle de unidades: todo lo previo (publicar
@@ -343,7 +349,7 @@ public sealed class SessionCoordinator
         // Ahora una parada es un final ordenado: se cierra con lo que se llevara hecho.
         Started?.Invoke(new SessionStarted(
             sessionId, request.Slug, request.Mode, commit, by, Environment.MachineName, now,
-            units.Select(u => u.Path).ToList()));
+            units.Select(u => u.Path).ToList(), session.Exhaustive));
 
         bool stopped = ct.IsCancellationRequested;
         SessionFailure? providerFailure = null;
@@ -607,7 +613,13 @@ public sealed class SessionCoordinator
                 // Por qué murió el hilo anterior. Se apunta cuando de verdad se abre otro: cerrar el
                 // último hilo de una unidad no es reiniciar nada.
                 string? pendingRestart = null;
-                bool threadless = false;
+
+                // R2 §1 — el MODO EXHAUSTIVO no es un tercer camino: es este mismo `threadless`, que
+                // ya existía para el proveedor que no sabe hilar (D-922), puesto a mano. Con él la
+                // unidad no abre conversación y cada pasada viaja como una petición nueva con el
+                // prompt recompuesto — el barrido de antes de F25, byte a byte. Nada más abajo
+                // pregunta por el ajuste: si lo hiciera, sería una rama propia que mantener.
+                bool threadless = session.Exhaustive;
 
                 for (int pass = 1; pass <= maxPasses && dryStreak < dryToFinish && !overBudget; pass++)
                 {

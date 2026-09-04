@@ -402,6 +402,22 @@ public sealed class AuditSession
     public int MaxPassesPerUnit { get; set; }
 
     /// <summary>
+    /// La sesión se barrió en <b>modo exhaustivo</b> (R2 §1): una petición nueva por pasada, con el
+    /// prompt recompuesto, en vez de un turno de la conversación de la unidad.
+    /// <para>
+    /// Se registra por lo mismo que el tope de pasadas: es un ajuste de la máquina que lanza la
+    /// auditoría, y sin él una sesión de hace dos meses no se podría leer — un coste tres veces
+    /// mayor y un par de duplicados serían indistinguibles de un modelo que se portó mal. Es también
+    /// lo que permite a Métricas separar el gasto de las dos formas de barrer.
+    /// </para>
+    /// <para>
+    /// False en todo lo anterior a R2, que es la verdad: hasta aquí no había interruptor, y desde
+    /// F25 el barrido era el hilo.
+    /// </para>
+    /// </summary>
+    public bool Exhaustive { get; set; }
+
+    /// <summary>
     /// La sesión se detuvo antes de cubrir todas sus unidades (F5.1b). Se registra igual: los
     /// hallazgos se persisten en vivo, así que una parada sin registro dejaba el hub mutado sin
     /// traza de quién lo hizo. False en sesiones anteriores a F5.1b y en las completas.

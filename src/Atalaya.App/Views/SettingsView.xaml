@@ -203,6 +203,55 @@
                         Visibility="{Binding ModelsNotice, Converter={StaticResource NotEmptyToVisibility}}" />
                 </Grid>
 
+                <!-- R2 §1 — MODO EXHAUSTIVO. Va justo debajo del tope porque los dos gobiernan
+                     lo mismo: cuánto se paga por unidad. El icono de aviso lleva las cifras de M2,
+                     y la frase es literal: sale de SettingsViewModel.ExhaustiveWarning, para que no
+                     haya dos versiones del precio. -->
+                <Grid Style="{StaticResource FieldRow}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Modo exhaustivo" Style="{StaticResource FieldLabel}" />
+                    <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal">
+                        <ui:ToggleSwitch IsChecked="{Binding ExhaustiveSweep}" VerticalAlignment="Center" />
+                        <TextBlock Text="⚠" Margin="9,0,0,0" FontSize="14" Foreground="#E0A030"
+                                   VerticalAlignment="Center"
+                                   ToolTip="{Binding ExhaustiveNotice}" />
+                    </StackPanel>
+                    <TextBlock
+                        Grid.Row="1" Grid.Column="1"
+                        Text="Apagado, cada unidad se audita como UNA conversación y cada pasada es un turno suyo. Encendido, cada pasada vuelve a ser una petición nueva con el prompt recompuesto, que es como se barría antes. Aplica a las auditorías que lances a partir de ahora; la que esté en curso termina como empezó, y queda escrito en la sesión y en la cabecera de su informe."
+                        Style="{StaticResource FieldHelp}" />
+                </Grid>
+
+                <!-- R2 §2 — LAS TARIFAS, que antes se gestionaban en Métricas. Se aplican solas
+                     desde el primer uso; aquí se corrigen. El fichero sigue en el hub (D-786):
+                     esto es dónde se edita, no dónde se guarda. -->
+                <Grid Style="{StaticResource FieldRow}"
+                      Visibility="{Binding CanManageRates, Converter={StaticResource BoolToVisibility}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="220" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Tarifas" Style="{StaticResource FieldLabel}" />
+                    <ui:Button Grid.Row="0" Grid.Column="1" Content="Tarifas…"
+                               Command="{Binding ManageRatesCommand}"
+                               HorizontalAlignment="Left" />
+                    <TextBlock
+                        Grid.Row="1" Grid.Column="1"
+                        Text="Lo que cuesta un millón de tokens de cada modelo, y de ahí sale el coste de cada sesión. La aplicación las trae puestas y las mantiene al día sola: aquí se corrige un precio que no cuadre y se añade el de un modelo que no traiga. Son de la ORGANIZACIÓN —viven en el hub y las ve todo el equipo, con el commit como atribución—, no de esta máquina. Lo que edites manda sobre lo que traiga la versión."
+                        Style="{StaticResource FieldHelp}" />
+                </Grid>
+
                 <!-- F6.9: el interruptor del arreglo asistido vuelve a Ajustes, ahora que hay
                      algo detrás. Encendido por defecto: es supervisado por diseño. -->
                 <Grid Style="{StaticResource FieldRow}">

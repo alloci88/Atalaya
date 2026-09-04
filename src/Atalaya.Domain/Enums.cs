@@ -100,6 +100,21 @@ public enum AuditMode
 public static class AuditModes
 {
     /// <summary>
+    /// La palabra del <b>modo exhaustivo</b> (R2 §1), escrita UNA vez. La dicen la cabecera del
+    /// informe, el pie en vivo y el manual, y tres copias de una palabra son tres sitios donde
+    /// cambiarla y dos donde olvidarse.
+    /// </summary>
+    public const string Exhaustive = "exhaustivo";
+
+    /// <summary>
+    /// Con qué se auditó, para la cabecera del informe y para el pie: «Lotes», o «Lotes ·
+    /// exhaustivo» cuando cada pasada fue una petición nueva en vez de un turno de la conversación
+    /// de la unidad. Sin esto, dos sesiones que cuestan el triple la una que la otra se leen igual.
+    /// </summary>
+    public static string Describe(AuditMode mode, bool exhaustive)
+        => exhaustive ? $"{mode} · {Exhaustive}" : mode.ToString();
+
+    /// <summary>
     /// True si el modo está retirado (F5.6 §2). Se lee del atributo, no de una lista paralela:
     /// una segunda lista es la que se queda sin actualizar (D-239).
     /// </summary>

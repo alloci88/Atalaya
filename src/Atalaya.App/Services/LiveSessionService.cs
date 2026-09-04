@@ -219,7 +219,19 @@ public sealed partial class LiveSessionService : ObservableObject
     public string ProgressLine => !IsRunning
         ? string.Empty
         : $"Auditando {AppSlug} · unidad {Math.Max(1, UnitIndex)}/{UnitCount}"
+          + (Exhaustive ? $" · {AuditModes.Exhaustive}" : string.Empty)
           + (CurrentPassNumber > 0 ? $" · pasada {CurrentPassNumber}" : "");
+
+    /// <summary>
+    /// Esta sesión se está barriendo en <b>modo exhaustivo</b> (R2 §1): una petición por pasada.
+    /// <para>
+    /// Se dice en el pie —junto a la unidad— porque cuesta el triple y puede duplicar hallazgos:
+    /// quien mira una sesión correr tiene que poder saber con qué se está pagando. Es lo único que
+    /// R2 añade a la línea; D-926 sigue mandando en todo lo demás.
+    /// </para>
+    /// </summary>
+    [ObservableProperty]
+    private bool _exhaustive;
 
     public TimeSpan Elapsed => StartedUtc is null
         ? TimeSpan.Zero
@@ -338,6 +350,7 @@ public sealed partial class LiveSessionService : ObservableObject
         UnitIndex = UnitCount = CurrentPassNumber = Calls = 0;
         InputTokens = OutputTokens = CacheReadTokens = CacheWriteTokens = 0;
         Turns = 0;
+        Exhaustive = false;
         Budget = null;
         Cost = null;
 
@@ -390,6 +403,7 @@ public sealed partial class LiveSessionService : ObservableObject
         CurrentPassNumber = 0;
         InputTokens = OutputTokens = CacheReadTokens = CacheWriteTokens = 0;
         Turns = 0;
+        Exhaustive = false;
         Budget = null;
         Cost = null;
         Calls = 0;
@@ -545,6 +559,10 @@ public sealed partial class LiveSessionService : ObservableObject
     private void OnStarted(SessionStarted started)
     {
         SessionId = started.Id.ToString();
+        // R2 §1 — la forma de barrer se toma de la SESIÓN y no del ajuste: la sesión ya escribió con
+        // cuál empezó, y mover el interruptor mientras corre no puede cambiar lo que el pie dice de
+        // ella.
+        Exhaustive = started.Exhaustive;
         _openMarker = new OpenSessionMarker
         {
             SessionId = started.Id.ToString(),

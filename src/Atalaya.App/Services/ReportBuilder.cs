@@ -206,8 +206,11 @@ public static class ReportBuilder
         sb.AppendLine($"- **Autor**: {session.By} ({session.Machine})");
         sb.AppendLine($"- **Commit auditado**: {session.Commit}");
         sb.AppendLine($"{ProviderLine(session)} · **Modelo**: {session.Model ?? "n/d"}");
+        // R2 §1 — el modo dice también CÓMO se barrió: «Lotes · exhaustivo» cuando cada pasada fue
+        // una petición nueva. Va en la cabecera y no en el anexo porque cambia lo que el informe
+        // cuesta y lo que puede duplicar, y eso se lee antes de nada.
         sb.AppendLine($"- **Ciclo**: {session.CycleN} · **Temática**: {ThemeCatalog.Display(session.Theme)}"
-            + $" · **Modo**: {session.Mode}");
+            + $" · **Modo**: {AuditModes.Describe(session.Mode, session.Exhaustive)}");
 
         CostResult cost = CreditCalculator.Calculate(session, rates);
         sb.AppendLine(CostHeadline(session, cost));

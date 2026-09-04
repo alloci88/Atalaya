@@ -86,6 +86,14 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly DeployConfig? _deploy;
     private readonly IAboutDialog? _about;
 
+    /// <summary>
+    /// Las tarifas de la organización (R2 §2). Opcionales por lo mismo que el «Acerca de»: los
+    /// tests que solo ejercitan los ajustes numéricos no montan ventanas, y sin diálogo el gesto no
+    /// hace nada en vez de reventar.
+    /// </summary>
+    private readonly ModelRatesService? _rates;
+    private readonly IModelRatesDialog? _ratesDialog;
+
     /// <summary>Plazo para que el SDK conteste con su catálogo antes de rendirse.</summary>
     private static readonly TimeSpan ModelListTimeout = TimeSpan.FromSeconds(30);
 
@@ -99,7 +107,9 @@ public sealed partial class SettingsViewModel : ViewModelBase
         NavigationService navigation,
         IAboutDialog? about = null,
         DeployConfig? deploy = null,
-        AuditorProviderRegistry? providers = null)
+        AuditorProviderRegistry? providers = null,
+        ModelRatesService? rates = null,
+        IModelRatesDialog? ratesDialog = null)
     {
         _settings = settings;
         _agent = agent;
@@ -111,6 +121,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _navigation = navigation;
         _about = about;
         _deploy = deploy;
+        _rates = rates;
+        _ratesDialog = ratesDialog;
         AppSettings s = settings.Current;
         _editor = s.Editor;
         _isLightTheme = string.Equals(s.Theme, "light", StringComparison.OrdinalIgnoreCase);
@@ -119,6 +131,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _maxPassesPerUnit = s.MaxPassesPerUnit;
         _copilotTimeoutMinutes = s.CopilotTimeoutMinutes;
         _enableAssistedFix = s.EnableAssistedFix;
+        _exhaustiveSweep = s.ExhaustiveSweep;
         // F14 — el proveedor elegido, y el modelo DE ESE proveedor. Los dos campos de modelo son
         // independientes porque sus espacios de nombres no se solapan, así que ir y volver entre
         // casas conserva las dos elecciones en vez de dejar una configurada con un id imposible.
@@ -205,6 +218,55 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// </para>
     /// </summary>
     [ObservableProperty] private bool _enableAssistedFix;
+
+    /// <summary>
+    /// <b>Modo exhaustivo</b> (R2 §1). Apagado de fábrica. Encendido, cada pasada del barrido es una
+    /// petición nueva con el prompt recompuesto — el camino de respaldo de F25 (D-922), con un
+    /// interruptor delante y sin ninguna rama propia.
+    /// <para>
+    /// Se aplica a la SIGUIENTE sesión: la que esté corriendo termina como empezó.
+    /// </para>
+    /// </summary>
+    [ObservableProperty] private bool _exhaustiveSweep;
+
+    /// <summary>
+    /// El aviso del modo exhaustivo, <b>literal y en un solo sitio</b> (R2 §1). Son los números que
+    /// M2 midió (D-917, D-920) y no una impresión: quien enciende esto tiene que ver el precio antes
+    /// de pagarlo. Si alguna vez se vuelve a medir, se cambia aquí y en DECISIONS, no en el XAML.
+    /// </summary>
+    public const string ExhaustiveWarning =
+        "Aumenta el coste de forma drástica (M2: ×3 por unidad) y puede producir hallazgos "
+        + "duplicados. Encuentra, de media, dos defectos de gravedad media más por cada veinte.";
+
+    /// <summary>Y la misma frase, para enlazarla desde el XAML sin duplicarla.</summary>
+    public string ExhaustiveNotice => ExhaustiveWarning;
+
+    // --- Tarifas por modelo (R2 §2) ---
+
+    /// <summary>
+    /// Se puede abrir la tabla de tarifas: hay servicio y hay quien la enseñe.
+    /// </summary>
+    public bool CanManageRates => _rates is not null && _ratesDialog is not null;
+
+    /// <summary>
+    /// <b>Las tarifas se corrigen aquí desde R2</b>, y antes en Métricas → Tarifas · Gestionar.
+    /// <para>
+    /// El fichero NO se mueve: sigue en la raíz del hub (D-786), porque un precio es del contrato de
+    /// la organización con su proveedor y no de la aplicación ni del puesto. Lo que cambia es dónde
+    /// se edita. Y desde R2 no hay nada que activar: la tabla se siembra sola al abrir el hub, así
+    /// que esta pantalla es para corregir un precio y para añadir el de un modelo nuevo.
+    /// </para>
+    /// </summary>
+    [RelayCommand]
+    private void ManageRates()
+    {
+        if (_rates is null || _ratesDialog is null)
+        {
+            return;
+        }
+
+        _ratesDialog.Show(new ModelRatesViewModel(_rates));
+    }
 
     // --- Modelo (F5.1) ---
 
@@ -345,6 +407,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
             CopilotTimeoutMinutes, SettingsLimits.MinCopilotTimeoutMinutes,
             "el timeout de Copilot", "minuto", corrections);
         s.EnableAssistedFix = EnableAssistedFix;
+        s.ExhaustiveSweep = ExhaustiveSweep;
         return s;
     }
 

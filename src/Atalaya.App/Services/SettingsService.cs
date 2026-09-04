@@ -236,6 +236,34 @@ public sealed class AppSettings
     /// </summary>
     public int MaxPassesPerUnit { get; set; } = SettingsLimits.DefaultMaxPassesPerUnit;
 
+    /// <summary>
+    /// <b>Modo exhaustivo</b> (R2 §1): cada pasada del barrido es una petición nueva con el prompt
+    /// recompuesto, en vez de un turno de la conversación de la unidad.
+    /// <para>
+    /// <b>Apagado de fábrica</b>, y no es un tercer camino de código: es exactamente el camino de
+    /// respaldo que F25 dejó puesto para cuando un hilo no puede continuar (D-922), con un
+    /// interruptor delante. Encendido, la unidad no abre hilo y cada pasada viaja como viajaba antes
+    /// de F25.
+    /// </para>
+    /// <para>
+    /// <b>Lo que cuesta y lo que compra, medido</b> (M2, D-917/D-920): ×3 por unidad —204,7 credits
+    /// contra 64,2 con la tarifa de Opus— y hallazgos duplicados que el hilo no produce (7 variantes
+    /// marcadas contra 0); a cambio, 20,0 de los 20 defectos del caso de referencia contra 17,7. Dos
+    /// defectos de gravedad media más por cada veinte.
+    /// </para>
+    /// <para>
+    /// Vive aquí, en la configuración de la máquina, por lo mismo que el tope de pasadas: el barrido
+    /// gasta los tokens del asiento de quien lanza la sesión, así que es una preferencia del
+    /// operador y no una propiedad de la app auditada. Queda REGISTRADO en cada sesión, que es lo
+    /// que permite a Métricas separar el coste de las dos formas de barrer.
+    /// </para>
+    /// <para>
+    /// Se aplica a la SIGUIENTE sesión: cambiarlo a mitad de un barrido cambiaría la forma de
+    /// auditar sin avisar, y la sesión ya escribió en su registro con cuál empezó.
+    /// </para>
+    /// </summary>
+    public bool ExhaustiveSweep { get; set; }
+
 
     /// <summary>
     /// Modelo de Copilot con el que se lanzan las sesiones nuevas (<c>SessionConfig.Model</c>).

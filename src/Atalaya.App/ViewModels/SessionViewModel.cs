@@ -105,8 +105,18 @@ public sealed partial class SessionViewModel : ViewModelBase
             var segments = new List<FooterSegment>
             {
                 FooterSegment.Of(ProgressText, bold: true),
-                FooterSegment.Of(ElapsedText, opacity: 0.85),
             };
+
+            // R2 §1 — la palabra va JUNTO A LA UNIDAD y no cede nunca el sitio: es lo que explica
+            // que esta sesión cueste el triple y pueda traer duplicados. Una palabra ocupa poco y,
+            // si se abreviara hasta desaparecer, desaparecería justo en la pantalla estrecha en la
+            // que el coste se lee de reojo.
+            if (_live.Exhaustive)
+            {
+                segments.Add(FooterSegment.Of(AuditModes.Exhaustive, opacity: 0.85));
+            }
+
+            segments.Add(FooterSegment.Of(ElapsedText, opacity: 0.85));
             segments.AddRange(CreditText.UsageSegments(
                 _live.Calls, _live.InputTokens, _live.OutputTokens,
                 _live.CacheReadTokens, _live.CacheWriteTokens, _live.CostResult, _live.Provider,

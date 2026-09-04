@@ -464,7 +464,12 @@ public sealed class UnitThreadTests : IDisposable
     /// Un auditor que apunta lo que se le manda. <b>No sabe hilar</b>: es el camino de respaldo, una
     /// petición por pasada, y por eso sirve de línea contra la que comparar.
     /// </summary>
-    private class RecordingAgent : IAuditorProvider
+    /// <summary>
+    /// <b>Internal, y no privado, desde R2</b>: los tests del modo exhaustivo comparan contra esta
+    /// misma línea base —el camino de respaldo— y montar un segundo doble sería tener dos
+    /// definiciones de «una petición por pasada» que pueden divergir.
+    /// </summary>
+    internal class RecordingAgent : IAuditorProvider
     {
         private int _reported;
 
@@ -537,7 +542,7 @@ public sealed class UnitThreadTests : IDisposable
     }
 
     /// <summary>El mismo, pero hilando: cada pasada es un turno de la misma conversación.</summary>
-    private sealed class ThreadingAgent : RecordingAgent, IThreadedAuditor
+    internal sealed class ThreadingAgent : RecordingAgent, IThreadedAuditor
     {
         public Task<IUnitThread> OpenUnitThreadAsync(IAuditToolbox toolbox, CancellationToken ct)
         {
