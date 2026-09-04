@@ -1308,16 +1308,95 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         => text.Length <= max ? text : text[..max] + "…";
 
     /// <summary>Los eventos llegan de hilos de fondo; hay que marshalear antes de tocar la UI.</summary>
-    private static void OnUi(Action action)
+    private void OnUi(Action action)
     {
         Dispatcher? dispatcher = Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
+        if (dispatcher is not null && !dispatcher.CheckAccess())
         {
-            action();
+            dispatcher.Invoke(() => RunOrQueue(action));
+            return;
         }
-        else
+
+        RunOrQueue(action);
+    }
+
+    // -------------------------------------------------- BUGFIX-RELEASE §1: nada de reentrada
+
+    /// <summary>La cola de escrituras pendientes y quién la está drenando. Ver <see cref="RunOrQueue"/>.</summary>
+    private readonly object _writeGate = new();
+
+    private readonly Queue<Action> _queuedWrites = new();
+
+    private bool _writing;
+
+    /// <summary>
+    /// Ejecuta una escritura de UI, o la <b>encola</b> si ya hay otra en vuelo.
+    /// <para>
+    /// <b>El defecto que cierra.</b> <see cref="OnUi"/> ejecuta en línea cuando ya está en el hilo
+    /// bueno —y siempre, cuando no hay <c>Application</c>—. Así que quien reaccione a un cambio de
+    /// <see cref="Conversation"/> escribiendo en ella, directamente o soltando una continuación
+    /// que lo haga, entra en el segundo <c>Add</c> mientras el primero todavía reparte su
+    /// <c>CollectionChanged</c>, y <c>ObservableCollection</c> lanza «Cannot change
+    /// ObservableCollection during a CollectionChanged event». Con eso muere la sesión de arreglo
+    /// entera, en medio del trabajo del usuario.
+    /// </para>
+    /// <para>
+    /// <b>Por qué aquí y no difiriendo siempre al dispatcher.</b> Un <c>BeginInvoke</c> incondicional
+    /// no arregla el caso sin <c>Application</c> —no hay a quién diferir— y cambiaría el orden de
+    /// todo lo demás. La regla que hace falta es más pequeña y es la de verdad: <b>una escritura a
+    /// la vez, y las que lleguen mientras tanto van detrás, en orden</b>. La reentrada deja de ser
+    /// reentrada y pasa a ser el siguiente elemento de la cola.
+    /// </para>
+    /// <para>
+    /// El precio, dicho: quien escribe desde dentro de otra escritura <b>vuelve antes de que lo
+    /// suyo esté puesto</b>. Es correcto —lo estará al acabar la de fuera, que es inmediatamente
+    /// después— y es la única ventana en la que ocurre.
+    /// </para>
+    /// </summary>
+    private void RunOrQueue(Action action)
+    {
+        lock (_writeGate)
         {
-            dispatcher.Invoke(action);
+            _queuedWrites.Enqueue(action);
+            if (_writing)
+            {
+                // Ya hay alguien drenando: se lleva esta también y volvemos sin tocar nada.
+                return;
+            }
+
+            _writing = true;
+        }
+
+        while (true)
+        {
+            Action next;
+            lock (_writeGate)
+            {
+                if (_queuedWrites.Count == 0)
+                {
+                    _writing = false;
+                    return;
+                }
+
+                next = _queuedWrites.Dequeue();
+            }
+
+            try
+            {
+                next();
+            }
+            catch
+            {
+                // Se suelta el turno para que lo que quede en la cola lo drene el siguiente que
+                // escriba: una excepción dentro de una escritura no puede dejar la conversación
+                // muda para siempre.
+                lock (_writeGate)
+                {
+                    _writing = false;
+                }
+
+                throw;
+            }
         }
     }
 
