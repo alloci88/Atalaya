@@ -1,4 +1,4 @@
-# DECISIONS.md — Atalaya
+﻿# DECISIONS.md — Atalaya
 
 Registro de decisiones tomadas en zonas **[LIBERTAD]** o ante ambigüedades no
 bloqueantes del prompt de construcción. Las decisiones **[NO NEGOCIABLE]** del
@@ -12392,3 +12392,412 @@ Comprobado con un worktree **vivo** (`git worktree add --detach .claude/worktree
 `git ls-files --others --exclude-standard` no devuelve nada bajo `.claude`, y `git status` en la raíz
 sale limpio. `git check-ignore -v` señala la regla nueva. El ajuste local de la máquina,
 `.claude/settings.local.json`, ya lo ignoraba la configuración global del usuario; esto no lo toca.
+
+## M2 — Medida: las pasadas como turnos de una misma conversación
+
+### D-913 — §0 Viabilidad: la mecánica existe, y en Claude Code está comprobada al token
+
+Sin esto no había medida, así que se contesta primero y con la evidencia delante.
+
+**Claude Code: sí, y el ahorro se ve en la primera sonda.** Una conversación de dos turnos contra
+el CLI pelado (2.1.260) con **los flags de producción** —`--no-session-persistence`,
+`--setting-sources ""`, `--tools ""`— por la entrada `--input-format stream-json`:
+
+| | Fresca | Leída | **Escrita** | Salida |
+| --- | ---: | ---: | ---: | ---: |
+| Turno 1 (un catálogo de 899 reglas) | 2 | 25.377 | **65.100** | 14 |
+| Turno 2 («¿cuál era el presupuesto de la REGLA 0500?») | 2 | 90.477 | **93** | 8 |
+
+**El turno 2 escribe 93 tokens donde el turno 1 escribió 65.100**, y lee 90.477 —el prefijo entero
+más lo que se dijo en el turno 1—. El `session_id` es el mismo en los dos, y el modelo contestó
+«3500 ms», que es exactamente lo que decía la regla 0500 del catálogo que se le mandó una sola vez.
+Las tres cosas que hacían falta —que el segundo turno vea el primero, que el `session_id` se
+conserve y que la caché se lea en vez de escribirse— quedan comprobadas y no supuestas.
+
+**Y no es un experimento de laboratorio: la mecánica ya está en producción desde F16.** El arreglo
+asistido de las DOS casas es una conversación de varios turnos sobre una sola sesión —
+`ClaudeCliRunner.RunConversationAsync` en Claude Code, y un bucle de `SendAndWaitAsync` sobre la
+misma `CopilotSession` en `RealCopilotAgent.FixAsync`—. Lo que M2 construye no es un mecanismo
+nuevo: es el mismo, aplicado al barrido.
+
+**Copilot: el SDK dice que sí, y AQUÍ NO SE PUEDE COMPROBAR.** Se dice como lo que es, y con lo que
+lo desmentiría. El contrato del SDK 1.0.11 lo publica en su propia documentación, leída del `.xml`
+que viaja con el paquete:
+
+> `CopilotClient.ResumeSessionAsync` — *«This allows you to continue a previous conversation,
+> maintaining all conversation history»*, con un ejemplo de **reanudar con herramientas nuevas**.
+> `CopilotSession` — *«Disposing a session releases in-memory resources but preserves session data
+> on disk — the conversation can be resumed later»*.
+> Y los contadores que esta medida necesita están de serie: `AssistantUsageData.CacheReadTokens`
+> («Number of tokens read from prompt cache») y `CacheWriteTokens`, que ya llegan a
+> `UsageAdapter.From` desde F2.
+
+Lo que no hay es asiento. **Medido, no supuesto**: la cuenta de esta máquina está autenticada
+(`authType: gh-cli`) y aun así `models.list` contesta **403 «unauthorized: not authorized to use
+this Copilot feature»**, y un envío a una sesión contesta *«You are not authorized to use this
+Copilot feature, it requires an enterprise or organization policy to be enabled»* (Request ID
+`DFAD:3ACEBD:31A6414:37FF2E5:6A9A7103`). Es la misma ausencia que D-883 anotó para F21.
+
+Con eso, y como el encargo previó: **la medida sigue solo con Claude Code**, y el brazo se
+implementa solo para él. Escribir un `IThreadedAuditor` de Copilot que no se puede ejecutar sería
+código que afirma algo que nadie ha visto funcionar — exactamente lo que N-2 prohíbe. La costura
+(`IThreadedAuditor`, `IUnitThread`) está en `Atalaya.Agents` y no en el driver de Claude Code
+precisamente para que el día que haya asiento no haya que rediseñar nada: hay que implementar dos
+métodos.
+
+### D-914 — Lo que ya estaba decidido, contestado en vez de ignorado
+
+El encargo pedía buscar si alguna vez se decidió que cada pasada fuera una petición nueva. Hay tres
+entradas que tocan esto y ninguna se salta.
+
+**1. Nunca se decidió: se construyó así, y F19 lo comprobó** (D-862). El encargo de F19 daba por
+supuesto lo contrario —que las pasadas compartían conversación y el coste crecía cuadráticamente— y
+la respuesta fue que no, que `SessionCoordinator` llama a `AuditUnitAsync` una vez por pasada, que
+Claude Code lanza un proceso nuevo cada vez y que Copilot crea y destruye una sesión cada vez. Lo
+que se anotó allí es que **el coste por pasada ya es plano**. Plano no es barato: es plano *y* caro,
+porque el andamiaje se reescribe entero en cada pasada. Esa frase es la que M2 viene a atacar.
+
+**2. Se intentó, se midió y se cayó** (D-874, F20 §3). Es el precedente de verdad y hay que decirlo
+con todas las letras: la conversación compartida se implementó entera, midió **un 91 % menos de
+escritura** en la llamada que abre cada pasada, y **se cayó por cobertura** — el auditor dejaba de
+llamar a herramientas por completo a partir de la segunda pasada. Dos unidades, dos redacciones del
+prompt de continuación, cero hallazgos tardíos, y una unidad que nadie auditaba. Aquella medida dejó
+escrita la condición para volver a intentarlo, y es la que gobierna M2:
+
+> **la prueba no es que ahorre, es que las pasadas ≥ 2 sigan encontrando lo que encuentran hoy.**
+
+También dejó una pregunta abierta que declaró como no resuelta (N-2): **por qué** dejaba de llamar.
+Las dos explicaciones compatibles eran que el modelo diera la unidad por terminada o que en un turno
+continuado no le llegaran las herramientas. La medida que las habría separado se quedó sin cuota.
+**M2 la contesta de camino, y por el lado que no se esperaba** (ver D-91x): en este brazo las
+pasadas 2..N sí llaman a herramientas, así que la segunda explicación —que las tools no lleguen— no
+puede ser cierta con este CLI.
+
+**3. El orden del prompt de F18 no lo impide** (D-852, D-853). El prefijo estable existe para que el
+proveedor lo pueda cachear **entre procesos**, y F20 midió que ahí no hay nada que rascar: la
+frontera de caché la pone el CLI y no depende de nuestro contenido (D-872). Un hilo no compite con
+eso ni lo rompe: es otro mecanismo —la misma conversación, el mismo proceso— y el prefijo sigue
+saliendo byte a byte igual en el turno que sí lo lleva, que es el primero. Nada de F18 hay que
+tocar, y el test que fija el orden sigue en verde.
+
+**4. El corte de F21 sí choca, y es lo más importante de esta lista.** El corte retiene `unit_done`
+e **interrumpe la invocación** para no pagar la llamada de cortesía (D-880). En un hilo la
+invocación tiene que sobrevivir a la pasada para poder recibir la siguiente, así que **cortar una
+pasada mata la conversación**: los dos mecanismos son alternativos dentro de una unidad, no
+acumulables — como mucho se podría cortar la ÚLTIMA pasada. Por eso la medida corre `--sin-corte`
+en **los dos brazos**, que es la única forma de comparar el mecanismo con el mecanismo, y por eso el
+§3 tiene que leerse sabiendo que la producción de hoy lleva el corte puesto.
+### D-915 — El brazo `--hilo`, y lo único que hubo que inventar
+
+**Dónde vive.** Una palanca del banco, con la misma forma que la de M1: `SessionCoordinator.Hilo`,
+`init`-only, `false` en producción y sin nadie en la aplicación que la ponga. Apagada, el
+coordinador llama a `AuditUnitAsync` una vez por pasada, tal cual. Encendida, abre **un hilo por
+unidad** y cada pasada es un turno suyo.
+
+**La costura, y por qué está donde está.** `IThreadedAuditor` / `IUnitThread` viven en
+`Atalaya.Agents`, junto a `IAuditorProvider`, y no dentro del driver de Claude Code: es una
+capacidad OPCIONAL de un proveedor, como `IAssistedFixProvider`. Un proveedor que no la implementa
+no está roto — es uno con el que esta medida no se puede hacer, y entonces la unidad corre como
+siempre y se dice, por evento y en las notas de la sesión. **Una tanda apuntada como «hilo» que no
+lo fuera mediría el otro brazo y la tabla no lo delataría**; por eso no se simula nada.
+
+**Lo que hace el hilo, por dentro.** `ClaudeUnitThread` monta `RunConversationAsync` —la conversación
+de varios turnos que el arreglo asistido usa desde F16— del revés: allí quien decide el turno
+siguiente es el usuario y el runner tira de él; aquí quien decide es el barrido y empuja. El
+servidor MCP y su tubería son **uno para toda la unidad**, así que las herramientas del turno 5 son
+literalmente las mismas instancias que las del turno 1, atadas al mismo toolbox de la sesión.
+
+**El turno 1 es byte a byte el prompt de producción.** Hay test que lo compara carácter a carácter
+contra lo que manda el brazo de producción en su pasada 1. Si no lo fuera, los dos brazos no
+arrancarían del mismo sitio y la comparación no diría nada.
+
+**Los turnos 2..N mandan esto, y solo esto** (`PromptComposer.ContinuationTurn`, ~150 tokens,
+**una versión, escrita una vez**):
+
+```
+PASADA SIGUIENTE DE LA MISMA UNIDAD. NO está cerrada: te queda barrido por hacer.
+
+No se te manda nada otra vez porque no hace falta: las reglas, el catálogo, el código
+íntegro de la unidad y los hallazgos que ya conocías están en esta misma conversación,
+más arriba. Míralos ahí.
+
+Entrega EN UN SOLO TURNO, y en este orden:
+
+1. report_verdicts con un veredicto por CADA hallazgo existente que se te listó al empezar
+   la unidad Y por cada uno que hayas reportado tú en ella (el ULID de los tuyos te lo
+   devolvió submit_findings en su resultado).
+2. submit_findings con lo que todavía NO hayas reportado de esta unidad. Si no queda nada,
+   manda el array vacío: eso también es una respuesta.
+3. unit_done la ÚLTIMA, con el resumen de lo que has cubierto en esta pasada.
+
+No vuelvas a reportar como nuevo nada que ya reportaste. Contesta SOLO con herramientas:
+lo que digas en texto no lo lee nadie.
+```
+
+Pide lo mismo que una pasada de hoy —reconciliar y reportar lo que falte— y **cierra la PASADA, no
+la unidad**, que es la lección de D-874 puesta en la primera línea. Hay test de que no reenvía
+reglas, ni código, ni la lista, de que es una constante y no una plantilla, y de que nombra las tres
+entregas.
+
+**Y el censo dice lo que SALIÓ.** En una pasada de continuación se apunta la composición del texto
+que de verdad viajó, no la del prompt que se compuso y no se mandó. Un informe de una medida que
+declarara 30.000 tokens donde viajaron 150 no valdría para nada.
+
+### D-916 — Encontrado construyendo: el auditor nunca sabe el ULID de lo que acaba de crear
+
+No es de M2 y por eso va aparte, como D-909 en M1. Solo se ve cuando se quita la lista del prompt.
+
+`submit_finding` contesta `{accepted, duplicateOf, error}`. **No devuelve el identificador de lo que
+acaba de crear**, y no hay ninguna otra puerta por la que el auditor lo aprenda. En producción no se
+nota porque **la pasada siguiente vuelve a listarle la unidad entera**, con lo que él reportó
+incluido: el ULID llega, pero por el prompt de la pasada de después, no por la respuesta de la
+herramienta.
+
+Eso deja una consecuencia real en el código de hoy: `add_locations` acepta explícitamente —y lo dice
+en su descripción al modelo— un `findingId` «que hayas reportado en esta unidad», y
+`SessionToolbox.AddLocations` tiene la rama `_createdInSweep` puesta desde F4.1 (D-090) para
+atenderlo. **Dentro de la pasada que lo creó, esa rama es inalcanzable**: el modelo no puede nombrar
+un ULID que nadie le ha dicho. Funciona a partir de la pasada siguiente, y solo porque la lista se
+lo devuelve. Es decir: la herramienta que F4.1 construyó para que un defecto sistémico no se
+fragmentara **no se puede usar sobre un hallazgo recién reportado**, que es justo cuando hace falta.
+
+**No se arregla aquí, porque esto mide.** Lo que M2 necesitaba era otra cosa y se resuelve dentro
+del brazo: `AuditorTools.ForThreadedAudit` devuelve las **mismas seis herramientas** con un solo
+cambio —el resultado de los dos `submit` lleva además el `Id`—, y el catálogo de producción
+(`ForAudit`) sale de ahí intacto, con test que lo fija por los dos lados. La correspondencia es por
+orden dentro del lote, y un rechazado no consume ningún id. Si un toolbox no sabe decir qué ha
+creado (`ISweepCreations`), no se inventa: se devuelven las tools de siempre.
+
+Queda anotado como lo que es: **una tool que no dice el nombre de lo que crea deja una rama de su
+vecina sin poder alcanzarse**, y llevaba así desde F4.1 sin que ningún test lo viera porque el
+prompt de la pasada siguiente lo tapaba.
+### D-917 — Lo medido: el ahorro es enorme y la cobertura se paga
+
+**Escenario**, el mismo de M1 para poder comparar: `CalculadoraCarga.cs` y `ClienteRemoto.cs` del
+banco de pruebas, modo `barrido`, tope 6, regla de parada de producción, **sin el corte de F21 en
+los DOS brazos** (obligado: ver D-914 §4), **Claude Code con `opus`**, tres tandas por brazo y
+**brazos alternados** para que la deriva temporal caiga igual en los dos. Reproduce
+`PromptBench barrido --clon <banco> --tope 6 --sin-corte --model opus [--hilo] <las dos unidades>`.
+
+`sonnet` como segunda tanda no se ha hecho y no se declara medido: con `opus` la señal es
+inequívoca en las dos direcciones y una tanda barata no habría cambiado ninguna conclusión.
+
+#### El coste, que es lo que el brazo venía a mover
+
+Media de las seis unidades de cada brazo, valorada a la tarifa de Opus (la de D-871):
+
+| | Fresca | Leída | **Escrita** | Salida | **Credits/unidad** |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| producción | 37.306 | 181.099 | **96.539** | 46.682 | **204,7** |
+| **hilo** | 5.228 | 172.501 | **25.776** | 14.741 | **64,2** |
+| | −86 % | −5 % | **−73 %** | −68 % | **−69 %** |
+
+Y la comparación que el encargo señalaba como la que decide, **la escritura de caché en las pasadas
+2..N**:
+
+| | Escrita en p1 | Escrita en p2..N | pasadas 2..N | **por pasada** |
+| --- | ---: | ---: | ---: | ---: |
+| producción | 95.571 | 483.662 | 30 | **16.122** |
+| **hilo** | 93.891 | **60.766** | 18 | **3.375** |
+
+**−79 % por pasada, y la pasada 1 cuesta lo mismo en los dos** (93.891 contra 95.571 sobre seis
+unidades). Eso último no es un detalle de color: es la prueba de que el turno 1 es el mismo prompt y
+de que todo lo que separa a los brazos ocurre a partir del segundo.
+
+**Lo que NO ahorra, y hay que decirlo porque la sonda del §0 invita a creer otra cosa.** Allí el
+turno 2 escribía 93 tokens; aquí escribe entre 2.000 y 5.500. La diferencia es que en una auditoría
+la conversación **crece con lo que el propio modelo dijo**, y eso se reescribe en el turno
+siguiente — es exactamente lo que D-882 midió como el 71 % de lo que una vuelta vuelve a escribir.
+El hilo quita la reescritura del **prefijo**; la del **razonamiento** sigue ahí y ahora se sabe
+cuánto vale.
+
+Lo demás del coste, por si sirve para dimensionar: **4,0 pasadas por unidad contra 6,0**, **8,5
+llamadas por unidad contra 15,7**, y **199 segundos por unidad contra 610**. El hilo es tres veces
+más barato y tres veces más rápido.
+
+#### Y el contexto por turno cabe de sobra, que era el riesgo declarado
+
+La caché leída de una unidad crece turno a turno 18.574 → 45.694 → 56.764 → 63.564 en la unidad
+mayor. Extrapolado a los seis turnos del tope son ~80.000 tokens contra los 200.000 del modelo. En
+seis turnos de una unidad de referencia **sobra**, y ninguna pasada perdió nada de lo anterior.
+
+#### La cobertura: contra los 20 defectos de D-895, no contra el número de hallazgos
+
+Esta es la cuenta que decide, y es importante hacerla bien: **el número de hallazgos NO es la
+cobertura**. Producción saca 35 fichas por tanda y el hilo 21, pero F24 ya dejó escrito que la cola
+tardía de producción es en buena parte la misma cosa contada otra vez. Lo que se cuenta aquí son los
+**~20 defectos distintos que D-895 fijó ANTES de tocar nada**, y un defecto sistémico que llega como
+una ficha con varios miembros cuenta por todos los que cubre (D-899b).
+
+**Cobertura acumulada por tope**, de 20:
+
+| tanda | tope 1 | 2 | 3 | 4 | 5 | 6 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| hilo · t1 | 17 | 18 | 18 | 18 | 18 | **18** |
+| hilo · t2 | 18 | 18 | 18 | 18 | 18 | **18** |
+| hilo · t3 | 16 | 17 | 17 | 17 | 17 | **17** |
+| producción · t1 | 16 | 18 | 18 | 20 | 20 | **20** |
+| producción · t2 | 16 | 17 | 18 | 20 | 20 | **20** |
+| producción · t3 | 15 | 17 | 18 | 18 | 20 | **20** |
+
+**Producción llega a 20 de 20 en las tres tandas. El hilo se queda en 17-18 y no se mueve a partir
+del tope 2 o 3.** No se solapan: no es ruido.
+
+**Y lo que pierde tiene nombre, y es el peor nombre posible.** Los dos defectos que el hilo no ve en
+ninguna de las tres tandas son **«lectura sin límite de tamaño ni validación de Content-Type»** y
+**«cuerpo de la respuesta devuelto sin parsear»** — que son el 4.º y el 5.º de los **cinco hallazgos
+tardíos REALES** que D-895 aisló como variable de control de toda esta línea de trabajo, con esta
+advertencia escrita mucho antes de que M2 existiera:
+
+> «una regla que enseñe al modelo a callarse antes haría desaparecer estos cinco, y eso sería una
+> degradación disfrazada de ahorro.»
+
+Producción los encuentra en las tres tandas, en las pasadas 4, 4 y 5. El hilo, nunca.
+
+#### Por qué los pierde, y se ve en las trazas
+
+| | pasadas | ¿convergió? |
+| --- | ---: | --- |
+| hilo | 4,0 | **6 de 6 unidades** (dos secas seguidas) |
+| producción | 6,0 | **1 de 6** (las demás agotan el tope) |
+
+```
+hilo · t1 · ClienteRemoto:        p1: 12n · p2: 2n · p3: seca · p4: seca
+producción · t1 · ClienteRemoto:  p1: 11n · p2: 5n · p3: 2n · p4: 2n · p5: 1n · p6: 1n
+```
+
+**El hilo no deja de trabajar: se da por terminado antes.** Reconcilia, reporta y cierra igual que
+producción, pero declara la unidad agotada en la pasada 3 mientras producción sigue aportando hasta
+la 6.ª. Un modelo que tiene delante su propia respuesta anterior, tal y como la escribió, converge —
+y la convergencia se lleva por delante justo lo que el tope de 6 existía para pescar (D-812).
+
+**Y de camino contesta la pregunta que D-874 dejó explícitamente sin resolver (N-2).** Allí no se
+pudo determinar POR QUÉ el auditor dejaba de llamar a herramientas: o daba la unidad por terminada,
+o en un turno continuado no le llegaban las tools. **La segunda queda descartada por observación**:
+aquí, en 18 turnos de continuación, el auditor llamó a herramientas en **todos**, reconcilió entero
+y cerró con `unit_done` cada vez. Las tools llegan. Lo que cambia es cuándo el modelo cree que ha
+acabado — que era la primera explicación, y ahora tiene evidencia a favor en vez de ser una de dos.
+
+#### El núcleo: intacto
+
+Los defectos que salen en las **tres** tandas: **producción 20 de 20; hilo 17 de 20**. Y en la
+**pasada 1** de las tres tandas: **hilo 16, producción 14** — el arranque del hilo no es peor, es
+algo mejor. **Ningún brazo pierde el núcleo**, que era la condición mínima de que la medida sirviera
+para algo. Lo que el hilo pierde es cola, y de la cola pierde lo bueno y lo malo.
+
+**Y aquí está el dato que cierra el asunto.** Los dos defectos que el hilo degrada son, uno por uno,
+**los mismos dos que D-907 nombró al retirar la regla de variantes de F24**:
+
+> «lo que sí hacía, se pagaba. La convergencia venía de la segunda mitad del contrato, y con ella se
+> iban defectos reales: **«sin Timeout» de 3/3 a 1/3, el `Content-Type` sin validar de 3/3 a
+> ninguna**. Las tandas que convergieron son las que menos encontraron.»
+
+Con el hilo: **«sin Timeout» pasa de 3/3 a 2/3, y la lectura sin límite ni `Content-Type`, de 3/3 a
+ninguna.** Dos mecanismos que no se parecen en nada —un contrato en el prompt y una conversación
+compartida— compran convergencia y la pagan **en los mismos dos defectos**. No es casualidad: es que
+esos dos son los que más tarde aparecen, y cualquier cosa que haga converger antes se los lleva
+primero.
+
+#### Variantes: la sospecha del «por qué» se confirma, y con números
+
+Contadas con el **mismo criterio que el marcador del §5 de F23** (`DuplicateHints.AreSimilar`:
+misma unidad, misma regla, línea a ≤ 5, símbolos como conjunto que se cortan) y, aparte, con el
+recuento que M1 publicó (pares de misma regla con miembros que se cortan, sin mirar la línea):
+
+| brazo | hallazgos (3 tandas) | marcados (criterio F23) | pares misma regla + miembro |
+| --- | ---: | ---: | ---: |
+| producción | 105 | **7** | **15** |
+| hilo | 62 | **0** | **2** |
+
+**Y el par recurrente del caso real desaparece.** El `.Result` y su consecuencia
+—«`Task.Result` envuelve el fallo en `AggregateException`»—, que es el par P2 de D-895, sale como
+**dos fichas en las 3 tandas de producción** y como **una sola en las 3 del hilo**. Es el mismo
+resultado que dio el brazo estructurado de M1, y aquí es más limpio.
+
+**No es solo que haya menos fichas.** Normalizado, la tasa de pares por hallazgo es 14,3 % en
+producción y 3,2 % en el hilo: cuatro veces y media menos. La sospecha que el encargo pedía no
+afirmar sin registro —que un modelo que ve su hallazgo anterior *tal como lo escribió* reformula
+menos que uno al que se lo enseñan resumido en una lista— **queda medida y sale a favor**.
+
+Pero se compra con lo mismo con lo que se compra el ahorro: el modelo deja de insistir. **La
+variante y el hallazgo tardío real caen por la misma cuchilla**, y esa cuchilla no distingue.
+
+#### Reconciliación: intacta, y sin un solo rechazo
+
+Es lo que F4 garantiza hoy y no podía degradarse. En las **seis** unidades del hilo, cada pasada
+2..N entregó un veredicto por **cada** hallazgo vivo de la unidad, incluidos los que el propio
+modelo había creado en turnos anteriores:
+
+```
+hilo · t1 · ClienteRemoto:  p1 crea 12 · p2 juzga 12 y crea 2 · p3 juzga 14 · p4 juzga 14
+```
+
+**Cero rechazos por ULID desconocido en las tres tandas**, que es lo que había que comprobar del
+arreglo de D-916: el auditor usó los identificadores que se le devolvieron y no se inventó ninguno.
+Y `submit_findings` con el array vacío en las pasadas secas, que es la respuesta correcta. Lo creado
+antes se marca presente y no se re-emite.
+
+### D-918 — La respuesta del §3: NO se hace fase, y las cuatro condiciones dicen por qué
+
+| condición | ¿se cumple? | |
+| --- | --- | --- |
+| Coste por unidad claramente menor | **Sí** | −69 %, y −79 % de escritura en las pasadas 2..N. Muy fuera del ruido. |
+| Mismo núcleo | **Sí** | Los 11 de D-907, en la pasada 1, en los dos brazos. |
+| **Cobertura por tope conservada** | **NO** | 17,7 de 20 contra 20,0. Pierde dos de los cinco tardíos reales de D-895, en las tres tandas. |
+| Reconciliación intacta | **Sí** | Veredictos completos en las seis unidades, cero rechazos. |
+
+**Tres de cuatro, y falla la única que D-874 dejó escrita como innegociable** el día que esto se
+volviera a intentar: *la prueba no es que ahorre, es que las pasadas ≥ 2 sigan encontrando lo que
+encuentran hoy*. No lo hacen. **No se hace fase.**
+
+Y hay que decirlo sin adornos, porque el número invita a lo contrario: **un 69 % de ahorro es
+muchísimo**, es el mayor que ha medido este proyecto, y aun así no basta. Lo que se compraría con él
+son dos defectos reales por unidad de referencia — uno de ellos una lectura de red sin límite de
+tamaño. Ese cambio no es un ahorro: es una auditoría distinta, más barata y más ciega, y venderla
+como lo primero sería exactamente lo que el anti-objetivo de F19 prohíbe.
+
+**El margen, además, es menor de lo que esta tabla sugiere.** La medida corre sin el corte de F21 en
+los dos brazos porque el corte y el hilo son incompatibles dentro de una unidad (D-914 §4), pero
+**producción hoy lleva el corte puesto**, y el corte ya se lleva un 67 % de la escritura de caché
+(D-881). El hilo no compite contra los 204,7 credits de esta tabla: compite contra bastante menos,
+y encima renunciando al corte.
+
+**Lo que sí deja la medida, y es aprovechable sin hacer nada de esto:**
+
+1. **La causa de la variante está identificada y es la misma que la del ahorro.** El modelo
+   reformula porque no tiene delante lo que escribió; cuando lo tiene, ni reformula ni insiste. Eso
+   convierte «quitar variantes» y «no perder tardíos» en **el mismo dial**, no en dos objetivos
+   independientes — que es lo que F24 y M1 estaban tratando por separado sin saberlo.
+2. **La pregunta abierta de D-874 está medio contestada**: las herramientas SÍ llegan en un turno
+   continuado. Lo que falla es la convergencia, no la mecánica.
+3. **El brazo se queda en el banco, desarmado**, con sus tests. Si algún día se quiere volver, la
+   pregunta ya no es «¿ahorra?» —se sabe que sí, y cuánto—, sino **«¿se puede tener el hilo sin la
+   convergencia temprana?»**. Va al backlog con esas palabras.
+
+### D-919 — Cobertura (15 tests nuevos, 2.167 en total, todo en verde)
+
+- **La condición de la medida**: el turno 1 del hilo es **byte a byte** el prompt que manda el brazo
+  de producción en su pasada 1, comparado carácter a carácter; y los turnos 2..N son exactamente
+  `ContinuationTurn` y nada más — con las tres cosas que no pueden viajar nombradas una a una
+  (`MÉTODO DE BARRIDO`, `CONTENIDO ÍNTEGRO DE LA UNIDAD`, `HALLAZGOS YA EXISTENTES`) para que el
+  rojo diga cuál se ha colado.
+- **Una versión del texto de continuación**: es la misma cadena en todos los turnos y **no es una
+  plantilla** —no lleva ni una llave—, que es la forma de que el anti-objetivo («no lo retoques
+  sobre la marcha para que gane») se pueda comprobar en vez de prometer. Y pide las tres entregas:
+  `report_verdicts`, `submit_findings` y `unit_done`.
+- **Apagada, no existe**: nadie abre ningún hilo y cada pasada pasa por `AuditUnitAsync`, tantas
+  veces como pasadas. **Encendida, un hilo por UNIDAD y no por pasada** —si fuera por pasada el
+  prefijo se reescribiría igual y el brazo no mediría nada— y se cierra una sola vez.
+- **La regla de parada y el tope mandan igual en los dos brazos**: un turno es una pasada, dos secas
+  seguidas terminan, y el tope no se toca.
+- **El cuadre del final entra en las cuentas de la unidad**: el consumo que el proveedor declara AL
+  CERRAR la conversación —lo único que trae el gasto del modelo auxiliar del CLI, D-879— se cuenta
+  antes de sellar el desglose. Es un orden, y sin test se rompe sin que nadie lo note: la sesión
+  declararía de menos, que es el fallo que costó descubrir D-865 por otro camino.
+- **El censo dice lo que salió**: en un turno de continuación, `Unidad` y `Existentes` valen 0 y el
+  total es una fracción del prompt compuesto.
+- **El proveedor que no sabe hilar lo dice**: evento y nota en la sesión, en vez de fingirlo.
+- **El catálogo del brazo** (`ForThreadedAudit`): mismas tools y mismos nombres que producción, el
+  ULID de vuelta en los dos `submit`, un rechazado no se lleva el id del siguiente, **el catálogo de
+  producción sigue sin id**, y un toolbox que no sabe decir lo que ha creado no se suple con nada
+  inventado.
