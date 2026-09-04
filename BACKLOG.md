@@ -4,8 +4,8 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-04 (F26 Parte A, revisada y corregida — crema más cálido, escala a 15,
-el raíl plegado arreglado y el piloto del hub en su sitio).
+Última revisión: 2026-09-05 (F26 Parte B — las seis vistas de trabajo por el sistema, con el banco
+de capturas que permite fotografiar la sesión y el arreglo sin gastar créditos).
 
 ## En vuelo
 
@@ -19,9 +19,11 @@ el raíl plegado arreglado y el piloto del hub en su sitio).
     —con su causa medida—, el raíl remedido por carriles (una sola columna de iconos, la misma x
     plegado o no) y el piloto convertido en insignia del avatar. Capturas en
     `docs/design/f26-parte-a/`, con el raíl plegado y desplegado en `rail/`.
-  - **Parte B — las vistas de trabajo.** Portafolio, Inventario, Hallazgos (lista y detalle),
-    Sesión en vivo y Arreglo asistido. Incluye la auditoría con capturas de Inventario, la ficha,
-    el arreglo y el alta, que no la tenían.
+  - **Parte B — las vistas de trabajo. ENTREGADA** (D-970…D-979): Portafolio con rejilla que
+    reparte y resumen del portafolio, Hallazgos con filtros que dicen qué filtran y vista rápida al
+    lado, Inventario con las acciones en su cabecera y el panel del ciclo que ya no se corta, la
+    ficha con su botonera jerarquizada, y Sesión y Arreglo pasadas por la escala. Las seis salen de
+    la lista de pendientes de `DesignTokenTests`. **Pendiente de la revisión visual del usuario.**
   - **Parte C — Ajustes, Cuenta, Métricas, Informes y Nueva aplicación.** Ajustes deja de ser un
     scroll y pasa a secciones navegables.
   - **La lista de pendientes de `DesignTokenTests` es el marcador.** Nombra las 17 vistas y

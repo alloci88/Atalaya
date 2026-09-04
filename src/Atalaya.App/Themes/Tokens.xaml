@@ -98,6 +98,32 @@
     <!-- La sangría de una fila de unidad bajo su módulo. El margen derecho reserva el ancho de la
          barra de desplazamiento: sin él, «🔒 alguien» se corta contra ella en las filas reclamadas. -->
     <Thickness x:Key="Pad.UnitRow">32,4,16,8</Thickness>
+    <Thickness x:Key="Pad.FieldLabel">0,8,0,4</Thickness>
+    <Thickness x:Key="Pad.Chip">0,0,8,4</Thickness>
+    <Thickness x:Key="Pad.S.Top">0,12,0,0</Thickness>
+
+    <!-- El aire entre una sub-sección y la siguiente dentro de una tarjeta: más arriba que abajo,
+         porque el título que abre la sección ya trae el suyo. -->
+    <Thickness x:Key="Pad.SectionGap">0,12,0,2</Thickness>
+
+    <!-- La sangría de lo que cuelga de una línea anterior (una opción bajo su radio, el detalle
+         bajo su cabecera): 24, que es el ancho del control que la precede más su hueco. -->
+    <Thickness x:Key="Pad.Indent">24,4,0,0</Thickness>
+    <Thickness x:Key="Pad.S.Right">0,0,12,0</Thickness>
+    <Thickness x:Key="Pad.XXS.V">0,4</Thickness>
+
+    <!-- Las dos sangrías de la conversación del arreglo: la del cuerpo de un mensaje bajo el
+         nombre de quien habla, y la del bloque que cuelga de él. Salen del ancho del avatar más su
+         hueco; están aquí para que las dos vistas densas usen la MISMA. -->
+    <Thickness x:Key="Pad.Indent.L">60,4,0,8</Thickness>
+    <Thickness x:Key="Pad.Indent.XL">76,8,0,8</Thickness>
+
+    <!-- Una fila apretada: la de un evento de sesión, donde caben muchas y el aire de una fila
+         normal las separaría más de lo que las agrupa. -->
+    <Thickness x:Key="Pad.RowTight">8,4</Thickness>
+
+    <!-- El aire entre dos bloques grandes de una vista densa. -->
+    <Thickness x:Key="Pad.SectionGapWide">0,16,0,8</Thickness>
 
     <!-- Y los asimétricos, con NOMBRE DE INTENCIÓN en vez de con sus números. «El relleno de un
          botón» se puede reajustar una vez para todos los botones; `12,8` repetido cuarenta veces,
@@ -195,6 +221,10 @@
     <!-- 24, que es el tamaño al que un icono de línea se lee sin mirarlo fijo. Antes 18-19, que
          iba con una base de 14: un icono no puede quedarse quieto cuando la letra crece. -->
     <sys:Double x:Key="Icon.Size">24</sys:Double>
+
+    <!-- El icono que acompaña a una línea de texto —el aviso de una razón, el separador de la
+         miga—: va a la altura de la letra, no a la de una entrada de menú. -->
+    <sys:Double x:Key="Icon.Size.Small">14</sys:Double>
 
     <!-- La barra de «estás aquí» del raíl, y el margen que la separa de la entrada. Están aquí y
          no sueltas en el estilo porque `RailCollapsedFitsTheIcon` hace la cuenta con ellas: lo que

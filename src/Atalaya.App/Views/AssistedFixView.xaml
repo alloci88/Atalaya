@@ -32,15 +32,15 @@
 
         <!-- · Una intervención de la conversación · -->
         <DataTemplate DataType="{x:Type services:FixMessage}">
-            <Grid Margin="0,3">
+            <Grid Margin="{StaticResource Pad.XXS.V}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="76" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="{Binding Speaker}" FontSize="10.5" FontWeight="SemiBold"
-                           VerticalAlignment="Top" Margin="0,2,8,0" TextAlignment="Right"
+                <TextBlock Grid.Column="0" Text="{Binding Speaker}" FontSize="{StaticResource FontSize.Meta}" FontWeight="SemiBold"
+                           VerticalAlignment="Top" Margin="{StaticResource Pad.XS}" TextAlignment="Right"
                            Foreground="{Binding Voice, Converter={StaticResource FixVoiceToBrush}}" />
-                <Border Grid.Column="1" CornerRadius="6" Padding="10,7"
+                <Border Grid.Column="1" CornerRadius="6" Padding="{StaticResource Pad.Field}"
                         Background="{Binding Voice, Converter={StaticResource FixVoiceToFill}}">
                     <!-- Rejilla, NO StackPanel horizontal: un StackPanel horizontal mide a sus
                          hijos con ancho INFINITO, así que TextWrapping no envuelve nada y el
@@ -51,11 +51,11 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{Binding Glyph}" FontWeight="Bold" Margin="0,0,8,0"
+                        <TextBlock Grid.Column="0" Text="{Binding Glyph}" FontWeight="Bold" Margin="{StaticResource Pad.XS.Right}"
                                    VerticalAlignment="Top" Opacity="0.9"
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                    Visibility="{Binding Glyph, Converter={StaticResource NotEmptyToVisibility}}" />
-                        <TextBlock Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap" FontSize="12.5"
+                        <TextBlock Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}"
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                     </Grid>
                 </Border>
@@ -64,16 +64,16 @@
 
         <!-- · Una pregunta esperando respuesta · -->
         <DataTemplate DataType="{x:Type services:FixQuestion}">
-            <Border CornerRadius="8" Padding="14,12" Margin="76,8,0,8"
+            <Border CornerRadius="8" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.Indent.XL}"
                     Background="#22E0A030" BorderBrush="#66E0A030" BorderThickness="1">
                 <StackPanel>
-                    <TextBlock Text="{Binding Header}" FontWeight="SemiBold" FontSize="12"
+                    <TextBlock Text="{Binding Header}" FontWeight="SemiBold" FontSize="{StaticResource FontSize.Meta}"
                                TextWrapping="Wrap" Foreground="#E0A030" />
-                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="0,7,0,0" FontSize="13"
+                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Small}"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
                     <!-- Opciones cerradas -->
-                    <ItemsControl ItemsSource="{Binding Choices}" Margin="0,10,0,0"
+                    <ItemsControl ItemsSource="{Binding Choices}" Margin="{StaticResource Pad.S.Top}"
                                   Visibility="{Binding IsPending, Converter={StaticResource BoolToVisibility}}">
                         <!-- Una opción por línea y a todo el ancho. Estas etiquetas no son «Sí/No»:
                              son consecuencias —«(A) lanzar excepción y adaptar los 7 llamadores»— y
@@ -86,7 +86,7 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <ui:Button Margin="0,0,0,6" HorizontalAlignment="Stretch"
+                                <ui:Button Margin="{StaticResource Pad.XS.Bottom}" HorizontalAlignment="Stretch"
                                            HorizontalContentAlignment="Left"
                                            Command="{Binding DataContext.ChooseCommand,
                                                      RelativeSource={RelativeSource AncestorType=UserControl}}">
@@ -106,7 +106,7 @@
                     </ItemsControl>
 
                     <!-- Texto libre -->
-                    <Grid Margin="0,4,0,0">
+                    <Grid Margin="{StaticResource Pad.XXS.Top}">
                         <Grid.Visibility>
                             <MultiBinding Converter="{StaticResource AllTrueToVisibility}">
                                 <Binding Path="IsPending" />
@@ -121,14 +121,14 @@
                              pantalla de 1366 y empujaba el botón fuera de la tarjeta. -->
                         <ui:TextBox Grid.Column="0" PlaceholderText="…o contesta con tus palabras"
                                     Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" />
-                        <ui:Button Grid.Column="1" Content="Responder" Margin="8,0,0,0" Appearance="Primary"
+                        <ui:Button Grid.Column="1" Content="Responder" Margin="{StaticResource Pad.XS.Left}" Appearance="Primary"
                                    Command="{Binding DataContext.AnswerFreeformCommand,
                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
                                    CommandParameter="{Binding}" />
                     </Grid>
 
                     <!-- Ya contestada -->
-                    <TextBlock Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap"
+                    <TextBlock Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                Visibility="{Binding IsAnswered, Converter={StaticResource BoolToVisibility}}">
                         <Run Text="Tu respuesta:" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding Answer, Mode=OneWay}" />
@@ -157,7 +157,7 @@
              acciones a la derecha (columna que no cede). Antes eran dos StackPanel sueltos en un
              Grid sin columnas, que no reparte: superpone. Con el distintivo de proveedor de F16,
              «Pausar» acabó pintado encima de «Volver al hallazgo». -->
-        <c:PageHeader Grid.Row="0" Margin="0,0,0,10">
+        <c:PageHeader Grid.Row="0" Margin="{StaticResource Pad.S.Bottom}">
             <!-- Identidad. Es un Grid y no un StackPanel a propósito: un StackPanel da a sus hijos
                  ancho infinito, así que el recorte con puntos suspensivos no llega a ocurrir nunca
                  y el texto se sale por el borde. La columna estrella del final absorbe el hueco
@@ -185,9 +185,9 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Arreglo asistido" FontSize="24" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="0" Text="Arreglo asistido" FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
                 <TextBlock Grid.Column="1" Text="{Binding FindingAliasText}" Opacity="0.75"
-                           VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="12,0,0,4"
+                           VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="{StaticResource Pad.S.Left}"
                            FontWeight="SemiBold"
                            ToolTip="El hallazgo que se está arreglando" />
                 <!-- SIN HorizontalAlignment="Left": con alineación distinta de Stretch, WPF
@@ -196,7 +196,7 @@
                      metía 20 px dentro del distintivo de al lado. Estirado, ocupa su columna y ni
                      un píxel más, que es justo lo que el recorte necesita para activarse. -->
                 <TextBlock Grid.Column="2" Text="{Binding AppNameText}" Opacity="0.6"
-                           VerticalAlignment="Bottom" Margin="12,0,0,4"
+                           VerticalAlignment="Bottom" Margin="{StaticResource Pad.S.Left}"
                            MaxWidth="220" TextTrimming="CharacterEllipsis"
                            ToolTip="{Binding AppNameText}" />
                 <!-- H9.1 §1: el camino de vuelta al hallazgo, disponible mientras haya sesión que
@@ -207,8 +207,8 @@
                      primero: entre un camino que se pulsa y un dato que se lee, se pierde el
                      dato — y el dato, además, está entero en el informe. -->
                 <Button Grid.Column="3" Content="{Binding BackToFindingLabel}" Command="{Binding BackToFindingCommand}"
-                        Style="{StaticResource LinkButton}" VerticalAlignment="Bottom" Margin="16,0,0,4"
-                        FontSize="12"
+                        Style="{StaticResource LinkButton}" VerticalAlignment="Bottom" Margin="{StaticResource Pad.M.Left}"
+                        FontSize="{StaticResource FontSize.Meta}"
                         ToolTip="Abre la ficha del hallazgo que originó este arreglo">
                     <Button.Visibility>
                         <MultiBinding Converter="{StaticResource AllTrueToVisibility}">
@@ -218,11 +218,11 @@
                     </Button.Visibility>
                 </Button>
                 <!-- F16: la pantalla es la misma con los dos motores, así que dice cuál trabaja. -->
-                <Border Grid.Column="4" Background="#18808080" CornerRadius="10" Padding="8,2"
-                        VerticalAlignment="Bottom" Margin="14,0,0,4"
+                <Border Grid.Column="4" Background="#18808080" CornerRadius="10" Padding="{StaticResource Pad.Pill}"
+                        VerticalAlignment="Bottom" Margin="{StaticResource Pad.M.Left}"
                         Visibility="{Binding HasEngine, Converter={StaticResource BoolToVisibility}}"
                         ToolTip="El proveedor y el modelo que están haciendo este arreglo. Quedan escritos en el informe.">
-                    <TextBlock Text="{Binding EngineText}" FontSize="11.5" Opacity="0.85"
+                    <TextBlock Text="{Binding EngineText}" FontSize="{StaticResource FontSize.Meta}" Opacity="0.85"
                                MaxWidth="220" TextTrimming="CharacterEllipsis" />
                 </Border>
             </Grid>
@@ -237,21 +237,21 @@
                    más aire del que separa a las demás. Estaba en medio, entre Pausar y Cerrar. -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <ui:Button Content="{Binding PauseLabel}" Command="{Binding TogglePauseCommand}"
-                           Margin="0,0,12,0"
+                           Margin="{StaticResource Pad.S.Right}"
                            ToolTip="Mientras esté en pausa no se aplicará ningún cambio ni se compilará nada. El agente puede seguir razonando."
                            Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
                 <ui:Button Content="Detener" Command="{Binding StopCommand}" Appearance="Caution"
-                           Margin="0,0,12,0"
+                           Margin="{StaticResource Pad.S.Right}"
                            ToolTip="Para al agente. Lo que ya haya aplicado se queda."
                            Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
                 <!-- BUGFIX-CIERRE: archivar la pantalla del arreglo. Apariencia neutra a
                      proposito: no revierte nada, y el gesto destructivo es el de al lado. -->
                 <ui:Button Content="Cerrar" Command="{Binding CloseCommand}" Appearance="Secondary"
-                           Margin="0,0,12,0"
+                           Margin="{StaticResource Pad.S.Right}"
                            ToolTip="Archiva esta pantalla y vuelve al hallazgo. No revierte nada: si el agente dejo ficheros tocados, te pregunta que hacer con ellos."
                            Visibility="{Binding CanClose, Converter={StaticResource BoolToVisibility}}" />
                 <ui:Button Content="Descartar todo" Command="{Binding DiscardAllCommand}"
-                           Appearance="Danger" Margin="12,0,0,0"
+                           Appearance="Danger" Margin="{StaticResource Pad.S.Left}"
                            ToolTip="Devuelve cada fichero tocado a como estaba antes de esta sesión." />
             </StackPanel>
         </c:PageHeader>
@@ -273,12 +273,12 @@
                         Visibility="{Binding HasPending, Converter={StaticResource BoolToVisibility}}">
                     <StackPanel>
                         <TextBlock Text="Arreglos anteriores sin cerrar" Style="{StaticResource SectionTitle}" />
-                        <TextBlock Style="{StaticResource Help}" Margin="0,0,0,8"
+                        <TextBlock Style="{StaticResource Help}" Margin="{StaticResource Pad.XS.Bottom}"
                                    Text="Estos cambios los aplicó un arreglo asistido y siguen en tu clon. Puedes descartarlos —vuelven byte a byte a como estaban— o darlos por buenos para dejar de verlos aquí." />
                         <ItemsControl ItemsSource="{Binding Pending}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border CornerRadius="6" Padding="10,8" Margin="0,4"
+                                    <Border CornerRadius="6" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.XXS.V}"
                                             Background="{DynamicResource SubtleFillColorTertiaryBrush}">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
@@ -286,16 +286,16 @@
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <StackPanel Grid.Column="0">
-                                                <TextBlock Text="{Binding Headline}" FontWeight="SemiBold" FontSize="12" />
-                                                <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="11"
-                                                           Margin="0,3,0,0" Opacity="0.8" />
+                                                <TextBlock Text="{Binding Headline}" FontWeight="SemiBold" FontSize="{StaticResource FontSize.Meta}" />
+                                                <TextBlock Text="{Binding Detail}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}"
+                                                           Margin="{StaticResource Pad.XXS.Top}" Opacity="0.8" />
                                             </StackPanel>
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                <ui:Button Content="Descartar" Appearance="Danger" Margin="8,0,0,0"
+                                                <ui:Button Content="Descartar" Appearance="Danger" Margin="{StaticResource Pad.XS.Left}"
                                                            Command="{Binding DataContext.DiscardPendingCommand,
                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                            CommandParameter="{Binding}" />
-                                                <ui:Button Content="Los mantengo" Margin="8,0,0,0"
+                                                <ui:Button Content="Los mantengo" Margin="{StaticResource Pad.XS.Left}"
                                                            Command="{Binding DataContext.KeepPendingCommand,
                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                            CommandParameter="{Binding}" />
@@ -315,47 +315,47 @@
              el texto seleccionable (TextBox de solo lectura, no TextBlock), con boton de copiar y
              con el error crudo del proveedor plegado tras «Ver detalle» dentro de un ScrollViewer
              acotado, para que su longitud no decida el layout. -->
-        <Border Grid.Row="1" CornerRadius="8" Padding="16" Margin="0,0,0,12"
+        <Border Grid.Row="1" CornerRadius="8" Padding="{StaticResource Pad.M}" Margin="{StaticResource Pad.S.Bottom}"
                 Background="#22C04040" BorderBrush="#66C04040" BorderThickness="1"
                 Visibility="{Binding ShowFailure, Converter={StaticResource BoolToVisibility}}">
             <StackPanel>
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#xE783;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                               Foreground="#E06C6C" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <TextBlock Text="No se pudo arreglar" FontSize="16" FontWeight="SemiBold"
+                    <TextBlock Text="&#xE783;" FontFamily="Segoe MDL2 Assets" FontSize="{StaticResource FontSize.Lead}"
+                               Foreground="#E06C6C" VerticalAlignment="Center" Margin="{StaticResource Pad.XS.Right}" />
+                    <TextBlock Text="No se pudo arreglar" FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold"
                                VerticalAlignment="Center" />
                 </StackPanel>
 
                 <TextBox Text="{Binding FailureMessage, Mode=OneWay}" IsReadOnly="True" IsTabStop="False"
                          TextWrapping="Wrap" BorderThickness="0" BorderBrush="Transparent"
-                         Background="Transparent" Padding="0" Margin="0,8,0,0"
+                         Background="Transparent" Padding="{StaticResource Pad.Zero}" Margin="{StaticResource Pad.XS.Top}"
                          Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
                 <!-- Lo que le ha pasado a SU clon, que no es una frase fija: si el agente ya habia
                      escrito antes del corte, decir «no se ha tocado» seria mentir justo cuando
                      importa saberlo. -->
-                <TextBlock Margin="0,8,0,0" FontSize="11" TextWrapping="Wrap"
+                <TextBlock Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            Text="{Binding FailureCloneNote}" />
 
-                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                    <ui:Button Content="{Binding DetailToggleLabel}" Appearance="Secondary" FontSize="11"
+                <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.S.Top}">
+                    <ui:Button Content="{Binding DetailToggleLabel}" Appearance="Secondary" FontSize="{StaticResource FontSize.Meta}"
                                Command="{Binding ToggleFailureDetailCommand}"
                                Visibility="{Binding HasFailureDetail, Converter={StaticResource BoolToVisibility}}" />
-                    <ui:Button Content="Copiar error" Appearance="Secondary" FontSize="11" Margin="8,0,0,0"
+                    <ui:Button Content="Copiar error" Appearance="Secondary" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Left}"
                                Command="{Binding CopyFailureCommand}" />
-                    <ui:Button Content="Elegir modelo en Ajustes" Appearance="Primary" Margin="8,0,0,0"
+                    <ui:Button Content="Elegir modelo en Ajustes" Appearance="Primary" Margin="{StaticResource Pad.XS.Left}"
                                Command="{Binding FixModelCommand}"
                                Visibility="{Binding FailureOffersModelChange, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
 
-                <Border Margin="0,10,0,0" CornerRadius="6" Padding="10" Background="#18000000"
+                <Border Margin="{StaticResource Pad.S.Top}" CornerRadius="6" Padding="{StaticResource Pad.S}" Background="#18000000"
                         Visibility="{Binding IsFailureDetailExpanded, Converter={StaticResource BoolToVisibility}}">
                     <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
                         <TextBox Text="{Binding FailureDetail, Mode=OneWay}" IsReadOnly="True" IsTabStop="False"
                                  TextWrapping="Wrap" BorderThickness="0" BorderBrush="Transparent"
-                                 Background="Transparent" Padding="0"
-                                 FontFamily="Consolas" FontSize="11"
+                                 Background="Transparent" Padding="{StaticResource Pad.Zero}"
+                                 FontFamily="Consolas" FontSize="{StaticResource FontSize.Meta}"
                                  Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </ScrollViewer>
                 </Border>
@@ -371,12 +371,12 @@
             </Grid.ColumnDefinitions>
 
             <!-- · Conversación (la protagonista) · -->
-            <Border Grid.Column="0" Background="#0C000000" CornerRadius="8" Padding="4"
+            <Border Grid.Column="0" Background="#0C000000" CornerRadius="8" Padding="{StaticResource Pad.XXS}"
                     Visibility="{Binding ShowClosing, Converter={StaticResource InverseBoolToVisibility}}">
                 <DockPanel>
                     <!-- Campo de entrada SIEMPRE disponible: interrumpir y dirigir es la mitad
                          del producto (F6.9 §4). -->
-                    <Grid DockPanel.Dock="Bottom" Margin="8,6,8,6">
+                    <Grid DockPanel.Dock="Bottom" Margin="{StaticResource Pad.RowTight}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
@@ -386,17 +386,17 @@
                                     Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}"
                                     KeyDown="OnDraftKeyDown"
                                     IsEnabled="{Binding IsRunning}" />
-                        <ui:Button Grid.Column="1" Content="Enviar" Margin="8,0,0,0" Appearance="Primary"
+                        <ui:Button Grid.Column="1" Content="Enviar" Margin="{StaticResource Pad.XS.Left}" Appearance="Primary"
                                    Command="{Binding SendCommand}" IsEnabled="{Binding IsRunning}" />
                     </Grid>
-                    <Grid DockPanel.Dock="Bottom" Margin="8,0,8,4">
+                    <Grid DockPanel.Dock="Bottom" Margin="{StaticResource Pad.RowTight}">
                         <ui:Button Content="↓ Volver al final" Command="{Binding BackToBottomCommand}"
-                                   Padding="8,2" FontSize="11" HorizontalAlignment="Right"
+                                   Padding="{StaticResource Pad.Pill}" FontSize="{StaticResource FontSize.Meta}" HorizontalAlignment="Right"
                                    Visibility="{Binding AutoScroll, Converter={StaticResource InverseBoolToVisibility}}" />
                     </Grid>
                     <ScrollViewer x:Name="ConversationScroll" VerticalScrollBarVisibility="Auto"
                                   ScrollChanged="OnConversationScrollChanged">
-                        <ItemsControl ItemsSource="{Binding Conversation}" Margin="6" />
+                        <ItemsControl ItemsSource="{Binding Conversation}" Margin="{StaticResource Pad.XS}" />
                     </ScrollViewer>
                 </DockPanel>
             </Border>
@@ -405,10 +405,10 @@
                           Visibility="{Binding ShowClosing, Converter={StaticResource InverseBoolToVisibility}}" />
 
             <!-- · Diff · -->
-            <Border Grid.Column="2" Background="#14808080" CornerRadius="8" Padding="10"
+            <Border Grid.Column="2" Background="#14808080" CornerRadius="8" Padding="{StaticResource Pad.S}"
                     Visibility="{Binding ShowClosing, Converter={StaticResource InverseBoolToVisibility}}">
                 <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                    <StackPanel DockPanel.Dock="Top" Margin="{StaticResource Pad.XS.Bottom}">
                         <TextBlock Text="Cambios en tu clon" Style="{StaticResource SectionTitle}" />
                         <TextBlock Style="{StaticResource Help}"
                                    Text="Cada pestaña es un fichero tocado. El diff compara con lo que había ANTES de esta sesión, que es lo que tendrás que revisar antes de commitear."
@@ -416,7 +416,7 @@
                         <TextBlock Style="{StaticResource Help}"
                                    Text="Todavía no se ha modificado ningún fichero."
                                    Visibility="{Binding HasFiles, Converter={StaticResource InverseBoolToVisibility}}" />
-                        <ItemsControl ItemsSource="{Binding Files}" Margin="0,8,0,0">
+                        <ItemsControl ItemsSource="{Binding Files}" Margin="{StaticResource Pad.XS.Top}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <WrapPanel />
@@ -424,7 +424,7 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Button Margin="0,0,6,6" Padding="9,4" Cursor="Hand" BorderThickness="1"
+                                    <Button Margin="{StaticResource Pad.XS}" Padding="{StaticResource Pad.Pill}" Cursor="Hand" BorderThickness="1"
                                             Command="{Binding DataContext.SelectFileCommand,
                                                       RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}"
@@ -433,15 +433,15 @@
                                             BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                                             Foreground="{DynamicResource TextFillColorPrimaryBrush}">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="⚠" Margin="0,0,5,0" Foreground="#E0A030" FontSize="11"
+                                            <TextBlock Text="⚠" Margin="{StaticResource Pad.XXS.Right}" Foreground="#E0A030" FontSize="{StaticResource FontSize.Meta}"
                                                        ToolTip="Fichero fuera del hallazgo: lo autorizaste durante la sesión"
                                                        Visibility="{Binding InScope, Converter={StaticResource InverseBoolToVisibility}}" />
                                             <!-- Nombre largo: elipsis EN MEDIO, nunca al final —lo que
                                                  identifica un fichero es su nombre, y la extensión dice
                                                  de qué se trata—. La ruta entera va en el ToolTip. -->
-                                            <TextBlock FontSize="12"
+                                            <TextBlock FontSize="{StaticResource FontSize.Meta}"
                                                        Text="{Binding FileName, Converter={StaticResource MiddleEllipsis}, ConverterParameter=28}" />
-                                            <TextBlock Text="{Binding Tally}" FontSize="11" Opacity="0.7" Margin="7,0,0,0" />
+                                            <TextBlock Text="{Binding Tally}" FontSize="{StaticResource FontSize.Meta}" Opacity="0.7" Margin="{StaticResource Pad.XS.Left}" />
                                         </StackPanel>
                                     </Button>
                                 </DataTemplate>
@@ -452,10 +452,10 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                                   DataContext="{Binding SelectedFile}">
                         <StackPanel>
-                            <TextBlock FontSize="11" Opacity="0.75" Margin="2,0,0,2"
+                            <TextBlock FontSize="{StaticResource FontSize.Meta}" Opacity="0.75" Margin="{StaticResource Pad.XXS}"
                                        ToolTip="{Binding RelativePath}"
                                        Text="{Binding RelativePath, Converter={StaticResource MiddleEllipsis}, ConverterParameter=52}" />
-                            <TextBlock Text="{Binding ScopeNote}" FontSize="11" Opacity="0.6" Margin="2,0,0,6"
+                            <TextBlock Text="{Binding ScopeNote}" FontSize="{StaticResource FontSize.Meta}" Opacity="0.6" Margin="{StaticResource Pad.XXS}"
                                        TextWrapping="Wrap" />
                             <ItemsControl ItemsSource="{Binding Lines}">
                                 <ItemsControl.ItemTemplate>
@@ -468,14 +468,14 @@
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0" Text="{Binding OldNumber}" FontFamily="Consolas"
-                                                       FontSize="11" Opacity="0.45" TextAlignment="Right" Margin="0,0,6,0" />
+                                                       FontSize="{StaticResource FontSize.Meta}" Opacity="0.45" TextAlignment="Right" Margin="{StaticResource Pad.XS.Right}" />
                                             <TextBlock Grid.Column="1" Text="{Binding NewNumber}" FontFamily="Consolas"
-                                                       FontSize="11" Opacity="0.45" TextAlignment="Right" Margin="0,0,6,0" />
+                                                       FontSize="{StaticResource FontSize.Meta}" Opacity="0.45" TextAlignment="Right" Margin="{StaticResource Pad.XS.Right}" />
                                             <TextBlock Grid.Column="2" Text="{Binding Marker}" FontFamily="Consolas"
-                                                       FontSize="12" FontWeight="Bold"
+                                                       FontSize="{StaticResource FontSize.Meta}" FontWeight="Bold"
                                                        Foreground="{Binding Kind, Converter={StaticResource DiffKindToBrush}}" />
                                             <TextBlock Grid.Column="3" Text="{Binding Text}" FontFamily="Consolas"
-                                                       FontSize="12" TextWrapping="NoWrap"
+                                                       FontSize="{StaticResource FontSize.Meta}" TextWrapping="NoWrap"
                                                        Foreground="{Binding Kind, Converter={StaticResource DiffKindToBrush}}" />
                                         </Grid>
                                     </DataTemplate>
@@ -493,56 +493,56 @@
             <Border x:Name="ClosingPanel" Grid.Column="0" Grid.ColumnSpan="3"
                     Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="8" Padding="22"
+                    CornerRadius="8" Padding="{StaticResource Pad.L}"
                     IsVisibleChanged="OnClosingShown"
                     Visibility="{Binding ShowClosing, Converter={StaticResource BoolToVisibility}}">
                 <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,14">
-                        <TextBlock Text="Arreglo terminado" FontSize="20" FontWeight="SemiBold" />
+                    <StackPanel DockPanel.Dock="Top" Margin="{StaticResource Pad.M.Bottom}">
+                        <TextBlock Text="Arreglo terminado" FontSize="{StaticResource FontSize.H3}" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding Fix.StatusMessage}" TextWrapping="Wrap" Opacity="0.8"
-                                   FontSize="12" Margin="0,6,0,0" />
-                        <Border CornerRadius="6" Padding="10,7" Margin="0,10,0,0"
+                                   FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Top}" />
+                        <Border CornerRadius="6" Padding="{StaticResource Pad.Field}" Margin="{StaticResource Pad.S.Top}"
                                 Background="#22E0A030" BorderBrush="#66E0A030" BorderThickness="1">
-                            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#F0D090"
+                            <TextBlock TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" Foreground="#F0D090"
                                        Text="Los cambios están en tu clon sin commitear — revisa y commitea cuando estés conforme. Arreglar no resuelve el hallazgo: sigue activo hasta que lo verifiques." />
                         </Border>
                     </StackPanel>
 
-                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,14,0,0">
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="{StaticResource Pad.M.Top}">
                         <ui:Button Content="Verificar ahora" Command="{Binding VerifyNowCommand}" Appearance="Primary" />
-                        <ui:Button Content="Abrir en el editor" Command="{Binding OpenInEditorCommand}" Margin="8,0,0,0" />
-                        <ui:Button Content="Ver informe" Command="{Binding OpenReportCommand}" Margin="8,0,0,0" />
-                        <ui:Button Content="Me quedo los cambios" Command="{Binding FinishCommand}" Margin="8,0,0,0" />
+                        <ui:Button Content="Abrir en el editor" Command="{Binding OpenInEditorCommand}" Margin="{StaticResource Pad.XS.Left}" />
+                        <ui:Button Content="Ver informe" Command="{Binding OpenReportCommand}" Margin="{StaticResource Pad.XS.Left}" />
+                        <ui:Button Content="Me quedo los cambios" Command="{Binding FinishCommand}" Margin="{StaticResource Pad.XS.Left}" />
                     </StackPanel>
 
                     <ScrollViewer x:Name="ClosingScroll" VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <TextBlock Text="Qué cambió y por qué" Style="{StaticResource SectionTitle}" />
-                            <TextBlock Text="{Binding Fix.Summary}" TextWrapping="Wrap" FontSize="12.5"
+                            <TextBlock Text="{Binding Fix.Summary}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
-                            <TextBlock Text="Riesgos declarados" Style="{StaticResource SectionTitle}" Margin="0,16,0,8"
+                            <TextBlock Text="Riesgos declarados" Style="{StaticResource SectionTitle}" Margin="{StaticResource Pad.SectionGapWide}"
                                        Visibility="{Binding Fix.Risks, Converter={StaticResource NotEmptyToVisibility}}" />
-                            <TextBlock Text="{Binding Fix.Risks}" TextWrapping="Wrap" FontSize="12.5" Foreground="#E0A030"
+                            <TextBlock Text="{Binding Fix.Risks}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}" Foreground="#E0A030"
                                        Visibility="{Binding Fix.Risks, Converter={StaticResource NotEmptyToVisibility}}" />
 
-                            <TextBlock Text="Ficheros tocados" Style="{StaticResource SectionTitle}" Margin="0,16,0,8" />
+                            <TextBlock Text="Ficheros tocados" Style="{StaticResource SectionTitle}" Margin="{StaticResource Pad.SectionGapWide}" />
                             <ItemsControl ItemsSource="{Binding Files}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Button Background="Transparent" BorderThickness="0" Padding="0,2" Cursor="Hand"
+                                        <Button Background="Transparent" BorderThickness="0" Padding="{StaticResource Pad.XXS.V}" Cursor="Hand"
                                                 HorizontalContentAlignment="Left"
                                                 Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                                 Command="{Binding DataContext.SelectFileCommand,
                                                           RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                 CommandParameter="{Binding}">
                                             <WrapPanel>
-                                                <TextBlock FontFamily="Consolas" FontSize="12"
+                                                <TextBlock FontFamily="Consolas" FontSize="{StaticResource FontSize.Meta}"
                                                            ToolTip="{Binding RelativePath}"
                                                            Text="{Binding RelativePath, Converter={StaticResource MiddleEllipsis}, ConverterParameter=60}" />
-                                                <TextBlock Text="{Binding Tally}" FontSize="11" Opacity="0.7" Margin="8,0,0,0" />
-                                                <TextBlock Text="fuera del hallazgo, autorizado por ti" FontSize="11"
-                                                           Foreground="#E0A030" Margin="8,0,0,0"
+                                                <TextBlock Text="{Binding Tally}" FontSize="{StaticResource FontSize.Meta}" Opacity="0.7" Margin="{StaticResource Pad.XS.Left}" />
+                                                <TextBlock Text="fuera del hallazgo, autorizado por ti" FontSize="{StaticResource FontSize.Meta}"
+                                                           Foreground="#E0A030" Margin="{StaticResource Pad.XS.Left}"
                                                            Visibility="{Binding InScope, Converter={StaticResource InverseBoolToVisibility}}" />
                                             </WrapPanel>
                                         </Button>
@@ -551,15 +551,15 @@
                             </ItemsControl>
 
                             <TextBlock Text="Resultado del último build/tests" Style="{StaticResource SectionTitle}"
-                                       Margin="0,16,0,8" />
-                            <TextBlock Text="{Binding BuildText}" TextWrapping="Wrap" FontSize="12" Margin="0,0,0,4"
+                                       Margin="{StaticResource Pad.SectionGapWide}" />
+                            <TextBlock Text="{Binding BuildText}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XXS.Bottom}"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                             <!-- Qué se compiló, dicho aparte: un veredicto sin ámbito no se puede
                                  interpretar (H9.1 §2). -->
-                            <TextBlock Text="{Binding BuildScopeText}" TextWrapping="Wrap" FontSize="11" Margin="0,0,0,6"
+                            <TextBlock Text="{Binding BuildScopeText}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Bottom}"
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        Visibility="{Binding BuildScopeText, Converter={StaticResource NotEmptyToVisibility}}" />
-                            <Border CornerRadius="6" Padding="10,8" Background="#18000000"
+                            <Border CornerRadius="6" Padding="{StaticResource Pad.Notice}" Background="#18000000"
                                     Visibility="{Binding Fix.LastBuild, Converter={StaticResource NotEmptyToVisibility}}">
                                 <!-- El tope de altura solo vale si lo que sobra se puede alcanzar:
                                      antes recortaba la salida del build sin decirlo. -->
@@ -569,34 +569,34 @@
                                      la tarjeta de commit quedaba fuera de alcance. -->
                                 <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto"
                                               PreviewMouseWheel="OnInnerScroll">
-                                    <TextBlock Text="{Binding Fix.LastBuild}" FontFamily="Consolas" FontSize="11"
+                                    <TextBlock Text="{Binding Fix.LastBuild}" FontFamily="Consolas" FontSize="{StaticResource FontSize.Meta}"
                                                TextWrapping="Wrap"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                 </ScrollViewer>
                             </Border>
 
                             <!-- · La sugerencia de commit, en su tarjeta propia y EDITABLE · -->
-                            <Border CornerRadius="8" Padding="14,12" Margin="0,18,0,0"
+                            <Border CornerRadius="8" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.M.Top}"
                                     Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                                 <StackPanel>
                                     <TextBlock Text="Sugerencia de commit" Style="{StaticResource SectionTitle}" />
-                                    <TextBlock Style="{StaticResource Help}" Margin="0,0,0,8"
+                                    <TextBlock Style="{StaticResource Help}" Margin="{StaticResource Pad.XS.Bottom}"
                                                Text="Atalaya no commitea: esto solo te ahorra redactarlo. Edítalo a tu gusto y cópialo." />
-                                    <TextBlock Text="Título" FontSize="11" Margin="0,4,0,3"
+                                    <TextBlock Text="Título" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XXS}"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     <ui:TextBox Text="{Binding Commit.Title, UpdateSourceTrigger=PropertyChanged}" />
-                                    <TextBlock Text="{Binding Commit.TitleLengthNote}" FontSize="10.5" Margin="0,3,0,0"
+                                    <TextBlock Text="{Binding Commit.TitleLengthNote}" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XXS.Top}"
                                                HorizontalAlignment="Right"
                                                Foreground="{Binding Commit.TitleIsLong, Converter={StaticResource WarningToBrush}}" />
-                                    <TextBlock Text="Descripción" FontSize="11" Margin="0,8,0,3"
+                                    <TextBlock Text="Descripción" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Top}"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     <ui:TextBox Text="{Binding Commit.Description, UpdateSourceTrigger=PropertyChanged}"
                                                 AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90"
                                                 VerticalScrollBarVisibility="Auto"
                                                 PreviewMouseWheel="OnInnerScroll" />
                                     <ui:Button Content="Copiar" Command="{Binding CopyCommitCommand}"
-                                               Appearance="Primary" HorizontalAlignment="Left" Margin="0,10,0,0" />
+                                               Appearance="Primary" HorizontalAlignment="Left" Margin="{StaticResource Pad.S.Top}" />
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -606,7 +606,7 @@
         </Grid>
 
         <!-- ================================ PIE ================================ -->
-        <Border Grid.Row="3" Background="#14808080" CornerRadius="8" Padding="12,7" Margin="0,10,0,0"
+        <Border Grid.Row="3" Background="#14808080" CornerRadius="8" Padding="{StaticResource Pad.Field}" Margin="{StaticResource Pad.S.Top}"
                 Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}">
             <!-- F17-RETOQUE: el WrapPanel bajaba de línea lo que no cabía, y el StackPanel de la
                  auditoría lo cortaba; ninguno de los dos abreviaba. Ahora los textos van en una
@@ -620,8 +620,8 @@
                 </Grid.ColumnDefinitions>
                 <c:FooterLine x:Name="Footer" Grid.Column="0" Segments="{Binding Footer}" VerticalAlignment="Center"
                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="14,0,0,0">
-                <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,10,0" VerticalAlignment="Center"
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="{StaticResource Pad.M.Left}">
+                <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="{StaticResource Pad.S.Right}" VerticalAlignment="Center"
                                  Visibility="{Binding Fix.IsBuilding, Converter={StaticResource BoolToVisibility}}" />
                 <!-- H9.1 §2: el ámbito de la compilación es decisión del USUARIO. El agente no
                      puede tocarlo: él no sabe si este cambio puede haber roto a un vecino, ni paga
@@ -632,7 +632,7 @@
                      no hace nada al marcarlo, cambia lo que hará el siguiente build. Su sitio es
                      al lado del resultado de ese build, que es donde se ve su consecuencia. -->
                 <CheckBox Content="Compilar solución completa" IsChecked="{Binding BuildFullSolution}"
-                          VerticalAlignment="Center" FontSize="12"
+                          VerticalAlignment="Center" FontSize="{StaticResource FontSize.Meta}"
                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                           ToolTip="Por defecto se compila solo el proyecto de los ficheros tocados y sus tests, que es lo que el veredicto puede atribuir al cambio. Marcando esto se compila la solución entera y los errores se cuentan contra una línea base del mismo commit." />
                 </StackPanel>

@@ -14181,3 +14181,219 @@ romperse en silencio**, y se ha dejado fuera a conciencia: probarlo pide levanta
 de verdad con su ciclo de vida, que es un aparato desproporcionado para un orden de dos líneas que
 además está escrito en un comentario delante de ellas. Queda apuntado aquí como lo que es: una
 regla cubierta por la revisión visual y no por la suite.
+
+## F26 · Parte B: las vistas de trabajo
+
+Portafolio, Inventario, Hallazgos (lista y vista rápida), la ficha, Sesión en vivo y Arreglo
+asistido, pasadas por el sistema de la Parte A. Las capturas del antes y el después, en las cuatro
+combinaciones, están en `docs/design/f26-parte-b/`.
+
+**La auditoría de las cuatro vistas que no tenían captura** —Inventario, la ficha, Arreglo asistido
+y el alta— se hizo antes de tocarlas, con el mismo formato que la del prompt, y cada una está
+citada en la decisión que la arregla. El alta (Nueva aplicación) es de la Parte C y se audita ahí.
+
+### D-970 — `ColumnsPanel`: una rejilla que reparte, no que sobra
+
+El portafolio usaba un `WrapPanel` con tarjetas de 330 px fijos: a 1920 se veía UNA tarjeta y el
+resto de la pantalla en blanco, y al estrechar la ventana la tarjeta no se enteraba. **Un
+`WrapPanel` reparte lo que le sobra en el hueco de la derecha; nunca en las tarjetas.**
+
+`ColumnsPanel` cuenta cuántas columnas de `MinColumnWidth` caben con su hueco, lo limita a
+`MaxColumns`, y reparte el ancho **entero** entre ellas. Es el principio 1 hecho control: a 1920
+salen tres o cuatro columnas, a 1280 dos, y una tarjeta mide siempre lo que le toca.
+
+Dos detalles que no son opcionales:
+
+- **El alto lo manda la fila.** Todas las tarjetas de una fila miden lo que la más alta. Una
+  rejilla de tarjetas desiguales se lee como un montón, no como una rejilla.
+- **Es un panel y no un `UniformGrid` con las columnas atadas desde fuera**, porque el número de
+  columnas depende del ancho DISPONIBLE, que solo se conoce en el `Measure`. Atarlo a la ventana
+  sería atarlo al ancho equivocado: el del contenido es menor, y cambia cuando el raíl se pliega.
+
+### D-971 — La gravedad se pinta con `DataTrigger`, no con un converter
+
+Un converter devuelve una brocha **ya resuelta**: al cambiar de tema no se le vuelve a preguntar y
+la lista se queda con los colores del tema anterior. Los `DataTrigger` ponen `DynamicResource`, que
+sí se reevalúa. Es la diferencia entre «el tema cambia todos los recursos» (principio 5) y «el tema
+cambia los recursos que no pasaron por un converter».
+
+El converter `SeverityToBrush` se queda para las **gráficas**, que es otra cosa: allí el color
+identifica una serie y tiene que ser el mismo en los dos temas para poder comparar dos capturas.
+
+### D-972 — Portafolio: la rejilla, el resumen y UNA acción por tarjeta
+
+**Lo que se veía** (captura del usuario): una tarjeta de 330 px y el 80 % de la pantalla vacía. La
+tarjeta amontonaba nombre, piloto, ciclo, barra, cuatro pastillas del mismo tamaño, deriva, última
+sesión y **dos botones de ancho completo**, uno encima del otro — «Abrir inventario» en gris y
+«Vincular clon local…» en azul —, los dos gritando lo mismo.
+
+**Qué falla contra los principios**: el 2 (el espacio se deja, no se reparte), el 4 (dos acciones
+compitiendo por ser la principal) y el 8 (las cifras, que son lo que hay que ver primero, con el
+mismo peso que las etiquetas).
+
+**Qué se hace**:
+
+- Rejilla de `ColumnsPanel` con tarjetas de 420 mínimo.
+- **El resumen del portafolio** ocupa el ancho que sobraba y contesta la pregunta con la que se
+  abre Atalaya por la mañana: cuánto hay abierto y de qué gravedad. Se **deriva** de las tarjetas
+  —no hay consulta nueva— porque es la misma cuenta vista desde más lejos: una consulta propia
+  podría dar otro número, y entonces habría dos verdades en la misma pantalla.
+- Cifras grandes por gravedad, con su color: se ve qué aplicación está peor sin leer.
+- **Una** acción principal por tarjeta, y la que toca: sin clon no hay nada que auditar, así que
+  vincular es lo primario; con clon, entrar. Lo decide un `DataTrigger` sobre el estado del
+  vínculo, así que no puede haber dos.
+- La papelera pasa a un menú «…»: es una salida, no una acción del día a día.
+
+### D-973 — Hallazgos: cada filtro dice qué filtra, y la gravedad se ve sin leer
+
+**Lo que se veía**: cuatro desplegables seguidos que ponían «Todas · Todas · Activos · Todas» —para
+saber cuál era cuál había que abrirlos— y dos checkboxes sueltos detrás. En la lista, la gravedad
+era una pastilla de color plano con letra blanca: el mismo peso visual para una crítica que para
+una baja, y el título a 13,5 px.
+
+**Qué se hace**: cada filtro con su nombre delante («Aplicación:», «Gravedad:», «Estado:»,
+«Temática:»), **banda de gravedad al borde de la fila** —que es lo que permite recorrer cien
+hallazgos y ver dónde están las críticas sin leer una palabra—, pastilla con el color de la paleta,
+ruta en monoespaciado y densidad a la escala del sistema.
+
+### D-974 — La vista rápida: la misma ficha, con menos cosas a la vista
+
+El prompt pedía el detalle a la derecha en pantalla ancha. La ficha son 625 líneas —metadatos,
+código, historial y el formulario de gobernanza con silenciado, alcance, motivo y notas— y en una
+columna de 460 px se lee **peor** que en su página. Se consultó y el usuario eligió la tercera
+salida: **vista rápida al lado, ficha completa a un clic**.
+
+El panel lleva gravedad, identificador, regla, título, ubicación, las **acciones frecuentes** con
+su razón al lado cuando alguna está bloqueada, el código donde está, la descripción y la
+recomendación. El historial y la gobernanza no están: son formularios, y para eso está «Abrir
+ficha».
+
+**Y es la MISMA ficha**: el panel monta un `FindingDetailViewModel` de verdad. Reproducir aquí «¿se
+puede arreglar con agente, y si no por qué?» habría sido copiar la lógica más delicada de la
+aplicación en un segundo sitio, y el día que divergieran el usuario vería dos respuestas distintas
+a la misma pregunta.
+
+**En estrecho el panel se va y la fila vuelve a abrir la ficha entera**, que es lo que hacía
+siempre. El umbral se mide sobre el ancho **disponible** y no sobre el de la ventana: el raíl se
+pliega y con él cambia lo que le queda al contenido sin que la ventana se mueva.
+
+Dos cosas salieron de mirar la captura, no del código:
+
+- El código se desplaza **dentro de su caja**, con tope de alto. Sin el tope empujaba las acciones
+  por debajo del borde del panel; sin el desplazamiento se cortaba a media línea, y una línea de
+  código partida deja de ser código.
+- Las acciones van **arriba**, justo bajo el título. En un panel que se desplaza, «abajo» es
+  «invisible» (principio 8).
+
+### D-975 — Inventario: las acciones a la cabecera y el panel que no cabía
+
+**Lo que se veía**: los seis botones de acción metidos en la misma línea que la caja de búsqueda,
+todos del mismo peso; el árbol ocupando media pantalla; y el resumen del ciclo, a 260 px, **con el
+texto cortado a media palabra** — «Gestiona», «Aquí r» —. Los estados de unidad eran pastillas
+grises, las tres iguales.
+
+**Qué se hace**:
+
+- Las acciones de la **vista** a su cabecera, con «Auditar selección» como único primario. «Reset
+  ciclo» y «Re-escanear» detrás del «…»: uno es destructivo y el otro no es del día a día.
+- Lo que toca la **lista** —buscar, filtrar deriva, seleccionar pendientes o cambiadas, plegar—
+  baja a la barra de la lista, que es donde actúa. No lanzan nada y no escriben: no son acciones de
+  vista. La separación no es estética: es la que hace que «Auditar selección» no tenga cinco
+  vecinos con su mismo aspecto.
+- El árbol al ancho, en su panel.
+- El resumen del ciclo a **320 px**, que es lo que necesita su línea más larga, y se pliega en
+  cuanto no cabe. **Un texto recortado no falla, solo miente**: por eso el ancho de un panel se
+  decide con su contenido delante y no a ojo.
+- Los estados con color: auditada en verde, «Grande» en ámbar, pendiente en neutro.
+
+### D-976 — La ficha: seis estilos que eran su tipografía entera
+
+La ficha declaraba en local **toda su escala** —13,5 para los títulos, 12,5 para los sub, 11 para la
+ayuda, 13 para el cuerpo— y no la compartía con nadie. Pasar esos seis estilos por los tokens
+convierte el fichero entero sin tocar sus 600 líneas, y de paso desaparece la ayuda a 11 px, que es
+de donde venía «el texto de ayuda no se lee».
+
+Y la botonera: los cuatro botones eran iguales y grises, así que no había forma de saber cuál hace
+avanzar el hallazgo. Ahora «Arreglar con agente» es **verde** —el color de lo que adelanta trabajo
+(D-949)— y la razón por la que no se puede va **al lado, con el color de aviso**, no en un gris de
+11 px que se lee como decoración (principio 4).
+
+### D-977 — El banco de capturas de las vistas densas
+
+Sesión en vivo y Arreglo asistido no se pueden fotografiar desde la aplicación instalada: hacen
+falta una sesión de varias unidades y un arreglo con su conversación, y lanzarlos de verdad **gasta
+los créditos del usuario y escribe en el hub del equipo**. El banco monta la **misma carcasa**
+—`MainWindow` con su `MainViewModel`— sobre un hub temporal y el agente falso que ya usa la suite,
+y la fotografía a mitad de la sesión, que es el estado que hay que poder mirar.
+
+Vive en el scratchpad y no en el repositorio: es un instrumento de esta fase, no producto. Lo que
+sí quedó en el producto son tres correcciones que destapó, y las tres estaban mal de antes:
+
+- La tabla VM→vista y el estilo `LinkButton` estaban sueltos en `App.xaml`, así que **solo existían
+  con la aplicación arrancada**. Ahora son diccionarios propios (`Themes/Pages.xaml`, `Styles`).
+- Las URIs del tema usaban la forma corta del pack URI, que se resuelve contra el ensamblado **de
+  entrada**. Es Atalaya cuando arranca la aplicación y no lo es en ningún otro caso. Ahora llevan
+  el nombre del ensamblado, que es lo correcto siempre.
+
+**Lo que el agente falso NO alcanza, dicho para que no se lea la captura como si lo hiciera**: el
+pie con el coste —el hub del banco no tiene tarifas configuradas, así que dice «coste no
+calculable»— y, en el arreglo, el panel de diff, porque la captura pilla la tarjeta de permiso
+esperando respuesta. Para esas dos franjas vale la captura real del usuario.
+
+Tres errores propios del banco, apuntados porque los tres son de la misma familia —**fallar en
+silencio**—:
+
+- La sesión salía con cero hallazgos: el guion usaba pilares que no existen («Seguridad»,
+  «Criterio»; los reales son Optimización, Mejoras y Errores) y el ingestor rechazaba el payload
+  entero. La sesión terminaba «bien», con seis incidencias por unidad y nada escrito.
+- Sin `Application.Run` no hay bucle de mensajes propio, y **cerrar la última ventana apaga el
+  despachador**: el banco salía con código 0 habiendo hecho dos capturas de ocho. Ahora esconde la
+  ventana en vez de cerrarla.
+- El conjunto de «unidades ya vistas» era estático y se compartía entre las cuatro pasadas, así que
+  de la segunda en adelante no se reportaba nada.
+
+### D-978 — El banco de geometría ya no borra los tokens
+
+`ViewLayout` —el medidor con el que esta casa comprueba que dos cosas no se pisan— cargaba el XAML
+**quitando todos los `StaticResource`**. Daba igual mientras los márgenes iban escritos a mano en el
+atributo: lo que medía era lo que se pintaba. Desde que la escala vive en `Tokens.xaml`, borrarlos
+mide una vista **sin un solo margen**, que no se parece a la que se ve — y dieciséis tests de
+solapamiento se pusieron rojos midiendo una vista que no existe.
+
+Ahora fusiona `Tokens.xaml` de verdad (no depende de nada: dobles y `Thickness`) y sigue quitando
+enlaces, brochas y estilos, que sí necesitan la aplicación viva. Es la lección de siempre en esta
+casa: **un andamiaje que simplifica de más deja de medir lo que dice medir**, y no avisa.
+
+### D-979 — Cobertura de la Parte B
+
+**Ningún test nuevo, y es a propósito** (N-5). Lo que la Parte B cambia es disposición y jerarquía
+visual: qué va arriba, qué color tiene y cuántas columnas caben. Nada de eso se rompe en silencio
+—se ve en la primera captura— y ya está vigilado por lo que hay:
+
+- `DesignTokenTests` cubre que ninguna de las seis vistas vuelva a escribir un tamaño a mano; las
+  seis se tachan de la lista de pendientes en esta parte.
+- `PageHeaderLayoutTests` y `FailureBannerLayoutTests` miden que nada se solape a cuatro anchos, y
+  ahora lo miden **de verdad** (D-978).
+- `V3_no_expone_NINGUNA_accion_de_escritura` obligó a mirar uno a uno los dos comandos nuevos de la
+  vista rápida y a decidir si escriben. No escriben.
+
+**Diez tests existentes actualizados, ninguno eliminado.** Todos protegían reglas vivas escritas
+contra un marcado que ha cambiado, y en cada uno se conservó la regla en vez de taparla. Los tres
+que más costaron y por qué:
+
+- **El filtro de deriva** ya no repite «Deriva:» dentro de su primera opción —va como etiqueta del
+  control, que es justo lo que arregla la barra ilegible—; siguen siendo cuatro opciones y el test
+  las sigue contando.
+- **Los dos microtítulos del panel del ciclo** ya no escriben su tamaño: comparten ESTILO, que es
+  una forma más fuerte de la misma regla —no pueden divergir aunque alguien lo intente— y el test
+  comprueba que lo compartan.
+- **El centrado de la fila del inventario** (F12 §H.3) se deja explícito en cada elemento aunque el
+  estilo ya lo ponga: ese guardia se vigila **leyendo la fila**, y uno que dependiera de mirar
+  dentro de un estilo dejaría de encontrar el elemento nuevo que se olvide de heredarlo.
+
+Y un tamaño que se resistía: `Ninguna_tarjeta_de_la_ficha_fija_un_alto` cazó un `Height="14"` de un
+icono. En vez de aflojar el test —que vigila que una tarjeta no fije alto— se puso el tamaño del
+icono pequeño en la escala (`Icon.Size.Small`). El test se quedó como estaba, que es la señal de
+que el arreglo era el correcto.
+
+**2.332 tests en verde** (1.823 de `Atalaya.App.Tests`).

@@ -86,6 +86,18 @@ Y no dice nada más: esa barra tiene un solo trabajo.
 Esa misma regla vale para el raíl: pulsar **Hallazgos** te devuelve *tus* hallazgos, con el filtro
 que tenían, no una lista virgen de todo el portafolio.
 
+### La vista rápida de Hallazgos
+
+Con la ventana ancha, pulsar un hallazgo lo abre **en el panel de la derecha**: gravedad, regla,
+dónde está con su código, qué es, qué recomienda, y las acciones que se usan a diario —arreglar con
+agente, abrir en el editor, verificar—. Si alguna no se puede pulsar, la razón se lee **al lado**.
+
+El historial y la gobernanza —silenciar, cerrar, asignar, comentar— no están ahí: son formularios y
+se rellenan mejor en su página. **«Abrir ficha»** lleva a ella.
+
+Con la ventana estrecha el panel desaparece y pulsar una fila abre la ficha directamente, como
+siempre.
+
 **El pie**, abajo, aparece **solo cuando hay algo corriendo** y dice qué: la sesión y el arreglo,
 con su progreso y un clic para ir a verlos.
 

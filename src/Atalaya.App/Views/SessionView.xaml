@@ -19,7 +19,7 @@
         <!-- Cabecera. Mismo reparto que el arreglo asistido, y por el mismo motivo: dos
              StackPanel en un Grid sin columnas no reparten espacio, se superponen. Aquí la
              izquierda es corta y no se había notado todavía. -->
-        <c:PageHeader Grid.Row="0" Margin="0,0,0,10">
+        <c:PageHeader Grid.Row="0" Margin="{StaticResource Pad.S.Bottom}">
             <Grid VerticalAlignment="Center">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
@@ -27,11 +27,11 @@
                          reparto, y el mismo suelo por el mismo motivo. -->
                     <ColumnDefinition Width="*" MinWidth="60" MaxWidth="420" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="{Binding Title}" FontSize="24" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="0" Text="{Binding Title}" FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
                 <!-- SIN HorizontalAlignment="Left", por lo mismo que en AssistedFixView: alineado
                      a la izquierda, WPF lo arregla a su tamaño deseado y se sale de su columna. -->
                 <TextBlock Grid.Column="1" Text="{Binding Live.HeaderText}" Opacity="0.6"
-                           VerticalAlignment="Bottom" Margin="12,0,0,4"
+                           VerticalAlignment="Bottom" Margin="{StaticResource Pad.S.Left}"
                            MaxWidth="420" TextTrimming="CharacterEllipsis"
                            ToolTip="{Binding Live.HeaderText}" />
             </Grid>
@@ -39,7 +39,7 @@
                  de la identidad lo pone c:PageHeader, que es quien reparte. -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <ui:Button Content="Detener" Command="{Binding StopCommand}" Appearance="Danger"
-                           Margin="0,0,12,0"
+                           Margin="{StaticResource Pad.S.Right}"
                            Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
                 <!-- BUGFIX-CIERRE: una sesion terminada se puede ARCHIVAR. Antes se quedaba fija en
                      el rail, sin salida, ocupando una entrada para siempre. Y solo en lo terminal:
@@ -61,41 +61,41 @@
              error crudo del proveedor vive plegado tras «Ver detalle» para que su longitud no
              empuje nada, y hay botón de copiar porque seleccionar a mano varias líneas dentro de un
              banner es el gesto que nadie hace. -->
-        <Border Grid.Row="1" CornerRadius="8" Padding="16" Margin="0,0,0,12"
+        <Border Grid.Row="1" CornerRadius="8" Padding="{StaticResource Pad.M}" Margin="{StaticResource Pad.S.Bottom}"
                 Background="#22C04040" BorderBrush="#66C04040" BorderThickness="1"
                 Visibility="{Binding ShowFailure, Converter={StaticResource BoolToVisibility}}">
             <StackPanel>
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#xE783;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                               Foreground="#E06C6C" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <TextBlock Text="No se pudo completar la sesión" FontSize="16" FontWeight="SemiBold"
+                    <TextBlock Text="&#xE783;" FontFamily="Segoe MDL2 Assets" FontSize="{StaticResource FontSize.Lead}"
+                               Foreground="#E06C6C" VerticalAlignment="Center" Margin="{StaticResource Pad.XS.Right}" />
+                    <TextBlock Text="No se pudo completar la sesión" FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold"
                                VerticalAlignment="Center" />
                 </StackPanel>
 
                 <!-- Seleccionable: es un TextBox de solo lectura sin chrome, no un TextBlock. -->
                 <TextBox Text="{Binding FailureMessage, Mode=OneWay}" IsReadOnly="True" IsTabStop="False"
-                         TextWrapping="Wrap" BorderThickness="0" BorderBrush="Transparent" Background="Transparent" Padding="0"
-                         Margin="0,8,0,0" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                         TextWrapping="Wrap" BorderThickness="0" BorderBrush="Transparent" Background="Transparent" Padding="{StaticResource Pad.Zero}"
+                         Margin="{StaticResource Pad.XS.Top}" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
-                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                    <ui:Button Content="{Binding DetailToggleLabel}" Appearance="Secondary" FontSize="11"
+                <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.S.Top}">
+                    <ui:Button Content="{Binding DetailToggleLabel}" Appearance="Secondary" FontSize="{StaticResource FontSize.Meta}"
                                Command="{Binding ToggleFailureDetailCommand}"
                                Visibility="{Binding HasFailureDetail, Converter={StaticResource BoolToVisibility}}" />
-                    <ui:Button Content="Copiar error" Appearance="Secondary" FontSize="11" Margin="8,0,0,0"
+                    <ui:Button Content="Copiar error" Appearance="Secondary" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Left}"
                                Command="{Binding CopyFailureCommand}" />
-                    <ui:Button Content="Elegir modelo en Ajustes" Appearance="Primary" Margin="8,0,0,0"
+                    <ui:Button Content="Elegir modelo en Ajustes" Appearance="Primary" Margin="{StaticResource Pad.XS.Left}"
                                Command="{Binding FixModelCommand}"
                                Visibility="{Binding FailureOffersModelChange, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
 
                 <!-- El crudo: acotado en alto y con su propio scroll, para que un error largo del
                      proveedor no pueda comerse el cuerpo de la vista. -->
-                <Border Margin="0,10,0,0" CornerRadius="6" Padding="10" Background="#18000000"
+                <Border Margin="{StaticResource Pad.S.Top}" CornerRadius="6" Padding="{StaticResource Pad.S}" Background="#18000000"
                         Visibility="{Binding IsFailureDetailExpanded, Converter={StaticResource BoolToVisibility}}">
                     <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
                         <TextBox Text="{Binding FailureDetail, Mode=OneWay}" IsReadOnly="True" IsTabStop="False"
-                                 TextWrapping="Wrap" BorderThickness="0" BorderBrush="Transparent" Background="Transparent" Padding="0"
-                                 FontFamily="Consolas" FontSize="11"
+                                 TextWrapping="Wrap" BorderThickness="0" BorderBrush="Transparent" Background="Transparent" Padding="{StaticResource Pad.Zero}"
+                                 FontFamily="Consolas" FontSize="{StaticResource FontSize.Meta}"
                                  Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     </ScrollViewer>
                 </Border>
@@ -111,18 +111,18 @@
             </Grid.ColumnDefinitions>
 
             <!-- · Col. 1 · Cola · -->
-            <Border Grid.Column="0" Background="#14808080" CornerRadius="8" Padding="10" Margin="0,0,10,0"
+            <Border Grid.Column="0" Background="#14808080" CornerRadius="8" Padding="{StaticResource Pad.S}" Margin="{StaticResource Pad.S.Right}"
                     Visibility="{Binding ShowSummary, Converter={StaticResource InverseBoolToVisibility}}">
                 <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                    <StackPanel DockPanel.Dock="Top" Margin="{StaticResource Pad.S.Bottom}">
                         <TextBlock Text="{Binding ProgressText}" FontWeight="SemiBold" />
-                        <ProgressBar Value="{Binding Live.Progress, Mode=OneWay}" Maximum="1" Height="4" Margin="0,6,0,0" />
+                        <ProgressBar Value="{Binding Live.Progress, Mode=OneWay}" Maximum="1" Height="4" Margin="{StaticResource Pad.XS.Top}" />
                     </StackPanel>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding Units}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Padding="4,5" Margin="0,1" CornerRadius="5" Background="#0C000000">
+                                    <Border Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS.V}" CornerRadius="5" Background="#0C000000">
                                         <StackPanel>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -143,21 +143,21 @@
                                                     Grid.Column="1"
                                                     Text="{Binding ShortName}"
                                                     ToolTip="{Binding Path}"
-                                                    FontSize="12"
+                                                    FontSize="{StaticResource FontSize.Meta}"
                                                     TextTrimming="CharacterEllipsis"
                                                     VerticalAlignment="Center" />
                                             </Grid>
                                             <TextBlock
                                                 Text="{Binding StateLabel}"
-                                                FontSize="10"
+                                                FontSize="{StaticResource FontSize.Meta}"
                                                 Opacity="0.65"
-                                                Margin="18,1,0,0"
+                                                Margin="{StaticResource Pad.M.Left}"
                                                 Foreground="{Binding State, Converter={StaticResource UnitRunStateToBrush}}" />
                                             <TextBlock
                                                 Text="{Binding ResultLine}"
-                                                FontSize="10"
+                                                FontSize="{StaticResource FontSize.Meta}"
                                                 Opacity="0.75"
-                                                Margin="18,1,0,0"
+                                                Margin="{StaticResource Pad.M.Left}"
                                                 TextWrapping="Wrap"
                                                 Visibility="{Binding ResultLine, Converter={StaticResource NotEmptyToVisibility}}" />
                                         </StackPanel>
@@ -170,42 +170,42 @@
             </Border>
 
             <!-- · Col. 2 · Actividad (la protagonista) · -->
-            <Border Grid.Column="1" Background="#0C000000" CornerRadius="8" Padding="4" Margin="0,0,10,0"
+            <Border Grid.Column="1" Background="#0C000000" CornerRadius="8" Padding="{StaticResource Pad.XXS}" Margin="{StaticResource Pad.S.Right}"
                     Visibility="{Binding ShowSummary, Converter={StaticResource InverseBoolToVisibility}}">
                 <DockPanel>
-                    <Grid DockPanel.Dock="Bottom" Margin="8,4,8,4">
+                    <Grid DockPanel.Dock="Bottom" Margin="{StaticResource Pad.RowTight}">
                         <ui:Button
                             Content="↓ Volver al final"
                             Command="{Binding BackToBottomCommand}"
-                            Padding="8,2"
-                            FontSize="11"
+                            Padding="{StaticResource Pad.Pill}"
+                            FontSize="{StaticResource FontSize.Meta}"
                             HorizontalAlignment="Right"
                             Visibility="{Binding AutoScroll, Converter={StaticResource InverseBoolToVisibility}}" />
                     </Grid>
                     <ScrollViewer x:Name="ActivityScroll" VerticalScrollBarVisibility="Auto" ScrollChanged="OnActivityScrollChanged">
-                        <ItemsControl ItemsSource="{Binding Units}" Margin="6">
+                        <ItemsControl ItemsSource="{Binding Units}" Margin="{StaticResource Pad.XS}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Expander IsExpanded="{Binding IsExpanded}" Margin="0,0,0,4">
+                                    <Expander IsExpanded="{Binding IsExpanded}" Margin="{StaticResource Pad.XXS.Bottom}">
                                         <Expander.Header>
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="{Binding StateGlyph}"
                                                            Foreground="{Binding State, Converter={StaticResource UnitRunStateToBrush}}"
-                                                           FontWeight="Bold" Margin="0,0,6,0" />
+                                                           FontWeight="Bold" Margin="{StaticResource Pad.XS.Right}" />
                                                 <TextBlock Text="{Binding Path}" ToolTip="{Binding Path}" FontWeight="SemiBold" />
                                             </StackPanel>
                                         </Expander.Header>
-                                        <ItemsControl ItemsSource="{Binding Passes}" Margin="14,4,0,0">
+                                        <ItemsControl ItemsSource="{Binding Passes}" Margin="{StaticResource Pad.M.Left}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <Expander IsExpanded="{Binding IsExpanded}" Margin="0,0,0,2">
+                                                    <Expander IsExpanded="{Binding IsExpanded}" Margin="{StaticResource Pad.XXS.Bottom}">
                                                         <Expander.Header>
-                                                            <TextBlock Text="{Binding Headline}" FontSize="12" Opacity="0.85" />
+                                                            <TextBlock Text="{Binding Headline}" FontSize="{StaticResource FontSize.Meta}" Opacity="0.85" />
                                                         </Expander.Header>
-                                                        <ItemsControl ItemsSource="{Binding Entries}" Margin="12,4,0,6">
+                                                        <ItemsControl ItemsSource="{Binding Entries}" Margin="{StaticResource Pad.S.Left}">
                                                             <ItemsControl.ItemTemplate>
                                                                 <DataTemplate>
-                                                                    <Grid Margin="0,1">
+                                                                    <Grid Margin="{StaticResource Pad.XXS.V}">
                                                                         <Grid.ColumnDefinitions>
                                                                             <ColumnDefinition Width="Auto" />
                                                                             <ColumnDefinition Width="Auto" />
@@ -222,7 +222,7 @@
                                                                             Grid.Column="1"
                                                                             CornerRadius="3"
                                                                             Width="6" Height="6"
-                                                                            Margin="0,6,6,0"
+                                                                            Margin="{StaticResource Pad.XS}"
                                                                             VerticalAlignment="Top"
                                                                             Background="{Binding Severity, Converter={StaticResource SeverityToBrush}}"
                                                                             Visibility="{Binding Severity, Converter={StaticResource SeverityToVisibility}}" />
@@ -231,7 +231,7 @@
                                                                             Text="{Binding Text}"
                                                                             TextWrapping="Wrap"
                                                                             FontFamily="Consolas"
-                                                                            FontSize="12"
+                                                                            FontSize="{StaticResource FontSize.Meta}"
                                                                             FontWeight="{Binding Kind, Converter={StaticResource ActivityKindToWeight}}" />
                                                                     </Grid>
                                                                 </DataTemplate>
@@ -250,29 +250,29 @@
             </Border>
 
             <!-- · Col. 3 · Hallazgos · -->
-            <Border Grid.Column="2" Background="#14808080" CornerRadius="8" Padding="10"
+            <Border Grid.Column="2" Background="#14808080" CornerRadius="8" Padding="{StaticResource Pad.S}"
                     Visibility="{Binding ShowSummary, Converter={StaticResource InverseBoolToVisibility}}">
                 <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                    <StackPanel DockPanel.Dock="Top" Margin="{StaticResource Pad.XS.Bottom}">
                         <TextBlock Text="Hallazgos" FontWeight="SemiBold" />
-                        <WrapPanel Margin="0,6,0,0">
-                            <Border Background="#D13A3A" CornerRadius="8" Padding="7,1" Margin="0,0,4,4">
-                                <TextBlock FontSize="11" Foreground="White">
+                        <WrapPanel Margin="{StaticResource Pad.XS.Top}">
+                            <Border Background="#D13A3A" CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS}">
+                                <TextBlock FontSize="{StaticResource FontSize.Meta}" Foreground="White">
                                     <Run Text="Crítica " /><Run Text="{Binding CriticalCount, Mode=OneWay}" FontWeight="Bold" />
                                 </TextBlock>
                             </Border>
-                            <Border Background="#E07A2B" CornerRadius="8" Padding="7,1" Margin="0,0,4,4">
-                                <TextBlock FontSize="11" Foreground="White">
+                            <Border Background="#E07A2B" CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS}">
+                                <TextBlock FontSize="{StaticResource FontSize.Meta}" Foreground="White">
                                     <Run Text="Alta " /><Run Text="{Binding HighCount, Mode=OneWay}" FontWeight="Bold" />
                                 </TextBlock>
                             </Border>
-                            <Border Background="#D2B036" CornerRadius="8" Padding="7,1" Margin="0,0,4,4">
-                                <TextBlock FontSize="11" Foreground="#202020">
+                            <Border Background="#D2B036" CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS}">
+                                <TextBlock FontSize="{StaticResource FontSize.Meta}" Foreground="#202020">
                                     <Run Text="Media " /><Run Text="{Binding MediumCount, Mode=OneWay}" FontWeight="Bold" />
                                 </TextBlock>
                             </Border>
-                            <Border Background="#6C93C0" CornerRadius="8" Padding="7,1" Margin="0,0,4,4">
-                                <TextBlock FontSize="11" Foreground="White">
+                            <Border Background="#6C93C0" CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS}">
+                                <TextBlock FontSize="{StaticResource FontSize.Meta}" Foreground="White">
                                     <Run Text="Baja " /><Run Text="{Binding LowCount, Mode=OneWay}" FontWeight="Bold" />
                                 </TextBlock>
                             </Border>
@@ -282,18 +282,18 @@
                         <ItemsControl ItemsSource="{Binding Findings}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Background="#0C000000" CornerRadius="5" Padding="7,5" Margin="0,2">
+                                    <Border Background="#0C000000" CornerRadius="5" Padding="{StaticResource Pad.ButtonSmall}" Margin="{StaticResource Pad.XXS.V}">
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal">
-                                                <Border CornerRadius="7" Padding="6,0" Margin="0,0,6,0"
+                                                <Border CornerRadius="7" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XS.Right}"
                                                         Background="{Binding Severity, Converter={StaticResource SeverityToBrush}}">
-                                                    <TextBlock Text="{Binding Severity}" FontSize="10" Foreground="White" />
+                                                    <TextBlock Text="{Binding Severity}" FontSize="{StaticResource FontSize.Meta}" Foreground="White" />
                                                 </Border>
-                                                <TextBlock Text="⚖" FontSize="11" Foreground="#E0A030" VerticalAlignment="Center"
+                                                <TextBlock Text="⚖" FontSize="{StaticResource FontSize.Meta}" Foreground="#E0A030" VerticalAlignment="Center"
                                                            ToolTip="Disputado: un auditor sostiene que nunca fue un defecto"
                                                            Visibility="{Binding Disputes.Count, Converter={StaticResource NotEmptyToVisibility}}" />
                                             </StackPanel>
-                                            <TextBlock Text="{Binding Title}" TextWrapping="Wrap" FontSize="12" Margin="0,4,0,0" />
+                                            <TextBlock Text="{Binding Title}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XXS.Top}" />
                                         </StackPanel>
                                     </Border>
                                 </DataTemplate>
@@ -314,35 +314,35 @@
             <Border Grid.Column="0" Grid.ColumnSpan="3"
                     Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="8" Padding="22"
+                    CornerRadius="8" Padding="{StaticResource Pad.L}"
                     Visibility="{Binding ShowSummary, Converter={StaticResource BoolToVisibility}}">
                 <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,14">
-                        <TextBlock Text="Sesión terminada" FontSize="20" FontWeight="SemiBold" />
+                    <StackPanel DockPanel.Dock="Top" Margin="{StaticResource Pad.M.Bottom}">
+                        <TextBlock Text="Sesión terminada" FontSize="{StaticResource FontSize.H3}" FontWeight="SemiBold" />
                         <!--
                             EXCEPCIÓN deliberada a la regla de F5.7 §4: no es feedback de una
                             acción del usuario, es el ESTADO VIVO de la sesión que está corriendo
                             («Auditando…», «Deteniendo tras la unidad actual…»). Tiene que
                             permanecer mientras dure, y su sitio es el panel de la sesión.
                         -->
-                        <TextBlock Text="{Binding Live.StatusMessage}" TextWrapping="Wrap" Opacity="0.8" FontSize="12" Margin="0,6,0,0" />
+                        <TextBlock Text="{Binding Live.StatusMessage}" TextWrapping="Wrap" Opacity="0.8" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Top}" />
                         <TextBlock Text="Pulsa cualquier línea para ver qué hallazgos la componen y por qué."
-                                   Opacity="0.55" FontSize="11" Margin="0,6,0,0" />
+                                   Opacity="0.55" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Top}" />
                     </StackPanel>
-                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,14,0,0">
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="{StaticResource Pad.M.Top}">
                         <ui:Button Content="Ver informe de sesión" Command="{Binding OpenReportCommand}" Appearance="Primary" />
                     </StackPanel>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding Summary}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <StackPanel Margin="0,0,0,3">
+                                    <StackPanel Margin="{StaticResource Pad.XXS.Bottom}">
                                         <Button
                                             Command="{Binding DataContext.ToggleLineCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                             CommandParameter="{Binding}"
                                             Background="#16808080"
                                             BorderThickness="0"
-                                            Padding="12,8"
+                                            Padding="{StaticResource Pad.Field}"
                                             HorizontalContentAlignment="Stretch"
                                             Cursor="Hand">
                                             <Grid>
@@ -351,11 +351,11 @@
                                                     <ColumnDefinition Width="Auto" />
                                                     <ColumnDefinition Width="*" />
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{Binding Count}" FontSize="18" FontWeight="Bold"
+                                                <TextBlock Grid.Column="0" Text="{Binding Count}" FontSize="{StaticResource FontSize.H3}" FontWeight="Bold"
                                                            Foreground="{Binding IsWarning, Converter={StaticResource WarningToBrush}}" />
                                                 <TextBlock Grid.Column="1" Text="{Binding Label}" FontWeight="SemiBold"
-                                                           VerticalAlignment="Center" Margin="0,0,10,0" />
-                                                <TextBlock Grid.Column="2" Text="{Binding Explanation}" Opacity="0.7" FontSize="11"
+                                                           VerticalAlignment="Center" Margin="{StaticResource Pad.S.Right}" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Explanation}" Opacity="0.7" FontSize="{StaticResource FontSize.Meta}"
                                                            TextWrapping="Wrap" VerticalAlignment="Center" />
                                             </Grid>
                                         </Button>
@@ -367,17 +367,17 @@
                                              líneas que no hablan de hallazgos (unidades,
                                              incidencias) siguen siendo una lista: ahí la unidad
                                              ya ES la línea. -->
-                                        <ItemsControl ItemsSource="{Binding Groups}" Margin="60,4,0,8"
+                                        <ItemsControl ItemsSource="{Binding Groups}" Margin="{StaticResource Pad.Indent.L}"
                                                       Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <StackPanel Margin="0,0,0,7">
+                                                    <StackPanel Margin="{StaticResource Pad.XS.Bottom}">
                                                         <WrapPanel>
                                                             <TextBlock Text="{Binding FileName}" FontWeight="SemiBold"
-                                                                       FontSize="12" VerticalAlignment="Center" />
-                                                            <TextBlock Text="{Binding CountLabel}" FontSize="11" Opacity="0.6"
-                                                                       Margin="8,0,0,0" VerticalAlignment="Center" />
-                                                            <ItemsControl ItemsSource="{Binding Chips}" Margin="8,0,0,0"
+                                                                       FontSize="{StaticResource FontSize.Meta}" VerticalAlignment="Center" />
+                                                            <TextBlock Text="{Binding CountLabel}" FontSize="{StaticResource FontSize.Meta}" Opacity="0.6"
+                                                                       Margin="{StaticResource Pad.XS.Left}" VerticalAlignment="Center" />
+                                                            <ItemsControl ItemsSource="{Binding Chips}" Margin="{StaticResource Pad.XS.Left}"
                                                                           VerticalAlignment="Center">
                                                                 <ItemsControl.ItemsPanel>
                                                                     <ItemsPanelTemplate>
@@ -386,23 +386,23 @@
                                                                 </ItemsControl.ItemsPanel>
                                                                 <ItemsControl.ItemTemplate>
                                                                     <DataTemplate>
-                                                                        <Border CornerRadius="8" Padding="6,1" Margin="0,0,4,0"
+                                                                        <Border CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS.Right}"
                                                                                 Background="#16808080">
-                                                                            <TextBlock Text="{Binding Label}" FontSize="10"
+                                                                            <TextBlock Text="{Binding Label}" FontSize="{StaticResource FontSize.Meta}"
                                                                                        Foreground="{Binding Severity, Converter={StaticResource SeverityToBrush}}" />
                                                                         </Border>
                                                                     </DataTemplate>
                                                                 </ItemsControl.ItemTemplate>
                                                             </ItemsControl>
                                                         </WrapPanel>
-                                                        <TextBlock Text="{Binding Subtitle}" FontSize="10" Opacity="0.5"
+                                                        <TextBlock Text="{Binding Subtitle}" FontSize="{StaticResource FontSize.Meta}" Opacity="0.5"
                                                                    TextTrimming="CharacterEllipsis"
                                                                    ToolTip="{Binding Subtitle}" />
-                                                        <ItemsControl ItemsSource="{Binding Items}" Margin="12,3,0,0">
+                                                        <ItemsControl ItemsSource="{Binding Items}" Margin="{StaticResource Pad.S.Left}">
                                                             <ItemsControl.ItemTemplate>
                                                                 <DataTemplate>
                                                                     <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
-                                                                               FontSize="11" Opacity="0.85" Margin="0,1" />
+                                                                               FontSize="{StaticResource FontSize.Meta}" Opacity="0.85" Margin="{StaticResource Pad.XXS.V}" />
                                                                 </DataTemplate>
                                                             </ItemsControl.ItemTemplate>
                                                         </ItemsControl>
@@ -411,11 +411,11 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
 
-                                        <ItemsControl ItemsSource="{Binding Details}" Margin="60,4,0,8"
+                                        <ItemsControl ItemsSource="{Binding Details}" Margin="{StaticResource Pad.Indent.L}"
                                                       Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="11" Opacity="0.85" Margin="0,1" />
+                                                    <TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" Opacity="0.85" Margin="{StaticResource Pad.XXS.V}" />
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
@@ -434,7 +434,7 @@
              que venía detrás se salía por el borde cortado a media palabra; además repetía lo que
              el segmento nuevo ya decía. Ahora el pie es una FooterLine: cada trozo trae sus formas
              y su prioridad (llamadas → coste → tokens), y el detalle entero está en el tooltip. -->
-        <Border Grid.Row="3" Background="#14808080" CornerRadius="8" Padding="12,7" Margin="0,10,0,0">
+        <Border Grid.Row="3" Background="#14808080" CornerRadius="8" Padding="{StaticResource Pad.Field}" Margin="{StaticResource Pad.S.Top}">
             <c:FooterLine x:Name="Footer" Segments="{Binding Footer}"
                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
         </Border>

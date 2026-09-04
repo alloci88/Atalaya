@@ -397,8 +397,8 @@
                                         HorizontalAlignment="Stretch"
                                         Visibility="{Binding AssistedFixBlock, Converter={StaticResource NotEmptyToVisibility}}">
                                     <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.XS}">
-                                        <Path Style="{StaticResource Icon}" Data="{x:Static c:Icons.Warning}"
-                                              Width="14" Height="14"
+                                        <Path Style="{StaticResource Icon.Small}" Data="{x:Static c:Icons.Warning}"
+                                              
                                               Stroke="{DynamicResource Brush.Warning.Ink}" />
                                         <TextBlock Text="{Binding AssistedFixBlock}"
                                                    Style="{StaticResource Reason.Text}"

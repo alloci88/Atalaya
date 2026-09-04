@@ -244,7 +244,7 @@
                                                 Visibility="{Binding IsLink, Converter={StaticResource BoolToVisibility}}" />
                                         <Path Style="{StaticResource Icon}"
                                               Data="{x:Static c:Icons.Chevron}"
-                                              Width="12" Height="12"
+                                              
                                               Stroke="{DynamicResource Brush.TextFaint}"
                                               Margin="{StaticResource Pad.XS}"
                                               Visibility="{Binding IsLink, Converter={StaticResource BoolToVisibility}}" />
@@ -270,8 +270,8 @@
                         Padding="{StaticResource Pad.Strip}"
                         Visibility="{Binding UpdateAvailable, Converter={StaticResource BoolToVisibility}}">
                     <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
-                        <Path Style="{StaticResource Icon}" Data="{x:Static c:Icons.Warning}"
-                              Width="14" Height="14"
+                        <Path Style="{StaticResource Icon.Small}" Data="{x:Static c:Icons.Warning}"
+                              
                               Stroke="{DynamicResource Brush.Warning.Ink}" />
                         <TextBlock Text="{Binding UpdateLabel}"
                                    Style="{StaticResource Text.Small}"

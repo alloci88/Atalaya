@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Markup;
@@ -66,10 +66,20 @@ internal static class ViewLayout
             string.Empty,
             RegexOptions.Singleline);
 
+        // Los enlaces y las brochas del tema se van: no hay view-model ni paleta montada. Los
+        // ESTILOS también, porque viven en `Styles.xaml` y ése sí necesita la paleta.
         body = Regex.Replace(
             body,
-            @"\s[\w:.]+=""\{(?:Binding|DynamicResource|StaticResource)[^""]*""",
+            @"\s[\w:.]+=""\{(?:Binding|DynamicResource)[^""]*""",
             string.Empty);
+
+        body = Regex.Replace(body, @"\sStyle=""\{StaticResource[^""]*""", string.Empty);
+
+        // Pero los TOKENS se quedan, y se resuelven de verdad (F26 §B). Antes se borraban con todo
+        // lo demás, y daba igual: los márgenes iban escritos a mano en el atributo. Desde que la
+        // escala vive en `Tokens.xaml`, borrarlos mide una vista SIN un solo margen —que no se
+        // parece a la que se pinta— y estos tests dejarían de decir nada sobre solapamientos.
+        // `Tokens.xaml` no depende de nada (dobles y Thickness), así que se puede fusionar tal cual.
 
         // Y los manejadores del code-behind, que aquí no existe.
         body = Regex.Replace(body, @"\s[\w:.]+=""On[A-Za-z0-9_]*""", string.Empty);
@@ -83,7 +93,10 @@ internal static class ViewLayout
             "<Grid xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" "
             + "xmlns:x=\"http://schemas.microsoft.com/winfx/2006/xaml\" "
             + "xmlns:ui=\"clr-namespace:Wpf.Ui.Controls;assembly=Wpf.Ui\" "
-            + "xmlns:c=\"clr-namespace:Atalaya.App.Controls;assembly=Atalaya\">",
+            + "xmlns:c=\"clr-namespace:Atalaya.App.Controls;assembly=Atalaya\">"
+            + "<Grid.Resources><ResourceDictionary "
+            + "Source=\"pack://application:,,,/Atalaya;component/Themes/Tokens.xaml\" />"
+            + "</Grid.Resources>",
             body.AsSpan(open.Length));
 
         return (Grid)XamlReader.Parse(body);

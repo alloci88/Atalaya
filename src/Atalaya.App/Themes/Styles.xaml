@@ -362,6 +362,12 @@
         <Setter Property="SnapsToDevicePixels" Value="True" />
     </Style>
 
+    <Style x:Key="Icon.Small" TargetType="Path" BasedOn="{StaticResource Icon}">
+        <Setter Property="Width" Value="{StaticResource Icon.Size.Small}" />
+        <Setter Property="Height" Value="{StaticResource Icon.Size.Small}" />
+    </Style>
+
+
     <!-- ================================================================ El raíl
 
          UNA fila del raíl, y de ella salen las tres que hay: el botón de plegar, cada entrada del
