@@ -16,7 +16,7 @@ es lo que pasa de verdad, no una maqueta que se queda vieja a la primera.
 
 ```powershell
 dotnet build scripts/PromptBench/PromptBench.csproj
-$bench = "scripts/PromptBench/bin/Debug/net8.0/PromptBench.exe"
+$bench = "scripts/PromptBench/bin/Debug/net8.0-windows/PromptBench.exe"
 
 # Offline y gratis: la composición del prompt, y si el prefijo estable lo es de verdad.
 & $bench composicion
@@ -38,6 +38,39 @@ contra la que se compara**: sin él no hay forma de enseñar que la escritura de
 hallazgos tardíos no se mueven. Al final de la tanda el banco dice cuántas pasadas se cortaron de
 verdad y, de las que no, por qué — una pasada que paga su llamada de cortesía tiene que verse, no
 esconderse en la media.
+
+## `barrido` — el barrido de verdad, con la aplicación delante
+
+`composicion` y `claude` miden un PROMPT. `barrido` mide un BARRIDO: monta un hub vacío en el
+temporal y conduce el `SessionCoordinator` de producción sobre un clon que se le pase, con su regla
+de parada, su tope y su reconciliación. Lo único fingido es el hub.
+
+```powershell
+& $bench barrido --clon C:\ruta\al\clon --tope 6 --tandas 3 --sin-corte `
+    src/Servicios/CalculadoraCarga.cs src/Servicios/ClienteRemoto.cs
+```
+
+- `--tope N` (6 por defecto) es `MaxPassesPerUnit`; `--tandas N` son N muestras independientes, cada
+  una con un hub nuevo — con el de la anterior, la tanda 2 vería sus hallazgos como existentes.
+- `--estructurado` (M1) sustituye el bloque `MÉTODO DE BARRIDO` por el recorrido miembro × familia.
+  Se midió y **no se hizo fase** (D-908); la palanca sigue aquí para poder repetirla.
+- **`--hilo` (M2)** corre la unidad como una **conversación**: una sola sesión del proveedor para
+  toda la unidad, la pasada 1 con el prompt de producción entero —byte a byte— y las pasadas 2..N
+  con un texto de continuación corto y fijo (`PromptComposer.ContinuationTurn`), sin reenviar
+  reglas, código ni la lista de existentes. Es incompatible con el corte de F21 por construcción —la
+  invocación tiene que sobrevivir a la pasada—, así que la comparación se hace con `--sin-corte` en
+  **los dos** brazos.
+
+Después de la tabla, el barrido imprime lo que decide una medida de coste: el **consumo por
+pasada** (fresca / leída / ESCRITA / salida y una valoración en credits a tarifa Opus), la
+comparación **pasada 1 contra pasadas 2..N** —que es donde vive el ahorro del hilo—, la **cobertura
+acumulada por tope** y en qué pasada nace cada hallazgo.
+
+**La valoración en credits no es el coste de la sesión.** Claude Code no factura a la organización
+y la aplicación, con razón, no le inventa un coste. Lo que imprime el banco es una valoración con la
+tarifa de Opus publicada —la misma con la que F20 reprodujo al credit la factura de la sesión de
+referencia (D-871)— para poder decir «este brazo cuesta la mitad que el otro» sin comparar cuatro
+columnas de tokens a ojo. Vive en `BenchCredits` y lo dice ahí.
 
 `--pasadas N` simula el barrido: N pasadas sobre la misma unidad, cada una viendo como conocido lo
 que reportaron las anteriores. **Una sola pasada mide el caso barato**; el gasto de F20 estaba en

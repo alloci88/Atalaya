@@ -85,8 +85,11 @@ if (mode == "barrido")
 {
     // M1 — el brazo estructurado, solo aquí. Sin la bandera, el prompt es el de producción.
     AuditStyle style = argv.Contains("--estructurado") ? AuditStyle.Estructurado : AuditStyle.Libre;
+    // M2 — la unidad como una conversación: la pasada 1 manda el prompt entero y las 2..N solo la
+    // continuación. Sin la bandera, cada pasada es una petición nueva, tal cual.
+    bool hilo = argv.Contains("--hilo");
     return await SweepBench.RunAsync(
-        units, cloneRoot ?? root, model, maxPasses, tandas, !noCut, style, theme);
+        units, cloneRoot ?? root, model, maxPasses, tandas, !noCut, style, theme, hilo);
 }
 
 AuditorBrief brief = PillarBrief.Parts(TechStack.DotNet);
@@ -129,7 +132,7 @@ static int Uso()
         + "[--model X] [--tema X] [--existentes N] [--pasadas N] [unidades...]");
     Console.Error.WriteLine(
         "     barrido: [--clon RUTA] [--tope N] [--tandas N] [--sin-corte] [--estructurado] "
-        + "[--tema X] [unidades...]");
+        + "[--hilo] [--tema X] [unidades...]");
     return 2;
 }
 

@@ -28,7 +28,7 @@ namespace Atalaya.ClaudeCode;
 /// nunca falla mudo.
 /// </para>
 /// </summary>
-public sealed class ClaudeCodeProvider : IAssistedFixProvider
+public sealed class ClaudeCodeProvider : IAssistedFixProvider, IThreadedAuditor
 {
     /// <summary>
     /// El identificador que se escribe en sesiones, hallazgos e informes. Constante, y no un
@@ -272,6 +272,75 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider
     /// <inheritdoc/>
     public Task VerifyAsync(VerifyRequest request, IVerifyToolbox toolbox, CancellationToken ct)
         => RunSessionAsync(request.Prompt, AuditorTools.ForVerify(toolbox), ct);
+
+    /// <summary>
+    /// <b>El hilo de una unidad</b> (M2, palanca de medida). Abre UNA conversación con el CLI y la
+    /// deja viva: la pasada 1 manda el prompt entero y las siguientes, la continuación.
+    /// <para>
+    /// <b>Sin el corte de F21, y a propósito.</b> El corte interrumpe la invocación en cuanto el
+    /// auditor entrega <c>unit_done</c>, y aquí la invocación tiene que sobrevivir a la pasada para
+    /// poder recibir la siguiente. La medida compara contra el brazo de producción corriendo
+    /// también sin corte, que es lo que el banco llama <c>--sin-corte</c>.
+    /// </para>
+    /// <para>
+    /// <b>Los eventos crudos sí se piden</b> (<c>--include-partial-messages</c>): no son solo cómo
+    /// se corta, son cómo se MIDE una llamada (D-878). Sin ellos el consumo por llamada sería el
+    /// anticipo parcial del evento <c>assistant</c>, y esta medida se decide con la escritura de
+    /// caché de las pasadas 2..N.
+    /// </para>
+    /// </summary>
+    public async Task<IUnitThread> OpenUnitThreadAsync(IAuditToolbox toolbox, CancellationToken ct)
+    {
+        AgentReadiness readiness = await CheckAsync(ct);
+        if (!readiness.Ready)
+        {
+            throw new AuditorAuthenticationException(
+                readiness.Message, readiness.Problem, readiness.Detail);
+        }
+
+        bool partial = await SupportsFlagAsync(PartialMessagesFlag, ct);
+
+        string cli = ResolveCli()!;
+        string workDirectory = _workDirectory();
+
+        IReadOnlyList<McpTool> tools = AuditorTools.ForThreadedAudit(toolbox);
+        var host = new McpPipeHost(tools, message => _logger.LogDebug("{Message}", message));
+        host.Start();
+
+        string configPath = ClaudeCliRunner.WriteMcpConfig(workDirectory, _bridgeExecutable, host.PipeName);
+
+        return new ClaudeUnitThread(
+            new ClaudeCliRunner(cli, message => _logger.LogDebug("{Message}", message), workDirectory),
+            new ClaudeRun(
+                string.Empty,
+                tools.Select(t => AuditorTools.Qualified(t.Name)).ToList(),
+                configPath,
+                ModelName,
+                PartialMessages: partial,
+                Conversational: true),
+            host,
+            configPath,
+            text => TextStreamed?.Invoke(text),
+            usage => UsageReported?.Invoke(usage with { Model = usage.Model ?? ModelName }),
+            Explain,
+            _logger);
+    }
+
+    /// <summary>El mismo desenlace que una pasada suelta: un fallo del CLI es una excepción tipada.</summary>
+    private Exception? Explain(ClaudeRunOutcome outcome)
+    {
+        if (!outcome.Failed)
+        {
+            return null;
+        }
+
+        _logger.LogWarning(
+            "Claude Code rechazó la operación: {Problem} — {Message}", outcome.Problem, outcome.Message);
+
+        return outcome.Problem == AgentProblem.ModelUnavailable
+            ? new AuditorModelUnavailableException(ModelName, outcome.Message, outcome.Message)
+            : new AuditorProviderException(outcome.Message, outcome.Problem, outcome.Message);
+    }
 
     /// <summary>
     /// ¿Admite este CLI <c>--append-system-prompt-file</c>? Se PREGUNTA a su ayuda, una vez por

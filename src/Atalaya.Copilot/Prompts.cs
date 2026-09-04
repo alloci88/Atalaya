@@ -135,6 +135,48 @@ public enum AuditStyle
 public static class PromptComposer
 {
     /// <summary>
+    /// <b>El texto de continuación del brazo `--hilo`</b> (M2). Es lo ÚNICO que se le manda a las
+    /// pasadas 2..N cuando la unidad se audita como una conversación: ni reglas, ni rúbrica, ni
+    /// catálogo, ni código, ni la lista de existentes — todo eso está delante del modelo porque es
+    /// la misma conversación.
+    /// <para>
+    /// <b>Una versión, y no se retoca sobre la marcha.</b> El anti-objetivo de la medida lo dice
+    /// con esas palabras: cambiar la redacción hasta que el brazo gane convierte la medida en una
+    /// búsqueda. Si hiciera falta una segunda, se mide aparte y se dice cuál es cuál.
+    /// </para>
+    /// <para>
+    /// <b>Qué pide, y por qué exactamente eso.</b> Lo mismo que pide una pasada de hoy: reconciliar
+    /// y reportar lo que falte. Reconciliar incluye <b>lo que el propio modelo creó en turnos
+    /// anteriores</b> — en producción lo consigue porque la pasada siguiente se lo vuelve a listar;
+    /// aquí lo consigue porque el brazo le devuelve el ULID al crearlo (<see cref="ISweepCreations"/>).
+    /// </para>
+    /// <para>
+    /// <b>Y cierra la PASADA, no la unidad.</b> Es la lección de D-874: en una conversación
+    /// compartida, «has terminado» se lee como el fin del encargo y el modelo deja de llamar a
+    /// herramientas. Aquí se dice al revés en la primera línea, antes que nada.
+    /// </para>
+    /// </summary>
+    public const string ContinuationTurn = """
+        PASADA SIGUIENTE DE LA MISMA UNIDAD. NO está cerrada: te queda barrido por hacer.
+
+        No se te manda nada otra vez porque no hace falta: las reglas, el catálogo, el código
+        íntegro de la unidad y los hallazgos que ya conocías están en esta misma conversación,
+        más arriba. Míralos ahí.
+
+        Entrega EN UN SOLO TURNO, y en este orden:
+
+        1. report_verdicts con un veredicto por CADA hallazgo existente que se te listó al empezar
+           la unidad Y por cada uno que hayas reportado tú en ella (el ULID de los tuyos te lo
+           devolvió submit_findings en su resultado).
+        2. submit_findings con lo que todavía NO hayas reportado de esta unidad. Si no queda nada,
+           manda el array vacío: eso también es una respuesta.
+        3. unit_done la ÚLTIMA, con el resumen de lo que has cubierto en esta pasada.
+
+        No vuelvas a reportar como nuevo nada que ya reportaste. Contesta SOLO con herramientas:
+        lo que digas en texto no lo lee nadie.
+        """;
+
+    /// <summary>
     /// Reglas del auditor. El ORDEN importa: la cobertura va primera porque es la obligación que
     /// define el modo lotes ("auditoría íntegra de las unidades seleccionadas").
     /// <para>

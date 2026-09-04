@@ -16,7 +16,7 @@ namespace Atalaya.App.Services;
 /// declara, no se toca (y la unidad queda incompleta).
 /// </para>
 /// </summary>
-public sealed class SessionToolbox : IAuditToolbox
+public sealed class SessionToolbox : IAuditToolbox, ISweepCreations
 {
     private readonly string _slug;
     private readonly AuditMode _mode;
@@ -66,6 +66,13 @@ public sealed class SessionToolbox : IAuditToolbox
     /// una contradicción del modelo, no una resolución: se ignora y se registra.
     /// </summary>
     private readonly Dictionary<string, Finding> _createdInSweep = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Los mismos, EN ORDEN de creación. Un diccionario no lo garantiza y aquí importa: quien lo
+    /// lee (el brazo `--hilo` de M2) tiene que casar cada resultado de <c>submit_findings</c> con
+    /// el hallazgo que lo produjo, y el lote llega y se contesta en orden.
+    /// </summary>
+    private readonly List<string> _createdOrder = new();
 
     /// <summary>
     /// Hallazgos ya reconciliados en el barrido en curso. Un barrido confirma cada hallazgo COMO
@@ -181,10 +188,18 @@ public sealed class SessionToolbox : IAuditToolbox
     public void BeginUnitSweep(string unitPath = "", string? unitContentHash = null)
     {
         _createdInSweep.Clear();
+        _createdOrder.Clear();
         _reconciledInSweep.Clear();
         _unitPath = CodeAnchor.NormalizePath(unitPath);
         _unitContentHash = unitContentHash;
     }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Solo lectura y sin efecto sobre nada (M2): lo mira el brazo del banco para poder devolverle
+    /// al auditor el ULID de lo que acaba de crear. En producción no lo mira nadie.
+    /// </remarks>
+    public IReadOnlyList<string> CreatedInSweep => _createdOrder;
 
     /// <summary>
     /// El sello de la sesión, anclado a la unidad en curso (F5.1b). El sello de sesión es uno para
@@ -610,6 +625,7 @@ public sealed class SessionToolbox : IAuditToolbox
 
         Finding created = _ingestion.Create(submitted, _slug, _mode, Stamp, _theme);
         _createdInSweep[created.Id.ToString()] = created;
+        _createdOrder.Add(created.Id.ToString());
         Counters.New++;
         PassNew++;
         _onFinding?.Invoke(created, "nuevo");

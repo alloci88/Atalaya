@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using Atalaya.Agents;
 using Atalaya.App.Services;
@@ -39,7 +39,7 @@ internal static class SweepBench
     public static async Task<int> RunAsync(
         IReadOnlyList<string> units, string cloneRoot, string? model,
         int maxPasses, int tandas, bool cut = true,
-        AuditStyle style = AuditStyle.Libre, AuditTheme tema = AuditTheme.General)
+        AuditStyle style = AuditStyle.Libre, AuditTheme tema = AuditTheme.General, bool hilo = false)
     {
         if (!Directory.Exists(cloneRoot))
         {
@@ -66,7 +66,7 @@ internal static class SweepBench
         Console.WriteLine($"BARRIDO REAL · tope {maxPasses} pasadas · {tandas} tanda(s) "
             + $"· modelo {model ?? "(por defecto)"}"
             + (cut ? " · con corte" : " · SIN corte")
-            + $" · brazo {style}"
+            + $" · brazo {(hilo ? "Hilo" : style.ToString())}"
             + (tema == AuditTheme.General ? string.Empty : $" · lupa {tema}"));
         Console.WriteLine($"Clon: {cloneRoot}");
         Console.WriteLine();
@@ -75,7 +75,7 @@ internal static class SweepBench
 
         for (int tanda = 1; tanda <= tandas; tanda++)
         {
-            int code = await OneAsync(units, cloneRoot, model, maxPasses, bridge, tanda, cut, style, tema);
+            int code = await OneAsync(units, cloneRoot, model, maxPasses, bridge, tanda, cut, style, tema, hilo);
             if (code != 0)
             {
                 return code;
@@ -87,7 +87,7 @@ internal static class SweepBench
 
     private static async Task<int> OneAsync(
         IReadOnlyList<string> units, string cloneRoot, string? model,
-        int maxPasses, string bridge, int tanda, bool cut, AuditStyle style, AuditTheme tema)
+        int maxPasses, string bridge, int tanda, bool cut, AuditStyle style, AuditTheme tema, bool hilo)
     {
         // Un hub NUEVO por tanda. Es la condición para que dos tandas sean dos muestras y no una
         // segunda auditoría: con el hub de la anterior, la tanda 2 vería sus hallazgos como
@@ -144,6 +144,32 @@ internal static class SweepBench
             hub, ingestion, reconciliation, machines, ulids, provider, settings)
         {
             Style = style,
+            Hilo = hilo,
+        };
+
+        // Una tanda que se apunta como «hilo» sin serlo mediría el otro brazo y la tabla no lo
+        // diría. Se ve en la consola, en el momento.
+        coordinator.ThreadUnavailable += casa =>
+            Console.WriteLine($"  ⚠ {casa} no sabe hilar: la tanda ha corrido como producción.");
+
+        // En qué PASADA nace cada hallazgo. Es lo que permite la tabla de cobertura por tope de M1
+        // sin volver a lanzar la tanda con topes distintos: el hallazgo lleva su ULID y su título,
+        // pero no el número de pasada, así que se apunta al vuelo. El coordinador ya emite las dos
+        // señales; aquí solo se cruzan.
+        int passNow = 0;
+        var bornAt = new List<(int Pass, string Unit, string Title, string Rule)>();
+        string unitNow = string.Empty;
+        coordinator.PassStarted += (unitPath, pass) =>
+        {
+            unitNow = unitPath;
+            passNow = pass;
+        };
+        coordinator.FindingReported += (f, what) =>
+        {
+            if (string.Equals(what, "nuevo", StringComparison.Ordinal))
+            {
+                bornAt.Add((passNow, unitNow, f.Title, f.RuleId));
+            }
         };
 
         var clock = Stopwatch.StartNew();
@@ -188,6 +214,54 @@ internal static class SweepBench
             Console.WriteLine($"  [{f.Severity}] {f.Title} · {f.RuleId} · {loc} · símbolo {f.Symbol ?? "—"}");
         }
 
+        // ---- M2 · lo que decide la medida -------------------------------------------------
+        //
+        // La fila que manda es ESCRITA, y por pasada: escribir en caché cuesta doce veces leerla
+        // (D-871), así que dos pasadas con la misma «entrada» pueden costar trece veces distinto.
+        Console.WriteLine();
+        Console.WriteLine("  Consumo por pasada");
+        Console.WriteLine("  | Unidad | Pasada | Llamadas | Fresca | Leída | ESCRITA | Salida | Credits |");
+        Console.WriteLine("  |---|---:|---:|---:|---:|---:|---:|---:|");
+        foreach (UnitUsageBreakdown b2 in session.UsageBreakdown)
+        {
+            foreach (PassUsage pu in b2.Passes.OrderBy(x => x.Pass))
+            {
+                Console.WriteLine(
+                    $"  | {Short(b2.Unit)} | {pu.Pass} | {pu.Calls} | {N(pu.InputTokens)} "
+                    + $"| {N(pu.CacheReadTokens)} | {N(pu.CacheWriteTokens)} | {N(pu.OutputTokens)} "
+                    + $"| {BenchCredits.Opus(pu.InputTokens, pu.OutputTokens, pu.CacheReadTokens, pu.CacheWriteTokens):0.0} |");
+            }
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("  Pasada 1 contra pasadas 2..N — la comparación que decide");
+        Console.WriteLine("  | Unidad | ESCRITA p1 | ESCRITA p2..N | Leída p2..N | Credits unidad |");
+        Console.WriteLine("  |---|---:|---:|---:|---:|");
+        foreach (UnitUsageBreakdown b2 in session.UsageBreakdown)
+        {
+            long w1 = b2.Passes.Where(x => x.Pass == 1).Sum(x => x.CacheWriteTokens);
+            long wN = b2.Passes.Where(x => x.Pass > 1).Sum(x => x.CacheWriteTokens);
+            long rN = b2.Passes.Where(x => x.Pass > 1).Sum(x => x.CacheReadTokens);
+            Console.WriteLine(
+                $"  | {Short(b2.Unit)} | {N(w1)} | {N(wN)} | {N(rN)} "
+                + $"| {BenchCredits.Opus(b2.InputTokens, b2.OutputTokens, b2.CacheReadTokens, b2.CacheWriteTokens):0.0} |");
+        }
+
+        // Cobertura ACUMULADA por tope: cuántos hallazgos distintos habría con un tope de k.
+        Console.WriteLine();
+        Console.WriteLine("  Cobertura acumulada por tope");
+        int topeMax = bornAt.Count == 0 ? 0 : bornAt.Max(x => x.Pass);
+        for (int k = 1; k <= topeMax; k++)
+        {
+            Console.WriteLine($"    tope {k}: {bornAt.Count(x => x.Pass <= k)} hallazgos");
+        }
+
+        Console.WriteLine();
+        foreach ((int pass, string unit, string title, string rule) in bornAt)
+        {
+            Console.WriteLine($"  nace en p{pass} · {Short(unit)} · {rule} · {title}");
+        }
+
         string report = hub.HubPaths.ReportFile("banco", result.SessionId.ToString());
         Console.WriteLine();
         Console.WriteLine($"  informe: {report}");
@@ -196,4 +270,7 @@ internal static class SweepBench
     }
 
     private static string Short(string path) => Path.GetFileName(path);
+
+    /// <summary>Un número con separador de millares, para que las columnas se lean de un vistazo.</summary>
+    private static string N(long value) => value.ToString("N0", CultureInfo.InvariantCulture);
 }
