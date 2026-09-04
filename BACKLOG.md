@@ -46,34 +46,37 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   - **Y es la última.** Si la v2 tampoco quita variantes, la conclusión no es probar una v3: es que
     la identidad del hallazgo no se arregla desde el prompt, y el sitio de esa pregunta es el modelo
     de dominio —lo que ya apunta la deuda del símbolo por ubicación, más arriba en esta lista—.
-- **M2 — el hilo NO se hace fase, y lo que quedaría por preguntar si alguien vuelve.** Medido y
-  escrito entero en D-913…D-919. Cumple tres de las cuatro condiciones del §3 —coste por unidad
-  **−69 %**, escritura de caché en las pasadas 2..N **−79 %**, mismo núcleo y reconciliación intacta
-  sin un solo rechazo— y **falla la de cobertura**: 17,7 de 20 defectos de D-895 contra 20,0 de
-  producción, en tres tandas que no se solapan. Lo que pierde son dos de los cinco tardíos reales
-  —la lectura sin límite ni `Content-Type` y el cuerpo sin parsear—, que son **exactamente los dos**
-  que D-907 nombró al retirar la regla de F24. La causa está identificada y no es la de F20: aquí el
-  auditor **sí** llama a herramientas en los 18 turnos de continuación y reconcilia entero; lo que
-  hace es **converger antes** (4 pasadas contra 6, dos secas en 6 de 6 unidades). Un modelo que
-  tiene delante lo que él mismo escribió deja de insistir.
-  - **La pregunta ya no es «¿ahorra?»** —se sabe que sí, y cuánto—, sino **«¿se puede tener el hilo
-    sin la convergencia temprana?»**. Y hay una pista que la medida deja servida: el hilo también
-    quita variantes de verdad (0 marcados contra 7, y el par recurrente del `.Result` pasa de dos
-    fichas a una en las tres tandas), así que **quitar variantes y perder tardíos son el mismo
-    dial**, no dos objetivos. Cualquier intento tiene que atacar esa unión, no el transporte.
-  - **Y si se retoma, se retoma con el corte de F21 delante**: el corte y el hilo son incompatibles
-    dentro de una unidad —cortar mata la conversación— y producción hoy lleva el corte puesto, que
-    ya se lleva un 67 % de la escritura (D-881). El margen real es menor que el de la tabla de M2.
-  - **El brazo se queda en el banco** (`PromptBench barrido --hilo`), desarmado y con sus tests, con
-    el turno 1 fijado byte a byte contra el prompt de producción.
-- **Encontrado en M2 y sin arreglar: el auditor no sabe el ULID de lo que acaba de crear.**
-  `submit_finding` contesta `{accepted, duplicateOf, error}` y nada más; hoy el modelo recupera el
-  identificador porque la pasada siguiente le vuelve a listar la unidad entera. Consecuencia real:
-  la rama `_createdInSweep` de `add_locations` —puesta en F4.1 (D-090) para que un defecto sistémico
-  no se fragmente— **es inalcanzable dentro de la pasada que creó el hallazgo**, que es justo cuando
-  hace falta. Se ve entero en D-916. Arreglarlo es devolver el `Id` en el resultado de los dos
-  `submit` (cuesta ~10 tokens por hallazgo, y el brazo de M2 ya lo hace por su cuenta); lo que hay
-  que medir antes es si el auditor lo usa para extender en vez de para reportar otra ficha.
+- **El margen del hilo contra la producción CON corte, sin medir.** Es el único dato que el §6 de F25
+  pedía y no se sacó: los créditos no son infinitos y se paró tras la primera tanda (D-927). M2 comparó
+  hilo contra producción **los dos sin corte**, porque cortar mata la conversación (D-914 §4), pero la
+  producción de antes de F25 llevaba el corte puesto y el corte ya se llevaba un 67 % de la escritura
+  (D-881). Así que **el −69 % es contra una línea que no era la real**, y el margen verdadero es menor.
+  Cuánto menos, no se sabe. La tanda que lo contestaría está implementada y probada: `PromptBench
+  barrido --corte-en-hilo` degenera el barrido exactamente en el de antes —prompt entero por pasada y
+  corte incluido—, así que es una orden y una espera, no trabajo.
+- **La varianza del hilo sobre el banco, con una sola muestra.** F25 corrió una tanda donde M2 corrió
+  tres: 17 de 20 defectos, dentro del rango que M2 dejó (17-18, media 17,7). Con una muestra no se
+  puede decir si esta unidad cae en 17 o en 18. No es urgente —M2 tiene tres tandas detrás— pero está
+  dicho para que nadie lea «17 de 20» como si fuera una medida nueva.
+- **Verificar el hilo en Copilot con una sesión real.** F25 lo implementa para las dos casas con los
+  mismos tests de forma, pero en esta máquina no hay asiento (`models.list` contesta 403, D-883), así
+  que lo que está comprobado es la forma y no el ahorro. **La verificación es del usuario**: correr
+  un barrido con Copilot elegido y mirar en el anexo técnico la **escritura de caché por pasada**. Si
+  las pasadas 2..N no bajan como bajan en Claude Code —−79 %—, el parte de esa sesión es la evidencia
+  y se abre un retoque. Lo que lo desmentiría está dicho: el SDK documenta que una sesión mantiene su
+  historia y publica `CacheReadTokens` / `CacheWriteTokens`, pero nadie lo ha visto funcionar aquí.
+- **El hilo se hizo fase, y lo que quedaría por preguntar.** F25 lo puso en producción con los
+  números de M2 delante (D-913…D-919): **−69 %** de coste por unidad, **−79 %** de escritura de caché
+  en las pasadas 2..N, cero variantes marcadas contra 7, reconciliación intacta — y **17-18 de 20**
+  defectos de D-895 contra los 20 de 20 del barrido anterior. Lo que se pierde son dos de los cinco
+  tardíos reales, y se perdió a sabiendas.
+  - **La pregunta que queda es «¿se puede tener el hilo sin la convergencia temprana?»**, y la medida
+    deja servido por qué es difícil: el hilo también quita variantes de verdad, así que **quitar
+    variantes y perder tardíos son el mismo dial**, no dos objetivos. Cualquier intento tiene que
+    atacar esa unión, no el transporte — y **no** retocando el texto de continuación, que es el
+    extremo barato de ese mismo dial.
+  - **El texto de continuación es una constante y así se queda.** Cambiarle una palabra es cambiar la
+    medida: si algún día hace falta otra redacción, se mide en el banco antes y se dice cuál es cuál.
 - **M1-c — el mismo retoque, pero sobre el prompt LIBRE, que es el que corre.** La v2 de arriba mide
   el brazo estructurado; esto mide si el hallazgo se puede aprovechar sin cambiar cómo se pregunta.
   - **El cambio**: acotar el criterio del auditor en el prompt de producción igual que en M1-b —solo
@@ -112,16 +115,12 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   y reproduce al credit la aceptación de F19 (D-871), pero falta verlo: la línea «Reparto del coste»
   en el informe de una sesión de Copilot, y el trozo del pie en vivo a 1366×768 —tiene que ceder
   antes que el coste y quedarse en «escritura de caché 61 %»—.
-- **F20 — la conversación compartida, si el modelo cambia.** Se implementó, se midió y se cayó: la
-  escritura de la llamada que abre cada pasada bajaba un 91 %, pero el auditor dejaba de usar
-  herramientas por completo a partir de la segunda pasada (D-874). Dos unidades, dos redacciones,
-  cero hallazgos tardíos. El día que se vuelva a intentar, **la prueba no es que ahorre**: es que
-  las pasadas ≥ 2 sigan encontrando lo que encuentran hoy. La medida y los dos prompts que se
-  probaron están en DECISIONS.
-  **Se volvió a intentar en M2 (2026-09-04) y volvió a caer, por otro camino**: ahora el auditor sí
-  usa herramientas en todos los turnos y reconcilia entero —así que la duda de D-874 sobre si las
-  tools llegaban queda descartada—, pero converge dos pasadas antes y pierde dos de los cinco
-  tardíos reales. Ver D-913…D-919 y la entrada de M2 arriba.
+- **F20 — la conversación compartida: cerrada, y está en producción.** Se implementó en F20, se midió
+  y se cayó (D-874: el auditor dejaba de usar herramientas a partir de la segunda pasada). Se volvió a
+  intentar en M2 y esa parte quedó descartada —el auditor sí llama a herramientas en todos los turnos
+  y reconcilia entero—, pero converge dos pasadas antes y pierde dos de los cinco tardíos reales.
+  **F25 la hizo modo de producción con esa pérdida escrita y aceptada** (D-920). Ya no hay nada
+  pendiente aquí; lo que queda vivo es la pregunta de arriba.
 - **F20 — la escritura de caché, después de F21.** Las dos hipótesis de F20 siguen caídas —A porque
   no hay corte de caché que podamos pedir (D-872), B porque el modelo deja de trabajar (D-874)—,
   pero el nudo que dejaron escrito **sí se ha deshecho**: la llamada de cortesía escribía el

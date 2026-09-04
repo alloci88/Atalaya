@@ -608,7 +608,8 @@ va en dos partes.
   gravedad dentro de cada uno.
 
 **El anexo técnico va al final**, tras un separador, y es diagnóstico del coste de la propia
-auditoría: tokens, reparto por conceptos, caché, consumo por unidad y por pasada, y la cobertura
+auditoría: tokens, reparto por conceptos, caché, consumo por unidad y por pasada, cuántos turnos de
+conversación tuvo cada unidad —y cuántas veces hubo que empezar otra, con el motivo— y la cobertura
 que el auditor declaró pasada a pasada. **No se ha quitado nada del informe**: se ha movido.
 
 #### Por qué dejó de barrerse una unidad
@@ -1154,6 +1155,27 @@ Cómo se lee:
 - **Manda la entrada fresca.** Es que no hay caché en juego — sesiones muy cortas, o un proveedor
   que no la usa.
 
+### El barrido
+
+Una unidad no se audita de una vez: se **barre**, en varias pasadas, hasta que dos seguidas no
+aportan nada. Esas pasadas son ahora **turnos de una misma conversación** con el proveedor: la
+primera le manda el prompt entero —las reglas, el catálogo, el código de la unidad y los hallazgos
+que ya conocía— y las siguientes le dicen poco más que «sigue, la unidad no está cerrada». No hace
+falta repetírselo: lo tiene delante, en la misma conversación. Antes cada pasada era una petición
+nueva y el prompt entero volvía a viajar tantas veces como pasadas tuviera la unidad. Medido sobre
+el caso de referencia, la conversación cuesta **un 69 % menos por unidad**, tarda tres veces menos y
+reporta cuatro veces y media menos hallazgos repetidos con otro nombre.
+
+**Y lo que cuesta se dice igual de claro, porque es una decisión y no un efecto secundario.** Con
+el barrido de antes, la unidad de referencia llegaba a **20 de 20** defectos conocidos pagando seis
+pasadas; con la conversación se queda en **17-18 de 20**. Un modelo que tiene delante su propia
+respuesta anterior se da por terminado antes, y al converger se deja los dos defectos que más tarde
+aparecían. Se eligió el ahorro sabiendo eso: un tercio del coste y cero variantes valen esas dos
+medias por unidad, y la decisión es del responsable de Atalaya, con las dos cifras delante. Si la
+conversación se rompe a mitad —el proveedor no puede continuarla, o crece tanto que no cabe— la
+unidad **no se pierde**: la pasada siguiente empieza otra desde cero, con el prompt entero, y el
+anexo técnico del informe dice cuántas veces pasó y por qué.
+
 ### Cuántas llamadas hace falta, y por qué
 
 El gasto no escala con el tamaño de la unidad: escala con las **llamadas**. Cada una reenvía el
@@ -1207,10 +1229,11 @@ En orden de cuánto mueven la aguja:
    cuarenta líneas cuesta casi lo mismo que una de cuatrocientas, porque el andamiaje es el mismo.
    Auditar por lotes lo que de verdad ha cambiado —y usar la **deriva** en vez de re-auditar todo—
    es lo que más ahorra.
-2. **El tope de pasadas del barrido** (Ajustes). Es el multiplicador directo del gasto por unidad:
-   cada pasada manda el prompt entero otra vez. **Bajarlo ahorra hoy y cuesta mañana**: está
-   comprobado que hay hallazgos reales en la 4.ª y la 5.ª pasada, así que recortarlo no elimina
-   trabajo, lo aplaza. Tócalo sabiendo eso.
+2. **El tope de pasadas del barrido** (Ajustes). Sigue siendo un multiplicador del gasto por
+   unidad, aunque desde que las pasadas son turnos de una conversación mueve mucho menos que antes:
+   lo que una pasada de más añade ya no es el prompt entero. **Bajarlo ahorra poco y cuesta
+   mañana**: está comprobado que hay hallazgos reales en la 4.ª y la 5.ª pasada, así que recortarlo
+   no elimina trabajo, lo aplaza. Tócalo sabiendo eso.
 3. **El presupuesto de directivas** (Inventario → Directivas). Va en el prefijo estable de *todas*
    las llamadas de la sesión: 8.000 tokens de directivas son 8.000 tokens en cada una. Ponerlo a 0
    las apaga.

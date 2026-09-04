@@ -12801,3 +12801,269 @@ y encima renunciando al corte.
   ULID de vuelta en los dos `submit`, un rechazado no se lleva el id del siguiente, **el catálogo de
   producción sigue sin id**, y un toolbox que no sabe decir lo que ha creado no se suple con nada
   inventado.
+
+## F25 — El barrido es una conversación
+
+### D-920 — La condición de D-874 se sustituye por una decisión de producto, con las dos cifras
+
+D-874 dejó escrita, el día que la conversación compartida se cayó en F20, la condición para volver a
+intentarlo:
+
+> **la prueba no es que ahorre, es que las pasadas ≥ 2 sigan encontrando lo que encuentran hoy.**
+
+M2 volvió a intentarlo, midió, y la condición **no se cumple**: 17,7 de 20 defectos de D-895 contra
+20,0, en tres tandas que no se solapan (D-917, D-918). Por eso M2 cerró como «no fase».
+
+**Esta decisión la sustituye, y no la rebaja.** No se ha encontrado un mecanismo nuevo ni una lectura
+más benévola de la medida: se ha tomado una decisión de producto con los dos números delante, y los
+dos van escritos aquí porque el que se pierde es tan parte de la decisión como el que se gana.
+
+| | barrido anterior | **hilo** | |
+| --- | ---: | ---: | --- |
+| Coste por unidad (credits, tarifa Opus) | 204,7 | **64,2** | **−69 %** |
+| Escritura de caché por pasada, en las 2..N | 16.122 | **3.375** | **−79 %** |
+| Variantes marcadas (criterio F23, 3 tandas) | 7 | **0** | |
+| Reconciliación | completa | completa | cero rechazos por ULID |
+| **Defectos de D-895 cubiertos, de 20** | **20,0** | **17,7** | **−2,3** |
+| Pasadas por unidad | 6,0 | 4,0 | |
+| Segundos por unidad | 610 | 199 | |
+
+**Lo que se pierde tiene nombre y no se disfraza.** Son «lectura sin límite de tamaño ni validación
+de `Content-Type`» y «cuerpo de la respuesta devuelto sin parsear»: dos de los cinco hallazgos
+tardíos REALES que D-895 aisló como variable de control de toda esta línea de trabajo. **Son medias,
+no bajas**, y son **exactamente los dos** que costaba la regla de variantes de F24 (D-907) — que es
+el dato que convierte la coincidencia en mecanismo: cualquier cosa que haga converger antes se lleva
+primero los que más tarde aparecen.
+
+**Quién decide y por qué.** El responsable de Atalaya, con esta tabla delante: un tercio del coste y
+cero variantes valen dos medias por unidad de referencia. El barrido de 20 de 20 no era gratis —
+llegaba ahí pagando seis pasadas, y solo a partir del tope 4-5.
+
+**Y lo que M2 dejó escrito sigue mandando sobre lo que se puede hacer a partir de aquí**: quitar
+variantes y perder tardíos son **el mismo dial**, no dos objetivos independientes. No hay que buscar
+un mecanismo que dé lo uno sin lo otro; hay que atacar la unión, o no atacarla.
+
+### D-921 — El hilo es el modo, y no hay modo exhaustivo elegible
+
+`SessionCoordinator.Hilo` era la palanca de medida de M2. **Se retira**: no hay bandera, no hay
+ajuste y no hay modo. Cada unidad se audita como una conversación y cada pasada es un turno suyo.
+
+- **Turno 1**: el prompt de siempre, **byte a byte**. Lo fijan los tests de F17 y R1 y uno propio que
+  lo compara carácter a carácter contra lo que recibe un proveedor que no sabe hilar.
+- **Turnos 2..N**: `PromptComposer.ContinuationTurn`, tal cual se midió, ~150 tokens. **Una versión.**
+  Cambiarle una palabra es cambiar la medida, así que si algún día hace falta otra se mide en el
+  banco antes y se dice cuál es cuál. Hay test de que es una constante y no una plantilla.
+- **La regla de parada y el tope no se tocan** (D-755, D-812): un turno es una pasada y se juzga con
+  lo mismo.
+
+**No se añade un modo «exhaustivo» por si acaso.** Un modo que nadie elige es código que nadie
+mantiene, y el día que alguien lo necesite lo que hará falta es medirlo y pedirlo, no encontrárselo
+apagado. Lo que sí queda —porque es otra cosa— es el **camino de respaldo**: la petición por pasada
+con el prompt recompuesto, que es el barrido de antes, y que ahora sirve exactamente para lo que dice
+el §2.
+
+### D-922 — Cuando el hilo no puede seguir: tres respaldos, y ninguna unidad perdida
+
+Una conversación es más frágil que una petición: hay tres formas de que deje de poder continuar, y en
+las tres la unidad **no se pierde**. La forma de contarlas es común —`IUnitThread.Closed` y
+`UnitThreadBrokenException`— y el reinicio se apunta **cuando de verdad se abre otro hilo**, no
+cuando se cierra el anterior: cerrar el último hilo de una unidad no es reiniciar nada.
+
+**1. El proveedor no puede continuar la sesión** (fallo al reanudar, sesión caducada, el CLI se va
+sin cerrar el turno). La pasada **no se ha servido**, así que se rehace como se hacía antes: petición
+nueva, prompt recompuesto y lista de existentes. El censo de esa pasada dice lo que de verdad viajó
+—el prompt entero, no la continuación que se compuso y no se mandó—, que es la misma exigencia que
+M2 le puso al brazo (D-915).
+
+Tiene tipo propio, `UnitThreadBrokenException`, porque tiene remedio propio. Lo que **no** entra ahí
+es un fallo que una petición nueva tampoco arreglaría —cuota, credencial, asiento, modelo—: eso sube
+tal cual y el barrido se cierra en orden, que es lo que BUGFIX-CUOTA dejó decidido. Reintentar contra
+una cuota agotada gasta las peticiones del reset siguiente.
+
+**2. El corte de F21.** Cortar mata la conversación: el corte interrumpe la invocación en cuanto
+llega `unit_done`, y en un hilo la invocación es la conversación entera (D-914 §4). **Política**: el
+turno cortado **cuenta como pasada, igual que hoy** —el auditor ya había entregado todo; lo único que
+se interrumpió fue la vuelta de cortesía—, y la pasada siguiente abre un hilo nuevo desde cero. **No
+se intenta reanudar un hilo cortado**, nunca.
+
+En producción el hilo **no lleva corte**: los dos mecanismos son alternativos dentro de una unidad y
+se eligió el hilo. El corte sigue gobernando el camino de respaldo, que es una pasada suelta y ahí es
+puro ahorro. Y queda `ClaudeCodeProvider.CutInThread`, apagado, para armarlo dentro del hilo desde el
+banco: con él cada pasada corta, cada corte cierra el hilo y la siguiente abre otro — es decir, **el
+barrido degenera exactamente en el de antes de F25**, y por eso es la forma de medir el margen contra
+la producción real que M2 dejó sin medir (D-881).
+
+**3. El contexto.** Ver D-923.
+
+En los tres casos el informe y el anexo dicen **cuántas veces se abrió un hilo nuevo y por qué**, y
+la sesión lleva la nota con el motivo en la pasada en que ocurrió.
+
+### D-923 — El techo de contexto, en un sitio y con su número escrito
+
+`UnitThreadLimits.TechoContexto = 120.000` tokens, junto al desglose de consumo y no repartido por
+las suites — que es la lección de R1 con el techo del prefijo (D-911): un número que se comprueba en
+un solo sitio es un número que se puede subir explicándolo.
+
+**De dónde sale.** M2 midió el contexto de una unidad creciendo turno a turno 18.574 → 45.694 →
+56.764 → 63.564, y extrapolado a los seis turnos del tope, ~80.000 contra los 200.000 de la ventana
+(D-917). 120.000 es **una vez y media el peor caso observado** y deja el 40 % de la ventana libre
+para el turno en curso.
+
+**Qué se mide y cuándo.** Al terminar cada pasada, `entrada + caché leída` de ese turno: es lo que el
+proveedor declara haber tenido delante, y es la misma serie con la que M2 midió el crecimiento. Si lo
+alcanza, el turno siguiente abre hilo nuevo.
+
+**Por qué no se deja correr.** Una conversación que desborda la ventana del modelo no falla con
+elegancia: empieza a perder lo de antes sin decirlo. Y todo el argumento del hilo es que el modelo
+tiene delante lo que ya se dijo — un hilo que ha olvidado la mitad es lo peor de los dos mundos,
+porque cuesta lo del hilo y cubre menos que una petición nueva.
+
+### D-924 — Copilot: el mismo hilo, verificado por el usuario y dicho con esas palabras
+
+Se implementa igual y con los mismos tests de forma. `RealCopilotAgent` implementa `IThreadedAuditor`
+y `CopilotUnitThread` mantiene **una `CopilotSession` viva por unidad**, con un `SendAndWaitAsync` por
+turno. No es un mecanismo nuevo: es exactamente el del arreglo asistido desde F16 —una
+`CreateSessionAsync`, N envíos, un `DisposeAsync`—, y aquí sale más simple que en Claude Code porque
+`SendAndWaitAsync` ya vuelve cuando el turno queda en reposo y `unit_done` es **terminal** desde el
+primer día.
+
+**Y aquí no hay asiento.** `models.list` contesta 403 en esta máquina (D-883, D-913), así que lo que
+está comprobado es la **forma** —el catálogo, el id de vuelta, una sesión por unidad, la conversación
+rota que no se lleva la unidad, la cuota que sube tal cual— y **no el ahorro**. El SDK 1.0.11
+documenta `ResumeSessionAsync` y publica `CacheReadTokens` / `CacheWriteTokens`, pero eso es lo que
+dice su documentación, no lo que se ha visto funcionar.
+
+**Una costura que existe por esto.** `ICopilotTurns` está ahí para que el hilo de Copilot no sea el
+único camino de producción que ningún test puede recorrer. Lo que no se puede recorrer se rompe sin
+que nadie lo vea, y afirmar el ahorro sin haberlo visto sería exactamente lo que N-2 prohíbe.
+
+**La fase se cierra como «desplegada, verificada en Claude Code, pendiente de verificar en
+Copilot».** La verificación es del usuario, con una sesión real, y lo que la enseña es la escritura
+de caché por pasada del anexo técnico. Si en Copilot las pasadas 2..N no bajan como en Claude Code,
+el parte de esa sesión es la evidencia y se abre un retoque.
+
+### D-925 — D-916 cerrado: `submit_finding` devuelve el ULID de lo que crea
+
+Es una línea de contrato y estaba anotado como deuda desde M2. En un hilo es **la única** forma de
+que el auditor pueda pronunciarse sobre lo que él mismo reportó: no hay pasada siguiente que le
+vuelva a listar la unidad entera.
+
+Los dos `submit` contestan además el `id`, y las descripciones se lo dicen al modelo — un campo que
+la herramienta no anuncia es un campo que nadie mira. El casado vive en `SweepReceipts`, en
+`Atalaya.Agents` y no en un driver, porque la regla tiene que ser la misma en las dos casas: **por
+orden dentro del lote**, y un rechazado no consume ninguno. Un toolbox que no sabe decir qué ha
+creado no se suple con nada inventado.
+
+**Y con esto se alcanza una rama que llevaba desde F4.1 sin poder usarse.** `add_locations` acepta
+—y se lo dice al modelo— un `findingId` «que hayas reportado en esta unidad», y
+`SessionToolbox.AddLocations` tiene la rama puesta desde D-090 para atenderlo; dentro de la pasada
+que lo creaba era inalcanzable. El test lo ejercita como pasa de verdad: el auditor crea un hallazgo
+por el catálogo de herramientas real, se queda con el id que le contestan y le añade una ubicación
+**sin salir del turno**. La ficha acaba con dos ubicaciones, que es lo que F4.1 quería y nunca podía
+conseguir donde hacía falta.
+
+### D-926 — Lo que ve el usuario: casi nada, y a propósito
+
+- **El pie en vivo sigue diciendo «pasada n».** Quien mira una sesión correr no tiene por qué saber
+  que una pasada viaja como un turno de una conversación.
+- **El desglose de caché del tooltip pasa a ser por turno**: `… caché 235.327 leída / 51.077 escrita
+  · 3.004 escrita/turno`. El total se queda porque es dato primario, pero la unidad en la que ahora
+  se paga es el turno, y lo que se escribe en cada uno es exactamente donde se ve si el hilo está
+  haciendo su trabajo. Sigue siendo de tooltip: en la línea pintada no entra nada nuevo (D-886).
+- **El anexo técnico gana un bloque**, `### El hilo, unidad a unidad`, con una línea por unidad:
+  `hilo: 4 turnos · 1 reinicio (la pasada se cortó en unit_done)`. Un motivo repetido se nombra una
+  vez. Una unidad barrida sin hilo lo dice —`sin hilo: una petición por pasada`— porque cuesta el
+  triple y callarlo la haría indistinguible de una cara por cualquier otro motivo.
+- **En el cuerpo del informe, nada** (F23, D-886): esto es instrumentación del coste, y el criterio
+  no ha cambiado. Hay test de que no se cuela.
+- **Métricas: nada nuevo.** El hub sigue registrando lo que registraba; solo se añaden los dos
+  contadores al desglose por unidad, que es un cambio aditivo y no toca el esquema.
+
+### D-927 — La comprobación sobre el banco: UNA tanda, y lo que no se midió se dice
+
+**Lo que se pidió y lo que se hizo.** El encargo pedía tres tandas con `opus` sobre las dos clases de
+referencia con el código de producción, más una cuarta con el corte armado. Se corrió **una**, y el
+resto se paró por decisión del responsable: los créditos no son infinitos y la tanda 1 ya contestaba
+la pregunta que estas tandas venían a contestar —«¿el código de producción se comporta como el brazo
+que M2 midió?»—. Se anota así, y no como si se hubieran hecho tres.
+
+Reproduce: `PromptBench barrido --clon <banco> --tope 6 --sin-corte --model opus <las dos unidades>`,
+con `AtalayaBanco/src/AtalayaBanco.Core/Servicios/CalculadoraCarga.cs` y `ClienteRemoto.cs`.
+
+**El coste, contra las cifras de M2:**
+
+| | esta tanda | M2 · hilo | M2 · producción |
+| --- | ---: | ---: | ---: |
+| Escritura de caché en la pasada 1 | 17.389 / 16.976 | 15.648 | 15.928 |
+| **Escritura de caché por pasada, en las 2..N** | **3.616** | **3.375** | **16.122** |
+| Entrada fresca en las pasadas 2..N | **4 tokens** | — | — |
+| Credits por unidad | 53,8 / 92,8 (media 73,3) | 64,2 | 204,7 |
+| Pasadas por unidad | 4 y 5 | 4,0 | 6,0 |
+
+Las dos unidades convergieron por la regla de siempre —dos secas seguidas— y el trazo es el de M2:
+`CalculadoraCarga: p1: 5n · p2: 2n · p3: seca · p4: seca` y `ClienteRemoto: p1: 12n · p2: 2n · p3: 1n
+· p4: seca · p5: seca`. **Está dentro del ruido de M2 en todo**, y la entrada fresca de 4 tokens en
+las pasadas de continuación es la prueba directa de lo que se buscaba: el turno de continuación no se
+escribe, se lee.
+
+**El censo, comprobado sobre un informe de verdad y no solo en un test.** En las pasadas 2..N el
+anexo declara `Existentes~ 0` y `Unidad~ 0`, y `Estable~ 230` contra los 3.085 de la pasada 1.
+
+**El contexto, y el techo.** La caché leída de una unidad creció 12.385 → 48.766 en cuatro turnos y
+18.668 → 73.602 en cinco. Extrapolado a los seis del tope son ~80.000, que es exactamente lo que M2
+midió y de donde sale el techo de 120.000 (D-923). **En esta tanda no se reinició ningún hilo**: ni
+por contexto, ni por corte, ni por reanudación fallida.
+
+**Variantes: cero.** 22 hallazgos y **ninguno** marcado como posible duplicado por el criterio del §5
+de F23. M2 daba 0 marcados en el hilo contra 7 en producción.
+
+**Cobertura: 17 de los 20 defectos de D-895**, contados como manda D-899b —un defecto sistémico con
+varios miembros cuenta por todos los que cubre—. `CalculadoraCarga` los 5; `ClienteRemoto` 12 de 15.
+Los tres que faltan son **«sin Timeout»**, **«lectura sin límite ni `Content-Type`»** y **«cuerpo
+devuelto sin parsear»**: exactamente los que M2 nombró, y el número cae en su rango (17-18, media
+17,7). Los cinco de `CalculadoraCarga` y el núcleo entero de `ClienteRemoto` salen igual.
+
+**Lo que NO se midió, y por qué importa decirlo:**
+
+- **La tanda con el corte armado.** Era el único dato nuevo del §6 —el margen del hilo contra la
+  producción que llevaba el corte puesto, que D-881 dejó abierto y M2 declaró explícitamente como no
+  medido— y sigue sin medirse. **No se afirma ningún margen contra esa línea.** El mecanismo está
+  implementado y probado (`CutInThread`, D-922), así que la tanda se puede correr el día que se
+  quiera pagar; va al backlog con esas palabras.
+- **La varianza entre tandas.** Con una sola muestra no se puede decir si esta unidad cae en 17 o en
+  18; lo que sí se puede decir es que cae donde M2 dijo que caería, con tres tandas detrás.
+- **El bloque `### El hilo, unidad a unidad` del anexo** no aparece en el informe de esta tanda: el
+  binario del banco se construyó antes de que existiera. Lo cubren sus tests, y lo verá el usuario en
+  su primera sesión.
+
+### D-928 — Cobertura (20 tests nuevos, 2.187 en total, todo en verde)
+
+- **El hilo es el camino**: el turno 1 es **byte a byte** el prompt que recibe un proveedor que no
+  sabe hilar, comparado carácter a carácter; los turnos 2..N son exactamente `ContinuationTurn` y
+  nada más, con las tres cosas que no pueden viajar nombradas una a una (`MÉTODO DE BARRIDO`,
+  `CONTENIDO ÍNTEGRO DE LA UNIDAD`, `HALLAZGOS YA EXISTENTES`) para que el rojo diga cuál se ha
+  colado. Un hilo por UNIDAD y no por pasada, y una sola vez cerrado.
+- **Los tres respaldos**, uno por test y los tres comprobando lo mismo —que la pasada se sirve y el
+  barrido sigue—: reanudación fallida → petición nueva con el prompt entero y el censo que lo dice;
+  corte → hilo nuevo y ninguna continuación; techo de contexto → hilo nuevo, con el número dentro del
+  motivo. Y su contraprueba: **por debajo del techo el hilo no se reinicia**, sin la cual un techo
+  puesto a cero pasaría por bueno.
+- **La regla de parada y el tope mandan igual por los dos caminos**: un turno es una pasada, dos secas
+  seguidas terminan, y el tope no se toca.
+- **El proveedor que no sabe hilar lo dice** —evento una vez por sesión, nota por unidad— y su
+  desglose declara cero turnos, en vez de fingir un hilo que no hubo.
+- **El cuadre del final entra en las cuentas de la unidad**: el consumo que el proveedor declara AL
+  CERRAR se cuenta antes de sellar el desglose. Es un orden, y sin test se rompe sin que nadie lo
+  note.
+- **El ULID de vuelta** (D-925): los dos `submit` lo devuelven, un rechazado no se lleva el del
+  siguiente, un toolbox que no sabe decir lo creado no se suple con nada inventado, las descripciones
+  se lo anuncian al modelo, y **el auditor crea un hallazgo y le añade una ubicación en el mismo
+  turno** — por el catálogo de herramientas real y sobre el toolbox real, que es donde estaba la
+  costura rota.
+- **Copilot, la forma entera**: el catálogo con las seis de siempre, el id anunciado, una sesión por
+  unidad, cerrarla una vez, la conversación rota que se dice como tal y la cuota que sube tal cual sin
+  convertirse en un reintento.
+- **Lo que ve el usuario**: la línea del anexo con turnos y reinicios, el motivo repetido nombrado una
+  vez, el bloque que no se escribe cuando no hubo hilo, el desglose por turno del tooltip —y que sigue
+  siendo de tooltip—, y que nada de esto se cuela en el cuerpo del informe.
+
