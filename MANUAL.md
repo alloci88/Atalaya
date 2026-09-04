@@ -38,7 +38,8 @@ algo está hecho como está, `DECISIONS.md`.
    el código que te muestra en `github.com/login/device` y autoriza. Ese login sirve
    para las tres cosas: acceso git al hub, autenticación de Copilot y autoría de los
    commits. No hay PAT que pegar ni URL que escribir.
-3. **Nueva aplicación.** Da de alta el repositorio que vas a auditar. El asistente
+3. **Nueva aplicación.** Elige el repositorio en el desplegable —son los de tu
+   organización— y señala dónde lo tienes clonado. El nombre lo pone él. El asistente
    escanea el clon, arma el inventario y, si encuentra un baseline v4 (`CodeAudit/`),
    te ofrece importarlo.
 4. **Inventario → Auditar selección.** Elige unidades y lanza. El progreso se sigue
@@ -649,6 +650,27 @@ mismo problema bajo dos reglas—. Los que marca, mirados de dos en dos, se resu
 
 El asistente de alta: repositorio, clon local, escaneo inicial y —si procede—
 importación del baseline v4. Publica una sola vez, al final.
+
+**El repositorio se elige, no se escribe.** El desplegable trae los repositorios de tu
+organización —la misma cuenta de GitHub que ya tienes conectada— y enseña solo el nombre corto:
+`XBLAST`, no la URL entera. Escribe para filtrar cuando haya muchos, y usa **Recargar** si acabas
+de crear el repositorio y todavía no sale.
+
+Los que **ya están en el hub** aparecen en la lista marcados con «· ya en el hub». Elegir uno no
+da de alta nada: te lleva a **vincular tu clon** de la aplicación que ya existe, que es el gesto
+que te faltaba. Dar de alta la misma aplicación dos veces no es posible ni desde aquí ni forzando
+el botón.
+
+**El nombre no se teclea.** Es el del repositorio que elijas, y hasta entonces está vacío. No hay
+un nombre de la aplicación distinto del nombre de su repositorio.
+
+**La ruta del clon** sigue siendo un cuadro de texto —pega la ruta si la tienes— con un
+**«Examinar…»** al lado que abre el selector de carpetas.
+
+**Si la lista no carga** —sin red, o sin permiso para listar los repositorios de la
+organización— el propio desplegable lo dice («no se pudo cargar la lista · reintentar») y **el
+alta no se bloquea**: escribe la URL del repositorio ahí mismo, en ese mismo control, y sigue como
+siempre. La lista es la comodidad, no la única puerta.
 
 ### Cuenta
 

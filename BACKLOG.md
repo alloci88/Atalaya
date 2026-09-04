@@ -4,8 +4,8 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-04 (R2 — el modo exhaustivo en Ajustes, y las tarifas que se aplican
-solas).
+Última revisión: 2026-09-04 (R3 — el alta elige el repositorio en vez de escribirlo, y la norma
+N-5 sobre tests).
 
 ## En vuelo
 
@@ -404,6 +404,14 @@ solas).
   esquina.
 
 ## Cerrado
+
+- **R3 · «Nueva aplicación» elige el repositorio, no lo escribe** — desplegable con los
+  repositorios de la organización de la cuenta conectada (nombre corto, filtro al escribir,
+  recarga, y los que ya están en el hub marcados y redirigidos a vincular), nombre de la
+  aplicación derivado del repositorio en vez de tecleado, y «Examinar…» en la ruta del clon. El
+  combo es editable a propósito: si la lista no carga, escribir la URL a mano sigue dando de alta.
+  La llamada vive en `GitHubApiClient` con el token de la cuenta y un `RepositoryCatalog` que
+  cachea en la sesión. Establece la norma **N-5** sobre tests (D-935).
 
 - **R2 · El modo exhaustivo, y las tarifas que ya no esperan a que alguien abra una pantalla** — dos
   cosas vistas usando la 1.4.1. **(1)** Desde F25 el barrido es una conversación por unidad: un tercio

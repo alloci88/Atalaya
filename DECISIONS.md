@@ -4,10 +4,10 @@ Registro de decisiones tomadas en zonas **[LIBERTAD]** o ante ambigüedades no
 bloqueantes del prompt de construcción. Las decisiones **[NO NEGOCIABLE]** del
 prompt no se repiten aquí salvo para anclar un detalle de implementación.
 
-## Normas de la casa (N-1…N-4)
+## Normas de la casa (N-1…N-5)
 
 Se citan por su número a lo largo de este fichero. Las tres primeras vienen de los prompts de
-construcción; la cuarta se establece en F6.10.
+construcción; la cuarta se establece en F6.10 y la quinta en R3.
 
 - **N-1 — Lo que toca el sync se prueba de verdad.** Cambio en la sincronización con el hub →
   tests de integración contra un remoto local `--bare`, sin red.
@@ -21,6 +21,13 @@ construcción; la cuarta se establece en F6.10.
   `MANUAL.md` y `DECISIONS.md`: cada fase mueve lo que entrega a «Cerrado» y apunta lo que deja
   pendiente. Un backlog que solo ve una persona no es un backlog del equipo, es una nota suya —y
   desaparece con ella.
+
+- **N-5 — Un test por comportamiento que pueda romperse, no por control que se toca.** Antes de
+  escribir uno: ¿qué regla protege, y qué se rompería **en silencio** si no existiera? Si la
+  respuesta es «nada que un usuario notara al primer clic», no se escribe. Los tests de forma —que
+  un XAML tenga un control— no valen; los de regla —que un duplicado se detecte, que el nombre
+  salga del repo elegido— sí. El parte dice cuántos añade y por qué cada uno, en una línea. Se
+  establece en R3 (**D-935**).
 
 ## Toolchain / entorno
 
@@ -13302,3 +13309,108 @@ quién las cambió — igual que se dice del umbral de unidad grande, que tampoc
   de parcial y el enlace, sin el botón viejo.
 - **Y el guarda de D-790 no se afloja**: la siembra se dispara desde `HubContext`, pero quien nombra
   `ModelRateSeed` sigue siendo solo el servicio de tarifas. La exención de D-790 no gana ni un fichero.
+
+## R3 — «Nueva aplicación» elige el repositorio, no lo escribe
+
+El alta pedía tres cosas escritas a mano —nombre, URL del repositorio y ruta local— y dos de ellas
+no hacía falta escribirlas. La organización ya está identificada (es la de la cuenta que sirve el
+token, la misma donde vive Atalaya), así que los repositorios donde puede vivir una aplicación son
+una **lista**; y el nombre de la aplicación es el nombre del repositorio, no una decisión aparte.
+Escribirlos a mano era la única forma de equivocarse.
+
+### D-935 — N-5: un test por comportamiento que pueda romperse, no por control que se toca
+
+Se establece aquí y **rige de esta fase en adelante**, así que vive también en «Normas de la casa»
+como **N-5** y se cita por ese número.
+
+Antes de escribir un test, la pregunta es **qué regla protege y qué se rompería en silencio si no
+existiera**. Si la respuesta es «nada que un usuario notara al primer clic», no se escribe. Cambiar
+un botón no son cinco tests.
+
+- **Los de forma no valen.** Que un XAML contenga un control no es un comportamiento: es una foto
+  del fichero que ya se ve al abrirlo, y su único efecto real es que renombrar un control tire un
+  test rojo sin que nada se haya roto. Un banco de tests así **encarece cada cambio de vista sin
+  detectar ni un defecto**, y acaba enseñando a no tocar la vista.
+- **Los de regla sí.** «Un duplicado se detecta», «el nombre sale del repositorio elegido», «sin
+  lista, el camino manual sigue abierto»: cosas que pueden dejar de cumplirse sin que la pantalla
+  cambie de aspecto. Ése es el criterio — **si romperlo no se ve, hace falta un test; si romperlo
+  se ve al primer clic, el test sobra**.
+- **El parte dice cuántos añade y por qué cada uno, en una línea.** Un test que no se puede
+  justificar en una línea no está protegiendo una regla, está describiendo la implementación.
+
+Esto no afloja N-1: lo que toca el sync se sigue probando de verdad contra un remoto local.
+
+### D-936 — El repositorio se ELIGE de la organización, y de él sale el nombre
+
+Los tres controles del alta, y por qué cada uno queda como queda:
+
+- **Repositorio: un desplegable con los de la organización de la cuenta conectada.** Se enseña el
+  **nombre corto** —`XBLAST`, no `https://github.com/Applied-Advanced-Solutions-AAS/XBLAST`—
+  porque la organización es la misma para todos y repetirla en cada fila solo empuja el nombre
+  fuera de la vista. La URL se guarda entera, como siempre: el modelo de datos de la app y
+  `machines.json` no cambian ni un campo.
+- **Los que ya están en el hub salen, y salen MARCADOS** («· ya en el hub»). Esconderlos dejaría al
+  usuario buscando un repositorio que está ahí y concluyendo que la lista está mal; enseñarlos sin
+  marca lo mandaría a intentar crear el duplicado que **D-303** tiene que parar después. Elegir uno
+  marcado lleva al aviso y al diálogo de vincular de **D-304**, que ya existe — no se escribe un
+  segundo camino.
+- **La marca va ESCRITA**, no en un color: es la misma razón de D-296, quien no distinga los grises
+  tiene que poder leerlo.
+- **Nombre: una etiqueta, no un cuadro de texto.** Vacía hasta que hay repositorio, y entonces el
+  nombre del repositorio. Se deriva con `RemoteUrl.Normalize` (**D-295**) y no con un troceo propio
+  de la URL, para que el `https` y el `ssh` del mismo repositorio den el mismo nombre. Un nombre
+  distinto del repositorio no servía para nada y era una tercera cosa que se podía teclear mal.
+- **Ruta local: el cuadro de texto de siempre y un «Examinar…»** con el `IFolderPicker` de D-304 —
+  el mismo seam, así que el gesto se prueba sin abrir un diálogo del sistema. Escribir a mano sigue
+  valiendo: quien pega una ruta del portapapeles no quiere navegar un árbol.
+
+**El camino manual no se cierra, y ése es el punto.** El control es **un combo editable**: escribir
+filtra la lista mientras lo escrito sea un nombre, y **vale como URL** en cuanto lo escrito parece
+una URL. Con eso, «no se pudo cargar la lista · reintentar» es un aviso y no una pared: sin red o
+sin permiso para listar, el alta sigue siendo posible en el mismo control donde ya está el cursor.
+La lista es la comodidad; la puerta sigue siendo la de antes.
+
+**Dónde vive la llamada.** En `GitHubApiClient`, que es quien ya habla con la API con el token de
+la cuenta, más un `RepositoryCatalog` que resuelve **de quién** son los repositorios y guarda la
+lista. Una segunda pila HTTP habría sido un segundo sitio donde acordarse de mandar el token, de
+traducir el 403 de SAML y de marcar la cuenta cuando GitHub la rechaza; los tests la doblan con el
+`HttpStub` que ya existe, así que ninguno sale a la red.
+
+- **El dueño sale de donde ya estaba escrito**: la organización que nombra el despliegue y, si no
+  nombra ninguna, el dueño del repositorio del hub. Ni un ajuste nuevo que alguien tenga que
+  rellenar.
+- **Y se pregunta a los dos sitios**: `/orgs/{owner}/repos` y, si eso da 404, `/users/{owner}/repos`
+  — mientras el hub sea un repositorio personal el dueño es una cuenta de usuario, y una lista
+  vacía por haber preguntado al sitio equivocado se leería como «la organización no tiene repos»,
+  que es una mentira difícil de diagnosticar.
+- **La caché es de SESIÓN, y el botón de recargar la rompe de verdad.** Volver a la pantalla no
+  vuelve a pagar la llamada; un repositorio recién creado aparece pulsando «Recargar». En disco no
+  se guarda nada: un fichero con la lista de ayer sería una lista en la que el repo nuevo no sale y
+  nadie sabe por qué.
+
+Lo que **no** se ha tocado: `machines.json` y el modelo de la app en el hub (§4), la detección de
+duplicados (D-303), el diálogo de vincular (D-304), el escaneo, el registro y el paso opcional del
+baseline v4.
+
+### D-937 — Cobertura (4 tests nuevos, 2.215 en total, todo en verde)
+
+Cuatro, y se justifican uno a uno como pide N-5:
+
+- **El nombre sale del repositorio elegido** — la etiqueta nace vacía y, al elegir, dice el nombre
+  del repo y guarda su URL. Sin él, el alta podría registrar el slug de un texto vacío y la
+  aplicación entraría en el hub con un nombre que no es el suyo, sin que la pantalla lo delate.
+- **Elegir un repo que ya está en el hub lleva a vincular, no a crear** — sale marcado, apaga el
+  botón de crear y nombra la app existente; y `Create` forzado a mano **no** escribe una segunda
+  app. Es D-303 vista desde la lista, que es por donde ahora se entra.
+- **Sin lista cargada, escribir la URL a mano sigue dando de alta** — el aviso de fallo aparece, el
+  camino manual funciona y la app queda registrada con su URL y su clon en `machines.json`. Si esto
+  se rompiera, un fallo de GitHub dejaría al equipo sin poder registrar aplicaciones.
+- **La lista se cachea en la sesión y «Recargar» vuelve a preguntar** — dos cargas, una sola
+  llamada; recargar, dos, con el token de la cuenta y contra `/orgs/{org}/repos`. Es la mitad
+  silenciosa: con la caché sin invalidar, un repositorio nuevo no aparecería hasta reiniciar y no
+  habría ningún síntoma que lo explicara.
+
+**Lo que NO se ha escrito, y por qué** (N-5): ni un test de que el XAML tenga un `ComboBox`, un
+botón «Examinar…» o una etiqueta en vez de un `TextBox` — son forma, se ven al abrir la pantalla y
+solo servirían para romperse al renombrar un control. Tampoco uno del filtro: que escribir no filtre
+se nota al primer carácter.
