@@ -4,8 +4,8 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-04 (R3 — el alta elige el repositorio en vez de escribirlo, y la norma
-N-5 sobre tests).
+Última revisión: 2026-09-04 (BUGFIX-RELEASE — la reentrada de la conversación, el tag mal escrito
+y el log de tests del run).
 
 ## En vuelo
 
@@ -172,10 +172,6 @@ N-5 sobre tests).
   los dos temas con los números del parte (D-837), pero el pie cambia cada llamada: verlo con Claude
   Code y con Copilot auditando de verdad, a 1366×768 y con la ventana a la mitad, y comprobar que
   ceden los tokens antes que el coste y que el tooltip lleva el desglose entero.
-- **Un test intermitente bajo carga.** `AssistedFixClaudeTests.Lo_que_el_usuario_escribe_llega_en_el_turno_siguiente`
-  falló una vez en una pasada completa de la suite (F17.2) y pasó tres veces seguidas aislado y en
-  la pasada siguiente: huele a tiempo de espera del CLI falso bajo paralelismo, no a regresión.
-  Si vuelve a caer, medir el tiempo que espera y decidir con evidencia (N-2), no subir el tope a ojo.
 - **F17.2 — la secuencia de ciclos, sobre el hub real.** Rehecha como capítulos y medida con datos
   desiguales (D-845…D-849), capturada en los dos temas a 1124 y 441 px; falta abrir Métricas con
   AtalayaBanco y XBLAST delante: XBLAST con su fila «sin ciclos en este periodo», AtalayaBanco con
@@ -404,6 +400,17 @@ N-5 sobre tests).
   esquina.
 
 ## Cerrado
+
+- **BUGFIX-RELEASE · El intermitente tenía nombre, y era un defecto de producción** — cierra «un
+  test intermitente bajo carga» que R1 dejó abierto sin poder nombrarlo. No era «tiempo de espera
+  del CLI falso bajo paralelismo», como se sospechaba: era `LiveFixService.OnUi`, que ejecutaba en
+  línea y dejaba escribir en `Conversation` mientras la colección repartía su `CollectionChanged`
+  —reentrada en el mismo hilo, o dos hilos a la vez—, y `ObservableCollection` lo mata con «Cannot
+  change ObservableCollection during a CollectionChanged event». Costó **5 de 17 runs de release**
+  y varios relanzamientos a mano. Arreglado con una cola de escritura (una a la vez, las demás
+  detrás y en orden) y con un test que provoca la reentrada en vez de esperarla. Más el tag
+  `V1.4.0` que contaminaba el estampado, y el `.trx` como artefacto del run — que es lo que faltaba
+  para haberlo cerrado en R1. Ver D-940…D-943.
 
 - **R3 · «Nueva aplicación» elige el repositorio, no lo escribe** — desplegable con los
   repositorios de la organización de la cuenta conectada (nombre corto, filtro al escribir,

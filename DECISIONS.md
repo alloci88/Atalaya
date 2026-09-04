@@ -13465,3 +13465,128 @@ Cinco, y se justifican uno a uno como pide N-5:
 botón «Examinar…» o una etiqueta en vez de un `TextBox` — son forma, se ven al abrir la pantalla y
 solo servirían para romperse al renombrar un control. Tampoco uno del filtro: que escribir no filtre
 se nota al primer carácter.
+
+## BUGFIX-RELEASE — Por qué fallaban una de cada tres publicaciones
+
+De 17 runs del workflow de release, **5 fallaron**, todos en el paso de tests, a los 3-4 minutos, y
+alternando con éxitos sobre el mismo código. El usuario tuvo que relanzar a mano para publicar la
+1.4.1. Los logs dieron por fin las dos causas, y **ninguna era del workflow**: una es un defecto de
+producción en el arreglo asistido, y la otra un tag mal escrito que contaminaba builds ajenos.
+
+### El diagnóstico primero (N-2): qué se midió, y con qué
+
+Antes de tocar nada, la pregunta del encargo: **quién llama a `Say` desde dentro de un
+`CollectionChanged`**. Medido con dos sondas y con el fallo reproducido en el banco:
+
+- **`ObservableCollection` no protege siempre: protege cuando hay MÁS DE UN suscriptor.** Sonda
+  aparte, dos hilos: el hilo A dentro de un manejador, el hilo B añadiendo. Con **un** suscriptor,
+  `SIN EXCEPCION`. Añadido un segundo, `InvalidOperationException: Cannot change ObservableCollection
+  during a CollectionChanged event`. Ésa es la mitad de la explicación de por qué el fallo era
+  intermitente y no constante — y por qué **no** se ve en la aplicación, que hoy tiene un solo
+  suscriptor (el `ItemsControl` de la vista).
+- **La otra mitad es `OnUi`, y ahí está el defecto.** `OnUi` marshalea al dispatcher solo si
+  `Application.Current` existe **y** no estamos ya en su hilo. En los tests no hay `Application`,
+  así que **ejecutaba en línea, en el hilo de quien llamara**. Con el lector del agente narrando
+  por un lado y el mensaje del usuario entrando por otro, dos hilos escriben en la misma colección
+  a la vez; y como el guardia de `ObservableCollection` es un contador **compartido**, no atado a
+  un hilo, el segundo revienta. En el runner, más lento y con más contención, la ventana se abre
+  más a menudo: **una de cada tres**.
+- **Reproducido en el banco, sin esperar al tiempo**, con la pila EXACTA del log de CI:
+  `LiveFixService.Say` → `OnUi` → el `Add` de la colección. El test provoca la llamada anidada en
+  vez de esperar a que una carrera la produzca.
+
+Lo que **no** se ha comprobado, y se dice: que este fallo se haya dado alguna vez en la aplicación
+en manos de un usuario. Hoy no puede, porque la vista es el único suscriptor y todo pasa por el
+dispatcher. Se arregla igual, y en `LiveFixService`, por dos razones: basta con que alguien añada
+un segundo suscriptor —un panel nuevo, una prueba— para que empiece a caerse en producción, y
+porque una colección de UI que se puede corromper desde dentro de su propio evento es un defecto,
+lo dispare hoy quien lo dispare.
+
+### D-940 — Una escritura a la vez: la reentrada pasa a ser la siguiente de la cola
+
+El arreglo va en `LiveFixService` y **no en el test**, como pedía el encargo. Toda escritura de UI
+pasa por `RunOrQueue`: si ya hay una en vuelo, la nueva **se encola** y la drena quien está dentro,
+en orden. La reentrada deja de ser reentrada y pasa a ser el siguiente elemento de la cola.
+
+**Por qué esto y no `BeginInvoke` siempre**, que era la otra opción sobre la mesa: diferir al
+dispatcher no arregla el caso en el que no hay `Application` —no hay a quién diferir, y es el caso
+del banco y de cualquier arranque sin ventana—, y cambiaría el orden de todo lo demás por un
+problema que solo aparece en una ventana concreta. La regla que hace falta es más pequeña y es la
+de verdad: **una escritura a la vez**. Cubre las dos formas del mismo fallo —la reentrada en el
+mismo hilo y las dos escrituras simultáneas de hilos distintos— porque las dos son «una segunda
+escritura mientras hay una en vuelo».
+
+El precio, dicho: quien escribe desde dentro de otra escritura **vuelve antes de que lo suyo esté
+puesto**. Es correcto —lo estará al acabar la de fuera, que es inmediatamente después— y es la
+única ventana en la que ocurre.
+
+Y `OnUi` deja de ser `static`, que es lo que delataba que no tenía estado y por tanto no podía
+serializar nada.
+
+### D-941 — Un tag mal escrito no puede contaminar un build
+
+El usuario creó **`V1.4.0`**, con mayúscula. No disparó el workflow —que escucha `v*`— pero llegó a
+GitHub, y para `git describe` era el tag más cercano. `Directory.Build.targets` estampaba el tag
+**tal cual** (solo quitaba la `v` minúscula), así que los builds de test salieron
+`V1.4.0-dev+…` y `IdentityTests.La_version_del_acerca_de_es_la_real_del_ensamblado`, que exige
+`^\d+\.\d+`, tumbó el run de `v1.4.1`. **Un tag mal escrito rompió la publicación del tag bien
+escrito.**
+
+No era un caso aislado: en el repositorio ya vivía un **`v.1.0.1`**, de la misma familia.
+
+Tres cosas, y la primera es la que cierra la clase entera:
+
+- **En el targets, se normaliza y se VALIDA.** Se quita la `v` inicial, en minúscula o en mayúscula;
+  y si lo que queda no es un número de versión, **ese tag no sirve para estampar**: se ignora y se
+  cae al suelo del props (`AtalayaFallbackVersion`) con `-dev` y el commit. Comprobado contra tags
+  de verdad en un repositorio de usar y tirar: `v1.4.0`→`1.4.0-dev+sha`, `V1.4.0`→`1.4.0-dev+sha`,
+  `v.1.0.1`/`demo-caliente`/`release-2`→`1.0.0-dev+sha`, sin tags→`1.0.0-dev`. Los cinco empiezan
+  por un número, que es lo que el test de identidad exige.
+  <br>
+  Y si el tag se descarta, **el conteo de commits también**: «commits desde ese tag» no dice nada
+  cuando ese tag no cuenta. El hash se queda — identifica el commit pase lo que pase.
+- **Aceptar la mayúscula al estampar no es bendecirla.** El tag bueno sigue siendo `v` minúscula, el
+  workflow solo escucha ése, y en un push **rechaza** `V1.2.3` con un mensaje que dice qué hacer.
+  El patrón del disparador NO se amplía a `[vV]*`: la mayúscula es un error, y lo que había que
+  arreglar es que no costara un release, no aceptarla.
+- **Y el workflow avisa de los tags mal escritos que encuentre**, con `::warning::` y nombrando el
+  tag más cercano al commit. No es una puerta —desde el arreglo del targets ya no rompen nada— es
+  la línea que hoy habría nombrado al culpable en segundos en vez de en cinco runs.
+
+### D-942 — El log de tests sube siempre, y por eso R1 no pudo cerrar esto
+
+R1 vio caer este mismo test, no pudo ponerle nombre y lo dejó en el backlog como «un test
+intermitente bajo carga». **La causa de no haberlo cerrado entonces fue que nadie guardaba el log
+del run.** El `.trx` va ahora como artefacto con `if: always()`: el run que hay que poder leer es
+justamente el que ha fallado. Es lo que ha permitido diagnosticar esto hoy a la primera.
+
+### D-943 — Cobertura (3 tests nuevos, 2.219 en total, todo en verde)
+
+Tres, y se justifican uno a uno como pide N-5:
+
+- **Escribir en la conversación desde un manejador suyo no revienta la sesión** — reproduce la
+  reentrada de forma **determinista** (provoca la llamada anidada; no espera a que el tiempo la
+  produzca) y **queda rojo sin el arreglo**, con la excepción y la pila exactas del log de CI. Los
+  dos suscriptores son parte del caso, no decorado: con uno solo, `ObservableCollection` ni
+  comprueba la reentrada y el fallo no se ve.
+- **Un tag mal escrito no puede contaminar la versión estampada** — corre el target de estampado de
+  verdad, con los ficheros de build reales, sobre un repositorio temporal con `V1.4.0` y con
+  `v.1.0.1`. Rojo sin el arreglo, con el `V1.4.0-dev+…` literal. Hay test y no basta con el de
+  identidad porque el de identidad solo se pone rojo **cuando ya hay un tag malo cerca de `HEAD`**:
+  el día de la publicación, en el runner. Si alguien quitara la normalización, todo seguiría verde
+  hasta el siguiente error de dedo. Cuesta 2 s.
+- **El log de tests se guarda aunque los tests fallen** — el workflow no se puede ejecutar desde
+  aquí, así que se afirma su contenido, que es el precedente de esta casa para el pipeline
+  (`ReleasePipelineTests`). Quitar el paso no pondría rojo nada y el precio se pagaría meses
+  después, el día que hiciera falta el log y no estuviera. Es la definición de romperse en silencio.
+
+**Lo que NO se ha escrito, y por qué** (N-5): ni un test de que el disparador siga siendo `v*`, ni
+de que la validación temprana del tag esté en su sitio. Un tag mal escrito ahora falla el run **en
+el primer paso y con su mensaje**: romper eso no es silencioso, es lo más ruidoso que hay. Y el
+intermitente de `AssistedFixClaudeTests` se deja **como estaba**: no se toca un test para tapar un
+defecto de producción.
+
+**Verificación de que el intermitente se ha ido**: cuatro pasadas completas de la suite de
+`Atalaya.App.Tests` seguidas, 1.708 tests, cero fallos. No es una prueba de ausencia —era
+intermitente— pero es la evidencia que hay, y la causa está reproducida y cerrada con un test
+determinista, que es lo que R1 no tenía.

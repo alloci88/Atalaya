@@ -328,9 +328,27 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
+### El tag: `v` minúscula y un número, y se empuja aparte
+
+Tres reglas cortas, y las tres se aprendieron pagando (BUGFIX-RELEASE en `DECISIONS.md`):
+
+- **`v` MINÚSCULA.** El workflow escucha `v*`, así que un `V1.2.3` **no publica nada** — y lo peor
+  no es eso: se queda en el repositorio, `git describe` lo ve, y contamina la versión de los builds
+  siguientes. Eso tumbó la publicación de la 1.4.1 cinco veces. Hoy ya no puede: un tag que no es
+  un número se ignora al estampar, y el propio workflow avisa en su log de los tags mal escritos
+  que encuentre. Pero sigue sin publicar, así que **si te equivocas, bórralo**:
+  `git tag -d V1.2.3 && git push origin :refs/tags/V1.2.3`.
+- **Un número SemVer detrás**: `v1.2.3`, o `v2.0.0-rc.1`. Nada de `v.1.2.3` ni `v1.2`. El workflow
+  lo comprueba **en el primer paso, en segundos**, antes de los tres minutos de tests.
+- **El tag se empuja EXPLÍCITAMENTE.** `git push` a secas no lleva tags, y **GitHub Desktop no
+  siempre empuja un tag creado sobre un commit que ya estaba subido**: si lo creas desde Desktop,
+  comprueba que ha llegado (`git push origin v1.2.3` no hace daño si ya está).
+
 El workflow `.github/workflows/release.yml` hace el resto en `windows-latest`:
 
-1. **Pasa los tests.** Un paquete no se publica con tests rojos.
+1. **Pasa los tests**, y **guarda el `.trx` como artefacto del run pase o falle**. Cuando un test
+   cae en el runner y no en tu máquina, el nombre y la pila están ahí — no hay que adivinar ni
+   relanzar a ciegas. Un paquete no se publica con tests rojos.
 2. **Publica self-contained win-x64** con la versión **del tag** (`-p:Version=1.2.3`), así que el
    binario distribuido no puede mentir sobre el tag que lo produjo — el propio workflow comprueba
    el estampado y falla si no coinciden.
