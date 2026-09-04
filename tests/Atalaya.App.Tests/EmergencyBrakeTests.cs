@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Copilot;
@@ -205,19 +205,32 @@ public sealed class EmergencyBrakeTests : IDisposable
     }
 
     /// <summary>
-    /// Y el rail lo PINTA: el item existe en la plantilla, enlazado a ese estado y a ese comando.
-    /// Esta mitad es la que puede caerse sin que el compilador diga nada.
+    /// Y el raíl lo OFRECE: la entrada existe exactamente cuando hay sesión que enseñar, lleva su
+    /// rótulo y late mientras corre. Ésta es la mitad que puede caerse sin que el compilador diga
+    /// nada — el camino de vuelta a una auditoría en marcha desaparecería y todo seguiría
+    /// compilando.
+    /// <para>
+    /// Desde F26 §A el raíl se construye desde el view-model (<c>NavGroups</c>) en vez de estar
+    /// escrito a mano en el XAML, así que la regla se mide donde ahora vive: en los datos. Es
+    /// además más fuerte que leer la plantilla — comprueba el comportamiento con y sin sesión, no
+    /// que exista una cadena de texto.
+    /// </para>
     /// </summary>
     [Fact]
-    public void La_carcasa_pinta_el_item_de_sesion_enlazado_a_su_estado()
+    public void El_rail_ofrece_la_sesion_exactamente_cuando_hay_sesion_que_ensenar()
     {
-        string shell = Markup(Repo("src", "Atalaya.App", "MainWindow.xaml"));
+        var main = _provider.GetRequiredService<MainViewModel>();
 
-        shell.Should().Contain("ShowSessionCommand", "sin comando no hay camino de vuelta");
-        shell.Should().Contain("{Binding HasSession, Converter={StaticResource BoolToVisibility}}",
-            "el item aparece exactamente cuando hay sesión que enseñar");
-        shell.Should().Contain("{Binding SessionNavLabel}");
-        shell.Should().Contain("{Binding IsSessionRunning", "el punto late mientras corre");
+        main.NavGroups.SelectMany(g => g.Items).Should().NotContain(
+            i => i.Key == "session",
+            "sin sesión, una entrada «Sesión en vivo» llevaría a una pantalla vacía");
+
+        RunningSession();
+
+        NavItem session = main.NavGroups.SelectMany(g => g.Items).Single(i => i.Key == "session");
+        session.Label.Should().Be(main.SessionNavLabel);
+        session.Pulsing.Should().BeTrue("el punto late mientras la auditoría corre");
+        session.Command.Should().BeSameAs(main.ShowSessionCommand, "sin comando no hay camino de vuelta");
     }
 
     // ==================================================== (b) detener la sesión

@@ -151,6 +151,9 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
     public override string Title => "Métricas";
 
+    /// <summary>F26 §A.</summary>
+    public override string RailKey => "metrics";
+
     // ---------- Fila de filtros ----------
 
     public ObservableCollection<AppOption> AppOptions { get; } = new();

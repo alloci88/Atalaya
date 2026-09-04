@@ -13,7 +13,7 @@ using Atalaya.Copilot;
 namespace Atalaya.App.ViewModels;
 
 /// <summary>V2 Inventory (§8): module→unit tree with state, claims, filters, and cycle actions.</summary>
-public sealed partial class InventoryViewModel : ViewModelBase
+public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
 {
     private readonly HubContext _hub;
     private readonly IUlidFactory _ulids;
@@ -153,6 +153,20 @@ public sealed partial class InventoryViewModel : ViewModelBase
     }
 
     public override string Title => AppName is { Length: > 0 } ? $"Inventario · {AppName}" : "Inventario";
+
+    /// <summary>F26 §A.</summary>
+    public override string RailKey => "inventory";
+
+    /// <summary>La miga ya lleva el nombre de la aplicación en el eslabón anterior; repetirlo sobra.</summary>
+    public override string CrumbLabel => "Inventario";
+
+    public override bool BelongsToApp => true;
+
+    /// <inheritdoc />
+    public string AppSlug => Slug;
+
+    /// <inheritdoc />
+    public string AppLabel => AppName is { Length: > 0 } ? AppName : Slug;
 
     public ObservableCollection<ModuleNode> Modules { get; } = new();
 

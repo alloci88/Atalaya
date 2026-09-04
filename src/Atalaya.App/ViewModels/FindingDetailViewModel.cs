@@ -39,7 +39,7 @@ namespace Atalaya.App.ViewModels;
 /// que recuperarla es volver a poner dos controles y no reescribir la gobernanza.
 /// </para>
 /// </summary>
-public sealed partial class FindingDetailViewModel : ViewModelBase
+public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
 {
     private readonly HubContext _hub;
     private readonly GovernanceService _governance;
@@ -163,6 +163,17 @@ public sealed partial class FindingDetailViewModel : ViewModelBase
     }
 
     public override string Title => Finding is null ? "Hallazgo" : $"{Finding.DisplayId ?? Finding.Id.ToString()}";
+
+    /// <summary>F26 §A — la ficha no tiene entrada propia: pertenece a Hallazgos.</summary>
+    public override string RailKey => "findings";
+
+    public override bool BelongsToApp => true;
+
+    /// <inheritdoc />
+    public string AppSlug => Slug;
+
+    /// <inheritdoc />
+    public string AppLabel => AppName;
 
     [ObservableProperty] private string _slug = string.Empty;
     [ObservableProperty] private Finding? _finding;

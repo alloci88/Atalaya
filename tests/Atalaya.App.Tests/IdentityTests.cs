@@ -126,12 +126,18 @@ public sealed class IdentityTests : IDisposable
         string shell = Source("src/Atalaya.App/MainWindow.xaml");
         shell.Should().Contain("Icon=\"pack://application:,,,/assets/atalaya.ico\"");
 
-        // El mismo icono en los TRES sitios de la carcasa, no tres dibujos parecidos: el de la
-        // ventana —de donde salen barra de tareas y Alt-Tab—, el del aviso efímero y, desde F8, el
-        // del banner de versión nueva. Los avisos son NUESTROS, así que los firma la aplicación.
-        // Al lado del texto de la barra de título NO va ninguno: se probó y no convenció.
+        // El mismo icono en los DOS sitios de la carcasa, no dos dibujos parecidos: el de la
+        // ventana —de donde salen barra de tareas y Alt-Tab— y el del aviso efímero, que es
+        // NUESTRO y por eso lo firma la aplicación. Al lado del texto de la barra de título NO va
+        // ninguno: se probó y no convenció.
+        //
+        // Eran TRES hasta F26 §A: el aviso de versión nueva llevaba el icono de Atalaya en una
+        // banda de dos líneas. Al pasar a una tira fina (D-957) el icono deja de ser una firma y
+        // pasa a ser el símbolo de lo que la tira DICE —hay algo que atender—, así que lleva el
+        // triángulo de aviso con el color de aviso. El icono de la aplicación en una tira de 24 px
+        // no firmaba nada: solo ocupaba.
         Regex.Matches(shell, Regex.Escape("pack://application:,,,/assets/atalaya.ico")).Count
-            .Should().Be(3, "la ventana, el banner de versión y el toast");
+            .Should().Be(2, "la ventana y el toast");
         shell.Should().NotContain("ui:TitleBar.Icon", "la barra de título se lee mejor limpia");
     }
 
@@ -146,8 +152,8 @@ public sealed class IdentityTests : IDisposable
     {
         var usages = new Dictionary<string, int[]>
         {
-            // El banner de versión (F8) y el aviso efímero, en ese orden dentro del fichero.
-            ["src/Atalaya.App/MainWindow.xaml"] = new[] { 16, 16 },
+            // El aviso efímero. El banner de versión tenía otro hasta F26 §A; ver arriba.
+            ["src/Atalaya.App/MainWindow.xaml"] = new[] { 16 },
             ["src/Atalaya.App/Views/AboutDialog.xaml"] = new[] { 64 },
         };
 

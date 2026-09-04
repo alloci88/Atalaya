@@ -668,18 +668,32 @@ public sealed class ReportsViewTests : IDisposable
 
     // =============================================================== La navegación
 
+    /// <summary>
+    /// Informes está en el grupo de TRABAJO del raíl, junto a Portafolio, Hallazgos y Métricas: es
+    /// una de las cuatro cosas que se hacen a diario, no una utilidad del sistema.
+    /// <para>
+    /// F26 §A cambió dos cosas de la regla original («justo debajo de Métricas», con «Nueva
+    /// aplicación» detrás). La primera, el ORDEN: la maqueta aprobada pone Informes antes que
+    /// Métricas —lo que se lee antes que lo que se mide— y el orden concreto es una decisión de
+    /// diseño, no un invariante. La segunda, que «Nueva aplicación» ya no está en el raíl: es una
+    /// acción del portafolio. Lo que SÍ sigue siendo invariante, y es lo que se fija aquí, es que
+    /// Informes viva en el grupo de trabajo y tenga página a la que llevar.
+    /// </para>
+    /// </summary>
     [Fact]
-    public void Informes_esta_en_el_rail_justo_debajo_de_Metricas()
+    public void Informes_esta_en_el_grupo_de_trabajo_del_rail()
     {
-        string shell = Source("src/Atalaya.App/MainWindow.xaml");
+        string shell = Source("src/Atalaya.App/ViewModels/MainViewModel.Shell.cs");
 
-        int metrics = shell.IndexOf("ShowMetricsCommand", StringComparison.Ordinal);
-        int reports = shell.IndexOf("ShowReportsCommand", StringComparison.Ordinal);
-        int newApp = shell.IndexOf("NewAppCommand", StringComparison.Ordinal);
+        int work = shell.IndexOf("var work = new List<NavItem>", StringComparison.Ordinal);
+        int system = shell.IndexOf("var system = new List<NavItem>", StringComparison.Ordinal);
+        work.Should().BeGreaterThan(0);
 
-        metrics.Should().BeGreaterThan(0);
-        reports.Should().BeGreaterThan(metrics).And.BeLessThan(newApp);
-        shell.Should().Contain("Content=\"Informes\"");
+        string trabajo = shell[work..system];
+        trabajo.Should().Contain("ShowReportsCommand", "Informes es trabajo diario, no sistema");
+        trabajo.Should().Contain("\"Informes\"");
+
+        shell.Should().NotContain("NewAppCommand", "el alta es una acción del portafolio, no un sitio del raíl");
 
         // Y la página existe como destino: VM → vista, como todas las demás.
         Source("src/Atalaya.App/App.xaml").Should().Contain("vm:ReportsViewModel")
@@ -695,7 +709,16 @@ public sealed class ReportsViewTests : IDisposable
     public void Todas_las_claves_que_pide_la_vista_existen()
     {
         string xaml = Source("src/Atalaya.App/Views/ReportsView.xaml");
-        string app = Source("src/Atalaya.App/App.xaml");
+
+        // Desde F26 §A los recursos de la aplicación viven repartidos en cuatro diccionarios
+        // fusionados —converters, tokens, paleta y estilos— además de `App.xaml`. Una clave puede
+        // estar declarada en cualquiera de ellos, así que se miran todos: lo que la regla vigila es
+        // que la clave EXISTA, no en qué fichero.
+        string app = Source("src/Atalaya.App/App.xaml")
+            + Source("src/Atalaya.App/Themes/Converters.xaml")
+            + Source("src/Atalaya.App/Themes/Tokens.xaml")
+            + Source("src/Atalaya.App/Themes/Palette.Dark.xaml")
+            + Source("src/Atalaya.App/Themes/Styles.xaml");
 
         var declared = Regex.Matches(xaml + app, "x:Key=\"([^\"]+)\"")
             .Select(m => m.Groups[1].Value)

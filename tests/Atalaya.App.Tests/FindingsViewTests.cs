@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using System.Windows.Input;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
@@ -810,33 +810,79 @@ public sealed class FindingsViewTests : IDisposable
     // ------------------------------------------------- el ancho de la ventana
 
     /// <summary>
-    /// La barra de filtros de V3 necesita <b>1064 px de página</b> para caber en una línea —medido
-    /// pintándola con «Limpiar filtros» visible, que es el caso ancho—. Sumados el rail (210) y el
-    /// relleno de la página (20 a cada lado), la ventana tiene que abrir con al menos 1314. Abría
-    /// con 1180, y por eso el último filtro caía a una segunda línea nada más arrancar.
+    /// La barra de filtros de V3 necesita <b>1064 px de página</b> para caber en una línea, y por
+    /// eso la ventana no puede estrenarse pequeña: abría con 1180 y el último filtro caía a una
+    /// segunda línea nada más arrancar. La regla es la PRIMERA IMPRESIÓN, no el mínimo — por
+    /// debajo, los filtros se reacomodan y bajan de línea, que es el comportamiento correcto.
     /// <para>
-    /// Esto NO fija el mínimo de la ventana: por debajo, los filtros se reacomodan y bajan de
-    /// línea, que es el comportamiento correcto. Fija la PRIMERA IMPRESIÓN.
+    /// <b>F26 §A cambia el mecanismo y refuerza la regla</b> (D-956). Antes se fijaba un ancho
+    /// declarado de 1314; el problema es que un número escrito en el XAML no sabe en qué monitor
+    /// va a abrir, y en uno de 1920 dejaba media pantalla vacía —que es la queja que trae esta
+    /// fase—. Ahora la ventana <b>arranca maximizada la primera vez</b>: la primera impresión es
+    /// la pantalla entera, que cabe siempre. De la segunda en adelante manda lo que el usuario
+    /// dejara, que es suyo.
     /// </para>
     /// </summary>
     [Fact]
-    public void La_ventana_abre_lo_bastante_ancha_para_que_los_filtros_quepan_en_una_linea()
+    public void La_ventana_se_estrena_maximizada_para_que_los_filtros_quepan_en_una_linea()
     {
-        const double filterBarNeeds = 1064;
-        const double railAndPadding = 210 + 20 + 20;
+        // Una máquina donde Atalaya no se ha cerrado nunca: no hay preferencia que respetar.
+        var (maximized, left, top, width, height) = WindowPlacementService.Resolve(
+            new WindowPlacement(),
+            new System.Windows.Rect(0, 0, 1920, 1080));
 
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Atalaya.sln")))
+        maximized.Should().BeTrue("estrenar la aplicación en una ventana pequeña es estrenarla en su peor tamaño");
+        left.Should().BeNull("sin posición guardada, la ventana se centra");
+        top.Should().BeNull();
+
+        // Y el mínimo respeta el principio 1: usable a 1280×720, nunca por debajo de 1100×700.
+        width.Should().BeGreaterThanOrEqualTo(WindowPlacementService.MinWidth);
+        height.Should().BeGreaterThanOrEqualTo(WindowPlacementService.MinHeight);
+    }
+
+    /// <summary>
+    /// Y de la segunda vez en adelante se respeta lo que el usuario dejó — incluido haberla dejado
+    /// pequeña, que es una decisión suya y no un defecto que corregir.
+    /// </summary>
+    [Fact]
+    public void Despues_de_la_primera_vez_manda_lo_que_el_usuario_dejo()
+    {
+        var saved = new WindowPlacement
         {
-            dir = dir.Parent;
-        }
+            Saved = true, Maximized = false, Left = 100, Top = 80, Width = 1400, Height = 900,
+        };
 
-        string xaml = File.ReadAllText(Path.Combine(dir!.FullName, "src", "Atalaya.App", "MainWindow.xaml"));
-        Match width = Regex.Match(xaml, @"\bWidth=""(\d+)""");
-        width.Success.Should().BeTrue("la ventana declara un ancho por defecto");
+        var (maximized, left, top, width, height) = WindowPlacementService.Resolve(
+            saved, new System.Windows.Rect(0, 0, 1920, 1080));
 
-        double.Parse(width.Groups[1].Value)
-            .Should().BeGreaterThanOrEqualTo(filterBarNeeds + railAndPadding);
+        maximized.Should().BeFalse();
+        left.Should().Be(100);
+        top.Should().Be(80);
+        width.Should().Be(1400);
+        height.Should().Be(900);
+    }
+
+    /// <summary>
+    /// <b>Salvo que esa posición ya no exista.</b> Es el caso que rompe estas funciones en la vida
+    /// real: se cierra Atalaya en el segundo monitor, se desconecta el monitor, y al abrirla
+    /// vuelve a unas coordenadas que no están en ninguna pantalla — la ventana existe, responde y
+    /// no se ve. Entonces se conserva el TAMAÑO y se descarta la posición.
+    /// </summary>
+    [Fact]
+    public void Una_posicion_guardada_en_un_monitor_que_ya_no_esta_se_descarta()
+    {
+        var saved = new WindowPlacement
+        {
+            Saved = true, Maximized = false, Left = -2600, Top = 100, Width = 1400, Height = 900,
+        };
+
+        var (_, left, top, width, height) = WindowPlacementService.Resolve(
+            saved, new System.Windows.Rect(0, 0, 1920, 1080));
+
+        left.Should().BeNull("fuera de todo escritorio, la ventana se centra en vez de esconderse");
+        top.Should().BeNull();
+        width.Should().Be(1400, "el tamaño que eligió sí sigue siendo suyo");
+        height.Should().Be(900);
     }
 
     [Theory]

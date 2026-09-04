@@ -107,19 +107,17 @@ public sealed class AssistedFixViewTests
     }
 
     /// <summary>
-    /// El item del rail y el indicador de la barra inferior: el camino de vuelta a un arreglo en
-    /// curso desde cualquier página, con su punto latiendo.
+    /// El camino de vuelta a un arreglo en curso, desde cualquier página: la entrada del raíl y el
+    /// indicador del pie. Desde F26 §A el raíl son datos (<c>NavGroups</c>), así que la regla se
+    /// mide ahí; el pie sigue leyéndose del XAML porque ahí sí es plantilla.
     /// </summary>
     [Fact]
     public void La_carcasa_ofrece_el_camino_de_vuelta_al_arreglo()
     {
         string xaml = Markup(MainWindowXaml());
 
-        xaml.Should().Contain("ShowFixCommand");
-        xaml.Should().Contain("{Binding HasFix, Converter={StaticResource BoolToVisibility}}");
-        xaml.Should().Contain("{Binding FixNavLabel}");
-        xaml.Should().Contain("FixPulse", "el punto late mientras el agente escribe en el clon");
-        xaml.Should().Contain("{Binding FixProgress}");
+        xaml.Should().Contain("ShowFixCommand", "el pie lleva al arreglo en curso");
+        xaml.Should().Contain("{Binding FixProgress}", "y dice en qué va");
     }
 
     /// <summary>

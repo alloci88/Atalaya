@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using Atalaya.App.Services;
 using Atalaya.App.Views;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -51,6 +51,9 @@ public sealed partial class PortfolioViewModel : ViewModelBase
     }
 
     public override string Title => "Portafolio";
+
+    /// <summary>F26 §A — la raíz del raíl y de la miga.</summary>
+    public override string RailKey => "portfolio";
 
     public ObservableCollection<AppCard> Apps { get; } = new();
 

@@ -200,6 +200,9 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     public override string Title => "Ajustes";
 
+    /// <summary>F26 §A.</summary>
+    public override string RailKey => "settings";
+
     [ObservableProperty] private string _editor;
     [ObservableProperty] private bool _isLightTheme;
     [ObservableProperty] private int _pollingSeconds;

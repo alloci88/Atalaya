@@ -18,7 +18,7 @@ namespace Atalaya.App.ViewModels;
 /// porque el estado esta en el servicio.
 /// </para>
 /// </summary>
-public sealed partial class SessionViewModel : ViewModelBase
+public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
 {
     private readonly LiveSessionService _live;
     private readonly DispatcherTimer? _clock;
@@ -54,6 +54,17 @@ public sealed partial class SessionViewModel : ViewModelBase
 
     /// <summary>El estado real, enlazado directamente por la vista.</summary>
     public LiveSessionService Live => _live;
+
+    /// <summary>F26 §A.</summary>
+    public override string RailKey => "session";
+
+    public override bool BelongsToApp => true;
+
+    /// <inheritdoc />
+    public string AppSlug => _live.AppSlug;
+
+    /// <inheritdoc />
+    public string AppLabel => _live.AppSlug;
 
     public ObservableCollection<UnitProgress> Units => _live.Units;
 

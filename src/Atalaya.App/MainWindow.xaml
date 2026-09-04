@@ -1,21 +1,27 @@
-<ui:FluentWindow
+﻿<ui:FluentWindow
     x:Class="Atalaya.App.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:c="clr-namespace:Atalaya.App.Controls"
     Title="Atalaya"
     Icon="pack://application:,,,/assets/atalaya.ico"
-    Width="1340"
-    Height="800"
-    MinWidth="900"
-    MinHeight="560"
+    Width="1100"
+    Height="700"
+    MinWidth="1100"
+    MinHeight="700"
+    Background="{DynamicResource Brush.Bg}"
     WindowStartupLocation="CenterScreen"
     ExtendsContentIntoTitleBar="True">
-    <Grid>
+    <!-- EL SUELO SE PINTA AQUÍ, no en `Window.Background` (F26 §A). `FluentWindow` aplica su
+         propio telón —el «backdrop» de Windows 11— por debajo de lo que declare la ventana, y con
+         él salían el #202020 y el #FAFAFA de fábrica de la librería en vez de nuestro #171B22 y
+         nuestro crema: el tema cambiaba TODO menos el fondo, que es lo primero que se ve. La
+         rejilla raíz está por encima del telón y no admite discusión. -->
+    <Grid Background="{DynamicResource Brush.Bg}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- La barra de título va SIN icono al lado del texto. Se probó —el de la aplicación, en
@@ -25,295 +31,333 @@
              Window.Icon y ApplicationIcon (F6.4 §1). -->
         <ui:TitleBar
             Grid.Row="0"
-            Title="Atalaya"
-            Grid.ColumnSpan="2" />
+            Title="Atalaya" />
 
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="1" x:Name="Shell" SizeChanged="OnShellSizeChanged">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="210" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Navigation rail -->
-            <Border Grid.Column="0" Background="{DynamicResource ApplicationBackgroundBrush}" Padding="12,16">
-                <!-- F5.3: sin cabecera de marca. «Atalaya» ya está en la barra de título; repetirla
-                     aquí en grande era la MISMA marca dos veces en la misma ventana. El rail
-                     empieza directamente por los items. -->
-                <StackPanel>
-                    <ui:Button
-                        Command="{Binding ShowPortfolioCommand}"
-                        Content="Portafolio"
-                        Appearance="Secondary"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Margin="0,2" />
-                    <!-- Sesión: solo aparece cuando hay una (en curso o recién terminada). El punto
-                         late mientras corre, que es la señal de que la auditoría sigue viva aunque
-                         estés en otra página (F5.2, Hito 1). -->
-                    <ui:Button
-                        Command="{Binding ShowSessionCommand}"
-                        Appearance="Secondary"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Margin="0,2"
-                        Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel Orientation="Horizontal">
-                            <Ellipse Width="9" Height="9" Margin="0,0,8,0" VerticalAlignment="Center"
-                                     Fill="#3FB950"
-                                     Visibility="{Binding IsSessionRunning, Converter={StaticResource BoolToVisibility}}">
-                                <Ellipse.Style>
-                                    <Style TargetType="Ellipse">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsSessionRunning}" Value="True">
-                                                <DataTrigger.EnterActions>
-                                                    <BeginStoryboard Name="Pulse">
-                                                        <Storyboard>
-                                                            <DoubleAnimation
-                                                                Storyboard.TargetProperty="Opacity"
-                                                                From="1.0" To="0.15" Duration="0:0:0.9"
-                                                                AutoReverse="True" RepeatBehavior="Forever" />
-                                                        </Storyboard>
-                                                    </BeginStoryboard>
-                                                </DataTrigger.EnterActions>
-                                                <DataTrigger.ExitActions>
-                                                    <StopStoryboard BeginStoryboardName="Pulse" />
-                                                </DataTrigger.ExitActions>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Ellipse.Style>
-                            </Ellipse>
-                            <TextBlock Text="{Binding SessionNavLabel}" VerticalAlignment="Center" />
+            <!-- ==================================================== EL RAÍL (F26 §A, D-954)
+
+                 Lo que había: ocho botones con borde, todos iguales, sin icono y sin ninguna señal
+                 de dónde estabas. Un menú así no es un mapa, es una lista. Ahora: icono y texto,
+                 agrupados por sentido (trabajo · aplicación activa · sistema), la entrada activa
+                 con fondo y barra de color primario, y plegable a solo iconos cuando la ventana se
+                 estrecha. «Nueva aplicación» ya no está: es una ACCIÓN del portafolio —donde ya era
+                 el botón primario—, no un sitio al que ir.
+            -->
+            <Border Grid.Column="0"
+                    Background="{DynamicResource Brush.Surface}"
+                    BorderBrush="{DynamicResource Brush.Line}"
+                    BorderThickness="{StaticResource Border.Right}"
+                    Padding="{StaticResource Pad.Rail}">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Width" Value="{StaticResource Rail.Width}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding RailCollapsed}" Value="True">
+                                <Setter Property="Width" Value="{StaticResource Rail.CollapsedWidth}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+
+                <DockPanel>
+                    <!-- El plegado, arriba del todo y siempre en el mismo sitio, plegado o no. -->
+                    <Button DockPanel.Dock="Top"
+                            Style="{StaticResource Button.Ghost}"
+                            Command="{Binding ToggleRailCommand}"
+                            HorizontalAlignment="Left"
+                            Margin="{StaticResource Pad.XXS}"
+                            ToolTip="Plegar o desplegar el menú">
+                        <Path Style="{StaticResource Icon}" Data="{x:Static c:Icons.RailToggle}" />
+                    </Button>
+
+                    <!-- El pie del raíl: la cuenta. Es «quién eres», que es información de sistema
+                         y no de trabajo; abajo, fuera del camino, y siempre a un clic. -->
+                    <Button DockPanel.Dock="Bottom"
+                            Style="{StaticResource Button.Ghost}"
+                            Command="{Binding ShowAccountCommand}"
+                            HorizontalContentAlignment="Left"
+                            Padding="{StaticResource Pad.RailItem}"
+                            ToolTip="{Binding AccountLabel}">
+                        <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
+                            <Border Width="24" Height="24" CornerRadius="{StaticResource Radius.Pill}">
+                                <Border.Background>
+                                    <ImageBrush ImageSource="{Binding AccountAvatarUrl}" Stretch="UniformToFill" />
+                                </Border.Background>
+                            </Border>
+                            <TextBlock Text="{Binding AccountLabel}"
+                                       Style="{StaticResource Text.Small}"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"
+                                       Visibility="{Binding RailCollapsed, Converter={StaticResource InverseBoolToVisibility}}" />
+                            <TextBlock Text="⚠"
+                                       Foreground="{DynamicResource Brush.Warning.Ink}"
+                                       VerticalAlignment="Center"
+                                       ToolTip="Reconecta tu cuenta de GitHub"
+                                       Visibility="{Binding AccountNeedsAttention, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
-                    </ui:Button>
-                    <!-- Arreglo asistido (F6.9): mismo patrón que la sesión — solo aparece cuando
-                         hay uno, y el punto late mientras el agente escribe en el clon. Se queda
-                         mientras QUEDEN cambios sin cerrar: es el camino de vuelta al descarte. -->
-                    <ui:Button
-                        Command="{Binding ShowFixCommand}"
-                        Appearance="Secondary"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Margin="0,2"
-                        Visibility="{Binding HasFix, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel Orientation="Horizontal">
-                            <Ellipse Width="9" Height="9" Margin="0,0,8,0" VerticalAlignment="Center"
-                                     Fill="#E0A030"
-                                     Visibility="{Binding IsFixRunning, Converter={StaticResource BoolToVisibility}}">
-                                <Ellipse.Style>
-                                    <Style TargetType="Ellipse">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsFixRunning}" Value="True">
-                                                <DataTrigger.EnterActions>
-                                                    <BeginStoryboard Name="FixPulse">
-                                                        <Storyboard>
-                                                            <DoubleAnimation
-                                                                Storyboard.TargetProperty="Opacity"
-                                                                From="1.0" To="0.15" Duration="0:0:0.9"
-                                                                AutoReverse="True" RepeatBehavior="Forever" />
-                                                        </Storyboard>
-                                                    </BeginStoryboard>
-                                                </DataTrigger.EnterActions>
-                                                <DataTrigger.ExitActions>
-                                                    <StopStoryboard BeginStoryboardName="FixPulse" />
-                                                </DataTrigger.ExitActions>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Ellipse.Style>
-                            </Ellipse>
-                            <TextBlock Text="{Binding FixNavLabel}" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </ui:Button>
-                    <ui:Button
-                        Command="{Binding ShowFindingsCommand}"
-                        Content="Hallazgos"
-                        Appearance="Secondary"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Margin="0,2" />
-                    <ui:Button
-                        Command="{Binding ShowMetricsCommand}"
-                        Content="Métricas"
-                        Appearance="Secondary"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Margin="0,2" />
-                    <ui:Button
-                        Command="{Binding ShowReportsCommand}"
-                        Content="Informes"
-                        Appearance="Secondary"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Margin="0,2" />
-                    <ui:Button
-                        Command="{Binding NewAppCommand}"
-                        Content="Nueva aplicación"
-                        Appearance="Secondary"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Margin="0,2" />
-                    <ui:Button
-                        Command="{Binding ShowAccountCommand}"
-                        Content="Cuenta"
-                        Appearance="Secondary"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Margin="0,2" />
-                    <ui:Button
-                        Command="{Binding ShowSettingsCommand}"
-                        Content="Ajustes"
-                        Appearance="Secondary"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Margin="0,2" />
-                </StackPanel>
+                    </Button>
+
+                    <ItemsControl ItemsSource="{Binding NavGroups}" DockPanel.Dock="Top">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel>
+                                    <!-- El rótulo del grupo desaparece al plegar: a 60 px no cabe,
+                                         y una etiqueta recortada a dos letras no es un rótulo. -->
+                                    <TextBlock Text="{Binding Title}"
+                                               Style="{StaticResource Text.Meta}"
+                                               Margin="{StaticResource Pad.RailGroup}"
+                                               TextTrimming="CharacterEllipsis"
+                                               Visibility="{Binding DataContext.RailCollapsed,
+                                                   RelativeSource={RelativeSource AncestorType=ItemsControl},
+                                                   Converter={StaticResource InverseBoolToVisibility}}" />
+                                    <ItemsControl ItemsSource="{Binding Items}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Command="{Binding Command}"
+                                                        Style="{StaticResource RailItem}"
+                                                        AutomationProperties.Name="{Binding Label}"
+                                                        ToolTip="{Binding Label}" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </DockPanel>
             </Border>
 
-            <!-- Page host. Las dos filas de arriba son los avisos que no pueden perderse: la
-                 versión nueva (F8 §3) y el cierre de ciclo (F12 §G). Cada una ocupa alto solo
-                 cuando hay algo que decir, así que el 99 % de los arranques la ventana se ve
-                 exactamente igual que antes. -->
+            <!-- ==================================================== EL ÁREA PRINCIPAL -->
             <Grid Grid.Column="1">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <!-- Discreto a propósito: ni modal ni toast. Un modal interrumpe por una noticia
-                     que no es urgente; un toast caduca a los 8 s y se pierde si mirabas otra cosa.
-                     Esto se queda hasta que el usuario decide, y ocupa una línea. -->
+                <!-- LA MIGA DE PAN Y LA VUELTA (F26 §A, D-955). Portafolio › XBLAST › Inventario.
+                     Antes no había ninguna referencia de dónde estabas fuera del título de la
+                     página, y el único camino de vuelta era volver a empezar por el portafolio. -->
                 <Border Grid.Row="0"
-                        Margin="20,12,20,0" Padding="12,8"
-                        CornerRadius="6"
-                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1"
+                        Background="{DynamicResource Brush.Surface}"
+                        BorderBrush="{DynamicResource Brush.Line}"
+                        BorderThickness="{StaticResource Border.Bottom}"
+                        Padding="{StaticResource Pad.TopBar}">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Left"
+                                Style="{StaticResource Button.Ghost}"
+                                Command="{Binding GoBackCommand}"
+                                Margin="{StaticResource Pad.Zero}"
+                                ToolTip="Volver">
+                            <Path Style="{StaticResource Icon}" Data="{x:Static c:Icons.Back}" />
+                        </Button>
+
+                        <!-- El estado del hub, a la derecha: es de la ventana entera, no de la
+                             página, y por eso vive en la barra y no dentro del contenido. -->
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                                    c:Stack.Gap="{StaticResource Space.XS}"
+                                    VerticalAlignment="Center">
+                            <Ellipse Width="8" Height="8" VerticalAlignment="Center"
+                                     Fill="{Binding SyncHealth, Converter={StaticResource SyncHealthToBrush}}" />
+                            <TextBlock Text="{Binding SyncHealth}" Style="{StaticResource Text.Small}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+
+                        <ItemsControl ItemsSource="{Binding Crumbs}" VerticalAlignment="Center"
+                                      Margin="{StaticResource Pad.XS}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <!-- El separador va DETRÁS del enlace, no delante: delante
+                                         del primero saldría un «›» suelto abriendo la miga, que
+                                         apunta a un eslabón que no existe. -->
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button Content="{Binding Label}"
+                                                Command="{Binding Command}"
+                                                Style="{StaticResource Button.Link}"
+                                                Foreground="{DynamicResource Brush.TextMuted}"
+                                                Visibility="{Binding IsLink, Converter={StaticResource BoolToVisibility}}" />
+                                        <Path Style="{StaticResource Icon}"
+                                              Data="{x:Static c:Icons.Chevron}"
+                                              Width="12" Height="12"
+                                              Stroke="{DynamicResource Brush.TextFaint}"
+                                              Margin="{StaticResource Pad.XS}"
+                                              Visibility="{Binding IsLink, Converter={StaticResource BoolToVisibility}}" />
+                                        <TextBlock Text="{Binding Label}"
+                                                   FontWeight="SemiBold"
+                                                   VerticalAlignment="Center"
+                                                   Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVisibility}}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </DockPanel>
+                </Border>
+
+                <!-- LA VERSIÓN NUEVA, EN UNA TIRA FINA (F26 §A, D-957). Era una banda de dos
+                     líneas en la cabecera de TODAS las vistas: la primera cosa que se veía al
+                     abrir cualquier página era una noticia que no es urgente. Ahora es una línea,
+                     con el color de aviso para que se vea sin ocupar, y al descartar desaparece.
+                     Lo que decía la segunda línea —por qué no se puede actualizar todavía— se
+                     enseña solo cuando hay algo que decir. -->
+                <Border Grid.Row="1"
+                        Background="{DynamicResource Brush.Warning.Soft}"
+                        Padding="{StaticResource Pad.Strip}"
                         Visibility="{Binding UpdateAvailable, Converter={StaticResource BoolToVisibility}}">
-                    <StackPanel>
-                        <StackPanel Orientation="Horizontal">
-                            <Image Width="16" Height="16" Margin="0,0,10,0"
-                                   VerticalAlignment="Center"
-                                   RenderOptions.BitmapScalingMode="HighQuality">
-                                <Image.Source>
-                                    <BitmapImage UriSource="pack://application:,,,/assets/atalaya.ico"
-                                                 DecodePixelWidth="16" DecodePixelHeight="16" />
-                                </Image.Source>
-                            </Image>
-                            <TextBlock Text="{Binding UpdateLabel}" VerticalAlignment="Center"
-                                       FontWeight="SemiBold" />
-
-                            <!-- F11 — Actualizar es una DECISIÓN, y por eso es un botón y no un
-                                 automatismo. Mientras dura, el banner deja de ofrecer y pasa a
-                                 contar: quien pulsó tiene derecho a ver qué está pasando. -->
-                            <ui:Button Content="{Binding InstallUpdateLabel}"
-                                       Command="{Binding InstallUpdateCommand}"
-                                       Appearance="Primary"
-                                       Margin="14,0,0,0" Padding="12,3"
-                                       VerticalAlignment="Center"
-                                       ToolTip="Descarga la versión nueva, comprueba su checksum, sustituye la carpeta y vuelve a abrir Atalaya. Tus ajustes, tu cuenta y tus clones no se tocan."
-                                       Visibility="{Binding CanInstallUpdate, Converter={StaticResource BoolToVisibility}}" />
-
-                            <ui:HyperlinkButton Content="Ver novedades"
-                                                Command="{Binding OpenUpdateCommand}"
-                                                Margin="12,0,0,0" Padding="0"
-                                                VerticalAlignment="Center"
-                                                ToolTip="Abre la página de la versión en el navegador, con sus notas y su zip."
-                                                Visibility="{Binding CanOpenUpdate, Converter={StaticResource BoolToVisibility}}" />
-                            <ui:HyperlinkButton Content="Descartar"
-                                                Command="{Binding DismissUpdateCommand}"
-                                                Margin="14,0,0,0" Padding="0"
-                                                VerticalAlignment="Center"
-                                                ToolTip="No vuelve a avisar de esta versión. De la siguiente sí." />
-                        </StackPanel>
-
-                        <!-- Por qué NO se puede actualizar (una sesión en curso, un build local,
-                             sin permisos), o qué tener en cuenta si sí (un arreglo abierto). Un
-                             botón que falta sin explicación se lee como un fallo del programa. -->
+                    <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
+                        <Path Style="{StaticResource Icon}" Data="{x:Static c:Icons.Warning}"
+                              Width="14" Height="14"
+                              Stroke="{DynamicResource Brush.Warning.Ink}" />
+                        <TextBlock Text="{Binding UpdateLabel}"
+                                   Style="{StaticResource Text.Small}"
+                                   Foreground="{DynamicResource Brush.Warning.Ink}"
+                                   VerticalAlignment="Center" />
                         <TextBlock Text="{Binding UpdateNotice}"
-                                   Margin="26,6,0,0"
-                                   TextWrapping="Wrap"
-                                   Opacity="0.75"
+                                   Style="{StaticResource Text.Small}"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding UpdateNotice}"
                                    Visibility="{Binding HasUpdateNotice, Converter={StaticResource BoolToVisibility}}" />
-
-                        <StackPanel Margin="26,8,0,0"
-                                    Visibility="{Binding UpdateInProgress, Converter={StaticResource BoolToVisibility}}">
-                            <TextBlock Text="{Binding UpdateProgressText}" TextWrapping="Wrap" />
-                            <ProgressBar Height="4" Margin="0,6,0,0"
-                                         Minimum="0" Maximum="100"
-                                         Value="{Binding UpdateProgressPercent, Mode=OneWay, FallbackValue=0, TargetNullValue=0}"
-                                         IsIndeterminate="{Binding UpdateProgressIndeterminate}" />
-                        </StackPanel>
+                        <TextBlock Text="{Binding UpdateProgressText}"
+                                   Style="{StaticResource Text.Small}"
+                                   VerticalAlignment="Center"
+                                   Visibility="{Binding UpdateInProgress, Converter={StaticResource BoolToVisibility}}" />
+                        <Button Content="{Binding InstallUpdateLabel}"
+                                Command="{Binding InstallUpdateCommand}"
+                                Style="{StaticResource Button.Secondary}"
+                                Padding="{StaticResource Pad.ButtonSmall}"
+                                MinHeight="0"
+                                ToolTip="Descarga la versión nueva, comprueba su checksum, sustituye la carpeta y vuelve a abrir Atalaya. Tus ajustes, tu cuenta y tus clones no se tocan."
+                                Visibility="{Binding CanInstallUpdate, Converter={StaticResource BoolToVisibility}}" />
+                        <Button Content="Ver novedades"
+                                Command="{Binding OpenUpdateCommand}"
+                                Style="{StaticResource Button.Link}"
+                                Foreground="{DynamicResource Brush.Warning.Ink}"
+                                ToolTip="Abre la página de la versión en el navegador, con sus notas y su zip."
+                                Visibility="{Binding CanOpenUpdate, Converter={StaticResource BoolToVisibility}}" />
+                        <Button Content="Descartar"
+                                Command="{Binding DismissUpdateCommand}"
+                                Style="{StaticResource Button.Link}"
+                                Foreground="{DynamicResource Brush.Warning.Ink}"
+                                ToolTip="No vuelve a avisar de esta versión. De la siguiente sí." />
                     </StackPanel>
                 </Border>
 
-                <!-- F12 §G — CIERRE DE CICLO. F9.2 cerraba y sembraba bien, pero en silencio: el
-                     Portafolio pasaba a «Ciclo 2» y ya. Mismo patrón que el aviso de versión —
-                     discreto, no efímero y descartable— porque cerrar un ciclo es una buena
-                     noticia que no puede perderse si mirabas otra pantalla, y no una
-                     interrupción que merezca un modal. -->
-                <Border Grid.Row="1"
-                        Margin="20,12,20,0" Padding="12,8"
-                        CornerRadius="6"
-                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1"
+                <!-- F12 §G — CIERRE DE CICLO. Mismo tratamiento que el aviso de versión y por la
+                     misma razón: es una buena noticia que no puede perderse si mirabas otra
+                     pantalla, y no una interrupción que merezca un modal. Va en verde porque es
+                     precisamente eso, una buena noticia. -->
+                <Border Grid.Row="2"
+                        Background="{DynamicResource Brush.Success.Soft}"
+                        Padding="{StaticResource Pad.Strip}"
                         Visibility="{Binding CycleClosed, Converter={StaticResource BoolToVisibility}}">
-                    <WrapPanel>
-                        <TextBlock Text="✓" VerticalAlignment="Center" Margin="0,0,10,0" FontWeight="Bold" />
-                        <TextBlock Text="{Binding CycleClosedLabel}" VerticalAlignment="Center"
-                                   TextWrapping="Wrap" FontWeight="SemiBold" />
-                        <ui:HyperlinkButton Content="Ver el informe del cierre"
-                                            Command="{Binding OpenCycleReportCommand}"
-                                            Margin="14,0,0,0" Padding="0"
-                                            VerticalAlignment="Center"
-                                            ToolTip="La foto de con qué cerró el ciclo y qué hereda el siguiente."
-                                            Visibility="{Binding CanOpenCycleReport, Converter={StaticResource BoolToVisibility}}" />
-                        <ui:HyperlinkButton Content="Descartar"
-                                            Command="{Binding DismissCycleCloseCommand}"
-                                            Margin="14,0,0,0" Padding="0"
-                                            VerticalAlignment="Center"
-                                            ToolTip="Quita el aviso. El informe del cierre sigue en Informes." />
-                    </WrapPanel>
+                    <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
+                        <TextBlock Text="✓" FontWeight="Bold"
+                                   Foreground="{DynamicResource Brush.Success.Ink}"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding CycleClosedLabel}"
+                                   Style="{StaticResource Text.Small}"
+                                   Foreground="{DynamicResource Brush.Success.Ink}"
+                                   VerticalAlignment="Center" />
+                        <Button Content="Ver el informe del cierre"
+                                Command="{Binding OpenCycleReportCommand}"
+                                Style="{StaticResource Button.Link}"
+                                Foreground="{DynamicResource Brush.Success.Ink}"
+                                ToolTip="La foto de con qué cerró el ciclo y qué hereda el siguiente."
+                                Visibility="{Binding CanOpenCycleReport, Converter={StaticResource BoolToVisibility}}" />
+                        <Button Content="Descartar"
+                                Command="{Binding DismissCycleCloseCommand}"
+                                Style="{StaticResource Button.Link}"
+                                Foreground="{DynamicResource Brush.Success.Ink}"
+                                ToolTip="Quita el aviso. El informe del cierre sigue en Informes." />
+                    </StackPanel>
                 </Border>
 
-                <Border Grid.Row="2" Padding="20,12">
+                <!-- LA PÁGINA. El relleno lo pone la carcasa —una vez— y no cada vista. -->
+                <Border Grid.Row="3" Padding="{StaticResource Pad.Page}">
                     <ContentControl Content="{Binding Navigation.Current}" />
+                </Border>
+
+                <!-- EL PIE: lo que está corriendo. La cuenta se ha mudado al raíl y el estado del
+                     hub a la miga, así que aquí queda solo el trabajo en marcha, que es lo único
+                     que de verdad hay que poder ver desde cualquier página. -->
+                <Border Grid.Row="4"
+                        Background="{DynamicResource Brush.Surface}"
+                        BorderBrush="{DynamicResource Brush.Line}"
+                        BorderThickness="{StaticResource Border.Top}"
+                        Padding="{StaticResource Pad.Footer}"
+                        Visibility="{Binding HasFooter, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.L}">
+                        <Button Command="{Binding ShowSessionCommand}"
+                                Style="{StaticResource Button.Link}"
+                                Foreground="{DynamicResource Brush.TextMuted}"
+                                ToolTip="Ir a la sesión en vivo"
+                                Visibility="{Binding SessionProgress, Converter={StaticResource NotEmptyToVisibility}}">
+                            <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.XS}">
+                                <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" />
+                                <TextBlock Text="{Binding SessionProgress}"
+                                           Style="{StaticResource Text.Small}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Command="{Binding ShowFixCommand}"
+                                Style="{StaticResource Button.Link}"
+                                Foreground="{DynamicResource Brush.TextMuted}"
+                                ToolTip="Ir al arreglo asistido"
+                                Visibility="{Binding FixProgress, Converter={StaticResource NotEmptyToVisibility}}">
+                            <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.XS}">
+                                <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" />
+                                <TextBlock Text="{Binding FixProgress}"
+                                           Style="{StaticResource Text.Small}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
                 </Border>
             </Grid>
 
             <!-- Avisos efímeros (F5.3 §3): flotan SOBRE la página, caducan a los 8 s y se
-                 descartan con un clic. Ya no son elementos de la barra de estado, que es lo que
-                 hacía que dos «Sesión completada» se quedaran ahí para siempre. -->
+                 descartan con un clic. -->
             <ItemsControl
                 Grid.Column="0"
                 Grid.ColumnSpan="2"
                 ItemsSource="{Binding Toasts}"
                 HorizontalAlignment="Right"
                 VerticalAlignment="Bottom"
-                Margin="0,0,20,12"
+                Margin="{StaticResource Pad.L}"
                 IsHitTestVisible="True">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Button
                             Command="{Binding DataContext.DismissToastCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                             CommandParameter="{Binding}"
-                            Background="Transparent"
-                            BorderThickness="0"
-                            Padding="0"
-                            Margin="0,4,0,0"
-                            Cursor="Hand"
+                            Style="{StaticResource Button.Ghost}"
+                            Padding="{StaticResource Pad.Zero}"
+                            Margin="{StaticResource Pad.XXS}"
                             HorizontalAlignment="Right"
                             ToolTip="Descartar">
-                            <Border Background="#EE2B2B2B" BorderBrush="#33FFFFFF" BorderThickness="1"
-                                    CornerRadius="10" Padding="12,7" MaxWidth="420">
-                                <StackPanel Orientation="Horizontal">
+                            <Border Background="{DynamicResource Brush.Surface2}"
+                                    BorderBrush="{DynamicResource Brush.LineStrong}"
+                                    BorderThickness="{StaticResource Border.Hairline}"
+                                    CornerRadius="{StaticResource Radius.L}"
+                                    Padding="{StaticResource Pad.Notice}"
+                                    MaxWidth="440">
+                                <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
                                     <!-- F6.4: el aviso lo firma la aplicación. Los toasts son
                                          NUESTROS (no los del sistema), así que el icono es el
                                          mismo .ico compilado, a 16 px — el tamaño para el que
                                          existe la variante de silueta. -->
-                                    <Image Width="16" Height="16" Margin="0,0,9,0"
+                                    <Image Width="16" Height="16"
                                            VerticalAlignment="Top"
                                            RenderOptions.BitmapScalingMode="HighQuality">
                                         <Image.Source>
@@ -321,8 +365,10 @@
                                                          DecodePixelWidth="16" DecodePixelHeight="16" />
                                         </Image.Source>
                                     </Image>
-                                    <TextBlock Text="{Binding Text}" FontSize="11" TextWrapping="Wrap"
-                                               Foreground="#F0F0F0" MaxWidth="370" />
+                                    <TextBlock Text="{Binding Text}"
+                                               Style="{StaticResource Text.Small}"
+                                               Foreground="{DynamicResource Brush.Text}"
+                                               MaxWidth="380" />
                                 </StackPanel>
                             </Border>
                         </Button>
@@ -330,87 +376,5 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </Grid>
-
-        <!-- Status bar -->
-        <Border Grid.Row="2" Background="{DynamicResource ApplicationBackgroundBrush}" Padding="14,6">
-            <Grid>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Ellipse Width="12" Height="12" Fill="{Binding SyncHealth, Converter={StaticResource SyncHealthToBrush}}" />
-                    <TextBlock Text="{Binding SyncHealth}" Margin="8,0,0,0" VerticalAlignment="Center" Opacity="0.85" />
-
-                    <!-- R1 §1 — AQUÍ HABÍA UN SEGUNDO GIRO. Un ui:ProgressRing genérico colgado de
-                         IsBusy, justo delante del de la sesión: mientras el arranque sincronizaba
-                         el hub y había una sesión en marcha, la barra enseñaba DOS círculos
-                         girando pegados, uno detrás de otro, delante de «Auditando … · unidad 2/2
-                         · pasada 5». El que sobra es éste: no dice QUÉ está en proceso, mientras
-                         que el de al lado lo dice con su propia línea. Y lo que este contaba —el
-                         hub sincronizando— ya lo cuenta el piloto de sync que tiene a la
-                         izquierda, que además dice en qué estado está y no solo que algo pasa.
-
-                         La regla que queda, y que hay un test que la fija: en la barra de estado,
-                         UN indicador de proceso por cosa en proceso, y ninguno anónimo. -->
-
-                    <!-- Progreso de la sesión: clic → V5. Que se vea desde cualquier página es
-                         justo lo que faltaba (F5.2, Hito 1). -->
-                    <Button
-                        Command="{Binding ShowSessionCommand}"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Padding="6,0"
-                        Margin="14,0,0,0"
-                        Cursor="Hand"
-                        ToolTip="Ir a la sesión en vivo"
-                        Visibility="{Binding SessionProgress, Converter={StaticResource NotEmptyToVisibility}}">
-                        <StackPanel Orientation="Horizontal">
-                            <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,8,0" />
-                            <TextBlock Text="{Binding SessionProgress}" VerticalAlignment="Center" Opacity="0.9" />
-                        </StackPanel>
-                    </Button>
-
-                    <!-- Arreglo asistido en curso (F6.9): mismo sitio y mismo gesto que el de
-                         la auditoría, para que se vea desde cualquier página. -->
-                    <Button
-                        Command="{Binding ShowFixCommand}"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Padding="6,0"
-                        Margin="14,0,0,0"
-                        Cursor="Hand"
-                        ToolTip="Ir al arreglo asistido"
-                        Visibility="{Binding FixProgress, Converter={StaticResource NotEmptyToVisibility}}">
-                        <StackPanel Orientation="Horizontal">
-                            <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="0,0,8,0" />
-                            <TextBlock Text="{Binding FixProgress}" VerticalAlignment="Center" Opacity="0.9" />
-                        </StackPanel>
-                    </Button>
-
-                    <!-- Connected account (D4): click goes to Cuenta. -->
-                    <Button
-                        Command="{Binding ShowAccountCommand}"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Padding="6,0"
-                        Margin="14,0,0,0"
-                        Cursor="Hand"
-                        ToolTip="Cuenta de GitHub">
-                        <StackPanel Orientation="Horizontal">
-                            <Border Width="18" Height="18" CornerRadius="9">
-                                <Border.Background>
-                                    <ImageBrush ImageSource="{Binding AccountAvatarUrl}" Stretch="UniformToFill" />
-                                </Border.Background>
-                            </Border>
-                            <TextBlock Text="{Binding AccountLabel}" Margin="7,0,0,0" VerticalAlignment="Center" Opacity="0.85" />
-                            <TextBlock
-                                Text="⚠"
-                                Foreground="#E0A030"
-                                Margin="6,0,0,0"
-                                VerticalAlignment="Center"
-                                ToolTip="Reconecta tu cuenta de GitHub"
-                                Visibility="{Binding AccountNeedsAttention, Converter={StaticResource BoolToVisibility}}" />
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-            </Grid>
-        </Border>
     </Grid>
 </ui:FluentWindow>

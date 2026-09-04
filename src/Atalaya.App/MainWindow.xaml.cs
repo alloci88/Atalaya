@@ -1,6 +1,7 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
+using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Wpf.Ui.Controls;
 
@@ -51,13 +52,63 @@ public partial class MainWindow : FluentWindow
             _toastTimer.Stop();
         };
         Closing += OnClosing;
+        // El tamaño se guarda al cerrar, no en cada arrastre: escribir el settings.json a cada
+        // píxel de un redimensionado sería cientos de escrituras por gesto.
+        Closed += (_, _) => _viewModel.SaveWindowPlacement(
+            WindowPlacementService.Capture(
+                WindowState,
+                RestoreBounds,
+                new Rect(Left, Top, Width, Height)));
 
         // F5.8 §1: volver al primer plano recalcula el estado de vinculación de la página viva.
         // Es el momento en que el usuario acaba de venir del explorador de archivos, que es donde
         // se mueven y se borran las carpetas de las que el piloto habla.
         Activated += async (_, _) => await _viewModel.OnWindowActivatedAsync();
 
-        FitToScreen();
+        ApplySavedPlacement();
+    }
+
+    /// <summary>
+    /// Coloca la ventana donde estaba (F26 Parte A, D-956). La PRIMERA vez, maximizada: Atalaya se
+    /// desarrolló y se probó en una ventana pequeña, y estrenarla así es empezar por el peor
+    /// tamaño que tiene. Después, lo que el usuario dejara.
+    /// </summary>
+    private void ApplySavedPlacement()
+    {
+        var (maximized, left, top, width, height) =
+            WindowPlacementService.Resolve(_viewModel.SavedWindowPlacement, VirtualScreen());
+
+        Rect area = SystemParameters.WorkArea;
+        Width = StartupSize.Clamp(width, MinWidth, area.Width);
+        Height = StartupSize.Clamp(height, MinHeight, area.Height);
+
+        if (left is not null && top is not null)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Left = left.Value;
+            Top = top.Value;
+        }
+
+        if (maximized)
+        {
+            WindowState = WindowState.Maximized;
+        }
+    }
+
+    /// <summary>
+    /// El raíl se pliega solo cuando la ventana se estrecha (principio 1: reorganizar, no encoger).
+    /// Se mide el ancho de la carcasa —lo que hay debajo de la barra de título— y no el de la
+    /// ventana, porque es el que de verdad se reparten raíl y contenido.
+    /// </summary>
+    private void OnShellSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!e.WidthChanged)
+        {
+            return;
+        }
+
+        double threshold = TryFindResource("Rail.CollapseBelow") is double d ? d : 1120;
+        _viewModel.OnShellWidthChanged(e.NewSize.Width, threshold);
     }
 
     /// <summary>
@@ -75,22 +126,16 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// Recorta el tamaño inicial a lo que de verdad cabe en la pantalla (F5.4 §6).
-    /// <para>
-    /// El ancho por defecto lo fija la barra de filtros de V3, que necesita 1314 px de ventana para
-    /// caber en una línea. Eso pasa de sobra en un monitor normal, pero WPF mide en unidades
-    /// independientes del dispositivo: con la pantalla al 150 %, un 1920 físico son 1280 de
-    /// escritorio, y la ventana abriría más ancha que la pantalla y CENTRADA — es decir, con la
-    /// barra de título a medias y los bordes fuera por los dos lados. Nunca por debajo del mínimo:
-    /// más vale una ventana que se sale un poco que una inutilizable.
-    /// </para>
+    /// El escritorio ENTERO, con todos sus monitores. Es contra esto —y no contra el monitor
+    /// principal— contra lo que se comprueba una posición guardada: una ventana que se cerró en el
+    /// segundo monitor tiene coordenadas perfectamente válidas que no están en el primero (F5.4 §6,
+    /// F26 §A).
     /// </summary>
-    private void FitToScreen()
-    {
-        Rect area = SystemParameters.WorkArea;
-        Width = StartupSize.Clamp(Width, MinWidth, area.Width);
-        Height = StartupSize.Clamp(Height, MinHeight, area.Height);
-    }
+    private static Rect VirtualScreen() => new(
+        SystemParameters.VirtualScreenLeft,
+        SystemParameters.VirtualScreenTop,
+        SystemParameters.VirtualScreenWidth,
+        SystemParameters.VirtualScreenHeight);
 
     /// <summary>
     /// Cerrar con una auditoría corriendo pregunta antes (F5.2, Hito 1).

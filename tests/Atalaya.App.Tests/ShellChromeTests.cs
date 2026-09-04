@@ -70,18 +70,17 @@ public sealed class ShellChromeTests
     [Fact]
     public void The_status_bar_hosts_no_notifications()
     {
-        string xaml = MainWindowXaml();
-        int start = xaml.IndexOf("<!-- Status bar -->", StringComparison.Ordinal);
-        start.Should().BeGreaterThan(0, "la barra de estado sigue estando en la carcasa");
+        Footer().Should().NotContain("{Binding Toasts}",
+            "los avisos son efímeros y flotan sobre la página; colgarlos del pie fue lo que hizo "
+            + "que dos «Sesión completada» se quedaran ahí para siempre");
 
-        string statusBar = xaml[start..];
-        statusBar.Should().NotContain("{Binding Toasts}",
-            "los avisos ya no son elementos de la barra de estado");
-
-        // Y lo estable sí sigue ahí, que es la otra mitad de la regla.
-        statusBar.Should().Contain("{Binding SyncHealth}");
-        statusBar.Should().Contain("{Binding SessionProgress}");
-        statusBar.Should().Contain("{Binding AccountLabel}");
+        // Y lo estable sí sigue en la carcasa, que es la otra mitad de la regla. Desde F26 §A cada
+        // cosa está donde le toca: lo que corre en el pie, el estado del hub en la barra de la
+        // miga —es de la ventana— y la cuenta en el pie del raíl —es quién eres—.
+        string shell = Markup(MainWindowXaml());
+        shell.Should().Contain("{Binding SyncHealth");
+        shell.Should().Contain("{Binding SessionProgress}");
+        shell.Should().Contain("{Binding AccountLabel}");
     }
 
     /// <summary>
@@ -102,28 +101,44 @@ public sealed class ShellChromeTests
     [Fact]
     public void Every_spinner_in_the_status_bar_says_what_it_is_spinning_for()
     {
-        string statusBar = StatusBar();
+        string footer = Footer();
 
         // Cada giro cuelga de un Button que enseña su propia línea: el de la sesión y el del
-        // arreglo asistido. Nada más gira en la barra.
-        var spinners = Regex.Matches(statusBar, "<ui:ProgressRing").Count;
+        // arreglo asistido. Nada más gira en el pie.
+        var spinners = Regex.Matches(footer, "<ui:ProgressRing").Count;
         spinners.Should().Be(2, "la sesión y el arreglo asistido; el genérico de IsBusy se fue");
 
-        Regex.Matches(statusBar, @"<ui:ProgressRing[^>]*?/>\s*<TextBlock Text=""\{Binding (\w+)\}")
+        Regex.Matches(footer, @"<ui:ProgressRing[^>]*?/>\s*<TextBlock Text=""\{Binding (\w+)\}")
             .Select(m => m.Groups[1].Value)
             .Should().BeEquivalentTo(new[] { "SessionProgress", "FixProgress" },
                 "un giro sin texto al lado es un giro que no dice de qué es");
 
-        statusBar.Should().NotContain("{Binding IsBusy",
+        footer.Should().NotContain("{Binding IsBusy",
             "el estado de ocupado de la carcasa ya lo cuenta el piloto de sync, y con más detalle");
     }
 
-    /// <summary>El trozo de XAML de la barra de estado, sin comentarios.</summary>
-    private static string StatusBar()
+    /// <summary>
+    /// El trozo de XAML del PIE, sin comentarios.
+    /// <para>
+    /// Se llamaba «barra de estado» hasta F26 §A. Lo que cambió es el reparto, no la regla: el
+    /// estado del hub subió a la barra de la miga —es de la ventana entera— y la cuenta se mudó al
+    /// pie del raíl —es «quién eres», información de sistema—. Abajo queda solo lo que está
+    /// CORRIENDO, que es lo único que hay que poder ver desde cualquier página, y por eso el pie
+    /// ni siquiera se pinta cuando no corre nada.
+    /// </para>
+    /// </summary>
+    private static string Footer()
     {
         string xaml = MainWindowXaml();
-        int start = xaml.IndexOf("<!-- Status bar -->", StringComparison.Ordinal);
-        start.Should().BeGreaterThan(0, "la barra de estado sigue estando en la carcasa");
-        return Markup(xaml[start..]);
+        int start = xaml.IndexOf("<!-- EL PIE:", StringComparison.Ordinal);
+        start.Should().BeGreaterThan(0, "el pie sigue estando en la carcasa");
+
+        // Hasta los avisos efímeros, que van DESPUÉS y flotan sobre la página: si el corte llegara
+        // al final del fichero, este test se leería a sí mismo al revés — encontraría los toasts
+        // dentro del «pie» y fallaría por la regla que viene a proteger.
+        int end = xaml.IndexOf("<!-- Avisos efímeros", start, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start, "los avisos efímeros siguen declarados después del pie");
+
+        return Markup(xaml[start..end]);
     }
 }

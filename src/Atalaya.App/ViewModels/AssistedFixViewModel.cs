@@ -30,7 +30,7 @@ public sealed record PendingFixRow(FixSnapshotSet Set)
 /// nada (D-085).
 /// </para>
 /// </summary>
-public sealed partial class AssistedFixViewModel : ViewModelBase
+public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
 {
     private readonly LiveFixService _fix;
     private readonly NavigationService? _navigation;
@@ -71,6 +71,17 @@ public sealed partial class AssistedFixViewModel : ViewModelBase
     }
 
     public override string Title => "Arreglo asistido";
+
+    /// <summary>F26 §A.</summary>
+    public override string RailKey => "fix";
+
+    public override bool BelongsToApp => true;
+
+    /// <inheritdoc />
+    public string AppSlug => _fix.Slug;
+
+    /// <inheritdoc />
+    public string AppLabel => _fix.AppName is { Length: > 0 } ? _fix.AppName : _fix.Slug;
 
     /// <summary>El estado real, enlazado directamente por la vista.</summary>
     public LiveFixService Fix => _fix;

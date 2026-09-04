@@ -86,6 +86,13 @@ public sealed partial class OnboardingViewModel : ViewModelBase
     public override string Title => "Nueva aplicación";
 
     /// <summary>
+    /// F26 §A — el alta es una ACCIÓN del portafolio, no un lugar propio: por eso sale del raíl
+    /// (ya era el botón primario de Portafolio) y, mientras dura, el raíl sigue señalando
+    /// Portafolio, que es de donde has salido y adonde vuelves.
+    /// </summary>
+    public override string RailKey => "portfolio";
+
+    /// <summary>
     /// El nombre de la aplicación. Desde R3 NO se escribe: se deriva del repositorio elegido, y la
     /// vista lo enseña como etiqueta. Un nombre distinto del repositorio no servía para nada y era
     /// una tercera cosa que se podía teclear mal.

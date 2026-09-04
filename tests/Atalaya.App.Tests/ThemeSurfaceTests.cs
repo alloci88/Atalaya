@@ -185,9 +185,12 @@ public sealed class ThemeSurfaceTests : IDisposable
     [Fact]
     public void El_distintivo_tiene_su_color_y_su_nombre_registrados()
     {
-        string app = File.ReadAllText(Source("src/Atalaya.App/App.xaml"));
+        // F26 §A: los converters salieron de `App.xaml` a `Themes/Converters.xaml`, para que los
+        // estilos del sistema —que son un diccionario fusionado— puedan pedirlos. Siguen
+        // declarados una sola vez; lo que cambia es en qué fichero.
+        string converters = File.ReadAllText(Source("src/Atalaya.App/Themes/Converters.xaml"));
 
-        app.Should().Contain("x:Key=\"ThemeToBrush\"").And.Contain("x:Key=\"ThemeToLabel\"");
+        converters.Should().Contain("x:Key=\"ThemeToBrush\"").And.Contain("x:Key=\"ThemeToLabel\"");
     }
 
     private static string Source(string relative)

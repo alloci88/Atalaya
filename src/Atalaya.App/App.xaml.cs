@@ -239,6 +239,9 @@ public partial class App : Application
 
         services.AddSingleton<HubContext>();
         services.AddSingleton<NavigationService>();
+        // F26 §A — en qué aplicación estás. Singleton porque es memoria compartida de la ventana:
+        // si cada vista tuviera la suya, el raíl volvería a no saber a qué inventario llevar.
+        services.AddSingleton<ActiveApp>();
         services.AddSingleton(sp => new MachineConfigStore(paths.MachinesJson));
         services.AddSingleton<InventoryScanner>();
         // F7: el escaneo de directivas es un recorrido distinto del árbol, con su propio catálogo.

@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Windows.Documents;
@@ -154,6 +154,9 @@ public sealed partial class ReportsViewModel : ViewModelBase
     }
 
     public override string Title => "Informes";
+
+    /// <summary>F26 §A.</summary>
+    public override string RailKey => "reports";
 
     // ---------- Filtros ----------
 

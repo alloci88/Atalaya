@@ -53,8 +53,13 @@ public sealed partial class MainViewModel : ObservableObject
         UpdateCheckService? updates = null,
         SelfUpdateService? selfUpdate = null,
         CycleConfigService? cycleConfig = null,
-        CycleConfigFlow? configFlow = null)
+        CycleConfigFlow? configFlow = null,
+        ActiveApp? activeApp = null)
     {
+        // F26 §A: opcional como los demás de esta cola, para que los tests de la carcasa puedan
+        // construirla sin montar el contenedor. Cuando falta se crea uno propio: el raíl sigue
+        // funcionando, simplemente nadie más escribe en él.
+        ActiveApplication = activeApp ?? new ActiveApp();
         _cycleConfig = cycleConfig;
         _configFlow = configFlow;
         _selfUpdate = selfUpdate;
@@ -89,9 +94,19 @@ public sealed partial class MainViewModel : ObservableObject
         // del estado, que es lo que siempre se puede volver a preguntar.
         SyncSession();
         SyncFix();
+
+        // F26 §A — el raíl y la miga se derivan de dónde estás, así que se rehacen en cada
+        // navegación. Suscribirse aquí (y no que cada comando lo llame) es lo que garantiza que
+        // NINGUNA forma de llegar a una página se olvide de encender su entrada: también las que
+        // navegan desde dentro de otra vista, que son la mayoría.
+        Navigation.Navigated += (_, _) => RefreshShell();
+        RefreshShell();
     }
 
     public NavigationService Navigation { get; }
+
+    /// <summary>En qué aplicación estás. La comparte todo el que navega dentro de una (F26 §A).</summary>
+    public ActiveApp ActiveApplication { get; }
 
     /// <summary>
     /// Avisos EFÍMEROS (F5.3 §3). No son elementos de la barra de estado: caducan solos y se
@@ -135,6 +150,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>Línea de la barra inferior: «Auditando app · unidad 3/10 · pasada 2».</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFooter))]
     private string _sessionProgress = string.Empty;
 
     /// <summary>La sesión sigue viva: cerrar la app debe preguntar antes (Hito 1).</summary>
@@ -157,6 +173,7 @@ public sealed partial class MainViewModel : ObservableObject
     private string _fixNavLabel = "Arreglo asistido";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFooter))]
     private string _fixProgress = string.Empty;
 
     /// <summary>
@@ -170,6 +187,20 @@ public sealed partial class MainViewModel : ObservableObject
     public void StopFix() => _fix.Stop();
 
     public int PollingSeconds => Math.Max(SettingsLimits.MinPollingSeconds, _settings.Current.PollingSeconds);
+
+    /// <summary>Dónde estaba la ventana la última vez (F26 §A, D-956).</summary>
+    public WindowPlacement SavedWindowPlacement => _settings.Current.Window;
+
+    /// <summary>
+    /// Apunta dónde ha quedado la ventana. Se llama UNA vez, al cerrar; guardar en cada
+    /// redimensionado sería escribir el fichero de ajustes cientos de veces por gesto.
+    /// </summary>
+    public void SaveWindowPlacement(WindowPlacement placement)
+    {
+        var settings = _settings.Current;
+        settings.Window = placement;
+        _settings.Save(settings);
+    }
 
     /// <summary>
     /// First run (D4): with no account we land straight on the welcome = the Cuenta page in its
@@ -276,6 +307,10 @@ public sealed partial class MainViewModel : ObservableObject
             ? "Sesión en vivo"
             : _live.HasFailed ? "Sesión fallida" : "Última sesión";
         SessionProgress = _live.ProgressLine;
+        // F26 §A: el raíl enseña la sesión, así que cambia con ella. VA AL FINAL: el raíl copia el
+        // rótulo y el estado en su entrada, así que rehacerlo antes de haberlos calculado lo
+        // dejaría con los de la vez anterior.
+        RefreshShell();
         // F11: una sesión que arranca retira el botón de actualizar, y una que termina lo
         // devuelve. Colgarlo del mismo evento que ya mueve el rail evita que el botón se quede
         // puesto para que alguien lo pulse a mitad de una auditoría pagada.
@@ -425,6 +460,8 @@ public sealed partial class MainViewModel : ObservableObject
             ? "Arreglo asistido"
             : _fix.HasFailed ? "Arreglo fallido" : "Último arreglo";
         FixProgress = _fix.ProgressLine;
+        // F26 §A: y el arreglo, igual — también al final, y por lo mismo.
+        RefreshShell();
         RefreshUpdateOffer();
     });
 
@@ -746,7 +783,7 @@ public sealed partial class MainViewModel : ObservableObject
     private Task ShowPortfolio() => Navigation.NavigateToAsync<PortfolioViewModel>();
 
     [RelayCommand]
-    private Task ShowFindings() => Navigation.NavigateToAsync<FindingsViewModel>(vm => vm.SetApp(null));
+    private Task ShowFindings() => Navigation.NavigateOrResumeAsync<FindingsViewModel>();
 
     [RelayCommand]
     private Task ShowMetrics() => Navigation.NavigateToAsync<MetricsViewModel>();

@@ -223,7 +223,7 @@ public sealed partial class FindingGroupHeader : FindingsListItem, ICollapsibleG
 /// eso vive en V4 (<see cref="FindingDetailViewModel"/>), donde la acción tiene contexto y autor.
 /// V3 es buscar, filtrar, ordenar y abrir.
 /// </summary>
-public sealed partial class FindingsViewModel : ViewModelBase
+public sealed partial class FindingsViewModel : ViewModelBase, IAppScoped
 {
     /// <summary>La opción neutra del combo de aplicación. Es el valor inicial.</summary>
     public static readonly AppFilterOption AllApps = new(null, "Todas");
@@ -290,6 +290,22 @@ public sealed partial class FindingsViewModel : ViewModelBase
     }
 
     public override string Title => "Hallazgos";
+
+    /// <summary>F26 §A.</summary>
+    public override string RailKey => "findings";
+
+    /// <summary>
+    /// Los hallazgos son de una aplicación cuando el filtro lo está. Con «todas» seleccionado la
+    /// vista es de portafolio y la miga se queda en dos eslabones, que es lo correcto: no estás
+    /// dentro de ninguna.
+    /// </summary>
+    public override bool BelongsToApp => SelectedApp?.Slug is { Length: > 0 };
+
+    /// <inheritdoc />
+    public string AppSlug => SelectedApp?.Slug ?? string.Empty;
+
+    /// <inheritdoc />
+    public string AppLabel => SelectedApp?.Label ?? string.Empty;
 
     /// <summary>Lo que pinta la lista: cabeceras y filas intercaladas, ya plegadas.</summary>
     public ObservableCollection<FindingsListItem> Items { get; } = new();

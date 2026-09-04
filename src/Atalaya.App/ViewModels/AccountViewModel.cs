@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Windows;
 using Atalaya.App.Services;
 using Atalaya.Storage.Sync;
@@ -55,6 +55,9 @@ public sealed partial class AccountViewModel : ViewModelBase
     }
 
     public override string Title => "Cuenta";
+
+    /// <summary>F26 §A.</summary>
+    public override string RailKey => "account";
 
     /// <summary>The four live check rows, bound directly.</summary>
     public ConnectionChecker Checker { get; }

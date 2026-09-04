@@ -141,6 +141,12 @@ public sealed class AppSettings
     /// <summary>"dark" or "light".</summary>
     public string Theme { get; set; } = "dark";
 
+    /// <summary>
+    /// Dónde y cómo estaba la ventana la última vez (F26 Parte A, D-956). Nunca viaja al hub: el
+    /// tamaño de una ventana es de ESTA máquina y de este monitor.
+    /// </summary>
+    public WindowPlacement Window { get; set; } = new();
+
     public int PollingSeconds { get; set; } = 60;
 
     /// <summary>

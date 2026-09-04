@@ -168,6 +168,42 @@ internal static class TestFactory
     public static RepositoryCatalog OfflineCatalog(HubContext hub, AppPaths paths)
         => new(Account(paths), new GitHubApiClient(new System.Net.Http.HttpClient()), new DeployConfig(), hub);
 
+    /// <summary>
+    /// El Portafolio con lo mínimo. Existe desde F26 §A: la regla de que salir al portafolio deja
+    /// de haber «aplicación activa» solo se puede comprobar navegando al portafolio de verdad.
+    /// </summary>
+    public static ViewModels.PortfolioViewModel Portfolio(
+        HubContext hub, AppPaths paths, NavigationService navigation, SettingsService? settings = null)
+    {
+        settings ??= Settings(paths);
+        var machines = new MachineConfigStore(paths.MachinesJson);
+        var openSession = new OpenSessionStore(paths);
+        var agent = new FakeCopilotAgent();
+        var live = new LiveSessionService(
+            () => new SessionCoordinator(
+                hub, new FindingIngestionService(hub, new UlidFactory(SystemClock.Instance)),
+                new ReconciliationService(hub), machines, new UlidFactory(SystemClock.Instance), agent, settings),
+            agent, openSession);
+
+        return new ViewModels.PortfolioViewModel(
+            new PortfolioQuery(hub.Store),
+            navigation,
+            new AppDeletionService(hub, machines, openSession),
+            new NeverConfirms(),
+            live,
+            hub,
+            new ToastCenter(),
+            Links(hub, paths),
+            LinkFlow(hub, paths),
+            new DriftQuery(hub));
+    }
+
+    /// <summary>Un confirmador que siempre dice que no: los tests que lo reciben no borran nada.</summary>
+    private sealed class NeverConfirms : IDeleteAppConfirmer
+    {
+        public bool Confirm(DeleteAppConfirmation confirmation) => false;
+    }
+
     /// <summary>El panel de métricas (F5.9) sin nada que abra una ventana ni un fichero.</summary>
     public static MetricsViewModel Metrics(
         HubContext hub,
@@ -201,7 +237,8 @@ internal static class TestFactory
     /// </summary>
     public static MainViewModel Shell(
         AppPaths paths, HubContext hub, ToastCenter? toasts = null, UpdateCheckService? updates = null,
-        SettingsService? settings = null, CycleConfigService? cycleConfig = null, CycleConfigFlow? configFlow = null)
+        SettingsService? settings = null, CycleConfigService? cycleConfig = null, CycleConfigFlow? configFlow = null,
+        NavigationService? navigation = null, ActiveApp? activeApp = null)
     {
         settings ??= Settings(paths);
         var ulids = new UlidFactory(SystemClock.Instance);
@@ -222,7 +259,7 @@ internal static class TestFactory
             new FixSnapshotStore(paths), new AssistedFixLauncher(settings, Links(hub, paths), machines, busy), busy);
 
         return new MainViewModel(
-            new NavigationService(new EmptyServiceProvider()),
+            navigation ?? new NavigationService(new EmptyServiceProvider()),
             hub,
             settings,
             Account(paths),
@@ -233,7 +270,8 @@ internal static class TestFactory
             center,
             updates,
             cycleConfig: cycleConfig,
-            configFlow: configFlow);
+            configFlow: configFlow,
+            activeApp: activeApp);
     }
 
     /// <summary>
