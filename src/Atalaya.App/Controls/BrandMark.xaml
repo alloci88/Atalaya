@@ -1,4 +1,4 @@
-<UserControl
+﻿<UserControl
     x:Class="Atalaya.App.Controls.BrandMark"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -16,8 +16,8 @@
         y desaparece; el día que llegue la versión en negativo, tampoco hará falta en oscuro.
     -->
     <Border x:Name="Plate"
-            CornerRadius="8"
-            Padding="16,12"
+            CornerRadius="{StaticResource Radius.L}"
+            Padding="{StaticResource Pad.M}"
             HorizontalAlignment="Left"
             Background="Transparent">
         <Image x:Name="Logo"

@@ -8,40 +8,23 @@
     xmlns:views="clr-namespace:Atalaya.App.Views">
     <Application.Resources>
         <ResourceDictionary>
+            <!-- EL ORDEN NO ES DECORATIVO (F26 Parte A, D-945):
+                   1. WPF-UI pone sus colores y sus plantillas de fábrica.
+                   2. `Tokens` añade la escala de tamaños y espacios, que no depende del tema.
+                   3. La PALETA va después de WPF-UI a propósito: parte de su trabajo es reescribir
+                      las claves de la librería para que sus controles se tiñan con los nuestros.
+                      `ThemeService` sustituye ESTE puesto al cambiar de tema, sin moverlo de sitio.
+                   4. `Styles` va el último porque construye sobre las tres anteriores.
+                 Aquí se monta la oscura porque es el tema de fábrica; el arranque aplica la que
+                 diga el ajuste antes de enseñar ninguna ventana. -->
             <ResourceDictionary.MergedDictionaries>
                 <ui:ThemesDictionary Theme="Dark" />
                 <ui:ControlsDictionary />
+                <ResourceDictionary Source="pack://application:,,,/Themes/Converters.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/Themes/Tokens.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/Themes/Palette.Dark.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/Themes/Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
-
-            <local:SyncHealthToBrushConverter x:Key="SyncHealthToBrush" />
-            <local:CloneLinkStateToBrushConverter x:Key="CloneLinkStateToBrush" />
-            <local:SeverityToBrushConverter x:Key="SeverityToBrush" />
-            <local:ThemeToBrushConverter x:Key="ThemeToBrush" />
-            <local:ThemeToLabelConverter x:Key="ThemeToLabel" />
-            <local:DashedToArrayConverter x:Key="DashedToArray" />
-            <local:SeverityToLabelConverter x:Key="SeverityToLabel" />
-            <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
-            <local:NotEmptyToVisibilityConverter x:Key="NotEmptyToVisibility" />
-            <local:ProgressToPercentConverter x:Key="ProgressToPercent" />
-            <local:CheckStateToGlyphConverter x:Key="CheckStateToGlyph" />
-            <local:CheckStateToBrushConverter x:Key="CheckStateToBrush" />
-            <local:ActivityKindToWeightConverter x:Key="ActivityKindToWeight" />
-            <local:UnitRunStateToBrushConverter x:Key="UnitRunStateToBrush" />
-            <local:SeverityToVisibilityConverter x:Key="SeverityToVisibility" />
-            <local:WarningToBrushConverter x:Key="WarningToBrush" />
-            <local:FindingStatusToBrushConverter x:Key="FindingStatusToBrush" />
-            <local:FindingStatusToFillConverter x:Key="FindingStatusToFill" />
-            <local:FindingEventToBrushConverter x:Key="FindingEventToBrush" />
-            <local:FixVoiceToBrushConverter x:Key="FixVoiceToBrush" />
-            <local:FixVoiceToFillConverter x:Key="FixVoiceToFill" />
-            <local:DiffKindToBrushConverter x:Key="DiffKindToBrush" />
-            <local:DiffKindToFillConverter x:Key="DiffKindToFill" />
-            <local:SelectedTabToFillConverter x:Key="SelectedTabToFill" />
-            <local:QuestionChoicePairConverter x:Key="QuestionChoicePair" />
-            <local:AllTrueToVisibilityConverter x:Key="AllTrueToVisibility" />
-            <local:InverseBoolConverter x:Key="InverseBool" />
-            <local:MiddleEllipsisConverter x:Key="MiddleEllipsis" />
-            <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
 
             <Style x:Key="LinkButton" TargetType="Button">
                 <Setter Property="Background" Value="Transparent" />

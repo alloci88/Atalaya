@@ -1,0 +1,45 @@
+﻿<!--
+    LOS CONVERSORES, en su propio diccionario (F26 Parte A).
+
+    Estaban sueltos en `App.xaml`, después de los diccionarios fusionados. Ahí funcionaban para las
+    vistas —que son hijas de la aplicación— pero NO para `Styles.xaml`: un diccionario fusionado no
+    ve los recursos del que lo fusiona, así que el estilo del raíl no podía pedir el converter de
+    visibilidad que necesita su contador. Sacándolos aquí y fusionándolos ANTES, los ve todo el
+    mundo y siguen estando escritos una sola vez.
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:Atalaya.App">
+
+    <local:SyncHealthToBrushConverter x:Key="SyncHealthToBrush" />
+    <local:CloneLinkStateToBrushConverter x:Key="CloneLinkStateToBrush" />
+    <local:SeverityToBrushConverter x:Key="SeverityToBrush" />
+    <local:ThemeToBrushConverter x:Key="ThemeToBrush" />
+    <local:ThemeToLabelConverter x:Key="ThemeToLabel" />
+    <local:DashedToArrayConverter x:Key="DashedToArray" />
+    <local:SeverityToLabelConverter x:Key="SeverityToLabel" />
+    <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
+    <local:NotEmptyToVisibilityConverter x:Key="NotEmptyToVisibility" />
+    <local:ProgressToPercentConverter x:Key="ProgressToPercent" />
+    <local:CheckStateToGlyphConverter x:Key="CheckStateToGlyph" />
+    <local:CheckStateToBrushConverter x:Key="CheckStateToBrush" />
+    <local:ActivityKindToWeightConverter x:Key="ActivityKindToWeight" />
+    <local:UnitRunStateToBrushConverter x:Key="UnitRunStateToBrush" />
+    <local:SeverityToVisibilityConverter x:Key="SeverityToVisibility" />
+    <local:WarningToBrushConverter x:Key="WarningToBrush" />
+    <local:FindingStatusToBrushConverter x:Key="FindingStatusToBrush" />
+    <local:FindingStatusToFillConverter x:Key="FindingStatusToFill" />
+    <local:FindingEventToBrushConverter x:Key="FindingEventToBrush" />
+    <local:FixVoiceToBrushConverter x:Key="FixVoiceToBrush" />
+    <local:FixVoiceToFillConverter x:Key="FixVoiceToFill" />
+    <local:DiffKindToBrushConverter x:Key="DiffKindToBrush" />
+    <local:DiffKindToFillConverter x:Key="DiffKindToFill" />
+    <local:SelectedTabToFillConverter x:Key="SelectedTabToFill" />
+    <local:QuestionChoicePairConverter x:Key="QuestionChoicePair" />
+    <local:AllTrueToVisibilityConverter x:Key="AllTrueToVisibility" />
+    <local:InverseBoolConverter x:Key="InverseBool" />
+    <local:MiddleEllipsisConverter x:Key="MiddleEllipsis" />
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+
+</ResourceDictionary>

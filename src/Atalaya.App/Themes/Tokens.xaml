@@ -1,0 +1,123 @@
+﻿<!--
+    TOKENS — la escala tipográfica y la de espaciado, escritas UNA vez (F26 Parte A, D-944/D-946).
+
+    De dónde salen: `docs/design/atalaya-mockup-A.html`, la maqueta que aprobó el usuario. Los
+    números de aquí son los de sus variables CSS, uno a uno, para que la aplicación y la maqueta no
+    puedan separarse sin que alguien lo note.
+
+    Por qué existe este fichero: hasta F26 cada vista escribía sus tamaños a mano —285 `FontSize` y
+    unos 700 `Margin`/`Padding` repartidos por 25 XAML—, y de ahí venía el «las fuentes son
+    pequeñas y la información se lee mal»: no había un tamaño pequeño, había veintitantos, y el más
+    pequeño ganaba en las pantallas que más texto tenían. Un tamaño que se escribe en un sitio se
+    corrige en un sitio.
+
+    Lo que NO va aquí: colores. Estos tokens son los mismos en los dos temas y por eso viven fuera
+    de la paleta —cambiar de tema no cambia lo que mide una cosa, solo de qué color es—.
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+
+    <!-- ============================================================ Tipografía
+
+         Base 14 para el texto de trabajo. Antes la base real era 12-13 heredada del tema de
+         WPF-UI, con ayudas a 11: por debajo de 13 el texto de ayuda dejó de leerse, que es
+         literalmente lo que reportó quien usa Atalaya. 12 se queda como MÍNIMO ABSOLUTO y solo
+         para metadatos (rutas, sellos de tiempo, contadores); nada que haya que leer para decidir
+         algo se escribe a 12.
+    -->
+    <sys:Double x:Key="FontSize.Meta">12</sys:Double>
+    <sys:Double x:Key="FontSize.Small">13</sys:Double>
+    <sys:Double x:Key="FontSize.Body">14</sys:Double>
+    <sys:Double x:Key="FontSize.Lead">16</sys:Double>
+    <sys:Double x:Key="FontSize.H3">20</sys:Double>
+    <sys:Double x:Key="FontSize.H2">24</sys:Double>
+    <sys:Double x:Key="FontSize.H1">28</sys:Double>
+
+    <!-- Interlineado 1.4 sobre la base. WPF no tiene «line-height relativo»: `LineHeight` es
+         absoluto, así que se declara ya multiplicado para cada tamaño que lo necesita. -->
+    <sys:Double x:Key="LineHeight.Meta">17</sys:Double>
+    <sys:Double x:Key="LineHeight.Small">18</sys:Double>
+    <sys:Double x:Key="LineHeight.Body">20</sys:Double>
+    <sys:Double x:Key="LineHeight.Lead">22</sys:Double>
+
+    <FontFamily x:Key="Font.Ui">Segoe UI Variable Text, Segoe UI</FontFamily>
+    <FontFamily x:Key="Font.Mono">Cascadia Code, Consolas, Courier New</FontFamily>
+
+    <!-- ============================================================ Espaciado
+
+         Múltiplos de 4, y solo estos siete. La regla no es estética: con una escala cerrada, dos
+         cosas separadas por «un hueco pequeño» tienen EL MISMO hueco en las dos vistas donde
+         aparecen, y una pantalla deja de verse cosida a mano.
+    -->
+    <sys:Double x:Key="Space.XXS">4</sys:Double>
+    <sys:Double x:Key="Space.XS">8</sys:Double>
+    <sys:Double x:Key="Space.S">12</sys:Double>
+    <sys:Double x:Key="Space.M">16</sys:Double>
+    <sys:Double x:Key="Space.L">24</sys:Double>
+    <sys:Double x:Key="Space.XL">32</sys:Double>
+    <sys:Double x:Key="Space.XXL">48</sys:Double>
+
+    <!-- Los mismos siete como `Thickness` uniforme, que es lo que consumen Margin y Padding. -->
+    <Thickness x:Key="Pad.XXS">4</Thickness>
+    <Thickness x:Key="Pad.XS">8</Thickness>
+    <Thickness x:Key="Pad.S">12</Thickness>
+    <Thickness x:Key="Pad.M">16</Thickness>
+    <Thickness x:Key="Pad.L">24</Thickness>
+    <Thickness x:Key="Pad.XL">32</Thickness>
+    <Thickness x:Key="Pad.Zero">0</Thickness>
+
+    <!-- Y los asimétricos, con NOMBRE DE INTENCIÓN en vez de con sus números. «El relleno de un
+         botón» se puede reajustar una vez para todos los botones; `12,8` repetido cuarenta veces,
+         no. Cada uno se declara aquí cuando una pieza del sistema lo necesita — no se inventan
+         por si acaso. -->
+    <Thickness x:Key="Pad.Button">16,7</Thickness>
+    <Thickness x:Key="Pad.ButtonSmall">12,5</Thickness>
+    <Thickness x:Key="Pad.Field">12,7</Thickness>
+    <Thickness x:Key="Pad.Pill">8,2</Thickness>
+    <Thickness x:Key="Pad.Row">16,12</Thickness>
+    <Thickness x:Key="Pad.Card">20</Thickness>
+    <Thickness x:Key="Pad.Page">32,24</Thickness>
+    <Thickness x:Key="Pad.Rail">12,16</Thickness>
+    <Thickness x:Key="Pad.RailItem">12,8</Thickness>
+    <Thickness x:Key="Pad.RailGroup">12,12,12,4</Thickness>
+    <Thickness x:Key="Pad.RailItemGap">0,0,0,2</Thickness>
+    <Thickness x:Key="Pad.TopBar">32,10</Thickness>
+    <Thickness x:Key="Pad.Footer">32,8</Thickness>
+    <Thickness x:Key="Pad.Strip">32,6</Thickness>
+    <Thickness x:Key="Pad.Notice">16,12</Thickness>
+
+    <!-- ============================================================ Formas -->
+    <CornerRadius x:Key="Radius.S">4</CornerRadius>
+    <CornerRadius x:Key="Radius.M">6</CornerRadius>
+    <CornerRadius x:Key="Radius.L">10</CornerRadius>
+    <CornerRadius x:Key="Radius.Pill">999</CornerRadius>
+
+    <Thickness x:Key="Border.Hairline">1</Thickness>
+    <Thickness x:Key="Border.Bottom">0,0,0,1</Thickness>
+    <Thickness x:Key="Border.Top">0,1,0,0</Thickness>
+    <Thickness x:Key="Border.Right">0,0,1,0</Thickness>
+    <Thickness x:Key="Border.Left">0,0,0,0</Thickness>
+
+    <!-- ============================================================ Dimensiones de la carcasa
+
+         `Content.MaxWidth` es el principio 2 hecho número: el contenido de lectura no se estira
+         hasta el borde de un monitor de 27" —a 2000 px una línea de texto deja de poder seguirse—,
+         se centra en una columna que sí se lee. Los paneles de datos densos (tablas de inventario,
+         la sesión en vivo) declaran el suyo y pueden ir más anchos.
+    -->
+    <sys:Double x:Key="Rail.Width">232</sys:Double>
+    <sys:Double x:Key="Rail.CollapsedWidth">60</sys:Double>
+    <sys:Double x:Key="Content.MaxWidth">1480</sys:Double>
+    <sys:Double x:Key="Control.MinHeight">34</sys:Double>
+    <sys:Double x:Key="Icon.Size">18</sys:Double>
+    <sys:Double x:Key="Icon.Stroke">1.6</sys:Double>
+
+    <!-- El ancho por debajo del cual el raíl se pliega a solo iconos. 1120 es el punto en el que,
+         con el raíl abierto, una vista de lista + detalle ya no puede dar al detalle sus 420 px
+         mínimos sin robárselos a la lista. Plegar el raíl devuelve 172 px, que es justo lo que
+         hace falta: reorganizar en vez de encoger (principio 1). -->
+    <sys:Double x:Key="Rail.CollapseBelow">1120</sys:Double>
+
+</ResourceDictionary>

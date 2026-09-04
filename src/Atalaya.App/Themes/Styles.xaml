@@ -1,0 +1,449 @@
+﻿<!--
+    ESTILOS BASE (F26 Parte A, D-949).
+
+    Las piezas del sistema, construidas SOBRE los tokens y la paleta. Ninguna escribe un número ni
+    un color: todo sale de `Tokens.xaml` y de la paleta que esté puesta, que es lo que hace que
+    cambiar de tema cambie la aplicación entera y no solo el fondo.
+
+    POR QUÉ PLANTILLAS PROPIAS Y NO LAS DE WPF-UI. Los botones de la librería traen su relleno, su
+    radio y sus colores de acento; con ellos, «el botón primario» de Atalaya sería el que WPF-UI
+    considere primario y no el que dice la paleta. Se escriben aquí las cuatro variantes que el
+    sistema reconoce —primario, secundario, peligro y enlace— y ninguna más: la regla de un solo
+    primario por vista (principio 4) no se puede sostener si hay siete formas de parecer el botón
+    importante.
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+    xmlns:c="clr-namespace:Atalaya.App.Controls">
+
+    <!-- ================================================================ Tipografía por defecto
+
+         La base de 14 se pone AQUÍ, en el estilo implícito, y no vista por vista. Es la mitad del
+         arreglo de «los elementos y las fuentes son demasiado pequeños»: sin esto, cada TextBlock
+         que no diga nada hereda el 12-13 del tema de la librería.
+    -->
+    <Style TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}" />
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
+        <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
+    </Style>
+    <!-- OJO: el estilo implícito NO toca `Foreground`. Un estilo implícito de TextBlock alcanza
+         también a los TextBlock que viven DENTRO de las plantillas de los controles —incluido el
+         del contenido de un botón—, así que fijar ahí el color del texto pintaría de gris la
+         etiqueta blanca de un botón primario. El color se hereda del control, que es de donde
+         tiene que venir; los estilos con nombre de abajo sí lo declaran, porque ésos se piden a
+         mano y saben sobre qué van. -->
+
+    <Style x:Key="Text.Default" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+    </Style>
+
+    <Style x:Key="Text.H1" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.H1}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style x:Key="Text.H2" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.H2}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style x:Key="Text.H3" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.H3}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style x:Key="Text.Lead" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Lead}" />
+        <Setter Property="LineHeight" Value="{StaticResource LineHeight.Lead}" />
+    </Style>
+
+    <!-- El texto de trabajo largo: el interlineado 1.4 se pone donde hay párrafos, no en todo
+         TextBlock, porque una etiqueta de una línea con LineHeight forzado desalinea su fila. -->
+    <Style x:Key="Text.Body" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="LineHeight" Value="{StaticResource LineHeight.Body}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- Secundario: la ayuda de un ajuste, el subtítulo de una tarjeta. 13, NUNCA 11. -->
+    <Style x:Key="Text.Small" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Small}" />
+        <Setter Property="LineHeight" Value="{StaticResource LineHeight.Small}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- Metadatos, y solo metadatos: rutas, sellos de tiempo, contadores. 12 es el suelo. -->
+    <Style x:Key="Text.Meta" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Meta}" />
+        <Setter Property="LineHeight" Value="{StaticResource LineHeight.Meta}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextFaint}" />
+    </Style>
+
+    <Style x:Key="Text.Mono" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Mono}" />
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Small}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+    </Style>
+
+    <!-- ================================================================ Botones
+
+         Cuatro variantes con significado y nada más. `Button.Secondary` es el estilo implícito:
+         un botón que no declara nada es secundario, que es lo que debe ser por defecto.
+    -->
+    <Style x:Key="Button.Secondary" TargetType="Button">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}" />
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
+        <Setter Property="Padding" Value="{StaticResource Pad.Button}" />
+        <Setter Property="MinHeight" Value="{StaticResource Control.MinHeight}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.LineStrong}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Border.Hairline}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Chrome"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{StaticResource Radius.M}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                            TextElement.Foreground="{TemplateBinding Foreground}"
+                            TextElement.FontSize="{TemplateBinding FontSize}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Surface2}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.8" />
+                        </Trigger>
+                        <!-- Deshabilitado se ve deshabilitado, pero SE SIGUE LEYENDO. El 0.4 de
+                             fábrica dejaba la etiqueta por debajo de cualquier contraste útil, y un
+                             botón cuya razón hay que adivinar es peor que uno que no está. La razón
+                             se escribe AL LADO (`Reason.Chip`), no en un tooltip. -->
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.65" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="Button" BasedOn="{StaticResource Button.Secondary}" />
+
+    <!-- UNO por vista. Es la acción que la vista existe para ofrecer. -->
+    <Style x:Key="Button.Primary" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
+        <Setter Property="Background" Value="{DynamicResource Brush.Primary.Fill}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Primary.OnFill}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary.Fill}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- Verde: la acción que ADELANTA trabajo (auditar, arreglar). Se separa del primario azul
+         porque en Atalaya conviven las dos: «Auditar selección» es la principal de Inventario y
+         «Arreglo asistido» es la que hace avanzar un hallazgo. -->
+    <Style x:Key="Button.Success" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
+        <Setter Property="Background" Value="{DynamicResource Brush.Success.Fill}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Success.OnFill}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Success.Fill}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- Peligro: perfilado, no relleno. Un rojo macizo en una barra de acciones atrae el ojo antes
+         que el primario, y lo que hay que pulsar no es «Cerrar como falso positivo». Relleno solo
+         cuando destruir ES la acción de la vista (el «Detener» de la sesión). -->
+    <Style x:Key="Button.Danger" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Danger.Ink}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Danger.Ink}" />
+    </Style>
+
+    <Style x:Key="Button.DangerSolid" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
+        <Setter Property="Background" Value="{DynamicResource Brush.Danger.Fill}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Danger.OnFill}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Danger.Fill}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style x:Key="Button.Link" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="{StaticResource Pad.Zero}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Primary.Ink}" />
+        <Setter Property="Padding" Value="{StaticResource Pad.XXS}" />
+        <Setter Property="MinHeight" Value="0" />
+    </Style>
+
+    <!-- Sin fondo ni borde: el «…» de una tarjeta, la flecha de volver, un icono en una fila. -->
+    <Style x:Key="Button.Ghost" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+        <Setter Property="Padding" Value="{StaticResource Pad.XS}" />
+    </Style>
+
+    <!-- ================================================================ Superficies -->
+
+    <Style x:Key="Card" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Border.Hairline}" />
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.L}" />
+        <Setter Property="Padding" Value="{StaticResource Pad.Card}" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <!-- Igual que la tarjeta pero SIN relleno: para lo que trae su propio contenido a sangre —una
+         lista de filas, una tabla— y no puede llevar aire por dentro del borde. -->
+    <Style x:Key="Panel" TargetType="Border" BasedOn="{StaticResource Card}">
+        <Setter Property="Padding" Value="{StaticResource Pad.Zero}" />
+    </Style>
+
+    <!-- ================================================================ Pastillas
+
+         La gravedad se ve DESDE LEJOS (principio 4): fondo teñido, tinta del color, 12 px en
+         seminegrita y un ancho mínimo para que las cuatro se alineen en columna.
+    -->
+    <Style x:Key="Pill" TargetType="Border">
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.S}" />
+        <Setter Property="Padding" Value="{StaticResource Pad.Pill}" />
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface2}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <Style x:Key="Pill.Text" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Meta}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+    </Style>
+
+    <!-- ================================================================ Avisos en línea
+
+         Un aviso es un fondo teñido, un icono y una frase — nunca un párrafo gris a 11 px, que es
+         lo que había y lo que nadie leía. Tres niveles, y el color dice cuál es.
+    -->
+    <Style x:Key="Notice" TargetType="Border">
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.M}" />
+        <Setter Property="Padding" Value="{StaticResource Pad.Notice}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Border.Hairline}" />
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface2}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <Style x:Key="Notice.Warning" TargetType="Border" BasedOn="{StaticResource Notice}">
+        <Setter Property="Background" Value="{DynamicResource Brush.Warning.Soft}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Warning.Fill}" />
+    </Style>
+
+    <Style x:Key="Notice.Danger" TargetType="Border" BasedOn="{StaticResource Notice}">
+        <Setter Property="Background" Value="{DynamicResource Brush.Danger.Soft}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Danger.Fill}" />
+    </Style>
+
+    <Style x:Key="Notice.Success" TargetType="Border" BasedOn="{StaticResource Notice}">
+        <Setter Property="Background" Value="{DynamicResource Brush.Success.Soft}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Success.Fill}" />
+    </Style>
+
+    <!-- LA RAZÓN DE UN DESHABILITADO (principio 4). Va PEGADA al botón que no se puede pulsar y
+         dice por qué en tres palabras, con el color de aviso. Un tooltip no vale: hay que saber
+         que existe para verlo, y quien mira un botón apagado no sabe que hay nada que ver. -->
+    <Style x:Key="Reason.Chip" TargetType="Border">
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.M}" />
+        <Setter Property="Padding" Value="{StaticResource Pad.ButtonSmall}" />
+        <Setter Property="Background" Value="{DynamicResource Brush.Warning.Soft}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="Reason.Text" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Small}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.Ink}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- ================================================================ Campos
+
+         Ancho digno: la caja de «Pasadas del barrido» medía seis caracteres y parecía rota. El
+         mínimo de un campo numérico es que quepa su etiqueta de unidades al lado sin apretarse.
+    -->
+    <Style TargetType="TextBox">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}" />
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
+        <Setter Property="Padding" Value="{StaticResource Pad.Field}" />
+        <Setter Property="MinHeight" Value="{StaticResource Control.MinHeight}" />
+        <Setter Property="Background" Value="{DynamicResource Brush.Bg}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.LineStrong}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Border.Hairline}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource Brush.Text}" />
+    </Style>
+
+    <!-- ================================================================ Tablas
+
+         Filas de 40 px y cabecera con etiqueta a 13. La tabla de Informes tenía las columnas sin
+         nombre legible y las filas tan bajas que una sola fila parecía un error de carga.
+    -->
+    <Style x:Key="Table.Header" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Small}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="Table.Row" TargetType="Border">
+        <Setter Property="MinHeight" Value="40" />
+        <Setter Property="Padding" Value="{StaticResource Pad.Row}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Border.Bottom}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <!-- ================================================================ Iconos de línea
+
+         Trazo, no relleno, y del color del texto que acompañan: un icono que no cambia con el tema
+         es el que delata que el tema no cambia todo.
+    -->
+    <Style x:Key="Icon" TargetType="Path">
+        <Setter Property="Width" Value="{StaticResource Icon.Size}" />
+        <Setter Property="Height" Value="{StaticResource Icon.Size}" />
+        <Setter Property="Stretch" Value="Uniform" />
+        <Setter Property="Fill" Value="{x:Null}" />
+        <Setter Property="Stroke" Value="{DynamicResource Brush.TextMuted}" />
+        <Setter Property="StrokeThickness" Value="{StaticResource Icon.Stroke}" />
+        <Setter Property="StrokeStartLineCap" Value="Round" />
+        <Setter Property="StrokeEndLineCap" Value="Round" />
+        <Setter Property="StrokeLineJoin" Value="Round" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <!-- ================================================================ El raíl
+
+         UNA entrada del raíl, con todo lo que una entrada puede tener: la barra de color que dice
+         «estás aquí», el icono, el texto, un contador y el punto que late cuando algo corre. Se
+         escribe una vez porque son ocho y porque aparecen y desaparecen: ocho copias de esto en el
+         XAML serían ocho sitios donde se puede olvidar el estado activo, que es exactamente lo que
+         pasaba antes.
+
+         El DataContext de la plantilla es un `NavItem`, así que se enlaza directo contra él; el
+         plegado viene de la ventana, que es de quien es.
+    -->
+    <Style x:Key="RailItem" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="{StaticResource Pad.Zero}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+        <Setter Property="Padding" Value="{StaticResource Pad.RailItem}" />
+        <Setter Property="Margin" Value="{StaticResource Pad.RailItemGap}" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- La barra de «estás aquí». Ocupa columna propia SIEMPRE, encendida o
+                             apagada, para que la entrada activa no se desplace tres píxeles
+                             respecto a las demás — un menú que baila al cambiar de página se nota
+                             aunque no se sepa decir por qué. -->
+                        <Border x:Name="Marker" Grid.Column="0"
+                                Width="3" Margin="{StaticResource Pad.XXS}"
+                                CornerRadius="{StaticResource Radius.Pill}"
+                                Background="Transparent" />
+
+                        <Border x:Name="Chrome" Grid.Column="1"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="{StaticResource Radius.M}"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Grid Grid.Column="0" Width="{StaticResource Icon.Size}">
+                                    <Path x:Name="Glyph"
+                                          Style="{StaticResource Icon}"
+                                          Data="{Binding Icon}"
+                                          Stroke="{TemplateBinding Foreground}" />
+                                    <!-- Lo que late sustituye al icono en vez de sumarse: dos
+                                         señales de lo mismo, una al lado de la otra, en 232 px. -->
+                                    <Ellipse x:Name="Pulse" Width="9" Height="9"
+                                             Fill="{DynamicResource Brush.Success.Fill}"
+                                             Visibility="Collapsed">
+                                        <Ellipse.Triggers>
+                                            <EventTrigger RoutedEvent="Loaded">
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation
+                                                            Storyboard.TargetProperty="Opacity"
+                                                            From="1.0" To="0.15" Duration="0:0:0.9"
+                                                            AutoReverse="True" RepeatBehavior="Forever" />
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </EventTrigger>
+                                        </Ellipse.Triggers>
+                                    </Ellipse>
+                                </Grid>
+
+                                <TextBlock x:Name="Label" Grid.Column="1"
+                                           Text="{Binding Label}"
+                                           Margin="{StaticResource Pad.RailItem}"
+                                           Foreground="{TemplateBinding Foreground}"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+
+                                <TextBlock x:Name="Badge" Grid.Column="2"
+                                           Text="{Binding Badge}"
+                                           Style="{StaticResource Text.Meta}"
+                                           VerticalAlignment="Center"
+                                           Visibility="{Binding HasBadge, Converter={StaticResource BoolToVisibility}}" />
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsActive}" Value="True">
+                            <Setter TargetName="Marker" Property="Background" Value="{DynamicResource Brush.Primary.Fill}" />
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Primary.Soft}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+                            <Setter TargetName="Label" Property="FontWeight" Value="SemiBold" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Pulsing}" Value="True">
+                            <Setter TargetName="Glyph" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="Pulse" Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                        <!-- Plegado: solo iconos. El texto no se encoge — desaparece (principio 1). -->
+                        <DataTrigger Binding="{Binding DataContext.RailCollapsed, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                            <Setter TargetName="Label" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="Badge" Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Surface2}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>
