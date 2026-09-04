@@ -110,6 +110,65 @@ public static class ModelRateSeed
         return table;
     }
 
+    /// <summary>
+    /// Lo que una siembra automática hizo con la tabla del hub (R2 §2).
+    /// </summary>
+    /// <param name="Table">La tabla resultante. Es la misma instancia que entró, si entró alguna.</param>
+    /// <param name="Added">
+    /// Las tarifas que faltaban y se han añadido. Vacía significa «no hay nada que escribir», y es
+    /// lo que evita un commit por arranque en un hub que ya está al día.
+    /// </param>
+    public sealed record SeedFill(ModelRateTable Table, IReadOnlyList<ModelRate> Added);
+
+    /// <summary>
+    /// <b>Rellena lo que falte, sin pisar nada</b> (R2 §2). Es la operación que la aplicación hace
+    /// sola al abrir el hub: un precio publicado es un dato, no una decisión del usuario, así que no
+    /// puede depender de que alguien visite una pantalla.
+    /// <para>
+    /// <b>Una tarifa escrita manda sobre la sembrada, siempre.</b> El criterio es por MODELO y no
+    /// por tabla: basta con que la tabla nombre ese modelo —con proveedor o sin él— para que la
+    /// siembra lo deje en paz. Así, quien corrigió un precio lo conserva, y un hub que ya tenía
+    /// tabla sí recibe los modelos que esa tabla todavía no conocía — que es lo que la regla por
+    /// tabla de D-786 no podía hacer.
+    /// </para>
+    /// <para>
+    /// La contrapartida, dicha: una tarifa sembrada que alguien BORRE vuelve en el arranque
+    /// siguiente. Borrar una tarifa no es una preferencia que la aplicación pueda respetar sin
+    /// inventarse una lápida por modelo; corregir el número sí, y es lo que la pantalla ofrece.
+    /// </para>
+    /// </summary>
+    /// <param name="existing">La tabla del hub, o null si todavía no hay ninguna.</param>
+    public static SeedFill Fill(ModelRateTable? existing)
+    {
+        ModelRateTable seed = Create();
+        if (existing is null)
+        {
+            return new SeedFill(seed, seed.Rates.ToList());
+        }
+
+        var known = new HashSet<string>(
+            existing.Rates.Select(r => r.Model), StringComparer.OrdinalIgnoreCase);
+
+        var added = new List<ModelRate>();
+        foreach (ModelRate rate in seed.Rates)
+        {
+            if (known.Add(rate.Model))
+            {
+                existing.Rates.Add(rate);
+                added.Add(rate);
+            }
+        }
+
+        // La procedencia se apunta solo cuando de verdad se ha escrito algo: sellar «revisado hoy»
+        // en una tabla que no se ha tocado sería fechar una revisión que nadie hizo.
+        if (added.Count > 0 && string.IsNullOrWhiteSpace(existing.Source))
+        {
+            existing.Source = SourceNote;
+        }
+
+        return new SeedFill(existing, added);
+    }
+
     private static void Add(
         ModelRateTable table,
         string model,

@@ -81,6 +81,34 @@ public sealed class HubSyncRegistrationTests : IDisposable
         tip.Author.Email.Should().Be("7+ana@users.noreply.github.com");
     }
 
+    /// <summary>
+    /// <b>Conectar siembra las tarifas y las publica</b> (R2 §2). Es la mitad que faltaba para que
+    /// una instalación limpia audite con coste desde la primera sesión: no basta con escribir el
+    /// fichero en el clon local, tiene que llegarle a la organización entera.
+    /// </summary>
+    [Fact]
+    public void The_first_connect_seeds_the_model_rates_and_publishes_them()
+    {
+        _account.Connect("gho_x", new GitHubUser(7, "ana", "Ana L.", null, null));
+
+        Hub().EnsureHub();
+
+        // Un clon independiente ve la tabla: llegó al remoto, no se quedó en esta máquina.
+        string second = Path.Combine(_root, "second-rates");
+        Repository.Clone(_remote, second);
+        File.Exists(Path.Combine(second, "model-rates.json")).Should().BeTrue();
+
+        using var remote = new Repository(_remote);
+        remote.Commits.Select(c => c.MessageShort)
+            .Should().Contain(m => m.StartsWith("tarifas:", StringComparison.Ordinal),
+                "el commit dice que lo que cambió fue una tarifa: es la atribución de esta tabla");
+    }
+
+    /// <summary>
+    /// Y la segunda vez no escribe nada. El número de commits ya no es 1 desde R2 —conectar siembra
+    /// las tarifas—, así que lo que se compara es contra lo que dejó la primera vez: lo que este test
+    /// vigila es que «Comprobar conexión» no genere commits NUEVOS, no cuántos hubo al principio.
+    /// </summary>
     [Fact]
     public void Re_running_the_check_does_not_re_initialise_the_hub()
     {
@@ -88,10 +116,16 @@ public sealed class HubSyncRegistrationTests : IDisposable
         HubContext hub = Hub();
         hub.EnsureHub();
 
+        int afterFirst;
+        using (var first = new Repository(_remote))
+        {
+            afterFirst = first.Commits.Count();
+        }
+
         hub.EnsureHub();
 
         using var remote = new Repository(_remote);
-        remote.Commits.Count().Should().Be(1, "«Comprobar conexión» no debe generar commits nuevos");
+        remote.Commits.Count().Should().Be(afterFirst, "«Comprobar conexión» no debe generar commits nuevos");
     }
 
     [Fact]

@@ -131,12 +131,8 @@ public sealed partial class MetricsViewModel : ViewModelBase
         NavigationService navigation,
         SettingsService settings,
         HubContext hub,
-        ToastCenter toasts,
-        ModelRatesService? rates = null,
-        IModelRatesDialog? ratesDialog = null)
+        ToastCenter toasts)
     {
-        _rates = rates;
-        _ratesDialog = ratesDialog;
         _metrics = metrics;
         _navigation = navigation;
         _settings = settings;
@@ -251,31 +247,21 @@ public sealed partial class MetricsViewModel : ViewModelBase
     [ObservableProperty] private string _costPartialNotice = string.Empty;
 
     /// <summary>
-    /// Las tarifas se editan DESDE AQUÍ (F15), que es donde se ve su consecuencia — el mismo
-    /// argumento que llevó los umbrales al Inventario (D-770). Opcionales: los tests que solo
-    /// ejercitan la agregación no tienen por qué montar un diálogo.
+    /// <b>Las tarifas ya no se editan aquí</b> (R2 §2): se corrigen en Ajustes → Tarifas, y esto es
+    /// el camino hasta allí.
+    /// <para>
+    /// Lo que Métricas conserva es lo suyo: el aviso de «parcial» con su recuento (D-787), que es lo
+    /// que convierte un hueco en algo accionable — un total al que le falta gasto se lee como si
+    /// fuera el gasto entero. El enlace va detrás de ese aviso porque es su remedio.
+    /// </para>
+    /// <para>
+    /// Editarlas aquí tenía sentido mientras activar la tabla fuera parte del trabajo de Métricas
+    /// (D-770: se edita donde se ve la consecuencia). Desde que las tarifas se aplican solas, el
+    /// hueco es la excepción y corregir un precio es mantenimiento de la configuración.
+    /// </para>
     /// </summary>
-    private readonly ModelRatesService? _rates;
-    private readonly IModelRatesDialog? _ratesDialog;
-
-    /// <summary>Se puede gestionar la tabla: hay servicio y hay quien la enseñe.</summary>
-    public bool CanManageRates => _rates is not null && _ratesDialog is not null;
-
-    /// <summary>Abre las tarifas y recarga: cambiarlas cambia todos los costes de la pantalla.</summary>
     [RelayCommand]
-    private async Task ManageRatesAsync()
-    {
-        if (_rates is null || _ratesDialog is null)
-        {
-            return;
-        }
-
-        ModelRatesViewModel dialog = _ratesDialog.Show(new ModelRatesViewModel(_rates));
-        if (dialog.Saved)
-        {
-            await LoadAsync();
-        }
-    }
+    private Task ManageRatesAsync() => _navigation.NavigateToAsync<SettingsViewModel>();
 
     /// <summary>El equivalente en dólares del total, para el tooltip. 1 credit = 0,01 $.</summary>
     [ObservableProperty] private string _costInDollars = string.Empty;

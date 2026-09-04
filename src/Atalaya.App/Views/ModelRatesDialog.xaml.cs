@@ -21,7 +21,7 @@ public partial class ModelRatesDialog : FluentWindow
 
 /// <summary>
 /// Quién abre las tarifas. Se inyecta por la misma razón que <see cref="IThresholdsDialog"/>:
-/// Métricas las ofrece y no puede depender de que haya una ventana para poder probarse.
+/// Ajustes las ofrece (R2) y no puede depender de que haya una ventana para poder probarse.
 /// </summary>
 public interface IModelRatesDialog
 {

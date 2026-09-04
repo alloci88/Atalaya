@@ -54,20 +54,24 @@ public sealed class ModelRatesTests : IDisposable
     [Fact]
     public void La_tabla_vive_en_la_raiz_del_hub_y_no_por_aplicacion()
     {
-        _rates.EnsureSeeded();
+        _hub.SeedModelRates();
 
         File.Exists(Path.Combine(_hub.HubPaths.Root, "model-rates.json")).Should().BeTrue();
         Directory.EnumerateFiles(Path.Combine(_hub.HubPaths.Root, "apps"), "model-rates.json",
             SearchOption.AllDirectories).Should().BeEmpty();
     }
 
+    /// <summary>
+    /// <b>Abrir el hub siembra</b> (R2 §2), sin preguntar y sin que nadie visite ninguna pantalla.
+    /// Hasta R2 esto lo hacía el constructor de la pantalla de tarifas, así que un hub recién
+    /// clonado no tenía tabla hasta que a alguien se le ocurría abrirla.
+    /// </summary>
     [Fact]
-    public void Sin_sembrar_no_hay_tabla_y_se_puede_ofrecer_sembrarla()
+    public void Abrir_el_hub_siembra_la_tabla_sin_que_nadie_la_pida()
     {
-        _rates.IsSeeded.Should().BeFalse();
-        _rates.Current.Should().BeNull("«no hay tabla» y «hay tabla vacía» tienen remedios distintos");
+        _rates.Current.Should().BeNull("el hub recién clonado no trae el fichero");
 
-        _rates.EnsureSeeded();
+        _hub.SeedModelRates();
 
         _rates.IsSeeded.Should().BeTrue();
         _rates.Current!.Rates.Should().NotBeEmpty();
@@ -78,11 +82,48 @@ public sealed class ModelRatesTests : IDisposable
     /// que la que trae la versión: es la que alguien fue a comprobar.
     /// </summary>
     [Fact]
-    public void Sembrar_no_pisa_una_tabla_existente()
+    public void Sembrar_no_pisa_una_tarifa_editada()
+    {
+        // Un modelo que la siembra SÍ trae, con un precio que alguien corrigió a mano.
+        _rates.Save(new ModelRateTable { Rates = { new ModelRate("gpt-5.4", 99m, 98m, 97m) } });
+
+        _hub.SeedModelRates();
+
+        ModelRate corregida = _rates.Current!.Find("gpt-5.4", "copilot")!;
+        corregida.InputPerMillion.Should().Be(99m, "lo editado manda sobre lo sembrado, siempre");
+        corregida.OutputPerMillion.Should().Be(98m);
+    }
+
+    /// <summary>
+    /// <b>Y rellena lo que falte</b>: el criterio es por MODELO y no por tabla. La regla por tabla
+    /// dejaba a un hub que ya tenía tarifas sin recibir nunca las de un modelo nuevo — que es lo que
+    /// se traduce en «tarifa no configurada» y en un agregado parcial.
+    /// </summary>
+    [Fact]
+    public void Sembrar_rellena_los_modelos_que_la_tabla_no_conocia()
     {
         _rates.Save(new ModelRateTable { Rates = { new ModelRate("mio", 1m, 2m, 0.1m) } });
 
-        _rates.EnsureSeeded().Rates.Should().ContainSingle().Which.Model.Should().Be("mio");
+        _hub.SeedModelRates();
+
+        _rates.Current!.Find("mio", "copilot").Should().NotBeNull("lo de casa no se toca");
+        _rates.Current!.Find("gpt-5.4", "copilot").Should().NotBeNull("y lo que faltaba, se añade");
+    }
+
+    /// <summary>
+    /// Con la tabla al día no se escribe nada. Sin esto, cada apertura del hub dejaría un commit
+    /// idéntico al anterior en el historial que ES la atribución de esta tabla (D-786).
+    /// </summary>
+    [Fact]
+    public void Sembrar_dos_veces_no_vuelve_a_escribir()
+    {
+        _hub.SeedModelRates();
+        string path = Path.Combine(_hub.HubPaths.Root, "model-rates.json");
+        DateTime first = File.GetLastWriteTimeUtc(path);
+
+        _hub.SeedModelRates();
+
+        File.GetLastWriteTimeUtc(path).Should().Be(first, "no había nada que añadir");
     }
 
     // ================================================================ el modelo sin tarifa
@@ -179,6 +220,8 @@ public sealed class ModelRatesTests : IDisposable
     [Fact]
     public void La_pantalla_abre_sembrada_y_dice_de_donde_salen_las_tarifas()
     {
+        _hub.SeedModelRates();
+
         var vm = new ModelRatesViewModel(_rates);
 
         vm.Rows.Should().NotBeEmpty();

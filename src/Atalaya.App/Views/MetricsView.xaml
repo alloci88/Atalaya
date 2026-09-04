@@ -256,10 +256,12 @@
                                            Margin="0,4,0,0"
                                            Visibility="{Binding CostInDollars, Converter={StaticResource NotEmptyToVisibility}}" />
 
-                                <ui:HyperlinkButton Content="Tarifas · Gestionar"
+                                <!-- R2 §2 — las tarifas se corrigen en Ajustes; aquí queda el aviso
+                                     de parcial, que es lo de Métricas, y el camino a su remedio. -->
+                                <ui:HyperlinkButton Content="Ajustes → Tarifas"
                                                     Command="{Binding ManageRatesCommand}"
-                                                    FontSize="11" Padding="0,2" Margin="0,4,0,0"
-                                                    Visibility="{Binding CanManageRates, Converter={StaticResource BoolToVisibility}}" />
+                                                    ToolTip="Las tarifas se aplican solas desde el primer uso. Aquí se corrigen las que no cuadren y se añaden las de un modelo nuevo."
+                                                    FontSize="11" Padding="0,2" Margin="0,4,0,0" />
                             </StackPanel>
                         </ui:Card>
 

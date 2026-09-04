@@ -215,6 +215,7 @@ public sealed class HubContext
         PullResult pulled = Pull();
         PublishAfterMigration();
         InitializeIfEmpty();
+        SeedModelRates();
         MigrateSilencesToUlidKeys();
         MigrateRuleExclusionsToPatterns();
         return pulled;
@@ -359,6 +360,45 @@ public sealed class HubContext
         Store.WriteHub(new HubInfo { OrganizationName = organization });
         Sync.CommitAndPush("hub: init");
         SyncStateChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// <b>Las tarifas se aplican solas</b> (R2 §2): al abrir el hub, lo que le falte de la siembra
+    /// se escribe y se publica, sin preguntar.
+    /// <para>
+    /// <b>Por qué aquí.</b> Un precio publicado es un DATO, no una decisión del usuario. Hasta R2 la
+    /// siembra colgaba de <c>ModelRatesViewModel</c>, así que el fichero no existía hasta que alguien
+    /// abría Métricas → Tarifas · Gestionar: una instalación limpia auditaba y sus sesiones salían
+    /// con «tarifa no configurada» hasta que a alguien se le ocurría visitar esa pantalla. Puesto en
+    /// la apertura del hub corre en el arranque <b>y</b> en cuanto el hub se clona al conectar la
+    /// cuenta, que es el otro momento en que una instalación limpia estrena tabla.
+    /// </para>
+    /// <para>
+    /// <b>Quién hace el trabajo.</b> <see cref="ModelRatesService.SeedMissing"/>, y no este fichero:
+    /// la contrapartida de D-790 es que nadie más que el servicio de tarifas puede nombrar
+    /// <c>ModelRateSeed</c>, y esa puerta no se abre por comodidad. El servicio se construye aquí
+    /// mismo —igual que la fábrica de ULIDs de la migración de F5.12— porque depende de este hub y
+    /// pedirlo por el constructor sería un ciclo.
+    /// </para>
+    /// <para>
+    /// El fichero sigue en la RAÍZ DEL HUB y no se muda a la configuración local: un precio es del
+    /// contrato de la organización con su proveedor, no de la aplicación ni del puesto. Lo que R2
+    /// cambia es dónde se EDITA (Ajustes), no dónde se guarda.
+    /// </para>
+    /// </summary>
+    public void SeedModelRates()
+    {
+        if (!Directory.Exists(HubPaths.Root))
+        {
+            // Sin clon no hay dónde sembrar, y crear el árbol por nuestra cuenta sería inventarse un
+            // hub. Se vuelve a intentar en cuanto el clon exista.
+            return;
+        }
+
+        if (new ModelRatesService(this).SeedMissing() > 0)
+        {
+            SyncStateChanged?.Invoke();
+        }
     }
 
     /// <summary>

@@ -68,10 +68,16 @@ public sealed partial class RateRow : ObservableObject
 /// <summary>
 /// La pantalla de tarifas por modelo (F15).
 /// <para>
-/// <b>Vive en Métricas y no en Ajustes</b>, por el mismo argumento que llevó los umbrales al
-/// Inventario (D-770): se edita donde se ve la consecuencia. Y es de la ORGANIZACIÓN —se escribe en
-/// el hub y la ve todo el equipo—, no una preferencia de máquina: por la regla de F13, lo que
-/// gobierna un resultado compartido se gobierna con ajuste compartido.
+/// <b>Vive en Ajustes desde R2</b>, y antes en Métricas. El argumento de D-770 —se edita donde se
+/// ve la consecuencia— valía cuando activar las tarifas era parte del trabajo de Métricas; desde que
+/// se aplican solas, corregir un precio es mantenimiento de la configuración y no una lectura del
+/// panel. Métricas conserva lo que sí es suyo: el aviso de «parcial» con su recuento, que es lo que
+/// hace accionable el hueco, y un enlace hasta aquí.
+/// </para>
+/// <para>
+/// <b>Ajustes es dónde se EDITA, no dónde se guarda.</b> El fichero sigue en la raíz del hub
+/// (D-786): un precio es del contrato de la organización con su proveedor, no de la aplicación ni
+/// del puesto. Es de la ORGANIZACIÓN —lo ve todo el equipo—, no una preferencia de máquina.
 /// </para>
 /// <para>
 /// El commit del hub es la atribución de quién cambió qué tarifa y cuándo, así que no hay ningún
@@ -114,7 +120,21 @@ public sealed partial class ModelRatesViewModel : ObservableObject
     private void Load()
     {
         Rows.Clear();
-        ModelRateTable table = _rates.EnsureSeeded();
+
+        // R2 §2 — aquí había un `EnsureSeeded()`: abrir esta pantalla era lo ÚNICO que llegaba a
+        // escribir `model-rates.json`, así que hasta que alguien la visitaba el hub no tenía tabla y
+        // las sesiones salían con «tarifa no configurada». La siembra la hace ahora la aplicación al
+        // abrir el hub, sin preguntar; esta pantalla solo LEE lo que hay y lo deja corregir.
+        ModelRateTable? table = _rates.Current;
+        if (table is null)
+        {
+            // Sin hub todavía —o con el fichero ilegible— no se inventa una tabla en memoria que
+            // guardar pisaría el día que el hub aparezca.
+            Status = "Todavía no hay tabla de tarifas en el hub. Se siembra sola al conectar con él.";
+            RefreshMissing();
+            return;
+        }
+
         Source = table.Source ?? string.Empty;
 
         // Solo lo que factura (F16-RETOQUE §1). Un hub sembrado antes de este cambio tiene
