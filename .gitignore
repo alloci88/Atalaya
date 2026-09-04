@@ -10,6 +10,7 @@ publish/
 .vs/
 
 ## Test / coverage
+artifacts/
 [Tt]est[Rr]esults/
 *.trx
 coverage*.json

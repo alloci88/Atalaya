@@ -78,6 +78,29 @@ public sealed class ReleasePipelineTests
         script.Should().Contain("PublishSingleFile=true");
     }
 
+    /// <summary>
+    /// BUGFIX-RELEASE §3 — el log de tests sube <b>pase o falle</b>.
+    /// <para>
+    /// R1 vio caer un test intermitente en el runner y no pudo ponerle nombre: nadie guardaba el
+    /// log del run. Se quedó en el backlog como «un test intermitente bajo carga» y volvió a costar
+    /// cinco publicaciones. Es la clase de cosa que se rompe en silencio —quitar el paso no pone
+    /// rojo nada, y el precio se paga meses después, el día que hace falta el log y no está—, así
+    /// que se afirma aquí. Lo que importa es el `if: always()`: el run que hay que poder leer es
+    /// justo el que ha fallado.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void El_log_de_tests_se_guarda_aunque_los_tests_fallen()
+    {
+        string yaml = Workflow();
+
+        yaml.Should().Contain("--logger", "sin logger no hay .trx que subir");
+        yaml.Should().Contain("trx", "el formato que trae el nombre del test y su pila");
+        yaml.Should().Contain("artifacts/tests", "y un sitio conocido del que recogerlo");
+        yaml.Should().Contain("if: always()",
+            "el run que hay que poder leer es el que ha fallado, no el que ha ido bien");
+    }
+
     /// <summary>El botón vive en el aviso de versión, con su progreso y su explicación.</summary>
     [Fact]
     public void El_aviso_de_version_ofrece_el_boton_de_actualizar()

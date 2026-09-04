@@ -47,12 +47,21 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $raw = if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
-            '${{ inputs.version }}'
-          } else {
-            '${{ github.ref_name }}'
+          $manual = '${{ github.event_name }}' -eq 'workflow_dispatch'
+          $raw = if ($manual) { '${{ inputs.version }}' } else { '${{ github.ref_name }}' }
+          $raw = $raw.Trim()
+
+          # BUGFIX-RELEASE §2 — el tag que dispara una publicación es `v` MINÚSCULA + SemVer, y se
+          # comprueba aquí, en segundos, antes de los tres minutos de tests. `V1.4.0` no se acepta
+          # y no se «arregla» en silencio: la mayúscula es un error de dedo, y corregirlo callando
+          # publicaría bajo un tag que no es el que se empujó.
+          if (-not $manual -and $raw -cnotmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+            throw "El tag «$raw» no vale para publicar: se espera «v» minúscula y un número SemVer, como v1.2.3. Borra el tag, créalo bien y vuelve a empujarlo."
           }
-          $version = $raw.Trim().TrimStart('v', 'V')
+
+          # En el disparo manual el tag lo crea el propio workflow, así que aquí se admite con `v`
+          # o sin ella y se normaliza — no hay ningún tag ya empujado al que contradecir.
+          $version = $raw.TrimStart('v', 'V')
           if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
             throw "«$raw» no es una versión SemVer (se esperaba 1.2.3 o v1.2.3)."
           }
@@ -60,13 +69,50 @@ jobs:
           "tag=v$version"    >> $env:GITHUB_OUTPUT
           Write-Host "Publicando v$version"
 
+      # BUGFIX-RELEASE §2 — y de paso, quién más hay en el repositorio mal escrito.
+      #
+      # No es una puerta: desde este arreglo un tag mal escrito ya no puede contaminar el estampado
+      # (Directory.Build.targets lo ignora y cae al suelo). Es una LÍNEA en el log que nombra al
+      # culpable en segundos. Hoy costó cinco runs averiguar que un `V1.4.0` de otra persona era lo
+      # que tumbaba la publicación de `v1.4.1`.
+      - name: Avisar de tags mal escritos
+        shell: pwsh
+        run: |
+          $near = (git describe --tags --abbrev=0 2>$null)
+          Write-Host "El tag más cercano a este commit es «$near»."
+          $malos = git tag --list | Where-Object { $_ -cnotmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$' }
+          foreach ($m in $malos) {
+            Write-Host "::warning::El tag «$m» no es «v» + SemVer. No rompe esta publicación, pero conviene borrarlo."
+          }
+          if (-not $malos) { Write-Host 'Todos los tags están bien escritos.' }
+
       - name: Restaurar
         run: dotnet restore Atalaya.sln
 
       # El paquete NO se publica con tests rojos. Va antes del publish para no gastar la
       # compilación de release en algo que no se va a distribuir.
       - name: Tests
-        run: dotnet test Atalaya.sln --configuration Release --no-restore --verbosity minimal
+        run: >
+          dotnet test Atalaya.sln --configuration Release --no-restore --verbosity minimal
+          --logger "trx;LogFileName=tests.trx" --results-directory artifacts/tests
+
+      # BUGFIX-RELEASE §3 — EL LOG DE TESTS SUBE SIEMPRE, PASE O FALLE.
+      #
+      # R1 vio caer un test intermitente y no pudo ponerle nombre porque nadie guardaba el log; se
+      # quedó en el backlog como «un test intermitente bajo carga» y volvió a costar cinco
+      # publicaciones. Con el `.trx` del run, el nombre y la pila están a un clic — que es como se
+      # ha diagnosticado esto al final.
+      #
+      # `if: always()` es la mitad que importa: el caso que hay que poder leer es justo aquel en el
+      # que el paso anterior ha fallado.
+      - name: Guardar el log de tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-${{ github.run_number }}
+          path: artifacts/tests
+          retention-days: 30
+          if-no-files-found: warn
 
       # Self-contained: la máquina destino no necesita tener instalado el runtime .NET 8.
       # Mismo comando que `scripts/publish.ps1 -SelfContained`, más la versión del tag.

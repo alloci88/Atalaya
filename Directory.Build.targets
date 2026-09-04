@@ -53,9 +53,30 @@
       <AtalayaCommitsSinceTag Condition="'$(_AtalayaCountAt)' != '' AND '$(_AtalayaCountAt)' != '-1'">$(_AtalayaHead.Substring($([MSBuild]::Add($(_AtalayaCountAt), 1))))</AtalayaCommitsSinceTag>
       <_AtalayaTag Condition="'$(_AtalayaCountAt)' != '' AND '$(_AtalayaCountAt)' != '-1'">$(_AtalayaHead.Substring(0, $(_AtalayaCountAt)))</_AtalayaTag>
 
-      <!-- La `v` del tag no es parte de la versión. -->
-      <AtalayaBaseVersion Condition="'$(_AtalayaTag)' != '' AND $(_AtalayaTag.StartsWith('v'))">$(_AtalayaTag.Substring(1))</AtalayaBaseVersion>
-      <AtalayaBaseVersion Condition="'$(AtalayaBaseVersion)' == '' AND '$(_AtalayaTag)' != ''">$(_AtalayaTag)</AtalayaBaseVersion>
+      <!-- BUGFIX-RELEASE §2 — LA `v` DEL TAG NO ES PARTE DE LA VERSIÓN, Y DA IGUAL CÓMO SE ESCRIBA.
+
+           El parte: alguien creó `V1.4.0`, con mayúscula. No disparó el workflow —que escucha
+           `v*`— pero SÍ llegó a GitHub, y para `git describe` era el tag más cercano. Así que los
+           builds de test salieron estampados `V1.4.0-dev+…`, y el test de identidad, que exige un
+           número (`^\d+\.\d+`), tumbó el run de `v1.4.1`. **Un tag mal escrito rompió la
+           publicación del tag bien escrito**, y costó cinco reintentos a mano.
+
+           Dos reglas, y la segunda es la que cierra la clase entera de fallos:
+             1. se quita la `v` inicial, en minúscula o en mayúscula;
+             2. si lo que queda NO es un número de versión, **este tag no sirve para estampar**: se
+                ignora y se cae al suelo del props. Un `demo`, un `hotfix-caliente` o un `V1.4.0`
+                en el repositorio no pueden volver a tumbar una publicación.
+
+           Aceptar la mayúscula aquí no es bendecirla: el tag bueno sigue siendo `v` minúscula y el
+           workflow solo escucha ése. Es que un error de dedo de otro no puede costar un release. -->
+      <_AtalayaTagBody Condition="'$(_AtalayaTag)' != ''">$(_AtalayaTag)</_AtalayaTagBody>
+      <_AtalayaTagBody Condition="'$(_AtalayaTagBody)' != '' AND ($(_AtalayaTagBody.StartsWith('v')) OR $(_AtalayaTagBody.StartsWith('V')))">$(_AtalayaTagBody.Substring(1))</_AtalayaTagBody>
+
+      <AtalayaBaseVersion Condition="'$(_AtalayaTagBody)' != '' AND $([System.Text.RegularExpressions.Regex]::IsMatch($(_AtalayaTagBody), '^[0-9]+\.[0-9]+'))">$(_AtalayaTagBody)</AtalayaBaseVersion>
+
+      <!-- Y si el tag se descarta, el conteo también: «commits desde ese tag» no dice nada cuando
+           ese tag no cuenta. El hash SÍ se queda — identifica el commit pase lo que pase. -->
+      <AtalayaCommitsSinceTag Condition="'$(AtalayaBaseVersion)' == ''"></AtalayaCommitsSinceTag>
     </PropertyGroup>
 
     <!-- Sin git, sin tags o con un describe que no se ha podido descomponer: el suelo del props,
