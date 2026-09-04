@@ -468,7 +468,14 @@ public partial class App : Application
         services.AddTransient<AccountViewModel>();
         services.AddTransient<OnboardingViewModel>();
         services.AddTransient<SessionViewModel>();
-        services.AddTransient<FindingsViewModel>();
+        // F26 §B: Hallazgos pide fichas para su vista rápida. Se le da la FÁBRICA y no una
+        // instancia: cada hallazgo que se señala necesita una recién cargada.
+        services.AddTransient<FindingsViewModel>(sp => new FindingsViewModel(
+            sp.GetRequiredService<HubContext>(),
+            sp.GetRequiredService<NavigationService>(),
+            sp.GetRequiredService<SettingsService>(),
+            sp.GetRequiredService<GroupExpansionMemory>(),
+            sp.GetRequiredService<FindingDetailViewModel>));
         services.AddTransient<FindingDetailViewModel>();
         services.AddTransient<MetricsViewModel>();
         services.AddTransient<ReportsViewModel>();

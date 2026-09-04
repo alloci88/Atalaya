@@ -83,6 +83,7 @@
     <Thickness x:Key="Pad.L.Bottom">0,0,0,24</Thickness>
     <Thickness x:Key="Pad.M.Top">0,16,0,0</Thickness>
     <Thickness x:Key="Pad.S.Left">12,0,0,0</Thickness>
+    <Thickness x:Key="Pad.M.Left">16,0,0,0</Thickness>
 
     <!-- Y los asimétricos, con NOMBRE DE INTENCIÓN en vez de con sus números. «El relleno de un
          botón» se puede reajustar una vez para todos los botones; `12,8` repetido cuarenta veces,
@@ -161,6 +162,14 @@
     <sys:Double x:Key="Rail.BadgeSize">12</sys:Double>
     <sys:Double x:Key="Rail.BadgeRing">2</sys:Double>
     <sys:Double x:Key="Content.MaxWidth">1480</sys:Double>
+
+    <!-- La vista rápida de Hallazgos. 460: por debajo, una línea de código con su sangría deja de
+         caber y el panel pasa a ser un sitio donde el código se parte, que es peor que no tenerlo. -->
+    <sys:Double x:Key="Preview.Width">460</sys:Double>
+
+    <!-- Y el tope de alto de su código: 260 son unas trece líneas, que es lo que hace falta para
+         ver el defecto con su contexto. Más, y las acciones se van por debajo del borde. -->
+    <sys:Double x:Key="Preview.CodeHeight">220</sys:Double>
     <sys:Double x:Key="Control.MinHeight">36</sys:Double>
 
     <!-- 24, que es el tamaño al que un icono de línea se lee sin mirarlo fijo. Antes 18-19, que
