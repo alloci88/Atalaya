@@ -13067,3 +13067,238 @@ devuelto sin parsear»**: exactamente los que M2 nombró, y el número cae en su
   vez, el bloque que no se escribe cuando no hubo hilo, el desglose por turno del tooltip —y que sigue
   siendo de tooltip—, y que nada de esto se cuela en el cuerpo del informe.
 
+## R2 — Dos ajustes: el modo exhaustivo, y las tarifas que se aplican solas
+
+### D-929 — El modo exhaustivo: el respaldo de F25 con un interruptor delante, y D-921 revisada
+
+D-921 cerró con estas palabras: «**No se añade un modo "exhaustivo" por si acaso.** Un modo que nadie
+elige es código que nadie mantiene, y el día que alguien lo necesite lo que hará falta es medirlo y
+pedirlo, no encontrárselo apagado.»
+
+**Ese día ha llegado, y la condición se ha cumplido en el orden que ella misma puso**: está medido
+(M2, D-917/D-920) y lo pide el responsable de Atalaya después de usar la 1.4.1. Lo que D-921 prohibía
+era un modo especulativo; esto es el de F25 §2 con un interruptor.
+
+**Y no es un tercer camino de código.** El barrido ya tenía dos formas de viajar y la segunda existe
+desde F25 para cuando un hilo no puede continuar (D-922): petición nueva por pasada, con el prompt
+recompuesto. El ajuste no añade ninguna: pone a `true` el mismo `threadless` que ya se ponía solo
+cuando el proveedor no sabe hilar. **Una línea en el coordinador**, y ni una rama más abajo — si
+hubiera que preguntar por el ajuste en algún otro sitio, sería una tercera forma de barrer y no esto.
+
+**El precio va delante, literal y medido.** Junto al interruptor, un icono de aviso:
+
+> Aumenta el coste de forma drástica (M2: ×3 por unidad) y puede producir hallazgos duplicados.
+> Encuentra, de media, dos defectos de gravedad media más por cada veinte.
+
+La frase vive en `SettingsViewModel.ExhaustiveWarning` y el XAML la enlaza: dos copias del precio son
+dos sitios donde cambiarlo y uno donde olvidarse. Sus cifras son las de la tabla de D-920, leída del
+otro lado —lo que se paga por volver al barrido anterior— y hay un test que la fija palabra por
+palabra, para que ninguna medida futura pueda cambiar el número sin cambiar también DECISIONS.
+
+**Apagado de fábrica**, y no se enciende en ningún sitio: ni en el banco, ni en un test que no lo
+esté probando, ni por promoción de arranque. El hilo es lo que se entrega (D-920) y esto es la
+excepción que alguien decide pagar.
+
+**Vive en los ajustes de la máquina**, con el tope de pasadas y por su mismo argumento (F5.1): el
+barrido gasta los tokens del asiento de quien lanza la sesión, así que es una preferencia del
+operador y no una propiedad de la app auditada. Por la regla de F13 no puede ser otra cosa: lo que
+llega al hub no es el ajuste, es con qué se auditó aquella vez.
+
+**Se aplica a la sesión SIGUIENTE.** La forma de barrer se lee una vez, al crear la sesión, y desde
+ahí manda lo que la sesión escribió. Cambiar el interruptor a mitad de un barrido cambiaría la forma
+de auditar sin avisar y dejaría un informe que no describe lo que pasó. Hay test: se enciende desde
+el evento de la pasada —que es exactamente cuando el usuario podría tocarlo— y la sesión termina como
+empezó.
+
+**Lo que NO toca**: la regla de parada, el tope, el techo de contexto, el prompt, el texto de
+continuación y los tres respaldos de D-922. Un turno sigue siendo una pasada y se juzga con lo mismo.
+
+### D-930 — Que se sepa con qué se auditó: cabecera, pie y sesión
+
+D-926 decidió que del hilo el usuario no viera casi nada, y ese criterio **no cambia**: el hilo es
+instrumentación del coste. El modo exhaustivo es otra cosa —**cuesta el triple y puede duplicar
+hallazgos**—, así que se dice, en los tres sitios desde los que se puede leer una sesión y en ninguno
+más:
+
+- **La cabecera del informe**: `**Modo**: Lotes · exhaustivo`. En la cabecera y no en el anexo porque
+  cambia lo que el informe costó y lo que puede repetir, y eso se lee antes que nada. El cuerpo no
+  gana ni una línea (D-886).
+- **El pie en vivo**: la palabra «exhaustivo» junto a la unidad, en la barra de estado y en el pie de
+  la sesión. No cede sitio cuando la ventana se estrecha: una palabra ocupa poco, y desaparecería
+  justo en la pantalla en la que el coste se lee de reojo.
+- **La sesión del hub**: `AuditSession.Exhaustive`. Es lo que permite a Métricas separar el gasto de
+  las dos formas de barrer; sin el campo, una sesión que cuesta el triple es indistinguible de un
+  modelo que se portó mal. False en todo lo anterior a R2, que es la verdad: hasta aquí no había
+  interruptor.
+
+**La palabra se escribe una vez**, en `AuditModes.Describe`. Tres copias de «exhaustivo» son dos
+sitios donde olvidarse de cambiarla.
+
+**Sin pantalla nueva y sin bloque nuevo en el anexo.** El bloque `### El hilo, unidad a unidad` de
+D-926 no aparece en una sesión exhaustiva, y es correcto: no hubo hilo del que contar turnos, y la
+cabecera ya dice por qué.
+
+### D-931 — Qué ve exactamente un arranque fresco, con la evidencia delante
+
+Antes de tocar nada. Las tres hipótesis del encargo, contestadas una a una con un test que se corrió
+sobre el código de la 1.4.1:
+
+**1. ¿Falta `model-rates.json` en el hub recién clonado? — SÍ, y es la causa.** Sobre un hub sin el
+fichero, una sesión de Copilot con `claude-sonnet-4.5` —un modelo que la siembra SÍ trae— sale así:
+
+```
+Expected cost.Why to be CostUnavailable.None, but found CostUnavailable.RateMissing.
+Expected _rates.Current not to be <null>.
+```
+
+`HubStore.TryReadModelRates()` devuelve null cuando el fichero no existe, `CreditCalculator.Calculate`
+con tabla nula da `RateMissing`, y de ahí sale «tarifa no configurada» en el informe, en el pie y en
+el azulejo, más el agregado marcado como parcial (D-787). Todo funcionando como está escrito; lo que
+faltaba era el fichero.
+
+**2. ¿Existe pero las tarifas no están vigentes hasta que alguien las «habilita»? — NO hay tal
+campo,** y conviene dejarlo escrito para que nadie lo busque: `ModelRate` no tiene ningún `Enabled`,
+y `ModelRateTable.Find` **no mira `EffectiveFrom`**. Una tarifa escrita está vigente. Es decir, la
+segunda mitad de lo que pedía el encargo —«una tarifa sembrada está vigente desde su fecha»— ya se
+cumplía.
+
+**Pero sí había un paso de activación, y era de facto.** El único sitio de producción que llamaba a
+`ModelRatesService.EnsureSeeded()` era `ModelRatesViewModel.Load()`, o sea **el constructor de la
+pantalla**. Comprobado:
+
+```
+Expected File.Exists(...model-rates.json) to be False because
+  PROBE: ¿lo escribe abrir la pantalla?, but found True.
+```
+
+**Abrir Métricas → Tarifas · Gestionar era lo que sembraba el hub.** Quien no visitara esa pantalla
+no veía un coste nunca, y quien la visitaba lo arreglaba para toda la organización sin saber que lo
+había hecho.
+
+**3. ¿El id del modelo de la sesión no casa con la clave? — No es lo que rompe el arranque fresco.**
+El caso de arriba usa un id que está en la siembra y aun así sale `RateMissing`, porque no hay tabla
+contra la que casar. Cuando de verdad no case —un modelo nuevo, un id que el proveedor renombre—, el
+síntoma es distinto y ya está atendido desde F15: la sesión sale «tarifa no configurada», el agregado
+se declara parcial con su recuento y el modelo aparece en «modelos usados sin tarifa» con cuántas
+sesiones esperan por él (D-787). Ese mecanismo no se toca; lo que R2 hace es que deje de dispararse
+por la razón equivocada.
+
+**Por qué la siembra de D-786 no lo cubría.** Dos motivos, y los dos importan:
+
+- **D-786 describe la siembra como CONTENIDO y nunca dice CUÁNDO ocurre.** Dice de dónde salen los
+  números, que llevan fecha de vigencia y que sembrar no pisa. Lo que no dice es quién la dispara — y
+  acabó colgando de la pantalla que las enseña, que es el sitio donde menos falta hace.
+- **Y su regla era por TABLA, no por tarifa**: «sembrar no pisa una tabla existente». Con eso, un hub
+  que ya tuviera tabla no recibía nunca la tarifa de un modelo nuevo publicado en una versión
+  posterior. Ese caso también sale como «tarifa no configurada», y no lo arregla nadie.
+
+**Un hallazgo lateral, encontrado mirando esto:** `ModelRatesService.Save` escribía el fichero y no
+commiteaba. La tarifa corregida llegaba al hub cuando cualquier otra operación commiteaba —`Commit`
+añade todo lo que haya cambiado—, así que acababa viajando dentro de un commit de claims o de
+hallazgos. El commit del hub **es** la atribución de esta tabla (D-786), así que ahora se commitea a
+propósito y el mensaje dice que lo que cambió fue una tarifa.
+
+### D-932 — Las tarifas se aplican solas, y la siembra pasa a ser por tarifa
+
+**Un precio publicado es un dato, no una decisión del usuario.** Así que la aplicación lo aplica sola:
+al abrir el hub —en el arranque y también en cuanto el hub se clona al conectar la cuenta, que es el
+otro momento en que una instalación limpia estrena tabla— se escribe lo que falte y se publica, sin
+preguntar. `ModelRatesService.SeedMissing()`, llamado desde `HubContext`, junto a las demás
+operaciones de apertura del hub (init, migración de silencios, migración de exclusiones).
+
+**Rellena, y no pisa. El criterio es por MODELO.** Basta con que la tabla nombre ese modelo —con
+proveedor o sin él— para que la siembra lo deje en paz. Una tarifa editada a mano es la que alguien
+fue a comprobar y vale más que la que trae la versión, siempre. Y un hub que ya tenía tabla sí recibe
+los modelos que esa tabla no conocía, que es lo que la regla por tabla no podía hacer.
+
+> **Esto matiza D-786 en un punto y confirma el resto.** Donde D-786 decía «sembrar no pisa una tabla
+> existente», ahora se lee **«sembrar no pisa una tarifa existente»**. Es más estricto donde importa
+> —lo editado sigue sin tocarse— y menos donde estorbaba. Lo demás de D-786 sigue en pie palabra por
+> palabra: de dónde salen los números, que llevan fecha, que los promocionales caducan y que la tabla
+> es del hub.
+
+**La contrapartida, dicha:** una tarifa sembrada que alguien **borre** vuelve en el arranque
+siguiente. Respetar un borrado exigiría una lápida por modelo en el fichero, y eso es más máquina de
+la que el caso merece: borrar una tarifa no hace más que devolver «tarifa no configurada» a ese
+modelo, mientras que corregir el número —que es lo que la pantalla ofrece— sí se respeta para siempre.
+
+**No escribe cuando no hay nada que añadir.** Sin eso, cada arranque dejaría un commit idéntico al
+anterior en el historial que es la atribución de esta tabla. Hay test de que sembrar dos veces no
+vuelve a tocar el fichero, y el de `HubSyncRegistrationTests` que ya vigilaba que «Comprobar conexión»
+no genere commits nuevos sigue vigilándolo — comparando contra lo que dejó la primera vez, porque
+desde R2 la primera vez sí deja uno.
+
+**Y un fichero corrupto no se siembra encima.** Se lee del almacén y no de `ModelRatesService.Current`,
+que se traga los errores y devuelve null: por ahí, un JSON a medio escribir por un merge se habría
+leído como «no hay tabla» y la siembra lo habría pisado entero. Con el fichero ilegible no se hace
+nada, que es lo que deja el problema a la vista para arreglarlo en el hub.
+
+**El paso de activación manual se elimina.** `EnsureSeeded` desaparece —no se esconde: hay un test de
+que el método ya no existe y de que construir la pantalla no escribe nada—, y `ModelRatesViewModel`
+pasa a solo LEER lo que hay. Sin tabla todavía, lo dice en vez de fabricar una en memoria que guardar
+convertiría en real.
+
+**La prueba de que esto era el problema son dos tests, y son los dos que pedía el encargo**: hub sin
+el fichero → se abre el hub → una sesión sale con su coste calculado; y hub con una tarifa editada →
+la siembra no la pisa ni la duplica. Con ellos va un tercero que fija el estado del que se viene —sin
+sembrar, esa misma sesión no vale nada—, para que el primero no pueda pasar por otro motivo, y un
+cuarto contra el remoto de verdad: al conectar, un clon independiente ve `model-rates.json` y el
+commit que lo trajo empieza por `tarifas:`.
+
+### D-933 — La pantalla se muda a Ajustes; el fichero NO se mueve
+
+**La pantalla pasa de Métricas → Tarifas · Gestionar a Ajustes → Tarifas**, con lo mismo que tenía: la
+tabla, la edición con sus validaciones, y la lista de modelos usados sin tarifa con sus sesiones a la
+espera (D-787).
+
+**Por qué se mueve, contra el argumento que la puso en Métricas.** D-786 la puso allí por D-770 —se
+edita donde se ve la consecuencia—, y ese argumento valía mientras **activar** la tabla fuera parte
+del trabajo de Métricas. Desde que las tarifas se aplican solas, el hueco es la excepción y corregir
+un precio es mantenimiento de la configuración, no una lectura del panel. Es lo que el encargo dice en
+una frase: la pantalla para corregir un precio es un ajuste, no una métrica.
+
+**Métricas conserva lo que sí es suyo**: el aviso de «parcial» con su recuento, que es lo que convierte
+un hueco en algo accionable —un total al que le falta gasto se lee como si fuera el gasto entero—, y
+un enlace hasta Ajustes → Tarifas, que es su remedio. Editar desde allí ya no se puede, y hay test de
+que el botón viejo no queda.
+
+> **Y esto NO contradice a D-786, que es la confusión fácil.** D-786 decide **dónde se GUARDA** la
+> tabla —en la raíz del hub, porque un precio es del contrato de la organización con su proveedor y no
+> de la aplicación ni del puesto— y ese argumento sigue valiendo entero. R2 decide **dónde se EDITA**,
+> que es otra pregunta. El fichero no se mueve a la configuración local, y hay un test que lo fija:
+> tras sembrar, el único `model-rates.json` de la máquina está en el hub, y `settings.json` no
+> contiene ni un precio.
+
+Ajustes sigue siendo, por lo demás, la pantalla de lo de esta máquina. Las tarifas son la excepción y
+se dice en la propia pantalla: son de la ORGANIZACIÓN, las ve todo el equipo y el commit del hub es
+quién las cambió — igual que se dice del umbral de unidad grande, que tampoco se edita ahí.
+
+### D-934 — Cobertura (24 tests nuevos, 2.211 en total, todo en verde)
+
+- **El modo exhaustivo es el respaldo, no un tercer camino**: encendido no se abre ninguna
+  conversación, cada pasada pasa por `AuditUnitAsync`, ninguna manda el turno de continuación y lo que
+  viaja es **carácter a carácter** lo que recibe un proveedor que no sabe hilar. Con su contraprueba:
+  apagado sigue siendo el hilo, un solo hilo por unidad y continuaciones a partir del segundo turno —
+  sin ella, el modo puesto de serie pasaría por bueno.
+- **La regla de parada y el tope mandan igual por los dos caminos**, y el ajuste no los toca.
+- **Cambiarlo no afecta a la sesión en curso**: se enciende desde el evento de la pasada y la sesión
+  termina por donde empezó, y queda escrita como lo que fue.
+- **Se dice en los tres sitios**: la cabecera del informe con la palabra y sin ella, el pie en vivo
+  —línea de estado y segmentos del pie, con la palabra junto a la unidad— y el registro del hub. Más
+  el aviso literal, comparado palabra por palabra, y que la palabra del modo vive en un solo sitio.
+- **Apagado de fábrica**, en `AppSettings` recién creado y en unos ajustes recién cargados; y guardar
+  lo guarda de verdad, releyendo el fichero.
+- **El arranque fresco**: hub sin el fichero → apertura → coste calculado; y su reverso, que sin
+  sembrar esa misma sesión no vale nada.
+- **La tarifa editada manda**: ni se pisa ni se duplica; y la siembra sí rellena los modelos que la
+  tabla no conocía. Sembrar dos veces no vuelve a escribir.
+- **El paso de activación ya no está**: construir la pantalla no escribe nada, y el método retirado
+  no existe.
+- **El fichero sigue en el hub**: el único de la máquina está en el clon, y los ajustes locales no
+  contienen ningún precio. Contra el remoto de verdad: conectar publica la tabla y su commit dice que
+  lo que cambió fue una tarifa.
+- **Las superficies**: el toggle enlazado al ajuste que gobierna y con su icono de aviso, el botón de
+  tarifas en Ajustes con el diálogo detrás abriendo sobre la tabla sembrada, y Métricas con el aviso
+  de parcial y el enlace, sin el botón viejo.
+- **Y el guarda de D-790 no se afloja**: la siembra se dispara desde `HubContext`, pero quien nombra
+  `ModelRateSeed` sigue siendo solo el servicio de tarifas. La exención de D-790 no gana ni un fichero.

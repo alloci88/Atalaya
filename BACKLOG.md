@@ -4,7 +4,8 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-03 (F21 — el corte en `unit_done`, con las cuentas cuadradas).
+Última revisión: 2026-09-04 (R2 — el modo exhaustivo en Ajustes, y las tarifas que se aplican
+solas).
 
 ## En vuelo
 
@@ -225,9 +226,12 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   sospechosos, por orden: la semántica de la caché (D-785), un promocional vencido en la tabla, y
   las llamadas que Copilot factura fuera de las sesiones de Atalaya (D-791).
 - **F15 — las tarifas, revisadas cuando venzan los promocionales.** La siembra del 2026-09-01 trae
-  GPT-5.6 Sol al 50 % **hasta el 2026-09-03** y Gemini 3.6/3.7 Flash **hasta el 2026-12-31**. Cuando
-  pasen esas fechas el precio sube y la tabla del hub hay que corregirla a mano — que es justo para
-  lo que se hizo editable (D-786).
+  GPT-5.6 Sol al 50 % **hasta el 2026-09-03** —o sea, **ya vencido**— y Gemini 3.6/3.7 Flash **hasta
+  el 2026-12-31**. Cuando pasen esas fechas el precio sube y la tabla del hub hay que corregirla a
+  mano — que es justo para lo que se hizo editable (D-786), y desde R2 se corrige en **Ajustes →
+  Tarifas** (D-933). Ojo con el matiz de R2: la siembra rellena lo que falta y **no** repara un
+  precio que se quedó viejo; eso sigue siendo una decisión de la organización, y por eso lo edita una
+  persona (D-932).
 - **F15 — la sesión en vivo y el azulejo de coste, vistos.** Los credits están probados por consulta
   en todos los sitios; falta abrirlos en la ventana: la cifra en vivo mientras corre una sesión, el
   azulejo con su equivalente en dólares y el enlace de tarifas, y el aviso de «parcial» cuando un
@@ -400,6 +404,23 @@ y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equ
   esquina.
 
 ## Cerrado
+
+- **R2 · El modo exhaustivo, y las tarifas que ya no esperan a que alguien abra una pantalla** — dos
+  cosas vistas usando la 1.4.1. **(1)** Desde F25 el barrido es una conversación por unidad: un tercio
+  del coste y cero variantes a cambio de 17,7 de 20 defectos (D-920). El barrido anterior seguía ahí
+  como camino de respaldo, y ahora se puede **elegir** desde Ajustes, con su precio delante y literal
+  —«×3 por unidad… dos defectos de gravedad media más por cada veinte»—. **No es un tercer camino**:
+  es el `threadless` de D-922 puesto a mano, una línea en el coordinador (D-929). Apagado de fábrica,
+  se aplica a la sesión siguiente, y queda dicho en la cabecera del informe, en el pie en vivo y en la
+  sesión del hub, para que Métricas pueda separar el gasto de las dos formas (D-930).
+  **(2)** En un arranque fresco no salían costes, y el diagnóstico —con la evidencia de un test sobre
+  la 1.4.1— es que el hub no tenía `model-rates.json` hasta que alguien abría Métricas → Tarifas ·
+  Gestionar: **el constructor de esa pantalla era el único sitio que sembraba** (D-931). Ahora las
+  tarifas se siembran solas al abrir el hub y se publican sin preguntar, la siembra **rellena por
+  tarifa y nunca pisa lo editado** —que matiza la regla por tabla de D-786— y el paso de activación se
+  elimina (D-932). La pantalla se muda a **Ajustes → Tarifas**; el fichero **no** se mueve del hub, que
+  es la otra mitad de D-786 y sigue entera (D-933). Métricas conserva el aviso de «parcial» con su
+  recuento y el enlace hasta el remedio.
 
 - **R1 · El guardarraíl del prefijo estable no medía las lupas** — el defecto que M1 destapó (D-909)
   y que llevaba abierto desde F17: el techo de F19 se comprobaba solo con General, la única lupa sin

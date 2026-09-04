@@ -278,9 +278,9 @@ vistazo y «42,0 %» no dice nada más.
 
 El **coste del periodo** va en **AI credits** —la misma unidad que el panel de Copilot de tu
 organización— e incluye **todas** las sesiones de Copilot que gastaron: auditorías, arreglos
-asistidos y verificaciones. Debajo tienes el equivalente en dólares (1 credit = 0,01 $) y el enlace
-**Tarifas · Gestionar**. Si alguna sesión usó un modelo sin tarifa, el azulejo lo dice: falta gasto
-por contar y no se disimula.
+asistidos y verificaciones. Debajo tienes el equivalente en dólares (1 credit = 0,01 $). Si alguna
+sesión usó un modelo sin tarifa, el azulejo lo dice —falta gasto por contar y no se disimula— y el
+enlace **Ajustes → Tarifas** te lleva a arreglarlo.
 
 **Esta cifra es la factura de tu organización, y solo eso.** Las sesiones de Claude Code no entran:
 ese consumo va contra la suscripción de quien las lanzó y no se tarifa. Si las hubo, el azulejo lo
@@ -667,10 +667,10 @@ fallo**, no se pinta como tal y no impide nada.
 
 ### Ajustes
 
-Frescura, **proveedor de auditoría** y su modelo, el interruptor del
-**arreglo asistido** (encendido por defecto), tema **claro/oscuro**,
-intervalo de sincronización y las acciones destructivas, con su confirmación. Al final,
-**Acerca de Atalaya**: versión, organización y los enlaces al repositorio y a este manual.
+Frescura, **proveedor de auditoría** y su modelo, el **modo exhaustivo** del barrido, el
+interruptor del **arreglo asistido** (encendido por defecto), las **tarifas** por modelo, tema
+**claro/oscuro**, intervalo de sincronización y las acciones destructivas, con su confirmación. Al
+final, **Acerca de Atalaya**: versión, organización y los enlaces al repositorio y a este manual.
 
 **Los ajustes son de esta máquina** —viven en tu `settings.json`, no en el hub—, así que
 cambiarlos no le toca nada a tus compañeros. Ésa es justamente la regla que decide qué está aquí:
@@ -684,10 +684,12 @@ Cada control dice bajo su caja **cuándo surte efecto**, porque no todos aplican
 | Ajuste | Qué gobierna | Cuándo aplica |
 | --- | --- | --- |
 | **Pasadas del barrido (tope)** | El presupuesto de pasadas por unidad; de él salen también las dos secas que cierran el barrido (fábrica: 6) | En las auditorías que lances **a partir de ahora** |
+| **Modo exhaustivo** | Si cada pasada es una petición nueva con el prompt entero (apagado de fábrica: cada unidad se audita como una conversación) | En las auditorías que lances **a partir de ahora** |
 | **Frescura (días)** | Cuándo un hallazgo confirmado se marca por revisar | Al guardar; la lista lo aplica al dibujarse |
 | **Proveedor de auditoría** | Con quién auditas y verificas tú | En las sesiones que lances a partir de ahora |
 | **Modelo del auditor** | Con qué modelo del proveedor elegido | En las sesiones que lances a partir de ahora |
 | **Arreglo asistido** | Si aparece «Arreglar con agente» | Al guardar |
+| **Tarifas** | Lo que cuesta un millón de tokens de cada modelo, y con ello el coste de toda sesión | Al guardar la tabla; los costes ya enseñados se recalculan |
 | **Sincronización del hub (s)** | Cada cuánto se buscan cambios de tus compañeros | Al guardar, sin reiniciar |
 | **Timeout de Copilot (min)** | Espera máxima por una respuesta del modelo, y por cada compilación del arreglo | Al guardar, en el siguiente turno |
 | **Editor preferido** | Con qué editor se abre el código | Al guardar |
@@ -706,6 +708,64 @@ de pendientes con su hallazgo de tamaño; las que dejen de serlo vuelven a la co
 que abras el Inventario de cada aplicación se te ofrece llevarlo a su política —«tenías 30 en esta
 máquina, ¿lo aplico a la aplicación?»— y se te pregunta **una sola vez** por aplicación. Nada se
 tira sin preguntar.
+
+#### Modo exhaustivo: qué cuesta y qué compra
+
+Normalmente **cada unidad se audita como una sola conversación** con el modelo: la primera pasada le
+manda las reglas, el código y los hallazgos que ya existen, y las siguientes son turnos de esa misma
+conversación, así que no hay que volver a mandarle nada de eso. Es lo que hace que un barrido cueste
+lo que cuesta hoy.
+
+**Encendido, cada pasada vuelve a ser una petición nueva** con el prompt recompuesto entero, que es
+como se barría antes. No es un modo aparte con reglas propias: es el mismo camino que la aplicación
+usa de respaldo cuando una conversación no puede continuar, puesto a mano.
+
+Al lado del interruptor hay un **icono de aviso** con el precio, que no es una impresión sino una
+medida:
+
+> Aumenta el coste de forma drástica (M2: ×3 por unidad) y puede producir hallazgos duplicados.
+> Encuentra, de media, dos defectos de gravedad media más por cada veinte.
+
+Los números, con más detalle, salen de comparar las dos formas sobre el mismo caso de referencia:
+
+| | conversación (lo normal) | exhaustivo |
+| --- | ---: | ---: |
+| Coste por unidad (credits, tarifa Opus) | **64,2** | 204,7 |
+| Escritura de caché por pasada, de la 2ª en adelante | **3.375** | 16.122 |
+| Hallazgos marcados como posible duplicado (3 tandas) | **0** | 7 |
+| Defectos encontrados, de los 20 del caso de referencia | 17,7 | **20,0** |
+| Pasadas por unidad | **4,0** | 6,0 |
+| Segundos por unidad | **199** | 610 |
+
+**Cuándo tiene sentido encenderlo**: una auditoría puntual sobre código crítico, en la que dos
+defectos de gravedad media valen tres veces la factura. **Cuándo no**: el trabajo de todos los días.
+Los dos defectos que se ganan son, medidos, de los que aparecen tarde — el barrido normal converge
+antes, y ése es exactamente el intercambio.
+
+**Queda dicho con qué se auditó**: mientras la sesión corre, el pie pone la palabra *exhaustivo*
+junto a la unidad; la cabecera de su informe dice **«Modo: Lotes · exhaustivo»**; y la sesión lo
+guarda, así que Métricas puede separar el gasto de las dos formas. Cambiar el interruptor **no toca
+la sesión en curso**: la que esté corriendo termina como empezó.
+
+#### Tarifas: de dónde salen y cómo se corrigen
+
+**No hay nada que activar.** Atalaya trae las tarifas puestas —verificadas contra la tabla de
+precios publicada de Copilot— y las escribe en el hub la primera vez que se conecta a él, sin
+preguntar. Un precio publicado es un dato, no una decisión tuya: por eso la primera sesión de una
+instalación limpia ya sale con su coste.
+
+**Lo que edites manda sobre lo que traiga la versión, siempre.** La siembra solo rellena lo que
+falta: si corriges un precio, ninguna versión futura te lo pisa; y si aparece un modelo nuevo, su
+tarifa se añade sola sin tocar las tuyas. Cuando venza un promocional o no te cuadre una cifra con
+la factura de tu organización, la corriges aquí y **todos los costes ya enseñados se recalculan** —
+también los del histórico.
+
+**Siguen viviendo en el hub, no en tu máquina.** Un precio es del contrato de tu organización con su
+proveedor, así que la tabla la ve todo el equipo y el commit del hub dice quién cambió qué y cuándo.
+Ajustes es **dónde se editan**, no dónde se guardan.
+
+El detalle de qué contiene la tabla, qué significa cada columna y por qué los modelos de Claude Code
+no están, en **[Las tarifas se editan, y viven en el hub](#las-tarifas-se-editan-y-viven-en-el-hub)**.
 
 ---
 
@@ -937,10 +997,18 @@ inventado.
 
 #### Las tarifas se editan, y viven en el hub
 
-**Métricas → Tarifas · Gestionar.** La tabla es de la **organización**: está en el hub, la ve todo
-el equipo y el historial de git dice quién cambió qué y cuándo. Se edita desde la aplicación porque
-las tarifas cambian, aparecen modelos nuevos y **hay promocionales con fecha de caducidad**:
-corregir un precio no puede exigir esperar a una versión nueva de Atalaya.
+**Ajustes → Tarifas.** La tabla es de la **organización**: está en el hub, la ve todo el equipo y el
+historial de git dice quién cambió qué y cuándo. Se edita desde la aplicación porque las tarifas
+cambian, aparecen modelos nuevos y **hay promocionales con fecha de caducidad**: corregir un precio
+no puede exigir esperar a una versión nueva de Atalaya.
+
+**Y se aplican solas.** Atalaya las siembra en el hub la primera vez que se conecta, sin que nadie
+tenga que abrir esta pantalla; la siembra **rellena lo que falta y nunca pisa** lo que alguien haya
+corregido. En Métricas queda el aviso de que a un total le falta gasto por contar, con su recuento,
+y el enlace hasta aquí.
+
+*(Hasta la 1.4.1 esta pantalla estaba en Métricas y era, además, lo único que llegaba a escribir la
+tabla: quien no la visitaba nunca veía un coste. Ya no.)*
 
 **Es la tabla de lo que FACTURA**, o sea de los modelos de Copilot — incluidos los de Anthropic que
 Copilot revende, que ésos sí los paga tu organización. Los de Claude Code no están y no se admiten:
