@@ -718,9 +718,59 @@ public static class ReportBuilder
 
             sb.AppendLine();
             AppendPassBreakdown(sb, session);
+            AppendThreadBreakdown(sb, session);
         }
 
         AppendPassNarrative(sb, session);
+    }
+
+    /// <summary>
+    /// <b>El hilo, unidad a unidad</b> (F25 §5): cuántos turnos y cuántas veces hubo que empezar
+    /// otra conversación, con el motivo.
+    /// <para>
+    /// Va aquí y no en el cuerpo porque es instrumentación —el criterio de D-886, y no ha cambiado—,
+    /// pero tiene que estar: la diferencia entre un barrido de cuatro turnos y uno de cuatro
+    /// conversaciones es toda la factura, y sin esta línea las dos se parecen en cualquier otra
+    /// tabla del anexo.
+    /// </para>
+    /// </summary>
+    private static void AppendThreadBreakdown(StringBuilder sb, AuditSession session)
+    {
+        if (!session.UsageBreakdown.Any(u => u.ThreadTurns > 0))
+        {
+            return;
+        }
+
+        sb.AppendLine("### El hilo, unidad a unidad");
+        sb.AppendLine();
+        sb.AppendLine("Cada unidad se audita como una conversación y cada pasada es un turno suyo. Una");
+        sb.AppendLine("conversación que se reabre vuelve a mandar el prompt entero, y por eso se cuenta.");
+        sb.AppendLine();
+        foreach (UnitUsageBreakdown b in session.UsageBreakdown)
+        {
+            sb.AppendLine($"- **{b.Unit}** — {ThreadLine(b)}");
+        }
+
+        sb.AppendLine();
+    }
+
+    /// <summary>«hilo: 4 turnos · 1 reinicio (la pasada se cortó en unit_done)», y sus casos raros.</summary>
+    private static string ThreadLine(UnitUsageBreakdown b)
+    {
+        if (b.ThreadTurns == 0)
+        {
+            return "sin hilo: una petición por pasada";
+        }
+
+        string line = $"hilo: {b.ThreadTurns} turno" + (b.ThreadTurns == 1 ? "" : "s");
+        if (b.ThreadRestarts == 0)
+        {
+            return line;
+        }
+
+        string why = string.Join(", ", b.ThreadRestartReasons.Distinct(StringComparer.Ordinal));
+        return line + $" · {b.ThreadRestarts} reinicio" + (b.ThreadRestarts == 1 ? "" : "s")
+            + (why.Length > 0 ? $" ({why})" : "");
     }
 
     /// <summary>

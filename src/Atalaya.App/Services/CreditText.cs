@@ -116,7 +116,15 @@ public static class CreditText
     /// tokens. Retirarlos sería quedarse sin ninguna magnitud, y son dato primario.
     /// </para>
     /// </summary>
-    public static string Tokens(long input, long output, long cacheRead, long cacheWrite)
+    /// <param name="turns">
+    /// Turnos de conversación de la sesión. Con ellos el desglose de caché se dice <b>por turno</b>,
+    /// que es la unidad en la que ahora se paga: una pasada ya no es una petición con su prefijo
+    /// dentro, es un turno de una conversación que el proveedor ya tiene cacheada, y lo que se
+    /// escribe por turno es exactamente donde se ve si eso está funcionando. Cero lo omite —una
+    /// sesión sin turnos no tiene por qué dividir nada.
+    /// </param>
+    public static string Tokens(
+        long input, long output, long cacheRead, long cacheWrite, int turns = 0)
     {
         if (input <= 0 && output <= 0 && cacheRead <= 0 && cacheWrite <= 0)
         {
@@ -124,9 +132,15 @@ public static class CreditText
         }
 
         string head = $"{N(input)} entrada · {N(output)} salida";
-        return cacheRead > 0 || cacheWrite > 0
-            ? $"{head} · caché {N(cacheRead)} leída / {N(cacheWrite)} escrita"
-            : head;
+        if (cacheRead <= 0 && cacheWrite <= 0)
+        {
+            return head;
+        }
+
+        string cache = $"{head} · caché {N(cacheRead)} leída / {N(cacheWrite)} escrita";
+        return turns > 0
+            ? $"{cache} · {N(cacheWrite / turns)} escrita/turno"
+            : cache;
     }
 
     /// <summary>
@@ -238,7 +252,7 @@ public static class CreditText
     /// </summary>
     public static IReadOnlyList<FooterSegment> UsageSegments(
         int calls, long input, long output, long cacheRead, long cacheWrite,
-        CostResult cost, string? providerId, PromptBudget? budget = null)
+        CostResult cost, string? providerId, PromptBudget? budget = null, int turns = 0)
     {
         var segments = new List<FooterSegment>
         {
@@ -254,7 +268,7 @@ public static class CreditText
         // tiempo y coste. Los tokens, el reparto y la composición son diagnóstico —lo que el
         // informe manda al anexo— y viven en el TOOLTIP: siguen a un gesto de distancia y dejan de
         // competir por una línea que se lee de reojo mientras la auditoría corre.
-        string tokens = Tokens(input, output, cacheRead, cacheWrite);
+        string tokens = Tokens(input, output, cacheRead, cacheWrite, turns);
         if (tokens.Length > 0)
         {
             segments.Add(FooterSegment.Hidden(tokens));

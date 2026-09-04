@@ -143,6 +143,12 @@ public sealed partial class LiveSessionService : ObservableObject
     [ObservableProperty] private int _calls;
 
     /// <summary>
+    /// Turnos de conversación servidos en la sesión. Es lo que hace legible el desglose de caché del
+    /// pie: lo que se escribe por turno es donde se ve si el hilo está haciendo su trabajo.
+    /// </summary>
+    [ObservableProperty] private int _turns;
+
+    /// <summary>
     /// Adónde va lo que se está gastando, según ocurre (F18 §1). Null hasta la primera medida.
     /// </summary>
     [ObservableProperty] private PromptBudget? _budget;
@@ -331,6 +337,7 @@ public sealed partial class LiveSessionService : ObservableObject
         EndedUtc = null;
         UnitIndex = UnitCount = CurrentPassNumber = Calls = 0;
         InputTokens = OutputTokens = CacheReadTokens = CacheWriteTokens = 0;
+        Turns = 0;
         Budget = null;
         Cost = null;
 
@@ -382,6 +389,7 @@ public sealed partial class LiveSessionService : ObservableObject
         UnitIndex = 0;
         CurrentPassNumber = 0;
         InputTokens = OutputTokens = CacheReadTokens = CacheWriteTokens = 0;
+        Turns = 0;
         Budget = null;
         Cost = null;
         Calls = 0;
@@ -769,6 +777,7 @@ public sealed partial class LiveSessionService : ObservableObject
         Cost = u.Cost.Credits;
         Provider = u.Provider;
         Calls = u.Calls;
+        Turns = u.Turns;
         CostUnit = CreditText.BillingUnit;
         Budget = u.Budget;
         OnPropertyChanged(nameof(CostPerUnit));
