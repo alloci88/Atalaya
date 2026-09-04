@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using Wpf.Ui.Appearance;
 
 namespace Atalaya.App.Services;
@@ -26,8 +26,12 @@ namespace Atalaya.App.Services;
 /// </summary>
 public static class ThemeService
 {
-    private const string DarkUri = "pack://application:,,,/Themes/Palette.Dark.xaml";
-    private const string LightUri = "pack://application:,,,/Themes/Palette.Light.xaml";
+    // Las URIs van CON el nombre del ensamblado. La forma corta —«pack://application:,,,/Themes/…»—
+    // se resuelve contra el ensamblado de ENTRADA, que es Atalaya cuando arranca la aplicación pero
+    // no cuando la carcasa la monta otro (el banco de capturas de las vistas densas, F26 §B). El
+    // recurso es de Atalaya siempre, así que se dice así siempre.
+    private const string DarkUri = "pack://application:,,,/Atalaya;component/Themes/Palette.Dark.xaml";
+    private const string LightUri = "pack://application:,,,/Atalaya;component/Themes/Palette.Light.xaml";
 
     /// <summary>La clave que marca un diccionario como «paleta», para poder reconocer el puesto.</summary>
     private const string Marker = "Palette.Name";

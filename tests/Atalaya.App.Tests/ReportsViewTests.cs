@@ -695,8 +695,10 @@ public sealed class ReportsViewTests : IDisposable
 
         shell.Should().NotContain("NewAppCommand", "el alta es una acción del portafolio, no un sitio del raíl");
 
-        // Y la página existe como destino: VM → vista, como todas las demás.
-        Source("src/Atalaya.App/App.xaml").Should().Contain("vm:ReportsViewModel")
+        // Y la página existe como destino: VM → vista, como todas las demás. La tabla vive en
+        // `Themes/Pages.xaml` desde F26 §B: estaba dentro de `App.xaml` y por eso solo existía con
+        // la aplicación arrancada, así que el banco de capturas no podía montar la carcasa.
+        Source("src/Atalaya.App/Themes/Pages.xaml").Should().Contain("vm:ReportsViewModel")
             .And.Contain("views:ReportsView");
     }
 

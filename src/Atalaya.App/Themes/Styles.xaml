@@ -192,6 +192,38 @@
         <Setter Property="Padding" Value="{StaticResource Pad.XS}" />
     </Style>
 
+    <!-- El «…» de una tarjeta: lo que existe pero no compite por la mirada. Es un ToggleButton
+         porque abre un menú y hay que poder ver si está abierto. -->
+    <Style x:Key="Button.More" TargetType="ToggleButton">
+        <Setter Property="Content" Value="···" />
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Padding" Value="{StaticResource Pad.XS}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Chrome" Background="{TemplateBinding Background}"
+                            CornerRadius="{StaticResource Radius.M}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          TextElement.Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Surface2}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Surface2}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ================================================================ Superficies -->
 
     <Style x:Key="Card" TargetType="Border">
@@ -457,6 +489,129 @@
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Surface2}" />
                             <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ================================================================ Gravedad
+
+         La gravedad se ve DESDE LEJOS (principio 4), y se ve con los colores del tema: pastilla de
+         fondo teñido con su tinta, y una banda al borde de la fila para poder recorrer una lista
+         sin leer una palabra.
+
+         POR QUÉ CON `DataTrigger` Y NO CON UN CONVERTER (D-971). Un converter devuelve una brocha
+         YA RESUELTA: al cambiar de tema no se vuelve a preguntar y la lista se queda con los
+         colores del tema anterior. Los `DataTrigger` ponen `DynamicResource`, que sí se reevalúa.
+         Es la diferencia entre «el tema cambia todos los recursos» (principio 5) y «el tema cambia
+         los recursos que no pasaron por un converter».
+
+         El converter `SeverityToBrush` se queda para las GRÁFICAS, que es otra cosa: allí el color
+         identifica una serie y tiene que ser el mismo en los dos temas para poder comparar dos
+         capturas.
+    -->
+    <Style x:Key="Pill.Sev" TargetType="Border" BasedOn="{StaticResource Pill}">
+        <Setter Property="MinWidth" Value="64" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Severity}" Value="Critica">
+                <Setter Property="Background" Value="{DynamicResource Brush.Danger.Soft}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Alta">
+                <Setter Property="Background" Value="{DynamicResource Brush.Danger.Soft}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Media">
+                <Setter Property="Background" Value="{DynamicResource Brush.Warning.Soft}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Baja">
+                <Setter Property="Background" Value="{DynamicResource Brush.Primary.Soft}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Pill.Sev.Text" TargetType="TextBlock" BasedOn="{StaticResource Pill.Text}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Severity}" Value="Critica">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Sev.Crit}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Alta">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Sev.High}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Media">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Sev.Med}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Baja">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Sev.Low}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- La banda del borde izquierdo de una fila. Es lo que permite recorrer una lista de cien
+         hallazgos y ver dónde están las críticas sin leer ni una palabra. -->
+    <Style x:Key="Band.Sev" TargetType="Border">
+        <Setter Property="Width" Value="{StaticResource Band.Width}" />
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.Pill}" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Severity}" Value="Critica">
+                <Setter Property="Background" Value="{DynamicResource Brush.Sev.Crit}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Alta">
+                <Setter Property="Background" Value="{DynamicResource Brush.Sev.High}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Media">
+                <Setter Property="Background" Value="{DynamicResource Brush.Sev.Med}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Baja">
+                <Setter Property="Background" Value="{DynamicResource Brush.Sev.Low}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ================================================================ Cifras grandes
+
+         El número primero y grande, la etiqueta debajo y pequeña. Es lo contrario de lo que hacía
+         el portafolio —«Crít 0» todo del mismo tamaño, cuatro veces— donde el dato y su nombre
+         pesaban igual y no se leía ninguno de los dos de un vistazo.
+    -->
+    <Style x:Key="Stat.Number" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.H2}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+    </Style>
+
+    <Style x:Key="Stat.Label" TargetType="TextBlock" BasedOn="{StaticResource Text.Small}">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+
+    <!-- La tarjeta de cifra, con su banda de color a la izquierda. -->
+    <Style x:Key="Stat.Card" TargetType="Border" BasedOn="{StaticResource Card}">
+        <Setter Property="Padding" Value="{StaticResource Pad.M}" />
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.M}" />
+    </Style>
+
+    <!-- El enlace de texto de siempre (pre-F26). Vive aquí desde F26 §B: estaba suelto en
+         `App.xaml`, así que solo existía con la aplicación arrancada y la sesión en vivo no se
+         podía montar fuera de ella. -->
+    <Style x:Key="LinkButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <TextBlock x:Name="Label" Text="{TemplateBinding Content}"
+                               Margin="{TemplateBinding Padding}"
+                               FontSize="{TemplateBinding FontSize}"
+                               Foreground="{TemplateBinding Foreground}" />
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Label" Property="TextDecorations" Value="Underline" />
+                            <Setter TargetName="Label" Property="Foreground"
+                                    Value="{DynamicResource TextFillColorPrimaryBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

@@ -36,10 +36,8 @@ public sealed class DesignTokenTests
     /// </summary>
     private static readonly HashSet<string> Pendientes = new(StringComparer.OrdinalIgnoreCase)
     {
-        // Parte B
-        "Views/PortfolioView.xaml",
+        // Parte B — Portafolio y Hallazgos ya han pasado por el sistema.
         "Views/InventoryView.xaml",
-        "Views/FindingsView.xaml",
         "Views/FindingDetailView.xaml",
         "Views/SessionView.xaml",
         "Views/AssistedFixView.xaml",

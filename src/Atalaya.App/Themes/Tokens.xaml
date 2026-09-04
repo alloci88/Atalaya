@@ -75,6 +75,15 @@
     <Thickness x:Key="Pad.XL">32</Thickness>
     <Thickness x:Key="Pad.Zero">0</Thickness>
 
+    <!-- Direccionales: separar de lo de ABAJO o de lo de ARRIBA es lo que más se repite en una
+         columna, y `Stack.Gap` no llega cuando el hueco es entre dos zonas de una rejilla. -->
+    <Thickness x:Key="Pad.XXS.Top">0,4,0,0</Thickness>
+    <Thickness x:Key="Pad.XS.Bottom">0,0,0,8</Thickness>
+    <Thickness x:Key="Pad.M.Bottom">0,0,0,16</Thickness>
+    <Thickness x:Key="Pad.L.Bottom">0,0,0,24</Thickness>
+    <Thickness x:Key="Pad.M.Top">0,16,0,0</Thickness>
+    <Thickness x:Key="Pad.S.Left">12,0,0,0</Thickness>
+
     <!-- Y los asimétricos, con NOMBRE DE INTENCIÓN en vez de con sus números. «El relleno de un
          botón» se puede reajustar una vez para todos los botones; `12,8` repetido cuarenta veces,
          no. Cada uno se declara aquí cuando una pieza del sistema lo necesita — no se inventan
@@ -163,6 +172,10 @@
          se rompió en la Parte A fue justamente esa cuenta. -->
     <sys:Double x:Key="Rail.MarkerWidth">3</sys:Double>
     <sys:Double x:Key="Rail.AvatarSize">24</sys:Double>
+
+    <!-- La banda de gravedad al borde de una fila de hallazgo. 4 px: lo justo para verse de reojo
+         recorriendo la lista sin robarle sitio al texto. -->
+    <sys:Double x:Key="Band.Width">4</sys:Double>
     <sys:Double x:Key="Icon.Stroke">1.6</sys:Double>
 
     <!-- El ancho por debajo del cual el raíl se pliega a solo iconos. 1120 es el punto en el que,

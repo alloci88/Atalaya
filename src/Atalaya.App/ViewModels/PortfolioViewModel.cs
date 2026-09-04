@@ -60,6 +60,14 @@ public sealed partial class PortfolioViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isEmpty;
 
+    /// <summary>
+    /// El resumen del portafolio entero (F26 §B, D-972): cuánto hay abierto y de qué gravedad.
+    /// Se DERIVA de las tarjetas —no hay consulta nueva— porque es la misma cuenta vista desde más
+    /// lejos: si algún día no cuadrara con la suma de las tarjetas, el error estaría en ellas.
+    /// </summary>
+    [ObservableProperty]
+    private PortfolioSummary _summary = PortfolioSummary.Empty;
+
     public override async Task LoadAsync()
     {
         IsBusy = true;
@@ -79,6 +87,7 @@ public sealed partial class PortfolioViewModel : ViewModelBase
             }
 
             IsEmpty = Apps.Count == 0;
+            Summary = PortfolioSummary.Of(Apps);
         }
         finally
         {
@@ -223,6 +232,7 @@ public sealed partial class PortfolioViewModel : ViewModelBase
             // apuntando a una app que ya no existe.
             Apps.Remove(card);
             IsEmpty = Apps.Count == 0;
+            Summary = PortfolioSummary.Of(Apps);
             _toasts.Show(result.Message);
         }
         catch (Exception ex)

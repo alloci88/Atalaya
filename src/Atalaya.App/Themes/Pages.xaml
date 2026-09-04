@@ -1,0 +1,48 @@
+﻿<!--
+    VM → VISTA (F26 Parte B). Estaba dentro de `App.xaml`, y por eso solo existía cuando arrancaba
+    la aplicación entera. Sacarlo a su propio diccionario permite montar la carcasa fuera del
+    arranque —el banco de capturas de las vistas densas lo hace— sin duplicar la tabla, que es lo
+    que la haría divergir.
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="clr-namespace:Atalaya.App.ViewModels"
+    xmlns:views="clr-namespace:Atalaya.App.Views">
+
+    <!-- VM-first navigation: each page VM renders as its view. -->
+    <DataTemplate DataType="{x:Type vm:PortfolioViewModel}">
+        <views:PortfolioView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:InventoryViewModel}">
+        <views:InventoryView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
+        <views:SettingsView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:AccountViewModel}">
+        <views:AccountView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:OnboardingViewModel}">
+        <views:OnboardingView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:SessionViewModel}">
+        <views:SessionView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:FindingsViewModel}">
+        <views:FindingsView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:FindingDetailViewModel}">
+        <views:FindingDetailView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:MetricsViewModel}">
+        <views:MetricsView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:ReportsViewModel}">
+        <views:ReportsView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:AssistedFixViewModel}">
+        <views:AssistedFixView />
+    </DataTemplate>
+
+</ResourceDictionary>

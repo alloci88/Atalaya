@@ -24,66 +24,9 @@
                 <ResourceDictionary Source="pack://application:,,,/Themes/Tokens.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/Themes/Palette.Dark.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/Themes/Styles.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/Themes/Pages.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
-            <Style x:Key="LinkButton" TargetType="Button">
-                <Setter Property="Background" Value="Transparent" />
-                <Setter Property="BorderThickness" Value="0" />
-                <Setter Property="Cursor" Value="Hand" />
-                <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="Button">
-                            <TextBlock x:Name="Label" Text="{TemplateBinding Content}"
-                                       Margin="{TemplateBinding Padding}"
-                                       FontSize="{TemplateBinding FontSize}"
-                                       Foreground="{TemplateBinding Foreground}" />
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Label" Property="TextDecorations" Value="Underline" />
-                                    <Setter TargetName="Label" Property="Foreground"
-                                            Value="{DynamicResource TextFillColorPrimaryBrush}" />
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-
-            <!-- VM-first navigation: each page VM renders as its view. -->
-            <DataTemplate DataType="{x:Type vm:PortfolioViewModel}">
-                <views:PortfolioView />
-            </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:InventoryViewModel}">
-                <views:InventoryView />
-            </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
-                <views:SettingsView />
-            </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:AccountViewModel}">
-                <views:AccountView />
-            </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:OnboardingViewModel}">
-                <views:OnboardingView />
-            </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:SessionViewModel}">
-                <views:SessionView />
-            </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:FindingsViewModel}">
-                <views:FindingsView />
-            </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:FindingDetailViewModel}">
-                <views:FindingDetailView />
-            </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:MetricsViewModel}">
-                <views:MetricsView />
-            </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:ReportsViewModel}">
-                <views:ReportsView />
-            </DataTemplate>
-            <DataTemplate DataType="{x:Type vm:AssistedFixViewModel}">
-                <views:AssistedFixView />
-            </DataTemplate>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -124,7 +124,10 @@ public sealed class IdentityTests : IDisposable
         csproj.Should().Contain("<Resource Include=", "la ventana no puede depender de un fichero suelto");
 
         string shell = Source("src/Atalaya.App/MainWindow.xaml");
-        shell.Should().Contain("Icon=\"pack://application:,,,/assets/atalaya.ico\"");
+        // La forma del pack URI lleva el ensamblado desde F26 §B —la corta se resuelve contra el
+        // ensamblado de ENTRADA, y la carcasa la monta también el banco de capturas—, así que lo
+        // que se busca es el RECURSO, no la sintaxis con la que se nombra.
+        shell.Should().MatchRegex(@"Icon=""pack://application:,,,/[^""]*assets/atalaya\.ico""");
 
         // El mismo icono en los DOS sitios de la carcasa, no dos dibujos parecidos: el de la
         // ventana —de donde salen barra de tareas y Alt-Tab— y el del aviso efímero, que es
@@ -136,7 +139,7 @@ public sealed class IdentityTests : IDisposable
         // pasa a ser el símbolo de lo que la tira DICE —hay algo que atender—, así que lleva el
         // triángulo de aviso con el color de aviso. El icono de la aplicación en una tira de 24 px
         // no firmaba nada: solo ocupaba.
-        Regex.Matches(shell, Regex.Escape("pack://application:,,,/assets/atalaya.ico")).Count
+        Regex.Matches(shell, @"pack://application:,,,/[^""]*assets/atalaya\.ico").Count
             .Should().Be(2, "la ventana y el toast");
         shell.Should().NotContain("ui:TitleBar.Icon", "la barra de título se lee mejor limpia");
     }
