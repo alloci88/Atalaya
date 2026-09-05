@@ -52,12 +52,15 @@
              borde rojo y la cifra iba en `Sev.Crit`: el color decía «hay una crítica» donde el
              número decía lo contrario, y es lo primero que se ve al abrir la aplicación. El color
              de gravedad aparece cuando hay algo de esa gravedad. -->
-        <c:ColumnsPanel Grid.Row="1"
-                        MinColumnWidth="200" MaxColumns="4"
-                        Gap="{StaticResource Space.M}"
-                        Margin="{StaticResource Pad.L.Bottom}"
-                        Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
-            <Border>
+        <!-- UNA TIRA, NO UNA REJILLA (UI-0020). Eran cuatro columnas repartiéndose el ancho
+             entero: 393 px por azulejo para enseñar «0 / Críticas», que mide 55. Ahora cada uno
+             mide lo suyo y la tira se queda a la izquierda; el ancho que sobra se lo lleva la
+             rejilla de aplicaciones, que es la que tiene algo que enseñar. -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal"
+                    c:Stack.Gap="{StaticResource Space.M}"
+                    Margin="{StaticResource Pad.L.Bottom}"
+                    Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
+            <Border MinWidth="{StaticResource Stat.TileWidth}">
                 <Border.Style>
                     <Style TargetType="Border" BasedOn="{StaticResource Stat.Card}">
                         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Sev.Crit}" />
@@ -74,7 +77,7 @@
                     <TextBlock Text="Críticas" Style="{StaticResource Stat.Label}" />
                 </StackPanel>
             </Border>
-            <Border>
+            <Border MinWidth="{StaticResource Stat.TileWidth}">
                 <Border.Style>
                     <Style TargetType="Border" BasedOn="{StaticResource Stat.Card}">
                         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Sev.High}" />
@@ -91,7 +94,7 @@
                     <TextBlock Text="Altas" Style="{StaticResource Stat.Label}" />
                 </StackPanel>
             </Border>
-            <Border>
+            <Border MinWidth="{StaticResource Stat.TileWidth}">
                 <Border.Style>
                     <Style TargetType="Border" BasedOn="{StaticResource Stat.Card}">
                         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Sev.Med}" />
@@ -108,7 +111,7 @@
                     <TextBlock Text="Medias" Style="{StaticResource Stat.Label}" />
                 </StackPanel>
             </Border>
-            <Border>
+            <Border MinWidth="{StaticResource Stat.TileWidth}">
                 <Border.Style>
                     <Style TargetType="Border" BasedOn="{StaticResource Stat.Card}">
                         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Sev.Low}" />
@@ -125,7 +128,7 @@
                     <TextBlock Text="Bajas" Style="{StaticResource Stat.Label}" />
                 </StackPanel>
             </Border>
-        </c:ColumnsPanel>
+        </StackPanel>
 
         <!-- ==================================================== Sin aplicaciones -->
         <Border Grid.Row="2"

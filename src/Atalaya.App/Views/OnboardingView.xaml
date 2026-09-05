@@ -35,16 +35,17 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0">
+        <!-- EL PATRÓN DE PÁGINA (P-02, UI-0035): el título en el margen, como en las demás; lo
+             que se centra es el cuerpo. Arrancaba en x = 633. -->
+        <c:PageShell Grid.Row="0"
+                     Title="Nueva aplicación"
+                     Subtitle="Registra un repo auditable: detecta el stack y construye el inventario del primer ciclo.">
+        <Grid>
         <ScrollViewer VerticalScrollBarVisibility="Auto"
                       Padding="{StaticResource Pad.Scroll}"
-                      MaxHeight="{Binding ActualHeight, ElementName=FormColumn, Converter={StaticResource Minus}, ConverterParameter=64}">
+                      MaxHeight="{Binding ActualHeight, ElementName=FormColumn, Converter={StaticResource Minus}, ConverterParameter=140}">
         <StackPanel MaxWidth="{StaticResource Form.MaxWidth}" HorizontalAlignment="Center"
                     Margin="{StaticResource Pad.L.Bottom}">
-
-            <TextBlock Text="Nueva aplicación" Style="{StaticResource Text.H2}" />
-            <TextBlock Style="{StaticResource Text.Small}" Margin="{StaticResource Pad.L.Bottom}"
-                       Text="Registra un repo auditable: detecta el stack y construye el inventario del primer ciclo." />
 
             <!-- ==================================================== Qué se audita -->
             <!-- Dos tarjetas, porque son dos preguntas distintas: QUÉ se audita (el repositorio,
@@ -275,6 +276,7 @@
         </ScrollViewer>
         <Rectangle Style="{StaticResource Scroll.Fade.Bottom}" />
         </Grid>
+        </c:PageShell>
 
         <!-- F5.7 §4: sin texto de estado al pie. El resultado va por el toast global. -->
         <StackPanel Grid.Row="1" Orientation="Horizontal"

@@ -52,6 +52,18 @@ public static class MarkdownFlowDocument
     /// </summary>
     private const double BaseFontSize = 15;
 
+    /// <summary>Los tres de la escala que el informe usa, con su interlineado (D-944.3, UI-0059).</summary>
+    private const double SmallFontSize = 14;
+
+    /// <inheritdoc cref="SmallFontSize"/>
+    private const double MetaFontSize = 13;
+
+    /// <inheritdoc cref="SmallFontSize"/>
+    private const double BaseLineHeight = 21;
+
+    /// <inheritdoc cref="SmallFontSize"/>
+    private const double MetaLineHeight = 18;
+
     /// <summary>
     /// Los seis niveles de encabezado, de H1 a H6, y sus tokens.
     /// <para>
@@ -112,10 +124,16 @@ public static class MarkdownFlowDocument
     {
         var doc = new FlowDocument
         {
-            FontFamily = new FontFamily("Segoe UI"),
             FontSize = BaseFontSize,
-            LineHeight = BaseFontSize * 1.55,
+            LineHeight = BaseLineHeight,
             PagePadding = new Thickness(0, 0, 14, 24),
+
+            // EN BANDERA, COMO TODO LO DEMÁS (UI-0031). No había un solo `TextAlignment="Justify"`
+            // en el árbol: el valor por DEFECTO de `FlowDocument` en WPF es justificado, y nadie
+            // lo había puesto ni quitado. En una medida de ~700 px, sin partición de palabras
+            // —WPF no la tiene—, justificar abre ríos de tres espacios entre palabras. Era el
+            // único texto de la aplicación que no iba en bandera.
+            TextAlignment = TextAlignment.Left,
             // Un ancho de columna infinito: el visor tiene su propio scroll y el informe se lee
             // en una sola columna, no en dos como haría el reparto por defecto.
             ColumnWidth = double.PositiveInfinity,
@@ -130,7 +148,13 @@ public static class MarkdownFlowDocument
             doc.MaxPageWidth = measure;
         }
 
+        // LA TIPOGRAFÍA SALE DEL SISTEMA (UI-0059). El tamaño base ya se pedía por clave; la
+        // FAMILIA y el INTERLINEADO se escribían a mano —`new FontFamily("Segoe UI")` y
+        // `BaseFontSize * 1.55` = 23,25 px cuando `LineHeight.Body` es 21, que es el 1,4 de
+        // D-944.3—. Es la vista de la que D-993 dijo que se leería «con la escala del sistema».
         Size(doc, "FontSize.Body", BaseFontSize);
+        Family(doc, "Font.Ui", "Segoe UI Variable Text, Segoe UI");
+        Line(doc, "LineHeight.Body", BaseLineHeight);
 
         Theme(doc, TextElement.ForegroundProperty, "TextFillColorPrimaryBrush", Brushes.Black);
 
@@ -336,15 +360,20 @@ public static class MarkdownFlowDocument
     /// <summary>Un bloque de código: monoespaciado, con fondo propio y sin ajuste de línea.</summary>
     private static WpfBlock Code(CodeBlock block)
     {
+        // 13 y no 13,5 (UI-0059): `BaseFontSize - 1.5` no era ninguno de los tres tamaños de la
+        // escala, y su interlineado propio tampoco. Los dos salen de los tokens.
         var paragraph = new Paragraph(new Run(TextOf(block)))
         {
-            FontFamily = new FontFamily("Cascadia Mono, Consolas, Courier New"),
-            FontSize = BaseFontSize - 1.5,
+            FontSize = MetaFontSize,
             Margin = new Thickness(0, 0, 0, 12),
             Padding = new Thickness(12, 9, 12, 9),
             BorderThickness = new Thickness(1),
-            LineHeight = BaseFontSize * 1.35,
+            LineHeight = MetaLineHeight,
         };
+
+        Size(paragraph, "FontSize.Meta", MetaFontSize);
+        Family(paragraph, "Font.Mono", "Cascadia Code, Consolas, Courier New");
+        Line(paragraph, "LineHeight.Meta", MetaLineHeight);
 
         Theme(paragraph, WpfBlock.BackgroundProperty,
             "ControlFillColorDefaultBrush", Brushes.WhiteSmoke);
@@ -542,12 +571,10 @@ public static class MarkdownFlowDocument
 
     private static WpfInline InlineCode(string text)
     {
-        var run = new Run(text)
-        {
-            FontFamily = new FontFamily("Cascadia Mono, Consolas, Courier New"),
-            FontSize = BaseFontSize - 1,
-        };
+        var run = new Run(text) { FontSize = SmallFontSize };
 
+        Size(run, "FontSize.Small", SmallFontSize);
+        Family(run, "Font.Mono", "Cascadia Code, Consolas, Courier New");
         Theme(run, TextElement.BackgroundProperty, "ControlFillColorDefaultBrush", Brushes.WhiteSmoke);
         return run;
     }
@@ -731,6 +758,36 @@ public static class MarkdownFlowDocument
         }
 
         element.SetValue(TextElement.FontSizeProperty, fallback);
+    }
+
+    /// <summary>La familia, por clave. Ver <see cref="Size"/>: mismo motivo y mismo respaldo.</summary>
+    private static void Family(DependencyObject element, string key, string fallback)
+    {
+        if (Application.Current is not null && element is FrameworkContentElement content)
+        {
+            content.SetResourceReference(TextElement.FontFamilyProperty, key);
+            return;
+        }
+
+        if (Application.Current is not null && element is FrameworkElement fe)
+        {
+            fe.SetResourceReference(TextBlock.FontFamilyProperty, key);
+            return;
+        }
+
+        element.SetValue(TextElement.FontFamilyProperty, new FontFamily(fallback));
+    }
+
+    /// <summary>El interlineado, por clave. WPF lo quiere absoluto, y la escala ya lo declara así.</summary>
+    private static void Line(DependencyObject element, string key, double fallback)
+    {
+        if (Application.Current is not null && element is FrameworkContentElement content)
+        {
+            content.SetResourceReference(WpfBlock.LineHeightProperty, key);
+            return;
+        }
+
+        element.SetValue(WpfBlock.LineHeightProperty, fallback);
     }
 
     private static void Theme(DependencyObject element, DependencyProperty property, string key, Brush fallback)

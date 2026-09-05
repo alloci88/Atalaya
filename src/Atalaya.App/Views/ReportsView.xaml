@@ -90,17 +90,15 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <!-- · Cabecera · -->
-            <DockPanel Grid.Row="0" Margin="{StaticResource Pad.S.Bottom}">
-                <TextBlock DockPanel.Dock="Right" Text="{Binding ResultsSummary}"
-                           Style="{StaticResource Text.Small}"
-                           VerticalAlignment="Bottom" />
-                <StackPanel>
-                    <TextBlock Text="Informes" Style="{StaticResource Text.H2}" />
-                    <TextBlock Text="Todo lo que las auditorías han dejado escrito. Pulsa uno para leerlo aquí."
-                               Style="{StaticResource Text.Small}" />
-                </StackPanel>
-            </DockPanel>
+            <!-- · Cabecera. EL RECUENTO VA BAJO EL TÍTULO (P-02, UI-0056): «8 informes» se
+                 pintaba en el extremo derecho, a 1.600 px del título que cuenta, mientras en
+                 Hallazgos y en Portafolio el mismo dato va aquí. Tres listas hermanas, dos sitios
+                 para el mismo dato, y el que estaba solo era el que había que ir a buscar al otro
+                 extremo. · -->
+            <c:PageShell Grid.Row="0"
+                         Title="Informes"
+                         Count="{Binding ResultsSummary}"
+                         Subtitle="Todo lo que las auditorías han dejado escrito. Pulsa uno para leerlo aquí." />
 
             <!-- · Barra de filtros: los mismos patrones que Hallazgos. Cada filtro dice QUÉ filtra
                  (D-973) y la separación la pone la barra, una y la misma (D-984). · -->
@@ -117,40 +115,59 @@
                             VerticalAlignment="Center"
                             Visibility="{Binding HasActiveFilters, Converter={StaticResource BoolToVisibility}}" />
 
+                    <!-- EL RITMO LO PONE LA BARRA, TAMBIÉN CUANDO ENVUELVE (D-984, UI-0055). A
+                         1280 esta barra se parte en dos filas, y las dos empezaban en x distinta:
+                         281 la primera —el borde de «Buscar…», que lleva el margen de la barra— y
+                         274 la segunda, porque arrancaba con un RÓTULO que solo llevaba su hueco a
+                         la derecha. Siete píxeles, y además ni siquiera múltiplo de 4. En Hallazgos
+                         la misma barra partida empieza las dos filas en 285 porque allí cada
+                         rótulo va DENTRO del bloque que lleva el margen. Aquí, igual. -->
                     <WrapPanel Orientation="Horizontal">
                         <ui:TextBox PlaceholderText="Buscar…"
                                     ToolTip="Busca en el CONTENIDO del informe además de en su título, su aplicación y quién lo firmó."
                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=250}"
                                     Width="220" Margin="{StaticResource Pad.BarItem}" VerticalAlignment="Center" />
 
-                        <TextBlock Text="Aplicación:" Style="{StaticResource Text.Small}"
-                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
-                        <ComboBox ItemsSource="{Binding AppOptions}"
-                                  SelectedItem="{Binding SelectedApp}"
-                                  DisplayMemberPath="Label"
-                                  Width="180" Margin="{StaticResource Pad.BarItem}" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.BarItem}"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="Aplicación:" Style="{StaticResource Text.Small}"
+                                       VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
+                            <ComboBox ItemsSource="{Binding AppOptions}"
+                                      SelectedItem="{Binding SelectedApp}"
+                                      DisplayMemberPath="Label"
+                                      Width="180" VerticalAlignment="Center" />
+                        </StackPanel>
 
-                        <TextBlock Text="Tipo:" Style="{StaticResource Text.Small}"
-                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
-                        <ComboBox ItemsSource="{Binding KindOptions}"
-                                  SelectedItem="{Binding SelectedKind}"
-                                  DisplayMemberPath="Label"
-                                  Width="150" Margin="{StaticResource Pad.BarItem}" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.BarItem}"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="Tipo:" Style="{StaticResource Text.Small}"
+                                       VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
+                            <ComboBox ItemsSource="{Binding KindOptions}"
+                                      SelectedItem="{Binding SelectedKind}"
+                                      DisplayMemberPath="Label"
+                                      Width="150" VerticalAlignment="Center" />
+                        </StackPanel>
 
-                        <TextBlock Text="Usuario:" Style="{StaticResource Text.Small}"
-                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
-                        <ComboBox ItemsSource="{Binding AuthorOptions}"
-                                  SelectedItem="{Binding SelectedAuthor}"
-                                  DisplayMemberPath="Label"
-                                  Width="170" Margin="{StaticResource Pad.BarItem}" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.BarItem}"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="Usuario:" Style="{StaticResource Text.Small}"
+                                       VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
+                            <ComboBox ItemsSource="{Binding AuthorOptions}"
+                                      SelectedItem="{Binding SelectedAuthor}"
+                                      DisplayMemberPath="Label"
+                                      Width="170" VerticalAlignment="Center" />
+                        </StackPanel>
 
-                        <TextBlock Text="Periodo:" Style="{StaticResource Text.Small}"
-                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
-                        <ComboBox ItemsSource="{Binding RangeOptions}"
-                                  SelectedItem="{Binding SelectedRange}"
-                                  DisplayMemberPath="Label"
-                                  Width="160" Margin="{StaticResource Pad.BarItem}" VerticalAlignment="Center"
-                                  IsEnabled="{Binding UsePresetRange}" />
+                        <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.BarItem}"
+                                    VerticalAlignment="Center">
+                            <TextBlock Text="Periodo:" Style="{StaticResource Text.Small}"
+                                       VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
+                            <ComboBox ItemsSource="{Binding RangeOptions}"
+                                      SelectedItem="{Binding SelectedRange}"
+                                      DisplayMemberPath="Label"
+                                      Width="160" VerticalAlignment="Center"
+                                      IsEnabled="{Binding UsePresetRange}" />
+                        </StackPanel>
 
                         <CheckBox Content="Rango a mano"
                                   IsChecked="{Binding UseCustomRange}"
@@ -189,9 +206,9 @@
                 <TextBlock Grid.Column="2" Text="Tipo" Style="{StaticResource Table.Header}" />
                 <TextBlock Grid.Column="3" Text="Modo" Style="{StaticResource Table.Header}" />
                 <TextBlock Grid.Column="4" Text="Usuario" Style="{StaticResource Table.Header}" />
-                <TextBlock Grid.Column="5" Text="Unidades" Style="{StaticResource Table.Header}" />
-                <TextBlock Grid.Column="6" Text="Hallazgos" Style="{StaticResource Table.Header}" />
-                <TextBlock Grid.Column="7" Text="Coste" Style="{StaticResource Table.Header}" />
+                <TextBlock Grid.Column="5" Text="Unidades" Style="{StaticResource Table.Header.Number}" />
+                <TextBlock Grid.Column="6" Text="Hallazgos" Style="{StaticResource Table.Header.Number}" />
+                <TextBlock Grid.Column="7" Text="Coste" Style="{StaticResource Table.Header.Number}" />
             </Grid>
 
             <!-- · Las filas. Virtualizada por fila, como Hallazgos. · -->
@@ -254,9 +271,12 @@
                                      (D-975). Ancho suficiente para el caso real y envuelve si aun
                                      así no cabe — la fila crece, que es lo que tiene que pasar. -->
                                 <TextBlock Grid.Column="4" Text="{Binding By}" Style="{StaticResource Table.Cell}" />
-                                <TextBlock Grid.Column="5" Text="{Binding Units}" Style="{StaticResource Table.Cell}" />
-                                <TextBlock Grid.Column="6" Text="{Binding Findings}" Style="{StaticResource Table.Cell}" />
-                                <TextBlock Grid.Column="7" Text="{Binding Cost}" Style="{StaticResource Table.Cell}"
+                                <!-- Cifras a la derecha y tabulares (P-08, UI-0030): es la
+                                     diferencia entre poder recorrer una columna de costes y tener
+                                     que leerla número a número. -->
+                                <TextBlock Grid.Column="5" Text="{Binding Units}" Style="{StaticResource Cell.Number}" />
+                                <TextBlock Grid.Column="6" Text="{Binding Findings}" Style="{StaticResource Cell.Number}" />
+                                <TextBlock Grid.Column="7" Text="{Binding Cost}" Style="{StaticResource Cell.Number}"
                                            ToolTip="{Binding CostDetail}" />
                             </Grid>
                         </Button>
@@ -334,17 +354,26 @@
 
             <!-- El informe renderizado. Scroll PROPIO: los informes largos se leen aquí dentro y
                  no arrastran la página entera. -->
-            <Border Grid.Row="1" Style="{StaticResource Card}">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
+            <!-- LA TARJETA SE CIÑE A LA MEDIDA Y SE CENTRA (UI-0032). Medía 1.640 px con el texto
+                 a 700 dentro, así que convivían dos anchos: la regla bajo el título llegaba a 990 y
+                 la barra del anexo, en la misma tarjeta, a 1.881. Y como la barra iba anclada al
+                 pie de una fila estrella, en una sesión corta el último renglón acababa en y≈650 y
+                 la barra aparecía en y≈960: 310 px de nada entre las dos —el mismo defecto de
+                 `DockPanel` que D-983 quitó de «Última sesión»—.
+
+                 Ahora el documento y el anexo van SEGUIDOS dentro de un solo desplazamiento, así
+                 que la tarjeta acaba donde acaba su contenido, y el visor del informe no lleva
+                 scroll propio: el de la tarjeta es el único. -->
+            <Border Grid.Row="1" Style="{StaticResource Card}"
+                    MaxWidth="{StaticResource Read.CardWidth}"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Top">
+                <ScrollViewer Style="{StaticResource Scroll}">
+                <StackPanel>
 
                     <FlowDocumentScrollViewer
-                        Grid.Row="0"
                         Document="{Binding Document}"
-                        VerticalScrollBarVisibility="Auto"
+                        VerticalScrollBarVisibility="Disabled"
                         HorizontalScrollBarVisibility="Auto"
                         IsToolBarVisible="False"
                         Background="Transparent"
@@ -354,7 +383,7 @@
                          actuar sobre los hallazgos; ocupaba media pantalla justo debajo del
                          resumen, que es lo que sí hace falta. Se despliega a ancho completo porque
                          lo que lleva dentro son tablas, no prosa. -->
-                    <Expander Grid.Row="1"
+                    <Expander
                               Header="Anexo técnico — diagnóstico"
                               Margin="{StaticResource Pad.S.Top}"
                               Visibility="{Binding HasAnnex, Converter={StaticResource BoolToVisibility}}">
@@ -367,7 +396,8 @@
                             Background="Transparent"
                             Foreground="{DynamicResource Brush.Text}" />
                     </Expander>
-                </Grid>
+                </StackPanel>
+                </ScrollViewer>
             </Border>
         </Grid>
     </Grid>

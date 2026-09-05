@@ -493,8 +493,14 @@
                              —no un hexadecimal escrito a mano, que era ilegible en tema claro
                              (D-983 §8)—. El botón es peligro macizo porque destruir ES la acción
                              de este bloque (D-949). -->
-                        <Border Style="{StaticResource Notice.Danger}" Margin="{StaticResource Pad.M.Top}"
-                                MaxWidth="{StaticResource Form.MaxWidth}" HorizontalAlignment="Left">
+                        <!-- EL TOPE LO PONE LA COLUMNA, NO EL BLOQUE (UI-0040). Medidos los bordes
+                             derechos dentro del mismo armazón, tres bloques del mismo nivel de la
+                             misma vista acababan en tres x distintas —1441, 1460 y 1400—, y
+                             ninguna de las dos diferencias (41 y 19) era múltiplo de 4: cada uno
+                             se había puesto su propio ancho. La columna ya tiene el suyo
+                             (`Setting.ContentWidth`), que es lo que hace que Ajustes tenga UN
+                             ritmo y no uno por bloque. -->
+                        <Border Style="{StaticResource Notice.Danger}" Margin="{StaticResource Pad.M.Top}">
                             <StackPanel>
                                 <TextBlock Text="Zona peligrosa" Style="{StaticResource Text.Lead}"
                                            FontWeight="SemiBold"

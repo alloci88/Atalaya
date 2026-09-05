@@ -436,7 +436,11 @@ public sealed class FindingsViewTests : IDisposable
         first.Subtitle.Should().Contain("src/Common.cs"); // la ruta completa al lado
         first.WorstSeverity.Should().Be(Severity.Critica);
         first.CountLabel.Should().Be("2 hallazgos");
-        first.Chips.Select(c => c.Label).Should().Equal("1 Crítica", "1 Media");
+        // LAS CUATRO RANURAS, SIEMPRE (UI-0024). Se filtraban las de cero, y por eso las pastillas
+        // se empaquetaban a la derecha: la misma gravedad caía en una columna distinta según
+        // cuántas tuviera la fila, y una pastilla roja aparecía donde el ojo ya se había
+        // acostumbrado a ver azul. La que no tiene casos ocupa su sitio y no se pinta.
+        first.Chips.Select(c => c.Label).Should().Equal("1 Crítica", "0 Altas", "1 Media", "0 Bajas");
     }
 
     [Fact]

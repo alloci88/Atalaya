@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 
 namespace Atalaya.App.Controls;
@@ -68,7 +68,19 @@ public sealed class ColumnsPanel : Panel
     }
 
     /// <summary>Cuántas columnas caben en <paramref name="available"/>. Nunca menos de una.</summary>
-    public int ColumnsFor(double available)
+    public int ColumnsFor(double available) => ColumnsFor(available, InternalChildren.Count);
+
+    /// <summary>
+    /// La cuenta, con el número de tarjetas delante.
+    /// <para>
+    /// <b>Y NUNCA MÁS COLUMNAS QUE TARJETAS</b> (UI-0020). Con una sola aplicación, el reparto daba
+    /// tres columnas y la tarjeta se quedaba con 531 de 1.635 px: el 68 % de la fila en blanco,
+    /// con las mismas cuatro cifras repetidas 200 px más abajo dentro de la propia tarjeta. Una
+    /// columna vacía no reparte nada — es hueco reservado para algo que no existe—, y el principio
+    /// 2 dice que el espacio se reparte, no se deja.
+    /// </para>
+    /// </summary>
+    public int ColumnsFor(double available, int items)
     {
         if (double.IsInfinity(available) || available <= 0)
         {
@@ -77,7 +89,8 @@ public sealed class ColumnsPanel : Panel
 
         // n columnas ocupan n·min + (n−1)·gap. Se despeja la n más grande que quepa.
         int n = (int)Math.Floor((available + Gap) / (MinColumnWidth + Gap));
-        return Math.Clamp(n, 1, Math.Max(1, MaxColumns));
+        int tope = Math.Max(1, Math.Min(MaxColumns, items));
+        return Math.Clamp(n, 1, tope);
     }
 
     protected override Size MeasureOverride(Size availableSize)

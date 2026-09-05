@@ -265,6 +265,13 @@
                                                 ToolTip="{Binding Subtitle}" />
                                 </Grid>
 
+                                <!-- UNA RANURA FIJA POR NIVEL (UI-0024). Cada gravedad cae siempre
+                                     en la misma x —el porqué está en `Sev.SlotWidth`— y la que no
+                                     tiene casos deja su hueco: es lo que hace que la columna se
+                                     pueda recorrer de arriba abajo en vez de leerse fila a fila.
+                                     La otra salida que la auditoría ofrecía —las pastillas junto al
+                                     nombre— se descarta: allí la x la decide lo largo que sea el
+                                     nombre del fichero, que es exactamente el defecto. -->
                                 <ItemsControl Grid.Column="2"
                                               ItemsSource="{Binding Chips}"
                                               VerticalAlignment="Center">
@@ -275,11 +282,15 @@
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border Style="{StaticResource Pill.Sev}"
-                                                    Margin="{StaticResource Pad.XXS}">
-                                                <TextBlock Text="{Binding Label}"
-                                                           Style="{StaticResource Pill.Sev.Text}" />
-                                            </Border>
+                                            <Grid Width="{StaticResource Sev.SlotWidth}">
+                                                <Border Style="{StaticResource Pill.Sev}"
+                                                        HorizontalAlignment="Left"
+                                                        Margin="{StaticResource Pad.XXS}"
+                                                        Visibility="{Binding Count, Converter={StaticResource NotEmptyToVisibility}}">
+                                                    <TextBlock Text="{Binding Label}"
+                                                               Style="{StaticResource Pill.Sev.Text}" />
+                                                </Border>
+                                            </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>

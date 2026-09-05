@@ -1,4 +1,4 @@
-<UserControl
+﻿<UserControl
     x:Class="Atalaya.App.Views.AccountView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -17,13 +17,16 @@
         en una columna de formulario es dejar aire a los dos lados) y cada estado se dice con las
         tres cosas a la vez: icono, color y PALABRA.
     -->
+    <!-- EL PATRÓN DE PÁGINA (P-02, UI-0035). El título arrancaba en x = 800 porque la columna
+         entera iba centrada, así que pasar de Portafolio a Cuenta movía el contenido 536 px a la
+         derecha y dejaba la miga —que no se mueve— casi quinientos píxeles a su izquierda. Ahora
+         el título vive en el margen de la página, como en las otras dieciséis vistas, y lo que se
+         centra es el CUERPO, que es lo que un formulario de dos columnas necesita. -->
+    <c:PageShell Title="Cuenta"
+                 Subtitle="Tu identidad de GitHub, lo que hace falta para auditar y el clon del hub en esta máquina."
+                 BodyWidth="{StaticResource Form.MaxWidth}">
     <ScrollViewer Style="{StaticResource Scroll}" VerticalScrollBarVisibility="Auto">
-        <StackPanel MaxWidth="{StaticResource Form.MaxWidth}" HorizontalAlignment="Center"
-                    Margin="{StaticResource Pad.L.Bottom}">
-
-            <TextBlock Text="Cuenta" Style="{StaticResource Text.H2}" />
-            <TextBlock Style="{StaticResource Text.Small}" Margin="{StaticResource Pad.L.Bottom}"
-                       Text="Tu identidad de GitHub, lo que hace falta para auditar y el clon del hub en esta máquina." />
+        <StackPanel Margin="{StaticResource Pad.L.Bottom}">
 
             <!-- ============ DESCONECTADO: bienvenida + un botón ============ -->
             <StackPanel Visibility="{Binding IsDisconnected, Converter={StaticResource BoolToVisibility}}">
@@ -298,4 +301,5 @@
             </StackPanel>
         </StackPanel>
     </ScrollViewer>
+    </c:PageShell>
 </UserControl>

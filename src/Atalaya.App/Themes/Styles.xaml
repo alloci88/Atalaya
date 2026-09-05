@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     ESTILOS BASE (F26 Parte A, D-949).
 
     Las piezas del sistema, construidas SOBRE los tokens y la paleta. Ninguna escribe un número ni
@@ -1097,6 +1097,59 @@
         </Setter>
     </Style>
 
+    <!-- ================================================================ El patrón de página (P-02)
+
+         La forma de una página, escrita una vez: título, su línea, las acciones de vista a la
+         derecha, y el cuerpo debajo. El porqué —y las dos vistas que se salían de la cuadrícula—
+         está en `PageShell`; aquí solo se dibuja.
+
+         LA CABECERA NO SE CENTRA NUNCA. Lo único que puede centrarse es el cuerpo, y solo cuando
+         la vista declara su medida: así una página de formulario deja de saltar 536 px respecto a
+         la miga, que es de la carcasa y no se mueve.
+    -->
+    <Style TargetType="{x:Type c:PageShell}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type c:PageShell}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <DockPanel Grid.Row="0" Margin="{StaticResource Pad.L.Bottom}">
+                            <!-- Las acciones de VISTA, y solo ésas: lo que actúa sobre una fila
+                                 vive en su fila. Van declaradas antes que la identidad para que
+                                 sean la columna que no cede, igual que en `PageHeader`. -->
+                            <ContentPresenter DockPanel.Dock="Right"
+                                              Content="{TemplateBinding Actions}"
+                                              VerticalAlignment="Center" />
+                            <StackPanel>
+                                <TextBlock Text="{TemplateBinding Title}" Style="{StaticResource Text.H2}" />
+                                <!-- EL RECUENTO VA AQUÍ (UI-0056): bajo el título, con el
+                                     subtítulo, porque cuenta lo que el título nombra. En Informes
+                                     vivía en el extremo derecho, a 1.600 px de él. -->
+                                <TextBlock Text="{Binding Lead, RelativeSource={RelativeSource TemplatedParent}}"
+                                           Style="{StaticResource Text.Small}"
+                                           Margin="{StaticResource Pad.XXS.Top}"
+                                           Visibility="{Binding HasLead, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource BoolToVisibility}}" />
+                            </StackPanel>
+                        </DockPanel>
+
+                        <ContentPresenter x:Name="Body" Grid.Row="1"
+                                          MaxWidth="{TemplateBinding BodyWidth}" />
+                    </Grid>
+
+                    <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsBodyCentered, RelativeSource={RelativeSource Self}}" Value="True">
+                            <Setter TargetName="Body" Property="HorizontalAlignment" Value="Center" />
+                        </DataTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ================================================================ La fila de un ajuste
 
          UN ritmo para las cinco secciones de Ajustes: a la izquierda la etiqueta con UNA línea de
@@ -1464,6 +1517,32 @@
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- LAS CIFRAS DE UNA TABLA, ALINEADAS POR DEFECTO (P-08, UI-0030).
+
+         Las tres columnas numéricas de Informes —«Unidades», «Hallazgos», «Coste»— iban alineadas
+         a la izquierda y sin dígitos tabulares, así que «1 unidad» y «12 unidades» empezaban en la
+         misma x y sus cifras no compartían columna; lo mismo con «20,2 AI credits» y «64,6», y con
+         el «—» del coste desconocido. La tabla que existe para comparar gasto era la única donde
+         no se podía comparar de un vistazo.
+
+         Y no era que nadie supiera hacerlo: en Tarifas (D-997 §4) y en el desglose por fase de
+         Métricas los números YA iban a la derecha y tabulares. Estaba resuelto y se quedó ahí,
+         que es lo que un estilo con nombre evita — quien escriba una columna de números no tiene
+         que acordarse.
+
+         `Tabular` es lo que hace que la coma caiga en la misma x: sin él, un «1» ocupa menos que
+         un «8» y una columna de precios deja de poder recorrerse. -->
+    <Style x:Key="Cell.Number" TargetType="TextBlock" BasedOn="{StaticResource Table.Cell}">
+        <Setter Property="TextAlignment" Value="Right" />
+        <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+
+    <!-- Y su cabecera, que tiene que caer sobre la misma columna. -->
+    <Style x:Key="Table.Header.Number" TargetType="TextBlock" BasedOn="{StaticResource Table.Header}">
+        <Setter Property="TextAlignment" Value="Right" />
     </Style>
 
     <!-- La celda que identifica la fila: la que se lee primero al recorrer la tabla. -->

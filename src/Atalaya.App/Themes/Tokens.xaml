@@ -287,6 +287,25 @@
          y ese número no puede depender del alto de la ventana. -->
     <sys:Double x:Key="Rail.RowHeight">36</sys:Double>
 
+    <!-- EL AZULEJO DE UNA CIFRA, CEÑIDO A SU CONTENIDO (UI-0020). Los cuatro del Portafolio
+         ocupaban 393 px cada uno —266→659, 680→1073, 1094→1487, 1508→1901— y dentro de cada uno
+         el contenido («0 / Críticas») medía ~55: el 86 % del azulejo era vacío. Un azulejo mide lo
+         que mide su cifra más su rótulo; 150 es lo que necesita el rótulo más largo, «Críticas»,
+         con su aire. -->
+    <sys:Double x:Key="Stat.TileWidth">150</sys:Double>
+
+    <!-- LA RANURA DE UNA PASTILLA DE GRAVEDAD (UI-0024). Las tres pastillas de recuento de una
+         fila de Hallazgos se empaquetaban a la derecha, así que la misma gravedad caía en una
+         columna distinta según cuántas tuviera la fila: medidas las x, las filas con tres las
+         ponían en 1670/1747/1819 y las que solo tenían una la ponían en 1819, que es la ranura de
+         «Baja». Recorriendo la columna se leía «4 Baja, 1 Baja, 6 Baja, 3 ALTA, 1 Baja…»: una
+         pastilla roja aparecía donde el ojo ya se había acostumbrado a ver azul.
+
+         Con una ranura por NIVEL, la columna se puede recorrer: cada gravedad cae siempre en la
+         misma x y su hueco se queda vacío cuando esa fila no tiene ninguna. 104 es lo que ocupa
+         «15 Críticas» —el caso largo— más su margen. -->
+    <sys:Double x:Key="Sev.SlotWidth">104</sys:Double>
+
     <!-- La banda de gravedad al borde de una fila de hallazgo. 4 px: lo justo para verse de reojo
          recorriendo la lista sin robarle sitio al texto. -->
     <sys:Double x:Key="Band.Width">4</sys:Double>
@@ -355,6 +374,13 @@
          informe también lleva tablas, y una columna de 600 px las parte; el anexo técnico, que es
          quien trae las más anchas, se lee en su propio panel a ancho completo. -->
     <sys:Double x:Key="Read.MaxWidth">720</sys:Double>
+
+    <!-- LA TARJETA QUE SOSTIENE ESA MEDIDA (UI-0032). Dentro de la tarjeta del informe convivían
+         dos anchos: la regla bajo el título ocupaba 700 px y la barra del anexo, en la MISMA
+         tarjeta, 1.591 — el ojo tenía que decidir dónde acaba el documento. La tarjeta se ciñe a
+         la medida de lectura más su relleno (720 + 20 a cada lado, redondeado a la escala) y se
+         centra en su área. -->
+    <sys:Double x:Key="Read.CardWidth">764</sys:Double>
 
     <!-- El icono de un estado vacío: más grande que uno de línea y más pequeño que un dibujo.
          Acompaña a la frase, no la sustituye. -->

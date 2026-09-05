@@ -566,9 +566,12 @@ partial void OnSelectedThemeChanged(ThemeFilterOption? value) => Reload();
                     UnitPath = g.Key.UnitPath,
                     Rows = ordered,
                     ShowApp = showApp,
+                    // LAS CUATRO RANURAS, SIEMPRE (UI-0024). Se filtraban las de cero, y por eso
+                    // las pastillas se empaquetaban a la derecha y la misma gravedad cambiaba de
+                    // columna según cuántas tuviera la fila. La que no tiene casos ocupa su sitio
+                    // y no se pinta, que es lo que permite recorrer la columna.
                     Chips = Enum.GetValues<Severity>()
                         .Select(s => new SeverityChip(s, ordered.Count(r => r.Severity == s)))
-                        .Where(c => c.Count > 0)
                         .ToList(),
                 };
             })

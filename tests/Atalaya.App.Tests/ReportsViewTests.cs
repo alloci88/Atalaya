@@ -633,7 +633,10 @@ public sealed class ReportsViewTests : IDisposable
         doc.Blocks.OfType<List>().Single().ListItems.Should().HaveCount(2);
 
         Paragraph code = doc.Blocks.OfType<Paragraph>().Last();
-        code.FontFamily.Source.Should().Contain("Mono");
+        // La familia monoespaciada del SISTEMA (`Font.Mono`, UI-0059): antes se escribía a mano
+        // aquí dentro —«Cascadia Mono»— y era la única tipografía de la aplicación que no salía de
+        // `Tokens.xaml`. La pila es la misma que usa el resto del código de la interfaz.
+        code.FontFamily.Source.Should().Contain("Cascadia").And.Contain("Consolas");
         new TextRange(code.ContentStart, code.ContentEnd).Text.Should().Contain("var x = 1;");
     }
 

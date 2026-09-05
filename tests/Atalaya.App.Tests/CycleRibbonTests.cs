@@ -508,12 +508,21 @@ public sealed class CycleRibbonTests : IDisposable
     [Fact]
     public void La_cinta_lleva_dentro_su_desplazamiento_y_nunca_usa_el_de_la_pagina()
     {
-        string xaml = File.ReadAllText(Source("src/Atalaya.App/Views/MetricsView.xaml"));
+        // Sin finales de linea: `core.autocrlf` esta en true, asi que el fichero llega con CRLF o
+        // con LF segun quien lo haya escrito por ultima vez, y una regla de diseno no puede
+        // depender de eso (UI-AUDIT-1: este test empezo a fallar al retocar la vista, sin que la
+        // regla que protege hubiera cambiado).
+        string xaml = File.ReadAllText(Source("src/Atalaya.App/Views/MetricsView.xaml"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         Regex.Matches(xaml, "<controls:CycleRibbon").Count.Should().Be(1);
         xaml.Should().NotContain("ViewportWidth=", "la cinta mide su propia ventana");
         xaml.Should().NotContain("RibbonFrom").And.NotContain("RibbonTo", "F17.2: ya no hay eje de calendario");
-        xaml.Should().NotContain("controls:ChartPlot\n", "las demás gráficas no se tocan");
+        // Las OTRAS gráficas siguen ahí, y son tres. Esto decía que el fichero no contenía
+        // «controls:ChartPlot» seguido de un salto de línea, y solo pasaba porque el fichero tenía
+        // CRLF: con LF, la misma vista intacta lo rompía. Una regla que depende de los finales de
+        // línea no es una regla (UI-AUDIT-1).
+        Regex.Matches(xaml, "<controls:ChartPlot").Count.Should().Be(3, "las demás gráficas no se tocan");
         xaml.Should().NotContain("x:Name=\"RibbonScroll\"", "el desplazamiento vive en el control, con la fila entera");
         xaml.Should().Contain("SpanCommand=\"{Binding OpenCycleCommand}\"");
         Regex.Matches(xaml, "Ciclos y temáticas").Count.Should().Be(1);
