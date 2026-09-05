@@ -1,285 +1,168 @@
-# F27 — Lo que la auditoría vio: siete raíces, no sesenta y un parches
+# F27 — Cierre: qué cambia en cada vista
 
-UI-AUDIT-1 dejó **61 hallazgos** (18 altos, 31 medios, 12 bajos) y 28 propuestas. Sesenta y un
-parches habrían sido sesenta y un sitios donde el mismo defecto puede volver, así que se arreglaron
-**siete causas** y se comprobó, hallazgo a hallazgo, cuál cae con cada una. Los siete que no caían
-con ninguna se arreglaron al final, uno por uno.
+UI-AUDIT-1 dejó **61 hallazgos**. F27 los arregló por causa y no por parche —siete raíces y siete
+sueltos—, y en el cierre el usuario abrió el `dist` y mandó **volver seis cosas** que se habían
+movido sin que él las pidiera. Este parte es la lista completa de **lo que se ve distinto de la
+Parte C**, vista por vista, una línea por cambio (N-6).
 
-**Resultado: 60 cerrados, 1 descartado por decisión del usuario (UI-0045).** Uno de los sesenta
-—**UI-0023**— no aparecía en la lista de ninguna raíz del encargo; se arregla igualmente y se dice
-dónde, que es lo que hace que el recuento cuadre. Ocho propuestas del
-bloque 2 entran —P-01, P-02, P-04, P-05, P-08, P-12, P-27, P-28—; una queda descartada con su
-hallazgo (P-17); las diecinueve restantes no se han tocado.
+**Cómo leerlo.** El «antes (C)» es `docs/design/ui-audit-1/banco/` — la auditoría se hizo sobre la
+Parte C, así que su banco **es** el estado de la C. El «después» es
+`docs/design/f27/banco/`, con los mismos 100 nombres. Los dos ficheros se abren al lado.
 
-## Cómo se mira la evidencia
-
-`docs/design/f27/banco/` tiene **exactamente los mismos 100 ficheros** que
-`docs/design/ui-audit-1/banco/`, con los mismos nombres y en las mismas cuatro combinaciones
-—oscuro y claro, 1920×1080 maximizada y 1280×720—. Cada hallazgo de abajo dice en qué fichero se
-comprueba, y ese fichero se abre al lado del de la auditoría: la misma pantalla, antes y después.
-
-Las capturas del recorrido salen del `dist` publicado con los datos reales de esta máquina; las de
-las cuatro vistas densas y los nueve diálogos, del banco del agente falso (P-28, D-1009).
+> **Las capturas de «después» son de antes de las seis reversiones y de los dos últimos arreglos.**
+> El recorrido del banco conduce la aplicación con el ratón de verdad (N-8), así que **no lo he
+> vuelto a lanzar**. Donde una fila dice *(revertido)* o *(sin captura)*, lo que hay que mirar es el
+> `dist`. La columna «se ve» dice qué buscar.
 
 ---
 
-## Raíz 1 — El color que no salía de la paleta
+## Las seis reversiones
 
-**La causa.** Había **cuatro sitios donde nacía un color**: la paleta, un converter de C# con
-hexadecimales dentro, un `Style` sin `BasedOn` que se llevaba la plantilla de la librería, y la
-propia WPF-UI escribiendo su acento en `Application.Resources`. Los tres últimos no se enteran de
-que el tema ha cambiado, y ninguno lo miraba `PaletteContrastTests`.
-
-**Qué cambió.** `Brush.Ink.OnVivid` —la única clave de color sin su pincel, con seis referencias que
-caían al negro en los dos temas— entra en las dos paletas junto con la regla que lo habría evitado
-(**P-12**). La gravedad estrena sus cuatro rellenos propios, `Sev.{Crit,High,Med,Low}.Soft`, en vez
-de tomar prestados `Danger.Soft` **dos veces**, `Warning.Soft` y `Primary.Soft` (**P-05**); `Sev.Low`
-sale además del azul del primario, con el que era el mismo valor en el tema claro. **Nueve converters
-de color escritos a mano se van** y su sitio son `DataTrigger` con `DynamicResource`, que se
-reevalúan al cambiar de tema (D-971). `Primary.Soft` deja de significar cuatro cosas a la vez. Y el
-acento de la librería se redirige por paleta y se tapa en `Application.Resources` desde
-`ThemeService`, que es donde un diccionario fusionado no llega.
-
-**Cierra 12:** UI-0005, 0006, 0007, 0008, 0010, 0018, 0019, 0027, 0034, 0049, 0050, 0051.
-
-| Hallazgo | Dónde se comprueba |
+| Vista | Qué vuelve a como estaba en la C |
 |---|---|
-| UI-0005 · las tres acciones de la ficha | `vistas/dark-completa/05-hallazgo-ficha.png` — «Arreglar con agente» verde y las tres del sistema |
-| UI-0006 · la pastilla de estado | `vistas/light-completa/05-hallazgo-ficha.png` — «Activo» sobre `Primary.Soft`, medida contra el crema |
-| UI-0007 · la tinta sobre color vivo | `vistas/dark-completa/04-hallazgos.png` — las pastillas de recuento, ninguna negra |
-| UI-0008 · el verde de estado de unidad | `densas/dark-completa-05-sesion-en-vivo.png` — la columna de unidades |
-| UI-0010 · un solo juego de gravedad | `densas/dark-completa-05-sesion-en-vivo.png` — chips y contadores, a 40 px, del mismo juego |
-| UI-0018 · el azul de la librería | `vistas/dark-completa/11d-ajustes-apariencia.png` — interruptores y radios |
-| UI-0019, UI-0050 · la pastilla de temática | `vistas/dark-completa/05-hallazgo-ficha.png` y `11b-ajustes-auditoria.png` |
-| UI-0027 · un solo rotulado | `vistas/dark-completa/04-hallazgos.png` — «15 Altas», «10 Medias», «4 Bajas» |
-| UI-0034 · el color no lo pone un converter | `vistas/dark-completa/08-metricas.png` |
-| UI-0049 · `Primary.Soft` no es cuatro cosas | `vistas/dark-completa/11-ajustes.png` — sección activa contra «estás aquí» del raíl |
-| UI-0051 · el cero no se pinta de peligro | `vistas/dark-completa/01-portafolio.png` — «0 Críticas» en neutro |
-
-## Raíz 2 — Los nueve diálogos no leían la paleta
-
-**La causa.** Los diálogos se escribieron antes que los tokens y nadie volvió: eran una isla con su
-propio fondo, sus propios botones y sus propias medidas.
-
-**Qué cambió.** Cada uno pinta su rejilla raíz con `Brush.Bg`, como `MainWindow`; sus botones son los
-cuatro del sistema; y sus tamaños, márgenes y colores salen de los tokens. **Las dos listas de deuda
-quedan a cero**: la de pendientes de `DesignTokenTests` y la de `ImplicitStyleTests`. Y sobre todo,
-`PaletteContrastTests` **mide ahora la superficie de un diálogo**, que era el hueco por el que se
-colaron: sin esa medida, el arreglo habría durado hasta el siguiente diálogo. El orden de conversión
-fue P-24 —un diálogo se convierte con la vista que lo abre—, usado solo como criterio de orden.
-
-**Cierra 2:** UI-0013, 0014.
-
-| Hallazgo | Dónde se comprueba |
-|---|---|
-| UI-0013 · el fondo del diálogo | `dialogos/dark-d1-vincular-clon.png` … `dark-d5-lanzar-auditoria.png`, y sus cinco en claro |
-| UI-0014 · los botones del diálogo | los mismos cinco: primario, secundario y destructiva perfilada |
-
-## Raíz 3 — El foco y la accesibilidad
-
-**La causa.** El foco no tenía sitio propio —se veía con el rectángulo de puntos de fábrica, que da
-**1,21:1 en oscuro** y era el único elemento visual de la aplicación que no cambiaba con el tema— y
-las dos superposiciones no se comportaban como superposiciones.
-
-**Qué cambió.** **P-04** se cierra con su uso: el anillo de 2 px dibujado **fuera** del control, con
-su token de separación, en botones, campos, interruptores, radios y listas. **P-03 sí sale más barato
-como un patrón único**: `Controls/Overlay.cs` es un comportamiento adjunto con un solo contrato —al
-abrirse toma el foco, lo retiene, `Escape` cierra, al cerrarse lo devuelve—, y lo usan el menú «…» de
-una tarjeta y el cajón del ciclo, que eran **el mismo defecto escrito dos veces**. **P-15 no hace
-falta** para UI-0042: el orden de tabulación ya es el visual, así que basta con que el foco entre en
-la página al cambiar de página.
-
-**Cierra 6:** UI-0001, 0003, 0015, 0016, 0042, 0061.
-
-| Hallazgo | Dónde se comprueba |
-|---|---|
-| UI-0001 · el menú «…» retiene el foco | `vistas/dark-completa/01b-portafolio-mas.png` |
-| UI-0003 · el cajón del ciclo | `vistas/dark-1280/03b-inventario-cajon.png` |
-| UI-0015 · el foco se ve | cualquier captura con foco; la regla vive en `Focus.Visual` y su paleta |
-| UI-0016 · nombres de accesibilidad | no es visual: se comprueba en el árbol de automatización, que es lo que recorre el propio banco |
-| UI-0042 · el foco entra en la página | ídem — el recorrido del banco depende de ello |
-| UI-0061 · la fila de usuario no navega | `vistas/dark-completa/12-rail-plegado.png` |
-
-## Raíz 4 — La carcasa: el raíl y la miga
-
-**La causa.** El raíl y la miga se movían entre vistas, y el marcador de «estás aquí» **no se pintaba
-nunca**: pedía 3 px de barra más 4 de relleno **a cada lado** dentro de un carril de 8, así que WPF
-lo recortaba en silencio. Es la aritmética de D-966 fallando por tercera vez; por eso esta vez la
-cuenta la vigila un test.
-
-**Qué cambió.** El bloque de sistema se ancla al pie —«Cuenta» recorría 137 px entre vistas—;
-«Inventario» tiene icono propio, que antes eran tres rayas como el botón de plegar; lo que late es el
-icono y no un punto que lo sustituye; y pasar por Portafolio ya no borra la aplicación activa, que
-hacía desaparecer «Inventario» del raíl en cinco vistas. La miga **acaba siempre en la página**, con
-el mismo grano: el hallazgo cuelga de «Hallazgos» y el informe de «Informes», lo que permite retirar
-el segundo «volver» que el informe pintaba dentro.
-
-**UI-0045 no se hace**: el usuario retiró los rótulos del raíl a propósito (D-1000 §2), y **P-17
-queda descartada** salvo que él la reabra.
-
-**Cierra 10:** UI-0004, 0017, 0025, 0029, 0043, 0044, 0046, 0047, 0048, 0058. **Descarta 1:**
-UI-0045.
-
-| Hallazgo | Dónde se comprueba |
-|---|---|
-| UI-0004, UI-0044 · la miga acaba en la página | `vistas/dark-completa/05-hallazgo-ficha.png` — «Portafolio › XBLAST › Hallazgos › BUG-0008» |
-| UI-0017 · la aplicación activa no se borra | `vistas/dark-completa/01-portafolio.png` — «Inventario» sigue en el raíl |
-| UI-0025 · «Ver hallazgos» conserva filtros | `vistas/dark-completa/04-hallazgos.png` |
-| UI-0029 · raíl, título y miga dicen lo mismo | cualquiera de las diecisiete vistas |
-| UI-0043 · el bloque de sistema, anclado | comparar `01-portafolio.png` con `11-ajustes.png`: Cuenta en la misma y |
-| UI-0046 · el marcador cabe en su carril | `vistas/dark-completa/04-hallazgos.png` — la barra azul a la izquierda de «Hallazgos» |
-| UI-0047 · «Inventario» tiene icono propio | `vistas/dark-completa/01-portafolio.png` |
-| UI-0048 · la flecha apagada se lee apagada | `vistas/dark-completa/01-portafolio.png` |
-| UI-0058 · un solo «volver» en el informe | `vistas/dark-completa/07b-informe-con-hallazgos.png` |
-
-## Raíz 5 — Los recortes que mentían
-
-**La causa.** Cada vista recortaba a su manera —o no recortaba—, así que lo mismo mentía en un sitio
-y no en otro. D-983 §5 arregló uno de los tres con un presupuesto de caracteres fijo, y volvió a
-aparecer en cuanto la ventana bajó a 1280.
-
-**Qué cambió. P-01 — tres primitivas y nada más:** `Text.Name` recorta un nombre por el final con
-elipsis; `Text.Path` acorta una ruta **por el medio** y conserva los dos extremos, sobre `c:PathText`,
-que **mide** contra el ancho que hay en vez de contar caracteres; `Text.Chip` no recorta una pastilla
-—si no cabe entera, no se pinta (`c:ChipHost`)—, porque una etiqueta a medias no es una versión corta
-de la etiqueta, es otra palabra. Y el aire de un desplazamiento pasa a un token y un estilo: los
-`ScrollViewer` de WPF-UI pintan la barra **superpuesta**, que es por lo que tapaba los enlaces
-«Gestionar» del cajón del ciclo. Donde el corte cae en medio, un degradado dice que el contenido
-sigue.
-
-**Cierra 6:** UI-0002, 0009, 0011, 0028, 0033, 0037.
-
-| Hallazgo | Dónde se comprueba |
-|---|---|
-| UI-0002 · la barra no tapa los enlaces | `vistas/dark-1280/03b-inventario-cajon.png` |
-| UI-0009 · las rutas de unidad | `densas/dark-completa-05-sesion-en-vivo.png` — «src/AtalayaBanco…/FormateadorInforme.cs» |
-| UI-0011 · la pastilla de proveedor | `densas/dark-completa-06-arreglo-asistido.png` (entera) contra `densas/dark-1280-06-arreglo-asistido.png` (retirada) |
-| UI-0028, UI-0037 · el degradado del corte | `densas/dark-1280-07-arreglo-cierre.png` |
-| UI-0033 · el coste por fase, en columna | `vistas/dark-completa/08-metricas.png` |
-
-## Raíz 6 — El primario, las acciones y los avisos
-
-**La causa.** El primario tenía **cuatro criterios en cuatro sitios**, y un aviso flotante que se
-pinta sobre todo acaba pintándose sobre un control.
-
-**Qué cambió. P-27 — el primario se apaga cuando no puede hacer nada, y dice por qué al lado.**
-Inventario tenía «Auditar selección» **encendido con cero casillas marcadas** —el botón que gasta
-créditos del usuario, sin nada que auditar—; Ajustes apagaba «Guardar» en cuatro secciones **sin la
-razón al lado** mientras la quinta lo tenía encendido sin que se hubiera tocado nada. La razón va en
-`Reason.Chip`, **pegada al botón**, y no en un tooltip: hay que saber que existe para verlo, y quien
-mira un botón apagado no sabe que hay nada que ver. **Un primario por vista**, y la destructiva
-perfilada en todas partes, con el macizo reservado al diálogo que confirma. Y el aviso flotante gana
-**carril propio**: una fila entre la página y el pie, que empuja el contenido en vez de taparlo y sin
-avisos mide cero.
-
-**Cierra 6:** UI-0012, 0021, 0022, 0038, 0039, 0041.
-
-| Hallazgo | Dónde se comprueba |
-|---|---|
-| UI-0012 · el aviso no tapa el pie | `densas/dark-completa-06-arreglo-asistido.png` — el toast sobre el pie, con «Compilar solución completa» entera |
-| UI-0021 · un primario por vista | `vistas/dark-completa/01-portafolio.png` — «Abrir inventario» secundario |
-| UI-0022, UI-0038 · el primario apagado dice por qué | `vistas/dark-completa/11-ajustes.png` — «no has cambiado nada» junto a «Guardar» |
-| UI-0039 · la destructiva perfilada | `vistas/dark-completa/09-cuenta.png` — «Desconectar» |
-| UI-0041 · la acción no se sale de la pantalla | `vistas/dark-1280/02-nueva-aplicacion.png` |
-
-### El hallazgo que ninguna raíz nombraba — UI-0023
-
-Los siete lotes del encargo suman 59 hallazgos, más las siete bajas: 59 + 7 = 60 con UI-0045
-descartado, y la auditoría tiene 61. El que faltaba es **UI-0023**, de gravedad media, y no estaba en
-ninguna lista.
-
-Cae del lado de esta raíz, así que se arregla aquí: «Expandir todo» se pintaba como **enlace azul**
-en el extremo derecho de la barra del Inventario y como **botón neutro arriba a la derecha** en
-Hallazgos —el mismo rótulo y la misma acción, dos formas y dos sitios—. Ahora vive en la barra de la
-lista en las dos, que es donde vive lo que **toca la lista** —buscar, filtrar, plegar— y no arriba
-con las acciones de vista: no lanza nada y no escribe nada. Y es un secundario, no un enlace: el
-azul, en el resto de la aplicación, anuncia que se va a otro sitio.
-
-Se comprueba en `vistas/dark-completa/03-inventario.png` y `04-hallazgos.png`.
-
-## Raíz 7 — La página y el documento
-
-**La causa.** No había ningún sitio donde estuviera escrito **dónde empieza una página y hasta dónde
-llega**, así que cada vista lo decidía por su cuenta: quince arrancaban en x = 264–266 y dos no
-—Nueva aplicación en 633 y Cuenta en 800—, porque se centraban imitando a «Acerca de», que es una
-excepción declarada y no un patrón.
-
-**Qué cambió. P-02 — `PageShell`:** título, subtítulo, recuento y acciones tienen un sitio, y **una
-página arranca en el margen de la página**; lo que una vista declara es el **techo** de su cuerpo, no
-su centro. El recuento vive bajo el título que cuenta, no a 1.600 px de él. **P-08 — `Cell.Number`:**
-las cifras de Informes y Métricas se alinean a la derecha con cifras de ancho fijo, que eran las
-únicas de la casa que no lo hacían. El informe se lee alineado a la izquierda, con la tipografía del
-sistema, con techo de línea de lectura y con documento y anexo en **un** solo desplazamiento. La
-rejilla no pone más columnas que tarjetas tiene —con una sola aplicación daba tres y la tarjeta se
-quedaba con 531 de 1.635 px— y los azulejos se ciñen a su contenido en vez de gastar 393 px para
-enseñar 55. Y la gravedad estrena **una ranura fija por nivel**, siempre las cuatro, la vacía sin
-pintar: se empaquetaban a la derecha, así que la misma gravedad caía en una columna distinta según
-cuántas tuviera la fila.
-
-**Cierra 10:** UI-0020, 0024, 0030, 0031, 0032, 0035, 0040, 0055, 0056, 0059.
-
-| Hallazgo | Dónde se comprueba |
-|---|---|
-| UI-0020 · los azulejos se ciñen | `vistas/dark-completa/01-portafolio.png` — cuatro de 150 px a la izquierda |
-| UI-0024 · una ranura por nivel | `vistas/dark-completa/04-hallazgos.png` — la columna se recorre; `dark-1280` igual |
-| UI-0030 · las cifras se alinean | `vistas/dark-completa/06-informes.png` — Unidades, Hallazgos y Coste |
-| UI-0031, UI-0032, UI-0059 · el documento | `vistas/dark-completa/07b-informe-con-hallazgos.png` |
-| UI-0035 · la página arranca en el margen | `vistas/dark-completa/09-cuenta.png` y `02-nueva-aplicacion.png` |
-| UI-0040 · el tope lo pone la columna | `vistas/dark-completa/11e-ajustes-avanzado.png` |
-| UI-0055 · la barra partida comparte margen | `vistas/dark-1280/06-informes.png` — las dos filas en x = 282 |
-| UI-0056 · el recuento bajo su título | `vistas/dark-completa/06-informes.png` — «8 informes ·» bajo «Informes» |
+| **Raíl** | Todas las entradas seguidas, sin bloque anclado al pie. La fila de usuario vuelve a llevar a «Cuenta». Se conserva **solo** el icono nuevo de Inventario. |
+| **Portafolio** | La rejilla reparte por ancho sin mirar cuántas tarjetas hay: la tarjeta recupera su medida y sus cuatro cifras vuelven a ir juntas dentro. |
+| **Portafolio** | La tira de gravedades vuelve a ser los cuatro azulejos anchos. |
+| **Portafolio** | Vuelve la **papelera** a la cara de la tarjeta; se va el menú «…». |
+| **Cuenta** | Centrada en su ancho máximo, **con su título** — el defecto era que la cabecera se quedaba en el margen y el cuerpo se iba al centro. |
+| **Nueva aplicación** | Igual: centrada, con su título y con su barra de acción. |
+| **Ajustes** | Fuera la pastilla «no has cambiado nada» junto a Guardar. |
 
 ---
 
-## Las siete bajas que no caían con ninguna raíz
+## Lo que sigue distinto de la Parte C, por vista
 
-Una línea cada una, que es lo que son.
+### Toda la aplicación (paleta y tipografía)
 
-- **UI-0026** — la monoespaciada marcaba tres filas de doce y no por lo que eran, y además bajaba a
-  11 px: ahora una sola clase —lo que escribió la máquina y hay que poder copiar carácter a
-  carácter—, marcada siempre y sin tocar el tamaño. `vistas/dark-completa/05-hallazgo-ficha.png`.
-- **UI-0036** — «Hub local» contaba en tinta neutra lo que la lista de arriba cuenta con icono +
-  color + palabra; ahora las tres cosas. `vistas/dark-completa/09-cuenta.png`.
-- **UI-0052** — el aviso salía en tres formas según la vista; ahora icono, texto y —si la hay— la
-  acción, siempre. `vistas/dark-1280/05-hallazgo-ficha.png`.
-- **UI-0053** — la tira de la carcasa repetía el progreso que la barra de la vista ya da con más
-  detalle; ahora dice qué se audita, que es lo que la vista no puede decir.
-  `densas/dark-completa-05-sesion-en-vivo.png`.
-- **UI-0054** — la tarjeta de permiso ya contestada baja a superficie neutra; el ámbar es de lo que
-  sigue abierto. `densas/dark-completa-06-arreglo-asistido.png`.
-- **UI-0057** — «sin cambios» baja a tinta apagada, así que la columna que dice si una sesión trajo
-  trabajo se puede recorrer. `vistas/dark-completa/06-informes.png`.
-- **UI-0060** — la fila «Stack» adopta la forma de las otras tres del formulario: una columna de
-  rótulos, una de controles y una de botones de apoyo. `vistas/dark-completa/02-nueva-aplicacion.png`.
+| Se ve | Antes (C) | Después |
+|---|---|---|
+| Las cuatro gravedades tienen **cuatro rellenos distintos**; antes crítica y alta compartían fondo y «baja» llevaba el azul de «estás aquí» | `banco/vistas/dark-completa/04-hallazgos.png` | `f27/banco/vistas/dark-completa/04-hallazgos.png` |
+| Un solo rotulado de gravedad: «15 Altas», no «15 Alta» / «Crit 0» / «Critica» | ídem | ídem |
+| El cero de un recuento se pinta en neutro, no en rojo de peligro | `…/01-portafolio.png` | ídem |
+| Interruptores, radios, casillas y anillos usan el azul de la paleta, no el de la librería | `…/11d-ajustes-apariencia.png` | ídem |
+| El foco se ve con un anillo de la paleta, no con el rectángulo de puntos de fábrica | — | abrir el `dist` y tabular |
+| Las tres acciones de la ficha vuelven al sistema (eran `#DDDDDD` sobre negro en los dos temas) | `…/05-hallazgo-ficha.png` | ídem |
+
+### Raíl y carcasa
+
+| Se ve | Antes (C) | Después |
+|---|---|---|
+| «Inventario» tiene icono propio; antes eran las tres rayas del botón de plegar | `…/01-portafolio.png` | `f27/…/01-portafolio.png` |
+| El marcador de «estás aquí» se pinta; antes no cabía en su carril y WPF lo recortaba entero | ídem | ídem |
+| La miga acaba siempre en la página, y el informe pierde su segundo «← Volver» | `…/07-informe-abierto.png` | `f27/…/07b-informe-con-hallazgos.png` |
+| Pasar por Portafolio ya no borra la aplicación activa del raíl | — | abrir el `dist` |
+| El aviso flotante tiene carril propio: empuja el pie en vez de taparlo | `densas/dark-completa-06-arreglo-asistido.png` | `f27/…/densas/dark-completa-06-arreglo-asistido.png` |
+| La flecha de volver apagada se lee apagada | `…/01-portafolio.png` | ídem |
+
+### Portafolio
+
+| Se ve | Antes (C) | Después |
+|---|---|---|
+| «Abrir inventario» pasa a secundario: un solo primario por vista | `…/01-portafolio.png` | *(revertido lo demás; esto se queda)* |
+
+### Hallazgos
+
+| Se ve | Antes (C) | Después |
+|---|---|---|
+| Las pastillas de gravedad caen en **una ranura fija por nivel**; antes se empaquetaban a la derecha y la misma gravedad cambiaba de columna según la fila | `…/04-hallazgos.png` | `f27/…/04-hallazgos.png` |
+| «Expandir todo» baja a la barra de la lista y deja de ser un enlace azul | ídem | *(sin captura)* |
+| Una ruta que no cabe se acorta **por el medio** y conserva el nombre del fichero | `banco/vistas/dark-1280/04-hallazgos.png` | *(sin captura)* |
+
+### Ficha de un hallazgo
+
+| Se ve | Antes (C) | Después |
+|---|---|---|
+| La monoespaciada marca **una** clase —identificadores, rutas y hashes— y no cambia el tamaño | `…/05-hallazgo-ficha.png` | `f27/…/05-hallazgo-ficha.png` |
+| El aviso de re-anclaje lleva icono, como los demás avisos de la casa | `banco/vistas/dark-1280/05-hallazgo-ficha.png` | ídem |
+| La pastilla «Activo» sale de la paleta (daba 2,38:1 sobre el crema) | `banco/vistas/light-completa/05-hallazgo-ficha.png` | ídem |
+
+### Informes
+
+| Se ve | Antes (C) | Después |
+|---|---|---|
+| Unidades, Hallazgos y Coste se alinean a la derecha con cifras de ancho fijo | `…/06-informes.png` | `f27/…/06-informes.png` |
+| «8 informes» vive bajo el título, no a 1.600 px de él | ídem | ídem |
+| «sin cambios» baja a tinta apagada; el delta se lee de un vistazo | ídem | ídem |
+| La barra de filtros partida empieza sus dos filas en la misma x | `banco/vistas/dark-1280/06-informes.png` | `f27/…/dark-1280/06-informes.png` |
+| La tabla **cabe** a 1280: antes los mínimos sumaban 8 px más de los que había | ídem | ídem |
+| El informe se lee alineado a la izquierda, con la tipografía del sistema y con anexo en el mismo desplazamiento | `…/07-informe-abierto.png` | `f27/…/07-informe-abierto.png` |
+
+### Métricas
+
+| Se ve | Antes (C) | Después |
+|---|---|---|
+| Las cifras de coste por fase se alinean; las dos filas comparten columna | `…/08-metricas.png` | `f27/…/08-metricas.png` |
+| Los recuentos por gravedad usan los cuatro rellenos nuevos | ídem | ídem |
+
+### Inventario
+
+| Se ve | Antes (C) | Después |
+|---|---|---|
+| «Auditar selección» está **apagado** con cero casillas, y dice por qué al lado | `…/03-inventario.png` | `f27/…/03-inventario.png` |
+| «Expandir todo» deja de ser un enlace azul | ídem | *(sin captura)* |
+| La barra del cajón del ciclo no tapa los enlaces «Gestionar» | `banco/vistas/dark-1280/03b-inventario-cajon.png` | `f27/…/dark-1280/03b-inventario-cajon.png` |
+
+### Ajustes
+
+| Se ve | Antes (C) | Después |
+|---|---|---|
+| Los bloques del mismo nivel acaban donde acaba su columna (antes en 1441, 1460 y 1400) | `…/11-ajustes.png` | `f27/…/11e-ajustes-avanzado.png` |
+| «Guardar tarifas» se apaga cuando no hay nada que guardar | `…/11c-ajustes-tarifas.png` | `f27/…/11c-ajustes-tarifas.png` |
+| Las cinco secciones se recorren con flechas y se activan con Enter | — | abrir el `dist` |
+
+### Cuenta
+
+| Se ve | Antes (C) | Después |
+|---|---|---|
+| «Hub local» dice su estado con **icono + color + palabra**, como la lista de arriba | `…/09-cuenta.png` | `f27/…/09-cuenta.png` |
+| «Desconectar» es perfilada, no maciza | ídem | ídem |
+
+### Nueva aplicación
+
+| Se ve | Antes (C) | Después |
+|---|---|---|
+| La fila «Stack» tiene la forma de las otras tres: rótulo, control y botón de apoyo en sus columnas | `…/02-nueva-aplicacion.png` | `f27/…/02-nueva-aplicacion.png` |
+| La razón de un control apagado **envuelve** en vez de cortarse contra el borde | ídem | ídem |
+| La fila de acción se queda pegada al pie de la columna; antes «Crear e inventariar» quedaba fuera de pantalla a 1280 | `banco/vistas/dark-1280/02-nueva-aplicacion.png` | `f27/…/dark-1280/02-nueva-aplicacion.png` |
+
+### Sesión en vivo y Arreglo asistido
+
+| Se ve | Antes (C) | Después |
+|---|---|---|
+| Las rutas de unidad se acortan por el medio en vez de cortarse contra el borde | `densas/dark-completa-05-sesion-en-vivo.png` | `f27/…/densas/dark-completa-05-sesion-en-vivo.png` |
+| La tira de la carcasa deja de repetir el progreso que la barra de la vista ya da | ídem | ídem |
+| La tarjeta de permiso **ya contestada** baja a superficie neutra; el ámbar queda para la abierta | `densas/dark-completa-06-arreglo-asistido.png` | `f27/…/densas/dark-completa-06-arreglo-asistido.png` |
+| «Responder» baja a secundario: había dos primarios a la vez | ídem | ídem |
+| La pastilla de proveedor y modelo se retira entera a 1280 en vez de quedarse en «Age» | `densas/dark-1280-06-arreglo-asistido.png` | `f27/…/densas/dark-1280-06-arreglo-asistido.png` |
+| El cierre del arreglo lleva icono en su aviso | `densas/dark-completa-07-arreglo-cierre.png` | `f27/…/densas/dark-completa-07-arreglo-cierre.png` |
+
+### Los nueve diálogos
+
+| Se ve | Antes (C) | Después |
+|---|---|---|
+| Fondo, botones, márgenes y colores salen del sistema; antes eran una isla | `dialogos/dark-d1-vincular-clon.png` … `d5` | `f27/banco/dialogos/…` |
+| «Restablecimiento de fábrica» y «Descartar todo» son perfiladas fuera del diálogo que confirma | `…/d4-restablecimiento-de-fabrica.png` | ídem |
 
 ---
 
 ## Las reglas nuevas
 
-Quince tests, uno por línea, con la regla que protege cada uno. Todos comprobados contra su defecto:
-se dejó el defecto en su sitio y se vio fallar el test.
+Trece tests. Uno por línea, con lo que protege cada uno. Todos comprobados contra su defecto.
 
-| Test | La regla que protege |
+| Test | La regla |
 |---|---|
-| `PaletteResourceTests.Cada_color_de_la_paleta_tiene_su_pincel` | Por cada `Color.X` hay un `Brush.X`, **en las dos paletas** |
-| `PaletteResourceTests.Ningun_XAML_pide_un_pincel_que_no_existe` | Todo `{DynamicResource Brush.*}` resuelve contra los diccionarios fusionados de verdad, WPF-UI incluida |
+| `PaletteResourceTests.Cada_color_de_la_paleta_tiene_su_pincel` | Por cada `Color.X` hay un `Brush.X`, en las dos paletas |
+| `PaletteResourceTests.Ningun_XAML_pide_un_pincel_que_no_existe` | Todo `{DynamicResource Brush.*}` resuelve contra los diccionarios fusionados de verdad |
 | `PaletteContrastTests.Los_cuatro_rellenos_y_las_cuatro_tintas_de_gravedad_son_distintos` | Los ocho colores de gravedad son ocho, y cada tinta se mide contra **su** relleno |
-| `PaletteContrastTests.Cada_dialogo_pinta_su_fondo_con_una_superficie_medida` | Un diálogo no puede inventarse un fondo que el contraste no haya medido |
-| `DesignTokenTests.El_marcador_de_estas_aqui_cabe_en_su_carril` | Barra + relleno ≤ carril, en los dos raíles: un marcador que no cabe WPF lo recorta en silencio |
-| `DesignTokenTests.Un_texto_que_no_envuelve_recorta_con_una_de_las_tres_primitivas` | Nadie escribe su propio `TextTrimming`: o `Text.Name`, o `Text.Path`, o `Text.Chip` |
-| `DesignTokenTests.Ningun_estilo_se_apoya_en_una_clave_que_se_declara_mas_abajo` | Un diccionario se lee de arriba abajo: una clave declarada después no existe todavía |
-| `DesignTokenTests.Ninguna_pagina_centra_su_cuerpo` | Una página arranca en el margen de la página; lo que declara es el techo de su cuerpo |
-| `PathTextTests.Una_ruta_que_cabe_se_deja_entera` | Acortar lo que cabe es esconder sin motivo |
-| `PathTextTests.Una_ruta_que_no_cabe_conserva_el_nombre_del_fichero` | El acortado es por el **medio**, y siempre con puntos suspensivos |
-| `PathTextTests.Una_fila_reciclada_vuelve_a_acortar_su_ruta` | En una lista virtualizada, cambiar el texto sin cambiar de tamaño también tiene que acortar |
-| `ExhaustiveModeTests.La_tira_de_la_carcasa_dice_la_palabra_y_no_repite_el_progreso` | El progreso lo dice la vista una vez; la carcasa dice lo que la vista no puede decir |
-| `ShellNavigationTests.Pasar_por_el_portafolio_conserva_el_grupo_de_la_aplicacion` | Navegar a Portafolio no puede borrar la aplicación activa del raíl |
-| `ShellNavigationTests.La_miga_acaba_en_la_pagina_y_solo_el_ultimo_eslabon_lo_parece` | Sólo un eslabón puede ser la página; los demás llevan su separador aunque no sean enlace |
-| `ShellNavigationTests.En_el_portafolio_la_miga_es_un_eslabon_y_es_el_ultimo` | Con un solo eslabón, ése es el último: ni «›» hacia la nada ni un título sin peso |
-
-Y dos que cambian porque cambió la regla que protegían: `PolishLayoutTests` pasa de contar columnas
-a exigir **una sola elástica y que sea la del texto** —el aviso lleva ahora también su icono—, y
-`DesignTokenTests`/`ImplicitStyleTests` se quedan con sus listas de pendientes **vacías**.
+| `PaletteContrastTests.Cada_dialogo_pinta_su_fondo_con_una_superficie_medida` | Un diálogo no se inventa un fondo que el contraste no haya medido |
+| `DesignTokenTests.El_marcador_de_estas_aqui_cabe_en_su_carril` | Barra + relleno ≤ carril: lo que no cabe, WPF lo recorta en silencio |
+| `DesignTokenTests.Un_texto_que_no_envuelve_recorta_con_una_de_las_tres_primitivas` | Nadie escribe su propio `TextTrimming` |
+| `DesignTokenTests.Ningun_estilo_se_apoya_en_una_clave_que_se_declara_mas_abajo` | Un diccionario se lee de arriba abajo: lo declarado después no existe todavía |
+| `DesignTokenTests.La_cabecera_y_el_cuerpo_de_una_pagina_van_en_la_misma_columna` | O los dos en el margen o los dos centrados; nunca uno a cada lado |
+| `PathTextTests` (tres) | Lo que cabe se deja entero; lo que no, se acorta por el medio; y una fila reciclada vuelve a acortar |
+| `ExhaustiveModeTests.La_tira_de_la_carcasa_dice_la_palabra_y_no_repite_el_progreso` | El progreso lo dice la vista una vez |
+| `ShellNavigationTests.La_miga_acaba_en_la_pagina_y_solo_el_ultimo_eslabon_lo_parece` | Sólo un eslabón es la página; los demás llevan separador aunque no sean enlace |
+| `ShellNavigationTests.Una_geometria_que_no_es_un_numero_no_se_guarda` | El autochequeo no puede acabar en excepción: su código de salida es lo que mira la Release |
 
 ---
 
@@ -287,76 +170,37 @@ a exigir **una sola elástica y que sea la del texto** —el aviso lleva ahora t
 
 | | |
 |---|---|
-| **Cerrados** | **60** |
-| **Descartados por decisión del usuario** | **1** — UI-0045 (los rótulos del raíl; D-1000 §2, P-17 con él) |
-| **Pendientes** | **0** |
+| **Cerrados** | **56** |
+| **Revertidos por decisión del usuario** | **4** — UI-0020 (los azulejos), UI-0043 (el bloque de sistema al pie), UI-0061 (la fila de usuario), y la mitad de UI-0038 que tocaba a «Guardar» |
+| **Descartados por decisión del usuario** | **1** — UI-0045 (los rótulos del raíl) |
 
-| Raíz | Cierra |
-|---|---|
-| 1 · el color sale de la paleta | 12 |
-| 2 · los diálogos leen la paleta | 2 |
-| 3 · el foco tiene sitio | 6 |
-| 4 · la carcasa deja de moverse | 10 (+1 descartado) |
-| 5 · los recortes dejan de mentir | 6 |
-| 6 · el primario, las acciones y los avisos | 6 + UI-0023 |
-| 7 · la página y el documento | 10 |
-| las bajas, una a una | 7 |
-| **Total** | **60 cerrados + 1 descartado = 61** |
+UI-0035 se mantiene cerrado, pero al revés de como F27 lo cerró: la cabecera se centra con el
+cuerpo, en vez de el cuerpo alinearse con la cabecera.
 
 ---
 
 ## Lo que el `dist` enseñó y el verde no
 
-Tres defectos propios, y son la razón por la que estas capturas se miran en el `dist`: **compilan
-igual y los tests pasan igual.** Están en D-1010 con su detalle; en resumen:
+Cuatro defectos propios, y son la razón de N-8. Los cuatro compilaban y pasaban los tests:
 
-1. **La aplicación publicada no arrancaba.** `Stat.Number.Sev` heredaba de un estilo declarado **88
-   líneas más abajo**. Build verde, 1.920 tests verdes, y `dist\Atalaya.exe` se cerraba solo al
-   pintar el Portafolio, que es la primera pantalla.
-2. **Anclar la cabecera al margen no bastaba.** Con el cuerpo centrado, el título quedaba a la
-   izquierda y el contenido en el medio, con 530 px en blanco entre los dos. Una página no se centra.
-3. **`TextTrimming="None"` era lo que impedía el acortado**, no lo que lo dejaba trabajar: un
-   `TextBlock` sin recorte declarado pide el ancho del texto entero y no acepta menos, así que en una
-   fila apretada empujaba su columna y el contenedor la cortaba en seco.
-4. **La miga del Inventario juntaba dos eslabones**: se leía `Portafolio › XBLASTInventario`, con el
-   nombre de la aplicación pegado al de la página y los dos en negrita. La causa es de la raíz 4: la
-   miga acaba ahora **siempre** en la página, y en el Inventario el eslabón de en medio no es enlace
-   —sería un enlace a donde ya estás—, así que mientras «ser la página» se dedujo de «no ser enlace»,
-   ese eslabón se pintaba como la página y el separador, que colgaba de lo mismo, no salía. `Crumb`
-   estrena `IsLast`, que lo pone quien construye la miga. Tests: dos, y **la miga no tenía
-   ninguno**.
-
-Y de camino, dos cosas que las capturas destaparon y que no son de la auditoría: la tabla de Informes
-**cabe a 1280** —sus mínimos sumaban 960 con 952 disponibles— y la razón de un control apagado
-**envuelve** en vez de cortarse contra el borde de su tarjeta. Más una del propio banco: `tour.ps1`
-seguía buscando el «← Volver» que la raíz 4 retiró del informe, así que dejó de tomar una captura sin
-decir por qué; ahora vuelve por el raíl.
-
----
-
-## Lo que NO se ha tocado
-
-Ninguna regla de negocio, ningún dato, nada del hub, ningún prompt. Y ninguna de las decisiones del
-usuario: el raíl sigue **sin rótulos de grupo** (D-1000 §2), la vista rápida sigue **descartada**, y
-«Guardar» sigue **bajo su sección** (D-987, D-1000 §1). De las 28 propuestas del bloque 2 entran las
-ocho de la lista y **ninguna más**.
-
-Lo que queda apuntado está en `BACKLOG.md`: las trece vistas que aún escriben su cabecera a mano
-—ya alineadas, así que no hay defecto, solo patrón por generalizar—, el ancho de las tarjetas de
-Cuenta, las diecinueve propuestas del bloque 2 que el usuario no ha pedido, y el `$PSScriptRoot`
-vacío de `tour.ps1` cuando se le invoca con `powershell -File`.
+1. **La aplicación publicada no arrancaba.** Un estilo heredaba de otro declarado 88 líneas más
+   abajo en el mismo diccionario: build verde, 1.920 tests verdes, autochequeo verde, y
+   `dist\Atalaya.exe` se cerraba solo al pintar la primera pantalla. **Desde ahora `--selfcheck`
+   pinta la primera vista**, que es donde se aplican los estilos.
+2. **El propio autochequeo acababa en excepción**, guardando la geometría de una ventana que nunca
+   se enseñó —infinitos, que `System.Text.Json` no escribe—. Imprimía «Arranca.» y reventaba: su
+   código de salida, que es lo que mira el workflow de release, no significaba nada.
+3. **`TextTrimming="None"` impedía el acortado** en vez de dejarlo trabajar: un `TextBlock` sin
+   recorte declarado pide el ancho del texto entero y no acepta menos.
+4. **La miga juntaba dos eslabones** —`Portafolio › XBLASTInventario`— porque «ser la página» se
+   deducía de «no ser enlace», y el eslabón de la aplicación no es enlace cuando ya estás en su
+   inventario.
 
 ---
 
 ## Estado
 
-- **Build:** correcto, 0 errores, 0 advertencias en la aplicación.
-- **Tests:** **2.436 en verde**, 0 fallos (1.927 de `Atalaya.App.Tests`, quince nuevos).
-- **`dist`:** reconstruido con `scripts/publish.ps1` y arrancado para comprobarlo.
-- **Capturas:** recorrido completo en las cuatro combinaciones más las densas y los diálogos, en
-  `docs/design/f27/banco/`. **Salvo dos vistas**: `03-inventario` y `04-hallazgos` son de la pasada
-  anterior a UI-0023 y al arreglo de la miga, así que en ellas «Expandir todo» todavía sale como
-  enlace y la miga del Inventario todavía se lee «XBLASTInventario». El recorrido conduce la
-  aplicación con el ratón de verdad, así que la pasada que las actualiza queda **a la espera de que
-  el usuario diga cuándo**.
-- **El push es del usuario** (N-3): los commits están hechos y listados; nadie ha publicado nada.
+- **Build:** correcto, 0 errores.
+- **Tests:** **2.437 en verde**, 0 fallos (1.928 de `Atalaya.App.Tests`).
+- **`dist`:** reconstruido, y `--selfcheck` en verde con la primera vista pintada.
+- **El push es del usuario** (N-3).

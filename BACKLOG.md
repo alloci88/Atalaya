@@ -4,8 +4,8 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-05 (F27 — las siete raíces de UI-AUDIT-1: 61 hallazgos arreglados por
-causa y no por parche, con las reglas que impiden que vuelvan).
+Última revisión: 2026-09-05 (F27 y su cierre — la auditoría de la interfaz arreglada por causa, y
+las seis reversiones de lo que se había movido sin pedirlo; con ellas entran N-6, N-7 y N-8).
 
 ## En vuelo
 
@@ -56,32 +56,26 @@ causa y no por parche, con las reglas que impiden que vuelvan).
   - **La lista de pendientes de `DesignTokenTests` está VACÍA.** Al cerrar la C quedaban diez, y los
     diez eran diálogos. Los cierra F27 con su raíz 2 (D-1002), junto con la lista de deuda de
     `ImplicitStyleTests`: las dos listas eran el marcador de la conversión, y las dos están a cero.
-- **F27 — las siete raíces de la auditoría de interfaz. ENTREGADA** (D-1001…D-1010). UI-AUDIT-1
-  dejó 61 hallazgos; se arreglan **siete causas** —el color que no salía de la paleta, los nueve
-  diálogos que no la leían, el foco, la carcasa, los recortes que mentían, el primario y los avisos,
-  y la falta de un armazón de página— más las siete bajas que no caían con ninguna. **Cierra 60,
-  descarta 1** (UI-0045, por decisión del usuario). Ocho propuestas del bloque 2 entran (P-01, P-02,
-  P-04, P-05, P-08, P-12, P-27, P-28) y una se descarta con su hallazgo (P-17). Parte y capturas en
-  `docs/design/f27/`.
+- **F27 — la auditoría de la interfaz. ENTREGADA** (D-1001). UI-AUDIT-1 dejó 61 hallazgos; se
+  arreglaron por causa —siete raíces y siete sueltos— y en el cierre el usuario revirtió **seis
+  cambios de disposición** que no había pedido: el raíl, las tarjetas y la tira del Portafolio, la
+  papelera de la tarjeta, el centrado de Cuenta y Nueva aplicación, y la pastilla junto a «Guardar».
+  Con ellas entran **N-6, N-7 y N-8**. Parte por vista en `docs/design/f27/parte.md`.
 
-  **Lo que F27 deja apuntado y NO hace:**
+  **Lo que queda apuntado:**
 
-  - **Las trece vistas que no usan `PageShell`.** El armazón de página (P-02) se aplica donde había
-    hallazgo —Cuenta, Nueva aplicación e Informes—; las demás siguen escribiendo su cabecera a mano.
-    Ya arrancan todas en la misma x, así que no hay defecto que arreglar: lo que queda es que la
-    próxima vista nazca con el patrón en vez de copiarlo. Trabajo mecánico, sin decisiones nuevas.
-  - **Las tarjetas de Cuenta miden 570 px dentro de una columna de 920.** UI-0035 se cierra —la
-    página arranca en el margen— pero la tarjeta sigue ciñéndose a su contenido en vez de a su
-    columna. No se toca porque no hay medida que diga cuál de las dos es la buena: el ancho de una
-    tarjeta de estados es una decisión de diseño, no un defecto de alineación.
+  - **Las capturas de «después» están a medias.** El banco de `docs/design/f27/banco/` es de antes
+    de las seis reversiones. No se ha vuelto a lanzar el recorrido porque conduce la aplicación con
+    el ratón de verdad (N-8): se refrescará **a demanda**, si hace falta para una auditoría.
+  - **Las trece vistas que no usan `PageShell`.** El patrón se aplicó donde había hallazgo —Cuenta,
+    Nueva aplicación e Informes—; las demás siguen escribiendo su cabecera a mano. Ya arrancan todas
+    en la misma x, así que no hay defecto: lo que queda es que la próxima vista nazca con el patrón.
   - **Las diecinueve propuestas del bloque 2 que el usuario no pidió.** Están en el informe de la
-    auditoría con su porqué; ninguna se ha empezado. **P-17** (devolver los rótulos al raíl) queda
-    **descartada** salvo que el usuario la reabra: retiró los rótulos a propósito en D-1000 §2.
-  - **`tour.ps1` invocado con `powershell -File` no encuentra el `dist`.** `$PSScriptRoot` no está
-    disponible al evaluar los valores por defecto de `param()` en esa forma de invocación, así que
-    el `-Exe` por defecto sale vacío. Por el camino documentado —llamarlo por su ruta desde una
-    consola, o desde `tour-todo.ps1`— funciona. Se apunta porque el mensaje de error no dice nada de
-    esto.
+    auditoría con su porqué. **P-17** (devolver los rótulos al raíl) queda **descartada** salvo que
+    él la reabra.
+  - **`tour.ps1` con `powershell -File` no encuentra el `dist`**: `$PSScriptRoot` no está disponible
+    al evaluar los valores por defecto de `param()` en esa forma de invocación. Por el camino
+    documentado funciona.
 
 - **F24 — el símbolo debería ir por UBICACIÓN, no por hallazgo.** Hoy `Finding.Symbol` es **uno para
   todo el hallazgo**, y un defecto sistémico tiene N ubicaciones en N miembros distintos. El auditor
