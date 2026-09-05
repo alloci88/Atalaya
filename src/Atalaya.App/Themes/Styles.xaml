@@ -1308,6 +1308,68 @@
         <Setter Property="Margin" Value="{StaticResource Pad.S.Right}" />
     </Style>
 
+    <!-- LA PREGUNTA CONTESTADA DEJA DE PEDIR ATENCIÓN (UI-0054). Las tarjetas de permiso del
+         arreglo asistido eran todas ámbar, la que espera y las cinco que ya se contestaron: al
+         bajar por el hilo, cada permiso resuelto volvía a reclamar el ojo y lo único que las
+         distinguía era una línea de 12 px al pie. El ámbar es de lo que está ABIERTO; contestada
+         la pregunta, la tarjeta baja a superficie neutra y se queda como lo que es, historia de la
+         conversación. -->
+    <Style x:Key="Notice.Ask" TargetType="Border" BasedOn="{StaticResource Notice.Warning}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsAnswered}" Value="True">
+                <Setter Property="Background" Value="{DynamicResource Brush.Surface2}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Notice.Ask.Header" TargetType="TextBlock" BasedOn="{StaticResource Text.Meta}">
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.Ink}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsAnswered}" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- EL ESTADO DEL HUB, CON LAS TRES COSAS (UI-0036). D-989 fijó icono + COLOR + PALABRA para
+         las filas de conexión, y la tarjeta de al lado —«Hub local»— contaba la misma verdad en
+         tinta neutra y sin icono: «Estado: sincronizado · última sincronización: …». Si el hub
+         estuviera desincronizado, esa línea se leería exactamente igual. Son los mismos tres
+         estados que ya pinta el punto del pie (`Dot.Sync`), dichos aquí con nombre. -->
+    <Style x:Key="Hub.State.Glyph" TargetType="Path" BasedOn="{StaticResource Icon}">
+        <Setter Property="Data" Value="{x:Static c:Icons.Cross}" />
+        <Setter Property="Stroke" Value="{DynamicResource Brush.Danger.Ink}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="{StaticResource Pad.XS.Right}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding HubHealth}" Value="Green">
+                <Setter Property="Data" Value="{x:Static c:Icons.Check}" />
+                <Setter Property="Stroke" Value="{DynamicResource Brush.Success.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding HubHealth}" Value="Amber">
+                <Setter Property="Data" Value="{x:Static c:Icons.Warning}" />
+                <Setter Property="Stroke" Value="{DynamicResource Brush.Warning.Ink}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Hub.State.Word" TargetType="TextBlock" BasedOn="{StaticResource Text.Default}">
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Danger.Ink}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding HubHealth}" Value="Green">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Success.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding HubHealth}" Value="Amber">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.Ink}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- La frase de un aviso NO se estira hasta el borde del monitor: un aviso es texto, y a 1.400
          px una línea deja de poder seguirse. Se para en la medida de lectura y arranca a la
          izquierda, pegada a su icono. -->
@@ -1538,6 +1600,21 @@
         <Setter Property="TextAlignment" Value="Right" />
         <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
         <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+
+    <!-- LA CIFRA QUE DICE SI PASÓ ALGO (UI-0057). Una columna de deltas donde «+15 / −0» y
+         «sin cambios» pesan lo mismo no se puede recorrer: hay que leer las ocho filas para dar
+         con las tres que trajeron trabajo. Lo apagado es la fila SIN delta —que es lo que no
+         reclama nada— y la que sí lo tiene se queda con la tinta principal. No lleva verde ni
+         rojo: aquí «+15» no es bueno ni malo, es que hay algo que mirar. -->
+    <Style x:Key="Cell.Number.Delta" TargetType="TextBlock" BasedOn="{StaticResource Cell.Number}">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextFaint}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding HasDelta}" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+            </DataTrigger>
+        </Style.Triggers>
     </Style>
 
     <!-- Y su cabecera, que tiene que caer sobre la misma columna. -->

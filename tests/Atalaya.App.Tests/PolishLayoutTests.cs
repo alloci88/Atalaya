@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using FluentAssertions;
 using Xunit;
 
@@ -46,9 +46,10 @@ public sealed class PolishLayoutTests
         band.Should().NotContain("StackPanel",
             "un StackPanel horizontal mide con ancho infinito y Wrap deja de envolver");
         band.Should().Contain("<Grid>");
-        Regex.Matches(band, @"<ColumnDefinition\b").Should().HaveCount(2,
-            "texto elástico y botón a su medida: eso es lo que le da un ancho al texto");
-        band.Should().Contain(@"<ColumnDefinition Width=""*"" />", "el texto se lleva lo que sobra");
+        // La regla no es «dos columnas» —desde UI-0052 el aviso lleva además su icono— sino que
+        // haya UNA sola elástica y que sea la del texto: es lo único que le da un ancho finito.
+        Regex.Matches(band, @"<ColumnDefinition Width=""\*"" />").Should().HaveCount(1,
+            "una sola columna se estira, y es la del texto; el resto van a su medida");
     }
 
     [Fact]

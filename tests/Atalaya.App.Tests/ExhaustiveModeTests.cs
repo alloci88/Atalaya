@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Copilot;
 using Atalaya.Domain;
@@ -224,20 +224,28 @@ public sealed class ExhaustiveModeTests : IDisposable
     }
 
     /// <summary>
-    /// <b>Y el pie en vivo, junto a la unidad.</b> Quien mira una sesión correr tiene que poder ver
-    /// con qué se está pagando; lo demás del pie no cambia (D-926).
+    /// <b>Y la tira de la carcasa, con la palabra.</b> Quien deja una sesión corriendo mientras
+    /// mira otra pantalla tiene que poder ver con qué se está pagando: el modo exhaustivo cuesta el
+    /// triple y puede duplicar hallazgos, así que viaja con la tira y no solo con la vista.
+    /// <para>
+    /// <b>Y la tira NO repite el progreso</b> (UI-0053). La unidad y la pasada son de la barra de
+    /// Sesión en vivo, que está a 44 px y ya las dice con más detalle. Si vuelven aquí, la carcasa
+    /// gasta su único renglón contando dos veces lo mismo.
+    /// </para>
     /// </summary>
     [Fact]
-    public void El_pie_en_vivo_dice_la_palabra_junto_a_la_unidad()
+    public void La_tira_de_la_carcasa_dice_la_palabra_y_no_repite_el_progreso()
     {
         LiveSessionService live = Live(exhaustive: true);
 
-        live.ProgressLine.Should().Be("Auditando app · unidad 2/5 · exhaustivo · pasada 3");
+        live.ProgressLine.Should().Be("Auditando app · exhaustivo");
+        live.ProgressLine.Should().NotContain("unidad").And.NotContain("pasada",
+            "el progreso lo dice la barra de la vista, y esta tira está a 44 px de ella");
         new SessionViewModel(live).Footer.Select(f => f.Full)
             .Should().ContainInOrder("Unidad 2 de 5", "exhaustivo");
 
         LiveSessionService normal = Live(exhaustive: false);
-        normal.ProgressLine.Should().Be("Auditando app · unidad 2/5 · pasada 3");
+        normal.ProgressLine.Should().Be("Auditando app");
         new SessionViewModel(normal).Footer.Select(f => f.Full).Should().NotContain("exhaustivo");
     }
 

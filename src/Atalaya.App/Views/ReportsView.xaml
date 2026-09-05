@@ -275,7 +275,7 @@
                                      diferencia entre poder recorrer una columna de costes y tener
                                      que leerla número a número. -->
                                 <TextBlock Grid.Column="5" Text="{Binding Units}" Style="{StaticResource Cell.Number}" />
-                                <TextBlock Grid.Column="6" Text="{Binding Findings}" Style="{StaticResource Cell.Number}" />
+                                <TextBlock Grid.Column="6" Text="{Binding Findings}" Style="{StaticResource Cell.Number.Delta}" />
                                 <TextBlock Grid.Column="7" Text="{Binding Cost}" Style="{StaticResource Cell.Number}"
                                            ToolTip="{Binding CostDetail}" />
                             </Grid>

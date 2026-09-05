@@ -65,10 +65,9 @@
         <!-- · Una pregunta esperando respuesta · -->
         <DataTemplate DataType="{x:Type services:FixQuestion}">
             <Border CornerRadius="8" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.Indent.XL}"
-                    Style="{StaticResource Notice.Warning}">
+                    Style="{StaticResource Notice.Ask}">
                 <StackPanel>
-                    <TextBlock Text="{Binding Header}" FontWeight="SemiBold" FontSize="{StaticResource FontSize.Meta}"
-                               TextWrapping="Wrap" Foreground="{DynamicResource Brush.Warning.Ink}" />
+                    <TextBlock Text="{Binding Header}" Style="{StaticResource Notice.Ask.Header}" />
                     <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Small}"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
@@ -564,10 +563,19 @@
                         <TextBlock Text="Arreglo terminado" FontSize="{StaticResource FontSize.H3}" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding Fix.StatusMessage}" TextWrapping="Wrap" Opacity="0.8"
                                    FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Top}" />
-                        <Border CornerRadius="6" Padding="{StaticResource Pad.Field}" Margin="{StaticResource Pad.S.Top}"
-                                Style="{StaticResource Notice.Warning}">
-                            <TextBlock TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.Warning.Ink}"
-                                       Text="Los cambios están en tu clon sin commitear — revisa y commitea cuando estés conforme. Arreglar no resuelve el hallazgo: sigue activo hasta que lo verifiques." />
+                        <!-- UN AVISO ES ICONO, TEXTO Y —SI LA HAY— LA ACCIÓN (UI-0052). Aquí
+                             «esto es un aviso» viajaba solo en el color: relleno ámbar y una frase,
+                             sin el icono que llevan los de Métricas y Ajustes. El mismo control
+                             salía en tres formas distintas según la vista. -->
+                        <Border Style="{StaticResource Notice.Warning}" Margin="{StaticResource Pad.S.Top}">
+                            <DockPanel>
+                                <Path DockPanel.Dock="Left" Style="{StaticResource Notice.Icon}"
+                                      Data="{x:Static c:Icons.Warning}"
+                                      Stroke="{DynamicResource Brush.Warning.Ink}" />
+                                <TextBlock Style="{StaticResource Notice.Text}"
+                                           Foreground="{DynamicResource Brush.Warning.Ink}"
+                                           Text="Los cambios están en tu clon sin commitear — revisa y commitea cuando estés conforme. Arreglar no resuelve el hallazgo: sigue activo hasta que lo verifiques." />
+                            </DockPanel>
                         </Border>
                     </StackPanel>
 

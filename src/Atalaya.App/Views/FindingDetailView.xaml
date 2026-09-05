@@ -107,12 +107,20 @@
                            Foreground="{DynamicResource Brush.TextMuted}" />
                 <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+                    <!-- LA MONOESPACIADA MARCA UNA CLASE, Y NO CAMBIA NADA MAS (UI-0026). Iba
+                         en tres de las doce filas y no por lo que eran: `Commit anclado: e34fc69`
+                         en monoespaciada y `Identificador: BUG-0008` en proporcional, siendo los
+                         dos literales de maquina. Y ademas bajaba a 11 px, asi que la familia no
+                         estaba diciendo «esto es literal» sino «estas tres filas son otra cosa».
+                         La clase es: lo que escribio la maquina y hay que poder copiar caracter a
+                         caracter —identificadores, rutas y hashes—. La familia sale del sistema
+                         (`Font.Mono`) y el tamaño no se toca: el enfasis de una tabla de metadatos
+                         lo pone el sitio de la fila, no su tipografia. -->
                     <TextBlock.Style>
                         <Style TargetType="TextBlock">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding Mono}" Value="True">
-                                    <Setter Property="FontFamily" Value="Cascadia Mono, Consolas" />
-                                    <Setter Property="FontSize" Value="11" />
+                                    <Setter Property="FontFamily" Value="{StaticResource Font.Mono}" />
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -227,12 +235,12 @@
                                         ToolTip="{Binding SnippetCaption}">
                                 <TextBlock Text="{Binding SnippetMember}" HorizontalAlignment="Right"
                                            FontSize="{StaticResource FontSize.Meta}"
-                                           FontFamily="Cascadia Mono, Consolas"
+                                           FontFamily="{StaticResource Font.Mono}"
                                            Foreground="{DynamicResource Brush.TextMuted}" />
                                 <TextBlock Text="{Binding SnippetWhere, Converter={StaticResource MiddleEllipsis}, ConverterParameter=46}"
                                            HorizontalAlignment="Right"
                                            FontSize="{StaticResource FontSize.Meta}"
-                                           FontFamily="Cascadia Mono, Consolas"
+                                           FontFamily="{StaticResource Font.Mono}"
                                            Foreground="{DynamicResource Brush.TextFaint}" />
                             </StackPanel>
                         </Grid>
@@ -243,16 +251,22 @@
                              Y el TONO lo decide el estado del hallazgo (F6.7): ámbar mientras haya
                              algo que atender, neutro cuando la franja solo informa. Un resuelto
                              pintado de ámbar decía «cuidado» de un cambio que era el arreglo. -->
-                        <Border CornerRadius="6" Padding="{StaticResource Pad.Field}" Margin="{StaticResource Pad.XS.Bottom}"
+                        <!-- UN AVISO ES ICONO, TEXTO Y —SI LA HAY— LA ACCIÓN (UI-0052). Esta
+                             banda tenía el relleno de aviso y ni icono ni cabecera: «esto es un
+                             aviso» viajaba solo en el color, y es el aviso de re-anclaje, el que
+                             dice que el código de debajo puede no ser el que se auditó. Y el
+                             relleno se pedía a mano a dos pinceles de la librería en vez de al
+                             estilo que ya existe. El TONO se conserva (F6.7): ámbar mientras haya
+                             algo que atender, neutro cuando la franja solo informa — y entonces el
+                             icono también cambia, porque una nota no es una advertencia. -->
+                        <Border Margin="{StaticResource Pad.XS.Bottom}"
                                 Visibility="{Binding HasSnippetNotice, Converter={StaticResource BoolToVisibility}}">
                             <Border.Style>
-                                <Style TargetType="Border">
-                                    <Setter Property="Background"
-                                            Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+                                <Style TargetType="Border" BasedOn="{StaticResource Notice.Warning}">
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding SnippetTone}" Value="Nota">
-                                            <Setter Property="Background"
-                                                    Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                            <Setter Property="Background" Value="{DynamicResource Brush.Surface2}" />
+                                            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
@@ -267,27 +281,41 @@
                                  aun así no cupiera. -->
                             <Grid>
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0"
+                                <Path Grid.Column="0">
+                                    <Path.Style>
+                                        <Style TargetType="Path" BasedOn="{StaticResource Notice.Icon}">
+                                            <Setter Property="VerticalAlignment" Value="Center" />
+                                            <Setter Property="Data" Value="{x:Static c:Icons.Warning}" />
+                                            <Setter Property="Stroke" Value="{DynamicResource Brush.Warning.Ink}" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SnippetTone}" Value="Nota">
+                                                    <Setter Property="Data" Value="{x:Static c:Icons.Info}" />
+                                                    <Setter Property="Stroke" Value="{DynamicResource Brush.TextMuted}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Path.Style>
+                                </Path>
+                                <TextBlock Grid.Column="1"
                                            Text="{Binding SnippetNotice}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}"
                                            ToolTip="{Binding SnippetNotice}"
                                            VerticalAlignment="Center">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground"
-                                                    Value="{DynamicResource SystemFillColorCautionBrush}" />
+                                            <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.Ink}" />
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding SnippetTone}" Value="Nota">
-                                                    <Setter Property="Foreground"
-                                                            Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
-                                <Button Grid.Column="1"
+                                <Button Grid.Column="2"
                                            Content="Verificar ahora" Command="{Binding VerifyCommand}"
                                            Padding="{StaticResource Pad.ButtonSmall}" FontSize="{StaticResource FontSize.Meta}"
                                            IsEnabled="{Binding CanAudit}"

@@ -74,6 +74,13 @@ public sealed partial class AccountViewModel : ViewModelBase
     [ObservableProperty] private bool _needsReconnect;
     [ObservableProperty] private string _syncState = string.Empty;
 
+    /// <summary>
+    /// El estado del hub como ESTADO y no como frase (UI-0036). El mismo que pinta el punto del
+    /// pie: aquí manda el icono y el color de la línea de «Hub local», que hasta ahora contaba en
+    /// tinta neutra exactamente lo mismo que la lista de arriba contaba con las tres cosas.
+    /// </summary>
+    [ObservableProperty] private SyncHealth _hubHealth = SyncHealth.Amber;
+
     /// <summary>Qué hizo la última sincronización: qué trajo y qué empujó (F5.1).</summary>
     [ObservableProperty] private string _syncSummary = string.Empty;
     [ObservableProperty] private string _syncError = string.Empty;
@@ -140,6 +147,7 @@ public sealed partial class AccountViewModel : ViewModelBase
 
         NeedsReconnect = _account.NeedsReconnect;
         LastSync = _hub.LastSync is { } t ? t.ToLocalTime().ToString("g") : "nunca";
+        HubHealth = _hub.Health;
         SyncState = _hub.Health switch
         {
             SyncHealth.Green => "sincronizado",

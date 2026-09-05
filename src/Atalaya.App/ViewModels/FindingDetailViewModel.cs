@@ -695,9 +695,11 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
             Meta.Add(new MetaRow("Qué busca", RuleText, "El criterio con el que el auditor la aplica."));
         }
 
+        // UI-0026: un alias es un literal de máquina que se copia y se pega, igual que el
+        // commit anclado. O van las dos en monoespaciada o ninguna.
         Meta.Add(new MetaRow(
             "Identificador", f.DisplayId ?? "(sin alias todavía)",
-            "El alias es de presentación; la identidad es el ULID."));
+            "El alias es de presentación; la identidad es el ULID.", Mono: true));
         Meta.Add(new MetaRow("Aplicación", app));
 
         if (loc is not null)

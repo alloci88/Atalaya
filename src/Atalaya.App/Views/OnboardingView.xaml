@@ -204,11 +204,22 @@
                             <TextBlock Style="{StaticResource Setting.Help}"
                                        Text="Lo deduce de los ficheros del clon. Sin repositorio elegido, lo toma del «origin» de la carpeta." />
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
-                            <TextBlock Text="{Binding DetectedStack}" Style="{StaticResource Text.Default}"
-                                       FontWeight="SemiBold" VerticalAlignment="Center" MinWidth="90" />
-                            <Button Content="Detectar stack" Command="{Binding DetectCommand}"
-                                    Style="{StaticResource Button.Secondary}" />
+                        <!-- LA MISMA FORMA QUE LAS OTRAS TRES FILAS (UI-0060). Era la unica
+                             del formulario con un `StackPanel` horizontal, y por eso rompia dos
+                             veces el ritmo: el valor caia 22 px por debajo de su rotulo —las demas
+                             los alinean— y «Detectar stack» se quedaba pegado al valor, en x=1100,
+                             sin compartir x con ningun otro boton de apoyo. Con la forma de
+                             «Carpeta» —el boton acoplado a la DERECHA y el valor ocupando lo que
+                             queda— las cuatro filas caen en las mismas tres columnas. -->
+                        <StackPanel>
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Content="Detectar stack"
+                                        Command="{Binding DetectCommand}"
+                                        Style="{StaticResource Button.Secondary}"
+                                        Margin="{StaticResource Pad.XS.Left}" />
+                                <TextBlock Text="{Binding DetectedStack}" Style="{StaticResource Text.Default}"
+                                           FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </DockPanel>
                         </StackPanel>
                     </DockPanel>
                 </StackPanel>

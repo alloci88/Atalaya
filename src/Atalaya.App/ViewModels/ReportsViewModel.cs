@@ -69,6 +69,14 @@ public sealed class ReportRow
         ? n == 0 && r == 0 ? "sin cambios" : $"+{n} / −{r}"
         : ReportsViewModel.Unknown;
 
+    /// <summary>
+    /// Esta sesión trajo trabajo (UI-0057). «+15 / −0» y «sin cambios» se pintaban con el mismo
+    /// color y el mismo peso, así que la única columna que dice si una sesión encontró algo no se
+    /// podía recorrer: había que leer las ocho filas para dar con las tres que importan. Es un
+    /// booleano y no un pincel a propósito (D-971): el color lo pone el estilo.
+    /// </summary>
+    public bool HasDelta => Entry.New is { } n && Entry.Resolved is { } r && (n > 0 || r > 0);
+
     public string Cost => Entry.Cost is { } c
         ? $"{Atalaya.App.Services.CreditText.Number(c)} {Entry.CostUnit}"
         : Entry.Billed

@@ -216,11 +216,23 @@ public sealed partial class LiveSessionService : ObservableObject
     public double Progress => UnitCount == 0 ? 0 : (double)UnitIndex / UnitCount;
 
     /// <summary>Línea de la barra de estado inferior mientras corre.</summary>
+    /// <summary>
+    /// <b>EL PROGRESO SE DICE UNA VEZ</b> (UI-0053). Esta tira decía «Auditando app · unidad 3/6 ·
+    /// pasada 2» a 44 px de la barra de la propia vista, que ya dice «Unidad 3 de 6 · 00:07 · 7
+    /// llamadas…»: el mismo dato dos veces y escrito de dos maneras, gastando el único renglón que
+    /// la carcasa tiene para lo que la vista NO puede decir. El reparto es ese: la unidad y la
+    /// pasada son de la vista de sesión —ahí es donde se mira el avance— y la carcasa dice lo que
+    /// se necesita saber desde cualquier otra pantalla, que es <b>qué</b> se está auditando.
+    /// <para>
+    /// El modo exhaustivo se queda: no es progreso, es un aviso de coste (R2 §1). Cuesta el triple
+    /// y puede duplicar hallazgos, y quien deja una sesión corriendo mientras mira otra cosa tiene
+    /// que poder verlo sin volver a Sesión en vivo.
+    /// </para>
+    /// </summary>
     public string ProgressLine => !IsRunning
         ? string.Empty
-        : $"Auditando {AppSlug} · unidad {Math.Max(1, UnitIndex)}/{UnitCount}"
-          + (Exhaustive ? $" · {AuditModes.Exhaustive}" : string.Empty)
-          + (CurrentPassNumber > 0 ? $" · pasada {CurrentPassNumber}" : "");
+        : $"Auditando {AppSlug}"
+          + (Exhaustive ? $" · {AuditModes.Exhaustive}" : string.Empty);
 
     /// <summary>
     /// Esta sesión se está barriendo en <b>modo exhaustivo</b> (R2 §1): una petición por pasada.

@@ -232,10 +232,19 @@
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
                         <TextBlock Text="Hub local" Style="{StaticResource Text.Lead}" FontWeight="SemiBold" />
-                        <TextBlock Style="{StaticResource Text.Small}" Margin="{StaticResource Pad.XS.Bottom}">
-                            <Run Text="Estado:" /><Run Text=" " /><Run Text="{Binding SyncState, Mode=OneWay}" />
-                            <Run Text=" · última sincronización:" /><Run Text=" " /><Run Text="{Binding LastSync, Mode=OneWay}" />
-                        </TextBlock>
+                        <!-- ICONO + COLOR + PALABRA, TAMBIÉN AQUÍ (UI-0036, D-989). Era una
+                             línea de texto neutro —«Estado: sincronizado · última sincronización:
+                             …»— a 200 px de la lista de conexiones, que sí lleva las tres cosas.
+                             Un hub desincronizado se leía igual que uno al día. El sello de hora
+                             se queda donde estaba, detrás de la palabra: es el dato de apoyo. -->
+                        <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.XS.Bottom}">
+                            <Path Style="{StaticResource Hub.State.Glyph}" />
+                            <TextBlock Text="{Binding SyncState}" Style="{StaticResource Hub.State.Word}" />
+                            <TextBlock Style="{StaticResource Text.Small}" VerticalAlignment="Center"
+                                       Margin="{StaticResource Pad.XS.Left}">
+                                <Run Text="· última sincronización:" /><Run Text=" " /><Run Text="{Binding LastSync, Mode=OneWay}" />
+                            </TextBlock>
+                        </StackPanel>
                         <TextBox
                             Text="{Binding HubClonePath, Mode=OneWay}"
                             IsReadOnly="True"
