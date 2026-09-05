@@ -657,4 +657,46 @@
         </Style.Triggers>
     </Style>
 
+    <!-- ================================================================ El diff
+
+         D-971 otra vez: el color lo pone un DataTrigger con DynamicResource, no un converter. Un
+         converter devuelve un pincel YA RESUELTO y se queda con el color del tema que hubiera al
+         convertir, asi que al cambiar de tema el diff seguia pintado con los tonos del anterior.
+         Y hasta D-980 daba igual, porque el panel era oscuro en los dos temas; ahora no.
+
+         El fondo de la fila SI sigue siendo un converter, y es correcto: son tintes con alfa, que
+         se componen sobre la superficie que haya y por eso no dependen del tema. Lo que dependia
+         era la TINTA, que es solida. -->
+    <Style x:Key="Diff.Text" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Consolas" />
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Meta}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Code.Ink}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Kind}" Value="Anadida">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Code.Added}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Kind}" Value="Quitada">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Code.Removed}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Kind}" Value="Salto">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Code.Faint}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- El marcador (+ - ...) va delante SIEMPRE: el color solo refuerza lo que ya se lee. -->
+    <Style x:Key="Diff.Marker" TargetType="TextBlock" BasedOn="{StaticResource Diff.Text}">
+        <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+
+    <!-- Los numeros de linea: son referencia, no contenido, y se apagan sin bajar de la tinta
+         minima legible. Opacity sobre la tinta del panel, no un gris propio. -->
+    <Style x:Key="Diff.Number" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="Consolas" />
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Meta}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Code.Faint}" />
+        <Setter Property="TextAlignment" Value="Right" />
+        <Setter Property="Margin" Value="{StaticResource Pad.XS.Right}" />
+    </Style>
+
 </ResourceDictionary>

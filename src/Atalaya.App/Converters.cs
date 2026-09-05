@@ -351,24 +351,6 @@ public sealed class FixVoiceToFillConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
-/// <summary>
-/// El color del texto de una línea de diff. Verde lo añadido, rojo lo quitado, el color normal el
-/// contexto. El marcador (+ − ⋯) va SIEMPRE delante: el color solo refuerza lo que ya se lee.
-/// </summary>
-public sealed class DiffKindToBrushConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
-    {
-        DiffKind.Anadida => new SolidColorBrush(Color.FromRgb(0x6C, 0xD0, 0x80)),
-        DiffKind.Quitada => new SolidColorBrush(Color.FromRgb(0xE0, 0x80, 0x80)),
-        DiffKind.Salto => new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
-        _ => new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
-    };
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}
-
 /// <summary>El fondo de la línea de diff, muy tenue: el código tiene que seguir leyéndose.</summary>
 public sealed class DiffKindToFillConverter : IValueConverter
 {

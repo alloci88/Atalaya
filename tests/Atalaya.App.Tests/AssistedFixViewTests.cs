@@ -65,7 +65,11 @@ public sealed class AssistedFixViewTests
 
         xaml.Should().Contain("SelectFileCommand");
         xaml.Should().Contain("{Binding Lines}");
-        xaml.Should().Contain("DiffKindToBrush");
+        // La regla es que el diff DISTINGA lo añadido de lo quitado por color. Desde D-980 ese
+        // color lo pone un estilo con DataTrigger y no un converter, porque un converter devuelve
+        // un pincel ya resuelto y congela el tema; la regla no cambia, cambia quién la aplica.
+        xaml.Should().Contain("Diff.Text");
+        xaml.Should().Contain("DiffKindToFill");
         xaml.Should().Contain("{Binding InScope, Converter={StaticResource InverseBoolToVisibility}}");
     }
 

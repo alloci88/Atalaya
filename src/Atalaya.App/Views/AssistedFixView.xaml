@@ -467,16 +467,11 @@
                                                 <ColumnDefinition Width="16" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="{Binding OldNumber}" FontFamily="Consolas"
-                                                       FontSize="{StaticResource FontSize.Meta}" Opacity="0.45" TextAlignment="Right" Margin="{StaticResource Pad.XS.Right}" />
-                                            <TextBlock Grid.Column="1" Text="{Binding NewNumber}" FontFamily="Consolas"
-                                                       FontSize="{StaticResource FontSize.Meta}" Opacity="0.45" TextAlignment="Right" Margin="{StaticResource Pad.XS.Right}" />
-                                            <TextBlock Grid.Column="2" Text="{Binding Marker}" FontFamily="Consolas"
-                                                       FontSize="{StaticResource FontSize.Meta}" FontWeight="Bold"
-                                                       Foreground="{Binding Kind, Converter={StaticResource DiffKindToBrush}}" />
-                                            <TextBlock Grid.Column="3" Text="{Binding Text}" FontFamily="Consolas"
-                                                       FontSize="{StaticResource FontSize.Meta}" TextWrapping="NoWrap"
-                                                       Foreground="{Binding Kind, Converter={StaticResource DiffKindToBrush}}" />
+                                            <TextBlock Grid.Column="0" Text="{Binding OldNumber}" Style="{StaticResource Diff.Number}" />
+                                            <TextBlock Grid.Column="1" Text="{Binding NewNumber}" Style="{StaticResource Diff.Number}" />
+                                            <TextBlock Grid.Column="2" Text="{Binding Marker}" Style="{StaticResource Diff.Marker}" />
+                                            <TextBlock Grid.Column="3" Text="{Binding Text}" Style="{StaticResource Diff.Text}"
+                                                       TextWrapping="NoWrap" />
                                         </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

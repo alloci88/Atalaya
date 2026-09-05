@@ -108,6 +108,35 @@
     <SolidColorBrush x:Key="Brush.Danger.Ink" Color="{StaticResource Color.Danger.Ink}" />
     <SolidColorBrush x:Key="Brush.Danger.Soft" Color="{StaticResource Color.Danger.Soft}" />
 
+    <!-- ============================================================ El panel de código
+
+         Superficie propia, y ahora una POR TEMA (D-980). Tenía una sola, oscura en los dos, con el
+         argumento de que un bloque de código con fondo propio es una convención que se lee igual
+         de bien en claro. Sobre el crema no se lee igual: es un ladrillo negro en una pantalla
+         cálida, y contradice el principio 5 —el tema cambia todos los recursos—.
+
+         En claro es un gris CÁLIDO del mismo tono que el resto (#1B1B20), un punto más oscuro que
+         el fondo: lo justo para que el panel se distinga sin convertirse en una mancha. La
+         sintaxis se ajusta a AA contra la superficie que toque, no a ojo.
+    -->
+    <Color x:Key="Color.Code.Surface">#1B1B20</Color>
+    <Color x:Key="Color.Code.Ink">#D6D6DD</Color>
+
+    <SolidColorBrush x:Key="Brush.Code.Surface" Color="{StaticResource Color.Code.Surface}" />
+    <SolidColorBrush x:Key="Brush.Code.Ink" Color="{StaticResource Color.Code.Ink}" />
+
+    <!-- El diff. Su tinta NO puede ser la de la interfaz: la fila lleva encima un tinte de
+         color, asi que el fondo real contra el que se lee no es la superficie del panel sino la
+         superficie MAS el tinte, un punto mas oscura. Estos tres tonos estan medidos contra ese
+         fondo compuesto (D-980). -->
+    <Color x:Key="Color.Code.Added">#3FB950</Color>
+    <Color x:Key="Color.Code.Removed">#F26660</Color>
+    <Color x:Key="Color.Code.Faint">#8C93A1</Color>
+
+    <SolidColorBrush x:Key="Brush.Code.Added" Color="{StaticResource Color.Code.Added}" />
+    <SolidColorBrush x:Key="Brush.Code.Removed" Color="{StaticResource Color.Code.Removed}" />
+    <SolidColorBrush x:Key="Brush.Code.Faint" Color="{StaticResource Color.Code.Faint}" />
+
     <!-- ============================================================ Gravedad
 
          Cuatro colores propios y no «peligro, peligro, aviso, primario»: la gravedad es una escala

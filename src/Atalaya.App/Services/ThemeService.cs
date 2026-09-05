@@ -50,6 +50,16 @@ public static class ThemeService
         Swap(app.Resources, IsLight(theme) ? LightUri : DarkUri);
 
         ApplicationThemeManager.Apply(IsLight(theme) ? ApplicationTheme.Light : ApplicationTheme.Dark);
+
+        // Y el panel de código (D-980). Su superficie sale de la paleta como todo lo demás, pero
+        // el COLOREADO no es un recurso: es una definición de AvalonEdit que hay que reajustar
+        // contra la superficie nueva. Se hace aquí porque éste es el único sitio que sabe cuándo
+        // cambia el tema.
+        if (app.TryFindResource("Color.Code.Surface") is System.Windows.Media.Color surface
+            && app.TryFindResource("Color.Code.Ink") is System.Windows.Media.Color ink)
+        {
+            Controls.CodePalette.Apply(surface, ink);
+        }
     }
 
     /// <summary>

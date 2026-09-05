@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Input;
@@ -34,7 +34,7 @@ public sealed class SnippetView : TextEditor
     private readonly FileLineNumberMargin _gutter = new();
     private readonly HighlightedLineRenderer _highlight = new();
 
-    static SnippetView() => CodePalette.LightenForDarkSurface(HighlightingManager.Instance.GetDefinition("C#"));
+    static SnippetView() => CodePalette.Adopt(HighlightingManager.Instance.GetDefinition("C#"));
 
     public SnippetView()
     {
@@ -46,8 +46,10 @@ public sealed class SnippetView : TextEditor
         Options.EnableHyperlinks = false;
         Options.EnableEmailHyperlinks = false;
         Options.HighlightCurrentLine = false;
-        Background = CodePalette.Surface;
-        Foreground = CodePalette.Foreground;
+        // Del TEMA, no de una constante (D-980): con `DynamicResource` el panel se repinta al
+        // cambiar de tema sin reconstruir la ficha, igual que todo lo demás.
+        SetResourceReference(BackgroundProperty, "Brush.Code.Surface");
+        SetResourceReference(ForegroundProperty, "Brush.Code.Ink");
         BorderThickness = new Thickness(0);
 
         _gutter.Margin = new Thickness(0, 0, 8, 0);
@@ -310,48 +312,82 @@ public sealed class SnippetView : TextEditor
 }
 
 /// <summary>
-/// La paleta del panel de código.
+/// Los colores del panel de código, uno por tema (F26 Parte B, D-980).
 /// <para>
-/// Las definiciones que trae AvalonEdit están pensadas para papel blanco: azul marino, negro,
-/// verde oscuro. Atalaya abre en tema oscuro, así que ese coloreado dejaba las palabras clave
-/// invisibles. En vez de escribir una definición nueva —y tener que mantenerla— se <b>aclara</b>
-/// la que ya hay: cada color se sube de luminosidad hasta pasar de un umbral legible sobre fondo
-/// oscuro, conservando su tono, que es lo que hace reconocible el resaltado.
+/// <b>Antes había una sola superficie, oscura en los dos temas</b>, con el argumento de que un
+/// bloque de código con fondo propio es una convención que se lee igual de bien en claro. Sobre el
+/// crema de F26 no se lee igual: es un ladrillo negro en una pantalla cálida, y sobre todo
+/// contradice el principio 5 — el tema cambia TODOS los recursos, no los que no pasaron por aquí.
 /// </para>
 /// <para>
-/// El panel lleva su propia superficie oscura en los dos temas. Un bloque de código con fondo
-/// propio es una convención que se lee igual de bien en claro, y evita tener que mantener dos
-/// paletas para el mismo texto.
+/// <b>La sintaxis se ajusta a la superficie que toque, y se ajusta MIDIENDO.</b> El criterio
+/// anterior era una luminosidad HSL mínima (0,66), que es una aproximación: dos colores con la
+/// misma luminosidad HSL contrastan distinto contra el mismo fondo, porque el ojo no pesa igual el
+/// rojo, el verde y el azul. Ahora se usa la razón de contraste de WCAG, la misma que gobierna la
+/// paleta (D-947), y se camina la luminosidad hasta pasar 4,5:1. Sobre superficie oscura eso
+/// significa aclarar; sobre clara, oscurecer — el mismo método, en las dos direcciones.
+/// </para>
+/// <para>
+/// <b>Los colores de fábrica se guardan la primera vez.</b> Ajustar es destructivo: una vez
+/// aclarado un color no se puede recuperar el original, y al cambiar de tema habría que ajustar
+/// sobre lo ya ajustado, que a los dos cambios deja la sintaxis en blanco. Con la copia, cada tema
+/// se deriva siempre del original.
 /// </para>
 /// </summary>
 internal static class CodePalette
 {
-    /// <summary>La superficie del panel, la misma en tema claro y oscuro.</summary>
-    public static readonly Brush Surface = Frozen(Color.FromRgb(0x1B, 0x1B, 0x20));
+    /// <summary>Lo que hace falta para leer texto pequeño, que es lo que es el código.</summary>
+    private const double MinContrast = 4.5;
+
+    /// <summary>Los colores de fábrica de la definición, antes de ajustar nada.</summary>
+    private static readonly Dictionary<string, Color> Original = new(StringComparer.Ordinal);
+
+    private static IHighlightingDefinition? _definition;
+
+    /// <summary>La superficie del panel en el tema vigente. La pone <see cref="Apply"/>.</summary>
+    public static Brush Surface { get; private set; } = Frozen(Color.FromRgb(0x1B, 0x1B, 0x20));
 
     /// <summary>El texto sin token reconocido.</summary>
-    public static readonly Brush Foreground = Frozen(Color.FromRgb(0xD6, 0xD6, 0xDD));
+    public static Brush Foreground { get; private set; } = Frozen(Color.FromRgb(0xD6, 0xD6, 0xDD));
 
-    /// <summary>Por debajo de esta luminosidad un color no se lee sobre la superficie.</summary>
-    private const double MinLuminance = 0.66;
+    /// <summary>El color de la superficie vigente, para poder medir contra él.</summary>
+    public static Color SurfaceColor { get; private set; } = Color.FromRgb(0x1B, 0x1B, 0x20);
 
-    public static void LightenForDarkSurface(IHighlightingDefinition? definition)
+    /// <summary>
+    /// Pone la paleta del tema y reajusta la sintaxis contra su superficie. Lo llama
+    /// <c>ThemeService</c> después de cambiar el diccionario, que es el único sitio que sabe
+    /// cuándo cambia el tema.
+    /// </summary>
+    public static void Apply(Color surface, Color ink)
     {
-        if (definition is null)
+        SurfaceColor = surface;
+        Surface = Frozen(surface);
+        Foreground = Frozen(ink);
+        Refit();
+    }
+
+    /// <summary>
+    /// Toma la definición de coloreado y guarda sus colores de fábrica. Se llama una vez; las
+    /// siguientes no hacen nada, que es lo que permite que <see cref="Apply"/> se pueda llamar en
+    /// cada cambio de tema sin degradar los colores.
+    /// </summary>
+    public static void Adopt(IHighlightingDefinition? definition)
+    {
+        if (definition is null || _definition is not null)
         {
             return;
         }
+
+        _definition = definition;
 
         try
         {
             foreach (HighlightingColor color in definition.NamedHighlightingColors)
             {
-                if (color.Foreground?.GetColor(null) is not { } rgb)
+                if (color.Foreground?.GetColor(null) is { } rgb && color.Name is { Length: > 0 })
                 {
-                    continue;
+                    Original[color.Name] = rgb;
                 }
-
-                color.Foreground = new SimpleHighlightingBrush(Lighten(rgb));
             }
         }
         catch (Exception)
@@ -359,35 +395,119 @@ internal static class CodePalette
             // Una definición congelada —o un pincel que no sabe dar su color— se queda como está:
             // mejor el coloreado de fábrica que reventar la ficha por un matiz.
         }
+
+        Refit();
     }
 
-    /// <summary>Sube la luminosidad conservando el tono. El gris puro acaba en gris claro.</summary>
-    internal static Color Lighten(Color color)
+    private static void Refit()
+    {
+        if (_definition is null)
+        {
+            return;
+        }
+
+        try
+        {
+            foreach (HighlightingColor color in _definition.NamedHighlightingColors)
+            {
+                if (color.Name is not { Length: > 0 } name || !Original.TryGetValue(name, out Color rgb))
+                {
+                    continue;
+                }
+
+                color.Foreground = new SimpleHighlightingBrush(Fit(rgb, SurfaceColor));
+            }
+        }
+        catch (Exception)
+        {
+            // Igual que arriba: el coloreado es un extra, no la ficha.
+        }
+    }
+
+    /// <summary>
+    /// Lleva un color hasta AA contra la superficie, conservando su tono. Camina la luminosidad en
+    /// la dirección que separa: hacia el blanco sobre fondo oscuro, hacia el negro sobre claro.
+    /// Si ni el extremo llega —un amarillo puro sobre blanco no llega nunca— devuelve lo mejor que
+    /// encontró: peor un color un poco justo que uno inventado de otro tono.
+    /// </summary>
+    internal static Color Fit(Color color, Color surface)
+    {
+        if (Contrast(color, surface) >= MinContrast)
+        {
+            return color;
+        }
+
+        (double h, double s, double l) = ToHsl(color);
+        bool darkSurface = Luminance(surface) < 0.5;
+
+        Color best = color;
+        double bestRatio = Contrast(color, surface);
+
+        for (int step = 1; step <= 100; step++)
+        {
+            double next = darkSurface ? l + (step * 0.01) : l - (step * 0.01);
+            if (next is < 0 or > 1)
+            {
+                break;
+            }
+
+            Color candidate = FromHsl(h, Math.Min(s, 0.85), next, color.A);
+            double ratio = Contrast(candidate, surface);
+            if (ratio > bestRatio)
+            {
+                best = candidate;
+                bestRatio = ratio;
+            }
+
+            if (ratio >= MinContrast)
+            {
+                return candidate;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>La razón de contraste de WCAG 2.1, la misma que gobierna la paleta (D-947).</summary>
+    internal static double Contrast(Color a, Color b)
+    {
+        double la = Luminance(a);
+        double lb = Luminance(b);
+        return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
+    }
+
+    private static double Luminance(Color c)
+    {
+        static double Channel(byte v)
+        {
+            double x = v / 255.0;
+            return x <= 0.04045 ? x / 12.92 : Math.Pow((x + 0.055) / 1.055, 2.4);
+        }
+
+        return (0.2126 * Channel(c.R)) + (0.7152 * Channel(c.G)) + (0.0722 * Channel(c.B));
+    }
+
+    private static (double H, double S, double L) ToHsl(Color color)
     {
         double r = color.R / 255.0, g = color.G / 255.0, b = color.B / 255.0;
         double max = Math.Max(r, Math.Max(g, b));
         double min = Math.Min(r, Math.Min(g, b));
         double l = (max + min) / 2.0;
-        if (l >= MinLuminance)
-        {
-            return color;
-        }
-
         double delta = max - min;
-        double s = delta == 0 ? 0 : delta / (1 - Math.Abs(2 * l - 1));
+        double s = delta == 0 ? 0 : delta / (1 - Math.Abs((2 * l) - 1));
         double h = delta == 0 ? 0
-            : max == r ? 60 * (((g - b) / delta + 6) % 6)
-            : max == g ? 60 * ((b - r) / delta + 2)
-            : 60 * ((r - g) / delta + 4);
+            : max == r ? 60 * ((((g - b) / delta) + 6) % 6)
+            : max == g ? 60 * (((b - r) / delta) + 2)
+            : 60 * (((r - g) / delta) + 4);
 
-        return FromHsl(h, Math.Min(s, 0.85), MinLuminance, color.A);
+        return (h, s, l);
     }
 
     private static Color FromHsl(double h, double s, double l, byte alpha)
     {
-        double c = (1 - Math.Abs(2 * l - 1)) * s;
-        double x = c * (1 - Math.Abs(h / 60 % 2 - 1));
-        double m = l - c / 2;
+        double c = (1 - Math.Abs((2 * l) - 1)) * s;
+        double x = c * (1 - Math.Abs((h / 60 % 2) - 1));
+        double m = l - (c / 2);
         (double r, double g, double b) = h switch
         {
             < 60 => (c, x, 0.0),

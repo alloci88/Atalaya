@@ -1720,7 +1720,9 @@ renumeradas desde 1 debajo de un hallazgo que vive en la línea 412.
   al almacén. Se dice lo que se sabe: «Sin clon local en esta máquina: no hay código que mostrar.
   El hallazgo quedó anclado a {ruta}:{línea} en el commit {sha}».
 
-- **D-197 — El panel de código lleva su propia superficie oscura en los dos temas.** Las
+- **D-197 — El panel de código lleva su propia superficie oscura en los dos temas.**
+  *(Sustituida por D-980: el panel tiene una superficie por tema, y el coloreado se ajusta a la
+  que toque midiendo contraste.)* Las
   definiciones de AvalonEdit están pensadas para papel blanco —azul marino, negro, verde oscuro— y
   Atalaya abre en tema oscuro, así que el coloreado de fábrica dejaba las palabras clave
   invisibles. En vez de escribir y mantener una definición nueva, se **aclara** la que ya hay:
@@ -14397,3 +14399,109 @@ icono pequeño en la escala (`Icon.Size.Small`). El test se quedó como estaba, 
 que el arreglo era el correcto.
 
 **2.332 tests en verde** (1.823 de `Atalaya.App.Tests`).
+
+### D-980 — El panel de código también tiene dos temas (sustituye a D-197)
+
+**D-197 decía que el panel de código lleva su propia superficie oscura en los dos temas**, con el
+argumento de que un bloque de código con fondo propio es una convención que se lee igual de bien en
+claro. Sobre el gris azulado de antes casi colaba. Sobre el crema de F26 no: es un ladrillo negro
+en una pantalla cálida, y sobre todo **contradice el principio 5** — el tema cambia *todos* los
+recursos, no los que no pasaron por aquí. Una superficie que ignora el tema es exactamente el tipo
+de excepción que hace que el modo claro nunca acabe de estar terminado.
+
+**Ahora hay dos superficies, una por tema**, y son tokens como cualquier otro
+(`Color.Code.Surface` / `Color.Code.Ink`, con sus pinceles):
+
+| | Superficie | Tinta | Contra la tarjeta |
+|---|---|---|---|
+| Oscuro | `#1B1B20` | `#D6D6DD` | 1,10 |
+| Claro | `#E9E0CE` | `#23262D` | 1,21 |
+
+El claro es **un gris cálido un punto más oscuro que la superficie que lo contiene**, no un panel
+gris frío pegado sobre crema: comparte el tono del tema. La referencia no es el fondo de la página
+sino la **tarjeta**, porque el panel de código siempre va dentro de una —en la ficha y en la vista
+rápida—, y esa es la relación que se ve. La franja útil es estrecha: por debajo de 1,04 no se
+distingue que hay un panel, y por encima de 1,4 el panel pesa más que el código que lleva dentro.
+
+**El coloreado se ajusta a la superficie que toque, y se ajusta midiendo.** El criterio de D-197
+era una luminosidad HSL mínima (0,66), que es una *aproximación*: dos colores con la misma
+luminosidad HSL contrastan distinto contra el mismo fondo, porque el ojo no pesa igual el rojo, el
+verde y el azul. Ahora se usa la razón de contraste de WCAG —la misma que gobierna la paleta
+(D-947)— y se camina la luminosidad hasta pasar 4,5:1. Sobre superficie oscura eso significa
+aclarar; sobre clara, oscurecer: **el mismo método en las dos direcciones**, donde antes había una
+función que solo sabía aclarar.
+
+Dos detalles que costaron:
+
+- **Los colores de fábrica se guardan la primera vez.** Ajustar es destructivo: una vez aclarado un
+  color no se recupera el original, y al cambiar de tema se ajustaría sobre lo ya ajustado — a los
+  dos cambios la sintaxis se queda en blanco. Con la copia, cada tema se deriva siempre del
+  original.
+- **El ajuste conserva el tono.** Es lo que hace reconocible un resaltado: si el verde de los
+  comentarios saliera azul, el color dejaría de significar «comentario» y sería decoración.
+
+Y la vista rápida de Hallazgos, que pintaba su código sobre `Brush.Bg` porque cuando se escribió no
+había superficie de código, pasa a la misma: el código se ve igual esté donde esté.
+
+**El diff se rompió al hacer esto, y era el mismo defecto una capa más abajo.** El panel de cambios
+del arreglo asistido es también un panel de código, así que heredó la superficie clara — y su
+texto se quedó ilegible: gris `#C8C8C8` sobre crema, verde `#6CD080`, rojo `#E08080`. Tres colores
+escritos a mano dentro de un *converter*, que es justo lo que D-971 ya prohibió para la gravedad:
+**un converter devuelve un pincel ya resuelto y se queda con el color del tema que hubiera al
+convertir**. Mientras el panel fue oscuro en los dos temas daba igual; desde aquí, no. La tinta
+pasa a un estilo con `DataTrigger` y `DynamicResource` (`Diff.Text`, `Diff.Marker`, `Diff.Number`)
+y el converter se retira.
+
+El **fondo** de la fila sí sigue siendo un converter, y es correcto: son tintes con alfa, que se
+componen sobre la superficie que haya y por eso no dependen del tema. Lo que dependía era la tinta,
+que es sólida — la distinción que separa un converter legítimo de uno que congela el tema.
+
+Y esos tintes obligan a medir con cuidado: **el fondo real de una línea de diff no es la superficie
+del panel, sino la superficie compuesta con su tinte**, un punto más oscura. Medida contra la
+superficie pelada, la tinta de éxito de la interfaz parecía suficiente; contra la fila teñida se
+quedaba en 3,8. De ahí tres tonos propios, medidos contra el fondo compuesto:
+
+| | Añadida | Quitada | Salto |
+|---|---|---|---|
+| Oscuro | `#3FB950` | `#F26660` | `#8C93A1` |
+| Claro | `#16642B` | `#962B26` | `#545A62` |
+
+**Seis tests nuevos** (`CodePaletteTests`, 34 casos), y son seis reglas, no seis controles:
+
+1. **Cada color de sintaxis llega a AA sobre la superficie oscura**, y
+2. **sobre la clara** — dos reglas y no una, porque el fallo es asimétrico: el que se rompe al
+   cambiar el tema oscuro no es el mismo color que se rompe en el claro (el negro de los números es
+   perfecto en claro e invisible en oscuro; el amarillo, al revés).
+3. **El ajuste conserva el tono**, que es lo que distingue ajustar de repintar.
+4. **La tinta del panel llega a AA sobre su superficie** — es la mayoría de lo que se ve en un
+   fragmento, y no la pone la definición sino la paleta.
+5. **La superficie se distingue de la tarjeta sin ser una mancha.**
+6. **Las tintas del diff llegan a AA sobre su fila teñida**, con el tinte compuesto en el propio
+   test: medir contra la superficie pelada da un número optimista y deja pasar el caso que falló.
+
+Son de regla y no de forma: **un coloreado ilegible no falla**. Se pinta, y lo que no se lee
+simplemente no se lee — nadie abre una incidencia por ello, se deja de mirar el panel. Es el mismo
+defecto que `PaletteContrastTests` vigila para la interfaz, aplicado al único sitio que se le
+escapaba, porque el color del código no sale de la paleta: sale de una definición de AvalonEdit.
+Los colores de fábrica están escritos en el test y no leídos de la librería a propósito — lo que se
+prueba es el **ajuste**, y un test que tomara la entrada de la misma librería que la salida dejaría
+de tener un caso difícil el día que la librería cambie de colores.
+
+**El banco contesta al permiso.** Las capturas del arreglo asistido salían con la tarjeta de
+autorización esperando y el panel de cambios diciendo que no se había tocado nada: la vista era
+real, pero era el minuto equivocado — el que menos enseña de una pantalla que existe para enseñar
+un diff. El banco (D-977) ahora autoriza como lo haría el usuario, pulsando «Autorizar» en la
+tarjeta por el mismo camino que la vista.
+
+Costó dos intentos entender por qué no bastaba con eso. **El ritmo no se puede poner desde el
+guion**: el agente falso hace `ToArray()` del guion entero antes de emitir un solo paso, así que una
+pausa entre `yield` se gasta toda de golpe al principio y el arreglo sigue saltando de la tarjeta de
+permiso a la pantalla de cierre sin un fotograma intermedio. **Tampoco vale pausar**: la pausa solo
+frena `apply_edit` y compilar, no el cierre. Lo que sí para el arreglo en el sitio exacto es una
+**pregunta**: después de tocar el fichero el agente plantea una decisión de diseño y espera. El
+banco contesta a los permisos pero no a las decisiones, así que la vista se queda donde hay que
+fotografiarla —permiso concedido, fichero tocado, diff lleno— y además es un estado **real** de la
+pantalla, no un truco de captura: un agente que pregunta a mitad de arreglo es justo lo que esta
+vista existe para enseñar.
+
+**2.366 tests en verde** (1.857 de `Atalaya.App.Tests`), 34 casos más que al cerrar la Parte B.

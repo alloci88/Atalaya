@@ -426,7 +426,7 @@
                                  así que se desplaza dentro de su caja, y no empuja fuera de la
                                  pantalla lo que hay debajo, que son las acciones (principio 8). -->
                             <Border Style="{StaticResource Panel}"
-                                    Background="{DynamicResource Brush.Bg}"
+                                    Background="{DynamicResource Brush.Code.Surface}"
                                     Padding="{StaticResource Pad.S}">
                                 <StackPanel c:Stack.Gap="{StaticResource Space.XS}">
                                     <TextBlock Text="{Binding SnippetCaption}" Style="{StaticResource Text.Meta}"
@@ -435,7 +435,7 @@
                                                   HorizontalScrollBarVisibility="Auto"
                                                   VerticalScrollBarVisibility="Auto">
                                         <TextBlock Text="{Binding Snippet}" Style="{StaticResource Text.Mono}"
-                                                   Foreground="{DynamicResource Brush.Text}" />
+                                                   Foreground="{DynamicResource Brush.Code.Ink}" />
                                     </ScrollViewer>
                                 </StackPanel>
                             </Border>

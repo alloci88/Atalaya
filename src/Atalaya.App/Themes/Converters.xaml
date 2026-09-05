@@ -34,7 +34,6 @@
     <local:FindingEventToBrushConverter x:Key="FindingEventToBrush" />
     <local:FixVoiceToBrushConverter x:Key="FixVoiceToBrush" />
     <local:FixVoiceToFillConverter x:Key="FixVoiceToFill" />
-    <local:DiffKindToBrushConverter x:Key="DiffKindToBrush" />
     <local:DiffKindToFillConverter x:Key="DiffKindToFill" />
     <local:SelectedTabToFillConverter x:Key="SelectedTabToFill" />
     <local:QuestionChoicePairConverter x:Key="QuestionChoicePair" />
