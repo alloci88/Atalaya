@@ -101,7 +101,13 @@
                     <!-- `ui:TextBox` y no el de WPF: es el que trae texto de sugerencia, y una caja
                          de búsqueda vacía sin una palabra dentro no dice qué se busca en ella. Los
                          tamaños siguen saliendo de la escala. -->
+                    <!-- CADA CONTROL QUE SE ENFOCA DICE SU NOMBRE (UI-0016). El buscador y los
+                         cuatro combos llegaban SIN NOMBRE al árbol de accesibilidad: un lector de
+                         pantalla anunciaba «edición» y «cuadro combinado» cinco veces seguidas. El
+                         rótulo está pintado al lado, pero un rótulo suelto no es el nombre de nada;
+                         un texto de sugerencia tampoco. -->
                     <ui:TextBox PlaceholderText="Buscar…"
+                                AutomationProperties.Name="Buscar en los hallazgos"
                                 Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                                 ToolTip="Busca en el título del hallazgo, en la regla que lo detectó y en la ruta del fichero."
                                 FontSize="{StaticResource FontSize.Body}"
@@ -113,6 +119,7 @@
                         <TextBlock Text="Aplicación:" Style="{StaticResource Text.Small}"
                                    VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
                         <ComboBox ItemsSource="{Binding AppOptions}" SelectedItem="{Binding SelectedApp}"
+                                  AutomationProperties.Name="Filtrar por aplicación"
                                   DisplayMemberPath="Label" MinWidth="150" VerticalAlignment="Center" />
                     </StackPanel>
 
@@ -121,6 +128,7 @@
                         <TextBlock Text="Gravedad:" Style="{StaticResource Text.Small}"
                                    VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
                         <ComboBox ItemsSource="{Binding SeverityOptions}" SelectedItem="{Binding SelectedSeverity}"
+                                  AutomationProperties.Name="Filtrar por gravedad"
                                   DisplayMemberPath="Label" MinWidth="110" VerticalAlignment="Center" />
                     </StackPanel>
 
@@ -129,6 +137,7 @@
                         <TextBlock Text="Estado:" Style="{StaticResource Text.Small}"
                                    VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
                         <ComboBox ItemsSource="{Binding ScopeOptions}" SelectedItem="{Binding SelectedScope}"
+                                  AutomationProperties.Name="Filtrar por estado"
                                   DisplayMemberPath="Label" MinWidth="120" VerticalAlignment="Center" />
                     </StackPanel>
 
@@ -137,6 +146,7 @@
                         <TextBlock Text="Temática:" Style="{StaticResource Text.Small}"
                                    VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
                         <ComboBox ItemsSource="{Binding ThemeOptions}" SelectedItem="{Binding SelectedTheme}"
+                                  AutomationProperties.Name="Filtrar por temática"
                                   DisplayMemberPath="Label" MinWidth="140" VerticalAlignment="Center"
                                   ToolTip="Temática del ciclo en que se detectó" />
                     </StackPanel>
@@ -215,6 +225,7 @@
                         <Button Style="{StaticResource RowLink}"
                                 Command="{Binding DataContext.ToggleGroupCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                 CommandParameter="{Binding}"
+                                AutomationProperties.Name="{Binding Subtitle}"
                                 ToolTip="{Binding CountLabel}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -266,9 +277,12 @@
 
                     <!-- · Fila de hallazgo: banda de gravedad, pastilla, título y metadatos · -->
                     <DataTemplate DataType="{x:Type vm:FindingRow}">
+                        <!-- La fila SE LLAMA como el hallazgo que abre (UI-0016): las 111 llegaban
+                             sin nombre y se anunciaban todas igual. -->
                         <Button Style="{StaticResource RowLink}"
                                 Command="{Binding DataContext.OpenDetailCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                 CommandParameter="{Binding}"
+                                AutomationProperties.Name="{Binding Title}"
                                 ToolTip="{Binding UnitPath}">
                             <Grid>
                                 <Grid.ColumnDefinitions>

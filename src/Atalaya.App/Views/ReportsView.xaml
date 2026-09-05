@@ -287,13 +287,13 @@
                     CornerRadius="{StaticResource Radius.M}"
                     Margin="{StaticResource Pad.S.Bottom}">
                 <DockPanel>
-                    <Button DockPanel.Dock="Left"
-                            Content="← Volver"
-                            Command="{Binding BackCommand}"
-                            Style="{StaticResource Button.Secondary}"
-                            Margin="{StaticResource Pad.M.Right}"
-                            VerticalAlignment="Center"
-                            ToolTip="Vuelve a la lista con los filtros como estaban" />
+                    <!-- AQUÍ HABÍA UN SEGUNDO «VOLVER» (UI-0058). La vista pintaba su propio
+                         «← Volver» 95 px por debajo de la flecha «‹» de la carcasa: dos controles
+                         de volver, con dos formas y dos alcances, uno encima del otro. El de la
+                         carcasa se queda —es el gesto de toda la aplicación— y la vuelta a la
+                         LISTA es ahora el eslabón «Informes» de la miga, que además dice dónde
+                         estás. `BackCommand` sigue existiendo: es lo que ese eslabón ejecuta
+                         (`SubCrumbParentCommand`). -->
 
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
                                 VerticalAlignment="Center"

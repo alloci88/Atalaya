@@ -194,7 +194,13 @@
                            MaxWidth="{StaticResource Header.IdentityMaxWidth}"
                            HorizontalAlignment="Left"
                            ToolTip="El hallazgo que se está arreglando">
-                    <Run Text="Arreglo asistido"
+                    <!-- EL TÍTULO LO DICE EL VIEW-MODEL, no el XAML (UI-0029). Estaba escrito aquí
+                         a mano, así que al terminar el arreglo la entrada del raíl pasaba a
+                         «Último arreglo» y la página seguía diciendo «Arreglo asistido»: en la
+                         misma pantalla, los tres sitios que dicen dónde estás decían dos cosas.
+                         Ahora el rótulo del raíl, el título y el último eslabón de la miga salen
+                         de la misma propiedad. -->
+                    <Run Text="{Binding Title, Mode=OneWay}"
                          FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
                     <Run Text=" " />
                     <Run Text="{Binding FindingAliasText, Mode=OneWay}" FontWeight="SemiBold"

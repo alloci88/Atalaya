@@ -65,6 +65,15 @@ public partial class MainWindow : FluentWindow
         // se mueven y se borran las carpetas de las que el piloto habla.
         Activated += async (_, _) => await _viewModel.OnWindowActivatedAsync();
 
+        // AL CAMBIAR DE PÁGINA, EL FOCO ENTRA EN LA PÁGINA (UI-0042).
+        _viewModel.Navigation.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(Services.NavigationService.Current))
+            {
+                FocusPage();
+            }
+        };
+
         ApplySavedPlacement();
     }
 
@@ -94,6 +103,35 @@ public partial class MainWindow : FluentWindow
             WindowState = WindowState.Maximized;
         }
     }
+
+    /// <summary>
+    /// LLEVA EL FOCO AL PRIMER CONTROL ÚTIL DE LA PÁGINA (UI-0042).
+    /// <para>
+    /// <b>De dónde viene.</b> Al navegar con el teclado el foco no iba a la página nueva ni se
+    /// quedaba en la entrada pulsada: volvía al elemento ventana. Desde ahí, llegar al primer
+    /// control del contenido costaba <b>14 paradas en Portafolio, 13 en Hallazgos y 22 en
+    /// Ajustes</b>, la mayoría recorriendo otra vez la carcasa entera. Navegar es «ya estoy aquí,
+    /// déjame trabajar»; el foco tiene que ir donde va la mirada.
+    /// </para>
+    /// <para>
+    /// <b>Al fondo de la cola</b>: cuando <c>Current</c> cambia, el <c>ContentControl</c> todavía
+    /// no ha montado la vista nueva —la plantilla se aplica al renderizar— y no habría a quién
+    /// enfocar. Y solo se mueve si el foco está FUERA de la página: durante una carga larga el
+    /// usuario puede haber pulsado ya algo dentro, y quitárselo sería peor que no haberlo movido.
+    /// </para>
+    /// </summary>
+    private void FocusPage() => Dispatcher.BeginInvoke(
+        DispatcherPriority.Input,
+        new Action(() =>
+        {
+            if (PageHost.IsKeyboardFocusWithin)
+            {
+                return;
+            }
+
+            PageHost.MoveFocus(new System.Windows.Input.TraversalRequest(
+                System.Windows.Input.FocusNavigationDirection.First));
+        }));
 
     /// <summary>
     /// El raíl se pliega solo cuando la ventana se estrecha (principio 1: reorganizar, no encoger).

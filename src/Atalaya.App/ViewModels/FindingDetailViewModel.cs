@@ -167,6 +167,33 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
     /// <summary>F26 §A — la ficha no tiene entrada propia: pertenece a Hallazgos.</summary>
     public override string RailKey => "findings";
 
+    /// <summary>
+    /// LA MIGA DE UNA FICHA PASA POR SU LISTA (UI-0058). Era «Portafolio › XBLAST › BUG-0008», sin
+    /// «Hallazgos» —que es de donde vienes— y con el eslabón intermedio llevando al INVENTARIO, así
+    /// que la miga no servía para volver a los hallazgos filtrados y solo quedaba la flecha. Ahora
+    /// la página es «Hallazgos» y el hallazgo cuelga de ella, que es lo que es.
+    /// </summary>
+    public override string CrumbLabel => "Hallazgos";
+
+    /// <inheritdoc />
+    public override string SubCrumbLabel => Finding is null
+        ? string.Empty
+        : Finding.DisplayId ?? Finding.Id.ToString();
+
+    /// <inheritdoc />
+    public override System.Windows.Input.ICommand? SubCrumbParentCommand => BackToFindingsCommand;
+
+    /// <summary>
+    /// Vuelve a la lista de hallazgos TAL COMO LA DEJASTE: la del historial si está, con su filtro
+    /// y su desplazamiento. Es el eslabón «Hallazgos» de la miga, y no hay un segundo botón de
+    /// volver dentro del contenido (UI-0058).
+    /// </summary>
+    [RelayCommand]
+    private Task BackToFindings()
+        => _navigation is null
+            ? Task.CompletedTask
+            : _navigation.NavigateOrResumeAsync<FindingsViewModel>();
+
     public override bool BelongsToApp => true;
 
     /// <inheritdoc />

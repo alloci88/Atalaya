@@ -363,6 +363,7 @@
                              dimensiones distintas, y una unidad puede estar «auditada» y «cambiada»
                              a la vez. -->
                         <ComboBox SelectedIndex="{Binding DriftFilter}" MinWidth="190"
+                                  AutomationProperties.Name="Filtrar por deriva"
                                   VerticalAlignment="Center"
                                   ToolTip="Filtra por lo que le ha pasado al código desde que se auditó. Es una dimensión aparte del estado de auditoría.">
                             <ComboBoxItem Content="Todas" />
@@ -439,6 +440,7 @@
                                     <CheckBox Grid.Column="0"
                                               IsChecked="{Binding IsAllSelected, Mode=OneWay}"
                                               IsThreeState="False"
+                                              AutomationProperties.Name="{Binding Name}"
                                               Command="{Binding DataContext.ToggleModuleCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                               CommandParameter="{Binding}"
                                               VerticalAlignment="Center"
@@ -482,7 +484,11 @@
                                                     <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
 
+                                                <!-- La casilla se llama como su unidad (UI-0016):
+                                                     las 923 llegaban sin nombre y un lector de
+                                                     pantalla anunciaba «casilla» 923 veces. -->
                                                 <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}"
+                                                          AutomationProperties.Name="{Binding FileName}"
                                                           VerticalAlignment="Center" />
 
                                                 <TextBlock Grid.Column="1" Text="{Binding FileName}"
@@ -595,9 +601,19 @@
                 </Button.Template>
             </Button>
 
+            <!-- EL CAJÓN TOMA EL FOCO, LO RETIENE Y ESCAPE LO CIERRA (P-03, UI-0003). Al
+                 abrirlo, el foco se quedaba en el botón que lo abrió, Tab NO entraba y seguía
+                 recorriendo la página que el cajón tapa —buscador, filtro, «Auditar selección» y
+                 las novecientas filas de módulo—, y Escape no lo cerraba: sus seis controles
+                 estaban marcados como enfocables y no había ninguna secuencia de Tab que llegara a
+                 ellos. Desde que D-997 §2 retiró de Ajustes el aviso del umbral, éste es el único
+                 sitio desde el que se llega a la gobernanza del ciclo. -->
             <Border Style="{StaticResource Card}"
                     Width="{StaticResource Cycle.PanelWidth}"
-                    HorizontalAlignment="Right" VerticalAlignment="Stretch">
+                    HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                    c:Overlay.IsOpen="{Binding CycleDrawerOpen}"
+                    c:Overlay.CloseCommand="{Binding ToggleCycleDrawerCommand}"
+                    AutomationProperties.Name="Resumen del ciclo">
                 <DockPanel>
                     <Button DockPanel.Dock="Top" HorizontalAlignment="Right"
                             Content="Cerrar" Style="{StaticResource Button.Link}"

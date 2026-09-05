@@ -1219,7 +1219,14 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
     }
 
     [RelayCommand]
-    private Task ShowFindings() => _navigation.NavigateToAsync<FindingsViewModel>(vm => vm.SetApp(Slug));
+    private Task ShowFindings()
+        // UN ENLACE QUE AÑADE UN FILTRO AÑADE ESE FILTRO Y RESPETA LOS DEMÁS (UI-0025). Era
+        // `NavigateToAsync`, que resuelve una página NUEVA del contenedor: llegar a Hallazgos por
+        // aquí restablecía toda la barra —la gravedad volvía a «Todas»— mientras que llegar por el
+        // raíl la conservaba (D-952). La misma vista volvía de dos maneras según la puerta, y nada
+        // lo decía. `NavigateOrResumeAsync` devuelve la que dejaste y le pone encima el filtro de
+        // esta aplicación, que es lo que se espera al venir de su inventario.
+        => _navigation.NavigateOrResumeAsync<FindingsViewModel>(vm => vm.SetApp(Slug));
 
     /// <summary>
     /// Abre la lista de hallazgos cuyo código ya no existe (F9 §4). No resuelve nada por su cuenta:

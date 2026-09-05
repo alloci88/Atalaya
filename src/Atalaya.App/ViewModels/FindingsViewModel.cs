@@ -345,7 +345,15 @@ public sealed partial class FindingsViewModel : ViewModelBase, IAppScoped
     /// <inheritdoc cref="GroupCollapse.HasGroups"/>
     public bool HasGroups => _collapse.HasGroups;
 
-    partial void OnSelectedAppChanged(AppFilterOption? value) => Reload();
+    partial void OnSelectedAppChanged(AppFilterOption? value)
+    {
+        // La miga enseña el eslabón de la aplicación cuando la PÁGINA está enseñando esa
+        // aplicación (UI-0004). Cambiar el filtro a «Todas» es dejar de enseñarla, y la carcasa
+        // tiene que enterarse: se construía solo al navegar, así que la miga se quedaba diciendo
+        // «› XBLAST ›» con la lista enseñando el portafolio entero.
+        RaiseScopeChanged();
+        Reload();
+    }
     partial void OnSelectedSeverityChanged(SeverityFilterOption? value) => Reload();
 partial void OnSelectedThemeChanged(ThemeFilterOption? value) => Reload();
     partial void OnSelectedScopeChanged(ScopeFilterOption? value) => Reload();

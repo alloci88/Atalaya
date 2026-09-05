@@ -222,6 +222,41 @@ public sealed class DesignTokenTests
     }
 
     /// <summary>
+    /// <b>EL MARCADOR DE «ESTÁS AQUÍ» CABE EN SU CARRIL</b> (UI-0046).
+    /// <para>
+    /// <b>De dónde viene.</b> El <c>DataTrigger</c> de <c>IsActive</c> pinta el marcador de
+    /// <c>Brush.Primary.Fill</c>, y el barrido de píxel de la auditoría no encontró <b>ni un solo
+    /// píxel del primario</b> en el raíl de ninguna de las cuatro combinaciones, ni desplegado ni
+    /// plegado. La causa: el carril es <c>Rail.MarkerLane</c> = 8 y el <c>Border</c> pedía
+    /// <c>Rail.MarkerWidth</c> 3 más <c>Pad.XXS</c> 4 <b>a cada lado</b> = 11. Toda la señal de
+    /// «estás aquí» recaía entonces en el relleno de la pastilla, que mide 1,27:1 en oscuro y
+    /// 1,21:1 en claro contra el fondo del raíl; desplegado lo salvaba el texto en seminegrita, y
+    /// plegado no hay texto.
+    /// </para>
+    /// <para>
+    /// <b>Por qué es de regla, y por tercera vez.</b> Es la aritmética de carriles de D-966
+    /// fallando otra vez —D-963 y D-999 §3 fueron las dos primeras—, y falla siempre igual: lo que
+    /// no cabe <b>se recorta en silencio</b>. No hay excepción, ni log, ni test rojo; el elemento
+    /// simplemente no está. Los dos raíles de la casa —el de primer nivel y la lista de secciones
+    /// de Ajustes— comparten plantilla y compartían el defecto, así que se comprueban los dos.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData("RailItem")]
+    [InlineData("Setting.Section")]
+    public void El_marcador_de_estas_aqui_cabe_en_su_carril(string estilo)
+    {
+        Thickness relleno = MarkerPadOfStyle(estilo);
+        double pide = Token("Rail.MarkerWidth") + H(relleno);
+
+        pide.Should().BeLessThanOrEqualTo(
+            Token("Rail.MarkerLane"),
+            "en «{0}» el marcador pide {1} —{2} de barra más {3} de relleno— y su carril mide {4}: "
+            + "lo que no cabe se recorta SIN PROTESTAR, y el «estás aquí» deja de pintarse",
+            estilo, pide, Token("Rail.MarkerWidth"), H(relleno), Token("Rail.MarkerLane"));
+    }
+
+    /// <summary>
     /// El raíl plegado mide EXACTAMENTE sus carriles: el del marcador, el del icono y el aire de la
     /// derecha. Ni uno más —sobraría hueco a un lado del icono y dejaría de estar centrado con el
     /// desplegado— ni uno menos.
@@ -303,6 +338,27 @@ public sealed class DesignTokenTests
             @"<Setter Property=""Padding"" Value=""\{StaticResource ([^}]+)\}"" />");
 
         m.Success.Should().BeTrue($"{key} declara su relleno con un token, no a mano");
+        return Pad(m.Groups[1].Value);
+    }
+
+    /// <summary>
+    /// El <c>Margin</c> del <c>Border</c> llamado <c>Marker</c> dentro de la plantilla de un
+    /// estilo, resuelto a su token. Es lo que el marcador se come además de su ancho.
+    /// </summary>
+    private static Thickness MarkerPadOfStyle(string key)
+    {
+        string styles = File.ReadAllText(Path.Combine(XamlRoot(), "Themes", "Styles.xaml"));
+
+        int start = styles.IndexOf($"x:Key=\"{key}\"", StringComparison.Ordinal);
+        start.Should().BeGreaterThan(0, $"`Styles.xaml` declara {key}");
+
+        int end = styles.IndexOf("</Style>", start, StringComparison.Ordinal);
+        var m = Regex.Match(
+            styles[start..end],
+            @"<Border x:Name=""Marker""[^>]*?Margin=""\{StaticResource ([^}]+)\}""",
+            RegexOptions.Singleline);
+
+        m.Success.Should().BeTrue($"{key} declara el margen de su marcador con un token, no a mano");
         return Pad(m.Groups[1].Value);
     }
 

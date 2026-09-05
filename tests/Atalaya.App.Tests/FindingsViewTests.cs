@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Windows.Input;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
@@ -145,7 +146,15 @@ public sealed class FindingsViewTests : IDisposable
         return vm;
     }
 
-    private static string[] CommandNames(Type t) => t.GetProperties()
+    /// <summary>
+    /// Los comandos que declara ESTA vista, no los que hereda. <c>DeclaredOnly</c> desde
+    /// UI-AUDIT-1: <c>ViewModelBase.SubCrumbParentCommand</c> es un `ICommand` que toda página
+    /// tiene, y no es una acción suya — es el puntero que la miga sigue para volver al eslabón de
+    /// arriba (UI-0044). Contarlo aquí haría que la frontera V3/V4 fallara por algo que no es una
+    /// acción de la lista.
+    /// </summary>
+    private static string[] CommandNames(Type t) => t
+        .GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
         .Where(p => typeof(ICommand).IsAssignableFrom(p.PropertyType))
         .Select(p => p.Name)
         .OrderBy(n => n, StringComparer.Ordinal)

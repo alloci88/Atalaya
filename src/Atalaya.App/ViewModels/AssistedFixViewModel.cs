@@ -70,7 +70,19 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
         }
     }
 
-    public override string Title => "Arreglo asistido";
+    /// <summary>
+    /// EL RAÍL, EL TÍTULO Y LA MIGA DICEN LO MISMO (UI-0029). Al acabar el arreglo, la entrada del
+    /// raíl cambiaba de rótulo y de icono —«Arreglo asistido» + punto verde → «Último arreglo» +
+    /// llave— y la página no: el título y la miga seguían diciendo «Arreglo asistido», así que en
+    /// la misma pantalla los tres sitios que dicen dónde estás decían dos cosas. La sesión, en el
+    /// mismo caso, sí cuadraba. Los tres estados son los mismos que `MainViewModel.FixNavLabel`
+    /// pone en el raíl.
+    /// </summary>
+    public override string Title => !_fix.HasSession
+        ? "Arreglo asistido"
+        : _fix.IsRunning
+            ? "Arreglo asistido"
+            : _fix.HasFailed ? "Arreglo fallido" : "Último arreglo";
 
     /// <summary>F26 §A.</summary>
     public override string RailKey => "fix";
@@ -635,6 +647,7 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
 
     private void OnFixChanged()
     {
+        OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(IsRunning));
         OnPropertyChanged(nameof(IsPaused));
         OnPropertyChanged(nameof(HasSession));

@@ -313,6 +313,18 @@
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
         <Setter Property="Padding" Value="{StaticResource Pad.XS}" />
+        <Style.Triggers>
+            <!-- APAGADO SE LEE COMO APAGADO (UI-0048). La flecha de volver se pintaba del MISMO
+                 color deshabilitada que habilitada —#A4ABB8 en los dos casos, medido píxel a
+                 píxel— porque su contenido es un `Path` y no texto: el disparador de la plantilla
+                 del enlace apaga la tinta del rótulo, y aquí no hay rótulo. Se apaga el
+                 `Foreground` del BOTÓN, del que el icono cuelga. D-983 §4 resolvió esto para los
+                 botones y esta flecha se quedó fuera; es la primera cosa arriba a la izquierda de
+                 la primera pantalla, con forma de control y sin hacer nada. -->
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Line}" />
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
     <!-- El «…» de una tarjeta: lo que existe pero no compite por la mirada. Es un ToggleButton
@@ -535,10 +547,23 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
+                        <!-- EL MARCADOR CABE EN SU CARRIL (UI-0046). Con `Pad.XXS` uniforme el
+                             `Border` pedía 3 de barra + 4 a cada lado = 11 dentro de un carril de
+                             8, así que WPF lo recortaba EN SILENCIO: no aparecía un solo píxel del
+                             primario en el raíl de ninguna de las cuatro combinaciones, ni
+                             desplegado ni plegado, y toda la señal de «estás aquí» recaía en el
+                             relleno de la pastilla —1,27:1 en oscuro, y plegado no hay texto que
+                             lo salve—. Era la aritmética de carriles de D-966 fallando por tercera
+                             vez (D-963 y D-999 §3 fueron las dos primeras), así que esta vez la
+                             cuenta la vigila un test: marcador + relleno ≤ carril.
+
+                             El relleno pasa a ser SOLO VERTICAL, que es lo que el carril dice
+                             desde el principio: «0…8 · 3 px de barra + 5 de aire». La barra va
+                             pegada al borde y los 5 que sobran son el aire hasta el icono. -->
                         <Border x:Name="Marker" Grid.Column="0"
                                 Width="{StaticResource Rail.MarkerWidth}"
                                 HorizontalAlignment="Left"
-                                Margin="{StaticResource Pad.XXS}"
+                                Margin="{StaticResource Pad.RailMarker}"
                                 CornerRadius="{StaticResource Radius.Pill}"
                                 Background="Transparent" />
 
@@ -558,32 +583,15 @@
                                 <!-- El icono, centrado en su canal. Ni ancho fijo que se recorte ni
                                      alineación a la izquierda: centrado en un canal de ancho fijo
                                      es lo único que da la misma x en las tres filas. -->
+                                <!-- El `Stroke` NO se asigna aquí: un valor local en la plantilla
+                                     gana a los disparadores de la propia plantilla, y el latido de
+                                     abajo no podría teñirlo. Lo pone el disparador de `IsActive` o
+                                     el del latido; sin ninguno de los dos, el estilo `Icon`. -->
                                 <Path x:Name="Glyph" Grid.Column="0"
                                       Style="{StaticResource Icon}"
                                       Data="{Binding Icon}"
-                                      HorizontalAlignment="Center"
-                                      Stroke="{TemplateBinding Foreground}" />
+                                      HorizontalAlignment="Center" />
 
-                                <!-- Lo que late sustituye al icono en vez de sumarse: dos señales
-                                     de lo mismo, una al lado de la otra, en un canal de 40 px. -->
-                                <Ellipse x:Name="Pulse" Grid.Column="0"
-                                         Width="9" Height="9"
-                                         HorizontalAlignment="Center" VerticalAlignment="Center"
-                                         Fill="{DynamicResource Brush.Success.Fill}"
-                                         Visibility="Collapsed">
-                                    <Ellipse.Triggers>
-                                        <EventTrigger RoutedEvent="Loaded">
-                                            <BeginStoryboard>
-                                                <Storyboard>
-                                                    <DoubleAnimation
-                                                        Storyboard.TargetProperty="Opacity"
-                                                        From="1.0" To="0.15" Duration="0:0:0.9"
-                                                        AutoReverse="True" RepeatBehavior="Forever" />
-                                                </Storyboard>
-                                            </BeginStoryboard>
-                                        </EventTrigger>
-                                    </Ellipse.Triggers>
-                                </Ellipse>
 
                                 <TextBlock x:Name="Label" Grid.Column="1"
                                            Text="{Binding Label}"
@@ -605,12 +613,35 @@
                         <DataTrigger Binding="{Binding IsActive}" Value="True">
                             <Setter TargetName="Marker" Property="Background" Value="{DynamicResource Brush.Primary.Fill}" />
                             <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Nav.Active}" />
+                            <Setter TargetName="Glyph" Property="Stroke" Value="{DynamicResource Brush.Text}" />
                             <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
                             <Setter TargetName="Label" Property="FontWeight" Value="SemiBold" />
                         </DataTrigger>
+                        <!-- LO QUE ESTÁ CORRIENDO SE DICE CON EL ICONO, no sustituyéndolo
+                             (UI-0047). La plantilla cambiaba el icono por un punto verde de 9 px,
+                             con su comentario: «lo que late sustituye al icono en vez de sumarse».
+                             El precio se veía al plegar el raíl: la entrada de lo que está
+                             corriendo quedaba como un punto suelto en una columna de iconos,
+                             indistinguible del piloto del avatar dos filas más abajo. Ahora el
+                             icono se queda —es lo que dice QUÉ está corriendo— y lo que late es
+                             él: el mismo verde y el mismo pulso, sobre la forma que identifica. -->
                         <DataTrigger Binding="{Binding Pulsing}" Value="True">
-                            <Setter TargetName="Glyph" Property="Visibility" Value="Collapsed" />
-                            <Setter TargetName="Pulse" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Glyph" Property="Stroke" Value="{DynamicResource Brush.Success.Ink}" />
+                            <Setter TargetName="Glyph" Property="StrokeThickness" Value="2" />
+                            <DataTrigger.EnterActions>
+                                <BeginStoryboard x:Name="PulseOn">
+                                    <Storyboard>
+                                        <DoubleAnimation
+                                            Storyboard.TargetName="Glyph"
+                                            Storyboard.TargetProperty="Opacity"
+                                            From="1.0" To="0.35" Duration="0:0:0.9"
+                                            AutoReverse="True" RepeatBehavior="Forever" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </DataTrigger.EnterActions>
+                            <DataTrigger.ExitActions>
+                                <StopStoryboard BeginStoryboardName="PulseOn" />
+                            </DataTrigger.ExitActions>
                         </DataTrigger>
                         <!-- Plegado: se va el TEXTO y nada más. Los carriles no se tocan, que es
                              justamente el arreglo: el icono no se entera de que el raíl ha
@@ -621,12 +652,29 @@
                         </DataTrigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Surface2}" />
+                            <Setter TargetName="Glyph" Property="Stroke" Value="{DynamicResource Brush.Text}" />
                             <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- LA FILA DE IDENTIDAD DEL PIE DEL RAÍL (UI-0061). Mide, se rellena y se alinea como una
+         entrada del menú —los mismos carriles, la misma altura— pero NO es un botón: dejó de
+         navegar. Había dos controles del raíl llevando a «Cuenta» —la entrada del bloque de
+         sistema y esta fila—, y la de abajo no marcaba «estás aquí» cuando estabas en Cuenta, no
+         tenía nombre de accesibilidad y era la SEGUNDA parada de tabulación de toda la ventana,
+         antes que las entradas del menú que tiene encima. La entrada de «Cuenta» se queda: tiene
+         su icono, marca dónde estás y está en el bloque que le toca. Esto es quién eres y si el
+         hub responde, que es lo que un pie de menú dice. -->
+    <Style x:Key="RailIdentity" TargetType="Border">
+        <Setter Property="Height" Value="{StaticResource Rail.RowHeight}" />
+        <Setter Property="Padding" Value="{StaticResource Pad.RailItem}" />
+        <Setter Property="Margin" Value="{StaticResource Pad.RailItemGap}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
     </Style>
 
     <!-- ================================================================ Gravedad
@@ -1077,10 +1125,12 @@
                             <ColumnDefinition Width="{Binding Source={StaticResource Rail.MarkerLane}}" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
+                        <!-- El mismo carril y la misma cuenta que el raíl de primer nivel
+                             (UI-0046): comparten gramática, así que compartían el defecto. -->
                         <Border x:Name="Marker" Grid.Column="0"
                                 Width="{StaticResource Rail.MarkerWidth}"
                                 HorizontalAlignment="Left"
-                                Margin="{StaticResource Pad.XXS}"
+                                Margin="{StaticResource Pad.RailMarker}"
                                 CornerRadius="{StaticResource Radius.Pill}"
                                 Background="Transparent" />
                         <Border x:Name="Chrome" Grid.Column="1"

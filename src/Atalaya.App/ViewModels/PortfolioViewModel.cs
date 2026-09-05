@@ -26,6 +26,14 @@ public sealed partial class PortfolioViewModel : ViewModelBase
     /// <summary>F9 §5: cuánta deuda nueva puede haber entrado desde la última auditoría.</summary>
     private readonly DriftQuery _drift;
 
+    /// <summary>
+    /// La aplicación en la que la ventana está trabajando. Aquí se usa para UNA cosa: olvidarla
+    /// cuando se borra (UI-0017). El portafolio dejó de borrarla por pasar por él —eso hacía
+    /// desaparecer «Inventario» del raíl y ponía el inventario a dos pasos—, así que ahora la
+    /// única forma de que la activa deje de existir es que se borre de verdad.
+    /// </summary>
+    private readonly ActiveApp _activeApp;
+
     public PortfolioViewModel(
         PortfolioQuery query,
         NavigationService navigation,
@@ -36,8 +44,10 @@ public sealed partial class PortfolioViewModel : ViewModelBase
         ToastCenter toasts,
         CloneLinkService links,
         LinkCloneFlow linkFlow,
-        DriftQuery drift)
+        DriftQuery drift,
+        ActiveApp activeApp)
     {
+        _activeApp = activeApp;
         _drift = drift;
         _query = query;
         _navigation = navigation;
@@ -233,6 +243,15 @@ public sealed partial class PortfolioViewModel : ViewModelBase
             Apps.Remove(card);
             IsEmpty = Apps.Count == 0;
             Summary = PortfolioSummary.Of(Apps);
+
+            // Y la carcasa deja de ofrecerla (UI-0017): el raíl conserva la aplicación activa
+            // hasta que el usuario elige otra o la borra, y esto es borrarla.
+            if (string.Equals(_activeApp.Slug, card.Slug, StringComparison.OrdinalIgnoreCase))
+            {
+                _activeApp.Clear();
+                RaiseScopeChanged();
+            }
+
             _toasts.Show(result.Message);
         }
         catch (Exception ex)

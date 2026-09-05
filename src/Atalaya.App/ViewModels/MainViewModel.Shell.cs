@@ -38,6 +38,20 @@ public sealed partial class MainViewModel
     /// <summary>Los grupos del raíl, tal cual se pintan. Se reconstruyen cuando cambia lo que hay.</summary>
     public ObservableCollection<NavGroup> NavGroups { get; } = new();
 
+    /// <summary>
+    /// EL BLOQUE DE SISTEMA, APARTE Y ANCLADO AL PIE (UI-0043).
+    /// <para>
+    /// Iba dentro de <see cref="NavGroups"/>, detrás del bloque de la aplicación, y el bloque de la
+    /// aplicación aparece, desaparece y crece —una, dos o tres entradas—. Medido: «Cuenta» está en
+    /// y=299 en el Portafolio, en y=356 en el Inventario, en y=396 con una sesión y en y=436 con
+    /// sesión y arreglo: <b>137 px de recorrido</b> para tres entradas que se aprenden de memoria y
+    /// se pulsan sin mirar. D-954 se preocupó de que la entrada activa no bailara tres píxeles;
+    /// esto era lo mismo a escala de cuarenta veces. Ahora el bloque va pegado al pie y lo que
+    /// crece es el hueco de en medio.
+    /// </para>
+    /// </summary>
+    public ObservableCollection<NavItem> SystemItems { get; } = new();
+
     /// <summary>Portafolio › XBLAST › Inventario. El último eslabón no es enlace.</summary>
     public ObservableCollection<Crumb> Crumbs { get; } = new();
 
@@ -160,6 +174,7 @@ public sealed partial class MainViewModel
     public void RefreshShell()
     {
         OnPropertyChanged(nameof(HasFooter));
+        WatchScope(Navigation.Current);
         SyncActiveApp();
         BuildRail();
         BuildCrumbs();
@@ -174,20 +189,82 @@ public sealed partial class MainViewModel
     /// <para>
     /// Una página que no es de ninguna aplicación NO borra la activa. Mirar las métricas de todas
     /// las aplicaciones no es «salir» de la tuya, y si lo borrara, el camino de vuelta al
-    /// inventario se perdería justo cuando se necesita. Solo el portafolio la borra, porque el
-    /// portafolio es literalmente el sitio donde eliges otra.
+    /// inventario se perdería justo cuando se necesita.
+    /// </para>
+    /// <para>
+    /// <b>Y el portafolio TAMPOCO la borra</b> (UI-0017). Lo hacía a propósito —«el portafolio es
+    /// literalmente el sitio donde eliges otra»— y el efecto medido era el contrario del que se
+    /// buscaba: el bloque de la aplicación solo se pinta si hay una, así que en cuanto se pasaba
+    /// por Portafolio el raíl de Métricas, Cuenta, Ajustes, Acerca de y Nueva aplicación se
+    /// quedaba sin «Inventario» y volver costaba <b>dos pasos</b> — incumpliendo D-944.6 por su
+    /// enunciado exacto: «el inventario es alcanzable en un paso desde cualquier sitio». Mirar el
+    /// portafolio no es elegir otra aplicación; elegir otra es entrar en ella, y eso ya la cambia.
+    /// La activa se conserva hasta que el usuario elija otra o borre la que había
+    /// (<see cref="ForgetActiveApp"/>).
     /// </para>
     /// </summary>
+    /// <summary>La página cuyo ámbito estamos escuchando. Solo una: la que está delante.</summary>
+    private ViewModelBase? _watched;
+
+    /// <summary>
+    /// Escucha los cambios de ÁMBITO de la página que está delante (UI-0004).
+    /// <para>
+    /// La miga se rehacía solo al navegar, así que cambiar el filtro de aplicación de Hallazgos la
+    /// dejaba diciendo «› XBLAST ›» con la lista enseñando el portafolio entero. Se engancha una
+    /// sola página —y se suelta la anterior—: un manejador que se acumula por navegación es una
+    /// fuga con un raíl repintado N veces dentro.
+    /// </para>
+    /// </summary>
+    private void WatchScope(ViewModelBase? page)
+    {
+        if (ReferenceEquals(_watched, page))
+        {
+            return;
+        }
+
+        if (_watched is not null)
+        {
+            _watched.ScopeChanged -= OnScopeChanged;
+        }
+
+        _watched = page;
+
+        if (_watched is not null)
+        {
+            _watched.ScopeChanged += OnScopeChanged;
+        }
+    }
+
+    private void OnScopeChanged(object? sender, EventArgs e)
+    {
+        // Solo la página que está delante: una que quedó en el historial y se recarga sola no
+        // tiene por qué mover la miga de la que se está mirando.
+        if (ReferenceEquals(sender, Navigation.Current))
+        {
+            SyncActiveApp();
+            BuildRail();
+            BuildCrumbs();
+        }
+    }
+
     private void SyncActiveApp()
     {
-        switch (Navigation.Current)
+        if (Navigation.Current is IAppScoped scoped && scoped.AppSlug.Length > 0)
         {
-            case PortfolioViewModel:
-                ActiveApplication.Clear();
-                break;
-            case IAppScoped scoped when scoped.AppSlug.Length > 0:
-                ActiveApplication.Set(scoped.AppSlug, scoped.AppLabel);
-                break;
+            ActiveApplication.Set(scoped.AppSlug, scoped.AppLabel);
+        }
+    }
+
+    /// <summary>
+    /// La aplicacion activa se OLVIDA cuando deja de existir, y solo entonces. La llama el
+    /// borrado de una aplicacion.
+    /// </summary>
+    public void ForgetActiveApp(string slug)
+    {
+        if (string.Equals(ActiveApplication.Slug, slug, StringComparison.OrdinalIgnoreCase))
+        {
+            ActiveApplication.Clear();
+            RefreshShell();
         }
     }
 
@@ -245,6 +322,12 @@ public sealed partial class MainViewModel
             item.IsActive = item.Key == active;
         }
 
+        SystemItems.Clear();
+        foreach (NavItem item in system)
+        {
+            SystemItems.Add(item);
+        }
+
         NavGroups.Clear();
         NavGroups.Add(new NavGroup(WorkGroup, work) { HasSeparator = false });
         if (app.Count > 0)
@@ -256,8 +339,6 @@ public sealed partial class MainViewModel
             // genérico en vez de quedarse en blanco.
             NavGroups.Add(new NavGroup(ActiveApplication.HasApp ? ActiveApplication.Name : "En curso", app));
         }
-
-        NavGroups.Add(new NavGroup(SystemGroup, system));
     }
 
     private const string WorkGroup = "Trabajo";
@@ -285,20 +366,36 @@ public sealed partial class MainViewModel
 
         Crumbs.Add(new Crumb("Portafolio", ShowPortfolioCommand));
 
+        // EL ESLABÓN DE LA APLICACIÓN SALE CUANDO LA PÁGINA ESTÁ ENSEÑANDO ESA APLICACIÓN, no
+        // cuando la ventana la recuerda (UI-0004). `BelongsToApp` es de la página y sabe la
+        // diferencia —Hallazgos con «Aplicación: Todas» dice que no—, y desde UI-0004 la miga se
+        // rehace también cuando la página cambia de filtro, que es lo que faltaba: se construía
+        // solo al navegar, así que poner «Todas» dejaba el «› XBLAST ›» de antes.
         bool inApp = current.BelongsToApp && ActiveApplication.HasApp;
         if (inApp)
         {
-            // El eslabón de la aplicación lleva a SU inventario, que es la portada de una
-            // aplicación en Atalaya. Cuando ya estás en el inventario no es enlace: sería un
-            // enlace a donde estás.
+            // Lleva a SU inventario, que es la portada de una aplicación en Atalaya. Cuando ya
+            // estás en el inventario no es enlace: sería un enlace a donde estás.
             Crumbs.Add(current is InventoryViewModel
                 ? new Crumb(ActiveApplication.Name)
                 : new Crumb(ActiveApplication.Name, ShowInventoryCommand));
         }
 
-        if (current is not InventoryViewModel)
+        // LA MIGA ACABA SIEMPRE EN LA PÁGINA (UI-0044). El inventario se saltaba su último
+        // eslabón y acababa en el nombre de la aplicación, así que era la única vista de las
+        // dieciocho que no decía en qué página estabas.
+        string sub = current.SubCrumbLabel;
+        Crumbs.Add(sub.Length > 0
+            ? new Crumb(current.CrumbLabel, current.SubCrumbParentCommand)
+            : new Crumb(current.CrumbLabel));
+
+        // Y CUANDO LA PÁGINA TIENE DOS NIVELES, el segundo también (UI-0044, UI-0058): el
+        // hallazgo dentro de Hallazgos, el informe dentro de Informes, la sección dentro de
+        // Ajustes. Es lo que hace que la ficha ofrezca la vuelta a su lista sin un segundo botón
+        // de «volver» dentro del contenido.
+        if (sub.Length > 0)
         {
-            Crumbs.Add(new Crumb(current.CrumbLabel));
+            Crumbs.Add(new Crumb(sub));
         }
     }
 }

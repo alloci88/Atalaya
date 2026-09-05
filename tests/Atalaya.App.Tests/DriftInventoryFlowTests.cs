@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
 using Atalaya.Copilot;
@@ -285,7 +285,8 @@ public sealed class DriftInventoryFlowTests : IDisposable
             _toasts,
             _provider.GetRequiredService<CloneLinkService>(),
             _provider.GetRequiredService<LinkCloneFlow>(),
-            _provider.GetRequiredService<DriftQuery>());
+            _provider.GetRequiredService<DriftQuery>(),
+            new ActiveApp());
         await vm.LoadAsync();
         return vm;
     }

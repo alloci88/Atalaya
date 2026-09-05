@@ -195,6 +195,14 @@
          los consume el `FocusVisualStyle` del sistema: 2 px de anillo —1 no se ve a 150 %—, 1 px
          de hueco entre el anillo y el control, y −3 de margen para que el conjunto se dibuje FUERA
          del control y no le tape ni un píxel de su contenido. -->
+    <!-- LA BARRA DE «ESTÁS AQUÍ» DENTRO DE SU CARRIL (UI-0046). 2 de aire a la izquierda, los 3
+         de la barra y los 3 que quedan hasta el icono: ocho justos, que es lo que mide
+         `Rail.MarkerLane`. Era `Pad.XXS` uniforme —4 a cada lado— y pedía 11 en un carril de 8, así
+         que WPF recortaba la barra entera y el marcador no se pintaba nunca. El relleno vertical
+         deja la barra un poco más corta que la fila, que es lo que la hace leerse como marca y no
+         como borde. -->
+    <Thickness x:Key="Pad.RailMarker">2,4,3,4</Thickness>
+
     <Thickness x:Key="Focus.Ring">2</Thickness>
     <Thickness x:Key="Focus.RingOffset">1</Thickness>
     <Thickness x:Key="Pad.FocusRing">-3</Thickness>

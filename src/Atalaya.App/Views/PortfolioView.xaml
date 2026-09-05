@@ -188,16 +188,34 @@
                                         <!-- F5.3 §4: el hard-reset. Detrás de un «…» porque es una
                                              SALIDA, no una acción del día a día: en la cara de la
                                              tarjeta competía por la mirada con «Abrir inventario». -->
+                                        <!-- EL TOOLTIP NO SE PINTA MIENTRAS SU MENÚ ESTÁ ABIERTO
+                                             (UI-0001). Abierto con el teclado, «Más acciones» se
+                                             dibujaba encima del desplegable y de su única entrada
+                                             solo se leía «…aplicación…». -->
                                         <ToggleButton x:Name="More"
                                                       Style="{StaticResource Button.More}"
+                                                      AutomationProperties.Name="Más acciones"
+                                                      ToolTipService.IsEnabled="{Binding IsChecked, RelativeSource={RelativeSource Self}, Converter={StaticResource InverseBool}}"
                                                       ToolTip="Más acciones" />
                                         <Popup IsOpen="{Binding IsChecked, ElementName=More}"
                                                PlacementTarget="{Binding ElementName=More}"
                                                Placement="Bottom" StaysOpen="False"
+                                               Focusable="True"
                                                AllowsTransparency="True">
+                                            <!-- EL DESPLEGABLE TOMA EL FOCO, LO RETIENE, Y ESCAPE LO
+                                                 CIERRA DEVOLVIÉNDOLO AL «···» (P-03, UI-0001).
+                                                 Antes el foco se quedaba en el botón y el siguiente
+                                                 Tab saltaba a «Abrir inventario», que está DETRÁS
+                                                 del menú abierto: «Eliminar la aplicación…» no
+                                                 recibía el foco nunca, y es la única vía para
+                                                 borrar una aplicación. El contrato lo pone
+                                                 `c:Overlay`, que es el mismo del cajón del ciclo. -->
                                             <Border Style="{StaticResource Card}"
                                                     Padding="{StaticResource Pad.XXS}"
-                                                    Margin="{StaticResource Pad.XXS}">
+                                                    Margin="{StaticResource Pad.XXS}"
+                                                    c:Overlay.IsOpen="{Binding IsChecked, ElementName=More}"
+                                                    c:Overlay.CloseToggle="{Binding ElementName=More}"
+                                                    AutomationProperties.Name="Más acciones de la aplicación">
                                                 <Button
                                                     Command="{Binding DataContext.DeleteAppCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                     CommandParameter="{Binding}"

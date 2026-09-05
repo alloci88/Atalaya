@@ -158,6 +158,17 @@ public sealed partial class ReportsViewModel : ViewModelBase
     /// <summary>F26 §A.</summary>
     public override string RailKey => "reports";
 
+    /// <summary>
+    /// EL INFORME ABIERTO TIENE SU PROPIO ESLABÓN (UI-0044). Tenía la miga de la lista, idéntica:
+    /// la miga no distinguía leer un informe de mirar la lista de informes. Y con esto «Informes»
+    /// pasa a ser el enlace de vuelta, que es lo que permite retirar el «← Volver» que la vista
+    /// pintaba dentro del contenido, 95 px por debajo de la flecha de la carcasa (UI-0058).
+    /// </summary>
+    public override string SubCrumbLabel => IsViewing ? ViewerTitle : string.Empty;
+
+    /// <inheritdoc />
+    public override System.Windows.Input.ICommand? SubCrumbParentCommand => BackCommand;
+
     // ---------- Filtros ----------
 
     public ObservableCollection<AppFilterOption> AppOptions { get; } = new();
@@ -482,6 +493,7 @@ public sealed partial class ReportsViewModel : ViewModelBase
             ? "Ver el hallazgo"
             : $"Ver el hallazgo ({row.Entry.FindingAlias})";
         IsViewing = true;
+        RaiseScopeChanged();
     }
 
     /// <summary>Vuelve a la lista. No la recarga: sus filtros y su scroll siguen donde estaban.</summary>
@@ -493,6 +505,7 @@ public sealed partial class ReportsViewModel : ViewModelBase
         Document = null;
         AnnexDocument = null;
         HasAnnex = false;
+        RaiseScopeChanged();
     }
 
     /// <summary>

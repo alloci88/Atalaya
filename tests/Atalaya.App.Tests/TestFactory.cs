@@ -195,7 +195,8 @@ internal static class TestFactory
             new ToastCenter(),
             Links(hub, paths),
             LinkFlow(hub, paths),
-            new DriftQuery(hub));
+            new DriftQuery(hub),
+            new ActiveApp());
     }
 
     /// <summary>Un confirmador que siempre dice que no: los tests que lo reciben no borran nada.</summary>

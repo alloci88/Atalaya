@@ -114,11 +114,24 @@ public sealed class ShellNavigationTests : IDisposable
     }
 
     /// <summary>
-    /// Fuera de toda aplicación —en el portafolio— no hay grupo de aplicación. Un «Inventario» que
-    /// no sabe de qué es peor que ninguno: lleva a una pregunta en vez de a un sitio.
+    /// <b>PASAR POR EL PORTAFOLIO NO BORRA LA APLICACIÓN ACTIVA</b> (UI-0017).
+    /// <para>
+    /// Lo hacía, y a propósito: «el portafolio es literalmente el sitio donde eliges otra». Medido
+    /// sobre el <c>dist</c>, el efecto era el contrario: el bloque de la aplicación solo se pinta
+    /// si hay una, así que en cuanto se pasaba por Portafolio el raíl de Métricas, Cuenta,
+    /// Ajustes, Acerca de y Nueva aplicación se quedaba sin «Inventario» y volver costaba dos
+    /// pasos — incumpliendo D-944.6 por su enunciado exacto: «el inventario es alcanzable en un
+    /// paso desde cualquier sitio».
+    /// </para>
+    /// <para>
+    /// Mirar el portafolio no es elegir otra aplicación. Elegir otra es ENTRAR en ella, y eso ya
+    /// la cambia; borrarla la borra
+    /// (<see cref="Atalaya.App.ViewModels.PortfolioViewModel.DeleteAppCommand"/>). Mientras tanto,
+    /// el raíl sigue sabiendo de dónde vienes.
+    /// </para>
     /// </summary>
     [Fact]
-    public async Task En_el_portafolio_no_hay_grupo_de_aplicacion()
+    public async Task Pasar_por_el_portafolio_conserva_el_grupo_de_la_aplicacion()
     {
         var provider = new PageProvider();
         var navigation = new NavigationService(provider);
@@ -133,8 +146,10 @@ public sealed class ShellNavigationTests : IDisposable
 
         await shell.ShowPortfolioCommand.ExecuteAsync(null);
 
-        shell.ActiveApplication.HasApp.Should().BeFalse();
-        shell.NavGroups.SelectMany(g => g.Items).Should().NotContain(i => i.Key == "inventory");
+        shell.ActiveApplication.Slug.Should().Be("xblast", "mirar el portafolio no es salir de tu aplicación");
+        shell.NavGroups.SelectMany(g => g.Items).Should().Contain(
+            i => i.Key == "inventory",
+            "el inventario sigue a un paso, que es lo que D-944.6 dice con esas palabras");
     }
 
     // ================================================================ hallazgos vuelve como se dejó

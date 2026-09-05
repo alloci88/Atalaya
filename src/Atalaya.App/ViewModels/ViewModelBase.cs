@@ -35,6 +35,41 @@ public abstract partial class ViewModelBase : ObservableObject
     /// </summary>
     public virtual bool BelongsToApp => false;
 
+    /// <summary>
+    /// El eslabón que cuelga de esta página cuando la página tiene DOS niveles (UI-0044, UI-0058):
+    /// el hallazgo que estás leyendo dentro de Hallazgos, el informe dentro de Informes, la
+    /// sección dentro de Ajustes. Vacío cuando la página es una sola cosa.
+    /// <para>
+    /// <b>Por qué existe.</b> La miga tenía tres granos distintos: el Inventario acababa en el
+    /// nombre de la aplicación y no decía «Inventario»; las cinco secciones de Ajustes tenían la
+    /// MISMA miga, aunque D-985 hizo de la sección un destino al que se aterriza desde Métricas; y
+    /// el informe abierto llevaba la miga de la lista, así que leer un informe y mirar la lista se
+    /// escribían igual. Con esto la miga acaba siempre en la página que estás mirando.
+    /// </para>
+    /// </summary>
+    public virtual string SubCrumbLabel => string.Empty;
+
+    /// <summary>
+    /// Qué hace el eslabón de la PÁGINA cuando hay un <see cref="SubCrumbLabel"/> debajo: cerrar el
+    /// informe abierto, volver a la lista de hallazgos. Nulo cuando no lleva a ningún sitio.
+    /// </summary>
+    public virtual System.Windows.Input.ICommand? SubCrumbParentCommand => null;
+
+    /// <summary>
+    /// La página ha cambiado de ÁMBITO sin que nadie haya navegado: otro filtro de aplicación,
+    /// otra sección, otro informe abierto.
+    /// <para>
+    /// <b>Lo que arregla</b> (UI-0004): la miga se construía solo al navegar, así que entrar en
+    /// Hallazgos desde el inventario de XBLAST y luego poner «Aplicación: Todas» dejaba la miga en
+    /// «Portafolio › XBLAST › Hallazgos» con la lista enseñando el portafolio entero. La miga
+    /// miente sobre dónde estás, que es lo único que la miga hace.
+    /// </para>
+    /// </summary>
+    public event EventHandler? ScopeChanged;
+
+    /// <summary>Avisa a la carcasa de que hay que rehacer la miga y el raíl.</summary>
+    protected void RaiseScopeChanged() => ScopeChanged?.Invoke(this, EventArgs.Empty);
+
     /// <summary>Loads/refreshes the page's data. Called on navigation and after hub changes.</summary>
     public virtual Task LoadAsync() => Task.CompletedTask;
 }

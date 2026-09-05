@@ -67,12 +67,29 @@
                     </Style>
                 </Border.Style>
 
-                <DockPanel>
+                <!-- UNA REJILLA Y NO UN `DockPanel` (UI-0043). Con el acoplado, el bloque de
+                     sistema iba pegado detrás del de la aplicación, y ése aparece, desaparece y
+                     crece: «Cuenta» recorría 137 px entre vistas. Con tres filas —el plegado
+                     arriba, los grupos en la fila que crece y el sistema abajo— lo que se estira
+                     es el hueco de en medio y las tres entradas que se pulsan sin mirar no se
+                     mueven nunca.
+
+                     Y EL ORDEN DE DECLARACIÓN ES EL ORDEN DE TABULACIÓN, que aquí también es el
+                     visual (UI-0042): el plegado, el menú, el sistema y el pie. Con el acoplado,
+                     la fila de usuario iba declarada la segunda y por eso era la segunda parada de
+                     tabulación de toda la ventana —900 px por debajo de la primera—. -->
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
                     <!-- El plegado, arriba del todo. Va en los MISMOS carriles que las entradas
                          (D-966): sus tres rayas caen exactamente en la x de los iconos de abajo,
                          plegado o no. Antes iba alineado a la izquierda con su propio margen, y por
                          eso no cuadraba con nada. -->
-                    <Button DockPanel.Dock="Top"
+                    <Button Grid.Row="0"
                             Style="{StaticResource RailRow}"
                             Command="{Binding ToggleRailCommand}"
                             AutomationProperties.Name="Plegar o desplegar el menú">
@@ -92,18 +109,87 @@
                         </Grid>
                     </Button>
 
-                    <!-- El pie del raíl: la cuenta. Es «quién eres», que es información de sistema
-                         y no de trabajo; abajo, fuera del camino, y siempre a un clic. -->
-                    <!-- LA FILA DE USUARIO (D-966/D-967). Misma altura, mismo relleno y mismos
-                         carriles que una entrada del menú —usa el mismo estilo `RailRow`, así que
-                         no es «parecida»: es la misma fila—. La línea fina de encima la separa del
-                         menú sin meter un hueco, que es lo que la haría bailar al plegar. -->
-                    <Border DockPanel.Dock="Bottom"
+                    <ItemsControl Grid.Row="1" ItemsSource="{Binding NavGroups}"
+                                  VerticalAlignment="Top"
+                                  Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel>
+                                    <!-- ENTRE BLOQUES, UNA RAYA Y NADA MÁS. Los rótulos
+                                         —«Trabajo», «Sistema»— se retiran: eran dos palabras que
+                                         no llevaban a ningún sitio, obligaban a un ritmo distinto
+                                         por encima y por debajo, y desaparecían al plegar, así que
+                                         el menú cambiaba de forma según su ancho. Con una línea,
+                                         todas las entradas van seguidas y el ritmo es uno solo: 36
+                                         de alto, 4 entre ellas, 8 a cada lado de la raya. Y la raya
+                                         sobrevive al plegado, que es lo que un rótulo no hacía. -->
+                                    <Border BorderThickness="{StaticResource Border.Top}"
+                                            BorderBrush="{DynamicResource Brush.Line}"
+                                            Margin="{StaticResource Pad.RailSeparator}"
+                                            Visibility="{Binding HasSeparator, Converter={StaticResource BoolToVisibility}}" />
+                                    <!-- EL NOMBRE DEL GRUPO VA EN LA LISTA, no en el `StackPanel`
+                                         (UI-0016). Un panel no llega a la vista de control del
+                                         árbol de accesibilidad, así que el bloque se anunciaba
+                                         como `DataItem 'Atalaya.App.ViewModels.NavGroup'` —el
+                                         nombre de la clase— y la promesa de D-1000 §2, que retiró
+                                         los rótulos «porque el nombre no se pierde: sigue siendo
+                                         el nombre de automatización del bloque», no se cumplía en
+                                         el binario. Un `ItemsControl` sí es un control y sí lo
+                                         lleva. -->
+                                    <ItemsControl ItemsSource="{Binding Items}"
+                                                  Focusable="False"
+                                                  AutomationProperties.Name="{Binding Title}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Command="{Binding Command}"
+                                                        Style="{StaticResource RailItem}"
+                                                        AutomationProperties.Name="{Binding Label}"
+                                                        ToolTip="{Binding Label}" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- EL BLOQUE DE SISTEMA, ANCLADO AL PIE (UI-0043). Cuenta, Ajustes y Acerca
+                         de son las tres entradas que se aprenden de memoria; ahora están siempre
+                         en la misma y. -->
+                    <StackPanel Grid.Row="2">
+                        <Border BorderThickness="{StaticResource Border.Top}"
+                                BorderBrush="{DynamicResource Brush.Line}"
+                                Margin="{StaticResource Pad.RailSeparator}" />
+                        <ItemsControl ItemsSource="{Binding SystemItems}"
+                                      Focusable="False"
+                                      AutomationProperties.Name="Sistema">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Command="{Binding Command}"
+                                            Style="{StaticResource RailItem}"
+                                            AutomationProperties.Name="{Binding Label}"
+                                            ToolTip="{Binding Label}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <!-- EL PIE DEL RAÍL: QUIÉN ERES, Y NADA MÁS (D-966/D-967, UI-0061).
+                         Mismos carriles, misma altura y mismo relleno que una entrada del menú
+                         —`RailIdentity` los declara igual que `RailRow`—, pero ya NO navega: era
+                         el segundo control del raíl que llevaba a «Cuenta», no marcaba «estás
+                         aquí» cuando estabas allí, llegaba sin nombre al árbol de accesibilidad y
+                         era la segunda parada de tabulación de toda la ventana, unos 900 px por
+                         debajo de la primera y por delante de las entradas del menú. A «Cuenta» se
+                         va por su entrada, que tiene icono y marca dónde estás; esto dice quién
+                         eres y si el hub responde. La línea fina de encima la separa del menú sin
+                         meter un hueco, que es lo que la haría bailar al plegar. -->
+                    <Border Grid.Row="3"
                             BorderBrush="{DynamicResource Brush.Line}"
                             BorderThickness="{StaticResource Border.Top}">
-                        <Button Style="{StaticResource RailRow}"
-                                Command="{Binding ShowAccountCommand}"
-                                ToolTip="{Binding AccountTooltip}">
+                        <Border Style="{StaticResource RailIdentity}"
+                                ToolTip="{Binding AccountTooltip}"
+                                AutomationProperties.Name="{Binding AccountLabel}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="{Binding Source={StaticResource Rail.MarkerLane}}" />
@@ -158,45 +244,9 @@
                                                Visibility="{Binding AccountNeedsAttention, Converter={StaticResource BoolToVisibility}}" />
                                 </StackPanel>
                             </Grid>
-                        </Button>
+                        </Border>
                     </Border>
-
-                    <ItemsControl ItemsSource="{Binding NavGroups}" DockPanel.Dock="Top">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel AutomationProperties.Name="{Binding Title}">
-                                    <!-- ENTRE BLOQUES, UNA RAYA Y NADA MÁS. Los rótulos
-                                         —«Trabajo», «Sistema»— se retiran: eran dos palabras que
-                                         no llevaban a ningún sitio, obligaban a un ritmo distinto
-                                         por encima y por debajo, y desaparecían al plegar, así que
-                                         el menú cambiaba de forma según su ancho. Con una línea,
-                                         todas las entradas van seguidas y el ritmo es uno solo: 36
-                                         de alto, 4 entre ellas, 8 a cada lado de la raya. Y la raya
-                                         sobrevive al plegado, que es lo que un rótulo no hacía.
-
-                                         El nombre del grupo NO se pierde: sigue siendo el nombre de
-                                         automatización del bloque, que es lo que un lector de
-                                         pantalla necesita para dar la agrupación que la raya da a
-                                         la vista. -->
-                                    <Border BorderThickness="{StaticResource Border.Top}"
-                                            BorderBrush="{DynamicResource Brush.Line}"
-                                            Margin="{StaticResource Pad.RailSeparator}"
-                                            Visibility="{Binding HasSeparator, Converter={StaticResource BoolToVisibility}}" />
-                                    <ItemsControl ItemsSource="{Binding Items}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Button Command="{Binding Command}"
-                                                        Style="{StaticResource RailItem}"
-                                                        AutomationProperties.Name="{Binding Label}"
-                                                        ToolTip="{Binding Label}" />
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </DockPanel>
+                </Grid>
             </Border>
 
             <!-- ==================================================== EL ÁREA PRINCIPAL -->
@@ -218,12 +268,18 @@
                         BorderThickness="{StaticResource Border.Bottom}"
                         Padding="{StaticResource Pad.TopBar}">
                     <DockPanel>
+                        <!-- La flecha lleva NOMBRE (UI-0016): llegaba sin él al árbol de
+                             accesibilidad, y un tooltip no es un nombre. Y su icono cuelga del
+                             `Foreground` del botón para que apagado se lea apagado (UI-0048): el
+                             estilo `Button.Ghost` lo apaga, y el `Path` lo sigue. -->
                         <Button DockPanel.Dock="Left"
                                 Style="{StaticResource Button.Ghost}"
                                 Command="{Binding GoBackCommand}"
                                 Margin="{StaticResource Pad.Zero}"
+                                AutomationProperties.Name="Volver"
                                 ToolTip="Volver">
-                            <Path Style="{StaticResource Icon}" Data="{x:Static c:Icons.Back}" />
+                            <Path Style="{StaticResource Icon}" Data="{x:Static c:Icons.Back}"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
                         </Button>
 
                         <!-- Aquí NO va el piloto del hub (D-964). Estuvo, con la palabra «Green»
@@ -232,7 +288,12 @@
                              la otra mitad de la misma pregunta. Los dos se han mudado al pie del
                              raíl, junto a la cuenta. Esta barra dice solo dónde estás. -->
 
+                        <!-- `Focusable="False"`: un contenedor no para el foco (UI-0042). El
+                             recorrido de teclado tenía 6 o 7 paradas por ciclo en listas y paneles
+                             que no hacen nada. -->
                         <ItemsControl ItemsSource="{Binding Crumbs}" VerticalAlignment="Center"
+                                      Focusable="False"
+                                      AutomationProperties.Name="Dónde estás"
                                       Margin="{StaticResource Pad.XS}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -348,7 +409,12 @@
 
                 <!-- LA PÁGINA. El relleno lo pone la carcasa —una vez— y no cada vista. -->
                 <Border Grid.Row="3" Padding="{StaticResource Pad.Page}">
-                    <ContentControl Content="{Binding Navigation.Current}" />
+                    <!-- AL CAMBIAR DE PÁGINA, EL FOCO ENTRA EN LA PÁGINA (UI-0042). Volvía al
+                         elemento ventana, y desde ahí llegar al primer control del contenido
+                         costaba 14 paradas en Portafolio, 13 en Hallazgos y 22 en Ajustes. Lo hace
+                         el code-behind, que es quien puede mover el foco. -->
+                    <ContentControl x:Name="PageHost" Content="{Binding Navigation.Current}"
+                                    AutomationProperties.Name="Contenido de la página" />
                 </Border>
 
                 <!-- EL PIE: lo que está corriendo. La cuenta se ha mudado al raíl y el estado del
@@ -397,6 +463,7 @@
                 HorizontalAlignment="Right"
                 VerticalAlignment="Bottom"
                 Margin="{StaticResource Pad.L}"
+                Focusable="False"
                 IsHitTestVisible="True">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>

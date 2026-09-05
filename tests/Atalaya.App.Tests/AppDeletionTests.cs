@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
 using Atalaya.Copilot;
@@ -404,7 +404,8 @@ public sealed class AppDeletionTests : IDisposable
             new ToastCenter(),
             TestFactory.Links(hub, _paths),
             TestFactory.LinkFlow(hub, _paths),
-            new DriftQuery(hub));
+            new DriftQuery(hub),
+            new ActiveApp());
     }
 
     /// <summary>El confirmador de los tests: responde lo que se le diga y guarda lo que le pidieron.</summary>

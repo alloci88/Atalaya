@@ -48,9 +48,23 @@ public static class Icons
     public static Geometry Metrics { get; } = P(
         "M4,19 L4,5 M4,19 L20,19 M8,15 L8,11 M12,15 L12,8 M16,15 L16,13");
 
-    /// <summary>Inventario: una lista de unidades.</summary>
+    /// <summary>
+    /// Inventario: una lista de unidades CON SU ESTADO — un portapapeles con dos marcas.
+    /// <para>
+    /// <b>Por qué cambia</b> (UI-0047). Eran tres rayas horizontales, y el botón de plegar el menú
+    /// (<see cref="RailToggle"/>) también: la única diferencia era que la tercera raya de
+    /// Inventario era más corta. Plegado el raíl —que es cuando el icono es lo ÚNICO que queda—
+    /// los dos caían en la misma columna de 40 px separados por 40 de alto, y no había forma de
+    /// distinguirlos. Un portapapeles marcado dice además lo que el inventario es: unidades con
+    /// un estado, no una lista cualquiera.
+    /// </para>
+    /// </summary>
     public static Geometry Inventory { get; } = P(
-        "M4,6 L20,6 M4,12 L20,12 M4,18 L14,18");
+        "M9,3.5 L15,3.5 L15,6 L9,6 Z " +
+        "M9,4.75 L6.5,4.75 A1.5,1.5 0 0 0 5,6.25 L5,19 A1.5,1.5 0 0 0 6.5,20.5 L17.5,20.5 " +
+        "A1.5,1.5 0 0 0 19,19 L19,6.25 A1.5,1.5 0 0 0 17.5,4.75 L15,4.75 " +
+        "M8,11 L9.5,12.5 L12,10 M14,11.5 L16,11.5 " +
+        "M8,16 L9.5,17.5 L12,15 M14,16.5 L16,16.5");
 
     /// <summary>Sesión en vivo: un reloj, porque una sesión es algo que está corriendo.</summary>
     public static Geometry Session { get; } = P(

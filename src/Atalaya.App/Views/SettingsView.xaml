@@ -51,16 +51,33 @@
             <!-- La lista de secciones. Se construye desde `Sections` y no como cinco botones
                  escritos a mano por lo mismo que el raíl (D-954): la entrada activa es un dato, y
                  un dato se puede probar. -->
+            <!-- UNA LISTA DE CINCO SE RECORRE CON FLECHAS Y SE ACTIVA CON ENTER (UI-0016).
+                 Medido sobre el `dist`: las cinco secciones ocupaban las paradas 18 a 22 de las 28
+                 del ciclo de tabulación, Espacio activaba, **Enter no hacía nada y las flechas no
+                 movían** — así que recorrer cinco opciones costaba cinco tabulaciones. Un `Button`
+                 solo responde a Enter si es el predeterminado de la ventana, y la navegación
+                 direccional por defecto se sale de la lista en la primera flecha: las dos cosas se
+                 declaran. `Focusable="False"` en el contenedor, además, para que la lista no sea
+                 ella misma una parada que no hace nada (UI-0042). -->
             <ItemsControl Grid.Column="0" Grid.RowSpan="2"
                           Width="{StaticResource Setting.SectionsWidth}"
                           Margin="{StaticResource Pad.L.Right}"
+                          Focusable="False"
+                          AutomationProperties.Name="Secciones de Ajustes"
+                          KeyboardNavigation.DirectionalNavigation="Cycle"
                           ItemsSource="{Binding Sections}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:SettingsSectionItem}">
                         <Button Style="{StaticResource Setting.Section}"
                                 AutomationProperties.Name="{Binding Label}"
                                 Command="{Binding DataContext.SelectSectionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                CommandParameter="{Binding Key}" />
+                                CommandParameter="{Binding Key}">
+                            <Button.InputBindings>
+                                <KeyBinding Key="Enter"
+                                            Command="{Binding DataContext.SelectSectionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding Key}" />
+                            </Button.InputBindings>
+                        </Button>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
@@ -99,6 +116,7 @@
                                            Visibility="{Binding IsChecked, ElementName=MasProveedor, Converter={StaticResource BoolToVisibility}}" />
                             </StackPanel>
                             <ComboBox ItemsSource="{Binding Providers}"
+                                      AutomationProperties.Name="Proveedor"
                                       SelectedValue="{Binding SelectedProviderId}"
                                       SelectedValuePath="Id"
                                       DisplayMemberPath="Name"
@@ -119,6 +137,7 @@
                             <StackPanel VerticalAlignment="Top">
                                 <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.XS}">
                                     <ComboBox ItemsSource="{Binding Models}"
+                                              AutomationProperties.Name="Modelo"
                                               SelectedValue="{Binding SelectedModelId}"
                                               SelectedValuePath="Id"
                                               DisplayMemberPath="Label"
@@ -423,6 +442,7 @@
                                            Text="Con qué editor se abre el código desde la ficha de un hallazgo. Aplica al guardar." />
                             </StackPanel>
                             <ComboBox SelectedValue="{Binding Editor}" SelectedValuePath="Tag"
+                                      AutomationProperties.Name="Editor de código"
                                       MinWidth="{StaticResource Field.SelectWidth}"
                                       HorizontalAlignment="Left" VerticalAlignment="Top">
                                 <ComboBoxItem Content="Visual Studio" Tag="vs" />
