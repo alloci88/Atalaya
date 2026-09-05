@@ -14710,3 +14710,47 @@ existía. Ahora reparte también al terminar de leerse del XAML. Una separación
 en pantalla no es una separación, es una casualidad.
 
 **2.368 tests en verde** (1.859 de `Atalaya.App.Tests`).
+
+### D-984 — La barra de filtros tiene UN ritmo, y lo pone la barra
+
+**Cada control traía su propio margen, así que no había ritmo: había seis.** Medido en el dist, de
+izquierda a derecha, el hueco entre elementos consecutivos era 12 · 12 · 13 · 12 · 16 · **45**. Los
+dos que se salían eran las casillas, que llevaban `Pad.S` mientras el resto llevaba `Pad.XXS`, y el
+peor de todos era el que separaba las dos casillas entre sí: doble que cualquier otro y a la vista
+de cualquiera.
+
+Es el mismo defecto que D-983 §10 describe para el margen izquierdo de un bloque, en horizontal:
+**cuando cada pieza decide su separación, la separación deja de significar nada**. Lo agravó una
+corrección anterior —al alinear «Disputados» le puse el margen de «Por revisar» «para que fueran
+iguales», y lo que hice fue igualar los dos que estaban mal—.
+
+**Ahora el margen lo pone la barra, uno y el mismo** (`Pad.BarItem`, 8 uniforme → 16 entre dos
+cualesquiera). Medido después: 16 · 16 · 17 · 16 · 16 · 16, con el 17 de un redondeo de píxel.
+
+**Uniforme y no `Stack.Gap`, a propósito.** La barra es un `WrapPanel` y en cuanto no cabe pasa a
+dos filas —a 1280 lo hace siempre—, y un gap solo separa a lo largo: las dos filas quedarían
+pegadas. Un margen uniforme separa en los dos ejes, que es lo que un `WrapPanel` necesita.
+
+Las etiquetas de grupo («Aplicación:», «Gravedad:»…) pasan a separar solo por su DERECHA. Con
+margen uniforme separaban también por la izquierda, y ese cuarto píxel se sumaba al de la barra:
+era la diferencia entre los 12 de un grupo y los 16 de una casilla.
+
+**Y «Disputados» vuelve a ser un solo texto.** Era un `StackPanel` con la balanza y la palabra en
+dos `TextBlock`, cada uno con su alineación y su margen: tres piezas donde «Por revisar» tiene una.
+Ahora el contenido de la casilla es la cadena `⚖︎ Disputados`, así que la plantilla del control
+separa la caja de su contenido igual que en la otra —9 px frente a 10— y el espacio entre el
+símbolo y la palabra lo pone la tipografía, que es quien sabe. De paso desaparece el andamiaje de
+centrado que hacía falta cuando eran dos cajas apiladas.
+
+**Un detalle de la librería que había que anular.** El `CheckBox` de WPF-UI trae relleno propio a la
+derecha de su rótulo: su caja acaba bastante después de su última letra, así que aun con el margen
+correcto el hueco medido entre las dos casillas seguía siendo de 37 px frente a los 16 del resto.
+Se le pone `Padding` a cero y `MinWidth` a cero: **el margen lo pone la barra, y un control que no
+sabe dónde está no puede añadirle nada por su cuenta.**
+
+**Ningún test nuevo** (N-5). Lo que hay aquí es un número repetido en seis sitios, y eso ya lo
+vigila `Ningun_XAML_ya_convertido_escribe_un_margen_a_mano`: la separación sale de un token, y un
+token no puede valer dos cosas a la vez. Lo que se rompió no fue la regla, fue haber tenido seis
+tokens distintos donde hacía falta uno — y eso se ve en la primera captura, que es donde se vio.
+
+**2.368 tests en verde** (1.859 de `Atalaya.App.Tests`).

@@ -122,6 +122,14 @@
          normal las separaría más de lo que las agrupa. -->
     <Thickness x:Key="Pad.RowTight">8,4</Thickness>
 
+    <!-- El ritmo de una barra de filtros. UNIFORME a propósito, y no un `Stack.Gap`: la barra es
+         un `WrapPanel` y en cuanto no cabe pasa a dos filas, así que la separación tiene que
+         existir también hacia abajo — un gap solo separa a lo largo, y las dos filas quedarían
+         pegadas. Uniforme y en TODOS los hijos, que es lo que hace que el hueco entre dos
+         cualesquiera sea el mismo: cuando cada control traía el suyo, entre dos casillas había
+         45 px y entre dos desplegables 12. -->
+    <Thickness x:Key="Pad.BarItem">8</Thickness>
+
     <!-- El aire entre dos bloques grandes de una vista densa. -->
     <Thickness x:Key="Pad.SectionGapWide">0,16,0,8</Thickness>
 

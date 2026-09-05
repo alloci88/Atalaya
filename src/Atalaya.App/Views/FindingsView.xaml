@@ -106,66 +106,69 @@
                                 ToolTip="Busca en el título del hallazgo, en la regla que lo detectó y en la ruta del fichero."
                                 FontSize="{StaticResource FontSize.Body}"
                                 Padding="{StaticResource Pad.Field}"
-                                Width="240" Margin="{StaticResource Pad.XXS}" VerticalAlignment="Center" />
+                                Width="240" Margin="{StaticResource Pad.BarItem}" VerticalAlignment="Center" />
 
-                    <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.XXS}"
+                    <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.BarItem}"
                                 VerticalAlignment="Center">
                         <TextBlock Text="Aplicación:" Style="{StaticResource Text.Small}"
-                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS}" />
+                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
                         <ComboBox ItemsSource="{Binding AppOptions}" SelectedItem="{Binding SelectedApp}"
                                   DisplayMemberPath="Label" MinWidth="150" VerticalAlignment="Center" />
                     </StackPanel>
 
-                    <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.XXS}"
+                    <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.BarItem}"
                                 VerticalAlignment="Center">
                         <TextBlock Text="Gravedad:" Style="{StaticResource Text.Small}"
-                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS}" />
+                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
                         <ComboBox ItemsSource="{Binding SeverityOptions}" SelectedItem="{Binding SelectedSeverity}"
                                   DisplayMemberPath="Label" MinWidth="110" VerticalAlignment="Center" />
                     </StackPanel>
 
-                    <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.XXS}"
+                    <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.BarItem}"
                                 VerticalAlignment="Center">
                         <TextBlock Text="Estado:" Style="{StaticResource Text.Small}"
-                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS}" />
+                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
                         <ComboBox ItemsSource="{Binding ScopeOptions}" SelectedItem="{Binding SelectedScope}"
                                   DisplayMemberPath="Label" MinWidth="120" VerticalAlignment="Center" />
                     </StackPanel>
 
-                    <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.XXS}"
+                    <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.BarItem}"
                                 VerticalAlignment="Center">
                         <TextBlock Text="Temática:" Style="{StaticResource Text.Small}"
-                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS}" />
+                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
                         <ComboBox ItemsSource="{Binding ThemeOptions}" SelectedItem="{Binding SelectedTheme}"
                                   DisplayMemberPath="Label" MinWidth="140" VerticalAlignment="Center"
                                   ToolTip="Temática del ciclo en que se detectó" />
                     </StackPanel>
 
+                    <!-- `Padding` a cero y `MinWidth` a cero en las DOS casillas (D-984). El
+                         CheckBox de la librería trae relleno propio a la derecha del rótulo, así
+                         que su caja acaba bastante después de su última letra: con el mismo margen
+                         que el resto de la barra, el hueco medido entre las dos casillas era de 37
+                         px y el de los demás de 16. El margen ya lo pone la barra; lo que sobra es
+                         el relleno de un control que no sabe dónde está. -->
                     <CheckBox Content="Por revisar"
                               IsChecked="{Binding OnlyNeedsReview}"
-                              VerticalAlignment="Center" Margin="{StaticResource Pad.S}"
+                              VerticalAlignment="Center" Margin="{StaticResource Pad.BarItem}"
+                              Padding="{StaticResource Pad.Zero}" MinWidth="0"
                               ToolTip="Hallazgos que la última comprobación no pudo confirmar, o cuya ubicación en el código se perdió." />
 
-                    <!-- Mismo margen que «Por revisar»: son la misma clase de control y estaban
-                         separados de la fila con números distintos.
+                    <!-- UNA SOLA LÍNEA DE TEXTO, como «Por revisar».
 
-                         Y los tres elementos —casilla, balanza y palabra— CENTRADOS. Un StackPanel
-                         da a sus hijos alto completo y cada TextBlock pintaba su texto arriba del
-                         suyo; como la balanza tiene una caja más alta que la letra, quedaban a
-                         alturas distintas y la casilla, centrada sobre el conjunto, más baja que
-                         las dos. Se centra cada uno, y la balanza lleva el tamaño del cuerpo
-                         escrito para que no cambie de alto con la fuente que la pinte. -->
-                    <CheckBox IsChecked="{Binding OnlyDisputed}"
-                              VerticalAlignment="Center" Margin="{StaticResource Pad.S}"
-                              ToolTip="Hallazgos que un auditor sostiene que nunca fueron un defecto. Los decide una persona.">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <!-- U+FE0E: presentación de TEXTO. Sin él la balanza sale como emoji a color. -->
-                            <TextBlock Text="⚖︎" VerticalAlignment="Center"
-                                       FontSize="{StaticResource FontSize.Body}"
-                                       Margin="{StaticResource Pad.XXS.Right}" />
-                            <TextBlock Text="Disputados" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </CheckBox>
+                         Era un StackPanel con la balanza y la palabra en dos TextBlock, cada uno
+                         con su alineación y su margen. Eso son tres piezas donde «Por revisar»
+                         tiene una, y se veía: la casilla quedaba despegada de su contenido y la
+                         balanza flotaba entre las dos. Con un solo TextBlock la casilla tiene
+                         enfrente lo mismo que en la otra —texto— así que la plantilla del
+                         CheckBox los separa igual, y el espacio entre la balanza y la palabra lo
+                         pone la tipografía, que es quien sabe.
+
+                         U+FE0E: presentación de TEXTO. Sin él la balanza sale como emoji a color. -->
+                    <CheckBox Content="⚖︎ Disputados"
+                              IsChecked="{Binding OnlyDisputed}"
+                              VerticalAlignment="Center" Margin="{StaticResource Pad.BarItem}"
+                              Padding="{StaticResource Pad.Zero}" MinWidth="0"
+                              ToolTip="Hallazgos que un auditor sostiene que nunca fueron un defecto. Los decide una persona." />
                 </WrapPanel>
             </DockPanel>
         </Border>
