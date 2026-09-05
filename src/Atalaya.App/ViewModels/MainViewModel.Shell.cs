@@ -230,10 +230,14 @@ public sealed partial class MainViewModel
             });
         }
 
+        // «Acerca de» es una PÁGINA desde F26 §C, y va en Sistema debajo de Ajustes: no se edita
+        // nada ahí dentro, así que no era un ajuste — estaba escondido al fondo de la única
+        // sección donde nadie iba a buscarlo.
         var system = new List<NavItem>
         {
             new("account", "Cuenta", Icons.Account, ShowAccountCommand, SystemGroup),
             new("settings", "Ajustes", Icons.Settings, ShowSettingsCommand, SystemGroup),
+            new("about", "Acerca de", Icons.Info, ShowAboutCommand, SystemGroup),
         };
 
         foreach (var item in work.Concat(app).Concat(system))

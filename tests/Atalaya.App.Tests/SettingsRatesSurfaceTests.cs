@@ -55,7 +55,25 @@ public sealed class SettingsRatesSurfaceTests
     {
         SettingsViewModel.ExhaustiveWarning.Should().Be(
             "Aumenta el coste de forma drástica (M2: ×3 por unidad) y puede producir hallazgos "
-            + "duplicados. Encuentra, de media, dos defectos de gravedad media más por cada veinte.");
+            + "duplicados.");
+
+        // F26 §C (revisión): la ayuda de la fila y el tooltip del icono son LA MISMA
+        // propiedad, y esa propiedad dice primero QUÉ hace el modo y después lo que cuesta. La
+        // ayuda de antes describía lo que el modo NO hace cuando está apagado.
+        typeof(SettingsViewModel).GetProperty("ExhaustiveNotice").Should().NotBeNull();
+    }
+
+    /// <summary>Una sola versión del precio: la fila y el icono leen la misma propiedad.</summary>
+    [Fact]
+    public void La_ayuda_del_modo_exhaustivo_y_su_tooltip_son_la_misma_frase()
+    {
+        string xaml = Markup(Xaml("SettingsView.xaml"));
+        int fila = xaml.IndexOf("Modo exhaustivo", StringComparison.Ordinal);
+        string bloque = xaml[fila..(fila + 1400)];
+
+        Regex.Matches(bloque, @"\{Binding ExhaustiveNotice\}").Count.Should().Be(
+            2, "la línea de ayuda y el tooltip del icono, y ninguna frase escrita a mano al lado");
+        bloque.Should().NotContain("Toggle.More", "una sola línea: sin «Más» que desplegar");
     }
 
     /// <summary>Y guardarlo lo guarda: un interruptor que no llega al fichero es un control muerto.</summary>

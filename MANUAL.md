@@ -59,7 +59,7 @@ La ventana tiene tres piezas fijas, y las tres están siempre en el mismo sitio.
   **Inventario**, más **Sesión en vivo** y **Arreglo asistido** cuando los hay. Este grupo aparece
   en cuanto entras en algo de una aplicación y te sigue mientras estés dentro: el inventario está
   **a un clic desde cualquier página**, sin pasar por Portafolio.
-- **Sistema** — Cuenta y Ajustes. Tu cuenta también está abajo del todo, con tu avatar — y en la
+- **Sistema** — Cuenta, Ajustes y **Acerca de**. Tu cuenta también está abajo del todo, con tu avatar — y en la
   esquina del avatar, **el piloto del hub**.
 
 La entrada donde estás va resaltada, con una barra de color a su izquierda. Un punto que late
@@ -772,6 +772,9 @@ autoría de los commits, ni hub donde escribir los hallazgos. Debajo hay **una f
 auditoría**, cada una con su propio piloto y su propia instrucción si falta algo. **Basta con tener
 uno listo** para poder auditar.
 
+La fila del **hub** dice cuándo se sincronizó por última vez, y nada más: la ruta del clon en esta
+máquina está debajo, en «Hub local», que es la tarjeta que va de eso.
+
 Cada fila dice su estado con **icono, color y palabra**, las tres cosas a la vez: **Disponible**
 (verde), **Comprobando** (con su anillo girando), **No comprobado** (gris) y **No disponible**
 (rojo, con el motivo en la línea de debajo). Un color solo no se lee si no distingues dos tonos, y
@@ -780,6 +783,14 @@ un glifo suelto —«…», «•»— no significa nada para quien no lo escrib
 Un proveedor **opcional** que no tengas instalado —hoy, Claude Code— sale con un `+` gris y la
 frase «disponible si lo activas»: te dice que existe y cómo activarlo si te interesa, y ahí acaba.
 **No es un fallo**, no se pinta como tal y no impide nada.
+
+### Acerca de
+
+Versión real del binario, la organización con su firma y los enlaces al repositorio y a este manual.
+Está en el raíl, en **Sistema**, debajo de Ajustes.
+
+*(Hasta la 1.4.4 era una ventana que se abría desde el fondo de Ajustes → Avanzado. No se edita nada
+ahí dentro, así que no era un ajuste — y ahí no lo encontraba nadie.)*
 
 ### Ajustes
 
@@ -793,7 +804,7 @@ un scroll largo:
 | **Auditoría** | El tope de pasadas del barrido, el **modo exhaustivo** y el interruptor del **arreglo asistido** |
 | **Tarifas** | La tabla de precios por modelo de la organización, con los modelos usados que aún no tienen tarifa |
 | **Apariencia** | Tema claro / oscuro |
-| **Avanzado** | Editor preferido, frescura, sincronización del hub, timeout, **Acerca de Atalaya** y la zona peligrosa |
+| **Avanzado** | Editor preferido, frescura, sincronización del hub, timeout y la zona peligrosa |
 
 **Guardar está siempre a la vista**, en la barra del pie. Cuando hay algo cambiado sin guardar la
 barra lo dice —«Hay cambios sin guardar»— y aparece **Descartar**, que devuelve las cajas a lo que
@@ -803,12 +814,23 @@ que se está editando ahí.
 Cada ajuste cuenta en **una línea** qué hace y cuándo aplica; lo que necesita más explicación vive
 detrás de un **«Más»** en la misma fila, plegado.
 
+**«Acerca de» ya no está aquí**: es una entrada del raíl, en el grupo Sistema, debajo de Ajustes.
+Y el **umbral de unidad grande** tampoco tiene fila: no se edita en esta máquina —es política de
+cada aplicación— y se gobierna en **Inventario → Gobernanza → Umbrales**, que es donde también se
+explica.
+
 **Los ajustes son de esta máquina** —viven en tu `settings.json`, no en el hub—, así que
 cambiarlos no le toca nada a tus compañeros. Ésa es justamente la regla que decide qué está aquí:
 **lo que escribe algo que el equipo comparte se gobierna en la aplicación, no en tus Ajustes.** Por
 eso el **umbral de unidad grande** no está en esta pantalla —clasifica el inventario y crea los
 hallazgos de tamaño, que son de todos— y se gobierna en **Inventario → Umbrales**. La **frescura**
 sí está aquí: solo colorea tu lista de hallazgos y no le cambia el estado a nadie.
+
+> **Lo que cuesta y lo que da el modo exhaustivo.** La pantalla dice el precio —«aumenta el coste
+> de forma drástica (M2: ×3 por unidad) y puede producir hallazgos duplicados»— porque es lo que hay
+> que saber antes de encenderlo. La otra mitad de la misma medición está aquí: encuentra, de media,
+> **dos defectos de gravedad media más por cada veinte**. Con esas dos cifras delante, la decisión
+> es tuya.
 
 Cada control dice bajo su caja **cuándo surte efecto**, porque no todos aplican igual:
 

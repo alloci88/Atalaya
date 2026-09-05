@@ -103,25 +103,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly NavigationService _navigation;
 
     /// <summary>
-    /// De dónde salen los enlaces del «Acerca de» (BUGFIX-VERSION). Opcional por lo mismo que el
-    /// diálogo: sin él no hay enlaces, y el diálogo lo dice — nunca uno roto.
-    /// </summary>
-    private readonly DeployConfig? _deploy;
-    private readonly IAboutDialog? _about;
-
-    /// <summary>
     /// Las tarifas de la organización (R2 §2). Opcionales por lo mismo que el «Acerca de»: los
     /// tests que solo ejercitan los ajustes numéricos no montan un hub con su tabla, y sin servicio
     /// la sección se enseña vacía con su motivo en vez de reventar.
     /// </summary>
     private readonly ModelRatesService? _rates;
-
-    /// <summary>
-    /// La aplicación activa, para el enlace del aviso de «Unidad grande (LOC)» (F26 Parte C). Es
-    /// opcional: sin ella el enlace lleva a Portafolio, que es donde se elige una — nunca a un
-    /// inventario que no se sabe de quién es.
-    /// </summary>
-    private readonly ActiveApp? _activeApp;
 
     /// <summary>Plazo para que el SDK conteste con su catálogo antes de rendirse.</summary>
     private static readonly TimeSpan ModelListTimeout = TimeSpan.FromSeconds(30);
@@ -134,11 +120,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
         IFactoryResetConfirmer confirmer,
         HubContext hub,
         NavigationService navigation,
-        IAboutDialog? about = null,
-        DeployConfig? deploy = null,
         AuditorProviderRegistry? providers = null,
-        ModelRatesService? rates = null,
-        ActiveApp? activeApp = null)
+        ModelRatesService? rates = null)
     {
         _settings = settings;
         _agent = agent;
@@ -148,10 +131,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _confirmer = confirmer;
         _hub = hub;
         _navigation = navigation;
-        _about = about;
-        _deploy = deploy;
         _rates = rates;
-        _activeApp = activeApp;
         Rates = rates is null ? null : new ModelRatesViewModel(rates);
         BuildSections();
         AppSettings s = settings.Current;
@@ -273,10 +253,28 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// </summary>
     public const string ExhaustiveWarning =
         "Aumenta el coste de forma drástica (M2: ×3 por unidad) y puede producir hallazgos "
-        + "duplicados. Encuentra, de media, dos defectos de gravedad media más por cada veinte.";
+        + "duplicados.";
 
-    /// <summary>Y la misma frase, para enlazarla desde el XAML sin duplicarla.</summary>
-    public string ExhaustiveNotice => ExhaustiveWarning;
+    /// <summary>
+    /// Lo que el modo HACE, delante de lo que cuesta (F26 §C, revisión).
+    /// <para>
+    /// La ayuda de antes describía lo que el modo <b>no</b> hace cuando está apagado —«cada unidad
+    /// se audita como UNA conversación y cada pasada es un turno suyo»— y hacía falta leerla dos
+    /// veces para saber qué pasaba al encenderlo. Un interruptor se explica por lo que enciende.
+    /// </para>
+    /// <para>
+    /// Es UNA frase y va en los dos sitios: la línea de ayuda de la fila y el tooltip del icono de
+    /// aviso. Que sean la misma propiedad es lo que impide que el precio acabe escrito con dos
+    /// cifras distintas.
+    /// </para>
+    /// <para>
+    /// <b>La otra mitad de M2 —lo que se GANA, dos defectos de gravedad media más por cada
+    /// veinte— se va al MANUAL.</b> En la fila estorbaba: quien mira este interruptor está
+    /// decidiendo si paga el triple, y el argumento a favor se lee entero o no se lee.
+    /// </para>
+    /// </summary>
+    public string ExhaustiveNotice =>
+        "Cada pasada vuelve a ser una petición nueva con el prompt completo. " + ExhaustiveWarning;
 
     // ================================================================ Las secciones (F26 §C)
 
@@ -536,13 +534,6 @@ public sealed partial class SettingsViewModel : ViewModelBase
         return applied;
     }
 
-    /// <summary>
-    /// El «Acerca de» (F6.4 §3). Opcional en el constructor porque los tests de ajustes no montan
-    /// ventanas: sin él, el gesto no hace nada en vez de reventar.
-    /// </summary>
-    [RelayCommand]
-    private void ShowAbout() => _about?.Show(AboutInfo.Create(_hub, _deploy));
-
     // ================================================================ Cambios sin guardar (§C)
 
     /// <summary>
@@ -632,22 +623,6 @@ public sealed partial class SettingsViewModel : ViewModelBase
         Snapshot();
         _toasts.Show("Cambios descartados.");
     }
-
-    /// <summary>
-    /// <b>El umbral de unidad grande no es un ajuste de esta página</b> (F13), y desde F26 §C
-    /// tampoco es un párrafo de cinco líneas fingiendo serlo: es un aviso de una frase con el
-    /// camino hasta donde SÍ se edita.
-    /// <para>
-    /// Con aplicación activa el enlace lleva a su inventario, que es donde vive su gobernanza; sin
-    /// ella lleva a Portafolio, que es donde se elige una. Nunca a un inventario que no se sabe de
-    /// quién sería.
-    /// </para>
-    /// </summary>
-    [RelayCommand]
-    private Task OpenGovernance()
-        => _activeApp is { HasApp: true } app
-            ? _navigation.NavigateToAsync<InventoryViewModel>(vm => vm.SetApp(app.Slug))
-            : _navigation.NavigateToAsync<PortfolioViewModel>();
 
     [RelayCommand]
     private void Save()

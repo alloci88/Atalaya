@@ -35,7 +35,13 @@ misma rejilla).
     sus cuatro tarjetas en una rejilla y estrena el **estado vacío del sistema**; Informes reparte
     su tabla y deja de recortar nombres, y el informe abierto se lee a 15 px en columna con el
     **anexo técnico plegado**; el alta de R3 pasa por la rejilla de Ajustes y su validación va en
-    línea. 38 casos de test nuevos, y siete escritos y podados por no proteger nada silencioso (D-995). Capturas en `docs/design/f26-parte-c/`.
+    línea. 38 casos de test nuevos, y siete escritos y podados por no proteger nada silencioso (D-995).
+    **Revisada por el usuario en el dist y corregida** (D-997): ocho arreglos — el nombre duplicado y
+    la ruta del clon fuera de Cuenta, el aviso del umbral fuera de Ajustes, el modo exhaustivo en una
+    línea que dice lo que hace, la tabla de tarifas rehecha con cabecera de dos líneas y cifras
+    tabulares (ya no recorta sus cabeceras en ventana reducida), el aviso de la escala con su ruta,
+    «Acerca de» convertido en entrada del raíl —y su diálogo borrado— y el azulejo de coste de
+    Métricas jerarquizado, con el aviso de tarifa fuera. Capturas en `docs/design/f26-parte-c/`.
   - **La lista de pendientes de `DesignTokenTests` es el marcador.** Al cerrar la C **quedan diez, y
     los diez son diálogos**: `AboutDialog`, `AuditLaunchDialog`, `CycleConfigDialog`,
     `DeleteAppDialog`, `DeletedUnitsDialog`, `DirectivesDialog`, `FactoryResetDialog`,

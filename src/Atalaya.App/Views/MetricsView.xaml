@@ -145,6 +145,31 @@
                          medía lo suyo y se centraba en la fila, así que ni los bordes de arriba ni
                          las cifras caían a la misma altura: la de coste, que es la más larga,
                          empujaba a las otras tres a flotar. -->
+                    <!-- F15 · R2 §2 — FALTA GASTO POR CONTAR: hay sesiones cuyo modelo no tiene
+                         tarifa. Vivía dentro del azulejo de coste, y afecta a las CUATRO cifras —el
+                         recuento de activos que salió de esas sesiones, la cobertura, todo—, así
+                         que va encima de la rejilla, que es lo que abarca. Un total al que le falta
+                         gasto se lee como si fuera el gasto entero. -->
+                    <Border Style="{StaticResource Notice.Warning}"
+                            Margin="{StaticResource Pad.M.Bottom}"
+                            Visibility="{Binding CostPartialNotice, Converter={StaticResource NotEmptyToVisibility}}">
+                        <DockPanel>
+                            <Path DockPanel.Dock="Left" Style="{StaticResource Notice.Icon}"
+                                  Data="{x:Static c:Icons.Warning}"
+                                  Stroke="{DynamicResource Brush.Warning.Ink}" />
+                            <StackPanel>
+                                <TextBlock Text="{Binding CostPartialNotice}"
+                                           Style="{StaticResource Notice.Text}"
+                                           Foreground="{DynamicResource Brush.Warning.Ink}" />
+                                <Button Content="Ajustes → Tarifas"
+                                        Style="{StaticResource Button.Link}"
+                                        Command="{Binding ManageRatesCommand}"
+                                        HorizontalAlignment="Left"
+                                        ToolTip="Las tarifas se aplican solas desde el primer uso. Aquí se corrigen las que no cuadren y se añaden las de un modelo nuevo." />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
                     <c:ColumnsPanel MinColumnWidth="280" MaxColumns="4"
                                     Gap="{StaticResource Space.M}"
                                     Margin="{StaticResource Pad.M.Bottom}">
@@ -197,8 +222,7 @@
                                 <!-- F16-RETOQUE §1 — SIEMPRE hay total, porque todo lo que llega
                                      aquí es de la misma naturaleza: la factura de la organización.
                                      La cifra y su unidad van en UN `TextBlock` con dos `Run`: es lo
-                                     único que comparte línea base en WPF (D-983 §9). Con dos cajas
-                                     alineadas por abajo, «credits» se sentaba por debajo del 244,7. -->
+                                     único que comparte línea base en WPF (D-983 §9). -->
                                 <TextBlock>
                                     <Run Text="{Binding CostTotal, Mode=OneWay}"
                                          FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
@@ -207,6 +231,13 @@
                                          FontSize="{StaticResource FontSize.Small}"
                                          Foreground="{DynamicResource Brush.TextMuted}" />
                                 </TextBlock>
+
+                                <!-- UNA línea secundaria con las tres formas de mirar el mismo
+                                     total: por unidad, cuántas unidades y su equivalente en
+                                     dólares. Eran tres renglones sueltos del mismo peso que todo
+                                     lo demás, y con ellos el azulejo llegó a tener seis. -->
+                                <TextBlock Text="{Binding CostSummary}" Style="{StaticResource Text.Small}"
+                                           TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" />
 
                                 <!-- Y si más de una casa factura, además el reparto: saber de qué
                                      bolsa salió el gasto es la mitad de poder cuadrarlo. -->
@@ -222,19 +253,25 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
 
-                                <TextBlock Text="{Binding CostPerUnit}" Style="{StaticResource Text.Meta}"
-                                           TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" />
-
-                                <!-- F18 §1 — EN QUE SE VA. El total dice cuanto; esto dice en que:
-                                     descubrimiento, verificacion y arreglo cuestan muy distinto y
-                                     hasta aqui habia que abrir los informes uno a uno para saberlo. -->
+                                <!-- F18 §1 — EN QUÉ se va. Dos filas de rejilla, etiqueta a la
+                                     izquierda y sus cifras a la derecha con dígitos tabulares: dos
+                                     fases que se comparan tienen que alinear. Eran dos cadenas
+                                     largas que envolvían en tres líneas cada una, con los tokens
+                                     dentro — y los tokens son del anexo del informe, no de aquí. -->
                                 <ItemsControl ItemsSource="{Binding CostByPhase}"
-                                              Margin="{StaticResource Pad.XXS.Top}"
+                                              Margin="{StaticResource Pad.XS.Top}"
                                               Visibility="{Binding HasPhases, Converter={StaticResource BoolToVisibility}}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding}" Style="{StaticResource Text.Meta}"
-                                                       TextWrapping="Wrap" />
+                                            <DockPanel Margin="{StaticResource Pad.XXS.V}">
+                                                <TextBlock DockPanel.Dock="Right"
+                                                           Text="{Binding Detail}"
+                                                           Style="{StaticResource Text.Meta}"
+                                                           Typography.NumeralAlignment="Tabular"
+                                                           Margin="{StaticResource Pad.XS.Left}" />
+                                                <TextBlock Text="{Binding Label}"
+                                                           Style="{StaticResource Text.Meta}" />
+                                            </DockPanel>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
@@ -243,39 +280,8 @@
                                      de más abajo: hubo sesiones de una casa que no factura. No es
                                      un aviso de que falte una tarifa; es justo lo contrario. -->
                                 <TextBlock Text="{Binding CostScopeNote}" Style="{StaticResource Text.Meta}"
-                                           TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}"
+                                           TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}"
                                            Visibility="{Binding CostScopeNote, Converter={StaticResource NotEmptyToVisibility}}" />
-
-                                <TextBlock Text="{Binding CostInDollars}" Style="{StaticResource Text.Meta}"
-                                           Margin="{StaticResource Pad.XXS.Top}"
-                                           Visibility="{Binding CostInDollars, Converter={StaticResource NotEmptyToVisibility}}" />
-
-                                <!-- F15 · R2 §2 — falta gasto por contar: hay sesiones cuyo modelo
-                                     no tiene tarifa. Es un AVISO, no una nota al pie: un total al
-                                     que le falta gasto se lee como si fuera el gasto entero. Y
-                                     lleva su remedio al lado, que está en Ajustes → Tarifas. -->
-                                <Border Style="{StaticResource Notice.Warning}"
-                                        Padding="{StaticResource Pad.XS}"
-                                        Margin="{StaticResource Pad.XS.Top}"
-                                        Visibility="{Binding CostPartialNotice, Converter={StaticResource NotEmptyToVisibility}}">
-                                    <StackPanel>
-                                        <DockPanel>
-                                            <Path DockPanel.Dock="Left" Style="{StaticResource Icon.Small}"
-                                                  Data="{x:Static c:Icons.Warning}"
-                                                  Stroke="{DynamicResource Brush.Warning.Ink}"
-                                                  VerticalAlignment="Top"
-                                                  Margin="{StaticResource Pad.XS.Right}" />
-                                            <TextBlock Text="{Binding CostPartialNotice}"
-                                                       Style="{StaticResource Text.Small}"
-                                                       Foreground="{DynamicResource Brush.Warning.Ink}" />
-                                        </DockPanel>
-                                        <Button Content="Ajustes → Tarifas"
-                                                Style="{StaticResource Button.Link}"
-                                                Command="{Binding ManageRatesCommand}"
-                                                HorizontalAlignment="Left"
-                                                ToolTip="Las tarifas se aplican solas desde el primer uso. Aquí se corrigen las que no cuadren y se añaden las de un modelo nuevo." />
-                                    </StackPanel>
-                                </Border>
                             </StackPanel>
                         </Border>
 

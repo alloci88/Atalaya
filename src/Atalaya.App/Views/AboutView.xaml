@@ -1,0 +1,71 @@
+<UserControl
+    x:Class="Atalaya.App.Views.AboutView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:c="clr-namespace:Atalaya.App.Controls"
+    xmlns:controls="clr-namespace:Atalaya.App.Controls">
+    <!--
+        F26 §C (revisión) — «Acerca de», que era un modal al fondo de Ajustes → Avanzado, es una
+        PÁGINA del grupo Sistema. Mismo contenido de F6.4 §3; lo que cambia es que se llega en un
+        clic desde el raíl y trae su miga, como todas.
+    -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="{StaticResource Form.MaxWidth}" HorizontalAlignment="Center"
+                    Margin="{StaticResource Pad.L.Bottom}">
+
+            <!-- Identidad de la aplicación: el icono grande y su nombre. El `.ico` se pide con el
+                 fotograma de su tamaño; sin `DecodePixelWidth` se decodifica por el de 256 y se
+                 encoge, que es el borrón que la variante de silueta existe para evitar. -->
+            <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.L.Bottom}">
+                <Image Width="64" Height="64"
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       VerticalAlignment="Center">
+                    <Image.Source>
+                        <BitmapImage UriSource="pack://application:,,,/Atalaya;component/assets/atalaya.ico"
+                                     DecodePixelWidth="64" DecodePixelHeight="64" />
+                    </Image.Source>
+                </Image>
+                <StackPanel VerticalAlignment="Center" Margin="{StaticResource Pad.M.Left}">
+                    <TextBlock Text="Atalaya" Style="{StaticResource Text.H2}" />
+                    <TextBlock Text="{Binding Info.VersionLabel}" Style="{StaticResource Text.Small}" />
+                </StackPanel>
+            </StackPanel>
+
+            <TextBlock Style="{StaticResource Text.Body}"
+                       MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
+                       Margin="{StaticResource Pad.L.Bottom}"
+                       Text="Auditoría de código colaborativa con agentes de IA. El estado vive en un repositorio git compartido; no hay servidor propio." />
+
+            <!-- La organización, con su firma. Es uno de los DOS sitios donde va la marca. -->
+            <Border Style="{StaticResource Card}"
+                    HorizontalAlignment="Left"
+                    Margin="{StaticResource Pad.L.Bottom}"
+                    Visibility="{Binding Info.HasOrganization, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <TextBlock Text="{Binding Info.Organization}" Style="{StaticResource Text.Default}"
+                               FontWeight="SemiBold" Margin="{StaticResource Pad.XS.Bottom}" />
+                    <controls:BrandMark LogoHeight="30" HorizontalAlignment="Left" />
+                </StackPanel>
+            </Border>
+
+            <!-- BUGFIX-VERSION: los dos enlaces salen de «appRepoUrl» del despliegue, y si no
+                 está configurado NO se enseñan. Un enlace que lleva a un 404 es peor que ningún
+                 enlace: el hueco se explica debajo. -->
+            <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.L}"
+                        Visibility="{Binding Info.HasRepository, Converter={StaticResource BoolToVisibility}}">
+                <Button Content="Repositorio" Style="{StaticResource Button.Link}"
+                        Command="{Binding OpenLinkCommand}"
+                        CommandParameter="{Binding Info.Repository}"
+                        ToolTip="{Binding Info.Repository}" />
+                <Button Content="Manual" Style="{StaticResource Button.Link}"
+                        Command="{Binding OpenLinkCommand}"
+                        CommandParameter="{Binding Info.Manual}"
+                        ToolTip="{Binding Info.Manual}" />
+            </StackPanel>
+
+            <TextBlock Text="{Binding Info.NoLinksNotice}" Style="{StaticResource Text.Small}"
+                       MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
+                       Visibility="{Binding Info.HasNoLinks, Converter={StaticResource BoolToVisibility}}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

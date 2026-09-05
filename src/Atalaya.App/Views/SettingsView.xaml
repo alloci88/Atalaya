@@ -148,12 +148,13 @@
                         <DockPanel Style="{StaticResource Setting.Row}">
                             <StackPanel Style="{StaticResource Setting.Label}">
                                 <TextBlock Text="Modo exhaustivo" Style="{StaticResource Setting.Name}" />
+                                <!-- UNA línea, y la que dice qué hace y qué cuesta. La de antes
+                                     describía lo que el modo NO hace cuando está apagado, que es
+                                     la forma más rápida de no entender un interruptor. El texto
+                                     sale del view-model, el mismo que el tooltip del icono: una
+                                     sola versión del precio (R2 §1). -->
                                 <TextBlock Style="{StaticResource Setting.Help}"
-                                           Text="Cada pasada vuelve a ser una petición nueva con el prompt recompuesto. Aplica a las auditorías que lances a partir de ahora." />
-                                <ToggleButton x:Name="MasExhaustivo" Style="{StaticResource Toggle.More}" />
-                                <TextBlock Style="{StaticResource Setting.More}"
-                                           Text="Apagado, cada unidad se audita como UNA conversación y cada pasada es un turno suyo. La que esté en curso termina como empezó, y queda escrito en la sesión y en la cabecera de su informe."
-                                           Visibility="{Binding IsChecked, ElementName=MasExhaustivo, Converter={StaticResource BoolToVisibility}}" />
+                                           Text="{Binding ExhaustiveNotice}" />
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Top"
                                         c:Stack.Gap="{StaticResource Space.XS}">
@@ -182,31 +183,19 @@
                                              HorizontalAlignment="Left" VerticalAlignment="Top" />
                         </DockPanel>
 
-                        <!-- F13 — el umbral de unidad grande NO es un ajuste de esta máquina. Era un
-                             párrafo de cinco líneas a 11 px fingiendo ser una fila; ahora es lo que
-                             es: un aviso de una frase con el camino hasta donde sí se edita. -->
-                        <Border Style="{StaticResource Notice.Info}">
-                            <DockPanel>
-                                <Path DockPanel.Dock="Left" Style="{StaticResource Notice.Icon}"
-                                      Data="{x:Static c:Icons.Info}"
-                                      Stroke="{DynamicResource Brush.Primary.Ink}" />
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource Notice.Text}"
-                                               Text="El umbral de «unidad grande» (LOC) es política de cada aplicación, no de esta máquina: se gobierna por aplicación, en Inventario → Gobernanza → Umbrales, y aplica al re-escanear." />
-                                    <Button Content="Ir a Inventario → Gobernanza"
-                                            Style="{StaticResource Button.Link}"
-                                            Command="{Binding OpenGovernanceCommand}"
-                                            HorizontalAlignment="Left" />
-                                </StackPanel>
-                            </DockPanel>
-                        </Border>
                     </StackPanel>
 
                     <!-- ============================== Tarifas ============================== -->
                     <!-- R2 §2 trajo esta pantalla desde Métricas y la dejó detrás de un botón que
-                         abría una ventana. Aquí es una sección más: la tabla, su edición y los
-                         modelos usados sin tarifa con las sesiones que esperan por ellos. El
-                         fichero sigue en el hub (D-786): esto es dónde se edita, no dónde vive. -->
+                         abría una ventana; F26 §C la hizo sección. Esta revisión la hace TABLA:
+                         el `DataGrid` de la librería salía plano y, en ventana reducida, recortaba
+                         sus propias cabeceras —«Entrada $/» , «Caché leíd»—, que es la peor forma
+                         de ahorrar sitio: se pierde justo lo que dice qué es cada columna.
+
+                         Ahora es la tabla del sistema, con cabecera de DOS líneas (nombre arriba,
+                         unidad debajo), las cifras a la derecha con dígitos tabulares y una raya
+                         fina por fila. El fichero sigue en el hub (D-786): esto es dónde se edita,
+                         no dónde vive. -->
                     <Grid Visibility="{Binding ShowRates, Converter={StaticResource BoolToVisibility}}">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -218,10 +207,18 @@
 
                         <TextBlock Grid.Row="0" Text="Tarifas" Style="{StaticResource Setting.SectionTitle}" />
 
-                        <TextBlock Grid.Row="1" Style="{StaticResource Text.Small}"
-                                   Margin="{StaticResource Pad.M.Bottom}"
-                                   MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
-                                   Text="Lo que cuesta un millón de tokens de cada modelo, y de ahí sale el coste de cada sesión. La aplicación las trae puestas y las mantiene al día sola: aquí se corrige un precio que no cuadre y se añade el de un modelo que no traiga. Son de la ORGANIZACIÓN —viven en el hub y las ve todo el equipo, con el commit como atribución—, no de esta máquina." />
+                        <!-- UNA línea, y el resto plegado: la de antes eran cuatro y había que
+                             leerlas enteras para llegar a la tabla, que es lo que se viene a ver. -->
+                        <StackPanel Grid.Row="1" Margin="{StaticResource Pad.M.Bottom}">
+                            <TextBlock Style="{StaticResource Text.Small}"
+                                       MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
+                                       Text="Precio por millón de tokens de cada modelo. Son de la organización: viven en el hub." />
+                            <ToggleButton x:Name="MasTarifas" Style="{StaticResource Toggle.More}" />
+                            <TextBlock Style="{StaticResource Setting.More}"
+                                       MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
+                                       Text="De aquí sale el coste de cada sesión. La aplicación las trae puestas y las mantiene al día sola: aquí se corrige un precio que no cuadre y se añade el de un modelo que no traiga. Las ve todo el equipo, con el commit del hub como atribución. Proveedor en blanco = vale para cualquiera; ponlo solo cuando el mismo modelo cueste distinto según quién facture. Caché escrita en blanco = ese modelo no la cobra aparte, y esos tokens son entrada normal; no es lo mismo que escribir un 0."
+                                       Visibility="{Binding IsChecked, ElementName=MasTarifas, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
 
                         <Border Grid.Row="2" Style="{StaticResource Notice.Warning}"
                                 Margin="{StaticResource Pad.M.Bottom}"
@@ -247,28 +244,109 @@
                             </DockPanel>
                         </Border>
 
+                        <!-- EN ESTRECHO, LA TABLA SE DESPLAZA; las cabeceras no se recortan nunca.
+                             El ancho de la rejilla sigue al del hueco visible —así las columnas
+                             reparten cuando sobra— pero no baja de su mínimo: por debajo aparece la
+                             barra horizontal, que es «reorganizar» en una tabla (principio 1). La
+                             cabecera va DENTRO del mismo desplazamiento, o se separaría de sus
+                             columnas al primer arrastre. -->
                         <Border Grid.Row="3" Style="{StaticResource Panel}"
                                 Visibility="{Binding CanManageRates, Converter={StaticResource BoolToVisibility}}">
-                            <DataGrid ItemsSource="{Binding Rates.Rows}"
-                                      AutoGenerateColumns="False"
-                                      CanUserAddRows="False"
-                                      HeadersVisibility="Column"
-                                      GridLinesVisibility="Horizontal"
-                                      Background="Transparent"
-                                      RowBackground="Transparent"
-                                      FontSize="{StaticResource FontSize.Small}"
-                                      MinRowHeight="{StaticResource Control.MinHeight}"
-                                      BorderThickness="{StaticResource Pad.Zero}">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="Modelo" Binding="{Binding Model}" Width="2*" />
-                                    <DataGridTextColumn Header="Proveedor" Binding="{Binding Provider}" Width="*" />
-                                    <DataGridTextColumn Header="Entrada $/M" Binding="{Binding Input}" Width="*" />
-                                    <DataGridTextColumn Header="Salida $/M" Binding="{Binding Output}" Width="*" />
-                                    <DataGridTextColumn Header="Caché leída $/M" Binding="{Binding CachedInput}" Width="*" />
-                                    <DataGridTextColumn Header="Caché escrita $/M" Binding="{Binding CacheWrite}" Width="*" />
-                                    <DataGridTextColumn Header="Nota" Binding="{Binding Note}" Width="2*" />
-                                </DataGrid.Columns>
-                            </DataGrid>
+                            <ScrollViewer x:Name="RatesScroll"
+                                          HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Disabled">
+                                <Grid MinWidth="1040"
+                                      Width="{Binding ViewportWidth, ElementName=RatesScroll}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="2*" MinWidth="220" />
+                                        <ColumnDefinition Width="1*" MinWidth="130" />
+                                        <ColumnDefinition Width="1*" MinWidth="110" />
+                                        <ColumnDefinition Width="1*" MinWidth="110" />
+                                        <ColumnDefinition Width="1*" MinWidth="130" />
+                                        <ColumnDefinition Width="1*" MinWidth="140" />
+                                        <ColumnDefinition Width="2*" MinWidth="200" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <Border Grid.Row="0" Grid.ColumnSpan="7"
+                                            BorderBrush="{DynamicResource Brush.LineStrong}"
+                                            BorderThickness="{StaticResource Border.Bottom}" />
+
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="{StaticResource Pad.Row}">
+                                        <TextBlock Text="Modelo" Style="{StaticResource Table.Header}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Margin="{StaticResource Pad.Row}">
+                                        <TextBlock Text="Proveedor" Style="{StaticResource Table.Header}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="2" Margin="{StaticResource Pad.Row}">
+                                        <TextBlock Text="Entrada" Style="{StaticResource Table.Header}"
+                                                   HorizontalAlignment="Right" />
+                                        <TextBlock Text="$ por millón" Style="{StaticResource Table.HeaderUnit}"
+                                                   HorizontalAlignment="Right" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="3" Margin="{StaticResource Pad.Row}">
+                                        <TextBlock Text="Salida" Style="{StaticResource Table.Header}"
+                                                   HorizontalAlignment="Right" />
+                                        <TextBlock Text="$ por millón" Style="{StaticResource Table.HeaderUnit}"
+                                                   HorizontalAlignment="Right" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="4" Margin="{StaticResource Pad.Row}">
+                                        <TextBlock Text="Caché leída" Style="{StaticResource Table.Header}"
+                                                   HorizontalAlignment="Right" />
+                                        <TextBlock Text="$ por millón" Style="{StaticResource Table.HeaderUnit}"
+                                                   HorizontalAlignment="Right" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="5" Margin="{StaticResource Pad.Row}">
+                                        <TextBlock Text="Caché escrita" Style="{StaticResource Table.Header}"
+                                                   HorizontalAlignment="Right" />
+                                        <TextBlock Text="$ por millón" Style="{StaticResource Table.HeaderUnit}"
+                                                   HorizontalAlignment="Right" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="6" Margin="{StaticResource Pad.Row}">
+                                        <TextBlock Text="Nota" Style="{StaticResource Table.Header}" />
+                                    </StackPanel>
+
+                                    <ItemsControl Grid.Row="1" Grid.ColumnSpan="7"
+                                                  ItemsSource="{Binding Rates.Rows}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border BorderBrush="{DynamicResource Brush.Line}"
+                                                        BorderThickness="{StaticResource Border.Bottom}">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="2*" MinWidth="220" />
+                                                            <ColumnDefinition Width="1*" MinWidth="130" />
+                                                            <ColumnDefinition Width="1*" MinWidth="110" />
+                                                            <ColumnDefinition Width="1*" MinWidth="110" />
+                                                            <ColumnDefinition Width="1*" MinWidth="130" />
+                                                            <ColumnDefinition Width="1*" MinWidth="140" />
+                                                            <ColumnDefinition Width="2*" MinWidth="200" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBox Grid.Column="0" Text="{Binding Model}"
+                                                                 Style="{StaticResource Field.Cell}"
+                                                                 FontWeight="SemiBold" />
+                                                        <TextBox Grid.Column="1" Text="{Binding Provider}"
+                                                                 Style="{StaticResource Field.Cell.Pill}" />
+                                                        <TextBox Grid.Column="2" Text="{Binding Input}"
+                                                                 Style="{StaticResource Field.Cell.Number}" />
+                                                        <TextBox Grid.Column="3" Text="{Binding Output}"
+                                                                 Style="{StaticResource Field.Cell.Number}" />
+                                                        <TextBox Grid.Column="4" Text="{Binding CachedInput}"
+                                                                 Style="{StaticResource Field.Cell.Number}" />
+                                                        <TextBox Grid.Column="5" Text="{Binding CacheWrite}"
+                                                                 Style="{StaticResource Field.Cell.Number}" />
+                                                        <TextBox Grid.Column="6" Text="{Binding Note}"
+                                                                 Style="{StaticResource Field.Cell.Note}" />
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Grid>
+                            </ScrollViewer>
                         </Border>
 
                         <c:EmptyState Grid.Row="3"
@@ -276,22 +354,17 @@
                                       Message="Todavía no hay tabla de tarifas en el hub. Se siembra sola al conectar con él."
                                       Visibility="{Binding CanManageRates, Converter={StaticResource InverseBoolToVisibility}}" />
 
-                        <StackPanel Grid.Row="4" Margin="{StaticResource Pad.S.Top}">
-                            <TextBlock Style="{StaticResource Text.Small}"
-                                       MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
-                                       Text="Proveedor en blanco = vale para cualquiera. Ponlo solo cuando el mismo modelo cueste distinto según quién facture. Caché escrita en blanco = ese modelo no la cobra aparte, y esos tokens son entrada normal; no es lo mismo que escribir un 0." />
-                            <Border Style="{StaticResource Notice.Warning}"
-                                    Margin="{StaticResource Pad.S.Top}"
-                                    Visibility="{Binding Rates.Status, Converter={StaticResource NotEmptyToVisibility}}">
-                                <DockPanel>
-                                    <Path DockPanel.Dock="Left" Style="{StaticResource Notice.Icon}"
-                                          Data="{x:Static c:Icons.Warning}"
-                                          Stroke="{DynamicResource Brush.Warning.Ink}" />
-                                    <TextBlock Text="{Binding Rates.Status}" Style="{StaticResource Notice.Text}"
-                                               Foreground="{DynamicResource Brush.Warning.Ink}" />
-                                </DockPanel>
-                            </Border>
-                        </StackPanel>
+                        <Border Grid.Row="4" Style="{StaticResource Notice.Warning}"
+                                Margin="{StaticResource Pad.S.Top}"
+                                Visibility="{Binding Rates.Status, Converter={StaticResource NotEmptyToVisibility}}">
+                            <DockPanel>
+                                <Path DockPanel.Dock="Left" Style="{StaticResource Notice.Icon}"
+                                      Data="{x:Static c:Icons.Warning}"
+                                      Stroke="{DynamicResource Brush.Warning.Ink}" />
+                                <TextBlock Text="{Binding Rates.Status}" Style="{StaticResource Notice.Text}"
+                                           Foreground="{DynamicResource Brush.Warning.Ink}" />
+                            </DockPanel>
+                        </Border>
                     </Grid>
 
                     <!-- ============================== Apariencia ============================== -->
@@ -310,15 +383,16 @@
 
                         <!-- NO hay control de escala tipográfica, y no se inventa uno: la escala es
                              del sistema (D-946) y quien necesita el texto más grande lo tiene en la
-                             escala de Windows, que Atalaya respeta al dibujarse con vectores
-                             (D-950). Un ajuste nuevo era justo lo que esta parte no podía añadir. -->
+                             de Windows, que Atalaya respeta al dibujarse con vectores (D-950). El
+                             aviso dice DÓNDE está, con la ruta entera: mandar a «la escala de
+                             Windows» sin decir por dónde se llega es no contestar. -->
                         <Border Style="{StaticResource Notice.Info}">
                             <DockPanel>
                                 <Path DockPanel.Dock="Left" Style="{StaticResource Notice.Icon}"
                                       Data="{x:Static c:Icons.Info}"
                                       Stroke="{DynamicResource Brush.Primary.Ink}" />
                                 <TextBlock Style="{StaticResource Notice.Text}"
-                                           Text="El tamaño del texto lo manda la escala de Windows: Atalaya se dibuja con vectores y la sigue sin recortar nada." />
+                                           Text="El tamaño del texto sigue la escala de Windows (Configuración → Pantalla → Escala). Atalaya no tiene un ajuste propio." />
                             </DockPanel>
                         </Border>
                     </StackPanel>
@@ -374,12 +448,6 @@
                             <TextBox Text="{Binding CopilotTimeoutMinutes}" Style="{StaticResource Field.Number}"
                                      VerticalAlignment="Top" />
                         </DockPanel>
-
-                        <Button Content="Acerca de Atalaya"
-                                Command="{Binding ShowAboutCommand}"
-                                Style="{StaticResource Button.Secondary}"
-                                HorizontalAlignment="Left"
-                                Margin="{StaticResource Pad.M.Bottom}" />
 
                         <!-- ZONA PELIGROSA. Va al final, y lo que la marca es el color del sistema
                              —no un hexadecimal escrito a mano, que era ilegible en tema claro

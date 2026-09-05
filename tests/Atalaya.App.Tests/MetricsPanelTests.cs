@@ -296,7 +296,7 @@ public sealed class MetricsPanelTests : IDisposable
         await vm.LoadAsync();
 
         vm.CostTotal.Should().Be(MetricsViewModel.Unknown);
-        vm.CostPerUnit.Should().Contain("Se activará cuando");
+        vm.CostSummary.Should().Contain("Se activará cuando");
         vm.CyclePct.Should().Be(MetricsViewModel.Unknown);
         vm.CycleDetail.Should().Contain("Se activará cuando");
         vm.HasCost.Should().BeFalse();

@@ -126,17 +126,14 @@
                                             VerticalAlignment="Center" />
 
                         <StackPanel VerticalAlignment="Center">
-                            <!-- Nombre y login en UNA línea con dos tamaños: los `Run` de un mismo
-                                 TextBlock sí comparten línea base, que es lo único que la comparte
-                                 en WPF (D-983 §9). -->
-                            <TextBlock TextTrimming="CharacterEllipsis">
-                                <Run Text="{Binding DisplayName, Mode=OneWay}"
-                                     FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold" />
-                                <Run Text="  " />
-                                <Run Text="{Binding Login, Mode=OneWay}"
-                                     FontSize="{StaticResource FontSize.Small}"
-                                     Foreground="{DynamicResource Brush.TextMuted}" />
-                            </TextBlock>
+                            <!-- UN nombre, no dos (F26 §C, revisión). `DisplayName` cae en el login
+                                 cuando la cuenta no declara nombre completo, que es el caso normal
+                                 aquí: la tarjeta enseñaba «alopezciller» en negrita y otra vez en
+                                 gris al lado. Un dato repetido no es jerarquía, es ruido. -->
+                            <TextBlock Text="{Binding DisplayName}"
+                                       Style="{StaticResource Text.Lead}"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis" />
                             <TextBlock Style="{StaticResource Text.Meta}"
                                        Visibility="{Binding ShowOrganization, Converter={StaticResource BoolToVisibility}}">
                                 <Run Text="Organización:" /><Run Text=" " /><Run Text="{Binding OrganizationLogin, Mode=OneWay}" />

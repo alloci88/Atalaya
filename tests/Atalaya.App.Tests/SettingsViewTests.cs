@@ -236,33 +236,57 @@ public sealed class SettingsViewTests
     /// error que un ajuste necesitaba re-escanear (o reiniciar) es la mitad de lo que hizo tan
     /// caro el defecto del umbral: el usuario probó tres gestos sin saber cuál tocaba.
     /// </summary>
+    /// <summary>La ayuda que llega por enlace: su texto vive en el view-model.</summary>
+    private const string HelpFromViewModel = @"Setting[.]Help[}]""\s*Text=""[{]Binding";
+
     [Fact]
     public void Cada_ayuda_dice_cuando_surte_efecto()
     {
         foreach (string row in FieldRows())
         {
+            // EXCEPCIÓN, declarada: la ayuda del modo exhaustivo sale del view-model —es la misma
+            // frase que el tooltip de su icono, para que el precio medido en M2 exista en UN solo
+            // sitio (R2 §1)— y desde la revisión de F26 §C dice qué hace el modo y qué cuesta, no
+            // cuándo aplica. Es un cambio pedido y consciente: quien mira ese interruptor está
+            // decidiendo si paga el triple, y el «cuándo» está en la tabla del MANUAL. El test lo
+            // salta por la vía por la que llega el texto, no por su nombre, para que una fila
+            // nueva con la ayuda escrita a mano siga teniendo que decirlo.
+            if (Regex.IsMatch(row, HelpFromViewModel))
+            {
+                continue;
+            }
+
             row.Should().MatchRegex("Aplica al|Aplica a las",
                 $"este control no dice cuándo surte efecto → {Head(row)}");
         }
     }
 
     /// <summary>
-    /// F13: el umbral de unidad grande ya no se edita aquí —es política de cada aplicación— y la
-    /// fila que queda dice dónde está, sin ningún control que lo edite. Dos sitios editables para
-    /// el mismo valor son dos verdades esperando a discrepar.
+    /// F13: el umbral de unidad grande <b>no se edita aquí</b> — es política de cada aplicación y
+    /// se gobierna en su Inventario. Dos sitios editables para el mismo valor son dos verdades
+    /// esperando a discrepar, y eso es lo que este test protege.
+    /// <para>
+    /// <b>Lo que la revisión de F26 §C retira</b>: la fila que lo decía. Era un párrafo de cinco
+    /// líneas fingiendo ser un ajuste, y la §C lo convirtió en un aviso con enlace; el usuario lo
+    /// miró en el dist y pidió quitarlo entero. Ajustes es la lista de lo que SE PUEDE cambiar
+    /// aquí, y un renglón dedicado a lo que no se puede cambiar aquí es la definición de ruido.
+    /// Dónde vive el umbral lo dice el MANUAL, y la propia pantalla de Inventario.
+    /// </para>
+    /// <para>
+    /// La mitad viva de la regla —que no quede ningún control que lo edite— se conserva entera.
+    /// </para>
     /// </summary>
     [Fact]
-    public void El_umbral_no_se_edita_en_Ajustes_y_la_pagina_dice_donde_esta()
+    public void El_umbral_no_se_edita_en_Ajustes()
     {
         string xaml = Markup(SettingsXaml());
 
         xaml.Should().NotContain("{Binding LargeUnitLoc}", "no puede quedar un control que lo edite");
+        xaml.Should().NotContain("Unidad grande", "ni una fila que hable de él");
+        xaml.Should().NotContain("unidad grande");
 
-        // F26 §C: era un párrafo de cinco líneas a 11 px fingiendo ser una fila; ahora es un aviso
-        // en línea de UNA frase, con el camino hasta donde sí se edita. Lo que dice no cambia.
-        xaml.Should().Contain("se gobierna por aplicación, en Inventario → Gobernanza → Umbrales");
-        xaml.Should().Contain("aplica al re-escanear");
-        xaml.Should().Contain("{Binding OpenGovernanceCommand}", "y el aviso lleva hasta alli");
+        typeof(SettingsViewModel).GetProperty("LargeUnitLoc")
+            .Should().BeNull("el view-model tampoco lo expone");
     }
 
     [Fact]

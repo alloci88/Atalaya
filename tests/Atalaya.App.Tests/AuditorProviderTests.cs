@@ -1,4 +1,4 @@
-using Atalaya.Agents;
+﻿using Atalaya.Agents;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
@@ -441,8 +441,6 @@ public sealed class AuditorProviderTests : IDisposable
             new NeverResets(),
             _hub,
             new NavigationService(new NoServices()),
-            about: null,
-            deploy: null,
             providers: registry);
 
     private sealed class NeverResets : IFactoryResetConfirmer

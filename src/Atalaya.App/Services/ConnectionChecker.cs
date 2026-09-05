@@ -265,7 +265,12 @@ public sealed class ConnectionChecker
 
                 if (_hub.Health == SyncHealth.Green && _hub.LastSync is { } t)
                 {
-                    hub.Succeed("Acceso al hub", $"Sincronizado {t.ToLocalTime():g} · {_hub.HubPaths.Root}");
+                    // SIN la ruta del clon (F26 §C, revisión). Esta fila contesta «¿llego al hub?»,
+                    // y la ruta local no forma parte de la respuesta: es un dato de esta máquina, y
+                    // vive dos tarjetas más abajo, en «Hub local», que es de lo que va aquella.
+                    // Repetida aquí solo alargaba la línea con lo único que no se estaba
+                    // comprobando.
+                    hub.Succeed("Acceso al hub", $"Sincronizado {t.ToLocalTime():g}");
                 }
                 else
                 {

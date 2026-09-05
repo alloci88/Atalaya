@@ -15143,6 +15143,123 @@ un marcado que ha cambiado. Los cuatro que costaron:
 **2.406 tests en verde** (1.897 de `Atalaya.App.Tests`), 38 más que al cerrar la revisión de la
 Parte B.
 
+### D-997 — Revisión de la Parte C: ocho correcciones vistas en el dist
+
+Las ocho salieron de mirar la aplicación instalada. Se agrupan por lo que enseñan, no por la vista
+en que aparecieron.
+
+**1 · Un dato repetido no es jerarquía, es ruido.** La tarjeta de identidad de Cuenta enseñaba
+«alopezciller» en negrita y otra vez en gris al lado: `DisplayName` cae en el login cuando la cuenta
+de GitHub no declara nombre completo, que es el caso normal en esta casa. Queda uno. Y la fila
+«Acceso al hub» soltaba la ruta del clon detrás del sello de sincronización — la ruta es un dato de
+esta máquina y vive dos tarjetas más abajo, en «Hub local», que es la tarjeta que va de eso. Esa
+fila contesta «¿llego al hub?»; la ruta no forma parte de la respuesta.
+
+**2 · Un renglón dedicado a lo que NO se puede cambiar aquí es la definición de ruido.** El aviso
+de «unidad grande (LOC)» se va entero de Ajustes → Auditoría, con su enlace. La §C ya lo había
+encogido de un párrafo de cinco líneas a una frase (D-986) y seguía sobrando: Ajustes es la lista de
+lo que se cambia en esta máquina, y el umbral no es una de esas cosas. **La regla de F13 no se
+toca** —sigue sin haber control que lo edite, y el test que lo vigila se queda—; lo que se retira es
+la explicación, que vive en el MANUAL y en la propia pantalla de Inventario. `OpenGovernanceCommand`
+se borra con ella: un comando que ya no llama nadie vuelve solo (D-981).
+
+**3 · Un interruptor se explica por lo que ENCIENDE.** La ayuda del modo exhaustivo describía lo que
+el modo *no* hace cuando está apagado —«cada unidad se audita como UNA conversación y cada pasada es
+un turno suyo»— y había que leerla dos veces para saber qué pasaba al encenderlo. Queda una línea:
+qué hace y qué cuesta, sin «Más» que desplegar. Es la misma propiedad que el tooltip del icono de
+aviso, así que el precio medido en M2 sigue existiendo en un solo sitio (R2 §1).
+
+*Lo que esto cuesta, dicho:* la frase ya no dice **cuándo** aplica, y `Cada_ayuda_dice_cuando_surte_efecto`
+(BUGFIX-AJUSTES §3) lo exigía. Se exceptúan las ayudas que llegan por enlace desde el view-model, y
+el test lo salta por esa vía y no por el nombre de la fila — una fila nueva con la ayuda escrita a
+mano sigue teniendo que decirlo. El «cuándo» del modo exhaustivo está en la tabla del MANUAL. Y la
+otra mitad de M2 —lo que se GANA, dos defectos de gravedad media más por cada veinte— se va también
+al MANUAL: quien mira ese interruptor está decidiendo si paga el triple, y el argumento a favor se
+lee entero o no se lee.
+
+**4 · La tabla de tarifas, rehecha.** El `DataGrid` de la librería salía plano y, en ventana
+reducida, **recortaba sus propias cabeceras** — «Entrada $/», «Caché leíd» —, que es la peor forma
+posible de ahorrar sitio: se pierde justo lo que dice qué es cada columna. Ahora es tabla del
+sistema:
+
+- **Cabecera de dos líneas**: el nombre arriba y la unidad debajo a 13 px («Entrada» / «$ por
+  millón»). Es lo que permite que la cabecera no tenga que caber en el ancho de la cifra.
+- **Cifras a la derecha y con dígitos tabulares** (`Typography.NumeralAlignment="Tabular"`). Sin
+  ellos «1,00» y «12,50» no alinean sus comas y una columna de precios deja de poder recorrerse.
+- **Una raya fina por fila**, «Modelo» con ancho mínimo que no recorta, «Nota» que envuelve.
+- **En estrecho, la tabla se desplaza**: cada columna lleva su mínimo, la rejilla sigue al ancho
+  visible mientras sobre y por debajo aparece la barra horizontal. La cabecera va DENTRO del mismo
+  desplazamiento, o se separaría de sus columnas al primer arrastre. **Ninguna cabecera se recorta
+  nunca**, que era el defecto.
+- Y la explicación de cuatro líneas de arriba queda en una, con el resto detrás del «Más».
+
+**La celda es editable y no lo parece hasta que se toca.** Una tabla de siete columnas por catorce
+filas con caja visible en cada celda se lee como un formulario, no como una tabla; el marco aparece
+al pasar por encima y al entrar, como en cualquier hoja de cálculo. El proveedor va **como
+pastilla** —y sigue siendo editable, porque «en blanco vale para cualquiera» es parte de lo que hay
+que poder escribir—: en una tabla donde todo se edita, una celda que no se editara sería la
+excepción que hay que descubrir. **Sin proveedor no se pinta pastilla**: una columna de cajas
+teñidas y vacías se lee como una tabla rota, y el caso normal es precisamente ése.
+
+*Y una que se vio en la primera captura de la tabla nueva:* la segunda línea de «Proveedor» decía
+«en blanco = todos» y **se cortaba** contra el borde de su columna. Una cabecera de dos líneas
+existe para llevar la UNIDAD; el proveedor no tiene unidad, y meter ahí una nota de uso reprodujo el
+defecto que la tabla venía a arreglar. Se va: esa nota vive en el «Más».
+
+**5 · El aviso de la escala, dicho con la ruta entera.** «El tamaño del texto lo manda la escala de
+Windows: Atalaya se dibuja con vectores y la sigue sin recortar nada» explicaba la implementación y
+no contestaba la pregunta. Ahora: «El tamaño del texto sigue la escala de Windows (Configuración →
+Pantalla → Escala). Atalaya no tiene un ajuste propio.» Mandar a «la escala de Windows» sin decir
+por dónde se llega es no contestar.
+
+**6 · «Acerca de» sale de Ajustes y es una entrada del raíl.** Era un modal que se abría desde el
+fondo de Ajustes → Avanzado: para leer la versión había que entrar en Ajustes, elegir una sección,
+bajar y abrir una ventana encima. **Y no es un ajuste** —no se edita nada ahí dentro—, así que
+estaba en el único sitio de la aplicación donde nadie iba a buscarlo. Ahora es una página del grupo
+**Sistema**, debajo de Ajustes, con su icono (la «i» en su círculo) y su miga.
+
+Mismo contenido de F6.4 §3, y `AboutDialog` **se borra** —el diálogo, su `IAboutDialog`, su host y
+su registro en el contenedor—, que es la misma regla que retiró el de tarifas (D-981, D-988). La
+vista nace convertida al sistema, así que sale de la lista de pendientes por la puerta buena.
+
+**7 · La tarjeta de coste tenía seis renglones y ninguna jerarquía.** Coste por unidad, unidades,
+equivalente en dólares, dos fases con sus tokens y el aviso ámbar, todo del mismo tamaño y el mismo
+color dentro de un azulejo de 280 px. Ahora:
+
+- La cifra grande con su unidad, como estaba.
+- **Una** línea secundaria con las tres formas de mirar el mismo total: «~8,4 por unidad · 16
+  unidades · ≈ 2,45 $».
+- El desglose por fase, en **dos filas de rejilla** —etiqueta a la izquierda, sesiones · llamadas ·
+  credits a la derecha con dígitos tabulares—, a 13 px y en color secundario. Dos fases que se
+  comparan tienen que alinear; eran dos cadenas largas envolviendo en tres líneas cada una.
+- **Los tokens salen de la tarjeta.** No son de aquí: la tarjeta contesta «cuánto cuesta y en qué se
+  va», y el recuento de tokens es instrumentación — vive en el anexo técnico del informe, que es
+  donde D-993 lo dejó.
+
+**8 · Y el aviso de «sesión sin tarifa» sale de la tarjeta.** Vivía dentro del azulejo de coste y
+**afecta a las cuatro cifras** —el recuento de activos que salió de esas sesiones, la cobertura,
+todo—, así que va como aviso en línea encima de la rejilla, con su enlace a Ajustes → Tarifas. Lo
+que abarca un aviso decide dónde va.
+
+**Ningún test nuevo, cinco actualizados y ninguno eliminado** (N-5). Lo que estas ocho cambian es
+disposición y redacción: se ve en la primera captura y no hay forma de romperlo en silencio. Los
+tests que se movieron protegían reglas vivas escritas contra un marcado que ha cambiado:
+
+- **`Ajustes_ofrece_acerca_de_…`** pasa a ser **`El_acerca_de_es_una_pagina_del_rail_…`**: la regla
+  de F6.4 —el gesto existe y trae los datos REALES— se conserva, medida donde ahora vive, y se le
+  añade que Ajustes ya no lo ofrece. Un gesto que sigue existiendo en dos sitios se mantiene en dos.
+- **`El_dialogo_esconde_los_enlaces_…`**, **`La_version_del_acerca_de_…`**, **`Cada_uso_del_icono_…`**
+  y **`La_marca_solo_aparece_en_los_tres_sitios_acordados`** apuntan a `AboutView.xaml`. Las reglas
+  —sin repositorio no hay enlace, la versión no se escribe en el XAML, el `.ico` se pide con su
+  fotograma, y la marca solo en dos sitios— no se tocan.
+- **`El_aviso_del_modo_exhaustivo_es_literal`** fija la frase medida más corta, y se le añade que la
+  fila y el tooltip lean **la misma** propiedad — que es lo que impide que el precio acabe escrito
+  con dos cifras distintas.
+- **`El_umbral_no_se_edita_en_Ajustes`** pierde la mitad que exigía que la página dijera dónde está
+  —ya no lo dice— y gana que no quede ni una fila que hable de él.
+
+**2.406 tests en verde** (1.898 de `Atalaya.App.Tests`).
+
 ### D-996 — Lo que la Parte C NO toca
 
 Ninguna regla de negocio, ningún dato, nada del hub, ningún prompt. Qué ajustes existen y qué hacen;

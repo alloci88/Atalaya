@@ -44,5 +44,8 @@
     <DataTemplate DataType="{x:Type vm:AssistedFixViewModel}">
         <views:AssistedFixView />
     </DataTemplate>
+    <DataTemplate DataType="{x:Type vm:AboutViewModel}">
+        <views:AboutView />
+    </DataTemplate>
 
 </ResourceDictionary>

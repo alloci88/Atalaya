@@ -30,6 +30,21 @@ public sealed record LegendItem(string Name, Brush Brush, bool Dashed);
 /// </summary>
 public sealed record MetricsSeverityChip(string Severity, string Label, int Count);
 
+/// <summary>
+/// Una fila del desglose por fase del azulejo de coste (F26 §C, revisión).
+/// <para>
+/// Antes era UNA cadena —«Descubrimiento · 5 sesión(es) · 97 llamada(s) · 4.381.463 tokens · 133,6
+/// AI credits»— que envolvía en tres líneas dentro de un azulejo de 280 px. Partida en etiqueta y
+/// detalle, la rejilla alinea las dos fases y se leen como lo que son: una comparación.
+/// </para>
+/// <para>
+/// <b>Sin los tokens.</b> No son de esta tarjeta: la tarjeta contesta «cuánto cuesta y en qué se
+/// va», y el recuento de tokens es instrumentación — vive en el anexo técnico del informe, que es
+/// donde D-993 lo puso.
+/// </para>
+/// </summary>
+public sealed record PhaseRow(string Label, string Detail);
+
 /// <summary>Un rosco de cobertura con todo lo que la vista escribe alrededor.</summary>
 public sealed record CoverageCard(
     string Slug,
@@ -224,7 +239,16 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
     [ObservableProperty] private string _costUnit = CreditText.Unit;
 
-    [ObservableProperty] private string _costPerUnit = string.Empty;
+    /// <summary>
+    /// LA LÍNEA SECUNDARIA del azulejo de coste: «~8,4 por unidad · 16 unidades · ≈ 2,45 $».
+    /// <para>
+    /// Eran tres propiedades en tres líneas del mismo tamaño y el mismo color que todo lo demás
+    /// —coste por unidad, unidades y equivalente en dólares—, y con ellas el azulejo llegó a tener
+    /// seis renglones sin jerarquía. Son la misma respuesta vista de tres formas: van juntas, una
+    /// vez, debajo de la cifra.
+    /// </para>
+    /// </summary>
+    [ObservableProperty] private string _costSummary = string.Empty;
 
     /// <summary>
     /// El coste POR PROVEEDOR, cuando hay más de una casa que facture en el periodo. Con una sola
@@ -239,7 +263,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
     /// <b>En qué se va el dinero, por fase</b> (F18 §1): descubrimiento, verificación y arreglo.
     /// Hasta aquí, contestar esa pregunta obligaba a abrir los informes uno a uno.
     /// </summary>
-    public ObservableCollection<string> CostByPhase { get; } = new();
+    public ObservableCollection<PhaseRow> CostByPhase { get; } = new();
 
     /// <summary>Hubo actividad que repartir. Sin sesiones en el periodo el bloque no se pinta.</summary>
     [ObservableProperty] private bool _hasPhases;
@@ -445,9 +469,6 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
         CostPartialNotice = d.CostIsPartial ? d.PartialCostNotice : string.Empty;
         CostScopeNote = d.HasUntariffed ? d.UntariffedNotice : string.Empty;
-        CostInDollars = d.CostInPeriod is { } dollars
-            ? $"≈ {CreditText.Dollars(dollars)} · 1 credit = 0,01 $"
-            : string.Empty;
         CostByProvider.Clear();
         foreach (string line in d.CostLines)
         {
@@ -459,17 +480,18 @@ public sealed partial class MetricsViewModel : ViewModelBase
         CostByPhase.Clear();
         foreach (PhaseCost phase in d.ByPhase)
         {
-            CostByPhase.Add(phase.Line);
+            // Sin los tokens: son del anexo del informe, no del azulejo (ver `PhaseRow`).
+            string detail = $"{phase.Sessions} ses. · {phase.Calls} llam.";
+            CostByPhase.Add(new PhaseRow(
+                phase.Phase,
+                phase.Cost is { } coste ? $"{detail} · {CreditText.WithUnit(coste, null)}" : detail));
         }
 
         HasPhases = CostByPhase.Count > 0;
 
-        CostPerUnit = d.CostInPeriod is null
+        CostSummary = d.CostInPeriod is null
             ? "Se activará cuando alguna sesión registre coste"
-            : d.CostPerAuditedUnit is { } per
-                ? $"~{CreditText.Number(per)} por unidad auditada "
-                  + $"({d.UnitsAuditedInPeriod} en el periodo)"
-                : "Sin unidades auditadas en el periodo";
+            : string.Join(" · ", Summary(d));
 
         // BUGFIX-REDONDEO: con los enteros, para que 3 de 1.335 no se enseñe como «0 %».
         CyclePct = d.HasCycleData
@@ -983,6 +1005,28 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
     /// <summary>Donde vive el informe de una sesión. Publico para poder comprobarlo sin abrir nada.</summary>
     public string ReportPathFor(string slug, string sessionId) => _hub.HubPaths.ReportFile(slug, sessionId);
+
+    /// <summary>
+    /// Las tres piezas de la línea secundaria, saltándose las que no hay: sin unidades auditadas no
+    /// se escribe «0 por unidad», que se leería como una medida y no lo es (D-318).
+    /// </summary>
+    private static IEnumerable<string> Summary(MetricsDashboard d)
+    {
+        if (d.CostPerAuditedUnit is { } per)
+        {
+            yield return $"~{CreditText.Number(per)} por unidad";
+        }
+
+        if (d.UnitsAuditedInPeriod > 0)
+        {
+            yield return d.UnitsAuditedInPeriod == 1 ? "1 unidad" : $"{d.UnitsAuditedInPeriod} unidades";
+        }
+
+        if (d.CostInPeriod is { } total)
+        {
+            yield return $"≈ {CreditText.Dollars(total)}";
+        }
+    }
 
     // ---------- Colores ----------
 

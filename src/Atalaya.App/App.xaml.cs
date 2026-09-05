@@ -438,7 +438,6 @@ public partial class App : Application
         // F5.9: abrir el informe de una sesion desde el registro de operaciones.
         services.AddSingleton<IFileOpener, ShellFileOpener>();
         services.AddSingleton<IFileSaver, SystemFileSaver>();
-        services.AddSingleton<IAboutDialog, AboutDialogHost>();
         // La memoria de plegado es de la SESIÓN, no de la vista: V2 y V3 son transitorias y la
         // comparten (F5.6 §1).
         services.AddSingleton<GroupExpansionMemory>();
@@ -464,6 +463,7 @@ public partial class App : Application
         services.AddTransient<PortfolioViewModel>();
         services.AddTransient<InventoryViewModel>();
         services.AddTransient<SettingsViewModel>();
+        services.AddTransient<AboutViewModel>();
         services.AddTransient<AccountViewModel>();
         services.AddTransient<OnboardingViewModel>();
         services.AddTransient<SessionViewModel>();

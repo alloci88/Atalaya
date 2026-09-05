@@ -157,7 +157,7 @@ public sealed class IdentityTests : IDisposable
         {
             // El aviso efímero. El banner de versión tenía otro hasta F26 §A; ver arriba.
             ["src/Atalaya.App/MainWindow.xaml"] = new[] { 16 },
-            ["src/Atalaya.App/Views/AboutDialog.xaml"] = new[] { 64 },
+            ["src/Atalaya.App/Views/AboutView.xaml"] = new[] { 64 },
         };
 
         foreach ((string file, int[] expected) in usages)
@@ -323,7 +323,7 @@ public sealed class IdentityTests : IDisposable
         var placements = new Dictionary<string, int>
         {
             ["src/Atalaya.App/Views/AccountView.xaml"] = 2,   // bienvenida + organización
-            ["src/Atalaya.App/Views/AboutDialog.xaml"] = 1,
+            ["src/Atalaya.App/Views/AboutView.xaml"] = 1,
         };
 
         foreach ((string file, int expected) in placements)
@@ -407,8 +407,8 @@ public sealed class IdentityTests : IDisposable
                 .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion.Trim(),
             "la informativa del binario que se está ejecutando, con sus sufijos");
 
-        Source("src/Atalaya.App/Views/AboutDialog.xaml").Should()
-            .Contain("{Binding VersionLabel}")
+        Source("src/Atalaya.App/Views/AboutView.xaml").Should()
+            .Contain("{Binding Info.VersionLabel}")
             .And.NotContain("Versión 1.", "la versión no se escribe en el XAML");
     }
 
@@ -426,21 +426,19 @@ public sealed class IdentityTests : IDisposable
         con.Signature.Should().Be("Atalaya · Maxam", "la misma firma que va al pie del informe");
     }
 
-    /// <summary>El gesto existe, está al final de Ajustes y abre el diálogo con los datos reales.</summary>
+    /// <summary>
+    /// <b>«Acerca de» es una PÁGINA del raíl</b> (F26 §C, revisión), y la construye con la
+    /// organización que diga el hub.
+    /// <para>
+    /// Hasta aquí era un modal que se abría desde el fondo de Ajustes → Avanzado. La regla de F6.4
+    /// —que el gesto exista y traiga los datos REALES, no un número escrito a mano— no cambia; lo
+    /// que cambia es dónde vive, y eso sí se comprueba: en el grupo Sistema y detrás de Ajustes,
+    /// que es el orden que el raíl declara.
+    /// </para>
+    /// </summary>
     [Fact]
-    public void Ajustes_ofrece_acerca_de_y_lo_abre_con_la_organizacion_del_hub()
+    public void El_acerca_de_es_una_pagina_del_rail_con_la_organizacion_del_hub()
     {
-        string xaml = Source("src/Atalaya.App/Views/SettingsView.xaml");
-        xaml.Should().Contain("{Binding ShowAboutCommand}");
-
-        // F6.4: «Acerca de» va antes de la zona peligrosa, porque lo último de una página no puede
-        // ser algo que no da miedo. Hasta F26 §C eso se medía contra «Guardar», que era lo último
-        // del scroll; ahora «Guardar» vive en la barra fija del pie —está SIEMPRE a la vista, que
-        // es justo el arreglo— y el final de la página es la zona peligrosa. La regla es la misma.
-        xaml.IndexOf("ShowAboutCommand", StringComparison.Ordinal).Should()
-            .BeLessThan(xaml.IndexOf("Zona peligrosa", StringComparison.Ordinal),
-                "va al final de los ajustes, pero antes de lo que da miedo");
-
         string root = Path.Combine(_root, "settings");
         var paths = new AppPaths(Path.Combine(root, "local"));
         var settings = new SettingsService(paths);
@@ -448,29 +446,18 @@ public sealed class IdentityTests : IDisposable
         HubContext hub = TestFactory.Hub(paths, settings);
         hub.Store.WriteHub(new HubInfo { OrganizationName = "Maxam" });
 
-        var dialog = new RecordingAboutDialog();
-        var vm = new SettingsViewModel(
-            settings,
-            new Atalaya.Copilot.FakeCopilotAgent(),
-            new ToastCenter(),
-            new FactoryResetService(hub, paths, settings, TestFactory.Account(paths), new OpenSessionStore(paths)),
-            new NoFactoryResetConfirmer(),
-            hub,
-            new NavigationService(new NoServices()),
-            dialog);
+        var vm = new AboutViewModel(hub);
 
-        vm.ShowAboutCommand.Execute(null);
+        vm.Info.Organization.Should().Be("Maxam");
+        vm.Info.Version.Should().Be(AboutInfo.CurrentVersion());
+        vm.RailKey.Should().Be("about", "el raíl resalta su entrada mientras la página está delante");
+        vm.Title.Should().Be("Acerca de");
 
-        dialog.Shown.Should().ContainSingle();
-        dialog.Shown[0].Organization.Should().Be("Maxam");
-        dialog.Shown[0].Version.Should().Be(AboutInfo.CurrentVersion());
-    }
-
-    private sealed class RecordingAboutDialog : IAboutDialog
-    {
-        public List<AboutInfo> Shown { get; } = new();
-
-        public void Show(AboutInfo info) => Shown.Add(info);
+        // Y ya no se abre desde Ajustes: un gesto que sigue existiendo en dos sitios es un gesto
+        // que se mantiene en dos sitios.
+        Source("src/Atalaya.App/Views/SettingsView.xaml").Should().NotContain("ShowAboutCommand");
+        typeof(SettingsViewModel).GetProperty("ShowAboutCommand")
+            .Should().BeNull("Ajustes ya no lo ofrece");
     }
 
     private sealed class NoFactoryResetConfirmer : IFactoryResetConfirmer

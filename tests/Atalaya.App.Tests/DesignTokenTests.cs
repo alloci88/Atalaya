@@ -50,7 +50,6 @@ public sealed class DesignTokenTests
 
         // Los DIÁLOGOS de las vistas de trabajo siguen pendientes: van con la vista que los abre y
         // ninguna parte de F26 los ha tocado todavía.
-        "Views/AboutDialog.xaml",
         "Views/AuditLaunchDialog.xaml",
         "Views/CycleConfigDialog.xaml",
         "Views/DeleteAppDialog.xaml",

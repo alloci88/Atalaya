@@ -141,15 +141,18 @@ public sealed class AboutVersionTests
         info.NoLinksNotice.Should().Contain("appRepoUrl", "el hueco dice qué falta y dónde");
     }
 
-    /// <summary>Y el diálogo los esconde de verdad, que es la mitad que el compilador no vigila.</summary>
+    /// <summary>
+    /// Y la PÁGINA los esconde de verdad, que es la mitad que el compilador no vigila. Era un
+    /// diálogo hasta F26 §C; el «Acerca de» es ahora una entrada del raíl (grupo Sistema).
+    /// </summary>
     [Fact]
-    public void El_dialogo_esconde_los_enlaces_cuando_no_hay_repositorio()
+    public void El_acerca_de_esconde_los_enlaces_cuando_no_hay_repositorio()
     {
-        string xaml = Source("src/Atalaya.App/Views/AboutDialog.xaml");
+        string xaml = Source("src/Atalaya.App/Views/AboutView.xaml");
 
-        xaml.Should().Contain("{Binding HasRepository, Converter={StaticResource BoolToVisibility}}");
-        xaml.Should().Contain("{Binding NoLinksNotice}");
-        xaml.Should().Contain("{Binding Repository}").And.Contain("{Binding Manual}");
+        xaml.Should().Contain("{Binding Info.HasRepository, Converter={StaticResource BoolToVisibility}}");
+        xaml.Should().Contain("{Binding Info.NoLinksNotice}");
+        xaml.Should().Contain("{Binding Info.Repository}").And.Contain("{Binding Info.Manual}");
     }
 
     // ================================================================ ni una URL a mano

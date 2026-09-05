@@ -804,6 +804,14 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private Task ShowSettings() => Navigation.NavigateToAsync<SettingsViewModel>();
 
+    /// <summary>
+    /// «Acerca de» (F26 §C). Es una página del grupo Sistema y no un modal de Ajustes: no se edita
+    /// nada ahí dentro, así que no era un ajuste — y al fondo de Ajustes → Avanzado no lo
+    /// encontraba nadie.
+    /// </summary>
+    [RelayCommand]
+    private Task ShowAbout() => Navigation.NavigateToAsync<AboutViewModel>();
+
     /// <summary>Abre V5 con el estado al día — la vista se reconstruye desde el servicio.</summary>
     [RelayCommand]
     private Task ShowSession() => Navigation.NavigateToAsync<SessionViewModel>();
