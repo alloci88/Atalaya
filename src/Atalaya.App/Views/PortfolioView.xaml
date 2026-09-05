@@ -323,35 +323,27 @@
                                      así que vincular es lo primario; con clon, entrar. Antes eran
                                      dos botones de ancho completo, uno encima del otro, y el
                                      primario era el de abajo. -->
+                                <!-- LA ACCIÓN DE UNA TARJETA ES SECUNDARIA (UI-0021). Eran las dos
+                                     primarias, del mismo azul macizo que «+ Nueva aplicación» de la
+                                     cabecera: con N tarjetas, N+1 azules del mismo peso compitiendo
+                                     por la misma mirada, y el principio 4 dice UNO por vista.
+
+                                     La tarjeta ya es su propio contexto: quien mira la de XBLAST
+                                     sabe que ese botón entra en XBLAST, y el estado del vínculo lo
+                                     dicen el piloto y su palabra, que están tres líneas más arriba.
+                                     El primario de esta vista es dar de alta una aplicación, que es
+                                     lo único que no depende de ninguna tarjeta. -->
                                 <Button Content="{Binding Link.ActionLabel}"
                                         Command="{Binding DataContext.LinkCloneCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                         CommandParameter="{Binding}"
                                         ToolTip="{Binding Link.Tooltip}"
-                                        Style="{StaticResource Button.Primary}"
                                         HorizontalAlignment="Stretch"
                                         Visibility="{Binding Link.NeedsAction, Converter={StaticResource BoolToVisibility}}" />
 
                                 <Button Content="Abrir inventario"
                                         Command="{Binding DataContext.OpenAppCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                         CommandParameter="{Binding}"
-                                        HorizontalAlignment="Stretch">
-                                    <Button.Style>
-                                        <Style TargetType="Button" BasedOn="{StaticResource Button.Primary}">
-                                            <Style.Triggers>
-                                                <!-- Con el clon sin vincular, entrar al inventario
-                                                     deja de ser lo principal —se puede mirar, pero
-                                                     no auditar— y el primario pasa a ser vincular.
-                                                     UN primario por tarjeta, siempre (principio 4). -->
-                                                <DataTrigger Binding="{Binding Link.NeedsAction}" Value="True">
-                                                    <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
-                                                    <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
-                                                    <Setter Property="BorderBrush" Value="{DynamicResource Brush.LineStrong}" />
-                                                    <Setter Property="FontWeight" Value="Normal" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
+                                        HorizontalAlignment="Stretch" />
                             </StackPanel>
                         </Border>
                     </DataTemplate>

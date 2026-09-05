@@ -16,7 +16,29 @@
         línea de ayuda a la izquierda, control a la derecha— y cada error de validación va debajo
         de su campo, en peligro.
     -->
-    <ScrollViewer Style="{StaticResource Scroll}" VerticalScrollBarVisibility="Auto">
+    <!-- LA ACCIÓN NO SE VA CON EL SCROLL, Y HAY POR DÓNDE SALIR (UI-0041).
+
+         «Crear e inventariar» era la última fila de un formulario que se desplaza: a 1920 quedaba
+         a ras del borde inferior y a 1280 estaba fuera de la pantalla, sin que nada anunciara que
+         existía. Es el defecto que D-987 describió para Ajustes y que D-1000 §1 resolvió allí
+         fijando la fila de acciones al pie de la columna; la otra pantalla de formulario no
+         recibió el mismo tratamiento. Aquí está el mismo armazón: el scroll mide lo que mide su
+         contenido pero no pasa del alto de la columna menos lo que ocupan los botones, así que en
+         un formulario corto quedan justo debajo de la última fila y en uno largo, pegados al pie.
+
+         Y «Cancelar», que no había: para salir hacía falta la flecha o la miga, mientras el raíl
+         marcaba «Portafolio» como entrada activa — la entrada resaltada del menú era, literalmente,
+         el botón que abandonaba el formulario sin avisar. -->
+    <Grid x:Name="FormColumn">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      Padding="{StaticResource Pad.Scroll}"
+                      MaxHeight="{Binding ActualHeight, ElementName=FormColumn, Converter={StaticResource Minus}, ConverterParameter=64}">
         <StackPanel MaxWidth="{StaticResource Form.MaxWidth}" HorizontalAlignment="Center"
                     Margin="{StaticResource Pad.L.Bottom}">
 
@@ -220,10 +242,18 @@
 
                     <DockPanel Style="{StaticResource Setting.Row}" Margin="{StaticResource Pad.Zero}">
                         <StackPanel Style="{StaticResource Setting.Label}" />
-                        <CheckBox Content="Importar el baseline al crear la aplicación"
-                                  IsChecked="{Binding ImportBaseline}"
-                                  IsEnabled="{Binding HasBaseline}"
-                                  VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
+                            <CheckBox Content="Importar el baseline al crear la aplicación"
+                                      IsChecked="{Binding ImportBaseline}"
+                                      IsEnabled="{Binding HasBaseline}"
+                                      VerticalAlignment="Center" />
+                            <!-- Un control apagado lleva su razón al lado, también cuando es una
+                                 casilla (UI-0038): estaba deshabilitada y no decía por qué. -->
+                            <Border Style="{StaticResource Reason.Chip}"
+                                    Visibility="{Binding HasBaselineBlockedReason, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="{Binding BaselineBlockedReason}" Style="{StaticResource Reason.Text}" />
+                            </Border>
+                        </StackPanel>
                     </DockPanel>
 
                     <!-- La salida del importador se queda a la vista: no es el aviso de una
@@ -241,11 +271,28 @@
                 </StackPanel>
             </Border>
 
-            <!-- F5.7 §4: sin texto de estado al pie. El resultado va por el toast global. -->
+        </StackPanel>
+        </ScrollViewer>
+        <Rectangle Style="{StaticResource Scroll.Fade.Bottom}" />
+        </Grid>
+
+        <!-- F5.7 §4: sin texto de estado al pie. El resultado va por el toast global. -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal"
+                    MaxWidth="{StaticResource Form.MaxWidth}" HorizontalAlignment="Center"
+                    Margin="{StaticResource Pad.SaveBar}"
+                    c:Stack.Gap="{StaticResource Space.S}">
             <Button Content="Crear e inventariar" Command="{Binding CreateCommand}"
                     Style="{StaticResource Button.Primary}"
-                    IsEnabled="{Binding CanCreate}" HorizontalAlignment="Left"
+                    IsEnabled="{Binding CanCreate}"
                     MinWidth="180" />
+            <Button Content="Cancelar" Command="{Binding CancelCommand}"
+                    ToolTip="Vuelve al portafolio sin crear nada." />
+
+            <!-- La razón, pegada al botón apagado (P-27, UI-0038). -->
+            <Border Style="{StaticResource Reason.Chip}"
+                    Visibility="{Binding HasCreateBlockedReason, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="{Binding CreateBlockedReason}" Style="{StaticResource Reason.Text}" />
+            </Border>
         </StackPanel>
-    </ScrollViewer>
+    </Grid>
 </UserControl>

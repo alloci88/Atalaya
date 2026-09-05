@@ -809,13 +809,25 @@ public sealed class InventoryViewTests : IDisposable
     {
         string xaml = InventoryXaml();
 
-        foreach (string command in new[] { "AuditSelectionCommand", "RescanCommand" })
+        // `AuditSelectionCommand` mira ademas la SELECCION desde UI-0022: el primario estaba
+        // encendido con cero casillas marcadas, y es el boton que gasta creditos del usuario.
+        // `CanAuditSelection` incluye `CanAudit` —sin clon no se audita— y le suma la seleccion.
+        foreach ((string command, string gate) in new[]
+        {
+            ("AuditSelectionCommand", "CanAuditSelection"),
+            ("RescanCommand", "CanAudit"),
+        })
         {
             string button = ButtonWith(xaml, command);
-            button.Should().Contain("IsEnabled=\"{Binding CanAudit}\"", $"«{command}» lanza o lee el clon");
+            button.Should().Contain($"IsEnabled=\"{{Binding {gate}}}\"", $"«{command}» lanza o lee el clon");
             button.Should().Contain("ToolTip=\"{Binding AuditDisabledTooltip}\"",
                 "un botón gris sin motivo es un botón roto");
         }
+
+        // Y la RAZON va pegada al boton, no en un tooltip (P-27, UI-0022): quien mira un boton
+        // apagado no sabe que hay nada que ver.
+        xaml.Should().Contain("{Binding AuditBlockedReason}", "el primario apagado dice por qué");
+        xaml.Should().Contain("{Binding HasAuditBlockedReason,", "y solo cuando hay algo que decir");
 
         xaml.Should().Contain("{Binding IsReadOnly,", "la barra de solo lectura se enseña sola");
         xaml.Should().Contain("{Binding LinkActionLabel}", "y trae el acceso directo a vincular");

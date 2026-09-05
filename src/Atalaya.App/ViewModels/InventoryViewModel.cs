@@ -316,6 +316,9 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
     [NotifyPropertyChangedFor(nameof(ReadOnlyNotice))]
     [NotifyPropertyChangedFor(nameof(LinkActionLabel))]
     [NotifyPropertyChangedFor(nameof(AuditDisabledTooltip))]
+    [NotifyPropertyChangedFor(nameof(AuditBlockedReason))]
+    [NotifyPropertyChangedFor(nameof(CanAuditSelection))]
+    [NotifyPropertyChangedFor(nameof(HasAuditBlockedReason))]
     private CloneLink _link = CloneLink.Unknown(string.Empty);
 
     /// <inheritdoc cref="CloneLink.CanAudit"/>
@@ -376,6 +379,31 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
         1 => "Auditar 1 seleccionada",
         _ => $"Auditar {SelectedCount} seleccionadas",
     };
+
+    /// <summary>
+    /// POR QUÉ NO SE PUEDE AUDITAR AHORA MISMO. Vacío = se puede (P-27, UI-0022).
+    /// <para>
+    /// <b>De dónde viene.</b> Con ninguna casilla marcada, el primario se pintaba a plena
+    /// intensidad y estaba habilitado —medido, <c>IsEnabled=True</c>—. D-999 §1 bajó ese botón a la
+    /// barra de la lista precisamente con su recuento, «porque es lo que se va a gastar»; con cero
+    /// seleccionadas no hay recuento y tampoco había freno: <b>el botón que gasta créditos del
+    /// usuario estaba encendido sin nada que auditar y sin la razón al lado</b>.
+    /// </para>
+    /// <para>
+    /// La regla es la misma en las tres vistas de trabajo: el primario se apaga cuando no puede
+    /// hacer nada, y la razón va PEGADA a él en tinta apagada — no en un tooltip, que hay que saber
+    /// que existe para verlo (D-944.4, D-949).
+    /// </para>
+    /// </summary>
+    public string AuditBlockedReason => !Link.CanAudit
+        ? Link.DisabledActionTooltip
+        : SelectedCount == 0 ? "marca al menos una unidad" : string.Empty;
+
+    /// <summary>Se puede auditar: hay clon y hay selección.</summary>
+    public bool CanAuditSelection => AuditBlockedReason.Length == 0;
+
+    /// <summary>Y hay algo que decir al lado del botón apagado.</summary>
+    public bool HasAuditBlockedReason => AuditBlockedReason.Length > 0;
 
     /// <summary>
     /// Qué es una unidad y, si las hay, dónde se han metido las «grandes». El recuento de grandes
@@ -802,6 +830,9 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
         SelectedCount = SelectedUnits().Count;
         HasSelection = SelectedCount > 0;
         OnPropertyChanged(nameof(AuditSelectionLabel));
+        OnPropertyChanged(nameof(AuditBlockedReason));
+        OnPropertyChanged(nameof(CanAuditSelection));
+        OnPropertyChanged(nameof(HasAuditBlockedReason));
 
         var pending = PendingPaths();
         bool allPendingSelected = pending.Count > 0 && pending.All(_selected.Contains);

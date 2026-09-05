@@ -121,7 +121,11 @@
                              pantalla de 1366 y empujaba el botón fuera de la tarjeta. -->
                         <ui:TextBox Grid.Column="0" PlaceholderText="…o contesta con tus palabras"
                                     Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" />
-                        <ui:Button Grid.Column="1" Content="Responder" Margin="{StaticResource Pad.XS.Left}" Appearance="Primary"
+                        <!-- SECUNDARIO (UI-0021). Había DOS primarios a la vez en esta vista
+                             —éste y «Enviar» del compositor— además de un aviso macizo y un
+                             peligro macizo. De los dos campos de respuesta solo uno lleva el
+                             primario, y es el compositor: es el canal que siempre está ahí. -->
+                        <ui:Button Grid.Column="1" Content="Responder" Margin="{StaticResource Pad.XS.Left}"
                                    Command="{Binding DataContext.AnswerFreeformCommand,
                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
                                    CommandParameter="{Binding}" />
@@ -296,8 +300,14 @@
                 <Button Content="Cerrar" Command="{Binding CloseCommand}"
                         ToolTip="Archiva esta pantalla y vuelve al hallazgo. No revierte nada: si el agente dejo ficheros tocados, te pregunta que hacer con ellos."
                         Visibility="{Binding CanClose, Converter={StaticResource BoolToVisibility}}" />
+                <!-- PERFILADA, NO MACIZA (UI-0039). D-999 §4 dejó la regla escrita —perfilado
+                     por defecto, macizo solo cuando la acción de ese color ES la acción de la
+                     vista— y aquí no se cumplía: en el cierre del arreglo «Descartar todo» seguía
+                     macizo arriba a la derecha mientras el paso siguiente real, «Verificar
+                     ahora», estaba abajo. El macizo se reserva para el diálogo de confirmación,
+                     que es donde destruir es lo que se ha venido a hacer. -->
                 <Button Content="Descartar todo" Command="{Binding DiscardAllCommand}"
-                        Style="{StaticResource Button.DangerSolid}"
+                        Style="{StaticResource Button.Danger}"
                         ToolTip="Devuelve cada fichero tocado a como estaba antes de esta sesión." />
             </StackPanel>
         </c:PageHeader>

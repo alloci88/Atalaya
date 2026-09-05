@@ -505,9 +505,14 @@
                                            Margin="{StaticResource Pad.XS.Top}" />
                                 <TextBlock Style="{StaticResource Setting.Help}"
                                            Text="Borra TODAS las aplicaciones del hub —las tuyas y las de tus compañeros— y deja esta máquina como recién instalada: sin clon del hub, sin ajustes y con la cuenta desconectada. El historial git del hub conserva una copia recuperable por un administrador." />
+                                <!-- PERFILADA, NO MACIZA (UI-0039). Era `#F2645E`/`#BA3630`
+                                     macizo, y acababa siendo lo más saturado de una pantalla cuyo
+                                     primario está apagado en gris: el rojo se llevaba la mirada
+                                     hacia lo único que no hay que pulsar. El macizo se reserva
+                                     para el diálogo que confirma (D-999 §4). -->
                                 <Button Content="Restablecimiento de fábrica"
                                         Command="{Binding FactoryResetCommand}"
-                                        Style="{StaticResource Button.DangerSolid}"
+                                        Style="{StaticResource Button.Danger}"
                                         HorizontalAlignment="Left"
                                         Margin="{StaticResource Pad.S.Top}" />
                             </StackPanel>
@@ -537,6 +542,12 @@
                     <Button Content="Guardar" Command="{Binding SaveCommand}"
                             Style="{StaticResource Button.Primary}"
                             IsEnabled="{Binding IsDirty}" />
+                    <!-- LA RAZÓN, PEGADA AL BOTÓN APAGADO (P-27, UI-0038). Estaba apagado en gris,
+                         bien contrastado, y sin decir por qué en ninguna de las cuatro secciones. -->
+                    <Border Style="{StaticResource Reason.Chip}"
+                            Visibility="{Binding IsDirty, Converter={StaticResource InverseBoolToVisibility}}">
+                        <TextBlock Text="no has cambiado nada" Style="{StaticResource Reason.Text}" />
+                    </Border>
                     <Button Content="Descartar" Command="{Binding DiscardCommand}"
                             Style="{StaticResource Button.Secondary}"
                             Visibility="{Binding IsDirty, Converter={StaticResource BoolToVisibility}}" />
@@ -552,10 +563,17 @@
                             Margin="{StaticResource Pad.RatesActions}"
                             c:Stack.Gap="{StaticResource Space.S}"
                             Visibility="{Binding ShowRates, Converter={StaticResource BoolToVisibility}}">
+                    <!-- LA MISMA REGLA QUE LAS OTRAS CUATRO SECCIONES (P-27, UI-0038): apagado
+                         mientras no haya nada que guardar, y con la razón al lado. -->
                     <Button Content="Guardar tarifas" Command="{Binding Rates.SaveCommand}"
-                            Style="{StaticResource Button.Primary}" />
+                            Style="{StaticResource Button.Primary}"
+                            IsEnabled="{Binding Rates.IsDirty}" />
                     <Button Content="Añadir modelo" Command="{Binding Rates.AddRowCommand}"
                             Style="{StaticResource Button.Secondary}" />
+                    <Border Style="{StaticResource Reason.Chip}"
+                            Visibility="{Binding Rates.HasSaveBlockedReason, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="{Binding Rates.SaveBlockedReason}" Style="{StaticResource Reason.Text}" />
+                    </Border>
                 </StackPanel>
             </Grid>
         </Grid>

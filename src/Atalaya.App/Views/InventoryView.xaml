@@ -390,8 +390,17 @@
                          acciones de VISTA, que es lo que aquella barra es. -->
                     <Button Content="{Binding AuditSelectionLabel}" Command="{Binding AuditSelectionCommand}"
                             Style="{StaticResource Button.Primary}"
-                            IsEnabled="{Binding CanAudit}" ToolTip="{Binding AuditDisabledTooltip}"
+                            IsEnabled="{Binding CanAuditSelection}" ToolTip="{Binding AuditDisabledTooltip}"
                             Margin="{StaticResource Pad.XXS}" VerticalAlignment="Center" />
+
+                    <!-- LA RAZÓN, PEGADA AL BOTÓN APAGADO (P-27, UI-0022). Un tooltip no vale: hay
+                         que saber que existe para verlo, y quien mira un botón apagado no sabe que
+                         hay nada que ver. -->
+                    <Border Style="{StaticResource Reason.Chip}"
+                            Margin="{StaticResource Pad.XXS}"
+                            Visibility="{Binding HasAuditBlockedReason, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="{Binding AuditBlockedReason}" Style="{StaticResource Reason.Text}" />
+                    </Border>
                 </WrapPanel>
             </DockPanel>
         </Border>

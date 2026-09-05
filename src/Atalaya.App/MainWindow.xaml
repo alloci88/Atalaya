@@ -256,6 +256,8 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
+                    <!-- EL CARRIL DE LOS AVISOS (UI-0012). Ver más abajo. -->
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
@@ -421,7 +423,7 @@
                 <!-- EL PIE: lo que está corriendo. La cuenta se ha mudado al raíl y el estado del
                      hub a la miga, así que aquí queda solo el trabajo en marcha, que es lo único
                      que de verdad hay que poder ver desde cualquier página. -->
-                <Border Grid.Row="4"
+                <Border Grid.Row="5"
                         Background="{DynamicResource Brush.Surface}"
                         BorderBrush="{DynamicResource Brush.Line}"
                         BorderThickness="{StaticResource Border.Top}"
@@ -453,19 +455,27 @@
                         </Button>
                     </StackPanel>
                 </Border>
-            </Grid>
 
-            <!-- Avisos efímeros (F5.3 §3): flotan SOBRE la página, caducan a los 8 s y se
-                 descartan con un clic. -->
-            <ItemsControl
-                Grid.Column="0"
-                Grid.ColumnSpan="2"
-                ItemsSource="{Binding Toasts}"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Bottom"
-                Margin="{StaticResource Pad.L}"
-                Focusable="False"
-                IsHitTestVisible="True">
+                <!-- AVISOS EFÍMEROS, EN SU PROPIO CARRIL (F5.3 §3, UI-0012).
+
+                     Flotaban sobre TODO, anclados abajo a la derecha de la ventana entera, y se
+                     plantaban encima del pie de la vista: en el cierre del arreglo tapaban una
+                     casilla de verificación con su rótulo —solo asomaba el borde superior del
+                     cuadrito y la mitad de arriba de las letras—, y a 1280 se llevaban por delante
+                     también «build/tests». Mientras el aviso estaba en pantalla, ese control no se
+                     veía ni se sabía qué decía. Un aviso informativo que el usuario no ha pedido no
+                     puede tapar un control.
+
+                     Ahora tienen una fila entre la página y el pie: EMPUJAN el contenido en vez de
+                     taparlo, se apilan hacia abajo y desaparecen sin dejar hueco —la fila mide Auto
+                     y sin avisos vale cero—. -->
+                <ItemsControl
+                    Grid.Row="4"
+                    ItemsSource="{Binding Toasts}"
+                    HorizontalAlignment="Right"
+                    Margin="{StaticResource Pad.L}"
+                    Focusable="False"
+                    IsHitTestVisible="True">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Button
@@ -503,8 +513,11 @@
                             </Border>
                         </Button>
                     </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+
+
         </Grid>
     </Grid>
 </ui:FluentWindow>

@@ -115,6 +115,8 @@ public sealed partial class OnboardingViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasBaseline))]
+    [NotifyPropertyChangedFor(nameof(BaselineBlockedReason))]
+    [NotifyPropertyChangedFor(nameof(HasBaselineBlockedReason))]
     private string _codeAuditPath = string.Empty;
 
     /// <summary>
@@ -179,6 +181,8 @@ public sealed partial class OnboardingViewModel : ViewModelBase
     private void DescribeBaseline(bool auto)
     {
         OnPropertyChanged(nameof(HasBaseline));
+        OnPropertyChanged(nameof(BaselineBlockedReason));
+        OnPropertyChanged(nameof(HasBaselineBlockedReason));
         if (CodeAuditPath.Length == 0)
         {
             BaselineNotice = string.Empty;
@@ -397,6 +401,9 @@ public sealed partial class OnboardingViewModel : ViewModelBase
     /// <summary>Escribir la URL ya basta para saber que la app existe: no hace falta llegar al final.</summary>
     partial void OnRepoUrlChanged(string value)
     {
+        OnPropertyChanged(nameof(CanCreate));
+        OnPropertyChanged(nameof(CreateBlockedReason));
+        OnPropertyChanged(nameof(HasCreateBlockedReason));
         Name = NameFromRepoUrl(value);
         DetectExistingApp();
         RepoError = string.Empty;
@@ -412,12 +419,48 @@ public sealed partial class OnboardingViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDuplicate))]
     [NotifyPropertyChangedFor(nameof(CanCreate))]
+    [NotifyPropertyChangedFor(nameof(CreateBlockedReason))]
+    [NotifyPropertyChangedFor(nameof(HasCreateBlockedReason))]
     private string _duplicateNotice = string.Empty;
 
     public bool IsDuplicate => DuplicateNotice.Length > 0;
 
-    /// <summary>Dar de alta se apaga mientras el repo elegido sea el de una app que ya existe.</summary>
-    public bool CanCreate => !IsDuplicate;
+    /// <summary>
+    /// POR QUÉ NO SE PUEDE CREAR AHORA MISMO. Vacío = se puede (P-27, UI-0038).
+    /// <para>
+    /// «Crear e inventariar» estaba encendido con el repositorio sin elegir: el primario de la
+    /// vista invitaba a pulsarlo antes de que hubiera nada que crear. La regla es la misma que en
+    /// Inventario y en Ajustes — se apaga cuando no puede hacer nada, y la razón va pegada a él.
+    /// </para>
+    /// </summary>
+    public string CreateBlockedReason => RepoUrl.Trim().Length == 0
+        ? "elige un repositorio"
+        : IsDuplicate ? "ese repositorio ya tiene aplicación" : string.Empty;
+
+    /// <summary>Dar de alta se apaga mientras falte el repositorio o ya exista su aplicación.</summary>
+    public bool CanCreate => CreateBlockedReason.Length == 0;
+
+    /// <summary>Y hay algo que decir al lado del botón apagado.</summary>
+    public bool HasCreateBlockedReason => CreateBlockedReason.Length > 0;
+
+    /// <summary>
+    /// Por qué no se puede importar el baseline. Vacío = se puede (UI-0038): la casilla estaba
+    /// deshabilitada y tampoco decía por qué.
+    /// </summary>
+    public string BaselineBlockedReason => HasBaseline
+        ? string.Empty
+        : "no se ha encontrado un CodeAudit en el clon";
+
+    /// <inheritdoc cref="BaselineBlockedReason"/>
+    public bool HasBaselineBlockedReason => !HasBaseline;
+
+    /// <summary>
+    /// Salir del formulario sin crear nada (UI-0041). No había ninguno: para salir hacía falta la
+    /// flecha o la miga, mientras el raíl marcaba «Portafolio» como entrada activa — la entrada
+    /// resaltada del menú era, literalmente, el botón que abandonaba el formulario sin avisar.
+    /// </summary>
+    [RelayCommand]
+    private Task Cancel() => _navigation.NavigateToAsync<PortfolioViewModel>();
 
     /// <summary>El botón del aviso: «Vincular mi clon» con el nombre de la app que ya existe.</summary>
     public string LinkExistingLabel => _existing is null

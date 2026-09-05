@@ -136,7 +136,7 @@ public sealed class ShellChromeTests
         // Hasta los avisos efímeros, que van DESPUÉS y flotan sobre la página: si el corte llegara
         // al final del fichero, este test se leería a sí mismo al revés — encontraría los toasts
         // dentro del «pie» y fallaría por la regla que viene a proteger.
-        int end = xaml.IndexOf("<!-- Avisos efímeros", start, StringComparison.Ordinal);
+        int end = xaml.IndexOf("<!-- AVISOS EFÍMEROS", start, StringComparison.Ordinal);
         end.Should().BeGreaterThan(start, "los avisos efímeros siguen declarados después del pie");
 
         return Markup(xaml[start..end]);

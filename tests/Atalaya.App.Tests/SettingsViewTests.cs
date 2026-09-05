@@ -314,8 +314,16 @@ public sealed class SettingsViewTests
         bloque.Should().Contain("{StaticResource Notice.Danger}",
             "el borde y el fondo de la zona son los del peligro del sistema, no un panel más");
         bloque.Should().Contain("FactoryResetCommand");
-        bloque.Should().Contain("{StaticResource Button.DangerSolid}",
-            "el botón final es rojo macizo: destruir ES la acción de este bloque");
+        // Y PERFILADO, NO MACIZO (UI-0039). Era `Button.DangerSolid` con el argumento de que
+        // «destruir ES la acción de este bloque»; medido en la pantalla, el argumento no se
+        // sostiene: el bloque no es la vista. El rojo macizo acababa siendo lo más saturado de
+        // una pantalla cuyo primario está apagado en gris, así que el ojo iba a lo único que no
+        // hay que pulsar. D-999 §4 reserva el macizo para cuando destruir es lo que se ha venido
+        // a hacer, y eso es el diálogo que confirma — donde sí es macizo.
+        bloque.Should().Contain("{StaticResource Button.Danger}",
+            "la destructiva se pinta igual en todas partes: perfilada");
+        bloque.Should().NotContain("{StaticResource Button.DangerSolid}",
+            "el macizo se queda para el diálogo de confirmación");
     }
 
     // ---------- Utilidades ----------

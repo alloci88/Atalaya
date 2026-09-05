@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using Atalaya.App.Services;
 using Atalaya.Domain.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -117,6 +117,64 @@ public sealed partial class ModelRatesViewModel : ObservableObject
     /// <summary>Hay modelos usados sin tarifa: los agregados que los incluyan son parciales.</summary>
     public bool HasMissing => MissingModels.Count > 0;
 
+    /// <summary>
+    /// LA MISMA REGLA QUE LAS OTRAS CUATRO SECCIONES DE AJUSTES (P-27, UI-0038).
+    /// <para>
+    /// «Guardar tarifas» estaba encendido sin que se hubiera tocado nada, mientras el «Guardar» de
+    /// las otras cuatro secciones se apagaba hasta que había cambios. Cuatro sitios y cuatro
+    /// criterios no es una regla: es lo que cada uno hizo el día que lo escribió.
+    /// </para>
+    /// <para>
+    /// La huella se toma de la tabla ENTERA, así que deshacer un cambio a mano vuelve a apagar el
+    /// botón — que es lo que «no hay nada que guardar» significa.
+    /// </para>
+    /// </summary>
+    [ObservableProperty] private bool _isDirty;
+
+    /// <inheritdoc cref="IsDirty"/>
+    public string SaveBlockedReason => IsDirty ? string.Empty : "no has cambiado nada";
+
+    /// <inheritdoc cref="IsDirty"/>
+    public bool HasSaveBlockedReason => !IsDirty;
+
+    partial void OnIsDirtyChanged(bool value)
+    {
+        OnPropertyChanged(nameof(SaveBlockedReason));
+        OnPropertyChanged(nameof(HasSaveBlockedReason));
+    }
+
+    /// <summary>La tabla tal cual está, en una cadena. Dos huellas iguales son dos tablas iguales.</summary>
+    private string Fingerprint() => string.Join(
+        "|",
+        Rows.Select(r => string.Join(
+            ";",
+            r.Model, r.Provider, r.Input, r.Output, r.CachedInput, r.CacheWrite, r.Note, r.EffectiveFrom))
+            .Append(Source));
+
+    /// <summary>Vuelve a comparar con lo guardado. La llama cualquier cambio de la tabla.</summary>
+    private void Recheck() => IsDirty = _savedFingerprint is not null && Fingerprint() != _savedFingerprint;
+
+    private string? _savedFingerprint;
+
+    private void Watch()
+    {
+        Rows.CollectionChanged -= OnRowsChanged;
+        Rows.CollectionChanged += OnRowsChanged;
+        foreach (RateRow row in Rows)
+        {
+            row.PropertyChanged -= OnRowChanged;
+            row.PropertyChanged += OnRowChanged;
+        }
+    }
+
+    private void OnRowsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        Watch();
+        Recheck();
+    }
+
+    private void OnRowChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => Recheck();
+
     private void Load()
     {
         Rows.Clear();
@@ -147,6 +205,9 @@ public sealed partial class ModelRatesViewModel : ObservableObject
         }
 
         RefreshMissing();
+        _savedFingerprint = Fingerprint();
+        Watch();
+        Recheck();
     }
 
     private void RefreshMissing()
@@ -235,6 +296,8 @@ public sealed partial class ModelRatesViewModel : ObservableObject
         Saved = true;
         Status = $"Guardadas {rates.Count} tarifas. Se aplican al recalcular: los costes que ya se "
             + "enseñan salen de estos números, así que cambian en cuanto se recarga Métricas.";
+        _savedFingerprint = Fingerprint();
+        Recheck();
         RefreshMissing();
     }
 }
