@@ -83,4 +83,33 @@ public static class Icons
 
     /// <summary>El plegado/desplegado del raíl.</summary>
     public static Geometry RailToggle { get; } = P("M4,6 L20,6 M4,12 L20,12 M4,18 L20,18");
+
+    /// <summary>Información: la «i» en su círculo. Es el icono de un aviso que no reclama nada.</summary>
+    public static Geometry Info { get; } = P(
+        "M3,12 A9,9 0 1 1 21,12 A9,9 0 1 1 3,12 Z M12,11 L12,16.5 M12,7.6 L12,7.8");
+
+    /// <summary>
+    /// Disponible: la marca de verificación. Va DENTRO de su círculo en la lista de estados de
+    /// Cuenta, porque las cinco filas tienen que ocupar lo mismo con estado o sin él.
+    /// </summary>
+    public static Geometry Check { get; } = P("M5,12.5 L10,17.5 L19,7");
+
+    /// <summary>No disponible: la cruz. Nunca sola: siempre con la palabra y el motivo debajo.</summary>
+    public static Geometry Cross { get; } = P("M6,6 L18,18 M18,6 L6,18");
+
+    /// <summary>
+    /// No comprobado: el círculo vacío. Es la forma de «todavía nada» que no se confunde con un
+    /// fallo — el punto relleno de antes se leía como una viñeta y no como un estado.
+    /// </summary>
+    public static Geometry Pending { get; } = P("M5,12 A7,7 0 1 1 19,12 A7,7 0 1 1 5,12 Z");
+
+    /// <summary>Un extra disponible que no está activado: el signo más, neutro por definición.</summary>
+    public static Geometry Plus { get; } = P("M12,5 L12,19 M5,12 L19,12");
+
+    /// <summary>
+    /// El icono de un estado vacío: una bandeja. Dice «aquí va algo y todavía no está», que es
+    /// distinto de un error y distinto de una advertencia.
+    /// </summary>
+    public static Geometry Empty { get; } = P(
+        "M4,13 L8,13 L9.5,16 L14.5,16 L16,13 L20,13 M4,13 L6.5,5.5 L17.5,5.5 L20,13 L20,18.5 L4,18.5 Z");
 }

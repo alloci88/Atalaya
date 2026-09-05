@@ -757,4 +757,323 @@
         <Setter Property="Margin" Value="{StaticResource Pad.XS.Right}" />
     </Style>
 
+    <!-- ================================================================ Estado vacío (Parte C)
+
+         Icono, UNA frase y —si la hay— la acción que lo llena. La plantilla del control
+         `EmptyState`, que existe para que los siete vacíos de Métricas e Informes sean el mismo
+         y no siete párrafos grises escritos a ojo.
+
+         Va CENTRADO en su panel y no pegado a la izquierda: un vacío alineado con el contenido se
+         lee como una fila más de ese contenido.
+    -->
+    <Style TargetType="{x:Type c:EmptyState}">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Padding" Value="{StaticResource Pad.Empty}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type c:EmptyState}">
+                    <StackPanel HorizontalAlignment="Center" Margin="{TemplateBinding Padding}">
+                        <Path Style="{StaticResource Icon}"
+                              Width="{StaticResource Icon.Size.Empty}"
+                              Height="{StaticResource Icon.Size.Empty}"
+                              Data="{TemplateBinding Glyph}"
+                              Stroke="{DynamicResource Brush.TextFaint}"
+                              HorizontalAlignment="Center" />
+                        <TextBlock Text="{TemplateBinding Message}"
+                                   Style="{StaticResource Text.Body}"
+                                   Foreground="{DynamicResource Brush.TextMuted}"
+                                   TextAlignment="Center"
+                                   MaxWidth="{StaticResource Read.MaxWidth}"
+                                   Margin="{StaticResource Pad.S.Top}"
+                                   HorizontalAlignment="Center" />
+                        <Button x:Name="Action"
+                                Content="{TemplateBinding ActionLabel}"
+                                Command="{TemplateBinding Command}"
+                                Style="{StaticResource Button.Secondary}"
+                                HorizontalAlignment="Center"
+                                Margin="{StaticResource Pad.M.Top}" />
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <!-- Sin rótulo no hay acción, y sin acción no hay botón: uno que no lleva
+                             a ningún sitio es peor que ninguno. -->
+                        <Trigger Property="ActionLabel" Value="">
+                            <Setter TargetName="Action" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ================================================================ La fila de un ajuste
+
+         UN ritmo para las cinco secciones de Ajustes: a la izquierda la etiqueta con UNA línea de
+         ayuda, a la derecha el control. Es un `DockPanel` y no un `Grid` con dos columnas escritas
+         quince veces — dos números que hay que mantener iguales a mano acaban siendo distintos
+         (D-966), y aquí serían treinta.
+    -->
+    <Style x:Key="Setting.Row" TargetType="DockPanel">
+        <Setter Property="LastChildFill" Value="True" />
+        <Setter Property="Margin" Value="{StaticResource Pad.L.Bottom}" />
+    </Style>
+
+    <Style x:Key="Setting.Label" TargetType="StackPanel">
+        <Setter Property="DockPanel.Dock" Value="Left" />
+        <Setter Property="Width" Value="{StaticResource Setting.LabelWidth}" />
+        <Setter Property="Margin" Value="{StaticResource Pad.L.Right}" />
+    </Style>
+
+    <!-- El nombre del ajuste: cuerpo, no título. Un ajuste no es una sección. -->
+    <Style x:Key="Setting.Name" TargetType="TextBlock" BasedOn="{StaticResource Text.Default}">
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- La ayuda: 14 px, NUNCA 11. Es la mitad literal de la queja original. -->
+    <Style x:Key="Setting.Help" TargetType="TextBlock" BasedOn="{StaticResource Text.Small}">
+        <Setter Property="Margin" Value="{StaticResource Pad.XXS.Top}" />
+    </Style>
+
+    <!-- El título de una sección de la vista. -->
+    <Style x:Key="Setting.SectionTitle" TargetType="TextBlock" BasedOn="{StaticResource Text.H3}">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+        <Setter Property="Margin" Value="{StaticResource Pad.M.Bottom}" />
+    </Style>
+
+    <!-- El «más» de una descripción larga. Es un enlace que abre lo que no cabe en una línea, y no
+         un párrafo de cuatro líneas a 11 px puesto siempre a la vista (principio 8). Sin relleno
+         horizontal, como todo enlace: dentro de un bloque hay UN margen izquierdo (D-983 §10). -->
+    <Style x:Key="Toggle.More" TargetType="ToggleButton">
+        <Setter Property="Content" Value="Más" />
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Small}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Primary.Ink}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Padding" Value="{StaticResource Pad.XXS.V}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <TextBlock x:Name="Label" Text="{TemplateBinding Content}"
+                               Margin="{TemplateBinding Padding}"
+                               FontSize="{TemplateBinding FontSize}"
+                               Foreground="{TemplateBinding Foreground}" />
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Label" Property="Text" Value="Menos" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Label" Property="TextDecorations" Value="Underline" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Lo que el «más» despliega. Mismo tamaño que la ayuda: no es letra pequeña, es texto que
+         estaba plegado. -->
+    <Style x:Key="Setting.More" TargetType="TextBlock" BasedOn="{StaticResource Text.Small}">
+        <Setter Property="Margin" Value="{StaticResource Pad.XXS.Top}" />
+    </Style>
+
+    <!-- Los campos con ancho digno. El numérico cabe cuatro cifras cómodas; el desplegable, el
+         nombre de un modelo con su multiplicador. -->
+    <Style x:Key="Field.Number" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+        <Setter Property="MinWidth" Value="{StaticResource Field.NumberWidth}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+
+    <!-- El desplegable NO lleva estilo propio, y es a propósito: un `Style TargetType="ComboBox"`
+         sin `BasedOn` SUSTITUYE al implícito de WPF-UI en vez de extenderlo, y el control se queda
+         sin su plantilla (es la lección del `ui:Card` de Métricas). Su ancho mínimo sale del token
+         `Field.SelectWidth`, escrito en el control. -->
+
+    <!-- ================================================================ La lista de secciones
+
+         El raíl de segundo nivel de Ajustes. Comparte la gramática del de primero —barra de «estás
+         aquí», fondo teñido y peso en la entrada activa— porque es el mismo gesto una capa más
+         abajo: si se pareciera a otra cosa, habría que aprenderlo dos veces.
+    -->
+    <Style x:Key="Setting.Section" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="{StaticResource Pad.Zero}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+        <Setter Property="Padding" Value="{StaticResource Pad.Row}" />
+        <Setter Property="Margin" Value="{StaticResource Pad.RailItemGap}" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="{Binding Source={StaticResource Rail.MarkerLane}}" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border x:Name="Marker" Grid.Column="0"
+                                Width="{StaticResource Rail.MarkerWidth}"
+                                HorizontalAlignment="Left"
+                                Margin="{StaticResource Pad.XXS}"
+                                CornerRadius="{StaticResource Radius.Pill}"
+                                Background="Transparent" />
+                        <Border x:Name="Chrome" Grid.Column="1"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="{StaticResource Radius.M}"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <TextBlock x:Name="Label" Text="{Binding Label}"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsActive}" Value="True">
+                            <Setter TargetName="Marker" Property="Background" Value="{DynamicResource Brush.Primary.Fill}" />
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Primary.Soft}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+                            <Setter TargetName="Label" Property="FontWeight" Value="SemiBold" />
+                        </DataTrigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Surface2}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ================================================================ Avisos, completos
+
+         `Notice` ya existía con sus tres niveles. Faltaba el INFORMATIVO —el que dice dónde está
+         algo que aquí no se edita— y faltaban el icono y la frase, que se escribían a mano en cada
+         sitio y por eso salían de tamaños distintos.
+    -->
+    <Style x:Key="Notice.Info" TargetType="Border" BasedOn="{StaticResource Notice}">
+        <Setter Property="Background" Value="{DynamicResource Brush.Primary.Soft}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary.Fill}" />
+    </Style>
+
+    <Style x:Key="Notice.Icon" TargetType="Path" BasedOn="{StaticResource Icon}">
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="Margin" Value="{StaticResource Pad.S.Right}" />
+    </Style>
+
+    <!-- La frase de un aviso NO se estira hasta el borde del monitor: un aviso es texto, y a 1.400
+         px una línea deja de poder seguirse. Se para en la medida de lectura y arranca a la
+         izquierda, pegada a su icono. -->
+    <Style x:Key="Notice.Text" TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="MaxWidth" Value="{StaticResource Read.MaxWidth}" />
+    </Style>
+
+    <!-- ================================================================ Estados de conexión
+
+         Icono + COLOR + PALABRA (F26 Parte C). Los tres, siempre: el color solo no se lee sin
+         distinguirlo, y el glifo solo —«…», «•»— no significa nada. Antes lo pintaban dos
+         converters con sus hexadecimales dentro, que es el defecto de D-971 en su forma pura: un
+         pincel ya resuelto no se entera de que el tema ha cambiado.
+
+         El estado «comprobando» no lleva glifo sino anillo: lo que está pasando se mueve.
+    -->
+    <Style x:Key="Check.Glyph" TargetType="Path" BasedOn="{StaticResource Icon}">
+        <Setter Property="Data" Value="{x:Static c:Icons.Pending}" />
+        <Setter Property="Stroke" Value="{DynamicResource Brush.TextFaint}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding State}" Value="Ok">
+                <Setter Property="Data" Value="{x:Static c:Icons.Check}" />
+                <Setter Property="Stroke" Value="{DynamicResource Brush.Success.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="Failed">
+                <Setter Property="Data" Value="{x:Static c:Icons.Cross}" />
+                <Setter Property="Stroke" Value="{DynamicResource Brush.Danger.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="Optional">
+                <Setter Property="Data" Value="{x:Static c:Icons.Plus}" />
+                <Setter Property="Stroke" Value="{DynamicResource Brush.TextMuted}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="Running">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- El anillo va DENTRO de este hueco y no lleva estilo propio, por la misma razón que el
+         desplegable: estilar un control de WPF-UI sin `BasedOn` le quita su plantilla. Lo que se
+         estila es el hueco —un `Grid`, que no tiene implícito de nadie— y con él su visibilidad. -->
+    <Style x:Key="Check.Spinner" TargetType="Grid">
+        <Setter Property="Width" Value="{StaticResource Icon.Size}" />
+        <Setter Property="Height" Value="{StaticResource Icon.Size}" />
+        <Setter Property="Visibility" Value="Collapsed" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding State}" Value="Running">
+                <Setter Property="Visibility" Value="Visible" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- LA PALABRA. Es un `Setter` por estado y no un converter porque un texto no es un pincel:
+         se puede fijar aquí, al lado del color al que acompaña, y así no hay dos sitios donde
+         mirar para saber qué dice una fila verde. -->
+    <!-- La palabra va al TAMAÑO DEL TÍTULO al que acompaña, no un punto por debajo: las dos
+         ocupan los dos extremos de la misma fila y no pueden compartir línea base con `Run`
+         (D-983 §9), así que lo que las alinea es medir igual. -->
+    <Style x:Key="Check.Word" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Text" Value="No comprobado" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextFaint}" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding State}" Value="Ok">
+                <Setter Property="Text" Value="Disponible" />
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Success.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="Failed">
+                <Setter Property="Text" Value="No disponible" />
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Danger.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="Running">
+                <Setter Property="Text" Value="Comprobando" />
+                <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="Optional">
+                <Setter Property="Text" Value="Disponible si lo activas" />
+                <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ================================================================ Celda de tabla
+
+         `Table.Header` y `Table.Row` ya estaban; faltaba la celda, que en Informes se escribía a
+         12 px con recorte. Un texto recortado no falla, MIENTE (D-975): la columna «Usuario»
+         enseñaba «Daniel Rodríguez d…» y no había forma de saber de quién era el informe.
+    -->
+    <Style x:Key="Table.Cell" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Small}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- La celda que identifica la fila: la que se lee primero al recorrer la tabla. -->
+    <Style x:Key="Table.Cell.Strong" TargetType="TextBlock" BasedOn="{StaticResource Table.Cell}">
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+    </Style>
+
+    <!-- ================================================================ Error de validación
+
+         La razón por la que un campo no vale, DEBAJO del campo y en peligro. Es la misma regla que
+         `Reason.Chip` aplica a un botón bloqueado (D-949): la razón va pegada a lo que la produce,
+         no en un tooltip ni en un toast que caduca a los ocho segundos.
+    -->
+    <Style x:Key="Text.Error" TargetType="TextBlock" BasedOn="{StaticResource Text.Small}">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Danger.Ink}" />
+        <Setter Property="Margin" Value="{StaticResource Pad.XXS.Top}" />
+    </Style>
+
 </ResourceDictionary>

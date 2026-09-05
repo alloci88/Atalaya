@@ -86,6 +86,8 @@
     <Thickness x:Key="Pad.M.Left">16,0,0,0</Thickness>
     <Thickness x:Key="Pad.XS.Left">8,0,0,0</Thickness>
     <Thickness x:Key="Pad.XS.Right">0,0,8,0</Thickness>
+    <Thickness x:Key="Pad.M.Right">0,0,16,0</Thickness>
+    <Thickness x:Key="Pad.L.Right">0,0,24,0</Thickness>
     <Thickness x:Key="Pad.XXS.Right">0,0,4,0</Thickness>
     <Thickness x:Key="Pad.XXS.Bottom">0,0,0,4</Thickness>
     <Thickness x:Key="Pad.S.Bottom">0,0,0,12</Thickness>
@@ -248,5 +250,50 @@
          mínimos sin robárselos a la lista. Plegar el raíl devuelve 172 px, que es justo lo que
          hace falta: reorganizar en vez de encoger (principio 1). -->
     <sys:Double x:Key="Rail.CollapseBelow">1120</sys:Double>
+
+    <!-- ============================================================ Vistas de sistema (Parte C)
+
+         LA FILA DE UN AJUSTE. La etiqueta y su línea de ayuda a la izquierda, el control a la
+         derecha, y las dos columnas iguales en las cinco secciones — que es lo que hace que
+         Ajustes tenga UN ritmo y no uno por bloque. 320 es lo que necesita la etiqueta más larga
+         («Sincronización del hub (segundos)») sin partirse en dos líneas.
+    -->
+    <sys:Double x:Key="Setting.LabelWidth">320</sys:Double>
+
+    <!-- La lista de secciones DENTRO de Ajustes. Es un raíl de segundo nivel y mide como el de
+         primero menos su canal de iconos: aquí el sitio lo manda el texto, no un icono. -->
+    <sys:Double x:Key="Setting.SectionsWidth">216</sys:Double>
+
+    <!-- El ancho MÍNIMO de un campo numérico: cuatro cifras cómodas. La caja del tope de pasadas
+         era un cuadrado de dos —un campo que no enseña lo que cabe dentro miente sobre lo que
+         acepta—, así que el mínimo se escribe una vez y lo cumplen todos. -->
+    <sys:Double x:Key="Field.NumberWidth">120</sys:Double>
+
+    <!-- Y el de un desplegable: lo que ocupa el nombre de un modelo con su multiplicador. -->
+    <sys:Double x:Key="Field.SelectWidth">300</sys:Double>
+
+    <!-- EL ANCHO DE UN FORMULARIO. Cuenta y Nueva aplicación no son listas: son dos columnas de
+         etiqueta y control, y estirarlas hasta 1480 dejaría la etiqueta y su control a medio metro
+         el uno del otro. Se centran en esto (principio 2: el espacio se reparte, y repartirlo aquí
+         es dejar aire a los dos lados y no todo a la derecha). -->
+    <sys:Double x:Key="Form.MaxWidth">920</sys:Double>
+
+    <!-- LA MEDIDA DE LECTURA de un informe: ~80-90 caracteres a 15 px. No baja más porque un
+         informe también lleva tablas, y una columna de 600 px las parte; el anexo técnico, que es
+         quien trae las más anchas, se lee en su propio panel a ancho completo. -->
+    <sys:Double x:Key="Read.MaxWidth">720</sys:Double>
+
+    <!-- El icono de un estado vacío: más grande que uno de línea y más pequeño que un dibujo.
+         Acompaña a la frase, no la sustituye. -->
+    <sys:Double x:Key="Icon.Size.Empty">40</sys:Double>
+
+    <!-- El avatar de la TARJETA de identidad de Cuenta. No es el del raíl (24): allí acompaña a
+         una fila de menú y aquí es la foto de quién eres, que es el dato de la tarjeta. -->
+    <sys:Double x:Key="Avatar.Size">56</sys:Double>
+
+    <!-- El aire de un estado vacío dentro de su panel, y el de la barra de guardar al pie de una
+         vista con formulario. -->
+    <Thickness x:Key="Pad.Empty">24,32</Thickness>
+    <Thickness x:Key="Pad.SaveBar">24,12</Thickness>
 
 </ResourceDictionary>
