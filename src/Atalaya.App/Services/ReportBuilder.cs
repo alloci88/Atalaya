@@ -5,6 +5,7 @@ using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 
 using Atalaya.Copilot;
+using Atalaya.App;
 
 namespace Atalaya.App.Services;
 
@@ -482,21 +483,16 @@ public static class ReportBuilder
     /// </summary>
     internal static string SeverityLine(IReadOnlyList<Finding> findings)
     {
-        (Severity Severity, string One, string Many)[] names =
-        {
-            (Severity.Critica, "Crítica", "Críticas"),
-            (Severity.Alta, "Alta", "Altas"),
-            (Severity.Media, "Media", "Medias"),
-            (Severity.Baja, "Baja", "Bajas"),
-        };
-
+        // Los nombres y la concordancia salen de `SeverityNames`, que es el único sitio donde se
+        // escriben (UI-0027): esta tabla los tenía duplicados, y una copia es cómo se llega a
+        // cinco rotulados distintos para cuatro niveles.
         var parts = new List<string>();
-        foreach ((Severity severity, string one, string many) in names)
+        foreach (Severity severity in new[] { Severity.Critica, Severity.Alta, Severity.Media, Severity.Baja })
         {
             int n = findings.Count(f => f.Severity == severity);
             if (n > 0)
             {
-                parts.Add($"{n} {(n == 1 ? one : many)}");
+                parts.Add(SeverityNames.Counted(severity, n));
             }
         }
 

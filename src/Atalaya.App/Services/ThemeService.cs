@@ -51,6 +51,15 @@ public static class ThemeService
 
         ApplicationThemeManager.Apply(IsLight(theme) ? ApplicationTheme.Light : ApplicationTheme.Dark);
 
+        // Y EL ACENTO, que hay que taparlo DESDE AQUÍ (UI-0018). `ApplicationThemeManager.Apply`
+        // llama por debajo al gestor de acento de WPF-UI, que toma el color de Windows y lo escribe
+        // en `Application.Resources` *directamente*, no en un diccionario fusionado. Los recursos
+        // propios de un `ResourceDictionary` ganan a los de sus fusionados, así que la paleta no
+        // puede alcanzarlos por mucho que declare las claves: de ahí salían el `#1E9BFA` del tema
+        // oscuro y el `#0071C7` del claro que se veían en los diálogos, los interruptores y los
+        // radios. Se sobrescriben aquí, y DESPUÉS de aplicar el tema, que es cuando existen.
+        ApplyAccent(app);
+
         // Y el panel de código (D-980). Su superficie sale de la paleta como todo lo demás, pero
         // el COLOREADO no es un recurso: es una definición de AvalonEdit que hay que reajustar
         // contra la superficie nueva. Se hace aquí porque éste es el único sitio que sabe cuándo
@@ -59,6 +68,45 @@ public static class ThemeService
             && app.TryFindResource("Color.Code.Ink") is System.Windows.Media.Color ink)
         {
             Controls.CodePalette.Apply(surface, ink);
+        }
+    }
+
+    /// <summary>
+    /// El acento de la aplicación es el primario de Atalaya, no el de Windows (UI-0018).
+    /// <para>
+    /// Son las claves que WPF-UI deriva del acento del sistema. Las escribe en
+    /// <c>Application.Resources</c> a pelo, así que sobrescribirlas ahí es la única forma de
+    /// ganarles; ponerlas en la paleta no basta. Se copian del color primario del tema que se
+    /// acaba de montar, de modo que cambian con él.
+    /// </para>
+    /// </summary>
+    private static void ApplyAccent(Application app)
+    {
+        if (app.TryFindResource("Color.Primary.Fill") is not System.Windows.Media.Color primary)
+        {
+            return;
+        }
+
+        var brush = new System.Windows.Media.SolidColorBrush(primary);
+        brush.Freeze();
+
+        foreach (string key in new[]
+        {
+            "SystemAccentColor", "SystemAccentColorPrimary",
+            "SystemAccentColorSecondary", "SystemAccentColorTertiary",
+        })
+        {
+            app.Resources[key] = primary;
+        }
+
+        foreach (string key in new[]
+        {
+            "SystemAccentBrush", "SystemAccentColorBrush", "SystemAccentColorPrimaryBrush",
+            "SystemAccentColorSecondaryBrush", "SystemAccentColorTertiaryBrush",
+            "PrimaryAccentBrush", "SecondaryAccentBrush", "TertiaryAccentBrush",
+        })
+        {
+            app.Resources[key] = brush;
         }
     }
 

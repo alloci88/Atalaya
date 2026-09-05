@@ -80,6 +80,10 @@
     <Color x:Key="Color.Warning.OnFill">#FFFFFF</Color>
     <Color x:Key="Color.Danger.OnFill">#FFFFFF</Color>
 
+    <!-- El pincel que faltaba (UI-0007). Ver la nota de `Palette.Dark.xaml`: la clave estaba y su
+         `SolidColorBrush` no, así que la tinta sobre color vivo caía al negro en los dos temas. -->
+    <SolidColorBrush x:Key="Brush.Ink.OnVivid" Color="{StaticResource Color.Ink.OnVivid}" />
+
     <Color x:Key="Color.Success.Fill">#1C7C35</Color>
     <Color x:Key="Color.Success.Ink">#1B7934</Color>
     <Color x:Key="Color.Success.Soft">#D7EFDF</Color>
@@ -142,12 +146,43 @@
     <Color x:Key="Color.Sev.Crit">#B8352F</Color>
     <Color x:Key="Color.Sev.High">#9E4E17</Color>
     <Color x:Key="Color.Sev.Med">#8D6200</Color>
-    <Color x:Key="Color.Sev.Low">#2E5FC3</Color>
+    <!-- Era #2E5FC3, EL MISMO VALOR que `Primary.Ink` (UI-0049): la cifra «20 Bajas» del
+         Portafolio y el enlace «Expandir todo» del Inventario se pintaban idénticos. Ver la nota
+         del tema oscuro. -->
+    <Color x:Key="Color.Sev.Low">#1D6382</Color>
 
     <SolidColorBrush x:Key="Brush.Sev.Crit" Color="{StaticResource Color.Sev.Crit}" />
     <SolidColorBrush x:Key="Brush.Sev.High" Color="{StaticResource Color.Sev.High}" />
     <SolidColorBrush x:Key="Brush.Sev.Med" Color="{StaticResource Color.Sev.Med}" />
     <SolidColorBrush x:Key="Brush.Sev.Low" Color="{StaticResource Color.Sev.Low}" />
+
+    <!-- Cuatro rellenos para cuatro niveles (P-05, UI-0034). Ver la nota del tema oscuro. -->
+    <Color x:Key="Color.Sev.Crit.Soft">#FBE0DC</Color>
+    <Color x:Key="Color.Sev.High.Soft">#FAE3CE</Color>
+    <Color x:Key="Color.Sev.Med.Soft">#F6EEC4</Color>
+    <Color x:Key="Color.Sev.Low.Soft">#D5EAF2</Color>
+
+    <SolidColorBrush x:Key="Brush.Sev.Crit.Soft" Color="{StaticResource Color.Sev.Crit.Soft}" />
+    <SolidColorBrush x:Key="Brush.Sev.High.Soft" Color="{StaticResource Color.Sev.High.Soft}" />
+    <SolidColorBrush x:Key="Brush.Sev.Med.Soft" Color="{StaticResource Color.Sev.Med.Soft}" />
+    <SolidColorBrush x:Key="Brush.Sev.Low.Soft" Color="{StaticResource Color.Sev.Low.Soft}" />
+
+    <!-- Los cuatro papeles del azul suave (UI-0049). Ver la nota del tema oscuro. -->
+    <Color x:Key="Color.Nav.Active">#D6E1F5</Color>
+    <Color x:Key="Color.Section.Active">#D6E1F5</Color>
+    <Color x:Key="Color.Info.Soft">#DEE8FA</Color>
+
+    <SolidColorBrush x:Key="Brush.Nav.Active" Color="{StaticResource Color.Nav.Active}" />
+    <SolidColorBrush x:Key="Brush.Section.Active" Color="{StaticResource Color.Section.Active}" />
+    <SolidColorBrush x:Key="Brush.Info.Soft" Color="{StaticResource Color.Info.Soft}" />
+
+    <!-- El anillo de foco (P-04, UI-0015). Ver la nota del tema oscuro: aquí el anillo es oscuro y
+         el hueco es la superficie, que es la inversión que el tema pide. -->
+    <Color x:Key="Color.Focus.Ring">#1B4FA8</Color>
+    <Color x:Key="Color.Focus.RingOffset">#FAF5EC</Color>
+
+    <SolidColorBrush x:Key="Brush.Focus.Ring" Color="{StaticResource Color.Focus.Ring}" />
+    <SolidColorBrush x:Key="Brush.Focus.RingOffset" Color="{StaticResource Color.Focus.RingOffset}" />
 
     <!-- ============================================================ El tema de WPF-UI, redirigido -->
     <SolidColorBrush x:Key="ApplicationBackgroundBrush" Color="{StaticResource Color.Bg}" />
@@ -177,5 +212,56 @@
     <SolidColorBrush x:Key="SubtleFillColorTransparentBrush" Color="Transparent" />
     <SolidColorBrush x:Key="SubtleFillColorSecondaryBrush" Color="{StaticResource Color.Surface2}" />
     <SolidColorBrush x:Key="SubtleFillColorTertiaryBrush" Color="{StaticResource Color.Bg}" />
+
+    <!-- ============================================================ El azul que no era el nuestro
+
+         TRES AZULES DICIENDO COSAS CERCANAS (UI-0018): `Primary.Fill` en los botones propios,
+         `Primary.Ink` en los enlaces y —en todo lo que sigue siendo un control de la librería— el
+         ACENTO DE WINDOWS, `#1E9BFA`/`#0071C7`, que esta paleta no declara en ninguna parte. En
+         Cuenta se veían los tres a la vez; en Ajustes › Apariencia, el interruptor encendido era
+         azul Windows a 40 px de un aviso azul de la paleta.
+
+         Arriba ya se redirigían `AccentFillColor*` y compañía, que es lo que leen los botones. Lo
+         que faltaba son las claves de los controles que se pintan de acento por su cuenta: el
+         interruptor, el anillo de progreso, la barra, el radio, la casilla y el foco de un campo.
+         Cada una tiene nombre propio en WPF-UI y ninguna pasa por `AccentFillColorDefaultBrush`.
+
+         (El acento que la librería escribe DIRECTAMENTE en `Application.Resources` no se puede
+         tapar desde aquí —los recursos propios de la aplicación ganan a sus diccionarios
+         fusionados—; de ése se encarga `ThemeService`.)
+    -->
+    <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="{StaticResource Color.Primary.Fill}" />
+    <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="{StaticResource Color.Primary.Fill}" />
+    <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="{StaticResource Color.Primary.Fill}" />
+    <SolidColorBrush x:Key="ToggleSwitchStrokeOnPointerOver" Color="{StaticResource Color.Primary.Fill}" />
+    <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="{StaticResource Color.Primary.OnFill}" />
+    <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="{StaticResource Color.Primary.OnFill}" />
+    <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="{StaticResource Color.Primary.OnFill}" />
+    <SolidColorBrush x:Key="ProgressBarIndicatorAnimatedFill" Color="{StaticResource Color.Primary.Fill}" />
+    <SolidColorBrush x:Key="ProgressRingForegroundThemeBrush" Color="{StaticResource Color.Primary.Fill}" />
+    <SolidColorBrush x:Key="RadioButtonOuterEllipseCheckedStroke" Color="{StaticResource Color.Primary.Fill}" />
+    <SolidColorBrush x:Key="RadioButtonOuterEllipseCheckedStrokePointerOver" Color="{StaticResource Color.Primary.Fill}" />
+    <SolidColorBrush x:Key="RadioButtonCheckGlyphFill" Color="{StaticResource Color.Primary.OnFill}" />
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillChecked" Color="{StaticResource Color.Primary.Fill}" />
+    <SolidColorBrush x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" Color="{StaticResource Color.Primary.Fill}" />
+    <SolidColorBrush x:Key="TextControlFocusedBorderBrush" Color="{StaticResource Color.Primary.Fill}" />
+    <SolidColorBrush x:Key="ComboBoxBorderBrushFocused" Color="{StaticResource Color.Primary.Fill}" />
+    <SolidColorBrush x:Key="AccentButtonBorderBrush" Color="{StaticResource Color.Primary.Fill}" />
+    <SolidColorBrush x:Key="AccentControlElevationBorderBrush" Color="{StaticResource Color.Primary.Fill}" />
+
+    <!-- El foco de los controles de la librería, con el mismo anillo que el nuestro (P-04). -->
+    <SolidColorBrush x:Key="FocusStrokeColorOuterBrush" Color="{StaticResource Color.Focus.Ring}" />
+    <SolidColorBrush x:Key="FocusStrokeColorInnerBrush" Color="{StaticResource Color.Focus.RingOffset}" />
+    <SolidColorBrush x:Key="KeyboardFocusBorderColorBrush" Color="{StaticResource Color.Focus.Ring}" />
+
+    <!-- Y las tres familias «de sistema» de WPF-UI, que la ficha y los diálogos usan para avisar:
+         eran los ámbar y rojos de fábrica, elegidos por Microsoft contra un fondo que no es el
+         nuestro. -->
+    <SolidColorBrush x:Key="SystemFillColorCautionBrush" Color="{StaticResource Color.Warning.Ink}" />
+    <SolidColorBrush x:Key="SystemFillColorCautionBackgroundBrush" Color="{StaticResource Color.Warning.Soft}" />
+    <SolidColorBrush x:Key="SystemFillColorCriticalBrush" Color="{StaticResource Color.Danger.Ink}" />
+    <SolidColorBrush x:Key="SystemFillColorCriticalBackgroundBrush" Color="{StaticResource Color.Danger.Soft}" />
+    <SolidColorBrush x:Key="SystemFillColorSuccessBrush" Color="{StaticResource Color.Success.Ink}" />
+    <SolidColorBrush x:Key="SystemFillColorSuccessBackgroundBrush" Color="{StaticResource Color.Success.Soft}" />
 
 </ResourceDictionary>

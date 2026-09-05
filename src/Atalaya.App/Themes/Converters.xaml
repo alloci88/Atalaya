@@ -12,11 +12,20 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="clr-namespace:Atalaya.App">
 
-    <local:SyncHealthToBrushConverter x:Key="SyncHealthToBrush" />
     <local:RailToggleTipConverter x:Key="RailToggleTip" />
-    <local:CloneLinkStateToBrushConverter x:Key="CloneLinkStateToBrush" />
-    <local:SeverityToBrushConverter x:Key="SeverityToBrush" />
-    <local:ThemeToBrushConverter x:Key="ThemeToBrush" />
+    <!-- SE FUERON NUEVE (UI-AUDIT-1 raíz 1). Todos hacían lo mismo: devolver un `SolidColorBrush`
+         con el hexadecimal escrito dentro —el verde `#3FB950`, el ámbar `#E0A030`, el azul
+         `#4A9EE0`—, el mismo en los dos temas «porque el estado es semántico». En el píxel no lo
+         era: ese verde es el del tema OSCURO y sobre el crema da 2,34:1. Además un converter
+         devuelve un pincel YA RESUELTO, así que al cambiar de tema la vista se quedaba con los
+         colores del anterior (D-971). Ahora el color de un estado lo pone un `DataTrigger` con
+         `DynamicResource` en `Styles.xaml`, que sí se reevalúa; los tintes CON ALFA siguen siendo
+         converters, y eso es correcto: se componen sobre la superficie que haya.
+
+         `SeverityToBrushConverter` sigue existiendo en el código para las GRÁFICAS —allí el color
+         identifica una serie y tiene que ser el mismo en los dos temas para poder comparar dos
+         capturas— pero ya no se declara aquí: una vista que lo pidiera volvería a tener dos juegos
+         de color de gravedad a la vez, que es UI-0010. -->
     <local:ThemeToLabelConverter x:Key="ThemeToLabel" />
     <local:DashedToArrayConverter x:Key="DashedToArray" />
     <local:SeverityToLabelConverter x:Key="SeverityToLabel" />
@@ -25,13 +34,7 @@
     <local:ProgressToPercentConverter x:Key="ProgressToPercent" />
     <local:MinusConverter x:Key="Minus" />
     <local:ActivityKindToWeightConverter x:Key="ActivityKindToWeight" />
-    <local:UnitRunStateToBrushConverter x:Key="UnitRunStateToBrush" />
     <local:SeverityToVisibilityConverter x:Key="SeverityToVisibility" />
-    <local:WarningToBrushConverter x:Key="WarningToBrush" />
-    <local:FindingStatusToBrushConverter x:Key="FindingStatusToBrush" />
-    <local:FindingStatusToFillConverter x:Key="FindingStatusToFill" />
-    <local:FindingEventToBrushConverter x:Key="FindingEventToBrush" />
-    <local:FixVoiceToBrushConverter x:Key="FixVoiceToBrush" />
     <local:FixVoiceToFillConverter x:Key="FixVoiceToFill" />
     <local:DiffKindToFillConverter x:Key="DiffKindToFill" />
     <local:SelectedTabToFillConverter x:Key="SelectedTabToFill" />

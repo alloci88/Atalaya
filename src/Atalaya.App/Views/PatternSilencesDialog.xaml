@@ -9,7 +9,19 @@
     ShowInTaskbar="False"
     WindowStartupLocation="CenterOwner"
     ExtendsContentIntoTitleBar="True">
-    <Grid>
+    <Grid Background="{DynamicResource Brush.Bg}">
+        <!-- EL DIÁLOGO PINTA SU FONDO (UI-0013). `FluentWindow` aplica su propio telón por
+             debajo —`#FAFAFA` en claro, `#202020` en oscuro, los colores de fábrica de
+             WPF-UI— y `MainWindow` lo tapa desde F26 §A justamente por eso; ninguno de los
+             nueve diálogos lo hacía, así que abrir uno enseñaba otro programa encima de una
+             aplicación crema. Y `PaletteContrastTests` pasaba en verde midiendo contra una
+             superficie que la aplicación nunca declara.
+
+             Y sus botones son los cuatro del sistema (UI-0014): el primario era el acento de
+             Windows —`#1E9BFA`/`#0071C7`— y no el azul de la casa, y el botón que confirma un
+             borrado irreversible no puede ser de otro color que el de Atalaya. El macizo de
+             peligro se queda AQUÍ y solo aquí (UI-0039): destruir es lo que se ha venido a
+             hacer a un diálogo de confirmación. -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -19,33 +31,33 @@
 
         <ui:TitleBar Grid.Row="0" Title="Patrones silenciados" ShowMaximize="False" ShowMinimize="False" />
 
-        <StackPanel Grid.Row="1" Margin="22,10,22,0">
-            <TextBlock Text="{Binding Title}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" />
-            <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" FontSize="12"
+        <StackPanel Grid.Row="1" Margin="{StaticResource Pad.DialogHead}">
+            <TextBlock Text="{Binding Title}" FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Meta}"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Text="Tipos de problema que las auditorías de esta aplicación no reportan. Cada patrón es una frase que viaja en el prompt del auditor: quien decide si un hallazgo es de ese tipo es él, mirando el código. Es por-aplicación: el mismo tipo puede ser crítico en otra." />
             <!-- F5.12 §4: el tope no bloquea nada. Muchos patrones activos no es un problema de
                  coste —la lista es despreciable frente a la unidad— sino el síntoma de que el
                  silenciado se está usando como taxonomía. -->
-            <Border CornerRadius="6" Padding="10,7" Margin="0,10,0,0"
+            <Border CornerRadius="6" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.S.Top}"
                     Background="{DynamicResource SubtleFillColorSecondaryBrush}"
                     Visibility="{Binding HasCapNotice, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock Text="{Binding CapNotice}" TextWrapping="Wrap" FontSize="12" />
+                <TextBlock Text="{Binding CapNotice}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" />
             </Border>
             <TextBlock Text="No hay ningún patrón silenciado en esta aplicación."
-                       Margin="0,14,0,0" Opacity="0.6" TextWrapping="Wrap"
+                       Margin="{StaticResource Pad.M.Top}" Foreground="{DynamicResource Brush.TextMuted}" TextWrapping="Wrap"
                        Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
         </StackPanel>
 
-        <ScrollViewer Grid.Row="2" Margin="22,12,14,0" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+        <ScrollViewer Grid.Row="2" Margin="{StaticResource Pad.DialogList}" VerticalScrollBarVisibility="Auto" Padding="{StaticResource Pad.XS.Right}">
             <ItemsControl ItemsSource="{Binding Rows}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border CornerRadius="6" Padding="12,10" Margin="0,0,0,8"
+                        <Border CornerRadius="6" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.XS.Bottom}"
                                 Background="{DynamicResource SubtleFillColorTertiaryBrush}">
                             <StackPanel>
                                 <TextBlock FontWeight="SemiBold" TextWrapping="Wrap"><Run Text="{Binding ShortId, Mode=OneWay}" FontFamily="Consolas" /><Run Text=" · " /><Run Text="{Binding Exemplar, Mode=OneWay}" /></TextBlock>
-                                <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
+                                <TextBlock Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                                     <Run Text="{Binding Reason, Mode=OneWay}" />
                                     <Run Text=" · por " /><Run Text="{Binding By, Mode=OneWay}" />
@@ -53,35 +65,35 @@
                                     <Run Text=" · " /><Run Text="{Binding Expiry, Mode=OneWay}" />
                                     <Run Text=" · " /><Run Text="{Binding State, Mode=OneWay}" FontWeight="SemiBold" />
                                 </TextBlock>
-                                <TextBlock Text="{Binding Notes}" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
+                                <TextBlock Text="{Binding Notes}" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                 <!-- Cuánto trabaja el patrón: el único dato con el que se decide si
                                      sigue mereciendo la pena o si se puso por un susto puntual. -->
-                                <TextBlock Text="{Binding Work}" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
+                                <TextBlock Text="{Binding Work}" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap"
                                            FontWeight="SemiBold" />
-                                <TextBlock Text="{Binding Effect}" Margin="0,2,0,0" FontSize="12" TextWrapping="Wrap"
+                                <TextBlock Text="{Binding Effect}" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
-                                <TextBlock Text="Ejemplar — la frase que lee el auditor" Margin="0,10,0,3" FontSize="12" />
+                                <TextBlock Text="Ejemplar — la frase que lee el auditor" Margin="{StaticResource Pad.S.Top}" FontSize="{StaticResource FontSize.Meta}" />
                                 <ui:TextBox Text="{Binding Exemplar, UpdateSourceTrigger=PropertyChanged}"
                                             HorizontalAlignment="Stretch" TextWrapping="Wrap" AcceptsReturn="False"
                                             ToolTip="Afinar el alcance es reescribir esta frase. El identificador corto no cambia." />
 
-                                <WrapPanel Margin="0,10,0,0" VerticalAlignment="Center">
-                                    <ui:Button Content="Guardar ejemplar" Margin="0,0,8,6"
+                                <WrapPanel Margin="{StaticResource Pad.S.Top}" VerticalAlignment="Center">
+                                    <Button Content="Guardar ejemplar" Margin="{StaticResource Pad.BarItem}"
                                                Command="{Binding DataContext.ApplyExemplarCommand,
                                                           RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                CommandParameter="{Binding}" />
                                     <TextBlock Text="Caducidad (días) — 0 = permanente" VerticalAlignment="Center"
-                                               Margin="0,0,8,6" FontSize="12" />
-                                    <ui:TextBox Width="90" Margin="0,0,8,6"
+                                               Margin="{StaticResource Pad.BarItem}" FontSize="{StaticResource FontSize.Meta}" />
+                                    <ui:TextBox Width="90" Margin="{StaticResource Pad.BarItem}"
                                                 Text="{Binding ExpiryDays, UpdateSourceTrigger=PropertyChanged}"
                                                 ToolTip="Días desde hoy. 0 deja el silencio permanente." />
-                                    <ui:Button Content="Aplicar caducidad" Margin="0,0,8,6"
+                                    <Button Content="Aplicar caducidad" Margin="{StaticResource Pad.BarItem}"
                                                Command="{Binding DataContext.ApplyExpiryCommand,
                                                           RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                CommandParameter="{Binding}" />
-                                    <ui:Button Content="Des-silenciar" Margin="0,0,0,6"
+                                    <Button Content="Des-silenciar" Margin="{StaticResource Pad.BarItem}"
                                                Command="{Binding DataContext.UnsilenceCommand,
                                                           RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                CommandParameter="{Binding}"
@@ -94,8 +106,8 @@
             </ItemsControl>
         </ScrollViewer>
 
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="22,12,22,18">
-            <ui:Button Content="Cerrar" Click="OnClose" Appearance="Secondary" />
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="{StaticResource Pad.DialogActions}">
+            <Button Content="Cerrar" Click="OnClose" />
         </StackPanel>
     </Grid>
 </ui:FluentWindow>

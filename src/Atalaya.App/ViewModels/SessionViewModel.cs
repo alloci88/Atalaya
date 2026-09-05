@@ -154,6 +154,24 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
 
     public int LowCount => Findings.Count(f => f.Severity == Severity.Baja);
 
+    /// <summary>
+    /// Los cuatro contadores del panel «Hallazgos», como pastillas del sistema (UI-0010).
+    /// <para>
+    /// Estaban escritos a mano en el XAML, cuatro <c>Border</c> con su color y su rótulo dentro
+    /// —«Crítica 2», con la cifra detrás—, y por eso podían salirse del sistema sin que nadie lo
+    /// notara: eran relleno vivo con una tinta que no resolvía. Como <see cref="SeverityChip"/>
+    /// llevan su nivel y su recuento, la pastilla del sistema se encarga del color, del rótulo en
+    /// plural y de apagarse cuando el recuento es cero.
+    /// </para>
+    /// <para>
+    /// Los cuatro se pintan SIEMPRE, también a cero: son el marcador de la sesión y desaparecer
+    /// haría que la fila cambiara de forma cada vez que aparece un hallazgo.
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<SeverityChip> SeverityChips => Enum.GetValues<Severity>()
+        .Select(s => new SeverityChip(s, Findings.Count(f => f.Severity == s)))
+        .ToList();
+
     /// <summary>La pantalla de cierre sustituye a la linea fugaz de estado cuando termina.</summary>
     public bool ShowSummary => !_live.IsRunning && _live.HasFinished && Summary.Count > 0;
 
@@ -331,5 +349,6 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
         OnPropertyChanged(nameof(HighCount));
         OnPropertyChanged(nameof(MediumCount));
         OnPropertyChanged(nameof(LowCount));
+        OnPropertyChanged(nameof(SeverityChips));
     }
 }

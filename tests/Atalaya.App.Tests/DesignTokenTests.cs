@@ -40,26 +40,19 @@ public sealed class DesignTokenTests
     /// no cambia: solo puede encoger.
     /// </para>
     /// </summary>
-    private static readonly HashSet<string> Pendientes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        // Parte B — las seis vistas de trabajo ya han pasado por el sistema.
+    private static readonly HashSet<string> Pendientes = new(StringComparer.OrdinalIgnoreCase);
 
-        // Parte C — las cinco vistas de sistema, también. `ModelRatesDialog.xaml` no está tachado:
-        // ha DESAPARECIDO, porque las tarifas son ahora una sección de Ajustes y un diálogo que no
-        // abre nadie es código muerto detrás de un registro del contenedor (D-981).
-
-        // Los DIÁLOGOS de las vistas de trabajo siguen pendientes: van con la vista que los abre y
-        // ninguna parte de F26 los ha tocado todavía.
-        "Views/AuditLaunchDialog.xaml",
-        "Views/CycleConfigDialog.xaml",
-        "Views/DeleteAppDialog.xaml",
-        "Views/DeletedUnitsDialog.xaml",
-        "Views/DirectivesDialog.xaml",
-        "Views/FactoryResetDialog.xaml",
-        "Views/LinkCloneDialog.xaml",
-        "Views/PatternSilencesDialog.xaml",
-        "Views/ThresholdsDialog.xaml",
-    };
+    // VACÍA desde UI-AUDIT-1 (raíz 2, UI-0013 y UI-0014). Los nueve diálogos eran lo único que
+    // quedaba, y la auditoría midió lo que costaba dejarlos fuera: el modo claro que D-948 decidió
+    // no existía dentro de ellos —ventana `#F2EBDD`, diálogo `#FAFAFA`, y las cajas de texto en
+    // blanco puro—, su primario era el acento de Windows, y en «Patrones silenciados» convivían
+    // las dos paletas: la página de fábrica con tarjetas crema, así que la tarjeta salía MÁS
+    // OSCURA que la página que la sostiene, al revés que en toda la aplicación.
+    //
+    // P-24 como criterio de orden: se convierten con la vista que los abre y no en una tanda
+    // aparte, porque un diálogo blanco encima de una pantalla crema no se lee como «esto todavía
+    // no está hecho» sino como «esto es de otro programa» — y los dos más blancos eran justo los
+    // dos que piden confirmar un borrado.
 
     /// <summary>
     /// Los ficheros del sistema visual: son los que DECLARAN los números, así que son los únicos

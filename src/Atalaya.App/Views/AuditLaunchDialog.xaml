@@ -10,7 +10,19 @@
     ShowInTaskbar="False"
     WindowStartupLocation="CenterOwner"
     ExtendsContentIntoTitleBar="True">
-    <Grid>
+    <Grid Background="{DynamicResource Brush.Bg}">
+        <!-- EL DIÁLOGO PINTA SU FONDO (UI-0013). `FluentWindow` aplica su propio telón por
+             debajo —`#FAFAFA` en claro, `#202020` en oscuro, los colores de fábrica de
+             WPF-UI— y `MainWindow` lo tapa desde F26 §A justamente por eso; ninguno de los
+             nueve diálogos lo hacía, así que abrir uno enseñaba otro programa encima de una
+             aplicación crema. Y `PaletteContrastTests` pasaba en verde midiendo contra una
+             superficie que la aplicación nunca declara.
+
+             Y sus botones son los cuatro del sistema (UI-0014): el primario era el acento de
+             Windows —`#1E9BFA`/`#0071C7`— y no el azul de la casa, y el botón que confirma un
+             borrado irreversible no puede ser de otro color que el de Atalaya. El macizo de
+             peligro se queda AQUÍ y solo aquí (UI-0039): destruir es lo que se ha venido a
+             hacer a un diálogo de confirmación. -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -18,69 +30,69 @@
 
         <ui:TitleBar Grid.Row="0" Title="Lanzar auditoría" ShowMaximize="False" ShowMinimize="False" />
 
-        <StackPanel Grid.Row="1" Margin="22,10,22,20">
+        <StackPanel Grid.Row="1" Margin="{StaticResource Pad.Dialog}">
             <TextBlock
                 Text="{Binding Headline}"
-                FontSize="17"
+                FontSize="{StaticResource FontSize.Lead}"
                 FontWeight="SemiBold"
                 TextWrapping="Wrap" />
 
             <TextBlock
                 Text="{Binding PassesLine}"
-                Margin="0,8,0,0"
+                Margin="{StaticResource Pad.XS.Top}"
                 TextWrapping="Wrap"
                 Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
             <!-- El cálculo, desglosado. Un total suelto no se puede contrastar. -->
             <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="6" Padding="12,10" Margin="0,14,0,0">
+                    BorderThickness="1" CornerRadius="6" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.M.Top}">
                 <StackPanel>
-                    <TextBlock Text="Estimación de coste" FontSize="11.5" FontWeight="SemiBold"
+                    <TextBlock Text="Estimación de coste" FontSize="{StaticResource FontSize.Meta}" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     <TextBlock x:Name="BreakdownText"
                                Text="{Binding Breakdown}"
                                TextWrapping="Wrap"
-                               FontSize="15" FontWeight="SemiBold"
-                               Margin="0,6,0,0" />
+                               FontSize="{StaticResource FontSize.Body}" FontWeight="SemiBold"
+                               Margin="{StaticResource Pad.XS.Top}" />
                     <TextBlock Text="{Binding Provenance}"
                                TextWrapping="Wrap"
-                               FontSize="11.5"
-                               Margin="0,8,0,0"
+                               FontSize="{StaticResource FontSize.Meta}"
+                               Margin="{StaticResource Pad.XS.Top}"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                 </StackPanel>
             </Border>
 
             <!-- F17 §5: el juez preferido del ciclo no es el de esta máquina. Una línea, y se
                  sigue: es preferencia, no imposición. -->
-            <StackPanel Orientation="Horizontal" Margin="0,10,0,0"
+            <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.S.Top}"
                         Visibility="{Binding HasPreferenceNotice, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock Text="⚠" Margin="0,0,7,0"
+                <TextBlock Text="⚠" Margin="{StaticResource Pad.XS.Right}"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
                 <TextBlock Text="{Binding PreferenceNotice}"
-                           TextWrapping="Wrap" FontSize="12" MaxWidth="440"
+                           TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" MaxWidth="440"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
             </StackPanel>
 
             <!-- Solo cuando el dato es flojo: si la media se sostiene, no hay nada que advertir. -->
-            <StackPanel Orientation="Horizontal" Margin="0,10,0,0"
+            <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.S.Top}"
                         Visibility="{Binding IsWeakEstimate, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock Text="⚠" Margin="0,0,7,0"
+                <TextBlock Text="⚠" Margin="{StaticResource Pad.XS.Right}"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
                 <TextBlock Text="El número es orientativo: hay poco gasto medido detrás."
-                           TextWrapping="Wrap" FontSize="12"
+                           TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
             </StackPanel>
 
             <TextBlock Text="{Binding Reassurance}"
                        TextWrapping="Wrap"
-                       FontSize="11.5"
-                       Margin="0,12,0,0"
+                       FontSize="{StaticResource FontSize.Meta}"
+                       Margin="{StaticResource Pad.S.Top}"
                        Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
 
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-                <ui:Button Content="Cancelar" Click="OnCancel" Appearance="Secondary" Margin="0,0,8,0" />
-                <ui:Button x:Name="ConfirmButton" Content="Confirmar y auditar" Click="OnConfirm" Appearance="Primary" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="{StaticResource Pad.M.Top}">
+                <Button Content="Cancelar" Click="OnCancel" Margin="{StaticResource Pad.XS.Right}" />
+                <Button x:Name="ConfirmButton" Content="Confirmar y auditar" Click="OnConfirm" Style="{StaticResource Button.Primary}" />
             </StackPanel>
         </StackPanel>
     </Grid>

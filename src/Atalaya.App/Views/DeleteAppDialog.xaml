@@ -10,7 +10,19 @@
     ShowInTaskbar="False"
     WindowStartupLocation="CenterOwner"
     ExtendsContentIntoTitleBar="True">
-    <Grid>
+    <Grid Background="{DynamicResource Brush.Bg}">
+        <!-- EL DIÁLOGO PINTA SU FONDO (UI-0013). `FluentWindow` aplica su propio telón por
+             debajo —`#FAFAFA` en claro, `#202020` en oscuro, los colores de fábrica de
+             WPF-UI— y `MainWindow` lo tapa desde F26 §A justamente por eso; ninguno de los
+             nueve diálogos lo hacía, así que abrir uno enseñaba otro programa encima de una
+             aplicación crema. Y `PaletteContrastTests` pasaba en verde midiendo contra una
+             superficie que la aplicación nunca declara.
+
+             Y sus botones son los cuatro del sistema (UI-0014): el primario era el acento de
+             Windows —`#1E9BFA`/`#0071C7`— y no el azul de la casa, y el botón que confirma un
+             borrado irreversible no puede ser de otro color que el de Atalaya. El macizo de
+             peligro se queda AQUÍ y solo aquí (UI-0039): destruir es lo que se ha venido a
+             hacer a un diálogo de confirmación. -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -18,36 +30,34 @@
 
         <ui:TitleBar Grid.Row="0" Title="Eliminar aplicación" ShowMaximize="False" ShowMinimize="False" />
 
-        <StackPanel Grid.Row="1" Margin="22,10,22,20">
+        <StackPanel Grid.Row="1" Margin="{StaticResource Pad.Dialog}">
             <TextBlock
                 Text="Esta acción no se puede deshacer desde Atalaya"
-                FontSize="17"
+                FontSize="{StaticResource FontSize.Lead}"
                 FontWeight="SemiBold"
-                Foreground="#E05050"
+                Foreground="{DynamicResource Brush.Danger.Ink}"
                 TextWrapping="Wrap" />
 
-            <Border Background="#22D13A3A" BorderBrush="#55D13A3A" BorderThickness="1"
-                    CornerRadius="6" Padding="12,10" Margin="0,12,0,0">
+            <Border Style="{StaticResource Notice.Danger}" Margin="{StaticResource Pad.S.Top}">
                 <StackPanel>
                     <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" />
                     <TextBlock Text="{Binding Reassurance}" TextWrapping="Wrap"
-                               Opacity="0.75" FontSize="12" Margin="0,8,0,0" />
+                               Foreground="{DynamicResource Brush.TextMuted}" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Top}" />
                 </StackPanel>
             </Border>
 
-            <TextBlock Text="{Binding Prompt}" Margin="0,16,0,6" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding Prompt}" Margin="{StaticResource Pad.M.Top}" TextWrapping="Wrap" />
             <ui:TextBox
                 x:Name="NameBox"
                 Text="{Binding TypedName, UpdateSourceTrigger=PropertyChanged}"
                 PlaceholderText="{Binding RequiredName}" />
 
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-                <ui:Button Content="Cancelar" Click="OnCancel" Appearance="Secondary" Margin="0,0,8,0" />
-                <ui:Button
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="{StaticResource Pad.M.Top}">
+                <Button Content="Cancelar" Click="OnCancel" Margin="{StaticResource Pad.XS.Right}" />
+                <Button
                     Content="Eliminar permanentemente"
                     Click="OnConfirm"
-                    Appearance="Danger"
-                    IsEnabled="{Binding CanDelete}" />
+                    IsEnabled="{Binding CanDelete}" Style="{StaticResource Button.DangerSolid}" />
             </StackPanel>
         </StackPanel>
     </Grid>

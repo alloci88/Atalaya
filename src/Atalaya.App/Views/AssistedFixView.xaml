@@ -39,7 +39,7 @@
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="{Binding Speaker}" FontSize="{StaticResource FontSize.Meta}" FontWeight="SemiBold"
                            VerticalAlignment="Top" Margin="{StaticResource Pad.XS}" TextAlignment="Right"
-                           Foreground="{Binding Voice, Converter={StaticResource FixVoiceToBrush}}" />
+                           Style="{StaticResource Voice.Name}" />
                 <Border Grid.Column="1" CornerRadius="6" Padding="{StaticResource Pad.Field}"
                         Background="{Binding Voice, Converter={StaticResource FixVoiceToFill}}">
                     <!-- Rejilla, NO StackPanel horizontal: un StackPanel horizontal mide a sus
@@ -608,9 +608,21 @@
                                     <TextBlock Text="Título" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XXS}"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     <ui:TextBox Text="{Binding Commit.Title, UpdateSourceTrigger=PropertyChanged}" />
+                                    <!-- El aviso de titulo largo, en ambar de la paleta y no en un
+                                         `#E0A030` escrito a mano que no cambia con el tema (UI-0008). -->
                                     <TextBlock Text="{Binding Commit.TitleLengthNote}" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XXS.Top}"
-                                               HorizontalAlignment="Right"
-                                               Foreground="{Binding Commit.TitleIsLong, Converter={StaticResource WarningToBrush}}" />
+                                               HorizontalAlignment="Right">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Commit.TitleIsLong}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.Ink}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                     <TextBlock Text="Descripción" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Top}"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     <ui:TextBox Text="{Binding Commit.Description, UpdateSourceTrigger=PropertyChanged}"

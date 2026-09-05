@@ -9,7 +9,19 @@
     ShowInTaskbar="False"
     WindowStartupLocation="CenterOwner"
     ExtendsContentIntoTitleBar="True">
-    <Grid>
+    <Grid Background="{DynamicResource Brush.Bg}">
+        <!-- EL DIÁLOGO PINTA SU FONDO (UI-0013). `FluentWindow` aplica su propio telón por
+             debajo —`#FAFAFA` en claro, `#202020` en oscuro, los colores de fábrica de
+             WPF-UI— y `MainWindow` lo tapa desde F26 §A justamente por eso; ninguno de los
+             nueve diálogos lo hacía, así que abrir uno enseñaba otro programa encima de una
+             aplicación crema. Y `PaletteContrastTests` pasaba en verde midiendo contra una
+             superficie que la aplicación nunca declara.
+
+             Y sus botones son los cuatro del sistema (UI-0014): el primario era el acento de
+             Windows —`#1E9BFA`/`#0071C7`— y no el azul de la casa, y el botón que confirma un
+             borrado irreversible no puede ser de otro color que el de Atalaya. El macizo de
+             peligro se queda AQUÍ y solo aquí (UI-0039): destruir es lo que se ha venido a
+             hacer a un diálogo de confirmación. -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -18,42 +30,42 @@
 
         <ui:TitleBar Grid.Row="0" Title="Umbrales de la aplicación" ShowMaximize="False" ShowMinimize="False" />
 
-        <ScrollViewer Grid.Row="1" Margin="22,10,14,0" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+        <ScrollViewer Grid.Row="1" Margin="{StaticResource Pad.DialogList}" VerticalScrollBarVisibility="Auto" Padding="{StaticResource Pad.XS.Right}">
             <StackPanel>
-                <TextBlock Text="{Binding AppName}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" />
-                <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" FontSize="12"
+                <TextBlock Text="{Binding AppName}" FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Meta}"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            Text="Esto es política de la aplicación, no una preferencia tuya: vive en el hub, vale para todo el equipo y queda en el historial de git quién la cambió y cuándo. Clasifica el inventario que todos compartís, así que si cada máquina llevara el suyo, la clasificación cambiaría con quien re-escaneara el último." />
 
-                <TextBlock Text="Unidad grande (LOC)" FontWeight="SemiBold" Margin="0,20,0,0" />
+                <TextBlock Text="Unidad grande (LOC)" FontWeight="SemiBold" Margin="{StaticResource Pad.L.Top}" />
                 <ui:TextBox Text="{Binding LargeUnitLoc, UpdateSourceTrigger=PropertyChanged}"
-                            Width="140" HorizontalAlignment="Left" Margin="0,6,0,0" />
-                <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" FontSize="11" Opacity="0.65"
+                            Width="140" HorizontalAlignment="Left" Margin="{StaticResource Pad.XS.Top}" />
+                <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.TextMuted}"
                            Text="A partir de cuántas líneas una unidad es demasiado grande para auditarla de una vez. Sale marcada «Grande»: no cuenta como pendiente y no impide cerrar el ciclo. Mínimo 1." />
 
-                <TextBlock Text="Unidad grande (caracteres)" FontWeight="SemiBold" Margin="0,18,0,0" />
+                <TextBlock Text="Unidad grande (caracteres)" FontWeight="SemiBold" Margin="{StaticResource Pad.M.Top}" />
                 <ui:TextBox Text="{Binding LargeUnitChars, UpdateSourceTrigger=PropertyChanged}"
-                            Width="140" HorizontalAlignment="Left" Margin="0,6,0,0" />
-                <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" FontSize="11" Opacity="0.65"
+                            Width="140" HorizontalAlignment="Left" Margin="{StaticResource Pad.XS.Top}" />
+                <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.TextMuted}"
                            Text="El mismo umbral por peso: una unidad de pocas líneas pero enorme tampoco cabe de una vez. Basta con superar UNO de los dos. Mínimo 1." />
 
-                <Border CornerRadius="6" Padding="12,10" Margin="0,20,0,0"
+                <Border CornerRadius="6" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.L.Top}"
                         Background="{DynamicResource SubtleFillColorTertiaryBrush}">
                     <StackPanel>
-                        <TextBlock Text="{Binding Preview}" TextWrapping="Wrap" FontSize="12" />
-                        <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" FontSize="11" Opacity="0.65"
+                        <TextBlock Text="{Binding Preview}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" />
+                        <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.TextMuted}"
                                    Text="La cuenta es por líneas, sobre el inventario que ya hay: el peso de cada unidad no se guarda, así que por caracteres no se puede contar sin volver a leer el clon." />
                     </StackPanel>
                 </Border>
 
-                <TextBlock TextWrapping="Wrap" Margin="0,16,0,0" FontSize="12"
+                <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.M.Top}" FontSize="{StaticResource FontSize.Meta}"
                            Text="Aplica al RE-ESCANEAR. Guardar no reclasifica nada por sí solo: el inventario que ya está escrito se queda como está hasta que alguien re-escanee esta aplicación —desde cualquier máquina, en cuanto tenga el cambio— o cierre o reinicie el ciclo." />
             </StackPanel>
         </ScrollViewer>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="22,16,22,18">
-            <ui:Button Content="Guardar umbrales" Appearance="Primary" Command="{Binding SaveCommand}" />
-            <ui:Button Content="Cerrar" Appearance="Secondary" Margin="8,0,0,0" Click="OnClose" />
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="{StaticResource Pad.DialogActions}">
+            <Button Content="Guardar umbrales" Command="{Binding SaveCommand}" Style="{StaticResource Button.Primary}" />
+            <Button Content="Cerrar" Margin="{StaticResource Pad.XS.Left}" Click="OnClose" />
         </StackPanel>
     </Grid>
 </ui:FluentWindow>

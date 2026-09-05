@@ -148,10 +148,8 @@
                                                 <TextBlock
                                                     Grid.Column="0"
                                                     Text="{Binding StateGlyph}"
-                                                    Foreground="{Binding State, Converter={StaticResource UnitRunStateToBrush}}"
-                                                    FontWeight="Bold"
-                                                    Width="18"
-                                                    VerticalAlignment="Center" />
+                                                    Style="{StaticResource Unit.State.Glyph}"
+                                                    Width="18" />
                                                 <!-- F5.3: SOLO el nombre del fichero. La ruta completa está en el
                                                      tooltip y en la cabecera de actividad; recortada aquí no
                                                      identificaba nada y se comía la columna. -->
@@ -163,12 +161,13 @@
                                                     TextTrimming="CharacterEllipsis"
                                                     VerticalAlignment="Center" />
                                             </Grid>
+                                            <!-- Lo apagado se apaga cambiando de COLOR, no bajando
+                                                 la opacidad (D-983 §4, UI-0008): con `Opacity=0.65`
+                                                 encima del verde, «completa» daba 1,66:1 en claro. -->
                                             <TextBlock
                                                 Text="{Binding StateLabel}"
-                                                FontSize="{StaticResource FontSize.Meta}"
-                                                Opacity="0.65"
-                                                Margin="{StaticResource Pad.M.Left}"
-                                                Foreground="{Binding State, Converter={StaticResource UnitRunStateToBrush}}" />
+                                                Style="{StaticResource Unit.State}"
+                                                Margin="{StaticResource Pad.M.Left}" />
                                             <TextBlock
                                                 Text="{Binding ResultLine}"
                                                 FontSize="{StaticResource FontSize.Meta}"
@@ -206,8 +205,8 @@
                                         <Expander.Header>
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="{Binding StateGlyph}"
-                                                           Foreground="{Binding State, Converter={StaticResource UnitRunStateToBrush}}"
-                                                           FontWeight="Bold" Margin="{StaticResource Pad.XS.Right}" />
+                                                           Style="{StaticResource Unit.State.Glyph}"
+                                                           Margin="{StaticResource Pad.XS.Right}" />
                                                 <TextBlock Text="{Binding Path}" ToolTip="{Binding Path}" FontWeight="SemiBold" />
                                             </StackPanel>
                                         </Expander.Header>
@@ -240,7 +239,7 @@
                                                                             Width="6" Height="6"
                                                                             Margin="{StaticResource Pad.XS}"
                                                                             VerticalAlignment="Top"
-                                                                            Background="{Binding Severity, Converter={StaticResource SeverityToBrush}}"
+                                                                            Style="{StaticResource Dot.Sev}"
                                                                             Visibility="{Binding Severity, Converter={StaticResource SeverityToVisibility}}" />
                                                                         <TextBlock
                                                                             Grid.Column="2"
@@ -271,28 +270,34 @@
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Margin="{StaticResource Pad.XS.Bottom}">
                         <TextBlock Text="Hallazgos" FontWeight="SemiBold" />
-                        <WrapPanel Margin="{StaticResource Pad.XS.Top}">
-                            <Border Background="{DynamicResource Brush.Sev.Crit}" CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS}">
-                                <TextBlock FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.Ink.OnVivid}">
-                                    <Run Text="Crítica " /><Run Text="{Binding CriticalCount, Mode=OneWay}" FontWeight="Bold" />
-                                </TextBlock>
-                            </Border>
-                            <Border Background="{DynamicResource Brush.Sev.High}" CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS}">
-                                <TextBlock FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.Ink.OnVivid}">
-                                    <Run Text="Alta " /><Run Text="{Binding HighCount, Mode=OneWay}" FontWeight="Bold" />
-                                </TextBlock>
-                            </Border>
-                            <Border Background="{DynamicResource Brush.Sev.Med}" CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS}">
-                                <TextBlock FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.Ink.OnVivid}">
-                                    <Run Text="Media " /><Run Text="{Binding MediumCount, Mode=OneWay}" FontWeight="Bold" />
-                                </TextBlock>
-                            </Border>
-                            <Border Background="{DynamicResource Brush.Sev.Low}" CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS}">
-                                <TextBlock FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.Ink.OnVivid}">
-                                    <Run Text="Baja " /><Run Text="{Binding LowCount, Mode=OneWay}" FontWeight="Bold" />
-                                </TextBlock>
-                            </Border>
-                        </WrapPanel>
+                        <!-- LOS CUATRO CONTADORES, con la pastilla del sistema (UI-0007, UI-0010,
+                             UI-0027, UI-0051). Eran cuatro rellenos VIVOS con la tinta
+                             `Brush.Ink.OnVivid` encima — un pincel que no existía, así que WPF
+                             caía al negro y las cuatro se quedaban por debajo de AA en el tema
+                             claro— y a 40 px de distancia los chips de la lista se pintaban con
+                             el OTRO juego de gravedad, el de las gráficas: la misma «Alta» en dos
+                             naranjas distintos en la misma columna. Ahora es la pastilla de
+                             siempre —relleno teñido y tinta de la escala—, la cifra va delante con
+                             su plural, y a cero se apaga.
+
+                             Se enlazan por `ItemsSource` y no a mano: es lo que permite que el
+                             estilo mire `Severity` y `Count` sin que la vista repita el color. -->
+                        <ItemsControl ItemsSource="{Binding SeverityChips}" Margin="{StaticResource Pad.XS.Top}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource Pill.Sev.Count}" MinWidth="0"
+                                            Margin="{StaticResource Pad.Chip}">
+                                        <TextBlock Text="{Binding Label}"
+                                                   Style="{StaticResource Pill.Sev.Count.Text}" />
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding Findings}">
@@ -301,9 +306,13 @@
                                     <Border Background="{DynamicResource Brush.Bg}" CornerRadius="5" Padding="{StaticResource Pad.ButtonSmall}" Margin="{StaticResource Pad.XXS.V}">
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal">
-                                                <Border CornerRadius="7" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XS.Right}"
-                                                        Background="{Binding Severity, Converter={StaticResource SeverityToBrush}}">
-                                                    <TextBlock Text="{Binding Severity}" FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.Ink.OnVivid}" />
+                                                <!-- El enum EN CRUDO escribía «Critica» sin tilde a 40 px
+                                                     de un «Crítica» bien puesto (UI-0027): pasa por
+                                                     `SeverityToLabel` como en el resto de la aplicación. -->
+                                                <Border Style="{StaticResource Pill.Sev}" MinWidth="0"
+                                                        Margin="{StaticResource Pad.XS.Right}">
+                                                    <TextBlock Text="{Binding Severity, Converter={StaticResource SeverityToLabel}}"
+                                                               Style="{StaticResource Pill.Sev.Text}" />
                                                 </Border>
                                                 <TextBlock Text="⚖" FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.Warning.Ink}" VerticalAlignment="Center"
                                                            ToolTip="Disputado: un auditor sostiene que nunca fue un defecto"
@@ -381,8 +390,17 @@
                                             Cursor="Hand">
                                             <TextBlock TextWrapping="Wrap">
                                                 <Run Text="{Binding Count, Mode=OneWay}"
-                                                     FontSize="{StaticResource FontSize.H3}" FontWeight="Bold"
-                                                     Foreground="{Binding IsWarning, Converter={StaticResource WarningToBrush}}" />
+                                                     FontSize="{StaticResource FontSize.H3}" FontWeight="Bold">
+                                                    <Run.Style>
+                                                        <Style TargetType="Run">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsWarning}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.Ink}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Run.Style>
+                                                </Run>
                                                 <Run Text="{Binding Label, Mode=OneWay}" FontWeight="SemiBold" />
                                                 <Run Text="·" Foreground="{DynamicResource Brush.TextFaint}" />
                                                 <Run Text="{Binding Explanation, Mode=OneWay}"
@@ -417,10 +435,10 @@
                                                                 </ItemsControl.ItemsPanel>
                                                                 <ItemsControl.ItemTemplate>
                                                                     <DataTemplate>
-                                                                        <Border CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS.Right}"
-                                                                                Background="{DynamicResource Brush.Surface2}">
-                                                                            <TextBlock Text="{Binding Label}" FontSize="{StaticResource FontSize.Meta}"
-                                                                                       Foreground="{Binding Severity, Converter={StaticResource SeverityToBrush}}" />
+                                                                        <Border Style="{StaticResource Pill.Sev}" MinWidth="0"
+                                                                                Margin="{StaticResource Pad.XXS.Right}">
+                                                                            <TextBlock Text="{Binding Label}"
+                                                                                       Style="{StaticResource Pill.Sev.Text}" />
                                                                         </Border>
                                                                     </DataTemplate>
                                                                 </ItemsControl.ItemTemplate>

@@ -10,7 +10,19 @@
     ShowInTaskbar="False"
     WindowStartupLocation="CenterOwner"
     ExtendsContentIntoTitleBar="True">
-    <Grid>
+    <Grid Background="{DynamicResource Brush.Bg}">
+        <!-- EL DIÁLOGO PINTA SU FONDO (UI-0013). `FluentWindow` aplica su propio telón por
+             debajo —`#FAFAFA` en claro, `#202020` en oscuro, los colores de fábrica de
+             WPF-UI— y `MainWindow` lo tapa desde F26 §A justamente por eso; ninguno de los
+             nueve diálogos lo hacía, así que abrir uno enseñaba otro programa encima de una
+             aplicación crema. Y `PaletteContrastTests` pasaba en verde midiendo contra una
+             superficie que la aplicación nunca declara.
+
+             Y sus botones son los cuatro del sistema (UI-0014): el primario era el acento de
+             Windows —`#1E9BFA`/`#0071C7`— y no el azul de la casa, y el botón que confirma un
+             borrado irreversible no puede ser de otro color que el de Atalaya. El macizo de
+             peligro se queda AQUÍ y solo aquí (UI-0039): destruir es lo que se ha venido a
+             hacer a un diálogo de confirmación. -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -18,52 +30,52 @@
 
         <ui:TitleBar Grid.Row="0" Title="{Binding Title}" ShowMaximize="False" ShowMinimize="False" />
 
-        <StackPanel Grid.Row="1" Margin="22,10,22,20">
-            <TextBlock Text="{Binding AppName}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" />
-            <TextBlock Text="{Binding Context}" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="12"
+        <StackPanel Grid.Row="1" Margin="{StaticResource Pad.Dialog}">
+            <TextBlock Text="{Binding AppName}" FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding Context}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Meta}"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
             <!-- La temática: el catálogo cerrado de la casa, General primero y marcada como
                  recomendada. La frase de debajo dice qué significa la elegida, para que nadie
                  elija «Rendimiento» pensando que también mira lo demás. -->
-            <TextBlock Text="Temática del ciclo" FontWeight="SemiBold" Margin="0,18,0,0" />
+            <TextBlock Text="Temática del ciclo" FontWeight="SemiBold" Margin="{StaticResource Pad.M.Top}" />
             <ComboBox ItemsSource="{Binding ThemeOptions}"
                       SelectedItem="{Binding SelectedTheme}"
                       DisplayMemberPath="Label"
-                      Width="300" HorizontalAlignment="Left" Margin="0,6,0,0"
+                      Width="300" HorizontalAlignment="Left" Margin="{StaticResource Pad.XS.Top}"
                       ToolTip="Qué busca el auditor en este ciclo. Fuera de la temática no se reporta nada." />
-            <TextBlock Text="{Binding ThemeDescription}" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="11.5"
-                       Opacity="0.75" />
+            <TextBlock Text="{Binding ThemeDescription}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Meta}"
+                       Foreground="{DynamicResource Brush.TextMuted}" />
 
             <!-- El aviso de cambiar con trabajo hecho. Solo aparece cuando cuesta algo. -->
-            <StackPanel Orientation="Horizontal" Margin="0,10,0,0"
+            <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.S.Top}"
                         Visibility="{Binding HasWarning, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock Text="⚠" Margin="0,0,7,0"
+                <TextBlock Text="⚠" Margin="{StaticResource Pad.XS.Right}"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
-                <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" FontSize="12" MaxWidth="470"
+                <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" MaxWidth="470"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
             </StackPanel>
 
             <!-- El modelo preferido: la lista del proveedor de quien configura. Es preferencia,
                  no imposición, y la frase lo dice. -->
-            <TextBlock FontWeight="SemiBold" Margin="0,18,0,0">
+            <TextBlock FontWeight="SemiBold" Margin="{StaticResource Pad.M.Top}">
                 <Run Text="Modelo preferido" /><Run Text=" · " /><Run Text="{Binding ProviderName}" FontWeight="Normal" />
             </TextBlock>
             <ComboBox ItemsSource="{Binding Models}"
                       SelectedValue="{Binding SelectedModelId}"
                       SelectedValuePath="Id"
                       DisplayMemberPath="Label"
-                      Width="300" HorizontalAlignment="Left" Margin="0,6,0,0"
+                      Width="300" HorizontalAlignment="Left" Margin="{StaticResource Pad.XS.Top}"
                       ToolTip="Con qué modelo prefiere el equipo auditar este ciclo. Quien lance con otro verá un aviso, y podrá seguir." />
-            <TextBlock Text="{Binding ModelsNotice}" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="11.5"
-                       Foreground="#E0A030"
+            <TextBlock Text="{Binding ModelsNotice}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Meta}"
+                       Foreground="{DynamicResource Brush.Warning.Ink}"
                        Visibility="{Binding HasModelsNotice, Converter={StaticResource BoolToVisibility}}" />
-            <TextBlock TextWrapping="Wrap" Margin="0,6,0,0" FontSize="11.5" Opacity="0.65"
+            <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.TextMuted}"
                        Text="Es una preferencia compartida, no una imposición: no todo el mundo tiene las dos casas. Al lanzar con otro proveedor o modelo, el diálogo de lanzar lo avisa y deja continuar." />
 
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-                <ui:Button Content="Cancelar" Click="OnCancel" Appearance="Secondary" Margin="0,0,8,0" />
-                <ui:Button x:Name="ApplyButton" Content="Aplicar" Click="OnApply" Appearance="Primary" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="{StaticResource Pad.M.Top}">
+                <Button Content="Cancelar" Click="OnCancel" Margin="{StaticResource Pad.XS.Right}" />
+                <Button x:Name="ApplyButton" Content="Aplicar" Click="OnApply" Style="{StaticResource Button.Primary}" />
             </StackPanel>
         </StackPanel>
     </Grid>

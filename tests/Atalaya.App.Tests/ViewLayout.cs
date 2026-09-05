@@ -66,6 +66,17 @@ internal static class ViewLayout
             string.Empty,
             RegexOptions.Singleline);
 
+        // Un `Setter` cuyo valor es un enlace o una brocha del tema se va ENTERO, y antes que
+        // nada. Si solo se le quitara el atributo —que es lo que hace el barrido de abajo— quedaría
+        // un `<Setter Property="Foreground" />` sin valor, y WPF no sella un Setter sin valor:
+        // «"{DependencyProperty.UnsetValue}" no es un valor válido». Pasó al sacar el color de los
+        // estados a `DataTrigger` (UI-0008): las vistas que declaran un estilo EN LÍNEA dejaron de
+        // poder montarse aquí, que es un defecto del medidor y no de la vista.
+        body = Regex.Replace(
+            body,
+            @"<Setter\b[^>]*Value=""\{(?:Binding|DynamicResource|TemplateBinding)[^""]*""[^>]*/>",
+            string.Empty);
+
         // Los enlaces y las brochas del tema se van: no hay view-model ni paleta montada. Los
         // ESTILOS también, porque viven en `Styles.xaml` y ése sí necesita la paleta.
         body = Regex.Replace(

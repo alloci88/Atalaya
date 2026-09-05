@@ -104,13 +104,12 @@
                          ciclo porque ES del ciclo: con otra lupa, «auditada» significa otra cosa. -->
                     <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.XS.Top}"
                                 c:Stack.Gap="{StaticResource Space.XS}">
-                        <Border Style="{StaticResource Pill}" VerticalAlignment="Center"
-                                Background="{Binding CycleTheme, Converter={StaticResource ThemeToBrush}, ConverterParameter=soft}"
-                                ToolTip="{Binding CycleThemeTooltip}">
-                            <TextBlock Text="{Binding CycleThemeLabel}" Style="{StaticResource Pill.Text}"
-                                       ToolTip="{Binding CycleThemeTooltip}"
-                                       Foreground="{Binding CycleTheme, Converter={StaticResource ThemeToBrush}}" />
-                        </Border>
+                        <!-- Texto y no pastilla, como en el Portafolio y por la misma razón
+                             (UI-0019, UI-0050): ver la nota de `PortfolioView.xaml`. -->
+                        <TextBlock Text="{Binding CycleThemeLabel}"
+                                   Style="{StaticResource Text.Small}"
+                                   VerticalAlignment="Center"
+                                   ToolTip="{Binding CycleThemeTooltip}" />
                         <Button Content="Configurar ciclo" Style="{StaticResource Button.Link}"
                                 VerticalAlignment="Center"
                                 Command="{Binding ConfigureCycleCommand}"
@@ -310,7 +309,7 @@
                             VerticalAlignment="Center" />
                     <Ellipse DockPanel.Dock="Left" Width="9" Height="9" VerticalAlignment="Center"
                              Margin="{StaticResource Pad.XS.Right}"
-                             Fill="{Binding Link.State, Converter={StaticResource CloneLinkStateToBrush}}" />
+                             Style="{StaticResource Dot.Link}" />
                     <TextBlock Text="{Binding ReadOnlyNotice}" TextWrapping="Wrap"
                                Foreground="{DynamicResource Brush.Text}"
                                VerticalAlignment="Center" />
@@ -401,9 +400,7 @@
              Solo cuando hay algo marcado. El contador es lo que se va a gastar, así que se lee
              antes de pulsar «Auditar selección» (F5.6 §3).
         -->
-        <Border Grid.Row="3" Grid.Column="0" Style="{StaticResource Notice}"
-                Background="{DynamicResource Brush.Primary.Soft}"
-                BorderBrush="{DynamicResource Brush.Primary.Fill}"
+        <Border Grid.Row="3" Grid.Column="0" Style="{StaticResource Notice.Info}"
                 Margin="{StaticResource Pad.S.Bottom}"
                 Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
             <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">

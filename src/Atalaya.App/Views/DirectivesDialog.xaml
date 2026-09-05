@@ -10,7 +10,19 @@
     ShowInTaskbar="False"
     WindowStartupLocation="CenterOwner"
     ExtendsContentIntoTitleBar="True">
-    <Grid>
+    <Grid Background="{DynamicResource Brush.Bg}">
+        <!-- EL DIÁLOGO PINTA SU FONDO (UI-0013). `FluentWindow` aplica su propio telón por
+             debajo —`#FAFAFA` en claro, `#202020` en oscuro, los colores de fábrica de
+             WPF-UI— y `MainWindow` lo tapa desde F26 §A justamente por eso; ninguno de los
+             nueve diálogos lo hacía, así que abrir uno enseñaba otro programa encima de una
+             aplicación crema. Y `PaletteContrastTests` pasaba en verde midiendo contra una
+             superficie que la aplicación nunca declara.
+
+             Y sus botones son los cuatro del sistema (UI-0014): el primario era el acento de
+             Windows —`#1E9BFA`/`#0071C7`— y no el azul de la casa, y el botón que confirma un
+             borrado irreversible no puede ser de otro color que el de Atalaya. El macizo de
+             peligro se queda AQUÍ y solo aquí (UI-0039): destruir es lo que se ha venido a
+             hacer a un diálogo de confirmación. -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -21,51 +33,51 @@
 
         <ui:TitleBar Grid.Row="0" Title="Directivas del proyecto" ShowMaximize="False" ShowMinimize="False" />
 
-        <StackPanel Grid.Row="1" Margin="22,10,22,0">
-            <TextBlock Text="{Binding Title}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" />
-            <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" FontSize="12"
+        <StackPanel Grid.Row="1" Margin="{StaticResource Pad.DialogHead}">
+            <TextBlock Text="{Binding Title}" FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Meta}"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Text="Los ficheros de convenciones que el equipo mantiene en el repositorio de esta aplicación: instrucciones de agentes, ADRs, specs, skills. Atalaya solo registra CUÁLES son; su contenido se lee del clon cada vez que se usa, así que siempre viaja la versión vigente. Informan el criterio del auditor y el estilo del arreglo — nunca cambian las reglas de la herramienta." />
 
             <!-- El presupuesto va arriba y siempre visible: es la decisión que condiciona todas las
                  demás de esta ventana. -->
-            <Border CornerRadius="6" Padding="10,7" Margin="0,10,0,0"
+            <Border CornerRadius="6" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.S.Top}"
                     Background="{DynamicResource SubtleFillColorSecondaryBrush}">
                 <StackPanel>
-                    <TextBlock Text="{Binding BudgetLabel}" TextWrapping="Wrap" FontSize="12" />
-                    <WrapPanel Margin="0,8,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding BudgetLabel}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" />
+                    <WrapPanel Margin="{StaticResource Pad.XS.Top}" VerticalAlignment="Center">
                         <TextBlock Text="Presupuesto (tokens) — 0 lo apaga" VerticalAlignment="Center"
-                                   Margin="0,0,8,0" FontSize="12" />
-                        <ui:TextBox Width="100" Margin="0,0,8,0"
+                                   Margin="{StaticResource Pad.XS.Right}" FontSize="{StaticResource FontSize.Meta}" />
+                        <ui:TextBox Width="100" Margin="{StaticResource Pad.XS.Right}"
                                     Text="{Binding Budget, UpdateSourceTrigger=PropertyChanged}"
                                     ToolTip="Es de ESTA aplicación y vive en su app.json: un monorepo lleno de ADRs no necesita lo mismo que un proyecto con un CLAUDE.md." />
-                        <ui:Button Content="Aplicar presupuesto" Command="{Binding ApplyBudgetCommand}" />
+                        <Button Content="Aplicar presupuesto" Command="{Binding ApplyBudgetCommand}" />
                     </WrapPanel>
                 </StackPanel>
             </Border>
 
-            <Border CornerRadius="6" Padding="10,7" Margin="0,8,0,0"
-                    Background="#22D2B036" BorderBrush="#55D2B036" BorderThickness="1"
+            <Border Margin="{StaticResource Pad.XS.Top}"
+                    Style="{StaticResource Notice.Warning}"
                     Visibility="{Binding IsOverBudget, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock Text="{Binding OverBudgetNotice}" TextWrapping="Wrap" FontSize="12" />
+                <TextBlock Text="{Binding OverBudgetNotice}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" />
             </Border>
 
-            <Border CornerRadius="6" Padding="10,7" Margin="0,8,0,0"
+            <Border CornerRadius="6" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.XS.Top}"
                     Background="{DynamicResource SubtleFillColorTertiaryBrush}"
                     Visibility="{Binding HasScanNotice, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock Text="{Binding ScanNotice}" TextWrapping="Wrap" FontSize="12" />
+                <TextBlock Text="{Binding ScanNotice}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" />
             </Border>
 
             <TextBlock Text="No se ha detectado ningún fichero de directivas y no hay ninguno registrado. Si este proyecto tiene convenciones escritas en otro sitio, añádelas a mano abajo."
-                       Margin="0,14,0,0" Opacity="0.6" TextWrapping="Wrap"
+                       Margin="{StaticResource Pad.M.Top}" Foreground="{DynamicResource Brush.TextMuted}" TextWrapping="Wrap"
                        Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
         </StackPanel>
 
-        <ScrollViewer Grid.Row="2" Margin="22,12,14,0" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+        <ScrollViewer Grid.Row="2" Margin="{StaticResource Pad.DialogList}" VerticalScrollBarVisibility="Auto" Padding="{StaticResource Pad.XS.Right}">
             <ItemsControl ItemsSource="{Binding Rows}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:DirectiveRow}">
-                        <Border CornerRadius="6" Padding="12,10" Margin="0,0,0,8"
+                        <Border CornerRadius="6" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.XS.Bottom}"
                                 Background="{DynamicResource SubtleFillColorTertiaryBrush}">
                             <StackPanel>
                                 <!-- La casilla ACTIVA la directiva. Un candidato nace siempre sin
@@ -76,54 +88,54 @@
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <CheckBox Grid.Column="0" IsChecked="{Binding IsActive}"
-                                              VerticalAlignment="Center" Margin="0,0,6,0"
+                                              VerticalAlignment="Center" Margin="{StaticResource Pad.XS.Right}"
                                               ToolTip="Marcada, su contenido viaja en los prompts del ámbito elegido." />
                                     <TextBlock Grid.Column="1" TextWrapping="Wrap" VerticalAlignment="Center"><Run Text="{Binding Path, Mode=OneWay}" FontFamily="Consolas" FontWeight="SemiBold" /></TextBlock>
                                 </Grid>
 
-                                <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
+                                <TextBlock Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                                     <Run Text="{Binding Kind, Mode=OneWay}" />
                                     <Run Text=" · " /><Run Text="{Binding Size, Mode=OneWay}" />
                                     <Run Text=" · " /><Run Text="{Binding Cost, Mode=OneWay}" />
                                     <Run Text=" · " /><Run Text="{Binding State, Mode=OneWay}" FontWeight="SemiBold" />
                                 </TextBlock>
-                                <TextBlock Text="{Binding Why}" Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap"
+                                <TextBlock Text="{Binding Why}" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
-                                <WrapPanel Margin="0,10,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="Ámbito" VerticalAlignment="Center" Margin="0,0,8,6" FontSize="12" />
-                                    <ComboBox Width="130" Margin="0,0,8,6"
+                                <WrapPanel Margin="{StaticResource Pad.S.Top}" VerticalAlignment="Center">
+                                    <TextBlock Text="Ámbito" VerticalAlignment="Center" Margin="{StaticResource Pad.BarItem}" FontSize="{StaticResource FontSize.Meta}" />
+                                    <ComboBox Width="130" Margin="{StaticResource Pad.BarItem}"
                                               ItemsSource="{Binding Source={x:Static vm:DirectiveRow.ScopeOptions}}"
                                               SelectedItem="{Binding SelectedScope}"
                                               ToolTip="Auditoría informa el criterio del auditor y del verificador; Arreglo, el estilo del arreglo; Ambos, los dos." />
-                                    <ui:Button Content="Guardar" Margin="0,0,8,6"
+                                    <Button Content="Guardar" Margin="{StaticResource Pad.BarItem}"
                                                Command="{Binding DataContext.ApplyScopeCommand,
                                                           RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                CommandParameter="{Binding}" />
-                                    <TextBlock Text="Prioridad" VerticalAlignment="Center" Margin="0,0,8,6" FontSize="12" />
-                                    <ui:TextBox Width="70" Margin="0,0,8,6"
+                                    <TextBlock Text="Prioridad" VerticalAlignment="Center" Margin="{StaticResource Pad.BarItem}" FontSize="{StaticResource FontSize.Meta}" />
+                                    <ui:TextBox Width="70" Margin="{StaticResource Pad.BarItem}"
                                                 Text="{Binding Order, UpdateSourceTrigger=PropertyChanged}"
                                                 ToolTip="Menor entra antes cuando el presupuesto no da para todo." />
-                                    <ui:Button Content="Aplicar prioridad" Margin="0,0,8,6"
+                                    <Button Content="Aplicar prioridad" Margin="{StaticResource Pad.BarItem}"
                                                Command="{Binding DataContext.ApplyOrderCommand,
                                                           RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                CommandParameter="{Binding}" />
-                                    <ui:Button Content="Vista previa" Margin="0,0,8,6" Appearance="Secondary"
+                                    <Button Content="Vista previa" Margin="{StaticResource Pad.BarItem}"
                                                Command="{Binding DataContext.TogglePreviewCommand,
                                                           RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                CommandParameter="{Binding}" />
-                                    <ui:Button Content="Retirar" Margin="0,0,0,6" Appearance="Secondary"
+                                    <Button Content="Retirar" Margin="{StaticResource Pad.BarItem}"
                                                Command="{Binding DataContext.ForgetCommand,
                                                           RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                CommandParameter="{Binding}"
                                                ToolTip="Quita la entrada del registro. Si el fichero sigue en el repositorio, volverá a proponerse como candidato." />
                                 </WrapPanel>
 
-                                <Border CornerRadius="4" Padding="10,8" Margin="0,8,0,0"
+                                <Border CornerRadius="4" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.XS.Top}"
                                         Background="{DynamicResource ControlFillColorDefaultBrush}"
                                         Visibility="{Binding IsPreviewOpen, Converter={StaticResource BoolToVisibility}}">
-                                    <TextBlock Text="{Binding Preview}" FontFamily="Consolas" FontSize="11"
+                                    <TextBlock Text="{Binding Preview}" FontFamily="Consolas" FontSize="{StaticResource FontSize.Meta}"
                                                TextWrapping="Wrap" MaxHeight="240" />
                                 </Border>
                             </StackPanel>
@@ -134,17 +146,17 @@
         </ScrollViewer>
 
         <!-- La válvula de F7 §1: lo que el catálogo no conoce se añade por su ruta. -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="22,12,22,0">
-            <TextBlock Text="Añadir a mano" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="12" />
-            <ui:TextBox Width="420" Margin="0,0,8,0"
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="{StaticResource Pad.DialogHead}">
+            <TextBlock Text="Añadir a mano" VerticalAlignment="Center" Margin="{StaticResource Pad.XS.Right}" FontSize="{StaticResource FontSize.Meta}" />
+            <ui:TextBox Width="420" Margin="{StaticResource Pad.XS.Right}"
                         PlaceholderText="ruta/relativa/al/repo/CONVENCIONES.md"
                         Text="{Binding ManualPath, UpdateSourceTrigger=PropertyChanged}"
                         ToolTip="Cualquier fichero del repositorio, aunque el catálogo no lo conozca." />
-            <ui:Button Content="Añadir" Command="{Binding AddManualCommand}" />
+            <Button Content="Añadir" Command="{Binding AddManualCommand}" />
         </StackPanel>
 
-        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="22,12,22,18">
-            <ui:Button Content="Cerrar" Click="OnClose" Appearance="Secondary" />
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="{StaticResource Pad.DialogActions}">
+            <Button Content="Cerrar" Click="OnClose" />
         </StackPanel>
     </Grid>
 </ui:FluentWindow>

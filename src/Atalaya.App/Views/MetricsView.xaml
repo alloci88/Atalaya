@@ -191,11 +191,15 @@
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border Style="{StaticResource Pill.Sev}" MinWidth="0"
+                                            <!-- La cifra DELANTE y el nombre concordado (UI-0027), y
+                                                 el cero en neutro (UI-0051): «Crít 0» seguía
+                                                 teñido de rojo diciendo que hay una crítica
+                                                 justo donde el número dice que no hay ninguna. -->
+                                            <Border Style="{StaticResource Pill.Sev.Count}" MinWidth="0"
                                                     Margin="{StaticResource Pad.Chip}">
-                                                <TextBlock Style="{StaticResource Pill.Sev.Text}">
-                                                    <Run Text="{Binding Label, Mode=OneWay}" />
+                                                <TextBlock Style="{StaticResource Pill.Sev.Count.Text}">
                                                     <Run Text="{Binding Count, Mode=OneWay}" FontWeight="Bold" />
+                                                    <Run Text="{Binding Label, Mode=OneWay}" />
                                                 </TextBlock>
                                             </Border>
                                         </DataTemplate>

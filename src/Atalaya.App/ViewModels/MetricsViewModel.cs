@@ -1031,14 +1031,20 @@ public sealed partial class MetricsViewModel : ViewModelBase
     // ---------- Colores ----------
 
     /// <summary>
-    /// Un chip por severidad. «Crít» va abreviado, igual que en la tarjeta del portafolio: son
-    /// cuatro chips en el ancho de un cuarto de fila, y «Crítica» los parte en dos líneas.
+    /// Un chip por severidad, con el rótulo que usa toda la aplicación (UI-0027).
+    /// <para>
+    /// Decía «Crít» —abreviado y solo aquí—, con la cifra detrás: era uno de los cinco rotulados
+    /// que los cuatro niveles tenían repartidos por la interfaz. Ahora el nombre lo da
+    /// <see cref="SeverityNames"/> concordado con el recuento, y la cifra va delante como en todas
+    /// las demás. Que «Críticas» sea más largo que «Crít» lo resuelve el sitio, no la abreviatura:
+    /// los chips envuelven en un <c>WrapPanel</c>.
+    /// </para>
     /// </summary>
     private static MetricsSeverityChip Chip(Severity severity, int count)
-    {
-        string label = severity == Severity.Critica ? "Crít" : SeverityNames.Display(severity);
-        return new MetricsSeverityChip(severity.ToString(), label, count);
-    }
+        => new(
+            severity.ToString(),
+            count == 1 ? SeverityNames.Display(severity) : SeverityNames.Plural(severity),
+            count);
 
     /// <summary>
     /// El color de una app: el del reparto del portafolio, en su paso para el tema vigente. Una

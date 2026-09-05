@@ -133,7 +133,7 @@
                                     <Ellipse Width="{StaticResource Rail.BadgeSize}"
                                              Height="{StaticResource Rail.BadgeSize}"
                                              HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                             Fill="{Binding SyncHealth, Converter={StaticResource SyncHealthToBrush}}"
+                                             Style="{StaticResource Dot.Sync}"
                                              Stroke="{DynamicResource Brush.Surface}"
                                              StrokeThickness="{StaticResource Rail.BadgeRing}" />
                                 </Grid>

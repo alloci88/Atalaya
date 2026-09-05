@@ -9,7 +9,6 @@ using Atalaya.Storage.Sync;
 
 namespace Atalaya.App;
 
-/// <summary>Sync indicator colour (§3): green/amber/red.</summary>
 /// <summary>
 /// El tooltip del botón de plegar el raíl: dice lo que va a HACER, no cómo está (F26 §A retoque).
 /// «Plegar o desplegar» describe un interruptor, y quien lo mira quiere saber qué pasa si lo pulsa.
@@ -23,43 +22,25 @@ public sealed class RailToggleTipConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
-public sealed class SyncHealthToBrushConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
-    {
-        SyncHealth.Green => new SolidColorBrush(Color.FromRgb(0x3F, 0xB9, 0x50)),
-        SyncHealth.Amber => new SolidColorBrush(Color.FromRgb(0xE0, 0xA0, 0x30)),
-        _ => new SolidColorBrush(Color.FromRgb(0xE0, 0x50, 0x50)),
-    };
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}
+// EL COLOR DE UN ESTADO SALE DE LA PALETA, y por eso aquí ya no hay nueve converters de color
+// (UI-AUDIT-1 raíz 1). Se fueron los del piloto de sync, el del vínculo local, el del estado de una
+// unidad, el del aviso, los dos del estado de un hallazgo, el de un evento del historial, el de
+// quién habla en el arreglo y el de la lupa del ciclo. Todos devolvían un `SolidColorBrush` con el
+// hexadecimal escrito dentro —el mismo en los dos temas «porque el estado es semántico»— y todos
+// fallaban por lo mismo: ese verde #3FB950 es el del tema OSCURO y sobre el crema del claro da
+// 2,34:1. Su sitio es un `DataTrigger` con `DynamicResource` en `Styles.xaml`, que además se
+// reevalúa al cambiar de tema (D-971).
+//
+// Los que quedan devuelven o un TINTE CON ALFA —que se compone sobre la superficie que haya y por
+// eso no depende del tema— o algo que no es un color.
 
 /// <summary>
-/// El piloto de vinculación local (F5.8 §1): verde, ámbar, rojo. Mismos tres colores y misma
-/// forma —un <c>Ellipse</c>— que el indicador de sync de la barra inferior, porque significan lo
-/// mismo: si esto está en verde, se puede trabajar.
-/// <para>
-/// Va con colores explícitos y no con los del tema por la razón de <c>FindingStatusToBrush</c>:
-/// el estado es semántico y significa lo mismo en claro que en oscuro. Y el color NUNCA va solo —
-/// la etiqueta con el nombre del estado se pinta al lado, para quien no lo distinga.
-/// </para>
+/// El color de una gravedad EN UNA GRÁFICA (rúbrica §0). Es el único sitio donde una severidad no
+/// se pinta con la escala de la paleta, y es a propósito: allí el color identifica una serie y
+/// tiene que ser el mismo en los dos temas para poder comparar dos capturas. Por eso ya no se
+/// declara en <c>Themes/Converters.xaml</c> — una vista que lo pidiera volvería a tener dos juegos
+/// de color de gravedad a la vez, que es UI-0010.
 /// </summary>
-public sealed class CloneLinkStateToBrushConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
-    {
-        CloneLinkState.Vinculada => new SolidColorBrush(Color.FromRgb(0x3F, 0xB9, 0x50)),
-        CloneLinkState.Problema => new SolidColorBrush(Color.FromRgb(0xE0, 0xA0, 0x30)),
-        _ => new SolidColorBrush(Color.FromRgb(0xE0, 0x50, 0x50)),
-    };
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}
-
-/// <summary>Severity colour for finding badges (rúbrica §0).</summary>
 public sealed class SeverityToBrushConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -74,6 +55,14 @@ public sealed class SeverityToBrushConverter : IValueConverter
 /// El nombre de una severidad tal y como se ESCRIBE en la interfaz. El identificador de la
 /// enumeración va sin tilde porque C# no las lleva; volcarlo con <c>ToString()</c> en una etiqueta
 /// escribía «Critica» en una interfaz en castellano. La enumeración es del modelo, no del usuario.
+/// <para>
+/// <b>UN rótulo por nivel, y la cifra siempre en el mismo lado</b> (UI-0027). Los cuatro niveles se
+/// rotulaban de cinco maneras —«Críticas · Altas» en Portafolio, «15 Alta» en Hallazgos, «Crít 0»
+/// en Métricas, «3 Altas» en el informe y «Critica» sin tilde en la sesión, que era el enum en
+/// crudo—. Aquí están las tres formas que existen y no hay una cuarta: el nombre solo
+/// (<see cref="Display"/>), el nombre en plural (<see cref="Plural"/>) y el recuento con su
+/// nombre (<see cref="Counted"/>), que pone la cifra delante y concuerda el número.
+/// </para>
 /// </summary>
 public static class SeverityNames
 {
@@ -84,6 +73,22 @@ public static class SeverityNames
         Severity.Media => "Media",
         _ => "Baja",
     };
+
+    /// <summary>El nombre en plural: el que acompaña a un recuento distinto de uno.</summary>
+    public static string Plural(Severity severity) => severity switch
+    {
+        Severity.Critica => "Críticas",
+        Severity.Alta => "Altas",
+        Severity.Media => "Medias",
+        _ => "Bajas",
+    };
+
+    /// <summary>
+    /// «3 Altas», «1 Crítica», «0 Bajas». La cifra DELANTE, siempre, y el nombre concordado: es la
+    /// única forma en la que un recuento de gravedad se escribe en toda la aplicación.
+    /// </summary>
+    public static string Counted(Severity severity, int count)
+        => $"{count} {(count == 1 ? Display(severity) : Plural(severity))}";
 }
 
 /// <inheritdoc cref="SeverityNames"/>
@@ -189,106 +194,11 @@ public sealed class ActivityKindToWeightConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
-/// <summary>Color del estado de una unidad en la cola de V5.</summary>
-public sealed class UnitRunStateToBrushConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
-    {
-        UnitRunState.Auditando => new SolidColorBrush(Color.FromRgb(0x4A, 0x9E, 0xE0)),
-        UnitRunState.Completa => new SolidColorBrush(Color.FromRgb(0x3F, 0xB9, 0x50)),
-        UnitRunState.Incompleta => new SolidColorBrush(Color.FromRgb(0xE0, 0xA0, 0x30)),
-        UnitRunState.CoberturaIncompleta => new SolidColorBrush(Color.FromRgb(0xE0, 0xA0, 0x30)),
-        UnitRunState.CortadaPorPresupuesto => new SolidColorBrush(Color.FromRgb(0xD1, 0x3A, 0x3A)),
-        UnitRunState.Detenida => new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99)),
-        UnitRunState.NoLocalizada => new SolidColorBrush(Color.FromRgb(0xD1, 0x3A, 0x3A)),
-        _ => new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
-    };
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}
-
 /// <summary>Una severidad nula (evento que no narra un hallazgo) no pinta chip.</summary>
 public sealed class SeverityToVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         => value is Severity ? Visibility.Visible : Visibility.Collapsed;
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}
-
-/// <summary>
-/// Resalta en ámbar las líneas del resumen que piden atención.
-/// <para>
-/// El ámbar es explícito porque es semántico: significa lo mismo en claro que en oscuro. Lo que NO
-/// se decide aquí es el color de las demás — se devuelve <see cref="DependencyProperty.UnsetValue"/>
-/// para que hereden el del tema. Antes era un <c>#DDDDDD</c> fijo, elegido cuando la pantalla de
-/// cierre era un panel casi negro; al pasar ésta a seguir el tema, ese gris claro se volvía
-/// invisible sobre fondo claro. Un color de texto que solo vale para un tema no es un color: es una
-/// suposición sobre el fondo.
-/// </para>
-/// </summary>
-public sealed class WarningToBrushConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => value is true
-            ? new SolidColorBrush(Color.FromRgb(0xE0, 0xA0, 0x30))
-            : DependencyProperty.UnsetValue;
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}
-
-/// <summary>
-/// El color del chip de estado de la ficha (F5.5 §2): azul lo activo, verde lo resuelto, gris lo
-/// silenciado. Va con colores explícitos y no con los del tema porque el estado es semántico —
-/// significa lo mismo en claro que en oscuro— y porque son los mismos tres colores que ya usan el
-/// indicador de sync y la cola de V5.
-/// </summary>
-public sealed class FindingStatusToBrushConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
-    {
-        FindingStatus.Activo => new SolidColorBrush(Color.FromRgb(0x4A, 0x9E, 0xE0)),
-        FindingStatus.Resuelto => new SolidColorBrush(Color.FromRgb(0x3F, 0xB9, 0x50)),
-        _ => new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0xA2)),
-    };
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}
-
-/// <inheritdoc cref="FindingStatusToBrushConverter"/>
-/// <remarks>El mismo color al 12 %: el relleno del chip, que nunca compite con el texto.</remarks>
-public sealed class FindingStatusToFillConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
-    {
-        FindingStatus.Activo => new SolidColorBrush(Color.FromArgb(0x20, 0x4A, 0x9E, 0xE0)),
-        FindingStatus.Resuelto => new SolidColorBrush(Color.FromArgb(0x20, 0x3F, 0xB9, 0x50)),
-        _ => new SolidColorBrush(Color.FromArgb(0x20, 0x9A, 0x9A, 0xA2)),
-    };
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}
-
-/// <summary>
-/// El color del glifo de un evento del historial (F5.5 §5): la línea de tiempo se recorre con la
-/// vista, y el color hace que «Resuelto» y «Reabierto» se distingan sin leerlos.
-/// </summary>
-public sealed class FindingEventToBrushConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
-    {
-        FindingEvent.Resolved => new SolidColorBrush(Color.FromRgb(0x3F, 0xB9, 0x50)),
-        FindingEvent.Reopened or FindingEvent.Recurrence => new SolidColorBrush(Color.FromRgb(0xE0, 0x7A, 0x2B)),
-        FindingEvent.Disputed or FindingEvent.DisputeCleared => new SolidColorBrush(Color.FromRgb(0xE0, 0xA0, 0x30)),
-        FindingEvent.Detected => new SolidColorBrush(Color.FromRgb(0x4A, 0x9E, 0xE0)),
-        FindingEvent.SeverityChanged => new SolidColorBrush(Color.FromRgb(0xD2, 0xB0, 0x36)),
-        _ => new SolidColorBrush(Color.FromRgb(0x8C, 0x8C, 0x96)),
-    };
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
@@ -302,27 +212,6 @@ public sealed class DashedToArrayConverter : IValueConverter
 {
     public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
         => value is true ? new DoubleCollection(new double[] { 2, 1.5 }) : null;
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}
-
-// ====================================================================== F6.9 · Arreglo asistido
-
-/// <summary>
-/// El color del nombre de quien habla en la conversación de arreglo (F6.9 §4). Tres voces, tres
-/// colores: el agente en azul, el usuario en verde, la aplicación en gris. Explícitos y no del
-/// tema por la razón de siempre — significan lo mismo en claro que en oscuro— y nunca van solos:
-/// el nombre («Agente», «Tú», «Atalaya») se escribe al lado.
-/// </summary>
-public sealed class FixVoiceToBrushConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
-    {
-        FixVoice.Agente => new SolidColorBrush(Color.FromRgb(0x6C, 0x93, 0xC0)),
-        FixVoice.Usuario => new SolidColorBrush(Color.FromRgb(0x3F, 0xB9, 0x50)),
-        _ => new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99)),
-    };
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
@@ -443,30 +332,6 @@ public sealed class InverseBoolConverter : IValueConverter
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => value is not true;
-}
-
-/// <summary>
-/// El color de una TEMÁTICA (F17 §6), sacado de <see cref="Copilot.ThemePalette"/> en el paso del
-/// tema vigente. Con el parámetro <c>soft</c> devuelve el mismo color atenuado, para fondos de
-/// chip: es el mismo par «color pleno / color al 20 %» que usan los chips de severidad.
-/// </summary>
-public sealed class ThemeToBrushConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-    {
-        var theme = value as AuditTheme? ?? AuditTheme.General;
-        bool dark = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme() != Wpf.Ui.Appearance.ApplicationTheme.Light;
-        var color = (Color)ColorConverter.ConvertFromString(Copilot.ThemePalette.Hex(theme, dark));
-        if (string.Equals(parameter as string, "soft", StringComparison.OrdinalIgnoreCase))
-        {
-            color.A = 0x33;
-        }
-
-        return new SolidColorBrush(color);
-    }
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
 }
 
 /// <summary>El nombre de una temática tal y como se escribe (F17).</summary>

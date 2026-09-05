@@ -674,10 +674,13 @@ public static class MarkdownFlowDocument
     {
         (string soft, string ink) = severity switch
         {
-            "Crítica" or "Críticas" => ("Brush.Danger.Soft", "Brush.Sev.Crit"),
-            "Alta" or "Altas" => ("Brush.Danger.Soft", "Brush.Sev.High"),
-            "Media" or "Medias" => ("Brush.Warning.Soft", "Brush.Sev.Med"),
-            _ => ("Brush.Primary.Soft", "Brush.Sev.Low"),
+            // Cuatro rellenos para cuatro niveles (P-05, UI-0034): crítica y alta compartían
+            // `Danger.Soft` —la escala se leía como tres— y la baja se pintaba del azul de
+            // «estás aquí». Cada nivel tiene ahora el suyo, igual que en `Pill.Sev`.
+            "Crítica" or "Críticas" => ("Brush.Sev.Crit.Soft", "Brush.Sev.Crit"),
+            "Alta" or "Altas" => ("Brush.Sev.High.Soft", "Brush.Sev.High"),
+            "Media" or "Medias" => ("Brush.Sev.Med.Soft", "Brush.Sev.Med"),
+            _ => ("Brush.Sev.Low.Soft", "Brush.Sev.Low"),
         };
 
         var caption = new TextBlock

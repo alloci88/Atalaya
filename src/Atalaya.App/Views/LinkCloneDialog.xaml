@@ -10,7 +10,19 @@
     ShowInTaskbar="False"
     WindowStartupLocation="CenterOwner"
     ExtendsContentIntoTitleBar="True">
-    <Grid>
+    <Grid Background="{DynamicResource Brush.Bg}">
+        <!-- EL DIÁLOGO PINTA SU FONDO (UI-0013). `FluentWindow` aplica su propio telón por
+             debajo —`#FAFAFA` en claro, `#202020` en oscuro, los colores de fábrica de
+             WPF-UI— y `MainWindow` lo tapa desde F26 §A justamente por eso; ninguno de los
+             nueve diálogos lo hacía, así que abrir uno enseñaba otro programa encima de una
+             aplicación crema. Y `PaletteContrastTests` pasaba en verde midiendo contra una
+             superficie que la aplicación nunca declara.
+
+             Y sus botones son los cuatro del sistema (UI-0014): el primario era el acento de
+             Windows —`#1E9BFA`/`#0071C7`— y no el azul de la casa, y el botón que confirma un
+             borrado irreversible no puede ser de otro color que el de Atalaya. El macizo de
+             peligro se queda AQUÍ y solo aquí (UI-0039): destruir es lo que se ha venido a
+             hacer a un diálogo de confirmación. -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -18,114 +30,109 @@
 
         <ui:TitleBar Grid.Row="0" Title="{Binding Title}" ShowMaximize="False" ShowMinimize="False" />
 
-        <StackPanel Grid.Row="1" Margin="22,10,22,20">
-            <TextBlock Text="{Binding Title}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" />
-            <TextBlock Text="{Binding Intro}" TextWrapping="Wrap" Opacity="0.8" Margin="0,6,0,0" />
+        <StackPanel Grid.Row="1" Margin="{StaticResource Pad.Dialog}">
+            <TextBlock Text="{Binding Title}" FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding Intro}" TextWrapping="Wrap" Foreground="{DynamicResource Brush.TextMuted}" Margin="{StaticResource Pad.XS.Top}" />
 
-            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                <TextBlock Text="Repo de la aplicación: " Opacity="0.6" FontSize="12" />
-                <TextBlock Text="{Binding RepoUrl}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.S.Top}">
+                <TextBlock Text="Repo de la aplicación: " Foreground="{DynamicResource Brush.TextMuted}" FontSize="{StaticResource FontSize.Meta}" />
+                <TextBlock Text="{Binding RepoUrl}" FontSize="{StaticResource FontSize.Meta}" FontWeight="SemiBold" TextWrapping="Wrap" />
             </StackPanel>
 
             <!-- · Los dos caminos. Se eligen a la vista, no en un menú: quien no tiene el repo
                  clonado no debe tener que adivinar que existe la segunda opción. · -->
             <StackPanel Visibility="{Binding Linked, Converter={StaticResource InverseBoolToVisibility}}">
-                <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.M.Top}">
                     <RadioButton Content="Ya tengo el repo clonado"
                                  GroupName="Camino"
                                  IsChecked="{Binding IsExistingMode, Mode=TwoWay}" />
                     <RadioButton Content="Clonarlo ahora"
                                  GroupName="Camino"
-                                 Margin="18,0,0,0"
+                                 Margin="{StaticResource Pad.L.Left}"
                                  IsEnabled="{Binding CanClone}"
                                  IsChecked="{Binding IsCloneMode, Mode=TwoWay}" />
                 </StackPanel>
 
                 <!-- Camino 1 -->
-                <StackPanel Margin="0,14,0,0"
+                <StackPanel Margin="{StaticResource Pad.M.Top}"
                             Visibility="{Binding IsExistingMode, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock Text="Carpeta del clon (la que contiene «.git»)" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <TextBlock Text="Carpeta del clon (la que contiene «.git»)" FontWeight="SemiBold" Margin="{StaticResource Pad.XXS.Bottom}" />
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <ui:TextBox Grid.Column="0" Text="{Binding ExistingPath, UpdateSourceTrigger=PropertyChanged}" />
-                        <ui:Button Grid.Column="1" Content="Examinar…" Command="{Binding ChooseExistingCommand}" Margin="8,0,0,0" />
+                        <Button Grid.Column="1" Content="Examinar…" Command="{Binding ChooseExistingCommand}" Margin="{StaticResource Pad.XS.Left}" />
                     </Grid>
                     <TextBlock
                         Text="Se comprueba que la carpeta sea un repo git y que su remoto «origin» sea el de esta aplicación."
-                        Opacity="0.65" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0" />
-                    <ui:Button Content="Vincular"
+                        Foreground="{DynamicResource Brush.TextMuted}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" />
+                    <Button Content="Vincular"
                                Command="{Binding LinkExistingCommand}"
-                               Appearance="Primary"
                                IsEnabled="{Binding NotBusy}"
                                HorizontalAlignment="Left"
-                               Margin="0,12,0,0" />
+                               Margin="{StaticResource Pad.S.Top}" Style="{StaticResource Button.Primary}" />
                 </StackPanel>
 
                 <!-- Camino 2 -->
-                <StackPanel Margin="0,14,0,0"
+                <StackPanel Margin="{StaticResource Pad.M.Top}"
                             Visibility="{Binding IsCloneMode, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock Text="Carpeta destino (el clon se crea dentro)" FontWeight="SemiBold" Margin="0,0,0,4" />
+                    <TextBlock Text="Carpeta destino (el clon se crea dentro)" FontWeight="SemiBold" Margin="{StaticResource Pad.XXS.Bottom}" />
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <ui:TextBox Grid.Column="0" Text="{Binding TargetParent, UpdateSourceTrigger=PropertyChanged}" />
-                        <ui:Button Grid.Column="1" Content="Examinar…" Command="{Binding ChooseTargetCommand}" Margin="8,0,0,0" />
+                        <Button Grid.Column="1" Content="Examinar…" Command="{Binding ChooseTargetCommand}" Margin="{StaticResource Pad.XS.Left}" />
                     </Grid>
                     <TextBlock Text="{Binding TargetPreview, StringFormat='Quedará en: {0}'}"
-                               Opacity="0.65" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0" />
-                    <ui:Button Content="Clonar y vincular"
+                               Foreground="{DynamicResource Brush.TextMuted}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" />
+                    <Button Content="Clonar y vincular"
                                Command="{Binding CloneNowCommand}"
-                               Appearance="Primary"
                                IsEnabled="{Binding NotBusy}"
                                HorizontalAlignment="Left"
-                               Margin="0,12,0,0" />
+                               Margin="{StaticResource Pad.S.Top}" Style="{StaticResource Button.Primary}" />
                 </StackPanel>
             </StackPanel>
 
             <!-- · Vinculada: el piloto en verde, dicho aquí mismo · -->
-            <Border Background="#2233C25B" BorderBrush="#5533C25B" BorderThickness="1"
-                    CornerRadius="6" Padding="12,10" Margin="0,16,0,0"
+            <Border Style="{StaticResource Notice.Success}" Margin="{StaticResource Pad.M.Top}"
                     Visibility="{Binding Linked, Converter={StaticResource BoolToVisibility}}">
                 <StackPanel>
                     <TextBlock Text="{Binding Outcome}" TextWrapping="Wrap" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding LinkedPath}" Opacity="0.7" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" />
+                    <TextBlock Text="{Binding LinkedPath}" Foreground="{DynamicResource Brush.TextMuted}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" />
                 </StackPanel>
             </Border>
 
             <!-- · El clon está en otro commit: se dice y se ofrece, no se hace solo · -->
-            <Border Background="#22D2B036" BorderBrush="#55D2B036" BorderThickness="1"
-                    CornerRadius="6" Padding="12,10" Margin="0,10,0,0"
+            <Border Style="{StaticResource Notice.Warning}" Margin="{StaticResource Pad.S.Top}"
                     Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}">
                 <StackPanel>
                     <TextBlock Text="{Binding DriftWarning}" TextWrapping="Wrap" />
-                    <ui:Button Content="Re-escanear ahora"
+                    <Button Content="Re-escanear ahora"
                                Command="{Binding RescanNowCommand}"
                                IsEnabled="{Binding NotBusy}"
                                HorizontalAlignment="Left"
-                               Margin="0,10,0,0" />
+                               Margin="{StaticResource Pad.S.Top}" />
                 </StackPanel>
             </Border>
 
             <!-- · El error, específico y con las dos URLs cuando el remoto no coincide · -->
-            <Border Background="#22D13A3A" BorderBrush="#55D13A3A" BorderThickness="1"
-                    CornerRadius="6" Padding="12,10" Margin="0,10,0,0"
+            <Border Style="{StaticResource Notice.Danger}" Margin="{StaticResource Pad.S.Top}"
                     Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}">
                 <TextBlock Text="{Binding Error}" TextWrapping="Wrap" />
             </Border>
 
-            <StackPanel Orientation="Horizontal" Margin="0,10,0,0"
+            <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.S.Top}"
                         Visibility="{Binding HasProgress, Converter={StaticResource BoolToVisibility}}">
                 <ui:ProgressRing IsIndeterminate="True" Width="18" Height="18" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding Progress}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Progress}" Margin="{StaticResource Pad.XS.Left}" VerticalAlignment="Center" />
             </StackPanel>
 
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
-                <ui:Button Content="Cerrar" Click="OnClose" Appearance="Secondary" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="{StaticResource Pad.M.Top}">
+                <Button Content="Cerrar" Click="OnClose" />
             </StackPanel>
         </StackPanel>
     </Grid>

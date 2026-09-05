@@ -9,7 +9,19 @@
     ShowInTaskbar="False"
     WindowStartupLocation="CenterOwner"
     ExtendsContentIntoTitleBar="True">
-    <Grid>
+    <Grid Background="{DynamicResource Brush.Bg}">
+        <!-- EL DIÁLOGO PINTA SU FONDO (UI-0013). `FluentWindow` aplica su propio telón por
+             debajo —`#FAFAFA` en claro, `#202020` en oscuro, los colores de fábrica de
+             WPF-UI— y `MainWindow` lo tapa desde F26 §A justamente por eso; ninguno de los
+             nueve diálogos lo hacía, así que abrir uno enseñaba otro programa encima de una
+             aplicación crema. Y `PaletteContrastTests` pasaba en verde midiendo contra una
+             superficie que la aplicación nunca declara.
+
+             Y sus botones son los cuatro del sistema (UI-0014): el primario era el acento de
+             Windows —`#1E9BFA`/`#0071C7`— y no el azul de la casa, y el botón que confirma un
+             borrado irreversible no puede ser de otro color que el de Atalaya. El macizo de
+             peligro se queda AQUÍ y solo aquí (UI-0039): destruir es lo que se ha venido a
+             hacer a un diálogo de confirmación. -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -19,21 +31,21 @@
 
         <ui:TitleBar Grid.Row="0" Title="Unidades que ya no existen" ShowMaximize="False" ShowMinimize="False" />
 
-        <StackPanel Grid.Row="1" Margin="22,10,22,0">
-            <TextBlock Text="{Binding Title}" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" />
-            <TextBlock TextWrapping="Wrap" Margin="0,4,0,0" FontSize="12"
+        <StackPanel Grid.Row="1" Margin="{StaticResource Pad.DialogHead}">
+            <TextBlock Text="{Binding Title}" FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Meta}"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Text="Hallazgos activos cuyo fichero ya no está en el repositorio. No se pueden verificar —no queda nada que mirar— y no se resuelven solos: sin una decisión tuya se quedan activos para siempre. Ojo con el fichero troceado: sale como borrado más unidades nuevas, y coserlo a ojo sería inventar." />
             <TextBlock Text="Ningún hallazgo activo se ha quedado sin código."
-                       Margin="0,14,0,0" Opacity="0.6" TextWrapping="Wrap"
+                       Margin="{StaticResource Pad.M.Top}" Foreground="{DynamicResource Brush.TextMuted}" TextWrapping="Wrap"
                        Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
         </StackPanel>
 
-        <ScrollViewer Grid.Row="2" Margin="22,12,14,0" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+        <ScrollViewer Grid.Row="2" Margin="{StaticResource Pad.DialogList}" VerticalScrollBarVisibility="Auto" Padding="{StaticResource Pad.XS.Right}">
             <ItemsControl ItemsSource="{Binding Rows}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border CornerRadius="6" Padding="12,10" Margin="0,0,0,8"
+                        <Border CornerRadius="6" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.XS.Bottom}"
                                 Background="{DynamicResource SubtleFillColorTertiaryBrush}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -41,16 +53,16 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}"
-                                          VerticalAlignment="Top" Margin="0,1,8,0" />
+                                          VerticalAlignment="Top" Margin="{StaticResource Pad.XS.Right}" />
                                 <StackPanel Grid.Column="1">
                                     <TextBlock FontWeight="SemiBold" TextWrapping="Wrap"><Run Text="{Binding Alias, Mode=OneWay}" FontFamily="Consolas" /><Run Text=" · " /><Run Text="{Binding Title, Mode=OneWay}" /></TextBlock>
-                                    <TextBlock Text="{Binding UnitPath}" Margin="0,4,0,0" FontSize="12"
+                                    <TextBlock Text="{Binding UnitPath}" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Meta}"
                                                TextWrapping="Wrap" FontFamily="Consolas"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     <!-- La evidencia, escrita. Cuando no se localiza el commit, lo
                                          dice: una evidencia ausente no se sustituye por una frase
                                          que suene a que la hay. -->
-                                    <TextBlock Text="{Binding Evidence}" Margin="0,4,0,0" FontSize="12"
+                                    <TextBlock Text="{Binding Evidence}" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Meta}"
                                                TextWrapping="Wrap"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                 </StackPanel>
@@ -61,13 +73,12 @@
             </ItemsControl>
         </ScrollViewer>
 
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="22,12,22,18">
-            <ui:Button Content="Marcar todo" Command="{Binding SelectAllCommand}" Margin="0,0,8,0" />
-            <ui:Button Content="Resolver por código eliminado"
-                       Command="{Binding ResolveSelectedCommand}"
-                       Appearance="Primary" Margin="0,0,8,0"
-                       ToolTip="Resuelve los marcados con tu nombre y, como evidencia, el commit que borró el fichero. Es una decisión tuya: la aplicación nunca la toma sola." />
-            <ui:Button Content="Cerrar" Click="OnClose" />
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="{StaticResource Pad.DialogActions}">
+            <Button Content="Marcar todo" Command="{Binding SelectAllCommand}" Margin="{StaticResource Pad.XS.Right}" />
+            <Button Content="Resolver por código eliminado"
+                       Command="{Binding ResolveSelectedCommand}" Margin="{StaticResource Pad.XS.Right}"
+                       ToolTip="Resuelve los marcados con tu nombre y, como evidencia, el commit que borró el fichero. Es una decisión tuya: la aplicación nunca la toma sola." Style="{StaticResource Button.Primary}" />
+            <Button Content="Cerrar" Click="OnClose" />
         </StackPanel>
     </Grid>
 </ui:FluentWindow>

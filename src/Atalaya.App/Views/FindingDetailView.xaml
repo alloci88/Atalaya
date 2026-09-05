@@ -57,16 +57,22 @@
             <Setter Property="Margin" Value="{StaticResource Pad.Chip}" />
         </Style>
 
+        <!-- El mismo chip, con la escala de gravedad del sistema y con la de estado (UI-0006,
+             UI-0010): los dos se pintaban con un converter que escribía el hexadecimal a mano, y
+             por eso `PaletteContrastTests` no los miraba nunca. -->
+        <Style x:Key="Chip.Sev" TargetType="Border" BasedOn="{StaticResource Pill.Sev}">
+            <Setter Property="Margin" Value="{StaticResource Pad.Chip}" />
+            <Setter Property="MinWidth" Value="0" />
+        </Style>
+
+        <Style x:Key="Chip.Status" TargetType="Border" BasedOn="{StaticResource Pill.Status}">
+            <Setter Property="Margin" Value="{StaticResource Pad.Chip}" />
+        </Style>
+
         <!-- «ver más» no es un botón: es una palabra en la que se hace clic. Con la plantilla de
              botón de serie, un control con chrome propio partía el párrafo en dos. -->
         <!-- El estilo de enlace vive en el sistema desde H9.1: lo usan esta vista y la de arreglo
              asistido, y una copia por vista es una copia que se desincroniza. -->
-
-        <Style x:Key="SideAction" TargetType="ui:Button">
-            <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="HorizontalContentAlignment" Value="Center" />
-            <Setter Property="Margin" Value="{StaticResource Pad.XXS.Bottom}" />
-        </Style>
 
         <!-- Las acciones de la columna, con nuestras plantillas: la jerarquía de la botonera la
              marca el COLOR, y para eso hacen falta los estilos del sistema (D-949). -->
@@ -141,11 +147,17 @@
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
                         <WrapPanel Margin="{StaticResource Pad.S.Top}">
-                            <Border Style="{StaticResource Chip}"
-                                    Background="{Binding Finding.Severity, Converter={StaticResource SeverityToBrush}}"
+                            <!-- LA GRAVEDAD SE PINTA COMO EN TODAS PARTES (UI-0010): la pastilla
+                                 del sistema, con su relleno y su tinta de la paleta. Antes tomaba
+                                 el fondo de `SeverityToBrush` —el juego de colores de las
+                                 GRÁFICAS, idéntico en los dos temas— y escribía encima una tinta
+                                 que no resolvía, así que salía negro sobre naranja: 3,5:1.
+                                 `Severity` viaja por el DataContext del chip para que los
+                                 disparadores de `Pill.Sev` lo encuentren. -->
+                            <Border Style="{StaticResource Chip.Sev}" DataContext="{Binding Finding}"
                                     ToolTip="Severidad según la rúbrica del sistema.">
-                                <TextBlock Text="{Binding Finding.Severity, Converter={StaticResource SeverityToLabel}}"
-                                           Foreground="{DynamicResource Brush.Ink.OnVivid}" FontSize="{StaticResource FontSize.Meta}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Severity, Converter={StaticResource SeverityToLabel}}"
+                                           Style="{StaticResource Pill.Sev.Text}" />
                             </Border>
 
                             <Border Style="{StaticResource Chip}"
@@ -155,11 +167,9 @@
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                             </Border>
 
-                            <Border Style="{StaticResource Chip}"
-                                    Background="{Binding Status, Converter={StaticResource FindingStatusToFill}}"
+                            <Border Style="{StaticResource Chip.Status}"
                                     ToolTip="{Binding StatusHelp}">
-                                <TextBlock Text="{Binding StatusLabel}" FontSize="{StaticResource FontSize.Meta}" FontWeight="SemiBold"
-                                           Foreground="{Binding Status, Converter={StaticResource FindingStatusToBrush}}" />
+                                <TextBlock Text="{Binding StatusLabel}" Style="{StaticResource Pill.Status.Text}" />
                             </Border>
 
                             <Border Style="{StaticResource Chip}"
@@ -277,9 +287,9 @@
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
-                                <ui:Button Grid.Column="1"
+                                <Button Grid.Column="1"
                                            Content="Verificar ahora" Command="{Binding VerifyCommand}"
-                                           Appearance="Secondary" Padding="{StaticResource Pad.ButtonSmall}" FontSize="{StaticResource FontSize.Meta}"
+                                           Padding="{StaticResource Pad.ButtonSmall}" FontSize="{StaticResource FontSize.Meta}"
                                            IsEnabled="{Binding CanAudit}"
                                            ToolTip="{Binding AuditDisabledTooltip}"
                                            Margin="{StaticResource Pad.S.Left}" VerticalAlignment="Center"
@@ -324,7 +334,7 @@
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0" Text="{Binding Icon}" FontSize="{StaticResource FontSize.Small}"
                                                        VerticalAlignment="Top" Margin="{StaticResource Pad.XXS.Top}"
-                                                       Foreground="{Binding Event, Converter={StaticResource FindingEventToBrush}}" />
+                                                       Style="{StaticResource Event.Glyph}" />
                                             <StackPanel Grid.Column="1">
                                                 <StackPanel Orientation="Horizontal">
                                                     <TextBlock Text="{Binding Label}" FontSize="{StaticResource FontSize.Meta}"
@@ -396,7 +406,7 @@
                         <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.XS.Top}">
                             <ui:TextBox PlaceholderText="Nuevo comentario…" Text="{Binding NewComment}"
                                         Width="360" Margin="{StaticResource Pad.XS.Right}" />
-                            <ui:Button Content="Comentar" Command="{Binding AddCommentCommand}" />
+                            <Button Content="Comentar" Command="{Binding AddCommentCommand}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -469,7 +479,7 @@
                                            TextWrapping="Wrap" />
                             </DockPanel>
                         </Border>
-                        <ui:Button Content="{Binding FixPromptActionLabel}" Style="{StaticResource SideAction}"
+                        <Button Content="{Binding FixPromptActionLabel}" Style="{StaticResource Action}"
                                    Command="{Binding GenerateFixPromptCommand}"
                                    ToolTip="Compone el encargo para un agente —con la lista de quién usa este código— y lo copia al portapapeles." />
                         <!-- F5.4: bajó de V3. Verificar de uno en uno deja ver QUÉ se le pregunta al agente.
@@ -480,15 +490,15 @@
                              CLASE de hallazgo. Uno medido no se pregunta, se mide: llamarlo igual
                              que a una verificación por LLM haría esperar tokens y una espera larga
                              donde solo hay una lectura de fichero. -->
-                        <ui:Button Content="{Binding VerifyActionLabel}" Style="{StaticResource SideAction}"
+                        <Button Content="{Binding VerifyActionLabel}" Style="{StaticResource Action}"
                                    Command="{Binding VerifyCommand}"
                                    IsEnabled="{Binding CanAudit}"
                                    ToolTip="{Binding VerifyHelp}" />
-                        <ui:Button Content="{Binding Link.ActionLabel}" Style="{StaticResource SideAction}"
+                        <Button Content="{Binding Link.ActionLabel}" Style="{StaticResource Action}"
                                    Command="{Binding LinkCloneCommand}"
                                    ToolTip="{Binding Link.Tooltip}"
                                    Visibility="{Binding Link.NeedsAction, Converter={StaticResource BoolToVisibility}}" />
-                        <ui:Button Content="Abrir en el editor" Style="{StaticResource SideAction}"
+                        <Button Content="Abrir en el editor" Style="{StaticResource Action}"
                                    Command="{Binding OpenInEditorCommand}"
                                    ToolTip="Abre el fichero en la línea del hallazgo con el editor de Ajustes." />
                     </StackPanel>
@@ -597,8 +607,8 @@
                                     Style="{StaticResource Button.Warning}"
                                     Margin="{StaticResource Pad.XS.Right}"
                                     Visibility="{Binding CanApplySilence, Converter={StaticResource BoolToVisibility}}" />
-                            <ui:Button Content="Des-silenciar" Command="{Binding UnsilenceCommand}"
-                                       Visibility="{Binding CanUnsilence, Converter={StaticResource BoolToVisibility}}" />
+                            <Button Content="Des-silenciar" Command="{Binding UnsilenceCommand}"
+                                    Visibility="{Binding CanUnsilence, Converter={StaticResource BoolToVisibility}}" />
                         </WrapPanel>
 
                         <Border Style="{StaticResource Divider}" />
@@ -616,7 +626,7 @@
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
-                            <ui:Button Content="Aplicar" Command="{Binding ApplySeverityCommand}" />
+                            <Button Content="Aplicar" Command="{Binding ApplySeverityCommand}" />
                         </StackPanel>
 
                         <Border Style="{StaticResource Divider}" />
@@ -653,14 +663,16 @@
                                 <ui:TextBox Text="{Binding Justification}" HorizontalAlignment="Stretch"
                                             AcceptsReturn="True" TextWrapping="Wrap" MinHeight="56"
                                             PlaceholderText="Qué se corrigió y dónde consta" />
-                                <ui:Button Content="Resolver manualmente" Appearance="Danger" Margin="{StaticResource Pad.XS.Top}"
-                                           Command="{Binding ResolveManuallyCommand}" />
+                                <Button Content="Resolver manualmente" Style="{StaticResource Button.Danger}"
+                                        Margin="{StaticResource Pad.XS.Top}" HorizontalAlignment="Left"
+                                        Command="{Binding ResolveManuallyCommand}" />
                             </StackPanel>
                         </Expander>
 
-                        <ui:Button Content="Reabrir" Command="{Binding ReopenCommand}" Margin="{StaticResource Pad.XXS.Top}"
-                                   ToolTip="Devuelve el hallazgo a activo, con traza en el historial."
-                                   Visibility="{Binding CanReopen, Converter={StaticResource BoolToVisibility}}" />
+                        <Button Content="Reabrir" Command="{Binding ReopenCommand}" Margin="{StaticResource Pad.XXS.Top}"
+                                HorizontalAlignment="Left"
+                                ToolTip="Devuelve el hallazgo a activo, con traza en el historial."
+                                Visibility="{Binding CanReopen, Converter={StaticResource BoolToVisibility}}" />
 
                         <!-- Disputa: existe SOLO si hay disputa (F5.1b, F5.5 §4) -->
                         <StackPanel Visibility="{Binding ShowDispute, Converter={StaticResource BoolToVisibility}}">
@@ -679,7 +691,7 @@
                                     HorizontalAlignment="Stretch" Margin="{StaticResource Pad.XXS.Bottom}"
                                     Command="{Binding AcceptDisputeCommand}"
                                        ToolTip="Da la razón al auditor que discrepó: se silencia como falso positivo, con tu nombre. No es una resolución." />
-                            <ui:Button Content="Sigue siendo defecto" Style="{StaticResource SideAction}"
+                            <Button Content="Sigue siendo defecto" Style="{StaticResource Action}"
                                        Command="{Binding DismissDisputeCommand}"
                                        ToolTip="Da la razón a quien lo reportó: se retira la marca y el hallazgo sigue igual." />
                         </StackPanel>

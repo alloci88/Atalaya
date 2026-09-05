@@ -224,7 +224,7 @@ public sealed partial class UnitProgress : ObservableObject
 /// <summary>Un conteo por severidad, para el resumen de una cabecera de grupo.</summary>
 public sealed record SeverityChip(Severity Severity, int Count)
 {
-    public string Label => $"{Count} {SeverityNames.Display(Severity)}";
+    public string Label => SeverityNames.Counted(Severity, Count);
 }
 
 /// <summary>

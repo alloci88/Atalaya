@@ -162,8 +162,13 @@ public sealed class ThemeSurfaceTests : IDisposable
         card.ThemeLabel.Should().Be("Concurrencia y asincronía");
         card.ThemeTooltip.Should().Contain("no sustituye a uno General");
 
+        // La temática se ESCRIBE, no se tiñe (UI-0019, UI-0050). Era una pastilla aquí y en el
+        // resumen del ciclo, y texto corrido en la ficha y en el informe: el mismo dato con dos
+        // formas según la puerta. Y su relleno usaba grises que no están en ninguna paleta —el
+        // único par que fallaba AA en los DOS temas—. Lo que la tarjeta tiene que enseñar es el
+        // nombre de la lupa; el color no decía nada que el nombre no dijera.
         string xaml = File.ReadAllText(Source("src/Atalaya.App/Views/PortfolioView.xaml"));
-        xaml.Should().Contain("{Binding ThemeLabel}").And.Contain("ThemeToBrush");
+        xaml.Should().Contain("{Binding ThemeLabel}").And.NotContain("ThemeToBrush");
     }
 
     [Fact]
@@ -190,7 +195,10 @@ public sealed class ThemeSurfaceTests : IDisposable
         // declarados una sola vez; lo que cambia es en qué fichero.
         string converters = File.ReadAllText(Source("src/Atalaya.App/Themes/Converters.xaml"));
 
-        converters.Should().Contain("x:Key=\"ThemeToBrush\"").And.Contain("x:Key=\"ThemeToLabel\"");
+        converters.Should().Contain("x:Key=\"ThemeToLabel\"", "el NOMBRE de la lupa se escribe");
+        converters.Should().NotContain("x:Key=\"ThemeToBrush\"",
+            "su color se retiró con la pastilla (UI-0019): eran grises fuera de paleta que no "
+            + "llegaban a AA en ninguno de los dos temas, y dejarlo declarado deja el atajo abierto");
     }
 
     private static string Source(string relative)

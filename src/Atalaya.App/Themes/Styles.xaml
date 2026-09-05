@@ -1,4 +1,4 @@
-﻿<!--
+<!--
     ESTILOS BASE (F26 Parte A, D-949).
 
     Las piezas del sistema, construidas SOBRE los tokens y la paleta. Ninguna escribe un número ni
@@ -85,12 +85,67 @@
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
     </Style>
 
+    <!-- ================================================================ El anillo de foco (P-04)
+
+         LO ÚLTIMO QUE PINTABA WINDOWS Y NO ATALAYA (UI-0015). Ningún control declaraba su anillo,
+         así que WPF dibujaba el suyo: un rectángulo de puntos negros de 1 px. Medido sobre el «···»
+         del Portafolio en oscuro daba **1,21:1** —era el único elemento visual de la aplicación
+         que no cambiaba con el tema, porque no salía de la paleta— y su forma a hueso no se parecía
+         a la pastilla redondeada del raíl, así que el foco y el «estás aquí» hablaban dos idiomas.
+
+         Se dibuja FUERA del control (margen negativo) para no taparle nada, y en DOS capas: el
+         anillo y, por dentro, un pelo del color del fondo. Esa segunda capa es lo que hace que el
+         foco se vea también sobre un botón macizo — un anillo azul pegado al azul del primario no
+         se distingue; separado por el hueco, sí.
+
+         El radio es el de un control (`Radius.M`) más lo que el anillo se separa, que es lo que
+         hace que la curva del anillo acompañe a la del botón en vez de cortarla.
+    -->
+    <Style x:Key="Focus.Visual">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Grid Margin="{StaticResource Pad.FocusRing}" SnapsToDevicePixels="True">
+                        <Border CornerRadius="{StaticResource Radius.L}"
+                                BorderThickness="{StaticResource Focus.Ring}"
+                                BorderBrush="{DynamicResource Brush.Focus.Ring}" />
+                        <Border Margin="{StaticResource Pad.FocusRingInset}"
+                                CornerRadius="{StaticResource Radius.M}"
+                                BorderThickness="{StaticResource Focus.RingOffset}"
+                                BorderBrush="{DynamicResource Brush.Focus.RingOffset}" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Y SE PONE EN LOS CONTROLES DE LA LIBRERÍA, que no pasan por nuestras plantillas. Sin
+         `BasedOn` un estilo implícito SUSTITUIRÍA al de WPF-UI y el control se quedaría sin
+         plantilla (la lección del `ui:Card` de Métricas): estos cinco extienden el suyo y solo le
+         añaden el anillo. Los NUESTROS lo reciben por `Button.Secondary`, de quien derivan todos. -->
+    <Style TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Focus.Visual}" />
+    </Style>
+    <Style TargetType="RadioButton" BasedOn="{StaticResource {x:Type RadioButton}}">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Focus.Visual}" />
+    </Style>
+    <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Focus.Visual}" />
+    </Style>
+    <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Focus.Visual}" />
+    </Style>
+    <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Focus.Visual}" />
+    </Style>
+
     <!-- ================================================================ Botones
 
          Cuatro variantes con significado y nada más. `Button.Secondary` es el estilo implícito:
          un botón que no declara nada es secundario, que es lo que debe ser por defecto.
     -->
     <Style x:Key="Button.Secondary" TargetType="Button">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Focus.Visual}" />
         <Setter Property="FontFamily" Value="{StaticResource Font.Ui}" />
         <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
         <Setter Property="Padding" Value="{StaticResource Pad.Button}" />
@@ -263,6 +318,7 @@
     <!-- El «…» de una tarjeta: lo que existe pero no compite por la mirada. Es un ToggleButton
          porque abre un menú y hay que poder ver si está abierto. -->
     <Style x:Key="Button.More" TargetType="ToggleButton">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Focus.Visual}" />
         <Setter Property="Content" Value="···" />
         <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
@@ -380,6 +436,7 @@
          mínimo de un campo numérico es que quepa su etiqueta de unidades al lado sin apretarse.
     -->
     <Style TargetType="TextBox">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Focus.Visual}" />
         <Setter Property="FontFamily" Value="{StaticResource Font.Ui}" />
         <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
         <Setter Property="Padding" Value="{StaticResource Pad.Field}" />
@@ -547,7 +604,7 @@
                     <ControlTemplate.Triggers>
                         <DataTrigger Binding="{Binding IsActive}" Value="True">
                             <Setter TargetName="Marker" Property="Background" Value="{DynamicResource Brush.Primary.Fill}" />
-                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Primary.Soft}" />
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Nav.Active}" />
                             <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
                             <Setter TargetName="Label" Property="FontWeight" Value="SemiBold" />
                         </DataTrigger>
@@ -588,20 +645,42 @@
          identifica una serie y tiene que ser el mismo en los dos temas para poder comparar dos
          capturas.
     -->
+    <!-- CUATRO RELLENOS PARA CUATRO NIVELES (P-05, UI-0034). Estos cuatro `Background` eran
+         `Danger.Soft` DOS VECES —no existía un relleno de crítica, así que reutilizaba el de
+         alta—, `Warning.Soft` y `Primary.Soft`: la escala de cuatro se leía como tres, y la baja
+         se pintaba del mismo azul que la entrada activa del raíl. La gravedad tiene ahora su
+         propia escala completa, tintas y rellenos, y `PaletteContrastTests` comprueba que los
+         ocho son distintos entre sí en los dos temas. -->
     <Style x:Key="Pill.Sev" TargetType="Border" BasedOn="{StaticResource Pill}">
         <Setter Property="MinWidth" Value="64" />
         <Style.Triggers>
             <DataTrigger Binding="{Binding Severity}" Value="Critica">
-                <Setter Property="Background" Value="{DynamicResource Brush.Danger.Soft}" />
+                <Setter Property="Background" Value="{DynamicResource Brush.Sev.Crit.Soft}" />
             </DataTrigger>
             <DataTrigger Binding="{Binding Severity}" Value="Alta">
-                <Setter Property="Background" Value="{DynamicResource Brush.Danger.Soft}" />
+                <Setter Property="Background" Value="{DynamicResource Brush.Sev.High.Soft}" />
             </DataTrigger>
             <DataTrigger Binding="{Binding Severity}" Value="Media">
-                <Setter Property="Background" Value="{DynamicResource Brush.Warning.Soft}" />
+                <Setter Property="Background" Value="{DynamicResource Brush.Sev.Med.Soft}" />
             </DataTrigger>
             <DataTrigger Binding="{Binding Severity}" Value="Baja">
-                <Setter Property="Background" Value="{DynamicResource Brush.Primary.Soft}" />
+                <Setter Property="Background" Value="{DynamicResource Brush.Sev.Low.Soft}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- LA PASTILLA DE UN RECUENTO A CERO NO SE TIÑE (UI-0051). El color de gravedad dice «hay
+         algo de esta gravedad»; con cero, dice lo contrario de lo que dice el número que lleva
+         dentro, y es lo primero que se ve al abrir la aplicación —«Críticas 0» con su borde rojo—.
+         Un recuento a cero se pinta en neutro y el color aparece cuando hay algo que contar.
+
+         Se enlaza a `Count` y no a `Severity`: el nivel sigue siendo el que es, lo que cambia es
+         que no hay ninguno. El orden importa —este disparador va DESPUÉS de los de `Pill.Sev`, y
+         por eso gana—. -->
+    <Style x:Key="Pill.Sev.Count" TargetType="Border" BasedOn="{StaticResource Pill.Sev}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Count}" Value="0">
+                <Setter Property="Background" Value="{DynamicResource Brush.Surface2}" />
             </DataTrigger>
         </Style.Triggers>
     </Style>
@@ -619,6 +698,80 @@
             </DataTrigger>
             <DataTrigger Binding="{Binding Severity}" Value="Baja">
                 <Setter Property="Foreground" Value="{DynamicResource Brush.Sev.Low}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- La tinta del recuento a cero, a juego con su relleno (UI-0051). -->
+    <Style x:Key="Pill.Sev.Count.Text" TargetType="TextBlock" BasedOn="{StaticResource Pill.Sev.Text}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Count}" Value="0">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- LA CIFRA DE UN RECUENTO POR GRAVEDAD, y el cero en neutro (UI-0051). El disparador mira su
+         PROPIO texto y no un enlace: quien la pinta —Portafolio en dos sitios— la enlaza a cuatro
+         propiedades con nombres distintos, y un estilo que dependiera del nombre de la propiedad
+         no valdría para los dos. El color se pone en el uso, que es quien sabe de qué nivel es la
+         cifra; lo que el sistema fija es que a cero se apaga. -->
+    <Style x:Key="Stat.Number.Sev" TargetType="TextBlock" BasedOn="{StaticResource Stat.Number}">
+        <Style.Triggers>
+            <Trigger Property="Text" Value="0">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ================================================================ El estado de un hallazgo
+
+         Activo, resuelto y todo lo demás (silenciado, caducado, falso positivo). Lo pintaban dos
+         converters con sus hexadecimales dentro —`#4A9EE0` para «Activo», el mismo en los dos
+         temas— y por eso `PaletteContrastTests` no los miraba nunca: sobre el crema del tema claro
+         daban 2,38:1, y el dato que dice si un hallazgo sigue vivo se leía peor que las dos
+         pastillas de al lado (UI-0006).
+
+         `DataTrigger` y no converter, por lo de siempre (D-971): un pincel ya resuelto no se
+         entera de que el tema ha cambiado. -->
+    <Style x:Key="Pill.Status" TargetType="Border" BasedOn="{StaticResource Pill}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Status}" Value="Activo">
+                <Setter Property="Background" Value="{DynamicResource Brush.Primary.Soft}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Status}" Value="Resuelto">
+                <Setter Property="Background" Value="{DynamicResource Brush.Success.Soft}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Pill.Status.Text" TargetType="TextBlock" BasedOn="{StaticResource Pill.Text}">
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Status}" Value="Activo">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Primary.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Status}" Value="Resuelto">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Success.Ink}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- El punto de gravedad de una línea de actividad: 6 px, solo color, y por eso lleva la tinta
+         VIVA de la escala y no el relleno teñido. Se pintaba con `SeverityToBrush` —el juego de las
+         gráficas— dentro de la misma columna en la que las pastillas usaban el de la paleta
+         (UI-0010). -->
+    <Style x:Key="Dot.Sev" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource Brush.Sev.Low}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Severity}" Value="Critica">
+                <Setter Property="Background" Value="{DynamicResource Brush.Sev.Crit}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Alta">
+                <Setter Property="Background" Value="{DynamicResource Brush.Sev.High}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Severity}" Value="Media">
+                <Setter Property="Background" Value="{DynamicResource Brush.Sev.Med}" />
             </DataTrigger>
         </Style.Triggers>
     </Style>
@@ -672,6 +825,7 @@
          `App.xaml`, así que solo existía con la aplicación arrancada y la sesión en vivo no se
          podía montar fuera de ella. -->
     <Style x:Key="LinkButton" TargetType="Button">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Focus.Visual}" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Cursor" Value="Hand" />
@@ -855,6 +1009,7 @@
          un párrafo de cuatro líneas a 11 px puesto siempre a la vista (principio 8). Sin relleno
          horizontal, como todo enlace: dentro de un bloque hay UN margen izquierdo (D-983 §10). -->
     <Style x:Key="Toggle.More" TargetType="ToggleButton">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource Focus.Visual}" />
         <Setter Property="Content" Value="Más" />
         <Setter Property="FontSize" Value="{StaticResource FontSize.Small}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Primary.Ink}" />
@@ -942,7 +1097,7 @@
                     <ControlTemplate.Triggers>
                         <DataTrigger Binding="{Binding IsActive}" Value="True">
                             <Setter TargetName="Marker" Property="Background" Value="{DynamicResource Brush.Primary.Fill}" />
-                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Primary.Soft}" />
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Section.Active}" />
                             <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
                             <Setter TargetName="Label" Property="FontWeight" Value="SemiBold" />
                         </DataTrigger>
@@ -963,7 +1118,7 @@
          sitio y por eso salían de tamaños distintos.
     -->
     <Style x:Key="Notice.Info" TargetType="Border" BasedOn="{StaticResource Notice}">
-        <Setter Property="Background" Value="{DynamicResource Brush.Primary.Soft}" />
+        <Setter Property="Background" Value="{DynamicResource Brush.Info.Soft}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary.Fill}" />
     </Style>
 
@@ -1054,6 +1209,118 @@
             <DataTrigger Binding="{Binding State}" Value="Optional">
                 <Setter Property="Text" Value="Disponible si lo activas" />
                 <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ================================================================ Pilotos y estados de la casa
+
+         LOS COLORES DE ESTADO SALEN DE LA PALETA (UI-0008). Los pintaban seis converters con sus
+         hexadecimales dentro —el verde `#3FB950`, el ámbar `#E0A030`, el rojo `#D13A3A`—, los
+         mismos en los dos temas porque «el estado es semántico y significa lo mismo en claro que
+         en oscuro». El argumento no se sostiene en el píxel: ese verde es el del tema OSCURO, y
+         sobre el crema del claro da 2,34:1. El dato que dice si una unidad está hecha era lo menos
+         legible de su columna.
+
+         Y lo apagado se apaga CAMBIANDO DE COLOR, no bajando la opacidad (D-983 §4): «completa»
+         llevaba `Opacity="0.65"` encima del verde, así que en claro salía `#7DCA81` — 1,66:1.
+
+         `DataTrigger` con `DynamicResource` y no converter, por lo de siempre (D-971): un pincel
+         ya resuelto se queda con el color del tema que hubiera al convertir.
+    -->
+    <Style x:Key="Dot.Sync" TargetType="Ellipse">
+        <Setter Property="Fill" Value="{DynamicResource Brush.Danger.Ink}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding SyncHealth}" Value="Green">
+                <Setter Property="Fill" Value="{DynamicResource Brush.Success.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding SyncHealth}" Value="Amber">
+                <Setter Property="Fill" Value="{DynamicResource Brush.Warning.Ink}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Dot.Link" TargetType="Ellipse">
+        <Setter Property="Fill" Value="{DynamicResource Brush.Danger.Ink}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Link.State}" Value="Vinculada">
+                <Setter Property="Fill" Value="{DynamicResource Brush.Success.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Link.State}" Value="Problema">
+                <Setter Property="Fill" Value="{DynamicResource Brush.Warning.Ink}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- El estado de una unidad de la sesión: el glifo y la palabra, del mismo color. -->
+    <Style x:Key="Unit.State" TargetType="TextBlock" BasedOn="{StaticResource Text.Meta}">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding State}" Value="Auditando">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Primary.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="Completa">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Success.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="Incompleta">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="CoberturaIncompleta">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="CortadaPorPresupuesto">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Danger.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding State}" Value="NoLocalizada">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Danger.Ink}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Unit.State.Glyph" TargetType="TextBlock" BasedOn="{StaticResource Unit.State}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Quien habla en la conversación del arreglo. -->
+    <Style x:Key="Voice.Name" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Voice}" Value="Agente">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Primary.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Voice}" Value="Usuario">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Success.Ink}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Un evento del historial del hallazgo: la línea de tiempo se recorre con la vista, y el
+         color hace que «Resuelto» y «Reabierto» se distingan sin leerlos. -->
+    <Style x:Key="Event.Glyph" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Event}" Value="Resolved">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Success.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Event}" Value="Reopened">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Sev.High}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Event}" Value="Recurrence">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Sev.High}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Event}" Value="Disputed">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Event}" Value="DisputeCleared">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Event}" Value="Detected">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Primary.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Event}" Value="SeverityChanged">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Sev.Med}" />
             </DataTrigger>
         </Style.Triggers>
     </Style>

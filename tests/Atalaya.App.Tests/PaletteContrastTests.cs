@@ -76,13 +76,127 @@ public sealed class PaletteContrastTests
             data.Add(theme, "Text", "Success.Soft");
             data.Add(theme, "Text", "Warning.Soft");
             data.Add(theme, "Text", "Danger.Soft");
-            data.Add(theme, "Sev.Crit", "Danger.Soft");
-            data.Add(theme, "Sev.High", "Danger.Soft");
-            data.Add(theme, "Sev.Med", "Warning.Soft");
-            data.Add(theme, "Sev.Low", "Primary.Soft");
+
+            // LA GRAVEDAD, SOBRE SU PROPIO RELLENO (P-05). Antes estos cuatro pares se medían
+            // contra los fondos de OTRAS familias —`Danger.Soft` dos veces, `Warning.Soft`,
+            // `Primary.Soft`—, que es exactamente lo que UI-0034 encontró en la pantalla: crítica
+            // y alta con el mismo fondo. Cada nivel tiene ahora el suyo y se mide contra él.
+            data.Add(theme, "Sev.Crit", "Sev.Crit.Soft");
+            data.Add(theme, "Sev.High", "Sev.High.Soft");
+            data.Add(theme, "Sev.Med", "Sev.Med.Soft");
+            data.Add(theme, "Sev.Low", "Sev.Low.Soft");
+            data.Add(theme, "Text", "Sev.Crit.Soft");
+            data.Add(theme, "Text", "Sev.High.Soft");
+            data.Add(theme, "Text", "Sev.Med.Soft");
+            data.Add(theme, "Text", "Sev.Low.Soft");
+
+            // Los cuatro papeles del azul suave, cada uno con lo que se escribe encima (UI-0049).
+            data.Add(theme, "Text", "Nav.Active");
+            data.Add(theme, "TextMuted", "Nav.Active");
+            data.Add(theme, "Text", "Section.Active");
+            data.Add(theme, "TextMuted", "Section.Active");
+            data.Add(theme, "Text", "Info.Soft");
+            data.Add(theme, "Primary.Ink", "Info.Soft");
         }
 
         return data;
+    }
+
+    /// <summary>
+    /// <b>Cuatro rellenos y cuatro tintas, y los ocho distintos</b> (P-05, UI-0034).
+    /// <para>
+    /// <b>De dónde viene.</b> La escala de gravedad tenía cuatro tintas y ningún relleno propio:
+    /// la pastilla tomaba prestados <c>Danger.Soft</c> (para crítica <b>y</b> para alta),
+    /// <c>Warning.Soft</c> y <c>Primary.Soft</c>. Resultado medido en la captura: «Crít 0» y
+    /// «Alta 27» con el mismo fondo, y la baja pintada del azul de «estás aquí». A la distancia a
+    /// la que se recorre una lista —que es para lo que D-973 puso el color— había tres manchas
+    /// donde tiene que haber cuatro.
+    /// </para>
+    /// <para>
+    /// <b>Por qué es de regla.</b> «La gravedad se ve sin leer» es una decisión (D-973) y hasta
+    /// ahora la única forma de comprobarla era mirar una captura y contar manchas. Dos colores que
+    /// se acercan no rompen nada: siguen pasando el contraste, siguen pintando, y la escala deja
+    /// de ser una escala sin que falle nada.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public void Los_cuatro_rellenos_y_las_cuatro_tintas_de_gravedad_son_distintos(string theme)
+    {
+        var palette = Palette(theme);
+        string[] niveles = { "Crit", "High", "Med", "Low" };
+
+        foreach (string papel in new[] { string.Empty, ".Soft" })
+        {
+            var valores = niveles.ToDictionary(n => n, n => palette[$"Color.Sev.{n}{papel}"], StringComparer.Ordinal);
+
+            var repetidos = valores
+                .GroupBy(p => p.Value, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1)
+                .Select(g => $"{string.Join(" = ", g.Select(p => p.Key))} → {g.Key}")
+                .ToList();
+
+            repetidos.Should().BeEmpty(
+                "en el tema {0}, dos niveles de gravedad comparten {1} y la escala de cuatro se lee "
+                + "como tres: {2}",
+                theme.ToLowerInvariant(),
+                papel == ".Soft" ? "relleno" : "tinta",
+                string.Join("; ", repetidos));
+        }
+    }
+
+    /// <summary>
+    /// <b>Un diálogo pinta su fondo con una superficie que este test mide</b> (raíz 2, UI-0013).
+    /// <para>
+    /// <b>De dónde viene.</b> Ninguno de los nueve <c>*Dialog.xaml</c> pintaba su rejilla raíz.
+    /// <c>MainWindow.xaml</c> sí lo hace, y su comentario explica por qué: <c>FluentWindow</c>
+    /// aplica su propio telón por debajo. Medido en el píxel, la ventana de la aplicación era
+    /// <c>#F2EBDD</c> y el diálogo <c>#FAFAFA</c> — los colores de fábrica de WPF-UI—, así que el
+    /// modo claro que D-948 decidió no existía en los diálogos, y dos de ellos son los que
+    /// confirman un borrado.
+    /// </para>
+    /// <para>
+    /// <b>Por qué aquí.</b> Éste era el punto ciego exacto: los pares de arriba pasaban en verde
+    /// sobre <c>Bg</c>, <c>Surface</c> y <c>Surface2</c> mientras la mitad de los diálogos se
+    /// pintaba sobre una superficie que la aplicación no declara en ninguna parte. Medir bien
+    /// unas superficies no dice nada de las que nadie mide; lo que cierra el hueco es que el
+    /// diálogo esté OBLIGADO a usar una de las medidas.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Cada_dialogo_pinta_su_fondo_con_una_superficie_medida()
+    {
+        string[] medidas = { "Brush.Bg", "Brush.Surface", "Brush.Surface2" };
+        string views = Path.Combine(RepoRoot(), "src", "Atalaya.App", "Views");
+
+        var dialogos = Directory.EnumerateFiles(views, "*Dialog.xaml").ToList();
+        dialogos.Should().NotBeEmpty("si no se encuentra ningún diálogo, este test no está mirando nada");
+
+        var descalzos = new List<string>();
+
+        foreach (string file in dialogos)
+        {
+            string body = Regex.Replace(
+                File.ReadAllText(file), "<!--.*?-->", string.Empty, RegexOptions.Singleline);
+
+            // La rejilla raíz: la primera que aparece tras el `<ui:FluentWindow …>` de apertura.
+            var m = Regex.Match(body, @"<Grid\b[^>]*>");
+
+            string fondo = m.Success
+                ? Regex.Match(m.Value, @"Background=""\{DynamicResource ([A-Za-z0-9.]+)\}""").Groups[1].Value
+                : string.Empty;
+
+            if (!medidas.Contains(fondo, StringComparer.Ordinal))
+            {
+                descalzos.Add($"{Path.GetFileName(file)} → {(fondo.Length == 0 ? "sin fondo" : fondo)}");
+            }
+        }
+
+        descalzos.Should().BeEmpty(
+            "un diálogo que no pinta su rejilla raíz se queda con el telón de fábrica de WPF-UI "
+            + "—#FAFAFA en claro, #202020 en oscuro— y sale de otro programa:"
+            + Environment.NewLine + string.Join(Environment.NewLine, descalzos));
     }
 
     [Theory]

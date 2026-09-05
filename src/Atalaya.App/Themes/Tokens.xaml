@@ -191,6 +191,15 @@
     <CornerRadius x:Key="Radius.L">10</CornerRadius>
     <CornerRadius x:Key="Radius.Pill">999</CornerRadius>
 
+    <!-- EL ANILLO DE FOCO (P-04, UI-0015). Dos gruesos y un desplazamiento, y los tres aquí porque
+         los consume el `FocusVisualStyle` del sistema: 2 px de anillo —1 no se ve a 150 %—, 1 px
+         de hueco entre el anillo y el control, y −3 de margen para que el conjunto se dibuje FUERA
+         del control y no le tape ni un píxel de su contenido. -->
+    <Thickness x:Key="Focus.Ring">2</Thickness>
+    <Thickness x:Key="Focus.RingOffset">1</Thickness>
+    <Thickness x:Key="Pad.FocusRing">-3</Thickness>
+    <Thickness x:Key="Pad.FocusRingInset">2</Thickness>
+
     <Thickness x:Key="Border.Hairline">1</Thickness>
     <Thickness x:Key="Border.Bottom">0,0,0,1</Thickness>
     <Thickness x:Key="Border.Top">0,1,0,0</Thickness>
@@ -345,5 +354,23 @@
          vista con formulario. -->
     <Thickness x:Key="Pad.Empty">24,32</Thickness>
     <Thickness x:Key="Pad.SaveBar">24,12</Thickness>
+
+    <!-- ============================================================ Los diálogos
+
+         UN DIÁLOGO ES UNA SUPERFICIE MÁS (UI-0013). Los nueve medían sus márgenes a mano —22 a los
+         lados, que no es múltiplo de 4— y ninguno pintaba su rejilla raíz, así que se quedaban con
+         el telón de fábrica de WPF-UI: `#FAFAFA` sobre una aplicación crema. Estos cuatro rellenos
+         son los que necesita la forma de un diálogo —cuerpo, cabecera de una lista, la lista y su
+         barra de acciones— y los usan los nueve. 24 y no 22: el ritmo es el mismo de las páginas.
+    -->
+    <Thickness x:Key="Pad.Dialog">24,8,24,24</Thickness>
+    <Thickness x:Key="Pad.DialogHead">24,8,24,0</Thickness>
+    <!-- La lista deja 16 a la derecha en vez de 24: los 8 que faltan son el carril de la barra de
+         desplazamiento, que se declara aparte en el `Padding` del propio scroll. -->
+    <Thickness x:Key="Pad.DialogList">24,12,16,0</Thickness>
+    <Thickness x:Key="Pad.DialogActions">24,12,24,20</Thickness>
+
+    <Thickness x:Key="Pad.L.Top">0,24,0,0</Thickness>
+    <Thickness x:Key="Pad.L.Left">24,0,0,0</Thickness>
 
 </ResourceDictionary>

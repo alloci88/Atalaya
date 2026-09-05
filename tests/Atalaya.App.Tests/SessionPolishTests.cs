@@ -53,7 +53,7 @@ public sealed class SessionPolishTests
             It("A.cs", Severity.Media, "catch vacío"),
         }).Single();
 
-        group.Chips.Select(c => c.Label).Should().Equal(new[] { "1 Crítica", "2 Media" });
+        group.Chips.Select(c => c.Label).Should().Equal(new[] { "1 Crítica", "2 Medias" });
         group.WorstSeverity.Should().Be(Severity.Critica);
     }
 

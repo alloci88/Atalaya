@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
 using Atalaya.Domain;
@@ -118,7 +118,7 @@ public sealed class LinkCloneFlowTests : IDisposable
     {
         string xaml = ViewXaml("PortfolioView.xaml");
 
-        xaml.Should().Contain("CloneLinkStateToBrush", "el piloto se ve, con los tres colores");
+        xaml.Should().Contain("StaticResource Dot.Link", "el piloto se ve, con los tres colores");
         xaml.Should().Contain("{Binding Link.Label}", "y se lee, para no depender solo del color");
         xaml.Should().Contain("{Binding Link.Tooltip}", "y se explica");
         xaml.Should().Contain("{Binding Link.ActionLabel}", "«Vincular…» y «Reparar…» no son lo mismo");

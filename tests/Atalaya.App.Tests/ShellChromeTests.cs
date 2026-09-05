@@ -78,7 +78,7 @@ public sealed class ShellChromeTests
         // cosa está donde le toca: lo que corre en el pie, el estado del hub en la barra de la
         // miga —es de la ventana— y la cuenta en el pie del raíl —es quién eres—.
         string shell = Markup(MainWindowXaml());
-        shell.Should().Contain("{Binding SyncHealth");
+        shell.Should().Contain("StaticResource Dot.Sync");
         shell.Should().Contain("{Binding SessionProgress}");
         shell.Should().Contain("{Binding AccountLabel}");
     }

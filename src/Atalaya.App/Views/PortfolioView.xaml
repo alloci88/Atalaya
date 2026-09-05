@@ -48,35 +48,79 @@
              Atalaya por la mañana: ¿cuánto hay abierto y de qué gravedad? Las cifras grandes; las
              etiquetas, debajo y pequeñas.
         -->
+        <!-- EL CERO NO SE PINTA DE PELIGRO (UI-0051). Con cero críticas el azulejo conservaba su
+             borde rojo y la cifra iba en `Sev.Crit`: el color decía «hay una crítica» donde el
+             número decía lo contrario, y es lo primero que se ve al abrir la aplicación. El color
+             de gravedad aparece cuando hay algo de esa gravedad. -->
         <c:ColumnsPanel Grid.Row="1"
                         MinColumnWidth="200" MaxColumns="4"
                         Gap="{StaticResource Space.M}"
                         Margin="{StaticResource Pad.L.Bottom}"
                         Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
-            <Border Style="{StaticResource Stat.Card}" BorderBrush="{DynamicResource Brush.Sev.Crit}">
+            <Border>
+                <Border.Style>
+                    <Style TargetType="Border" BasedOn="{StaticResource Stat.Card}">
+                        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Sev.Crit}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Summary.Critica}" Value="0">
+                                <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <StackPanel>
-                    <TextBlock Text="{Binding Summary.Critica}" Style="{StaticResource Stat.Number}"
+                    <TextBlock Text="{Binding Summary.Critica}" Style="{StaticResource Stat.Number.Sev}"
                                Foreground="{DynamicResource Brush.Sev.Crit}" />
                     <TextBlock Text="Críticas" Style="{StaticResource Stat.Label}" />
                 </StackPanel>
             </Border>
-            <Border Style="{StaticResource Stat.Card}" BorderBrush="{DynamicResource Brush.Sev.High}">
+            <Border>
+                <Border.Style>
+                    <Style TargetType="Border" BasedOn="{StaticResource Stat.Card}">
+                        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Sev.High}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Summary.Alta}" Value="0">
+                                <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <StackPanel>
-                    <TextBlock Text="{Binding Summary.Alta}" Style="{StaticResource Stat.Number}"
+                    <TextBlock Text="{Binding Summary.Alta}" Style="{StaticResource Stat.Number.Sev}"
                                Foreground="{DynamicResource Brush.Sev.High}" />
                     <TextBlock Text="Altas" Style="{StaticResource Stat.Label}" />
                 </StackPanel>
             </Border>
-            <Border Style="{StaticResource Stat.Card}" BorderBrush="{DynamicResource Brush.Sev.Med}">
+            <Border>
+                <Border.Style>
+                    <Style TargetType="Border" BasedOn="{StaticResource Stat.Card}">
+                        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Sev.Med}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Summary.Media}" Value="0">
+                                <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <StackPanel>
-                    <TextBlock Text="{Binding Summary.Media}" Style="{StaticResource Stat.Number}"
+                    <TextBlock Text="{Binding Summary.Media}" Style="{StaticResource Stat.Number.Sev}"
                                Foreground="{DynamicResource Brush.Sev.Med}" />
                     <TextBlock Text="Medias" Style="{StaticResource Stat.Label}" />
                 </StackPanel>
             </Border>
-            <Border Style="{StaticResource Stat.Card}" BorderBrush="{DynamicResource Brush.Sev.Low}">
+            <Border>
+                <Border.Style>
+                    <Style TargetType="Border" BasedOn="{StaticResource Stat.Card}">
+                        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Sev.Low}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Summary.Baja}" Value="0">
+                                <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <StackPanel>
-                    <TextBlock Text="{Binding Summary.Baja}" Style="{StaticResource Stat.Number}"
+                    <TextBlock Text="{Binding Summary.Baja}" Style="{StaticResource Stat.Number.Sev}"
                                Foreground="{DynamicResource Brush.Sev.Low}" />
                     <TextBlock Text="Bajas" Style="{StaticResource Stat.Label}" />
                 </StackPanel>
@@ -174,7 +218,7 @@
                                             c:Stack.Gap="{StaticResource Space.XS}"
                                             ToolTip="{Binding Link.Tooltip}">
                                     <Ellipse Width="9" Height="9" VerticalAlignment="Center"
-                                             Fill="{Binding Link.State, Converter={StaticResource CloneLinkStateToBrush}}" />
+                                             Style="{StaticResource Dot.Link}" />
                                     <TextBlock Text="{Binding Link.Label}"
                                                Style="{StaticResource Text.Small}"
                                                VerticalAlignment="Center" />
@@ -190,22 +234,22 @@
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0">
-                                        <TextBlock Text="{Binding Critica}" Style="{StaticResource Stat.Number}"
+                                        <TextBlock Text="{Binding Critica}" Style="{StaticResource Stat.Number.Sev}"
                                                    Foreground="{DynamicResource Brush.Sev.Crit}" />
                                         <TextBlock Text="Críticas" Style="{StaticResource Stat.Label}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="1">
-                                        <TextBlock Text="{Binding Alta}" Style="{StaticResource Stat.Number}"
+                                        <TextBlock Text="{Binding Alta}" Style="{StaticResource Stat.Number.Sev}"
                                                    Foreground="{DynamicResource Brush.Sev.High}" />
                                         <TextBlock Text="Altas" Style="{StaticResource Stat.Label}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
-                                        <TextBlock Text="{Binding Media}" Style="{StaticResource Stat.Number}"
+                                        <TextBlock Text="{Binding Media}" Style="{StaticResource Stat.Number.Sev}"
                                                    Foreground="{DynamicResource Brush.Sev.Med}" />
                                         <TextBlock Text="Medias" Style="{StaticResource Stat.Label}" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="3">
-                                        <TextBlock Text="{Binding Baja}" Style="{StaticResource Stat.Number}"
+                                        <TextBlock Text="{Binding Baja}" Style="{StaticResource Stat.Number.Sev}"
                                                    Foreground="{DynamicResource Brush.Sev.Low}" />
                                         <TextBlock Text="Bajas" Style="{StaticResource Stat.Label}" />
                                     </StackPanel>
@@ -218,13 +262,25 @@
                                             <Run Text="Ciclo" /><Run Text=" " /><Run Text="{Binding CurrentCycle, Mode=OneWay}" FontWeight="SemiBold" />
                                             <Run Text=" · " /><Run Text="{Binding ProgressText, Mode=OneWay}" FontWeight="SemiBold" /><Run Text=" auditado" />
                                         </TextBlock>
-                                        <Border Style="{StaticResource Pill}"
-                                                Background="{Binding Theme, Converter={StaticResource ThemeToBrush}, ConverterParameter=soft}"
-                                                ToolTip="{Binding ThemeTooltip}">
-                                            <TextBlock Text="{Binding ThemeLabel}"
-                                                       Style="{StaticResource Pill.Text}"
-                                                       Foreground="{Binding Theme, Converter={StaticResource ThemeToBrush}}" />
-                                        </Border>
+                                        <!-- LA TEMÁTICA ES UN METADATO, no una etiqueta (UI-0050).
+                                             Se pintaba como pastilla teñida aquí y en el resumen del
+                                             ciclo, y como texto corrido en la ficha y en el informe:
+                                             el mismo dato, dos formas según por dónde entres. Se
+                                             elige TEXTO en los cuatro sitios, y no pastilla, por el
+                                             sitio donde no cabe la otra opción — dentro de la frase
+                                             «Ciclo: 1 · Temática: General · Modo: Lotes» del informe
+                                             una pastilla no se puede pintar—. Un dato que en uno de
+                                             sus cuatro sitios tiene que ser texto es texto.
+
+                                             Y de paso se va el color que no salía de ninguna paleta
+                                             (UI-0019): la pastilla usaba `#DDDBD7` sobre `#6B7280`
+                                             en claro (3,50:1) y `#383E47` sobre `#9CA3AF` en oscuro
+                                             (4,25:1) — el único par que fallaba en los DOS temas,
+                                             porque nunca entró en la comprobación. -->
+                                        <TextBlock Text="{Binding ThemeLabel}"
+                                                   Style="{StaticResource Text.Small}"
+                                                   VerticalAlignment="Center"
+                                                   ToolTip="{Binding ThemeTooltip}" />
                                     </StackPanel>
                                     <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}" Height="6" />
                                 </StackPanel>

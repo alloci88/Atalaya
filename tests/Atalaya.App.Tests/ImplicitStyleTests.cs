@@ -24,13 +24,13 @@ public sealed class ImplicitStyleTests
     /// mismo fallo sigue en pie, escrita para que se vea en vez de para que se olvide. Quitar una
     /// entrada de aquí es arreglar el estilo; añadir una obliga a explicar por qué se acepta.
     /// </summary>
-    private static readonly Dictionary<string, string> Pending = new()
-    {
-        ["FindingDetailView.xaml"] =
-            "«SideAction» (ui:Button) redefine solo alineación y margen y se lleva por delante la "
-            + "plantilla del botón, igual que el «Block» de F5.9 §2. Es anterior a esta tanda y "
-            + "F5.9 tenía prohibido tocar otras vistas: se arregla cuando se toque esa vista",
-    };
+    private static readonly Dictionary<string, string> Pending = new();
+
+    // VACÍA desde UI-AUDIT-1 (UI-0005). «SideAction» era la última entrada: un `Style` sobre
+    // `ui:Button` que solo declaraba alineación y margen y se llevaba por delante la plantilla,
+    // así que las tres acciones de la ficha se pintaban con el botón de fábrica —relleno #DDDDDD
+    // y texto negro, IDÉNTICOS en los dos temas, medido byte a byte— y en oscuro pesaban más que
+    // el primario verde que tenían encima. Ya no existe: esas acciones son `Button.Secondary`.
 
     /// <summary>Todas las vistas, más la carcasa: la regla no es de una página.</summary>
     public static TheoryData<string> Markup
