@@ -1,0 +1,7 @@
+# Lo que se versiona es el INSTRUMENTO, no lo que produce (P-28).
+#
+# Las capturas de una fase concreta van a `docs/design/<fase>/` cuando son la evidencia de algo que
+# se decidió, y a la basura cuando no. Un banco que arrastrara sus PNG haría crecer el repositorio
+# unos cien megas por auditoría sin que ninguno de ellos volviera a mirarse.
+*.png
+*.jpg

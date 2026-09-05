@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- EL BANCO DE LAS VISTAS DENSAS Y LOS DIALOGOS (P-28). NO esta en `Atalaya.sln`, igual que
+       `PromptBench` y por lo mismo: no es producto ni suite, y meterlo en la solucion haria que
+       cada build de la aplicacion arrastrara una ventana que solo se abre a mano. Se compila y se
+       corre por su ruta.
+
+       Referencia a `Atalaya.App` porque monta la carcasa DE VERDAD -las mismas vistas, los mismos
+       diccionarios de tema- contra el agente falso y un hub temporal: las cuatro vistas densas y
+       los cinco dialogos no se pueden fotografiar desde el `dist` sin gastar creditos del usuario
+       y sin escribir en el hub del equipo. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Atalaya.Shots</RootNamespace>
+    <AssemblyName>Atalaya.Shots</AssemblyName>
+    <NoWarn>$(NoWarn);CS8618;CS8600;CS8602;CS8604</NoWarn>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Atalaya.App\Atalaya.App.csproj" />
+  </ItemGroup>
+
+</Project>
