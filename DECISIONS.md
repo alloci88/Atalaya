@@ -15260,6 +15260,64 @@ tests que se movieron protegían reglas vivas escritas contra un marcado que ha 
 
 **2.406 tests en verde** (1.898 de `Atalaya.App.Tests`).
 
+### D-998 — La tabla de tarifas es la de Copilot, y la mudanza del umbral se retira
+
+Dos retiradas de la misma familia: **una columna y un aviso que solo existían para un caso que ya no
+se da.**
+
+**La tabla se titula por lo que es: «Tarifas de GitHub Copilot».** Y pierde la columna
+**Proveedor**. Estaba ahí para el caso en que el mismo modelo costara distinto según quién
+facturara, y ese caso no existe: la tabla es la de lo que FACTURA (F16-RETOQUE §1), o sea Copilot,
+y las sesiones de Claude Code van contra la suscripción de cada uno y no se tarifan. En el hub las
+catorce filas la tienen en blanco. Una columna que siempre está vacía no informa de nada: ocupa
+ancho, obliga a explicarse en la ayuda y deja al usuario preguntándose qué debería escribir ahí.
+
+**El campo NO se va del fichero.** `ModelRate.Provider` sigue existiendo y `RateRow` lo sigue
+llevando de ida y vuelta, porque `ModelRateTable.Find` y `Billable` lo usan para resolver una tarifa
+y para saber qué factura. Quitarlo del editor y no del modelo es lo correcto: la pantalla deja de
+pedir un dato que nadie rellena, y el primer guardado no borra el que alguien pudiera tener puesto.
+Es la diferencia entre retirar un control y perder un dato.
+
+Y la ayuda dice de dónde salen los precios —la tabla pública de GitHub Copilot—, que Atalaya los
+siembra y los completa sola, y que aquí solo se corrige lo que no cuadre. Antes decía que eran «de
+la organización», que es cierto de dónde VIVEN y no dice nada de de dónde SALEN, que es lo que se
+pregunta al mirar un precio raro.
+
+**Y se retira la oferta de mudanza del umbral de unidad grande** (F13): «Tenías 30 LOC configurados
+en esta máquina, de cuando el umbral era un ajuste personal… ¿Lo aplico a la política de XBLAST?»,
+con sus dos enlaces. Era de la transición al umbral por aplicación, esa transición terminó, y lo
+que quedaba era un panel de gobernanza preguntando por un número que ya no gobierna nada — a una
+aplicación distinta cada vez, porque se ofrecía una vez por cada una.
+
+Se va **el aviso y el código que lo dispara**: `HasLargeUnitOffer`, su rótulo, los dos comandos, el
+recuento de aplicaciones ya preguntadas (`LargeUnitOfferedApps`) y el propio valor heredado
+(`LocalThresholds.LegacyLargeUnitLoc`). Es la regla de D-981 otra vez: una función retirada se
+borra, no se esconde detrás de una condición que ya casi nunca se cumple.
+
+**Y no hace falta migrador, que es la parte que merece anotarse.** La instrucción era «si queda un
+valor viejo en la configuración local, se ignora y se borra sin preguntar», y eso **ya lo hace el
+serializador**: sin la propiedad, `System.Text.Json` ignora `largeUnitLoc` al leer y no lo escribe
+al guardar, así que el primer `Save` lo saca del fichero. Escribir código para borrarlo habría sido
+un migrador que no migra nada — y una pieza más que mantener para siempre por un fichero que se
+limpia solo la primera vez que alguien toca Ajustes.
+
+**Un test nuevo, y es esa regla** (N-5): un `settings.json` de antes de F13 —con `largeUnitLoc` y
+`largeUnitOfferedApps` dentro— se lee conservando lo que sí sigue siendo suyo, y al guardar las dos
+claves desaparecen. **Se rompe en silencio**: si alguien configurara el deserializador para
+conservar lo desconocido, o volviera a declarar la propiedad, el número seguiría ahí y nadie lo
+notaría — hasta el día que otra cosa lo leyera. Lo acompaña uno que comprueba que del Inventario no
+queda ni el aviso ni sus dos enlaces.
+
+**Cuatro tests actualizados, ninguno eliminado.** Los tres de la mudanza (`El_umbral_heredado_se_ofrece_…`,
+`Rechazar_la_oferta_…`, `Contestada_la_ultima_aplicacion_…`, `Sin_umbral_heredado_no_hay_oferta`)
+protegían una función que ya no existe y los sustituye el par de arriba;
+`Saving_does_not_reset_the_thresholds_the_page_does_not_edit` medía su regla —guardar parte de lo
+que hay, no de cero— sobre el valor heredado, y ahora la mide sobre la frescura, que es lo que queda
+en `LocalThresholds`; y la asertiva de la tabla de tarifas pasa a exigir el título nuevo y el origen
+de los precios.
+
+**2.404 tests en verde** (1.896 de `Atalaya.App.Tests`).
+
 ### D-996 — Lo que la Parte C NO toca
 
 Ninguna regla de negocio, ningún dato, nada del hub, ningún prompt. Qué ajustes existen y qué hacen;

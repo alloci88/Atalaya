@@ -79,20 +79,6 @@ public sealed class LocalThresholds
     /// </summary>
     public int FreshnessDays { get; set; } = 60;
 
-    /// <summary>
-    /// <b>Legado.</b> El umbral de unidad grande que esta máquina tuvo mientras fue un ajuste
-    /// personal (BUGFIX-AJUSTES, entre d859d16 y F13). Ya no gobierna NADA: solo existe para poder
-    /// ofrecer una vez, por aplicación, llevarlo a la política del equipo. Contestada la oferta se
-    /// pone a 0 y deja de existir — un valor que nadie lee no puede quedarse en el fichero
-    /// invitando a leerlo.
-    /// </summary>
-    [JsonPropertyName("largeUnitLoc")]
-    public int LegacyLargeUnitLoc { get; set; }
-
-    /// <summary>¿Hay un umbral heredado que de verdad diga algo distinto de lo de fábrica?</summary>
-    [JsonIgnore]
-    public bool HasLegacyLargeUnit
-        => LegacyLargeUnitLoc > 0 && LegacyLargeUnitLoc != new Thresholds().LargeUnitLoc;
 }
 
 /// <summary>Machine-local application settings (§8 Ajustes). Never stored in the hub.</summary>
@@ -161,15 +147,18 @@ public sealed class AppSettings
     /// tiene que poder ofrecer.
     /// </para>
     /// </summary>
+    /// <para>
+    /// <b>Un valor viejo se ignora y desaparece, sin preguntar</b> (F26 §C, revisión). Entre
+    /// <c>d859d16</c> y F13 el umbral de unidad grande fue un ajuste de esta máquina, y F13 dejó una
+    /// oferta para llevarlo a la política de cada aplicación. Esa oferta se retira: la transición
+    /// terminó hace tiempo y lo único que quedaba era un aviso que preguntaba por un número que ya
+    /// no gobierna nada. No hace falta código de migración —<c>largeUnitLoc</c> ya no existe como
+    /// propiedad, así que el deserializador lo ignora y el primer guardado lo borra del fichero—:
+    /// borrarlo a mano habría sido escribir un migrador para no migrar nada.
+    /// </para>
+    /// </summary>
     [JsonPropertyName("defaultThresholds")]
     public LocalThresholds Thresholds { get; set; } = new();
-
-    /// <summary>
-    /// Las aplicaciones a las que ya se les ofreció llevar el umbral heredado de esta máquina a su
-    /// política (F13). Se apunta la respuesta —sea sí o sea no— porque una oferta que reaparece en
-    /// cada visita es un aviso que se aprende a ignorar.
-    /// </summary>
-    public List<string> LargeUnitOfferedApps { get; set; } = new();
 
     /// <summary>
     /// Interruptor del arreglo asistido (§5.7, H9 — entregado en F6.9).

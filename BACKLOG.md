@@ -41,7 +41,10 @@ misma rejilla).
     línea que dice lo que hace, la tabla de tarifas rehecha con cabecera de dos líneas y cifras
     tabulares (ya no recorta sus cabeceras en ventana reducida), el aviso de la escala con su ruta,
     «Acerca de» convertido en entrada del raíl —y su diálogo borrado— y el azulejo de coste de
-    Métricas jerarquizado, con el aviso de tarifa fuera. Capturas en `docs/design/f26-parte-c/`.
+    Métricas jerarquizado, con el aviso de tarifa fuera. Y dos retiradas más (D-998): la columna
+    «Proveedor» de la tabla de tarifas —siempre en blanco, porque la tabla es la de Copilot— y la
+    oferta de mudanza del umbral de unidad grande, con el código que la disparaba. Capturas en
+    `docs/design/f26-parte-c/`.
   - **La lista de pendientes de `DesignTokenTests` es el marcador.** Al cerrar la C **quedan diez, y
     los diez son diálogos**: `AboutDialog`, `AuditLaunchDialog`, `CycleConfigDialog`,
     `DeleteAppDialog`, `DeletedUnitsDialog`, `DirectivesDialog`, `FactoryResetDialog`,

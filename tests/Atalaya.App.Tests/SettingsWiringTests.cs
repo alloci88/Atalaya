@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Copilot;
 using Atalaya.Domain;
@@ -297,7 +297,6 @@ public sealed class SettingsWiringTests : IDisposable
         s.Theme.Should().Be("dark");
         s.PollingSeconds.Should().Be(60);
         s.Thresholds.FreshnessDays.Should().Be(60);
-        s.Thresholds.LegacyLargeUnitLoc.Should().Be(0, "sin umbral heredado no hay nada que ofrecer");
         new Thresholds().LargeUnitLoc.Should().Be(1500, "el umbral de fábrica es de la aplicación");
         new Thresholds().LargeUnitChars.Should().Be(60_000);
         // F16 §D — 6: cuatro pasadas que puedan aportar más las dos secas seguidas con las que

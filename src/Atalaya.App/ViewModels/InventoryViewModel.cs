@@ -609,7 +609,6 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
         // donde lo escribe «Umbrales · Gestionar». Enseñarlo aquí es lo que hace que un inventario
         // con 40 unidades grandes se pueda explicar sin abrir nada.
         LargeUnitLoc = app.Thresholds.LargeUnitLoc;
-        RefreshLargeUnitOffer();
 
         // F17: la lupa y el juez preferido del ciclo, leídos del mismo fichero que las unidades.
         _cycleConfigValue = inv?.Config ?? CycleConfig.Default;
@@ -982,87 +981,6 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
         => $"A partir de {LargeUnitLoc} líneas una unidad sale «Grande» y no entra en la cola de "
            + "auditoría. Es política de esta aplicación: vive en el hub, vale para todo el equipo y "
            + "aplica en el próximo re-escaneo.";
-
-    /// <summary>
-    /// La oferta de mudanza (F13): esta máquina traía un umbral personal distinto del de fábrica —
-    /// de cuando el ajuste era de Ajustes— y esta aplicación no lo tiene como política. Se ofrece
-    /// UNA vez por aplicación, y la respuesta se apunta: una oferta que reaparece en cada visita es
-    /// un aviso que se aprende a ignorar.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(LargeUnitOfferLabel))]
-    private bool _hasLargeUnitOffer;
-
-    public string LargeUnitOfferLabel
-        => $"Tenías {_settings.Current.Thresholds.LegacyLargeUnitLoc} LOC configurados en esta "
-           + $"máquina, de cuando el umbral era un ajuste personal. Esta aplicación usa "
-           + $"{LargeUnitLoc}. ¿Lo aplico a la política de «{AppName}», para todo el equipo?";
-
-    /// <summary>
-    /// ¿Hay algo que ofrecer? Solo si el valor heredado existe, dice algo distinto de la política
-    /// vigente, y no se ha contestado ya por esta aplicación.
-    /// </summary>
-    private void RefreshLargeUnitOffer()
-    {
-        LocalThresholds local = _settings.Current.Thresholds;
-        HasLargeUnitOffer = local.HasLegacyLargeUnit
-            && local.LegacyLargeUnitLoc != LargeUnitLoc
-            && !_settings.Current.LargeUnitOfferedApps.Contains(Slug, StringComparer.OrdinalIgnoreCase);
-        OnPropertyChanged(nameof(LargeUnitOfferLabel));
-    }
-
-    /// <summary>Lleva el umbral heredado a la política de ESTA aplicación, y lo publica.</summary>
-    [RelayCommand]
-    private void AcceptLargeUnitOffer()
-    {
-        int inherited = _settings.Current.Thresholds.LegacyLargeUnitLoc;
-        if (Slug.Length == 0 || inherited <= 0)
-        {
-            return;
-        }
-
-        ThresholdPolicyResult result = _thresholds.Set(Slug, inherited, _thresholds.Read(Slug).LargeUnitChars);
-        AnswerLargeUnitOffer();
-        _toasts.Show(result.Saved
-            ? $"Umbral de «{AppName}» = {result.LargeUnitLoc} LOC, ahora para todo el equipo. "
-              + "Aplica en el próximo re-escaneo."
-            : result.Message);
-        Rebuild();
-    }
-
-    /// <summary>«Aquí no»: se apunta la respuesta y no se vuelve a preguntar por esta aplicación.</summary>
-    [RelayCommand]
-    private void DismissLargeUnitOffer()
-    {
-        AnswerLargeUnitOffer();
-        RefreshLargeUnitOffer();
-    }
-
-    /// <summary>
-    /// Apunta que esta aplicación ya contestó, y retira el valor heredado en cuanto no le quede
-    /// ninguna por preguntar que pudiera quererlo. Un número que ya no gobierna nada no puede
-    /// quedarse en el fichero invitando a que alguien lo lea.
-    /// </summary>
-    private void AnswerLargeUnitOffer()
-    {
-        AppSettings settings = _settings.Current;
-        if (!settings.LargeUnitOfferedApps.Contains(Slug, StringComparer.OrdinalIgnoreCase))
-        {
-            settings.LargeUnitOfferedApps.Add(Slug);
-        }
-
-        var pending = _hub.Store.ListAppSlugs()
-            .Where(s => !settings.LargeUnitOfferedApps.Contains(s, StringComparer.OrdinalIgnoreCase))
-            .ToList();
-        if (pending.Count == 0)
-        {
-            settings.Thresholds.LegacyLargeUnitLoc = 0;
-            settings.LargeUnitOfferedApps.Clear();
-        }
-
-        _settings.Save(settings);
-        HasLargeUnitOffer = false;
-    }
 
     /// <summary>
     /// «Umbrales · Gestionar» (F13). Vive aquí y no en Ajustes porque lo que decide —qué unidades

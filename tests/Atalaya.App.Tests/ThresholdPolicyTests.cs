@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
@@ -267,74 +267,73 @@ public sealed class ThresholdPolicyTests : IDisposable
         UnitOf(LegacyUnit).State.Should().Be(UnitState.Pendiente, "editar no reclasifica: eso lo hace el re-escaneo");
     }
 
-    // ================================================================ 3 · la mudanza del valor local
+    // ================================================================ 3 · el valor local, retirado
 
     /// <summary>
-    /// El umbral que esta máquina tenía cuando era un ajuste personal se ofrece UNA vez por
-    /// aplicación. Aceptar lo convierte en política del equipo.
+    /// <b>La mudanza del umbral personal se retira</b> (F26 §C, revisión).
+    /// <para>
+    /// Entre <c>d859d16</c> y F13 el umbral de unidad grande fue un ajuste de esta máquina; F13 lo
+    /// convirtió en política de cada aplicación y dejó una oferta —«tenías 30 LOC configurados
+    /// aquí… ¿lo aplico a la política de XBLAST?»— que se hacía una vez por aplicación. La
+    /// transición terminó hace tiempo y lo que quedaba era un aviso preguntando por un número que
+    /// ya no gobierna nada.
+    /// </para>
+    /// <para>
+    /// <b>Y no hace falta migrador.</b> La propiedad ya no existe, así que un <c>settings.json</c>
+    /// viejo con <c>largeUnitLoc</c> dentro se lee ignorándolo y el primer guardado lo deja fuera
+    /// del fichero. Es lo que este test comprueba: que se ignore, y que desaparezca sin preguntar.
+    /// </para>
     /// </summary>
     [Fact]
-    public void El_umbral_heredado_se_ofrece_y_al_aceptarlo_pasa_a_ser_politica()
+    public void Un_umbral_local_viejo_se_ignora_y_se_borra_sin_preguntar()
     {
-        AppSettings s = _settings.Current;
-        s.Thresholds.LegacyLargeUnitLoc = 30;
-        _settings.Save(s);
+        // Un fichero de antes de F13, con el umbral personal y la lista de aplicaciones ya
+        // preguntadas dentro.
+        Directory.CreateDirectory(Path.GetDirectoryName(_paths.SettingsJson)!);
+        File.WriteAllText(_paths.SettingsJson, """
+            {
+              "defaultThresholds": { "freshnessDays": 45, "largeUnitLoc": 30 },
+              "largeUnitOfferedApps": [ "app" ],
+              "editor": "vscode"
+            }
+            """);
 
-        InventoryViewModel vm = Inventory();
-        vm.HasLargeUnitOffer.Should().BeTrue();
-        vm.LargeUnitOfferLabel.Should().Contain("30").And.Contain("1500");
+        var settings = new SettingsService(_paths);
+        AppSettings leidos = settings.Load();
 
-        vm.AcceptLargeUnitOfferCommand.Execute(null);
+        leidos.Thresholds.FreshnessDays.Should().Be(45, "lo que sí sigue siendo suyo se conserva");
+        leidos.Editor.Should().Be("vscode");
+        typeof(LocalThresholds).GetProperty("LegacyLargeUnitLoc")
+            .Should().BeNull("el umbral personal ya no tiene dónde vivir");
+        typeof(AppSettings).GetProperty("LargeUnitOfferedApps")
+            .Should().BeNull("ni la lista de a quién ya se le preguntó");
 
-        _hub.Store.TryReadApp("app")!.Thresholds.LargeUnitLoc.Should().Be(30);
-        vm.HasLargeUnitOffer.Should().BeFalse("ya está contestada");
+        settings.Save(leidos);
+
+        string escrito = File.ReadAllText(_paths.SettingsJson);
+        escrito.Should().NotContain("largeUnitLoc", "el primer guardado lo borra, sin preguntar");
+        escrito.Should().NotContain("largeUnitOfferedApps");
+        escrito.Should().Contain("\"freshnessDays\": 45");
     }
 
-    /// <summary>Y decir que no también es contestar: no vuelve a preguntarse por esa aplicación.</summary>
+    /// <summary>Y el Inventario no pregunta nada: no queda ni la oferta ni sus dos enlaces.</summary>
     [Fact]
-    public void Rechazar_la_oferta_no_toca_la_politica_y_no_vuelve_a_preguntar()
+    public void El_inventario_ya_no_ofrece_mudar_ningun_umbral()
     {
-        AppSettings s = _settings.Current;
-        s.Thresholds.LegacyLargeUnitLoc = 30;
-        _settings.Save(s);
+        typeof(InventoryViewModel).GetProperty("HasLargeUnitOffer").Should().BeNull();
+        typeof(InventoryViewModel).GetProperty("LargeUnitOfferLabel").Should().BeNull();
+        typeof(InventoryViewModel).GetProperty("AcceptLargeUnitOfferCommand").Should().BeNull();
+        typeof(InventoryViewModel).GetProperty("DismissLargeUnitOfferCommand").Should().BeNull();
 
-        InventoryViewModel vm = Inventory();
-        vm.DismissLargeUnitOfferCommand.Execute(null);
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Atalaya.sln")))
+        {
+            dir = dir.Parent;
+        }
 
-        _hub.Store.TryReadApp("app")!.Thresholds.LargeUnitLoc.Should().Be(1500);
-        vm.HasLargeUnitOffer.Should().BeFalse();
-
-        // Y en una visita nueva —view-model nuevo, ajustes releídos del disco— sigue callada.
-        Inventory().HasLargeUnitOffer.Should().BeFalse("una oferta que reaparece se aprende a ignorar");
-    }
-
-    /// <summary>
-    /// Contestadas todas las aplicaciones, el valor heredado se borra del fichero: un número que ya
-    /// no gobierna nada no puede quedarse invitando a que alguien lo lea (misma regla que D-764).
-    /// </summary>
-    [Fact]
-    public void Contestada_la_ultima_aplicacion_el_valor_heredado_desaparece()
-    {
-        AppSettings s = _settings.Current;
-        s.Thresholds.LegacyLargeUnitLoc = 30;
-        _settings.Save(s);
-
-        Inventory().DismissLargeUnitOfferCommand.Execute(null);
-
-        new SettingsService(_paths).Load().Thresholds.LegacyLargeUnitLoc.Should().Be(0);
-    }
-
-    /// <summary>Sin nada heredado —o con lo de fábrica— no se ofrece nada.</summary>
-    [Fact]
-    public void Sin_umbral_heredado_no_hay_oferta()
-    {
-        Inventory().HasLargeUnitOffer.Should().BeFalse();
-
-        AppSettings s = _settings.Current;
-        s.Thresholds.LegacyLargeUnitLoc = 1500;
-        _settings.Save(s);
-
-        Inventory().HasLargeUnitOffer.Should().BeFalse("1500 es lo de fábrica: no dice nada distinto");
+        File.ReadAllText(Path.Combine(
+                dir!.FullName, "src", "Atalaya.App", "Views", "InventoryView.xaml"))
+            .Should().NotContain("LargeUnitOffer", "ni el aviso ni sus dos enlaces");
     }
 
     /// <summary>

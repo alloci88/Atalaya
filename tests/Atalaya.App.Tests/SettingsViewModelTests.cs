@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
@@ -158,24 +158,32 @@ public sealed class SettingsViewModelTests : IDisposable
             .Should().BeNull("se gobierna por aplicación, en el Inventario");
         typeof(LocalThresholds).GetProperty("LargeUnitLoc")
             .Should().BeNull("y los ajustes de la máquina ya no tienen dónde guardarlo");
+        typeof(LocalThresholds).GetProperty("LegacyLargeUnitLoc")
+            .Should().BeNull("ni el heredado: la mudanza de F13 se retiró en F26 §C");
     }
 
+    /// <summary>
+    /// Guardar vuelca SOLO lo que la página edita y se apoya en los umbrales vigentes: construir un
+    /// <c>LocalThresholds</c> nuevo devolvería a su valor por defecto lo que la página no toca.
+    /// <para>
+    /// Hasta F26 §C lo que protegía era el umbral heredado de F13, que ya no existe. La regla sigue
+    /// viva —parte de lo que hay, no de cero— y se mide sobre lo que sí queda ahí.
+    /// </para>
+    /// </summary>
     [Fact]
     public void Saving_does_not_reset_the_thresholds_the_page_does_not_edit()
     {
-        // El umbral heredado de la máquina (F13) no tiene control en la página, y guardar no puede
-        // llevárselo por delante: la mudanza todavía tiene que poder ofrecerlo.
-        _settings.Current.Thresholds.LegacyLargeUnitLoc = 30;
+        _settings.Current.Thresholds.FreshnessDays = 45;
         _settings.Save(_settings.Current);
 
         SettingsViewModel vm = NewViewModel();
-        vm.FreshnessDays = 90;
+        vm.PollingSeconds = 90;
         vm.SaveCommand.Execute(null);
 
         AppSettings reloaded = new SettingsService(_paths).Load();
-        reloaded.Thresholds.FreshnessDays.Should().Be(90);
-        reloaded.Thresholds.LegacyLargeUnitLoc.Should().Be(30,
-            "construir un LocalThresholds nuevo al guardar lo devolvía a su valor por defecto");
+        reloaded.PollingSeconds.Should().Be(90);
+        reloaded.Thresholds.FreshnessDays.Should().Be(
+            45, "el view-model nace con lo guardado y guardar no lo devuelve a fábrica");
     }
 
     // ---------- 1b. El guardado se ve (F5.7 §4) ----------

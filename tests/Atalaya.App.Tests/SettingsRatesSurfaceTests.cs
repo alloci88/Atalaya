@@ -129,8 +129,12 @@ public sealed class SettingsRatesSurfaceTests
         xaml.Should().Contain("{Binding Rates.Rows}", "con su tabla de verdad");
         xaml.Should().Contain("{Binding Rates.MissingModels}",
             "y con los modelos usados sin tarifa, que es lo que la hace accionable");
-        xaml.Should().Contain("las trae puestas y las mantiene al día sola",
-            "de dónde salen, dicho donde se corrigen");
+        xaml.Should().Contain("Tarifas de GitHub Copilot",
+            "la tabla es la de Copilot y se titula por lo que es");
+        xaml.Should().Contain("la tabla pública de GitHub Copilot",
+            "de dónde salen los precios, dicho donde se corrigen");
+        xaml.Should().Contain("Atalaya los siembra y los completa sola",
+            "y que no hay que rellenarla a mano");
 
         typeof(SettingsViewModel).GetProperty("CanManageRates").Should().NotBeNull();
         SettingsViewModel.RatesSection.Should().NotBeNullOrWhiteSpace(

@@ -1107,29 +1107,6 @@
         <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
     </Style>
 
-    <!-- El proveedor, como pastilla. Sigue siendo editable —«en blanco vale para cualquiera» es
-         parte de lo que hay que poder escribir—, así que es una celda con forma de pastilla y no
-         una pastilla de adorno: en una tabla donde todo se edita, una celda que no se editara
-         sería la excepción que hay que descubrir. -->
-    <Style x:Key="Field.Cell.Pill" TargetType="TextBox" BasedOn="{StaticResource Field.Cell}">
-        <Setter Property="FontSize" Value="{StaticResource FontSize.Meta}" />
-        <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
-        <Setter Property="TextAlignment" Value="Center" />
-        <Setter Property="HorizontalContentAlignment" Value="Center" />
-        <Setter Property="Padding" Value="{StaticResource Pad.Pill}" />
-        <Setter Property="Background" Value="{DynamicResource Brush.Surface2}" />
-        <Setter Property="HorizontalAlignment" Value="Left" />
-        <Setter Property="MinWidth" Value="88" />
-        <Style.Triggers>
-            <!-- Sin proveedor no hay pastilla: una columna de cajas teñidas y vacías se lee como
-                 una tabla rota, y «en blanco vale para cualquiera» es el caso NORMAL. -->
-            <DataTrigger Binding="{Binding Text, RelativeSource={RelativeSource Self}}" Value="">
-                <Setter Property="Background" Value="Transparent" />
-            </DataTrigger>
-        </Style.Triggers>
-    </Style>
-
     <!-- La nota: texto largo, envuelve, y no se recorta. -->
     <Style x:Key="Field.Cell.Note" TargetType="TextBox" BasedOn="{StaticResource Field.Cell}">
         <Setter Property="TextWrapping" Value="Wrap" />

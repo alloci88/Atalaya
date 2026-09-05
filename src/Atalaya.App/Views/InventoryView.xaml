@@ -224,22 +224,6 @@
                                 ToolTip="Fijar a partir de cuántas líneas —o de cuántos caracteres— una unidad es demasiado grande para auditarla de una vez. Es política de la aplicación: vale para todo el equipo y aplica en el próximo re-escaneo." />
                     </Grid>
 
-                    <!-- La mudanza del umbral personal, ofrecida UNA vez por aplicación. -->
-                    <Border Style="{StaticResource Notice}" Margin="{StaticResource Pad.XS.Top}"
-                            Visibility="{Binding HasLargeUnitOffer, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel c:Stack.Gap="{StaticResource Space.XS}">
-                            <TextBlock Text="{Binding LargeUnitOfferLabel}" Style="{StaticResource Text.Small}"
-                                       ToolTip="Este umbral era un ajuste de tu máquina y ahora es política de cada aplicación. Se te pregunta una vez por aplicación: lo que decidas queda en el hub, para todo el equipo." />
-                            <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
-                                <Button Content="Aplicar a la aplicación" Style="{StaticResource Button.Link}"
-                                        Command="{Binding AcceptLargeUnitOfferCommand}"
-                                        ToolTip="Escribe ese umbral en la política de esta aplicación y lo publica en el hub, para todo el equipo." />
-                                <Button Content="Aquí no" Style="{StaticResource Button.Link}"
-                                        Command="{Binding DismissLargeUnitOfferCommand}"
-                                        ToolTip="Deja esta aplicación con su política y no vuelve a preguntar por ella." />
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
                     <!-- F5.7 §4: el resultado de la última acción va por el toast global, no
                          incrustado al fondo de este panel, donde se quedaba pegado. -->
                 </StackPanel>

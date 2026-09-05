@@ -1150,7 +1150,9 @@ inventado.
 
 #### Las tarifas se editan, y viven en el hub
 
-**Ajustes → Tarifas.** La tabla es de la **organización**: está en el hub, la ve todo el equipo y el
+**Ajustes → Tarifas.** Es la tabla de **GitHub Copilot**, y así se titula: los precios son los de
+su tabla pública, Atalaya los siembra y los completa sola, y aquí solo se corrige lo que no cuadre.
+La tabla es de la **organización**: está en el hub, la ve todo el equipo y el
 historial de git dice quién cambió qué y cuándo. Se edita desde la aplicación porque las tarifas
 cambian, aparecen modelos nuevos y **hay promocionales con fecha de caducidad**: corregir un precio
 no puede exigir esperar a una versión nueva de Atalaya.
@@ -1173,10 +1175,8 @@ La pantalla te señala **los modelos que estás usando y no tienen tarifa**, con
 esperan por ellos. Eso es lo que convierte un «parcial» en algo que puedes arreglar. Solo aparecen
 modelos de las casas que facturan: a un modelo usado con Claude Code no le falta ninguna tarifa.
 
-Dos detalles que importan al editarla:
+Un detalle que importa al editarla:
 
-- **Proveedor en blanco = vale para cualquiera.** Ponlo solo cuando el mismo modelo cueste distinto
-  según quién facture.
 - **Caché escrita en blanco ≠ 0.** En blanco significa «este modelo no la cobra aparte» y esos
   tokens son entrada normal; un 0 afirmaría que escribir en caché es gratis, que es otra cosa.
 

@@ -205,18 +205,18 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" Text="Tarifas" Style="{StaticResource Setting.SectionTitle}" />
+                        <TextBlock Grid.Row="0" Text="Tarifas de GitHub Copilot" Style="{StaticResource Setting.SectionTitle}" />
 
                         <!-- UNA línea, y el resto plegado: la de antes eran cuatro y había que
                              leerlas enteras para llegar a la tabla, que es lo que se viene a ver. -->
                         <StackPanel Grid.Row="1" Margin="{StaticResource Pad.M.Bottom}">
                             <TextBlock Style="{StaticResource Text.Small}"
                                        MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
-                                       Text="Precio por millón de tokens de cada modelo. Son de la organización: viven en el hub." />
+                                       Text="Los precios son los de la tabla pública de GitHub Copilot. Atalaya los siembra y los completa sola; aquí solo se corrige lo que no cuadre." />
                             <ToggleButton x:Name="MasTarifas" Style="{StaticResource Toggle.More}" />
                             <TextBlock Style="{StaticResource Setting.More}"
                                        MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
-                                       Text="De aquí sale el coste de cada sesión. La aplicación las trae puestas y las mantiene al día sola: aquí se corrige un precio que no cuadre y se añade el de un modelo que no traiga. Las ve todo el equipo, con el commit del hub como atribución. Proveedor en blanco = vale para cualquiera; ponlo solo cuando el mismo modelo cueste distinto según quién facture. Caché escrita en blanco = ese modelo no la cobra aparte, y esos tokens son entrada normal; no es lo mismo que escribir un 0."
+                                       Text="De aquí sale el coste de cada sesión. La tabla vive en el hub y la ve todo el equipo, con el commit como atribución; añade aquí el precio de un modelo que Atalaya todavía no traiga. Caché escrita en blanco = ese modelo no la cobra aparte, y esos tokens son entrada normal; no es lo mismo que escribir un 0. Las sesiones de Claude Code no se tarifan: van contra tu suscripción y no entran en esta tabla."
                                        Visibility="{Binding IsChecked, ElementName=MasTarifas, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
 
@@ -255,11 +255,10 @@
                             <ScrollViewer x:Name="RatesScroll"
                                           HorizontalScrollBarVisibility="Auto"
                                           VerticalScrollBarVisibility="Disabled">
-                                <Grid MinWidth="1040"
+                                <Grid MinWidth="910"
                                       Width="{Binding ViewportWidth, ElementName=RatesScroll}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="2*" MinWidth="220" />
-                                        <ColumnDefinition Width="1*" MinWidth="130" />
                                         <ColumnDefinition Width="1*" MinWidth="110" />
                                         <ColumnDefinition Width="1*" MinWidth="110" />
                                         <ColumnDefinition Width="1*" MinWidth="130" />
@@ -271,7 +270,7 @@
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
 
-                                    <Border Grid.Row="0" Grid.ColumnSpan="7"
+                                    <Border Grid.Row="0" Grid.ColumnSpan="6"
                                             BorderBrush="{DynamicResource Brush.LineStrong}"
                                             BorderThickness="{StaticResource Border.Bottom}" />
 
@@ -279,37 +278,34 @@
                                         <TextBlock Text="Modelo" Style="{StaticResource Table.Header}" />
                                     </StackPanel>
                                     <StackPanel Grid.Row="0" Grid.Column="1" Margin="{StaticResource Pad.Row}">
-                                        <TextBlock Text="Proveedor" Style="{StaticResource Table.Header}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Row="0" Grid.Column="2" Margin="{StaticResource Pad.Row}">
                                         <TextBlock Text="Entrada" Style="{StaticResource Table.Header}"
                                                    HorizontalAlignment="Right" />
                                         <TextBlock Text="$ por millón" Style="{StaticResource Table.HeaderUnit}"
                                                    HorizontalAlignment="Right" />
                                     </StackPanel>
-                                    <StackPanel Grid.Row="0" Grid.Column="3" Margin="{StaticResource Pad.Row}">
+                                    <StackPanel Grid.Row="0" Grid.Column="2" Margin="{StaticResource Pad.Row}">
                                         <TextBlock Text="Salida" Style="{StaticResource Table.Header}"
                                                    HorizontalAlignment="Right" />
                                         <TextBlock Text="$ por millón" Style="{StaticResource Table.HeaderUnit}"
                                                    HorizontalAlignment="Right" />
                                     </StackPanel>
-                                    <StackPanel Grid.Row="0" Grid.Column="4" Margin="{StaticResource Pad.Row}">
+                                    <StackPanel Grid.Row="0" Grid.Column="3" Margin="{StaticResource Pad.Row}">
                                         <TextBlock Text="Caché leída" Style="{StaticResource Table.Header}"
                                                    HorizontalAlignment="Right" />
                                         <TextBlock Text="$ por millón" Style="{StaticResource Table.HeaderUnit}"
                                                    HorizontalAlignment="Right" />
                                     </StackPanel>
-                                    <StackPanel Grid.Row="0" Grid.Column="5" Margin="{StaticResource Pad.Row}">
+                                    <StackPanel Grid.Row="0" Grid.Column="4" Margin="{StaticResource Pad.Row}">
                                         <TextBlock Text="Caché escrita" Style="{StaticResource Table.Header}"
                                                    HorizontalAlignment="Right" />
                                         <TextBlock Text="$ por millón" Style="{StaticResource Table.HeaderUnit}"
                                                    HorizontalAlignment="Right" />
                                     </StackPanel>
-                                    <StackPanel Grid.Row="0" Grid.Column="6" Margin="{StaticResource Pad.Row}">
+                                    <StackPanel Grid.Row="0" Grid.Column="5" Margin="{StaticResource Pad.Row}">
                                         <TextBlock Text="Nota" Style="{StaticResource Table.Header}" />
                                     </StackPanel>
 
-                                    <ItemsControl Grid.Row="1" Grid.ColumnSpan="7"
+                                    <ItemsControl Grid.Row="1" Grid.ColumnSpan="6"
                                                   ItemsSource="{Binding Rates.Rows}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -318,7 +314,6 @@
                                                     <Grid>
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="2*" MinWidth="220" />
-                                                            <ColumnDefinition Width="1*" MinWidth="130" />
                                                             <ColumnDefinition Width="1*" MinWidth="110" />
                                                             <ColumnDefinition Width="1*" MinWidth="110" />
                                                             <ColumnDefinition Width="1*" MinWidth="130" />
@@ -328,17 +323,15 @@
                                                         <TextBox Grid.Column="0" Text="{Binding Model}"
                                                                  Style="{StaticResource Field.Cell}"
                                                                  FontWeight="SemiBold" />
-                                                        <TextBox Grid.Column="1" Text="{Binding Provider}"
-                                                                 Style="{StaticResource Field.Cell.Pill}" />
-                                                        <TextBox Grid.Column="2" Text="{Binding Input}"
+                                                        <TextBox Grid.Column="1" Text="{Binding Input}"
                                                                  Style="{StaticResource Field.Cell.Number}" />
-                                                        <TextBox Grid.Column="3" Text="{Binding Output}"
+                                                        <TextBox Grid.Column="2" Text="{Binding Output}"
                                                                  Style="{StaticResource Field.Cell.Number}" />
-                                                        <TextBox Grid.Column="4" Text="{Binding CachedInput}"
+                                                        <TextBox Grid.Column="3" Text="{Binding CachedInput}"
                                                                  Style="{StaticResource Field.Cell.Number}" />
-                                                        <TextBox Grid.Column="5" Text="{Binding CacheWrite}"
+                                                        <TextBox Grid.Column="4" Text="{Binding CacheWrite}"
                                                                  Style="{StaticResource Field.Cell.Number}" />
-                                                        <TextBox Grid.Column="6" Text="{Binding Note}"
+                                                        <TextBox Grid.Column="5" Text="{Binding Note}"
                                                                  Style="{StaticResource Field.Cell.Note}" />
                                                     </Grid>
                                                 </Border>
