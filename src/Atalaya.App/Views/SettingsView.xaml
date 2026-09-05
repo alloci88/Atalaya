@@ -23,7 +23,6 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- ==================================================== Cabecera -->
@@ -37,13 +36,22 @@
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
+                <!-- LA COLUMNA DEL FORMULARIO, y con ella la de su barra de acciones. El tope va en
+                     la COLUMNA y no en cada hijo: puesto en el hijo, un `Left` lo encoge hasta su
+                     contenido —la barra se quedaba del ancho del botón— y un `Stretch` lo centra.
+                     En la columna, los dos se estiran hasta 960 y ahí se paran, con el aire a la
+                     derecha; por debajo de 960 la columna vale lo que haya. -->
+                <ColumnDefinition Width="*" MaxWidth="{StaticResource Setting.ContentWidth}" />
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
             <!-- La lista de secciones. Se construye desde `Sections` y no como cinco botones
                  escritos a mano por lo mismo que el raíl (D-954): la entrada activa es un dato, y
                  un dato se puede probar. -->
-            <ItemsControl Grid.Column="0"
+            <ItemsControl Grid.Column="0" Grid.RowSpan="2"
                           Width="{StaticResource Setting.SectionsWidth}"
                           Margin="{StaticResource Pad.L.Right}"
                           ItemsSource="{Binding Sections}">
@@ -59,7 +67,7 @@
 
             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
                           Padding="{StaticResource Pad.L.Right}">
-                <Grid MaxWidth="{StaticResource Content.MaxWidth}" HorizontalAlignment="Left">
+                <Grid>
 
                     <!-- ============================== Proveedor y modelo ============================== -->
                     <StackPanel Visibility="{Binding ShowProvider, Converter={StaticResource BoolToVisibility}}">
@@ -468,18 +476,19 @@
                     </StackPanel>
                 </Grid>
             </ScrollViewer>
-        </Grid>
 
         <!-- ==================================================== La barra de guardar
 
-             Al PIE de la vista y siempre a la vista, que es lo que «Guardar» no era: vivía al final
-             de un scroll de dos pantallas, así que se editaba sin tenerlo delante.
+             Al PIE de la COLUMNA del formulario —no de la ventana— y siempre a la vista, que es
+             lo que «Guardar» no era: vivía al final de un scroll de dos pantallas, así que se
+             editaba sin tenerlo delante. Y una barra al ancho de la ventana dejaba el botón a
+             1.400 px de lo que guarda: la acción se coloca junto a lo que actúa.
 
              UN primario, y el de la sección que estás editando (principio 4): en Tarifas se guarda
              la tabla del hub, que es otra cosa y otro sitio. Dos «Guardar» a la vez habrían dejado
              al usuario decidiendo cuál era el suyo.
         -->
-        <Border Grid.Row="2" Style="{StaticResource Card}"
+        <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource Card}"
                 Padding="{StaticResource Pad.SaveBar}"
                 CornerRadius="{StaticResource Radius.M}"
                 Margin="{StaticResource Pad.M.Top}">
@@ -515,5 +524,7 @@
                 </StackPanel>
             </DockPanel>
         </Border>
+        </Grid>
+
     </Grid>
 </UserControl>

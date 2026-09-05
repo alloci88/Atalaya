@@ -14,7 +14,7 @@
         cabía. Los estados de unidad eran pastillas grises: todas iguales, sin decir nada de un
         vistazo.
 
-        Lo que hay: las acciones de la VISTA en su cabecera, con «Auditar selección» como único
+        Lo que hay: las acciones de la VISTA en su cabecera, y «Auditar selección» —el único
         primario; los gestos que tocan la LISTA (buscar, filtrar deriva, seleccionar pendientes o
         cambiadas) en la barra de la lista, que es donde actúan; el árbol al ancho; y el panel del
         ciclo a 320 px, que es lo que su contenido necesita, plegándose en cuanto no cabe.
@@ -247,9 +247,10 @@
 
         <!-- ==================================================== Cabecera de vista
 
-             Las acciones de la VISTA van aquí, y «Auditar selección» es el único primario: es lo
-             que esta pantalla existe para hacer. Lo que toca la LISTA —buscar, filtrar, seleccionar
-             pendientes o cambiadas— baja a la barra de la lista, que es donde actúa.
+             Las acciones de la VISTA van aquí. Lo que toca la LISTA —buscar, filtrar, seleccionar
+             pendientes o cambiadas y AUDITAR LA SELECCIÓN— vive en la barra de la lista, que es
+             donde actúa: un primario a media pantalla de las casillas que gobierna no se lee como
+             el final de ese gesto (F26 §C, segunda revisión).
         -->
         <Grid Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Margin="{StaticResource Pad.M.Bottom}">
             <StackPanel>
@@ -288,10 +289,6 @@
                         Visibility="{Binding Wide, Converter={StaticResource InverseBoolToVisibility}}" />
 
                 <Button Content="Ver hallazgos" Command="{Binding ShowFindingsCommand}" />
-
-                <Button Content="Auditar selección" Command="{Binding AuditSelectionCommand}"
-                        Style="{StaticResource Button.Primary}"
-                        IsEnabled="{Binding CanAudit}" ToolTip="{Binding AuditDisabledTooltip}" />
             </StackPanel>
         </Grid>
 
@@ -384,6 +381,16 @@
                          reconciliación. La re-auditoría no estrena ningún camino de resolución. -->
                     <Button Content="{Binding ChangedToggleLabel}" Command="{Binding SelectChangedCommand}"
                             ToolTip="{Binding ChangedToggleTooltip}"
+                            Margin="{StaticResource Pad.XXS}" VerticalAlignment="Center" />
+
+                    <!-- EL PRIMARIO, JUNTO A LO QUE ACTÚA (F26 §C, segunda revisión). Estaba en la
+                         cabecera de la vista, arriba a la derecha, a media pantalla de las casillas
+                         que selecciona; aquí está pegado a los dos botones que hacen la selección y
+                         dice sobre cuántas unidades va a actuar. En la cabecera quedan solo las
+                         acciones de VISTA, que es lo que aquella barra es. -->
+                    <Button Content="{Binding AuditSelectionLabel}" Command="{Binding AuditSelectionCommand}"
+                            Style="{StaticResource Button.Primary}"
+                            IsEnabled="{Binding CanAudit}" ToolTip="{Binding AuditDisabledTooltip}"
                             Margin="{StaticResource Pad.XXS}" VerticalAlignment="Center" />
                 </WrapPanel>
             </DockPanel>

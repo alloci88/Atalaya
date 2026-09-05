@@ -161,7 +161,7 @@ ciclo** en la cabecera, y abre lo mismo como un cajón sobre la lista. Todo lo q
 
 - **Grande** significa que la unidad supera el umbral de tamaño (LOC o caracteres):
   queda excluida del ciclo y genera su propio hallazgo.
-- **Auditar selección** lanza una sesión sobre lo marcado.
+- **Auditar selección** lanza una sesión sobre lo marcado. Está en la **barra de la lista**, junto a los dos botones que seleccionan, y dice sobre cuántas unidades va a actuar («Auditar 3 seleccionadas»): la acción va donde está lo que actúa.
 - **Seleccionar cambiadas** marca las unidades cuyo código ha cambiado desde que
   se auditaron. Es el gesto de cada sprint; a partir de ahí, el flujo es el de
   siempre. Al lado, el **filtro de deriva** recorta la lista por lo que le ha
@@ -786,8 +786,21 @@ frase «disponible si lo activas»: te dice que existe y cómo activarlo si te i
 
 ### Acerca de
 
-Versión real del binario, la organización con su firma y los enlaces al repositorio y a este manual.
-Está en el raíl, en **Sistema**, debajo de Ajustes.
+Está en el raíl, en **Sistema**, debajo de Ajustes. Es la ficha del binario que estás ejecutando, y
+es la pantalla a la que ir cuando algo va raro y hay que decir con qué se está trabajando:
+
+| Dato | Qué es |
+| --- | --- |
+| **Versión** | El número, tal cual lo declara el binario |
+| **Canal** | «release» si viene del workflow de publicación; «build local» si lo compiló alguien |
+| **Commit** | El commit exacto del que salió |
+| **Fecha del binario** | Cuándo se construyó este ejecutable |
+| **Proveedor** y **Modelo** | Con quién y con qué estás auditando ahora mismo |
+| **Organización** | La del hub, con su logotipo |
+
+Y cuatro acciones: **Buscar actualizaciones** —pregunta a GitHub en el momento, sin esperar al
+chequeo periódico, y contesta ahí mismo—, **Novedades** (las notas de las versiones publicadas),
+**Repositorio** y **Manual**.
 
 *(Hasta la 1.4.4 era una ventana que se abría desde el fondo de Ajustes → Avanzado. No se edita nada
 ahí dentro, así que no era un ajuste — y ahí no lo encontraba nadie.)*

@@ -198,6 +198,37 @@ public sealed class DesignTokenTests
     }
 
     /// <summary>
+    /// <b>Y la fila cabe su icono a lo ALTO</b> (F26 §C, segunda revisión).
+    /// <para>
+    /// La fila del raíl pasó de tener alto MÍNIMO a tenerlo fijo —con un mínimo, la fila de usuario
+    /// anclada al pie crecía con lo que le sobrara al raíl y el avatar se despegaba de su insignia—.
+    /// Un alto fijo obliga a hacer la cuenta: 36 de fila, 24 de icono, quedan 6 arriba y 6 abajo.
+    /// Con los 8 que había, la fila pedía 40 y <b>WPF recortaba el icono sin decir nada</b>: en la
+    /// captura, la hoja de «Informes» era un palo y el triángulo de «Hallazgos» salía sin punta.
+    /// </para>
+    /// <para>
+    /// Es el mismo defecto que D-963 por el otro eje —allí el icono no cabía a lo ancho—, y la
+    /// misma razón para probarlo: un ancho o un alto que no caben se recortan en silencio, y un
+    /// icono a medias es indistinguible de un icono mal dibujado.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Una_fila_del_rail_cabe_su_icono_a_lo_alto()
+    {
+        double fila = Token("Rail.RowHeight");
+        double aire = Pad("Pad.RailItem").Top + Pad("Pad.RailItem").Bottom;
+
+        (fila - aire).Should().BeGreaterThanOrEqualTo(
+            Token("Icon.Size"),
+            "la fila mide {0}, su relleno vertical se come {1} y el icono pide {2}: lo que no cabe "
+            + "se recorta sin protestar",
+            fila, aire, Token("Icon.Size"));
+
+        (fila - aire).Should().BeGreaterThanOrEqualTo(
+            Token("Rail.AvatarSize"), "y el avatar de la cuenta ocupa esa misma fila");
+    }
+
+    /// <summary>
     /// El raíl plegado mide EXACTAMENTE sus carriles: el del marcador, el del icono y el aire de la
     /// derecha. Ni uno más —sobraría hueco a un lado del icono y dejaría de estar centrado con el
     /// desplegado— ni uno menos.

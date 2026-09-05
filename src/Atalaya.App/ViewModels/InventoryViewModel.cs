@@ -362,6 +362,22 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
         : $"{SelectedCount} unidades seleccionadas";
 
     /// <summary>
+    /// El rótulo del primario, CON SU RECUENTO (F26 §C, segunda revisión).
+    /// <para>
+    /// El botón vivía en la cabecera de la vista, arriba a la derecha, a media pantalla de las
+    /// casillas que selecciona: la acción y lo que actúa no se veían de una mirada. Baja a la barra
+    /// de la lista, junto a «Seleccionar pendientes / cambiadas», y dice sobre cuántas va a actuar
+    /// — que es el dato que se necesita ANTES de pulsarlo, porque es lo que se va a gastar.
+    /// </para>
+    /// </summary>
+    public string AuditSelectionLabel => SelectedCount switch
+    {
+        0 => "Auditar selección",
+        1 => "Auditar 1 seleccionada",
+        _ => $"Auditar {SelectedCount} seleccionadas",
+    };
+
+    /// <summary>
     /// Qué es una unidad y, si las hay, dónde se han metido las «grandes». El recuento de grandes
     /// salió del panel por decisión del usuario (F5.6 §5) —no aporta a ese nivel—, pero sin
     /// decirlo en algún sitio el panel deja de cuadrar: auditadas + pendientes no suman el total.
@@ -785,6 +801,7 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
     {
         SelectedCount = SelectedUnits().Count;
         HasSelection = SelectedCount > 0;
+        OnPropertyChanged(nameof(AuditSelectionLabel));
 
         var pending = PendingPaths();
         bool allPendingSelected = pending.Count > 0 && pending.All(_selected.Contains);

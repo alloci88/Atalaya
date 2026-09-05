@@ -578,8 +578,15 @@
                                     ToolTip="Días que dura el silencio. Pasados, el hallazgo vuelve a aparecer solo. 0 lo deja permanente." />
 
                         <WrapPanel Margin="{StaticResource Pad.S.Top}">
-                            <ui:Button Content="{Binding SilenceActionLabel}" Command="{Binding SilenceCommand}" Margin="{StaticResource Pad.XS.Right}"
-                                       Visibility="{Binding CanApplySilence, Converter={StaticResource BoolToVisibility}}" />
+                            <!-- SILENCIAR SE VE (F26 §C, segunda revisión): borde y tinta de aviso,
+                                 sin relleno. Es la acción con consecuencia de este bloque —oculta un
+                                 hallazgo de informes y auditorías— y era un botón gris más entre
+                                 seis. Perfilado y no macizo por la regla de D-949: un ámbar relleno
+                                 atrae el ojo antes que el primario de la ficha. -->
+                            <Button Content="{Binding SilenceActionLabel}" Command="{Binding SilenceCommand}"
+                                    Style="{StaticResource Button.Warning}"
+                                    Margin="{StaticResource Pad.XS.Right}"
+                                    Visibility="{Binding CanApplySilence, Converter={StaticResource BoolToVisibility}}" />
                             <ui:Button Content="Des-silenciar" Command="{Binding UnsilenceCommand}"
                                        Visibility="{Binding CanUnsilence, Converter={StaticResource BoolToVisibility}}" />
                         </WrapPanel>
@@ -656,8 +663,11 @@
                                 <TextBlock Text="{Binding DisputeSummary}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}"
                                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
                             </Border>
-                            <ui:Button Content="Es falso positivo" Style="{StaticResource SideAction}"
-                                       Command="{Binding AcceptDisputeCommand}"
+                            <!-- Cerrar un hallazgo como falso positivo lo saca de la lista para
+                                 siempre con tu nombre encima: peligro, perfilado (D-949). -->
+                            <Button Content="Es falso positivo" Style="{StaticResource Button.Danger}"
+                                    HorizontalAlignment="Stretch" Margin="{StaticResource Pad.XXS.Bottom}"
+                                    Command="{Binding AcceptDisputeCommand}"
                                        ToolTip="Da la razón al auditor que discrepó: se silencia como falso positivo, con tu nombre. No es una resolución." />
                             <ui:Button Content="Sigue siendo defecto" Style="{StaticResource SideAction}"
                                        Command="{Binding DismissDisputeCommand}"

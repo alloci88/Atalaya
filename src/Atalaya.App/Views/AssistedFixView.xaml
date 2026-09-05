@@ -266,7 +266,7 @@
                         ToolTip="Mientras esté en pausa no se aplicará ningún cambio ni se compilará nada. El agente puede seguir razonando."
                         Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
                 <Button Content="Detener" Command="{Binding StopCommand}"
-                        Style="{StaticResource Button.Warning}"
+                        Style="{StaticResource Button.WarningSolid}"
                         ToolTip="Para al agente. Lo que ya haya aplicado se queda."
                         Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
                 <!-- BUGFIX-CIERRE: archivar la pantalla del arreglo. Apariencia neutra a

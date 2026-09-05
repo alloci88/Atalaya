@@ -310,7 +310,11 @@ public sealed partial class AccountViewModel : ViewModelBase
         try
         {
             ConnectionCheckResult result = await Checker.RunAsync(CancellationToken.None);
-            StatusMessage = result.AllOk ? "Todo listo." : result.FirstProblem ?? "Revisa los pasos marcados.";
+            // SIN «Todo listo.» (F26 §C, segunda revisión). Cinco filas en verde con su palabra
+            // ya lo dicen, y con más precisión: un resumen debajo repite lo que la lista acaba de
+            // enseñar. Lo que sí hace falta es el PRIMER problema cuando lo hay — ahí el resumen
+            // no repite, señala.
+            StatusMessage = result.AllOk ? string.Empty : result.FirstProblem ?? "Revisa los pasos marcados.";
             return result.AllOk;
         }
         catch (Exception ex)

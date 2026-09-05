@@ -142,6 +142,29 @@ public sealed class NotEmptyToVisibilityConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
+/// <summary>
+/// A MAYÚSCULAS, para los rótulos de grupo del raíl (F26 §C, segunda revisión).
+/// <para>
+/// Se hace al pintar y no en el view-model: «Trabajo» y «Sistema» son los nombres de los grupos y
+/// el nombre de la aplicación activa es el suyo — mayúsculas es una decisión de cómo se ven los
+/// rótulos, no de cómo se llaman las cosas.
+/// </para>
+/// <para>
+/// <b>Sin tracking.</b> WPF no tiene espaciado entre letras, y la única forma de fingirlo es meter
+/// caracteres entre las de la palabra: eso rompe la cadena para cualquiera que la lea —búsqueda,
+/// lector de pantalla, copiar y pegar— a cambio de unos píxeles. Las versalitas y la tinta
+/// terciaria ya separan el rótulo de lo que rotula.
+/// </para>
+/// </summary>
+public sealed class UpperCaseConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value?.ToString()?.ToUpper(culture) ?? string.Empty;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
 /// <summary>Formats a 0..1 progress as a whole percentage string.</summary>
 public sealed class ProgressToPercentConverter : IValueConverter
 {

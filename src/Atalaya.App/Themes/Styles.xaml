@@ -182,7 +182,17 @@
          esta pasando, y eso no es una accion neutra. El ambar es el color de «cuidado con esto»
          que ya usan los avisos (D-949), y aqui macizo porque es un boton, no un rotulo.
          Tinta oscura sobre el ambar: es el par que la paleta tiene medido (D-947). -->
+    <!-- AVISO, y la misma pareja que peligro (D-949): perfilado por defecto, macizo cuando la
+         acción de aviso ES la acción de la vista. Un ámbar relleno atrae el ojo antes que el
+         primario, así que un «Silenciar» dentro de un bloque de gobernanza va perfilado; el
+         «Pausar» de una sesión que está corriendo, macizo. -->
     <Style x:Key="Button.Warning" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.Ink}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Warning.Ink}" />
+    </Style>
+
+    <Style x:Key="Button.WarningSolid" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
         <Setter Property="Background" Value="{DynamicResource Brush.Warning.Fill}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.OnFill}" />
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Warning.Fill}" />
@@ -443,9 +453,23 @@
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
         <Setter Property="Padding" Value="{StaticResource Pad.RailItem}" />
         <Setter Property="Margin" Value="{StaticResource Pad.RailItemGap}" />
-        <Setter Property="MinHeight" Value="{StaticResource Control.MinHeight}" />
+        <!-- ALTO FIJO, no mínimo: la fila de usuario va anclada al pie del raíl y con un mínimo
+             crecía con lo que le sobrara, despegando el avatar de su insignia. -->
+        <Setter Property="Height" Value="{StaticResource Rail.RowHeight}" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <!-- EL RÓTULO DE UN GRUPO del raíl. En versalitas y en la tinta terciaria: no es una entrada,
+         es el nombre de un cajón, y tiene que leerse como tal sin competir con lo que rotula. El
+         aire va en su margen (`Pad.RailGroup`), 24 por encima y 8 por debajo, que es lo que agrupa.
+         <b>A 13 y no a 12</b>: 13 es el suelo de la escala desde D-962 y el 12 dejó de existir como
+         token — en mayúsculas se lee bastante más grande que su número, así que el efecto es el que
+         se pedía sin reabrir lo que aquella decisión cerró. -->
+    <Style x:Key="RailGroup" TargetType="TextBlock" BasedOn="{StaticResource Text.Meta}">
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Margin" Value="{StaticResource Pad.RailGroup}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
 
     <!-- Los carriles, para que las tres filas los declaren igual sin copiarlos. -->

@@ -15318,6 +15318,99 @@ de los precios.
 
 **2.404 tests en verde** (1.896 de `Atalaya.App.Tests`).
 
+### D-999 — Segunda revisión de la Parte C: dónde se pone una acción, y el ritmo del raíl
+
+Siete puntos del dist. Tres son de sistema —valen para toda la aplicación— y cuatro son de una
+vista.
+
+**1 · LA ACCIÓN SE COLOCA JUNTO A LO QUE ACTÚA, Y SU BARRA MIDE LO QUE MIDE EL CONTENIDO.** Es la
+regla que sale de aquí, y corregía tres sitios a la vez:
+
+- En **Ajustes**, la barra de guardar ocupaba el ancho de la VENTANA, así que a pantalla completa
+  el botón quedaba a 1.400 px del formulario que guarda, al otro lado de una franja vacía. Lo mismo
+  en **Tarifas** con «Añadir modelo» y «Guardar tarifas».
+- En **Inventario**, «Auditar selección» —el botón más importante de la vista— estaba arriba a la
+  derecha, a media pantalla de las casillas que selecciona.
+
+El tope va en la **columna** y no en cada hijo, que es el detalle que costó: puesto en el hijo, un
+`HorizontalAlignment="Left"` lo encoge hasta su contenido —la barra se quedó del ancho del botón— y
+un `Stretch` con `MaxWidth` lo centra. En la `ColumnDefinition`, el formulario y su barra se
+estiran hasta 960 y ahí se paran, con el aire a la derecha; por debajo de 960 la columna vale lo que
+haya.
+
+Y en Inventario el primario baja a la **barra de la lista**, junto a «Seleccionar pendientes» y
+«Seleccionar cambiadas», **con su recuento**: «Auditar 3 seleccionadas». El recuento es el dato que
+hace falta antes de pulsar, porque es lo que se va a gastar. En la cabecera de la vista quedan las
+acciones de vista —«Ver hallazgos» y el «…»—, que es lo que aquella barra siempre debió ser.
+
+**2 · EL RITMO VERTICAL DEL RAÍL: el aire va ANTES de cada grupo.** Con 16 arriba del rótulo, 4
+debajo y 2 entre entradas, un rótulo quedaba casi tan pegado a su grupo como a lo que tenía encima
+— y un menú donde todo está a la misma distancia de todo se lee plano. Ahora: entradas de **36** con
+**4** entre ellas, rótulo con **24 por encima** y **8 por debajo**, y el botón de las tres rayas
+separado del primer rótulo por ese mismo 24, que lo pone el margen del rótulo. El rótulo va en
+mayúsculas, seminegrita y tinta terciaria: es el nombre de un cajón, no una entrada.
+
+**Dos desviaciones de lo pedido, con su motivo.** El encargo decía 12 px y «un poco de tracking».
+El tamaño se queda en **13**: es el suelo de la escala desde D-962 y el 12 dejó de existir como
+token — en mayúsculas se lee bastante más grande que su número, así que el efecto es el que se
+pedía sin reabrir lo que aquella decisión cerró. Y **no hay tracking**: WPF no tiene espaciado entre
+letras, y la única forma de fingirlo es meter caracteres entre las de la palabra, lo que rompe la
+cadena para cualquiera que la lea —búsqueda, lector de pantalla, copiar y pegar— a cambio de unos
+píxeles.
+
+**3 · LA FILA DE USUARIO TIENE ALTO FIJO.** El avatar y el nombre bailaban con el alto de la
+ventana. La causa: la fila del raíl declaraba alto MÍNIMO, y la fila de usuario está anclada al pie
+— con un mínimo crecía con lo que le sobrara al raíl, y dentro de esa caja estirada la insignia del
+piloto —alineada abajo— se despegaba del avatar. Ahora la fila mide `Rail.RowHeight` (36) fijo, la
+misma que una entrada del menú, y el avatar vive en una caja de SU tamaño con su insignia dentro.
+
+**Y el alto fijo cobró su peaje en el sitio de siempre.** Con 36 de fila y 8+8 de relleno, un icono
+de 24 pedía 40: **WPF lo recortó sin decir nada** — en la captura, la hoja de «Informes» era un palo
+y el triángulo de «Hallazgos» salía sin punta. Es el defecto de D-963 por el otro eje. El relleno
+pasa a 6, que es lo que sobra —(36−24)/2—, y **hay un test que hace esa cuenta**: un alto que no
+cabe se recorta en silencio, igual que un ancho.
+
+**4 · «Silenciar» se ve.** Era un botón gris entre seis, y es la acción con consecuencia de su
+bloque: oculta un hallazgo de informes y auditorías. Pasa a aviso **perfilado** —borde y tinta
+ámbar, sin relleno—, y «Es falso positivo» a peligro perfilado, que cierra un hallazgo con tu
+nombre encima.
+
+Esto obligó a partir el aviso en dos, como ya estaba peligro (D-949): **`Button.Warning` pasa a ser
+el perfilado** y el macizo se llama `Button.WarningSolid`. La regla queda dicha una vez para los
+dos colores: perfilado por defecto, macizo cuando la acción de ese color ES la acción de la vista —
+el «Pausar» de una sesión que está corriendo lo es, un «Silenciar» dentro de un bloque de
+gobernanza no.
+
+**5 · Cuenta pierde «Todo listo.»** Cinco filas en verde con su palabra ya lo dicen, y con más
+precisión. Lo que sí se queda es el PRIMER problema cuando lo hay: ahí el resumen no repite,
+señala.
+
+**6 · «Acerca de» se gana la pantalla.** Como página traía el contenido del diálogo —icono,
+versión, logo y dos enlaces—: cuatro líneas en un monitor entero. Ahora es **una tarjeta de 640
+centrada en los dos ejes** con lo que se viene a buscar aquí cuando algo va raro:
+
+- **La ficha**: versión, canal (build local / release), commit, fecha del binario, proveedor
+  conectado y su modelo, y la organización. Se salta las filas que no se saben — sin registro de
+  proveedores no se escribe «Copilot» por defecto (D-318).
+- **La fecha sale del fichero y no de la marca del PE**: los builds de .NET son deterministas, así
+  que esa marca es un hash y no una fecha. Enseñarla sería enseñar un número con formato de día que
+  no lo es.
+- **El logotipo, solo.** Llevaba una tarjeta con la palabra «Maxam» encima: el nombre de la
+  organización ya está en la ficha, y un logotipo con su nombre escrito al lado se lee dos veces.
+- **Cuatro acciones**, con «Buscar actualizaciones» de primario — es lo único de esta página que
+  hace algo. Pregunta a GitHub **a la fuerza**, saltándose el suelo anti-bucle de 15 minutos, porque
+  lo ha pedido una persona; y **contesta aquí**, no en el banner de la carcasa: el banner es el que
+  ofrece instalar y lo levanta el arranque, esta página contesta a «¿estoy al día?», que es otra
+  pregunta. «Novedades» abre la página de releases del repositorio, y «Repositorio» y «Manual» son
+  los dos enlaces de siempre.
+
+**Un test nuevo, y es la regla del alto** (N-5): una fila del raíl cabe su icono a lo alto. Se rompe
+callando —un icono recortado es indistinguible de uno mal dibujado— y es la misma familia que
+`El_canal_de_iconos_cabe_el_icono_y_el_avatar`, que ya mide el otro eje. Del resto, ninguno: cambiar
+dónde va un botón, cuánto mide una barra o de qué color es se ve en la primera captura.
+
+**2.405 tests en verde** (1.897 de `Atalaya.App.Tests`).
+
 ### D-996 — Lo que la Parte C NO toca
 
 Ninguna regla de negocio, ningún dato, nada del hub, ningún prompt. Qué ajustes existen y qué hacen;

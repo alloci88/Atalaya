@@ -5,67 +5,110 @@
     xmlns:c="clr-namespace:Atalaya.App.Controls"
     xmlns:controls="clr-namespace:Atalaya.App.Controls">
     <!--
-        F26 §C (revisión) — «Acerca de», que era un modal al fondo de Ajustes → Avanzado, es una
-        PÁGINA del grupo Sistema. Mismo contenido de F6.4 §3; lo que cambia es que se llega en un
-        clic desde el raíl y trae su miga, como todas.
+        F26 §C — «Acerca de», que era un modal al fondo de Ajustes → Avanzado, es una PÁGINA del
+        grupo Sistema. Y como página se gana la pantalla (segunda revisión): con el contenido del
+        diálogo eran cuatro líneas perdidas en un monitor entero.
+
+        UNA tarjeta, centrada en los dos ejes. Lo que lleva dentro es lo que se viene a buscar aquí
+        cuando algo va raro —qué binario, de qué commit, de qué día, contra qué proveedor y con qué
+        modelo— y las acciones que lo acompañan.
     -->
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel MaxWidth="{StaticResource Form.MaxWidth}" HorizontalAlignment="Center"
-                    Margin="{StaticResource Pad.L.Bottom}">
+    <Grid>
+        <Border Style="{StaticResource Card}"
+                MaxWidth="{StaticResource About.CardWidth}"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Padding="{StaticResource Pad.XL}">
+            <StackPanel c:Stack.Gap="{StaticResource Space.L}">
 
-            <!-- Identidad de la aplicación: el icono grande y su nombre. El `.ico` se pide con el
-                 fotograma de su tamaño; sin `DecodePixelWidth` se decodifica por el de 256 y se
-                 encoge, que es el borrón que la variante de silueta existe para evitar. -->
-            <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.L.Bottom}">
-                <Image Width="64" Height="64"
-                       RenderOptions.BitmapScalingMode="HighQuality"
-                       VerticalAlignment="Center">
-                    <Image.Source>
-                        <BitmapImage UriSource="pack://application:,,,/Atalaya;component/assets/atalaya.ico"
-                                     DecodePixelWidth="64" DecodePixelHeight="64" />
-                    </Image.Source>
-                </Image>
-                <StackPanel VerticalAlignment="Center" Margin="{StaticResource Pad.M.Left}">
-                    <TextBlock Text="Atalaya" Style="{StaticResource Text.H2}" />
-                    <TextBlock Text="{Binding Info.VersionLabel}" Style="{StaticResource Text.Small}" />
+                <!-- Identidad: el icono grande y su nombre. El `.ico` se pide con el fotograma de
+                     su tamaño; sin `DecodePixelWidth` se decodifica por el de 256 y se encoge, que
+                     es el borrón que la variante de silueta existe para evitar. -->
+                <StackPanel Orientation="Horizontal">
+                    <Image Width="64" Height="64"
+                           RenderOptions.BitmapScalingMode="HighQuality"
+                           VerticalAlignment="Center">
+                        <Image.Source>
+                            <BitmapImage UriSource="pack://application:,,,/Atalaya;component/assets/atalaya.ico"
+                                         DecodePixelWidth="64" DecodePixelHeight="64" />
+                        </Image.Source>
+                    </Image>
+                    <StackPanel VerticalAlignment="Center" Margin="{StaticResource Pad.M.Left}">
+                        <TextBlock Text="Atalaya" Style="{StaticResource Text.H2}" />
+                        <TextBlock Text="{Binding Info.VersionLabel}" Style="{StaticResource Text.Small}" />
+                    </StackPanel>
                 </StackPanel>
-            </StackPanel>
 
-            <TextBlock Style="{StaticResource Text.Body}"
-                       MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
-                       Margin="{StaticResource Pad.L.Bottom}"
-                       Text="Auditoría de código colaborativa con agentes de IA. El estado vive en un repositorio git compartido; no hay servidor propio." />
+                <TextBlock Style="{StaticResource Text.Body}"
+                           Text="Auditoría de código colaborativa con agentes de IA. El estado vive en un repositorio git compartido; no hay servidor propio." />
 
-            <!-- La organización, con su firma. Es uno de los DOS sitios donde va la marca. -->
-            <Border Style="{StaticResource Card}"
-                    HorizontalAlignment="Left"
-                    Margin="{StaticResource Pad.L.Bottom}"
-                    Visibility="{Binding Info.HasOrganization, Converter={StaticResource BoolToVisibility}}">
+                <!-- LA FICHA. Nombre a la izquierda, valor a la derecha, una fila por dato: es lo
+                     que hace que se puedan leer en columna y que la séptima nazca alineada. Los
+                     datos los arma el view-model y se salta los que no sabe — aquí no se inventa
+                     un «Copilot» por defecto (D-318). -->
+                <ItemsControl ItemsSource="{Binding Facts}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel Margin="{StaticResource Pad.XXS.V}">
+                                <TextBlock DockPanel.Dock="Left"
+                                           Text="{Binding Label}"
+                                           Style="{StaticResource Text.Small}"
+                                           Width="{StaticResource About.LabelWidth}" />
+                                <TextBlock Text="{Binding Value}"
+                                           Style="{StaticResource Text.Small}"
+                                           Foreground="{DynamicResource Brush.Text}"
+                                           TextWrapping="Wrap" />
+                            </DockPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- LA MARCA, sola. Llevaba una tarjeta con la palabra «Maxam» encima del logotipo:
+                     el nombre de la organización ya está en la ficha de arriba, y un logotipo con
+                     su propio nombre escrito al lado se lee dos veces. Es uno de los DOS sitios
+                     donde la marca aparece (F6.4). -->
+                <controls:BrandMark LogoHeight="30" HorizontalAlignment="Left"
+                                    Visibility="{Binding Info.HasOrganization, Converter={StaticResource BoolToVisibility}}" />
+
+                <!-- Las acciones. «Buscar actualizaciones» es el primario: es lo único de esta
+                     página que hace algo, y es la razón por la que se abre cuando algo va raro. -->
                 <StackPanel>
-                    <TextBlock Text="{Binding Info.Organization}" Style="{StaticResource Text.Default}"
-                               FontWeight="SemiBold" Margin="{StaticResource Pad.XS.Bottom}" />
-                    <controls:BrandMark LogoHeight="30" HorizontalAlignment="Left" />
+                    <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
+                        <Button Content="Buscar actualizaciones"
+                                Command="{Binding CheckUpdatesCommand}"
+                                Style="{StaticResource Button.Primary}"
+                                IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                                ToolTip="Pregunta a GitHub ahora mismo si hay una versión más nueva."
+                                Visibility="{Binding CanCheckUpdates, Converter={StaticResource BoolToVisibility}}" />
+                        <Button Content="Novedades"
+                                Command="{Binding OpenLinkCommand}"
+                                CommandParameter="{Binding Notes}"
+                                Style="{StaticResource Button.Secondary}"
+                                ToolTip="{Binding Notes}"
+                                Visibility="{Binding HasNotes, Converter={StaticResource BoolToVisibility}}" />
+                        <Button Content="Repositorio"
+                                Command="{Binding OpenLinkCommand}"
+                                CommandParameter="{Binding Info.Repository}"
+                                Style="{StaticResource Button.Secondary}"
+                                ToolTip="{Binding Info.Repository}"
+                                Visibility="{Binding Info.HasRepository, Converter={StaticResource BoolToVisibility}}" />
+                        <Button Content="Manual"
+                                Command="{Binding OpenLinkCommand}"
+                                CommandParameter="{Binding Info.Manual}"
+                                Style="{StaticResource Button.Secondary}"
+                                ToolTip="{Binding Info.Manual}"
+                                Visibility="{Binding Info.HasManual, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource Text.Small}"
+                               Margin="{StaticResource Pad.XS.Top}"
+                               Visibility="{Binding UpdateStatus, Converter={StaticResource NotEmptyToVisibility}}" />
                 </StackPanel>
-            </Border>
 
-            <!-- BUGFIX-VERSION: los dos enlaces salen de «appRepoUrl» del despliegue, y si no
-                 está configurado NO se enseñan. Un enlace que lleva a un 404 es peor que ningún
-                 enlace: el hueco se explica debajo. -->
-            <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.L}"
-                        Visibility="{Binding Info.HasRepository, Converter={StaticResource BoolToVisibility}}">
-                <Button Content="Repositorio" Style="{StaticResource Button.Link}"
-                        Command="{Binding OpenLinkCommand}"
-                        CommandParameter="{Binding Info.Repository}"
-                        ToolTip="{Binding Info.Repository}" />
-                <Button Content="Manual" Style="{StaticResource Button.Link}"
-                        Command="{Binding OpenLinkCommand}"
-                        CommandParameter="{Binding Info.Manual}"
-                        ToolTip="{Binding Info.Manual}" />
+                <!-- BUGFIX-VERSION: sin «appRepoUrl» en el despliegue no hay adónde enlazar, y el
+                     hueco se explica en vez de dejar tres botones que no aparecen sin motivo. -->
+                <TextBlock Text="{Binding Info.NoLinksNotice}" Style="{StaticResource Text.Small}"
+                           Visibility="{Binding Info.HasNoLinks, Converter={StaticResource BoolToVisibility}}" />
             </StackPanel>
-
-            <TextBlock Text="{Binding Info.NoLinksNotice}" Style="{StaticResource Text.Small}"
-                       MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
-                       Visibility="{Binding Info.HasNoLinks, Converter={StaticResource BoolToVisibility}}" />
-        </StackPanel>
-    </ScrollViewer>
+        </Border>
+    </Grid>
 </UserControl>

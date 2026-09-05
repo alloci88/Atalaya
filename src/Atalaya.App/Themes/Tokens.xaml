@@ -161,11 +161,21 @@
          Funcionaba y estaba mal planteado: dos números que hay que mantener iguales a mano acaban
          siendo distintos. Con un canal fijo no hay nada que mantener. -->
     <Thickness x:Key="Pad.Rail">0,16</Thickness>
-    <Thickness x:Key="Pad.RailItem">0,8</Thickness>
+    <!-- 6 y no 8: la fila mide 36 fijos y el icono 24, así que el relleno vertical es lo que
+         sobra —(36−24)/2—. Con 8 la fila pedía 40 y WPF recortaba el icono EN SILENCIO, que es
+         exactamente el defecto de D-963 por el otro extremo: allí no cabía a lo ancho, aquí a lo
+         alto. Un alto fijo obliga a hacer la cuenta. -->
+    <Thickness x:Key="Pad.RailItem">0,6</Thickness>
     <Thickness x:Key="Pad.RailChip">0,0,8,0</Thickness>
     <Thickness x:Key="Pad.RailLabel">12,0,0,0</Thickness>
-    <Thickness x:Key="Pad.RailGroup">60,16,12,4</Thickness>
-    <Thickness x:Key="Pad.RailItemGap">0,0,0,2</Thickness>
+    <!-- EL RITMO VERTICAL DEL RAÍL (F26 §C, segunda revisión). El aire va ANTES de cada grupo, no
+         repartido a partes iguales entre todo: con 16 arriba, 4 abajo y 2 entre entradas, los
+         rótulos quedaban casi tan pegados a su grupo como a lo que tenían encima, y el menú se
+         leía plano. Ahora: 24 por encima del rótulo, 8 por debajo, y 4 entre entradas de 36. El
+         botón de las tres rayas queda separado del primer rótulo por ese mismo 24, porque es el
+         margen superior del rótulo quien lo pone. -->
+    <Thickness x:Key="Pad.RailGroup">60,24,12,8</Thickness>
+    <Thickness x:Key="Pad.RailItemGap">0,0,0,4</Thickness>
     <Thickness x:Key="Pad.TopBar">32,10</Thickness>
     <Thickness x:Key="Pad.Footer">32,8</Thickness>
     <Thickness x:Key="Pad.Strip">32,6</Thickness>
@@ -240,6 +250,12 @@
     <sys:Double x:Key="Rail.MarkerWidth">3</sys:Double>
     <sys:Double x:Key="Rail.AvatarSize">24</sys:Double>
 
+    <!-- EL ALTO DE UNA FILA DEL RAÍL, fijo. Era un mínimo, y con un mínimo la fila de usuario
+         —anclada al pie— crecía o encogía con lo que le sobrara al raíl: el avatar se despegaba de
+         su insignia y el nombre bailaba. Una fila del raíl mide lo que mide una entrada del menú,
+         y ese número no puede depender del alto de la ventana. -->
+    <sys:Double x:Key="Rail.RowHeight">36</sys:Double>
+
     <!-- La banda de gravedad al borde de una fila de hallazgo. 4 px: lo justo para verse de reojo
          recorriendo la lista sin robarle sitio al texto. -->
     <sys:Double x:Key="Band.Width">4</sys:Double>
@@ -263,6 +279,14 @@
     <!-- La lista de secciones DENTRO de Ajustes. Es un raíl de segundo nivel y mide como el de
          primero menos su canal de iconos: aquí el sitio lo manda el texto, no un icono. -->
     <sys:Double x:Key="Setting.SectionsWidth">216</sys:Double>
+
+    <!-- EL ANCHO DE LA COLUMNA DE AJUSTES, y con ella el de su barra de acciones.
+         <b>La acción va junto a lo que actúa</b> (F26 §C, segunda revisión): la barra de guardar
+         ocupaba el ancho de la VENTANA, así que a pantalla completa el botón quedaba a 1.400 px del
+         formulario que guarda — al otro lado de una franja vacía. Una barra de acciones mide lo que
+         mide su contenido. 960 es la etiqueta (320) más su hueco (24) más lo que necesita el
+         control más ancho, y da además el sitio de la tabla de tarifas. -->
+    <sys:Double x:Key="Setting.ContentWidth">960</sys:Double>
 
     <!-- El ancho MÍNIMO de un campo numérico: cuatro cifras cómodas. La caja del tope de pasadas
          era un cuadrado de dos —un campo que no enseña lo que cabe dentro miente sobre lo que
@@ -290,6 +314,12 @@
     <!-- El avatar de la TARJETA de identidad de Cuenta. No es el del raíl (24): allí acompaña a
          una fila de menú y aquí es la foto de quién eres, que es el dato de la tarjeta. -->
     <sys:Double x:Key="Avatar.Size">56</sys:Double>
+
+    <!-- La tarjeta de «Acerca de»: una ficha, centrada en los dos ejes. 640 es lo que necesita su
+         línea más larga —la descripción de dos renglones— sin estirarse a lo ancho de un monitor,
+         que es lo que hacía que cuatro líneas parecieran una pantalla vacía. -->
+    <sys:Double x:Key="About.CardWidth">640</sys:Double>
+    <sys:Double x:Key="About.LabelWidth">150</sys:Double>
 
     <!-- El aire de un estado vacío dentro de su panel, y el de la barra de guardar al pie de una
          vista con formulario. -->

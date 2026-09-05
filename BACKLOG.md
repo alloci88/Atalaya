@@ -43,7 +43,11 @@ misma rejilla).
     «Acerca de» convertido en entrada del raíl —y su diálogo borrado— y el azulejo de coste de
     Métricas jerarquizado, con el aviso de tarifa fuera. Y dos retiradas más (D-998): la columna
     «Proveedor» de la tabla de tarifas —siempre en blanco, porque la tabla es la de Copilot— y la
-    oferta de mudanza del umbral de unidad grande, con el código que la disparaba. Capturas en
+    oferta de mudanza del umbral de unidad grande, con el código que la disparaba. **Segunda vuelta
+    de revisión** (D-999): la acción se coloca junto a lo que actúa y su barra mide lo que mide el
+    contenido —Ajustes, Tarifas y el primario del Inventario—, el raíl estrena ritmo vertical y fila
+    de usuario de alto fijo, «Silenciar» y «Es falso positivo» se ven, y «Acerca de» se gana la
+    pantalla con su ficha del binario y «Buscar actualizaciones». Capturas en
     `docs/design/f26-parte-c/`.
   - **La lista de pendientes de `DesignTokenTests` es el marcador.** Al cerrar la C **quedan diez, y
     los diez son diálogos**: `AboutDialog`, `AuditLaunchDialog`, `CycleConfigDialog`,

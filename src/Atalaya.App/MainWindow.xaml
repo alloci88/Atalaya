@@ -118,7 +118,10 @@
                                      Suelto al final de la fila era una cuarta cosa que alinear; en
                                      la esquina del avatar es lo que ya se mira para saber quién
                                      eres, diciendo además si puedes trabajar. -->
-                                <Grid Grid.Column="1" HorizontalAlignment="Center"
+                                <Grid Grid.Column="1"
+                                      Width="{StaticResource Rail.AvatarSize}"
+                                      Height="{StaticResource Rail.AvatarSize}"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"
                                       ToolTip="{Binding SyncTooltip}">
                                     <Border Width="{StaticResource Rail.AvatarSize}"
                                             Height="{StaticResource Rail.AvatarSize}"
@@ -167,10 +170,8 @@
                                     <!-- Sangrada a la x del texto de las entradas (D-966): un
                                          rótulo de grupo que no cae en la misma columna que lo que
                                          rotula se lee como si fuera de otra cosa. -->
-                                    <TextBlock Text="{Binding Title}"
-                                               Style="{StaticResource Text.Meta}"
-                                               Margin="{StaticResource Pad.RailGroup}"
-                                               TextTrimming="CharacterEllipsis"
+                                    <TextBlock Text="{Binding Title, Converter={StaticResource UpperCase}}"
+                                               Style="{StaticResource RailGroup}"
                                                Visibility="{Binding DataContext.RailCollapsed,
                                                    RelativeSource={RelativeSource AncestorType=ItemsControl},
                                                    Converter={StaticResource InverseBoolToVisibility}}" />
