@@ -267,8 +267,11 @@ Shot "06-informes"
 Write-Host "Informe abierto"
 if (ClickNth 0 3000) { Shot "07-informe-abierto" }
 
+# Se vuelve por el RAIL y no por un «← Volver» dentro del informe: ese boton ya no existe. Lo
+# retiro F27 con la raiz 4 (UI-0058) porque la miga hace ya ese trabajo y habia dos vueltas atras
+# distintas en la misma pantalla. Mientras el banco lo siguio buscando, esta captura no se tomo.
 Write-Host "Informe con hallazgos"
-Click "← Volver" 1800 | Out-Null
+Click "Informes" 1800 | Out-Null
 if (ClickNth 2 3000) { Shot "07b-informe-con-hallazgos" }
 
 # ============================================================================ EL «…» Y EL RAIL

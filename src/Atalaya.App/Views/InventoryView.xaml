@@ -338,10 +338,13 @@
         <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource Panel}"
                 Padding="{StaticResource Pad.S}" Margin="{StaticResource Pad.S.Bottom}">
             <DockPanel LastChildFill="True">
+                <!-- La forma de plegar es la MISMA que en Hallazgos (UI-0023): un secundario,
+                     no un enlace. El sitio ya era éste y sigue siéndolo — es Hallazgos el que baja
+                     aquí su botón. El porqué del sitio está tres líneas más arriba. -->
                 <Button DockPanel.Dock="Right"
                         Content="{Binding ToggleAllLabel}"
                         Command="{Binding ToggleAllGroupsCommand}"
-                        Style="{StaticResource Button.Link}"
+                        Style="{StaticResource Button.Secondary}"
                         Margin="{StaticResource Pad.S.Left}"
                         VerticalAlignment="Center"
                         ToolTip="Con todo plegado, las cabeceras son el resumen: módulo y cuántas de sus unidades están auditadas."

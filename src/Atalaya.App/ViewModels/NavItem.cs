@@ -93,5 +93,19 @@ public sealed class Crumb
 
     public bool IsLink => Command is not null;
 
-    public bool IsCurrent => Command is null;
+    /// <summary>
+    /// El ÚLTIMO eslabón: la página en la que estás. Lo pone quien construye la miga, porque es lo
+    /// único que un eslabón no puede saber de sí mismo.
+    /// <para>
+    /// Antes se deducía de no ser enlace, y con la miga acabando siempre en la página (UI-0044) esa
+    /// deducción dejó de valer: en el Inventario, el eslabón de la aplicación <b>no es enlace</b>
+    /// —sería un enlace a donde ya estás— y tampoco es el último. Con la regla vieja salían dos
+    /// eslabones en negrita, los dos «la página», y sin el «›» entre ellos: la miga se leía
+    /// «Portafolio › XBLASTInventario», con el nombre de la aplicación pegado al de la página.
+    /// </para>
+    /// </summary>
+    public bool IsLast { get; set; }
+
+    /// <summary>Se pinta como texto y no como enlace. No es lo mismo que ser el último.</summary>
+    public bool IsPlain => Command is null;
 }

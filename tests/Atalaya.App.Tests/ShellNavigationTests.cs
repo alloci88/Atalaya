@@ -208,6 +208,71 @@ public sealed class ShellNavigationTests : IDisposable
         findings.SelectedApp!.Slug.Should().Be("otra");
     }
 
+    // ================================================================ la miga
+
+    /// <summary>
+    /// <b>La miga acaba SIEMPRE en la página</b> (UI-0044), y el último eslabón es el único que
+    /// se pinta como tal.
+    /// <para>
+    /// El Inventario es el caso que lo rompe todo: su eslabón de en medio —el nombre de la
+    /// aplicación— <b>no es enlace</b>, porque sería un enlace a donde ya estás. Mientras «ser la
+    /// página» se dedujo de «no ser enlace», ese eslabón se pintaba como la página igual que el
+    /// último: dos en negrita, y sin el «›» entre ellos porque el separador colgaba de lo mismo.
+    /// La miga se leía <c>Portafolio › XBLASTInventario</c>, con el nombre de la aplicación pegado
+    /// al de la página.
+    /// </para>
+    /// <para>
+    /// Se rompe en silencio: la miga se sigue construyendo, con sus tres eslabones y sus tres
+    /// rótulos correctos. Lo que cambia es cómo se pinta, y eso no lo mira nada.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task La_miga_acaba_en_la_pagina_y_solo_el_ultimo_eslabon_lo_parece()
+    {
+        var provider = new PageProvider();
+        var pages = new NavigationService(provider);
+        var inventory = TestFactory.Inventory(
+            _hub, _paths, new MachineConfigStore(_paths.MachinesJson),
+            new Atalaya.Domain.Ids.UlidFactory(Atalaya.Domain.Abstractions.SystemClock.Instance),
+            _settings, new ToastCenter());
+        provider.Add(inventory);
+        MainViewModel shell = TestFactory.Shell(_paths, _hub, navigation: pages);
+
+        await pages.NavigateToAsync<InventoryViewModel>(vm => vm.SetApp("xblast"));
+
+        shell.Crumbs.Select(c => c.Label).Should().Equal(
+            new[] { "Portafolio", "XBLAST", "Inventario" },
+            "la miga acaba en la PÁGINA, no en el nombre de la aplicación");
+
+        shell.Crumbs[^1].IsLast.Should().BeTrue("el último eslabón es la página en la que estás");
+        shell.Crumbs.Take(shell.Crumbs.Count - 1).Should().OnlyContain(
+            c => !c.IsLast,
+            "solo hay una página, así que solo un eslabón puede parecerlo — y los demás llevan «›» detrás");
+
+        shell.Crumbs[1].IsPlain.Should().BeTrue(
+            "estando en el inventario, el eslabón de la aplicación no es enlace: llevaría a donde ya estás");
+        shell.Crumbs[1].IsLast.Should().BeFalse(
+            "y no ser enlace no lo convierte en la página: es el caso que juntaba «XBLAST» e «Inventario»");
+    }
+
+    /// <summary>
+    /// Y en el Portafolio la miga es un solo eslabón, que también es el último: sin esto no
+    /// llevaría negrita y arrastraría un «›» hacia un eslabón que no existe.
+    /// </summary>
+    [Fact]
+    public async Task En_el_portafolio_la_miga_es_un_eslabon_y_es_el_ultimo()
+    {
+        var provider = new PageProvider();
+        var pages = new NavigationService(provider);
+        var portfolio = TestFactory.Portfolio(_hub, _paths, pages, _settings);
+        provider.Add(portfolio);
+        MainViewModel shell = TestFactory.Shell(_paths, _hub, navigation: pages);
+
+        await pages.NavigateToAsync<PortfolioViewModel>(_ => { });
+
+        shell.Crumbs.Should().ContainSingle().Which.IsLast.Should().BeTrue();
+    }
+
     /// <summary>
     /// Resuelve por tipo las páginas que se le den; lo demás, nada. Se le añaden DESPUÉS de
     /// construirlo porque una página recibe la navegación en su constructor: sin esto no hay forma

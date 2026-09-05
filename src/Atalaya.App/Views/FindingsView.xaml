@@ -73,11 +73,6 @@
                            Margin="{StaticResource Pad.XXS.Top}" />
             </StackPanel>
 
-            <Button Content="{Binding ToggleAllLabel}"
-                    Command="{Binding ToggleAllGroupsCommand}"
-                    HorizontalAlignment="Right" VerticalAlignment="Center"
-                    ToolTip="Con todo plegado, las cabeceras son el resumen: clase y conteo por gravedad."
-                    Visibility="{Binding HasGroups, Converter={StaticResource BoolToVisibility}}" />
         </Grid>
 
         <!-- ==================================================== La barra de filtros
@@ -89,6 +84,22 @@
                 Padding="{StaticResource Pad.S}"
                 Margin="{StaticResource Pad.M.Bottom}">
             <DockPanel LastChildFill="True">
+                <!-- UN GESTO, UNA FORMA Y EL MISMO SITIO (UI-0023). Plegar los grupos se pintaba
+                     como enlace azul en el extremo derecho de la barra del Inventario y como botón
+                     neutro arriba a la derecha en Hallazgos: el mismo rótulo y la misma acción, dos
+                     formas y dos sitios. Vive donde vive lo que TOCA LA LISTA —buscar, filtrar,
+                     plegar—, que es la barra, y no arriba con las acciones de vista: no lanza nada
+                     y no escribe nada. Y no es un enlace: el azul, en el resto de la aplicación,
+                     anuncia que se va a otro sitio. -->
+                <Button DockPanel.Dock="Right"
+                        Content="{Binding ToggleAllLabel}"
+                        Command="{Binding ToggleAllGroupsCommand}"
+                        Style="{StaticResource Button.Secondary}"
+                        Margin="{StaticResource Pad.S.Left}"
+                        VerticalAlignment="Center"
+                        ToolTip="Con todo plegado, las cabeceras son el resumen: clase y conteo por gravedad."
+                        Visibility="{Binding HasGroups, Converter={StaticResource BoolToVisibility}}" />
+
                 <Button DockPanel.Dock="Right"
                         Content="Limpiar filtros"
                         Command="{Binding ClearFiltersCommand}"

@@ -360,7 +360,7 @@ public sealed partial class MainViewModel
 
         if (current is PortfolioViewModel)
         {
-            Crumbs.Add(new Crumb("Portafolio"));
+            Crumbs.Add(new Crumb("Portafolio") { IsLast = true });
             return;
         }
 
@@ -397,5 +397,9 @@ public sealed partial class MainViewModel
         {
             Crumbs.Add(new Crumb(sub));
         }
+
+        // Y EL ÚLTIMO ES EL ÚLTIMO, lo diga su comando o no: es lo que decide quién lleva
+        // separador detrás y quién se pinta como la página.
+        Crumbs[^1].IsLast = true;
     }
 }

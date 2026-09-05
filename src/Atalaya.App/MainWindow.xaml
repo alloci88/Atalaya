@@ -304,25 +304,44 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <!-- El separador va DETRÁS del enlace, no delante: delante
+                                    <!-- El separador va DETRÁS del eslabón, no delante: delante
                                          del primero saldría un «›» suelto abriendo la miga, que
-                                         apunta a un eslabón que no existe. -->
+                                         apunta a un eslabón que no existe. Y lo lleva TODO el que
+                                         no es el último, sea enlace o no: en el Inventario, el
+                                         eslabón de la aplicación no es enlace —sería un enlace a
+                                         donde ya estás— y aun así tiene algo detrás. Colgar el
+                                         separador de «ser enlace» juntaba los dos, y la miga se
+                                         leía «Portafolio › XBLASTInventario». -->
                                     <StackPanel Orientation="Horizontal">
                                         <Button Content="{Binding Label}"
                                                 Command="{Binding Command}"
                                                 Style="{StaticResource Button.Link}"
                                                 Foreground="{DynamicResource Brush.TextMuted}"
                                                 Visibility="{Binding IsLink, Converter={StaticResource BoolToVisibility}}" />
+                                        <TextBlock Text="{Binding Label}"
+                                                   VerticalAlignment="Center"
+                                                   Visibility="{Binding IsPlain, Converter={StaticResource BoolToVisibility}}">
+                                            <TextBlock.Style>
+                                                <!-- La negrita es de la PÁGINA. Un eslabón
+                                                     intermedio que no es enlace es texto normal: si
+                                                     pesa igual que el último, la miga dice que
+                                                     estás en dos sitios a la vez. -->
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                                    <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsLast}" Value="True">
+                                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                                            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                         <Path Style="{StaticResource Icon}"
                                               Data="{x:Static c:Icons.Chevron}"
-                                              
                                               Stroke="{DynamicResource Brush.TextFaint}"
                                               Margin="{StaticResource Pad.XS}"
-                                              Visibility="{Binding IsLink, Converter={StaticResource BoolToVisibility}}" />
-                                        <TextBlock Text="{Binding Label}"
-                                                   FontWeight="SemiBold"
-                                                   VerticalAlignment="Center"
-                                                   Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVisibility}}" />
+                                              Visibility="{Binding IsLast, Converter={StaticResource InverseBoolToVisibility}}" />
                                     </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>

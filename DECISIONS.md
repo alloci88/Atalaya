@@ -15507,3 +15507,274 @@ escondido.
 **Y queda una lista de pendientes que ya solo tiene diálogos.** `DesignTokenTests` nombra diez, todos
 de las vistas de trabajo: van con la vista que los abre y ninguna parte de F26 los ha tocado. Están
 apuntados en BACKLOG.
+
+## F27 — Las siete raíces de UI-AUDIT-1
+
+La auditoría de la interfaz dejó **61 hallazgos y 28 propuestas**. Sesenta y un parches habrían sido
+sesenta y un sitios donde el mismo defecto puede volver, así que se arreglan **siete causas** y se
+comprueba, hallazgo a hallazgo, cuál cae con cada una. Lo que no cae con ninguna se arregla al final,
+uno por uno. Una entrada por raíz.
+
+### D-1001 — Raíz 1: el color sale de la paleta, y hay una regla que lo comprueba
+
+**Doce hallazgos, una causa: había cuatro sitios donde nacía un color** —la paleta, un converter de
+C# con hexadecimales dentro, un `Style` sin `BasedOn` que se llevaba la plantilla de la librería, y
+la propia WPF-UI escribiendo su acento en `Application.Resources`—. Ninguno de los tres últimos se
+entera de que el tema ha cambiado, y ninguno lo miraba `PaletteContrastTests`.
+
+**P-12 — por cada `Color.X`, su `Brush.X`, en las dos paletas.** `Brush.Ink.OnVivid` era la única
+clave de color sin su `SolidColorBrush`: las seis referencias de las vistas no resolvían y WPF caía
+al negro en los dos temas (**UI-0007**). Con el pincel entra la regla que lo habría evitado, en
+`PaletteResourceTests`, y con ella la segunda mitad: **todo `{DynamicResource Brush.*}` de `Views/`,
+`Controls/` y `Themes/` resuelve** contra los diccionarios fusionados de verdad, WPF-UI incluida.
+Comprobado que las dos fallan al quitar el pincel.
+
+**P-05 — la gravedad tiene sus cuatro rellenos, además de sus cuatro tintas.** `Pill.Sev` tomaba
+prestados `Danger.Soft` **dos veces**, `Warning.Soft` y `Primary.Soft`: crítica y alta salían con el
+mismo fondo, y la baja con el azul de «estás aquí». Ahora `Sev.{Crit,High,Med,Low}.Soft` en las dos
+paletas, y `PaletteContrastTests` comprueba que **los ocho son distintos entre sí** y mide cada tinta
+contra **su** relleno. `Sev.Low` sale además del azul del primario, con el que era el mismo valor en
+el tema claro.
+
+Y con eso caen los demás: un solo juego de color de gravedad (**UI-0010** — los chips de la sesión
+usaban el juego de las *gráficas*, idéntico en los dos temas, a 40 px de unos contadores que usaban
+la paleta); un solo rotulado (**UI-0027** — «Críticas», «15 Alta», «Crit 0», «3 Altas» y «Critica»
+sin tilde, que era el enum en crudo, pasan por `SeverityNames` con la cifra delante y concordada); el
+cero no se pinta de peligro (**UI-0051**); `Primary.Soft` deja de significar cuatro cosas a la vez
+(**UI-0049**: `Nav.Active`, `Section.Active`, `Info.Soft` y `Sev.Low.Soft`); las tres acciones de la
+ficha vuelven al sistema (**UI-0005** — `SideAction` era un `Style` sobre `ui:Button` **sin
+`BasedOn`**, que se pintaba `#DDDDDD` sobre negro idéntico en los dos temas); y la pastilla «Activo»
+(**UI-0006**), el verde de estado de unidad (**UI-0008**) y la pastilla de temática (**UI-0019**,
+**UI-0050**) salen de sus converters: **nueve converters de color escritos a mano se van** y su sitio
+son `DataTrigger` con `DynamicResource`, que se reevalúan al cambiar de tema (D-971).
+
+**El azul de la librería (UI-0018)** tiene dos mitades. La paleta redirige las claves del
+interruptor, el anillo, la barra, el radio, la casilla y el foco; y el acento que WPF-UI escribe
+**directamente en `Application.Resources`** —donde un diccionario fusionado no llega— lo tapa
+`ThemeService` después de aplicar el tema.
+
+Cierra **UI-0005, 0006, 0007, 0008, 0010, 0018, 0019, 0027, 0034, 0049, 0050, 0051**.
+
+### D-1002 — Raíz 2: los nueve diálogos leen la paleta
+
+Los diálogos eran una isla: se escribieron antes que los tokens y nadie volvió. Cada uno pinta ahora
+su rejilla raíz con `Brush.Bg`, como `MainWindow` (**UI-0013**); sus botones son los cuatro del
+sistema (**UI-0014**); y sus tamaños, márgenes y colores salen de los tokens, con lo que la lista de
+pendientes de `DesignTokenTests` **queda vacía**.
+
+Y sobre todo: **`PaletteContrastTests` mide ahora la superficie de un diálogo.** Ése era el hueco por
+el que se colaron —medía el fondo de la ventana y el de las tarjetas, y el de un diálogo no—, así que
+el arreglo sin la medida habría durado hasta el siguiente diálogo. El criterio de orden fue P-24: un
+diálogo se convierte con la vista que lo abre.
+
+Cierra **UI-0013, 0014**.
+
+### D-1003 — Raíz 3: el foco tiene sitio, y una superposición se comporta como una
+
+**P-04 se cierra con su uso.** El `FocusVisualStyle` de la paleta —un anillo de 2 px dibujado
+**fuera** del control, con su token de separación— se pone en los botones, los campos, los
+interruptores, los radios y las listas. El rectángulo de puntos de fábrica —**1,21:1 en oscuro**, el
+único elemento visual de la aplicación que no cambiaba con el tema— desaparece.
+
+**P-03, y sí sale más barato como un patrón único.** `Controls/Overlay.cs` es un comportamiento
+adjunto con un solo contrato: al abrirse toma el foco, lo retiene mientras está abierta, `Escape` la
+cierra, y al cerrarse lo devuelve a quien la abrió. Lo usan el menú «…» de una tarjeta (**UI-0001**)
+y el cajón del ciclo (**UI-0003**), que eran **el mismo defecto escrito dos veces**: en el primero
+«Eliminar la aplicación…» no recibía el foco nunca —y es la única vía para borrar—, y en el segundo
+`Tab` seguía recorriendo la página que el cajón tapa.
+
+**UI-0016**: nombre de accesibilidad en lo que llegaba sin él, y el nombre de un bloque del raíl pasa
+del `StackPanel` —que no llega al árbol de automatización— a su `ItemsControl`, que es donde D-1000
+§2 daba por hecho que estaba. **UI-0042**: al cambiar de página el foco entra en la página —costaba
+entre 13 y 22 paradas llegar al primer control— y los contenedores dejan de pararlo; **P-15 no hace
+falta**, el orden de tabulación ya es el visual. **UI-0061**: la fila de usuario del pie deja de
+navegar; había dos controles del raíl llevando a «Cuenta» y el de abajo no marcaba «estás aquí», no
+tenía nombre y era la segunda parada de toda la ventana.
+
+Cierra **UI-0001, 0003, 0015, 0016, 0042, 0061**.
+
+### D-1004 — Raíz 4: la carcasa deja de moverse
+
+**UI-0046, con su test.** El marcador de «estás aquí» pedía 3 px de barra más 4 de relleno **a cada
+lado** dentro de un carril de 8, así que WPF lo recortaba en silencio y **no había un solo píxel del
+primario en el raíl**. Es la aritmética de D-966 fallando por tercera vez, así que esta vez la cuenta
+la vigila `El_marcador_de_estas_aqui_cabe_en_su_carril`, comprobado que falla con el margen anterior
+y en los dos raíles.
+
+Lo demás del raíl: pasar por Portafolio ya no borra la aplicación activa (**UI-0017** — lo hacía a
+propósito y el efecto medido era el contrario: «Inventario» desaparecía del raíl de cinco vistas); el
+bloque de sistema se ancla al pie (**UI-0043** — «Cuenta» recorría 137 px entre vistas);
+«Inventario» tiene icono propio (**UI-0047** — eran tres rayas, como el botón de plegar) y lo que
+late es el icono y no un punto que lo sustituye; la flecha de volver apagada se lee apagada
+(**UI-0048**).
+
+Y la miga: **acaba siempre en la página**, con el mismo grano (**UI-0044**); el hallazgo cuelga de
+«Hallazgos» y el informe de «Informes», que es lo que permite retirar el segundo «volver» que el
+informe pintaba dentro (**UI-0058**, **UI-0004**); el eslabón de la aplicación aparece cuando la
+página la está enseñando, para lo cual la miga se rehace también al cambiar de filtro; «Ver
+hallazgos» conserva los demás filtros (**UI-0025**); y raíl, título y miga dicen lo mismo
+(**UI-0029**).
+
+**UI-0045 no se hace.** El usuario retiró los rótulos del raíl a propósito (D-1000 §2), y **P-17
+queda descartada** salvo que él la reabra.
+
+Cierra **UI-0004, 0017, 0025, 0029, 0043, 0044, 0046, 0047, 0048, 0058**. Descarta **UI-0045**.
+
+### D-1005 — Raíz 5: los recortes dejan de mentir
+
+**P-01 — tres primitivas y nada más**, con su test:
+
+- `Text.Name` — un **nombre** se recorta por el final, con elipsis.
+- `Text.Path` — una **ruta** se acorta por el **medio** y conserva los dos extremos, sobre
+  `c:PathText`, que **mide** contra el ancho que hay en vez de contar caracteres.
+- `Text.Chip` — una **pastilla** no se recorta: si no cabe entera, no se pinta (`c:ChipHost`). Una
+  etiqueta a medias no es una versión corta de la etiqueta; es otra palabra.
+
+`Un_texto_que_no_envuelve_recorta_con_una_de_las_tres_primitivas` recorre los XAML y exige que todo
+texto que no envuelve y o recorta o tiene tope de ancho use una de las tres y **no escriba su propio
+`TextTrimming`**. Distingue el recorte de la **medida de lectura** —un texto que envuelve con tope no
+recorta, y el envolver puede venir de su estilo, así que resuelve la cadena de `BasedOn`—.
+
+Con eso caen los tres, verificados en captura: las rutas de unidad de la sesión (**UI-0009** — la
+cabecera de un `Expander` se mide con ancho **infinito** y su galón se pinta encima sin quitarle
+sitio, así que la ruta salía entera y la cortaba el borde: «FormateadorInfc⌄» parece un nombre de
+fichero); la pastilla de proveedor y modelo (**UI-0011** — su columna pasa de `Auto`, que no encoge
+nunca, a estrella, y `ChipHost` la retira entera cuando no le llega: a 1920 «Agente falso ·
+claude-opus-4.7», a 1280 no hay pastilla, en vez de «Age»); y las dos filas del coste por fase, que
+comparten columna (**UI-0033**).
+
+Y **el aire de un desplazamiento**, en un token y en un estilo (`Pad.Scroll`, `Scroll`): los
+`ScrollViewer` de WPF-UI pintan la barra **superpuesta**, que es por lo que tapaba los enlaces
+«Gestionar» del cajón del ciclo (**UI-0002**). Donde el corte cae en medio, un degradado dice que el
+contenido sigue (**UI-0028**, **UI-0037**), pintado encima y no como máscara de opacidad, que le
+quitaría el suavizado de subpíxel a un panel que es todo texto.
+
+Cierra **UI-0002, 0009, 0011, 0028, 0033, 0037**.
+
+### D-1006 — Raíz 6: una sola regla para el primario, y el aviso deja de tapar controles
+
+**P-27 — el primario se apaga cuando no puede hacer nada, y dice por qué al lado.** Eran cuatro
+sitios y cuatro criterios (**UI-0038**): Inventario tenía «Auditar selección» **encendido con cero
+casillas marcadas** —el botón que gasta créditos del usuario, sin nada que auditar (**UI-0022**)—;
+Nueva aplicación tenía «Crear e inventariar» encendido sin repositorio elegido y una casilla apagada
+que no decía por qué; y Ajustes apagaba «Guardar» en cuatro secciones **sin la razón al lado**
+mientras la quinta lo tenía encendido sin que se hubiera tocado nada. La razón va en `Reason.Chip`,
+**pegada al botón**, y no en un tooltip: hay que saber que existe para verlo, y quien mira un botón
+apagado no sabe que hay nada que ver.
+
+**UI-0021 — un primario por vista.** En Portafolio eran «+ Nueva aplicación» y «Abrir inventario»,
+los dos azul macizo del mismo peso: con N tarjetas, N+1 azules. **UI-0039 — la destructiva se pinta
+igual en todas partes**: perfilada, y el macizo se reserva para el diálogo que confirma, que es donde
+destruir es lo que se ha venido a hacer.
+
+**UI-0012 — el aviso flotante tiene carril propio.** Flotaba sobre **todo**, anclado abajo a la
+derecha de la ventana, y se plantaba encima del pie de la vista: tapaba una casilla con su rótulo y a
+1280 se llevaba también «build/tests». Ahora tiene una fila entre la página y el pie: **empuja el
+contenido en vez de taparlo**, se apila, y sin avisos mide cero. **UI-0041**: la fila de acciones de
+Nueva aplicación se queda pegada al pie de la columna; el botón que crea la aplicación estaba fuera
+de la pantalla a 1280 sin que nada anunciara que existía.
+
+Cierra **UI-0012, 0021, 0022, 0038, 0039, 0041**.
+
+### D-1007 — Raíz 7: la página tiene un armazón, y las cifras se alinean
+
+**P-02 — `PageShell`.** El armazón de una vista deja de copiarse a mano en cada XAML: título,
+subtítulo, recuento y acciones tienen un sitio. **La regla es que una página arranca en el margen de
+la página**, y lo que una vista declara es el **techo** de su cuerpo (`BodyWidth`), no su centro.
+Medido sobre la fila del título, quince vistas arrancaban en x = 264–266 y dos no —Nueva aplicación
+en 633 y Cuenta en 800— porque se centraban **imitando a «Acerca de»**, que es una excepción
+declarada (una tarjeta de 640 centrada en los dos ejes, D-999 §6) y no un patrón: el salto al cambiar
+de vista era de 536 px con la miga quieta en 311 (**UI-0035**). Y el recuento vive **bajo el título
+que cuenta**, no a 1.600 px de él (**UI-0056**).
+
+**P-08 — `Cell.Number` y `Table.Header.Number`.** Las cifras de Informes y Métricas se alinean a la
+derecha con cifras de ancho fijo: eran las únicas de la casa que no lo hacían (**UI-0030**).
+
+**El documento** (**UI-0031**, **UI-0032**, **UI-0059**): el informe se lee alineado a la izquierda,
+con la tipografía del sistema, con techo de línea de lectura (`Read.CardWidth`) y con documento y
+anexo en **un** solo desplazamiento.
+
+**Las tiras de cifras** (**UI-0020**): la rejilla no pone más columnas que tarjetas tiene —con una
+sola aplicación daba tres y la tarjeta se quedaba con 531 de 1.635 px— y los azulejos del Portafolio
+se ciñen a su contenido en vez de gastar 393 px para enseñar 55.
+
+**Las ranuras de gravedad** (**UI-0024**): una ranura fija **por nivel**, siempre las cuatro, la
+vacía sin pintar. Se empaquetaban a la derecha, así que la misma gravedad caía en una columna
+distinta según cuántas tuviera la fila y una pastilla roja aparecía donde el ojo ya se había
+acostumbrado a ver azul. La otra salida que la auditoría ofrecía —las pastillas junto al nombre— se
+descarta: allí la x la decide lo largo que sea el nombre del fichero, que es exactamente el defecto.
+
+Y el margen lo pone el contenedor, no cada pieza: la barra de Informes empieza sus dos filas en la
+misma x cuando envuelve (**UI-0055**) y los bloques de Ajustes acaban donde acaba su columna
+(**UI-0040** — tres bloques del mismo nivel acababan en 1441, 1460 y 1400, y ninguna de las dos
+diferencias era múltiplo de 4).
+
+Cierra **UI-0020, 0024, 0030, 0031, 0032, 0035, 0040, 0055, 0056, 0059**.
+
+### D-1008 — Las siete bajas que no caían con ninguna raíz
+
+Siete defectos sin causa común, arreglados uno a uno:
+
+- **UI-0026** — la monoespaciada marcaba tres filas de doce y no por lo que eran (`Commit anclado`
+  sí, `Identificador` no, siendo los dos literales de máquina) y además bajaba a 11 px. Una clase
+  —lo que escribió la máquina y hay que poder copiar carácter a carácter—, marcada siempre, con
+  `Font.Mono` y **sin tocar el tamaño**: el énfasis de una tabla de metadatos lo pone el sitio.
+- **UI-0036** — «Hub local» contaba en tinta neutra la misma verdad que la lista de arriba cuenta con
+  icono + color + palabra (D-989). Ahora las tres cosas, con los mismos tres estados que pinta el
+  punto del pie.
+- **UI-0052** — el aviso salía en tres formas según la vista. La banda de re-anclaje de la ficha y el
+  cierre del arreglo llevaban el relleno y ni icono ni cabecera: «esto es un aviso» viajaba solo en
+  el color.
+- **UI-0053** — la tira de la carcasa decía «unidad 3/6 · pasada 2» a 44 px de la barra que ya dice
+  «Unidad 3 de 6 · 00:07 · 7 llamadas». El progreso es de la vista; la carcasa dice lo que la vista
+  no puede decir, que es **qué** se audita. El modo exhaustivo se queda: no es progreso, es un aviso
+  de coste.
+- **UI-0054** — las tarjetas de permiso ya contestadas seguían ámbar, así que cada permiso resuelto
+  volvía a reclamar el ojo al bajar por el hilo. El ámbar es de lo que está abierto.
+- **UI-0057** — «+15 / −0» y «sin cambios» pesaban lo mismo, y esa columna es la única que dice si
+  una sesión trajo trabajo. Lo apagado es la fila sin delta.
+- **UI-0060** — la fila «Stack» era la única del formulario con un `StackPanel` horizontal: el valor
+  caía 22 px bajo su rótulo y el botón de apoyo no compartía x con ningún otro.
+
+### D-1009 — P-28: el banco de capturas deja el scratchpad y entra en `scripts/` (sustituye a D-977)
+
+**Contradice D-977**, que decidió que el banco «vive en el scratchpad y no en el repositorio: es un
+instrumento de esta fase, no producto». El argumento nuevo es que **ya no es de una fase**: se ha
+necesitado en F26 §B, en F26 §C y otra vez en UI-AUDIT-1, y esa tercera vez hubo que rescatarlo del
+scratchpad de otra sesión y volver a arreglarle tres cosas. Y hay una razón más fuerte: **cualquier
+comprobación de lo que se pinta depende de él**, y eso no puede depender de un fichero temporal.
+
+Lo que D-977 dijo con razón es que el banco no es **producto**. `scripts/` no es producto, y ahí ya
+viven `PromptBench` e `IconGen` por el mismo motivo. Entran las dos piezas —`scripts/Banco/tour.ps1`
+y `tour-todo.ps1` para el recorrido sobre el `dist`, y `scripts/Banco/Atalaya.Shots/` para las vistas
+densas y los nueve diálogos—, con las rutas absolutas convertidas en relativas al repositorio y
+`Atalaya.Shots` **fuera** de `Atalaya.sln`, como `PromptBench`, para que un build de la aplicación no
+arrastre una ventana que solo se abre a mano. El `.gitignore` de la carpeta deja fuera los PNG: lo
+que se versiona es el instrumento.
+
+### D-1010 — Lo que el `dist` enseñó y el verde no: tres defectos propios, tres reglas
+
+Las tres son de la misma familia y son la razón por la que estas capturas se miran en el `dist`:
+**compilan igual y los tests pasan igual.**
+
+- **La aplicación publicada no arrancaba.** `Stat.Number.Sev` heredaba de `Stat.Number` y había
+  quedado **88 líneas por encima** de él. Un `StaticResource` se resuelve mientras el diccionario se
+  lee, de arriba abajo: build verde, 1.920 tests verdes, y `dist\Atalaya.exe` se cerraba solo al
+  pintar el Portafolio, que es la primera pantalla. Test:
+  `Ningun_estilo_se_apoya_en_una_clave_que_se_declara_mas_abajo`.
+- **Anclar la cabecera al margen no bastaba** (UI-0035, segunda vuelta). Con el cuerpo centrado, el
+  título quedaba a la izquierda y el contenido en el medio, con 530 px en blanco entre los dos. Una
+  página no se centra; declara el techo de su cuerpo y se para **desde la izquierda**. Test:
+  `Ninguna_pagina_centra_su_cuerpo`.
+- **`TextTrimming="None"` era lo que impedía el acortado**, no lo que lo dejaba trabajar. Un
+  `TextBlock` con `NoWrap` y sin recorte declarado pide en la medida el ancho del texto **entero** y
+  no acepta menos, así que en una fila apretada empujaba su columna estrella más allá del hueco que
+  había y el contenedor la cortaba en seco: se leía «XBLASTRecovery/Class/Authentication.» como si el
+  fichero se llamara así, sin haber pasado nunca por `PathText`. Con el recorte declarado, el
+  `TextBlock` acepta el ancho que le den y `PathText` acorta por el medio. Tests: `PathTextTests`,
+  tres, y el del reciclado comprobado contra el defecto.
+
+Y de camino, dos cosas que las capturas destaparon y que no son de la auditoría: la tabla de Informes
+**cabe a 1280** —sus mínimos sumaban 960 con 952 disponibles, y hasta P-08 no se notaba porque las
+cifras iban pegadas a la izquierda de su columna— y la razón de un control apagado **envuelve** en
+vez de cortarse contra el borde de su tarjeta.

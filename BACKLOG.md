@@ -4,9 +4,8 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-05 (F26 Parte C — las cinco vistas de sistema por el sistema: Ajustes en
-secciones, Cuenta con estados que se leen, Métricas alineada, Informes legible y el alta por la
-misma rejilla).
+Última revisión: 2026-09-05 (F27 — las siete raíces de UI-AUDIT-1: 61 hallazgos arreglados por
+causa y no por parche, con las reglas que impiden que vuelvan).
 
 ## En vuelo
 
@@ -54,14 +53,36 @@ misma rejilla).
     ficha se leen como datos. Con dos tests nuevos para los dos fallos que solo se veían al abrir la
     pantalla: una clave inexistente y un `Double` donde iba un `GridLength`. Capturas en
     `docs/design/f26-parte-c/`.
-  - **La lista de pendientes de `DesignTokenTests` es el marcador.** Al cerrar la C **quedan diez, y
-    los diez son diálogos**: `AboutDialog`, `AuditLaunchDialog`, `CycleConfigDialog`,
-    `DeleteAppDialog`, `DeletedUnitsDialog`, `DirectivesDialog`, `FactoryResetDialog`,
-    `LinkCloneDialog`, `PatternSilencesDialog` y `ThresholdsDialog`. Ninguna parte de F26 los ha
-    tocado: van con la vista que los abre y esa vista ya está hecha, así que es trabajo acotado y
-    mecánico —tipografía, espaciado y color por tokens— sin decisiones de diseño nuevas. **Se apunta
-    aquí y no se hace en la C**: el encargo de la C son cinco vistas, y meter once ficheros más
-    habría escondido la revisión de las cinco entre diálogos que nadie ha pedido mirar.
+  - **La lista de pendientes de `DesignTokenTests` está VACÍA.** Al cerrar la C quedaban diez, y los
+    diez eran diálogos. Los cierra F27 con su raíz 2 (D-1002), junto con la lista de deuda de
+    `ImplicitStyleTests`: las dos listas eran el marcador de la conversión, y las dos están a cero.
+- **F27 — las siete raíces de la auditoría de interfaz. ENTREGADA** (D-1001…D-1010). UI-AUDIT-1
+  dejó 61 hallazgos; se arreglan **siete causas** —el color que no salía de la paleta, los nueve
+  diálogos que no la leían, el foco, la carcasa, los recortes que mentían, el primario y los avisos,
+  y la falta de un armazón de página— más las siete bajas que no caían con ninguna. **Cierra 60,
+  descarta 1** (UI-0045, por decisión del usuario). Ocho propuestas del bloque 2 entran (P-01, P-02,
+  P-04, P-05, P-08, P-12, P-27, P-28) y una se descarta con su hallazgo (P-17). Parte y capturas en
+  `docs/design/f27/`.
+
+  **Lo que F27 deja apuntado y NO hace:**
+
+  - **Las trece vistas que no usan `PageShell`.** El armazón de página (P-02) se aplica donde había
+    hallazgo —Cuenta, Nueva aplicación e Informes—; las demás siguen escribiendo su cabecera a mano.
+    Ya arrancan todas en la misma x, así que no hay defecto que arreglar: lo que queda es que la
+    próxima vista nazca con el patrón en vez de copiarlo. Trabajo mecánico, sin decisiones nuevas.
+  - **Las tarjetas de Cuenta miden 570 px dentro de una columna de 920.** UI-0035 se cierra —la
+    página arranca en el margen— pero la tarjeta sigue ciñéndose a su contenido en vez de a su
+    columna. No se toca porque no hay medida que diga cuál de las dos es la buena: el ancho de una
+    tarjeta de estados es una decisión de diseño, no un defecto de alineación.
+  - **Las diecinueve propuestas del bloque 2 que el usuario no pidió.** Están en el informe de la
+    auditoría con su porqué; ninguna se ha empezado. **P-17** (devolver los rótulos al raíl) queda
+    **descartada** salvo que el usuario la reabra: retiró los rótulos a propósito en D-1000 §2.
+  - **`tour.ps1` invocado con `powershell -File` no encuentra el `dist`.** `$PSScriptRoot` no está
+    disponible al evaluar los valores por defecto de `param()` en esa forma de invocación, así que
+    el `-Exe` por defecto sale vacío. Por el camino documentado —llamarlo por su ruta desde una
+    consola, o desde `tour-todo.ps1`— funciona. Se apunta porque el mensaje de error no dice nada de
+    esto.
+
 - **F24 — el símbolo debería ir por UBICACIÓN, no por hallazgo.** Hoy `Finding.Symbol` es **uno para
   todo el hallazgo**, y un defecto sistémico tiene N ubicaciones en N miembros distintos. El auditor
   resuelve el desajuste como puede —metiendo una lista en el campo: «CargaMediaPorMetro /
