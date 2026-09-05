@@ -163,9 +163,16 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
     public string SubHeaderText => _fix.FindingTitle;
 
     /// <summary>
-    /// Con quién se está arreglando: «Claude Code · modelo opus» (F16). Va en la cabecera, no
-    /// escondido en el informe: la pantalla es la misma con los dos motores —ése es el punto— y
-    /// justamente por eso tiene que decir cuál está detrás. Vacío antes de que haya sesión.
+    /// Con quién se está arreglando: «Claude Code · opus» (F16). Va en la cabecera, no escondido
+    /// en el informe: la pantalla es la misma con los dos motores —ése es el punto— y justamente
+    /// por eso tiene que decir cuál está detrás. Vacío antes de que haya sesión.
+    /// <para>
+    /// <b>Sin la palabra «modelo»</b> (F26-B revisión, D-983). La llevaba, y con ella la pastilla
+    /// no cabía: en el dist se leía «GitHub Copilot · modelo claude-opu…», que es la peor mitad de
+    /// las dos —el proveedor se entiende sin ayuda y el modelo es el dato que hay que mirar—.
+    /// Ocho caracteres que no informaban de nada: lo que va detrás del punto ya se sabe que es un
+    /// modelo. Sin ella entra entera, y una pastilla que entra entera no necesita recorte.
+    /// </para>
     /// </summary>
     public string EngineText
     {
@@ -177,7 +184,7 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
             }
 
             return _fix.Model is { Length: > 0 } model
-                ? $"{_fix.ProviderName} · modelo {model}"
+                ? $"{_fix.ProviderName} · {model}"
                 : $"{_fix.ProviderName} · modelo por defecto";
         }
     }

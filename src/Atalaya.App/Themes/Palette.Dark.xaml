@@ -137,6 +137,11 @@
     <SolidColorBrush x:Key="Brush.Code.Removed" Color="{StaticResource Color.Code.Removed}" />
     <SolidColorBrush x:Key="Brush.Code.Faint" Color="{StaticResource Color.Code.Faint}" />
 
+    <!-- El velo de un cajon o un modal: apaga lo de debajo sin taparlo. Mas denso en oscuro,
+         porque sobre un fondo ya oscuro un velo claro no separa nada. -->
+    <Color x:Key="Color.Scrim">#8C000000</Color>
+    <SolidColorBrush x:Key="Brush.Scrim" Color="{StaticResource Color.Scrim}" />
+
     <!-- ============================================================ Gravedad
 
          Cuatro colores propios y no «peligro, peligro, aviso, primario»: la gravedad es una escala

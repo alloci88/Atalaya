@@ -349,8 +349,13 @@ public sealed class AssistedFixViewTests
     {
         // El panel de la conversación, desde su borde hasta el separador: Markup() se come los
         // comentarios, así que el ancla es el propio marcado.
+        //
+        // El ancla ERA el color de fondo escrito a mano de ese Border. Desde D-983 ningún XAML
+        // convertido escribe colores —ese `#0C000000` era el mismo gris en los dos temas— así que
+        // se ancla en la columna, que es lo que de verdad identifica al panel y no cambia al
+        // repintarlo.
         string conversation = Between(
-            Markup(ViewXaml()), "Background=\"#0C000000\"", "<GridSplitter");
+            Markup(ViewXaml()), "<Border Grid.Column=\"0\"", "<GridSplitter");
 
         Regex.Matches(conversation, "<ScrollViewer").Count
             .Should().Be(1, "el del flujo de la conversación, y ninguno anidado dentro");

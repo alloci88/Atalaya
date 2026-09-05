@@ -652,9 +652,20 @@ public sealed class InventoryViewTests : IDisposable
         string xaml = File.ReadAllText(
             Path.Combine(dir!.FullName, "src", "Atalaya.App", "Views", "InventoryView.xaml"));
         string markup = Regex.Replace(xaml, "<!--.*?-->", string.Empty, RegexOptions.Singleline);
-        int start = markup.IndexOf("Resumen del ciclo", StringComparison.Ordinal);
-        start.Should().BeGreaterThan(0, "el panel del resumen tiene que seguir ahí");
-        return markup[start..];
+
+        // El panel vive en una PLANTILLA desde D-982 —se pinta acoplado a la derecha cuando cabe y
+        // como cajón encima cuando no, y una sola definición es lo que impide que las dos copias
+        // diverjan—, así que el bloque va de la plantilla a su cierre. Antes se cogía «desde el
+        // título hasta el final del fichero», y con el botón que abre el cajón —que se llama
+        // igual, porque abre eso— ese corte se llevaba por delante media vista.
+        int start = markup.IndexOf("<DataTemplate x:Key=\"CycleSummary\">", StringComparison.Ordinal);
+        start.Should().BeGreaterThan(0, "el panel del resumen tiene que seguir ahí, en su plantilla");
+
+        int end = markup.IndexOf("</DataTemplate>", start, StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start, "la plantilla del panel se cierra");
+
+        markup[start..end].Should().Contain("Resumen del ciclo", "y sigue titulándose así");
+        return markup[start..end];
     }
 
     private AuditSession SystemSession(AuditMode mode, int cycleN)

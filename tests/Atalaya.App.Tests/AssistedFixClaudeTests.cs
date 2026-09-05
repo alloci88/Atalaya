@@ -433,7 +433,9 @@ public sealed class AssistedFixClaudeTests : IDisposable
 
         fix.HasFinished.Should().BeTrue(fix.FailureMessage);
         view.HasEngine.Should().BeTrue();
-        view.EngineText.Should().Be("Claude Code · modelo opus");
+        // Sin la palabra «modelo» desde D-983: con ella la pastilla no cabia en la cabecera
+        // y se recortaba justo por el modelo, que es el dato que hay que mirar.
+        view.EngineText.Should().Be("Claude Code · opus");
         fix.Conversation.OfType<FixMessage>().Should()
             .Contain(m => m.Text.Contains("Claude Code") && m.Text.Contains("modelo opus"));
 

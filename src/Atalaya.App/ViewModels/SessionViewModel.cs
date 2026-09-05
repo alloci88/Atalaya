@@ -48,9 +48,14 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
         }
     }
 
+    /// <summary>
+    /// El título de la pantalla. <b>Con tildes</b> (F26-B revisión, D-983): el raíl, el MANUAL y
+    /// la miga escriben «Última sesión» y aquí salía «Ultima sesion», así que la misma pantalla se
+    /// llamaba de dos formas según dónde se leyera su nombre.
+    /// </summary>
     public override string Title => Live.HasFailed && !Live.IsRunning
-        ? "Sesion fallida"
-        : Live.HasFinished && !Live.IsRunning ? "Ultima sesion" : "Sesion en vivo";
+        ? "Sesión fallida"
+        : Live.HasFinished && !Live.IsRunning ? "Última sesión" : "Sesión en vivo";
 
     /// <summary>El estado real, enlazado directamente por la vista.</summary>
     public LiveSessionService Live => _live;

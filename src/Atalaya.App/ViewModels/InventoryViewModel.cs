@@ -278,6 +278,34 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
     [ObservableProperty] private bool _wide = true;
 
     /// <summary>
+    /// El resumen del ciclo, abierto como cajón sobre la lista (D-982).
+    /// <para>
+    /// Cuando no cabe al lado, el panel NO puede limitarse a desaparecer: dentro viven «Configurar
+    /// ciclo» y los tres «Gestionar» de la gobernanza, y con la ventana en su tamaño mínimo —1100
+    /// px, de los que el raíl se lleva 232— el umbral nunca se alcanza. Es decir: quien trabaje en
+    /// ventana pequeña perdía esas acciones para siempre y sin ningún control que las devolviera.
+    /// Ahora se pliega a un botón de la cabecera que lo abre encima.
+    /// </para>
+    /// </summary>
+    [ObservableProperty] private bool _cycleDrawerOpen;
+
+    /// <summary>Abre y cierra el cajón. Un solo gesto: el botón de la cabecera y el aspa.</summary>
+    [RelayCommand]
+    private void ToggleCycleDrawer() => CycleDrawerOpen = !CycleDrawerOpen;
+
+    /// <summary>
+    /// Al ensancharse, el cajón sobra: el panel vuelve a su sitio a la derecha y dejarlo abierto
+    /// taparía la lista con lo mismo que ya se ve al lado.
+    /// </summary>
+    partial void OnWideChanged(bool value)
+    {
+        if (value)
+        {
+            CycleDrawerOpen = false;
+        }
+    }
+
+    /// <summary>
     /// Si esta máquina tiene el clon de la app (F5.8 §3). El inventario se ABRE siempre —ver
     /// estados, quién audita y el resumen del ciclo no necesita el código—, pero lo que LANZA
     /// una auditoría o lee ficheros del clon queda deshabilitado y dice por qué.

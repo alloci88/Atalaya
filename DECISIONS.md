@@ -14545,3 +14545,168 @@ dos escribía, y la frontera V3/V4 no se mueve —lo que cambia es que hay menos
 vigilar. El comentario del test conserva por qué existieron y por qué ya no.
 
 **2.366 tests en verde** (1.857 de `Atalaya.App.Tests`).
+
+### D-982 — El resumen del ciclo se pliega a un cajón, no desaparece
+
+**El panel del ciclo se retiraba al estrecharse y no dejaba ninguna forma de volver a él.** Dentro
+viven «Configurar ciclo» y los tres «Gestionar» de la gobernanza —patrones silenciados, directivas,
+umbrales—, así que lo que se perdía no era un resumen: eran acciones que no están en ningún otro
+sitio.
+
+**Y no era un caso raro, era el caso normal.** El umbral del panel se mide sobre el ancho
+DISPONIBLE, no sobre el de la ventana, y son 1060 px. La ventana tiene un mínimo de 1100 y el raíl
+desplegado se lleva 232, así que en su tamaño mínimo al contenido le quedan unos 860: por debajo
+del umbral **siempre**. Quien trabaje con la ventana pequeña no veía ese panel nunca.
+
+*(El mínimo de ventana de la Parte A sí se respeta, y se comprobó: pedida a 820×520 por
+`SetWindowPos`, la ventana se planta en 1100×700. Lo que fallaba no era el mínimo, era que a ese
+mínimo el panel ya no cabía.)*
+
+**El panel se define UNA vez, en una plantilla**, y se pinta en dos sitios: acoplado a la derecha
+cuando cabe, y como cajón sobre la lista cuando no. Dos copias del mismo bloque divergen —la que se
+ve menos deja de mantenerse y un día le falta una fila que la otra sí tiene—, y aquí eso
+significaría que la mitad de la gobernanza existe solo en una de las dos anchuras.
+
+Lo abre un botón de la cabecera, «Resumen del ciclo», **que solo aparece cuando el panel no está**:
+si cabe al lado, ese botón abriría encima lo que ya se está viendo. El cajón lleva velo —apaga lo de
+debajo y cierra al pulsarlo, que es el gesto que todo el mundo prueba primero— y el velo es un token
+de la paleta (`Brush.Scrim`), más denso en oscuro porque sobre un fondo ya oscuro un velo claro no
+separa nada.
+
+**Ningún test nuevo, y uno reparado con su motivo** (N-5). Un cajón que no abre se ve en la primera
+captura; lo que sí se rompió en silencio fue `Cada_dato_del_panel_lleva_su_frase`, que extraía «el
+panel» como «desde el título hasta el final del fichero». Con el botón que abre el cajón —que se
+llama igual, porque abre eso— ese corte pasó a llevarse media vista por delante y el test empezó a
+exigir tooltips a controles que no son datos. Ahora el corte va de la plantilla a su cierre, que es
+lo que el test decía que miraba.
+
+### D-983 — Revisión de la Parte B: ocho defectos vistos en el dist
+
+Los ocho salieron de mirar la aplicación instalada a 1920×1080 y en ventana reducida, en los dos
+temas. Se agrupan por lo que enseñan, no por la vista en que aparecieron.
+
+**1 · La ventana no arrancaba maximizada, y la culpa era del banco.** D-956 funciona: con el estado
+limpio la ventana abre maximizada —comprobado, `showCmd = 3`, 1936×1048— y con estado guardado abre
+como se dejó. Lo que pasaba es que el recorrido de capturas escribe en el `settings.json` REAL del
+usuario para fijar tema y tamaño, y dejaba puesto `window.saved = true` con 1280×720. La aplicación
+honraba una preferencia que nunca existió. **El recorrido ahora hace copia del ajuste antes de
+tocarlo y lo restaura al terminar**: una herramienta de medida que altera lo que mide no mide.
+
+**2 · El resumen del ciclo**: D-982.
+
+**3 · «Disputados» no estaba alineado.** Un `StackPanel` da a sus hijos el alto completo y cada
+`TextBlock` pinta su texto arriba del suyo; como la balanza tiene una caja más alta que la letra,
+quedaban a alturas distintas, y la casilla —centrada sobre el conjunto— más baja que las dos. Se
+centra cada pieza, la balanza lleva su tamaño escrito para que no cambie de alto con la fuente que
+la pinte, y el margen pasa a ser el mismo que el de «Por revisar», que es el control de al lado.
+
+**4 · La razón de un botón bloqueado se cortaba, y el botón no parecía bloqueado.** Dos cosas
+distintas con la misma raíz —el aviso se escribió mirando el caso corto—:
+
+- El texto vivía en un `StackPanel` horizontal, que da ancho INFINITO a sus hijos, así que su
+  `TextWrapping` no llegaba a dispararse nunca. Con un `DockPanel` el icono ocupa lo suyo y el texto
+  recibe lo que queda, que es lo único que hace que envuelva.
+- Y **deshabilitado ya no es «lo mismo con menos opacidad»**. Un verde macizo al 65 % sobre una
+  tarjeta sigue siendo verde macizo: «Arreglar con agente» bloqueado se veía igual que disponible.
+  Ahora el relleno pasa a superficie neutra y la tinta a texto secundario —6,4:1 en los dos temas,
+  apagado no es ilegible—. Es el principio 4 en su forma más literal: si el color significa algo, no
+  puede pintarse cuando no significa nada.
+
+**5 · La cabecera del bloque de código se cortaba por donde no.** Era una línea con `MaxWidth=380`
+y recorte por el final, así que lo que se perdía era siempre la ruta y a veces ya el miembro
+(«HttpService.LoginExternalUser · XBLASTRecovery/C…»). El orden importa al revés: el nombre de
+clase y miembro dice QUÉ se está mirando y es corto; la ruta es larga y repetitiva y admite
+acortarse por el MEDIO, que conserva sus extremos —los que la identifican—. Dos líneas, el nombre
+entero arriba y la ruta acortada debajo.
+
+**6 · La pastilla del proveedor no cabía** («GitHub Copilot · modelo claude-opu…»). Sobraba la
+palabra «modelo»: ocho caracteres que no informan, porque lo que va detrás del punto ya se sabe que
+es un modelo. Sin ella entra entera, y una pastilla que entra entera no necesita recorte — se le
+quitan el `MaxWidth` y el recorte, y de paso el `#18808080` escrito a mano.
+
+**7 · Pausar / Detener / Descartar todo no parecían un grupo.** Tres `ui:Button` con tres
+`Appearance` distintas traen tres rellenos y tres alturas, y las separaciones se escribían control a
+control: 12 a la derecha de unos, 12 a la izquierda del último, o sea 24 entre los dos de en medio.
+Ahora son los botones del sistema, con una sola separación puesta por `Stack.Gap` en el contenedor
+—que es lo único que garantiza que sea la misma para todos— y el significado lo dice el color:
+secundario, aviso, peligro. Medido en la captura: **51 px de alto los tres, 12 px entre cada par**.
+
+Esto obligó a añadir `Button.Warning` al sistema: la acción que INTERRUMPE no destruye nada, pero
+tampoco es neutra. Y **retira media regla anterior**: F16-RETOQUE §2·4 pedía más aire alrededor del
+destructivo («la separación ES la jerarquía»). El usuario miró la cabecera y pidió lo contrario: los
+tres son un grupo y lo que distingue al destructivo es su color. Se conserva la otra mitad —va el
+último— y el test lo dice con esas palabras.
+
+**8 · El aviso de fin de arreglo era ilegible en claro**, y no era un caso suelto. Llevaba
+`Background="#22E0A030"` con `Foreground="#F0D090"`: ámbar translúcido con tinta ámbar clara, que
+sobre el gris oscuro de siempre se leía y sobre el crema es ámbar sobre ámbar. Había **cincuenta y
+tantos colores escritos a mano** repartidos por las vistas, todos elegidos mirando el tema oscuro.
+Se llevan todos a la paleta —avisos a `Notice.Warning`/`Notice.Danger`, superficies a
+`Brush.Surface2`/`Brush.Bg`, gravedad a `Brush.Sev.*`, tinta sobre color vivo a
+`Brush.Ink.OnVivid`— y el test de «ningún XAML convertido escribe a mano» **se amplía a los
+colores**, hexadecimales y con nombre. Es la tercera regla de la misma familia, y la que más falta
+hacía: un color a mano no falla nunca, solo deja de verse, y solo en el tema que nadie miró al
+escribirlo.
+
+**9 y 10 · La alineación, que era un defecto del sistema y no de una vista.** Dos patrones:
+
+- **Dos tamaños en una fila.** WPF **no alinea líneas base entre celdas de un Grid** —no existe
+  `VerticalAlignment="Baseline"`— y `Bottom` iguala el borde inferior de dos CAJAS: la de un texto
+  de 13 tiene menos hueco bajo la letra que la de uno de 26, así que el subtítulo se sentaba por
+  debajo de la base del título, y el «15» de un recuento flotaba por encima de las palabras que lo
+  explican. Lo que sí comparte línea base son los `Run` de un mismo `TextBlock`, que es la
+  maquetación de texto de siempre. Título y subtítulo pasan a ser una línea con dos tamaños; la
+  fila de recuento, una línea con tres.
+- **Un margen izquierdo por bloque.** El culpable era `Button.Link`, con 4 px de relleno uniforme:
+  un enlace metido en una columna de texto arrancaba 4 px a la derecha de la línea de arriba y de
+  la de abajo. Es el único control que aparece mezclado entre párrafos —la deriva del Portafolio,
+  los «Gestionar» del ciclo—, así que su relleno gobernaba la alineación de media aplicación. Pasa
+  a ser solo vertical.
+
+Los enlaces necesitaron además **plantilla propia**: con la del botón, el nuevo apagado les pintaba
+una chapa gris donde no había ninguna —«Nada ha cambiado desde su auditoría» del Portafolio salía
+con recuadro—. Un enlace que no se puede pulsar simplemente deja de parecer pulsable.
+
+Y la tarjeta de «Última sesión» dejó de estirarse hasta el pie: era un `DockPanel` con el botón
+anclado abajo, así que con dos líneas de recuento seguía llegando al borde de la ventana con 600 px
+de nada y «Ver informe de sesión» abandonado al fondo. Un `StackPanel` acaba donde acaba su
+contenido. De paso, el título recupera sus tildes: el raíl y el MANUAL ya escribían «Última sesión»
+y la propia pantalla se llamaba «Ultima sesion».
+
+**El barrido, vista por vista.** Las seis convertidas, buscando los dos patrones:
+
+| Vista | Dos tamaños en una fila | Un margen por bloque |
+|---|---|---|
+| Portafolio | Cifra y etiqueta van APILADAS, no en fila: sin defecto. | El enlace de deriva, corregido por el relleno del sistema. |
+| Hallazgos | La fila de un hallazgo es toda del mismo tamaño. | «Limpiar filtros» es el único enlace y va centrado en su tarjeta. |
+| Inventario | Sin filas mixtas. | Diez enlaces («Gestionar», «Configurar ciclo», «Revisar»), todos en columnas de texto del panel: son los que más se notaban. |
+| Ficha | El título va sobre las pastillas, no junto a ellas. | Tres enlaces, corregidos. La cabecera de «Código» se rehace entera (defecto 5). |
+| Sesión | Cabecera y filas de recuento: **las dos rehechas**. | Todo el contenido de la tarjeta a la misma x. |
+| Arreglo | Cabecera: **rehecha**. El enlace y la pastilla dejan de colgar del borde inferior. | Sin enlaces en columna de texto. |
+
+**Dos tests nuevos, y son dos reglas** (N-5):
+
+1. **Ningún XAML convertido escribe un color a mano** — la tercera de la familia de la escala,
+   descrita arriba.
+2. **Un enlace no tiene relleno horizontal** — medido sobre el estilo del sistema, no vista por
+   vista, porque es de ahí de donde sale la alineación de todas.
+
+**Seis tests existentes actualizados, ninguno eliminado.** Los tres que costaron:
+
+- **`La_accion_destructiva_no_viaja_entre_las_de_control`** buscaba el botón por su `Appearance` de
+  WPF-UI, que ya no existe, y exigía el aire extra que el usuario retiró. Pasa a reconocerlo por su
+  rótulo —el banco de geometría quita los `Style=` a propósito, así que preguntar por el estilo
+  allí no preguntaría por nada— y conserva la mitad viva de la regla.
+- **`La_conversacion_tiene_un_unico_scroll`** se anclaba en un color escrito a mano. Ahora se ancla
+  en la columna, que es lo que identifica al panel y no cambia al repintarlo.
+- **`Un_titulo_largo_se_recorta_y_se_lee_en_el_tooltip`** exige que todo texto con recorte tenga un
+  tope, y tenía razón: al fundir título y subtítulo en un `TextBlock` se quedó sin él. El tope es
+  ahora un token (`Header.IdentityMaxWidth`), no un número suelto.
+
+**Y un arreglo que salió de un test**: `Stack.Gap` solo repartía al **cargarse** el panel, o sea
+solo si llegaba a una ventana. Un panel medido fuera de pantalla salía con sus hijos pegados, y el
+test que vigila que dos piezas no se amontonen medía un hueco de cero que en la aplicación no
+existía. Ahora reparte también al terminar de leerse del XAML. Una separación que depende de estar
+en pantalla no es una separación, es una casualidad.
+
+**2.368 tests en verde** (1.859 de `Atalaya.App.Tests`).

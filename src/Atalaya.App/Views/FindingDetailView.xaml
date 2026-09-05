@@ -135,7 +135,7 @@
                                     Background="{Binding Finding.Severity, Converter={StaticResource SeverityToBrush}}"
                                     ToolTip="Severidad según la rúbrica del sistema.">
                                 <TextBlock Text="{Binding Finding.Severity, Converter={StaticResource SeverityToLabel}}"
-                                           Foreground="White" FontSize="{StaticResource FontSize.Meta}" FontWeight="SemiBold" />
+                                           Foreground="{DynamicResource Brush.Ink.OnVivid}" FontSize="{StaticResource FontSize.Meta}" FontWeight="SemiBold" />
                             </Border>
 
                             <Border Style="{StaticResource Chip}"
@@ -187,13 +187,34 @@
                 <!-- · Código: el miembro completo, con las líneas del fichero · -->
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
+                        <!-- La cabecera, en dos piezas y con columnas de verdad (D-983). Antes era
+                             una sola linea con `MaxWidth=380` y recorte por el final, asi que lo
+                             que se perdia era siempre la ruta y a veces ya el miembro: en el dist
+                             se leia «HttpService.LoginExternalUser · XBLASTRecovery/C…».
+
+                             Ahora el NOMBRE va entero y sin recorte —es lo que dice que se esta
+                             mirando, y es corto— y la ruta va debajo, acortada por el MEDIO, que
+                             conserva sus extremos: los que la identifican. Nada de MaxWidth: la
+                             columna estrella reparte lo que haya. -->
                         <Grid>
-                            <TextBlock Text="Código" Style="{StaticResource SectionTitle}" />
-                            <TextBlock Text="{Binding SnippetCaption}" HorizontalAlignment="Right"
-                                       FontSize="{StaticResource FontSize.Meta}" FontFamily="Cascadia Mono, Consolas"
-                                       TextTrimming="CharacterEllipsis" MaxWidth="380"
-                                       ToolTip="{Binding SnippetCaption}"
-                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Código" Style="{StaticResource SectionTitle}" />
+                            <StackPanel Grid.Column="1" HorizontalAlignment="Right"
+                                        Margin="{StaticResource Pad.S.Left}"
+                                        ToolTip="{Binding SnippetCaption}">
+                                <TextBlock Text="{Binding SnippetMember}" HorizontalAlignment="Right"
+                                           FontSize="{StaticResource FontSize.Meta}"
+                                           FontFamily="Cascadia Mono, Consolas"
+                                           Foreground="{DynamicResource Brush.TextMuted}" />
+                                <TextBlock Text="{Binding SnippetWhere, Converter={StaticResource MiddleEllipsis}, ConverterParameter=46}"
+                                           HorizontalAlignment="Right"
+                                           FontSize="{StaticResource FontSize.Meta}"
+                                           FontFamily="Cascadia Mono, Consolas"
+                                           Foreground="{DynamicResource Brush.TextFaint}" />
+                            </StackPanel>
                         </Grid>
 
                         <!-- Nunca enseñar código viejo como si fuera actual: cuando el ancla no
@@ -419,14 +440,24 @@
                                     <Binding Path="CanStartFix" Converter="{StaticResource InverseBool}" />
                                 </MultiBinding>
                             </Border.Visibility>
-                            <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.XS}">
-                                <Path Style="{StaticResource Icon.Small}" Data="{x:Static c:Icons.Warning}"
-                                      
+                            <!-- DockPanel y no StackPanel horizontal: un StackPanel da a sus hijos
+                                 ancho INFINITO, asi que el `TextWrapping` de dentro no llega a
+                                 dispararse nunca y la razon se cortaba por la derecha justo antes
+                                 de decir que hay que commitear. Aqui el icono ocupa lo suyo y el
+                                 texto recibe lo que queda, que es lo unico que hace que envuelva.
+                                 El icono va arriba: con la razon en dos lineas, centrarlo lo dejaba
+                                 flotando entre ambas. -->
+                            <DockPanel>
+                                <Path DockPanel.Dock="Left" Style="{StaticResource Icon.Small}"
+                                      Data="{x:Static c:Icons.Warning}"
+                                      VerticalAlignment="Top"
+                                      Margin="{StaticResource Pad.XS.Right}"
                                       Stroke="{DynamicResource Brush.Warning.Ink}" />
                                 <TextBlock Text="{Binding AssistedFixBlock}"
                                            Style="{StaticResource Reason.Text}"
+                                           VerticalAlignment="Top"
                                            TextWrapping="Wrap" />
-                            </StackPanel>
+                            </DockPanel>
                         </Border>
                         <ui:Button Content="{Binding FixPromptActionLabel}" Style="{StaticResource SideAction}"
                                    Command="{Binding GenerateFixPromptCommand}"

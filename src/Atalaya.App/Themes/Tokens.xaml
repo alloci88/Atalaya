@@ -203,6 +203,12 @@
     <sys:Double x:Key="Rail.BadgeRing">2</sys:Double>
     <sys:Double x:Key="Content.MaxWidth">1480</sys:Double>
 
+    <!-- El tope de la identidad de una cabecera: titulo mas subtitulo. Un texto con recorte NECESITA
+         un tope —sin el, WPF le da el ancho que pida y el recorte no llega a activarse hasta que ya
+         ha empujado a las acciones fuera de la pantalla—. 560 es lo que ocupa «Ultima sesion» con un
+         subtitulo de aplicacion y modo, que es el caso largo real. -->
+    <sys:Double x:Key="Header.IdentityMaxWidth">560</sys:Double>
+
     <!-- El resumen del ciclo del Inventario. 320 y no 260: a 260 su línea más larga —«Patrones
          silenciados: 0 · Gestionar»— se cortaba a media palabra, y nadie lo dijo porque un texto
          recortado no falla, solo miente. -->

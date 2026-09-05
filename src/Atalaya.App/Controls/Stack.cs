@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 
 namespace Atalaya.App.Controls;
@@ -21,9 +21,15 @@ namespace Atalaya.App.Controls;
 /// saben explicar. Se respeta el margen que un hijo ya traiga en los otros tres lados.
 /// </para>
 /// <para>
-/// <b>Cuándo se aplica.</b> Al cargarse el panel, que es cuando sus hijos ya existen. Para listas
-/// generadas (<c>ItemsControl</c>) la separación va en el <c>ItemContainerStyle</c>, porque ahí los
-/// hijos aparecen y desaparecen y el «último» cambia con los datos.
+/// <b>Cuándo se aplica.</b> En cuanto el panel termina de leerse del XAML —<c>Initialized</c>, que
+/// es cuando sus hijos declarados ya existen— y otra vez al cargarse, por si alguno llegó después.
+/// Al principio solo se hacía en <c>Loaded</c>, y eso ataba la separación a que el panel llegara a
+/// una ventana: un panel medido fuera de pantalla —el banco de geometría de los tests, por
+/// ejemplo— salía con sus hijos pegados, y el test que vigila que dos piezas no se amontonen medía
+/// un hueco de cero que en la aplicación no existía. Una separación que depende de estar en
+/// pantalla no es una separación, es una casualidad. Para listas generadas (<c>ItemsControl</c>) la
+/// separación sigue yendo en el <c>ItemContainerStyle</c>, porque ahí los hijos aparecen y
+/// desaparecen y el «último» cambia con los datos.
 /// </para>
 /// </summary>
 public static class Stack
@@ -48,16 +54,20 @@ public static class Stack
 
         panel.Loaded -= OnPanelLoaded;
         panel.Loaded += OnPanelLoaded;
+        panel.Initialized -= OnPanelInitialized;
+        panel.Initialized += OnPanelInitialized;
 
-        // Un panel que YA está cargado (le cambian el gap en caliente, o lo trae un estilo que se
-        // aplica después) no vuelve a disparar Loaded. Se reparte ahora mismo.
-        if (panel.IsLoaded)
+        // Un panel que YA está inicializado o cargado —le cambian el gap en caliente, o lo trae un
+        // estilo que se aplica después— no vuelve a disparar ninguno de los dos. Se reparte ahora.
+        if (panel.IsInitialized || panel.IsLoaded)
         {
             Apply(panel);
         }
     }
 
     private static void OnPanelLoaded(object sender, RoutedEventArgs e) => Apply((Panel)sender);
+
+    private static void OnPanelInitialized(object? sender, EventArgs e) => Apply((Panel)sender!);
 
     /// <summary>Reparte la separación entre los hijos visibles del panel.</summary>
     public static void Apply(Panel panel)

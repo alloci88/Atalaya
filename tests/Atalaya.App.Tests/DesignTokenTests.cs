@@ -93,6 +93,66 @@ public sealed class DesignTokenTests
     }
 
     /// <summary>
+    /// <b>Y ningún color a mano</b> (F26-B revisión, D-983). Es la misma regla que las dos de
+    /// arriba, y la que más falta hacía.
+    /// <para>
+    /// <b>De dónde viene.</b> El aviso de fin de arreglo llevaba escrito
+    /// <c>Background="#22E0A030"</c> con <c>Foreground="#F0D090"</c>: ámbar translúcido con tinta
+    /// ámbar clara. Sobre el gris oscuro de siempre se leía; sobre el crema del tema claro es
+    /// ámbar claro sobre ámbar claro, es decir, nada. Y no era un caso suelto: había cincuenta y
+    /// tantos colores escritos a mano repartidos por las vistas, todos elegidos mirando el tema
+    /// oscuro, cada uno una excepción silenciosa al principio 5.
+    /// </para>
+    /// <para>
+    /// <b>Por qué se rompe en silencio.</b> Un color a mano no falla nunca: pinta. Solo deja de
+    /// verse, y solo en el tema que nadie miró al escribirlo — que es exactamente cómo el modo
+    /// claro llegó a estar «casi terminado» durante meses. Los pares de la paleta sí están
+    /// medidos (D-947, <c>PaletteContrastTests</c>), pero medir la paleta no sirve de nada si las
+    /// vistas no la usan.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Ningun_XAML_ya_convertido_escribe_un_color_a_mano()
+    {
+        // Cualquier literal hexadecimal en un atributo —#RGB, #RRGGBB o #AARRGGBB— y también los
+        // colores CON NOMBRE que se usaban aquí: `Foreground="White"` sobre una pastilla de
+        // gravedad es el mismo problema escrito de otra forma —blanco puro sobre el ámbar del
+        // tema claro no llega a AA, y la paleta tiene `Brush.Ink.OnVivid` medido justo para eso—.
+        // «Transparent» no cuenta: no es un color, es la ausencia de uno.
+        var culpables = Escanear(@"=\s*""(?:#[0-9A-Fa-f]{3,8}|White|Black|Gray|Red|Green|Blue|Yellow)""");
+
+        culpables.Should().BeEmpty(
+            "los colores salen de la paleta (Brush.Warning.Ink, Brush.Surface2, Brush.Sev.Crit…), "
+            + "que tiene sus pares medidos a AA en los DOS temas; un color escrito a mano se "
+            + "elige mirando un solo tema y desaparece en el otro sin fallar");
+    }
+
+    /// <summary>
+    /// <b>Un enlace se sienta en el margen del bloque</b> (F26-B revisión, D-983).
+    /// <para>
+    /// Dentro de un bloque de texto hay UN margen izquierdo. Un <c>Button.Link</c> con relleno
+    /// horizontal mete su rótulo unos píxeles a la derecha de la línea de arriba y de la de abajo,
+    /// y eso es exactamente el defecto que el usuario describió como «líneas consecutivas del
+    /// mismo bloque que arrancan a distintas x»: con 4 px no se lee como un error, se lee como que
+    /// la pantalla está mal hecha y no se sabe por qué.
+    /// </para>
+    /// <para>
+    /// <b>Por qué en el sistema y no en cada vista.</b> El enlace es el ÚNICO control que aparece
+    /// mezclado en columnas de texto —la deriva del Portafolio, los «Gestionar» del ciclo, «Ver
+    /// detalle»—, así que su relleno gobierna la alineación de media aplicación desde un solo
+    /// sitio. Medirlo aquí vale por medirlo en todas.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Un_enlace_no_tiene_relleno_horizontal()
+    {
+        H(PadOfStyle("Button.Link")).Should().Be(
+            0,
+            "el rótulo de un enlace arranca donde arranca el párrafo que lo rodea; el relleno "
+            + "vertical se queda, que es el que hace cómodo pulsarlo");
+    }
+
+    /// <summary>
     /// La lista de pendientes solo puede encoger. Sin esto, un fichero nuevo escrito a la antigua
     /// se «arreglaría» añadiéndolo a la lista, y la lista dejaría de significar nada.
     /// </summary>
@@ -222,6 +282,23 @@ public sealed class DesignTokenTests
             2 => new Thickness(n[0], n[1], n[0], n[1]),
             _ => new Thickness(n[0], n[1], n[2], n[3]),
         };
+    }
+
+    /// <summary>El <c>Padding</c> que un estilo con nombre declara, resuelto a su token.</summary>
+    private static Thickness PadOfStyle(string key)
+    {
+        string styles = File.ReadAllText(Path.Combine(XamlRoot(), "Themes", "Styles.xaml"));
+
+        int start = styles.IndexOf($"x:Key=\"{key}\"", StringComparison.Ordinal);
+        start.Should().BeGreaterThan(0, $"`Styles.xaml` declara {key}");
+
+        int end = styles.IndexOf("</Style>", start, StringComparison.Ordinal);
+        var m = Regex.Match(
+            styles[start..end],
+            @"<Setter Property=""Padding"" Value=""\{StaticResource ([^}]+)\}"" />");
+
+        m.Success.Should().BeTrue($"{key} declara su relleno con un token, no a mano");
+        return Pad(m.Groups[1].Value);
     }
 
     private static string Tokens()

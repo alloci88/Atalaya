@@ -220,6 +220,21 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
     [ObservableProperty] private int _snippetFirstLine = 1;
     [ObservableProperty] private int _snippetHighlightLine;
     [ObservableProperty] private string _snippetCaption = string.Empty;
+
+    /// <summary>
+    /// La cabecera del bloque de código, en DOS piezas (F26-B revisión, D-983).
+    /// <para>
+    /// Escrita de una sola vez —«Clase.Miembro · ruta:línea»— no cabía, y lo que el recorte se
+    /// llevaba era siempre el final: la ruta. Pero el orden importa al revés. El nombre de la
+    /// clase y del miembro es lo que dice QUÉ se está mirando y es corto; la ruta es larga y
+    /// repetitiva —los primeros segmentos son los mismos para media aplicación— y admite
+    /// acortarse por el medio sin perder lo que la identifica, que son sus extremos.
+    /// </para>
+    /// </summary>
+    [ObservableProperty] private string _snippetMember = string.Empty;
+
+    /// <inheritdoc cref="SnippetMember"/>
+    [ObservableProperty] private string _snippetWhere = string.Empty;
     [ObservableProperty] private string _snippetNotice = string.Empty;
     [ObservableProperty] private string _snippetPath = string.Empty;
     [ObservableProperty] private SnippetState _snippetState = SnippetState.SinUbicacion;
@@ -796,6 +811,10 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
         SnippetNotice = panel.Notice;
         Snippet = panel.Text;
         SnippetCaption = loc is null ? string.Empty : panel.Caption(loc.Path, panel.HighlightLine);
+        SnippetMember = loc is null ? string.Empty : panel.Member ?? string.Empty;
+        SnippetWhere = loc is null
+            ? string.Empty
+            : panel.HighlightLine > 0 ? $"{loc.Path}:{panel.HighlightLine}" : loc.Path;
     }
 
     private Ulid Id => Finding!.Id;

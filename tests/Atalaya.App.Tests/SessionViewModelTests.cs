@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Copilot;
 using Atalaya.Domain;
@@ -206,7 +206,8 @@ public sealed class SessionViewModelTests : IDisposable
 
         var vm = new SessionViewModel(live);
         await vm.LoadAsync();
-        vm.Title.Should().Be("Ultima sesion");
+        // Con tildes desde D-983: el rail y el MANUAL ya la llamaban asi.
+        vm.Title.Should().Be("Última sesión");
         vm.ShowSummary.Should().BeTrue("la pantalla de cierre sustituye a la línea fugaz de estado");
     }
 

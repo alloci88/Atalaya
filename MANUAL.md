@@ -155,6 +155,10 @@ nada. Ver «Auditar lo que ha cambiado», más abajo.
 Las unidades de la aplicación en el ciclo vigente, por módulos, con su estado
 —**pendiente**, **auditada** o **grande**— y el panel lateral del ciclo.
 
+Con la ventana estrecha ese panel no cabe al lado y se pliega: aparece el botón **Resumen del
+ciclo** en la cabecera, y abre lo mismo como un cajón sobre la lista. Todo lo que hay dentro
+—incluidos «Configurar ciclo» y los «Gestionar» de la gobernanza— sigue estando a un clic.
+
 - **Grande** significa que la unidad supera el umbral de tamaño (LOC o caracteres):
   queda excluida del ciclo y genera su propio hallazgo.
 - **Auditar selección** lanza una sesión sobre lo marcado.

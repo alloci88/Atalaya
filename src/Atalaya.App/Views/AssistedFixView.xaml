@@ -65,10 +65,10 @@
         <!-- · Una pregunta esperando respuesta · -->
         <DataTemplate DataType="{x:Type services:FixQuestion}">
             <Border CornerRadius="8" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.Indent.XL}"
-                    Background="#22E0A030" BorderBrush="#66E0A030" BorderThickness="1">
+                    Style="{StaticResource Notice.Warning}">
                 <StackPanel>
                     <TextBlock Text="{Binding Header}" FontWeight="SemiBold" FontSize="{StaticResource FontSize.Meta}"
-                               TextWrapping="Wrap" Foreground="#E0A030" />
+                               TextWrapping="Wrap" Foreground="{DynamicResource Brush.Warning.Ink}" />
                     <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Small}"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
@@ -185,18 +185,29 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Arreglo asistido" FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
-                <TextBlock Grid.Column="1" Text="{Binding FindingAliasText}" Opacity="0.75"
-                           VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="{StaticResource Pad.S.Left}"
-                           FontWeight="SemiBold"
-                           ToolTip="El hallazgo que se está arreglando" />
+                <!-- Título e identificador en el MISMO TextBlock, por lo mismo que en
+                     SessionView (D-983): dos tamaños en una fila comparten línea base solo si
+                     comparten párrafo. `VerticalAlignment="Bottom"` igualaba cajas, no bases, y
+                     el alias quedaba hundido respecto al título. -->
+                <TextBlock Grid.Column="0" Grid.ColumnSpan="2" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           MaxWidth="{StaticResource Header.IdentityMaxWidth}"
+                           HorizontalAlignment="Left"
+                           ToolTip="El hallazgo que se está arreglando">
+                    <Run Text="Arreglo asistido"
+                         FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
+                    <Run Text=" " />
+                    <Run Text="{Binding FindingAliasText, Mode=OneWay}" FontWeight="SemiBold"
+                         Foreground="{DynamicResource Brush.TextMuted}" />
+                </TextBlock>
                 <!-- SIN HorizontalAlignment="Left": con alineación distinta de Stretch, WPF
                      arregla el texto a su tamaño DESEADO —hasta su MaxWidth— y no al de su celda,
                      así que en cuanto la columna estrella encogía por debajo de 220 el nombre se
                      metía 20 px dentro del distintivo de al lado. Estirado, ocupa su columna y ni
                      un píxel más, que es justo lo que el recorte necesita para activarse. -->
-                <TextBlock Grid.Column="2" Text="{Binding AppNameText}" Opacity="0.6"
-                           VerticalAlignment="Bottom" Margin="{StaticResource Pad.S.Left}"
+                <TextBlock Grid.Column="2" Text="{Binding AppNameText}"
+                           Foreground="{DynamicResource Brush.TextFaint}"
+                           VerticalAlignment="Center" Margin="{StaticResource Pad.S.Left}"
                            MaxWidth="220" TextTrimming="CharacterEllipsis"
                            ToolTip="{Binding AppNameText}" />
                 <!-- H9.1 §1: el camino de vuelta al hallazgo, disponible mientras haya sesión que
@@ -207,7 +218,7 @@
                      primero: entre un camino que se pulsa y un dato que se lee, se pierde el
                      dato — y el dato, además, está entero en el informe. -->
                 <Button Grid.Column="3" Content="{Binding BackToFindingLabel}" Command="{Binding BackToFindingCommand}"
-                        Style="{StaticResource LinkButton}" VerticalAlignment="Bottom" Margin="{StaticResource Pad.M.Left}"
+                        Style="{StaticResource LinkButton}" VerticalAlignment="Center" Margin="{StaticResource Pad.M.Left}"
                         FontSize="{StaticResource FontSize.Meta}"
                         ToolTip="Abre la ficha del hallazgo que originó este arreglo">
                     <Button.Visibility>
@@ -218,12 +229,15 @@
                     </Button.Visibility>
                 </Button>
                 <!-- F16: la pantalla es la misma con los dos motores, así que dice cuál trabaja. -->
-                <Border Grid.Column="4" Background="#18808080" CornerRadius="10" Padding="{StaticResource Pad.Pill}"
-                        VerticalAlignment="Bottom" Margin="{StaticResource Pad.M.Left}"
+                <!-- SIN recorte y sin ancho maximo (D-983). Un dato de 30 caracteres con
+                     `MaxWidth=220` se corta siempre, y lo que se cortaba era el modelo. Y la
+                     pastilla usa el estilo del sistema en vez de un `#18808080` escrito a mano,
+                     que era el mismo gris en los dos temas. -->
+                <Border Grid.Column="4" Style="{StaticResource Pill}"
+                        VerticalAlignment="Center" Margin="{StaticResource Pad.M.Left}"
                         Visibility="{Binding HasEngine, Converter={StaticResource BoolToVisibility}}"
                         ToolTip="El proveedor y el modelo que están haciendo este arreglo. Quedan escritos en el informe.">
-                    <TextBlock Text="{Binding EngineText}" FontSize="{StaticResource FontSize.Meta}" Opacity="0.85"
-                               MaxWidth="220" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding EngineText}" Style="{StaticResource Pill.Text}" />
                 </Border>
             </Grid>
             <!-- Barra de acciones. F16-RETOQUE §2·3 y §2·4, dos reglas:
@@ -235,24 +249,34 @@
                  · Y la destructiva no viaja entre las de control. Pausar, Detener y Cerrar
                    gobiernan la sesión; «Descartar todo» deshace el trabajo, y va la última, con
                    más aire del que separa a las demás. Estaba en medio, entre Pausar y Cerrar. -->
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <ui:Button Content="{Binding PauseLabel}" Command="{Binding TogglePauseCommand}"
-                           Margin="{StaticResource Pad.S.Right}"
-                           ToolTip="Mientras esté en pausa no se aplicará ningún cambio ni se compilará nada. El agente puede seguir razonando."
-                           Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
-                <ui:Button Content="Detener" Command="{Binding StopCommand}" Appearance="Caution"
-                           Margin="{StaticResource Pad.S.Right}"
-                           ToolTip="Para al agente. Lo que ya haya aplicado se queda."
-                           Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
+            <!-- SON UN GRUPO, y hasta D-983 no lo parecian: tres `ui:Button` de la libreria con
+                 tres `Appearance` distintas traen tres rellenos y tres alturas, y encima las
+                 separaciones se escribian control a control —12 a la derecha de unos, 12 a la
+                 izquierda del ultimo, o sea 24 entre los dos de en medio—. Se veian como tres
+                 botones sueltos que coinciden en una esquina.
+
+                 Ahora son los botones del sistema: misma altura minima, mismo relleno horizontal
+                 y una sola separacion, puesta por `Stack.Gap` en el contenedor, que es lo unico
+                 que garantiza que sea la misma para todos. El significado lo sigue diciendo el
+                 color, que es lo que se queria: Pausar secundario, Detener aviso, Descartar todo
+                 peligro. -->
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                        c:Stack.Gap="{StaticResource Space.S}">
+                <Button Content="{Binding PauseLabel}" Command="{Binding TogglePauseCommand}"
+                        ToolTip="Mientras esté en pausa no se aplicará ningún cambio ni se compilará nada. El agente puede seguir razonando."
+                        Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
+                <Button Content="Detener" Command="{Binding StopCommand}"
+                        Style="{StaticResource Button.Warning}"
+                        ToolTip="Para al agente. Lo que ya haya aplicado se queda."
+                        Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
                 <!-- BUGFIX-CIERRE: archivar la pantalla del arreglo. Apariencia neutra a
                      proposito: no revierte nada, y el gesto destructivo es el de al lado. -->
-                <ui:Button Content="Cerrar" Command="{Binding CloseCommand}" Appearance="Secondary"
-                           Margin="{StaticResource Pad.S.Right}"
-                           ToolTip="Archiva esta pantalla y vuelve al hallazgo. No revierte nada: si el agente dejo ficheros tocados, te pregunta que hacer con ellos."
-                           Visibility="{Binding CanClose, Converter={StaticResource BoolToVisibility}}" />
-                <ui:Button Content="Descartar todo" Command="{Binding DiscardAllCommand}"
-                           Appearance="Danger" Margin="{StaticResource Pad.S.Left}"
-                           ToolTip="Devuelve cada fichero tocado a como estaba antes de esta sesión." />
+                <Button Content="Cerrar" Command="{Binding CloseCommand}"
+                        ToolTip="Archiva esta pantalla y vuelve al hallazgo. No revierte nada: si el agente dejo ficheros tocados, te pregunta que hacer con ellos."
+                        Visibility="{Binding CanClose, Converter={StaticResource BoolToVisibility}}" />
+                <Button Content="Descartar todo" Command="{Binding DiscardAllCommand}"
+                        Style="{StaticResource Button.DangerSolid}"
+                        ToolTip="Devuelve cada fichero tocado a como estaba antes de esta sesión." />
             </StackPanel>
         </c:PageHeader>
 
@@ -316,12 +340,12 @@
              con el error crudo del proveedor plegado tras «Ver detalle» dentro de un ScrollViewer
              acotado, para que su longitud no decida el layout. -->
         <Border Grid.Row="1" CornerRadius="8" Padding="{StaticResource Pad.M}" Margin="{StaticResource Pad.S.Bottom}"
-                Background="#22C04040" BorderBrush="#66C04040" BorderThickness="1"
+                Style="{StaticResource Notice.Danger}"
                 Visibility="{Binding ShowFailure, Converter={StaticResource BoolToVisibility}}">
             <StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xE783;" FontFamily="Segoe MDL2 Assets" FontSize="{StaticResource FontSize.Lead}"
-                               Foreground="#E06C6C" VerticalAlignment="Center" Margin="{StaticResource Pad.XS.Right}" />
+                               Foreground="{DynamicResource Brush.Danger.Ink}" VerticalAlignment="Center" Margin="{StaticResource Pad.XS.Right}" />
                     <TextBlock Text="No se pudo arreglar" FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold"
                                VerticalAlignment="Center" />
                 </StackPanel>
@@ -349,7 +373,7 @@
                                Visibility="{Binding FailureOffersModelChange, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
 
-                <Border Margin="{StaticResource Pad.S.Top}" CornerRadius="6" Padding="{StaticResource Pad.S}" Background="#18000000"
+                <Border Margin="{StaticResource Pad.S.Top}" CornerRadius="6" Padding="{StaticResource Pad.S}" Background="{DynamicResource Brush.Bg}"
                         Visibility="{Binding IsFailureDetailExpanded, Converter={StaticResource BoolToVisibility}}">
                     <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
                         <TextBox Text="{Binding FailureDetail, Mode=OneWay}" IsReadOnly="True" IsTabStop="False"
@@ -371,7 +395,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- · Conversación (la protagonista) · -->
-            <Border Grid.Column="0" Background="#0C000000" CornerRadius="8" Padding="{StaticResource Pad.XXS}"
+            <Border Grid.Column="0" Background="{DynamicResource Brush.Bg}" CornerRadius="8" Padding="{StaticResource Pad.XXS}"
                     Visibility="{Binding ShowClosing, Converter={StaticResource InverseBoolToVisibility}}">
                 <DockPanel>
                     <!-- Campo de entrada SIEMPRE disponible: interrumpir y dirigir es la mitad
@@ -405,7 +429,7 @@
                           Visibility="{Binding ShowClosing, Converter={StaticResource InverseBoolToVisibility}}" />
 
             <!-- · Diff · -->
-            <Border Grid.Column="2" Background="#14808080" CornerRadius="8" Padding="{StaticResource Pad.S}"
+            <Border Grid.Column="2" Background="{DynamicResource Brush.Surface2}" CornerRadius="8" Padding="{StaticResource Pad.S}"
                     Visibility="{Binding ShowClosing, Converter={StaticResource InverseBoolToVisibility}}">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Margin="{StaticResource Pad.XS.Bottom}">
@@ -433,7 +457,7 @@
                                             BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                                             Foreground="{DynamicResource TextFillColorPrimaryBrush}">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="⚠" Margin="{StaticResource Pad.XXS.Right}" Foreground="#E0A030" FontSize="{StaticResource FontSize.Meta}"
+                                            <TextBlock Text="⚠" Margin="{StaticResource Pad.XXS.Right}" Foreground="{DynamicResource Brush.Warning.Ink}" FontSize="{StaticResource FontSize.Meta}"
                                                        ToolTip="Fichero fuera del hallazgo: lo autorizaste durante la sesión"
                                                        Visibility="{Binding InScope, Converter={StaticResource InverseBoolToVisibility}}" />
                                             <!-- Nombre largo: elipsis EN MEDIO, nunca al final —lo que
@@ -485,10 +509,13 @@
             <!-- H9.1 §4: al llegar fix_done esta pantalla aparece y hay que ATERRIZAR en ella —
                  arriba del todo, con la rueda funcionando—. El aviso de visibilidad es lo que lo
                  dispara: se levanta una sola vez, cuando de verdad cambia. -->
+            <!-- La tarjeta del SISTEMA, no la de la libreria (D-983): `Card` sale de nuestra
+                 paleta y cambia con el tema como todo lo demas; los pinceles de WPF-UI son los
+                 suyos, y por eso el suelo de la ventana se quedaba con el gris de fabrica hasta
+                 que se pinto a mano (D-957). Misma razon, un nivel mas abajo. -->
             <Border x:Name="ClosingPanel" Grid.Column="0" Grid.ColumnSpan="3"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="8" Padding="{StaticResource Pad.L}"
+                    Style="{StaticResource Card}"
+                    Padding="{StaticResource Pad.L}"
                     IsVisibleChanged="OnClosingShown"
                     Visibility="{Binding ShowClosing, Converter={StaticResource BoolToVisibility}}">
                 <DockPanel>
@@ -497,8 +524,8 @@
                         <TextBlock Text="{Binding Fix.StatusMessage}" TextWrapping="Wrap" Opacity="0.8"
                                    FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Top}" />
                         <Border CornerRadius="6" Padding="{StaticResource Pad.Field}" Margin="{StaticResource Pad.S.Top}"
-                                Background="#22E0A030" BorderBrush="#66E0A030" BorderThickness="1">
-                            <TextBlock TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" Foreground="#F0D090"
+                                Style="{StaticResource Notice.Warning}">
+                            <TextBlock TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.Warning.Ink}"
                                        Text="Los cambios están en tu clon sin commitear — revisa y commitea cuando estés conforme. Arreglar no resuelve el hallazgo: sigue activo hasta que lo verifiques." />
                         </Border>
                     </StackPanel>
@@ -518,7 +545,7 @@
 
                             <TextBlock Text="Riesgos declarados" Style="{StaticResource SectionTitle}" Margin="{StaticResource Pad.SectionGapWide}"
                                        Visibility="{Binding Fix.Risks, Converter={StaticResource NotEmptyToVisibility}}" />
-                            <TextBlock Text="{Binding Fix.Risks}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}" Foreground="#E0A030"
+                            <TextBlock Text="{Binding Fix.Risks}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}" Foreground="{DynamicResource Brush.Warning.Ink}"
                                        Visibility="{Binding Fix.Risks, Converter={StaticResource NotEmptyToVisibility}}" />
 
                             <TextBlock Text="Ficheros tocados" Style="{StaticResource SectionTitle}" Margin="{StaticResource Pad.SectionGapWide}" />
@@ -537,7 +564,7 @@
                                                            Text="{Binding RelativePath, Converter={StaticResource MiddleEllipsis}, ConverterParameter=60}" />
                                                 <TextBlock Text="{Binding Tally}" FontSize="{StaticResource FontSize.Meta}" Opacity="0.7" Margin="{StaticResource Pad.XS.Left}" />
                                                 <TextBlock Text="fuera del hallazgo, autorizado por ti" FontSize="{StaticResource FontSize.Meta}"
-                                                           Foreground="#E0A030" Margin="{StaticResource Pad.XS.Left}"
+                                                           Foreground="{DynamicResource Brush.Warning.Ink}" Margin="{StaticResource Pad.XS.Left}"
                                                            Visibility="{Binding InScope, Converter={StaticResource InverseBoolToVisibility}}" />
                                             </WrapPanel>
                                         </Button>
@@ -554,7 +581,7 @@
                             <TextBlock Text="{Binding BuildScopeText}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Bottom}"
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                        Visibility="{Binding BuildScopeText, Converter={StaticResource NotEmptyToVisibility}}" />
-                            <Border CornerRadius="6" Padding="{StaticResource Pad.Notice}" Background="#18000000"
+                            <Border CornerRadius="6" Padding="{StaticResource Pad.Notice}" Background="{DynamicResource Brush.Bg}"
                                     Visibility="{Binding Fix.LastBuild, Converter={StaticResource NotEmptyToVisibility}}">
                                 <!-- El tope de altura solo vale si lo que sobra se puede alcanzar:
                                      antes recortaba la salida del build sin decirlo. -->
@@ -601,7 +628,7 @@
         </Grid>
 
         <!-- ================================ PIE ================================ -->
-        <Border Grid.Row="3" Background="#14808080" CornerRadius="8" Padding="{StaticResource Pad.Field}" Margin="{StaticResource Pad.S.Top}"
+        <Border Grid.Row="3" Background="{DynamicResource Brush.Surface2}" CornerRadius="8" Padding="{StaticResource Pad.Field}" Margin="{StaticResource Pad.S.Top}"
                 Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}">
             <!-- F17-RETOQUE: el WrapPanel bajaba de línea lo que no cabía, y el StackPanel de la
                  auditoría lo cortaba; ninguno de los dos abreviaba. Ahora los textos van en una

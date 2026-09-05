@@ -112,7 +112,7 @@
                             CornerRadius="{StaticResource Radius.M}"
                             Padding="{TemplateBinding Padding}"
                             SnapsToDevicePixels="True">
-                        <ContentPresenter
+                        <ContentPresenter x:Name="Label"
                             HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                             VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                             TextElement.Foreground="{TemplateBinding Foreground}"
@@ -125,12 +125,22 @@
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Chrome" Property="Opacity" Value="0.8" />
                         </Trigger>
-                        <!-- Deshabilitado se ve deshabilitado, pero SE SIGUE LEYENDO. El 0.4 de
-                             fábrica dejaba la etiqueta por debajo de cualquier contraste útil, y un
-                             botón cuya razón hay que adivinar es peor que uno que no está. La razón
-                             se escribe AL LADO (`Reason.Chip`), no en un tooltip. -->
+                        <!-- Deshabilitado se ve deshabilitado, pero SE SIGUE LEYENDO.
+                             El 0.4 de fábrica dejaba la etiqueta por debajo de cualquier contraste
+                             útil, y un botón cuya razón hay que adivinar es peor que uno que no
+                             está. La razón se escribe AL LADO (`Reason.Chip`), no en un tooltip.
+
+                             Y NO basta con bajar la opacidad (F26-B revisión, D-983): un verde o un
+                             azul macizo al 65 % sobre una tarjeta sigue siendo verde o azul macizo,
+                             así que «Arreglar con agente» bloqueado se veía igual que disponible.
+                             El color con significado se APAGA — el relleno pasa a superficie neutra
+                             y la tinta a texto secundario—, que es lo que dice el principio 4: si
+                             el color significa algo, no puede pintarse cuando no significa nada.
+                             6,4:1 en los dos temas: apagado no es ilegible. -->
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="Chrome" Property="Opacity" Value="0.65" />
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Surface2}" />
+                            <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
+                            <Setter TargetName="Label" Property="TextElement.Foreground" Value="{DynamicResource Brush.TextMuted}" />
                             <Setter Property="Cursor" Value="Arrow" />
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -168,6 +178,17 @@
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Danger.Ink}" />
     </Style>
 
+    <!-- Aviso: la accion que INTERRUMPE. No destruye nada —lo hecho se queda— pero corta lo que
+         esta pasando, y eso no es una accion neutra. El ambar es el color de «cuidado con esto»
+         que ya usan los avisos (D-949), y aqui macizo porque es un boton, no un rotulo.
+         Tinta oscura sobre el ambar: es el par que la paleta tiene medido (D-947). -->
+    <Style x:Key="Button.Warning" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
+        <Setter Property="Background" Value="{DynamicResource Brush.Warning.Fill}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.OnFill}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Warning.Fill}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
     <Style x:Key="Button.DangerSolid" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
         <Setter Property="Background" Value="{DynamicResource Brush.Danger.Fill}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Danger.OnFill}" />
@@ -175,17 +196,54 @@
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
+    <!-- UN ENLACE ES TEXTO, así que tiene su propia plantilla y no la del botón.
+
+         Dos motivos, los dos vistos en el dist (D-983). El relleno era uniforme —4 px por los
+         cuatro lados— y eso mete el texto del enlace 4 px a la derecha de la línea que tiene
+         encima y de la que tiene debajo: dentro de un bloque, un único margen izquierdo, y un
+         enlace no es una excepción. Ahora el relleno es solo vertical: el blanco de pulsado sigue
+         siendo cómodo y el texto arranca donde arranca el párrafo.
+
+         Y el deshabilitado. Los botones apagan color pintando superficie neutra, que es lo correcto
+         para una chapa; sobre un enlace eso es una chapa gris donde no había ninguna —el «Nada ha
+         cambiado desde su auditoría» del Portafolio salía con recuadro—. Un enlace que no se puede
+         pulsar simplemente deja de parecer pulsable: se apaga la tinta y ya. -->
     <Style x:Key="Button.Link" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="BorderThickness" Value="{StaticResource Pad.Zero}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Primary.Ink}" />
-        <Setter Property="Padding" Value="{StaticResource Pad.XXS}" />
+        <Setter Property="Padding" Value="{StaticResource Pad.XXS.V}" />
         <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter x:Name="Label"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                            TextElement.Foreground="{TemplateBinding Foreground}"
+                            TextElement.FontSize="{TemplateBinding FontSize}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Label" Property="TextElement.Foreground"
+                                    Value="{DynamicResource Brush.Primary.Fill}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Label" Property="TextElement.Foreground"
+                                    Value="{DynamicResource Brush.TextMuted}" />
+                            <Setter Property="Cursor" Value="Arrow" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
-    <!-- Sin fondo ni borde: el «…» de una tarjeta, la flecha de volver, un icono en una fila. -->
-    <Style x:Key="Button.Ghost" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
+    <!-- Sin fondo ni borde: el «…» de una tarjeta, la flecha de volver, un icono en una fila.
+         Hereda la plantilla del enlace por lo mismo: apagarlo no puede pintarle una chapa. -->
+    <Style x:Key="Button.Ghost" TargetType="Button" BasedOn="{StaticResource Button.Link}">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />

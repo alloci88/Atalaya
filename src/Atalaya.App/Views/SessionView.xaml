@@ -27,13 +27,29 @@
                          reparto, y el mismo suelo por el mismo motivo. -->
                     <ColumnDefinition Width="*" MinWidth="60" MaxWidth="420" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="{Binding Title}" FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
-                <!-- SIN HorizontalAlignment="Left", por lo mismo que en AssistedFixView: alineado
-                     a la izquierda, WPF lo arregla a su tamaño deseado y se sale de su columna. -->
-                <TextBlock Grid.Column="1" Text="{Binding Live.HeaderText}" Opacity="0.6"
-                           VerticalAlignment="Bottom" Margin="{StaticResource Pad.S.Left}"
-                           MaxWidth="420" TextTrimming="CharacterEllipsis"
-                           ToolTip="{Binding Live.HeaderText}" />
+                <!-- TÍTULO Y SUBTÍTULO EN EL MISMO `TextBlock` (D-983).
+
+                     Eran dos TextBlock en dos celdas, el subtítulo con `VerticalAlignment="Bottom"`.
+                     Alinear por abajo iguala el borde inferior de dos CAJAS, y la caja de un texto
+                     de 13 tiene menos hueco bajo la letra que la de uno de 26: el subtítulo se
+                     sentaba por debajo de la base del título. WPF no alinea líneas base entre
+                     celdas de un Grid —no existe `VerticalAlignment="Baseline"`— pero sí entre los
+                     `Run` de un mismo TextBlock, que es su maquetación de texto de siempre. Una
+                     línea, dos tamaños, una base.
+
+                     Y el recorte sigue cayendo donde debe: corta por el FINAL de la línea, o sea
+                     por el subtítulo, que es el dato; el título no se toca. -->
+                <TextBlock Grid.Column="0" Grid.ColumnSpan="2" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           MaxWidth="{StaticResource Header.IdentityMaxWidth}"
+                           HorizontalAlignment="Left"
+                           ToolTip="{Binding Live.HeaderText}">
+                    <Run Text="{Binding Title, Mode=OneWay}"
+                         FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
+                    <Run Text=" " />
+                    <Run Text="{Binding Live.HeaderText, Mode=OneWay}"
+                         Foreground="{DynamicResource Brush.TextMuted}" />
+                </TextBlock>
             </Grid>
             <!-- F16-RETOQUE §2·1: el aire entre piezas lo pone cada barra; el que separa esta zona
                  de la identidad lo pone c:PageHeader, que es quien reparte. -->
@@ -62,12 +78,12 @@
              empuje nada, y hay botón de copiar porque seleccionar a mano varias líneas dentro de un
              banner es el gesto que nadie hace. -->
         <Border Grid.Row="1" CornerRadius="8" Padding="{StaticResource Pad.M}" Margin="{StaticResource Pad.S.Bottom}"
-                Background="#22C04040" BorderBrush="#66C04040" BorderThickness="1"
+                Style="{StaticResource Notice.Danger}"
                 Visibility="{Binding ShowFailure, Converter={StaticResource BoolToVisibility}}">
             <StackPanel>
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xE783;" FontFamily="Segoe MDL2 Assets" FontSize="{StaticResource FontSize.Lead}"
-                               Foreground="#E06C6C" VerticalAlignment="Center" Margin="{StaticResource Pad.XS.Right}" />
+                               Foreground="{DynamicResource Brush.Danger.Ink}" VerticalAlignment="Center" Margin="{StaticResource Pad.XS.Right}" />
                     <TextBlock Text="No se pudo completar la sesión" FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold"
                                VerticalAlignment="Center" />
                 </StackPanel>
@@ -90,7 +106,7 @@
 
                 <!-- El crudo: acotado en alto y con su propio scroll, para que un error largo del
                      proveedor no pueda comerse el cuerpo de la vista. -->
-                <Border Margin="{StaticResource Pad.S.Top}" CornerRadius="6" Padding="{StaticResource Pad.S}" Background="#18000000"
+                <Border Margin="{StaticResource Pad.S.Top}" CornerRadius="6" Padding="{StaticResource Pad.S}" Background="{DynamicResource Brush.Bg}"
                         Visibility="{Binding IsFailureDetailExpanded, Converter={StaticResource BoolToVisibility}}">
                     <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
                         <TextBox Text="{Binding FailureDetail, Mode=OneWay}" IsReadOnly="True" IsTabStop="False"
@@ -111,7 +127,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- · Col. 1 · Cola · -->
-            <Border Grid.Column="0" Background="#14808080" CornerRadius="8" Padding="{StaticResource Pad.S}" Margin="{StaticResource Pad.S.Right}"
+            <Border Grid.Column="0" Background="{DynamicResource Brush.Surface2}" CornerRadius="8" Padding="{StaticResource Pad.S}" Margin="{StaticResource Pad.S.Right}"
                     Visibility="{Binding ShowSummary, Converter={StaticResource InverseBoolToVisibility}}">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Margin="{StaticResource Pad.S.Bottom}">
@@ -122,7 +138,7 @@
                         <ItemsControl ItemsSource="{Binding Units}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS.V}" CornerRadius="5" Background="#0C000000">
+                                    <Border Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS.V}" CornerRadius="5" Background="{DynamicResource Brush.Bg}">
                                         <StackPanel>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -170,7 +186,7 @@
             </Border>
 
             <!-- · Col. 2 · Actividad (la protagonista) · -->
-            <Border Grid.Column="1" Background="#0C000000" CornerRadius="8" Padding="{StaticResource Pad.XXS}" Margin="{StaticResource Pad.S.Right}"
+            <Border Grid.Column="1" Background="{DynamicResource Brush.Bg}" CornerRadius="8" Padding="{StaticResource Pad.XXS}" Margin="{StaticResource Pad.S.Right}"
                     Visibility="{Binding ShowSummary, Converter={StaticResource InverseBoolToVisibility}}">
                 <DockPanel>
                     <Grid DockPanel.Dock="Bottom" Margin="{StaticResource Pad.RowTight}">
@@ -250,29 +266,29 @@
             </Border>
 
             <!-- · Col. 3 · Hallazgos · -->
-            <Border Grid.Column="2" Background="#14808080" CornerRadius="8" Padding="{StaticResource Pad.S}"
+            <Border Grid.Column="2" Background="{DynamicResource Brush.Surface2}" CornerRadius="8" Padding="{StaticResource Pad.S}"
                     Visibility="{Binding ShowSummary, Converter={StaticResource InverseBoolToVisibility}}">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Margin="{StaticResource Pad.XS.Bottom}">
                         <TextBlock Text="Hallazgos" FontWeight="SemiBold" />
                         <WrapPanel Margin="{StaticResource Pad.XS.Top}">
-                            <Border Background="#D13A3A" CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS}">
-                                <TextBlock FontSize="{StaticResource FontSize.Meta}" Foreground="White">
+                            <Border Background="{DynamicResource Brush.Sev.Crit}" CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS}">
+                                <TextBlock FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.Ink.OnVivid}">
                                     <Run Text="Crítica " /><Run Text="{Binding CriticalCount, Mode=OneWay}" FontWeight="Bold" />
                                 </TextBlock>
                             </Border>
-                            <Border Background="#E07A2B" CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS}">
-                                <TextBlock FontSize="{StaticResource FontSize.Meta}" Foreground="White">
+                            <Border Background="{DynamicResource Brush.Sev.High}" CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS}">
+                                <TextBlock FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.Ink.OnVivid}">
                                     <Run Text="Alta " /><Run Text="{Binding HighCount, Mode=OneWay}" FontWeight="Bold" />
                                 </TextBlock>
                             </Border>
-                            <Border Background="#D2B036" CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS}">
-                                <TextBlock FontSize="{StaticResource FontSize.Meta}" Foreground="#202020">
+                            <Border Background="{DynamicResource Brush.Sev.Med}" CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS}">
+                                <TextBlock FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.Ink.OnVivid}">
                                     <Run Text="Media " /><Run Text="{Binding MediumCount, Mode=OneWay}" FontWeight="Bold" />
                                 </TextBlock>
                             </Border>
-                            <Border Background="#6C93C0" CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS}">
-                                <TextBlock FontSize="{StaticResource FontSize.Meta}" Foreground="White">
+                            <Border Background="{DynamicResource Brush.Sev.Low}" CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS}">
+                                <TextBlock FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.Ink.OnVivid}">
                                     <Run Text="Baja " /><Run Text="{Binding LowCount, Mode=OneWay}" FontWeight="Bold" />
                                 </TextBlock>
                             </Border>
@@ -282,14 +298,14 @@
                         <ItemsControl ItemsSource="{Binding Findings}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Background="#0C000000" CornerRadius="5" Padding="{StaticResource Pad.ButtonSmall}" Margin="{StaticResource Pad.XXS.V}">
+                                    <Border Background="{DynamicResource Brush.Bg}" CornerRadius="5" Padding="{StaticResource Pad.ButtonSmall}" Margin="{StaticResource Pad.XXS.V}">
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal">
                                                 <Border CornerRadius="7" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XS.Right}"
                                                         Background="{Binding Severity, Converter={StaticResource SeverityToBrush}}">
-                                                    <TextBlock Text="{Binding Severity}" FontSize="{StaticResource FontSize.Meta}" Foreground="White" />
+                                                    <TextBlock Text="{Binding Severity}" FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.Ink.OnVivid}" />
                                                 </Border>
-                                                <TextBlock Text="⚖" FontSize="{StaticResource FontSize.Meta}" Foreground="#E0A030" VerticalAlignment="Center"
+                                                <TextBlock Text="⚖" FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.Warning.Ink}" VerticalAlignment="Center"
                                                            ToolTip="Disputado: un auditor sostiene que nunca fue un defecto"
                                                            Visibility="{Binding Disputes.Count, Converter={StaticResource NotEmptyToVisibility}}" />
                                             </StackPanel>
@@ -312,12 +328,18 @@
                  columnas se RETIRAN (arriba, `InverseBoolToVisibility`) y esto ocupa el hueco con
                  el fondo del tema: nada que traslucir, y correcto en los dos temas. -->
             <Border Grid.Column="0" Grid.ColumnSpan="3"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="8" Padding="{StaticResource Pad.L}"
+                    Style="{StaticResource Card}"
+                    Padding="{StaticResource Pad.L}"
+                    VerticalAlignment="Top"
                     Visibility="{Binding ShowSummary, Converter={StaticResource BoolToVisibility}}">
-                <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Margin="{StaticResource Pad.M.Bottom}">
+                <!-- LA TARJETA MIDE LO QUE CONTIENE (D-983). Era un DockPanel con el botón
+                     anclado abajo y la lista estirándose en medio: con cuatro líneas de recuento
+                     la tarjeta seguía llegando hasta el pie de la ventana y dejaba 600 px de nada
+                     con «Ver informe de sesión» abandonado al fondo. Un StackPanel pone cada cosa
+                     debajo de la anterior y se acaba donde se acaba el contenido; el `Top` del
+                     Border es lo que impide que la fila del Grid vuelva a estirarla. -->
+                <StackPanel>
+                    <StackPanel Margin="{StaticResource Pad.M.Bottom}">
                         <TextBlock Text="Sesión terminada" FontSize="{StaticResource FontSize.H3}" FontWeight="SemiBold" />
                         <!--
                             EXCEPCIÓN deliberada a la regla de F5.7 §4: no es feedback de una
@@ -329,35 +351,44 @@
                         <TextBlock Text="Pulsa cualquier línea para ver qué hallazgos la componen y por qué."
                                    Opacity="0.55" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Top}" />
                     </StackPanel>
-                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="{StaticResource Pad.M.Top}">
-                        <ui:Button Content="Ver informe de sesión" Command="{Binding OpenReportCommand}" Appearance="Primary" />
-                    </StackPanel>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="{StaticResource Cycle.PanelHeight}">
                         <ItemsControl ItemsSource="{Binding Summary}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <StackPanel Margin="{StaticResource Pad.XXS.Bottom}">
+                                        <!-- UNA LÍNEA, TRES TAMAÑOS, UNA BASE (D-983).
+
+                                             Eran tres celdas de un Grid: el número en H3 sin
+                                             alineación vertical —o sea, arriba—, la etiqueta y la
+                                             explicación centradas. El 15 grande flotaba por encima
+                                             de las palabras que lo explican, que es justo lo que no
+                                             puede pasar cuando conviven dos tamaños en una fila.
+                                             Los `Run` de un mismo TextBlock comparten línea base
+                                             por construcción; tres celdas de un Grid no comparten
+                                             nada, porque WPF no alinea líneas base entre celdas.
+
+                                             Y el relleno horizontal se va: el contenido de la
+                                             tarjeta arranca TODO en la misma x —título, frases y
+                                             filas— y la fila pulsable ocupa el ancho entero, que
+                                             además la hace un blanco mayor. -->
                                         <Button
                                             Command="{Binding DataContext.ToggleLineCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                             CommandParameter="{Binding}"
-                                            Background="#16808080"
+                                            Background="{DynamicResource Brush.Surface2}"
                                             BorderThickness="0"
-                                            Padding="{StaticResource Pad.Field}"
+                                            Padding="{StaticResource Pad.XXS.V}"
                                             HorizontalContentAlignment="Stretch"
                                             Cursor="Hand">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="52" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="*" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{Binding Count}" FontSize="{StaticResource FontSize.H3}" FontWeight="Bold"
-                                                           Foreground="{Binding IsWarning, Converter={StaticResource WarningToBrush}}" />
-                                                <TextBlock Grid.Column="1" Text="{Binding Label}" FontWeight="SemiBold"
-                                                           VerticalAlignment="Center" Margin="{StaticResource Pad.S.Right}" />
-                                                <TextBlock Grid.Column="2" Text="{Binding Explanation}" Opacity="0.7" FontSize="{StaticResource FontSize.Meta}"
-                                                           TextWrapping="Wrap" VerticalAlignment="Center" />
-                                            </Grid>
+                                            <TextBlock TextWrapping="Wrap">
+                                                <Run Text="{Binding Count, Mode=OneWay}"
+                                                     FontSize="{StaticResource FontSize.H3}" FontWeight="Bold"
+                                                     Foreground="{Binding IsWarning, Converter={StaticResource WarningToBrush}}" />
+                                                <Run Text="{Binding Label, Mode=OneWay}" FontWeight="SemiBold" />
+                                                <Run Text="·" Foreground="{DynamicResource Brush.TextFaint}" />
+                                                <Run Text="{Binding Explanation, Mode=OneWay}"
+                                                     FontSize="{StaticResource FontSize.Meta}"
+                                                     Foreground="{DynamicResource Brush.TextMuted}" />
+                                            </TextBlock>
                                         </Button>
                                         <!-- F12 §H.1 — el desglose de HALLAZGOS va agrupado por
                                              clase, con el recuento por severidad al lado, que es
@@ -387,7 +418,7 @@
                                                                 <ItemsControl.ItemTemplate>
                                                                     <DataTemplate>
                                                                         <Border CornerRadius="8" Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS.Right}"
-                                                                                Background="#16808080">
+                                                                                Background="{DynamicResource Brush.Surface2}">
                                                                             <TextBlock Text="{Binding Label}" FontSize="{StaticResource FontSize.Meta}"
                                                                                        Foreground="{Binding Severity, Converter={StaticResource SeverityToBrush}}" />
                                                                         </Border>
@@ -424,7 +455,13 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
-                </DockPanel>
+
+                    <!-- Justo debajo de las filas de recuento, no anclado al pie de una tarjeta
+                         estirada, y en la misma x que todo lo demás (D-983). -->
+                    <Button Content="Ver informe de sesión" Command="{Binding OpenReportCommand}"
+                            Style="{StaticResource Button.Primary}"
+                            HorizontalAlignment="Left" Margin="{StaticResource Pad.M.Top}" />
+                </StackPanel>
             </Border>
         </Grid>
 
@@ -434,7 +471,7 @@
              que venía detrás se salía por el borde cortado a media palabra; además repetía lo que
              el segmento nuevo ya decía. Ahora el pie es una FooterLine: cada trozo trae sus formas
              y su prioridad (llamadas → coste → tokens), y el detalle entero está en el tooltip. -->
-        <Border Grid.Row="3" Background="#14808080" CornerRadius="8" Padding="{StaticResource Pad.Field}" Margin="{StaticResource Pad.S.Top}">
+        <Border Grid.Row="3" Background="{DynamicResource Brush.Surface2}" CornerRadius="8" Padding="{StaticResource Pad.Field}" Margin="{StaticResource Pad.S.Top}">
             <c:FooterLine x:Name="Footer" Segments="{Binding Footer}"
                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
         </Border>

@@ -75,6 +75,177 @@
             <Setter Property="Margin" Value="{StaticResource Pad.XXS.Top}" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
+
+        <!-- ============================================ EL RESUMEN DEL CICLO, UNA VEZ
+
+             Se pinta en dos sitios —acoplado a la derecha cuando cabe, y como cajón encima de
+             la lista cuando no (D-982)— y por eso vive aquí, en una plantilla. Dos copias del
+             mismo bloque divergen: la que se ve menos deja de mantenerse y un día le falta una
+             fila que la otra sí tiene.
+        -->
+        <DataTemplate x:Key="CycleSummary">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="{StaticResource Cycle.PanelHeight}">
+                <StackPanel>
+                    <TextBlock Text="Resumen del ciclo" Style="{StaticResource Text.Lead}"
+                               FontWeight="SemiBold"
+                               ToolTip="Lo que hay en la vuelta actual del inventario de esta aplicación." />
+
+                    <!-- · Bloque 1 · CICLO — dónde va la vuelta actual del inventario.
+                         Los tres bloques van separados por un pelo y un microtítulo (F9.1 §2): en
+                         la lista corrida anterior, «deriva» quedaba como una línea perdida en el
+                         medio y los patrones parecían parte de ella. Lo que agrupa es el aire; el
+                         pelo solo lo confirma. · -->
+                    <TextBlock Text="{Binding CycleLabel}" Style="{StaticResource PanelLine}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource Brush.Text}"
+                               ToolTip="{Binding CycleTooltip}" />
+
+                    <!-- F17: la lupa del ciclo, con su color, y el acceso a cambiarla. Va pegado al
+                         ciclo porque ES del ciclo: con otra lupa, «auditada» significa otra cosa. -->
+                    <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.XS.Top}"
+                                c:Stack.Gap="{StaticResource Space.XS}">
+                        <Border Style="{StaticResource Pill}" VerticalAlignment="Center"
+                                Background="{Binding CycleTheme, Converter={StaticResource ThemeToBrush}, ConverterParameter=soft}"
+                                ToolTip="{Binding CycleThemeTooltip}">
+                            <TextBlock Text="{Binding CycleThemeLabel}" Style="{StaticResource Pill.Text}"
+                                       ToolTip="{Binding CycleThemeTooltip}"
+                                       Foreground="{Binding CycleTheme, Converter={StaticResource ThemeToBrush}}" />
+                        </Border>
+                        <Button Content="Configurar ciclo" Style="{StaticResource Button.Link}"
+                                VerticalAlignment="Center"
+                                Command="{Binding ConfigureCycleCommand}"
+                                ToolTip="Elegir la temática del ciclo y el modelo preferido. Cambiar de temática con unidades auditadas las devuelve a pendientes; los hallazgos no se tocan." />
+                    </StackPanel>
+
+                    <TextBlock Style="{StaticResource PanelLine}"
+                               ToolTip="El modelo con el que el equipo prefiere auditar este ciclo. Es una preferencia: lanzar con otro avisa y deja continuar."><Run Text="Modelo preferido: " /><Run Text="{Binding PreferredModelLabel, Mode=OneWay}" /></TextBlock>
+
+                    <!-- F17.1: el ciclo no olvida con qué lupa se trabajó antes del cambio. -->
+                    <TextBlock Style="{StaticResource PanelLine}"
+                               Text="{Binding CycleThemeHistory}"
+                               ToolTip="Las temáticas por las que ha pasado este ciclo, con quién las cambió y cuándo. Los hallazgos de cada lupa siguen llevando la suya."
+                               Visibility="{Binding HasCycleThemeHistory, Converter={StaticResource BoolToVisibility}}" />
+
+                    <TextBlock Style="{StaticResource PanelLine}" ToolTip="{Binding UnitsTooltip}"><Run Text="Unidades: " /><Run Text="{Binding TotalUnits, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                    <TextBlock Style="{StaticResource PanelLine}" ToolTip="Ya revisadas en este ciclo. Puedes volver sobre ellas marcándolas a mano."><Run Text="Auditadas: " /><Run Text="{Binding AuditedUnits, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                    <TextBlock Style="{StaticResource PanelLine}" ToolTip="Aún sin revisar en este ciclo. Es lo que queda para que se cierre."><Run Text="Pendientes: " /><Run Text="{Binding PendingUnits, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                    <TextBlock Style="{StaticResource PanelLine}" ToolTip="Cada lanzamiento de auditoría es una sesión. Los cierres de ciclo y los resets no cuentan."><Run Text="Sesiones este ciclo: " /><Run Text="{Binding SessionCount, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                    <TextBlock Style="{StaticResource PanelLine}"
+                               ToolTip="Las unidades que se auditarán al pulsar «Auditar selección»."
+                               Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}"><Run Text="Seleccionadas: " /><Run Text="{Binding SelectedCount, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+
+                    <!-- · Bloque 2 · DERIVA — qué ha cambiado desde que se auditó (F9). · -->
+                    <Border Style="{StaticResource PanelDivider}" />
+                    <TextBlock Text="Deriva" Style="{StaticResource PanelSection}"
+                               ToolTip="Lo que le ha pasado al código desde que se auditó. Se calcula del historial de tu clon y no se guarda en ninguna parte." />
+                    <!-- Contra qué se ha medido, como SUBTÍTULO del grupo y no como línea suelta:
+                         es el alcance de los tres números de abajo, no un dato más. -->
+                    <TextBlock Text="{Binding DriftBranchLabel}" Style="{StaticResource Text.Meta}"
+                               TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}"
+                               ToolTip="La rama de tu clon y su HEAD. Medir contra otra rama es legítimo, pero lo que veas será la deriva de esa rama."
+                               Visibility="{Binding DriftIsKnown, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Text="Calculando…" Style="{StaticResource PanelLine}"
+                               ToolTip="Se está comparando el commit de cada auditoría con HEAD de tu clon. Va fuera del hilo de la interfaz: puedes seguir usando la vista."
+                               Visibility="{Binding IsDriftLoading, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Text="{Binding DriftProblem}" Style="{StaticResource PanelLine}"
+                               ToolTip="Por qué no hay deriva que enseñar. No saber no es lo mismo que saber que no ha cambiado nada, así que en vez de un cero se dice qué falta."
+                               Visibility="{Binding HasDriftProblem, Converter={StaticResource BoolToVisibility}}" />
+                    <!-- Tres ceros seguidos ocupan lo mismo que un dato y no dicen más que una frase. -->
+                    <TextBlock Text="{Binding NoDriftLabel}" Style="{StaticResource PanelLine}"
+                               ToolTip="Ninguna unidad auditada ha cambiado, ninguna está pendiente de verificar y de todas se ha podido leer el historial."
+                               Visibility="{Binding HasNoDrift, Converter={StaticResource BoolToVisibility}}" />
+                    <TextBlock Style="{StaticResource PanelLine}"
+                               ToolTip="Auditadas cuyo código ha cambiado por mano ajena desde su auditoría. Son las candidatas de «Seleccionar cambiadas»."
+                               Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"><Run Text="Cambiadas: " /><Run Text="{Binding ChangedUnits, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                    <TextBlock Style="{StaticResource PanelLine}"
+                               ToolTip="Arregladas desde Atalaya y todavía sin comprobar. Se cierran verificando, que es el instrumento que detectó el hallazgo; al verificar en verde dejan de contar."
+                               Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"><Run Text="Arregladas sin verificar: " /><Run Text="{Binding FixedPendingVerify, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                    <TextBlock Style="{StaticResource PanelLine}"
+                               ToolTip="Auditadas cuyo historial no se puede comparar: el commit de su auditoría no está en este clon, se reescribió la historia, o tu clon va por detrás. Ni «sin cambios» ni «cambiada» serían ciertas."
+                               Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"><Run Text="Sin historial: " /><Run Text="{Binding NoHistoryUnits, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+
+                    <!-- F9 §4: los hallazgos que se quedaron sin código. Nada se resuelve solo. -->
+                    <StackPanel Margin="{StaticResource Pad.XXS.Top}"
+                                Visibility="{Binding HasOrphans, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Style="{StaticResource PanelLine}"
+                                   ToolTip="Hallazgos activos cuyo fichero ya no está en el repositorio. No se verifican ni se resuelven solos."><Run Text="Sin código: " /><Run Text="{Binding OrphanFindings, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                        <Button Content="Revisar" Style="{StaticResource Button.Link}"
+                                HorizontalAlignment="Left"
+                                Command="{Binding ShowDeletedUnitsCommand}"
+                                ToolTip="Ver esos hallazgos, con el commit que borró cada fichero, y resolverlos por código eliminado si procede. La decisión es tuya." />
+                    </StackPanel>
+
+                    <!-- · Bloque 3 · GOBERNANZA — lo que condiciona QUÉ se reporta en esta
+                         aplicación. No tiene nada que ver con la deriva, y pegado a ella lo
+                         parecía. · -->
+                    <Border Style="{StaticResource PanelDivider}" />
+                    <TextBlock Text="Gobernanza" Style="{StaticResource PanelSection}"
+                               ToolTip="Lo que esta aplicación ha decidido callar y lo que ha decidido contarle al auditor. Condiciona la lectura de todo lo de arriba." />
+
+                    <Grid Margin="{StaticResource Pad.XXS.Top}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Style="{StaticResource PanelLine}" VerticalAlignment="Center"
+                                   ToolTip="{Binding PatternsTooltip}"><Run Text="Patrones silenciados: " /><Run Text="{Binding SilencedPatterns, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                        <Button Grid.Column="1" Content="Gestionar" Style="{StaticResource Button.Link}"
+                                VerticalAlignment="Center"
+                                Command="{Binding ManagePatternSilencesCommand}"
+                                ToolTip="Ver cuánto suprime cada patrón, afinar su ejemplar, des-silenciarlo o cambiar su caducidad." />
+                    </Grid>
+
+                    <Grid Margin="{StaticResource Pad.XXS.Top}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Style="{StaticResource PanelLine}" VerticalAlignment="Center"
+                                   ToolTip="{Binding DirectivesTooltip}"><Run Text="Directivas: " /><Run Text="{Binding ActiveDirectives, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
+                        <Button Grid.Column="1" Content="Gestionar" Style="{StaticResource Button.Link}"
+                                VerticalAlignment="Center"
+                                Command="{Binding ManageDirectivesCommand}"
+                                ToolTip="Activar los ficheros de convenciones del proyecto, decidir a qué flujo aplica cada uno, ordenarlos y ver cuánto presupuesto consumen." />
+                    </Grid>
+
+                    <!-- F13: el umbral de tamaño es política de la aplicación y se edita aquí,
+                         junto a lo demás que gobierna qué se reporta. En Ajustes no está: aquello
+                         es de esta máquina, y esto clasifica el inventario que comparte el equipo. -->
+                    <Grid Margin="{StaticResource Pad.XXS.Top}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Style="{StaticResource PanelLine}" VerticalAlignment="Center"
+                                   ToolTip="{Binding ThresholdsTooltip}"><Run Text="Umbrales: " /><Run Text="{Binding LargeUnitLoc, Mode=OneWay}" FontWeight="Bold" /><Run Text=" LOC" /></TextBlock>
+                        <Button Grid.Column="1" Content="Gestionar" Style="{StaticResource Button.Link}"
+                                VerticalAlignment="Center"
+                                Command="{Binding ManageThresholdsCommand}"
+                                ToolTip="Fijar a partir de cuántas líneas —o de cuántos caracteres— una unidad es demasiado grande para auditarla de una vez. Es política de la aplicación: vale para todo el equipo y aplica en el próximo re-escaneo." />
+                    </Grid>
+
+                    <!-- La mudanza del umbral personal, ofrecida UNA vez por aplicación. -->
+                    <Border Style="{StaticResource Notice}" Margin="{StaticResource Pad.XS.Top}"
+                            Visibility="{Binding HasLargeUnitOffer, Converter={StaticResource BoolToVisibility}}">
+                        <StackPanel c:Stack.Gap="{StaticResource Space.XS}">
+                            <TextBlock Text="{Binding LargeUnitOfferLabel}" Style="{StaticResource Text.Small}"
+                                       ToolTip="Este umbral era un ajuste de tu máquina y ahora es política de cada aplicación. Se te pregunta una vez por aplicación: lo que decidas queda en el hub, para todo el equipo." />
+                            <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
+                                <Button Content="Aplicar a la aplicación" Style="{StaticResource Button.Link}"
+                                        Command="{Binding AcceptLargeUnitOfferCommand}"
+                                        ToolTip="Escribe ese umbral en la política de esta aplicación y lo publica en el hub, para todo el equipo." />
+                                <Button Content="Aquí no" Style="{StaticResource Button.Link}"
+                                        Command="{Binding DismissLargeUnitOfferCommand}"
+                                        ToolTip="Deja esta aplicación con su política y no vuelve a preguntar por ella." />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <!-- F5.7 §4: el resultado de la última acción va por el toast global, no
+                         incrustado al fondo de este panel, donde se quedaba pegado. -->
+                </StackPanel>
+            </ScrollViewer>
+        </DataTemplate>
+
     </UserControl.Resources>
 
     <Grid x:Name="Split" SizeChanged="OnSplitSizeChanged">
@@ -124,6 +295,13 @@
                         </StackPanel>
                     </Border>
                 </Popup>
+
+                <!-- Solo cuando el panel no cabe al lado: si cabe, este boton abriria encima
+                     lo que ya se esta viendo (D-982). -->
+                <Button Content="Resumen del ciclo"
+                        Command="{Binding ToggleCycleDrawerCommand}"
+                        ToolTip="Ciclo, modelo, unidades, deriva y gobernanza."
+                        Visibility="{Binding Wide, Converter={StaticResource InverseBoolToVisibility}}" />
 
                 <Button Content="Ver hallazgos" Command="{Binding ShowFindingsCommand}" />
 
@@ -400,172 +578,46 @@
              (F5.6 §5). «Grandes» no sale aquí por decisión suya — no aporta a este nivel, y el
              estado sigue visible en la fila de cada unidad, que es donde se actúa.
         -->
+        <!-- Acoplado a la derecha cuando hay sitio. Cuando no lo hay, este panel NO se limita a
+             desaparecer: se abre como cajón desde la cabecera (D-982). -->
         <Border Grid.Row="1" Grid.Column="1" Grid.RowSpan="4"
                 Style="{StaticResource Card}"
                 Width="{StaticResource Cycle.PanelWidth}"
                 Margin="{StaticResource Pad.M.Left}"
                 VerticalAlignment="Top"
                 Visibility="{Binding Wide, Converter={StaticResource BoolToVisibility}}">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="{StaticResource Cycle.PanelHeight}">
-                <StackPanel>
-                    <TextBlock Text="Resumen del ciclo" Style="{StaticResource Text.Lead}"
-                               FontWeight="SemiBold"
-                               ToolTip="Lo que hay en la vuelta actual del inventario de esta aplicación." />
-
-                    <!-- · Bloque 1 · CICLO — dónde va la vuelta actual del inventario.
-                         Los tres bloques van separados por un pelo y un microtítulo (F9.1 §2): en
-                         la lista corrida anterior, «deriva» quedaba como una línea perdida en el
-                         medio y los patrones parecían parte de ella. Lo que agrupa es el aire; el
-                         pelo solo lo confirma. · -->
-                    <TextBlock Text="{Binding CycleLabel}" Style="{StaticResource PanelLine}"
-                               FontWeight="SemiBold"
-                               Foreground="{DynamicResource Brush.Text}"
-                               ToolTip="{Binding CycleTooltip}" />
-
-                    <!-- F17: la lupa del ciclo, con su color, y el acceso a cambiarla. Va pegado al
-                         ciclo porque ES del ciclo: con otra lupa, «auditada» significa otra cosa. -->
-                    <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.XS.Top}"
-                                c:Stack.Gap="{StaticResource Space.XS}">
-                        <Border Style="{StaticResource Pill}" VerticalAlignment="Center"
-                                Background="{Binding CycleTheme, Converter={StaticResource ThemeToBrush}, ConverterParameter=soft}"
-                                ToolTip="{Binding CycleThemeTooltip}">
-                            <TextBlock Text="{Binding CycleThemeLabel}" Style="{StaticResource Pill.Text}"
-                                       ToolTip="{Binding CycleThemeTooltip}"
-                                       Foreground="{Binding CycleTheme, Converter={StaticResource ThemeToBrush}}" />
-                        </Border>
-                        <Button Content="Configurar ciclo" Style="{StaticResource Button.Link}"
-                                VerticalAlignment="Center"
-                                Command="{Binding ConfigureCycleCommand}"
-                                ToolTip="Elegir la temática del ciclo y el modelo preferido. Cambiar de temática con unidades auditadas las devuelve a pendientes; los hallazgos no se tocan." />
-                    </StackPanel>
-
-                    <TextBlock Style="{StaticResource PanelLine}"
-                               ToolTip="El modelo con el que el equipo prefiere auditar este ciclo. Es una preferencia: lanzar con otro avisa y deja continuar."><Run Text="Modelo preferido: " /><Run Text="{Binding PreferredModelLabel, Mode=OneWay}" /></TextBlock>
-
-                    <!-- F17.1: el ciclo no olvida con qué lupa se trabajó antes del cambio. -->
-                    <TextBlock Style="{StaticResource PanelLine}"
-                               Text="{Binding CycleThemeHistory}"
-                               ToolTip="Las temáticas por las que ha pasado este ciclo, con quién las cambió y cuándo. Los hallazgos de cada lupa siguen llevando la suya."
-                               Visibility="{Binding HasCycleThemeHistory, Converter={StaticResource BoolToVisibility}}" />
-
-                    <TextBlock Style="{StaticResource PanelLine}" ToolTip="{Binding UnitsTooltip}"><Run Text="Unidades: " /><Run Text="{Binding TotalUnits, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
-                    <TextBlock Style="{StaticResource PanelLine}" ToolTip="Ya revisadas en este ciclo. Puedes volver sobre ellas marcándolas a mano."><Run Text="Auditadas: " /><Run Text="{Binding AuditedUnits, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
-                    <TextBlock Style="{StaticResource PanelLine}" ToolTip="Aún sin revisar en este ciclo. Es lo que queda para que se cierre."><Run Text="Pendientes: " /><Run Text="{Binding PendingUnits, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
-                    <TextBlock Style="{StaticResource PanelLine}" ToolTip="Cada lanzamiento de auditoría es una sesión. Los cierres de ciclo y los resets no cuentan."><Run Text="Sesiones este ciclo: " /><Run Text="{Binding SessionCount, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
-                    <TextBlock Style="{StaticResource PanelLine}"
-                               ToolTip="Las unidades que se auditarán al pulsar «Auditar selección»."
-                               Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}"><Run Text="Seleccionadas: " /><Run Text="{Binding SelectedCount, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
-
-                    <!-- · Bloque 2 · DERIVA — qué ha cambiado desde que se auditó (F9). · -->
-                    <Border Style="{StaticResource PanelDivider}" />
-                    <TextBlock Text="Deriva" Style="{StaticResource PanelSection}"
-                               ToolTip="Lo que le ha pasado al código desde que se auditó. Se calcula del historial de tu clon y no se guarda en ninguna parte." />
-                    <!-- Contra qué se ha medido, como SUBTÍTULO del grupo y no como línea suelta:
-                         es el alcance de los tres números de abajo, no un dato más. -->
-                    <TextBlock Text="{Binding DriftBranchLabel}" Style="{StaticResource Text.Meta}"
-                               TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}"
-                               ToolTip="La rama de tu clon y su HEAD. Medir contra otra rama es legítimo, pero lo que veas será la deriva de esa rama."
-                               Visibility="{Binding DriftIsKnown, Converter={StaticResource BoolToVisibility}}" />
-                    <TextBlock Text="Calculando…" Style="{StaticResource PanelLine}"
-                               ToolTip="Se está comparando el commit de cada auditoría con HEAD de tu clon. Va fuera del hilo de la interfaz: puedes seguir usando la vista."
-                               Visibility="{Binding IsDriftLoading, Converter={StaticResource BoolToVisibility}}" />
-                    <TextBlock Text="{Binding DriftProblem}" Style="{StaticResource PanelLine}"
-                               ToolTip="Por qué no hay deriva que enseñar. No saber no es lo mismo que saber que no ha cambiado nada, así que en vez de un cero se dice qué falta."
-                               Visibility="{Binding HasDriftProblem, Converter={StaticResource BoolToVisibility}}" />
-                    <!-- Tres ceros seguidos ocupan lo mismo que un dato y no dicen más que una frase. -->
-                    <TextBlock Text="{Binding NoDriftLabel}" Style="{StaticResource PanelLine}"
-                               ToolTip="Ninguna unidad auditada ha cambiado, ninguna está pendiente de verificar y de todas se ha podido leer el historial."
-                               Visibility="{Binding HasNoDrift, Converter={StaticResource BoolToVisibility}}" />
-                    <TextBlock Style="{StaticResource PanelLine}"
-                               ToolTip="Auditadas cuyo código ha cambiado por mano ajena desde su auditoría. Son las candidatas de «Seleccionar cambiadas»."
-                               Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"><Run Text="Cambiadas: " /><Run Text="{Binding ChangedUnits, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
-                    <TextBlock Style="{StaticResource PanelLine}"
-                               ToolTip="Arregladas desde Atalaya y todavía sin comprobar. Se cierran verificando, que es el instrumento que detectó el hallazgo; al verificar en verde dejan de contar."
-                               Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"><Run Text="Arregladas sin verificar: " /><Run Text="{Binding FixedPendingVerify, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
-                    <TextBlock Style="{StaticResource PanelLine}"
-                               ToolTip="Auditadas cuyo historial no se puede comparar: el commit de su auditoría no está en este clon, se reescribió la historia, o tu clon va por detrás. Ni «sin cambios» ni «cambiada» serían ciertas."
-                               Visibility="{Binding HasDrift, Converter={StaticResource BoolToVisibility}}"><Run Text="Sin historial: " /><Run Text="{Binding NoHistoryUnits, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
-
-                    <!-- F9 §4: los hallazgos que se quedaron sin código. Nada se resuelve solo. -->
-                    <StackPanel Margin="{StaticResource Pad.XXS.Top}"
-                                Visibility="{Binding HasOrphans, Converter={StaticResource BoolToVisibility}}">
-                        <TextBlock Style="{StaticResource PanelLine}"
-                                   ToolTip="Hallazgos activos cuyo fichero ya no está en el repositorio. No se verifican ni se resuelven solos."><Run Text="Sin código: " /><Run Text="{Binding OrphanFindings, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
-                        <Button Content="Revisar" Style="{StaticResource Button.Link}"
-                                HorizontalAlignment="Left"
-                                Command="{Binding ShowDeletedUnitsCommand}"
-                                ToolTip="Ver esos hallazgos, con el commit que borró cada fichero, y resolverlos por código eliminado si procede. La decisión es tuya." />
-                    </StackPanel>
-
-                    <!-- · Bloque 3 · GOBERNANZA — lo que condiciona QUÉ se reporta en esta
-                         aplicación. No tiene nada que ver con la deriva, y pegado a ella lo
-                         parecía. · -->
-                    <Border Style="{StaticResource PanelDivider}" />
-                    <TextBlock Text="Gobernanza" Style="{StaticResource PanelSection}"
-                               ToolTip="Lo que esta aplicación ha decidido callar y lo que ha decidido contarle al auditor. Condiciona la lectura de todo lo de arriba." />
-
-                    <Grid Margin="{StaticResource Pad.XXS.Top}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource PanelLine}" VerticalAlignment="Center"
-                                   ToolTip="{Binding PatternsTooltip}"><Run Text="Patrones silenciados: " /><Run Text="{Binding SilencedPatterns, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
-                        <Button Grid.Column="1" Content="Gestionar" Style="{StaticResource Button.Link}"
-                                VerticalAlignment="Center"
-                                Command="{Binding ManagePatternSilencesCommand}"
-                                ToolTip="Ver cuánto suprime cada patrón, afinar su ejemplar, des-silenciarlo o cambiar su caducidad." />
-                    </Grid>
-
-                    <Grid Margin="{StaticResource Pad.XXS.Top}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource PanelLine}" VerticalAlignment="Center"
-                                   ToolTip="{Binding DirectivesTooltip}"><Run Text="Directivas: " /><Run Text="{Binding ActiveDirectives, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
-                        <Button Grid.Column="1" Content="Gestionar" Style="{StaticResource Button.Link}"
-                                VerticalAlignment="Center"
-                                Command="{Binding ManageDirectivesCommand}"
-                                ToolTip="Activar los ficheros de convenciones del proyecto, decidir a qué flujo aplica cada uno, ordenarlos y ver cuánto presupuesto consumen." />
-                    </Grid>
-
-                    <!-- F13: el umbral de tamaño es política de la aplicación y se edita aquí,
-                         junto a lo demás que gobierna qué se reporta. En Ajustes no está: aquello
-                         es de esta máquina, y esto clasifica el inventario que comparte el equipo. -->
-                    <Grid Margin="{StaticResource Pad.XXS.Top}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource PanelLine}" VerticalAlignment="Center"
-                                   ToolTip="{Binding ThresholdsTooltip}"><Run Text="Umbrales: " /><Run Text="{Binding LargeUnitLoc, Mode=OneWay}" FontWeight="Bold" /><Run Text=" LOC" /></TextBlock>
-                        <Button Grid.Column="1" Content="Gestionar" Style="{StaticResource Button.Link}"
-                                VerticalAlignment="Center"
-                                Command="{Binding ManageThresholdsCommand}"
-                                ToolTip="Fijar a partir de cuántas líneas —o de cuántos caracteres— una unidad es demasiado grande para auditarla de una vez. Es política de la aplicación: vale para todo el equipo y aplica en el próximo re-escaneo." />
-                    </Grid>
-
-                    <!-- La mudanza del umbral personal, ofrecida UNA vez por aplicación. -->
-                    <Border Style="{StaticResource Notice}" Margin="{StaticResource Pad.XS.Top}"
-                            Visibility="{Binding HasLargeUnitOffer, Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel c:Stack.Gap="{StaticResource Space.XS}">
-                            <TextBlock Text="{Binding LargeUnitOfferLabel}" Style="{StaticResource Text.Small}"
-                                       ToolTip="Este umbral era un ajuste de tu máquina y ahora es política de cada aplicación. Se te pregunta una vez por aplicación: lo que decidas queda en el hub, para todo el equipo." />
-                            <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
-                                <Button Content="Aplicar a la aplicación" Style="{StaticResource Button.Link}"
-                                        Command="{Binding AcceptLargeUnitOfferCommand}"
-                                        ToolTip="Escribe ese umbral en la política de esta aplicación y lo publica en el hub, para todo el equipo." />
-                                <Button Content="Aquí no" Style="{StaticResource Button.Link}"
-                                        Command="{Binding DismissLargeUnitOfferCommand}"
-                                        ToolTip="Deja esta aplicación con su política y no vuelve a preguntar por ella." />
-                            </StackPanel>
-                        </StackPanel>
-                    </Border>
-                    <!-- F5.7 §4: el resultado de la última acción va por el toast global, no
-                         incrustado al fondo de este panel, donde se quedaba pegado. -->
-                </StackPanel>
-            </ScrollViewer>
+            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource CycleSummary}" />
         </Border>
+
+        <!-- ==================================================== El cajón del ciclo (D-982)
+
+             Encima de la lista, no al lado: cuando no cabe una columna de 320 px, lo que cabe es
+             una capa. El velo apaga lo de debajo y cierra al pulsarlo, que es el gesto que todo
+             el mundo prueba primero.
+        -->
+        <Grid Grid.Row="0" Grid.RowSpan="5" Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding CycleDrawerOpen, Converter={StaticResource BoolToVisibility}}">
+            <Button Command="{Binding ToggleCycleDrawerCommand}"
+                    Background="{DynamicResource Brush.Scrim}" BorderThickness="{StaticResource Pad.Zero}"
+                    Focusable="False" ToolTip="Cerrar el resumen">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" />
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <Border Style="{StaticResource Card}"
+                    Width="{StaticResource Cycle.PanelWidth}"
+                    HorizontalAlignment="Right" VerticalAlignment="Stretch">
+                <DockPanel>
+                    <Button DockPanel.Dock="Top" HorizontalAlignment="Right"
+                            Content="Cerrar" Style="{StaticResource Button.Link}"
+                            Margin="{StaticResource Pad.XS.Bottom}"
+                            Command="{Binding ToggleCycleDrawerCommand}" />
+                    <ContentControl Content="{Binding}" ContentTemplate="{StaticResource CycleSummary}" />
+                </DockPanel>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

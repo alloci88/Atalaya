@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
@@ -123,8 +123,11 @@ public sealed class PageHeaderLayoutTests
     {
         string xaml = ViewLayout.Xaml("AssistedFixView.xaml");
 
-        xaml.Should().Contain("{Binding FindingAliasText}",
-            "el alias vive junto al título, en una columna que no encoge: es corto y cabe entero");
+        // Desde D-983 el alias es un `Run` dentro del TextBlock del título —dos tamaños en una
+        // fila solo comparten línea base si comparten párrafo—, así que el enlace lleva `Mode`.
+        // La regla no cambia: el alias aparece UNA vez y entero.
+        xaml.Should().Contain("{Binding FindingAliasText, Mode=OneWay}",
+            "el alias vive junto al título, en la misma línea: es corto y cabe entero");
         xaml.Should().NotContain("Volver al hallazgo (",
             "el enlace ya no repite el alias que está dos piezas más a la izquierda");
     }
@@ -301,17 +304,24 @@ public sealed class PageHeaderLayoutTests
                 .Where(c => c.Visibility == Visibility.Visible)
                 .ToList();
 
-            var danger = buttons.OfType<Wpf.Ui.Controls.Button>()
-                .Single(b => b.Appearance == Wpf.Ui.Controls.ControlAppearance.Danger);
+            // Los botones de la cabecera son los del sistema desde D-983, no los de la librería:
+            // tres `Appearance` distintas traían tres alturas y tres rellenos, y el grupo no
+            // parecía un grupo. Aquí el destructivo se reconoce por su ROTULO y no por su estilo
+            // porque el banco de geometría quita los `Style=` a propósito —mide la vista, no el
+            // tema— así que preguntar por el estilo aquí no preguntaría por nada.
+            var danger = buttons.OfType<Button>()
+                .Single(b => (b.Content as string) == "Descartar todo");
 
             buttons[^1].Should().BeSameAs(danger, "la que deshace el trabajo va al final, no en medio");
 
-            Rect previous = ViewLayout.BoxOf(buttons[^2], header);
-            Rect destructive = ViewLayout.BoxOf(danger, header);
-
-            (destructive.Left - previous.Right).Should().BeGreaterThanOrEqualTo(
-                DestructiveGap - Tolerance,
-                "más aire que entre las de control: la separación ES la jerarquía");
+            // LO QUE YA NO SE COMPRUEBA, y por qué. Hasta aquí este test exigía además que el
+            // destructivo llevara MÁS aire que el resto (F16-RETOQUE §2·4, «la separación ES la
+            // jerarquía»). En la revisión de la Parte B el usuario miró la cabecera en el dist y
+            // pidió lo contrario: los tres son un grupo, con la misma altura, el mismo relleno y
+            // la MISMA separación entre ellos; lo que distingue al destructivo es su color, que es
+            // lo que dice el principio 4. Se retira esa mitad de la regla —no se relaja: se
+            // sustituye por una decisión posterior y explícita— y se conserva la otra, que es el
+            // orden: la que deshace el trabajo va la última.
         });
 
     /// <summary>
@@ -415,14 +425,12 @@ public sealed class PageHeaderLayoutTests
     /// <inheritdoc cref="MinZoneGap"/>
     private const double MinRowGap = 10;
 
-    /// <summary>El aire alrededor de la acción destructiva: más que entre las de control.</summary>
-    private const double DestructiveGap = 20;
-
     /// <summary>Medio píxel de holgura: WPF redondea a la rejilla del dispositivo.</summary>
     private const double Tolerance = 0.5;
 
     private static PageHeader HeaderOf(Grid root)
         => ViewLayout.InRow(root, 0).OfType<PageHeader>().Single();
+
 
     /// <summary>
     /// Hasta dónde llega lo que de VERDAD se ve de una zona. No basta con su rectángulo: cuando el

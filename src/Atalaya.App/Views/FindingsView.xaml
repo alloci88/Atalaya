@@ -146,13 +146,24 @@
                               VerticalAlignment="Center" Margin="{StaticResource Pad.S}"
                               ToolTip="Hallazgos que la última comprobación no pudo confirmar, o cuya ubicación en el código se perdió." />
 
+                    <!-- Mismo margen que «Por revisar»: son la misma clase de control y estaban
+                         separados de la fila con números distintos.
+
+                         Y los tres elementos —casilla, balanza y palabra— CENTRADOS. Un StackPanel
+                         da a sus hijos alto completo y cada TextBlock pintaba su texto arriba del
+                         suyo; como la balanza tiene una caja más alta que la letra, quedaban a
+                         alturas distintas y la casilla, centrada sobre el conjunto, más baja que
+                         las dos. Se centra cada uno, y la balanza lleva el tamaño del cuerpo
+                         escrito para que no cambie de alto con la fuente que la pinte. -->
                     <CheckBox IsChecked="{Binding OnlyDisputed}"
-                              VerticalAlignment="Center" Margin="{StaticResource Pad.XXS}"
+                              VerticalAlignment="Center" Margin="{StaticResource Pad.S}"
                               ToolTip="Hallazgos que un auditor sostiene que nunca fueron un defecto. Los decide una persona.">
-                        <StackPanel Orientation="Horizontal">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <!-- U+FE0E: presentación de TEXTO. Sin él la balanza sale como emoji a color. -->
-                            <TextBlock Text="⚖︎" Margin="{StaticResource Pad.XXS}" />
-                            <TextBlock Text="Disputados" />
+                            <TextBlock Text="⚖︎" VerticalAlignment="Center"
+                                       FontSize="{StaticResource FontSize.Body}"
+                                       Margin="{StaticResource Pad.XXS.Right}" />
+                            <TextBlock Text="Disputados" VerticalAlignment="Center" />
                         </StackPanel>
                     </CheckBox>
                 </WrapPanel>

@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Markup;
@@ -129,7 +129,13 @@ public sealed class FailureBannerLayoutTests
         string xaml = Xaml(view);
 
         xaml.Should().NotContain("#F2101010", "un fondo casi negro fijo no vale para el tema claro");
-        xaml.Should().Contain("Background=\"{DynamicResource CardBackgroundFillColorDefaultBrush}\"");
+
+        // Desde D-983 la tarjeta es la del SISTEMA y no la de WPF-UI: `Card` sale de nuestra
+        // paleta —la que tiene sus pares medidos a AA en los dos temas— mientras que los pinceles
+        // de la librería son los suyos. La regla es la misma y ahora se cumple mejor: el fondo lo
+        // pone el tema, no un color escrito en la vista.
+        xaml.Should().Contain("Style=\"{StaticResource Card}\"",
+            "la pantalla de cierre usa la tarjeta del sistema, que cambia con el tema");
     }
 
     // ================================================================ y medido de verdad
