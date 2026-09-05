@@ -524,7 +524,7 @@ public sealed class MetricsPanelTests : IDisposable
         vm.ResolutionLegend.Should().BeEmpty();
 
         Markup(Source("src/Atalaya.App/Views/MetricsView.xaml"))
-            .Should().Contain("aún no hay resoluciones en este periodo");
+            .Should().Contain("Aún no hay resoluciones en este periodo");
     }
 
     // ============================================ Severidad por aplicación (F6.5)

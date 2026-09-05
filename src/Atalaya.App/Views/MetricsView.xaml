@@ -3,95 +3,75 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:c="clr-namespace:Atalaya.App.Controls"
     xmlns:controls="clr-namespace:Atalaya.App.Controls">
+    <!--
+        F26 Parte C — MÉTRICAS.
+
+        Lo que se veía: cuatro tarjetas de resumen de alturas distintas y CENTRADAS en su fila, así
+        que ni sus cifras ni sus bordes de arriba caían a la misma altura; las pastillas de gravedad
+        pintadas con pinceles ya resueltos (D-971), que no cambian con el tema; los vacíos escritos
+        como prosa gris a 12 px dentro del panel de la gráfica; y el conmutador «Acumulado» flotando
+        sobre el título en vez de en su línea.
+
+        Lo que NO cambia: qué se mide y cómo (D-786 y siguientes). Ni una consulta, ni un número, ni
+        un filtro nuevo.
+    -->
     <UserControl.Resources>
 
-        <!-- El ritmo del panel en un sitio: cada bloque es una tarjeta con el mismo margen, y
-             cada titulo de bloque pesa lo mismo. Ponerlo a ojo en cada gráfica es como se
-             descuadró Ajustes (F5.7 §1). -->
-        <!-- BasedOn NO es opcional: un Style con TargetType="ui:Card" y sin él SUSTITUYE al
-             estilo implícito de WPF-UI en vez de extenderlo, y la tarjeta se queda sin fondo, sin
-             borde y sin padding. Se vio en el render: el interruptor «Acumulado» acababa pegado
-             al borde de la página porque el bloque ya no tenía relleno que lo separase. Es la
-             misma regla que ButtonForegroundTests vigila en los Button, aplicada a Card. -->
-        <Style x:Key="Block" TargetType="ui:Card" BasedOn="{StaticResource {x:Type ui:Card}}">
-            <Setter Property="Margin" Value="0,0,0,14" />
+        <!-- El bloque de una gráfica: tarjeta del sistema con el hueco que la separa de la
+             siguiente. Es lo único que queda de los ocho estilos locales que este fichero
+             declaraba —su tipografía entera, a 15/12/11— porque el resto ya vive en el sistema. -->
+        <Style x:Key="Block" TargetType="Border" BasedOn="{StaticResource Card}">
+            <Setter Property="Margin" Value="{StaticResource Pad.M.Bottom}" />
         </Style>
-        <Style x:Key="BlockTitle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="15" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-        </Style>
-        <Style x:Key="BlockHint" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="Opacity" Value="0.7" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="Margin" Value="0,2,0,0" />
-        </Style>
-        <Style x:Key="TileCaption" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="Opacity" Value="0.7" />
-        </Style>
-        <Style x:Key="TileNumber" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="34" />
-            <Setter Property="FontWeight" Value="Bold" />
-            <Setter Property="Margin" Value="0,2,0,0" />
-        </Style>
-        <Style x:Key="TileFoot" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="Opacity" Value="0.7" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="Margin" Value="0,6,0,0" />
-        </Style>
-        <Style x:Key="EmptyNote" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="Opacity" Value="0.7" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="Margin" Value="0,10,0,0" />
-        </Style>
+
+        <!-- La leyenda: color + NOMBRE, nunca un color solo. Es la misma regla del piloto de
+             vinculación (D-296): quien no distinga dos tonos tiene que poder leer cuál es cuál. -->
+        <DataTemplate x:Key="LegendEntry">
+            <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.BarItem}">
+                <Rectangle Width="16" Height="3" RadiusX="1.5" RadiusY="1.5"
+                           VerticalAlignment="Center"
+                           Fill="{Binding Brush}"
+                           StrokeDashArray="{Binding Dashed, Converter={StaticResource DashedToArray}}" />
+                <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Small}"
+                           Margin="{StaticResource Pad.XS.Left}" VerticalAlignment="Center" />
+            </StackPanel>
+        </DataTemplate>
 
         <!-- La fila del registro de operaciones. Lleva plantilla propia por una razón medida en
              el render: el ContentPresenter del botón por defecto NO estira su contenido, así que
              la rejilla de columnas de la fila se encogía hasta el ancho del texto y dejaba de
-             cuadrar con la de la cabecera — el nombre de la app y quién la auditó salían pegados.
-             Y quien redefine la plantilla se queda con el color: un Style de Button sin BasedOn
-             arranca con el negro de serie de WPF, invisible sobre el tema oscuro (F5.6 §1). -->
-        <Style x:Key="SessionRow" TargetType="Button">
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+             cuadrar con la de la cabecera. Ahora hereda del secundario del sistema, así que el
+             color del texto y la altura mínima salen de ahí. -->
+        <Style x:Key="SessionRow" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Padding" Value="6,6" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="{StaticResource Pad.Zero}" />
+            <Setter Property="Padding" Value="{StaticResource Pad.Row}" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Chrome"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="4"
-                                Padding="{TemplateBinding Padding}">
+                                BorderBrush="{DynamicResource Brush.Line}"
+                                BorderThickness="{StaticResource Border.Bottom}"
+                                MinHeight="40"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Chrome" Property="Background"
-                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                        Value="{DynamicResource Brush.Surface2}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
-
-        <!-- La leyenda: color + NOMBRE, nunca un color solo. Es la misma regla del piloto de
-             vinculación (D-296): quien no distinga dos tonos tiene que poder leer cuál es cuál. -->
-        <DataTemplate x:Key="LegendEntry">
-            <StackPanel Orientation="Horizontal" Margin="0,0,16,4">
-                <Rectangle Width="16" Height="3" RadiusX="1.5" RadiusY="1.5"
-                           VerticalAlignment="Center"
-                           Fill="{Binding Brush}"
-                           StrokeDashArray="{Binding Dashed, Converter={StaticResource DashedToArray}}" />
-                <TextBlock Text="{Binding Name}" FontSize="12" Margin="7,0,0,0" VerticalAlignment="Center" />
-            </StackPanel>
-        </DataTemplate>
     </UserControl.Resources>
 
     <Grid>
@@ -102,70 +82,83 @@
         </Grid.RowDefinitions>
 
         <!-- Cabecera -->
-        <StackPanel Grid.Row="0" Margin="0,0,18,12">
-            <TextBlock Text="Métricas" FontSize="24" FontWeight="SemiBold" />
-            <TextBlock Text="{Binding PeriodLabel}" Style="{StaticResource BlockHint}" />
+        <StackPanel Grid.Row="0" Margin="{StaticResource Pad.S.Bottom}">
+            <TextBlock Text="Métricas" Style="{StaticResource Text.H2}" />
+            <TextBlock Text="{Binding PeriodLabel}" Style="{StaticResource Text.Small}" />
         </StackPanel>
 
         <!-- Fila de filtros: afectan a TODO el panel. Van arriba del todo porque cambian el
-             significado de cada número de abajo. -->
-        <Border Grid.Row="1"
-                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
-                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                BorderThickness="1"
-                CornerRadius="8"
-                Padding="12,10"
-                Margin="0,0,18,14">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Aplicación" VerticalAlignment="Center"
-                           FontSize="12" Opacity="0.7" Margin="0,0,8,0" />
-                <ComboBox MinWidth="220"
+             significado de cada número de abajo, y cada uno dice QUÉ filtra (D-973): antes eran
+             dos desplegables sin nombre y había que abrirlos para saber cuál era cuál. El ritmo lo
+             pone la barra, uno y el mismo (D-984). -->
+        <Border Grid.Row="1" Style="{StaticResource Card}"
+                Padding="{StaticResource Pad.XS}"
+                CornerRadius="{StaticResource Radius.M}"
+                Margin="{StaticResource Pad.M.Bottom}">
+            <WrapPanel Orientation="Horizontal">
+                <TextBlock Text="Aplicación:" Style="{StaticResource Text.Small}"
+                           VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
+                <ComboBox MinWidth="220" Margin="{StaticResource Pad.BarItem}"
                           ItemsSource="{Binding AppOptions}"
                           SelectedItem="{Binding SelectedApp}"
                           DisplayMemberPath="Name"
                           ToolTip="Filtra el panel entero por una aplicación" />
 
-                <TextBlock Text="Periodo" VerticalAlignment="Center"
-                           FontSize="12" Opacity="0.7" Margin="20,0,8,0" />
-                <ComboBox MinWidth="140"
+                <TextBlock Text="Periodo:" Style="{StaticResource Text.Small}"
+                           VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
+                <ComboBox MinWidth="160" Margin="{StaticResource Pad.BarItem}"
                           ItemsSource="{Binding RangeOptions}"
                           SelectedItem="{Binding SelectedRange}"
                           DisplayMemberPath="Label"
                           ToolTip="Ventana temporal de las gráficas y de los tiles de periodo" />
 
-                <ui:ProgressRing IsIndeterminate="True" Width="16" Height="16" Margin="18,0,0,0"
+                <ui:ProgressRing IsIndeterminate="True"
+                                 Width="{StaticResource Icon.Size}" Height="{StaticResource Icon.Size}"
+                                 Margin="{StaticResource Pad.BarItem}"
                                  VerticalAlignment="Center"
                                  Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
-            </StackPanel>
+            </WrapPanel>
         </Border>
 
         <!-- El mismo canalón que la cabecera y los filtros. La barra de desplazamiento de WPF-UI
              se pinta ENCIMA del contenido, así que sin este hueco la última tarjeta de la fila de
-             cifras queda debajo de la barra; y con un hueco distinto al de arriba, el panel
-             tendría dos bordes derechos. -->
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="0,0,18,0">
+             cifras queda debajo de la barra. -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                      Padding="{StaticResource Pad.M.Right}">
             <StackPanel>
 
                 <!-- Estado vacío del panel entero -->
-                <ui:Card Style="{StaticResource Block}"
-                         Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
-                    <StackPanel>
-                        <TextBlock Text="Todavía no hay nada que medir" Style="{StaticResource BlockTitle}" />
-                        <TextBlock Style="{StaticResource BlockHint}"
-                                   Text="El panel se llena solo con lo que ya se guarda: hallazgos, inventarios y sesiones. Lanza una auditoría desde el inventario de una aplicación y vuelve aquí." />
-                    </StackPanel>
-                </ui:Card>
+                <Border Style="{StaticResource Block}"
+                        Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
+                    <c:EmptyState
+                        Glyph="{x:Static c:Icons.Metrics}"
+                        Message="Todavía no hay nada que medir. El panel se llena solo con lo que ya se guarda: hallazgos, inventarios y sesiones." />
+                </Border>
 
                 <StackPanel Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
 
-                    <!-- ================= Tiles ================= -->
-                    <UniformGrid Rows="1" Columns="4" Margin="0,0,0,14">
+                    <!-- ================= Las cuatro cifras =================
 
-                        <ui:Card Margin="0,0,12,0">
+                         En `ColumnsPanel` y no en un `UniformGrid` con márgenes a mano: el panel
+                         reparte el ancho entero, y —lo que hacía falta aquí— DA A TODAS LAS
+                         TARJETAS DE UNA FILA EL ALTO DE LA MÁS ALTA (D-970). Antes cada tarjeta
+                         medía lo suyo y se centraba en la fila, así que ni los bordes de arriba ni
+                         las cifras caían a la misma altura: la de coste, que es la más larga,
+                         empujaba a las otras tres a flotar. -->
+                    <c:ColumnsPanel MinColumnWidth="280" MaxColumns="4"
+                                    Gap="{StaticResource Space.M}"
+                                    Margin="{StaticResource Pad.M.Bottom}">
+
+                        <Border Style="{StaticResource Stat.Card}">
                             <StackPanel>
-                                <TextBlock Text="Hallazgos activos" Style="{StaticResource TileCaption}" />
-                                <TextBlock Text="{Binding ActiveTotal}" Style="{StaticResource TileNumber}" />
-                                <ItemsControl ItemsSource="{Binding ActiveChips}" Margin="0,8,0,0">
+                                <TextBlock Text="Hallazgos activos" Style="{StaticResource Stat.Label}" />
+                                <TextBlock Text="{Binding ActiveTotal}" Style="{StaticResource Stat.Number}" />
+
+                                <!-- Las pastillas del sistema, las mismas que Portafolio y
+                                     Hallazgos: fondo teñido y tinta de la paleta por `DataTrigger`,
+                                     que sí se reevalúa al cambiar de tema (D-971). -->
+                                <ItemsControl ItemsSource="{Binding ActiveChips}"
+                                              Margin="{StaticResource Pad.XS.Top}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
                                             <WrapPanel />
@@ -173,9 +166,9 @@
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border CornerRadius="8" Padding="6,2" Margin="0,0,4,4"
-                                                    Background="{Binding Background}">
-                                                <TextBlock FontSize="11">
+                                            <Border Style="{StaticResource Pill.Sev}" MinWidth="0"
+                                                    Margin="{StaticResource Pad.Chip}">
+                                                <TextBlock Style="{StaticResource Pill.Sev.Text}">
                                                     <Run Text="{Binding Label, Mode=OneWay}" />
                                                     <Run Text="{Binding Count, Mode=OneWay}" FontWeight="Bold" />
                                                 </TextBlock>
@@ -184,56 +177,64 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                             </StackPanel>
-                        </ui:Card>
+                        </Border>
 
-                        <ui:Card Margin="0,0,12,0">
+                        <Border Style="{StaticResource Stat.Card}">
                             <StackPanel>
-                                <TextBlock Text="Resueltos en el periodo" Style="{StaticResource TileCaption}" />
-                                <TextBlock Text="{Binding ResolvedInPeriod}" Style="{StaticResource TileNumber}" />
+                                <TextBlock Text="Resueltos en el periodo" Style="{StaticResource Stat.Label}" />
+                                <TextBlock Text="{Binding ResolvedInPeriod}" Style="{StaticResource Stat.Number}" />
                                 <TextBlock Text="{Binding ResolvedDelta}"
                                            Foreground="{Binding ResolvedDeltaBrush}"
-                                           FontSize="11" Margin="0,6,0,0" TextWrapping="Wrap" />
+                                           Style="{StaticResource Text.Small}"
+                                           Margin="{StaticResource Pad.XXS.Top}" />
                             </StackPanel>
-                        </ui:Card>
+                        </Border>
 
-                        <ui:Card Margin="0,0,12,0">
+                        <Border Style="{StaticResource Stat.Card}">
                             <StackPanel>
-                                <TextBlock Text="Coste del periodo" Style="{StaticResource TileCaption}" />
+                                <TextBlock Text="Coste del periodo" Style="{StaticResource Stat.Label}" />
 
                                 <!-- F16-RETOQUE §1 — SIEMPRE hay total, porque todo lo que llega
                                      aquí es de la misma naturaleza: la factura de la organización.
-                                     Lo que no factura no se tarifa y no entra (ver la nota de
-                                     abajo), así que ya no hay dos magnitudes que malabarear. -->
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="{Binding CostTotal}" Style="{StaticResource TileNumber}" />
-                                    <TextBlock Text="{Binding CostUnit}" Style="{StaticResource TileCaption}"
-                                               VerticalAlignment="Bottom" Margin="7,0,0,7" />
-                                </StackPanel>
+                                     La cifra y su unidad van en UN `TextBlock` con dos `Run`: es lo
+                                     único que comparte línea base en WPF (D-983 §9). Con dos cajas
+                                     alineadas por abajo, «credits» se sentaba por debajo del 244,7. -->
+                                <TextBlock>
+                                    <Run Text="{Binding CostTotal, Mode=OneWay}"
+                                         FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
+                                    <Run Text=" " />
+                                    <Run Text="{Binding CostUnit, Mode=OneWay}"
+                                         FontSize="{StaticResource FontSize.Small}"
+                                         Foreground="{DynamicResource Brush.TextMuted}" />
+                                </TextBlock>
 
                                 <!-- Y si más de una casa factura, además el reparto: saber de qué
                                      bolsa salió el gasto es la mitad de poder cuadrarlo. -->
-                                <ItemsControl ItemsSource="{Binding CostByProvider}" Margin="0,4,0,0"
+                                <ItemsControl ItemsSource="{Binding CostByProvider}"
+                                              Margin="{StaticResource Pad.XXS.Top}"
                                               Visibility="{Binding CostHasBreakdown, Converter={StaticResource BoolToVisibility}}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding}" TextWrapping="Wrap"
-                                                       FontSize="14" FontWeight="SemiBold" Margin="0,0,0,3" />
+                                            <TextBlock Text="{Binding}" Style="{StaticResource Text.Small}"
+                                                       Foreground="{DynamicResource Brush.Text}"
+                                                       FontWeight="SemiBold" />
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
 
-                                <TextBlock Text="{Binding CostPerUnit}" Style="{StaticResource TileFoot}" />
+                                <TextBlock Text="{Binding CostPerUnit}" Style="{StaticResource Text.Meta}"
+                                           TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" />
 
                                 <!-- F18 §1 — EN QUE SE VA. El total dice cuanto; esto dice en que:
                                      descubrimiento, verificacion y arreglo cuestan muy distinto y
-                                     hasta aqui habia que abrir los informes uno a uno para saberlo.
-                                     Los tokens van siempre, el coste solo cuando lo hay. -->
-                                <ItemsControl ItemsSource="{Binding CostByPhase}" Margin="0,6,0,0"
+                                     hasta aqui habia que abrir los informes uno a uno para saberlo. -->
+                                <ItemsControl ItemsSource="{Binding CostByPhase}"
+                                              Margin="{StaticResource Pad.XXS.Top}"
                                               Visibility="{Binding HasPhases, Converter={StaticResource BoolToVisibility}}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <TextBlock Text="{Binding}" TextWrapping="Wrap"
-                                                       FontSize="11" Opacity="0.75" Margin="0,0,0,2" />
+                                            <TextBlock Text="{Binding}" Style="{StaticResource Text.Meta}"
+                                                       TextWrapping="Wrap" />
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
@@ -241,62 +242,74 @@
                                 <!-- F16-RETOQUE §1 — por qué esta cifra no cubre toda la actividad
                                      de más abajo: hubo sesiones de una casa que no factura. No es
                                      un aviso de que falte una tarifa; es justo lo contrario. -->
-                                <TextBlock Text="{Binding CostScopeNote}" TextWrapping="Wrap"
-                                           FontSize="11" Opacity="0.7" Margin="0,4,0,0"
+                                <TextBlock Text="{Binding CostScopeNote}" Style="{StaticResource Text.Meta}"
+                                           TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}"
                                            Visibility="{Binding CostScopeNote, Converter={StaticResource NotEmptyToVisibility}}" />
 
-                                <!-- F15 — falta gasto por contar: hay sesiones cuyo modelo no tiene
-                                     tarifa. Se dice, porque un total al que le falta gasto se lee
-                                     como si fuera el gasto entero. -->
-                                <TextBlock Text="{Binding CostPartialNotice}" TextWrapping="Wrap"
-                                           FontSize="11" Foreground="#E0A030" Margin="0,4,0,0"
-                                           Visibility="{Binding CostPartialNotice, Converter={StaticResource NotEmptyToVisibility}}" />
-
-                                <TextBlock Text="{Binding CostInDollars}" FontSize="11" Opacity="0.6"
-                                           Margin="0,4,0,0"
+                                <TextBlock Text="{Binding CostInDollars}" Style="{StaticResource Text.Meta}"
+                                           Margin="{StaticResource Pad.XXS.Top}"
                                            Visibility="{Binding CostInDollars, Converter={StaticResource NotEmptyToVisibility}}" />
 
-                                <!-- R2 §2 — las tarifas se corrigen en Ajustes; aquí queda el aviso
-                                     de parcial, que es lo de Métricas, y el camino a su remedio. -->
-                                <ui:HyperlinkButton Content="Ajustes → Tarifas"
-                                                    Command="{Binding ManageRatesCommand}"
-                                                    ToolTip="Las tarifas se aplican solas desde el primer uso. Aquí se corrigen las que no cuadren y se añaden las de un modelo nuevo."
-                                                    FontSize="11" Padding="0,2" Margin="0,4,0,0" />
+                                <!-- F15 · R2 §2 — falta gasto por contar: hay sesiones cuyo modelo
+                                     no tiene tarifa. Es un AVISO, no una nota al pie: un total al
+                                     que le falta gasto se lee como si fuera el gasto entero. Y
+                                     lleva su remedio al lado, que está en Ajustes → Tarifas. -->
+                                <Border Style="{StaticResource Notice.Warning}"
+                                        Padding="{StaticResource Pad.XS}"
+                                        Margin="{StaticResource Pad.XS.Top}"
+                                        Visibility="{Binding CostPartialNotice, Converter={StaticResource NotEmptyToVisibility}}">
+                                    <StackPanel>
+                                        <DockPanel>
+                                            <Path DockPanel.Dock="Left" Style="{StaticResource Icon.Small}"
+                                                  Data="{x:Static c:Icons.Warning}"
+                                                  Stroke="{DynamicResource Brush.Warning.Ink}"
+                                                  VerticalAlignment="Top"
+                                                  Margin="{StaticResource Pad.XS.Right}" />
+                                            <TextBlock Text="{Binding CostPartialNotice}"
+                                                       Style="{StaticResource Text.Small}"
+                                                       Foreground="{DynamicResource Brush.Warning.Ink}" />
+                                        </DockPanel>
+                                        <Button Content="Ajustes → Tarifas"
+                                                Style="{StaticResource Button.Link}"
+                                                Command="{Binding ManageRatesCommand}"
+                                                HorizontalAlignment="Left"
+                                                ToolTip="Las tarifas se aplican solas desde el primer uso. Aquí se corrigen las que no cuadren y se añaden las de un modelo nuevo." />
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
-                        </ui:Card>
+                        </Border>
 
-                        <ui:Card>
+                        <Border Style="{StaticResource Stat.Card}">
                             <StackPanel>
-                                <TextBlock Text="Cobertura del ciclo" Style="{StaticResource TileCaption}" />
-                                <TextBlock Text="{Binding CyclePct}" Style="{StaticResource TileNumber}" />
-                                <TextBlock Text="{Binding CycleDetail}" Style="{StaticResource TileFoot}" />
+                                <TextBlock Text="Cobertura del ciclo" Style="{StaticResource Stat.Label}" />
+                                <TextBlock Text="{Binding CyclePct}" Style="{StaticResource Stat.Number}" />
+                                <TextBlock Text="{Binding CycleDetail}" Style="{StaticResource Text.Meta}"
+                                           TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" />
                             </StackPanel>
-                        </ui:Card>
-                    </UniformGrid>
+                        </Border>
+                    </c:ColumnsPanel>
 
                     <!-- ============ Gráfica 1: coste en el tiempo ============ -->
-                    <ui:Card Style="{StaticResource Block}">
+                    <Border Style="{StaticResource Block}">
                         <StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                                    <TextBlock Text="Coste en el tiempo" Style="{StaticResource BlockTitle}" />
-                                    <TextBlock Style="{StaticResource BlockHint}"
-                                               Text="Lo que consumió cada aplicación en cada tramo del periodo. Pasa el ratón por la gráfica para ver el desglose." />
-                                </StackPanel>
-                                <ui:ToggleSwitch Grid.Column="1"
+                            <!-- El conmutador va en LA MISMA LÍNEA del título y alineado a la
+                                 derecha: es una opción de lectura de esta gráfica, no un control
+                                 flotando sobre su bloque. -->
+                            <DockPanel>
+                                <ui:ToggleSwitch DockPanel.Dock="Right"
                                                  Content="Acumulado"
                                                  IsChecked="{Binding Cumulative}"
-                                                 VerticalAlignment="Top"
+                                                 VerticalAlignment="Center"
                                                  ToolTip="Suma tramo a tramo: la curva ascendente de lo gastado hasta cada fecha" />
-                            </Grid>
+                                <TextBlock Text="Coste en el tiempo" Style="{StaticResource Text.Lead}"
+                                           FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <TextBlock Style="{StaticResource Text.Small}"
+                                       Text="Lo que consumió cada aplicación en cada tramo del periodo. Pasa el ratón por la gráfica para ver el desglose." />
 
                             <ItemsControl ItemsSource="{Binding CostLegend}"
                                           ItemTemplate="{StaticResource LegendEntry}"
-                                          Margin="0,12,0,0"
+                                          Margin="{StaticResource Pad.XS.Top}"
                                           Visibility="{Binding ShowCostLegend, Converter={StaticResource BoolToVisibility}}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -307,47 +320,42 @@
 
                             <controls:ChartPlot
                                 Height="240"
-                                Margin="0,8,0,0"
+                                Margin="{StaticResource Pad.XS.Top}"
                                 Series="{Binding CostSeries}"
                                 Labels="{Binding CostLabels}"
                                 TooltipLabels="{Binding CostRanges}"
                                 Unit="{Binding CostUnit}"
-                                AxisBrush="{DynamicResource TextFillColorSecondaryBrush}"
-                                GridBrush="{DynamicResource TextFillColorTertiaryBrush}"
+                                AxisBrush="{DynamicResource Brush.TextMuted}"
+                                GridBrush="{DynamicResource Brush.Line}"
                                 Visibility="{Binding HasCost, Converter={StaticResource BoolToVisibility}}" />
 
-                            <TextBlock Style="{StaticResource EmptyNote}"
-                                       Text="— · se activará cuando alguna sesión del periodo tenga coste facturable. El coste se deriva de los tokens con la tarifa del modelo; las sesiones de Claude Code no se tarifan y salen en la actividad con sus tokens."
-                                       Visibility="{Binding HasCost, Converter={StaticResource InverseBoolToVisibility}}" />
+                            <c:EmptyState
+                                Glyph="{x:Static c:Icons.Metrics}"
+                                Message="Se activará cuando alguna sesión del periodo tenga coste facturable. El coste se deriva de los tokens con la tarifa del modelo; las sesiones de Claude Code no se tarifan y salen en la actividad con sus tokens."
+                                Visibility="{Binding HasCost, Converter={StaticResource InverseBoolToVisibility}}" />
                         </StackPanel>
-                    </ui:Card>
+                    </Border>
 
                     <!-- ============ Gráfica 2: resoluciones en el tiempo ============ -->
                     <!-- Misma forma y mismo componente que la de coste, y va JUSTO debajo: se
-                         leen en pareja («esto costó, esto saldó»). Los colores salen del mismo
-                         reparto por identidad, así que una app es del mismo color en las dos. -->
-                    <ui:Card Style="{StaticResource Block}">
+                         leen en pareja («esto costó, esto saldó»). -->
+                    <Border Style="{StaticResource Block}">
                         <StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                                    <TextBlock Text="Resoluciones en el tiempo" Style="{StaticResource BlockTitle}" />
-                                    <TextBlock Style="{StaticResource BlockHint}"
-                                               Text="Cuántos hallazgos se dieron por resueltos en cada tramo, por aplicación. Cuenta todas las vías —veredicto del auditor, resolución manual y medida—: es deuda saldada, venga de donde venga." />
-                                </StackPanel>
-                                <ui:ToggleSwitch Grid.Column="1"
+                            <DockPanel>
+                                <ui:ToggleSwitch DockPanel.Dock="Right"
                                                  Content="Acumulado"
                                                  IsChecked="{Binding CumulativeResolutions}"
-                                                 VerticalAlignment="Top"
+                                                 VerticalAlignment="Center"
                                                  ToolTip="Suma tramo a tramo: la curva ascendente de lo saldado hasta cada fecha" />
-                            </Grid>
+                                <TextBlock Text="Resoluciones en el tiempo" Style="{StaticResource Text.Lead}"
+                                           FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <TextBlock Style="{StaticResource Text.Small}"
+                                       Text="Cuántos hallazgos se dieron por resueltos en cada tramo, por aplicación. Cuenta todas las vías —veredicto del auditor, resolución manual y medida—: es deuda saldada, venga de donde venga." />
 
                             <ItemsControl ItemsSource="{Binding ResolutionLegend}"
                                           ItemTemplate="{StaticResource LegendEntry}"
-                                          Margin="0,12,0,0"
+                                          Margin="{StaticResource Pad.XS.Top}"
                                           Visibility="{Binding ShowResolutionLegend, Converter={StaticResource BoolToVisibility}}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -358,30 +366,31 @@
 
                             <controls:ChartPlot
                                 Height="240"
-                                Margin="0,8,0,0"
+                                Margin="{StaticResource Pad.XS.Top}"
                                 Series="{Binding ResolutionSeries}"
                                 Labels="{Binding ResolutionLabels}"
                                 TooltipLabels="{Binding ResolutionRanges}"
                                 ValueFormat="0"
                                 Unit="resoluciones"
-                                AxisBrush="{DynamicResource TextFillColorSecondaryBrush}"
-                                GridBrush="{DynamicResource TextFillColorTertiaryBrush}"
+                                AxisBrush="{DynamicResource Brush.TextMuted}"
+                                GridBrush="{DynamicResource Brush.Line}"
                                 Visibility="{Binding HasResolutions, Converter={StaticResource BoolToVisibility}}" />
 
-                            <TextBlock Style="{StaticResource EmptyNote}"
-                                       Text="— · aún no hay resoluciones en este periodo."
-                                       Visibility="{Binding HasResolutions, Converter={StaticResource InverseBoolToVisibility}}" />
+                            <c:EmptyState
+                                Message="Aún no hay resoluciones en este periodo."
+                                Visibility="{Binding HasResolutions, Converter={StaticResource InverseBoolToVisibility}}" />
                         </StackPanel>
-                    </ui:Card>
+                    </Border>
 
                     <!-- ============ Gráfica 3: cobertura por aplicación ============ -->
-                    <ui:Card Style="{StaticResource Block}">
+                    <Border Style="{StaticResource Block}">
                         <StackPanel>
-                            <TextBlock Text="Cobertura por aplicación" Style="{StaticResource BlockTitle}" />
-                            <TextBlock Style="{StaticResource BlockHint}"
+                            <TextBlock Text="Cobertura por aplicación" Style="{StaticResource Text.Lead}"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Style="{StaticResource Text.Small}"
                                        Text="Qué parte del inventario del ciclo vigente está auditada. Pulsa un rosco para abrir ese inventario." />
 
-                            <ItemsControl ItemsSource="{Binding Coverage}" Margin="0,14,0,0"
+                            <ItemsControl ItemsSource="{Binding Coverage}" Margin="{StaticResource Pad.M.Top}"
                                           Visibility="{Binding HasCoverage, Converter={StaticResource BoolToVisibility}}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -393,11 +402,8 @@
                                         <Button
                                             Command="{Binding DataContext.OpenInventoryCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                             CommandParameter="{Binding}"
-                                            Background="Transparent"
-                                            BorderThickness="0"
-                                            Padding="10,6"
-                                            Margin="0,0,10,10"
-                                            Cursor="Hand"
+                                            Style="{StaticResource Button.Ghost}"
+                                            Margin="{StaticResource Pad.BarItem}"
                                             ToolTip="{Binding Detail}">
                                             <StackPanel>
                                                 <Grid Width="{Binding DataContext.DonutSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
@@ -405,12 +411,16 @@
                                                       HorizontalAlignment="Center">
                                                     <controls:DonutRing Segments="{Binding Segments}" RingThickness="14" />
                                                     <TextBlock Text="{Binding PctText}"
-                                                               FontSize="20" FontWeight="Bold"
+                                                               Style="{StaticResource Text.H3}"
+                                                               Foreground="{DynamicResource Brush.Text}"
                                                                HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                 </Grid>
-                                                <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"
-                                                           HorizontalAlignment="Center" Margin="0,8,0,0" />
-                                                <TextBlock Text="{Binding CycleLabel}" FontSize="11" Opacity="0.7"
+                                                <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Small}"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource Brush.Text}"
+                                                           HorizontalAlignment="Center"
+                                                           Margin="{StaticResource Pad.XS.Top}" />
+                                                <TextBlock Text="{Binding CycleLabel}" Style="{StaticResource Text.Meta}"
                                                            HorizontalAlignment="Center" />
                                             </StackPanel>
                                         </Button>
@@ -418,30 +428,31 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <TextBlock Style="{StaticResource EmptyNote}"
-                                       Text="— · se activará cuando haya un inventario del ciclo vigente."
-                                       Visibility="{Binding HasCoverage, Converter={StaticResource InverseBoolToVisibility}}" />
+                            <c:EmptyState
+                                Message="Se activará cuando haya un inventario del ciclo vigente."
+                                Visibility="{Binding HasCoverage, Converter={StaticResource InverseBoolToVisibility}}" />
                         </StackPanel>
-                    </ui:Card>
+                    </Border>
 
                     <!-- ============ Gráfica 3b: severidad por aplicación ============ -->
                     <!-- Va JUSTO debajo de cobertura y con el mismo lenguaje de roscos: una dice
                          cuánto se ha mirado, la otra qué se encontró. Y es la única gráfica del
                          panel que usa los colores de severidad, porque es la única donde la
                          paleta semántica ES el dato (F5.9 §2, D-316). -->
-                    <ui:Card Style="{StaticResource Block}">
+                    <Border Style="{StaticResource Block}">
                         <StackPanel>
-                            <TextBlock Text="Severidad por aplicación" Style="{StaticResource BlockTitle}" />
+                            <TextBlock Text="Severidad por aplicación" Style="{StaticResource Text.Lead}"
+                                       FontWeight="SemiBold" />
                             <!-- El subtítulo dice que el rango temporal NO manda aquí. Sin esa
                                  frase, cambiar el periodo y ver los mismos números se lee como un
                                  fallo del programa en vez de como lo que es. -->
-                            <TextBlock Style="{StaticResource BlockHint}"
+                            <TextBlock Style="{StaticResource Text.Small}"
                                        Text="Cómo se reparte la deuda viva de cada aplicación — hallazgos activos a día de hoy, sin recortar por el periodo. Pulsa un tramo para ver esos hallazgos." />
 
                             <!-- Una leyenda para la fila entera, no una por rosco. -->
                             <ItemsControl ItemsSource="{Binding SeverityLegend}"
                                           ItemTemplate="{StaticResource LegendEntry}"
-                                          Margin="0,12,0,0"
+                                          Margin="{StaticResource Pad.XS.Top}"
                                           Visibility="{Binding HasSeverity, Converter={StaticResource BoolToVisibility}}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -450,7 +461,7 @@
                                 </ItemsControl.ItemsPanel>
                             </ItemsControl>
 
-                            <ItemsControl ItemsSource="{Binding SeverityCards}" Margin="0,12,0,0"
+                            <ItemsControl ItemsSource="{Binding SeverityCards}" Margin="{StaticResource Pad.S.Top}"
                                           Visibility="{Binding HasSeverity, Converter={StaticResource BoolToVisibility}}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -466,11 +477,8 @@
                                         <Button
                                             Command="{Binding DataContext.OpenAppFindingsCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                             CommandParameter="{Binding}"
-                                            Background="Transparent"
-                                            BorderThickness="0"
-                                            Padding="10,6"
-                                            Margin="0,0,10,10"
-                                            Cursor="Hand"
+                                            Style="{StaticResource Button.Ghost}"
+                                            Margin="{StaticResource Pad.BarItem}"
                                             ToolTip="{Binding Detail}">
                                             <StackPanel>
                                                 <Grid Width="{Binding DataContext.DonutSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
@@ -480,15 +488,19 @@
                                                         Segments="{Binding Segments}"
                                                         RingThickness="14"
                                                         SegmentGap="3"
-                                                        EmptyBrush="{DynamicResource ControlFillColorSecondaryBrush}"
+                                                        EmptyBrush="{DynamicResource Brush.Surface2}"
                                                         SegmentCommand="{Binding DataContext.OpenSeverityCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" />
                                                     <TextBlock Text="{Binding TotalText}"
-                                                               FontSize="20" FontWeight="Bold"
+                                                               Style="{StaticResource Text.H3}"
+                                                               Foreground="{DynamicResource Brush.Text}"
                                                                HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                 </Grid>
-                                                <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"
-                                                           HorizontalAlignment="Center" Margin="0,8,0,0" />
-                                                <TextBlock Text="0 activos" FontSize="11" Opacity="0.7"
+                                                <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Small}"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource Brush.Text}"
+                                                           HorizontalAlignment="Center"
+                                                           Margin="{StaticResource Pad.XS.Top}" />
+                                                <TextBlock Text="0 activos" Style="{StaticResource Text.Meta}"
                                                            HorizontalAlignment="Center"
                                                            Visibility="{Binding HasData, Converter={StaticResource InverseBoolToVisibility}}" />
                                             </StackPanel>
@@ -497,22 +509,23 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <TextBlock Style="{StaticResource EmptyNote}"
-                                       Text="— · se activará cuando haya alguna aplicación dada de alta."
-                                       Visibility="{Binding HasSeverity, Converter={StaticResource InverseBoolToVisibility}}" />
+                            <c:EmptyState
+                                Message="Se activará cuando haya alguna aplicación dada de alta."
+                                Visibility="{Binding HasSeverity, Converter={StaticResource InverseBoolToVisibility}}" />
                         </StackPanel>
-                    </ui:Card>
+                    </Border>
 
                     <!-- ============ Gráfica 4: flujo de hallazgos ============ -->
-                    <ui:Card Style="{StaticResource Block}">
+                    <Border Style="{StaticResource Block}">
                         <StackPanel>
-                            <TextBlock Text="Flujo de hallazgos" Style="{StaticResource BlockTitle}" />
-                            <TextBlock Style="{StaticResource BlockHint}"
+                            <TextBlock Text="Flujo de hallazgos" Style="{StaticResource Text.Lead}"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Style="{StaticResource Text.Small}"
                                        Text="Lo que entra y lo que se cierra en cada tramo, y cuántos quedaban vivos al cerrarlo. Si la línea baja, la deuda baja." />
 
                             <ItemsControl ItemsSource="{Binding FlowLegend}"
                                           ItemTemplate="{StaticResource LegendEntry}"
-                                          Margin="0,12,0,0"
+                                          Margin="{StaticResource Pad.XS.Top}"
                                           Visibility="{Binding ShowFlowLegend, Converter={StaticResource BoolToVisibility}}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -523,32 +536,33 @@
 
                             <controls:ChartPlot
                                 Height="220"
-                                Margin="0,8,0,0"
+                                Margin="{StaticResource Pad.XS.Top}"
                                 Series="{Binding FlowSeries}"
                                 Labels="{Binding FlowLabels}"
                                 TooltipLabels="{Binding FlowRanges}"
                                 ValueFormat="0"
                                 Unit="hallazgos"
-                                AxisBrush="{DynamicResource TextFillColorSecondaryBrush}"
-                                GridBrush="{DynamicResource TextFillColorTertiaryBrush}"
+                                AxisBrush="{DynamicResource Brush.TextMuted}"
+                                GridBrush="{DynamicResource Brush.Line}"
                                 Visibility="{Binding HasFlow, Converter={StaticResource BoolToVisibility}}" />
 
-                            <TextBlock Style="{StaticResource EmptyNote}"
-                                       Text="— · se activará cuando haya hallazgos detectados o resueltos en el periodo."
-                                       Visibility="{Binding HasFlow, Converter={StaticResource InverseBoolToVisibility}}" />
+                            <c:EmptyState
+                                Message="Se activará cuando haya hallazgos detectados o resueltos en el periodo."
+                                Visibility="{Binding HasFlow, Converter={StaticResource InverseBoolToVisibility}}" />
                         </StackPanel>
-                    </ui:Card>
+                    </Border>
 
                     <!-- ============ Gráfica 6: la cinta de ciclos (F17 §6) ============ -->
-                    <ui:Card Style="{StaticResource Block}">
+                    <Border Style="{StaticResource Block}">
                         <StackPanel>
-                            <TextBlock Text="Ciclos y temáticas" Style="{StaticResource BlockTitle}" />
-                            <TextBlock Style="{StaticResource BlockHint}"
+                            <TextBlock Text="Ciclos y temáticas" Style="{StaticResource Text.Lead}"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Style="{StaticResource Text.Small}"
                                        Text="Los ciclos de cada aplicación, en orden: un bloque por ciclo, coloreado por su temática, con sus fechas debajo y los huecos sin auditar contados. Pulsa un bloque para abrir el informe de su cierre; el ciclo abierto lleva al inventario." />
 
                             <ItemsControl ItemsSource="{Binding CycleLegend}"
                                           ItemTemplate="{StaticResource LegendEntry}"
-                                          Margin="0,12,0,0"
+                                          Margin="{StaticResource Pad.XS.Top}"
                                           Visibility="{Binding ShowCycleLegend, Converter={StaticResource BoolToVisibility}}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -561,46 +575,50 @@
                                  desplazamiento horizontal (jamás el de la página): la fila es la
                                  unidad indivisible, y nombre y banda no pueden moverse por separado. -->
                             <controls:CycleRibbon
-                                Margin="0,8,0,0"
+                                Margin="{StaticResource Pad.XS.Top}"
                                 Tracks="{Binding CycleTracks}"
                                 SpanCommand="{Binding OpenCycleCommand}"
-                                AxisBrush="{DynamicResource TextFillColorSecondaryBrush}"
-                                TextBrush="{DynamicResource TextFillColorPrimaryBrush}"
+                                AxisBrush="{DynamicResource Brush.TextMuted}"
+                                TextBrush="{DynamicResource Brush.Text}"
                                 Visibility="{Binding HasCycles, Converter={StaticResource BoolToVisibility}}" />
 
-                            <TextBlock Style="{StaticResource EmptyNote}"
-                                       Text="— · se activará cuando haya alguna aplicación registrada."
-                                       Visibility="{Binding HasCycles, Converter={StaticResource InverseBoolToVisibility}}" />
+                            <c:EmptyState
+                                Message="Se activará cuando haya alguna aplicación registrada."
+                                Visibility="{Binding HasCycles, Converter={StaticResource InverseBoolToVisibility}}" />
                         </StackPanel>
-                    </ui:Card>
+                    </Border>
 
                     <!-- ============ Gráfica 7: actividad de sesiones ============ -->
-                    <ui:Card Style="{StaticResource Block}">
+                    <Border Style="{StaticResource Block}" Padding="{StaticResource Pad.Zero}">
                         <StackPanel>
-                            <TextBlock Text="Actividad de sesiones" Style="{StaticResource BlockTitle}" />
-                            <TextBlock Style="{StaticResource BlockHint}"
-                                       Text="El registro de operaciones del periodo. Pulsa una línea para abrir su informe." />
+                            <StackPanel Margin="{StaticResource Pad.Card}">
+                                <TextBlock Text="Actividad de sesiones" Style="{StaticResource Text.Lead}"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Style="{StaticResource Text.Small}"
+                                           Text="El registro de operaciones del periodo. Pulsa una línea para abrir su informe." />
+                            </StackPanel>
 
-                            <Grid Margin="6,14,6,4" Visibility="{Binding HasSessions, Converter={StaticResource BoolToVisibility}}">
+                            <Grid Margin="{StaticResource Pad.Row}"
+                                  Visibility="{Binding HasSessions, Converter={StaticResource BoolToVisibility}}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="110" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="130" />
-                                    <ColumnDefinition Width="120" />
-                                    <ColumnDefinition Width="110" />
-                                    <ColumnDefinition Width="80" />
-                                    <ColumnDefinition Width="95" />
                                     <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="140" />
+                                    <ColumnDefinition Width="150" />
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="110" />
+                                    <ColumnDefinition Width="170" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Fecha" FontSize="11" Opacity="0.6" />
-                                <TextBlock Grid.Column="1" Text="Aplicación" FontSize="11" Opacity="0.6" />
-                                <TextBlock Grid.Column="2" Text="Tipo" FontSize="11" Opacity="0.6" />
+                                <TextBlock Grid.Column="0" Text="Fecha" Style="{StaticResource Table.Header}" />
+                                <TextBlock Grid.Column="1" Text="Aplicación" Style="{StaticResource Table.Header}" />
+                                <TextBlock Grid.Column="2" Text="Tipo" Style="{StaticResource Table.Header}" />
                                 <!-- F16 §C: con dos casas, saber cuál gastó es parte de leer la fila. -->
-                                <TextBlock Grid.Column="3" Text="Proveedor" FontSize="11" Opacity="0.6" />
-                                <TextBlock Grid.Column="4" Text="Quién" FontSize="11" Opacity="0.6" />
-                                <TextBlock Grid.Column="5" Text="Unidades" FontSize="11" Opacity="0.6" />
-                                <TextBlock Grid.Column="6" Text="Hallazgos" FontSize="11" Opacity="0.6" />
-                                <TextBlock Grid.Column="7" Text="Coste y tokens" FontSize="11" Opacity="0.6" />
+                                <TextBlock Grid.Column="3" Text="Proveedor" Style="{StaticResource Table.Header}" />
+                                <TextBlock Grid.Column="4" Text="Quién" Style="{StaticResource Table.Header}" />
+                                <TextBlock Grid.Column="5" Text="Unidades" Style="{StaticResource Table.Header}" />
+                                <TextBlock Grid.Column="6" Text="Hallazgos" Style="{StaticResource Table.Header}" />
+                                <TextBlock Grid.Column="7" Text="Coste y tokens" Style="{StaticResource Table.Header}" />
                             </Grid>
 
                             <ItemsControl ItemsSource="{Binding Sessions}"
@@ -614,40 +632,37 @@
                                             ToolTip="Abrir el informe de esta sesión">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="110" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="130" />
-                                                    <ColumnDefinition Width="120" />
-                                                    <ColumnDefinition Width="110" />
-                                                    <ColumnDefinition Width="80" />
-                                                    <ColumnDefinition Width="95" />
                                                     <ColumnDefinition Width="150" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="140" />
+                                                    <ColumnDefinition Width="140" />
+                                                    <ColumnDefinition Width="150" />
+                                                    <ColumnDefinition Width="100" />
+                                                    <ColumnDefinition Width="110" />
+                                                    <ColumnDefinition Width="170" />
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{Binding When}" FontSize="12" Opacity="0.85" />
+                                                <TextBlock Grid.Column="0" Text="{Binding When}" Style="{StaticResource Table.Cell}" />
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                                                     <Rectangle Width="9" Height="9" RadiusX="2" RadiusY="2"
                                                                Fill="{Binding AppBrush}" VerticalAlignment="Center" />
-                                                    <TextBlock Text="{Binding AppName}" FontSize="12" Margin="7,0,0,0" />
+                                                    <TextBlock Text="{Binding AppName}" Style="{StaticResource Table.Cell.Strong}"
+                                                               Margin="{StaticResource Pad.XS.Left}" />
                                                 </StackPanel>
-                                                <TextBlock Grid.Column="2" Text="{Binding Type}" FontSize="12" Opacity="0.85"
-                                                           TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Grid.Column="3" Text="{Binding Provider}" FontSize="12" Opacity="0.85"
-                                                           TextTrimming="CharacterEllipsis" ToolTip="{Binding Provider}" />
-                                                <TextBlock Grid.Column="4" Text="{Binding By}" FontSize="12" Opacity="0.85"
-                                                           TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Grid.Column="5" Text="{Binding Units}" FontSize="12" Opacity="0.85" />
-                                                <TextBlock Grid.Column="6" Text="{Binding Findings}" FontSize="12" Opacity="0.85" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Type}" Style="{StaticResource Table.Cell}" />
+                                                <TextBlock Grid.Column="3" Text="{Binding Provider}" Style="{StaticResource Table.Cell}"
+                                                           ToolTip="{Binding Provider}" />
+                                                <TextBlock Grid.Column="4" Text="{Binding By}" Style="{StaticResource Table.Cell}" />
+                                                <TextBlock Grid.Column="5" Text="{Binding Units}" Style="{StaticResource Table.Cell}" />
+                                                <TextBlock Grid.Column="6" Text="{Binding Findings}" Style="{StaticResource Table.Cell}" />
                                                 <!-- F16-RETOQUE §1 — el coste y, debajo, los tokens.
                                                      Una sesión que no se tarifa dice «suscripción» y
                                                      sus tokens son lo que deja comparar su peso con
-                                                     el de cualquier otra. El desglose por tipo y la
-                                                     frase entera, en los tooltips. -->
+                                                     el de cualquier otra. -->
                                                 <StackPanel Grid.Column="7">
-                                                    <TextBlock Text="{Binding Cost}" FontSize="12" Opacity="0.85"
-                                                               TextTrimming="CharacterEllipsis"
+                                                    <TextBlock Text="{Binding Cost}" Style="{StaticResource Table.Cell}"
                                                                ToolTip="{Binding CostDetail}" />
-                                                    <TextBlock Text="{Binding Tokens}" FontSize="10.5" Opacity="0.6"
-                                                               TextTrimming="CharacterEllipsis"
+                                                    <TextBlock Text="{Binding Tokens}" Style="{StaticResource Text.Meta}"
+                                                               TextWrapping="Wrap"
                                                                ToolTip="{Binding TokensDetail}"
                                                                Visibility="{Binding Tokens, Converter={StaticResource NotEmptyToVisibility}}" />
                                                 </StackPanel>
@@ -657,11 +672,12 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-                            <TextBlock Style="{StaticResource EmptyNote}"
-                                       Text="— · no hay sesiones registradas en este periodo."
-                                       Visibility="{Binding HasSessions, Converter={StaticResource InverseBoolToVisibility}}" />
+                            <c:EmptyState
+                                Glyph="{x:Static c:Icons.Session}"
+                                Message="No hay sesiones registradas en este periodo."
+                                Visibility="{Binding HasSessions, Converter={StaticResource InverseBoolToVisibility}}" />
                         </StackPanel>
-                    </ui:Card>
+                    </Border>
                 </StackPanel>
             </StackPanel>
         </ScrollViewer>

@@ -18,10 +18,17 @@ public sealed record RangeOption(MetricsRange Range, string Label);
 public sealed record LegendItem(string Name, Brush Brush, bool Dashed);
 
 /// <summary>
-/// Un chip de severidad del tile de activos (F5.9). Trae ya su fondo calculado: el mismo color de la
-/// severidad, atenuado, como en las tarjetas del portafolio.
+/// Un chip de severidad del tile de activos (F5.9).
+/// <para>
+/// <b>Lleva el NOMBRE de la severidad, no sus pinceles</b> (F26 Parte C). Traía el fondo y la
+/// tinta ya calculados, que es el defecto de D-971: un pincel resuelto no se entera de que el tema
+/// ha cambiado, y las cuatro pastillas de Métricas se quedaban con los colores del tema anterior.
+/// Con el nombre, la pastilla es la MISMA del Portafolio y de Hallazgos —los estilos
+/// <c>Pill.Sev</c> y <c>Pill.Sev.Text</c>, con sus <c>DataTrigger</c>— y no una cuarta forma de
+/// pintar una gravedad.
+/// </para>
 /// </summary>
-public sealed record MetricsSeverityChip(string Label, int Count, Brush Foreground, Brush Background);
+public sealed record MetricsSeverityChip(string Severity, string Label, int Count);
 
 /// <summary>Un rosco de cobertura con todo lo que la vista escribe alrededor.</summary>
 public sealed record CoverageCard(
@@ -985,9 +992,8 @@ public sealed partial class MetricsViewModel : ViewModelBase
     /// </summary>
     private static MetricsSeverityChip Chip(Severity severity, int count)
     {
-        string hex = SeverityPalette.Hex(severity);
         string label = severity == Severity.Critica ? "Crít" : SeverityNames.Display(severity);
-        return new MetricsSeverityChip(label, count, Brush(hex), Brush(hex, 0x38));
+        return new MetricsSeverityChip(severity.ToString(), label, count);
     }
 
     /// <summary>

@@ -1,4 +1,6 @@
+﻿using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using Markdig;
@@ -38,10 +40,53 @@ namespace Atalaya.App.Services;
 /// </summary>
 public static class MarkdownFlowDocument
 {
-    private const double BaseFontSize = 13.5;
+    /// <summary>
+    /// EL CUERPO DE UN INFORME ES EL CUERPO DEL SISTEMA (F26 Parte C, D-962): 15, no 13,5. Un
+    /// informe es lo más largo que se lee en Atalaya y estaba escrito en el tamaño más pequeño de
+    /// la aplicación anterior a F26.
+    /// <para>
+    /// El número es el de respaldo: con una <c>Application</c> viva, el tamaño sale del token
+    /// <c>FontSize.Body</c> por referencia de recurso, así que la escala se cambia en un sitio y
+    /// el informe la sigue. Sin aplicación —los tests— vale este.
+    /// </para>
+    /// </summary>
+    private const double BaseFontSize = 15;
 
-    /// <summary>Los tamaños de los seis niveles de encabezado, de H1 a H6.</summary>
-    private static readonly double[] HeadingSizes = { 23, 19, 16.5, 15, 14, 13.5 };
+    /// <summary>
+    /// Los seis niveles de encabezado, de H1 a H6, y sus tokens.
+    /// <para>
+    /// No arrancan en <c>FontSize.H1</c>: el título del informe ya lo enseña la cabecera del visor
+    /// y repetirlo a 30 px dentro del documento haría de la primera pantalla una portada. El H1 del
+    /// markdown entra por H2 y la escala baja desde ahí hasta el cuerpo.
+    /// </para>
+    /// </summary>
+    private static readonly (string Key, double Fallback)[] HeadingSizes =
+    {
+        ("FontSize.H2", 26),
+        ("FontSize.H3", 21),
+        ("FontSize.Lead", 17),
+        ("FontSize.Body", 15),
+        ("FontSize.Body", 15),
+        ("FontSize.Body", 15),
+    };
+
+    /// <summary>
+    /// LA MEDIDA DE LECTURA (F26 Parte C): el texto se para aquí aunque la ventana siga. Una línea
+    /// de 1.600 px no se puede seguir con la vista, y un informe es texto largo. El anexo técnico
+    /// —que es quien trae las tablas de nueve columnas— se pinta aparte y sin este tope.
+    /// </summary>
+    private const double ReadMaxWidth = 720;
+
+    /// <summary>
+    /// Las cuatro gravedades tal y como el informe las escribe: entre corchetes en el encabezado de
+    /// un hallazgo (<c>#### [Crítica] …</c>) y contadas en la línea de resumen (<c>3 Críticas ·
+    /// 27 Altas</c>). Son los DOS sitios donde el informe habla de gravedad, y los dos se pintan
+    /// con la pastilla del sistema en vez de con texto entre corchetes.
+    /// </summary>
+    private static readonly Regex SeverityMarks = new(
+        @"\[(?<b>Crítica|Alta|Media|Baja)\]"
+        + @"|(?<n>\d+)\s+(?<w>Críticas|Crítica|Altas|Alta|Medias|Media|Bajas|Baja)\b",
+        RegexOptions.Compiled);
 
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
         // Tablas de tubería: es lo que escriben nuestros informes. Nada de extensiones de más:
@@ -57,7 +102,13 @@ public static class MarkdownFlowDocument
     /// <param name="openLink">
     /// Qué hacer con un enlace del informe. Se llama con la URL tal cual; null lo deja inerte.
     /// </param>
-    public static FlowDocument Build(string? markdown, Action<string>? openLink = null)
+    /// <param name="measure">
+    /// La medida de lectura, en píxeles. <see cref="ReadMaxWidth"/> por defecto; <c>0</c> la quita,
+    /// que es lo que necesita el anexo técnico —sus tablas son de nueve columnas y en 720 px se
+    /// parten—.
+    /// </param>
+    public static FlowDocument Build(
+        string? markdown, Action<string>? openLink = null, double measure = ReadMaxWidth)
     {
         var doc = new FlowDocument
         {
@@ -70,6 +121,16 @@ public static class MarkdownFlowDocument
             ColumnWidth = double.PositiveInfinity,
             Background = Brushes.Transparent,
         };
+
+        // La MEDIDA DE LECTURA. `MaxPageWidth` para el texto donde deja de poder seguirse; el
+        // visor sigue ocupando el ancho que tenga, así que la columna queda a la izquierda de su
+        // panel y no flotando en medio de una tarjeta.
+        if (measure > 0)
+        {
+            doc.MaxPageWidth = measure;
+        }
+
+        Size(doc, "FontSize.Body", BaseFontSize);
 
         Theme(doc, TextElement.ForegroundProperty, "TextFillColorPrimaryBrush", Brushes.Black);
 
@@ -109,17 +170,37 @@ public static class MarkdownFlowDocument
     private static WpfBlock Heading(HeadingBlock heading, Action<string>? openLink)
     {
         int level = Math.Clamp(heading.Level, 1, HeadingSizes.Length);
+        (string key, double fallback) = HeadingSizes[level - 1];
         var paragraph = new Paragraph
         {
-            FontSize = HeadingSizes[level - 1],
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, level == 1 ? 0 : 18, 0, 6),
         };
 
-        Fill(paragraph.Inlines, heading.Inline, openLink);
+        Size(paragraph, key, fallback);
 
-        // Una raya bajo H1 y H2 separa las secciones largas sin necesidad de más espacio en
-        // blanco, que es lo que un informe de tres pantallas agradece.
+        // EL ENCABEZADO DE UN HALLAZGO abre con su gravedad entre corchetes: `#### [Alta] …`. Se
+        // resuelve AQUÍ y no en el reconocimiento de texto normal porque Markdig ve `[Alta]` como
+        // una referencia de enlace sin destino y la parte en tres trozos —«[», «Alta», «]»—, así
+        // que ningún literal contiene nunca la marca entera. Con el texto plano del encabezado
+        // delante sí se ve, y es el único sitio del informe donde este caso aparece.
+        if (Application.Current is not null && HeadingSeverity(heading) is var (severity, rest))
+        {
+            paragraph.Inlines.Add(Pill(severity, severity));
+            paragraph.Inlines.Add(new Run(" " + rest));
+            return Ruled(paragraph, level);
+        }
+
+        Fill(paragraph.Inlines, heading.Inline, openLink);
+        return Ruled(paragraph, level);
+    }
+
+    /// <summary>
+    /// Una raya bajo H1 y H2 separa las secciones largas sin necesidad de más espacio en blanco,
+    /// que es lo que un informe de tres pantallas agradece.
+    /// </summary>
+    private static WpfBlock Ruled(Paragraph paragraph, int level)
+    {
         if (level <= 2)
         {
             paragraph.BorderThickness = new Thickness(0, 0, 0, 1);
@@ -129,6 +210,45 @@ public static class MarkdownFlowDocument
         }
 
         return paragraph;
+    }
+
+    /// <summary>
+    /// La gravedad con la que abre el encabezado de un hallazgo, y lo que va detrás. Null cuando el
+    /// encabezado no empieza por una — que es el caso de todos los demás.
+    /// </summary>
+    internal static (string Severity, string Title)? HeadingSeverity(HeadingBlock heading)
+    {
+        string text = PlainText(heading.Inline).TrimStart();
+        Match m = Regex.Match(text, @"^\[(Crítica|Alta|Media|Baja)\]\s*");
+        return m.Success ? (m.Groups[1].Value, text[m.Length..]) : null;
+    }
+
+    /// <summary>El texto de un encabezado sin su formato. Solo se usa para leerlo, no para pintarlo.</summary>
+    private static string PlainText(ContainerInline? container)
+    {
+        if (container is null)
+        {
+            return string.Empty;
+        }
+
+        var sb = new System.Text.StringBuilder();
+        foreach (MdInline inline in container)
+        {
+            switch (inline)
+            {
+                case LiteralInline literal:
+                    sb.Append(literal.Content.ToString());
+                    break;
+                case CodeInline code:
+                    sb.Append(code.Content);
+                    break;
+                case ContainerInline nested:
+                    sb.Append(PlainText(nested));
+                    break;
+            }
+        }
+
+        return sb.ToString();
     }
 
     private static WpfBlock Paragraph(ParagraphBlock block, Action<string>? openLink)
@@ -370,7 +490,11 @@ public static class MarkdownFlowDocument
         switch (inline)
         {
             case LiteralInline literal:
-                yield return new Run(literal.Content.ToString());
+                foreach (WpfInline piece in Severities(literal.Content.ToString()))
+                {
+                    yield return piece;
+                }
+
                 break;
 
             case CodeInline code:
@@ -475,12 +599,137 @@ public static class MarkdownFlowDocument
         return hyperlink;
     }
 
+    // ---------- Gravedad ----------
+
+    /// <summary>
+    /// LAS GRAVEDADES SE PINTAN CON LA PASTILLA DEL SISTEMA (F26 Parte C).
+    /// <para>
+    /// El informe las escribe de dos maneras y solo de esas dos: entre corchetes al abrir un
+    /// hallazgo —<c>#### [Crítica] …</c>— y contadas en la línea de resumen de F23 —<c>Gravedad: 3
+    /// Críticas · 27 Altas</c>—. En un texto corrido las dos se leen igual que el resto de la
+    /// línea, que es justo lo que la gravedad no puede hacer: en Portafolio, en Hallazgos y en
+    /// Métricas se ve sin leer, y en el informe —que es donde se decide qué arreglar— no.
+    /// </para>
+    /// <para>
+    /// <b>El informe NO cambia</b> (F23, y es de lo que esta parte no toca): cambia cómo se pinta
+    /// lo que ya dice. Por eso el reconocimiento es de las dos formas literales y de ninguna más —
+    /// pillar «Baja» suelto convertiría en pastilla la palabra de cualquier frase que la use.
+    /// </para>
+    /// </summary>
+    private static IEnumerable<WpfInline> Severities(string text)
+    {
+        foreach ((string piece, string? severity) in SeveritySpans(text))
+        {
+            // Sin `Application` viva no se construye un control: un `TextBlock` exige hilo STA y
+            // los tests montan el documento en cualquier hilo. Lo que sale entonces es el texto
+            // tal cual, que es lo que ya salía antes — la pastilla es presentación, no contenido.
+            yield return severity is null || Application.Current is null
+                ? new Run(piece)
+                : Pill(severity, piece);
+        }
+    }
+
+    /// <summary>
+    /// El texto partido en trozos, cada uno con la gravedad que representa (o null si es texto
+    /// normal). Separado del dibujo para poder comprobar la REGLA —qué se reconoce como gravedad y
+    /// qué no— sin levantar una ventana.
+    /// </summary>
+    internal static IEnumerable<(string Text, string? Severity)> SeveritySpans(string text)
+    {
+        MatchCollection marks = SeverityMarks.Matches(text);
+        if (marks.Count == 0)
+        {
+            yield return (text, null);
+            yield break;
+        }
+
+        int at = 0;
+        foreach (Match m in marks)
+        {
+            if (m.Index > at)
+            {
+                yield return (text[at..m.Index], null);
+            }
+
+            yield return m.Groups["b"].Success
+                ? (m.Groups["b"].Value, m.Groups["b"].Value)
+                : ($"{m.Groups["n"].Value} {m.Groups["w"].Value}", m.Groups["w"].Value);
+
+            at = m.Index + m.Length;
+        }
+
+        if (at < text.Length)
+        {
+            yield return (text[at..], null);
+        }
+    }
+
+    /// <summary>
+    /// Una pastilla de gravedad dentro del texto. Los mismos pares que <c>Pill.Sev</c> en
+    /// <c>Styles.xaml</c> —fondo teñido y tinta de la severidad—, pedidos por clave para que sigan
+    /// al tema: un pincel resuelto aquí se quedaría con los colores del tema que hubiera al abrir
+    /// el informe (D-971).
+    /// </summary>
+    private static WpfInline Pill(string severity, string label)
+    {
+        (string soft, string ink) = severity switch
+        {
+            "Crítica" or "Críticas" => ("Brush.Danger.Soft", "Brush.Sev.Crit"),
+            "Alta" or "Altas" => ("Brush.Danger.Soft", "Brush.Sev.High"),
+            "Media" or "Medias" => ("Brush.Warning.Soft", "Brush.Sev.Med"),
+            _ => ("Brush.Primary.Soft", "Brush.Sev.Low"),
+        };
+
+        var caption = new TextBlock
+        {
+            Text = label,
+            FontWeight = FontWeights.SemiBold,
+            FontSize = 13,
+        };
+        Theme(caption, TextBlock.ForegroundProperty, ink, Brushes.Black);
+        Size(caption, "FontSize.Meta", 13);
+
+        var chip = new Border
+        {
+            Child = caption,
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(8, 1, 8, 1),
+            Margin = new Thickness(0, 0, 2, 0),
+        };
+        Theme(chip, Border.BackgroundProperty, soft, Brushes.Transparent);
+
+        return new InlineUIContainer(chip) { BaselineAlignment = BaselineAlignment.Center };
+    }
+
     // ---------- Tema ----------
 
     /// <summary>
     /// Enlaza una propiedad al pincel del tema. Sin <c>Application</c> viva —los tests— se pone el
     /// color de respaldo: el documento se puede construir y comprobar fuera de una ventana.
     /// </summary>
+    /// <summary>
+    /// Un tamaño de la escala (<c>Tokens.xaml</c>), por referencia de recurso. Es lo que hace que
+    /// el informe siga la escala del sistema en vez de llevar la suya escrita: hasta F26 §C tenía
+    /// siete números propios —13,5 de cuerpo y seis de encabezado— y por eso era el texto más
+    /// pequeño de la aplicación siendo el más largo. Sin <c>Application</c> viva vale el número.
+    /// </summary>
+    private static void Size(DependencyObject element, string key, double fallback)
+    {
+        if (Application.Current is not null && element is FrameworkContentElement content)
+        {
+            content.SetResourceReference(TextElement.FontSizeProperty, key);
+            return;
+        }
+
+        if (Application.Current is not null && element is FrameworkElement fe)
+        {
+            fe.SetResourceReference(TextBlock.FontSizeProperty, key);
+            return;
+        }
+
+        element.SetValue(TextElement.FontSizeProperty, fallback);
+    }
+
     private static void Theme(DependencyObject element, DependencyProperty property, string key, Brush fallback)
     {
         if (Application.Current is not null && element is FrameworkContentElement content)

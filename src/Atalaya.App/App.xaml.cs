@@ -352,7 +352,6 @@ public partial class App : Application
         // F15 — las tarifas por modelo: configuración de la ORGANIZACIÓN, en el hub, y editable
         // desde Métricas, que es donde se ve su consecuencia (mismo argumento que D-770).
         services.AddSingleton<ModelRatesService>();
-        services.AddSingleton<IModelRatesDialog, ModelRatesDialogHost>();
         services.AddSingleton<IThresholdsDialog, ThresholdsDialogHost>();
         // F17 §4: configurar el ciclo —su lupa y su juez preferido— y quién lo pregunta. El
         // servicio escribe en el hub (política compartida, D-769); el flujo monta el diálogo con

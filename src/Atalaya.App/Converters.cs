@@ -142,42 +142,6 @@ public sealed class NotEmptyToVisibilityConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
-/// <summary>Check mark / cross / dash for each row of the chained connection check (D2.3).</summary>
-public sealed class CheckStateToGlyphConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
-    {
-        CheckState.Ok => "✓",
-        CheckState.Failed => "✕",
-        CheckState.Running => "…",
-        // F14 (adenda): un extra disponible se marca con un signo NEUTRO. Ni ✓ —no está activado—
-        // ni ✕ —no falta nada—: es información, y el glifo tiene que leerse como tal.
-        CheckState.Optional => "+",
-        _ => "•",
-    };
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}
-
-/// <summary>Colour for the connection-check glyph: green ok, red failed, muted otherwise.</summary>
-public sealed class CheckStateToBrushConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
-    {
-        CheckState.Ok => new SolidColorBrush(Color.FromRgb(0x3F, 0xB9, 0x50)),
-        CheckState.Failed => new SolidColorBrush(Color.FromRgb(0xE0, 0x50, 0x50)),
-        CheckState.Running => new SolidColorBrush(Color.FromRgb(0xE0, 0xA0, 0x30)),
-        // Gris, como el estado en reposo: lo opcional no llama la atención. Pintarlo de ámbar lo
-        // convertiría en una tarea pendiente, que es justo lo que no es.
-        CheckState.Optional => new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
-        _ => new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
-    };
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}
-
 /// <summary>Formats a 0..1 progress as a whole percentage string.</summary>
 public sealed class ProgressToPercentConverter : IValueConverter
 {

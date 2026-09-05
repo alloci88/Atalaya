@@ -23,8 +23,6 @@
     <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
     <local:NotEmptyToVisibilityConverter x:Key="NotEmptyToVisibility" />
     <local:ProgressToPercentConverter x:Key="ProgressToPercent" />
-    <local:CheckStateToGlyphConverter x:Key="CheckStateToGlyph" />
-    <local:CheckStateToBrushConverter x:Key="CheckStateToBrush" />
     <local:ActivityKindToWeightConverter x:Key="ActivityKindToWeight" />
     <local:UnitRunStateToBrushConverter x:Key="UnitRunStateToBrush" />
     <local:SeverityToVisibilityConverter x:Key="SeverityToVisibility" />

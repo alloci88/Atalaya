@@ -3,195 +3,282 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:c="clr-namespace:Atalaya.App.Controls"
     xmlns:controls="clr-namespace:Atalaya.App.Controls">
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel MaxWidth="680" HorizontalAlignment="Left">
+    <!--
+        F26 Parte C — CUENTA.
 
-            <TextBlock Text="Cuenta" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,16" />
+        Era una columna estrecha pegada al borde izquierdo con la mitad de la pantalla vacía, y sus
+        estados de conexión se decían con un glifo suelto —«…», «•»— pintado por un converter con
+        los hexadecimales dentro, que es el defecto de D-971 en su forma pura: un pincel ya resuelto
+        no se entera de que el tema ha cambiado.
+
+        Ahora el contenido se CENTRA en su ancho (principio 2: el espacio se reparte, y repartirlo
+        en una columna de formulario es dejar aire a los dos lados) y cada estado se dice con las
+        tres cosas a la vez: icono, color y PALABRA.
+    -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="{StaticResource Form.MaxWidth}" HorizontalAlignment="Center"
+                    Margin="{StaticResource Pad.L.Bottom}">
+
+            <TextBlock Text="Cuenta" Style="{StaticResource Text.H2}" />
+            <TextBlock Style="{StaticResource Text.Small}" Margin="{StaticResource Pad.L.Bottom}"
+                       Text="Tu identidad de GitHub, lo que hace falta para auditar y el clon del hub en esta máquina." />
 
             <!-- ============ DESCONECTADO: bienvenida + un botón ============ -->
             <StackPanel Visibility="{Binding IsDisconnected, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock
-                    Text="Conecta tu cuenta de GitHub de la organización: es la que te da identidad, autoría y acceso al hub de auditorías, y hace falta audites con quien audites. Con ella entra además tu asiento de Copilot."
-                    TextWrapping="Wrap" Opacity="0.9" Margin="0,0,0,20" FontSize="15" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel c:Stack.Gap="{StaticResource Space.M}">
+                        <TextBlock Style="{StaticResource Text.Body}"
+                                   Text="Conecta tu cuenta de GitHub de la organización: es la que te da identidad, autoría y acceso al hub de auditorías, y hace falta audites con quien audites. Con ella entra además tu asiento de Copilot." />
 
-                <ui:Button
-                    Content="Conectar con GitHub"
-                    Command="{Binding ConnectCommand}"
-                    Appearance="Primary"
-                    FontSize="16"
-                    Padding="24,12"
-                    HorizontalAlignment="Left"
-                    IsEnabled="{Binding CanConnect}" />
+                        <Button Content="Conectar con GitHub"
+                                Command="{Binding ConnectCommand}"
+                                Style="{StaticResource Button.Primary}"
+                                HorizontalAlignment="Left"
+                                IsEnabled="{Binding CanConnect}" />
 
-                <TextBlock
-                    Text="{Binding ConnectBlockedMessage}"
-                    TextWrapping="Wrap"
-                    Foreground="#E0A030"
-                    Margin="0,14,0,0"
-                    Visibility="{Binding CanConnect, Converter={StaticResource InverseBoolToVisibility}}" />
+                        <Border Style="{StaticResource Notice.Warning}"
+                                Visibility="{Binding CanConnect, Converter={StaticResource InverseBoolToVisibility}}">
+                            <DockPanel>
+                                <Path DockPanel.Dock="Left" Style="{StaticResource Notice.Icon}"
+                                      Data="{x:Static c:Icons.Warning}"
+                                      Stroke="{DynamicResource Brush.Warning.Ink}" />
+                                <TextBlock Text="{Binding ConnectBlockedMessage}"
+                                           Style="{StaticResource Notice.Text}"
+                                           Foreground="{DynamicResource Brush.Warning.Ink}" />
+                            </DockPanel>
+                        </Border>
 
-                <TextBlock
-                    Text="No necesitas conocer la URL del hub, crear ningún token ni abrir una consola."
-                    Opacity="0.6" FontSize="12" Margin="0,16,0,0" TextWrapping="Wrap" />
+                        <TextBlock Style="{StaticResource Text.Small}"
+                                   Text="No necesitas conocer la URL del hub, crear ningún token ni abrir una consola." />
+                    </StackPanel>
+                </Border>
 
                 <!-- F6.4 · La firma de la bienvenida. Discreta y DEBAJO del bloque de conexión:
                      quien abre la aplicación por primera vez viene a conectarse, no a mirar un
                      logo. Si no hay asset, el hueco se colapsa solo. -->
-                <controls:BrandMark LogoHeight="24" Margin="0,34,0,0" />
+                <controls:BrandMark LogoHeight="24" Margin="{StaticResource Pad.L}"
+                                    HorizontalAlignment="Center" />
             </StackPanel>
 
             <!-- ============ AUTORIZANDO: el código en grande ============ -->
             <StackPanel Visibility="{Binding IsAuthorizing, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock Text="Introduce este código en GitHub" FontSize="15" Opacity="0.9" Margin="0,0,0,10" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel c:Stack.Gap="{StaticResource Space.M}">
+                        <TextBlock Text="Introduce este código en GitHub" Style="{StaticResource Text.Lead}" />
 
-                <Border Background="#22808080" CornerRadius="10" Padding="28,18" HorizontalAlignment="Left" Margin="0,0,0,14">
-                    <TextBlock
-                        Text="{Binding UserCode}"
-                        FontSize="46"
-                        FontWeight="Bold"
-                        FontFamily="Consolas"
-                        TextAlignment="Center" />
+                        <Border Background="{DynamicResource Brush.Surface2}"
+                                CornerRadius="{StaticResource Radius.L}"
+                                Padding="{StaticResource Pad.L}"
+                                HorizontalAlignment="Left">
+                            <TextBlock Text="{Binding UserCode}"
+                                       FontSize="{StaticResource FontSize.H1}"
+                                       FontWeight="Bold"
+                                       FontFamily="{StaticResource Font.Mono}"
+                                       Foreground="{DynamicResource Brush.Text}"
+                                       TextAlignment="Center" />
+                        </Border>
+
+                        <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
+                            <Button Content="Abrir github.com/login/device"
+                                    Command="{Binding OpenVerificationPageCommand}"
+                                    Style="{StaticResource Button.Primary}" />
+                            <Button Content="Copiar código" Command="{Binding CopyCodeCommand}"
+                                    Style="{StaticResource Button.Secondary}" />
+                            <Button Content="Cancelar" Command="{Binding CancelConnectCommand}"
+                                    Style="{StaticResource Button.Secondary}" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
+                            <ui:ProgressRing IsIndeterminate="True"
+                                             Width="{StaticResource Icon.Size}"
+                                             Height="{StaticResource Icon.Size}" />
+                            <TextBlock Text="Esperando autorización…" Style="{StaticResource Text.Body}"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Countdown}" Style="{StaticResource Text.Meta}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </StackPanel>
                 </Border>
-
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                    <ui:Button Content="Abrir github.com/login/device" Command="{Binding OpenVerificationPageCommand}"
-                               Appearance="Primary" Margin="0,0,8,0" />
-                    <ui:Button Content="Copiar código" Command="{Binding CopyCodeCommand}" Margin="0,0,8,0" />
-                    <ui:Button Content="Cancelar" Command="{Binding CancelConnectCommand}" />
-                </StackPanel>
-
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                    <ui:ProgressRing IsIndeterminate="True" Width="18" Height="18" Margin="0,0,10,0" />
-                    <TextBlock Text="Esperando autorización…" VerticalAlignment="Center" Opacity="0.85" />
-                    <TextBlock Text="{Binding Countdown}" VerticalAlignment="Center" Margin="14,0,0,0" Opacity="0.65" />
-                </StackPanel>
             </StackPanel>
 
-            <!-- ============ CONECTADO: perfil + comprobaciones ============ -->
-            <StackPanel Visibility="{Binding IsConnected, Converter={StaticResource BoolToVisibility}}">
-                <Border Background="#18808080" CornerRadius="10" Padding="16" Margin="0,0,0,18">
-                    <StackPanel Orientation="Horizontal">
-                        <Border Width="56" Height="56" CornerRadius="28" Margin="0,0,14,0">
+            <!-- ============ CONECTADO: identidad, estados, hub y acciones ============ -->
+            <StackPanel Visibility="{Binding IsConnected, Converter={StaticResource BoolToVisibility}}"
+                        c:Stack.Gap="{StaticResource Space.M}">
+
+                <!-- · La identidad · -->
+                <Border Style="{StaticResource Card}">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Left"
+                                Width="{StaticResource Avatar.Size}" Height="{StaticResource Avatar.Size}"
+                                CornerRadius="{StaticResource Radius.Pill}"
+                                Margin="{StaticResource Pad.M.Right}">
                             <Border.Background>
                                 <ImageBrush ImageSource="{Binding AvatarUrl}" Stretch="UniformToFill" />
                             </Border.Background>
                         </Border>
+
+                        <!-- F6.4 · La firma, junto a la organización a la que pertenece la cuenta.
+                             Es el único sitio de una vista de trabajo donde va, y va aquí porque es
+                             aquí donde se habla de la organización. -->
+                        <controls:BrandMark DockPanel.Dock="Right" LogoHeight="22"
+                                            VerticalAlignment="Center" />
+
                         <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="{Binding DisplayName}" FontSize="17" FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding Login}" Opacity="0.75" />
-                            <TextBlock Opacity="0.6" FontSize="12"
+                            <!-- Nombre y login en UNA línea con dos tamaños: los `Run` de un mismo
+                                 TextBlock sí comparten línea base, que es lo único que la comparte
+                                 en WPF (D-983 §9). -->
+                            <TextBlock TextTrimming="CharacterEllipsis">
+                                <Run Text="{Binding DisplayName, Mode=OneWay}"
+                                     FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold" />
+                                <Run Text="  " />
+                                <Run Text="{Binding Login, Mode=OneWay}"
+                                     FontSize="{StaticResource FontSize.Small}"
+                                     Foreground="{DynamicResource Brush.TextMuted}" />
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource Text.Meta}"
                                        Visibility="{Binding ShowOrganization, Converter={StaticResource BoolToVisibility}}">
                                 <Run Text="Organización:" /><Run Text=" " /><Run Text="{Binding OrganizationLogin, Mode=OneWay}" />
                             </TextBlock>
                         </StackPanel>
+                    </DockPanel>
+                </Border>
 
-                        <!-- F6.4 · La firma, junto a la organización a la que pertenece la cuenta.
-                             Es el único sitio de una vista de trabajo donde va, y va aquí porque
-                             es aquí donde se habla de la organización. -->
-                        <controls:BrandMark LogoHeight="22" Margin="20,0,0,0"
-                                            VerticalAlignment="Center" />
+                <Border Style="{StaticResource Notice.Warning}"
+                        Visibility="{Binding NeedsReconnect, Converter={StaticResource BoolToVisibility}}">
+                    <DockPanel>
+                        <Path DockPanel.Dock="Left" Style="{StaticResource Notice.Icon}"
+                              Data="{x:Static c:Icons.Warning}"
+                              Stroke="{DynamicResource Brush.Warning.Ink}" />
+                        <TextBlock Style="{StaticResource Notice.Text}"
+                                   Foreground="{DynamicResource Brush.Warning.Ink}"
+                                   Text="GitHub ha rechazado tus credenciales. Vuelve a conectar la cuenta para seguir sincronizando y auditando." />
+                    </DockPanel>
+                </Border>
+
+                <!-- · Estado de la conexión · -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="Estado de la conexión" Style="{StaticResource Text.Lead}"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Setting.Help}"
+                                   Text="Las tres primeras son de GitHub y no se sustituyen; debajo, un auditor por proveedor." />
+                        <ToggleButton x:Name="MasEstado" Style="{StaticResource Toggle.More}" />
+                        <TextBlock Style="{StaticResource Setting.More}"
+                                   Text="Sin las de GitHub no hay identidad, ni autoría, ni hub donde escribir. De los auditores basta con tener uno listo para poder auditar, y cuál se usa se elige en Ajustes → Proveedor y modelo."
+                                   Visibility="{Binding IsChecked, ElementName=MasEstado, Converter={StaticResource BoolToVisibility}}" />
+
+                        <!-- LA LISTA DE ESTADOS. Icono + color + palabra, los tres siempre: el
+                             color solo no se lee sin distinguirlo y el glifo solo no significa
+                             nada. El motivo de un fallo va en la línea de DEBAJO, con el mismo
+                             margen izquierdo que el título (D-983 §10). -->
+                        <ItemsControl ItemsSource="{Binding Checker.Steps}"
+                                      Margin="{StaticResource Pad.S.Top}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="{StaticResource Pad.XXS.V}"
+                                          Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibility}}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+
+                                        <Grid Grid.Row="0" Grid.Column="0"
+                                              Margin="{StaticResource Pad.S.Right}">
+                                            <Path Style="{StaticResource Check.Glyph}" />
+                                            <Grid Style="{StaticResource Check.Spinner}">
+                                                <ui:ProgressRing IsIndeterminate="True"
+                                                                 Width="{StaticResource Icon.Size}"
+                                                                 Height="{StaticResource Icon.Size}" />
+                                            </Grid>
+                                        </Grid>
+
+                                        <DockPanel Grid.Row="0" Grid.Column="1">
+                                            <TextBlock DockPanel.Dock="Right"
+                                                       Style="{StaticResource Check.Word}"
+                                                       Margin="{StaticResource Pad.S.Left}" />
+                                            <TextBlock Text="{Binding Title}"
+                                                       Style="{StaticResource Text.Default}"
+                                                       VerticalAlignment="Center"
+                                                       TextWrapping="Wrap" />
+                                        </DockPanel>
+
+                                        <TextBlock Grid.Row="1" Grid.Column="1"
+                                                   Text="{Binding Detail}"
+                                                   Style="{StaticResource Text.Small}"
+                                                   Visibility="{Binding Detail, Converter={StaticResource NotEmptyToVisibility}}" />
+
+                                        <Button Grid.Row="2" Grid.Column="1"
+                                                Content="Ver la documentación de GitHub"
+                                                Style="{StaticResource Button.Link}"
+                                                Command="{Binding DataContext.OpenHelpCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding HelpUrl}"
+                                                HorizontalAlignment="Left"
+                                                Visibility="{Binding HelpUrl, Converter={StaticResource NotEmptyToVisibility}}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </Border>
 
-                <Border Background="#33E0A030" CornerRadius="8" Padding="12,8" Margin="0,0,0,14"
-                        Visibility="{Binding NeedsReconnect, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock TextWrapping="Wrap"
-                               Text="GitHub ha rechazado tus credenciales. Vuelve a conectar la cuenta para seguir sincronizando y auditando." />
-                </Border>
-
-                <TextBlock Text="Estado de la conexión" FontWeight="SemiBold" Margin="0,0,0,8" />
-                <!-- F14 — la pantalla no puede sugerir que elegir otro auditor sustituya a GitHub:
-                     identidad, autoría y hub lo necesitan siempre. Las tres primeras filas son de
-                     GitHub; las de abajo, una por proveedor de auditoría. -->
-                <TextBlock
-                    Text="Las tres primeras son de GitHub y no se sustituyen: sin ellas no hay identidad, ni autoría, ni hub donde escribir. Debajo, un auditor por proveedor: basta con tener uno listo para poder auditar, y cuál se usa se elige en Ajustes."
-                    TextWrapping="Wrap" Opacity="0.75" FontSize="12" Margin="0,0,0,10" />
-                <ItemsControl ItemsSource="{Binding Checker.Steps}" Margin="0,0,0,14">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Margin="0,0,0,8"
-                                        Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibility}}">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock
-                                        Text="{Binding State, Converter={StaticResource CheckStateToGlyph}}"
-                                        Foreground="{Binding State, Converter={StaticResource CheckStateToBrush}}"
-                                        FontWeight="Bold" Width="22" />
-                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
-                                </StackPanel>
-                                <TextBlock
-                                    Text="{Binding Detail}"
-                                    TextWrapping="Wrap"
-                                    Opacity="0.75"
-                                    FontSize="12"
-                                    Margin="22,2,0,0"
-                                    Visibility="{Binding Detail, Converter={StaticResource NotEmptyToVisibility}}" />
-                                <ui:HyperlinkButton
-                                    Content="Ver la documentación de GitHub"
-                                    NavigateUri="{Binding HelpUrl}"
-                                    Margin="18,0,0,0"
-                                    Padding="4,2"
-                                    FontSize="12"
-                                    Visibility="{Binding HelpUrl, Converter={StaticResource NotEmptyToVisibility}}" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-
-                <TextBlock Text="Hub local" FontWeight="SemiBold" Margin="0,0,0,6" />
-                <Border Background="#18808080" CornerRadius="8" Padding="12,10" Margin="0,0,0,16">
+                <!-- · El hub local · -->
+                <Border Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock FontSize="12" Opacity="0.75" Margin="0,0,0,2">
+                        <TextBlock Text="Hub local" Style="{StaticResource Text.Lead}" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Text.Small}" Margin="{StaticResource Pad.XS.Bottom}">
                             <Run Text="Estado:" /><Run Text=" " /><Run Text="{Binding SyncState, Mode=OneWay}" />
                             <Run Text=" · última sincronización:" /><Run Text=" " /><Run Text="{Binding LastSync, Mode=OneWay}" />
                         </TextBlock>
                         <TextBox
                             Text="{Binding HubClonePath, Mode=OneWay}"
                             IsReadOnly="True"
-                            BorderThickness="0"
+                            BorderThickness="{StaticResource Pad.Zero}"
                             Background="Transparent"
-                            Padding="0"
-                            FontFamily="Consolas"
-                            FontSize="12"
-                            Opacity="0.8"
+                            Padding="{StaticResource Pad.Zero}"
+                            FontFamily="{StaticResource Font.Mono}"
+                            FontSize="{StaticResource FontSize.Meta}"
+                            Foreground="{DynamicResource Brush.TextFaint}"
                             ToolTip="Ruta del clon local del hub en esta máquina" />
                         <TextBlock
                             Text="{Binding SyncSummary}"
-                            TextWrapping="Wrap"
-                            FontSize="12"
-                            Opacity="0.75"
-                            Margin="0,6,0,0"
+                            Style="{StaticResource Text.Small}"
+                            Margin="{StaticResource Pad.XS.Top}"
                             ToolTip="Qué trajo el pull y qué commits locales se publicaron"
                             Visibility="{Binding SyncSummary, Converter={StaticResource NotEmptyToVisibility}}" />
                         <TextBlock
                             Text="{Binding SyncError}"
-                            TextWrapping="Wrap"
-                            FontSize="12"
-                            Foreground="#E0A030"
-                            Margin="0,6,0,0"
+                            Style="{StaticResource Text.Small}"
+                            Foreground="{DynamicResource Brush.Warning.Ink}"
+                            Margin="{StaticResource Pad.XS.Top}"
                             Visibility="{Binding SyncError, Converter={StaticResource NotEmptyToVisibility}}" />
                         <TextBlock
                             Text="{Binding TlsNotice}"
-                            TextWrapping="Wrap"
-                            FontSize="12"
-                            Opacity="0.7"
-                            Margin="0,6,0,0"
+                            Style="{StaticResource Text.Small}"
+                            Margin="{StaticResource Pad.XS.Top}"
                             Visibility="{Binding TlsNotice, Converter={StaticResource NotEmptyToVisibility}}" />
                         <TextBlock
                             Text="{Binding MigrationNotice}"
-                            TextWrapping="Wrap"
-                            FontSize="12"
-                            Opacity="0.7"
-                            Margin="0,6,0,0"
+                            Style="{StaticResource Text.Small}"
+                            Margin="{StaticResource Pad.XS.Top}"
                             Visibility="{Binding MigrationNotice, Converter={StaticResource NotEmptyToVisibility}}" />
                     </StackPanel>
                 </Border>
 
-                <StackPanel Orientation="Horizontal">
-                    <ui:Button Content="Comprobar conexión" Command="{Binding CheckConnectionCommand}"
-                               Appearance="Primary" Margin="0,0,8,0" />
-                    <ui:Button Content="Sincronizar ahora" Command="{Binding SyncNowCommand}" Margin="0,0,8,0" />
-                    <ui:Button Content="Desconectar" Command="{Binding DisconnectCommand}" />
+                <!-- · La botonera. UN primario, y el destructivo el último y perfilado (D-949). · -->
+                <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
+                    <Button Content="Comprobar conexión" Command="{Binding CheckConnectionCommand}"
+                            Style="{StaticResource Button.Primary}" />
+                    <Button Content="Sincronizar ahora" Command="{Binding SyncNowCommand}"
+                            Style="{StaticResource Button.Secondary}" />
+                    <Button Content="Desconectar" Command="{Binding DisconnectCommand}"
+                            Style="{StaticResource Button.Danger}" />
                 </StackPanel>
             </StackPanel>
 
@@ -203,11 +290,14 @@
                 caduca a los 8 segundos se lo llevaría justo cuando hace falta. Por eso vive aquí,
                 junto a su anillo de progreso, y no en la cola de avisos.
             -->
-            <StackPanel Orientation="Horizontal" Margin="0,16,0,0"
+            <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.M.Top}"
+                        c:Stack.Gap="{StaticResource Space.S}"
                         Visibility="{Binding StatusMessage, Converter={StaticResource NotEmptyToVisibility}}">
-                <ui:ProgressRing IsIndeterminate="True" Width="16" Height="16" Margin="0,0,10,0"
+                <ui:ProgressRing IsIndeterminate="True"
+                                 Width="{StaticResource Icon.Size}" Height="{StaticResource Icon.Size}"
                                  Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}" />
-                <TextBlock Text="{Binding StatusMessage}" TextWrapping="Wrap" Opacity="0.9" MaxWidth="620" />
+                <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource Text.Body}"
+                           VerticalAlignment="Center" />
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

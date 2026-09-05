@@ -1,28 +1,41 @@
-<UserControl
+﻿<UserControl
     x:Class="Atalaya.App.Views.ReportsView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:c="clr-namespace:Atalaya.App.Controls">
+    <!--
+        F26 Parte C — INFORMES.
+
+        Lo que se veía: una tabla de filas de 35 px con las cabeceras a 11 px y opacidad 0,6 —o
+        sea, ilegibles—, la columna «Usuario» recortando nombres («Daniel Rodríguez d…»), una barra
+        de filtros de cinco desplegables que ponían «Todas · Todos · Todos · Todo» sin decir cuál
+        era cuál, y un estado vacío que era una frase centrada sin salida.
+
+        Y el informe abierto: 13,5 px de cuerpo a todo lo ancho de un monitor de 27", con el anexo
+        técnico —que el propio informe dice que no hace falta para actuar— ocupando media pantalla
+        justo debajo del resumen.
+    -->
 
     <UserControl.Resources>
 
-        <!-- La fila entera es el enlace al informe, igual que en V3: sin botón «Ver», hover sutil.
-             Y con BasedOn implícito NO: quien redefine la plantilla se queda con el color, y un
-             Style de Button sin Foreground explícito cae al negro de serie de WPF, invisible sobre
-             el tema oscuro (F5.6 §1). -->
-        <Style x:Key="ReportRowLink" TargetType="Button">
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <!-- La fila entera es el enlace al informe, igual que en Hallazgos: sin botón «Ver». Hereda
+             del secundario del sistema para no volver a quedarse con el negro de serie de WPF
+             (F5.6 §1), y su alto es el de una fila de tabla (`Table.Row`: 40 px). -->
+        <Style x:Key="ReportRowLink" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="{StaticResource Pad.Zero}" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Padding" Value="{StaticResource Pad.Row}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Chrome"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="6"
+                                BorderBrush="{DynamicResource Brush.Line}"
+                                BorderThickness="{StaticResource Border.Bottom}"
+                                MinHeight="40"
                                 Padding="{TemplateBinding Padding}"
                                 SnapsToDevicePixels="True">
                             <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center" />
@@ -30,11 +43,11 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Chrome" Property="Background"
-                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                        Value="{DynamicResource Brush.Surface2}" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="Chrome" Property="Background"
-                                        Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                        Value="{DynamicResource Brush.Surface2}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -44,17 +57,12 @@
 
         <!-- La insignia de tipo. Los tonos salen del TEMA, no de una paleta nueva: los colores
              de severidad están reservados (D-316) y un informe no habla de gravedad. -->
-        <Style x:Key="KindBadge" TargetType="Border">
-            <Setter Property="CornerRadius" Value="9" />
-            <Setter Property="Padding" Value="8,1" />
-            <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-            <Setter Property="VerticalAlignment" Value="Center" />
+        <Style x:Key="KindBadge" TargetType="Border" BasedOn="{StaticResource Pill}">
+            <Setter Property="BorderThickness" Value="{StaticResource Border.Hairline}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding KindLabel}" Value="Consolidado">
-                    <Setter Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
-                    <Setter Property="BorderBrush" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary.Ink}" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding KindLabel}" Value="Operaciones">
                     <Setter Property="Background" Value="Transparent" />
@@ -63,22 +71,9 @@
                      pintara como una sesión, la lista diría que son lo mismo. -->
                 <DataTrigger Binding="{Binding KindLabel}" Value="Verificación">
                     <Setter Property="Background" Value="Transparent" />
-                    <Setter Property="BorderBrush" Value="{DynamicResource AccentTextFillColorSecondaryBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary.Ink}" />
                 </DataTrigger>
             </Style.Triggers>
-        </Style>
-
-        <Style x:Key="ColumnHead" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="Opacity" Value="0.6" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-        </Style>
-
-        <Style x:Key="Cell" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
         </Style>
     </UserControl.Resources>
 
@@ -96,108 +91,115 @@
             </Grid.RowDefinitions>
 
             <!-- · Cabecera · -->
-            <Grid Grid.Row="0" Margin="0,0,0,14">
+            <DockPanel Grid.Row="0" Margin="{StaticResource Pad.S.Bottom}">
+                <TextBlock DockPanel.Dock="Right" Text="{Binding ResultsSummary}"
+                           Style="{StaticResource Text.Small}"
+                           VerticalAlignment="Bottom" />
                 <StackPanel>
-                    <TextBlock Text="Informes" FontSize="24" FontWeight="SemiBold" />
+                    <TextBlock Text="Informes" Style="{StaticResource Text.H2}" />
                     <TextBlock Text="Todo lo que las auditorías han dejado escrito. Pulsa uno para leerlo aquí."
-                               FontSize="12" Opacity="0.7" Margin="0,2,0,0" />
+                               Style="{StaticResource Text.Small}" />
                 </StackPanel>
-                <TextBlock Text="{Binding ResultsSummary}"
-                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,0,2"
-                           FontSize="12.5"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-            </Grid>
+            </DockPanel>
 
-            <!-- · Barra de filtros: los mismos patrones que Hallazgos · -->
-            <Border Grid.Row="1"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,0,0,12">
+            <!-- · Barra de filtros: los mismos patrones que Hallazgos. Cada filtro dice QUÉ filtra
+                 (D-973) y la separación la pone la barra, una y la misma (D-984). · -->
+            <Border Grid.Row="1" Style="{StaticResource Card}"
+                    Padding="{StaticResource Pad.XS}"
+                    CornerRadius="{StaticResource Radius.M}"
+                    Margin="{StaticResource Pad.S.Bottom}">
                 <DockPanel LastChildFill="True">
-                    <ui:Button DockPanel.Dock="Right"
-                               Content="Limpiar filtros"
-                               Command="{Binding ClearFiltersCommand}"
-                               Appearance="Secondary"
-                               Padding="10,4" Margin="12,0,0,0" VerticalAlignment="Center"
-                               Visibility="{Binding HasActiveFilters, Converter={StaticResource BoolToVisibility}}" />
+                    <Button DockPanel.Dock="Right"
+                            Content="Limpiar filtros"
+                            Command="{Binding ClearFiltersCommand}"
+                            Style="{StaticResource Button.Secondary}"
+                            Margin="{StaticResource Pad.BarItem}"
+                            VerticalAlignment="Center"
+                            Visibility="{Binding HasActiveFilters, Converter={StaticResource BoolToVisibility}}" />
 
                     <WrapPanel Orientation="Horizontal">
                         <ui:TextBox PlaceholderText="Buscar…"
                                     ToolTip="Busca en el CONTENIDO del informe además de en su título, su aplicación y quién lo firmó."
                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged, Delay=250}"
-                                    Width="210" Margin="0,3,8,3" VerticalAlignment="Center" />
+                                    Width="220" Margin="{StaticResource Pad.BarItem}" VerticalAlignment="Center" />
 
+                        <TextBlock Text="Aplicación:" Style="{StaticResource Text.Small}"
+                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
                         <ComboBox ItemsSource="{Binding AppOptions}"
                                   SelectedItem="{Binding SelectedApp}"
                                   DisplayMemberPath="Label"
-                                  Width="170" Margin="0,3,8,3" VerticalAlignment="Center"
-                                  ToolTip="Aplicación" />
+                                  Width="180" Margin="{StaticResource Pad.BarItem}" VerticalAlignment="Center" />
 
+                        <TextBlock Text="Tipo:" Style="{StaticResource Text.Small}"
+                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
                         <ComboBox ItemsSource="{Binding KindOptions}"
                                   SelectedItem="{Binding SelectedKind}"
                                   DisplayMemberPath="Label"
-                                  Width="140" Margin="0,3,8,3" VerticalAlignment="Center"
-                                  ToolTip="Tipo de informe" />
+                                  Width="150" Margin="{StaticResource Pad.BarItem}" VerticalAlignment="Center" />
 
+                        <TextBlock Text="Usuario:" Style="{StaticResource Text.Small}"
+                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
                         <ComboBox ItemsSource="{Binding AuthorOptions}"
                                   SelectedItem="{Binding SelectedAuthor}"
                                   DisplayMemberPath="Label"
-                                  Width="150" Margin="0,3,8,3" VerticalAlignment="Center"
-                                  ToolTip="Quién lo generó" />
+                                  Width="170" Margin="{StaticResource Pad.BarItem}" VerticalAlignment="Center" />
 
+                        <TextBlock Text="Periodo:" Style="{StaticResource Text.Small}"
+                                   VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
                         <ComboBox ItemsSource="{Binding RangeOptions}"
                                   SelectedItem="{Binding SelectedRange}"
                                   DisplayMemberPath="Label"
-                                  Width="150" Margin="0,3,8,3" VerticalAlignment="Center"
-                                  IsEnabled="{Binding UsePresetRange}"
-                                  ToolTip="Ventana temporal" />
+                                  Width="160" Margin="{StaticResource Pad.BarItem}" VerticalAlignment="Center"
+                                  IsEnabled="{Binding UsePresetRange}" />
 
                         <CheckBox Content="Rango a mano"
                                   IsChecked="{Binding UseCustomRange}"
-                                  VerticalAlignment="Center" Margin="4,3,8,3"
+                                  VerticalAlignment="Center" Margin="{StaticResource Pad.BarItem}"
+                                  Padding="{StaticResource Pad.Zero}" MinWidth="0"
                                   ToolTip="Elige tú las dos fechas en vez de usar un preset." />
 
                         <DatePicker SelectedDate="{Binding CustomFrom}"
-                                    Width="130" Margin="0,3,6,3" VerticalAlignment="Center"
+                                    Width="140" Margin="{StaticResource Pad.BarItem}" VerticalAlignment="Center"
                                     ToolTip="Desde"
                                     Visibility="{Binding UseCustomRange, Converter={StaticResource BoolToVisibility}}" />
                         <DatePicker SelectedDate="{Binding CustomTo}"
-                                    Width="130" Margin="0,3,0,3" VerticalAlignment="Center"
+                                    Width="140" Margin="{StaticResource Pad.BarItem}" VerticalAlignment="Center"
                                     ToolTip="Hasta (incluido)"
                                     Visibility="{Binding UseCustomRange, Converter={StaticResource BoolToVisibility}}" />
                     </WrapPanel>
                 </DockPanel>
             </Border>
 
-            <!-- · Cabecera de columnas · -->
-            <Grid Grid.Row="2" Margin="10,0,24,6"
+            <!-- · Cabecera de columnas. Mismo relleno que la fila, para que cada rótulo caiga
+                 sobre su columna: `Pad.Row` en los dos y ni un número suelto. · -->
+            <Grid Grid.Row="2" Margin="{StaticResource Pad.Row}"
                   Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="155" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="115" />
-                    <ColumnDefinition Width="125" />
-                    <ColumnDefinition Width="115" />
-                    <ColumnDefinition Width="105" />
-                    <ColumnDefinition Width="100" />
-                    <ColumnDefinition Width="110" />
+                    <ColumnDefinition Width="1.5*" MinWidth="150" />
+                    <ColumnDefinition Width="1.4*" MinWidth="130" />
+                    <ColumnDefinition Width="1.1*" MinWidth="110" />
+                    <ColumnDefinition Width="1.3*" MinWidth="120" />
+                    <ColumnDefinition Width="1.7*" MinWidth="150" />
+                    <ColumnDefinition Width="1*" MinWidth="95" />
+                    <ColumnDefinition Width="1*" MinWidth="95" />
+                    <ColumnDefinition Width="1.2*" MinWidth="110" />
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Fecha" Style="{StaticResource ColumnHead}" />
-                <TextBlock Grid.Column="1" Text="Aplicación" Style="{StaticResource ColumnHead}" />
-                <TextBlock Grid.Column="2" Text="Tipo" Style="{StaticResource ColumnHead}" />
-                <TextBlock Grid.Column="3" Text="Modo" Style="{StaticResource ColumnHead}" />
-                <TextBlock Grid.Column="4" Text="Usuario" Style="{StaticResource ColumnHead}" />
-                <TextBlock Grid.Column="5" Text="Unidades" Style="{StaticResource ColumnHead}" />
-                <TextBlock Grid.Column="6" Text="Hallazgos" Style="{StaticResource ColumnHead}" />
-                <TextBlock Grid.Column="7" Text="Coste" Style="{StaticResource ColumnHead}" />
+                <TextBlock Grid.Column="0" Text="Fecha" Style="{StaticResource Table.Header}" />
+                <TextBlock Grid.Column="1" Text="Aplicación" Style="{StaticResource Table.Header}" />
+                <TextBlock Grid.Column="2" Text="Tipo" Style="{StaticResource Table.Header}" />
+                <TextBlock Grid.Column="3" Text="Modo" Style="{StaticResource Table.Header}" />
+                <TextBlock Grid.Column="4" Text="Usuario" Style="{StaticResource Table.Header}" />
+                <TextBlock Grid.Column="5" Text="Unidades" Style="{StaticResource Table.Header}" />
+                <TextBlock Grid.Column="6" Text="Hallazgos" Style="{StaticResource Table.Header}" />
+                <TextBlock Grid.Column="7" Text="Coste" Style="{StaticResource Table.Header}" />
             </Grid>
 
-            <!-- · Las filas. Virtualizada por fila, como V3. · -->
+            <!-- · Las filas. Virtualizada por fila, como Hallazgos. · -->
             <ListBox Grid.Row="3"
                      ItemsSource="{Binding Rows}"
                      Background="Transparent"
-                     BorderThickness="0"
-                     Padding="0"
+                     BorderThickness="{StaticResource Pad.Zero}"
+                     Padding="{StaticResource Pad.Zero}"
                      HorizontalContentAlignment="Stretch"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      ScrollViewer.VerticalScrollBarVisibility="Auto"
@@ -209,8 +211,8 @@
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem">
                         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                        <Setter Property="Padding" Value="0" />
-                        <Setter Property="Margin" Value="0" />
+                        <Setter Property="Padding" Value="{StaticResource Pad.Zero}" />
+                        <Setter Property="Margin" Value="{StaticResource Pad.Zero}" />
                         <Setter Property="Focusable" Value="False" />
                         <Setter Property="Template">
                             <Setter.Value>
@@ -225,37 +227,36 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <Button Style="{StaticResource ReportRowLink}"
-                                Margin="0,0,14,1"
                                 Command="{Binding DataContext.OpenCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                 CommandParameter="{Binding}"
                                 ToolTip="{Binding Title}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="155" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="115" />
-                                    <ColumnDefinition Width="125" />
-                                    <ColumnDefinition Width="115" />
-                                    <ColumnDefinition Width="105" />
-                                    <ColumnDefinition Width="100" />
-                                    <ColumnDefinition Width="110" />
+                                    <ColumnDefinition Width="1.5*" MinWidth="150" />
+                                    <ColumnDefinition Width="1.4*" MinWidth="130" />
+                                    <ColumnDefinition Width="1.1*" MinWidth="110" />
+                                    <ColumnDefinition Width="1.3*" MinWidth="120" />
+                                    <ColumnDefinition Width="1.7*" MinWidth="150" />
+                                    <ColumnDefinition Width="1*" MinWidth="95" />
+                                    <ColumnDefinition Width="1*" MinWidth="95" />
+                                    <ColumnDefinition Width="1.2*" MinWidth="110" />
                                 </Grid.ColumnDefinitions>
 
-                                <TextBlock Grid.Column="0" Text="{Binding When}" Style="{StaticResource Cell}"
+                                <TextBlock Grid.Column="0" Text="{Binding When}" Style="{StaticResource Table.Cell}"
                                            ToolTip="{Binding WhenTooltip}" />
                                 <TextBlock Grid.Column="1" Text="{Binding AppName}"
-                                           FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                           Style="{StaticResource Table.Cell.Strong}" />
                                 <Border Grid.Column="2" Style="{StaticResource KindBadge}" HorizontalAlignment="Left">
-                                    <TextBlock Text="{Binding KindLabel}" FontSize="10.5" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Text="{Binding KindLabel}" Style="{StaticResource Pill.Text}" />
                                 </Border>
-                                <TextBlock Grid.Column="3" Text="{Binding Mode}" Style="{StaticResource Cell}" />
-                                <TextBlock Grid.Column="4" Text="{Binding By}" Style="{StaticResource Cell}" />
-                                <TextBlock Grid.Column="5" Text="{Binding Units}" Style="{StaticResource Cell}" />
-                                <TextBlock Grid.Column="6" Text="{Binding Findings}" Style="{StaticResource Cell}" />
-                                <TextBlock Grid.Column="7" Text="{Binding Cost}" Style="{StaticResource Cell}"
+                                <TextBlock Grid.Column="3" Text="{Binding Mode}" Style="{StaticResource Table.Cell}" />
+                                <!-- «Usuario» NO se recorta: un nombre cortado no falla, MIENTE
+                                     (D-975). Ancho suficiente para el caso real y envuelve si aun
+                                     así no cabe — la fila crece, que es lo que tiene que pasar. -->
+                                <TextBlock Grid.Column="4" Text="{Binding By}" Style="{StaticResource Table.Cell}" />
+                                <TextBlock Grid.Column="5" Text="{Binding Units}" Style="{StaticResource Table.Cell}" />
+                                <TextBlock Grid.Column="6" Text="{Binding Findings}" Style="{StaticResource Table.Cell}" />
+                                <TextBlock Grid.Column="7" Text="{Binding Cost}" Style="{StaticResource Table.Cell}"
                                            ToolTip="{Binding CostDetail}" />
                             </Grid>
                         </Button>
@@ -263,18 +264,15 @@
                 </ListBox.ItemTemplate>
             </ListBox>
 
-            <!-- · Estado vacío: dice QUÉ pasa, y solo ofrece la salida que corresponde · -->
-            <StackPanel Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Center"
-                        Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock Text="{Binding EmptyMessage}"
-                           HorizontalAlignment="Center" TextWrapping="Wrap" MaxWidth="420"
-                           TextAlignment="Center"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                <ui:Button Content="Limpiar filtros"
-                           Command="{Binding ClearFiltersCommand}"
-                           HorizontalAlignment="Center" Margin="0,12,0,0"
-                           Visibility="{Binding HasActiveFilters, Converter={StaticResource BoolToVisibility}}" />
-            </StackPanel>
+            <!-- · Estado vacío: el patrón del sistema —icono, una frase y la SALIDA que
+                 corresponde— y no una frase suelta centrada. · -->
+            <c:EmptyState Grid.Row="3"
+                          VerticalAlignment="Center"
+                          Glyph="{x:Static c:Icons.Reports}"
+                          Message="{Binding EmptyMessage}"
+                          ActionLabel="{Binding EmptyActionLabel}"
+                          Command="{Binding EmptyActionCommand}"
+                          Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
         </Grid>
 
         <!-- ================= El visor ================= -->
@@ -284,67 +282,92 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <Border Grid.Row="0"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,12">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
+            <Border Grid.Row="0" Style="{StaticResource Card}"
+                    Padding="{StaticResource Pad.Row}"
+                    CornerRadius="{StaticResource Radius.M}"
+                    Margin="{StaticResource Pad.S.Bottom}">
+                <DockPanel>
+                    <Button DockPanel.Dock="Left"
+                            Content="← Volver"
+                            Command="{Binding BackCommand}"
+                            Style="{StaticResource Button.Secondary}"
+                            Margin="{StaticResource Pad.M.Right}"
+                            VerticalAlignment="Center"
+                            ToolTip="Vuelve a la lista con los filtros como estaban" />
 
-                    <ui:Button Grid.Column="0"
-                               Content="← Volver"
-                               Command="{Binding BackCommand}"
-                               Appearance="Secondary"
-                               Padding="10,4" Margin="0,0,14,0" VerticalAlignment="Center"
-                               ToolTip="Vuelve a la lista con los filtros como estaban" />
-
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding ViewerTitle}" FontSize="16" FontWeight="SemiBold"
-                                   TextTrimming="CharacterEllipsis" />
-                        <TextBlock Text="{Binding ViewerSubtitle}" FontSize="12" Opacity="0.7" Margin="0,1,0,0" />
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                c:Stack.Gap="{StaticResource Space.S}">
                         <!-- H9.1 §1: de un informe de arreglo se vuelve a SU hallazgo. Va primero
                              porque es el más concreto de los dos caminos. -->
-                        <ui:Button Content="{Binding OpenFindingLabel}"
-                                   Command="{Binding OpenFindingCommand}"
-                                   Appearance="Secondary"
-                                   Padding="10,4" Margin="0,0,8,0"
-                                   ToolTip="Abre la ficha del hallazgo que arregló esta sesión"
-                                   Visibility="{Binding CanOpenFinding, Converter={StaticResource BoolToVisibility}}" />
-                        <ui:Button Content="Ver hallazgos de esta sesión"
-                                   Command="{Binding OpenFindingsCommand}"
-                                   Appearance="Secondary"
-                                   Padding="10,4" Margin="0,0,8,0"
-                                   ToolTip="Abre Hallazgos filtrado por esta aplicación"
-                                   Visibility="{Binding CanOpenFindings, Converter={StaticResource BoolToVisibility}}" />
-                        <ui:Button Content="Descargar .md"
-                                   Command="{Binding DownloadCommand}"
-                                   Appearance="Primary"
-                                   Padding="10,4"
-                                   ToolTip="Guarda una copia del informe donde tú elijas" />
+                        <Button Content="{Binding OpenFindingLabel}"
+                                Command="{Binding OpenFindingCommand}"
+                                Style="{StaticResource Button.Secondary}"
+                                ToolTip="Abre la ficha del hallazgo que arregló esta sesión"
+                                Visibility="{Binding CanOpenFinding, Converter={StaticResource BoolToVisibility}}" />
+                        <Button Content="Ver hallazgos de esta sesión"
+                                Command="{Binding OpenFindingsCommand}"
+                                Style="{StaticResource Button.Secondary}"
+                                ToolTip="Abre Hallazgos filtrado por esta aplicación"
+                                Visibility="{Binding CanOpenFindings, Converter={StaticResource BoolToVisibility}}" />
+                        <Button Content="Descargar .md"
+                                Command="{Binding DownloadCommand}"
+                                Style="{StaticResource Button.Primary}"
+                                ToolTip="Guarda una copia del informe donde tú elijas" />
                     </StackPanel>
-                </Grid>
+
+                    <!-- Título y subtítulo en UNA línea con dos tamaños: los `Run` de un mismo
+                         TextBlock comparten línea base, que es lo único que la comparte en WPF
+                         (D-983 §9). -->
+                    <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left"
+                               MaxWidth="{StaticResource Header.IdentityMaxWidth}"
+                               TextTrimming="CharacterEllipsis">
+                        <Run Text="{Binding ViewerTitle, Mode=OneWay}"
+                             FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold" />
+                        <Run Text="  " />
+                        <Run Text="{Binding ViewerSubtitle, Mode=OneWay}"
+                             FontSize="{StaticResource FontSize.Small}"
+                             Foreground="{DynamicResource Brush.TextMuted}" />
+                    </TextBlock>
+                </DockPanel>
             </Border>
 
             <!-- El informe renderizado. Scroll PROPIO: los informes largos se leen aquí dentro y
                  no arrastran la página entera. -->
-            <Border Grid.Row="1"
-                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="20,16,8,8">
-                <FlowDocumentScrollViewer
-                    Document="{Binding Document}"
-                    VerticalScrollBarVisibility="Auto"
-                    HorizontalScrollBarVisibility="Auto"
-                    IsToolBarVisible="False"
-                    Background="Transparent"
-                    Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Border Grid.Row="1" Style="{StaticResource Card}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <FlowDocumentScrollViewer
+                        Grid.Row="0"
+                        Document="{Binding Document}"
+                        VerticalScrollBarVisibility="Auto"
+                        HorizontalScrollBarVisibility="Auto"
+                        IsToolBarVisible="False"
+                        Background="Transparent"
+                        Foreground="{DynamicResource Brush.Text}" />
+
+                    <!-- EL ANEXO TÉCNICO, PLEGADO. El propio informe dice que no hace falta para
+                         actuar sobre los hallazgos; ocupaba media pantalla justo debajo del
+                         resumen, que es lo que sí hace falta. Se despliega a ancho completo porque
+                         lo que lleva dentro son tablas, no prosa. -->
+                    <Expander Grid.Row="1"
+                              Header="Anexo técnico — diagnóstico"
+                              Margin="{StaticResource Pad.S.Top}"
+                              Visibility="{Binding HasAnnex, Converter={StaticResource BoolToVisibility}}">
+                        <FlowDocumentScrollViewer
+                            Document="{Binding AnnexDocument}"
+                            MaxHeight="{StaticResource Read.MaxWidth}"
+                            VerticalScrollBarVisibility="Auto"
+                            HorizontalScrollBarVisibility="Auto"
+                            IsToolBarVisible="False"
+                            Background="Transparent"
+                            Foreground="{DynamicResource Brush.Text}" />
+                    </Expander>
+                </Grid>
             </Border>
         </Grid>
     </Grid>

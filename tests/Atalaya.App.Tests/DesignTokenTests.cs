@@ -32,20 +32,24 @@ public sealed class DesignTokenTests
     /// <summary>
     /// Las vistas que todavía no han pasado por el sistema. Cada parte de F26 tacha las suyas:
     /// la B se lleva Portafolio, Inventario, Hallazgos, la ficha, la sesión y el arreglo; la C,
-    /// Ajustes, Cuenta, Métricas, Informes y el alta. Al cerrar la C, esta lista queda vacía.
+    /// Ajustes, Cuenta, Métricas, Informes y el alta.
+    /// <para>
+    /// <b>Al cerrar la C quedan los DIÁLOGOS, y solo ellos.</b> Van con la vista que los abre y esa
+    /// vista ya está hecha, así que lo que les queda es mecánico —tipografía, espaciado y color por
+    /// tokens— y sin decisiones de diseño nuevas. Está apuntado en BACKLOG. La regla de esta lista
+    /// no cambia: solo puede encoger.
+    /// </para>
     /// </summary>
     private static readonly HashSet<string> Pendientes = new(StringComparer.OrdinalIgnoreCase)
     {
         // Parte B — las seis vistas de trabajo ya han pasado por el sistema.
 
-        // Parte C
-        "Views/SettingsView.xaml",
-        "Views/AccountView.xaml",
-        "Views/MetricsView.xaml",
-        "Views/ReportsView.xaml",
-        "Views/OnboardingView.xaml",
+        // Parte C — las cinco vistas de sistema, también. `ModelRatesDialog.xaml` no está tachado:
+        // ha DESAPARECIDO, porque las tarifas son ahora una sección de Ajustes y un diálogo que no
+        // abre nadie es código muerto detrás de un registro del contenedor (D-981).
 
-        // Los diálogos van con la vista que los abre; se tachan con ella.
+        // Los DIÁLOGOS de las vistas de trabajo siguen pendientes: van con la vista que los abre y
+        // ninguna parte de F26 los ha tocado todavía.
         "Views/AboutDialog.xaml",
         "Views/AuditLaunchDialog.xaml",
         "Views/CycleConfigDialog.xaml",
@@ -54,7 +58,6 @@ public sealed class DesignTokenTests
         "Views/DirectivesDialog.xaml",
         "Views/FactoryResetDialog.xaml",
         "Views/LinkCloneDialog.xaml",
-        "Views/ModelRatesDialog.xaml",
         "Views/PatternSilencesDialog.xaml",
         "Views/ThresholdsDialog.xaml",
     };

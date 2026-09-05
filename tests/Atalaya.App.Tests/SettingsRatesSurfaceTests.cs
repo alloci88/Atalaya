@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
@@ -96,17 +96,27 @@ public sealed class SettingsRatesSurfaceTests
     /// Las tarifas se editan en Ajustes desde R2, y el texto dice de dónde salen y cómo se corrigen
     /// — que es lo que el usuario preguntaba al no ver costes.
     /// </summary>
+    /// <summary>
+    /// <b>Actualizado en F26 §C</b>: las tarifas dejan de ser un botón que abre una ventana y pasan
+    /// a ser una SECCIÓN de Ajustes, con su tabla dentro. La regla no cambia —Ajustes es donde se
+    /// editan, y la página dice de dónde salen— y se comprueba donde ahora vive.
+    /// </summary>
     [Fact]
     public void Las_tarifas_se_gestionan_desde_ajustes()
     {
         string xaml = Markup(Xaml("SettingsView.xaml"));
 
-        xaml.Should().Contain("{Binding ManageRatesCommand}");
-        xaml.Should().Contain("Tarifas");
+        xaml.Should().Contain("{Binding ShowRates, Converter={StaticResource BoolToVisibility}}",
+            "la sección de tarifas se enseña dentro de la página, no en un diálogo");
+        xaml.Should().Contain("{Binding Rates.Rows}", "con su tabla de verdad");
+        xaml.Should().Contain("{Binding Rates.MissingModels}",
+            "y con los modelos usados sin tarifa, que es lo que la hace accionable");
         xaml.Should().Contain("las trae puestas y las mantiene al día sola",
             "de dónde salen, dicho donde se corrigen");
 
         typeof(SettingsViewModel).GetProperty("CanManageRates").Should().NotBeNull();
+        SettingsViewModel.RatesSection.Should().NotBeNullOrWhiteSpace(
+            "la sección es un destino: Métricas enlaza hasta ella");
     }
 
     /// <summary>
@@ -127,11 +137,16 @@ public sealed class SettingsRatesSurfaceTests
     }
 
     /// <summary>
-    /// El diálogo de tarifas se sigue registrando, y ahora lo pide Ajustes. Sin esto, mover la
-    /// pantalla dejaría un botón que no abre nada — que es exactamente el control muerto de D-275.
+    /// Con servicio de tarifas, Ajustes trae la tabla montada y la enseña. Sin esto, mover la
+    /// pantalla dejaría una sección que no enseña nada — que es exactamente el control muerto de
+    /// D-275.
+    /// <para>
+    /// <b>F26 §C</b>: antes esto comprobaba que el botón abriera el DIÁLOGO. El diálogo ya no
+    /// existe; lo que se comprueba es lo mismo un paso más adentro — que la sección tiene sus filas.
+    /// </para>
     /// </summary>
     [Fact]
-    public void Ajustes_puede_abrir_las_tarifas_cuando_se_le_dan_el_servicio_y_el_dialogo()
+    public void Ajustes_trae_la_tabla_de_tarifas_cuando_se_le_da_el_servicio()
     {
         string root = Path.Combine(Path.GetTempPath(), "atalaya-r2-dlg", Guid.NewGuid().ToString("N"));
         try
@@ -143,14 +158,14 @@ public sealed class SettingsRatesSurfaceTests
             hub.Store.WriteHub(new HubInfo { OrganizationName = "Org" });
             hub.SeedModelRates();
 
-            var dialog = new SpyRatesDialog();
-            SettingsViewModel vm = ViewModel(paths, settings, hub, new ModelRatesService(hub), dialog);
+            SettingsViewModel vm = ViewModel(paths, settings, hub, new ModelRatesService(hub));
 
             vm.CanManageRates.Should().BeTrue();
-            vm.ManageRatesCommand.Execute(null);
+            vm.Rates.Should().NotBeNull();
+            vm.Rates!.Rows.Should().NotBeEmpty("la sección monta la tabla sembrada");
 
-            dialog.Shown.Should().NotBeNull();
-            dialog.Shown!.Rows.Should().NotBeEmpty("abre sobre la tabla sembrada");
+            vm.Section = SettingsViewModel.RatesSection;
+            vm.ShowRates.Should().BeTrue("y la sección se puede seleccionar desde fuera");
         }
         finally
         {
@@ -164,23 +179,11 @@ public sealed class SettingsRatesSurfaceTests
         }
     }
 
-    private sealed class SpyRatesDialog : IModelRatesDialog
-    {
-        public ModelRatesViewModel? Shown { get; private set; }
-
-        public ModelRatesViewModel Show(ModelRatesViewModel viewModel)
-        {
-            Shown = viewModel;
-            return viewModel;
-        }
-    }
-
     private static SettingsViewModel ViewModel(
         AppPaths paths,
         SettingsService settings,
         HubContext? hub = null,
-        ModelRatesService? rates = null,
-        IModelRatesDialog? dialog = null)
+        ModelRatesService? rates = null)
     {
         HubContext context = hub ?? TestFactory.Hub(paths, settings);
         return new SettingsViewModel(
@@ -192,8 +195,7 @@ public sealed class SettingsRatesSurfaceTests
             new NoReset(),
             context,
             new NavigationService(new EmptyServices()),
-            rates: rates,
-            ratesDialog: dialog);
+            rates: rates);
     }
 
     /// <summary>El reset de fábrica no se dispara sin querer desde estos tests.</summary>

@@ -1,6 +1,7 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
+using Atalaya.App.Views;
 using FluentAssertions;
 using Xunit;
 
@@ -108,20 +109,53 @@ public sealed class SettingsViewTests
 
     // ---------- §1. Secciones y espaciado uniforme ----------
 
+    /// <summary>
+    /// <b>F26 §C: la página son CINCO SECCIONES navegables, y en el orden del trabajo</b> — con
+    /// quién auditas · cómo audita · lo que cuesta · cómo se ve · lo demás.
+    /// <para>
+    /// La regla que este test protegía sigue viva y es la misma: Ajustes tiene una estructura
+    /// declarada y la zona peligrosa va al final, no entre los ajustes normales. Lo que cambia es
+    /// que las secciones son DATOS del view-model —se pueden contar y ordenar— en vez de rótulos
+    /// buscados por su posición en el XAML.
+    /// </para>
+    /// </summary>
     [Fact]
-    public void La_pagina_esta_dividida_en_las_cuatro_secciones_y_en_ese_orden()
+    public void La_pagina_esta_dividida_en_las_cinco_secciones_y_en_ese_orden()
     {
+        SettingsViewModel vm = Model();
+
+        vm.Sections.Select(x => x.Key).Should().Equal(
+            SettingsViewModel.ProviderSection,
+            SettingsViewModel.AuditSection,
+            SettingsViewModel.RatesSection,
+            SettingsViewModel.AppearanceSection,
+            SettingsViewModel.AdvancedSection);
+
+        vm.Section.Should().Be(SettingsViewModel.ProviderSection, "se abre por la primera");
+        vm.Sections[0].IsActive.Should().BeTrue("y la lista dice donde estas, como el rail");
+
         string xaml = Markup(SettingsXaml());
+        int avanzado = xaml.IndexOf("\"Avanzado\"", StringComparison.Ordinal);
+        int peligro = xaml.IndexOf("Zona peligrosa", StringComparison.Ordinal);
+        avanzado.Should().BeGreaterThan(0);
+        peligro.Should().BeGreaterThan(avanzado, "la zona peligrosa va al final, no entre los ajustes normales");
+    }
 
-        int general = xaml.IndexOf("\"General\"", StringComparison.Ordinal);
-        int auditoria = xaml.IndexOf("\"Auditoría\"", StringComparison.Ordinal);
-        int sync = xaml.IndexOf("\"Sincronización\"", StringComparison.Ordinal);
-        int peligro = xaml.IndexOf("\"Zona peligrosa\"", StringComparison.Ordinal);
+    /// <summary>
+    /// La sección es un DESTINO: Métricas enlaza hasta las tarifas cuando falta una, y llegar a la
+    /// página entera para tener que buscar la tabla no es llegar. Se rompe en silencio —el enlace
+    /// sigue navegando, solo que a la sección equivocada—, por eso se comprueba.
+    /// </summary>
+    [Fact]
+    public void Elegir_una_seccion_la_ensena_y_apaga_las_demas()
+    {
+        SettingsViewModel vm = Model();
 
-        general.Should().BeGreaterThan(0);
-        auditoria.Should().BeGreaterThan(general);
-        sync.Should().BeGreaterThan(auditoria);
-        peligro.Should().BeGreaterThan(sync, "la zona peligrosa va al final, no entre los ajustes normales");
+        vm.SelectSectionCommand.Execute(SettingsViewModel.RatesSection);
+
+        vm.ShowRates.Should().BeTrue();
+        vm.ShowProvider.Should().BeFalse();
+        vm.Sections.Single(x => x.IsActive).Key.Should().Be(SettingsViewModel.RatesSection);
     }
 
     /// <summary>
@@ -136,17 +170,17 @@ public sealed class SettingsViewTests
         rows.Should().HaveCountGreaterThan(5, "una fila por control editable");
         foreach (string row in rows)
         {
-            row.Should().Contain("<ColumnDefinition Width=\"220\" />",
+            row.Should().Contain("{StaticResource Setting.Label}",
                 $"todas las filas alinean su etiqueta en la misma columna → {Head(row)}");
-            row.Should().Contain("{StaticResource FieldLabel}",
-                $"la etiqueta usa el estilo común → {Head(row)}");
+            row.Should().Contain("{StaticResource Setting.Name}",
+                $"y el nombre del ajuste usa el estilo común → {Head(row)}");
 
             // Y ningún elemento del ritmo compartido —etiqueta o ayuda— se pone su propio
             // margen: ahí es exactamente por donde el espaciado volvió a descuadrarse.
             foreach (Match block in Regex.Matches(row, "<TextBlock.*?/>", RegexOptions.Singleline))
             {
-                if (!block.Value.Contains("FieldLabel", StringComparison.Ordinal)
-                    && !block.Value.Contains("FieldHelp", StringComparison.Ordinal))
+                if (!block.Value.Contains("Setting.Name", StringComparison.Ordinal)
+                    && !block.Value.Contains("Setting.Help", StringComparison.Ordinal))
                 {
                     continue;
                 }
@@ -169,7 +203,7 @@ public sealed class SettingsViewTests
     {
         foreach (string row in FieldRows())
         {
-            row.Should().Contain("{StaticResource FieldHelp}",
+            row.Should().Contain("{StaticResource Setting.Help}",
                 $"este control no se explica solo → {Head(row)}");
         }
     }
@@ -223,8 +257,12 @@ public sealed class SettingsViewTests
         string xaml = Markup(SettingsXaml());
 
         xaml.Should().NotContain("{Binding LargeUnitLoc}", "no puede quedar un control que lo edite");
-        xaml.Should().Contain("Se gobierna por aplicación, en Inventario → Gobernanza → Umbrales.");
-        xaml.Should().Contain("Aplica al re-escanear");
+
+        // F26 §C: era un párrafo de cinco líneas a 11 px fingiendo ser una fila; ahora es un aviso
+        // en línea de UNA frase, con el camino hasta donde sí se edita. Lo que dice no cambia.
+        xaml.Should().Contain("se gobierna por aplicación, en Inventario → Gobernanza → Umbrales");
+        xaml.Should().Contain("aplica al re-escanear");
+        xaml.Should().Contain("{Binding OpenGovernanceCommand}", "y el aviso lleva hasta alli");
     }
 
     [Fact]
@@ -245,23 +283,63 @@ public sealed class SettingsViewTests
         zona.Should().BeGreaterThan(0);
 
         string bloque = xaml[Math.Max(0, zona - 400)..];
-        bloque.Should().Contain("D13A3A", "el borde y el fondo de la zona son rojos, no un panel más");
+
+        // F26 §C: el rojo sale de la paleta y no de un hexadecimal escrito a mano — el de antes
+        // (#18D13A3A sobre #55D13A3A) se eligió mirando el tema oscuro y en claro no se veía
+        // (D-983 §8). La regla —la zona se ve como zona peligrosa y lleva el reset— no cambia.
+        bloque.Should().Contain("{StaticResource Notice.Danger}",
+            "el borde y el fondo de la zona son los del peligro del sistema, no un panel más");
         bloque.Should().Contain("FactoryResetCommand");
-        bloque.Should().Contain("Appearance=\"Danger\"", "el botón final es rojo");
+        bloque.Should().Contain("{StaticResource Button.DangerSolid}",
+            "el botón final es rojo macizo: destruir ES la acción de este bloque");
     }
 
     // ---------- Utilidades ----------
+
+    /// <summary>
+    /// Un view-model de Ajustes sobre un directorio de usar y tirar. Solo lo mínimo: estos tests
+    /// miran las secciones, que no dependen del hub ni del proveedor.
+    /// </summary>
+    private static SettingsViewModel Model()
+    {
+        var paths = new AppPaths(Path.Combine(
+            Path.GetTempPath(), "atalaya-settings-sec", Guid.NewGuid().ToString("N")));
+        var settings = new SettingsService(paths);
+        settings.Load();
+        HubContext hub = TestFactory.Hub(paths, settings);
+
+        return new SettingsViewModel(
+            settings,
+            new Atalaya.Copilot.FakeCopilotAgent(),
+            new ToastCenter(),
+            new FactoryResetService(
+                hub, paths, settings, TestFactory.Account(paths), new OpenSessionStore(paths)),
+            new NoReset(),
+            hub,
+            new NavigationService(new NoServices()));
+    }
+
+    /// <summary>El reset de fábrica no se dispara sin querer desde estos tests.</summary>
+    private sealed class NoReset : IFactoryResetConfirmer
+    {
+        public bool Confirm(FactoryResetConfirmation confirmation) => false;
+    }
+
+    private sealed class NoServices : IServiceProvider
+    {
+        public object? GetService(Type serviceType) => null;
+    }
 
     /// <summary>Cada fila etiqueta+control, desde su <c>Grid</c> hasta el cierre correspondiente.</summary>
     private static List<string> FieldRows()
     {
         string markup = Markup(SettingsXaml());
         var rows = new List<string>();
-        const string open = "<Grid Style=\"{StaticResource FieldRow}\">";
+        const string open = "<DockPanel Style=\"{StaticResource Setting.Row}\"";
         int at = markup.IndexOf(open, StringComparison.Ordinal);
         while (at >= 0)
         {
-            int end = markup.IndexOf("</Grid>", at, StringComparison.Ordinal);
+            int end = markup.IndexOf("</DockPanel>", at, StringComparison.Ordinal);
             rows.Add(markup[at..(end < 0 ? markup.Length : end)]);
             at = markup.IndexOf(open, at + open.Length, StringComparison.Ordinal);
         }

@@ -19,6 +19,29 @@ namespace Atalaya.App.ViewModels;
 /// </summary>
 public sealed record ProviderOption(string Id, string Name);
 
+/// <summary>
+/// Una sección de Ajustes en la lista lateral de la vista (F26 Parte C).
+/// <para>
+/// Es un objeto observable y no un <c>record</c> porque <see cref="IsActive"/> cambia sin que la
+/// lista cambie: el estilo de la entrada se pinta con un <c>DataTrigger</c> sobre él, igual que en
+/// el raíl (D-954). Reconstruir la colección al cambiar de sección haría parpadear las cinco.
+/// </para>
+/// </summary>
+public sealed partial class SettingsSectionItem : ObservableObject
+{
+    public SettingsSectionItem(string key, string label)
+    {
+        Key = key;
+        Label = label;
+    }
+
+    public string Key { get; }
+
+    public string Label { get; }
+
+    [ObservableProperty] private bool _isActive;
+}
+
 public sealed record ModelOption(string Id, string Label)
 {
     public static ModelOption From(AgentModel model)
@@ -88,11 +111,17 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     /// <summary>
     /// Las tarifas de la organización (R2 §2). Opcionales por lo mismo que el «Acerca de»: los
-    /// tests que solo ejercitan los ajustes numéricos no montan ventanas, y sin diálogo el gesto no
-    /// hace nada en vez de reventar.
+    /// tests que solo ejercitan los ajustes numéricos no montan un hub con su tabla, y sin servicio
+    /// la sección se enseña vacía con su motivo en vez de reventar.
     /// </summary>
     private readonly ModelRatesService? _rates;
-    private readonly IModelRatesDialog? _ratesDialog;
+
+    /// <summary>
+    /// La aplicación activa, para el enlace del aviso de «Unidad grande (LOC)» (F26 Parte C). Es
+    /// opcional: sin ella el enlace lleva a Portafolio, que es donde se elige una — nunca a un
+    /// inventario que no se sabe de quién es.
+    /// </summary>
+    private readonly ActiveApp? _activeApp;
 
     /// <summary>Plazo para que el SDK conteste con su catálogo antes de rendirse.</summary>
     private static readonly TimeSpan ModelListTimeout = TimeSpan.FromSeconds(30);
@@ -109,7 +138,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         DeployConfig? deploy = null,
         AuditorProviderRegistry? providers = null,
         ModelRatesService? rates = null,
-        IModelRatesDialog? ratesDialog = null)
+        ActiveApp? activeApp = null)
     {
         _settings = settings;
         _agent = agent;
@@ -122,7 +151,9 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _about = about;
         _deploy = deploy;
         _rates = rates;
-        _ratesDialog = ratesDialog;
+        _activeApp = activeApp;
+        Rates = rates is null ? null : new ModelRatesViewModel(rates);
+        BuildSections();
         AppSettings s = settings.Current;
         _editor = s.Editor;
         _isLightTheme = string.Equals(s.Theme, "light", StringComparison.OrdinalIgnoreCase);
@@ -153,6 +184,9 @@ public sealed partial class SettingsViewModel : ViewModelBase
         // Hasta que el proveedor conteste, el desplegable enseña el modelo configurado: así nunca
         // está vacío ni «elige» en silencio uno distinto del que se está usando.
         Models.Add(ModelOption.Unverified(_selectedModelId));
+
+        // La foto de lo guardado, contra la que se mide «hay cambios sin guardar».
+        Snapshot();
     }
 
     // --- Proveedor de auditoría (F14) ---
@@ -244,32 +278,104 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// <summary>Y la misma frase, para enlazarla desde el XAML sin duplicarla.</summary>
     public string ExhaustiveNotice => ExhaustiveWarning;
 
+    // ================================================================ Las secciones (F26 §C)
+
+    /// <summary>
+    /// <b>Ajustes deja de ser un scroll y pasa a cinco secciones</b> (F26 Parte C).
+    /// <para>
+    /// <b>Por qué lista lateral y no pestañas.</b> Las dos caben; la lista gana por tres razones y
+    /// ninguna es estética. Una: los rótulos son largos («Proveedor y modelo», «Apariencia») y una
+    /// tira horizontal de cinco los apretaría contra el título de la página justo a 1280, que es el
+    /// ancho que hay que soportar (principio 1). Dos: la lista es EL MISMO gesto que el raíl una
+    /// capa más abajo —barra de «estás aquí», fondo teñido, peso en la activa— y así no hay que
+    /// aprender dos formas de decir dónde estás (principio 7). Y tres: crece. Añadir una sección a
+    /// una columna no cuesta nada; a una tira de pestañas le queda el ancho que le queda.
+    /// </para>
+    /// <para>
+    /// La sección es además el DESTINO de un enlace: Métricas manda aquí cuando falta una tarifa, y
+    /// llegar a la página entera para tener que buscar la tabla no es llegar.
+    /// </para>
+    /// </summary>
+    public const string ProviderSection = "provider";
+
+    public const string AuditSection = "audit";
+
+    public const string RatesSection = "rates";
+
+    public const string AppearanceSection = "appearance";
+
+    public const string AdvancedSection = "advanced";
+
+    /// <summary>Las secciones, como DATOS: es lo que permite pintarlas con un solo estilo.</summary>
+    public ObservableCollection<SettingsSectionItem> Sections { get; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowProvider))]
+    [NotifyPropertyChangedFor(nameof(ShowAudit))]
+    [NotifyPropertyChangedFor(nameof(ShowRates))]
+    [NotifyPropertyChangedFor(nameof(ShowAppearance))]
+    [NotifyPropertyChangedFor(nameof(ShowAdvanced))]
+    private string _section = ProviderSection;
+
+    public bool ShowProvider => Section == ProviderSection;
+
+    public bool ShowAudit => Section == AuditSection;
+
+    public bool ShowRates => Section == RatesSection;
+
+    public bool ShowAppearance => Section == AppearanceSection;
+
+    public bool ShowAdvanced => Section == AdvancedSection;
+
+    partial void OnSectionChanged(string value)
+    {
+        foreach (SettingsSectionItem item in Sections)
+        {
+            item.IsActive = item.Key == value;
+        }
+    }
+
+    [RelayCommand]
+    private void SelectSection(string? key)
+    {
+        if (!string.IsNullOrWhiteSpace(key))
+        {
+            Section = key;
+        }
+    }
+
+    private void BuildSections()
+    {
+        Sections.Clear();
+        Sections.Add(new SettingsSectionItem(ProviderSection, "Proveedor y modelo"));
+        Sections.Add(new SettingsSectionItem(AuditSection, "Auditoría"));
+        Sections.Add(new SettingsSectionItem(RatesSection, "Tarifas"));
+        Sections.Add(new SettingsSectionItem(AppearanceSection, "Apariencia"));
+        Sections.Add(new SettingsSectionItem(AdvancedSection, "Avanzado"));
+        OnSectionChanged(Section);
+    }
+
     // --- Tarifas por modelo (R2 §2) ---
 
     /// <summary>
-    /// Se puede abrir la tabla de tarifas: hay servicio y hay quien la enseñe.
-    /// </summary>
-    public bool CanManageRates => _rates is not null && _ratesDialog is not null;
-
-    /// <summary>
-    /// <b>Las tarifas se corrigen aquí desde R2</b>, y antes en Métricas → Tarifas · Gestionar.
+    /// <b>La tabla de tarifas, ya no en un diálogo</b> (F26 Parte C). R2 la trajo desde Métricas y
+    /// la dejó detrás de un botón que abría una ventana; ahora es la sección «Tarifas» de esta
+    /// página, con su tabla, su edición y su lista de modelos usados sin tarifa.
     /// <para>
     /// El fichero NO se mueve: sigue en la raíz del hub (D-786), porque un precio es del contrato de
     /// la organización con su proveedor y no de la aplicación ni del puesto. Lo que cambia es dónde
-    /// se edita. Y desde R2 no hay nada que activar: la tabla se siembra sola al abrir el hub, así
-    /// que esta pantalla es para corregir un precio y para añadir el de un modelo nuevo.
+    /// se edita. Y no hay nada que activar: la tabla se siembra sola al abrir el hub, así que esta
+    /// sección es para corregir un precio y para añadir el de un modelo nuevo.
+    /// </para>
+    /// <para>
+    /// Nula cuando no hay servicio —tests que solo tocan los ajustes numéricos, o un hub que aún no
+    /// existe—: la sección se enseña entonces con su motivo, no vacía y sin explicación.
     /// </para>
     /// </summary>
-    [RelayCommand]
-    private void ManageRates()
-    {
-        if (_rates is null || _ratesDialog is null)
-        {
-            return;
-        }
+    public ModelRatesViewModel? Rates { get; }
 
-        _ratesDialog.Show(new ModelRatesViewModel(_rates));
-    }
+    /// <summary>Hay tabla que enseñar. Es lo que separa «no hay tarifas» de «no hay hub».</summary>
+    public bool CanManageRates => Rates is not null;
 
     // --- Modelo (F5.1) ---
 
@@ -437,6 +543,112 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [RelayCommand]
     private void ShowAbout() => _about?.Show(AboutInfo.Create(_hub, _deploy));
 
+    // ================================================================ Cambios sin guardar (§C)
+
+    /// <summary>
+    /// <b>Hay cambios sin guardar</b> (F26 Parte C).
+    /// <para>
+    /// Antes no se veía: se tocaban tres interruptores, se cambiaba de página y no pasaba nada —
+    /// ni se guardaba ni se avisaba—. El botón «Guardar» estaba al fondo de un scroll de dos
+    /// pantallas, así que ni siquiera estaba a la vista mientras se editaba. Ahora la barra vive
+    /// al pie de la vista, con el primario dentro, y esta marca dice si hay algo que salvar.
+    /// </para>
+    /// <para>
+    /// <b>Lo que NO cambia es el comportamiento de guardar</b>: sigue siendo explícito, con sus
+    /// mínimos aplicados y contados, y su toast. Esto es la señal, no una autoguarda.
+    /// </para>
+    /// </summary>
+    [ObservableProperty] private bool _isDirty;
+
+    /// <summary>Lo guardado, tal y como lo dejó el último <c>Save</c> (o el arranque).</summary>
+    private string _saved = string.Empty;
+
+    /// <summary>
+    /// Los valores editables, en una cadena. Compararlos así —y no campo a campo— es lo que hace
+    /// que añadir un ajuste a la página no obligue a acordarse de tocar la comparación: se añade
+    /// aquí, en un sitio, y la marca de sucio sigue siendo cierta.
+    /// </summary>
+    private string Fingerprint() => string.Join(
+        '',
+        Editor,
+        IsLightTheme,
+        PollingSeconds,
+        FreshnessDays,
+        MaxPassesPerUnit,
+        CopilotTimeoutMinutes,
+        EnableAssistedFix,
+        ExhaustiveSweep,
+        SelectedProviderId,
+        SelectedModelId);
+
+    private void Snapshot()
+    {
+        _saved = Fingerprint();
+        IsDirty = false;
+    }
+
+    /// <summary>
+    /// Cualquier cambio de un campo editable recalcula la marca. Se hace aquí y no con diez
+    /// <c>partial void On…Changed</c> porque diez ganchos que hay que mantener iguales acaban
+    /// siendo nueve.
+    /// </summary>
+    protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+
+        if (e.PropertyName is nameof(IsDirty) or nameof(Section) or nameof(IsBusy))
+        {
+            return;
+        }
+
+        IsDirty = _saved.Length > 0 && Fingerprint() != _saved;
+    }
+
+    /// <summary>
+    /// Descartar: las cajas vuelven a lo que hay escrito en el fichero. No borra nada ni escribe
+    /// nada — es el «no era esto» de quien ha tocado un número y ya no sabe cuál era.
+    /// </summary>
+    [RelayCommand]
+    private void Discard()
+    {
+        AppSettings s = _settings.Current;
+        Editor = s.Editor;
+        IsLightTheme = string.Equals(s.Theme, "light", StringComparison.OrdinalIgnoreCase);
+        PollingSeconds = s.PollingSeconds;
+        FreshnessDays = s.Thresholds.FreshnessDays;
+        MaxPassesPerUnit = s.MaxPassesPerUnit;
+        CopilotTimeoutMinutes = s.CopilotTimeoutMinutes;
+        EnableAssistedFix = s.EnableAssistedFix;
+        ExhaustiveSweep = s.ExhaustiveSweep;
+        if (_providers is not null)
+        {
+            SelectedProviderId = _providers.Current.ProviderId;
+        }
+
+        SelectedModelId = string.IsNullOrWhiteSpace(SelectedProviderId)
+            ? s.CopilotModel
+            : _settings.ModelFor(SelectedProviderId);
+
+        Snapshot();
+        _toasts.Show("Cambios descartados.");
+    }
+
+    /// <summary>
+    /// <b>El umbral de unidad grande no es un ajuste de esta página</b> (F13), y desde F26 §C
+    /// tampoco es un párrafo de cinco líneas fingiendo serlo: es un aviso de una frase con el
+    /// camino hasta donde SÍ se edita.
+    /// <para>
+    /// Con aplicación activa el enlace lleva a su inventario, que es donde vive su gobernanza; sin
+    /// ella lleva a Portafolio, que es donde se elige una. Nunca a un inventario que no se sabe de
+    /// quién sería.
+    /// </para>
+    /// </summary>
+    [RelayCommand]
+    private Task OpenGovernance()
+        => _activeApp is { HasApp: true } app
+            ? _navigation.NavigateToAsync<InventoryViewModel>(vm => vm.SetApp(app.Slug))
+            : _navigation.NavigateToAsync<PortfolioViewModel>();
+
     [RelayCommand]
     private void Save()
     {
@@ -450,6 +662,9 @@ public sealed partial class SettingsViewModel : ViewModelBase
         CopilotTimeoutMinutes = _settings.Current.CopilotTimeoutMinutes;
         FreshnessDays = _settings.Current.Thresholds.FreshnessDays;
         ThemeService.Apply(IsLightTheme ? "light" : "dark");
+        // Lo guardado pasa a ser la nueva referencia: sin esto la barra seguiría diciendo «hay
+        // cambios sin guardar» justo después de guardarlos.
+        Snapshot();
         // Toast global (F5.3): el aviso vivía al fondo de la página y no se veía sin bajar hasta
         // él — justo debajo del botón que lo provocaba, pero fuera de la pantalla.
         _toasts.Show(corrections.Count == 0

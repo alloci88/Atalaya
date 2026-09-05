@@ -432,8 +432,14 @@ public sealed class IdentityTests : IDisposable
     {
         string xaml = Source("src/Atalaya.App/Views/SettingsView.xaml");
         xaml.Should().Contain("{Binding ShowAboutCommand}");
+
+        // F6.4: «Acerca de» va antes de la zona peligrosa, porque lo último de una página no puede
+        // ser algo que no da miedo. Hasta F26 §C eso se medía contra «Guardar», que era lo último
+        // del scroll; ahora «Guardar» vive en la barra fija del pie —está SIEMPRE a la vista, que
+        // es justo el arreglo— y el final de la página es la zona peligrosa. La regla es la misma.
         xaml.IndexOf("ShowAboutCommand", StringComparison.Ordinal).Should()
-            .BeGreaterThan(xaml.IndexOf("SaveCommand", StringComparison.Ordinal), "va al final de la página");
+            .BeLessThan(xaml.IndexOf("Zona peligrosa", StringComparison.Ordinal),
+                "va al final de los ajustes, pero antes de lo que da miedo");
 
         string root = Path.Combine(_root, "settings");
         var paths = new AppPaths(Path.Combine(root, "local"));

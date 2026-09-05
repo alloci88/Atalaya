@@ -226,6 +226,32 @@ public sealed partial class ReportsViewModel : ViewModelBase
     /// <summary>El markdown ya renderizado. Se construye al abrir, no al listar.</summary>
     [ObservableProperty] private FlowDocument? _document;
 
+    /// <summary>
+    /// <b>El anexo técnico, aparte y PLEGADO</b> (F26 Parte C).
+    /// <para>
+    /// El propio informe lo dice de sí mismo: «no hace falta para actuar sobre los hallazgos: está
+    /// aquí para quien mantiene Atalaya». Aun así ocupaba media pantalla de tablas de tokens
+    /// justo debajo del resumen, que es lo que sí hace falta. Se separa por su encabezado —el que
+    /// escribe <c>ReportBuilder</c>— y se lee en su propio panel, desplegable, a ancho completo:
+    /// sus tablas son de nueve columnas y no caben en una medida de lectura.
+    /// </para>
+    /// <para>
+    /// El informe NO cambia (F23): lo que cambia es dónde se corta al pintarlo. Un informe sin
+    /// anexo —un importado de v4, un arreglo— sale con esto en null y sin panel que abrir.
+    /// </para>
+    /// </summary>
+    [ObservableProperty] private FlowDocument? _annexDocument;
+
+    /// <summary>Este informe trae anexo. Es lo que enciende el desplegable.</summary>
+    [ObservableProperty] private bool _hasAnnex;
+
+    /// <summary>
+    /// Por dónde se corta. Es el encabezado literal que escribe <c>ReportBuilder.AppendAnnex</c>;
+    /// vive aquí como constante para que renombrarlo allí y no aquí sea un cambio que se ve —el
+    /// anexo dejaría de plegarse— y no uno que se pierde.
+    /// </summary>
+    internal const string AnnexHeading = "## Anexo técnico";
+
     [ObservableProperty] private string _viewerTitle = string.Empty;
 
     /// <summary>«21 ago 2026 · 10:32 · XBlast · alvaro».</summary>
@@ -353,11 +379,41 @@ public sealed partial class ReportsViewModel : ViewModelBase
         ResultsSummary = ResultCount == 1 ? "1 informe" : $"{ResultCount} informes";
         HasActiveFilters = filter.IsActive;
         IsEmpty = Rows.Count == 0;
-        EmptyMessage = !IsEmpty
-            ? string.Empty
+        // EL ESTADO VACÍO LLEVA SU SALIDA (F26 Parte C). Antes era una frase centrada y, como
+        // mucho, «Limpiar filtros» — que en el caso de no haber ningún informe todavía no aparecía,
+        // así que la pantalla se quedaba sin nada que ofrecer. La salida depende de POR QUÉ está
+        // vacío, que es lo único que hace útil a un estado vacío.
+        //
+        // Son DOS y no tres: el prompt de F26 §C pedía además «aún no hay informes de esta
+        // aplicación · Auditar», y ese estado NO EXISTE en esta lista. El combo de aplicación se
+        // rellena con las que TIENEN informe (`ReportsQuery.Apps`), así que una aplicación sin
+        // ninguno no se puede ni elegir; y ningún enlace de fuera filtra por aplicación —todos
+        // entran por `ShowReport`, con un informe concreto—. Ofrecer una tercera rama sería
+        // escribir código muerto detrás de una condición imposible (D-981).
+        (EmptyMessage, EmptyActionLabel) = !IsEmpty
+            ? (string.Empty, string.Empty)
             : HasActiveFilters
-                ? "Ningún informe con estos filtros."
-                : "Todavía no hay informes. Cada auditoría, cada verificación y cada arreglo deja el suyo al terminar.";
+                ? ("Ningún informe con estos filtros.", "Limpiar filtros")
+                : ("Todavía no hay informes. Cada auditoría, cada verificación y cada arreglo deja el suyo al terminar.",
+                    "Ir al Portafolio");
+    }
+
+    /// <summary>El rótulo de la salida del estado vacío. Vacío = no hay estado vacío que llenar.</summary>
+    [ObservableProperty] private string _emptyActionLabel = string.Empty;
+
+    /// <summary>
+    /// La salida del estado vacío: quitar los filtros que no dejan pasar ninguno, o ir a elegir la
+    /// aplicación que auditar — que es lo que hace que aparezca el primer informe.
+    /// </summary>
+    [RelayCommand]
+    private Task EmptyAction() => EmptyActionLabel == "Limpiar filtros"
+        ? Clear()
+        : _navigation.NavigateToAsync<PortfolioViewModel>();
+
+    private Task Clear()
+    {
+        ClearFiltersCommand.Execute(null);
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -411,7 +467,12 @@ public sealed partial class ReportsViewModel : ViewModelBase
         }
 
         OpenReport = row;
-        Document = MarkdownFlowDocument.Build(_reports.Read(row.Entry), OpenExternal);
+        (string cuerpo, string? anexo) = SplitAnnex(_reports.Read(row.Entry));
+        Document = MarkdownFlowDocument.Build(cuerpo, OpenExternal);
+        // El anexo, SIN medida de lectura: sus tablas son de nueve columnas y en una columna de
+        // 720 px se parten. No es prosa, son datos.
+        AnnexDocument = anexo is null ? null : MarkdownFlowDocument.Build(anexo, OpenExternal, measure: 0);
+        HasAnnex = anexo is not null;
         ViewerTitle = row.Title;
         ViewerSubtitle = string.Join(" · ", new[] { row.When, row.AppName, row.By }
             .Where(s => !string.IsNullOrWhiteSpace(s) && s != Unknown));
@@ -430,6 +491,38 @@ public sealed partial class ReportsViewModel : ViewModelBase
         IsViewing = false;
         OpenReport = null;
         Document = null;
+        AnnexDocument = null;
+        HasAnnex = false;
+    }
+
+    /// <summary>
+    /// Parte el markdown por el encabezado del anexo. Devuelve el cuerpo y el anexo, o el informe
+    /// entero y null si no lo trae.
+    /// <para>
+    /// La raya horizontal que <c>ReportBuilder</c> pone delante del anexo se va con él: sin eso, el
+    /// cuerpo acabaría en una línea de separación que no separa de nada.
+    /// </para>
+    /// </summary>
+    internal static (string Body, string? Annex) SplitAnnex(string? markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+        {
+            return (markdown ?? string.Empty, null);
+        }
+
+        int at = markdown.IndexOf(AnnexHeading, StringComparison.Ordinal);
+        if (at < 0)
+        {
+            return (markdown, null);
+        }
+
+        string body = markdown[..at].TrimEnd();
+        if (body.EndsWith("---", StringComparison.Ordinal))
+        {
+            body = body[..^3].TrimEnd();
+        }
+
+        return (body, markdown[at..]);
     }
 
     /// <summary>

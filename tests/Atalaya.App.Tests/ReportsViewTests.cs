@@ -476,6 +476,44 @@ public sealed class ReportsViewTests : IDisposable
         public object? GetService(Type serviceType) => null;
     }
 
+    // =============================================================== §C · el estado vacío
+
+    /// <summary>
+    /// F26 Parte C — <b>un estado vacío lleva la salida que corresponde, y son tres</b>.
+    /// <para>
+    /// Antes era una frase centrada y, como mucho, «Limpiar filtros». Quien filtraba por una
+    /// aplicación que todavía no se ha auditado leía «Ningún informe con estos filtros» y se
+    /// quedaba ahí: la salida era quitar el filtro, que es justo lo que NO quería. Ahora la salida
+    /// depende de por qué está vacío — que es lo único que hace útil a un estado vacío.
+    /// </para>
+    /// <para>
+    /// <b>Se rompe en silencio</b>: la lista sigue vacía, el botón sigue estando, y lo único que
+    /// cambia es que lleva al sitio equivocado.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Sin_informes_de_NINGUNA_aplicacion_la_salida_es_ir_a_elegir_una()
+    {
+        ReportsViewModel vm = TestFactory.Reports(_hub);
+        await vm.LoadAsync();
+
+        vm.IsEmpty.Should().BeTrue();
+        vm.EmptyActionLabel.Should().Be("Ir al Portafolio");
+    }
+
+    [Fact]
+    public async Task Con_filtros_puestos_la_salida_es_quitarlos()
+    {
+        Session("app");
+
+        ReportsViewModel vm = TestFactory.Reports(_hub);
+        await vm.LoadAsync();
+        vm.SearchText = "no-existe-este-texto";
+
+        vm.IsEmpty.Should().BeTrue();
+        vm.EmptyActionLabel.Should().Be("Limpiar filtros");
+    }
+
     /// <summary>
     /// Un enlace que llega de fuera —Métricas, «Última sesión»— a un informe que no está no puede
     /// quedarse callado: sin aviso es indistinguible de que el botón no funcione.

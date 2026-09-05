@@ -135,7 +135,30 @@ public sealed partial class OnboardingViewModel : ViewModelBase
 
     partial void OnCodeAuditPathChanged(string value) => DescribeBaseline(auto: false);
 
-    partial void OnClonePathChanged(string value) => DetectBaseline();
+    partial void OnClonePathChanged(string value)
+    {
+        DetectBaseline();
+        ClonePathError = string.Empty;
+    }
+
+    /// <summary>
+    /// <b>Los errores de validación van EN LÍNEA, bajo el campo que los produce</b> (F26 Parte C).
+    /// <para>
+    /// Hasta aquí, pulsar «Crear» sin repositorio o con una ruta que no existe soltaba un toast
+    /// —«Elige el repositorio (o escribe su URL) y una ruta de clon válida.»— que decía las dos
+    /// cosas a la vez, no decía cuál fallaba y caducaba a los ocho segundos. Es la misma regla que
+    /// D-949 aplica a un botón bloqueado: la razón va pegada a lo que la produce.
+    /// </para>
+    /// <para>
+    /// Aparecen al INTENTAR crear, no mientras se escribe: un formulario que se pone rojo antes de
+    /// que lo hayas rellenado regaña por adelantado. Y se van solos en cuanto el campo cambia.
+    /// </para>
+    /// </summary>
+    [ObservableProperty] private string _repoError = string.Empty;
+
+    [ObservableProperty] private string _clonePathError = string.Empty;
+
+
 
     /// <summary>
     /// Busca la <c>CodeAudit/</c> en el clon elegido. Solo PROPONE: encontrarla no importa nada,
@@ -376,6 +399,7 @@ public sealed partial class OnboardingViewModel : ViewModelBase
     {
         Name = NameFromRepoUrl(value);
         DetectExistingApp();
+        RepoError = string.Empty;
     }
 
     /// <summary>La app del hub que YA tiene este repo, si la hay.</summary>
@@ -456,9 +480,17 @@ public sealed partial class OnboardingViewModel : ViewModelBase
     [RelayCommand]
     private async Task Create()
     {
-        if (string.IsNullOrWhiteSpace(Name) || string.IsNullOrWhiteSpace(RepoUrl) || !Directory.Exists(ClonePath))
+        // La validación se dice EN LÍNEA, campo a campo (F26 §C): antes era un toast que juntaba
+        // las dos condiciones y no decía cuál había fallado.
+        RepoError = string.IsNullOrWhiteSpace(Name) || string.IsNullOrWhiteSpace(RepoUrl)
+            ? "Elige un repositorio de la lista, o escribe su URL."
+            : string.Empty;
+        ClonePathError = string.IsNullOrWhiteSpace(ClonePath)
+            ? "Señala la carpeta donde tienes clonado el repositorio."
+            : Directory.Exists(ClonePath) ? string.Empty : "Esa carpeta no existe en esta máquina.";
+
+        if (RepoError.Length > 0 || ClonePathError.Length > 0)
         {
-            _toasts.Show("Elige el repositorio (o escribe su URL) y una ruta de clon válida.");
             return;
         }
 
