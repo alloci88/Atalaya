@@ -5,7 +5,9 @@ parches habrían sido sesenta y un sitios donde el mismo defecto puede volver, a
 **siete causas** y se comprobó, hallazgo a hallazgo, cuál cae con cada una. Los siete que no caían
 con ninguna se arreglaron al final, uno por uno.
 
-**Resultado: 60 cerrados, 1 descartado por decisión del usuario (UI-0045).** Ocho propuestas del
+**Resultado: 60 cerrados, 1 descartado por decisión del usuario (UI-0045).** Uno de los sesenta
+—**UI-0023**— no aparecía en la lista de ninguna raíz del encargo; se arregla igualmente y se dice
+dónde, que es lo que hace que el recuento cuadre. Ocho propuestas del
 bloque 2 entran —P-01, P-02, P-04, P-05, P-08, P-12, P-27, P-28—; una queda descartada con su
 hallazgo (P-17); las diecinueve restantes no se han tocado.
 
@@ -180,6 +182,21 @@ avisos mide cero.
 | UI-0039 · la destructiva perfilada | `vistas/dark-completa/09-cuenta.png` — «Desconectar» |
 | UI-0041 · la acción no se sale de la pantalla | `vistas/dark-1280/02-nueva-aplicacion.png` |
 
+### El hallazgo que ninguna raíz nombraba — UI-0023
+
+Los siete lotes del encargo suman 59 hallazgos, más las siete bajas: 59 + 7 = 60 con UI-0045
+descartado, y la auditoría tiene 61. El que faltaba es **UI-0023**, de gravedad media, y no estaba en
+ninguna lista.
+
+Cae del lado de esta raíz, así que se arregla aquí: «Expandir todo» se pintaba como **enlace azul**
+en el extremo derecho de la barra del Inventario y como **botón neutro arriba a la derecha** en
+Hallazgos —el mismo rótulo y la misma acción, dos formas y dos sitios—. Ahora vive en la barra de la
+lista en las dos, que es donde vive lo que **toca la lista** —buscar, filtrar, plegar— y no arriba
+con las acciones de vista: no lanza nada y no escribe nada. Y es un secundario, no un enlace: el
+azul, en el resto de la aplicación, anuncia que se va a otro sitio.
+
+Se comprueba en `vistas/dark-completa/03-inventario.png` y `04-hallazgos.png`.
+
 ## Raíz 7 — La página y el documento
 
 **La causa.** No había ningún sitio donde estuviera escrito **dónde empieza una página y hasta dónde
@@ -239,7 +256,7 @@ Una línea cada una, que es lo que son.
 
 ## Las reglas nuevas
 
-Trece tests, uno por línea, con la regla que protege cada uno. Todos comprobados contra su defecto:
+Quince tests, uno por línea, con la regla que protege cada uno. Todos comprobados contra su defecto:
 se dejó el defecto en su sitio y se vio fallar el test.
 
 | Test | La regla que protege |
@@ -257,6 +274,8 @@ se dejó el defecto en su sitio y se vio fallar el test.
 | `PathTextTests.Una_fila_reciclada_vuelve_a_acortar_su_ruta` | En una lista virtualizada, cambiar el texto sin cambiar de tamaño también tiene que acortar |
 | `ExhaustiveModeTests.La_tira_de_la_carcasa_dice_la_palabra_y_no_repite_el_progreso` | El progreso lo dice la vista una vez; la carcasa dice lo que la vista no puede decir |
 | `ShellNavigationTests.Pasar_por_el_portafolio_conserva_el_grupo_de_la_aplicacion` | Navegar a Portafolio no puede borrar la aplicación activa del raíl |
+| `ShellNavigationTests.La_miga_acaba_en_la_pagina_y_solo_el_ultimo_eslabon_lo_parece` | Sólo un eslabón puede ser la página; los demás llevan su separador aunque no sean enlace |
+| `ShellNavigationTests.En_el_portafolio_la_miga_es_un_eslabon_y_es_el_ultimo` | Con un solo eslabón, ése es el último: ni «›» hacia la nada ni un título sin peso |
 
 Y dos que cambian porque cambió la regla que protegían: `PolishLayoutTests` pasa de contar columnas
 a exigir **una sola elástica y que sea la del texto** —el aviso lleva ahora también su icono—, y
@@ -272,8 +291,17 @@ a exigir **una sola elástica y que sea la del texto** —el aviso lleva ahora t
 | **Descartados por decisión del usuario** | **1** — UI-0045 (los rótulos del raíl; D-1000 §2, P-17 con él) |
 | **Pendientes** | **0** |
 
-Por raíz: raíz 1 · 12 · raíz 2 · 2 · raíz 3 · 6 · raíz 4 · 10 (+1 descartado) · raíz 5 · 6 · raíz 6 ·
-6 · raíz 7 · 10 · bajas sueltas · 7. Suma 59 + 7 bajas = **60 cerrados y 1 descartado**.
+| Raíz | Cierra |
+|---|---|
+| 1 · el color sale de la paleta | 12 |
+| 2 · los diálogos leen la paleta | 2 |
+| 3 · el foco tiene sitio | 6 |
+| 4 · la carcasa deja de moverse | 10 (+1 descartado) |
+| 5 · los recortes dejan de mentir | 6 |
+| 6 · el primario, las acciones y los avisos | 6 + UI-0023 |
+| 7 · la página y el documento | 10 |
+| las bajas, una a una | 7 |
+| **Total** | **60 cerrados + 1 descartado = 61** |
 
 ---
 
@@ -290,6 +318,13 @@ igual y los tests pasan igual.** Están en D-1010 con su detalle; en resumen:
 3. **`TextTrimming="None"` era lo que impedía el acortado**, no lo que lo dejaba trabajar: un
    `TextBlock` sin recorte declarado pide el ancho del texto entero y no acepta menos, así que en una
    fila apretada empujaba su columna y el contenedor la cortaba en seco.
+4. **La miga del Inventario juntaba dos eslabones**: se leía `Portafolio › XBLASTInventario`, con el
+   nombre de la aplicación pegado al de la página y los dos en negrita. La causa es de la raíz 4: la
+   miga acaba ahora **siempre** en la página, y en el Inventario el eslabón de en medio no es enlace
+   —sería un enlace a donde ya estás—, así que mientras «ser la página» se dedujo de «no ser enlace»,
+   ese eslabón se pintaba como la página y el separador, que colgaba de lo mismo, no salía. `Crumb`
+   estrena `IsLast`, que lo pone quien construye la miga. Tests: dos, y **la miga no tenía
+   ninguno**.
 
 Y de camino, dos cosas que las capturas destaparon y que no son de la auditoría: la tabla de Informes
 **cabe a 1280** —sus mínimos sumaban 960 con 952 disponibles— y la razón de un control apagado
@@ -316,8 +351,12 @@ vacío de `tour.ps1` cuando se le invoca con `powershell -File`.
 ## Estado
 
 - **Build:** correcto, 0 errores, 0 advertencias en la aplicación.
-- **Tests:** **2.434 en verde**, 0 fallos (1.925 de `Atalaya.App.Tests`, trece nuevos).
+- **Tests:** **2.436 en verde**, 0 fallos (1.927 de `Atalaya.App.Tests`, quince nuevos).
 - **`dist`:** reconstruido con `scripts/publish.ps1` y arrancado para comprobarlo.
 - **Capturas:** recorrido completo en las cuatro combinaciones más las densas y los diálogos, en
-  `docs/design/f27/banco/`.
+  `docs/design/f27/banco/`. **Salvo dos vistas**: `03-inventario` y `04-hallazgos` son de la pasada
+  anterior a UI-0023 y al arreglo de la miga, así que en ellas «Expandir todo» todavía sale como
+  enlace y la miga del Inventario todavía se lee «XBLASTInventario». El recorrido conduce la
+  aplicación con el ratón de verdad, así que la pasada que las actualiza queda **a la espera de que
+  el usuario diga cuándo**.
 - **El push es del usuario** (N-3): los commits están hechos y listados; nadie ha publicado nada.
