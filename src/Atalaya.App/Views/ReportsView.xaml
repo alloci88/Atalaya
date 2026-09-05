@@ -189,17 +189,22 @@
 
             <!-- · Cabecera de columnas. Mismo relleno que la fila, para que cada rótulo caiga
                  sobre su columna: `Pad.Row` en los dos y ni un número suelto. · -->
+            <!-- Y LOS MÍNIMOS SUMAN MENOS QUE EL ANCHO QUE HAY. Sumaban 960 y a 1280 la tabla
+                 dispone de 952 con su relleno: ocho píxeles de más, que hasta P-08 no se veían
+                 porque las cifras iban pegadas a la IZQUIERDA de su columna y les sobraba sitio
+                 por la derecha. Alineadas a la derecha, esos ocho píxeles se comían la «s» de
+                 «credits» y la «e» de «Coste». Un mínimo que no cabe no es un mínimo. -->
             <Grid Grid.Row="2" Margin="{StaticResource Pad.Row}"
                   Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="1.5*" MinWidth="150" />
-                    <ColumnDefinition Width="1.4*" MinWidth="130" />
-                    <ColumnDefinition Width="1.1*" MinWidth="110" />
-                    <ColumnDefinition Width="1.3*" MinWidth="120" />
-                    <ColumnDefinition Width="1.7*" MinWidth="150" />
-                    <ColumnDefinition Width="1*" MinWidth="95" />
-                    <ColumnDefinition Width="1*" MinWidth="95" />
-                    <ColumnDefinition Width="1.2*" MinWidth="110" />
+                    <ColumnDefinition Width="1.5*" MinWidth="140" />
+                    <ColumnDefinition Width="1.4*" MinWidth="110" />
+                    <ColumnDefinition Width="1.1*" MinWidth="90" />
+                    <ColumnDefinition Width="1.3*" MinWidth="110" />
+                    <ColumnDefinition Width="1.7*" MinWidth="120" />
+                    <ColumnDefinition Width="1*" MinWidth="85" />
+                    <ColumnDefinition Width="1*" MinWidth="85" />
+                    <ColumnDefinition Width="1.2*" MinWidth="105" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="Fecha" Style="{StaticResource Table.Header}" />
                 <TextBlock Grid.Column="1" Text="Aplicación" Style="{StaticResource Table.Header}" />
@@ -249,14 +254,14 @@
                                 ToolTip="{Binding Title}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="1.5*" MinWidth="150" />
-                                    <ColumnDefinition Width="1.4*" MinWidth="130" />
-                                    <ColumnDefinition Width="1.1*" MinWidth="110" />
-                                    <ColumnDefinition Width="1.3*" MinWidth="120" />
-                                    <ColumnDefinition Width="1.7*" MinWidth="150" />
-                                    <ColumnDefinition Width="1*" MinWidth="95" />
-                                    <ColumnDefinition Width="1*" MinWidth="95" />
-                                    <ColumnDefinition Width="1.2*" MinWidth="110" />
+                                    <ColumnDefinition Width="1.5*" MinWidth="140" />
+                                    <ColumnDefinition Width="1.4*" MinWidth="110" />
+                                    <ColumnDefinition Width="1.1*" MinWidth="90" />
+                                    <ColumnDefinition Width="1.3*" MinWidth="110" />
+                                    <ColumnDefinition Width="1.7*" MinWidth="120" />
+                                    <ColumnDefinition Width="1*" MinWidth="85" />
+                                    <ColumnDefinition Width="1*" MinWidth="85" />
+                                    <ColumnDefinition Width="1.2*" MinWidth="105" />
                                 </Grid.ColumnDefinitions>
 
                                 <TextBlock Grid.Column="0" Text="{Binding When}" Style="{StaticResource Table.Cell}"
@@ -364,9 +369,13 @@
                  Ahora el documento y el anexo van SEGUIDOS dentro de un solo desplazamiento, así
                  que la tarjeta acaba donde acaba su contenido, y el visor del informe no lleva
                  scroll propio: el de la tarjeta es el único. -->
+            <!-- Y ARRANCA EN EL MARGEN, NO EN EL CENTRO (UI-0035). El techo de lectura es lo
+                 que hace legible el informe; centrarlo era otra cosa, y dejaba la barra de arriba
+                 —que empieza en 264 con todo lo demás— apuntando a una tarjeta que empezaba en
+                 700. La medida de lectura se conserva entera: lo que se mueve es de dónde parte. -->
             <Border Grid.Row="1" Style="{StaticResource Card}"
                     MaxWidth="{StaticResource Read.CardWidth}"
-                    HorizontalAlignment="Center"
+                    HorizontalAlignment="Left"
                     VerticalAlignment="Top">
                 <ScrollViewer Style="{StaticResource Scroll}">
                 <StackPanel>

@@ -20,8 +20,9 @@
     <!-- EL PATRÓN DE PÁGINA (P-02, UI-0035). El título arrancaba en x = 800 porque la columna
          entera iba centrada, así que pasar de Portafolio a Cuenta movía el contenido 536 px a la
          derecha y dejaba la miga —que no se mueve— casi quinientos píxeles a su izquierda. Ahora
-         el título vive en el margen de la página, como en las otras dieciséis vistas, y lo que se
-         centra es el CUERPO, que es lo que un formulario de dos columnas necesita. -->
+         el título vive en el margen de la página, como en las otras dieciséis vistas, y el cuerpo
+         arranca con él: lo que la vista declara es su TECHO (920), no su centro. Centrarlo dejaba
+         530 px en blanco a la izquierda de la primera tarjeta con el título al otro lado. -->
     <c:PageShell Title="Cuenta"
                  Subtitle="Tu identidad de GitHub, lo que hace falta para auditar y el clon del hub en esta máquina."
                  BodyWidth="{StaticResource Form.MaxWidth}">

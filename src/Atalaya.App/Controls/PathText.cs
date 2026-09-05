@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -109,12 +109,27 @@ public sealed class PathText : TextBlock
         }
     }
 
+    /// <summary>
+    /// <b>Una fila RECICLADA vuelve a acortar.</b> La lista de Hallazgos está virtualizada: el
+    /// mismo control sirve a una fila detrás de otra y lo único que cambia es <see cref="Full"/>.
+    /// Al llegar la ruta nueva se escribe entera, y como el control vive en una columna estrella su
+    /// tamaño NO cambia por eso —la columna manda—, así que <c>OnRenderSizeChanged</c> no se
+    /// dispara y el acortado no llegaba a ocurrir nunca: la ruta se salía por el borde de la fila,
+    /// cortada en seco y sin puntos suspensivos. Se veía solo en las filas cuyo NOMBRE de fichero
+    /// era largo, que son las que dejan menos sitio a la ruta.
+    /// <para>
+    /// Con <c>MaxWidth</c> puesto manda él —es el caso del contenedor que mide con ancho
+    /// infinito—; sin él, el ancho bueno es el que este control ya tiene, que es el de su columna y
+    /// no depende del texto. La primera vez vale 0 y no se acorta nada: entonces sí hay cambio de
+    /// tamaño, y ése es el que dispara el acortado.
+    /// </para>
+    /// </summary>
     private static void OnFullChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var self = (PathText)d;
         self._lastWidth = -1;
         self.Text = (string)e.NewValue ?? string.Empty;
-        self.Reflow(self.MaxWidth);
+        self.Reflow(double.IsInfinity(self.MaxWidth) ? self.ActualWidth : self.MaxWidth);
     }
 
     /// <summary>

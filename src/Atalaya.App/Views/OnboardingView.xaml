@@ -37,15 +37,19 @@
 
         <!-- EL PATRÓN DE PÁGINA (P-02, UI-0035): el título en el margen, como en las demás; lo
              que se centra es el cuerpo. Arrancaba en x = 633. -->
+        <!-- EL PATRÓN DE PÁGINA (P-02, UI-0035). El título arrancaba en x = 633 porque la
+             columna entera iba centrada: pasar de Portafolio aquí movía el contenido 369 px a la
+             derecha y dejaba la miga a su izquierda. El techo del formulario se declara arriba y
+             es el mismo de siempre (920); lo que cambia es que ya no se centra. -->
         <c:PageShell Grid.Row="0"
                      Title="Nueva aplicación"
-                     Subtitle="Registra un repo auditable: detecta el stack y construye el inventario del primer ciclo.">
+                     Subtitle="Registra un repo auditable: detecta el stack y construye el inventario del primer ciclo."
+                     BodyWidth="{StaticResource Form.MaxWidth}">
         <Grid>
         <ScrollViewer VerticalScrollBarVisibility="Auto"
                       Padding="{StaticResource Pad.Scroll}"
                       MaxHeight="{Binding ActualHeight, ElementName=FormColumn, Converter={StaticResource Minus}, ConverterParameter=140}">
-        <StackPanel MaxWidth="{StaticResource Form.MaxWidth}" HorizontalAlignment="Center"
-                    Margin="{StaticResource Pad.L.Bottom}">
+        <StackPanel Margin="{StaticResource Pad.L.Bottom}">
 
             <!-- ==================================================== Qué se audita -->
             <!-- Dos tarjetas, porque son dos preguntas distintas: QUÉ se audita (el repositorio,
@@ -254,10 +258,15 @@
 
                     <DockPanel Style="{StaticResource Setting.Row}" Margin="{StaticResource Pad.Zero}">
                         <StackPanel Style="{StaticResource Setting.Label}" />
-                        <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
-                            <CheckBox Content="Importar el baseline al crear la aplicación"
+                        <!-- DockPanel y no StackPanel horizontal: un StackPanel da a sus hijos
+                             ancho INFINITO, así que la razón no envolvía nunca y se salía de la
+                             tarjeta, cortada a mitad de «CodeAudit» contra el borde. La casilla
+                             ocupa lo suyo y la razón recibe lo que queda. -->
+                        <DockPanel>
+                            <CheckBox DockPanel.Dock="Left" Content="Importar el baseline al crear la aplicación"
                                       IsChecked="{Binding ImportBaseline}"
                                       IsEnabled="{Binding HasBaseline}"
+                                      Margin="{StaticResource Pad.S.Right}"
                                       VerticalAlignment="Center" />
                             <!-- Un control apagado lleva su razón al lado, también cuando es una
                                  casilla (UI-0038): estaba deshabilitada y no decía por qué. -->
@@ -265,7 +274,7 @@
                                     Visibility="{Binding HasBaselineBlockedReason, Converter={StaticResource BoolToVisibility}}">
                                 <TextBlock Text="{Binding BaselineBlockedReason}" Style="{StaticResource Reason.Text}" />
                             </Border>
-                        </StackPanel>
+                        </DockPanel>
                     </DockPanel>
 
                     <!-- La salida del importador se queda a la vista: no es el aviso de una
@@ -290,8 +299,11 @@
         </c:PageShell>
 
         <!-- F5.7 §4: sin texto de estado al pie. El resultado va por el toast global. -->
+        <!-- Y la barra de acción, bajo la columna que cierra (UI-0035). Iba centrada, como iba
+             el formulario: al dejar de centrarse el formulario, un botón centrado se quedaba
+             solo en mitad del lienzo. -->
         <StackPanel Grid.Row="1" Orientation="Horizontal"
-                    MaxWidth="{StaticResource Form.MaxWidth}" HorizontalAlignment="Center"
+                    MaxWidth="{StaticResource Form.MaxWidth}" HorizontalAlignment="Left"
                     Margin="{StaticResource Pad.SaveBar}"
                     c:Stack.Gap="{StaticResource Space.S}">
             <Button Content="Crear e inventariar" Command="{Binding CreateCommand}"

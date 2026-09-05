@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 
 namespace Atalaya.App.Controls;
@@ -18,10 +18,11 @@ namespace Atalaya.App.Controls;
 /// buscar al otro extremo.
 /// </para>
 /// <para>
-/// <b>La regla, y es una sola.</b> El título, su línea de subtítulo, el recuento y las acciones de
-/// vista viven <b>en el margen de la página</b>, siempre; lo único que puede centrarse es el
-/// CUERPO, y se declara (<see cref="BodyWidth"/>). Así una página que se centra deja de saltar
-/// respecto a la miga, y el recuento tiene un sitio y no dos.
+/// <b>La regla, y es una sola.</b> Todo —el título, su línea de subtítulo, el recuento, las
+/// acciones de vista y el cuerpo— arranca <b>en el margen de la página</b>. Lo que una vista puede
+/// declarar es el <b>techo</b> de su cuerpo (<see cref="BodyWidth"/>), que es otra cosa: un
+/// formulario no debe estirarse hasta 1.900 px, pero tampoco tiene por qué irse al centro dejando
+/// medio lienzo en blanco a su izquierda y su propio título quinientos píxeles más allá.
 /// </para>
 /// <para>
 /// <b>Por qué un control y no una convención.</b> Porque una convención se copia mal: las dos
@@ -60,10 +61,9 @@ public sealed class PageShell : ContentControl, System.ComponentModel.INotifyPro
         nameof(Actions), typeof(object), typeof(PageShell), new FrameworkPropertyMetadata(null));
 
     /// <summary>
-    /// El ancho del CUERPO. <c>PositiveInfinity</c> —lo normal— es «todo el ancho de la página»;
-    /// un número lo centra en esa medida. Es la única forma declarada de centrar una vista, y por
-    /// eso <see cref="IsBodyCentered"/> se deriva de aquí en vez de ser una segunda propiedad que
-    /// pudiera contradecirla.
+    /// El TECHO del cuerpo. <c>PositiveInfinity</c> —lo normal— es «todo el ancho de la página»;
+    /// un número lo para ahí. Nunca lo centra: el cuerpo empieza donde empieza el título, que es
+    /// lo que hace que pasar de una vista a otra no mueva nada.
     /// </summary>
     public static readonly DependencyProperty BodyWidthProperty = DependencyProperty.Register(
         nameof(BodyWidth),
@@ -71,8 +71,7 @@ public sealed class PageShell : ContentControl, System.ComponentModel.INotifyPro
         typeof(PageShell),
         new FrameworkPropertyMetadata(
             double.PositiveInfinity,
-            FrameworkPropertyMetadataOptions.AffectsMeasure,
-            (d, _) => ((PageShell)d).OnPropertyChangedName(nameof(IsBodyCentered))));
+            FrameworkPropertyMetadataOptions.AffectsMeasure));
 
     public string Title
     {
@@ -114,9 +113,6 @@ public sealed class PageShell : ContentControl, System.ComponentModel.INotifyPro
         ({ Length: > 0 }, _) => Count,
         _ => Subtitle,
     };
-
-    /// <summary>El cuerpo va centrado en su medida en vez de ocupar la página entera.</summary>
-    public bool IsBodyCentered => !double.IsInfinity(BodyWidth);
 
     /// <summary>Hay una línea bajo el título. Sin ella, el título no arrastra un hueco vacío.</summary>
     public bool HasLead => Lead.Length > 0;

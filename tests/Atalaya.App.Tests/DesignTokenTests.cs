@@ -582,6 +582,111 @@ public sealed class DesignTokenTests
     }
 
     /// <summary>
+    /// <b>Una página arranca en el margen, y su cuerpo con ella</b> (P-02, UI-0035).
+    /// <para>
+    /// Medido sobre la fila del título, quince vistas arrancaban en x = 264–266 y dos no: Nueva
+    /// aplicación en 633 y Cuenta en 800, porque las dos se centraban imitando a «Acerca de», que
+    /// es una excepción declarada —una tarjeta de 640 centrada en los dos ejes, D-999 §6— y no un
+    /// patrón. El salto al cambiar de vista era de 536 px, con la miga quieta en 311: el título
+    /// medio lienzo a la derecha de su propia miga.
+    /// </para>
+    /// <para>
+    /// Lo que una vista declara es el <b>techo</b> de su cuerpo, no su centro. Un techo se puede
+    /// tener y seguir empezando donde empieza el título; centrarlo es lo que abre el hueco.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Ninguna_pagina_centra_su_cuerpo()
+    {
+        string estilos = File.ReadAllText(Path.Combine(XamlRoot(), "Themes", "Styles.xaml"));
+        string plantilla = Between(estilos, "<Style TargetType=\"{x:Type c:PageShell}\">", "</Style>");
+
+        plantilla.Should().Contain("HorizontalAlignment=\"Left\"",
+            "el cuerpo de una página empieza donde empieza su título");
+        plantilla.Should().NotContain("HorizontalAlignment=\"Center\"",
+            "centrar el cuerpo es lo que separaba el título de su miga 536 px");
+
+        var centradas = new List<string>();
+        foreach (string file in Directory.EnumerateFiles(Path.Combine(XamlRoot(), "Views"), "*.xaml"))
+        {
+            string body = File.ReadAllText(file);
+            if (!body.Contains("<c:PageShell", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // La forma exacta que lo causaba: una columna con techo Y centrada.
+            foreach (Match m in Regex.Matches(body, @"MaxWidth=""\{StaticResource [^""]+\}""[^>]*HorizontalAlignment=""Center"""))
+            {
+                int line = body.Take(m.Index).Count(c => c == '\n') + 1;
+                centradas.Add($"{Path.GetFileName(file)}:{line}");
+            }
+        }
+
+        centradas.Should().BeEmpty(
+            "una columna con techo se para en su medida, pero se para desde la izquierda:"
+            + Environment.NewLine + string.Join(Environment.NewLine, centradas));
+    }
+
+    private static string Between(string body, string desde, string hasta)
+    {
+        int i = body.IndexOf(desde, StringComparison.Ordinal);
+        i.Should().BeGreaterThan(-1, $"«{desde}» tiene que existir");
+        int j = body.IndexOf(hasta, i, StringComparison.Ordinal);
+        j.Should().BeGreaterThan(-1, $"«{hasta}» tiene que cerrar a «{desde}»");
+        return body[i..j];
+    }
+
+    /// <summary>
+    /// <b>Y ninguna hoja de tema se apoya en una clave que declara MÁS ABAJO.</b>
+    /// <para>
+    /// Un <c>StaticResource</c> se resuelve mientras el diccionario se lee, de arriba abajo: una
+    /// clave que todavía no ha pasado no existe. Compila, los tests de recursos pasan —la clave
+    /// está declarada, solo que después— y el fallo espera a que alguien aplique ese estilo.
+    /// </para>
+    /// <para>
+    /// Pasó con <c>Stat.Number.Sev</c>, que quedó 88 líneas por encima del <c>Stat.Number</c> del
+    /// que hereda: build verde, 1.920 tests verdes, y el <c>dist</c> se cerraba solo al pintar el
+    /// Portafolio —la primera pantalla— con «No se puede encontrar el recurso con el nombre
+    /// "Stat.Number"». Lo que hay entre medias es la única diferencia entre una aplicación que
+    /// arranca y una que no, y no la miraba nadie.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Ningun_estilo_se_apoya_en_una_clave_que_se_declara_mas_abajo()
+    {
+        var adelantadas = new List<string>();
+
+        foreach (string file in Directory.EnumerateFiles(Path.Combine(XamlRoot(), "Themes"), "*.xaml"))
+        {
+            string body = File.ReadAllText(file);
+            string relative = Path.GetRelativePath(XamlRoot(), file).Replace('\\', '/');
+
+            // Dónde se declara cada clave de ESTA hoja. La primera vale: dos con el mismo nombre
+            // ya las caza el compilador.
+            var declaradaEn = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (Match m in Regex.Matches(body, @"x:Key=""([^""]+)"""))
+            {
+                declaradaEn.TryAdd(m.Groups[1].Value, m.Index);
+            }
+
+            foreach (Match m in Regex.Matches(body, @"\{StaticResource ([A-Za-z0-9._]+)\}"))
+            {
+                if (declaradaEn.TryGetValue(m.Groups[1].Value, out int declarada) && declarada > m.Index)
+                {
+                    int line = body.Take(m.Index).Count(c => c == '\n') + 1;
+                    int donde = body.Take(declarada).Count(c => c == '\n') + 1;
+                    adelantadas.Add($"{relative}:{line} → {m.Groups[1].Value} (se declara en la {donde})");
+                }
+            }
+        }
+
+        adelantadas.Should().BeEmpty(
+            "un diccionario se lee de arriba abajo y la aplicación revienta al pintar, no al compilar:"
+            + Environment.NewLine + string.Join(Environment.NewLine, adelantadas));
+    }
+
+    /// <summary>
     /// Un token de TAMAÑO no puede ir en el ancho de una columna ni en el alto de una fila.
     /// <para>
     /// Los tokens de medida se declaran <c>sys:Double</c>, y <c>ColumnDefinition.Width</c> y

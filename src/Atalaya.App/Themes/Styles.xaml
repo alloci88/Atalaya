@@ -514,10 +514,15 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
+    <!-- Y ENVUELVE. Una razón es una frase, y la del baseline —«no se ha encontrado un CodeAudit/
+         dentro del clon»— salía cortada a mitad de palabra contra el borde de su tarjeta, sin
+         puntos suspensivos y sin tooltip: el defecto de P-01 en su forma pura. Un texto que no cabe
+         en una línea usa dos; el ancho se lo da quien lo coloca. -->
     <Style x:Key="Reason.Text" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
         <Setter Property="FontSize" Value="{StaticResource FontSize.Small}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.Ink}" />
         <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
     <!-- ================================================================ Campos
@@ -837,19 +842,6 @@
         </Style.Triggers>
     </Style>
 
-    <!-- LA CIFRA DE UN RECUENTO POR GRAVEDAD, y el cero en neutro (UI-0051). El disparador mira su
-         PROPIO texto y no un enlace: quien la pinta —Portafolio en dos sitios— la enlaza a cuatro
-         propiedades con nombres distintos, y un estilo que dependiera del nombre de la propiedad
-         no valdría para los dos. El color se pone en el uso, que es quien sabe de qué nivel es la
-         cifra; lo que el sistema fija es que a cero se apaga. -->
-    <Style x:Key="Stat.Number.Sev" TargetType="TextBlock" BasedOn="{StaticResource Stat.Number}">
-        <Style.Triggers>
-            <Trigger Property="Text" Value="0">
-                <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
-            </Trigger>
-        </Style.Triggers>
-    </Style>
-
     <!-- ================================================================ El estado de un hallazgo
 
          Activo, resuelto y todo lo demás (silenciado, caducado, falso positivo). Lo pintaban dos
@@ -934,6 +926,19 @@
         <Setter Property="FontSize" Value="{StaticResource FontSize.H2}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+    </Style>
+
+    <!-- LA CIFRA DE UN RECUENTO POR GRAVEDAD, y el cero en neutro (UI-0051). El disparador mira su
+         PROPIO texto y no un enlace: quien la pinta —Portafolio en dos sitios— la enlaza a cuatro
+         propiedades con nombres distintos, y un estilo que dependiera del nombre de la propiedad
+         no valdría para los dos. El color se pone en el uso, que es quien sabe de qué nivel es la
+         cifra; lo que el sistema fija es que a cero se apaga. -->
+    <Style x:Key="Stat.Number.Sev" TargetType="TextBlock" BasedOn="{StaticResource Stat.Number}">
+        <Style.Triggers>
+            <Trigger Property="Text" Value="0">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
     <Style x:Key="Stat.Label" TargetType="TextBlock" BasedOn="{StaticResource Text.Small}">
@@ -1103,9 +1108,10 @@
          derecha, y el cuerpo debajo. El porqué —y las dos vistas que se salían de la cuadrícula—
          está en `PageShell`; aquí solo se dibuja.
 
-         LA CABECERA NO SE CENTRA NUNCA. Lo único que puede centrarse es el cuerpo, y solo cuando
-         la vista declara su medida: así una página de formulario deja de saltar 536 px respecto a
-         la miga, que es de la carcasa y no se mueve.
+         NADA SE CENTRA. Cabecera y cuerpo arrancan en el margen de la página, y lo que una vista
+         declara es el TECHO de su cuerpo: un formulario se para en su medida, pero se para desde
+         la izquierda. Centrarlo era la causa de que Cuenta empezara 536 px a la derecha de su
+         propia miga —que es de la carcasa y no se mueve— con medio lienzo en blanco al lado.
     -->
     <Style TargetType="{x:Type c:PageShell}">
         <Setter Property="Template">
@@ -1137,14 +1143,9 @@
                         </DockPanel>
 
                         <ContentPresenter x:Name="Body" Grid.Row="1"
+                                          HorizontalAlignment="Left"
                                           MaxWidth="{TemplateBinding BodyWidth}" />
                     </Grid>
-
-                    <ControlTemplate.Triggers>
-                        <DataTrigger Binding="{Binding IsBodyCentered, RelativeSource={RelativeSource Self}}" Value="True">
-                            <Setter TargetName="Body" Property="HorizontalAlignment" Value="Center" />
-                        </DataTrigger>
-                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
