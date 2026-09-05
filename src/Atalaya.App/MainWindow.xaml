@@ -164,17 +164,24 @@
                     <ItemsControl ItemsSource="{Binding NavGroups}" DockPanel.Dock="Top">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel>
-                                    <!-- El rótulo del grupo desaparece al plegar: a 60 px no cabe,
-                                         y una etiqueta recortada a dos letras no es un rótulo. -->
-                                    <!-- Sangrada a la x del texto de las entradas (D-966): un
-                                         rótulo de grupo que no cae en la misma columna que lo que
-                                         rotula se lee como si fuera de otra cosa. -->
-                                    <TextBlock Text="{Binding Title, Converter={StaticResource UpperCase}}"
-                                               Style="{StaticResource RailGroup}"
-                                               Visibility="{Binding DataContext.RailCollapsed,
-                                                   RelativeSource={RelativeSource AncestorType=ItemsControl},
-                                                   Converter={StaticResource InverseBoolToVisibility}}" />
+                                <StackPanel AutomationProperties.Name="{Binding Title}">
+                                    <!-- ENTRE BLOQUES, UNA RAYA Y NADA MÁS. Los rótulos
+                                         —«Trabajo», «Sistema»— se retiran: eran dos palabras que
+                                         no llevaban a ningún sitio, obligaban a un ritmo distinto
+                                         por encima y por debajo, y desaparecían al plegar, así que
+                                         el menú cambiaba de forma según su ancho. Con una línea,
+                                         todas las entradas van seguidas y el ritmo es uno solo: 36
+                                         de alto, 4 entre ellas, 8 a cada lado de la raya. Y la raya
+                                         sobrevive al plegado, que es lo que un rótulo no hacía.
+
+                                         El nombre del grupo NO se pierde: sigue siendo el nombre de
+                                         automatización del bloque, que es lo que un lector de
+                                         pantalla necesita para dar la agrupación que la raya da a
+                                         la vista. -->
+                                    <Border BorderThickness="{StaticResource Border.Top}"
+                                            BorderBrush="{DynamicResource Brush.Line}"
+                                            Margin="{StaticResource Pad.RailSeparator}"
+                                            Visibility="{Binding HasSeparator, Converter={StaticResource BoolToVisibility}}" />
                                     <ItemsControl ItemsSource="{Binding Items}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Reflection;
 using Atalaya.App.Services;
 
@@ -74,9 +74,6 @@ public sealed class AboutInfo
     /// <summary>Este binario NO viene del workflow de release.</summary>
     public bool IsDevelopmentBuild => LooksLikeDevelopment(Version);
 
-    /// <summary><inheritdoc cref="Describe" path="/summary"/></summary>
-    public string VersionLabel => $"Versión {Describe(Version)}";
-
     /// <summary>Lo construye desde el hub, el despliegue y el ensamblado vivo.</summary>
     public static AboutInfo Create(HubContext hub, DeployConfig? deploy = null)
         => new(hub.OrganizationName, CurrentVersion(), deploy?.AppRepoUrl);
@@ -133,41 +130,7 @@ public sealed class AboutInfo
         return dash >= 0 ? text[..dash] : text;
     }
 
-    /// <summary>
-    /// Cómo se LEE la versión: «1.0.3» si viene del workflow, «1.0.3-dev · build local (0f920d9)»
-    /// si no.
-    /// <para>
-    /// La diferencia tiene que verse de un vistazo y decir POR QUÉ es distinta. El commit va
-    /// entre paréntesis porque es lo que hace falta para reproducir un fallo reportado desde un
-    /// build sin publicar — que es exactamente el caso que este parte vino a arreglar.
-    /// </para>
-    /// </summary>
-    public static string Describe(string? version)
-    {
-        if (string.IsNullOrWhiteSpace(version))
-        {
-            return "—";
-        }
-
-        string text = version!.Trim();
-        if (!LooksLikeDevelopment(text))
-        {
-            // Release: los metadatos de build (+sha) estorban a la lectura y no son parte de la
-            // versión (SemVer §10), así que se recortan.
-            int plus = text.IndexOf('+');
-            return plus > 0 ? text[..plus] : text;
-        }
-
-        int metadata = text.IndexOf('+');
-        string number = metadata > 0 ? text[..metadata] : text;
-        string commit = metadata > 0 ? text[(metadata + 1)..] : string.Empty;
-
-        return commit.Length > 0
-            ? $"{number} · build local ({commit})"
-            : $"{number} · build local";
-    }
-
-    /// <summary>
+        /// <summary>
     /// Un pre-release marcado como desarrollo. Se mira el identificador COMPLETO tras el guion y
     /// no un «contiene»: un futuro <c>1.1.0-rc.1</c> es un pre-release de verdad, publicado por el
     /// workflow, y no puede leerse como un build de alguien en su portátil.

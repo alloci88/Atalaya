@@ -1,4 +1,4 @@
-using System.Windows.Input;
+﻿using System.Windows.Input;
 using System.Windows.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -70,6 +70,12 @@ public sealed partial class NavGroup : ObservableObject
     public string Title { get; }
 
     public IReadOnlyList<NavItem> Items { get; }
+
+    /// <summary>
+    /// Si el bloque va precedido de una raya. Lo lleva todo el mundo menos el primero: una línea
+    /// antes de la primera entrada no separa nada, solo cuelga del botón de plegar.
+    /// </summary>
+    public bool HasSeparator { get; init; } = true;
 }
 
 /// <summary>Un eslabón de la miga de pan. El último no lleva comando: es donde estás.</summary>

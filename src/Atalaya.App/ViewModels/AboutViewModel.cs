@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using Atalaya.App.Services;
@@ -22,9 +22,13 @@ public sealed record AboutFact(string Label, string Value);
 /// <para>
 /// <b>Y como página tiene que ganarse la pantalla</b> (segunda revisión). Con el contenido del
 /// diálogo —icono, versión, logo y dos enlaces— eran cuatro líneas en una pantalla entera. Lo que
-/// se añade no es relleno: es lo que se viene a buscar aquí cuando algo va raro —qué binario estoy
-/// ejecutando, de qué commit, de qué día, contra qué proveedor y con qué modelo— y las acciones que
-/// lo acompañan, empezando por comprobar si hay una versión nueva.
+/// la gana no es más filas: es la ACCIÓN —«Buscar actualizaciones»— más la identidad del binario.
+/// </para>
+/// <para>
+/// <b>Y en la tercera revisión la ficha adelgazó otra vez.</b> Ganarse la pantalla no era llenarla:
+/// canal, commit, proveedor, modelo y organización se fueron. Queda lo que solo se puede saber
+/// aquí —qué versión estoy ejecutando y de qué día es—; lo demás o lo dice el logotipo o se
+/// consulta donde se cambia.
 /// </para>
 /// </summary>
 public sealed partial class AboutViewModel : ViewModelBase
@@ -32,21 +36,15 @@ public sealed partial class AboutViewModel : ViewModelBase
     private readonly HubContext _hub;
     private readonly DeployConfig? _deploy;
     private readonly UpdateCheckService? _updates;
-    private readonly AuditorProviderRegistry? _providers;
-    private readonly SettingsService? _settings;
 
     public AboutViewModel(
         HubContext hub,
         DeployConfig? deploy = null,
-        UpdateCheckService? updates = null,
-        AuditorProviderRegistry? providers = null,
-        SettingsService? settings = null)
+        UpdateCheckService? updates = null)
     {
         _hub = hub;
         _deploy = deploy;
         _updates = updates;
-        _providers = providers;
-        _settings = settings;
         Info = AboutInfo.Create(hub, deploy);
     }
 
@@ -62,11 +60,17 @@ public sealed partial class AboutViewModel : ViewModelBase
     public AboutInfo Info { get; private set; }
 
     /// <summary>
-    /// La ficha de datos: versión, commit, canal, fecha del binario, proveedor y modelo.
+    /// La ficha de datos: <b>versión y fecha del binario, y nada más</b> (tercera revisión de §C).
     /// <para>
-    /// Es una lista y no seis propiedades sueltas porque lo que la vista pinta es una REJILLA de
-    /// nombre y valor: con seis propiedades habría seis filas escritas a mano y la séptima nacería
-    /// con otro margen.
+    /// Traía seis filas y sobraban cuatro. <b>Organización</b> la dice el logotipo, que está justo
+    /// encima. <b>Proveedor</b> y <b>Modelo</b> son opciones elegidas en Ajustes, no propiedades de
+    /// este binario: se cambian sin reinstalar nada y se consultan donde se cambian. Y <b>Canal</b>
+    /// y <b>Commit</b> son de quien compila, no de quien usa — un número hexadecimal de ocho
+    /// dígitos no le sirve a nadie que no vaya a abrir el repositorio.
+    /// </para>
+    /// <para>
+    /// Sigue siendo una lista y no dos propiedades sueltas: lo que la vista pinta es una rejilla de
+    /// nombre y valor, y la tercera fila que vuelva tiene que nacer alineada con las otras.
     /// </para>
     /// </summary>
     public IReadOnlyList<AboutFact> Facts { get; private set; } = Array.Empty<AboutFact>();
@@ -100,8 +104,15 @@ public sealed partial class AboutViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Los seis datos, saltándose los que no se saben. Nada se inventa: sin registro de proveedores
-    /// no se escribe «Copilot» por defecto, se omite la fila (D-318).
+    /// Qué binario es y de cuándo. La versión se corta por el <c>+</c>: lo de detrás son los
+    /// metadatos de build —el commit—, que no son parte de la versión (SemVer §10) y que ya no se
+    /// enseñan. La fecha se salta si no se sabe: nada se inventa.
+    /// <para>
+    /// <b>El sufijo sí se queda.</b> Con «Canal» fuera, lo único que distingue un build local de
+    /// una release es el <c>-dev</c> del propio número, así que la versión se enseña con él y no
+    /// recortada a <c>1.0.3</c>. Y lo que ese sufijo GOBIERNA sigue en pie donde importa:
+    /// <c>SelfUpdateService</c> se niega a auto-actualizar un build local.
+    /// </para>
     /// </summary>
     private List<AboutFact> BuildFacts()
     {
@@ -111,31 +122,11 @@ public sealed partial class AboutViewModel : ViewModelBase
         var facts = new List<AboutFact>
         {
             new("Versión", plus < 0 ? raw : raw[..plus]),
-            new("Canal", Info.IsDevelopmentBuild ? "build local" : "release"),
         };
-
-        if (plus >= 0 && plus < raw.Length - 1)
-        {
-            facts.Add(new AboutFact("Commit", raw[(plus + 1)..]));
-        }
 
         if (BuildDate() is { } built)
         {
             facts.Add(new AboutFact("Fecha del binario", built.ToString("d MMM yyyy · HH:mm", AppCulture.Display)));
-        }
-
-        if (_providers?.Current is { } provider)
-        {
-            facts.Add(new AboutFact("Proveedor", provider.ProviderName));
-            if (_settings?.ModelFor(provider.ProviderId) is { Length: > 0 } model)
-            {
-                facts.Add(new AboutFact("Modelo", model));
-            }
-        }
-
-        if (Info.HasOrganization)
-        {
-            facts.Add(new AboutFact("Organización", Info.Organization!));
         }
 
         return facts;

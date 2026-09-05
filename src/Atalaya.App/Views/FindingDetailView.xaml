@@ -82,13 +82,23 @@
 
         <!-- Un campo de metadatos: etiqueta a la izquierda, valor a la derecha con wrap. -->
         <DataTemplate x:Key="MetaRowTemplate">
+            <!-- CLAVE Y VALOR SE DISTINGUEN POR SITIO Y POR COLOR. Con 120 y sin hueco, «Última
+                 confirmación» llegaba al borde de su columna y su valor empezaba pegado: la fila
+                 se leía como una frase seguida —«Última confirmación 04/09/2026…»— en vez de como
+                 un dato con su nombre. La columna cabe la clave más larga y deja 24 de aire, y la
+                 clave va en la tinta apagada contra el valor en la principal. -->
             <Grid Margin="{StaticResource Pad.XS.Bottom}" ToolTip="{Binding Tooltip}">
+                <!-- El ancho va en la CLAVE y la columna es `Auto`: los tokens de tamaño son
+                     `Double` y una `ColumnDefinition` quiere un `GridLength`. Puesto en la columna
+                     no es un error de compilación — revienta al abrir la ficha. -->
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="120" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="{Binding Label}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                           Width="{StaticResource Meta.LabelWidth}"
+                           Margin="{StaticResource Pad.MetaGap}"
+                           Foreground="{DynamicResource Brush.TextMuted}" />
                 <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}">
                     <TextBlock.Style>

@@ -1,4 +1,4 @@
-<UserControl
+﻿<UserControl
     x:Class="Atalaya.App.Views.AboutView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -9,9 +9,9 @@
         grupo Sistema. Y como página se gana la pantalla (segunda revisión): con el contenido del
         diálogo eran cuatro líneas perdidas en un monitor entero.
 
-        UNA tarjeta, centrada en los dos ejes. Lo que lleva dentro es lo que se viene a buscar aquí
-        cuando algo va raro —qué binario, de qué commit, de qué día, contra qué proveedor y con qué
-        modelo— y las acciones que lo acompañan.
+        UNA tarjeta, centrada en los dos ejes: identidad arriba, qué es, la ficha del binario y las
+        acciones. En la tercera revisión la ficha adelgazó —lo que se enseña es lo que solo se puede
+        saber aquí— y la marca subió a la cabecera.
     -->
     <Grid>
         <Border Style="{StaticResource Card}"
@@ -20,10 +20,21 @@
                 Padding="{StaticResource Pad.XL}">
             <StackPanel c:Stack.Gap="{StaticResource Space.L}">
 
-                <!-- Identidad: el icono grande y su nombre. El `.ico` se pide con el fotograma de
-                     su tamaño; sin `DecodePixelWidth` se decodifica por el de 256 y se encoge, que
-                     es el borrón que la variante de silueta existe para evitar. -->
-                <StackPanel Orientation="Horizontal">
+                <!-- LA CABECERA: el icono, el nombre y, a la derecha, la marca.
+
+                     LA MARCA VA AQUÍ, a la derecha del nombre, como en la tarjeta de
+                     identidad de Cuenta: es la cabecera la que dice de quién es esto. Suelta entre
+                     la ficha y los botones era un logotipo flotando en mitad de una tarjeta, sin
+                     nada a lo que pertenecer. Es uno de los DOS sitios donde la marca aparece
+                     (F6.4). Sin organización en el hub no se pinta, y la fila se queda con el
+                     icono y el nombre. -->
+                <DockPanel>
+                    <controls:BrandMark DockPanel.Dock="Right" LogoHeight="30"
+                                        VerticalAlignment="Center"
+                                        Visibility="{Binding Info.HasOrganization, Converter={StaticResource BoolToVisibility}}" />
+                    <!-- El `.ico` se pide con el fotograma de su tamaño; sin `DecodePixelWidth` se
+                         decodifica por el de 256 y se encoge, que es el borrón que la variante de
+                         silueta existe para evitar. -->
                     <Image Width="64" Height="64"
                            RenderOptions.BitmapScalingMode="HighQuality"
                            VerticalAlignment="Center">
@@ -32,19 +43,21 @@
                                          DecodePixelWidth="64" DecodePixelHeight="64" />
                         </Image.Source>
                     </Image>
-                    <StackPanel VerticalAlignment="Center" Margin="{StaticResource Pad.M.Left}">
-                        <TextBlock Text="Atalaya" Style="{StaticResource Text.H2}" />
-                        <TextBlock Text="{Binding Info.VersionLabel}" Style="{StaticResource Text.Small}" />
-                    </StackPanel>
-                </StackPanel>
+                    <!-- El nombre SOLO. La versión estaba aquí y en la ficha de abajo: el mismo
+                         número dos veces a diez píxeles de distancia. -->
+                    <TextBlock Text="Atalaya" Style="{StaticResource Text.H2}"
+                               VerticalAlignment="Center"
+                               Margin="{StaticResource Pad.M.Left}" />
+                </DockPanel>
 
                 <TextBlock Style="{StaticResource Text.Body}"
                            Text="Auditoría de código colaborativa con agentes de IA. El estado vive en un repositorio git compartido; no hay servidor propio." />
 
-                <!-- LA FICHA. Nombre a la izquierda, valor a la derecha, una fila por dato: es lo
-                     que hace que se puedan leer en columna y que la séptima nazca alineada. Los
-                     datos los arma el view-model y se salta los que no sabe — aquí no se inventa
-                     un «Copilot» por defecto (D-318). -->
+                <!-- LA FICHA: versión y fecha del binario. Nombre a la izquierda, valor a la
+                     derecha, una fila por dato, para que se lean en columna y la tercera que vuelva
+                     nazca alineada. Traía seis filas y sobraban cuatro — el logotipo ya dice la
+                     organización, y proveedor y modelo son opciones de Ajustes, no propiedades de
+                     este binario. -->
                 <ItemsControl ItemsSource="{Binding Facts}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
@@ -61,13 +74,6 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-
-                <!-- LA MARCA, sola. Llevaba una tarjeta con la palabra «Maxam» encima del logotipo:
-                     el nombre de la organización ya está en la ficha de arriba, y un logotipo con
-                     su propio nombre escrito al lado se lee dos veces. Es uno de los DOS sitios
-                     donde la marca aparece (F6.4). -->
-                <controls:BrandMark LogoHeight="30" HorizontalAlignment="Left"
-                                    Visibility="{Binding Info.HasOrganization, Converter={StaticResource BoolToVisibility}}" />
 
                 <!-- Las acciones. «Buscar actualizaciones» es el primario: es lo único de esta
                      página que hace algo, y es la razón por la que se abre cuando algo va raro. -->

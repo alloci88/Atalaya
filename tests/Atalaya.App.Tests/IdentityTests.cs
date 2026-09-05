@@ -407,8 +407,11 @@ public sealed class IdentityTests : IDisposable
                 .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion.Trim(),
             "la informativa del binario que se está ejecutando, con sus sufijos");
 
+        // La vista la pinta a través de `Facts`, que la arma el view-model desde el ensamblado.
+        // Lo que este test defiende es que NO haya un número escrito en el XAML, que es el defecto
+        // de BUGFIX-VERSION: un literal envejece sin que nadie lo note.
         Source("src/Atalaya.App/Views/AboutView.xaml").Should()
-            .Contain("{Binding Info.VersionLabel}")
+            .Contain("{Binding Facts}")
             .And.NotContain("Versión 1.", "la versión no se escribe en el XAML");
     }
 
@@ -418,7 +421,6 @@ public sealed class IdentityTests : IDisposable
         var sin = new AboutInfo(null, "1.2.3", "https://github.com/org/repo");
         sin.HasOrganization.Should().BeFalse();
         sin.Signature.Should().Be("Atalaya");
-        sin.VersionLabel.Should().Be("Versión 1.2.3");
 
         var con = new AboutInfo("  Maxam  ", "1.2.3", "https://github.com/org/repo");
         con.HasOrganization.Should().BeTrue();

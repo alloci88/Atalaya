@@ -245,27 +245,6 @@ public sealed class DesignTokenTests
     }
 
     /// <summary>
-    /// La x del texto es la suma de los carriles, y es la MISMA para las entradas y para los
-    /// rótulos de grupo. Un rótulo que no cae en la columna de lo que rotula se lee como si fuera
-    /// de otra cosa.
-    /// </summary>
-    [Fact]
-    public void El_texto_del_rail_empieza_donde_acaban_los_carriles()
-    {
-        double sangria = Token("Rail.MarkerLane") + Token("Rail.IconChannel") + Pad("Pad.RailLabel").Left;
-
-        Token("Rail.TextIndent").Should().Be(
-            sangria,
-            "el número que sangra los rótulos de grupo tiene que ser la suma de los carriles: "
-            + "{0} + {1} + {2}",
-            Token("Rail.MarkerLane"), Token("Rail.IconChannel"), Pad("Pad.RailLabel").Left);
-
-        Pad("Pad.RailGroup").Left.Should().Be(
-            Token("Rail.TextIndent"),
-            "y los rótulos de grupo se sangran con él");
-    }
-
-    /// <summary>
     /// El raíl NO tiene relleno horizontal: el ancho lo reparten los carriles de cada fila. Es lo
     /// que garantiza que el icono caiga en la misma x plegado y desplegado — con relleno en el
     /// raíl, cambiarlo al plegar movía el icono, que es exactamente el defecto de partida.
@@ -359,6 +338,118 @@ public sealed class DesignTokenTests
         }
 
         return culpables;
+    }
+
+    /// <summary>
+    /// TODA clave que un XAML pide con <c>StaticResource</c> existe: o la declara el sistema visual
+    /// o la declara el propio fichero.
+    /// <para>
+    /// <b>Se rompe en el peor sitio posible.</b> Una clave que no existe no es un error de
+    /// compilación —el XAML se compila igual— ni lo ve ningún test que no monte la vista: es una
+    /// <c>XamlParseException</c> el día que alguien navega a esa pantalla, y la aplicación se cierra
+    /// entera. Pasó al mover la barra de guardar de Ajustes: dos tokens nuevos se escribieron en la
+    /// vista y el parche que los añadía a <c>Tokens.xaml</c> no llegó a aplicarse. Compilación
+    /// verde, 2.397 tests verdes, y el dist se moría al pulsar «Ajustes».
+    /// </para>
+    /// <para>
+    /// Mira los DOS sitios donde una clave puede vivir: los diccionarios de <c>Themes/</c>, que
+    /// están fusionados en la aplicación, y el propio fichero —muchas vistas declaran sus plantillas
+    /// y estilos locales—. Con eso basta: lo que no está en ninguno de los dos no está.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Ninguna_vista_pide_una_clave_que_no_existe()
+    {
+        var declaradas = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string file in Directory.EnumerateFiles(Path.Combine(XamlRoot(), "Themes"), "*.xaml"))
+        {
+            foreach (Match m in Regex.Matches(File.ReadAllText(file), @"x:Key=""([^""]+)"""))
+            {
+                declaradas.Add(m.Groups[1].Value);
+            }
+        }
+
+        var huerfanas = new List<string>();
+
+        foreach (string file in Directory.EnumerateFiles(XamlRoot(), "*.xaml", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(XamlRoot(), file).Replace('\\', '/');
+            if (relative.StartsWith("Themes/", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string body = File.ReadAllText(file);
+            var locales = new HashSet<string>(
+                Regex.Matches(body, @"x:Key=""([^""]+)""").Select(m => m.Groups[1].Value),
+                StringComparer.Ordinal);
+
+            foreach (Match m in Regex.Matches(body, @"\{StaticResource ([A-Za-z0-9._]+)\}"))
+            {
+                string key = m.Groups[1].Value;
+                if (!declaradas.Contains(key) && !locales.Contains(key))
+                {
+                    int line = body.Take(m.Index).Count(c => c == '\n') + 1;
+                    huerfanas.Add($"{relative}:{line} → {key}");
+                }
+            }
+        }
+
+        huerfanas.Should().BeEmpty(
+            "una clave que no existe revienta la vista al abrirla, no al compilarla:"
+            + Environment.NewLine + string.Join(Environment.NewLine, huerfanas));
+    }
+
+    /// <summary>
+    /// Un token de TAMAÑO no puede ir en el ancho de una columna ni en el alto de una fila.
+    /// <para>
+    /// Los tokens de medida se declaran <c>sys:Double</c>, y <c>ColumnDefinition.Width</c> y
+    /// <c>RowDefinition.Height</c> quieren un <c>GridLength</c>. Un <c>StaticResource</c> no pasa
+    /// por el conversor de tipos —eso solo lo hace un literal en el atributo—, así que la
+    /// asignación falla; y falla <b>al montar la vista</b>, no al compilarla. Pasó al fijar la
+    /// columna de claves de la ficha del hallazgo: compilación verde, tests verdes, y el dist se
+    /// cerraba al abrir un hallazgo.
+    /// </para>
+    /// <para>
+    /// La forma correcta es la que usan Ajustes y «Acerca de»: la columna en <c>Auto</c> y el ancho
+    /// puesto en el hijo, donde <c>Width</c> sí es un <c>Double</c>.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Ningun_token_de_tamano_se_usa_como_medida_de_una_rejilla()
+    {
+        var dobles = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string file in Directory.EnumerateFiles(Path.Combine(XamlRoot(), "Themes"), "*.xaml"))
+        {
+            foreach (Match m in Regex.Matches(File.ReadAllText(file), @"<sys:Double x:Key=""([^""]+)"""))
+            {
+                dobles.Add(m.Groups[1].Value);
+            }
+        }
+
+        dobles.Should().NotBeEmpty("si no se encuentra ningún token, este test no está mirando nada");
+
+        var culpables = new List<string>();
+
+        foreach (string file in Directory.EnumerateFiles(XamlRoot(), "*.xaml", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(XamlRoot(), file).Replace('\\', '/');
+            string body = File.ReadAllText(file);
+
+            foreach (Match m in Regex.Matches(
+                body, @"<(ColumnDefinition|RowDefinition)[^>]*?\s(Width|Height)=""\{StaticResource ([A-Za-z0-9._]+)\}"""))
+            {
+                if (dobles.Contains(m.Groups[3].Value))
+                {
+                    int line = body.Take(m.Index).Count(c => c == '\n') + 1;
+                    culpables.Add($"{relative}:{line} → {m.Groups[1].Value}.{m.Groups[2].Value} = {m.Groups[3].Value}");
+                }
+            }
+        }
+
+        culpables.Should().BeEmpty(
+            "una rejilla quiere GridLength y el token es Double: la vista revienta al abrirse."
+            + Environment.NewLine + string.Join(Environment.NewLine, culpables));
     }
 
     private static string XamlRoot()

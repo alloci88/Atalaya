@@ -15411,6 +15411,90 @@ dónde va un botón, cuánto mide una barra o de qué color es se ve en la prime
 
 **2.405 tests en verde** (1.897 de `Atalaya.App.Tests`).
 
+### D-1000 — Tercera revisión de la Parte C: la acción bajo su formulario, el raíl sin rótulos, y dos fallos que solo se veían al abrir la pantalla
+
+Cuatro puntos del dist, y **dos defectos propios** que salieron al hacerlos y que dejan test.
+
+**1 · «GUARDAR» VA DEBAJO DE LA ÚLTIMA FILA, ALINEADO CON LO QUE GUARDA.** D-999 ya había estrechado
+la barra de la ventana a la columna de contenido, pero seguía al pie de la ventana: con una sección
+de tres filas, el botón estaba a 600 px de la última, al fondo de una franja vacía. Ahora la fila de
+botones es la fila siguiente del formulario y empieza en **la columna de controles** —la misma x que
+los desplegables que guarda, `Pad.SettingActions` = 344—, que es donde el ojo ya está.
+
+- **«Guardar» deshabilitado hasta que haya cambios.** Un primario encendido que no hace nada es un
+  primario que se aprende a ignorar. Con cambios aparecen **«Descartar»** al lado y el texto **«Hay
+  cambios sin guardar»**; sin ellos, la fila es un botón apagado y nada más.
+- **En Tarifas, bajo la tabla y alineados con su borde izquierdo** (`Pad.RatesActions`, sin sangría):
+  la tabla ocupa la columna entera, así que la sangría de un formulario no aplica.
+- **Y se quedan pegados al pie de la COLUMNA cuando la sección es más larga que la ventana.** WPF no
+  tiene `position: sticky`. Se consigue con tres filas: el scroll mide lo que mide su contenido —así
+  los botones quedan justo debajo de la última fila cuando cabe— con un tope igual al alto de la
+  columna menos lo que ocupan los botones. Ese tope es lo único que hace falta del nuevo
+  `MinusConverter`, y por eso su documentación dice para qué existe.
+
+**2 · EL RAÍL PIERDE «TRABAJO» Y «SISTEMA», Y GANA UNA RAYA.** Eran dos palabras que no llevaban a
+ningún sitio. Costaban tres cosas: obligaban a un ritmo distinto por encima y por debajo —24 arriba,
+8 abajo, contra los 4 de las entradas—, ocupaban una fila de menú cada una, y **desaparecían al
+plegar**, así que el menú cambiaba de forma según su ancho. Ahora todas las entradas van seguidas
+—Portafolio, Hallazgos, Informes, Métricas, la aplicación activa cuando la hay, Cuenta, Ajustes,
+Acerca de— y entre bloques va **una línea de un píxel con 8 arriba y 8 abajo**. Con eso el ritmo se
+resuelve solo: 36 de alto, 4 entre entradas, y nada más que decidir. La raya sobrevive al plegado.
+
+**El nombre del grupo no se pierde: pasa a ser el nombre de automatización del bloque.** Un lector de
+pantalla no ve una raya, y la agrupación que la raya da a la vista tiene que llegarle de alguna
+forma. Se fueron con los rótulos `Pad.RailGroup`, el estilo `RailGroup`, el token `Rail.TextIndent`
+—que existía solo para sangrarlos— y `UpperCaseConverter`, que no tenía más cliente.
+
+**3 · «ACERCA DE» ADELGAZA.** D-999 la llenó con seis filas para que se ganara la pantalla, y ganarse
+la pantalla no era llenarla. Se van **Organización** (ya lo dice el logotipo), **Proveedor** y
+**Modelo** (son opciones elegidas en Ajustes, no propiedades de este binario: se cambian sin
+reinstalar nada y se consultan donde se cambian) y **Canal** y **Commit** (son de quien compila).
+Quedan **versión** y **fecha del binario**, que es lo que solo se puede saber aquí. El **logotipo de
+Maxam sube a la cabecera de la tarjeta**, a la derecha del icono y del nombre, como en la tarjeta de
+identidad de Cuenta: suelto entre la ficha y los botones era un logotipo flotando sin nada a lo que
+pertenecer. Y la versión, que estaba en la cabecera **y** en la ficha, se dice una vez.
+
+**Con «Canal» fuera muere `AboutInfo.VersionLabel` y con él `Describe`**, que era quien escribía
+«build local (0f920d9)» — código que ya no pinta nadie, así que sale, y con él sus tres tests. **Lo
+que ese texto decía no se pierde**: el sufijo `-dev` sigue en el número que se enseña, y lo que el
+sufijo GOBIERNA sigue donde importa —`SelfUpdateService` se niega a auto-actualizar un build local, y
+`IsDevelopmentBuild` conserva sus casos.
+
+**4 · LOS METADATOS DE LA FICHA SE LEEN COMO DATOS, NO COMO UNA FRASE.** La columna de claves medía
+120 y no tenía hueco: «Última confirmación» llegaba al borde y su valor empezaba pegado, así que la
+fila se leía «Última confirmación 04/09/2026 13:32 · Daniel…» de corrido. La columna pasa a **150 con
+24 de aire** y la clave a la **tinta apagada** contra el valor en la principal: se distinguen por
+sitio y por color, no por uno solo.
+
+Y **«modelo auto» pasa a «modelo automático»**. `auto` es un modelo de verdad del selector de
+Copilot —el que deja elegir al proveedor—, así que el sello lo guarda tal cual y la ficha lo enseñaba
+abreviado a medias. **No se puede decir a cuál resolvió**: `DetectionStamp` no guarda con qué sesión
+se detectó y el proveedor no devuelve su elección, así que no hay de dónde sacarlo. Enseñar el modelo
+configurado HOY sería peor que no decir nada, porque no es el que juzgó.
+
+---
+
+**LOS DOS DEFECTOS PROPIOS, Y SUS DOS TESTS.** Los dos son de la misma familia y son la razón por la
+que estas capturas se miran en el dist y no en un `dotnet build`: **el XAML compila igual y los tests
+pasan igual; la vista revienta al abrirse.**
+
+- **Una clave que no existe.** Los dos tokens de la fila de botones se escribieron en la vista y el
+  parche que los añadía a `Tokens.xaml` no llegó a aplicarse. Compilación verde, 2.397 tests verdes,
+  y `dist\Atalaya.exe` se cerraba entero al pulsar «Ajustes» — `XamlParseException`, sin ventana de
+  error y sin rastro. Test: **toda clave que un XAML pide con `StaticResource` existe**, o en los
+  diccionarios de `Themes/` o en el propio fichero.
+- **Un `Double` donde va un `GridLength`.** La columna de claves de la ficha se fijó con
+  `<ColumnDefinition Width="{StaticResource Meta.LabelWidth}" />`, y los tokens de medida son
+  `sys:Double`. Un `StaticResource` **no pasa por el conversor de tipos** —eso solo lo hace un
+  literal en el atributo—, así que la asignación falla al montar la vista. Mismo síntoma: la
+  aplicación se cerraba al abrir un hallazgo. La forma correcta es la que ya usaban Ajustes y «Acerca
+  de»: la columna en `Auto` y el ancho en el hijo, donde `Width` sí es un `Double`. Test: **ningún
+  token de tamaño se usa como medida de una rejilla**.
+
+Los dos cumplen N-5 sin discusión: protegen una regla, se rompen en silencio para todo lo que
+verifica (compilador, tests, revisión de código) y solo hablan cuando ya es tarde. **2.399 tests en
+verde** (1.890 de `Atalaya.App.Tests`, dos nuevos y cinco retirados con el código que probaban).
+
 ### D-996 — Lo que la Parte C NO toca
 
 Ninguna regla de negocio, ningún dato, nada del hub, ningún prompt. Qué ajustes existen y qué hacen;

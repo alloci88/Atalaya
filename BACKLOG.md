@@ -47,7 +47,12 @@ misma rejilla).
     de revisión** (D-999): la acción se coloca junto a lo que actúa y su barra mide lo que mide el
     contenido —Ajustes, Tarifas y el primario del Inventario—, el raíl estrena ritmo vertical y fila
     de usuario de alto fijo, «Silenciar» y «Es falso positivo» se ven, y «Acerca de» se gana la
-    pantalla con su ficha del binario y «Buscar actualizaciones». Capturas en
+    pantalla con su ficha del binario y «Buscar actualizaciones». **Tercera vuelta** (D-1000):
+    «Guardar» baja debajo de la última fila y alineado con la columna de controles —pegado al pie de
+    la columna cuando la sección no cabe—, el raíl pierde los rótulos de grupo y los separa una raya,
+    «Acerca de» se queda en versión y fecha con el logotipo en la cabecera, y los metadatos de la
+    ficha se leen como datos. Con dos tests nuevos para los dos fallos que solo se veían al abrir la
+    pantalla: una clave inexistente y un `Double` donde iba un `GridLength`. Capturas en
     `docs/design/f26-parte-c/`.
   - **La lista de pendientes de `DesignTokenTests` es el marcador.** Al cerrar la C **quedan diez, y
     los diez son diálogos**: `AboutDialog`, `AuditLaunchDialog`, `CycleConfigDialog`,

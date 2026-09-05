@@ -23,7 +23,7 @@
     <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
     <local:NotEmptyToVisibilityConverter x:Key="NotEmptyToVisibility" />
     <local:ProgressToPercentConverter x:Key="ProgressToPercent" />
-    <local:UpperCaseConverter x:Key="UpperCase" />
+    <local:MinusConverter x:Key="Minus" />
     <local:ActivityKindToWeightConverter x:Key="ActivityKindToWeight" />
     <local:UnitRunStateToBrushConverter x:Key="UnitRunStateToBrush" />
     <local:SeverityToVisibilityConverter x:Key="SeverityToVisibility" />

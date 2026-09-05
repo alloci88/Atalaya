@@ -65,8 +65,22 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
-                          Padding="{StaticResource Pad.L.Right}">
+            <!-- LA COLUMNA DE CONTENIDO, con su fila de acciones DEBAJO del contenido y no al pie
+                 de la ventana. Las tres filas hacen los dos comportamientos que hacen falta: el
+                 scroll mide lo que mide su contenido —así los botones quedan justo debajo de la
+                 última fila de una sección corta— pero no pasa del alto de la columna menos lo que
+                 ocupan los botones, así que en una sección larga se queda pegado al pie de la
+                 columna. WPF no tiene «position: sticky»; esto es lo que hay. -->
+            <Grid Grid.Column="1" x:Name="SettingsColumn">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto"
+                              MaxHeight="{Binding ActualHeight, ElementName=SettingsColumn, Converter={StaticResource Minus}, ConverterParameter=64}"
+                              Padding="{StaticResource Pad.L.Right}">
                 <Grid>
 
                     <!-- ============================== Proveedor y modelo ============================== -->
@@ -477,54 +491,46 @@
                 </Grid>
             </ScrollViewer>
 
-        <!-- ==================================================== La barra de guardar
+                <!-- ==================================================== Las acciones
 
-             Al PIE de la COLUMNA del formulario —no de la ventana— y siempre a la vista, que es
-             lo que «Guardar» no era: vivía al final de un scroll de dos pantallas, así que se
-             editaba sin tenerlo delante. Y una barra al ancho de la ventana dejaba el botón a
-             1.400 px de lo que guarda: la acción se coloca junto a lo que actúa.
+                     Debajo de la última fila y ALINEADAS CON LA COLUMNA DE CONTROLES: «Guardar»
+                     empieza donde empiezan los desplegables que guarda, que es donde el ojo ya
+                     está. Vivían en una barra al ancho de la ventana, a 1.400 px del formulario.
 
-             UN primario, y el de la sección que estás editando (principio 4): en Tarifas se guarda
-             la tabla del hub, que es otra cosa y otro sitio. Dos «Guardar» a la vez habrían dejado
-             al usuario decidiendo cuál era el suyo.
-        -->
-        <Border Grid.Row="1" Grid.Column="1" Style="{StaticResource Card}"
-                Padding="{StaticResource Pad.SaveBar}"
-                CornerRadius="{StaticResource Radius.M}"
-                Margin="{StaticResource Pad.M.Top}">
-            <DockPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                     UN primario, y el de la sección que estás editando (principio 4): en Tarifas se
+                     guarda la tabla del hub, que es otra cosa y otro sitio. Dos «Guardar» a la vez
+                     habrían dejado al usuario decidiendo cuál era el suyo.
+                -->
+                <StackPanel Grid.Row="1" Orientation="Horizontal"
+                            Margin="{StaticResource Pad.SettingActions}"
                             c:Stack.Gap="{StaticResource Space.S}"
                             Visibility="{Binding ShowRates, Converter={StaticResource InverseBoolToVisibility}}">
+                    <!-- Deshabilitado mientras no haya nada que guardar: un primario encendido que
+                         no hace nada es un primario que se aprende a ignorar. -->
+                    <Button Content="Guardar" Command="{Binding SaveCommand}"
+                            Style="{StaticResource Button.Primary}"
+                            IsEnabled="{Binding IsDirty}" />
                     <Button Content="Descartar" Command="{Binding DiscardCommand}"
                             Style="{StaticResource Button.Secondary}"
                             Visibility="{Binding IsDirty, Converter={StaticResource BoolToVisibility}}" />
-                    <Button Content="Guardar" Command="{Binding SaveCommand}"
-                            Style="{StaticResource Button.Primary}" />
-                </StackPanel>
-
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
-                            c:Stack.Gap="{StaticResource Space.S}"
-                            Visibility="{Binding ShowRates, Converter={StaticResource BoolToVisibility}}">
-                    <Button Content="Añadir modelo" Command="{Binding Rates.AddRowCommand}"
-                            Style="{StaticResource Button.Secondary}" />
-                    <Button Content="Guardar tarifas" Command="{Binding Rates.SaveCommand}"
-                            Style="{StaticResource Button.Primary}" />
-                </StackPanel>
-
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
-                            c:Stack.Gap="{StaticResource Space.XS}"
-                            Visibility="{Binding IsDirty, Converter={StaticResource BoolToVisibility}}">
-                    <Path Style="{StaticResource Icon.Small}"
-                          Data="{x:Static c:Icons.Info}"
-                          Stroke="{DynamicResource Brush.Warning.Ink}" />
                     <TextBlock Text="Hay cambios sin guardar" Style="{StaticResource Text.Small}"
                                Foreground="{DynamicResource Brush.Warning.Ink}"
-                               VerticalAlignment="Center" />
+                               VerticalAlignment="Center"
+                               Visibility="{Binding IsDirty, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
-            </DockPanel>
-        </Border>
-        </Grid>
 
+                <!-- En Tarifas, bajo la TABLA y alineadas con su borde izquierdo: la tabla ocupa la
+                     columna entera, así que aquí la sangría de los controles no aplica. -->
+                <StackPanel Grid.Row="1" Orientation="Horizontal"
+                            Margin="{StaticResource Pad.RatesActions}"
+                            c:Stack.Gap="{StaticResource Space.S}"
+                            Visibility="{Binding ShowRates, Converter={StaticResource BoolToVisibility}}">
+                    <Button Content="Guardar tarifas" Command="{Binding Rates.SaveCommand}"
+                            Style="{StaticResource Button.Primary}" />
+                    <Button Content="Añadir modelo" Command="{Binding Rates.AddRowCommand}"
+                            Style="{StaticResource Button.Secondary}" />
+                </StackPanel>
+            </Grid>
+        </Grid>
     </Grid>
 </UserControl>

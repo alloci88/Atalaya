@@ -51,22 +51,26 @@ algo está hecho como está, `DECISIONS.md`.
 
 La ventana tiene tres piezas fijas, y las tres están siempre en el mismo sitio.
 
-**El raíl**, a la izquierda. Sus entradas van agrupadas por lo que son:
+**El raíl**, a la izquierda. Todas las entradas van seguidas, separadas en bloques por **una
+línea fina**:
 
-- **Trabajo** — Portafolio, Hallazgos, Informes, Métricas. Lo que se hace a diario, esté donde
-  esté puesta la aplicación.
-- **La aplicación en la que estás** — el grupo lleva su nombre (`XBLAST`) y dentro va su
-  **Inventario**, más **Sesión en vivo** y **Arreglo asistido** cuando los hay. Este grupo aparece
-  en cuanto entras en algo de una aplicación y te sigue mientras estés dentro: el inventario está
-  **a un clic desde cualquier página**, sin pasar por Portafolio.
-- **Sistema** — Cuenta, Ajustes y **Acerca de**. Tu cuenta también está abajo del todo, con tu avatar — y en la
-  esquina del avatar, **el piloto del hub**.
+- **Lo de siempre** — Portafolio, Hallazgos, Informes, Métricas. Lo que se hace a diario, esté
+  donde esté puesta la aplicación.
+- **La aplicación en la que estás** — **Inventario**, más **Sesión en vivo** y **Arreglo asistido**
+  cuando los hay. Este bloque aparece en cuanto entras en algo de una aplicación y te sigue mientras
+  estés dentro: el inventario está **a un clic desde cualquier página**, sin pasar por Portafolio.
+- **Lo tuyo y lo de la aplicación** — Cuenta, Ajustes y **Acerca de**. Tu cuenta también está abajo
+  del todo, con tu avatar — y en la esquina del avatar, **el piloto del hub**.
+
+*(Hasta la 1.4.4 los bloques llevaban un rótulo escrito, «TRABAJO» y «SISTEMA». No llevaban a ningún
+sitio, ocupaban una fila cada uno y desaparecían al plegar el raíl, así que el menú cambiaba de forma
+según su ancho. Una raya hace lo mismo y aguanta plegada.)*
 
 La entrada donde estás va resaltada, con una barra de color a su izquierda. Un punto que late
 sustituye al icono cuando algo está corriendo — una auditoría o un arreglo.
 
 Todos los iconos del raíl van en **una sola columna** —el botón de las tres rayas, cada entrada y
-tu avatar— y todos los textos empiezan en la misma vertical, incluidos los rótulos de los grupos.
+tu avatar— y todos los textos empiezan en la misma vertical.
 Plegado o desplegado, los iconos no se mueven de sitio: lo único que desaparece es el texto.
 
 Si estrechas mucho la ventana, el raíl **se pliega a solo iconos** para devolverle el sitio al
@@ -786,21 +790,16 @@ frase «disponible si lo activas»: te dice que existe y cómo activarlo si te i
 
 ### Acerca de
 
-Está en el raíl, en **Sistema**, debajo de Ajustes. Es la ficha del binario que estás ejecutando, y
-es la pantalla a la que ir cuando algo va raro y hay que decir con qué se está trabajando:
-
-| Dato | Qué es |
-| --- | --- |
-| **Versión** | El número, tal cual lo declara el binario |
-| **Canal** | «release» si viene del workflow de publicación; «build local» si lo compiló alguien |
-| **Commit** | El commit exacto del que salió |
-| **Fecha del binario** | Cuándo se construyó este ejecutable |
-| **Proveedor** y **Modelo** | Con quién y con qué estás auditando ahora mismo |
-| **Organización** | La del hub, con su logotipo |
+Está en el raíl, debajo de Ajustes. Es la ficha del binario que estás ejecutando, y es la pantalla a
+la que ir cuando algo va raro y hay que decir con qué se está trabajando: **la versión** y **la fecha
+del binario**, con el logotipo de tu organización en la cabecera de la tarjeta.
 
 Y cuatro acciones: **Buscar actualizaciones** —pregunta a GitHub en el momento, sin esperar al
 chequeo periódico, y contesta ahí mismo—, **Novedades** (las notas de las versiones publicadas),
 **Repositorio** y **Manual**.
+
+*(Con quién y con qué estás auditando no está aquí: se elige en **Ajustes → Proveedor y modelo**, y
+se consulta donde se cambia.)*
 
 *(Hasta la 1.4.4 era una ventana que se abría desde el fondo de Ajustes → Avanzado. No se edita nada
 ahí dentro, así que no era un ajuste — y ahí no lo encontraba nadie.)*
@@ -827,7 +826,7 @@ que se está editando ahí.
 Cada ajuste cuenta en **una línea** qué hace y cuándo aplica; lo que necesita más explicación vive
 detrás de un **«Más»** en la misma fila, plegado.
 
-**«Acerca de» ya no está aquí**: es una entrada del raíl, en el grupo Sistema, debajo de Ajustes.
+**«Acerca de» ya no está aquí**: es una entrada del raíl, debajo de Ajustes.
 Y el **umbral de unidad grande** tampoco tiene fila: no se edita en esta máquina —es política de
 cada aplicación— y se gobierna en **Inventario → Gobernanza → Umbrales**, que es donde también se
 explica.

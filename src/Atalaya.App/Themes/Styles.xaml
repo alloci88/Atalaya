@@ -460,18 +460,6 @@
         <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
 
-    <!-- EL RÓTULO DE UN GRUPO del raíl. En versalitas y en la tinta terciaria: no es una entrada,
-         es el nombre de un cajón, y tiene que leerse como tal sin competir con lo que rotula. El
-         aire va en su margen (`Pad.RailGroup`), 24 por encima y 8 por debajo, que es lo que agrupa.
-         <b>A 13 y no a 12</b>: 13 es el suelo de la escala desde D-962 y el 12 dejó de existir como
-         token — en mayúsculas se lee bastante más grande que su número, así que el efecto es el que
-         se pedía sin reabrir lo que aquella decisión cerró. -->
-    <Style x:Key="RailGroup" TargetType="TextBlock" BasedOn="{StaticResource Text.Meta}">
-        <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Margin" Value="{StaticResource Pad.RailGroup}" />
-        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-    </Style>
-
     <!-- Los carriles, para que las tres filas los declaren igual sin copiarlos. -->
     <ItemsPanelTemplate x:Key="RailStack">
         <StackPanel />

@@ -762,13 +762,33 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
     /// antes de F5.1b no guardaban modelo y los de antes de F14 no guardaban casa. Un proveedor en
     /// blanco es Copilot y no «desconocido» — no había otro (D-780).
     /// </para>
+    /// <para>
+    /// <b><c>auto</c> se escribe entero.</b> Es un modelo de verdad del selector de Copilot —el que
+    /// deja elegir al proveedor—, así que el sello lo guarda tal cual y la ficha enseñaba «modelo
+    /// auto», que se lee como una abreviatura rota. Se dice «modelo automático».
+    /// </para>
+    /// <para>
+    /// <b>Y no se puede decir cuál salió.</b> Lo suyo sería enseñar el modelo real, pero el sello
+    /// —<c>DetectionStamp</c>— no guarda con qué sesión se detectó, y el proveedor tampoco devuelve
+    /// a qué resolvió su <c>auto</c>: no hay de dónde sacarlo. Enseñar el modelo configurado HOY
+    /// sería peor que no decir nada, porque no es el que juzgó.
+    /// </para>
     /// </summary>
     private static string Judge(Finding f)
     {
         string house = ProviderNames.Display(f.LastConfirmed.Provider ?? f.FirstDetected.Provider);
         string? model = f.LastConfirmed.Model ?? f.FirstDetected.Model;
-        return model is { Length: > 0 } ? $"{house} · modelo {model}" : house;
+        if (model is not { Length: > 0 })
+        {
+            return house;
+        }
+
+        string named = model.Equals(AutoModel, StringComparison.OrdinalIgnoreCase) ? "automático" : model;
+        return $"{house} · modelo {named}";
     }
+
+    /// <summary>El modelo que delega la elección en el proveedor. No es un id de modelo real.</summary>
+    private const string AutoModel = "auto";
 
     private static string Short(string? sha)
         => string.IsNullOrWhiteSpace(sha) ? "—" : (sha!.Length <= 8 ? sha : sha[..8]);

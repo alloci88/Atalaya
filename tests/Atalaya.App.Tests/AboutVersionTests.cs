@@ -18,30 +18,7 @@ namespace Atalaya.App.Tests;
 /// </summary>
 public sealed class AboutVersionTests
 {
-    // ================================================================ cómo se lee la versión
-
-    [Theory]
-    [InlineData("1.0.3", "1.0.3")]
-    [InlineData("1.0.3+abcdef1", "1.0.3")]                       // los metadatos estorban a la lectura
-    [InlineData("2.1.0", "2.1.0")]
-    public void Una_release_se_lee_limpia(string stamped, string expected)
-        => AboutInfo.Describe(stamped).Should().Be(expected);
-
-    [Theory]
-    [InlineData("1.0.3-dev+0f920d9", "1.0.3-dev · build local (0f920d9)")]
-    [InlineData("1.0.3-dev.4+abc1234", "1.0.3-dev.4 · build local (abc1234)")]
-    [InlineData("1.0.3-dev+0f920d9.dirty", "1.0.3-dev · build local (0f920d9.dirty)")]
-    public void Un_build_local_se_distingue_a_simple_vista(string stamped, string expected)
-        => AboutInfo.Describe(stamped).Should().Be(expected);
-
-    /// <summary>Sin git al construir se pierde el commit, pero NO la marca de desarrollo.</summary>
-    [Fact]
-    public void Sin_git_al_construir_sigue_marcando_desarrollo()
-    {
-        AboutInfo.Describe("1.0.0-dev").Should().Be("1.0.0-dev · build local");
-        AboutInfo.Describe("1.0.0-dev").Should().Contain("build local",
-            "que no sepamos de qué commit sale no lo convierte en una release: al contrario");
-    }
+    // ================================================================ release o build local
 
     [Theory]
     [InlineData("1.0.3-dev+sha", true)]
@@ -62,13 +39,7 @@ public sealed class AboutVersionTests
     public void Un_prerelease_publicado_no_se_lee_como_build_local(string version)
     {
         new AboutInfo(null, version, null).IsDevelopmentBuild.Should().BeFalse();
-        AboutInfo.Describe(version).Should().Be(version);
     }
-
-    [Fact]
-    public void La_etiqueta_del_dialogo_lleva_la_palabra_version_delante()
-        => new AboutInfo(null, "1.0.3-dev+0f920d9", null).VersionLabel
-            .Should().Be("Versión 1.0.3-dev · build local (0f920d9)");
 
     // ================================================================ la versión base
 

@@ -246,12 +246,14 @@ public sealed partial class MainViewModel
         }
 
         NavGroups.Clear();
-        NavGroups.Add(new NavGroup(WorkGroup, work));
+        NavGroups.Add(new NavGroup(WorkGroup, work) { HasSeparator = false });
         if (app.Count > 0)
         {
-            // El rótulo del grupo es el NOMBRE de la aplicación. Si la sesión o el arreglo están
-            // vivos sin aplicación activa —puede pasar al arrancar con una sesión a medias—, el
-            // grupo se rotula genérico en vez de quedarse en blanco.
+            // El nombre del grupo es el de la APLICACIÓN. Ya no se pinta —desde la tercera
+            // revisión de §C los bloques se separan con una raya y sin texto—, pero sigue siendo
+            // el nombre de automatización del bloque. Si la sesión o el arreglo están vivos sin
+            // aplicación activa —puede pasar al arrancar con una sesión a medias—, se nombra
+            // genérico en vez de quedarse en blanco.
             NavGroups.Add(new NavGroup(ActiveApplication.HasApp ? ActiveApplication.Name : "En curso", app));
         }
 

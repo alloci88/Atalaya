@@ -174,8 +174,12 @@
          leía plano. Ahora: 24 por encima del rótulo, 8 por debajo, y 4 entre entradas de 36. El
          botón de las tres rayas queda separado del primer rótulo por ese mismo 24, porque es el
          margen superior del rótulo quien lo pone. -->
-    <Thickness x:Key="Pad.RailGroup">60,24,12,8</Thickness>
     <Thickness x:Key="Pad.RailItemGap">0,0,0,4</Thickness>
+
+    <!-- LO QUE SEPARA DOS BLOQUES DEL RAÍL: una línea, y su aire. Los rótulos —«Trabajo»,
+         «Sistema»— se retiraron: eran dos palabras que no llevaban a ningún sitio y que obligaban
+         a un ritmo distinto por encima y por debajo. Con una raya, el ritmo se resuelve solo. -->
+    <Thickness x:Key="Pad.RailSeparator">0,8</Thickness>
     <Thickness x:Key="Pad.TopBar">32,10</Thickness>
     <Thickness x:Key="Pad.Footer">32,8</Thickness>
     <Thickness x:Key="Pad.Strip">32,6</Thickness>
@@ -211,14 +215,6 @@
     <sys:Double x:Key="Rail.IconChannel">40</sys:Double>
     <sys:Double x:Key="Rail.MarkerLane">8</sys:Double>
 
-    <!-- Dónde empieza el texto en el raíl: 8 + 40 + 12. Se escribe también como número porque las
-         etiquetas de grupo no van dentro de una fila y necesitan sangrarse solas. `RailLanesAddUp`
-         comprueba que este número siga siendo la suma. -->
-    <sys:Double x:Key="Rail.TextIndent">60</sys:Double>
-
-    <!-- La insignia del piloto sobre el avatar: 8 px de color y 2 de anillo del color del raíl, o
-         sea 12 de círculo (el trazo de WPF va centrado en el borde, así que 12 − 2·2 = 8 de
-         relleno visible). El anillo es lo que la separa del avatar sin pintar un borde encima. -->
     <sys:Double x:Key="Rail.BadgeSize">12</sys:Double>
     <sys:Double x:Key="Rail.BadgeRing">2</sys:Double>
     <sys:Double x:Key="Content.MaxWidth">1480</sys:Double>
@@ -288,6 +284,24 @@
          control más ancho, y da además el sitio de la tabla de tarifas. -->
     <sys:Double x:Key="Setting.ContentWidth">960</sys:Double>
 
+    <!-- LA SANGRÍA DE LA COLUMNA DE CONTROLES: la etiqueta (320) más su hueco (24). Es donde
+         empiezan los desplegables y las cajas de una fila de ajuste, y por tanto donde tiene que
+         empezar la fila de botones que los guarda — «Guardar» alineado con lo que guarda. -->
+    <Thickness x:Key="Pad.SettingControlColumn">344,0,0,0</Thickness>
+
+    <!-- El margen de la fila de botones de Ajustes: esa misma sangría, más su aire arriba y abajo. -->
+    <Thickness x:Key="Pad.SettingActions">344,8,0,16</Thickness>
+
+    <!-- Y el de Tarifas, SIN sangría: la tabla ocupa la columna entera, así que sus botones se
+         alinean con su borde izquierdo y no con la columna de controles de un formulario. -->
+    <Thickness x:Key="Pad.RatesActions">0,12,0,16</Thickness>
+
+    <!-- Lo que la fila de botones se lleva de alto, contando su margen. El tope del scroll se
+         calcula restándolo: es lo que hace que los botones queden pegados al pie de la COLUMNA
+         cuando la sección es más larga que la ventana, y justo debajo de la última fila cuando no.
+         Un número y no una medida en vivo porque la fila es siempre la misma: un botón. -->
+    <sys:Double x:Key="Setting.ActionsHeight">64</sys:Double>
+
     <!-- El ancho MÍNIMO de un campo numérico: cuatro cifras cómodas. La caja del tope de pasadas
          era un cuadrado de dos —un campo que no enseña lo que cabe dentro miente sobre lo que
          acepta—, así que el mínimo se escribe una vez y lo cumplen todos. -->
@@ -320,6 +334,12 @@
          que es lo que hacía que cuatro líneas parecieran una pantalla vacía. -->
     <sys:Double x:Key="About.CardWidth">640</sys:Double>
     <sys:Double x:Key="About.LabelWidth">150</sys:Double>
+
+    <!-- La columna de CLAVES de una ficha de metadatos. Fija y con sitio para la más larga
+         —«Última confirmación»—, y con 24 de hueco hasta el valor: con 120 y sin hueco, la clave y
+         su valor se tocaban y la fila se leía como una sola frase. -->
+    <sys:Double x:Key="Meta.LabelWidth">150</sys:Double>
+    <Thickness x:Key="Pad.MetaGap">0,0,24,0</Thickness>
 
     <!-- El aire de un estado vacío dentro de su panel, y el de la barra de guardar al pie de una
          vista con formulario. -->
