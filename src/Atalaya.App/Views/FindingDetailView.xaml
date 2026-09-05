@@ -323,7 +323,7 @@
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
                         <TextBlock Text="Historial" Style="{StaticResource SectionTitle}" />
-                        <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer Style="{StaticResource Scroll}" MaxHeight="420" VerticalScrollBarVisibility="Auto">
                             <ItemsControl ItemsSource="{Binding History}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -379,7 +379,7 @@
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
                         <TextBlock Text="Comentarios" Style="{StaticResource SectionTitle}" />
-                        <ScrollViewer MaxHeight="320" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer Style="{StaticResource Scroll}" MaxHeight="320" VerticalScrollBarVisibility="Auto">
                             <ItemsControl ItemsSource="{Binding Comments}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>

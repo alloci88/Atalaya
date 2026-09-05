@@ -202,7 +202,11 @@ public sealed class AssistedFixViewTests
 
         xaml.Should().Contain("Converter={StaticResource MiddleEllipsis}");
         xaml.Should().Contain("ToolTip=\"{Binding RelativePath}\"");
-        xaml.Should().Contain("<ScrollViewer MaxHeight=\"220\" VerticalScrollBarVisibility=\"Auto\"");
+
+        // El `Style` del sistema va delante desde UI-AUDIT-1: todo contenedor con desplazamiento
+        // lleva su aire, y ese aire se declara una vez (`Pad.Scroll`, UI-0028/UI-0037).
+        xaml.Should().Contain(
+            "<ScrollViewer Style=\"{StaticResource Scroll}\" MaxHeight=\"220\"");
 
         // La regla no es «hay un solo tope de altura», que envejece en cuanto la vista crece: es que
         // TODO tope de altura vaya en un ScrollViewer. Un MaxHeight sin scroll recorta en silencio.

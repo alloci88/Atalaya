@@ -16,7 +16,7 @@
         línea de ayuda a la izquierda, control a la derecha— y cada error de validación va debajo
         de su campo, en peligro.
     -->
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <ScrollViewer Style="{StaticResource Scroll}" VerticalScrollBarVisibility="Auto">
         <StackPanel MaxWidth="{StaticResource Form.MaxWidth}" HorizontalAlignment="Center"
                     Margin="{StaticResource Pad.L.Bottom}">
 
@@ -68,7 +68,7 @@
                                                         Visibility="{Binding AlreadyInHub, Converter={StaticResource BoolToVisibility}}">
                                                     <TextBlock Text="ya en el hub" Style="{StaticResource Pill.Text}" />
                                                 </Border>
-                                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Name}" />
                                             </DockPanel>
                                         </DataTemplate>
                                     </ComboBox.ItemTemplate>
@@ -114,12 +114,13 @@
                                            Style="{StaticResource Text.Small}"
                                            FontStyle="Italic"
                                            Visibility="{Binding HasName, Converter={StaticResource InverseBoolToVisibility}}" />
-                                <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Lead}"
+                                <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Name}"
+                                           FontSize="{StaticResource FontSize.Lead}"
                                            FontWeight="SemiBold"
-                                           TextTrimming="CharacterEllipsis"
                                            Visibility="{Binding HasName, Converter={StaticResource BoolToVisibility}}" />
-                                <TextBlock Text="{Binding RepoUrl}" Style="{StaticResource Text.Meta}"
-                                           TextTrimming="CharacterEllipsis"
+                                <TextBlock Text="{Binding RepoUrl}" Style="{StaticResource Text.Name}"
+                                           FontSize="{StaticResource FontSize.Meta}"
+                                           Foreground="{DynamicResource Brush.TextFaint}"
                                            ToolTip="{Binding RepoUrl}"
                                            Visibility="{Binding RepoUrl, Converter={StaticResource NotEmptyToVisibility}}" />
                             </StackPanel>

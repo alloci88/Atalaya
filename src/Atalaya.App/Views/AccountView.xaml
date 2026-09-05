@@ -17,7 +17,7 @@
         en una columna de formulario es dejar aire a los dos lados) y cada estado se dice con las
         tres cosas a la vez: icono, color y PALABRA.
     -->
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <ScrollViewer Style="{StaticResource Scroll}" VerticalScrollBarVisibility="Auto">
         <StackPanel MaxWidth="{StaticResource Form.MaxWidth}" HorizontalAlignment="Center"
                     Margin="{StaticResource Pad.L.Bottom}">
 
@@ -131,9 +131,9 @@
                                  aquí: la tarjeta enseñaba «alopezciller» en negrita y otra vez en
                                  gris al lado. Un dato repetido no es jerarquía, es ruido. -->
                             <TextBlock Text="{Binding DisplayName}"
-                                       Style="{StaticResource Text.Lead}"
-                                       FontWeight="SemiBold"
-                                       TextTrimming="CharacterEllipsis" />
+                                       Style="{StaticResource Text.Name}"
+                                       FontSize="{StaticResource FontSize.Lead}"
+                                       FontWeight="SemiBold" />
                             <TextBlock Style="{StaticResource Text.Meta}"
                                        Visibility="{Binding ShowOrganization, Converter={StaticResource BoolToVisibility}}">
                                 <Run Text="Organización:" /><Run Text=" " /><Run Text="{Binding OrganizationLogin, Mode=OneWay}" />

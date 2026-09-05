@@ -222,6 +222,81 @@ public sealed class DesignTokenTests
     }
 
     /// <summary>
+    /// <b>UNA REGLA DE RECORTE PARA TODA LA APLICACIÓN</b> (P-01, UI-0009, UI-0011, UI-0033).
+    /// <para>
+    /// <b>De dónde viene.</b> Cada vista recortaba a su manera, o no recortaba, y el resultado era
+    /// que lo mismo mentía en un sitio y no en otro: a 1280 —que es también cualquier pantalla al
+    /// 150 %— las rutas de unidad se cortaban por el final <b>sin puntos suspensivos</b> contra el
+    /// galón de desplegar (<c>…/Servicios/FormateadorInfc⌄</c> parece un nombre de fichero); la
+    /// pastilla de proveedor y modelo del arreglo quedaba en <c>Age</c>; y la etiqueta
+    /// «Descubrimiento» de Métricas se cortaba a mitad de la «o» final. D-983 §5 arregló <b>uno</b>
+    /// de los tres, con un presupuesto de caracteres fijo, y no se generalizó: un presupuesto en
+    /// caracteres no sabe a qué ancho está la ventana.
+    /// </para>
+    /// <para>
+    /// <b>La regla.</b> Un texto que <b>no envuelve</b> y o recorta o tiene tope de ancho usa una
+    /// de las tres primitivas —<c>Text.Name</c> (elipsis al final), <c>Text.Path</c> (acorta por el
+    /// medio, sobre <c>c:PathText</c>) o <c>Text.Chip</c> (no se recorta: si no cabe, no se
+    /// pinta)— y no escribe su propio <c>TextTrimming</c>.
+    /// </para>
+    /// <para>
+    /// <b>Por qué es de regla.</b> Un texto recortado no falla: <b>miente</b>. No hay excepción, no
+    /// hay log, y lo que queda en pantalla es una palabra perfectamente legible que dice otra cosa.
+    /// Es el fallo más caro de esta interfaz precisamente porque no se nota, y el único que se
+    /// puede vigilar sin mirar una captura es éste: que el recorte no lo decida cada vista.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Un_texto_que_no_envuelve_recorta_con_una_de_las_tres_primitivas()
+    {
+        string[] primitivas = { "Text.Name", "Text.Path", "Text.Chip" };
+        var culpables = new List<string>();
+
+        foreach (string file in Directory.EnumerateFiles(XamlRoot(), "*.xaml", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(XamlRoot(), file).Replace('\\', '/');
+            if (Sistema.Contains(relative))
+            {
+                continue;
+            }
+
+            string body = Regex.Replace(File.ReadAllText(file), "<!--.*?-->", string.Empty, RegexOptions.Singleline);
+            var envuelven = EstilosQueEnvuelven(body);
+
+            foreach (Match m in Regex.Matches(body, @"<(?:TextBlock|c:PathText)\b(?:[^>""]|""[^""]*"")*?/?>"))
+            {
+                string el = m.Value;
+
+                // Un texto que ENVUELVE con tope de ancho es una medida de lectura, no un recorte:
+                // el ancho dice hasta dónde llega una línea, y lo que sobra baja. La elipsis que
+                // algunos llevan es el «hay más» de un bloque plegado, con su «Más» al lado. El
+                // envolver puede venir del atributo o de su estilo, así que se miran los dos.
+                bool envuelve = el.Contains("TextWrapping=\"Wrap\"", StringComparison.Ordinal)
+                    || envuelven.Any(k => el.Contains($"{{StaticResource {k}}}", StringComparison.Ordinal));
+                bool recorta = el.Contains("TextTrimming=", StringComparison.Ordinal);
+                bool tope = el.Contains("MaxWidth=", StringComparison.Ordinal);
+
+                if (envuelve || !(recorta || tope))
+                {
+                    continue;
+                }
+
+                bool usa = primitivas.Any(p => el.Contains($"{{StaticResource {p}}}", StringComparison.Ordinal));
+                if (!usa || recorta)
+                {
+                    int line = body.Take(m.Index).Count(c => c == '\n') + 1;
+                    culpables.Add($"{relative}:{line}");
+                }
+            }
+        }
+
+        culpables.Should().BeEmpty(
+            "el recorte lo deciden `Text.Name`, `Text.Path` y `Text.Chip`, no cada vista; un texto "
+            + "recortado a su manera no falla, MIENTE:"
+            + Environment.NewLine + string.Join(Environment.NewLine, culpables));
+    }
+
+    /// <summary>
     /// <b>EL MARCADOR DE «ESTÁS AQUÍ» CABE EN SU CARRIL</b> (UI-0046).
     /// <para>
     /// <b>De dónde viene.</b> El <c>DataTrigger</c> de <c>IsActive</c> pinta el marcador de
@@ -360,6 +435,63 @@ public sealed class DesignTokenTests
 
         m.Success.Should().BeTrue($"{key} declara el margen de su marcador con un token, no a mano");
         return Pad(m.Groups[1].Value);
+    }
+
+    /// <summary>
+    /// Las claves de estilo que ponen <c>TextWrapping="Wrap"</c>, ellas o alguno de sus
+    /// antecesores. Se miran el sistema y el propio fichero, que es donde una vista declara los
+    /// suyos. Sin esto, un texto que envuelve porque su estilo lo dice se contaría como recorte.
+    /// </summary>
+    private static HashSet<string> EstilosQueEnvuelven(string ownMarkup)
+    {
+        string styles = File.ReadAllText(Path.Combine(XamlRoot(), "Themes", "Styles.xaml"));
+
+        var basedOn = new Dictionary<string, string>(StringComparer.Ordinal);
+        var wraps = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (string markup in new[] { styles, ownMarkup })
+        {
+            foreach (Match m in Regex.Matches(
+                markup,
+                @"<Style\b(?<head>[^>]*)>(?<body>.*?)</Style>",
+                RegexOptions.Singleline))
+            {
+                var key = Regex.Match(m.Groups["head"].Value, @"x:Key=""([^""]+)""");
+                if (!key.Success)
+                {
+                    continue;
+                }
+
+                var parent = Regex.Match(m.Groups["head"].Value, @"BasedOn=""\{StaticResource ([^}]+)\}""");
+                if (parent.Success)
+                {
+                    basedOn[key.Groups[1].Value] = parent.Groups[1].Value;
+                }
+
+                if (m.Groups["body"].Value.Contains(
+                    @"<Setter Property=""TextWrapping"" Value=""Wrap"" />", StringComparison.Ordinal))
+                {
+                    wraps.Add(key.Groups[1].Value);
+                }
+            }
+        }
+
+        // Y las que heredan de una que envuelve. Dos vueltas bastan para las cadenas que hay; se
+        // repite hasta que no crezca, que es más barato que razonar sobre la profundidad.
+        bool crecio = true;
+        while (crecio)
+        {
+            crecio = false;
+            foreach ((string key, string parent) in basedOn)
+            {
+                if (wraps.Contains(parent) && wraps.Add(key))
+                {
+                    crecio = true;
+                }
+            }
+        }
+
+        return wraps;
     }
 
     private static string Tokens()

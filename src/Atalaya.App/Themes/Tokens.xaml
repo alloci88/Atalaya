@@ -93,6 +93,20 @@
     <Thickness x:Key="Pad.S.Bottom">0,0,0,12</Thickness>
     <Thickness x:Key="Pad.XS.Top">0,8,0,0</Thickness>
 
+    <!-- EL RELLENO DE UN CONTENEDOR CON DESPLAZAMIENTO (UI-0002, UI-0028, UI-0037).
+
+         12 arriba y abajo: MEDIA LÍNEA (`LineHeight.Body` es 21) redondeada a la escala. Es lo que
+         hace que el corte de un desplazamiento caiga ENTRE líneas y no dentro de una. Sin él, el
+         panel empieza pegado a lo que tenga encima y el primer mensaje de la conversación aparece
+         seccionado a media altura de glifo: no parece un texto que continúe hacia arriba, parece un
+         texto roto. Lo mismo por abajo contra una barra de acciones fija.
+
+         Y 8 A LA DERECHA, que es el carril de la barra. Los `ScrollViewer` de WPF-UI llevan la
+         barra SUPERPUESTA —flota sobre el contenido, no se le quita sitio—, así que el pulgar se
+         pintaba encima de los enlaces «Gestionar» del cajón del ciclo y los cruzaba entre la «a» y
+         la «r»: el enlace se leía tachado y su zona de pulsación quedaba debajo de la barra. -->
+    <Thickness x:Key="Pad.Scroll">0,12,8,12</Thickness>
+
     <!-- El pelo que separa los bloques de un panel: aire arriba, un poco menos abajo — el
          microtítulo que viene detrás ya trae el suyo. -->
     <Thickness x:Key="Pad.PanelDivider">0,16,0,10</Thickness>
@@ -241,6 +255,10 @@
          ha empujado a las acciones fuera de la pantalla—. 560 es lo que ocupa «Ultima sesion» con un
          subtitulo de aplicacion y modo, que es el caso largo real. -->
     <sys:Double x:Key="Header.IdentityMaxWidth">560</sys:Double>
+
+    <!-- El tope del NOMBRE DE LA APLICACION en esa misma cabecera: la unica pieza de la zona de
+         identidad que puede ser larga, y la unica que cede cuando falta sitio. -->
+    <sys:Double x:Key="Header.AppNameMaxWidth">220</sys:Double>
 
     <!-- El resumen del ciclo del Inventario. 320 y no 260: a 260 su línea más larga —«Patrones
          silenciados: 0 · Gestionar»— se cortaba a media palabra, y nadie lo dijo porque un texto

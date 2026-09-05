@@ -240,18 +240,30 @@
                                            Style="{StaticResource Text.Meta}"
                                            VerticalAlignment="Center" />
 
-                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding FileName}"
+                                <!-- REJILLA Y NO `StackPanel` HORIZONTAL (P-01): un StackPanel
+                                     horizontal mide a sus hijos con ancho infinito, así que el
+                                     recorte no llegaba a activarse nunca y la ruta se salía por el
+                                     borde. Con una columna estrella, `PathText` acorta por el MEDIO
+                                     y conserva el nombre del fichero, que es lo que identifica. -->
+                                <Grid Grid.Column="1" VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding FileName}"
                                                Style="{StaticResource Text.Lead}"
                                                FontWeight="SemiBold"
                                                VerticalAlignment="Center" />
                                     <!-- La ruta en monoespaciado: es una ruta, y se lee como tal. -->
-                                    <TextBlock Text="{Binding Subtitle}"
-                                               Style="{StaticResource Text.Mono}"
-                                               Margin="{StaticResource Pad.S.Left}"
-                                               VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis" />
-                                </StackPanel>
+                                    <c:PathText Grid.Column="1" Full="{Binding Subtitle}"
+                                                Style="{StaticResource Text.Path}"
+                                                FontFamily="{StaticResource Font.Mono}"
+                                                FontSize="{StaticResource FontSize.Small}"
+                                                Foreground="{DynamicResource Brush.TextMuted}"
+                                                Margin="{StaticResource Pad.S.Left}"
+                                                VerticalAlignment="Center"
+                                                ToolTip="{Binding Subtitle}" />
+                                </Grid>
 
                                 <ItemsControl Grid.Column="2"
                                               ItemsSource="{Binding Chips}"

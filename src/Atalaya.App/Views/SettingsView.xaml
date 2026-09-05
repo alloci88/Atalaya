@@ -95,9 +95,14 @@
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto"
+                <!-- LA BARRA DE GUARDAR NO SIEGA UNA LÍNEA (UI-0037). El tope de alto deja los
+                     botones pegados al pie de la columna (D-1000 §1) y el corte caía DENTRO de una
+                     línea: a media altura de glifo, sin elipsis y sin nada que dijera que había
+                     más. El degradado lo dice. -->
+                <Grid Grid.Row="0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
                               MaxHeight="{Binding ActualHeight, ElementName=SettingsColumn, Converter={StaticResource Minus}, ConverterParameter=64}"
-                              Padding="{StaticResource Pad.L.Right}">
+                              Padding="{StaticResource Pad.Scroll}">
                 <Grid>
 
                     <!-- ============================== Proveedor y modelo ============================== -->
@@ -293,7 +298,7 @@
                              columnas al primer arrastre. -->
                         <Border Grid.Row="3" Style="{StaticResource Panel}"
                                 Visibility="{Binding CanManageRates, Converter={StaticResource BoolToVisibility}}">
-                            <ScrollViewer x:Name="RatesScroll"
+                            <ScrollViewer Style="{StaticResource Scroll}" x:Name="RatesScroll"
                                           HorizontalScrollBarVisibility="Auto"
                                           VerticalScrollBarVisibility="Disabled">
                                 <Grid MinWidth="910"
@@ -510,6 +515,8 @@
                     </StackPanel>
                 </Grid>
             </ScrollViewer>
+                <Rectangle Style="{StaticResource Scroll.Fade.Bottom}" />
+                </Grid>
 
                 <!-- ==================================================== Las acciones
 

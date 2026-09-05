@@ -264,4 +264,46 @@
     <SolidColorBrush x:Key="SystemFillColorSuccessBrush" Color="{StaticResource Color.Success.Ink}" />
     <SolidColorBrush x:Key="SystemFillColorSuccessBackgroundBrush" Color="{StaticResource Color.Success.Soft}" />
 
+    <!-- ============================================================ El borde de un desplazamiento
+
+         UN DEGRADADO DICE QUE EL CONTENIDO SIGUE (UI-0028, UI-0037). Media línea de relleno hace
+         que el corte no toque lo que tiene encima o debajo, pero un panel que se auto-desplaza
+         —la conversación del arreglo— o que acaba contra una barra de acciones fija sigue cortando
+         una línea por la mitad de la letra, y eso no se lee como «hay más»: se lee como un texto
+         roto. El degradado es la señal, y va PINTADO ENCIMA —no como máscara de opacidad—: una
+         máscara obliga a WPF a componer la capa entera y le quita el suavizado de subpíxel al
+         texto, que en un panel que es todo texto se nota.
+
+         Del color del fondo al MISMO color con alfa cero. Con negro o blanco transparente el
+         degradado ensuciaría uno de los dos temas; con el color de la superficie, en los dos se
+         lee como que la página se acaba ahí. -->
+    <Color x:Key="Color.Bg.Fade">#00F2EBDD</Color>
+    <SolidColorBrush x:Key="Brush.Bg.Fade" Color="{StaticResource Color.Bg.Fade}" />
+
+    <LinearGradientBrush x:Key="Brush.ScrollFade.Top" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="{StaticResource Color.Bg}" />
+        <GradientStop Offset="1" Color="{StaticResource Color.Bg.Fade}" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Brush.ScrollFade.Bottom" StartPoint="0,1" EndPoint="0,0">
+        <GradientStop Offset="0" Color="{StaticResource Color.Bg}" />
+        <GradientStop Offset="1" Color="{StaticResource Color.Bg.Fade}" />
+    </LinearGradientBrush>
+
+    <!-- Y el mismo degradado sobre una TARJETA. El de arriba es del color del fondo de página; un
+         desplazamiento dentro de una tarjeta va sobre `Surface`, y con el otro se vería una banda
+         más oscura donde debería no verse nada. -->
+    <Color x:Key="Color.Surface.Fade">#00FAF5EC</Color>
+    <SolidColorBrush x:Key="Brush.Surface.Fade" Color="{StaticResource Color.Surface.Fade}" />
+
+    <LinearGradientBrush x:Key="Brush.ScrollFade.Top.Surface" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="{StaticResource Color.Surface}" />
+        <GradientStop Offset="1" Color="{StaticResource Color.Surface.Fade}" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="Brush.ScrollFade.Bottom.Surface" StartPoint="0,1" EndPoint="0,0">
+        <GradientStop Offset="0" Color="{StaticResource Color.Surface}" />
+        <GradientStop Offset="1" Color="{StaticResource Color.Surface.Fade}" />
+    </LinearGradientBrush>
+
 </ResourceDictionary>

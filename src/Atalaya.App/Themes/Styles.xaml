@@ -85,6 +85,84 @@
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
     </Style>
 
+    <!-- ================================================================ Cómo se recorta un texto
+
+         TRES PRIMITIVAS Y NADA MÁS (P-01). Hasta aquí cada vista recortaba a su manera —o no
+         recortaba— y el resultado era que lo mismo mentía en un sitio y no en otro: rutas cortadas
+         por el final sin puntos suspensivos (UI-0009), una pastilla reducida a «Age» (UI-0011), una
+         etiqueta cortada a mitad de la «o» de «Descubrimiento» (UI-0033). D-983 §5 arregló uno de
+         los tres, con un presupuesto de caracteres fijo, y el arreglo no se generalizó: volvió a
+         aparecer en cuanto la ventana bajó a 1280.
+
+         Las tres, y qué dice cada una:
+
+           · `Text.Name` — un NOMBRE se recorta por el final, con elipsis. Lo que identifica está
+             al principio, y lo que se pierde se anuncia.
+           · `Text.Path` — una RUTA se acorta por el MEDIO y conserva los dos extremos, porque lo
+             que identifica un fichero es su nombre y va al final. Va sobre `c:PathText`, que mide
+             contra el ancho que hay en vez de contar caracteres.
+           · `Text.Chip` — una PASTILLA no se recorta: si no cabe entera, no se pinta
+             (`c:ChipHost`). Una etiqueta a medias no es una versión corta de la etiqueta; es otra
+             palabra.
+
+         `DesignTokenTests` comprueba que ningún texto de una vista recorte por su cuenta.
+    -->
+    <Style x:Key="Text.Name" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <!-- `PathText` deriva de `TextBlock`, y un estilo implícito solo alcanza a su tipo EXACTO: la
+         tipografía por defecto hay que dársela aquí. -->
+    <Style x:Key="Text.Path" TargetType="c:PathText">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}" />
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
+        <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="TextTrimming" Value="None" />
+    </Style>
+
+    <Style x:Key="Text.Chip" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="TextWrapping" Value="NoWrap" />
+        <Setter Property="TextTrimming" Value="None" />
+    </Style>
+
+    <!-- UN CONTENEDOR CON DESPLAZAMIENTO LLEVA SU AIRE (UI-0002, UI-0028, UI-0037). El porqué de
+         los tres números está en `Pad.Scroll`; aquí solo se consume, para que los veinte
+         `ScrollViewer` de las vistas no lo escriban veinte veces. -->
+    <Style x:Key="Scroll" TargetType="ScrollViewer">
+        <Setter Property="Padding" Value="{StaticResource Pad.Scroll}" />
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+    </Style>
+
+    <!-- Y CUANDO EL CORTE CAE EN MEDIO, un degradado dice que el contenido sigue (UI-0028,
+         UI-0037). Se pinta ENCIMA del desplazamiento, en la misma celda; no toca el foco ni el
+         ratón. El porqué del color y por qué no es una máscara de opacidad está en la paleta. -->
+    <Style x:Key="Scroll.Fade.Top" TargetType="Rectangle">
+        <!-- El MISMO relleno que el desplazamiento: el degradado tiene que empezar donde empieza
+             la ventana de contenido —no donde empieza el control— y no puede taparle el carril a
+             la barra. -->
+        <Setter Property="Margin" Value="{StaticResource Pad.Scroll}" />
+        <Setter Property="Height" Value="{StaticResource Space.M}" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+        <Setter Property="Fill" Value="{DynamicResource Brush.ScrollFade.Top}" />
+    </Style>
+
+    <Style x:Key="Scroll.Fade.Bottom" TargetType="Rectangle" BasedOn="{StaticResource Scroll.Fade.Top}">
+        <Setter Property="VerticalAlignment" Value="Bottom" />
+        <Setter Property="Fill" Value="{DynamicResource Brush.ScrollFade.Bottom}" />
+    </Style>
+
+    <!-- Los mismos dos, para un desplazamiento que va dentro de una TARJETA. -->
+    <Style x:Key="Scroll.Fade.Top.Surface" TargetType="Rectangle" BasedOn="{StaticResource Scroll.Fade.Top}">
+        <Setter Property="Fill" Value="{DynamicResource Brush.ScrollFade.Top.Surface}" />
+    </Style>
+
+    <Style x:Key="Scroll.Fade.Bottom.Surface" TargetType="Rectangle" BasedOn="{StaticResource Scroll.Fade.Bottom}">
+        <Setter Property="Fill" Value="{DynamicResource Brush.ScrollFade.Bottom.Surface}" />
+    </Style>
+
     <!-- ================================================================ El anillo de foco (P-04)
 
          LO ÚLTIMO QUE PINTABA WINDOWS Y NO ATALAYA (UI-0015). Ningún control declaraba su anillo,

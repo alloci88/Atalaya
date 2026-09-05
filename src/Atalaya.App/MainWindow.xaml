@@ -233,9 +233,9 @@
                                          añadida aparte. El color sí es el apagado, porque no es
                                          un sitio al que ir sino quién eres. -->
                                     <TextBlock Text="{Binding AccountLabel}"
+                                               Style="{StaticResource Text.Name}"
                                                Foreground="{DynamicResource Brush.TextMuted}"
-                                               VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis" />
+                                               VerticalAlignment="Center" />
                                     <TextBlock Text="⚠"
                                                Foreground="{DynamicResource Brush.Warning.Ink}"
                                                Margin="{StaticResource Pad.RailLabel}"
@@ -347,9 +347,10 @@
                                    Foreground="{DynamicResource Brush.Warning.Ink}"
                                    VerticalAlignment="Center" />
                         <TextBlock Text="{Binding UpdateNotice}"
-                                   Style="{StaticResource Text.Small}"
+                                   Style="{StaticResource Text.Name}"
+                                   FontSize="{StaticResource FontSize.Small}"
+                                   Foreground="{DynamicResource Brush.TextMuted}"
                                    VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis"
                                    ToolTip="{Binding UpdateNotice}"
                                    Visibility="{Binding HasUpdateNotice, Converter={StaticResource BoolToVisibility}}" />
                         <TextBlock Text="{Binding UpdateProgressText}"

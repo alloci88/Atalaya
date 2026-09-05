@@ -40,7 +40,7 @@
                      Y el recorte sigue cayendo donde debe: corta por el FINAL de la línea, o sea
                      por el subtítulo, que es el dato; el título no se toca. -->
                 <TextBlock Grid.Column="0" Grid.ColumnSpan="2" VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis"
+                           Style="{StaticResource Text.Name}"
                            MaxWidth="{StaticResource Header.IdentityMaxWidth}"
                            HorizontalAlignment="Left"
                            ToolTip="{Binding Live.HeaderText}">
@@ -108,7 +108,7 @@
                      proveedor no pueda comerse el cuerpo de la vista. -->
                 <Border Margin="{StaticResource Pad.S.Top}" CornerRadius="6" Padding="{StaticResource Pad.S}" Background="{DynamicResource Brush.Bg}"
                         Visibility="{Binding IsFailureDetailExpanded, Converter={StaticResource BoolToVisibility}}">
-                    <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer Style="{StaticResource Scroll}" MaxHeight="120" VerticalScrollBarVisibility="Auto">
                         <TextBox Text="{Binding FailureDetail, Mode=OneWay}" IsReadOnly="True" IsTabStop="False"
                                  TextWrapping="Wrap" BorderThickness="0" BorderBrush="Transparent" Background="Transparent" Padding="{StaticResource Pad.Zero}"
                                  FontFamily="Consolas" FontSize="{StaticResource FontSize.Meta}"
@@ -134,7 +134,7 @@
                         <TextBlock Text="{Binding ProgressText}" FontWeight="SemiBold" />
                         <ProgressBar Value="{Binding Live.Progress, Mode=OneWay}" Maximum="1" Height="4" Margin="{StaticResource Pad.XS.Top}" />
                     </StackPanel>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer Style="{StaticResource Scroll}" VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding Units}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -157,8 +157,8 @@
                                                     Grid.Column="1"
                                                     Text="{Binding ShortName}"
                                                     ToolTip="{Binding Path}"
+                                                    Style="{StaticResource Text.Name}"
                                                     FontSize="{StaticResource FontSize.Meta}"
-                                                    TextTrimming="CharacterEllipsis"
                                                     VerticalAlignment="Center" />
                                             </Grid>
                                             <!-- Lo apagado se apaga cambiando de COLOR, no bajando
@@ -197,17 +197,45 @@
                             HorizontalAlignment="Right"
                             Visibility="{Binding AutoScroll, Converter={StaticResource InverseBoolToVisibility}}" />
                     </Grid>
-                    <ScrollViewer x:Name="ActivityScroll" VerticalScrollBarVisibility="Auto" ScrollChanged="OnActivityScrollChanged">
+                    <ScrollViewer Style="{StaticResource Scroll}" x:Name="ActivityScroll" VerticalScrollBarVisibility="Auto" ScrollChanged="OnActivityScrollChanged">
                         <ItemsControl ItemsSource="{Binding Units}" Margin="{StaticResource Pad.XS}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Expander IsExpanded="{Binding IsExpanded}" Margin="{StaticResource Pad.XXS.Bottom}">
+                                    <!-- `HorizontalContentAlignment="Stretch"`: sin esto, el
+                                         `Expander` mide su cabecera con ancho INFINITO y la
+                                         arregla a lo que pida, así que la rejilla de dentro
+                                         recibía el ancho del texto y no el de la fila — y
+                                         `PathText` acortaba contra un ancho que no era el que se
+                                         ve (P-01, UI-0009). -->
+                                    <Expander IsExpanded="{Binding IsExpanded}"
+                                              Margin="{StaticResource Pad.XXS.Bottom}"
+                                              HorizontalContentAlignment="Stretch">
                                         <Expander.Header>
+                                            <!-- REJILLA Y NO `StackPanel` HORIZONTAL (P-01, UI-0009). Un
+                                                 StackPanel horizontal da a sus hijos ancho INFINITO, así
+                                                 que la ruta salía entera y se cortaba contra el galón de
+                                                 desplegar SIN elipsis: se leía «…/Servicios/FormateadorInfc⌄»,
+                                                 que parece un nombre de fichero. Con una columna estrella,
+                                                 `PathText` sabe cuánto sitio hay y acorta por el medio. -->
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="{Binding StateGlyph}"
                                                            Style="{StaticResource Unit.State.Glyph}"
                                                            Margin="{StaticResource Pad.XS.Right}" />
-                                                <TextBlock Text="{Binding Path}" ToolTip="{Binding Path}" FontWeight="SemiBold" />
+                                                <!-- EL TOPE LO PONE LA FILA (UI-0009). La cabecera de un
+                                                     `Expander` se mide con ancho INFINITO y su galón se
+                                                     pinta encima, sin quitarle sitio: la ruta salía entera
+                                                     y la recortaba el borde, sin elipsis, dejando
+                                                     «FormateadorInfc⌄» —que parece un nombre de fichero—.
+                                                     Con un `MaxWidth` calculado sobre el ancho de la fila
+                                                     (`Minus`, el mismo truco de D-1000 §1), `PathText` sabe
+                                                     contra qué acortar. `Expander.HeaderInset` es lo que la
+                                                     cabecera no puede usar: el galón y su aire. -->
+                                                <c:PathText Full="{Binding Path}"
+                                                            Style="{StaticResource Text.Path}"
+                                                            FontWeight="SemiBold"
+                                                            VerticalAlignment="Center"
+                                                            MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Expander}, Converter={StaticResource Minus}, ConverterParameter=80}"
+                                                            ToolTip="{Binding Path}" />
                                             </StackPanel>
                                         </Expander.Header>
                                         <ItemsControl ItemsSource="{Binding Passes}" Margin="{StaticResource Pad.M.Left}">
@@ -299,7 +327,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </StackPanel>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer Style="{StaticResource Scroll}" VerticalScrollBarVisibility="Auto">
                         <ItemsControl ItemsSource="{Binding Findings}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -360,7 +388,7 @@
                         <TextBlock Text="Pulsa cualquier línea para ver qué hallazgos la componen y por qué."
                                    Opacity="0.55" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Top}" />
                     </StackPanel>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="{StaticResource Cycle.PanelHeight}">
+                    <ScrollViewer Style="{StaticResource Scroll}" VerticalScrollBarVisibility="Auto" MaxHeight="{StaticResource Cycle.PanelHeight}">
                         <ItemsControl ItemsSource="{Binding Summary}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -444,9 +472,15 @@
                                                                 </ItemsControl.ItemTemplate>
                                                             </ItemsControl>
                                                         </WrapPanel>
-                                                        <TextBlock Text="{Binding Subtitle}" FontSize="{StaticResource FontSize.Meta}" Opacity="0.5"
-                                                                   TextTrimming="CharacterEllipsis"
-                                                                   ToolTip="{Binding Subtitle}" />
+                                                        <!-- Una ruta se acorta por el MEDIO (P-01): lo que
+                                                             identifica un fichero es su nombre, y va al final.
+                                                             Y lo apagado se apaga con la tinta, no con la
+                                                             opacidad (D-983 §4). -->
+                                                        <c:PathText Full="{Binding Subtitle}"
+                                                                    Style="{StaticResource Text.Path}"
+                                                                    FontSize="{StaticResource FontSize.Meta}"
+                                                                    Foreground="{DynamicResource Brush.TextFaint}"
+                                                                    ToolTip="{Binding Subtitle}" />
                                                         <ItemsControl ItemsSource="{Binding Items}" Margin="{StaticResource Pad.S.Left}">
                                                             <ItemsControl.ItemTemplate>
                                                                 <DataTemplate>

@@ -183,14 +183,20 @@
                          recortado o lo recorta la cabecera, pero nunca se pinta sobre nadie. -->
                     <ColumnDefinition Width="*" MinWidth="60" MaxWidth="220" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
+                    <!-- LA PASTILLA VA EN UNA COLUMNA QUE PUEDE ENCOGER (UI-0011). En `Auto` no
+                         encoge nunca: la rejilla le da lo que pide, la fila se sale y la recorta
+                         la cabecera, que es como el distintivo acababa en «Age». En estrella cede
+                         cuando falta sitio, y `c:ChipHost` la retira entera en cuanto lo que le
+                         queda no le llega. A anchos amplios no se mueve nada: la columna 2 está
+                         topada en 220, así que el sobrante caía aquí de todos modos. -->
+                    <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <!-- Título e identificador en el MISMO TextBlock, por lo mismo que en
                      SessionView (D-983): dos tamaños en una fila comparten línea base solo si
                      comparten párrafo. `VerticalAlignment="Bottom"` igualaba cajas, no bases, y
                      el alias quedaba hundido respecto al título. -->
                 <TextBlock Grid.Column="0" Grid.ColumnSpan="2" VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis"
+                           Style="{StaticResource Text.Name}"
                            MaxWidth="{StaticResource Header.IdentityMaxWidth}"
                            HorizontalAlignment="Left"
                            ToolTip="El hallazgo que se está arreglando">
@@ -212,9 +218,10 @@
                      metía 20 px dentro del distintivo de al lado. Estirado, ocupa su columna y ni
                      un píxel más, que es justo lo que el recorte necesita para activarse. -->
                 <TextBlock Grid.Column="2" Text="{Binding AppNameText}"
+                           Style="{StaticResource Text.Name}"
                            Foreground="{DynamicResource Brush.TextFaint}"
                            VerticalAlignment="Center" Margin="{StaticResource Pad.S.Left}"
-                           MaxWidth="220" TextTrimming="CharacterEllipsis"
+                           MaxWidth="{StaticResource Header.AppNameMaxWidth}"
                            ToolTip="{Binding AppNameText}" />
                 <!-- H9.1 §1: el camino de vuelta al hallazgo, disponible mientras haya sesión que
                      mirar —corriendo, terminada o fallida—, no solo en la pantalla de cierre.
@@ -238,13 +245,22 @@
                 <!-- SIN recorte y sin ancho maximo (D-983). Un dato de 30 caracteres con
                      `MaxWidth=220` se corta siempre, y lo que se cortaba era el modelo. Y la
                      pastilla usa el estilo del sistema en vez de un `#18808080` escrito a mano,
-                     que era el mismo gris en los dos temas. -->
-                <Border Grid.Column="4" Style="{StaticResource Pill}"
-                        VerticalAlignment="Center" Margin="{StaticResource Pad.M.Left}"
-                        Visibility="{Binding HasEngine, Converter={StaticResource BoolToVisibility}}"
-                        ToolTip="El proveedor y el modelo que están haciendo este arreglo. Quedan escritos en el informe.">
-                    <TextBlock Text="{Binding EngineText}" Style="{StaticResource Pill.Text}" />
-                </Border>
+                     que era el mismo gris en los dos temas.
+
+                     Y SI NO CABE ENTERA, NO SE PINTA (P-01, UI-0011). Quitarle el ancho máximo no
+                     bastó: a 1280 la columna se apretaba igual y la pastilla se cortaba a mitad de
+                     palabra hasta dejar «Age» —y en el cierre, «Agente falso · clau»—, así que el
+                     modelo con el que se está tocando el código dejaba de estar escrito y lo que
+                     quedaba no se podía interpretar. «Age» no es una versión corta de «Agente
+                     falso · claude-opus-4.7»: es otra palabra. `c:ChipHost` la retira entera
+                     cuando no cabe; el dato sigue en el tooltip. -->
+                <c:ChipHost Grid.Column="4" VerticalAlignment="Center" Margin="{StaticResource Pad.M.Left}"
+                            Visibility="{Binding HasEngine, Converter={StaticResource BoolToVisibility}}">
+                    <Border Style="{StaticResource Pill}"
+                            ToolTip="El proveedor y el modelo que están haciendo este arreglo. Quedan escritos en el informe.">
+                        <TextBlock Text="{Binding EngineText}" Style="{StaticResource Pill.Text}" />
+                    </Border>
+                </c:ChipHost>
             </Grid>
             <!-- Barra de acciones. F16-RETOQUE §2·3 y §2·4, dos reglas:
 
@@ -287,7 +303,7 @@
         </c:PageHeader>
 
         <!-- ================================ SIN SESIÓN ================================ -->
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+        <ScrollViewer Style="{StaticResource Scroll}" Grid.Row="2" VerticalScrollBarVisibility="Auto"
                       Visibility="{Binding ShowEmpty, Converter={StaticResource BoolToVisibility}}">
             <StackPanel>
                 <Border Style="{StaticResource Card}">
@@ -381,7 +397,7 @@
 
                 <Border Margin="{StaticResource Pad.S.Top}" CornerRadius="6" Padding="{StaticResource Pad.S}" Background="{DynamicResource Brush.Bg}"
                         Visibility="{Binding IsFailureDetailExpanded, Converter={StaticResource BoolToVisibility}}">
-                    <ScrollViewer MaxHeight="120" VerticalScrollBarVisibility="Auto">
+                    <ScrollViewer Style="{StaticResource Scroll}" MaxHeight="120" VerticalScrollBarVisibility="Auto">
                         <TextBox Text="{Binding FailureDetail, Mode=OneWay}" IsReadOnly="True" IsTabStop="False"
                                  TextWrapping="Wrap" BorderThickness="0" BorderBrush="Transparent"
                                  Background="Transparent" Padding="{StaticResource Pad.Zero}"
@@ -424,10 +440,19 @@
                                    Padding="{StaticResource Pad.Pill}" FontSize="{StaticResource FontSize.Meta}" HorizontalAlignment="Right"
                                    Visibility="{Binding AutoScroll, Converter={StaticResource InverseBoolToVisibility}}" />
                     </Grid>
-                    <ScrollViewer x:Name="ConversationScroll" VerticalScrollBarVisibility="Auto"
-                                  ScrollChanged="OnConversationScrollChanged">
-                        <ItemsControl ItemsSource="{Binding Conversation}" Margin="{StaticResource Pad.XS}" />
-                    </ScrollViewer>
+                    <!-- EL BORDE DE LA CONVERSACIÓN DICE QUE HAY MÁS (UI-0028). El panel empezaba
+                         pegado a la cabecera, sin relleno y sin nada que marcara su borde, y como
+                         el hilo se auto-desplaza al final, lo que quedaba arriba era un mensaje
+                         seccionado a media altura de glifo: no parecía un texto que continuara
+                         hacia arriba, parecía un texto roto. `Scroll` le da su media línea de aire
+                         y el degradado dice lo que el aire no puede decir — que sigue. -->
+                    <Grid>
+                        <ScrollViewer Style="{StaticResource Scroll}" x:Name="ConversationScroll" VerticalScrollBarVisibility="Auto"
+                                      ScrollChanged="OnConversationScrollChanged">
+                            <ItemsControl ItemsSource="{Binding Conversation}" Margin="{StaticResource Pad.XS}" />
+                        </ScrollViewer>
+                        <Rectangle Style="{StaticResource Scroll.Fade.Top}" />
+                    </Grid>
                 </DockPanel>
             </Border>
 
@@ -479,7 +504,7 @@
                         </ItemsControl>
                     </StackPanel>
 
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                    <ScrollViewer Style="{StaticResource Scroll}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                                   DataContext="{Binding SelectedFile}">
                         <StackPanel>
                             <TextBlock FontSize="{StaticResource FontSize.Meta}" Opacity="0.75" Margin="{StaticResource Pad.XXS}"
@@ -543,7 +568,13 @@
                         <ui:Button Content="Me quedo los cambios" Command="{Binding FinishCommand}" Margin="{StaticResource Pad.XS.Left}" />
                     </StackPanel>
 
-                    <ScrollViewer x:Name="ClosingScroll" VerticalScrollBarVisibility="Auto">
+                    <!-- LA BARRA FIJA NO SIEGA UNA LÍNEA (UI-0037). Recortaba el contenido en
+                         seco: la de debajo se veía a media altura de glifo, sin elipsis y sin nada
+                         que dijera que había más. Aquí era peor que en ningún sitio — el titular
+                         «Resultado del último build/tests» quedaba a la vista y su única línea de
+                         contenido, tapada: un epígrafe sin cuerpo. -->
+                    <Grid>
+                    <ScrollViewer Style="{StaticResource Scroll}" x:Name="ClosingScroll" VerticalScrollBarVisibility="Auto">
                         <StackPanel>
                             <TextBlock Text="Qué cambió y por qué" Style="{StaticResource SectionTitle}" />
                             <TextBlock Text="{Binding Fix.Summary}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}"
@@ -595,7 +626,7 @@
                                      SnippetScroll): si no, bajar por la pantalla de cierre pasando
                                      el cursor por encima de la salida del build era una lotería, y
                                      la tarjeta de commit quedaba fuera de alcance. -->
-                                <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto"
+                                <ScrollViewer Style="{StaticResource Scroll}" MaxHeight="220" VerticalScrollBarVisibility="Auto"
                                               PreviewMouseWheel="OnInnerScroll">
                                     <TextBlock Text="{Binding Fix.LastBuild}" FontFamily="Consolas" FontSize="{StaticResource FontSize.Meta}"
                                                TextWrapping="Wrap"
@@ -641,6 +672,8 @@
                             </Border>
                         </StackPanel>
                     </ScrollViewer>
+                    <Rectangle Style="{StaticResource Scroll.Fade.Bottom.Surface}" />
+                    </Grid>
                 </DockPanel>
             </Border>
         </Grid>

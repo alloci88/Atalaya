@@ -148,7 +148,7 @@
         </Border>
 
         <!-- ==================================================== La rejilla de aplicaciones -->
-        <ScrollViewer Grid.Row="2"
+        <ScrollViewer Style="{StaticResource Scroll}" Grid.Row="2"
                       VerticalScrollBarVisibility="Auto"
                       Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
             <ItemsControl ItemsSource="{Binding Apps}">
@@ -169,8 +169,9 @@
                                 <!-- Identidad y el «…» -->
                                 <Grid>
                                     <StackPanel>
-                                        <TextBlock Text="{Binding Name}" Style="{StaticResource Text.H3}"
-                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Name}"
+                                                   FontSize="{StaticResource FontSize.H3}"
+                                                   FontWeight="SemiBold" />
                                         <TextBlock Text="{Binding Stack}" Style="{StaticResource Text.Meta}" />
                                     </StackPanel>
 

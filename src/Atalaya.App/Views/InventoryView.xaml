@@ -84,7 +84,7 @@
              fila que la otra sí tiene.
         -->
         <DataTemplate x:Key="CycleSummary">
-            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="{StaticResource Cycle.PanelHeight}">
+            <ScrollViewer Style="{StaticResource Scroll}" VerticalScrollBarVisibility="Auto" MaxHeight="{StaticResource Cycle.PanelHeight}">
                 <StackPanel>
                     <TextBlock Text="Resumen del ciclo" Style="{StaticResource Text.Lead}"
                                FontWeight="SemiBold"
@@ -492,9 +492,9 @@
                                                           VerticalAlignment="Center" />
 
                                                 <TextBlock Grid.Column="1" Text="{Binding FileName}"
+                                                           Style="{StaticResource Text.Name}"
                                                            VerticalAlignment="Center"
-                                                           Margin="{StaticResource Pad.XS.Left}"
-                                                           TextTrimming="CharacterEllipsis" />
+                                                           Margin="{StaticResource Pad.XS.Left}" />
 
                                                 <!-- El estado, con COLOR (D-975): auditada en
                                                      verde, pendiente en neutro, excluida apagada.

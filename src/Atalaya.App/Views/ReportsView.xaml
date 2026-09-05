@@ -320,8 +320,8 @@
                          TextBlock comparten línea base, que es lo único que la comparte en WPF
                          (D-983 §9). -->
                     <TextBlock VerticalAlignment="Center" HorizontalAlignment="Left"
-                               MaxWidth="{StaticResource Header.IdentityMaxWidth}"
-                               TextTrimming="CharacterEllipsis">
+                               Style="{StaticResource Text.Name}"
+                               MaxWidth="{StaticResource Header.IdentityMaxWidth}">
                         <Run Text="{Binding ViewerTitle, Mode=OneWay}"
                              FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold" />
                         <Run Text="  " />

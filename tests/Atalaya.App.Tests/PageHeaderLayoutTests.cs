@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using System.Text.RegularExpressions;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
@@ -373,29 +374,44 @@ public sealed class PageHeaderLayoutTests
     /// <summary>
     /// El texto largo se RECORTA, no se sale. Un <c>StackPanel</c> da a sus hijos ancho infinito y
     /// nunca llega a recortar nada — por eso la zona de identidad es un <c>Grid</c>.
+    /// <para>
+    /// <b>El recorte se lee del MARCADO desde UI-AUDIT-1</b> (P-01). Antes se medía sobre el árbol
+    /// montado, y funcionaba porque cada vista escribía su propio <c>TextTrimming</c>. Ahora el
+    /// recorte lo pone una de las tres primitivas del sistema —aquí <c>Text.Name</c>— y
+    /// <see cref="ViewLayout"/> quita los estilos al cargar, porque viven en <c>Styles.xaml</c> y
+    /// ése necesita la paleta montada. Lo que la vista tiene que declarar sigue siendo lo mismo y
+    /// se comprueba igual: la primitiva, y un TOPE, sin el cual el recorte no llega a activarse
+    /// hasta que ya ha empujado a los demás fuera de la pantalla.
+    /// </para>
     /// </summary>
     [Theory]
     [MemberData(nameof(Views))]
     public void Un_titulo_largo_se_recorta_y_se_lee_en_el_tooltip(string view)
-        => ViewLayout.OnUiThread(() =>
+    {
+        string identidad = Regex.Match(
+            ViewLayout.Xaml(view),
+            @"<TextBlock Grid.Column=""0"" Grid.ColumnSpan=""2""(?:[^>""]|""[^""]*"")*?>").Value;
+
+        identidad.Should().Contain(
+            "{StaticResource Text.Name}",
+            "el recorte de un nombre lo pone la primitiva del sistema, no la vista (P-01)");
+        identidad.Should().Contain(
+            "MaxWidth=\"{StaticResource Header.IdentityMaxWidth}\"",
+            "sin un tope, el recorte no llega a activarse hasta que ya ha empujado a los demás");
+        identidad.Should().Contain("ToolTip=", "y lo que no cabe se lee entero al pasar por encima");
+
+        ViewLayout.OnUiThread(() =>
         {
             Grid root = ViewLayout.LoadRoot(view);
             PageHeader header = HeaderOf(root);
             FillWithLongText(header);
             ViewLayout.Layout(root, 1366, 768);
 
-            var trimmed = ViewLayout.Descendants<TextBlock>(header)
-                .Where(t => t.TextTrimming == TextTrimming.CharacterEllipsis)
-                .ToList();
-
-            trimmed.Should().NotBeEmpty("el subtítulo se recorta con puntos suspensivos");
-            trimmed.Should().OnlyContain(t => t.MaxWidth < double.PositiveInfinity,
-                "sin un tope, el recorte no llega a activarse hasta que ya ha empujado a los demás");
-
             SlotOf((FrameworkElement)header.Children[0]).Width
                 .Should().BeLessThanOrEqualTo(header.ActualWidth,
                     "la identidad cabe en su columna: para eso está el recorte");
         });
+    }
 
     /// <summary>
     /// Y la cabecera recorta lo que se salga. Es el cinturón además de los tirantes: un panel
