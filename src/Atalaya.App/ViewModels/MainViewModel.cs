@@ -199,6 +199,17 @@ public sealed partial class MainViewModel : ObservableObject
     /// </summary>
     public void SaveWindowPlacement(WindowPlacement placement)
     {
+        // UNA VENTANA QUE NUNCA SE ENSEÑÓ NO TIENE GEOMETRÍA QUE GUARDAR. `RestoreBounds` de una
+        // ventana sin mostrar es `Empty`, es decir infinitos, y `System.Text.Json` no sabe escribir
+        // un infinito: `--selfcheck` construye la carcasa y al cerrar el proceso el manejador de
+        // `Closed` intentaba guardar eso, así que el autochequeo imprimía «Arranca.» y a
+        // continuación reventaba con una excepción sin recoger — y el código de salida que mira el
+        // workflow de release dejaba de significar nada. Lo que no es un número no se guarda.
+        if (!IsUsable(placement))
+        {
+            return;
+        }
+
         var settings = _settings.Current;
 
         // El raíl NO viene en lo que captura la ventana —es una preferencia, no una geometría— así
@@ -210,6 +221,14 @@ public sealed partial class MainViewModel : ObservableObject
         settings.Window = placement;
         _settings.Save(settings);
     }
+
+    /// <summary>Una geometría con números de verdad y tamaño positivo.</summary>
+    private static bool IsUsable(WindowPlacement placement)
+        => Finite(placement.Left) && Finite(placement.Top)
+           && Finite(placement.Width) && Finite(placement.Height)
+           && placement.Width > 0 && placement.Height > 0;
+
+    private static bool Finite(double value) => !double.IsNaN(value) && !double.IsInfinity(value);
 
     /// <summary>
     /// First run (D4): with no account we land straight on the welcome = the Cuenta page in its

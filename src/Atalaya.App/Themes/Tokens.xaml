@@ -287,13 +287,6 @@
          y ese número no puede depender del alto de la ventana. -->
     <sys:Double x:Key="Rail.RowHeight">36</sys:Double>
 
-    <!-- EL AZULEJO DE UNA CIFRA, CEÑIDO A SU CONTENIDO (UI-0020). Los cuatro del Portafolio
-         ocupaban 393 px cada uno —266→659, 680→1073, 1094→1487, 1508→1901— y dentro de cada uno
-         el contenido («0 / Críticas») medía ~55: el 86 % del azulejo era vacío. Un azulejo mide lo
-         que mide su cifra más su rótulo; 150 es lo que necesita el rótulo más largo, «Críticas»,
-         con su aire. -->
-    <sys:Double x:Key="Stat.TileWidth">150</sys:Double>
-
     <!-- LA RANURA DE UNA PASTILLA DE GRAVEDAD (UI-0024). Las tres pastillas de recuento de una
          fila de Hallazgos se empaquetaban a la derecha, así que la misma gravedad caía en una
          columna distinta según cuántas tuviera la fila: medidas las x, las filas con tres las

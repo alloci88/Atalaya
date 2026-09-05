@@ -18,11 +18,18 @@ namespace Atalaya.App.Controls;
 /// buscar al otro extremo.
 /// </para>
 /// <para>
-/// <b>La regla, y es una sola.</b> Todo —el título, su línea de subtítulo, el recuento, las
-/// acciones de vista y el cuerpo— arranca <b>en el margen de la página</b>. Lo que una vista puede
-/// declarar es el <b>techo</b> de su cuerpo (<see cref="BodyWidth"/>), que es otra cosa: un
-/// formulario no debe estirarse hasta 1.900 px, pero tampoco tiene por qué irse al centro dejando
-/// medio lienzo en blanco a su izquierda y su propio título quinientos píxeles más allá.
+/// <b>La regla, y es una sola.</b> El título, su línea de subtítulo, el recuento, las acciones de
+/// vista y el cuerpo van <b>en la misma columna</b>: o los cinco en el margen de la página, o los
+/// cinco centrados en la medida que la vista declare (<see cref="BodyWidth"/>). Lo que no puede
+/// pasar es que la cabecera vaya por un lado y el cuerpo por otro, que es lo que hubo un rato en
+/// F27: el título en x=264 y las tarjetas en x=795, con medio lienzo en blanco entre los dos.
+/// <para>
+/// <b>Centrarse es un patrón de la casa, no un desliz.</b> Cuenta, Nueva aplicación y «Acerca de»
+/// se centran en su ancho máximo desde la Parte C y así se quedan: son formularios y fichas, no
+/// listas, y una columna de 920 pegada al borde izquierdo de un monitor de 1.920 se lee peor que
+/// centrada. Lo declaran, y por eso <see cref="IsBodyCentered"/> se deriva de la medida en vez de
+/// ser un segundo interruptor que pudiera contradecirla.
+/// </para>
 /// </para>
 /// <para>
 /// <b>Por qué un control y no una convención.</b> Porque una convención se copia mal: las dos
@@ -61,9 +68,9 @@ public sealed class PageShell : ContentControl, System.ComponentModel.INotifyPro
         nameof(Actions), typeof(object), typeof(PageShell), new FrameworkPropertyMetadata(null));
 
     /// <summary>
-    /// El TECHO del cuerpo. <c>PositiveInfinity</c> —lo normal— es «todo el ancho de la página»;
-    /// un número lo para ahí. Nunca lo centra: el cuerpo empieza donde empieza el título, que es
-    /// lo que hace que pasar de una vista a otra no mueva nada.
+    /// La medida de la PÁGINA. <c>PositiveInfinity</c> —lo normal— es «todo el ancho»; un número
+    /// centra la página entera —cabecera y cuerpo— en esa medida. Es la única forma declarada de
+    /// centrar una vista, y por eso <see cref="IsBodyCentered"/> se deriva de aquí.
     /// </summary>
     public static readonly DependencyProperty BodyWidthProperty = DependencyProperty.Register(
         nameof(BodyWidth),
@@ -71,7 +78,8 @@ public sealed class PageShell : ContentControl, System.ComponentModel.INotifyPro
         typeof(PageShell),
         new FrameworkPropertyMetadata(
             double.PositiveInfinity,
-            FrameworkPropertyMetadataOptions.AffectsMeasure));
+            FrameworkPropertyMetadataOptions.AffectsMeasure,
+            (d, _) => ((PageShell)d).OnPropertyChangedName(nameof(IsBodyCentered))));
 
     public string Title
     {
@@ -113,6 +121,9 @@ public sealed class PageShell : ContentControl, System.ComponentModel.INotifyPro
         ({ Length: > 0 }, _) => Count,
         _ => Subtitle,
     };
+
+    /// <summary>La página va centrada en su medida en vez de ocupar el ancho entero.</summary>
+    public bool IsBodyCentered => !double.IsInfinity(BodyWidth);
 
     /// <summary>Hay una línea bajo el título. Sin ella, el título no arrastra un hueco vacío.</summary>
     public bool HasLead => Lead.Length > 0;

@@ -548,12 +548,14 @@
                     <Button Content="Guardar" Command="{Binding SaveCommand}"
                             Style="{StaticResource Button.Primary}"
                             IsEnabled="{Binding IsDirty}" />
-                    <!-- LA RAZÓN, PEGADA AL BOTÓN APAGADO (P-27, UI-0038). Estaba apagado en gris,
-                         bien contrastado, y sin decir por qué en ninguna de las cuatro secciones. -->
-                    <Border Style="{StaticResource Reason.Chip}"
-                            Visibility="{Binding IsDirty, Converter={StaticResource InverseBoolToVisibility}}">
-                        <TextBlock Text="no has cambiado nada" Style="{StaticResource Reason.Text}" />
-                    </Border>
+                    <!-- SIN PASTILLA DE RAZÓN (F27, cierre). P-27 —«el primario apagado dice por
+                         qué al lado»— NO aplica aquí: «Guardar» apagado ya lo dice entero, porque
+                         lo único que puede encenderlo es haber cambiado algo, y eso lo sabe quien
+                         acaba de no cambiarlo. La pastilla añadía una etiqueta ámbar permanente en
+                         el estado NORMAL de la pantalla —el de no haber tocado nada—, que es lo
+                         contrario de lo que un aviso debe hacer. La regla sigue valiendo donde hay
+                         una condición que el usuario no puede deducir: «marca al menos una unidad»,
+                         «elige un repositorio». N-6. -->
                     <Button Content="Descartar" Command="{Binding DiscardCommand}"
                             Style="{StaticResource Button.Secondary}"
                             Visibility="{Binding IsDirty, Converter={StaticResource BoolToVisibility}}" />
@@ -576,10 +578,6 @@
                             IsEnabled="{Binding Rates.IsDirty}" />
                     <Button Content="Añadir modelo" Command="{Binding Rates.AddRowCommand}"
                             Style="{StaticResource Button.Secondary}" />
-                    <Border Style="{StaticResource Reason.Chip}"
-                            Visibility="{Binding Rates.HasSaveBlockedReason, Converter={StaticResource BoolToVisibility}}">
-                        <TextBlock Text="{Binding Rates.SaveBlockedReason}" Style="{StaticResource Reason.Text}" />
-                    </Border>
                 </StackPanel>
             </Grid>
         </Grid>

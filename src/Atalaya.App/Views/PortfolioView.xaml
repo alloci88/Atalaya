@@ -52,15 +52,14 @@
              borde rojo y la cifra iba en `Sev.Crit`: el color decía «hay una crítica» donde el
              número decía lo contrario, y es lo primero que se ve al abrir la aplicación. El color
              de gravedad aparece cuando hay algo de esa gravedad. -->
-        <!-- UNA TIRA, NO UNA REJILLA (UI-0020). Eran cuatro columnas repartiéndose el ancho
-             entero: 393 px por azulejo para enseñar «0 / Críticas», que mide 55. Ahora cada uno
-             mide lo suyo y la tira se queda a la izquierda; el ancho que sobra se lo lleva la
-             rejilla de aplicaciones, que es la que tiene algo que enseñar. -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal"
-                    c:Stack.Gap="{StaticResource Space.M}"
-                    Margin="{StaticResource Pad.L.Bottom}"
-                    Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
-            <Border MinWidth="{StaticResource Stat.TileWidth}">
+        <!-- LA TIRA DE GRAVEDADES, COMO EN LA PARTE B (F27, cierre). F27 la había ceñido al
+             contenido de cada azulejo (UI-0020); el usuario mandó dejarla como estaba. N-6. -->
+        <c:ColumnsPanel Grid.Row="1"
+                        MinColumnWidth="200" MaxColumns="4"
+                        Gap="{StaticResource Space.M}"
+                        Margin="{StaticResource Pad.L.Bottom}"
+                        Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
+            <Border>
                 <Border.Style>
                     <Style TargetType="Border" BasedOn="{StaticResource Stat.Card}">
                         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Sev.Crit}" />
@@ -77,7 +76,7 @@
                     <TextBlock Text="Críticas" Style="{StaticResource Stat.Label}" />
                 </StackPanel>
             </Border>
-            <Border MinWidth="{StaticResource Stat.TileWidth}">
+            <Border>
                 <Border.Style>
                     <Style TargetType="Border" BasedOn="{StaticResource Stat.Card}">
                         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Sev.High}" />
@@ -94,7 +93,7 @@
                     <TextBlock Text="Altas" Style="{StaticResource Stat.Label}" />
                 </StackPanel>
             </Border>
-            <Border MinWidth="{StaticResource Stat.TileWidth}">
+            <Border>
                 <Border.Style>
                     <Style TargetType="Border" BasedOn="{StaticResource Stat.Card}">
                         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Sev.Med}" />
@@ -111,7 +110,7 @@
                     <TextBlock Text="Medias" Style="{StaticResource Stat.Label}" />
                 </StackPanel>
             </Border>
-            <Border MinWidth="{StaticResource Stat.TileWidth}">
+            <Border>
                 <Border.Style>
                     <Style TargetType="Border" BasedOn="{StaticResource Stat.Card}">
                         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Sev.Low}" />
@@ -128,7 +127,7 @@
                     <TextBlock Text="Bajas" Style="{StaticResource Stat.Label}" />
                 </StackPanel>
             </Border>
-        </StackPanel>
+        </c:ColumnsPanel>
 
         <!-- ==================================================== Sin aplicaciones -->
         <Border Grid.Row="2"
@@ -189,48 +188,30 @@
                                                        Foreground="{DynamicResource Brush.Success.Ink}" />
                                         </Border>
 
-                                        <!-- F5.3 §4: el hard-reset. Detrás de un «…» porque es una
-                                             SALIDA, no una acción del día a día: en la cara de la
-                                             tarjeta competía por la mirada con «Abrir inventario». -->
-                                        <!-- EL TOOLTIP NO SE PINTA MIENTRAS SU MENÚ ESTÁ ABIERTO
-                                             (UI-0001). Abierto con el teclado, «Más acciones» se
-                                             dibujaba encima del desplegable y de su única entrada
-                                             solo se leía «…aplicación…». -->
-                                        <ToggleButton x:Name="More"
-                                                      Style="{StaticResource Button.More}"
-                                                      AutomationProperties.Name="Más acciones"
-                                                      ToolTipService.IsEnabled="{Binding IsChecked, RelativeSource={RelativeSource Self}, Converter={StaticResource InverseBool}}"
-                                                      ToolTip="Más acciones" />
-                                        <Popup IsOpen="{Binding IsChecked, ElementName=More}"
-                                               PlacementTarget="{Binding ElementName=More}"
-                                               Placement="Bottom" StaysOpen="False"
-                                               Focusable="True"
-                                               AllowsTransparency="True">
-                                            <!-- EL DESPLEGABLE TOMA EL FOCO, LO RETIENE, Y ESCAPE LO
-                                                 CIERRA DEVOLVIÉNDOLO AL «···» (P-03, UI-0001).
-                                                 Antes el foco se quedaba en el botón y el siguiente
-                                                 Tab saltaba a «Abrir inventario», que está DETRÁS
-                                                 del menú abierto: «Eliminar la aplicación…» no
-                                                 recibía el foco nunca, y es la única vía para
-                                                 borrar una aplicación. El contrato lo pone
-                                                 `c:Overlay`, que es el mismo del cajón del ciclo. -->
-                                            <Border Style="{StaticResource Card}"
-                                                    Padding="{StaticResource Pad.XXS}"
-                                                    Margin="{StaticResource Pad.XXS}"
-                                                    c:Overlay.IsOpen="{Binding IsChecked, ElementName=More}"
-                                                    c:Overlay.CloseToggle="{Binding ElementName=More}"
-                                                    AutomationProperties.Name="Más acciones de la aplicación">
-                                                <Button
-                                                    Command="{Binding DataContext.DeleteAppCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    IsEnabled="{Binding CanDelete}"
-                                                    ToolTip="{Binding DeleteTooltip}"
-                                                    Style="{StaticResource Button.Danger}"
-                                                    BorderBrush="Transparent"
-                                                    HorizontalContentAlignment="Left"
-                                                    Content="Eliminar la aplicación…" />
-                                            </Border>
-                                        </Popup>
+                                        <!-- F5.3 §4: el hard-reset de la aplicación, con SU
+                                             ICONO y no detrás de un «…» (F27, cierre). El menú lo
+                                             puso F26 §B —«en la cara de la tarjeta competía por la
+                                             mirada con Abrir inventario»— y escondía una sola
+                                             entrada detrás de dos gestos; el usuario mandó volver a
+                                             la papelera. Discreta, apagada mientras alguien esté
+                                             auditando, y con el motivo en el tooltip. N-6.
+
+                                             Lo que F27 sí deja: la papelera llega al árbol de
+                                             accesibilidad CON NOMBRE (UI-0016), que es lo que el
+                                             «…» tampoco tenía al principio. -->
+                                        <Button Command="{Binding DataContext.DeleteAppCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                IsEnabled="{Binding CanDelete}"
+                                                Style="{StaticResource Button.Ghost}"
+                                                Padding="{StaticResource Pad.XXS}"
+                                                Margin="{StaticResource Pad.Zero}"
+                                                VerticalAlignment="Center"
+                                                AutomationProperties.Name="Eliminar la aplicación"
+                                                ToolTip="{Binding DeleteTooltip}">
+                                            <Path Style="{StaticResource Icon}"
+                                                  Data="{x:Static c:Icons.Trash}"
+                                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                        </Button>
                                     </StackPanel>
                                 </Grid>
 

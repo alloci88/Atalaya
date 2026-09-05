@@ -131,18 +131,6 @@ public sealed partial class ModelRatesViewModel : ObservableObject
     /// </summary>
     [ObservableProperty] private bool _isDirty;
 
-    /// <inheritdoc cref="IsDirty"/>
-    public string SaveBlockedReason => IsDirty ? string.Empty : "no has cambiado nada";
-
-    /// <inheritdoc cref="IsDirty"/>
-    public bool HasSaveBlockedReason => !IsDirty;
-
-    partial void OnIsDirtyChanged(bool value)
-    {
-        OnPropertyChanged(nameof(SaveBlockedReason));
-        OnPropertyChanged(nameof(HasSaveBlockedReason));
-    }
-
     /// <summary>La tabla tal cual está, en una cadena. Dos huellas iguales son dos tablas iguales.</summary>
     private string Fingerprint() => string.Join(
         "|",

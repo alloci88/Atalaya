@@ -582,50 +582,37 @@ public sealed class DesignTokenTests
     }
 
     /// <summary>
-    /// <b>Una página arranca en el margen, y su cuerpo con ella</b> (P-02, UI-0035).
+    /// <b>La cabecera de una página y su cuerpo van en la MISMA columna</b> (P-02, UI-0035).
     /// <para>
     /// Medido sobre la fila del título, quince vistas arrancaban en x = 264–266 y dos no: Nueva
-    /// aplicación en 633 y Cuenta en 800, porque las dos se centraban imitando a «Acerca de», que
-    /// es una excepción declarada —una tarjeta de 640 centrada en los dos ejes, D-999 §6— y no un
-    /// patrón. El salto al cambiar de vista era de 536 px, con la miga quieta en 311: el título
-    /// medio lienzo a la derecha de su propia miga.
+    /// aplicación en 633 y Cuenta en 800, porque se centran en su ancho máximo —que es el patrón de
+    /// la casa para un formulario desde la Parte C, y así se queda—. Lo que estaba mal no era
+    /// centrarse: era que la miga, que es de la carcasa, se quedaba en 311.
     /// </para>
     /// <para>
-    /// Lo que una vista declara es el <b>techo</b> de su cuerpo, no su centro. Un techo se puede
-    /// tener y seguir empezando donde empieza el título; centrarlo es lo que abre el hueco.
+    /// F27 lo arregló anclando la cabecera al margen y dejando el cuerpo centrado, y eso fue peor:
+    /// el título en 264, las tarjetas en 795 y medio lienzo en blanco entre los dos, con el título
+    /// sin nada debajo. La regla es que los dos van juntos —los dos en el margen, o los dos
+    /// centrados en la medida que la vista declare— y por eso el tope y el centrado se ponen en la
+    /// PÁGINA, nunca en el cuerpo solo.
     /// </para>
     /// </summary>
     [Fact]
-    public void Ninguna_pagina_centra_su_cuerpo()
+    public void La_cabecera_y_el_cuerpo_de_una_pagina_van_en_la_misma_columna()
     {
         string estilos = File.ReadAllText(Path.Combine(XamlRoot(), "Themes", "Styles.xaml"));
         string plantilla = Between(estilos, "<Style TargetType=\"{x:Type c:PageShell}\">", "</Style>");
 
-        plantilla.Should().Contain("HorizontalAlignment=\"Left\"",
-            "el cuerpo de una página empieza donde empieza su título");
-        plantilla.Should().NotContain("HorizontalAlignment=\"Center\"",
-            "centrar el cuerpo es lo que separaba el título de su miga 536 px");
+        string cuerpo = Between(plantilla, "<ContentPresenter Grid.Row=\"1\"", "/>");
+        cuerpo.Should().NotContain("HorizontalAlignment",
+            "el cuerpo no se coloca por su cuenta: lo coloca la página, con la cabecera dentro");
+        cuerpo.Should().NotContain("MaxWidth",
+            "y el tope tampoco es suyo, o el título se queda ancho sobre un cuerpo estrecho");
 
-        var centradas = new List<string>();
-        foreach (string file in Directory.EnumerateFiles(Path.Combine(XamlRoot(), "Views"), "*.xaml"))
-        {
-            string body = File.ReadAllText(file);
-            if (!body.Contains("<c:PageShell", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            // La forma exacta que lo causaba: una columna con techo Y centrada.
-            foreach (Match m in Regex.Matches(body, @"MaxWidth=""\{StaticResource [^""]+\}""[^>]*HorizontalAlignment=""Center"""))
-            {
-                int line = body.Take(m.Index).Count(c => c == '\n') + 1;
-                centradas.Add($"{Path.GetFileName(file)}:{line}");
-            }
-        }
-
-        centradas.Should().BeEmpty(
-            "una columna con techo se para en su medida, pero se para desde la izquierda:"
-            + Environment.NewLine + string.Join(Environment.NewLine, centradas));
+        plantilla.Should().Contain("TargetName=\"Page\" Property=\"MaxWidth\"",
+            "la medida declarada se aplica a la página entera");
+        plantilla.Should().Contain("TargetName=\"Page\" Property=\"HorizontalAlignment\"",
+            "y el centrado también, que es lo que mantiene el título encima de lo que titula");
     }
 
     private static string Between(string body, string desde, string hasta)

@@ -67,20 +67,16 @@ public sealed class ColumnsPanel : Panel
         set => SetValue(GapProperty, value);
     }
 
-    /// <summary>Cuántas columnas caben en <paramref name="available"/>. Nunca menos de una.</summary>
-    public int ColumnsFor(double available) => ColumnsFor(available, InternalChildren.Count);
-
     /// <summary>
-    /// La cuenta, con el número de tarjetas delante.
+    /// Cuántas columnas caben en <paramref name="available"/>. Nunca menos de una.
     /// <para>
-    /// <b>Y NUNCA MÁS COLUMNAS QUE TARJETAS</b> (UI-0020). Con una sola aplicación, el reparto daba
-    /// tres columnas y la tarjeta se quedaba con 531 de 1.635 px: el 68 % de la fila en blanco,
-    /// con las mismas cuatro cifras repetidas 200 px más abajo dentro de la propia tarjeta. Una
-    /// columna vacía no reparte nada — es hueco reservado para algo que no existe—, y el principio
-    /// 2 dice que el espacio se reparte, no se deja.
+    /// <b>Y no mira cuántas tarjetas hay.</b> F27 le puso un tope por número de tarjetas (UI-0020)
+    /// para que una sola no dejara dos columnas vacías; con eso la tarjeta pasaba a ocupar la fila
+    /// entera y sus cuatro cifras se separaban 400 px. El usuario lo vio en el dist y mandó volver
+    /// a la rejilla de la Parte B: la tarjeta tiene su ancho y la fila reparte por ancho. N-6.
     /// </para>
     /// </summary>
-    public int ColumnsFor(double available, int items)
+    public int ColumnsFor(double available)
     {
         if (double.IsInfinity(available) || available <= 0)
         {
@@ -89,8 +85,7 @@ public sealed class ColumnsPanel : Panel
 
         // n columnas ocupan n·min + (n−1)·gap. Se despeja la n más grande que quepa.
         int n = (int)Math.Floor((available + Gap) / (MinColumnWidth + Gap));
-        int tope = Math.Max(1, Math.Min(MaxColumns, items));
-        return Math.Clamp(n, 1, tope);
+        return Math.Clamp(n, 1, Math.Max(1, MaxColumns));
     }
 
     protected override Size MeasureOverride(Size availableSize)

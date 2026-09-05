@@ -1,4 +1,4 @@
-using System.Windows.Media;
+﻿using System.Windows.Media;
 
 namespace Atalaya.App.Controls;
 
@@ -85,6 +85,22 @@ public static class Icons
         "L9.2,6 A7,7 0 0 0 7.5,7 L5.1,6 L3.1,9.5 L5.1,11 A7,7 0 0 0 5.1,13 L3.1,14.5 L5.1,18 L7.5,17 " +
         "A7,7 0 0 0 9.2,18 L9.5,20.6 L14.5,20.6 L14.8,18 A7,7 0 0 0 16.5,17 L18.9,18 L20.9,14.5 L18.9,13 " +
         "A7,7 0 0 0 19,12 Z");
+
+    /// <summary>
+    /// La papelera de la tarjeta del portafolio: tapa, cuerpo y las dos rayas de dentro.
+    /// <para>
+    /// Vuelve en el cierre de F27. El borrado de una aplicación vivía tras un «…» desde F26 §B; el
+    /// usuario mandó devolver el icono, que es lo que había antes y lo que se reconoce sin abrir
+    /// nada. Se dibuja con la geometría de la casa y no con un glifo de Segoe MDL2 —que es como
+    /// estaba— para que herede el trazo, el tamaño y el color del sistema (D-944).
+    /// </para>
+    /// </summary>
+    public static Geometry Trash { get; } = P(
+        "M4,7 L20,7 " +
+        "M10,4 L14,4 " +
+        "M6,7 L7,20 L17,20 L18,7 " +
+        "M10,10.5 L10,16.5 " +
+        "M14,10.5 L14,16.5");
 
     /// <summary>La flecha de volver, en la miga de pan.</summary>
     public static Geometry Back { get; } = P("M15,5 L8,12 L15,19");

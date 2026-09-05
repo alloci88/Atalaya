@@ -37,10 +37,9 @@
 
         <!-- EL PATRÓN DE PÁGINA (P-02, UI-0035): el título en el margen, como en las demás; lo
              que se centra es el cuerpo. Arrancaba en x = 633. -->
-        <!-- EL PATRÓN DE PÁGINA (P-02, UI-0035). El título arrancaba en x = 633 porque la
-             columna entera iba centrada: pasar de Portafolio aquí movía el contenido 369 px a la
-             derecha y dejaba la miga a su izquierda. El techo del formulario se declara arriba y
-             es el mismo de siempre (920); lo que cambia es que ya no se centra. -->
+        <!-- EL PATRÓN DE PÁGINA (P-02). El formulario se centra en su ancho máximo, como en la
+             Parte C y como Cuenta; lo que cambia es que el TÍTULO se centra con él en vez de
+             quedarse en el margen. El ancho es el de siempre (920) y lo declara la página. -->
         <c:PageShell Grid.Row="0"
                      Title="Nueva aplicación"
                      Subtitle="Registra un repo auditable: detecta el stack y construye el inventario del primer ciclo."
@@ -299,11 +298,9 @@
         </c:PageShell>
 
         <!-- F5.7 §4: sin texto de estado al pie. El resultado va por el toast global. -->
-        <!-- Y la barra de acción, bajo la columna que cierra (UI-0035). Iba centrada, como iba
-             el formulario: al dejar de centrarse el formulario, un botón centrado se quedaba
-             solo en mitad del lienzo. -->
+        <!-- Y la barra de acción, bajo la columna que cierra: centrada con ella. -->
         <StackPanel Grid.Row="1" Orientation="Horizontal"
-                    MaxWidth="{StaticResource Form.MaxWidth}" HorizontalAlignment="Left"
+                    MaxWidth="{StaticResource Form.MaxWidth}" HorizontalAlignment="Center"
                     Margin="{StaticResource Pad.SaveBar}"
                     c:Stack.Gap="{StaticResource Space.S}">
             <Button Content="Crear e inventariar" Command="{Binding CreateCommand}"

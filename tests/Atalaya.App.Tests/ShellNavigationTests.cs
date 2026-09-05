@@ -208,6 +208,45 @@ public sealed class ShellNavigationTests : IDisposable
         findings.SelectedApp!.Slug.Should().Be("otra");
     }
 
+    // ================================================================ la geometría de la ventana
+
+    /// <summary>
+    /// <b>Una ventana que nunca se enseñó no tiene geometría que guardar</b> (F27, N-8).
+    /// <para>
+    /// <c>RestoreBounds</c> de una ventana sin mostrar es <c>Rect.Empty</c>, o sea infinitos, y
+    /// <c>System.Text.Json</c> no sabe escribir un infinito. <c>--selfcheck</c> construye la
+    /// carcasa, así que al cerrar el proceso el manejador de <c>Closed</c> intentaba guardar eso:
+    /// el autochequeo imprimía «Arranca.» y a continuación reventaba con una excepción sin recoger,
+    /// y el código de salida que mira el workflow de release dejaba de significar nada. Un chequeo
+    /// que acaba en excepción no protege de nada.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Una_geometria_que_no_es_un_numero_no_se_guarda()
+    {
+        MainViewModel shell = TestFactory.Shell(_paths, _hub, settings: _settings);
+        WindowPlacement antes = _settings.Current.Window;
+
+        shell.SaveWindowPlacement(new WindowPlacement
+        {
+            Saved = true,
+            Left = double.PositiveInfinity,
+            Top = double.PositiveInfinity,
+            Width = double.PositiveInfinity,
+            Height = double.PositiveInfinity,
+        });
+
+        _settings.Current.Window.Should().BeSameAs(antes, "no había nada que guardar");
+
+        // Y una de verdad sí se guarda: el guardarraíl no puede tragarse el caso normal.
+        shell.SaveWindowPlacement(new WindowPlacement
+        {
+            Saved = true, Left = 40, Top = 40, Width = 1280, Height = 720,
+        });
+
+        _settings.Current.Window.Width.Should().Be(1280);
+    }
+
     // ================================================================ la miga
 
     /// <summary>

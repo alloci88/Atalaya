@@ -38,20 +38,6 @@ public sealed partial class MainViewModel
     /// <summary>Los grupos del raíl, tal cual se pintan. Se reconstruyen cuando cambia lo que hay.</summary>
     public ObservableCollection<NavGroup> NavGroups { get; } = new();
 
-    /// <summary>
-    /// EL BLOQUE DE SISTEMA, APARTE Y ANCLADO AL PIE (UI-0043).
-    /// <para>
-    /// Iba dentro de <see cref="NavGroups"/>, detrás del bloque de la aplicación, y el bloque de la
-    /// aplicación aparece, desaparece y crece —una, dos o tres entradas—. Medido: «Cuenta» está en
-    /// y=299 en el Portafolio, en y=356 en el Inventario, en y=396 con una sesión y en y=436 con
-    /// sesión y arreglo: <b>137 px de recorrido</b> para tres entradas que se aprenden de memoria y
-    /// se pulsan sin mirar. D-954 se preocupó de que la entrada activa no bailara tres píxeles;
-    /// esto era lo mismo a escala de cuarenta veces. Ahora el bloque va pegado al pie y lo que
-    /// crece es el hueco de en medio.
-    /// </para>
-    /// </summary>
-    public ObservableCollection<NavItem> SystemItems { get; } = new();
-
     /// <summary>Portafolio › XBLAST › Inventario. El último eslabón no es enlace.</summary>
     public ObservableCollection<Crumb> Crumbs { get; } = new();
 
@@ -322,12 +308,6 @@ public sealed partial class MainViewModel
             item.IsActive = item.Key == active;
         }
 
-        SystemItems.Clear();
-        foreach (NavItem item in system)
-        {
-            SystemItems.Add(item);
-        }
-
         NavGroups.Clear();
         NavGroups.Add(new NavGroup(WorkGroup, work) { HasSeparator = false });
         if (app.Count > 0)
@@ -339,6 +319,11 @@ public sealed partial class MainViewModel
             // genérico en vez de quedarse en blanco.
             NavGroups.Add(new NavGroup(ActiveApplication.HasApp ? ActiveApplication.Name : "En curso", app));
         }
+
+        // EL BLOQUE DE SISTEMA VA AQUÍ, CON LOS DEMÁS (F27, cierre). F27 lo sacó a una colección
+        // propia para anclarlo al pie del raíl (UI-0043); el usuario lo vio en el dist y mandó
+        // volver a la Parte C, con todas las entradas seguidas. N-6.
+        NavGroups.Add(new NavGroup(SystemGroup, system));
     }
 
     private const string WorkGroup = "Trabajo";

@@ -756,22 +756,6 @@
         </Setter>
     </Style>
 
-    <!-- LA FILA DE IDENTIDAD DEL PIE DEL RAÍL (UI-0061). Mide, se rellena y se alinea como una
-         entrada del menú —los mismos carriles, la misma altura— pero NO es un botón: dejó de
-         navegar. Había dos controles del raíl llevando a «Cuenta» —la entrada del bloque de
-         sistema y esta fila—, y la de abajo no marcaba «estás aquí» cuando estabas en Cuenta, no
-         tenía nombre de accesibilidad y era la SEGUNDA parada de tabulación de toda la ventana,
-         antes que las entradas del menú que tiene encima. La entrada de «Cuenta» se queda: tiene
-         su icono, marca dónde estás y está en el bloque que le toca. Esto es quién eres y si el
-         hub responde, que es lo que un pie de menú dice. -->
-    <Style x:Key="RailIdentity" TargetType="Border">
-        <Setter Property="Height" Value="{StaticResource Rail.RowHeight}" />
-        <Setter Property="Padding" Value="{StaticResource Pad.RailItem}" />
-        <Setter Property="Margin" Value="{StaticResource Pad.RailItemGap}" />
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="SnapsToDevicePixels" Value="True" />
-    </Style>
-
     <!-- ================================================================ Gravedad
 
          La gravedad se ve DESDE LEJOS (principio 4), y se ve con los colores del tema: pastilla de
@@ -1120,16 +1104,16 @@
          derecha, y el cuerpo debajo. El porqué —y las dos vistas que se salían de la cuadrícula—
          está en `PageShell`; aquí solo se dibuja.
 
-         NADA SE CENTRA. Cabecera y cuerpo arrancan en el margen de la página, y lo que una vista
-         declara es el TECHO de su cuerpo: un formulario se para en su medida, pero se para desde
-         la izquierda. Centrarlo era la causa de que Cuenta empezara 536 px a la derecha de su
-         propia miga —que es de la carcasa y no se mueve— con medio lienzo en blanco al lado.
+         CABECERA Y CUERPO, EN LA MISMA COLUMNA. O las dos en el margen de la página, o las dos
+         centradas en la medida que la vista declare. Lo que no vale es una a cada lado: F27 ancló
+         la cabecera al margen y dejó el cuerpo centrado, y Cuenta acabó con el título en x=264, las
+         tarjetas en x=795 y medio lienzo en blanco entre los dos.
     -->
     <Style TargetType="{x:Type c:PageShell}">
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type c:PageShell}">
-                    <Grid>
+                    <Grid x:Name="Page">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
@@ -1154,10 +1138,18 @@
                             </StackPanel>
                         </DockPanel>
 
-                        <ContentPresenter x:Name="Body" Grid.Row="1"
-                                          HorizontalAlignment="Left"
-                                          MaxWidth="{TemplateBinding BodyWidth}" />
+                        <ContentPresenter Grid.Row="1" />
                     </Grid>
+
+                    <ControlTemplate.Triggers>
+                        <!-- Una vista que declara su medida se centra ENTERA. El tope va en la
+                             página y no en el cuerpo, que es lo que mantiene el título encima de
+                             lo que titula. -->
+                        <DataTrigger Binding="{Binding IsBodyCentered, RelativeSource={RelativeSource Self}}" Value="True">
+                            <Setter TargetName="Page" Property="MaxWidth" Value="{Binding BodyWidth, RelativeSource={RelativeSource TemplatedParent}}" />
+                            <Setter TargetName="Page" Property="HorizontalAlignment" Value="Center" />
+                        </DataTrigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

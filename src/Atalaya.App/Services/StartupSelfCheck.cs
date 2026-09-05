@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -57,9 +57,17 @@ public sealed record SelfCheckReport(IReadOnlyList<SelfCheckStep> Steps)
 /// que no arranca no puede volver a publicarse.
 /// </para>
 /// <para>
-/// <b>Y no abre ventana</b>: comprueba que la carcasa se puede construir —que es donde revientan
-/// los errores de XAML, que el compilador no ve— pero no la enseña ni navega a ninguna página, y
-/// no toca la red ni el hub. Es un chequeo, no una sesión.
+/// <b>Y no abre ventana</b>: construye la carcasa —que es donde revientan los errores de XAML,
+/// que el compilador no ve—, <b>mide y coloca la primera vista</b> fuera de pantalla, y no toca la
+/// red ni el hub. Es un chequeo, no una sesión.
+/// </para>
+/// <para>
+/// <b>Por qué también se pinta</b> (F27, N-8). Construir no basta: un estilo que hereda de otro
+/// declarado más abajo en el mismo diccionario compila, se registra y no falla hasta que alguien
+/// lo <i>aplica</i>, y aplicarlo ocurre en la medida. Pasó en F27 con <c>Stat.Number.Sev</c>:
+/// build verde, 1.920 tests verdes, autochequeo verde, y el <c>dist</c> se cerraba solo al pintar
+/// el Portafolio —la primera pantalla—. Medir y colocar la primera vista con su view-model de
+/// verdad cuesta milisegundos y cierra ese hueco.
 /// </para>
 /// </summary>
 public static class StartupSelfCheck
@@ -148,6 +156,7 @@ public static class StartupSelfCheck
                     _ = host.Services.GetRequiredService<ViewModels.MainViewModel>();
                     _ = host.Services.GetRequiredService<MainWindow>();
                 });
+                Step(steps, "primera vista", () => PaintFirstView(host.Services));
             }
         }
         finally
@@ -171,6 +180,39 @@ public static class StartupSelfCheck
         }
 
         return new SelfCheckReport(steps);
+    }
+
+    /// <summary>
+    /// Mide y coloca la PRIMERA VISTA, fuera de pantalla y con su view-model de verdad.
+    /// <para>
+    /// No se enseña ninguna ventana: la página se mete en un <c>ContentControl</c> suelto, que es
+    /// lo que hace que la plantilla de <c>Themes/Pages.xaml</c> la resuelva, y se le pide una
+    /// medida y una colocación a 1440×900. Eso aplica las plantillas y resuelve los
+    /// <c>StaticResource</c> de los estilos, que es donde estaba el hueco.
+    /// </para>
+    /// <para>
+    /// Devuelve qué se pintó, para que el parte lo diga. Si algo revienta, lo recoge
+    /// <c>Step</c> con su causa, como todos los demás pasos.
+    /// </para>
+    /// </summary>
+    private static string PaintFirstView(IServiceProvider services)
+    {
+        var shell = services.GetRequiredService<ViewModels.MainViewModel>();
+        var page = services.GetRequiredService<ViewModels.PortfolioViewModel>();
+
+        var host = new System.Windows.Controls.ContentControl
+        {
+            Content = page,
+            Width = 1440,
+            Height = 900,
+        };
+
+        host.Measure(new System.Windows.Size(1440, 900));
+        host.Arrange(new System.Windows.Rect(0, 0, 1440, 900));
+        host.UpdateLayout();
+
+        _ = shell;
+        return "Portafolio, medido y colocado a 1440×900";
     }
 
     /// <summary>
