@@ -112,7 +112,7 @@ apretarse.
 
 ### Tema claro y tema oscuro
 
-En **Ajustes → Tema claro**. El cambio se aplica al guardar, sin reiniciar, y cambia la aplicación
+En **Ajustes → Apariencia → Tema claro**. El cambio se aplica al guardar, sin reiniciar, y cambia la aplicación
 entera: fondos, textos, botones, pastillas de gravedad y avisos. El modo claro es **crema**, no
 blanco: un blanco puro a pantalla completa cansa la vista, y esto es una herramienta de mirar
 código durante horas.
@@ -730,6 +730,10 @@ mismo problema bajo dos reglas—. Los que marca, mirados de dos en dos, se resu
 - **Nombres de fase ni de hito.** El informe no lleva referencias internas del desarrollo de
   Atalaya en ningún sitio, ni en el anexo: viven en el repositorio, que es donde se pueden buscar.
 
+**En pantalla**, el informe se lee en columna y no a todo lo ancho del monitor: una línea de mil
+seiscientos píxeles no se puede seguir con la vista. Y el **anexo técnico —diagnóstico** va **plegado**: lo dice
+el propio informe, «no hace falta para actuar sobre los hallazgos». Se abre con un clic, y entonces
+sí ocupa el ancho entero, porque lo que lleva dentro son tablas.
 
 ### Nueva aplicación
 
@@ -768,16 +772,36 @@ autoría de los commits, ni hub donde escribir los hallazgos. Debajo hay **una f
 auditoría**, cada una con su propio piloto y su propia instrucción si falta algo. **Basta con tener
 uno listo** para poder auditar.
 
+Cada fila dice su estado con **icono, color y palabra**, las tres cosas a la vez: **Disponible**
+(verde), **Comprobando** (con su anillo girando), **No comprobado** (gris) y **No disponible**
+(rojo, con el motivo en la línea de debajo). Un color solo no se lee si no distingues dos tonos, y
+un glifo suelto —«…», «•»— no significa nada para quien no lo escribió.
+
 Un proveedor **opcional** que no tengas instalado —hoy, Claude Code— sale con un `+` gris y la
-palabra «opcional»: te dice que existe y cómo activarlo si te interesa, y ahí acaba. **No es un
-fallo**, no se pinta como tal y no impide nada.
+frase «disponible si lo activas»: te dice que existe y cómo activarlo si te interesa, y ahí acaba.
+**No es un fallo**, no se pinta como tal y no impide nada.
 
 ### Ajustes
 
-Frescura, **proveedor de auditoría** y su modelo, el **modo exhaustivo** del barrido, el
-interruptor del **arreglo asistido** (encendido por defecto), las **tarifas** por modelo, tema
-**claro/oscuro**, intervalo de sincronización y las acciones destructivas, con su confirmación. Al
-final, **Acerca de Atalaya**: versión, organización y los enlaces al repositorio y a este manual.
+**Ajustes tiene cinco secciones**, en la lista de la izquierda de la propia pantalla. Se navegan
+como el menú lateral —la que estás mirando va resaltada— y cada una es una página corta en vez de
+un scroll largo:
+
+| Sección | Qué hay dentro |
+| --- | --- |
+| **Proveedor y modelo** | Con quién auditas y con qué modelo, y el botón de actualizar la lista |
+| **Auditoría** | El tope de pasadas del barrido, el **modo exhaustivo** y el interruptor del **arreglo asistido** |
+| **Tarifas** | La tabla de precios por modelo de la organización, con los modelos usados que aún no tienen tarifa |
+| **Apariencia** | Tema claro / oscuro |
+| **Avanzado** | Editor preferido, frescura, sincronización del hub, timeout, **Acerca de Atalaya** y la zona peligrosa |
+
+**Guardar está siempre a la vista**, en la barra del pie. Cuando hay algo cambiado sin guardar la
+barra lo dice —«Hay cambios sin guardar»— y aparece **Descartar**, que devuelve las cajas a lo que
+hay escrito en el fichero. En la sección **Tarifas** esa barra guarda la tabla del hub, que es lo
+que se está editando ahí.
+
+Cada ajuste cuenta en **una línea** qué hace y cuándo aplica; lo que necesita más explicación vive
+detrás de un **«Más»** en la misma fila, plegado.
 
 **Los ajustes son de esta máquina** —viven en tu `settings.json`, no en el hub—, así que
 cambiarlos no le toca nada a tus compañeros. Ésa es justamente la regla que decide qué está aquí:
@@ -1015,7 +1039,7 @@ es un sustituto, es un segundo auditor.
 
 ### Cómo se elige
 
-En **Ajustes → Proveedor de auditoría**. Es una preferencia **tuya y de esta máquina** —cada uno
+En **Ajustes → Proveedor y modelo**. Es una preferencia **tuya y de esta máquina** —cada uno
 audita con la cuenta que tiene— y se aplica a la **siguiente** sesión: a mitad de un barrido no se
 cambia de juez. Cada proveedor recuerda **su propio modelo**, así que ir y volver no te deshace la
 elección.

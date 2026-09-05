@@ -14754,3 +14754,394 @@ token no puede valer dos cosas a la vez. Lo que se rompió no fue la regla, fue 
 tokens distintos donde hacía falta uno — y eso se ve en la primera captura, que es donde se vio.
 
 **2.368 tests en verde** (1.859 de `Atalaya.App.Tests`).
+
+## F26 · Parte C: las vistas de sistema
+
+Ajustes, Cuenta, Métricas, Informes y Nueva aplicación, pasadas por el sistema de la Parte A. Son
+las que el usuario señaló con más dureza en el encargo original —*«Ajustes es un scroll vertical
+enorme con texto de ayuda pequeño»*, *«Métricas tiene tarjetas desalineadas y prosa como estado
+vacío»*, *«Informes es una tabla de una fila en una pantalla vacía»*, *«Cuenta es una columna
+estrecha pegada a la izquierda con estados que no se entienden»*— y son también las últimas: al
+cerrar esta parte, **la lista de pendientes de `DesignTokenTests` se queda solo con los diálogos**.
+
+Las capturas del antes y el después, en las cuatro combinaciones —dos temas × pantalla completa y
+1280×720—, están en `docs/design/f26-parte-c/`. El recorrido es el de la Parte B (D-977, D-983 §1):
+el dist real, con su copia de seguridad del `settings.json` del usuario antes de tocarlo y su
+restauración al terminar.
+
+### D-985 — Ajustes: de un scroll de dos pantallas a cinco secciones
+
+**Lo que se veía**, medido en la captura: 2,5 pantallas de alto; las descripciones a **11 px** —
+cuatro y cinco líneas cada una, con el tope de pasadas gastando ocho renglones en explicar un
+número—; la caja de ese número **del tamaño de dos cifras**; «Guardar» al fondo del scroll, fuera de
+la vista durante todo el rato que se está editando; y 1.000 px de pantalla vacía a la derecha.
+
+**Lista lateral, no pestañas**, y la razón no es estética:
+
+1. **Los rótulos son largos** («Proveedor y modelo», «Apariencia»). Una tira horizontal de cinco
+   los aprieta contra el título de la página justo a 1280, que es el ancho que hay que soportar
+   (principio 1).
+2. **Es el mismo gesto que el raíl, una capa más abajo** — barra de «estás aquí», fondo teñido y
+   peso en la entrada activa, con el mismo estilo. No hay que aprender dos formas de decir dónde
+   estás (principio 7).
+3. **Crece.** Añadir una sección a una columna no cuesta nada; a una tira de pestañas le queda el
+   ancho que le queda.
+
+Y la sección es además un **destino**: Métricas enlaza a las tarifas cuando falta una, y llegar a la
+página entera para tener que buscar la tabla no es llegar. Por eso `Section` es una propiedad del
+view-model y las cinco entradas son datos (`SettingsSectionItem`), no cinco botones escritos a mano:
+la entrada activa es un dato y un dato se puede probar (D-954, otra vez).
+
+**El orden es el del trabajo**: con quién auditas · cómo audita · lo que cuesta · cómo se ve · lo
+demás.
+
+| Sección | Qué lleva |
+|---|---|
+| Proveedor y modelo | El proveedor, el modelo y «Actualizar lista», con el aviso de la lista por el recurso del sistema |
+| Auditoría | Tope de pasadas, modo exhaustivo con su icono y el aviso literal de R2, arreglo asistido, y el aviso del umbral de unidad grande |
+| Tarifas | La tabla del hub, entera (D-988) |
+| Apariencia | Tema claro |
+| Avanzado | Editor, frescura, sincronización, timeout, «Acerca de» y la zona peligrosa |
+
+**Dos colocaciones que no son obvias.** El **arreglo asistido** va en Auditoría y no en Avanzado:
+gobierna lo que un agente puede hacer sobre tu clon, que es de lo que va esa sección, y no es una
+opción para expertos —viene encendida—. Y la **zona peligrosa** cierra Avanzado, que es donde va lo
+que casi nadie toca; «Acerca de» sigue **antes** que ella, porque lo último de una página no puede
+ser algo que no da miedo (F6.4).
+
+**La fila de un ajuste, una y la misma para las cinco secciones**: a la izquierda la etiqueta y
+**una** línea de ayuda a 14 px; a la derecha el control. Es un `DockPanel` con estilo compartido
+(`Setting.Row` + `Setting.Label`) y no un `Grid` con dos columnas escritas quince veces — dos
+números que hay que mantener iguales a mano acaban siendo distintos (D-966), y aquí serían treinta.
+
+**Lo que no cabe en esa línea vive detrás de un «más», plegado** (principio 8). Las descripciones
+largas no se han acortado: se han movido. El tope de pasadas sigue explicando las dos pasadas secas
+y qué pasa al agotarse; lo que ha cambiado es que ya no ocupa ocho renglones a 11 px delante de
+quien solo quería ver qué número tiene puesto.
+
+**Y los campos tienen ancho digno**, por token y no por vista: `Field.NumberWidth` (120, cuatro
+cifras cómodas) y `Field.SelectWidth` (300, el nombre de un modelo con su multiplicador). El
+numérico pasa además al `TextBox` del sistema —el estilo implícito de `Styles.xaml`— en vez del de
+la librería.
+
+**Tres cosas que el encargo pedía y NO se han hecho, con su motivo:**
+
+- **«Temática por defecto» en Auditoría.** No existe como ajuste: la temática es del **ciclo** de
+  cada aplicación (F17), se elige al abrirlo y vive en el hub. Inventar aquí una preferencia de
+  máquina que gobernara un dato compartido es exactamente lo que F13 prohíbe, y además habría sido
+  un ajuste nuevo, que es un anti-objetivo de esta parte.
+- **«Escala» en Apariencia.** Tampoco existe, y no se ha creado. La escala tipográfica es del
+  sistema (D-946) y quien necesita el texto más grande lo tiene en la escala de Windows, que Atalaya
+  respeta porque se dibuja con vectores (D-950). La sección lo dice con un aviso en línea, para que
+  la respuesta esté donde se hace la pregunta.
+- **Cabeceras de tabla «a 13 px»** (Informes). Se usan las del sistema, que son **14**
+  (`Table.Header`): 13 es el suelo de la escala y está reservado a metadatos —rutas, sellos de
+  tiempo—, y el nombre de una columna es una etiqueta que se lee para entender la fila. La intención
+  del encargo —que dejaran de ser ilegibles, 11 px al 60 % de opacidad— se cumple con margen.
+
+### D-986 — «Unidad grande (LOC)» deja de fingir que es un ajuste
+
+Era una fila con etiqueta, una frase a la derecha y **cinco líneas a 11 px** debajo explicando por
+qué no se puede editar ahí. Una fila que no edita nada no es una fila: es un aviso disfrazado, y el
+disfraz costaba media pantalla.
+
+Ahora es un **aviso en línea de nivel informativo** —una frase— con un enlace hasta donde sí se
+edita. La regla de F13 no cambia ni un ápice: sigue sin haber control que lo toque, y el texto sigue
+diciendo que es política de cada aplicación y que aplica al re-escanear.
+
+**A dónde lleva el enlace, y por qué depende.** Con aplicación activa, a **su** inventario, que es
+donde vive su gobernanza; sin ella, a Portafolio, que es donde se elige una. Nunca a un inventario
+que no se sabe de quién sería — un enlace que lleva al sitio equivocado es peor que no tenerlo.
+
+Esto obliga a `Notice.Info`, que faltaba: la paleta tenía aviso, peligro y éxito, y no tenía «esto
+es información». Un aviso ámbar para decir dónde está algo habría convertido una nota en una tarea
+pendiente.
+
+### D-987 — La barra de guardar, y el primario que cambia con la sección
+
+**Guardar estaba al fondo de un scroll de dos pantallas.** Se editaba sin tenerlo delante, y
+cambiar de página no avisaba de nada: se perdía lo tocado en silencio.
+
+La barra vive ahora **al pie de la vista**, fija, con el primario dentro. Y cuando hay algo sin
+guardar lo **dice** —«Hay cambios sin guardar»— y aparece **Descartar**, que devuelve las cajas a lo
+que hay escrito en el fichero. **El comportamiento de guardar no cambia**: sigue siendo explícito,
+con sus mínimos aplicados y contados y su toast (BUGFIX-AJUSTES). Esto es la señal, no una
+autoguarda.
+
+**UN primario por vista, y el de la sección que estás editando** (principio 4). En Tarifas la barra
+guarda la tabla del hub —que es otra cosa, en otro sitio— y ofrece «Añadir modelo»; en las otras
+cuatro, «Guardar» y «Descartar». Dos botones de guardar a la vez habrían dejado al usuario
+decidiendo cuál era el suyo.
+
+**La marca de sucio se calcula con una HUELLA de todos los campos editables**, no campo a campo. La
+razón es la de siempre en esta casa: diez ganchos `On…Changed` que hay que mantener iguales acaban
+siendo nueve, y el ajuste que falte dejará de marcar. Con la huella, añadir un ajuste a la página es
+añadirlo en un sitio — y hay un test que lo recorre por reflexión para que el olvido se vea.
+
+### D-988 — Las tarifas dejan de ser un diálogo, y el diálogo se retira
+
+R2 §2 trajo la tabla de tarifas desde Métricas y la dejó **detrás de un botón que abría una
+ventana**. Funcionaba y era una excepción: es la única pantalla de configuración de la aplicación
+que no estaba en Ajustes sino en un modal encima de Ajustes, con su propia tipografía, su propio
+espaciado y su propio botón de cerrar.
+
+Ahora es la **sección Tarifas**, con su tabla, su edición, su lista de modelos usados sin tarifa —con
+las sesiones que esperan por ellos— y su nota al pie. El fichero **no se mueve**: sigue en la raíz
+del hub (D-786). Esto es dónde se edita, no dónde vive.
+
+**Y `ModelRatesDialog` se borra, no se esconde.** El diálogo, su `IModelRatesDialog`, su host y su
+registro en el contenedor. Es la lección de D-981: código muerto detrás de un `Visibility` —o de un
+registro— no es una vista retirada, es una vista que nadie mantiene y que vuelve sola en el
+siguiente refactor. `SettingsViewModel` deja de recibir el diálogo y monta el `ModelRatesViewModel`
+él mismo cuando hay servicio; sin servicio, la sección enseña su estado vacío con el motivo.
+
+El enlace de Métricas ya navegaba a Ajustes (R2); ahora **aterriza en la sección**, que es lo que
+convierte «Ajustes → Tarifas» en una frase cierta.
+
+### D-989 — Cuenta: icono + COLOR + PALABRA, y dos converters menos
+
+**Lo que se veía**: una columna de 680 px pegada al borde izquierdo con la mitad de la pantalla
+vacía, y los estados de conexión dichos con un glifo suelto — «✓», «✕», «…», «•» —. «…» y «•» no
+significan nada para quien no los escribió.
+
+Y debajo había un defecto de sistema en su forma más pura: los dos `CheckStateToGlyphConverter` y
+`CheckStateToBrushConverter` devolvían **pinceles con los hexadecimales dentro**. Es exactamente lo
+que D-971 prohibió para la gravedad: un converter devuelve una brocha **ya resuelta**, así que al
+cambiar de tema la lista se queda con los colores del anterior. Los dos converters **se borran**.
+
+Ahora cada fila dice su estado con las tres cosas a la vez, y las tres las pone el sistema con
+`DataTrigger` y `DynamicResource`:
+
+| Estado | Icono | Color | Palabra |
+|---|---|---|---|
+| `Ok` | check | `Success.Ink` | Disponible |
+| `Running` | *anillo girando* | neutro | Comprobando |
+| `Pending` | círculo vacío | `TextFaint` | No comprobado |
+| `Failed` | cruz | `Danger.Ink` | No disponible, con el motivo debajo |
+| `Optional` | más | `TextMuted` | Disponible si lo activas |
+
+**La palabra se declara con un `Setter` por estado, al lado del color al que acompaña**, y no con un
+converter de cadenas. Un texto no es un pincel —se puede fijar en el estilo sin congelar nada— y así
+no hay dos sitios donde mirar para saber qué dice una fila verde.
+
+**El «comprobando» no lleva glifo sino anillo**: lo que está pasando se mueve. El anillo va dentro de
+un `Grid` estilado y no estilado él mismo, porque un `Style TargetType` sobre un control de WPF-UI
+**sin `BasedOn` lo deja sin plantilla** — la lección del `ui:Card` de Métricas, aplicada antes de
+pisarla.
+
+Y el contenido **se centra en su ancho** (`Form.MaxWidth`, 920): Cuenta no es una lista, es una
+columna de tarjetas, y estirarla hasta 1480 dejaría la etiqueta y su valor a medio metro. El
+principio 2 no dice «llena la pantalla», dice **reparte**: aquí repartir es dejar aire a los dos
+lados en vez de todo a la derecha.
+
+La descripción de tres líneas bajo «Estado de la conexión» se queda en una, con el resto detrás del
+«más» de Ajustes — el mismo control, porque es el mismo problema.
+
+### D-990 — Métricas: la rejilla iguala, la pastilla es la del sistema
+
+**Lo que se veía**: cuatro tarjetas de resumen en un `UniformGrid`, cada una midiendo lo suyo y
+**centrada en la fila**. La de coste es cuatro veces más larga que las otras, así que las otras tres
+flotaban a alturas distintas: ni sus bordes de arriba ni sus cifras caían en la misma y. Se lee como
+un montón, no como una rejilla.
+
+Ahora van en **`ColumnsPanel`** (D-970), que es el control que ya arregló el portafolio, y que hace
+las dos cosas que hacían falta: reparte el ancho entero y **da a todas las tarjetas de una fila el
+alto de la más alta**. A 1280 pasan a tres y una en vez de encogerse (principio 1).
+
+**Las pastillas de gravedad son las del sistema.** `MetricsSeverityChip` traía dentro su fondo y su
+tinta ya calculados —D-971 otra vez—; ahora lleva el **nombre** de la severidad y la pinta
+`Pill.Sev`/`Pill.Sev.Text`, que son las mismas de Portafolio y de Hallazgos. Cuatro sitios pintando
+una gravedad y una sola forma de hacerlo.
+
+**La cifra y su unidad comparten línea base.** «244,7 credits» eran dos cajas alineadas por abajo, y
+`Bottom` iguala el borde inferior de dos CAJAS: la de un texto de 14 tiene menos hueco bajo la letra
+que la de uno de 26, así que «credits» se sentaba por debajo del número. Ahora es un `TextBlock` con
+dos `Run`, que es lo único que comparte línea base en WPF (D-983 §9).
+
+**El conmutador «Acumulado» va en la línea del título**, alineado a la derecha: es una opción de
+lectura de esa gráfica, no un control flotando sobre su bloque. Y los paneles de gráfica ocupan el
+ancho, con título, una línea de ayuda a 14 y su leyenda.
+
+**La barra de filtros dice qué filtra** —«Aplicación:», «Periodo:»— y su ritmo lo pone la barra
+(D-973, D-984). Eran dos desplegables sin nombre.
+
+**Nada cambia en qué se mide ni cómo** (D-786 y siguientes). Ni una consulta, ni un número, ni un
+filtro nuevo.
+
+### D-991 — El estado vacío es un patrón del sistema, no un párrafo gris
+
+Métricas escribía sus vacíos como prosa a 12 px dentro del panel de la gráfica —«— · se activará
+cuando alguna sesión del periodo tenga coste facturable»— e Informes como una frase suelta centrada.
+Los dos se leen igual que un dato que no se entiende: nada dice que la pantalla esté bien y que lo
+que falta sea contenido.
+
+`EmptyState` es un control con plantilla en `Styles.xaml`: **icono, UNA frase y —si la hay— la
+acción que lo llena**. Es un control y no seis bloques de XAML porque hay siete sitios que lo
+necesitan, y seis copias del mismo bloque divergen: la que se ve menos deja de mantenerse y el
+patrón deja de serlo.
+
+**La acción es opcional, a propósito.** Hay vacíos que nadie puede llenar desde donde está —«se
+activará cuando alguna sesión registre coste» no tiene botón— y ofrecer uno que no lleva a ningún
+sitio es peor que no ofrecer ninguno.
+
+**Y el aviso ámbar de Métricas deja de ser una nota al pie.** «1 sesión sin tarifa para su modelo: no
+está contada» era una línea de 11 px en ámbar escrito a mano; ahora es un `Notice.Warning` con su
+icono y el enlace a Ajustes → Tarifas dentro. Un total al que le falta gasto se lee como si fuera el
+gasto entero: eso es un aviso, no una nota.
+
+**El estado vacío de Informes tiene DOS salidas y no las tres del encargo.** El encargo pedía además
+«Aún no hay informes de esta aplicación · Auditar», y ese estado **no existe en esta lista**: el
+combo de aplicación se rellena con las que TIENEN informe (`ReportsQuery.Apps`), así que una
+aplicación sin ninguno no se puede ni elegir, y ningún enlace de fuera filtra por aplicación —todos
+entran por `ShowReport`, con un informe concreto—. Escribir la tercera rama habría sido código muerto
+detrás de una condición imposible (D-981). Las dos que sí existen llevan su salida: «Limpiar
+filtros» cuando los filtros son los que no dejan pasar nada, y «Ir al Portafolio» cuando todavía no
+hay ningún informe — que es donde se elige la aplicación que auditar.
+
+### D-992 — Informes: la tabla ocupa el ancho, y el nombre no se recorta
+
+**Lo que se veía**: filas de 35 px, cabeceras a **11 px con opacidad 0,6** —ilegibles—, la columna
+«Usuario» recortando nombres («Daniel Rodríguez d…») y cinco desplegables sin nombre que ponían
+«Todas · Todos · Todos · Todo».
+
+- **Filas de 40 px** con el relleno de fila del sistema, y la cabecera con el MISMO relleno, para que
+  cada rótulo caiga sobre su columna sin un número suelto que mantener.
+- **Cabeceras por `Table.Header`**: 14 px, seminegrita, tinta secundaria — con su par medido a AA.
+- **«Usuario» no se recorta.** Un texto recortado no falla, **miente** (D-975). Ancho suficiente para
+  el caso real y `Wrap` si aun así no cabe: la fila crece, que es lo que tiene que pasar.
+- **Las columnas se reparten en proporción, con mínimo.** Con anchos fijos y una sola columna
+  elástica, esa columna se quedaba 630 px de vacío en medio de la tabla mientras las demás iban
+  apretadas. Ahora cada una lleva su parte y su suelo: a 1920 se reparten, a 1280 ninguna baja de lo
+  que necesita.
+- **Cada filtro dice qué filtra** y la separación la pone la barra, una y la misma (D-973, D-984).
+
+### D-993 — El informe se lee: la escala del sistema, la medida, la gravedad y el anexo plegado
+
+`MarkdownFlowDocument` llevaba **su propia escala**: 13,5 de cuerpo y seis tamaños de encabezado
+escritos a mano. O sea que el texto **más largo** de la aplicación estaba escrito en el tamaño **más
+pequeño** que la aplicación tenía antes de F26, y a todo lo ancho de un monitor de 27".
+
+- **El cuerpo es el cuerpo del sistema** (15, D-962), y sale del token por referencia de recurso:
+  la escala se cambia en un sitio y el informe la sigue. Sin `Application` viva —los tests— vale el
+  número de respaldo.
+- **Los encabezados no arrancan en H1.** El título del informe ya lo enseña la cabecera del visor;
+  repetirlo a 30 px dentro del documento haría de la primera pantalla una portada. El H1 del markdown
+  entra por `FontSize.H2` y la escala baja desde ahí.
+- **Medida de lectura de 720 px** (`Read.MaxWidth`, `MaxPageWidth` del documento). No baja más
+  porque un informe también lleva tablas y una columna de 600 px las parte.
+- **El anexo técnico va aparte y PLEGADO.** Lo dice el propio informe: «no hace falta para actuar
+  sobre los hallazgos: está aquí para quien mantiene Atalaya». Aun así ocupaba media pantalla de
+  tablas de tokens justo debajo del resumen, que es lo que sí hace falta. Se parte por su encabezado
+  —el que escribe `ReportBuilder`— y se lee en su propio panel desplegable, **a ancho completo y sin
+  medida**: sus tablas son de nueve columnas y en 720 px se parten. **El informe no cambia** (F23):
+  cambia dónde se corta al pintarlo.
+- **La gravedad se ve sin leer.** Las dos formas en que el informe la escribe —la línea de recuento
+  del resumen («3 Altas · 6 Medias · 6 Bajas») y el corchete que abre un hallazgo («[Alta] …»)— se
+  pintan con la pastilla del sistema.
+
+**Y el corchete costó entender por qué no salía.** Con el reconocimiento hecho sobre el texto, la
+línea del resumen se pintaba y el encabezado no. La causa: **Markdig ve `[Alta]` como una referencia
+de enlace sin destino y la parte en tres trozos** —«[», «Alta», «]»—, así que ningún literal contiene
+nunca la marca entera. Se resuelve mirando el texto plano del ENCABEZADO, que es el único sitio del
+informe donde este caso aparece. Es la lección de siempre: lo que no se pinta no siempre está mal
+escrito; a veces está partido.
+
+**Lo que NO se reconoce como gravedad, a propósito**: una palabra suelta. «La cobertura es baja»
+no lleva pastilla. Si el color significa «esto es un hallazgo grave», no puede pintarse cuando solo
+significa «esta palabra existe» — es el principio 4 en la tipografía.
+
+### D-994 — Nueva aplicación: el sistema sobre la vista de R3, y la validación en línea
+
+R3 dejó el alta bien planteada —el repositorio se elige de una lista con su nombre corto, el nombre
+de la aplicación se deriva de él, la ruta local se examina— y maquetada a la antigua: columna
+estrecha pegada al borde izquierdo, ayudas a 11 px, títulos de tarjeta a 13,5.
+
+Ahora el formulario se **centra en su ancho** (`Form.MaxWidth`) y sus filas son **las de Ajustes**:
+el mismo `Setting.Row`, la misma etiqueta con su línea de ayuda, el mismo control a la derecha. Dos
+pantallas de formulario que se parecen no es coincidencia: es que hay un solo formulario.
+
+**Y los errores de validación van EN LÍNEA, bajo el campo que los produce.** Hasta aquí, pulsar
+«Crear» sin repositorio o con una ruta que no existe soltaba un toast —«Elige el repositorio (o
+escribe su URL) y una ruta de clon válida»— que decía las dos cosas a la vez, no decía cuál fallaba
+y caducaba a los ocho segundos. Es la misma regla que D-949 aplica a un botón bloqueado: la razón va
+pegada a lo que la produce.
+
+**Aparecen al intentar crear, no mientras se escribe**, y se van solos en cuanto el campo cambia. Un
+formulario que se pone rojo antes de que lo hayas rellenado regaña por adelantado.
+
+### D-995 — Cobertura de la Parte C (45 tests nuevos, 6 reglas)
+
+**Seis reglas, y las seis se rompen en silencio** (N-5):
+
+1. **«Hay cambios sin guardar» se enciende y se apaga** (`SettingsSaveBarTests`, 12 casos). Las dos
+   formas de romperse callan: quedarse encendida después de guardar hace que la barra mienta y se
+   aprenda a ignorar; no encenderse al tocar un ajuste devuelve el defecto de partida. El test
+   recorre **por reflexión** los siete campos editables, que es lo que caza el olvido de añadir el
+   octavo a la huella.
+2. **Cada estado de conexión tiene icono, color y palabra** (`ConnectionStateWordTests`, 16 casos).
+   Un `DataTrigger` que falta no falla: el estado cae al valor por defecto del estilo y la fila dice
+   «No comprobado» en gris con la comprobación hecha y verde. Es la peor clase de error de interfaz,
+   uno que se lee bien y miente. Se comprueba también que **los dos converters ya no existen**: un
+   converter muerto que sigue registrado vuelve solo.
+3. **El anexo se separa por el encabezado que el generador escribe** (`ReportReadingTests`). Es la
+   mitad importante: renombrarlo en `ReportBuilder` dejaría el anexo desplegado para siempre sin que
+   nada fallara. El test ata las dos puntas.
+4. **Qué se reconoce como gravedad y qué no** (`ReportReadingTests`, 9 casos). Se pintan las dos
+   formas literales del informe y ninguna más; una palabra suelta no es una gravedad. Y el corchete
+   del encabezado se reconoce entero, que es el caso que Markdig parte en tres.
+5. **Las tarjetas de una fila miden lo que la más alta** (`ColumnsPanelTests`, 3 casos). Es un
+   `ArrangeOverride`: alguien lo simplifica, las tarjetas vuelven a medir su contenido y no falla
+   nada. El test mide el panel de verdad, con contenido de alturas distintas — una tarjeta con
+   `Height` fijo mediría el número que el propio test escribió.
+6. **El estado vacío de Informes lleva la salida que corresponde** (`ReportsViewTests`, 2 casos). La
+   lista sigue vacía, el botón sigue estando, y lo único que cambia es que lleva al sitio
+   equivocado.
+
+**Y una séptima que se prueba donde ya estaba**: `SettingsViewTests` conserva sus reglas de F5.7
+—una fila por control, con su ayuda y con cuándo aplica— medidas sobre el marcado nuevo, y añade que
+las cinco secciones existen, están en orden y se seleccionan.
+
+**Lo que NO se ha escrito, y por qué** (N-5):
+
+- **Ningún test de «ningún texto de ayuda por debajo de 13 px».** Ya está: `DesignTokenTests`
+  prohíbe escribir un tamaño a mano en cualquier XAML convertido, y el suelo de la escala es 13
+  (D-962). Un test que volviera a comprobarlo mediría la escala en dos sitios.
+- **Ni de la lista lateral, ni del «más», ni de la barra al pie, ni del centrado de Cuenta.** Son
+  forma: se ven en la primera captura y no hay manera de romperlos sin que salte a la vista.
+- **Ni de la medida de lectura del informe.** Lo que sí se prueba es que el CUERPO no baje de 15,
+  que es lo que se rompe sin verse; un ancho máximo mal puesto se ve en la primera línea.
+
+**14 tests existentes actualizados, ninguno eliminado.** Todos protegían reglas vivas escritas contra
+un marcado que ha cambiado. Los cuatro que costaron:
+
+- **`La_zona_peligrosa_esta_marcada_en_rojo_y_lleva_el_reset`** exigía el hexadecimal `#18D13A3A`.
+  Ese color se eligió mirando el tema oscuro y en claro no se veía — es literalmente lo que D-983 §8
+  prohibió. Ahora exige el recurso del sistema (`Notice.Danger`, `Button.DangerSolid`) y la regla
+  —la zona se ve como zona peligrosa y lleva el reset— se conserva entera.
+- **`Ajustes_ofrece_acerca_de_…`** medía que «Acerca de» fuera **después** de «Guardar», porque
+  «Guardar» era lo último del scroll. Ahora «Guardar» vive en la barra fija del pie —está siempre a
+  la vista, que es justo el arreglo—, así que la regla de F6.4 se mide contra lo que de verdad cierra
+  la página: la zona peligrosa.
+- **`Las_tarifas_se_gestionan_desde_ajustes`** buscaba el botón que abría el diálogo. Ahora busca la
+  sección y su tabla: la regla —Ajustes es donde se editan, y la página dice de dónde salen— no se
+  mueve; lo que se mueve es un paso más adentro.
+- **`La_cinta_lleva_dentro_su_desplazamiento…`** se puso roja por un final de línea. El fichero
+  reescrito salió con LF y el test ancla en `"controls:ChartPlot\n"`, que sobre CRLF no casa. No es
+  una anécdota: **un fichero del repositorio que cambia de final de línea cambia lo que los tests
+  leen**, y este lo dijo en voz alta. Los cinco XAML reescritos vuelven a CRLF.
+
+**2.413 tests en verde** (1.904 de `Atalaya.App.Tests`), 45 más que al cerrar la revisión de la
+Parte B.
+
+### D-996 — Lo que la Parte C NO toca
+
+Ninguna regla de negocio, ningún dato, nada del hub, ningún prompt. Qué ajustes existen y qué hacen;
+qué mide Métricas; qué contiene un informe (F23); las seis vistas de la Parte B. Lo único que sale
+del terreno de la presentación son tres cosas, y las tres estaban pedidas: la marca de «hay cambios
+sin guardar» con su «Descartar», los errores de validación del alta en línea en vez de en un toast,
+y la mudanza de la tabla de tarifas de un diálogo a una sección — con el diálogo borrado, no
+escondido.
+
+**Y queda una lista de pendientes que ya solo tiene diálogos.** `DesignTokenTests` nombra diez, todos
+de las vistas de trabajo: van con la vista que los abre y ninguna parte de F26 los ha tocado. Están
+apuntados en BACKLOG.

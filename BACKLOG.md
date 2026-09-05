@@ -4,8 +4,9 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-05 (F26 Parte B — las seis vistas de trabajo por el sistema, con el banco
-de capturas que permite fotografiar la sesión y el arreglo sin gastar créditos).
+Última revisión: 2026-09-05 (F26 Parte C — las cinco vistas de sistema por el sistema: Ajustes en
+secciones, Cuenta con estados que se leen, Métricas alineada, Informes legible y el alta por la
+misma rejilla).
 
 ## En vuelo
 
@@ -26,11 +27,23 @@ de capturas que permite fotografiar la sesión y el arreglo sin gastar créditos
     pendientes de `DesignTokenTests`. El panel de código pasa a tener superficie por tema y su
     sintaxis se ajusta midiendo (D-980). La vista rápida de Hallazgos se construyó, se probó en el
     dist y **se retiró** (D-981): la lista ocupa el ancho entero y la fila abre la ficha.
-  - **Parte C — Ajustes, Cuenta, Métricas, Informes y Nueva aplicación.** Ajustes deja de ser un
-    scroll y pasa a secciones navegables.
-  - **La lista de pendientes de `DesignTokenTests` es el marcador.** Nombra las 17 vistas y
-    diálogos que aún escriben tamaños a mano; la B y la C la tachan hasta dejarla vacía. Si al
-    cerrar la C queda algo dentro, es que algo se quedó fuera del sistema.
+  - **Parte C — las vistas de sistema. ENTREGADA, pendiente de revisión** (D-985…D-996): Ajustes
+    deja de ser un scroll de dos pantallas y pasa a **cinco secciones navegables** con una barra de
+    guardar siempre a la vista y la marca de «hay cambios sin guardar»; las **tarifas** dejan de ser
+    un diálogo y son una sección (el diálogo se borra); Cuenta se centra y dice cada estado con
+    **icono, color y palabra**, con los dos converters que congelaban el tema fuera; Métricas iguala
+    sus cuatro tarjetas en una rejilla y estrena el **estado vacío del sistema**; Informes reparte
+    su tabla y deja de recortar nombres, y el informe abierto se lee a 15 px en columna con el
+    **anexo técnico plegado**; el alta de R3 pasa por la rejilla de Ajustes y su validación va en
+    línea. Capturas en `docs/design/f26-parte-c/`.
+  - **La lista de pendientes de `DesignTokenTests` es el marcador.** Al cerrar la C **quedan diez, y
+    los diez son diálogos**: `AboutDialog`, `AuditLaunchDialog`, `CycleConfigDialog`,
+    `DeleteAppDialog`, `DeletedUnitsDialog`, `DirectivesDialog`, `FactoryResetDialog`,
+    `LinkCloneDialog`, `PatternSilencesDialog` y `ThresholdsDialog`. Ninguna parte de F26 los ha
+    tocado: van con la vista que los abre y esa vista ya está hecha, así que es trabajo acotado y
+    mecánico —tipografía, espaciado y color por tokens— sin decisiones de diseño nuevas. **Se apunta
+    aquí y no se hace en la C**: el encargo de la C son cinco vistas, y meter once ficheros más
+    habría escondido la revisión de las cinco entre diálogos que nadie ha pedido mirar.
 - **F24 — el símbolo debería ir por UBICACIÓN, no por hallazgo.** Hoy `Finding.Symbol` es **uno para
   todo el hallazgo**, y un defecto sistémico tiene N ubicaciones en N miembros distintos. El auditor
   resuelve el desajuste como puede —metiendo una lista en el campo: «CargaMediaPorMetro /
