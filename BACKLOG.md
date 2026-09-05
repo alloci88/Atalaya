@@ -19,11 +19,13 @@ de capturas que permite fotografiar la sesión y el arreglo sin gastar créditos
     —con su causa medida—, el raíl remedido por carriles (una sola columna de iconos, la misma x
     plegado o no) y el piloto convertido en insignia del avatar. Capturas en
     `docs/design/f26-parte-a/`, con el raíl plegado y desplegado en `rail/`.
-  - **Parte B — las vistas de trabajo. ENTREGADA** (D-970…D-979): Portafolio con rejilla que
-    reparte y resumen del portafolio, Hallazgos con filtros que dicen qué filtran y vista rápida al
-    lado, Inventario con las acciones en su cabecera y el panel del ciclo que ya no se corta, la
-    ficha con su botonera jerarquizada, y Sesión y Arreglo pasadas por la escala. Las seis salen de
-    la lista de pendientes de `DesignTokenTests`. **Pendiente de la revisión visual del usuario.**
+  - **Parte B — las vistas de trabajo. ACEPTADA** (D-970…D-981): Portafolio con rejilla que
+    reparte y resumen del portafolio, Hallazgos con filtros que dicen qué filtran, Inventario con
+    las acciones en su cabecera y el panel del ciclo que ya no se corta, la ficha con su botonera
+    jerarquizada, y Sesión y Arreglo pasadas por la escala. Las seis salen de la lista de
+    pendientes de `DesignTokenTests`. El panel de código pasa a tener superficie por tema y su
+    sintaxis se ajusta midiendo (D-980). La vista rápida de Hallazgos se construyó, se probó en el
+    dist y **se retiró** (D-981): la lista ocupa el ancho entero y la fila abre la ficha.
   - **Parte C — Ajustes, Cuenta, Métricas, Informes y Nueva aplicación.** Ajustes deja de ser un
     scroll y pasa a secciones navegables.
   - **La lista de pendientes de `DesignTokenTests` es el marcador.** Nombra las 17 vistas y

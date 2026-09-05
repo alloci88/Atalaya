@@ -14260,6 +14260,9 @@ ruta en monoespaciado y densidad a la escala del sistema.
 
 ### D-974 — La vista rápida: la misma ficha, con menos cosas a la vista
 
+*(Revertida por D-981: se construyó, se probó en el dist y el usuario la descartó por preferir la
+ficha directa. Lo de abajo queda como registro de qué se hizo y por qué, no de cómo funciona hoy.)*
+
 El prompt pedía el detalle a la derecha en pantalla ancha. La ficha son 625 líneas —metadatos,
 código, historial y el formulario de gobernanza con silenciado, alcance, motivo y notas— y en una
 columna de 460 px se lee **peor** que en su página. Se consultó y el usuario eligió la tercera
@@ -14505,3 +14508,40 @@ pantalla, no un truco de captura: un agente que pregunta a mitad de arreglo es j
 vista existe para enseñar.
 
 **2.366 tests en verde** (1.857 de `Atalaya.App.Tests`), 34 casos más que al cerrar la Parte B.
+
+### D-981 — Fuera la vista rápida de Hallazgos (revierte D-974)
+
+**La vista rápida se construyó, se probó en el dist y el usuario la descartó.** Esto se anota con
+ese dato dentro para que no se vuelva a proponer como idea nueva: no se rechazó sobre el papel —se
+implementó entera (opción 3 de tres que se le ofrecieron), se miró funcionando y se prefirió la
+ficha directa.
+
+Lo que tenía la vista rápida: gravedad, título, regla, ubicación con su código, descripción,
+recomendación y las acciones frecuentes con su razón al lado, en un panel de 460 px a la derecha de
+la lista, con «Abrir ficha» para el historial y la gobernanza; por debajo de 1080 px de ancho
+disponible el panel se retiraba y la fila volvía a abrir la ficha entera.
+
+**Por qué no funcionó, ya visto:** el detalle de un hallazgo se lee mejor en su página que en una
+columna estrecha, y el panel cobraba un peaje permanente —la lista perdía 460 px en TODAS las
+sesiones, incluidas las de recorrer cien hallazgos sin abrir ninguno— a cambio de ahorrar un clic
+en las de leer uno. El intercambio parecía bueno de diseñar y no lo es de usar.
+
+**Lo que se retira**, no se apaga: el panel entero del XAML, `ActivateRow`, `OpenSelected`,
+`Wide`, `SelectedRow`, `Preview`/`HasPreview` y la fábrica `Func<FindingDetailViewModel>` que el
+contenedor le inyectaba a V3; el `SizeChanged` y la constante `SplitBelow` del *code-behind*, que
+se queda solo con su constructor; y los dos tokens que solo existían para el panel
+(`Preview.Width`, `Preview.CodeHeight`). Código muerto detrás de un `Visibility` no es una vista
+retirada: es una vista que nadie mantiene y que vuelve sola en el siguiente refactor.
+
+**Lo que se queda, porque no era del panel:** los filtros con nombre delante (D-973), la banda de
+gravedad y la pastilla junto al título, y el filtro recordado al volver a Hallazgos (D-968, la
+regla 6 de F26). Eso lo pidió el usuario en el encargo original y sigue siendo lo que arregla la
+barra ilegible y la vuelta que enseñaba todo de todas las aplicaciones.
+
+**Ningún test nuevo, y uno actualizado con su motivo** (N-5). `V3_no_expone_NINGUNA_accion_de_escritura`
+listaba los seis comandos de V3 de forma exacta; ahora lista cuatro. Es el mismo test haciendo el
+mismo trabajo: `ActivateRow` y `OpenSelected` desaparecen porque desaparece el panel, ninguno de los
+dos escribía, y la frontera V3/V4 no se mueve —lo que cambia es que hay menos superficie que
+vigilar. El comentario del test conserva por qué existieron y por qué ya no.
+
+**2.366 tests en verde** (1.857 de `Atalaya.App.Tests`).

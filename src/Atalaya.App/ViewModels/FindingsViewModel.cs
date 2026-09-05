@@ -253,13 +253,11 @@ public sealed partial class FindingsViewModel : ViewModelBase, IAppScoped
     private bool _suspendReload;
 
     public FindingsViewModel(
-        HubContext hub, NavigationService navigation, SettingsService settings, GroupExpansionMemory expansion,
-        Func<FindingDetailViewModel>? detail = null)
+        HubContext hub, NavigationService navigation, SettingsService settings, GroupExpansionMemory expansion)
     {
         _hub = hub;
         _navigation = navigation;
         _settings = settings;
-        _detail = detail;
         _collapse = new GroupCollapse(expansion);
 
         // La cabecera sigue leyendo AllCollapsed/ToggleAllLabel/HasGroups en el view-model: los
@@ -649,79 +647,4 @@ partial void OnSelectedThemeChanged(ThemeFilterOption? value) => Reload();
         => row is null
             ? Task.CompletedTask
             : _navigation.NavigateToAsync<FindingDetailViewModel>(vm => vm.Load(row.Slug, row.Id));
-
-    // ================================================================ La vista rápida (F26 §B, D-974)
-
-    /// <summary>
-    /// Construye la ficha que alimenta la vista rápida. Se pide al contenedor —no se guarda una—
-    /// porque cargarla toca el hub y el clon, y una instancia viva por siempre se quedaría con lo
-    /// que leyó el primer día.
-    /// </summary>
-    private readonly Func<FindingDetailViewModel>? _detail;
-
-    /// <summary>
-    /// Hay sitio para el panel de la derecha. Lo pone la VISTA al medirse, porque es lo único que
-    /// sabe cuánto ancho le ha tocado — la ventana no basta: el raíl se pliega y se despliega.
-    /// </summary>
-    [ObservableProperty]
-    private bool _wide;
-
-    /// <summary>La fila señalada. Con panel, es la que se está leyendo; sin panel, no hay.</summary>
-    [ObservableProperty]
-    private FindingRow? _selectedRow;
-
-    /// <summary>
-    /// La vista rápida: gravedad, título, regla, ubicación con su código, descripción,
-    /// recomendación y las acciones frecuentes. <b>Es la MISMA ficha</b>, con menos cosas a la
-    /// vista: reproducir aquí «¿se puede arreglar con agente, y si no por qué?» habría sido copiar
-    /// la lógica más delicada de la aplicación en un segundo sitio.
-    /// </summary>
-    [ObservableProperty]
-    private FindingDetailViewModel? _preview;
-
-    public bool HasPreview => Preview is not null;
-
-    partial void OnPreviewChanged(FindingDetailViewModel? value) => OnPropertyChanged(nameof(HasPreview));
-
-    /// <summary>
-    /// Lo que hace pulsar una fila, y depende del ancho: con panel la señala y la enseña al lado;
-    /// sin panel abre la ficha entera, que es lo que hacía siempre.
-    /// </summary>
-    [RelayCommand]
-    private async Task ActivateRow(FindingRow? row)
-    {
-        if (row is null)
-        {
-            return;
-        }
-
-        if (!Wide || _detail is null)
-        {
-            await OpenDetail(row);
-            return;
-        }
-
-        SelectedRow = row;
-        FindingDetailViewModel vm = _detail();
-        vm.Load(row.Slug, row.Id);
-        await vm.LoadAsync();
-        Preview = vm;
-    }
-
-    /// <summary>«Abrir ficha»: el historial y la gobernanza no caben en un panel, y no deben.</summary>
-    [RelayCommand]
-    private Task OpenSelected() => OpenDetail(SelectedRow);
-
-    /// <summary>
-    /// Al estrecharse, el panel se va y la selección con él: una fila «señalada» sin nada que
-    /// enseñar al lado es una fila resaltada sin motivo.
-    /// </summary>
-    partial void OnWideChanged(bool value)
-    {
-        if (!value)
-        {
-            Preview = null;
-            SelectedRow = null;
-        }
-    }
 }

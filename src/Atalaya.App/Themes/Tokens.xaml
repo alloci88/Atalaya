@@ -203,14 +203,6 @@
     <sys:Double x:Key="Rail.BadgeRing">2</sys:Double>
     <sys:Double x:Key="Content.MaxWidth">1480</sys:Double>
 
-    <!-- La vista rápida de Hallazgos. 460: por debajo, una línea de código con su sangría deja de
-         caber y el panel pasa a ser un sitio donde el código se parte, que es peor que no tenerlo. -->
-    <sys:Double x:Key="Preview.Width">460</sys:Double>
-
-    <!-- Y el tope de alto de su código: 260 son unas trece líneas, que es lo que hace falta para
-         ver el defecto con su contexto. Más, y las acciones se van por debajo del borde. -->
-    <sys:Double x:Key="Preview.CodeHeight">220</sys:Double>
-
     <!-- El resumen del ciclo del Inventario. 320 y no 260: a 260 su línea más larga —«Patrones
          silenciados: 0 · Gestionar»— se cortaba a media palabra, y nadie lo dijo porque un texto
          recortado no falla, solo miente. -->

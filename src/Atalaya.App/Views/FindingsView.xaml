@@ -159,15 +159,14 @@
             </DockPanel>
         </Border>
 
-        <!-- ==================================================== La lista y la vista rápida -->
-        <Grid Grid.Row="2" x:Name="Split" SizeChanged="OnSplitSizeChanged"
-              Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
+        <!-- ==================================================== La lista
 
-        <Border Grid.Column="0" Style="{StaticResource Panel}">
+             Ocupa el ancho ENTERO y pulsar una fila abre la ficha completa. Hubo una vista
+             rápida a la derecha (D-974); se probó en el dist y se retiró (D-981): el detalle
+             se lee mejor en su página que en una columna de 460 px.
+        -->
+        <Border Grid.Row="2" Style="{StaticResource Panel}"
+                Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
             <ListBox ItemsSource="{Binding Items}"
                      Background="Transparent"
                      BorderThickness="{StaticResource Pad.Zero}"
@@ -254,7 +253,7 @@
                     <!-- · Fila de hallazgo: banda de gravedad, pastilla, título y metadatos · -->
                     <DataTemplate DataType="{x:Type vm:FindingRow}">
                         <Button Style="{StaticResource RowLink}"
-                                Command="{Binding DataContext.ActivateRowCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                Command="{Binding DataContext.OpenDetailCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                 CommandParameter="{Binding}"
                                 ToolTip="{Binding UnitPath}">
                             <Grid>
@@ -328,137 +327,6 @@
                 </ListBox.Resources>
             </ListBox>
         </Border>
-
-            <!-- ============================================== LA VISTA RÁPIDA (D-974)
-
-                 Gravedad, título, regla, ubicación con su código, descripción, recomendación y las
-                 acciones frecuentes con su razón al lado. El historial y la gobernanza NO están
-                 aquí: son formularios, y un formulario en una columna de 460 px se rellena peor
-                 que en su página. Para eso está «Abrir ficha».
-
-                 En estrecho el panel desaparece y la fila vuelve a abrir la ficha entera, que es lo
-                 que hacía siempre: reorganizar, no encoger (principio 1).
-            -->
-            <Border Grid.Column="1"
-                    Style="{StaticResource Card}"
-                    Width="{StaticResource Preview.Width}"
-                    Margin="{StaticResource Pad.M.Left}"
-                    Visibility="{Binding Wide, Converter={StaticResource BoolToVisibility}}">
-                <Grid>
-                    <!-- Sin nada señalado: se dice qué hacer, no se deja un hueco gris. -->
-                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
-                                c:Stack.Gap="{StaticResource Space.S}"
-                                Visibility="{Binding HasPreview, Converter={StaticResource InverseBoolToVisibility}}">
-                        <Path Style="{StaticResource Icon}" Data="{x:Static c:Icons.Findings}"
-                              Width="28" Height="28" HorizontalAlignment="Center" />
-                        <TextBlock Text="Elige un hallazgo para verlo aquí"
-                                   Style="{StaticResource Text.Small}" HorizontalAlignment="Center" />
-                    </StackPanel>
-
-                    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                  DataContext="{Binding Preview}"
-                                  Visibility="{Binding DataContext.HasPreview,
-                                      RelativeSource={RelativeSource AncestorType=UserControl},
-                                      Converter={StaticResource BoolToVisibility}}">
-                        <StackPanel c:Stack.Gap="{StaticResource Space.M}">
-
-                            <!-- Gravedad, identificador y regla -->
-                            <StackPanel c:Stack.Gap="{StaticResource Space.XS}">
-                                <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.XS}">
-                                    <Border Style="{StaticResource Pill.Sev}"
-                                            DataContext="{Binding Finding}">
-                                        <TextBlock Text="{Binding Severity, Converter={StaticResource SeverityToLabel}}"
-                                                   Style="{StaticResource Pill.Sev.Text}" />
-                                    </Border>
-                                    <TextBlock Text="{Binding Finding.DisplayId}" Style="{StaticResource Text.Mono}"
-                                               VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding RuleId}" Style="{StaticResource Text.Meta}"
-                                               VerticalAlignment="Center"
-                                               TextTrimming="CharacterEllipsis" />
-                                </StackPanel>
-                                <TextBlock Text="{Binding Finding.Title}" Style="{StaticResource Text.H3}"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Text="{Binding SnippetPath}" Style="{StaticResource Text.Mono}"
-                                           TextWrapping="Wrap" />
-                            </StackPanel>
-
-                            <!-- LAS ACCIONES FRECUENTES, con la razón al lado del que no se puede
-                                 pulsar (principio 4). El verde es la que adelanta trabajo. -->
-                            <StackPanel c:Stack.Gap="{StaticResource Space.XS}">
-                                <Button Content="Arreglar con agente"
-                                        Command="{Binding StartAssistedFixCommand}"
-                                        IsEnabled="{Binding CanStartFix}"
-                                        ToolTip="{Binding AssistedFixTooltip}"
-                                        Style="{StaticResource Button.Success}"
-                                        HorizontalAlignment="Stretch"
-                                        Visibility="{Binding ShowAssistedFix, Converter={StaticResource BoolToVisibility}}" />
-
-                                <Border Style="{StaticResource Reason.Chip}"
-                                        HorizontalAlignment="Stretch"
-                                        Visibility="{Binding AssistedFixBlock, Converter={StaticResource NotEmptyToVisibility}}">
-                                    <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.XS}">
-                                        <Path Style="{StaticResource Icon.Small}" Data="{x:Static c:Icons.Warning}"
-                                              
-                                              Stroke="{DynamicResource Brush.Warning.Ink}" />
-                                        <TextBlock Text="{Binding AssistedFixBlock}"
-                                                   Style="{StaticResource Reason.Text}"
-                                                   TextWrapping="Wrap" />
-                                    </StackPanel>
-                                </Border>
-
-                                <Button Content="Abrir en el editor"
-                                        Command="{Binding OpenInEditorCommand}"
-                                        HorizontalAlignment="Stretch" />
-                                <Button Content="Verificar ahora"
-                                        Command="{Binding VerifyNowCommand}"
-                                        HorizontalAlignment="Stretch" />
-                            </StackPanel>
-
-                            <!-- Lo que NO cabe aquí, y adónde ir a buscarlo. -->
-                            <Button Content="Abrir ficha  ·  historial y gobernanza"
-                                    Command="{Binding DataContext.OpenSelectedCommand,
-                                        RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                    Style="{StaticResource Button.Primary}"
-                                    HorizontalAlignment="Stretch" />
-
-                            <!-- El código donde está. Con su PROPIO desplazamiento, y con tope de
-                                 alto: el código no se parte —una línea partida deja de ser código—
-                                 así que se desplaza dentro de su caja, y no empuja fuera de la
-                                 pantalla lo que hay debajo, que son las acciones (principio 8). -->
-                            <Border Style="{StaticResource Panel}"
-                                    Background="{DynamicResource Brush.Code.Surface}"
-                                    Padding="{StaticResource Pad.S}">
-                                <StackPanel c:Stack.Gap="{StaticResource Space.XS}">
-                                    <TextBlock Text="{Binding SnippetCaption}" Style="{StaticResource Text.Meta}"
-                                               TextTrimming="CharacterEllipsis" />
-                                    <ScrollViewer MaxHeight="{StaticResource Preview.CodeHeight}"
-                                                  HorizontalScrollBarVisibility="Auto"
-                                                  VerticalScrollBarVisibility="Auto">
-                                        <TextBlock Text="{Binding Snippet}" Style="{StaticResource Text.Mono}"
-                                                   Foreground="{DynamicResource Brush.Code.Ink}" />
-                                    </ScrollViewer>
-                                </StackPanel>
-                            </Border>
-
-                            <StackPanel c:Stack.Gap="{StaticResource Space.XXS}">
-                                <TextBlock Text="Descripción" Style="{StaticResource Text.Small}"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource Brush.Text}" />
-                                <TextBlock Text="{Binding Finding.Description}" Style="{StaticResource Text.Body}" />
-                            </StackPanel>
-
-                            <StackPanel c:Stack.Gap="{StaticResource Space.XXS}">
-                                <TextBlock Text="Recomendación" Style="{StaticResource Text.Small}"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource Brush.Text}" />
-                                <TextBlock Text="{Binding Finding.Recommendation}" Style="{StaticResource Text.Body}" />
-                            </StackPanel>
-
-                        </StackPanel>
-                    </ScrollViewer>
-                </Grid>
-            </Border>
-        </Grid>
 
         <!-- ==================================================== Sin resultados -->
         <Border Grid.Row="2" Style="{StaticResource Card}" VerticalAlignment="Top"

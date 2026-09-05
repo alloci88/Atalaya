@@ -899,16 +899,16 @@ public sealed class FindingsViewTests : IDisposable
     public void V3_no_expone_NINGUNA_accion_de_escritura()
     {
         // La lista exacta, no «contiene»: si aparece un comando nuevo hay que mirarlo y decidir si
-        // escribe. Los seis que hay filtran, pliegan, señalan o navegan; ninguno toca el hub.
+        // escribe. Los cuatro que hay filtran, pliegan o navegan; ninguno toca el hub.
         //
-        // Los dos de F26 §B son de la vista rápida (D-974) y se miraron uno a uno al añadirlos:
-        // `ActivateRow` señala una fila y carga su ficha para el panel —o abre la ficha entera si
-        // no hay panel—, y `OpenSelected` navega a la ficha de la señalada. Ninguno escribe: la
-        // vista rápida ENSEÑA la ficha, y quien escribe sigue siendo V4. La regla no ha cedido, y
-        // este test es justo lo que obligó a comprobarlo.
+        // Fueron seis durante la vista rápida (D-974): `ActivateRow` señalaba una fila y cargaba su
+        // ficha para el panel, y `OpenSelected` navegaba a la ficha de la señalada. Los dos se
+        // retiran con el panel (D-981) y `OpenDetail` vuelve a ser lo único que hace pulsar una
+        // fila. Ninguno de los dos escribía, así que la frontera no se mueve: lo que cambia es que
+        // hay menos superficie que vigilar.
         CommandNames(typeof(FindingsViewModel))
             .Should().Equal(
-                "ActivateRowCommand", "ClearFiltersCommand", "OpenDetailCommand", "OpenSelectedCommand",
+                "ClearFiltersCommand", "OpenDetailCommand",
                 "ToggleAllGroupsCommand", "ToggleGroupCommand");
     }
 
