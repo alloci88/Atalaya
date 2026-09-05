@@ -114,12 +114,24 @@
 
     <!-- `PathText` deriva de `TextBlock`, y un estilo implícito solo alcanza a su tipo EXACTO: la
          tipografía por defecto hay que dársela aquí. -->
+    <!-- Y EL RECORTE DECLARADO ES LO QUE HACE QUE LLEGUE EL ANCHO. Parece contradictorio en un
+         estilo cuyo trabajo es acortar por su cuenta, y es justo al revés: un `TextBlock` con
+         `NoWrap` y `TextTrimming="None"` pide en la medida el ancho del texto ENTERO y no acepta
+         menos, así que en una fila apretada empujaba su columna estrella más allá del hueco que
+         había y la ruta acababa cortada en seco por el contenedor —sin puntos suspensivos y sin
+         haber pasado nunca por el acortado—. Se leía «XBLASTRecovery/Class/Authentication.» como
+         si el fichero se llamara así, que es exactamente la mentira que P-01 vino a quitar.
+
+         Con un recorte declarado, el `TextBlock` acepta el ancho que le den; y ése es el ancho que
+         `PathText` recibe y contra el que acorta por el medio. El recorte de WPF no llega a verse
+         nunca —cuando `PathText` termina, el texto ya cabe—: está para que un corte, si alguna vez
+         ocurre, se vea. Un recorte peor es aceptable; uno invisible, no. -->
     <Style x:Key="Text.Path" TargetType="c:PathText">
         <Setter Property="FontFamily" Value="{StaticResource Font.Ui}" />
         <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
         <Setter Property="TextWrapping" Value="NoWrap" />
-        <Setter Property="TextTrimming" Value="None" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
 
     <Style x:Key="Text.Chip" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
