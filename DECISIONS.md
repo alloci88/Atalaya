@@ -15069,47 +15069,57 @@ pegada a lo que la produce.
 **Aparecen al intentar crear, no mientras se escribe**, y se van solos en cuanto el campo cambia. Un
 formulario que se pone rojo antes de que lo hayas rellenado regaña por adelantado.
 
-### D-995 — Cobertura de la Parte C (45 tests nuevos, 6 reglas)
+### D-995 — Cobertura de la Parte C (38 casos nuevos, 5 reglas, y 7 podados)
 
-**Seis reglas, y las seis se rompen en silencio** (N-5):
+**Cinco reglas, y las cinco se rompen sin dejar rastro** (N-5):
 
-1. **«Hay cambios sin guardar» se enciende y se apaga** (`SettingsSaveBarTests`, 12 casos). Las dos
-   formas de romperse callan: quedarse encendida después de guardar hace que la barra mienta y se
-   aprenda a ignorar; no encenderse al tocar un ajuste devuelve el defecto de partida. El test
-   recorre **por reflexión** los siete campos editables, que es lo que caza el olvido de añadir el
-   octavo a la huella.
-2. **Cada estado de conexión tiene icono, color y palabra** (`ConnectionStateWordTests`, 16 casos).
-   Un `DataTrigger` que falta no falla: el estado cae al valor por defecto del estilo y la fila dice
-   «No comprobado» en gris con la comprobación hecha y verde. Es la peor clase de error de interfaz,
-   uno que se lee bien y miente. Se comprueba también que **los dos converters ya no existen**: un
-   converter muerto que sigue registrado vuelve solo.
-3. **El anexo se separa por el encabezado que el generador escribe** (`ReportReadingTests`). Es la
-   mitad importante: renombrarlo en `ReportBuilder` dejaría el anexo desplegado para siempre sin que
-   nada fallara. El test ata las dos puntas.
-4. **Qué se reconoce como gravedad y qué no** (`ReportReadingTests`, 9 casos). Se pintan las dos
-   formas literales del informe y ninguna más; una palabra suelta no es una gravedad. Y el corchete
-   del encabezado se reconoce entero, que es el caso que Markdig parte en tres.
-5. **Las tarjetas de una fila miden lo que la más alta** (`ColumnsPanelTests`, 3 casos). Es un
-   `ArrangeOverride`: alguien lo simplifica, las tarjetas vuelven a medir su contenido y no falla
-   nada. El test mide el panel de verdad, con contenido de alturas distintas — una tarjeta con
-   `Height` fijo mediría el número que el propio test escribió.
-6. **El estado vacío de Informes lleva la salida que corresponde** (`ReportsViewTests`, 2 casos). La
-   lista sigue vacía, el botón sigue estando, y lo único que cambia es que lleva al sitio
-   equivocado.
+1. **Tocar un ajuste enciende la marca de «hay cambios sin guardar»** (`SettingsSaveBarTests`, 7
+   casos, uno por campo editable, recorridos por reflexión). Si la marca no se enciende, se cambia
+   de página perdiendo el cambio y nadie se entera — que es el defecto de partida. El recorrido por
+   reflexión es lo que caza el olvido de meter el octavo ajuste en la huella.
+2. **Guardar apaga la marca, y descartar devuelve lo guardado sin escribir** (`SettingsSaveBarTests`,
+   3 casos). Una barra que sigue diciendo «hay cambios» con todo guardado se aprende a ignorar; un
+   «Descartar» que restaura tres de ocho campos es invisible —hay que saber qué números había—; y
+   uno que escribiera en el fichero sería destructivo y mudo.
+3. **Cada estado de conexión tiene icono, color y palabra** (`ConnectionStateWordTests`, 16 casos).
+   Un `DataTrigger` que falta no falla: el estado cae al valor por defecto y la fila dice «No
+   comprobado» en gris con la comprobación hecha y verde. Se lee bien y miente. Cuatro de los cinco
+   estados no salen en ninguna captura porque exigen una máquina rota. Incluye que **los dos
+   converters ya no existan**: uno muerto pero registrado vuelve solo, y con él vuelve el tema
+   congelado de D-971.
+4. **El anexo se separa por el encabezado que el generador escribe** (`ReportReadingTests`, 3
+   casos). Renombrarlo en `ReportBuilder` dejaría el anexo desplegado para siempre sin que nada
+   fallara; el test ata las dos puntas. Y el caso que ninguna captura alcanza: un informe SIN anexo
+   —un arreglo, un importado v4— donde partir de más abre un panel vacío.
+5. **Qué se reconoce como gravedad y qué no** (`ReportReadingTests`, 7 casos). Una línea de recuento
+   que deja de pintarse se sigue leyendo perfectamente: no se ve que falte nada, solo deja de
+   significar. Y al revés, una pastilla sobre «la cobertura es baja» convierte el color de «esto es
+   grave» en «esta palabra existe». Incluye el corchete del encabezado, que es el caso que Markdig
+   parte en tres.
 
-**Y una séptima que se prueba donde ya estaba**: `SettingsViewTests` conserva sus reglas de F5.7
-—una fila por control, con su ayuda y con cuándo aplica— medidas sobre el marcado nuevo, y añade que
-las cinco secciones existen, están en orden y se seleccionan.
+Y dos más donde ya vivían: **el estado vacío de Informes lleva la salida que corresponde**
+(`ReportsViewTests`, 2 casos — la lista sigue vacía, el botón sigue estando y lo único que cambia es
+que lleva al sitio equivocado) y **elegir una sección la enseña y apaga las demás**
+(`SettingsViewTests`, 1 caso — el enlace de Métricas navega igual, solo que a la sección
+equivocada). `SettingsViewTests` conserva además sus reglas de F5.7 —una fila por control, con su
+ayuda y con cuándo aplica— medidas sobre el marcado nuevo.
 
-**Lo que NO se ha escrito, y por qué** (N-5):
+**SIETE tests se escribieron y se quitaron antes de entregar**, y se apuntan porque el criterio vale
+más que ellos. Todos protegían algo cierto; ninguno protegía algo **silencioso**:
 
-- **Ningún test de «ningún texto de ayuda por debajo de 13 px».** Ya está: `DesignTokenTests`
-  prohíbe escribir un tamaño a mano en cualquier XAML convertido, y el suelo de la escala es 13
-  (D-962). Un test que volviera a comprobarlo mediría la escala en dos sitios.
-- **Ni de la lista lateral, ni del «más», ni de la barra al pie, ni del centrado de Cuenta.** Son
-  forma: se ven en la primera captura y no hay manera de romperlos sin que salte a la vista.
-- **Ni de la medida de lectura del informe.** Lo que sí se prueba es que el CUERPO no baje de 15,
-  que es lo que se rompe sin verse; un ancho máximo mal puesto se ve en la primera línea.
+| Quitado | Por qué |
+|---|---|
+| `ColumnsPanelTests` (3: alto igual, ancho repartido, lo que no cabe baja) | Una fila de tarjetas desiguales, una tarjeta con media pantalla en blanco al lado o una columna estrujada **salen en la primera captura de Métricas** — son exactamente el «antes» de esta parte, y se vieron mirando. Es forma. |
+| `Nace_limpio` | Si la marca naciera encendida, la barra diría «hay cambios sin guardar» en la captura de Ajustes recién abierta. |
+| `Cambiar_de_seccion_no_ensucia_nada` | Igual: las cuatro capturas de sección se toman **después** de pulsarla, así que un sucio por navegar estaría en la foto. |
+| `El_cuerpo_del_informe_no_baja_del_cuerpo_de_la_escala` | Un informe encogido se ve en su captura. Y era un test leyendo la constante de su propio fichero, que es medir la escala en dos sitios. |
+| `Un_encabezado_sin_gravedad_se_queda_como_esta` | Una pastilla donde no toca en un encabezado se ve; y el reconocimiento del encabezado está anclado al principio de línea (`^\[…\]`), así que sobre-emparejar es casi imposible. |
+
+**La regla que esto deja escrita, y que es la que hay que releer la próxima vez:** un test de
+interfaz se gana el sitio cuando su fallo **sobrevive a la revisión visual**. «Se rompe en silencio»
+no es «no lanza una excepción» — media interfaz no lanza nunca. Es que la pantalla siga pareciendo
+correcta. Las tarjetas desalineadas de Métricas llevaban meses ahí y se arreglaron **mirando**;
+que la barra calle al tocar un ajuste no se arregla mirando ninguna captura.
 
 **14 tests existentes actualizados, ninguno eliminado.** Todos protegían reglas vivas escritas contra
 un marcado que ha cambiado. Los cuatro que costaron:
@@ -15130,7 +15140,7 @@ un marcado que ha cambiado. Los cuatro que costaron:
   una anécdota: **un fichero del repositorio que cambia de final de línea cambia lo que los tests
   leen**, y este lo dijo en voz alta. Los cinco XAML reescritos vuelven a CRLF.
 
-**2.413 tests en verde** (1.904 de `Atalaya.App.Tests`), 45 más que al cerrar la revisión de la
+**2.406 tests en verde** (1.897 de `Atalaya.App.Tests`), 38 más que al cerrar la revisión de la
 Parte B.
 
 ### D-996 — Lo que la Parte C NO toca

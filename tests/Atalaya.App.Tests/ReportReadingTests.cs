@@ -1,5 +1,4 @@
-using System.Text.RegularExpressions;
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using FluentAssertions;
 using Xunit;
@@ -16,9 +15,11 @@ namespace Atalaya.App.Tests;
 /// incidencia por eso; se deja de mirar el informe, que es exactamente lo que pasaba.
 /// </para>
 /// <para>
-/// Lo que NO se comprueba aquí, a propósito: cómo se ve la pastilla. Eso se ve en la primera
-/// captura. Lo que se comprueba es qué se reconoce como gravedad y qué no — que es donde está la
-/// decisión.
+/// <b>Lo que NO se comprueba aquí, a propósito</b> (N-5): cómo se ve la pastilla, que el cuerpo
+/// mida 15 y que un encabezado normal no se pinte de nada. Los tres salen en la primera captura de
+/// un informe abierto — un cuerpo encogido, una pastilla donde no toca o un anexo desplegado se ven
+/// sin buscarlos. Lo que se comprueba es qué se reconoce como gravedad y qué no, y por dónde se
+/// corta el anexo: eso no se ve, se lee bien y significa otra cosa.
 /// </para>
 /// </summary>
 public sealed class ReportReadingTests
@@ -135,35 +136,6 @@ public sealed class ReportReadingTests
         MarkdownFlowDocument.HeadingSeverity(heading)!.Value.Severity.Should().Be("Alta");
         MarkdownFlowDocument.HeadingSeverity(heading)!.Value.Title
             .Should().StartWith("Posible NullReferenceException");
-    }
-
-    /// <summary>Un encabezado normal no se convierte en pastilla de nada.</summary>
-    [Fact]
-    public void Un_encabezado_sin_gravedad_se_queda_como_esta()
-    {
-        var doc = Markdig.Markdown.Parse("## Cobertura");
-        var heading = doc.OfType<Markdig.Syntax.HeadingBlock>().Single();
-
-        MarkdownFlowDocument.HeadingSeverity(heading).Should().BeNull();
-    }
-
-    /// <summary>
-    /// <b>El cuerpo del informe es el cuerpo del sistema</b> (D-962). Hasta F26 §C este fichero
-    /// llevaba su propia escala —13,5 de cuerpo y seis tamaños de encabezado escritos a mano— y
-    /// por eso el informe era el texto más pequeño de la aplicación siendo el más largo. Se
-    /// comprueba sobre el código porque no hay `Application` viva en la suite y el respaldo es el
-    /// número: si alguien lo baja, el informe encoge sin que nada falle.
-    /// </summary>
-    [Fact]
-    public void El_cuerpo_del_informe_no_baja_del_cuerpo_de_la_escala()
-    {
-        string source = File.ReadAllText(
-            Path.Combine(Root(), "src", "Atalaya.App", "Services", "MarkdownFlowDocument.cs"));
-
-        Match m = Regex.Match(source, @"private const double BaseFontSize = ([0-9.]+);");
-        m.Success.Should().BeTrue();
-        double.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture)
-            .Should().BeGreaterThanOrEqualTo(15, "es el cuerpo de la escala, y un informe es texto largo");
     }
 
     private static string Root()

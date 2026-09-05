@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
 using FluentAssertions;
@@ -21,6 +21,13 @@ namespace Atalaya.App.Tests;
 /// página y olvidarse de la comparación</b>. La huella se construye con todos los campos
 /// editables; si alguien añade el noveno y no lo mete ahí, el caso de abajo lo enseña.
 /// </para>
+/// <para>
+/// <b>Lo que NO se prueba aquí, y por qué</b> (N-5). Que la marca nazca apagada y que cambiar de
+/// sección no la encienda son las dos formas de que la barra <i>sobre</i>-avise, y las dos salen
+/// en la primera captura de Ajustes: si la barra dijera «hay cambios sin guardar» nada más abrir,
+/// o al pulsar una sección, estaría en la foto. Lo que no sale en ninguna foto es lo de abajo —
+/// tocar un ajuste y que la barra calle—, y por eso es lo que se mide.
+/// </para>
 /// </summary>
 public sealed class SettingsSaveBarTests : IDisposable
 {
@@ -36,12 +43,6 @@ public sealed class SettingsSaveBarTests : IDisposable
         _settings = new SettingsService(_paths);
         _settings.Load();
         _hub = TestFactory.Hub(_paths, _settings);
-    }
-
-    [Fact]
-    public void Nace_limpio()
-    {
-        Model().IsDirty.Should().BeFalse("nada más abrir no hay nada que salvar");
     }
 
     [Theory]
@@ -71,17 +72,6 @@ public sealed class SettingsSaveBarTests : IDisposable
         pi.SetValue(vm, !(bool)pi.GetValue(vm)!);
 
         vm.IsDirty.Should().BeTrue($"«{property}» es un ajuste editable de la página");
-    }
-
-    /// <summary>Y cambiar de sección no es editar: la barra no puede encenderse por navegar.</summary>
-    [Fact]
-    public void Cambiar_de_seccion_no_ensucia_nada()
-    {
-        SettingsViewModel vm = Model();
-
-        vm.SelectSectionCommand.Execute(SettingsViewModel.AdvancedSection);
-
-        vm.IsDirty.Should().BeFalse();
     }
 
     [Fact]

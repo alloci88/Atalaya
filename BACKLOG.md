@@ -35,7 +35,7 @@ misma rejilla).
     sus cuatro tarjetas en una rejilla y estrena el **estado vacío del sistema**; Informes reparte
     su tabla y deja de recortar nombres, y el informe abierto se lee a 15 px en columna con el
     **anexo técnico plegado**; el alta de R3 pasa por la rejilla de Ajustes y su validación va en
-    línea. Capturas en `docs/design/f26-parte-c/`.
+    línea. 38 casos de test nuevos, y siete escritos y podados por no proteger nada silencioso (D-995). Capturas en `docs/design/f26-parte-c/`.
   - **La lista de pendientes de `DesignTokenTests` es el marcador.** Al cerrar la C **quedan diez, y
     los diez son diálogos**: `AboutDialog`, `AuditLaunchDialog`, `CycleConfigDialog`,
     `DeleteAppDialog`, `DeletedUnitsDialog`, `DirectivesDialog`, `FactoryResetDialog`,
