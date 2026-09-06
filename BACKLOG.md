@@ -469,6 +469,13 @@ las seis reversiones de lo que se había movido sin pedirlo; con ellas entran N-
 
 ## Cerrado
 
+- **R8 · Cuenta respira, y los diálogos por el sistema de verdad** — R5 declaró `Dialog.Title` y
+  `Dialog.Help` y no los usó en ningún sitio, así que los diez diálogos seguían con su título a 17
+  a mano y sus ayudas sueltas; ahora los aplican, y el relleno sube a 24 uniformes. Cuenta parte la
+  lista de estados en GitHub y Auditores con rótulo propio, la fila pasa a 48 px con el icono en un
+  círculo de 24, y las tarjetas a 32 de relleno con 24 entre ellas. Tarifas pierde el párrafo del
+  desplegable y recorta el de la tabla, con las dos salvedades al «Más». Ver D-1007.
+
 - **R7 · Los diálogos cerraban la aplicación** — el estilo base que R5 dio a los diez diálogos no
   derivaba del implícito de WPF-UI, así que lo SUSTITUÍA con su plantilla: la ventana salía en
   blanco y se cerraba al mostrarse. Arreglado en el estilo base —deriva del de la librería, y los

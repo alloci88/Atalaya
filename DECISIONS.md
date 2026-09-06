@@ -15952,3 +15952,47 @@ ocupa 124 px y la columna deja 136 tras su canal, así que no vuelve a partirse.
 `Application` para cargar los diccionarios como los carga la aplicación corre en colección propia sin
 paralelismo — WPF admite una por dominio y con afinidad de hilo, y en paralelo no da rojo: cuelga el
 conjunto.
+
+---
+
+## R8 — Cuenta respira, y los diálogos por el sistema de verdad
+
+### D-1007 — Un estilo declarado y no aplicado no viste nada
+
+Un párrafo para la fase (N-7), y solo lo pedido (N-6). **Diagnóstico primero, y corrige la premisa
+del encargo**: R7 **no** quitó el estilo base para que los diálogos dejaran de reventar — los diez
+siguen declarando `Style="{StaticResource Dialog}"` (10 de 10, comprobado), y lo que R7 hizo fue
+darle el `BasedOn` que le faltaba. Lo que pasa es otra cosa, y se ve en el fichero: **R5 declaró
+`Dialog.Title` y `Dialog.Help` y no los usó en ningún sitio — cero referencias en las diez vistas**.
+Un estilo que nadie aplica no viste nada, así que cada diálogo seguía escribiendo su título a mano a
+17 px con el `FontWeight` suelto y sus ayudas como `FontSize` a pelo; lo único que R5 llegó a cambiar
+fue el token de la ayuda, de 13 a 14. Y el relleno tampoco era 24: `Pad.DialogList` valía `24,12,16,0`
+y `Pad.DialogActions` `24,12,24,20`, así que el contenido arrancaba pegado a la barra de título
+mientras respiraba por los costados. **Lo que sí estaba bien y el encargo daba por malo**: los botones
+ya salían del sistema — no queda un solo `ui:Button` en ningún diálogo y los que no declaran estilo
+reciben el implícito, que es `Button.Secondary`. Lo que se leía como «de fábrica» era la tipografía y
+el aire, no la chapa. **El arreglo**: los dos estilos se aplican de verdad en los diez diálogos —el
+título pasa a 21, el de una sección del sistema, y la ayuda a 14 por estilo y no por `FontSize`
+suelto—, y los cuatro tokens de relleno suben a 24 uniformes, salvo el canal derecho de la lista con
+desplazamiento, que conserva sus 16 porque ahí no hay aire sino sitio reservado para la barra
+(`Pad.Scroll`). La cabecera ya llevaba el color del diálogo desde R7. **Cuenta.** Fuera la frase de
+ayuda de «Estado de la conexión», que intentaba explicar de una vez las tres filas de GitHub y las dos
+de los auditores desde arriba del todo: la lista se parte en dos grupos con su rótulo a 13 en
+terciario —«GitHub» y «Auditores · basta con uno, se elige en Ajustes → Proveedor y modelo»—, y cada
+rótulo dice lo suyo justo encima de lo que nombra. Los dos grupos son rebanadas de la MISMA lista de
+pasos, no copias: la comprobación las muta en el sitio y las dos se enteran. La fila se rehace como
+plantilla única —48 de alto, 8 hasta la siguiente, el icono en un círculo de 24 y la palabra en la
+fila del TÍTULO para que quede a su altura aunque debajo haya detalle—; antes era una rejilla sin alto
+fijo y las filas con detalle medían el doble que las demás, así que la lista bailaba al comprobar. Y
+el ritmo: 32 de relleno en las cuatro tarjetas, 24 entre ellas, 32 bajo el título de la vista y 24
+hasta la botonera. **Ajustes → Tarifas.** Fuera el párrafo de seis líneas bajo un desplegable de dos
+opciones cuyos rótulos ya dicen todo lo que hay que decidir; la explicación de la tabla baja de tres
+frases a dos y las dos salvedades —una caja en blanco no es un cero, Claude Code no entra aquí— pasan
+al «Más», que importan el día que se edita y ningún otro. Medido: el hueco de ~100 px antes de la
+tabla era la propia ayuda (66,6 px de texto y su «Más»), no relleno; con el recorte, lo que separa la
+tabla de lo de arriba son los 24 pedidos. **Sin tests nuevos** (N-7): no hay regla nueva —esto es
+tipografía, aire y agrupación—, y el único que se toca es el de R2 que fijaba la frase de las tarifas
+palabra por palabra, que se actualiza a la nueva sin cambiar lo que protege. La captura de Directivas
+va en el parte, renderizada fuera de pantalla con un proyecto de consola del scratchpad: mide, coloca
+y rasteriza el árbol sin abrir ninguna ventana, que es lo que permite enseñar una pantalla sin
+secuestrar el ratón de nadie (N-8).
