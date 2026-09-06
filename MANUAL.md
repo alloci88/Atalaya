@@ -285,6 +285,25 @@ Aparece en el menú solo cuando hay una sesión (en curso o recién terminada), 
 punto late mientras corre. Enseña el progreso unidad a unidad, los hallazgos según
 van llegando, el coste y los tokens consumidos, y al terminar el resumen de cierre.
 
+**Lo que se ve mientras trabaja.** La columna del centro es el **hilo de actividad**: lo que va
+pasando, en orden y con su hora. Ahí salen las **herramientas** que el auditor usa —«5 hallazgos
+nuevos», «4 veredictos sobre hallazgos existentes», «Añade 2 ubicaciones a HAL-0412», «Unidad
+cerrada»— en cuanto ocurren, y no al final de la pasada; la **prosa** del modelo cuando la escribe;
+y los **hitos** de Atalaya, como una reanudación fallida o un corte que no se pudo hacer.
+
+> **Por qué importa.** Una llamada al modelo tarda unos doce segundos de media, y a veces
+> cuarenta y cinco. Antes, en ese hueco solo podía aparecer lo que el modelo escribiera por su
+> cuenta —y escribir es opcional para él—, así que la pantalla se quedaba quieta y de pronto
+> aparecían once hallazgos de golpe. Las herramientas no son opcionales: si está trabajando, las
+> llama. Enseñarlas no cuesta ni una llamada ni un token: son cosas que Atalaya ya apuntaba y
+> guardaba para el informe.
+
+**«Esperando al modelo · 42 s».** Cuando pasan más de **20 segundos** sin que llegue nada, el pie
+lo dice con el reloj subiendo, y a los **90 segundos** lo pone en negrita. No es un error ni un
+aviso: es la diferencia entre *el modelo está pensando* y *esto se ha caído*, que hasta ahora se
+veían exactamente igual —la pantalla parada—. Quien decide cuándo se corta de verdad sigue siendo
+el tope de tokens de Ajustes.
+
 Cada unidad se audita en **pasadas**, y cada pasada dice lo que hizo: **nuevos ·
 confirmados · disputados**. Una pasada que no aporta hallazgos nuevos se llama **seca**, y
 eso no significa que no haya pasado nada — puede haber confirmado siete. La unidad se da

@@ -16204,3 +16204,68 @@ sesión de verdad sobre un hub con `xblast`/`XBLAST` y se leen los tres —miga,
 estado— exigiendo que digan el nombre y que **no** contengan el identificador. Y **un test existente
 se corrige, no se relaja**: el de la tira del modo exhaustivo montaba su servicio a mano con solo el
 identificador puesto; ahora pone también el nombre, que es lo que la tira dice.
+
+---
+
+## F30 · Parte 1: el hilo de actividad y la espera
+
+### D-1012 — Todo lo que hacía falta ya estaba apuntado; lo que faltaba era enseñarlo cuando pasa
+
+**§0 · El diagnóstico, medido.** Cinco cosas, y tres de ellas cambian la premisa del encargo.
+**(a) Copilot ya manda deltas de texto** —`AssistantMessageDeltaEvent`— y la vista los pinta según
+llegan desde F5.2; lo que no consume es todo lo demás: de los ~60 tipos de evento que declara el SDK
+1.0.11, `RealCopilotAgent.OnSessionEvent` atiende **tres** (`AssistantUsageEvent`,
+`AssistantMessageDeltaEvent`, `AssistantMessageEvent`) y tira el resto — incluidos
+`ToolExecutionStartEvent`, `ToolExecutionCompleteEvent` y `AssistantToolCallDeltaEvent`, que trae
+`InputDelta`: **la entrada parcial de una herramienta SÍ está disponible en Copilot**, así que el
+«3 de 11» de §2 es posible en las dos casas. **(b) Claude Code NO manda el texto delta a delta**: se
+emite entero cuando el mensaje `assistant` cierra. Los eventos crudos sí se piden
+(`--include-partial-messages`) y llegan, pero el `switch` de `ClaudeStreamReader` solo mira
+`message_start` y `message_delta` —para las cuentas de F21— y descarta `content_block_start`,
+`text_delta` e `input_json_delta` con un comentario que lo dice. **(c) El alta y el re-escaneo NO
+corren en el hilo de interfaz**: los dos son `await Task.Run(...)` desde antes de esta fase, así que
+no hay nada que mover. Y el escaneo tampoco es lo lento: medido sobre este mismo repositorio, **283
+unidades en 54 ms —0,19 ms por unidad—**, o sea unos **175 ms** para las 923 de XBLAST. Lo que se
+percibe como «congelada» es la ausencia de señal durante una secuencia cuyos pasos caros son otros:
+escribir el inventario, reconciliar los hallazgos de unidad grande y, sobre todo, el
+`CommitAndPush` final, que depende de la red y no dice nada. **(d) La espera real entre eventos
+visibles**, con los datos del hub del usuario (N-2): **14 sesiones de Copilot, 122 llamadas,
+1.440 s → 11,8 s de media por llamada**, con una sesión de 5 llamadas en 241 s (**48 s por
+llamada**). **(e) Y el hallazgo que resuelve la fase**: el coordinador ya registra cada llamada a
+herramienta —`SessionToolbox.ToolCallLog`, desde F3—, y las vuelca en `session.Notes` **al cerrar la
+pasada**; en la sesión real más grande del hub son **136 notas** de esa forma para 86 llamadas. No
+faltaba información: faltaba enseñarla a tiempo. **§1 · El hilo, en vivo.** La toolbox de auditoría
+gana `ToolInvoked`, que se dispara donde ya se apuntaba —un único `Log(entry)` para no poder contar
+una cosa y enseñar otra—, y el coordinador lo reenvía como `ActivityNoted` situándolo en su unidad y
+su pasada. Es exactamente la costura que el arreglo asistido tiene desde F16
+(`FixToolbox.FileRead`, `Edited`…) y por la que esa pantalla sí da la sensación de que pasan cosas.
+Van por el mismo canal los **hitos de Atalaya** que hasta ahora solo existían en el anexo: la
+reanudación fallida de F25 y el corte de F21 que no se pudo hacer. La traducción a castellano vive
+en `ActivityWording` y no en el emisor: el texto que viaja es la traza cruda que ya va a las notas,
+y escribirla dos veces —una para el registro y otra para la pantalla— es la forma segura de que un
+día digan cosas distintas. **Los iconos son familia propia** (`⚒`, `👁`, `◆`) y no los de la
+narración: una llamada a `submit_findings` con cinco elementos es UN gesto del auditor, no cinco
+hallazgos, y reutilizar el `＋` habría hecho contar dos veces lo mismo — lo cantó
+`LiveNarrationTests` a la primera, que es para lo que está. **§3 · Qué se está esperando.** El
+servicio apunta cuándo llegó la última señal de vida —cualquier evento: herramienta, texto, consumo
+o cambio de pasada— y el pie dice «esperando al modelo · 42 s» a partir de **20 s**, en negrita a
+partir de **90 s**. Los dos umbrales salen de las cifras de §0(d): con 11,8 s de media, callar por
+debajo de 20 s es lo correcto y nombrarlo por encima también. El corte de F19 sigue mandando cuándo
+se para: esto informa, no decide. **Cobertura (N-5, N-7): tres tests, dos nuevos y uno ampliado.**
+El del **orden** —una herramienta se narra antes de que llegue el cierre de su pasada— es la regla
+entera de la fase, y se comprobó con un cebo: desactivando la emisión, se pone rojo. El del
+**espejo** ejerce la norma «ni un token más» por la vía que de verdad la protege: tantas líneas
+narradas como líneas `tool ·` tiene la sesión persistida, ni una más — una narración que costara una
+herramienta extra rompería la igualdad por arriba. (La primera versión comparaba dos sesiones
+seguidas y era falsa: la segunda corre sobre el hub que dejó la primera y reconcilia sus hallazgos,
+así que medía el estado del hub y no el coste de narrar.) Y el **inventario de glifos** que ya
+existía se amplía con la familia nueva, declarada a propósito. **Lo que esta parte NO trae, y por
+qué se dice aquí en vez de dejarlo entender.** Quedan fuera **§2** (deltas de Claude y anuncio de
+herramienta al empezar), **§4** (barra determinada y Cancelar en el alta y el re-escaneo) y **§5**
+(guardar el hilo con la sesión). §2 obliga a tocar el mismo `switch` de `ClaudeStreamReader` que
+gobierna `AccountingIsComplete`, que es la condición del corte de F21 —y un corte que se dispare con
+una petición en vuelo se factura y no aparece en ningún sitio (medido en F21)—: no es trabajo que
+deba ir en el mismo commit que todo lo demás, y merece su verificación aparte. §4 pierde su premisa
+con §0(c) —no hay nada que sacar del hilo de interfaz— y lo que queda es progreso sobre los pasos
+que de verdad tardan, que no son el escaneo. Lo de esta parte se sostiene solo y se puede abrir en
+el `dist` sin lo demás.
