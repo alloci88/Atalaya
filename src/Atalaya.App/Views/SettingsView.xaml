@@ -4,7 +4,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:c="clr-namespace:Atalaya.App.Controls"
-    xmlns:vm="clr-namespace:Atalaya.App.ViewModels">
+    xmlns:vm="clr-namespace:Atalaya.App.ViewModels"
+    xmlns:s="clr-namespace:Atalaya.App.Services">
     <!--
         F26 Parte C — AJUSTES DEJA DE SER UN SCROLL.
 
@@ -276,15 +277,37 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Text="Tarifas de GitHub Copilot" Style="{StaticResource Setting.SectionTitle}" />
 
+                        <!-- F29 §2 — LA DIVISA, LA PRIMERA FILA DE LA SECCIÓN. Es lo único de aquí
+                             que cambia lo que se ve en todas las demás pantallas, y es de esta
+                             máquina: la tabla de abajo es del hub y se pulsa para guardarla; esto se
+                             guarda al cambiarlo, como los demás ajustes (R5 §7). -->
+                        <DockPanel Grid.Row="1" Style="{StaticResource Setting.Row}">
+                            <StackPanel Style="{StaticResource Setting.Label}">
+                                <TextBlock Text="Mostrar el coste en" Style="{StaticResource Setting.Name}" />
+                                <TextBlock Style="{StaticResource Setting.Help}"
+                                           Text="{x:Static vm:SettingsViewModel.CurrencyHelp}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top"
+                                        c:Stack.Gap="{StaticResource Space.S}">
+                                <ComboBox ItemsSource="{Binding Currencies}"
+                                          SelectedValue="{Binding ShowCostIn}"
+                                          AutomationProperties.Name="Mostrar el coste en"
+                                          MinWidth="{StaticResource Field.SelectWidth}"
+                                          HorizontalAlignment="Left" />
+                                <c:SavedMark Shown="{Binding Saved[ShowCostIn].Shown}" />
+                            </StackPanel>
+                        </DockPanel>
+
                         <!-- UNA línea, y el resto plegado: la de antes eran cuatro y había que
                              leerlas enteras para llegar a la tabla, que es lo que se viene a ver. -->
-                        <StackPanel Grid.Row="1" Margin="{StaticResource Pad.M.Bottom}">
+                        <StackPanel Grid.Row="2" Margin="{StaticResource Pad.M.Bottom}">
                             <TextBlock Style="{StaticResource Text.Small}"
                                        MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
                                        Text="Los precios son los de la tabla pública de GitHub Copilot. Atalaya los siembra y los completa sola; aquí solo se corrige lo que no cuadre." />
@@ -295,29 +318,31 @@
                                        Visibility="{Binding IsChecked, ElementName=MasTarifas, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
 
-                        <Border Grid.Row="2" Style="{StaticResource Notice.Warning}"
-                                Margin="{StaticResource Pad.M.Bottom}"
-                                Visibility="{Binding Rates.HasMissing, Converter={StaticResource BoolToVisibility}}">
-                            <DockPanel>
-                                <Path DockPanel.Dock="Left" Style="{StaticResource Notice.Icon}"
-                                      Data="{x:Static c:Icons.Warning}"
-                                      Stroke="{DynamicResource Brush.Warning.Ink}" />
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource Notice.Text}"
-                                               Foreground="{DynamicResource Brush.Warning.Ink}"
-                                               Text="Modelos usados SIN tarifa configurada. Sus sesiones no se pueden valorar, así que los agregados que las incluyan salen marcados como parciales." />
-                                    <ItemsControl ItemsSource="{Binding Rates.MissingModels}"
-                                                  Margin="{StaticResource Pad.XS.Top}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding}" Style="{StaticResource Text.Small}"
-                                                           Foreground="{DynamicResource Brush.Warning.Ink}" />
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </DockPanel>
-                        </Border>
+                        <!-- F29 §1 — AQUÍ VIVÍA EL AVISO ÁMBAR de «modelos usados sin tarifa», con
+                             su lista y su icono. Se va, y en su sitio queda una línea neutra con el
+                             recuento y el camino.
+
+                             El motivo no es que sobrara información: es que estaba en la pantalla
+                             equivocada. El coste es de la sesión, la sesión es de una aplicación, y
+                             quien mira el Portafolio —que es quien decide— no pasa por Ajustes. El
+                             aviso vive ahora en la tarjeta de su aplicación y la acción, en el
+                             resumen de su ciclo. Tarifas es para precios; el hueco es de las
+                             aplicaciones.
+
+                             Y ámbar tampoco: desde aquí no se puede hacer nada, así que un color de
+                             alarma sobre algo que no tiene botón se aprende a ignorar. -->
+                        <TextBlock Grid.Row="3" Style="{StaticResource Text.Small}"
+                                   Margin="{StaticResource Pad.M.Bottom}"
+                                   MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
+                                   TextWrapping="Wrap"
+                                   Visibility="{Binding Rates.HasMissing, Converter={StaticResource BoolToVisibility}}">
+                            <Run Text="{Binding Rates.MissingLine, Mode=OneWay}" /><Run Text=" · se reconcilian desde el inventario de cada aplicación" />
+                        </TextBlock>
+                        <Button Grid.Row="3" Content="Ir al Portafolio" Style="{StaticResource Button.Link}"
+                                HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Command="{Binding GoToPortfolioCommand}"
+                                ToolTip="El aviso y la acción viven con la aplicación: su tarjeta dice cuántas sesiones sin coste tiene, y el resumen de su ciclo lleva a reconciliarlas."
+                                Visibility="{Binding Rates.HasMissing, Converter={StaticResource BoolToVisibility}}" />
 
                         <!-- EN ESTRECHO, LA TABLA SE DESPLAZA; las cabeceras no se recortan nunca.
                              El ancho de la rejilla sigue al del hueco visible —así las columnas
@@ -325,7 +350,7 @@
                              barra horizontal, que es «reorganizar» en una tabla (principio 1). La
                              cabecera va DENTRO del mismo desplazamiento, o se separaría de sus
                              columnas al primer arrastre. -->
-                        <Border Grid.Row="3" Style="{StaticResource Panel}"
+                        <Border Grid.Row="4" Style="{StaticResource Panel}"
                                 Visibility="{Binding CanManageRates, Converter={StaticResource BoolToVisibility}}">
                             <ScrollViewer Style="{StaticResource Scroll}" x:Name="RatesScroll"
                                           HorizontalScrollBarVisibility="Auto"
@@ -355,25 +380,25 @@
                                     <StackPanel Grid.Row="0" Grid.Column="1" Margin="{StaticResource Pad.Row}">
                                         <TextBlock Text="Entrada" Style="{StaticResource Table.Header}"
                                                    HorizontalAlignment="Right" />
-                                        <TextBlock Text="$ por millón" Style="{StaticResource Table.HeaderUnit}"
+                                        <TextBlock Text="{x:Static s:CostFormat.RateColumnUnit}" Style="{StaticResource Table.HeaderUnit}"
                                                    HorizontalAlignment="Right" />
                                     </StackPanel>
                                     <StackPanel Grid.Row="0" Grid.Column="2" Margin="{StaticResource Pad.Row}">
                                         <TextBlock Text="Salida" Style="{StaticResource Table.Header}"
                                                    HorizontalAlignment="Right" />
-                                        <TextBlock Text="$ por millón" Style="{StaticResource Table.HeaderUnit}"
+                                        <TextBlock Text="{x:Static s:CostFormat.RateColumnUnit}" Style="{StaticResource Table.HeaderUnit}"
                                                    HorizontalAlignment="Right" />
                                     </StackPanel>
                                     <StackPanel Grid.Row="0" Grid.Column="3" Margin="{StaticResource Pad.Row}">
                                         <TextBlock Text="Caché leída" Style="{StaticResource Table.Header}"
                                                    HorizontalAlignment="Right" />
-                                        <TextBlock Text="$ por millón" Style="{StaticResource Table.HeaderUnit}"
+                                        <TextBlock Text="{x:Static s:CostFormat.RateColumnUnit}" Style="{StaticResource Table.HeaderUnit}"
                                                    HorizontalAlignment="Right" />
                                     </StackPanel>
                                     <StackPanel Grid.Row="0" Grid.Column="4" Margin="{StaticResource Pad.Row}">
                                         <TextBlock Text="Caché escrita" Style="{StaticResource Table.Header}"
                                                    HorizontalAlignment="Right" />
-                                        <TextBlock Text="$ por millón" Style="{StaticResource Table.HeaderUnit}"
+                                        <TextBlock Text="{x:Static s:CostFormat.RateColumnUnit}" Style="{StaticResource Table.HeaderUnit}"
                                                    HorizontalAlignment="Right" />
                                     </StackPanel>
                                     <StackPanel Grid.Row="0" Grid.Column="5" Margin="{StaticResource Pad.Row}">
@@ -417,12 +442,12 @@
                             </ScrollViewer>
                         </Border>
 
-                        <c:EmptyState Grid.Row="3"
+                        <c:EmptyState Grid.Row="4"
                                       Glyph="{x:Static c:Icons.Metrics}"
                                       Message="Todavía no hay tabla de tarifas en el hub. Se siembra sola al conectar con él."
                                       Visibility="{Binding CanManageRates, Converter={StaticResource InverseBoolToVisibility}}" />
 
-                        <Border Grid.Row="4" Style="{StaticResource Notice.Warning}"
+                        <Border Grid.Row="5" Style="{StaticResource Notice.Warning}"
                                 Margin="{StaticResource Pad.S.Top}"
                                 Visibility="{Binding Rates.Status, Converter={StaticResource NotEmptyToVisibility}}">
                             <DockPanel>

@@ -128,6 +128,22 @@ public sealed class AppSettings
     public string Theme { get; set; } = "dark";
 
     /// <summary>
+    /// <b>En qué divisa se enseña el coste</b> (F29 §2): <c>"credits"</c> o <c>"usd"</c>.
+    /// <para>
+    /// Es de ESTA máquina y no del hub, por la regla de F13: no gobierna nada compartido —el hub
+    /// sigue guardando tokens y credits exactamente igual—, solo cómo lee las cifras quien está
+    /// delante. Dos personas del mismo equipo pueden mirar el mismo panel en unidades distintas sin
+    /// cambiarle el número a nadie.
+    /// </para>
+    /// <para>
+    /// De fábrica, credits: es la unidad en la que factura GitHub y en la que grafica su panel, así
+    /// que es la que se puede cuadrar contra la factura. Los dólares son para quien decide con un
+    /// presupuesto, y eso se elige.
+    /// </para>
+    /// </summary>
+    public string CostCurrency { get; set; } = "credits";
+
+    /// <summary>
     /// Dónde y cómo estaba la ventana la última vez (F26 Parte A, D-956). Nunca viaja al hub: el
     /// tamaño de una ventana es de ESTA máquina y de este monitor.
     /// </summary>

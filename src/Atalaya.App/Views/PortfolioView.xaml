@@ -301,6 +301,28 @@
                                     <TextBlock Style="{StaticResource Text.Meta}">
                                         <Run Text="Última sesión:" /><Run Text=" " /><Run Text="{Binding LastSessionBy, Mode=OneWay}" />
                                     </TextBlock>
+
+                                    <!-- F29 §1 — LAS SESIONES SIN COSTE, JUNTO A LA ÚLTIMA SESIÓN.
+                                         El coste es de la sesión y la sesión es de una aplicación,
+                                         así que el aviso vive con la aplicación y no en Ajustes →
+                                         Tarifas, donde no lo veía nadie que mirara el Portafolio.
+                                         Es una insignia DISCRETA —icono y una línea, del tamaño de
+                                         la meta que tiene encima— y no un bloque ámbar: aquí no se
+                                         actúa, se avisa; la acción está en el resumen del ciclo de
+                                         esta misma aplicación. Sin sesiones sin coste no hay
+                                         insignia. -->
+                                    <StackPanel Orientation="Horizontal"
+                                                c:Stack.Gap="{StaticResource Space.XXS}"
+                                                ToolTip="{Binding CostGapTooltip}"
+                                                Visibility="{Binding HasCostGap, Converter={StaticResource BoolToVisibility}}">
+                                        <Path Style="{StaticResource Icon.Meta}"
+                                              Data="{x:Static c:Icons.Warning}"
+                                              Stroke="{DynamicResource Brush.Warning.Ink}" />
+                                        <TextBlock Text="{Binding CostGapLabel}"
+                                                   Style="{StaticResource Text.Meta}"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource Brush.Warning.Ink}" />
+                                    </StackPanel>
                                 </StackPanel>
 
                                 <!-- LA ACCIÓN. Una, y la que toca: sin clon no hay nada que auditar,

@@ -102,23 +102,26 @@ public sealed class DriftSurfaceTests
     }
 
     [Fact]
-    public void El_panel_va_en_tres_bloques_separados_y_no_en_una_lista_corrida()
+    public void El_panel_va_en_bloques_separados_y_no_en_una_lista_corrida()
     {
         // F9.1 §2: en la lista corrida, «deriva» quedaba como una línea perdida en el medio y los
-        // patrones y las directivas parecían parte de ella. Tres grupos, con su pelo y su título.
+        // patrones y las directivas parecían parte de ella. Un grupo, su pelo y su título.
+        // F29 §1 añade el cuarto: el coste que no se ha podido calcular, con su acción.
         string xaml = Source("src/Atalaya.App/Views/InventoryView.xaml");
         string panel = xaml[xaml.IndexOf("Resumen del ciclo", StringComparison.Ordinal)..];
 
         int ciclo = panel.IndexOf("{Binding CycleLabel}", StringComparison.Ordinal);
         int deriva = panel.IndexOf("Text=\"Deriva\"", StringComparison.Ordinal);
         int gobernanza = panel.IndexOf("Text=\"Gobernanza\"", StringComparison.Ordinal);
+        int coste = panel.IndexOf("{Binding CostGapLabel}", StringComparison.Ordinal);
 
         ciclo.Should().BeGreaterThan(0);
         deriva.Should().BeGreaterThan(ciclo, "la deriva va después del ciclo");
-        gobernanza.Should().BeGreaterThan(deriva, "y la gobernanza, al final");
+        gobernanza.Should().BeGreaterThan(deriva, "y la gobernanza, después");
+        coste.Should().BeGreaterThan(gobernanza, "y el coste, al final: es lo último que se mira");
 
         Regex.Matches(panel, "PanelDivider").Count
-            .Should().Be(2, "dos pelos para tres bloques");
+            .Should().Be(3, "un pelo por bloque a partir del primero: cuatro bloques, tres pelos");
         xaml.Should().Contain("x:Key=\"PanelDivider\"");
     }
 

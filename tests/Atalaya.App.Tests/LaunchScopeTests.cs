@@ -132,6 +132,9 @@ public sealed class LaunchScopeTests : IDisposable
         // F13: la política de tamaño de la aplicación, y su diálogo mudo.
         services.AddSingleton<ThresholdPolicyService>();
         services.AddSingleton<IThresholdsDialog, TestFactory.NoThresholdsDialog>();
+        services.AddSingleton<ModelRatesService>();
+        services.AddSingleton<CostReconciliationService>();
+        services.AddSingleton<IReconcileCostsDialog, TestFactory.NoReconcileCostsDialog>();
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
     }

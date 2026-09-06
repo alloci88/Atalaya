@@ -72,8 +72,8 @@ public sealed record CostEstimate(
                 ? string.Empty
                 : $" × {MaxPasses}/{ObservedMaxPasses} pasadas";
 
-            return $"{UnitsLabel} × ~{CreditText.Number(per)}/unidad{factor} "
-                + $"≈ {CreditText.Number(total)} {CostUnit}";
+            return $"{UnitsLabel} × ~{CostFormat.Number(per)}/unidad{factor} "
+                + $"≈ {CostFormat.Number(total)} {CostUnit}";
         }
     }
 
@@ -157,8 +157,12 @@ public sealed class CostEstimator
     /// La unidad en la que se estima (F15): AI credits, la misma en la que factura GitHub y en la
     /// que grafica el panel de la organización. Sustituye a las «unidades SDK», que eran premium
     /// requests — el sistema retirado el 1 de junio de 2026.
+    /// <para>
+    /// Desde F29 §2 se lee en cada llamada y no es una constante: la divisa de presentación es una
+    /// preferencia de esta máquina y puede cambiar mientras la aplicación está abierta.
+    /// </para>
     /// </summary>
-    public const string DefaultCostUnit = CreditText.Unit;
+    public static string DefaultCostUnit => CostFormat.Unit;
 
     private readonly HubContext _hub;
 

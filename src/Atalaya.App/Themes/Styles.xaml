@@ -1353,6 +1353,13 @@
         <Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary.Fill}" />
     </Style>
 
+    <!-- F29 §1: el icono de una insignia de metadatos, a la altura de su texto. El de aviso normal
+         mide como el cuerpo y en una línea de 12 px se come el renglón. -->
+    <Style x:Key="Icon.Meta" TargetType="Path" BasedOn="{StaticResource Icon}">
+        <Setter Property="Width" Value="{StaticResource Icon.Size.Small}" />
+        <Setter Property="Height" Value="{StaticResource Icon.Size.Small}" />
+    </Style>
+
     <Style x:Key="Notice.Icon" TargetType="Path" BasedOn="{StaticResource Icon}">
         <Setter Property="VerticalAlignment" Value="Top" />
         <Setter Property="Margin" Value="{StaticResource Pad.S.Right}" />

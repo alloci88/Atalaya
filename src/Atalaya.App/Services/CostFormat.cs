@@ -2,8 +2,19 @@
 
 namespace Atalaya.App.Services;
 
+/// <summary>En qué unidad se ENSEÑA un coste (F29 §2). Es presentación: el hub no la conoce.</summary>
+public enum CostCurrency
+{
+    /// <summary>AI credits, la unidad en la que factura GitHub. Un decimal.</summary>
+    Credits,
+
+    /// <summary>Dólares, a 0,01 $ por credit. Dos decimales, con el símbolo detrás.</summary>
+    Usd,
+}
+
 /// <summary>
-/// El ÚNICO sitio donde un coste se convierte en texto (F15).
+/// El ÚNICO sitio donde un coste se convierte en texto (F15; se llamaba <c>CreditText</c> hasta
+/// F29, cuando los credits dejaron de ser la única unidad en la que se enseña).
 /// <para>
 /// Mismo papel que <see cref="PercentText"/> y por el mismo motivo: un número que se formatea en
 /// cinco sitios acaba diciendo cinco cosas distintas, y el redondeo es donde nacen las mentiras
@@ -11,14 +22,49 @@ namespace Atalaya.App.Services;
 /// escribir un cero cuando hubo gasto</b>. «0,0 credits» tras auditar una unidad es la misma falta
 /// que el «0 %» de cobertura con trabajo hecho — dice que no costó nada, y costó.
 /// </para>
+/// <para>
+/// <b>Y desde F29 es también el único sitio que sabe en qué DIVISA se enseña</b> (§2). La unidad
+/// del hub sigue siendo el credit —los tokens y los credits se guardan como siempre—; los dólares
+/// son una lente de lectura de esta máquina. Por eso la divisa vive aquí y no en cada vista: si el
+/// pie, el azulejo y la lista de informes tuvieran que acordarse de convertir, a la primera que se
+/// olvidara habría dos monedas en la misma pantalla.
+/// </para>
 /// </summary>
-public static class CreditText
+public static class CostFormat
 {
-    /// <summary>Cómo se llama la unidad. En un sitio, para que no se escriba de dos maneras.</summary>
-    public const string Unit = "credits";
+    /// <summary>
+    /// <b>La divisa activa de esta máquina</b> (F29 §2). La pone el arranque leyendo los ajustes y
+    /// la cambia la fila de Ajustes → Tarifas. Es estática por lo mismo que <see cref="AppCulture"/>
+    /// y que el tema: la lee todo lo que escribe un coste, y pasarla de mano en mano por doce
+    /// firmas acabaría con una que no la recibe.
+    /// <para>
+    /// <b>Los informes NO la miran</b>: escriben las dos cifras siempre (<see cref="Both"/>). Un
+    /// informe se lee dentro de años y no puede depender de una preferencia de una máquina.
+    /// </para>
+    /// </summary>
+    public static CostCurrency Currency { get; set; } = CostCurrency.Credits;
 
-    /// <summary>Lo mínimo que se puede escribir con un decimal.</summary>
+    /// <summary>
+    /// Cómo se llama la unidad activa. En un sitio, para que no se escriba de dos maneras — ni en
+    /// C# ni en XAML, donde hay un test que lo recorre.
+    /// </summary>
+    public static string Unit => Currency == CostCurrency.Usd ? UsdSymbol : "credits";
+
+    /// <summary>El símbolo del dólar, detrás de la cifra, como ya lo escribía Métricas.</summary>
+    public const string UsdSymbol = "$";
+
+    /// <summary>
+    /// <b>La unidad de la TABLA DE TARIFAS</b>, que no es la divisa de presentación: los precios
+    /// publicados de GitHub están en dólares por millón de tokens y ahí seguirán aunque el coste se
+    /// enseñe en credits. Vive aquí para que el XAML no escriba un «$» a mano.
+    /// </summary>
+    public const string RateColumnUnit = "$ por millón";
+
+    /// <summary>Lo mínimo que se puede escribir en credits, con su decimal.</summary>
     private const decimal SmallestShown = 0.1m;
+
+    /// <summary>Y lo mínimo en dólares, con los suyos. Un céntimo.</summary>
+    private const decimal SmallestUsd = 0.01m;
 
     /// <summary>Lo que se lee donde no hay nada que decir.</summary>
     public const string Unknown = "—";
@@ -42,16 +88,28 @@ public static class CreditText
     public const string SubscriptionCostShort = "suscripción";
 
     /// <summary>
-    /// La unidad en la que factura GitHub. Es la de TODO lo que esta clase valora, porque desde
-    /// F16-RETOQUE lo único que se tarifa es lo que factura (F15, D-789 revisado).
+    /// La unidad LARGA de la divisa activa: «AI credits», que es como factura GitHub (F15, D-789
+    /// revisado), o el símbolo del dólar. Es la que acompaña a una cifra suelta en una tarjeta.
     /// </summary>
-    public const string BillingUnit = "AI credits";
+    public static string BillingUnit => Currency == CostCurrency.Usd ? UsdSymbol : "AI credits";
+
+    /// <summary>
+    /// El importe sin unidad, en la divisa activa («68,2» en credits, «0,68» en dólares).
+    /// <para>
+    /// El argumento son SIEMPRE credits: es lo que el hub guarda y lo único que
+    /// <see cref="CreditCalculator"/> produce. La conversión ocurre aquí y solo aquí, con
+    /// <see cref="CreditCalculator.UsdPerCredit"/>, que es donde D-786 dejó escrito lo que vale un
+    /// credit — el día que cambie, cambia ahí.
+    /// </para>
+    /// </summary>
+    public static string Number(decimal? credits)
+        => Currency == CostCurrency.Usd ? UsdNumber(credits) : CreditNumber(credits);
 
     /// <summary>
     /// Los credits, sin unidad («68,2»). Un decimal, que es la precisión con la que el panel de
     /// GitHub enseña sus cifras y suficiente para decidir.
     /// </summary>
-    public static string Number(decimal? credits)
+    public static string CreditNumber(decimal? credits)
     {
         if (credits is not { } value)
         {
@@ -76,9 +134,47 @@ public static class CreditText
             : rounded.ToString("0.0", AppCulture.Display);
     }
 
-    /// <summary>Los credits con su unidad: «68,2 credits».</summary>
+    /// <summary>
+    /// Los dólares, sin símbolo («1,85»). Dos decimales — y la misma regla del redondeo: si hubo
+    /// gasto y no llega al céntimo se dice «&lt; 0,01», nunca un «0,00» que afirmaría que fue gratis.
+    /// </summary>
+    public static string UsdNumber(decimal? credits)
+    {
+        if (credits is not { } value)
+        {
+            return Unknown;
+        }
+
+        decimal usd = value * CreditCalculator.UsdPerCredit;
+        if (usd <= 0m)
+        {
+            return 0m.ToString("0.00", AppCulture.Display);
+        }
+
+        if (usd < SmallestUsd)
+        {
+            return "< " + SmallestUsd.ToString("0.00", AppCulture.Display);
+        }
+
+        return Math.Round(usd, 2, MidpointRounding.AwayFromZero).ToString("0.00", AppCulture.Display);
+    }
+
+    /// <summary>El importe con su unidad, en la divisa activa: «68,2 credits» o «0,68 $».</summary>
     public static string Of(decimal? credits)
         => credits is null ? Unknown : $"{Number(credits)} {Unit}";
+
+    /// <summary>
+    /// <b>Las dos cifras, para lo que se guarda</b> (F29 §2): «185,3 AI credits (1,85 $)».
+    /// <para>
+    /// La escriben los informes, y no miran la divisa activa: un informe se lee dentro de años, en
+    /// otra máquina, y no puede depender de una preferencia de ésta. Registrar las dos cuesta seis
+    /// caracteres y ahorra tener que saber a cuánto estaba el credit aquel día.
+    /// </para>
+    /// </summary>
+    public static string Both(decimal? credits)
+        => credits is null
+            ? Unknown
+            : $"{CreditNumber(credits)} AI credits ({UsdNumber(credits)} {UsdSymbol})";
 
     /// <summary>
     /// <b>El coste de una sesión, con UN solo criterio y consciente de la casa</b> (F16 §B,
@@ -103,6 +199,28 @@ public static class CreditText
         {
             CostUnavailable.NotBilled => SubscriptionCost,
             CostUnavailable.None => WithUnit(cost.Credits, providerId),
+            _ => $"coste no calculable ({Reason(cost.Why)})",
+        };
+
+    /// <summary>
+    /// <b>El coste de una sesión tal y como lo registra un INFORME</b> (F29 §2): con las dos
+    /// cifras, y sin mirar la divisa de esta máquina.
+    /// <para>
+    /// Un informe se lee dentro de años, en otro puesto y con otra preferencia puesta; si dijera
+    /// solo lo que quien lo generó tenía elegido, haría falta saber a cuánto estaba el credit aquel
+    /// día para poder leerlo. Y cuando el coste es una valoración y no una medida, lo dice
+    /// (F29 §1): eso también tiene que quedar escrito.
+    /// </para>
+    /// </summary>
+    public static string OfSessionForReport(CostResult cost, string? providerId)
+        => cost.Why switch
+        {
+            CostUnavailable.NotBilled => SubscriptionCost,
+            CostUnavailable.None => Both(cost.Credits)
+                + (cost.EstimatedWith is { } r
+                    ? $" — coste estimado con tarifa de {r.AssignedModel}, asignada por {r.By} "
+                      + $"el {r.On.ToString("dd/MM/yyyy", AppCulture.Display)}"
+                    : string.Empty),
             _ => $"coste no calculable ({Reason(cost.Why)})",
         };
 
@@ -305,12 +423,36 @@ public static class CreditText
             : cost.HasValue ? $"{Number(cost.Credits)} {Unit}" : "coste: —";
 
     /// <summary>
-    /// El número con la unidad de la casa que lo factura: «68,2 AI credits». Ya no hay una segunda
-    /// forma —el «equivalente API» de D-789— porque ya no hay un segundo coste: lo que no factura
-    /// no se tarifa y no llega hasta aquí (F16-RETOQUE §1).
+    /// El número con la unidad de la casa que lo factura: «68,2 AI credits» —o «0,68 $» con la
+    /// divisa puesta en dólares (F29 §2)—. Ya no hay una segunda forma —el «equivalente API» de
+    /// D-789— porque ya no hay un segundo coste: lo que no factura no se tarifa y no llega hasta
+    /// aquí (F16-RETOQUE §1).
     /// </summary>
     public static string WithUnit(decimal? credits, string? providerId)
         => $"{Number(credits)} {BillingUnit}";
+
+    /// <summary>
+    /// <b>El asterisco de un coste estimado</b> (F29 §1). Va pegado a la cifra allá donde se
+    /// enseñe, y lleva siempre <see cref="EstimateTooltip"/> detrás: un coste estimado nunca se
+    /// confunde con uno medido, y la marca no se quita al reconciliar — se queda para siempre.
+    /// </summary>
+    public const string EstimateMark = "*";
+
+    /// <summary>Con qué tarifa se estimó, quién la asignó y cuándo. La frase entera, en un sitio.</summary>
+    public static string EstimateTooltip(CostReconciliation? reconciled)
+        => reconciled is null
+            ? string.Empty
+            : $"Coste estimado con tarifa de {reconciled.AssignedModel}, asignada por "
+              + $"{reconciled.By} el {reconciled.On.ToString("dd/MM/yyyy", AppCulture.Display)}. "
+              + "La sesión no registró con qué modelo corrió, así que este número es una "
+              + "valoración, no una medida.";
+
+    /// <summary>La cifra con su asterisco cuando el coste es estimado, y tal cual cuando no.</summary>
+    public static string Marked(string amount, bool estimated)
+        => estimated ? amount + EstimateMark : amount;
+
+    /// <inheritdoc cref="Marked(string, bool)"/>
+    public static string Marked(string amount, CostResult cost) => Marked(amount, cost.IsEstimate);
 
     /// <summary>
     /// El coste con su motivo cuando no lo hay. Es la forma que se enseña en las vistas: un número,
@@ -334,14 +476,56 @@ public static class CreditText
     /// no tenemos (N-2).
     /// </summary>
     public static string Dollars(decimal? credits)
-        => credits is not { } value
+        => credits is null ? Unknown : UsdNumber(credits) + " " + UsdSymbol;
+
+    /// <summary>
+    /// La MISMA cifra en la otra divisa, para el tooltip: quien mira dólares quiere ver los credits
+    /// que factura GitHub, y quien mira credits, lo que cuestan. Es lo que hace que cambiar la
+    /// preferencia no esconda nunca la otra mitad.
+    /// </summary>
+    public static string Equivalent(decimal? credits)
+        => credits is null
             ? Unknown
-            : (value * CreditCalculator.UsdPerCredit).ToString("0.00", AppCulture.Display) + " $";
+            : Currency == CostCurrency.Usd
+                ? $"{CreditNumber(credits)} AI credits"
+                : Dollars(credits);
 
     /// <summary>
     /// Qué hay que saber del número que se enseña. Con una sola naturaleza de coste —la factura de
-    /// la organización— la salvedad es una sola: qué es un credit.
+    /// la organización— la salvedad es una sola: qué es un credit, y a cuánto está.
     /// </summary>
     public static string Caveat =>
-        "AI credits: lo que GitHub factura por estos tokens. 1 credit = 0,01 $.";
+        Currency == CostCurrency.Usd
+            ? "Dólares, a 0,01 $ por AI credit: lo que GitHub factura por estos tokens."
+            : "AI credits: lo que GitHub factura por estos tokens. 1 credit = 0,01 $.";
+}
+
+/// <summary>
+/// <b>La divisa, entre el ajuste y el formateador</b> (F29 §2). El fichero de ajustes guarda una
+/// palabra —<c>credits</c> o <c>usd</c>— y no el nombre de un miembro de un <c>enum</c>: renombrar
+/// un enum no puede cambiar lo que ya está escrito en la máquina de alguien.
+/// </summary>
+public static class CostCurrencies
+{
+    public const string Credits = "credits";
+
+    public const string Usd = "usd";
+
+    /// <summary>Lo que diga el ajuste; cualquier otra cosa es credits, que es lo de fábrica.</summary>
+    public static CostCurrency Parse(string? saved)
+        => string.Equals(saved?.Trim(), Usd, StringComparison.OrdinalIgnoreCase)
+            ? CostCurrency.Usd
+            : CostCurrency.Credits;
+
+    /// <summary>Y de vuelta, para guardarla.</summary>
+    public static string Save(CostCurrency currency)
+        => currency == CostCurrency.Usd ? Usd : Credits;
+
+    /// <summary>
+    /// Cómo se llama cada opción en el desplegable. «AI credits» y «dólares (USD)» son las palabras
+    /// del encargo, y dicen las dos cosas que hacen falta para elegir: cuál es la unidad de la
+    /// factura y cuál la del presupuesto.
+    /// </summary>
+    public static string Label(CostCurrency currency)
+        => currency == CostCurrency.Usd ? "Dólares (USD)" : "AI credits";
 }

@@ -253,7 +253,7 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
     }
 
     /// <summary>Mismo criterio que el pie de la auditoría y que el informe (F16 §B).</summary>
-    public string CostText => CreditText.SessionFooter(
+    public string CostText => CostFormat.SessionFooter(
         _fix.Calls, _fix.InputTokens, _fix.OutputTokens,
         _fix.CacheReadTokens, _fix.CacheWriteTokens, _fix.CostResult, _fix.Provider);
 
@@ -273,7 +273,7 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
                 new(new[] { SubHeaderText, Shorten(SubHeaderText, 40) }.Distinct().ToList(), Priority: 4, Bold: true),
                 FooterSegment.Of(ElapsedText, opacity: 0.85),
             };
-            segments.AddRange(CreditText.UsageSegments(
+            segments.AddRange(CostFormat.UsageSegments(
                 _fix.Calls, _fix.InputTokens, _fix.OutputTokens,
                 _fix.CacheReadTokens, _fix.CacheWriteTokens, _fix.CostResult, _fix.Provider));
             segments.Add(FooterSegment.Of(TouchedText, priority: 3, opacity: 0.8));

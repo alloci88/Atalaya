@@ -93,20 +93,20 @@ public sealed partial class ModelRatesViewModel : ObservableObject
 {
     private readonly ModelRatesService _rates;
 
-    public ModelRatesViewModel(ModelRatesService rates)
+    /// <summary>
+    /// Las sesiones sin coste, para la línea neutra (F29 §1). Opcional por lo mismo que el resto:
+    /// los tests que solo ejercitan la tabla no montan un hub con sesiones.
+    /// </summary>
+    private readonly CostReconciliationService? _gaps;
+
+    public ModelRatesViewModel(ModelRatesService rates, CostReconciliationService? gaps = null)
     {
         _rates = rates;
+        _gaps = gaps;
         Load();
     }
 
     public ObservableCollection<RateRow> Rows { get; } = new();
-
-    /// <summary>
-    /// Los modelos que APARECEN en las sesiones del hub y no tienen tarifa. Es lo que convierte
-    /// esta pantalla en accionable: sin la lista, un modelo nuevo se traduce en agregados parciales
-    /// y nadie sabe qué añadir.
-    /// </summary>
-    public ObservableCollection<string> MissingModels { get; } = new();
 
     [ObservableProperty] private string _status = string.Empty;
 
@@ -114,8 +114,23 @@ public sealed partial class ModelRatesViewModel : ObservableObject
 
     [ObservableProperty] private bool _saved;
 
-    /// <summary>Hay modelos usados sin tarifa: los agregados que los incluyan son parciales.</summary>
-    public bool HasMissing => MissingModels.Count > 0;
+    /// <summary>Hay sesiones sin coste en algún sitio del hub. Lo dice la línea neutra.</summary>
+    public bool HasMissing => _sessionsWithoutCost > 0;
+
+    private int _sessionsWithoutCost;
+    private int _appsWithoutCost;
+
+    /// <summary>
+    /// <b>La línea neutra</b> (F29 §1): «Sesiones sin coste: 3 en 1 aplicación».
+    /// <para>
+    /// Es un recuento y un camino, no un aviso: desde aquí no se puede reconciliar nada, y pintar de
+    /// ámbar algo sobre lo que no se puede actuar solo enseña a ignorar el color. La acción vive en
+    /// el inventario de cada aplicación, que es de quien es el hueco.
+    /// </para>
+    /// </summary>
+    public string MissingLine
+        => $"Sesiones sin coste: {_sessionsWithoutCost} en "
+           + (_appsWithoutCost == 1 ? "1 aplicación" : $"{_appsWithoutCost} aplicaciones");
 
     /// <summary>
     /// LA MISMA REGLA QUE LAS OTRAS CUATRO SECCIONES DE AJUSTES (P-27, UI-0038).
@@ -198,17 +213,20 @@ public sealed partial class ModelRatesViewModel : ObservableObject
         Recheck();
     }
 
+    /// <summary>
+    /// F29 §1 — aquí se montaba <c>MissingModels</c>, la lista ámbar de «modelos usados sin
+    /// tarifa». Se retira con su bloque: desde esta pantalla no se puede reconciliar nada, y un
+    /// aviso sobre el que no se puede actuar se aprende a ignorar. Lo que queda es el recuento, en
+    /// una línea neutra, y el camino hasta donde sí se actúa.
+    /// </summary>
     private void RefreshMissing()
     {
-        MissingModels.Clear();
-        foreach ((string model, string? provider, int sessions) in _rates.ModelsWithoutRate())
-        {
-            MissingModels.Add(provider is { Length: > 0 }
-                ? $"{model} ({provider}) · {sessions} sesión(es)"
-                : $"{model} · {sessions} sesión(es)");
-        }
+        IReadOnlyList<AppCostGap> gaps = _gaps?.Gaps() ?? Array.Empty<AppCostGap>();
+        _appsWithoutCost = gaps.Count;
+        _sessionsWithoutCost = gaps.Sum(g => g.Sessions);
 
         OnPropertyChanged(nameof(HasMissing));
+        OnPropertyChanged(nameof(MissingLine));
     }
 
     [RelayCommand]

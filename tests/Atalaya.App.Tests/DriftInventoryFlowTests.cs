@@ -94,6 +94,9 @@ public sealed class DriftInventoryFlowTests : IDisposable
         // F13: la política de tamaño de la aplicación, y su diálogo mudo.
         services.AddSingleton<ThresholdPolicyService>();
         services.AddSingleton<IThresholdsDialog, TestFactory.NoThresholdsDialog>();
+        services.AddSingleton<ModelRatesService>();
+        services.AddSingleton<CostReconciliationService>();
+        services.AddSingleton<IReconcileCostsDialog, TestFactory.NoReconcileCostsDialog>();
         services.AddTransient<InventoryViewModel>();
         _provider = services.BuildServiceProvider();
     }
@@ -286,7 +289,8 @@ public sealed class DriftInventoryFlowTests : IDisposable
             _provider.GetRequiredService<CloneLinkService>(),
             _provider.GetRequiredService<LinkCloneFlow>(),
             _provider.GetRequiredService<DriftQuery>(),
-            new ActiveApp());
+            new ActiveApp(),
+            TestFactory.CostGaps(_hub));
         await vm.LoadAsync();
         return vm;
     }

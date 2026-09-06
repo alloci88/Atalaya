@@ -254,6 +254,17 @@ public sealed class HubStore
     public void WriteSession(AuditSession session)
         => WriteJson(_paths.SessionFile(session.AppSlug, session.Id.ToString()), session, SchemaValidation.Validate);
 
+    // --- Reconciliaciones de coste (F29 §1). La sesión NO se toca: ver HubPaths. ---
+
+    public IReadOnlyList<CostReconciliation> ListCostReconciliations(string slug)
+        => ReadAll<CostReconciliation>(_paths.CostReconciliationsDir(slug), SchemaValidation.Validate);
+
+    public void WriteCostReconciliation(CostReconciliation reconciliation)
+        => WriteJson(
+            _paths.CostReconciliationFile(reconciliation.AppSlug, reconciliation.SessionId.ToString()),
+            reconciliation,
+            SchemaValidation.Validate);
+
     // --- Comments ---
 
     public IReadOnlyList<Comment> ListComments(string slug, string findingUlid)

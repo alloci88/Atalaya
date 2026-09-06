@@ -105,6 +105,16 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
     private readonly IThresholdsDialog _thresholdsDialog;
 
     /// <summary>
+    /// Las sesiones sin coste de esta aplicación, y quién las cierra (F29 §1). La MISMA cuenta que
+    /// la insignia del Portafolio: dos cuentas parecidas del mismo hueco acaban discrepando.
+    /// </summary>
+    private readonly CostReconciliationService _costGaps;
+
+    private readonly ModelRatesService _modelRates;
+
+    private readonly IReconcileCostsDialog _reconcileDialog;
+
+    /// <summary>
     /// Configurar el ciclo (F17 §4). Los dos son opcionales por lo mismo que el registro de
     /// proveedores: los tests que ejercitan la selección y el barrido no tienen nada que decir
     /// sobre temáticas, y sin flujo el reinicio hereda la configuración sin preguntar.
@@ -122,9 +132,14 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
         DirectiveService directives, IDirectivesDialog directivesDialog,
         DriftQuery driftQuery, IDeletedUnitsDialog deletedDialog,
         ThresholdPolicyService thresholds, IThresholdsDialog thresholdsDialog,
+        CostReconciliationService costGaps, ModelRatesService modelRates,
+        IReconcileCostsDialog reconcileDialog,
         AuditorProviderRegistry? providers = null,
         CycleConfigService? cycleConfig = null, CycleConfigFlow? configFlow = null)
     {
+        _costGaps = costGaps;
+        _modelRates = modelRates;
+        _reconcileDialog = reconcileDialog;
         _cycleConfig = cycleConfig;
         _configFlow = configFlow;
         _providers = providers;
@@ -665,6 +680,12 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
                 : $"{_cycleConfigValue.PreferredModel} ({ProviderNames.Display(_cycleConfigValue.PreferredProvider)})";
 
         var sessions = _hub.Store.ListSessions(Slug);
+
+        // F29 §1 — las sesiones sin coste de ESTA aplicación. Se cuentan sobre todas sus sesiones y
+        // no sobre las del ciclo: el hueco es de la aplicación, y una sesión de hace tres ciclos sin
+        // valorar sigue faltando en los agregados de hoy.
+        CostGap = _costGaps.GapOf(Slug, _pendingReconcile);
+
         CycleStart start = CycleSummary.StartOf(sessions, CycleN);
         CycleLabel = CycleSummary.Label(CycleN, start);
         CycleTooltip = CycleSummary.Tooltip(start);
@@ -1024,6 +1045,66 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ThresholdsTooltip))]
     private int _largeUnitLoc = 1500;
+
+    /// <summary>
+    /// <b>Las sesiones de esta aplicación que se quedaron sin coste</b> (F29 §1). Null hasta que se
+    /// construye la página.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCostGap))]
+    [NotifyPropertyChangedFor(nameof(CostGapLabel))]
+    [NotifyPropertyChangedFor(nameof(CostGapTooltip))]
+    private AppCostGap? _costGap;
+
+    /// <summary>Sin sesiones sin coste, la línea no está. No hay nada que reconciliar.</summary>
+    public bool HasCostGap => CostGap is { Sessions: > 0 };
+
+    /// <summary>«3 sesiones sin coste», la misma frase que la insignia de la tarjeta.</summary>
+    public string CostGapLabel => CostGap?.Badge ?? string.Empty;
+
+    public string CostGapTooltip => CostGap is { Sessions: > 0 } gap
+        ? $"{gap.Reason}. Reconciliar escribe en el hub lo que falta para poder calcular su coste; "
+          + "los informes ya escritos no se reescriben."
+        : string.Empty;
+
+    /// <summary>
+    /// <b>«Reconciliar costes»</b> (F29 §1). Es el ÚNICO sitio desde el que se lanza: la insignia
+    /// del Portafolio avisa y no actúa, y Tarifas solo cuenta cuántas hay. Vive aquí, en el resumen
+    /// del ciclo, porque el coste es de la sesión y la sesión es de esta aplicación.
+    /// </summary>
+    [RelayCommand]
+    private async Task ReconcileCosts()
+    {
+        if (Slug.Length == 0)
+        {
+            return;
+        }
+
+        var vm = new ReconcileCostsViewModel(_costGaps, _modelRates);
+        vm.Load(Slug, AppName, _pendingReconcile);
+        _reconcileDialog.Show(vm);
+
+        // Lo que el diálogo se comprometió a cerrar y no cerró sigue pendiente: al volver de las
+        // tarifas, reabrirlo lo vuelve a listar. Sin esto, la tarifa recién añadida cerraría el
+        // hueco por su cuenta (D-788) y esas sesiones ya no volverían a pasar por aquí, así que
+        // sus informes se quedarían sin la línea de «calculado a posteriori».
+        _pendingReconcile = _costGaps.GapOf(Slug, vm.Scope).Sessions > 0 ? vm.Scope : null;
+        Rebuild();
+
+        // El enlace de un grupo lleva a la tabla de tarifas, y no navega él: mover la pantalla de
+        // detrás con un modal encima deja al usuario mirando algo que no puede tocar.
+        if (vm.GoToRates)
+        {
+            await _navigation.NavigateToAsync<SettingsViewModel>(
+                s => s.Section = SettingsViewModel.RatesSection);
+        }
+    }
+
+    /// <summary>
+    /// Lo que un diálogo de reconciliar dejó a medias en esta página (F29 §1). Se pierde al salir
+    /// del inventario, y es correcto: es el hilo de una gestión, no un dato del hub.
+    /// </summary>
+    private IReadOnlyList<Domain.Ids.Ulid>? _pendingReconcile;
 
     public string ThresholdsTooltip
         => $"A partir de {LargeUnitLoc} líneas una unidad sale «Grande» y no entra en la cola de "

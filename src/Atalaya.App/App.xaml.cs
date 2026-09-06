@@ -88,6 +88,10 @@ public partial class App : Application
         // por defecto nuevo no las alcanza. La frase que devuelve se enseña una vez, abajo.
         string? sweepNotice = settings.MigrateSweepCapDefault();
         ThemeService.Apply(settings.Current.Theme);
+        // F29 §2 — la divisa, antes de que nada escriba un coste. Va aquí y no dentro de la primera
+        // vista que la necesite por lo mismo que el tema: la leen el pie, las tarjetas, Métricas y
+        // la lista de informes, y la primera que se pintara antes la enseñaría en la otra unidad.
+        CostFormat.Currency = CostCurrencies.Parse(settings.Current.CostCurrency);
 
         MainViewModel main = _host.Services.GetRequiredService<MainViewModel>();
 
@@ -352,7 +356,14 @@ public partial class App : Application
         // F15 — las tarifas por modelo: configuración de la ORGANIZACIÓN, en el hub, y editable
         // desde Métricas, que es donde se ve su consecuencia (mismo argumento que D-770).
         services.AddSingleton<ModelRatesService>();
+        // F29 §1 — las sesiones sin coste y cómo se cierran. Lo consultan el Portafolio (la
+        // insignia), el Inventario (la línea y el diálogo) y Ajustes (la línea neutra), y todos
+        // tienen que contar lo mismo: una sola cuenta, un solo servicio.
+        services.AddSingleton<CostReconciliationService>();
         services.AddSingleton<IThresholdsDialog, ThresholdsDialogHost>();
+        // F29 §1: reconciliar los costes de una aplicación. Diálogo, y se inyecta como los demás
+        // para que el inventario se pueda probar sin abrir una ventana.
+        services.AddSingleton<IReconcileCostsDialog, ReconcileCostsDialogHost>();
         // F17 §4: configurar el ciclo —su lupa y su juez preferido— y quién lo pregunta. El
         // servicio escribe en el hub (política compartida, D-769); el flujo monta el diálogo con
         // la lista de modelos del proveedor de quien configura, y se inyecta como los demás.

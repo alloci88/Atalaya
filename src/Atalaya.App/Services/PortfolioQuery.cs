@@ -70,6 +70,28 @@ public sealed record AppCard(
     /// <summary>Arregladas desde Atalaya y sin verificar (F9 §2). Va SEPARADO: es otra acción.</summary>
     public int? FixedPendingVerify { get; init; }
 
+    /// <summary>
+    /// <b>Cuántas sesiones de esta aplicación se quedaron sin coste, y por qué</b> (F29 §1). No sale
+    /// de la consulta —hace falta la tabla de tarifas del hub y las reconciliaciones ya escritas, y
+    /// esta consulta solo mira lo primario de la app—: lo pone el view-model, igual que
+    /// <see cref="Link"/> y que la deriva. Null mientras no se ha preguntado.
+    /// </summary>
+    public AppCostGap? CostGap { get; init; }
+
+    /// <summary>
+    /// La insignia solo aparece cuando hay algo que reconciliar. Sin sesiones sin coste no hay
+    /// insignia: un ámbar permanente en cada tarjeta se aprende a no ver.
+    /// </summary>
+    public bool HasCostGap => CostGap is { Sessions: > 0 };
+
+    /// <summary>«3 sesiones sin coste», junto a la línea de última sesión.</summary>
+    public string CostGapLabel => CostGap?.Badge ?? string.Empty;
+
+    /// <summary>El motivo resumido, y desde dónde se cierra.</summary>
+    public string CostGapTooltip => CostGap is { Sessions: > 0 } gap
+        ? $"{gap.Reason}. Se reconcilian desde el resumen del ciclo, en el inventario de esta aplicación."
+        : string.Empty;
+
     /// <summary>La lupa del ciclo vigente (F17): un distintivo en la tarjeta, con su color.</summary>
     public AuditTheme Theme { get; init; } = AuditTheme.General;
 

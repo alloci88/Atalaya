@@ -48,7 +48,22 @@ internal static class TestFactory
             governance, new NoPatternSilencesDialog(),
             directives, new NoDirectivesDialog(),
             new DriftQuery(hub), new NoDeletedUnitsDialog(),
-            new ThresholdPolicyService(hub), new NoThresholdsDialog());
+            new ThresholdPolicyService(hub), new NoThresholdsDialog(),
+            CostGaps(hub), new ModelRatesService(hub), new NoReconcileCostsDialog());
+    }
+
+    /// <summary>Las sesiones sin coste de cada aplicación (F29 §1), montadas sobre este hub.</summary>
+    public static CostReconciliationService CostGaps(HubContext hub)
+        => new(hub, new ModelRatesService(hub));
+
+    /// <summary>
+    /// El diálogo de reconciliar que no abre nada: el inventario lo ofrece y en un test no hay
+    /// ventana. Devuelve el mismo view-model, igual que el real.
+    /// </summary>
+    public sealed class NoReconcileCostsDialog : Views.IReconcileCostsDialog
+    {
+        public ViewModels.ReconcileCostsViewModel Show(ViewModels.ReconcileCostsViewModel viewModel)
+            => viewModel;
     }
 
     /// <summary>El confirmador que dice que sí: los tests que no ejercitan el diálogo no lo montan.</summary>
@@ -196,7 +211,8 @@ internal static class TestFactory
             Links(hub, paths),
             LinkFlow(hub, paths),
             new DriftQuery(hub),
-            new ActiveApp());
+            new ActiveApp(),
+            CostGaps(hub));
     }
 
     /// <summary>Un confirmador que siempre dice que no: los tests que lo reciben no borran nada.</summary>

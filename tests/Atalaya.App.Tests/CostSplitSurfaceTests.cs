@@ -111,7 +111,7 @@ public sealed class CostSplitSurfaceTests
     {
         CostResult cost = CreditCalculator.Calculate(Session(), Opus());
 
-        IReadOnlyList<FooterSegment> segments = CreditText.UsageSegments(
+        IReadOnlyList<FooterSegment> segments = CostFormat.UsageSegments(
             9, 246_541, 18_139, 119_583, 126_904, cost, RealCopilotAgent.Id);
 
         // F23 §6 — el pie en vivo se rige por el criterio del cuerpo: el reparto es diagnóstico y
@@ -127,7 +127,7 @@ public sealed class CostSplitSurfaceTests
     /// <summary>Sin coste no hay trozo de reparto en el pie: no se pinta un cero.</summary>
     [Fact]
     public void Sin_coste_el_pie_no_reparte()
-        => CreditText.UsageSegments(
+        => CostFormat.UsageSegments(
                 9, 1000, 100, 0, 0,
                 CostResult.Unavailable(CostUnavailable.NotBilled), ClaudeCodeProvider.Id)
             .Should().NotContain(s => s.Full.Contains("escritura de caché", StringComparison.Ordinal));

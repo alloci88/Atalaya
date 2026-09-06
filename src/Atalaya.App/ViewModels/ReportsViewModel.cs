@@ -78,15 +78,22 @@ public sealed class ReportRow
     public bool HasDelta => Entry.New is { } n && Entry.Resolved is { } r && (n > 0 || r > 0);
 
     public string Cost => Entry.Cost is { } c
-        ? $"{Atalaya.App.Services.CreditText.Number(c)} {Entry.CostUnit}"
+        ? Atalaya.App.Services.CostFormat.Marked(
+            $"{Atalaya.App.Services.CostFormat.Number(c)} {Entry.CostUnit}", Entry.CostIsEstimate)
         : Entry.Billed
             ? ReportsViewModel.Unknown
-            : Atalaya.App.Services.CreditText.SubscriptionCostShort;
+            : Atalaya.App.Services.CostFormat.SubscriptionCostShort;
 
-    /// <summary>La frase entera detrás de la celda de coste, para el tooltip.</summary>
-    public string CostDetail => Entry.Billed
-        ? Atalaya.App.Services.CreditText.Caveat
-        : Atalaya.App.Services.CreditText.SubscriptionCost;
+    /// <summary>
+    /// La frase entera detrás de la celda de coste, para el tooltip. Con un coste estimado
+    /// (F29 §1) dice con qué tarifa, quién la asignó y cuándo: un asterisco sin explicación al lado
+    /// es un asterisco que nadie entiende.
+    /// </summary>
+    public string CostDetail => Entry.CostIsEstimate
+        ? Atalaya.App.Services.CostFormat.EstimateTooltip(Entry.Reconciled)
+        : Entry.Billed
+            ? Atalaya.App.Services.CostFormat.Caveat
+            : Atalaya.App.Services.CostFormat.SubscriptionCost;
 
     public string Title => Entry.Title;
 }
@@ -280,6 +287,14 @@ public sealed partial class ReportsViewModel : ViewModelBase
     /// El enlace a los hallazgos solo aparece en informes de SESIÓN: un consolidado de cierre o un
     /// reset no habla de una tanda concreta de hallazgos.
     /// </summary>
+    /// <summary>
+    /// «Coste calculado a posteriori el 06/09/2026» (F29 §1). Vacía cuando el informe se escribió
+    /// con su coste ya calculado, que es lo normal.
+    /// </summary>
+    [ObservableProperty] private string _calculatedLaterLine = string.Empty;
+
+    [ObservableProperty] private bool _hasCalculatedLater;
+
     [ObservableProperty] private bool _canOpenFindings;
 
     /// <summary>
@@ -495,6 +510,12 @@ public sealed partial class ReportsViewModel : ViewModelBase
         ViewerTitle = row.Title;
         ViewerSubtitle = string.Join(" · ", new[] { row.When, row.AppName, row.By }
             .Where(s => !string.IsNullOrWhiteSpace(s) && s != Unknown));
+        // F29 §1 — el informe NO se reescribe (F23: el informe es lo que se vio ese día), pero se
+        // dice cuándo se cerró su hueco de coste. Al pie de la cabecera, que es donde acaba lo que
+        // identifica al documento y empieza el documento.
+        CalculatedLaterLine = row.Entry.CalculatedLaterLine;
+        HasCalculatedLater = row.Entry.CostCalculatedLater;
+
         CanOpenFindings = row.Entry.Kind == ReportKind.Sesion;
         CanOpenFinding = row.Entry.HasFinding;
         OpenFindingLabel = string.IsNullOrWhiteSpace(row.Entry.FindingAlias)

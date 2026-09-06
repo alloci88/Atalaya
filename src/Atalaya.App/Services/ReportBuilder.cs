@@ -113,9 +113,12 @@ public static class ReportBuilder
     /// </summary>
     private static void AppendCostSplit(StringBuilder sb, CostResult cost)
     {
-        string line = CreditText.CostSplitLine(cost);
+        string line = CostFormat.CostSplitLine(cost);
         if (line.Length > 0)
         {
+            // F29 §2 — el anexo registra como la cabecera: el total en las dos unidades, y el
+            // reparto en credits, que es la unidad en la que se comparan los conceptos entre sí.
+            sb.AppendLine($"- **Coste**: {CostFormat.Both(cost.Credits)}");
             sb.AppendLine($"- **Reparto del coste**: {line}");
         }
     }
@@ -439,7 +442,9 @@ public static class ReportBuilder
     /// </summary>
     private static string CostHeadline(AuditSession session, CostResult cost)
     {
-        var parts = new List<string> { CreditText.OfSession(cost, session.Provider) };
+        // F29 §2 — las DOS cifras: «185,3 AI credits (1,85 $)». Un informe registra, y lo que se
+        // registra no puede depender de una preferencia de la máquina que lo generó.
+        var parts = new List<string> { CostFormat.OfSessionForReport(cost, session.Provider) };
 
         int units = session.Units.Count;
         if (cost.Credits is { } credits && units > 0)
@@ -904,7 +909,7 @@ public static class ReportBuilder
         sb.AppendLine(UsageLine(session));
 
         CostResult cost = CreditCalculator.Calculate(session, rates);
-        sb.AppendLine($"- **Coste**: {CreditText.OfSession(cost, session.Provider)}");
+        sb.AppendLine($"- **Coste**: {CostFormat.OfSessionForReport(cost, session.Provider)}");
         AppendDeclaredCost(sb, session);
         sb.AppendLine();
 
@@ -1015,7 +1020,7 @@ public static class ReportBuilder
         sb.AppendLine(UsageLine(session));
 
         CostResult fixCost = CreditCalculator.Calculate(session, rates);
-        sb.AppendLine($"- **Coste**: {CreditText.OfSession(fixCost, session.Provider)}");
+        sb.AppendLine($"- **Coste**: {CostFormat.OfSessionForReport(fixCost, session.Provider)}");
         AppendDeclaredCost(sb, session);
         if (session.Interrupted)
         {

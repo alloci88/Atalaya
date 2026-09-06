@@ -91,6 +91,16 @@ public sealed record CostResult(
     /// <summary>Se ha podido calcular.</summary>
     public bool HasValue => Credits is not null;
 
+    /// <summary>
+    /// <b>El número es una estimación, no una medida</b> (F29 §1). Solo lo es cuando nadie supo con
+    /// qué modelo corrió la sesión y una persona eligió con qué tarifa valorarla; se enseña con un
+    /// asterisco y su explicación allá donde se enseñe el coste, y <b>la marca no se quita nunca</b>:
+    /// asignar una tarifa no convierte en medido lo que no se midió.
+    /// </summary>
+    public CostReconciliation? EstimatedWith { get; init; }
+
+    public bool IsEstimate => EstimatedWith is not null;
+
     /// <summary>Los dólares detrás de los credits. 1 credit = 0,01 $.</summary>
     public decimal? Usd => Credits / 100m;
 
@@ -266,9 +276,21 @@ public static class CreditCalculator
                 fresh / UsdPerCredit));
     }
 
-    /// <summary>El coste de una sesión entera, con el modelo y el proveedor que ella misma registró.</summary>
-    public static CostResult Calculate(AuditSession session, ModelRateTable? rates)
-        => Calculate(
+    /// <summary>
+    /// El coste de una sesión entera, con el modelo y el proveedor que ella misma registró — y, si
+    /// su hueco se reconcilió alguna vez, por el camino que aquella reconciliación dejó escrito
+    /// (F29 §1).
+    /// <para>
+    /// <b>El orden importa y es éste</b>: primero la fórmula de siempre. Una sesión cuyo modelo
+    /// tiene tarifa se valora con ella y la reconciliación no pinta nada — ni siquiera si alguien
+    /// le asignó otra en su día. La reconciliación solo contesta donde la fórmula dice «no puedo»,
+    /// que es justamente para lo que existe.
+    /// </para>
+    /// </summary>
+    public static CostResult Calculate(
+        AuditSession session, ModelRateTable? rates, CostReconciliation? reconciled = null)
+    {
+        CostResult direct = Calculate(
             session.Model,
             session.Provider,
             session.Usage.InputTokens,
@@ -276,6 +298,101 @@ public static class CreditCalculator
             session.Usage.CacheReadTokens,
             session.Usage.CacheWriteTokens,
             rates);
+
+        if (direct.HasValue
+            || reconciled is null
+            || direct.Why is not (CostUnavailable.RateMissing or CostUnavailable.ModelUnknown))
+        {
+            return direct;
+        }
+
+        return reconciled.How switch
+        {
+            CostResolution.PorLlamada => ByCall(session, rates, direct),
+            CostResolution.TarifaAsignada => Assigned(session, rates, reconciled, direct),
+
+            // La tarifa se añadió a la tabla y luego alguien la quitó: se vuelve a lo que hay, que
+            // es «tarifa no configurada». Una reconciliación no puede fabricar un precio.
+            _ => direct,
+        };
+    }
+
+    /// <summary>
+    /// <b>El coste llamada a llamada</b> (F29 §0). Copilot enruta por llamada cuando se le deja
+    /// elegir, y cada respuesta trae el modelo que de verdad contestó: sumando el coste de cada una
+    /// con SU tarifa sale un coste medido, sin aproximar nada. Es la misma fórmula de arriba
+    /// aplicada N veces, no una segunda aritmética.
+    /// <para>
+    /// Si una sola llamada no se puede valorar, no hay coste: media sesión valorada se leería como
+    /// la sesión entera, que es la mentira que D-787 fue a impedir.
+    /// </para>
+    /// </summary>
+    private static CostResult ByCall(AuditSession session, ModelRateTable? rates, CostResult direct)
+    {
+        IReadOnlyList<CallSample> calls = CostReconciler.CallsOf(session);
+        if (!CostReconciler.CanCostByCall(session, rates))
+        {
+            return direct;
+        }
+
+        decimal credits = 0m;
+        decimal write = 0m, output = 0m, cached = 0m, fresh = 0m;
+        long billable = 0;
+        foreach (CallSample call in calls)
+        {
+            CostResult one = Calculate(
+                call.Model, session.Provider,
+                call.InputTokens, call.OutputTokens, call.CacheReadTokens, call.CacheWriteTokens,
+                rates);
+
+            // Una llamada sin tokens no cuesta: se salta, no invalida la sesión.
+            if (!one.HasValue)
+            {
+                continue;
+            }
+
+            credits += one.Credits ?? 0m;
+            billable += one.BillableInputTokens;
+            if (one.Split is { } s)
+            {
+                write += s.CacheWrite;
+                output += s.Output;
+                cached += s.Cached;
+                fresh += s.Fresh;
+            }
+        }
+
+        return new CostResult(
+            credits,
+            CostUnavailable.None,
+            billable,
+            session.Usage.CacheReadTokens,
+            session.Usage.CacheWriteTokens,
+            session.Usage.OutputTokens,
+            session.Model,
+            new CostSplit(write, output, cached, fresh));
+    }
+
+    /// <summary>
+    /// <b>El coste con la tarifa que alguien eligió</b> (F29 §1): la fórmula de siempre sobre los
+    /// tokens de la sesión, con el modelo asignado. Sale marcado como estimación y así viaja.
+    /// </summary>
+    private static CostResult Assigned(
+        AuditSession session, ModelRateTable? rates, CostReconciliation reconciled, CostResult direct)
+    {
+        CostResult estimated = Calculate(
+            reconciled.AssignedModel,
+            session.Provider,
+            session.Usage.InputTokens,
+            session.Usage.OutputTokens,
+            session.Usage.CacheReadTokens,
+            session.Usage.CacheWriteTokens,
+            rates);
+
+        return estimated.HasValue
+            ? estimated with { Model = session.Model, EstimatedWith = reconciled }
+            : direct;
+    }
 
     private static decimal PerMillion(long tokens, decimal pricePerMillion)
         => tokens <= 0 ? 0m : tokens / 1_000_000m * pricePerMillion;

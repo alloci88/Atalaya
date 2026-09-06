@@ -88,8 +88,25 @@ public sealed record ReportEntry(
     bool HasSession,
     string? FindingId = null,
     string? FindingAlias = null,
-    bool Billed = true)
+    bool Billed = true,
+    CostReconciliation? Reconciled = null)
 {
+    /// <summary>
+    /// <b>El coste de esta sesión se calculó DESPUÉS de escribirse el informe</b> (F29 §1). La
+    /// lista lo enseña calculado —es un derivado, y se recalcula en cada lectura—, pero el informe
+    /// que se abre es el que se escribió aquel día y no se reescribe (F23). La línea al pie de su
+    /// cabecera dice cuándo se cerró el hueco.
+    /// </summary>
+    public bool CostCalculatedLater => Reconciled is not null;
+
+    /// <summary>«Coste calculado a posteriori el 06/09/2026».</summary>
+    public string CalculatedLaterLine => Reconciled is null
+        ? string.Empty
+        : $"Coste calculado a posteriori el {Reconciled.On.ToString("dd/MM/yyyy", AppCulture.Display)}";
+
+    /// <summary>El coste es una valoración y no una medida: lleva su asterisco (F29 §1).</summary>
+    public bool CostIsEstimate => Reconciled is { IsEstimate: true };
+
     /// <summary>
     /// Este informe es de un arreglo asistido y se sabe de qué hallazgo (H9.1 §1). Es lo que
     /// enciende el enlace de vuelta a la ficha: los informes de arreglo anteriores a H9.1 no lo
@@ -155,6 +172,28 @@ public sealed class ReportsQuery
             return null;
         }
     }
+
+    /// <summary>
+    /// Las reconciliaciones de una aplicación (F29 §1). Sin ellas, una sesión ya reconciliada
+    /// seguiría saliendo sin coste en la lista — y el informe, sin su línea de «a posteriori».
+    /// </summary>
+    private Dictionary<Domain.Ids.Ulid, CostReconciliation> Reconciliations(string slug)
+    {
+        var map = new Dictionary<Domain.Ids.Ulid, CostReconciliation>();
+        try
+        {
+            foreach (CostReconciliation r in _hub.Store.ListCostReconciliations(slug))
+            {
+                map[r.SessionId] = r;
+            }
+        }
+        catch (Exception)
+        {
+            // Un fichero ilegible no puede vaciar la lista de informes.
+        }
+
+        return map;
+    }
     private readonly object _gate = new();
     private IReadOnlyList<ReportEntry>? _cache;
     private readonly Dictionary<string, string> _contents = new(StringComparer.OrdinalIgnoreCase);
@@ -201,9 +240,10 @@ public sealed class ReportsQuery
                 .GroupBy(s => s.Id.ToString(), StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
+            var reconciled = Reconciliations(slug);
             foreach (string reportId in _hub.Store.ListReports(slug))
             {
-                entries.Add(Describe(slug, appName, reportId, sessions));
+                entries.Add(Describe(slug, appName, reportId, sessions, reconciled));
             }
         }
 
@@ -352,13 +392,17 @@ public sealed class ReportsQuery
     // ---------- De fichero a fila ----------
 
     private ReportEntry Describe(
-        string slug, string appName, string reportId, IReadOnlyDictionary<string, AuditSession> sessions)
+        string slug, string appName, string reportId,
+        IReadOnlyDictionary<string, AuditSession> sessions,
+        IReadOnlyDictionary<Domain.Ids.Ulid, CostReconciliation>? reconciliations = null)
     {
         string path = _hub.HubPaths.ReportFile(slug, reportId);
 
         if (sessions.TryGetValue(reportId, out AuditSession? session))
         {
             SessionCounters c = session.Counters;
+            CostReconciliation? reconciled = null;
+            reconciliations?.TryGetValue(session.Id, out reconciled);
             return new ReportEntry(
                 slug,
                 appName,
@@ -375,14 +419,17 @@ public sealed class ReportsQuery
                 c.Resolved,
                 // F15 — derivado de los tokens con la tarifa del modelo de la sesión, igual que en
                 // Métricas y en el informe. Una sola aritmética para el mismo número.
-                CreditCalculator.Calculate(session, Rates()).Credits,
-                CreditText.BillingUnit,
+                // F29 §1 — y con su reconciliación, si la hubo: en la LISTA el coste sale
+                // calculado, aunque el informe que se abre siga siendo el que se escribió aquel día.
+                CreditCalculator.Calculate(session, Rates(), reconciled).Credits,
+                CostFormat.BillingUnit,
                 HasSession: true,
                 FindingId: session.FixFindingId,
                 FindingAlias: session.FixFindingAlias,
                 // F16-RETOQUE §1 — si su casa no factura, la fila no dice «—» (que es «no se
                 // sabe»): dice que va contra la suscripción, que sí se sabe.
-                Billed: CreditCalculator.IsBilled(session.Provider));
+                Billed: CreditCalculator.IsBilled(session.Provider),
+                Reconciled: reconciled);
         }
 
         // Sin sesión: lo único que se sabe es lo que el informe declara de sí mismo. Se lee la
@@ -405,7 +452,7 @@ public sealed class ReportsQuery
             null,
             null,
             null,
-            CreditText.Unit,
+            CostFormat.Unit,
             HasSession: false);
     }
 

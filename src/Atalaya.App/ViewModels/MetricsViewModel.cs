@@ -237,7 +237,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
     [ObservableProperty] private string _costTotal = Unknown;
 
-    [ObservableProperty] private string _costUnit = CreditText.Unit;
+    [ObservableProperty] private string _costUnit = CostFormat.Unit;
 
     /// <summary>
     /// LA LÍNEA SECUNDARIA del azulejo de coste: «~8,4 por unidad · 16 unidades · ≈ 2,45 $».
@@ -465,7 +465,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
         };
 
         CostUnit = d.CostUnit;
-        CostTotal = d.CostInPeriod is { } c ? CreditText.Number(c) : Unknown;
+        CostTotal = d.CostInPeriod is { } c ? CostFormat.Number(c) : Unknown;
 
         CostPartialNotice = d.CostIsPartial ? d.PartialCostNotice : string.Empty;
         CostScopeNote = d.HasUntariffed ? d.UntariffedNotice : string.Empty;
@@ -484,7 +484,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
             string detail = $"{phase.Sessions} ses. · {phase.Calls} llam.";
             CostByPhase.Add(new PhaseRow(
                 phase.Phase,
-                phase.Cost is { } coste ? $"{detail} · {CreditText.WithUnit(coste, null)}" : detail));
+                phase.Cost is { } coste ? $"{detail} · {CostFormat.WithUnit(coste, null)}" : detail));
         }
 
         HasPhases = CostByPhase.Count > 0;
@@ -856,7 +856,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
                 : $"Auditadas al cierre: {s.Audited} / {s.Auditable} auditables");
         lines.Add($"Hallazgos: +{s.NewFindings} nuevos · −{s.ResolvedFindings} resueltos");
         lines.Add(s.Cost is { } c
-            ? $"Coste: {CreditText.Number(c)} {CreditText.BillingUnit} (solo lo facturable)"
+            ? $"Coste: {CostFormat.Number(c)} {CostFormat.BillingUnit} (solo lo facturable)"
             : "Coste: — (nada facturable en este ciclo)");
         lines.Add(s.IsOpen
             ? "Pulsa para abrir el inventario."
@@ -915,12 +915,15 @@ public sealed partial class MetricsViewModel : ViewModelBase
                 row.By,
                 row.Units == 1 ? "1 unidad" : $"{row.Units} unidades",
                 findings,
-                row.Cost is { } c ? $"{CreditText.Number(c)} {row.CostUnit}"
-                    : row.Billed ? Unknown : CreditText.SubscriptionCostShort,
+                row.Cost is { } c
+                    ? CostFormat.Marked($"{CostFormat.Number(c)} {row.CostUnit}", row.CostIsEstimate)
+                    : row.Billed ? Unknown : CostFormat.SubscriptionCostShort,
                 File.Exists(ReportPathFor(row.Slug, row.SessionId)),
                 row.Tokens,
                 row.TokensDetail,
-                row.Billed ? CreditText.Caveat : CreditText.SubscriptionCost));
+                row.CostIsEstimate
+                    ? CostFormat.EstimateTooltip(row.Estimated)
+                    : row.Billed ? CostFormat.Caveat : CostFormat.SubscriptionCost));
         }
 
         HasSessions = Sessions.Count > 0;
@@ -1014,7 +1017,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
     {
         if (d.CostPerAuditedUnit is { } per)
         {
-            yield return $"~{CreditText.Number(per)} por unidad";
+            yield return $"~{CostFormat.Number(per)} por unidad";
         }
 
         if (d.UnitsAuditedInPeriod > 0)
@@ -1024,7 +1027,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
         if (d.CostInPeriod is { } total)
         {
-            yield return $"≈ {CreditText.Dollars(total)}";
+            yield return $"≈ {CostFormat.Dollars(total)}";
         }
     }
 

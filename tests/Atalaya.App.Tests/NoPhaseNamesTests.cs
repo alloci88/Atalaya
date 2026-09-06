@@ -46,7 +46,7 @@ public sealed class NoPhaseNamesTests
     [Fact]
     public void El_pie_en_vivo_tampoco()
     {
-        string footer = string.Join(" · ", CreditText.UsageSegments(
+        string footer = string.Join(" · ", CostFormat.UsageSegments(
                 9, 246_541, 18_139, 119_583, 126_904,
                 new CostResult(185.3m), RealCopilotAgent.Id)
             .Select(s => s.Full));

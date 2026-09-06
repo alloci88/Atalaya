@@ -130,7 +130,7 @@ public sealed partial class LiveSessionService : ObservableObject
     [ObservableProperty] private long _cacheReadTokens;
     [ObservableProperty] private long _cacheWriteTokens;
     [ObservableProperty] private decimal? _cost;
-    [ObservableProperty] private string _costUnit = CreditText.Unit;
+    [ObservableProperty] private string _costUnit = CostFormat.Unit;
 
     /// <summary>
     /// El coste con su procedencia: el número, o el motivo por el que no lo hay (F16 §B). Es lo
@@ -808,7 +808,7 @@ public sealed partial class LiveSessionService : ObservableObject
         Provider = u.Provider;
         Calls = u.Calls;
         Turns = u.Turns;
-        CostUnit = CreditText.BillingUnit;
+        CostUnit = CostFormat.BillingUnit;
         Budget = u.Budget;
         OnPropertyChanged(nameof(CostPerUnit));
     });

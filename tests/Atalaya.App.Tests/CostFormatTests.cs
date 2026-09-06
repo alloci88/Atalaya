@@ -29,14 +29,14 @@ namespace Atalaya.App.Tests;
 /// que arreglar.
 /// </para>
 /// </summary>
-public sealed class CostTextTests : IDisposable
+public sealed class CostFormatTests : IDisposable
 {
     private readonly string _root;
     private readonly AppPaths _paths;
     private readonly SettingsService _settings;
     private readonly HubContext _hub;
 
-    public CostTextTests()
+    public CostFormatTests()
     {
         _root = Path.Combine(Path.GetTempPath(), "atalaya-coste", Guid.NewGuid().ToString("N"));
         _paths = new AppPaths(Path.Combine(_root, "local"));
@@ -71,7 +71,7 @@ public sealed class CostTextTests : IDisposable
         var cost = CreditCalculator.Calculate(session, TestRates.Table());
         cost.Why.Should().Be(CostUnavailable.NotBilled);
 
-        string footer = CreditText.OfSession(cost, session.Provider);
+        string footer = CostFormat.OfSession(cost, session.Provider);
         string report = ReportBuilder.BuildSessionReport(
             App(), session, Array.Empty<Finding>(), 0, 0, "Org", TestRates.Table());
 
@@ -100,8 +100,8 @@ public sealed class CostTextTests : IDisposable
             cost.Why.Should().Be(CostUnavailable.NotBilled);
             cost.Credits.Should().BeNull("un número aquí sería un cobro que nadie hace");
 
-            string text = CreditText.OfSession(cost, ClaudeCodeProvider.Id);
-            text.Should().Be(CreditText.SubscriptionCost);
+            string text = CostFormat.OfSession(cost, ClaudeCodeProvider.Id);
+            text.Should().Be(CostFormat.SubscriptionCost);
             text.Should().NotContain("tarifa").And.NotContain("credits").And.NotContain("no calculable");
         }
     }
@@ -114,7 +114,7 @@ public sealed class CostTextTests : IDisposable
     [Fact]
     public void Sin_coste_el_pie_ensena_llamadas_y_tokens()
     {
-        string footer = CreditText.SessionFooter(
+        string footer = CostFormat.SessionFooter(
             14, 2786, 10975, 201371, 22525,
             CostResult.Unavailable(CostUnavailable.NotBilled), ClaudeCodeProvider.Id);
 
@@ -122,7 +122,7 @@ public sealed class CostTextTests : IDisposable
         footer.Should().Contain("2.786 entrada").And.Contain("10.975 salida");
         footer.Should().Contain("201.371 leída").And.Contain("22.525 escrita");
         // F17-RETOQUE: el orden es llamadas → coste → tokens, en las dos casas.
-        footer.Should().Contain($"coste: {CreditText.SubscriptionCost}");
+        footer.Should().Contain($"coste: {CostFormat.SubscriptionCost}");
         footer.IndexOf("coste:", StringComparison.Ordinal).Should()
             .BeLessThan(footer.IndexOf("2.786 entrada", StringComparison.Ordinal));
         footer.Should().NotContain("credits");
@@ -134,7 +134,7 @@ public sealed class CostTextTests : IDisposable
     /// </summary>
     [Fact]
     public void Con_factura_el_pie_sigue_diciendo_credits()
-        => CreditText.SessionFooter(3, 1000, 200, 0, 0, new CostResult(68.2m), RealCopilotAgent.Id)
+        => CostFormat.SessionFooter(3, 1000, 200, 0, 0, new CostResult(68.2m), RealCopilotAgent.Id)
             .Should().Be("3 llamadas · 68,2 AI credits · 1.000 entrada · 200 salida");
 
     /// <summary>
@@ -149,7 +149,7 @@ public sealed class CostTextTests : IDisposable
     {
         // Solo se prueba con la casa que factura: a la otra no le llega nunca uno de estos tres
         // motivos —los para IsBilled antes—, y fingir que sí probaría un camino que no existe.
-        CreditText.OfSession(CostResult.Unavailable(why), RealCopilotAgent.Id)
+        CostFormat.OfSession(CostResult.Unavailable(why), RealCopilotAgent.Id)
             .Should().NotContain("SDK")
             .And.StartWith("coste no calculable (");
     }
@@ -164,10 +164,10 @@ public sealed class CostTextTests : IDisposable
     {
         var cost = new CostResult(68.2m);
 
-        CreditText.OfSession(cost, RealCopilotAgent.Id).Should().Be("68,2 AI credits");
+        CostFormat.OfSession(cost, RealCopilotAgent.Id).Should().Be("68,2 AI credits");
 
         // Y una sesión anterior a F14, sin proveedor escrito, es Copilot: no había otro.
-        CreditText.OfSession(cost, null).Should().Be("68,2 AI credits");
+        CostFormat.OfSession(cost, null).Should().Be("68,2 AI credits");
     }
 
     /// <summary>
@@ -192,7 +192,7 @@ public sealed class CostTextTests : IDisposable
 
         var view = new SessionViewModel(live);
 
-        view.CostText.Should().Be(CreditText.SessionFooter(
+        view.CostText.Should().Be(CostFormat.SessionFooter(
             live.Calls, live.InputTokens, live.OutputTokens,
             live.CacheReadTokens, live.CacheWriteTokens, live.CostResult, live.Provider));
         view.CostText.Should().NotContain("SDK").And.NotContain("tarifa");

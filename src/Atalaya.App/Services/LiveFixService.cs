@@ -171,7 +171,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
     [ObservableProperty] private string _providerName = string.Empty;
 
     [ObservableProperty] private decimal? _cost;
-    [ObservableProperty] private string _costUnit = CreditText.Unit;
+    [ObservableProperty] private string _costUnit = CostFormat.Unit;
 
     /// <summary>
     /// Lo que el PROVEEDOR declara que ha costado, en su unidad, tal cual lo dice (F16-RETOQUE §1).
@@ -1214,7 +1214,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         CostResult = CreditCalculator.Calculate(
             Model, Provider, InputTokens, OutputTokens, CacheReadTokens, CacheWriteTokens, ModelRates());
         Cost = CostResult.Credits;
-        CostUnit = CreditText.BillingUnit;
+        CostUnit = CostFormat.BillingUnit;
 
         // Y lo que el proveedor DECLARA, aparte y sin mezclarse con lo anterior: es un dato suyo,
         // no una cuenta nuestra, y solo vale para dejarlo escrito en el informe.

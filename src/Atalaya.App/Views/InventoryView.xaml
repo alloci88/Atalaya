@@ -223,6 +223,41 @@
                                 ToolTip="Fijar a partir de cuántas líneas —o de cuántos caracteres— una unidad es demasiado grande para auditarla de una vez. Es política de la aplicación: vale para todo el equipo y aplica en el próximo re-escaneo." />
                     </Grid>
 
+                    <!-- · Bloque 4 · COSTE — lo que las sesiones de esta aplicación no han podido
+                         valorar (F29 §1). Va con la aplicación y no en Ajustes → Tarifas: el coste
+                         es de la sesión, la sesión es de esta aplicación, y quien mira el Portafolio
+                         —que es quien decide— no pasa por Ajustes.
+
+                         La misma frase que la insignia de la tarjeta, con la acción al lado y con
+                         la forma de las tres de arriba: dato a la izquierda, enlace a la derecha,
+                         como «Gestionar». Y solo cuando hay algo que reconciliar. · -->
+                    <StackPanel Visibility="{Binding HasCostGap, Converter={StaticResource BoolToVisibility}}">
+                        <Border Style="{StaticResource PanelDivider}" />
+                        <Grid Margin="{StaticResource Pad.XXS.Top}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal"
+                                        c:Stack.Gap="{StaticResource Space.XXS}"
+                                        VerticalAlignment="Center"
+                                        ToolTip="{Binding CostGapTooltip}">
+                                <Path Style="{StaticResource Icon.Meta}"
+                                      Data="{x:Static c:Icons.Warning}"
+                                      Stroke="{DynamicResource Brush.Warning.Ink}" />
+                                <TextBlock Text="{Binding CostGapLabel}"
+                                           Style="{StaticResource PanelLine}"
+                                           VerticalAlignment="Center"
+                                           ToolTip="{Binding CostGapTooltip}"
+                                           Foreground="{DynamicResource Brush.Warning.Ink}" />
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="Reconciliar costes" Style="{StaticResource Button.Link}"
+                                    VerticalAlignment="Center"
+                                    Command="{Binding ReconcileCostsCommand}"
+                                    ToolTip="Ver qué sesiones se quedaron sin coste y por qué, y cerrar las que se puedan. Escribe en el hub lo que falta para calcularlo, con tu nombre en el commit; los informes ya escritos no se reescriben." />
+                        </Grid>
+                    </StackPanel>
+
                     <!-- F5.7 §4: el resultado de la última acción va por el toast global, no
                          incrustado al fondo de este panel, donde se quedaba pegado. -->
                 </StackPanel>

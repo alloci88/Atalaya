@@ -126,8 +126,17 @@ public sealed class SettingsRatesSurfaceTests
         xaml.Should().Contain("{Binding ShowRates, Converter={StaticResource BoolToVisibility}}",
             "la sección de tarifas se enseña dentro de la página, no en un diálogo");
         xaml.Should().Contain("{Binding Rates.Rows}", "con su tabla de verdad");
-        xaml.Should().Contain("{Binding Rates.MissingModels}",
-            "y con los modelos usados sin tarifa, que es lo que la hace accionable");
+        // F29 §1 — aquí estaba «{Binding Rates.MissingModels}», la lista ámbar de modelos usados
+        // sin tarifa. Se retira: desde Ajustes no se puede reconciliar nada, y un aviso sobre el que
+        // no se puede actuar se aprende a ignorar. Queda una línea neutra con el recuento y el
+        // camino; el aviso y la acción viven con la aplicación (insignia del Portafolio y
+        // «Reconciliar costes» en el resumen de su ciclo).
+        xaml.Should().Contain("{Binding Rates.MissingLine, Mode=OneWay}",
+            "el recuento se queda, en una línea neutra");
+        xaml.Should().Contain("se reconcilian desde el inventario de cada aplicación",
+            "y dice dónde se cierran");
+        xaml.Should().NotContain("Notice.Warning}\"\n                                Margin=\"{StaticResource Pad.M.Bottom}\"",
+            "y ya no es un bloque ámbar");
         xaml.Should().Contain("Tarifas de GitHub Copilot",
             "la tabla es la de Copilot y se titula por lo que es");
         xaml.Should().Contain("la tabla pública de GitHub Copilot",

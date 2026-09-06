@@ -380,6 +380,17 @@
                 <ScrollViewer Style="{StaticResource Scroll}">
                 <StackPanel>
 
+                    <!-- F29 §1 — EL INFORME NO SE REESCRIBE (F23: el informe es lo que se vio ese
+                         día), así que lo que se calculó después se dice AQUÍ, al pie de la cabecera
+                         y delante del documento, y no dentro de su texto. Solo aparece cuando hubo
+                         reconciliación. -->
+                    <TextBlock Text="{Binding CalculatedLaterLine}"
+                               Style="{StaticResource Text.Meta}"
+                               Margin="{StaticResource Pad.XS.Bottom}"
+                               TextWrapping="Wrap"
+                               ToolTip="El coste de esta sesión no se pudo calcular el día en que se escribió el informe. Se cerró después, y la lista de Informes ya lo enseña calculado."
+                               Visibility="{Binding HasCalculatedLater, Converter={StaticResource BoolToVisibility}}" />
+
                     <FlowDocumentScrollViewer
                         Document="{Binding Document}"
                         VerticalScrollBarVisibility="Disabled"

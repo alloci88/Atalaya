@@ -132,11 +132,11 @@ public sealed class PromptBudgetSurfaceTests
     {
         PromptBudget budget = PromptBudget.From(Session(withComposition: true));
 
-        string footer = CreditText.SessionFooter(
+        string footer = CostFormat.SessionFooter(
             20, 570_000, 24_000, 450_000, 100_000, new CostResult(193.3m), RealCopilotAgent.Id);
         footer.Should().NotContain("código");
 
-        IReadOnlyList<FooterSegment> segments = CreditText.UsageSegments(
+        IReadOnlyList<FooterSegment> segments = CostFormat.UsageSegments(
             20, 570_000, 24_000, 450_000, 100_000, new CostResult(193.3m), RealCopilotAgent.Id, budget);
 
         // F23 §6 — la composición es diagnóstico y pasa al TOOLTIP, entera. Ya no hace falta una
@@ -152,11 +152,11 @@ public sealed class PromptBudgetSurfaceTests
     {
         PromptBudget budget = PromptBudget.From(Session(withComposition: false));
 
-        CreditText.UsageSegments(
+        CostFormat.UsageSegments(
                 20, 570_000, 24_000, 450_000, 100_000, new CostResult(193.3m), RealCopilotAgent.Id, budget)
             .Should().NotContain(s => s.Full.Contains("código", StringComparison.Ordinal));
 
-        CreditText.BudgetShort(null).Should().BeEmpty();
+        CostFormat.BudgetShort(null).Should().BeEmpty();
     }
 
     /// <summary>

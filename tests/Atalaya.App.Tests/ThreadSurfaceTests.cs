@@ -135,7 +135,7 @@ public sealed class ThreadSurfaceTests
     [Fact]
     public void El_tooltip_del_pie_desglosa_la_cache_por_turno()
     {
-        CreditText.Tokens(28_050, 15_670, 235_327, 51_077, turns: 17)
+        CostFormat.Tokens(28_050, 15_670, 235_327, 51_077, turns: 17)
             .Should().Be(
                 "28.050 entrada · 15.670 salida · caché 235.327 leída / 51.077 escrita · 3.004 escrita/turno");
     }
@@ -144,7 +144,7 @@ public sealed class ThreadSurfaceTests
     [Fact]
     public void Sin_turnos_el_tooltip_no_divide_nada()
     {
-        CreditText.Tokens(28_050, 15_670, 235_327, 51_077)
+        CostFormat.Tokens(28_050, 15_670, 235_327, 51_077)
             .Should().Be("28.050 entrada · 15.670 salida · caché 235.327 leída / 51.077 escrita");
     }
 
@@ -155,7 +155,7 @@ public sealed class ThreadSurfaceTests
     [Fact]
     public void El_desglose_por_turno_no_se_pinta_en_la_linea()
     {
-        IReadOnlyList<FooterSegment> segments = CreditText.UsageSegments(
+        IReadOnlyList<FooterSegment> segments = CostFormat.UsageSegments(
             20, 28_050, 15_670, 235_327, 51_077,
             CostResult.Unavailable(CostUnavailable.RateMissing), "claude-code", null, turns: 17);
 

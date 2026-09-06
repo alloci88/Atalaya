@@ -34,6 +34,13 @@ public sealed partial class PortfolioViewModel : ViewModelBase
     /// </summary>
     private readonly ActiveApp _activeApp;
 
+    /// <summary>
+    /// Las sesiones sin coste de cada aplicación (F29 §1). La insignia de la tarjeta y la línea del
+    /// resumen del ciclo salen de aquí, que es la misma cuenta: dos cuentas parecidas acaban
+    /// diciendo números distintos en la misma pantalla.
+    /// </summary>
+    private readonly CostReconciliationService _costGaps;
+
     public PortfolioViewModel(
         PortfolioQuery query,
         NavigationService navigation,
@@ -45,8 +52,10 @@ public sealed partial class PortfolioViewModel : ViewModelBase
         CloneLinkService links,
         LinkCloneFlow linkFlow,
         DriftQuery drift,
-        ActiveApp activeApp)
+        ActiveApp activeApp,
+        CostReconciliationService costGaps)
     {
+        _costGaps = costGaps;
         _activeApp = activeApp;
         _drift = drift;
         _query = query;
@@ -87,7 +96,7 @@ public sealed partial class PortfolioViewModel : ViewModelBase
             // al sincronizar y al volver la ventana al primer plano (F5.8 §1), que son los tres
             // momentos en los que la carpeta ha podido moverse a espaldas de la aplicación.
             var cards = await Task.Run(() => _query.BuildAll()
-                .Select(c => c with { Link = _links.For(c.Slug) })
+                .Select(c => c with { Link = _links.For(c.Slug), CostGap = _costGaps.GapOf(c.Slug) })
                 .ToList());
 
             Apps.Clear();

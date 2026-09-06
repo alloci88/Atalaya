@@ -405,7 +405,8 @@ public sealed class AppDeletionTests : IDisposable
             TestFactory.Links(hub, _paths),
             TestFactory.LinkFlow(hub, _paths),
             new DriftQuery(hub),
-            new ActiveApp());
+            new ActiveApp(),
+            TestFactory.CostGaps(hub));
     }
 
     /// <summary>El confirmador de los tests: responde lo que se le diga y guarda lo que le pidieron.</summary>

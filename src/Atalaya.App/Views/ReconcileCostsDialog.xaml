@@ -1,0 +1,106 @@
+<ui:FluentWindow
+    x:Class="Atalaya.App.Views.ReconcileCostsDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:c="clr-namespace:Atalaya.App.Controls"
+    Title="Reconciliar costes"
+    Width="680"
+    Height="540"
+    ShowInTaskbar="False"
+    WindowStartupLocation="CenterOwner"
+    ExtendsContentIntoTitleBar="True">
+    <!--
+        F29 §1 — RECONCILIAR ES UN DIÁLOGO, y se abre desde el resumen del ciclo de la aplicación
+        cuyas sesiones están sin coste. Es el ÚNICO sitio desde el que se lanza: la insignia del
+        Portafolio avisa y no actúa, y Ajustes → Tarifas ni siquiera avisa — allí solo queda una
+        línea neutra con el recuento.
+
+        Un grupo por MOTIVO, porque el remedio es por motivo: una tarifa que falta se añade a la
+        tabla del hub; unas sesiones que no dicen con qué modelo corrieron se valoran con la tarifa
+        que alguien elija, y eso queda marcado como estimado para siempre.
+    -->
+    <Grid Background="{DynamicResource Brush.Bg}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="Reconciliar costes" ShowMaximize="False" ShowMinimize="False" />
+
+        <ScrollViewer Grid.Row="1" Margin="{StaticResource Pad.DialogList}"
+                      VerticalScrollBarVisibility="Auto" Padding="{StaticResource Pad.XS.Right}">
+            <StackPanel>
+                <TextBlock Text="{Binding AppName}" Style="{StaticResource Text.Lead}" FontWeight="SemiBold"
+                           TextWrapping="Wrap" />
+                <TextBlock Style="{StaticResource Text.Meta}" TextWrapping="Wrap"
+                           Margin="{StaticResource Pad.XXS.Top}"
+                           Text="Estas sesiones tienen tokens pero no coste. Reconciliar no escribe un importe: escribe lo que faltaba para poder calcularlo, y se publica en el hub con tu nombre en el commit. Los informes ya escritos no se reescriben." />
+
+                <c:EmptyState Glyph="{x:Static c:Icons.Metrics}"
+                              Message="Ninguna sesión de esta aplicación se ha quedado sin coste."
+                              Margin="{StaticResource Pad.L.Top}"
+                              Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
+
+                <ItemsControl ItemsSource="{Binding Groups}" Margin="{StaticResource Pad.M.Top}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource Panel}" Margin="{StaticResource Pad.S.Bottom}">
+                                <StackPanel c:Stack.Gap="{StaticResource Space.XS}">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding Count}"
+                                                   Style="{StaticResource Text.Small}"
+                                                   Foreground="{DynamicResource Brush.TextMuted}"
+                                                   VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                                                   TextWrapping="Wrap" />
+                                    </DockPanel>
+
+                                    <TextBlock Text="{Binding State}" Style="{StaticResource Text.Small}"
+                                               TextWrapping="Wrap" />
+
+                                    <!-- La tarifa que falta se añade donde se editan las tarifas, y
+                                         no aquí: esta tabla es del hub y tiene su pantalla. -->
+                                    <Button Content="Añadir la tarifa en Ajustes → Tarifas"
+                                            Style="{StaticResource Button.Link}"
+                                            HorizontalAlignment="Left"
+                                            Command="{Binding DataContext.AddRateCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            ToolTip="Cierra este diálogo y lleva a la tabla de tarifas. Al volver y reabrirlo, el grupo saldrá como «listo para calcular»."
+                                            Visibility="{Binding NeedsRate, Converter={StaticResource BoolToVisibility}}" />
+
+                                    <!-- Y lo que nadie midió se VALORA, que no es lo mismo que
+                                         medirlo: el desplegable elige con qué tarifa, y lo que
+                                         salga lleva su marca de estimado donde se enseñe. -->
+                                    <StackPanel Orientation="Horizontal"
+                                                c:Stack.Gap="{StaticResource Space.S}"
+                                                Visibility="{Binding NeedsAssignment, Converter={StaticResource BoolToVisibility}}">
+                                        <TextBlock Text="Valorarlas con la tarifa de" VerticalAlignment="Center"
+                                                   Style="{StaticResource Text.Small}" />
+                                        <ComboBox ItemsSource="{Binding DataContext.RatedModels, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                  SelectedValue="{Binding DataContext.AssignedModel, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                  AutomationProperties.Name="Tarifa con la que valorar"
+                                                  MinWidth="{StaticResource Field.SelectWidth}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Text="{Binding Status}" Style="{StaticResource Text.Small}"
+                           TextWrapping="Wrap" Margin="{StaticResource Pad.S.Top}"
+                           Visibility="{Binding Status, Converter={StaticResource NotEmptyToVisibility}}" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"
+                    Margin="{StaticResource Pad.DialogActions}">
+            <Button Content="{Binding ReconcileLabel}" Command="{Binding ReconcileCommand}"
+                    Style="{StaticResource Button.Primary}"
+                    IsEnabled="{Binding CanReconcile}"
+                    ToolTip="{Binding DisabledReason}" />
+            <Button Content="Cerrar" Margin="{StaticResource Pad.XS.Left}" Click="OnClose" />
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>

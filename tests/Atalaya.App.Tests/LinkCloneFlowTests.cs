@@ -246,7 +246,8 @@ public sealed class LinkCloneFlowTests : IDisposable
             _links,
             TestFactory.LinkFlow(_hub, _paths, _toasts, dialog: dialog),
             new DriftQuery(_hub),
-            new ActiveApp());
+            new ActiveApp(),
+            TestFactory.CostGaps(_hub));
 
     private LiveSessionService Live()
     {

@@ -159,7 +159,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
         HubContext hub,
         NavigationService navigation,
         AuditorProviderRegistry? providers = null,
-        ModelRatesService? rates = null)
+        ModelRatesService? rates = null,
+        CostReconciliationService? costGaps = null)
     {
         _settings = settings;
         _agent = agent;
@@ -170,10 +171,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _hub = hub;
         _navigation = navigation;
         _rates = rates;
-        Rates = rates is null ? null : new ModelRatesViewModel(rates);
+        Rates = rates is null ? null : new ModelRatesViewModel(rates, costGaps);
         BuildSections();
         AppSettings s = settings.Current;
         _editor = s.Editor;
+        _showCostIn = CostCurrencies.Label(CostCurrencies.Parse(s.CostCurrency));
         _isLightTheme = string.Equals(s.Theme, "light", StringComparison.OrdinalIgnoreCase);
         _pollingSeconds = s.PollingSeconds;
         _freshnessDays = s.Thresholds.FreshnessDays;
@@ -253,6 +255,30 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public override string RailKey => "settings";
 
     [ObservableProperty] private string _editor;
+
+    /// <summary>
+    /// <b>En qué divisa se enseña el coste</b> (F29 §2). Es una preferencia de esta máquina —el hub
+    /// sigue guardando tokens y credits— y por eso vive en Ajustes: no le cambia el número a nadie
+    /// del equipo, solo la unidad en la que lo lee quien está delante.
+    /// </summary>
+    [ObservableProperty] private string _showCostIn;
+
+    /// <summary>Las dos opciones del desplegable, en el orden en el que se leen.</summary>
+    public IReadOnlyList<string> Currencies { get; } = new[]
+    {
+        CostCurrencies.Label(CostCurrency.Credits),
+        CostCurrencies.Label(CostCurrency.Usd),
+    };
+
+    /// <summary>
+    /// Qué significa elegir. Las dos mitades importan: de dónde sale cada unidad, y que el hub no
+    /// cambia — quien la mueva no está cambiando ninguna cifra compartida.
+    /// </summary>
+    public const string CurrencyHelp =
+        "AI credits es la unidad en la que factura GitHub y en la que grafica su panel; los dólares "
+        + "salen de ella a 0,01 $ por credit. Es una preferencia de esta máquina: el hub sigue "
+        + "guardando los mismos tokens y los mismos credits, y los informes registran las dos.";
+
     [ObservableProperty] private bool _isLightTheme;
     [ObservableProperty] private int _pollingSeconds;
     [ObservableProperty] private int _freshnessDays;
@@ -511,6 +537,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     {
         AppSettings s = _settings.Current;
         s.Editor = Editor;
+        s.CostCurrency = CostCurrencies.Save(SelectedCurrency);
         s.Theme = IsLightTheme ? "light" : "dark";
         s.PollingSeconds = Floor(
             PollingSeconds, SettingsLimits.MinPollingSeconds, "la sincronización del hub", "segundos", corrections);
@@ -554,6 +581,19 @@ public sealed partial class SettingsViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// <b>El hueco de coste se reconcilia en el inventario de cada aplicación</b> (F29 §1), y desde
+    /// aquí solo se lleva hasta allí. Tarifas es para precios.
+    /// </summary>
+    [RelayCommand]
+    private async Task GoToPortfolio() => await _navigation.NavigateToAsync<PortfolioViewModel>();
+
+    /// <summary>La divisa elegida, leída de la etiqueta del desplegable.</summary>
+    private CostCurrency SelectedCurrency
+        => string.Equals(ShowCostIn, CostCurrencies.Label(CostCurrency.Usd), StringComparison.Ordinal)
+            ? CostCurrency.Usd
+            : CostCurrency.Credits;
+
+    /// <summary>
     /// El mínimo de un campo, aplicado y CONTADO. La frase se redacta aquí —donde se conoce el
     /// campo, el número y la unidad— y no en el toast, para que no pueda decir un mínimo distinto
     /// del que se aplicó.
@@ -583,6 +623,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public static readonly IReadOnlyList<string> Editable = new[]
     {
         nameof(Editor),
+        nameof(ShowCostIn),
         nameof(IsLightTheme),
         nameof(PollingSeconds),
         nameof(FreshnessDays),
@@ -665,6 +706,13 @@ public sealed partial class SettingsViewModel : ViewModelBase
             if (field == nameof(IsLightTheme))
             {
                 ThemeService.Apply(IsLightTheme ? "light" : "dark");
+            }
+
+            // F29 §2 — la divisa se aplica al momento y en todas partes, como el tema: se cambia en
+            // Ajustes y se va a mirar Métricas, no se reinicia la aplicación.
+            if (field == nameof(ShowCostIn))
+            {
+                CostFormat.Currency = SelectedCurrency;
             }
 
             if (corrections.Count > 0)

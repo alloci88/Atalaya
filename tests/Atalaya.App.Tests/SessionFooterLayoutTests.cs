@@ -33,10 +33,10 @@ public sealed class SessionFooterLayoutTests
 
     /// <summary>Los números del parte: 20 llamadas, 28.050 / 15.670, caché 235.327 / 51.077.</summary>
     private static IReadOnlyList<FooterSegment> Claude()
-        => CreditText.UsageSegments(20, 28050, 15670, 235327, 51077, Subscription, ClaudeCodeProvider.Id);
+        => CostFormat.UsageSegments(20, 28050, 15670, 235327, 51077, Subscription, ClaudeCodeProvider.Id);
 
     private static IReadOnlyList<FooterSegment> Copilot()
-        => CreditText.UsageSegments(20, 28050, 15670, 0, 0, new CostResult(68.2m), RealCopilotAgent.Id);
+        => CostFormat.UsageSegments(20, 28050, 15670, 0, 0, new CostResult(68.2m), RealCopilotAgent.Id);
 
     private static int Count(string text, string needle)
     {

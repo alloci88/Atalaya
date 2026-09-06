@@ -284,6 +284,8 @@ public sealed class CycleConfigDialogTests : IDisposable
             directives, new TestFactory.NoDirectivesDialog(),
             new DriftQuery(_hub), new TestFactory.NoDeletedUnitsDialog(),
             new ThresholdPolicyService(_hub), new TestFactory.NoThresholdsDialog(),
+            TestFactory.CostGaps(_hub), new ModelRatesService(_hub),
+            new TestFactory.NoReconcileCostsDialog(),
             AuditorProviderRegistry.Of(agent),
             new CycleConfigService(_hub), Flow(dialog, agent));
         vm.SetApp("app");

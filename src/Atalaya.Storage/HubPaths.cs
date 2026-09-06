@@ -103,6 +103,22 @@ public sealed class HubPaths
 
     public string SessionsDir(string slug) => Path.Combine(AppDir(slug), "sessions");
 
+    /// <summary>
+    /// F29 §1: cómo se cerró el hueco de coste de una sesión. Un fichero por sesión, nombrado con
+    /// su ULID, merge-friendly como todo lo demás.
+    /// <para>
+    /// Carpeta propia y no dentro de la sesión, por lo mismo que <see cref="FixesDir"/>: una sesión
+    /// es el registro INMUTABLE de lo que pasó y esto es una decisión posterior sobre cómo
+    /// valorarla, tomada por otra persona y otro día. Meterla dentro obligaría a reescribir un
+    /// registro que se escribió una vez.
+    /// </para>
+    /// </summary>
+    public string CostReconciliationsDir(string slug) => Path.Combine(AppDir(slug), "cost-reconciliations");
+
+    /// <summary><c>apps/{slug}/cost-reconciliations/{ulid}.json</c>, con el ULID de la sesión.</summary>
+    public string CostReconciliationFile(string slug, string sessionUlid)
+        => Path.Combine(CostReconciliationsDir(slug), $"{sessionUlid}.json");
+
     public string SessionFile(string slug, string ulid) => Path.Combine(SessionsDir(slug), $"{ulid}.json");
 
     public string CommentsDir(string slug) => Path.Combine(AppDir(slug), "comments");

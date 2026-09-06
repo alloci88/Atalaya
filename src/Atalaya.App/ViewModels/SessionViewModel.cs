@@ -100,9 +100,9 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
     /// El pie dice del coste EXACTAMENTE lo que dirá el informe de esta sesión (F16 §B). Decía
     /// «coste no informado por el SDK», que era una frase acuñada para Copilot —y que además nombra
     /// un SDK que con Claude Code no existe— mientras el informe de la misma sesión decía «tarifa
-    /// no configurada». Un solo criterio, en <see cref="CreditText.OfSession"/>.
+    /// no configurada». Un solo criterio, en <see cref="CostFormat.OfSession"/>.
     /// </summary>
-    public string CostText => CreditText.SessionFooter(
+    public string CostText => CostFormat.SessionFooter(
         _live.Calls, _live.InputTokens, _live.OutputTokens,
         _live.CacheReadTokens, _live.CacheWriteTokens, _live.CostResult, _live.Provider);
 
@@ -133,7 +133,7 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
             }
 
             segments.Add(FooterSegment.Of(ElapsedText, opacity: 0.85));
-            segments.AddRange(CreditText.UsageSegments(
+            segments.AddRange(CostFormat.UsageSegments(
                 _live.Calls, _live.InputTokens, _live.OutputTokens,
                 _live.CacheReadTokens, _live.CacheWriteTokens, _live.CostResult, _live.Provider,
                 _live.Budget, _live.Turns));
