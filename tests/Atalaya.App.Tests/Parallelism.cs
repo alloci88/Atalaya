@@ -23,3 +23,18 @@ public sealed class CurrencyCollection
 {
     public const string Name = "divisa";
 }
+
+/// <summary>
+/// <b>Y quien monta una <see cref="System.Windows.Application"/> corre solo</b> (R6 §1).
+/// <para>
+/// WPF admite UNA por dominio y con afinidad de hilo, así que una prueba que la crea para resolver
+/// recursos <c>pack://</c> —la única forma de cargar los diccionarios como los carga la
+/// aplicación— no puede convivir con otra que lea <c>Application.Current</c> desde su propio hilo:
+/// lo que sale de ahí no es un rojo, es un bloqueo, y el conjunto se queda colgado.
+/// </para>
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class AppCollection
+{
+    public const string Name = "aplicación";
+}

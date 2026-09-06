@@ -1249,27 +1249,49 @@
         </Setter>
     </Style>
 
-    <!-- ================================================================ UN DIÁLOGO (R6 §6)
+    <!-- ================================================================ UN DIÁLOGO (R5 §6, R6 §1)
 
          F27 les puso fondo y primario y ahí se quedó: por dentro seguían siendo ventanas de
          fábrica —el título de la barra a 13, las ayudas a 13, «Cerrar» sin estilo, y una franja
          negra de Windows encima del crema porque `FluentWindow` pinta su propio telón—. Diez
-         diálogos, diez maneras.
+         diálogos, diez maneras. Esto es la única, y el próximo diálogo también la lleva: que es la
+         mitad del encargo.
 
-         Esto es la única: fondo, tipografía y tinta de la casa, sin telón del sistema y sin barra
-         de estado. Todos los diálogos lo declaran, y el próximo también — que es la mitad del
-         encargo: que el siguiente no vuelva a salir de fábrica.
+         · · ·
+
+         Y ÉSTA FUE LA CAUSA DEL CIERRE (R6 §1). Tal y como R5 lo dejó, este estilo no derivaba de
+         nada: su `BasedOn` era null. WPF-UI trae un estilo IMPLÍCITO para `ui:FluentWindow`
+         —comprobado: la clave `typeof(FluentWindow)` está en los diccionarios fusionados— y un
+         estilo con clave que no derive de él lo SUSTITUYE entero, plantilla incluida. La ventana se
+         quedaba sin el `ControlTemplate` de la librería, y de ahí que el diálogo apareciera en
+         blanco; al mostrarse, WPF vuelve a resolver el estilo dentro de la creación de la ventana
+         —`Window.Show` → `CreateSourceWindow` → `SetupInitialState` →
+         `PresentationSource.RootChanged` → `OnInitialized` → `UpdateStyleProperty` →
+         `StyleHelper.DoStyleInvalidations` → `ApplyStyleOrTemplateValue`— y cae sobre
+         `Window.CoerceAllowsTransparency`, que a esas alturas ya no puede cambiar:
+
+             System.InvalidOperationException: No se puede cambiar AllowsTransparency después de
+             mostrarse un elemento Window o de haber llamado a WindowInteropHelper.EnsureHandle.
+
+         En el hilo de interfaz eso no lo para nadie, y la aplicación se cierra.
+
+         El arreglo es UNO y va aquí, no diálogo a diálogo: **derivar del implícito de la librería**
+         en vez de sustituirlo. La ventana conserva su plantilla, su chrome y sus valores, y lo
+         nuestro solo añade fondo, tinta y tipografía. Lo vigila `DialogStyleTests`.
+
+         Y se van dos setters que no pueden vivir en un estilo de ventana: `WindowBackdropType` y
+         `ExtendsContentIntoTitleBar` son propiedades de WPF-UI cuyo manejador toca el HANDLE, y
+         desde un estilo se aplican tarde —dentro de la creación—, que es justo el momento en que
+         tocarlo revienta. Las dos se declaran en la etiqueta de cada diálogo, donde se aplican a
+         tiempo. La franja oscura no vuelve: el telón queda detrás del fondo opaco que este estilo
+         pinta, y de la barra de título, que lleva el suyo.
     -->
-    <Style x:Key="Dialog" TargetType="ui:FluentWindow">
+    <Style x:Key="Dialog" TargetType="ui:FluentWindow"
+           BasedOn="{StaticResource {x:Type ui:FluentWindow}}">
         <Setter Property="Background" Value="{DynamicResource Brush.Bg}" />
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
         <Setter Property="FontFamily" Value="{StaticResource Font.Ui}" />
         <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
-        <!-- SIN TELÓN DEL SISTEMA. Es lo que pinta la franja oscura sobre el crema: el backdrop de
-             Mica se dibuja POR DEBAJO de la ventana y asoma en la barra de título, que es la única
-             zona que la aplicación no cubría con su propio fondo. -->
-        <Setter Property="WindowBackdropType" Value="None" />
-        <Setter Property="ExtendsContentIntoTitleBar" Value="True" />
         <Setter Property="ShowInTaskbar" Value="False" />
         <!-- `WindowStartupLocation` NO se puede poner desde aquí: es una propiedad CLR de `Window`
              y no una de dependencia, así que un `Setter` sobre ella revienta AL CARGAR el estilo
@@ -1278,12 +1300,14 @@
 
     <!-- La barra de título de un diálogo: el MISMO fondo que el diálogo, y sin maximizar ni
          minimizar — una ventana modal de 600 px no se maximiza. -->
-    <Style x:Key="Dialog.TitleBar" TargetType="ui:TitleBar">
-        <Setter Property="Background" Value="{DynamicResource Brush.Bg}" />
-        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
-        <Setter Property="ShowMaximize" Value="False" />
-        <Setter Property="ShowMinimize" Value="False" />
-    </Style>
+    <!-- LA BARRA DE TÍTULO NO LLEVA ESTILO CON CLAVE, y es deliberado (R6 §1). Tenía uno, y era
+         la otra mitad del cierre: sustituía al implícito de WPF-UI y dejaba a la barra sin su
+         plantilla. Derivar de él tampoco vale aquí — `{StaticResource {x:Type ui:TitleBar}}` no
+         resuelve al CARGAR este diccionario, porque un `StaticResource` solo ve su propio ámbito y
+         el estilo de la librería vive más adentro—. Así que sus tres propiedades se declaran en la
+         etiqueta de cada diálogo, que es donde se aplican a tiempo y sin sustituir nada.
+    -->
+
 
     <!-- El título de dentro del diálogo: 21, como el de una sección. La barra de arriba dice de
          qué ventana se trata; esto dice de qué va lo que hay debajo. -->

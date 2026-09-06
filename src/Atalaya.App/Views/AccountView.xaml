@@ -175,12 +175,12 @@
                     <StackPanel>
                         <TextBlock Text="Estado de la conexión" Style="{StaticResource Text.Lead}"
                                    FontWeight="SemiBold" />
+                        <!-- UNA LÍNEA, Y SIN «MÁS» (R6 §2). Eran dos redacciones del mismo aviso
+                             —una corta y otra plegada— y ninguna decía lo que hace falta saber
+                             para leer la lista: cuáles son obligatorias y dónde se elige el
+                             auditor. Ahora lo dice una sola, y no hay nada que desplegar. -->
                         <TextBlock Style="{StaticResource Setting.Help}"
-                                   Text="Las tres primeras son de GitHub y no se sustituyen; debajo, un auditor por proveedor." />
-                        <ToggleButton x:Name="MasEstado" Style="{StaticResource Toggle.More}" />
-                        <TextBlock Style="{StaticResource Setting.More}"
-                                   Text="Sin las de GitHub no hay identidad, ni autoría, ni hub donde escribir. De los auditores basta con tener uno listo para poder auditar, y cuál se usa se elige en Ajustes → Proveedor y modelo."
-                                   Visibility="{Binding IsChecked, ElementName=MasEstado, Converter={StaticResource BoolToVisibility}}" />
+                                   Text="Las tres primeras son necesarias y las da GitHub. De los dos auditores basta con uno; cuál se usa se elige en Ajustes → Proveedor y modelo." />
 
                         <!-- LA LISTA DE ESTADOS. Icono + color + palabra, los tres siempre: el
                              color solo no se lee sin distinguirlo y el glifo solo no significa
@@ -190,7 +190,10 @@
                                       Margin="{StaticResource Pad.XS.Top}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
+                                    <!-- R6 §2: lo que no cabe en la línea va detrás de ella. Hoy
+                                         solo el hub lo usa, para la ruta del clon en esta máquina. -->
                                     <Grid Margin="{StaticResource Pad.XXS.Bottom}"
+                                          ToolTip="{Binding Tooltip}"
                                           Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibility}}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
@@ -238,36 +241,13 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                    </StackPanel>
-                </Border>
 
-                <!-- · El hub local · -->
-                <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.M}">
-                    <StackPanel>
-                        <TextBlock Text="Hub local" Style="{StaticResource Text.Lead}" FontWeight="SemiBold" />
-                        <!-- ICONO + COLOR + PALABRA, TAMBIÉN AQUÍ (UI-0036, D-989). Era una
-                             línea de texto neutro —«Estado: sincronizado · última sincronización:
-                             …»— a 200 px de la lista de conexiones, que sí lleva las tres cosas.
-                             Un hub desincronizado se leía igual que uno al día. El sello de hora
-                             se queda donde estaba, detrás de la palabra: es el dato de apoyo. -->
-                        <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.XS.Bottom}">
-                            <Path Style="{StaticResource Hub.State.Glyph}" />
-                            <TextBlock Text="{Binding SyncState}" Style="{StaticResource Hub.State.Word}" />
-                            <TextBlock Style="{StaticResource Text.Small}" VerticalAlignment="Center"
-                                       Margin="{StaticResource Pad.XS.Left}">
-                                <Run Text="· última sincronización:" /><Run Text=" " /><Run Text="{Binding LastSync, Mode=OneWay}" />
-                            </TextBlock>
-                        </StackPanel>
-                        <TextBox
-                            Text="{Binding HubClonePath, Mode=OneWay}"
-                            IsReadOnly="True"
-                            BorderThickness="{StaticResource Pad.Zero}"
-                            Background="Transparent"
-                            Padding="{StaticResource Pad.Zero}"
-                            FontFamily="{StaticResource Font.Mono}"
-                            FontSize="{StaticResource FontSize.Meta}"
-                            Foreground="{DynamicResource Brush.TextFaint}"
-                            ToolTip="Ruta del clon local del hub en esta máquina" />
+                        <!-- LOS AVISOS DEL HUB SE QUEDAN AQUÍ (R6 §2). Lo que se ha retirado es
+                             la tarjeta «Hub local», que repetía el estado y la fecha que ya dice la
+                             línea «Acceso al hub» de arriba y añadía la ruta, que ahora vive en su
+                             tooltip. Estos cuatro no repetían nada: cuentan qué trajo el último
+                             pull, qué falló, y las dos migraciones que pueden estar pendientes.
+                             Borrarlos con la tarjeta habría sido perder lo único que no sobraba. -->
                         <TextBlock
                             Text="{Binding SyncSummary}"
                             Style="{StaticResource Text.Small}"

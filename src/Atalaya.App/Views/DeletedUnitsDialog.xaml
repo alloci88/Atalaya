@@ -9,6 +9,7 @@
     ShowInTaskbar="False"
     WindowStartupLocation="CenterOwner"
     Style="{StaticResource Dialog}"
+    WindowBackdropType="None"
     ExtendsContentIntoTitleBar="True">
     <Grid Background="{DynamicResource Brush.Bg}">
         <!-- EL DIÁLOGO PINTA SU FONDO (UI-0013). `FluentWindow` aplica su propio telón por
@@ -30,7 +31,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Style="{StaticResource Dialog.TitleBar}" Grid.Row="0" Title="Unidades que ya no existen" />
+        <ui:TitleBar Background="{DynamicResource Brush.Bg}" Foreground="{DynamicResource Brush.Text}" ShowMaximize="False" ShowMinimize="False" Grid.Row="0" Title="Unidades que ya no existen" />
 
         <StackPanel Grid.Row="1" Margin="{StaticResource Pad.DialogHead}">
             <TextBlock Text="{Binding Title}" FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold" TextWrapping="Wrap" />

@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -157,6 +158,7 @@ public static class StartupSelfCheck
                     _ = host.Services.GetRequiredService<MainWindow>();
                 });
                 Step(steps, "primera vista", () => PaintFirstView(host.Services));
+                Step(steps, "diálogos", PaintDialogs);
             }
         }
         finally
@@ -214,6 +216,88 @@ public static class StartupSelfCheck
         _ = shell;
         return "Portafolio, medido y colocado a 1440×900";
     }
+
+    /// <summary>
+    /// <b>Los DIÁLOGOS, uno a uno</b> (R6 §1). Se construyen y se miden; no se muestran.
+    /// <para>
+    /// <b>Por qué existe.</b> Es la segunda vez que un <c>dist</c> con el build y los tests en verde
+    /// revienta al PINTAR: la primera fue un estilo que heredaba de otro declarado más abajo (F27),
+    /// y la segunda, un estilo con clave sobre un control de la librería que sustituía al suyo y
+    /// dejaba a la ventana sin plantilla — con lo que abrir Directivas cerraba la aplicación. Lo que
+    /// las dos tienen en común es que un estilo no falla al compilar ni al registrarse: falla cuando
+    /// alguien lo APLICA, y aplicarlo ocurre al medir. La primera vista ya se medía desde F27; los
+    /// diálogos no los medía nadie.
+    /// </para>
+    /// <para>
+    /// <b>La lista NO se escribe a mano</b>, se descubre: son las ventanas del ensamblado, y por eso
+    /// un diálogo nuevo entra aquí solo. Un listado a mano es un listado que alguien olvidará.
+    /// </para>
+    /// <para>
+    /// Los argumentos del constructor se crean SIN ejecutar el suyo
+    /// (<see cref="RuntimeHelpers.GetUninitializedObject"/>): montar un view-model de verdad
+    /// exigiría media aplicación por diálogo, y lo que se está probando no es el view-model — es que
+    /// el XAML y sus estilos se resuelvan. Los enlaces que no encuentren datos fallan como enlaces,
+    /// que es lo que WPF hace en silencio y no lo que se persigue aquí.
+    /// </para>
+    /// </summary>
+    private static string PaintDialogs()
+    {
+        var painted = new List<string>();
+        foreach (Type type in DialogTypes())
+        {
+            ConstructorInfo ctor = type.GetConstructors()
+                .OrderBy(c => c.GetParameters().Length)
+                .First();
+
+            object?[] args = ctor.GetParameters()
+                .Select(parameter => parameter.ParameterType.IsValueType
+                    ? Activator.CreateInstance(parameter.ParameterType)
+                    : RuntimeHelpers.GetUninitializedObject(parameter.ParameterType))
+                .ToArray();
+
+            var window = (System.Windows.Window)ctor.Invoke(args);
+
+            // NO se crea el handle ni se muestra: probado, no añade nada. El cierre de R5 no salta
+            // ni construyendo, ni midiendo, ni con `EnsureHandle` — hace falta una ventana MOSTRADA
+            // y activa, y eso no cabe en un autochequeo que corre en una máquina de compilación.
+            // Lo que este paso sí cubre es la clase de F27: un estilo que se resuelve mal al
+            // APLICARSE, que es lo que ocurre al medir. Del defecto de R5 se encarga una regla
+            // estática, que además lo pilla antes: ver `DialogStyleTests`.
+
+            // Un diálogo con `SizeToContent` no declara alto, así que su `Height` es NaN y medir
+            // con NaN lanza. Se mide con lo que declare y, donde no declare nada, con el tamaño de
+            // un diálogo corriente: lo que se comprueba es que el árbol se construya y los estilos
+            // se apliquen, no cuánto mide la ventana.
+            var size = new System.Windows.Size(
+                double.IsNaN(window.Width) ? 800 : window.Width,
+                double.IsNaN(window.Height) ? 600 : window.Height);
+
+            window.Measure(size);
+            window.Arrange(new System.Windows.Rect(new System.Windows.Point(0, 0), size));
+            window.UpdateLayout();
+            painted.Add(type.Name);
+        }
+
+        return painted.Count == 0
+            ? "ninguno encontrado"
+            : $"{painted.Count} medidos: {string.Join(", ", painted)}";
+    }
+
+    /// <summary>
+    /// <b>Los diálogos de la aplicación</b>: toda ventana del ensamblado que no sea la principal.
+    /// <para>
+    /// Público para que una prueba pueda exigir que esta lista sea la lista COMPLETA — si algún día
+    /// se escribiera a mano, un diálogo nuevo se quedaría fuera del autochequeo sin que nadie lo
+    /// notara, que es exactamente el hueco por el que se coló el cierre de R5.
+    /// </para>
+    /// </summary>
+    public static IReadOnlyList<Type> DialogTypes()
+        => typeof(App).Assembly.GetTypes()
+            .Where(t => !t.IsAbstract
+                        && typeof(System.Windows.Window).IsAssignableFrom(t)
+                        && t != typeof(MainWindow))
+            .OrderBy(t => t.Name, StringComparer.Ordinal)
+            .ToList();
 
     /// <summary>
     /// <b>El paso que importa.</b> Resuelve TODOS los servicios que la aplicación registra, uno a

@@ -645,29 +645,41 @@
                                      y «Tipo» iban apretadas —«Auditoría por lotes» partida en dos
                                      líneas— mientras «Hallazgos» y «Coste» nadaban en cuatrocientos
                                      píxeles de vacío. Ahora las OCHO son estrella con su mínimo
-                                     declarado —110, 160, 150, 130, 180, 100, 110, 160—, así que lo
-                                     que sobra se reparte por igual y ninguna se lo lleva todo.
-                                     «Aplicación» lleva además un máximo de 320: un nombre de
-                                     repositorio no necesita más, y sin tope se comía el reparto.
-                                     La suma de los mínimos (1.100) sigue cabiendo a 1280. -->
+                                     declarado, así que lo que sobra se reparte por igual y ninguna
+                                     se lo lleva todo. «Aplicación» lleva además un máximo de 320:
+                                     un nombre de repositorio no necesita más, y sin tope se comía
+                                     el reparto.
+
+                                     Y EL AIRE ENTRE COLUMNAS ES 24, NO 12 (R6 §3). Con 12, «Quién»
+                                     acababa pegada a «Unidades» —un nombre completo llena su
+                                     columna y la cifra de al lado empieza donde el nombre termina—
+                                     mientras las columnas cortas parecían tener más aire. El canal
+                                     es ahora el mismo para las ocho, y sale del canal y no de lo
+                                     que mida el dato de cada una.
+
+                                     Con ese aire, «Quién» pide 200 y «Tipo» 160: medido, «Auditoría
+                                     por lotes» ocupa 124 px y la columna deja 136 libres tras su
+                                     canal, así que no vuelve a partirse en dos líneas. Los mínimos
+                                     —110, 160, 160, 130, 200, 100, 110, 160— suman 1.130 y siguen
+                                     cabiendo a 1280. -->
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" MinWidth="110" />
                                     <ColumnDefinition Width="*" MinWidth="160" MaxWidth="320" />
-                                    <ColumnDefinition Width="*" MinWidth="150" />
+                                    <ColumnDefinition Width="*" MinWidth="160" />
                                     <ColumnDefinition Width="*" MinWidth="130" />
-                                    <ColumnDefinition Width="*" MinWidth="180" />
+                                    <ColumnDefinition Width="*" MinWidth="200" />
                                     <ColumnDefinition Width="*" MinWidth="100" />
                                     <ColumnDefinition Width="*" MinWidth="110" />
                                     <ColumnDefinition Width="*" MinWidth="160" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Fecha" Style="{StaticResource Table.Header}" Margin="{StaticResource Pad.S.Right}" />
-                                <TextBlock Grid.Column="1" Text="Aplicación" Style="{StaticResource Table.Header}" Margin="{StaticResource Pad.S.Right}" />
-                                <TextBlock Grid.Column="2" Text="Tipo" Style="{StaticResource Table.Header}" Margin="{StaticResource Pad.S.Right}" />
+                                <TextBlock Grid.Column="0" Text="Fecha" Style="{StaticResource Table.Header}" Margin="{StaticResource Pad.L.Right}" />
+                                <TextBlock Grid.Column="1" Text="Aplicación" Style="{StaticResource Table.Header}" Margin="{StaticResource Pad.L.Right}" />
+                                <TextBlock Grid.Column="2" Text="Tipo" Style="{StaticResource Table.Header}" Margin="{StaticResource Pad.L.Right}" />
                                 <!-- F16 §C: con dos casas, saber cuál gastó es parte de leer la fila. -->
-                                <TextBlock Grid.Column="3" Text="Proveedor" Style="{StaticResource Table.Header}" Margin="{StaticResource Pad.S.Right}" />
-                                <TextBlock Grid.Column="4" Text="Quién" Style="{StaticResource Table.Header}" Margin="{StaticResource Pad.S.Right}" />
-                                <TextBlock Grid.Column="5" Text="Unidades" Style="{StaticResource Table.Header.Number}" Margin="{StaticResource Pad.S.Right}" />
-                                <TextBlock Grid.Column="6" Text="Hallazgos" Style="{StaticResource Table.Header.Number}" Margin="{StaticResource Pad.S.Right}" />
+                                <TextBlock Grid.Column="3" Text="Proveedor" Style="{StaticResource Table.Header}" Margin="{StaticResource Pad.L.Right}" />
+                                <TextBlock Grid.Column="4" Text="Quién" Style="{StaticResource Table.Header}" Margin="{StaticResource Pad.L.Right}" />
+                                <TextBlock Grid.Column="5" Text="Unidades" Style="{StaticResource Table.Header.Number}" Margin="{StaticResource Pad.L.Right}" />
+                                <TextBlock Grid.Column="6" Text="Hallazgos" Style="{StaticResource Table.Header.Number}" Margin="{StaticResource Pad.L.Right}" />
                                 <!-- «Coste y tokens» es una CIFRA, y va donde van las cifras: a la
                                      derecha, como «Unidades» y «Hallazgos» (P-08). -->
                                 <TextBlock Grid.Column="7" Text="Coste y tokens" Style="{StaticResource Table.Header.Number}" />
@@ -687,33 +699,33 @@
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" MinWidth="110" />
                                                     <ColumnDefinition Width="*" MinWidth="160" MaxWidth="320" />
-                                                    <ColumnDefinition Width="*" MinWidth="150" />
+                                                    <ColumnDefinition Width="*" MinWidth="160" />
                                                     <ColumnDefinition Width="*" MinWidth="130" />
-                                                    <ColumnDefinition Width="*" MinWidth="180" />
+                                                    <ColumnDefinition Width="*" MinWidth="200" />
                                                     <ColumnDefinition Width="*" MinWidth="100" />
                                                     <ColumnDefinition Width="*" MinWidth="110" />
                                                     <ColumnDefinition Width="*" MinWidth="160" />
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{Binding When}" Style="{StaticResource Table.Cell}" Margin="{StaticResource Pad.S.Right}" />
-                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="{StaticResource Pad.S.Right}">
+                                                <TextBlock Grid.Column="0" Text="{Binding When}" Style="{StaticResource Table.Cell}" Margin="{StaticResource Pad.L.Right}" />
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="{StaticResource Pad.L.Right}">
                                                     <Rectangle Width="9" Height="9" RadiusX="2" RadiusY="2"
                                                                Fill="{Binding AppBrush}" VerticalAlignment="Center" />
                                                     <TextBlock Text="{Binding AppName}" Style="{StaticResource Table.Cell.Strong}"
                                                                Margin="{StaticResource Pad.XS.Left}" />
                                                 </StackPanel>
-                                                <TextBlock Grid.Column="2" Text="{Binding Type}" Style="{StaticResource Table.Cell}" Margin="{StaticResource Pad.S.Right}" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Type}" Style="{StaticResource Table.Cell}" Margin="{StaticResource Pad.L.Right}" />
                                                 <TextBlock Grid.Column="3" Text="{Binding Provider}" Style="{StaticResource Table.Cell}"
-                                                           Margin="{StaticResource Pad.S.Right}"
+                                                           Margin="{StaticResource Pad.L.Right}"
                                                            ToolTip="{Binding Provider}" />
                                                 <!-- R6 §3: el nombre entero en una línea; si no cabe,
                                                      elipsis al final y el nombre completo en el tooltip. -->
                                                 <TextBlock Grid.Column="4" Text="{Binding By}" Style="{StaticResource Table.Cell}"
-                                                           Margin="{StaticResource Pad.S.Right}"
+                                                           Margin="{StaticResource Pad.L.Right}"
                                                            TextTrimming="CharacterEllipsis"
                                                            ToolTip="{Binding By}" />
                                                 <!-- Cifras a la derecha y tabulares, como en Informes (P-08, UI-0030). -->
-                                                <TextBlock Grid.Column="5" Text="{Binding Units}" Style="{StaticResource Cell.Number}" Margin="{StaticResource Pad.S.Right}" />
-                                                <TextBlock Grid.Column="6" Text="{Binding Findings}" Style="{StaticResource Cell.Number}" Margin="{StaticResource Pad.S.Right}" />
+                                                <TextBlock Grid.Column="5" Text="{Binding Units}" Style="{StaticResource Cell.Number}" Margin="{StaticResource Pad.L.Right}" />
+                                                <TextBlock Grid.Column="6" Text="{Binding Findings}" Style="{StaticResource Cell.Number}" Margin="{StaticResource Pad.L.Right}" />
                                                 <!-- F16-RETOQUE §1 — el coste y, debajo, los tokens.
                                                      Una sesión que no se tarifa dice «suscripción» y
                                                      sus tokens son lo que deja comparar su peso con

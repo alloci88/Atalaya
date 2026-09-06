@@ -46,6 +46,13 @@ public sealed partial class ConnectionStep : ObservableObject
     [ObservableProperty] private string _detail = string.Empty;
     [ObservableProperty] private string? _helpUrl;
 
+    /// <summary>
+    /// Lo que hay detrás de la línea y no cabe en ella (R6 §2). Hoy solo lo usa el hub, para
+    /// llevar la ruta del clon: quien la necesita la encuentra, y quien no, no la ve. Vacío en
+    /// las demás, y entonces la fila no lleva tooltip.
+    /// </summary>
+    [ObservableProperty] private string _tooltip = string.Empty;
+
     public bool IsVisible => State != CheckState.Skipped;
 
     partial void OnStateChanged(CheckState value) => OnPropertyChanged(nameof(IsVisible));
@@ -56,6 +63,7 @@ public sealed partial class ConnectionStep : ObservableObject
         State = CheckState.Pending;
         Detail = string.Empty;
         HelpUrl = null;
+        Tooltip = string.Empty;
     }
 
     internal void Skip()
@@ -265,12 +273,13 @@ public sealed class ConnectionChecker
 
                 if (_hub.Health == SyncHealth.Green && _hub.LastSync is { } t)
                 {
-                    // SIN la ruta del clon (F26 §C, revisión). Esta fila contesta «¿llego al hub?»,
-                    // y la ruta local no forma parte de la respuesta: es un dato de esta máquina, y
-                    // vive dos tarjetas más abajo, en «Hub local», que es de lo que va aquella.
-                    // Repetida aquí solo alargaba la línea con lo único que no se estaba
-                    // comprobando.
+                    // LA RUTA DEL CLON VA EN EL TOOLTIP (R6 §2). No en la línea: ésta contesta
+                    // «¿llego al hub?» y la ruta no es parte de esa respuesta. Y ya no vive «dos
+                    // tarjetas más abajo», porque aquella tarjeta —«Hub local»— decía lo mismo que
+                    // esta línea y se ha retirado: el estado y la fecha estaban dos veces en la
+                    // misma pantalla.
                     hub.Succeed("Acceso al hub", $"Sincronizado {t.ToLocalTime():g}");
+                    hub.Tooltip = $"Clon del hub en esta máquina: {_hub.HubPaths.Root}";
                 }
                 else
                 {
