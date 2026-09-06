@@ -16352,3 +16352,40 @@ que cambiar de carácter a vector no obliga a tocar el modelo.
 
 **Ni un token más**: no se toca el orden de nada, no se añade ninguna llamada, y todo lo de aquí es
 aritmética sobre registros que ya existían o presentación.
+
+## F30 · Entrega 1: el streaming de herramienta
+
+### D-1015 — Los argumentos que el modelo escribe ya venían; lo que faltaba era leerlos
+
+D-1014 midió que el minuto de silencio de una auditoría es el modelo **escribiendo los argumentos**
+de `submit_findings` —246 tokens por hallazgo, 64 tokens/s, unos 42 s para once— y que ese tramo era
+invisible porque las dos casas emiten esos argumentos según se escriben y Atalaya los descartaba.
+Esta entrega los lee. **Claude Code**: el `switch` de los eventos crudos atendía dos —`message_start`
+y `message_delta`, que son las cuentas— y tiraba el resto con un «lo demás se ignora»; ahora atiende
+además `content_block_start`, `content_block_delta` y `content_block_stop`, que traen el texto según
+se escribe (`text_delta`, que Claude **no** estaba pintando delta a delta: mandaba el párrafo entero
+al cerrar el mensaje) y los argumentos (`input_json_delta`). **Copilot**: de la sesentena de tipos de
+evento del SDK, `OnSessionEvent` atendía tres; entran `ToolExecutionStartEvent` y
+`AssistantToolCallDeltaEvent`, que trae `InputDelta`. El texto ya lo hacía desde F5.2. **Cómo se
+cuenta, y por qué no se parsea.** Lo que llega es un array a medias, que por definición no es JSON
+válido: deserializarlo fallaría en cada trozo. Se cuentan los valores de una clave que ya han
+**cerrado su comilla** —el título de un hallazgo, el veredicto, la ruta—, así que un elemento a medio
+escribir no cuenta hasta que está entero, que es justo lo que se quiere enseñar; y solo se repinta
+cuando se completa uno, porque a 64 tokens/s avisar por cada trozo serían decenas de repintados por
+segundo sin información nueva. La regla vive en `ToolCallInput`, en el vocabulario común y no en cada
+casa: dos copias acabarían contando distinto y la misma sesión diría «3 hallazgos» con una casa y
+«4» con la otra. **Y NO dice «3 de 11».** El encargo lo pedía; el total no se puede saber hasta que
+el array cierra, así que se dice lo que hay. Poner el denominador sería inventar progreso, que es
+anti-objetivo declarado de esta fase. **LA VERIFICACIÓN, que era la condición para entrar.** Los
+casos nuevos viven en el mismo `switch` que gobierna `AccountingIsComplete`, de la que depende el
+corte de F21 — y un corte con una petición en vuelo se factura y no aparece en ningún sitio. El
+argumento de seguridad es estructural: los tres casos nuevos **no tocan** `_openCalls`,
+`_settledCalls` ni `_sawPartialMessages`, que son los tres campos de esa condición; narrar no puede
+mover la decisión de cortar. Y se ejerce, no se promete: un test repite
+`Con_una_peticion_en_vuelo_las_cuentas_NO_estan` **con el flujo que ahora se lee de verdad** —bloques
+abriéndose, texto a trozos, argumentos escribiéndose— y exige que las cuentas digan lo mismo; otro
+corre el mismo flujo con y sin eventos de contenido y exige llamadas y tokens idénticos en los
+cuatro conceptos. Los dos se comprobaron con un cebo: haciendo que `content_block_stop` incrementara
+`_settledCalls`, el primero se pone rojo. Con eso, los 106 tests de Claude Code —incluidos los diez
+de F21 que ya protegían el corte— siguen en verde. **Ni un token más**: no se cambia el prompt, no se
+añade ninguna llamada y no se le pide al modelo que hable más; se lee lo que ya venía y se tiraba.

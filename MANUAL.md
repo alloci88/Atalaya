@@ -315,10 +315,17 @@ que vuelve a hablar. Mientras Atalaya prepara lo suyo no dice nada, porque ahí 
 
 > **Y el minuto tiene explicación.** El silencio largo no es que el modelo no arranque: es el modelo
 > **escribiendo**. Reportar un hallazgo le cuesta unos **246 tokens** de escritura, y escribe a unos
-> **64 por segundo**: once hallazgos son **unos 42 segundos** en los que, por dentro, no para — pero
-> lo que escribe son los datos del reporte, y eso Atalaya todavía no lo puede pintar. Por eso la
-> línea «11 hallazgos nuevos» aparece al **final** de ese tramo y no al principio. Decirte tras qué
-> se espera es lo más honrado que se puede hacer mientras tanto.
+> **64 por segundo**: once hallazgos son **unos 42 segundos**. Por eso la línea «11 hallazgos
+> nuevos» aparece al **final** de ese tramo y no al principio.
+
+**Y ese tramo ya se ve.** Mientras el modelo escribe una llamada, el hilo lo cuenta: primero
+**«Reportando hallazgos…»** y después **«Recibiendo hallazgos · 3 · Credenciales embebidas…»**, con
+el número subiendo según cada uno se completa. Cuando la herramienta se ejecuta, esa línea se
+sustituye por la definitiva («11 hallazgos nuevos»). Lo mismo con los veredictos y las ubicaciones.
+
+> **No dice «3 de 11», y es a propósito.** Lo que llega es una lista que se está escribiendo:
+> cuántos va a tener no se sabe hasta que cierra. Se cuenta lo que hay; poner un total sería
+> inventárselo.
 
 No es un error ni un aviso: es la diferencia entre *el modelo está pensando* y *esto se ha caído*,
 que hasta ahora se veían exactamente igual —la pantalla parada—. Quien decide cuándo se corta de
