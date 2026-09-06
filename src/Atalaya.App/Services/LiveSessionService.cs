@@ -259,17 +259,50 @@ public sealed partial class LiveSessionService : ObservableObject
         ? DateTimeOffset.UtcNow - at
         : TimeSpan.Zero;
 
-    /// <summary>Se está esperando al modelo y ya se nota.</summary>
-    public bool IsWaiting => IsRunning && SinceLastEvent.TotalSeconds >= QuietSeconds;
+    /// <summary>
+    /// Se está esperando <b>al modelo</b> y ya se nota. Las dos mitades cuentan: que haya pasado el
+    /// silencio corto, y que el turno esté de verdad en el aire — mientras Atalaya prepara el suyo
+    /// no se está esperando a nadie, y decirlo sería echarle al modelo un tiempo que no es suyo.
+    /// </summary>
+    public bool IsWaiting => IsRunning && _awaitingModel && SinceLastEvent.TotalSeconds >= QuietSeconds;
 
     /// <summary>La espera es larga: el pie lo dice en ámbar.</summary>
     public bool WaitIsLong => IsRunning && SinceLastEvent.TotalSeconds >= LongWaitSeconds;
 
     /// <summary>
+    /// <b>El turno está en el aire</b> (F30 §1b): salió hacia el modelo y todavía no ha vuelto
+    /// nada de él.
+    /// <para>
+    /// Es lo que hace que el pie pueda decir «esperando al modelo» y no solo «no llega nada». La
+    /// diferencia importa porque <b>el hueco tiene dueño y se ha medido</b>: entre una pasada y la
+    /// siguiente Atalaya tarda <b>16 ms</b> —releer los 149 hallazgos del hub real y recomponer el
+    /// prompt— frente a los <b>16,9 s</b> que dura una pasada de media (26 unidades, 92 pasadas,
+    /// 1.559 s del hub del usuario). O sea: el <b>99,9 %</b> del silencio es el modelo. Anclar la
+    /// cuenta en el envío es decirlo sin tener que explicarlo.
+    /// </para>
+    /// </summary>
+    private bool _awaitingModel;
+
+    /// <summary>
     /// Señal de vida: la llama todo lo que llega del barrido. Un solo sitio, para que no pueda
     /// haber un evento que se pinte y no cuente como actividad.
+    /// <para>
+    /// Y cierra la espera: si ha llegado algo, el turno ya no está en el aire. El único que la
+    /// abre es la entrega (<see cref="ActivityNoteKind.Handover"/>).
+    /// </para>
     /// </summary>
-    private void Touch() => _lastEventUtc = DateTimeOffset.UtcNow;
+    private void Touch()
+    {
+        _lastEventUtc = DateTimeOffset.UtcNow;
+        _awaitingModel = false;
+    }
+
+    /// <summary>El turno acaba de salir: la espera empieza aquí y no en el último evento.</summary>
+    private void TurnSent()
+    {
+        _lastEventUtc = DateTimeOffset.UtcNow;
+        _awaitingModel = true;
+    }
 
     /// <summary>Línea de la barra de estado inferior mientras corre.</summary>
     /// <summary>
@@ -644,14 +677,29 @@ public sealed partial class LiveSessionService : ObservableObject
     /// </summary>
     private void OnActivityNoted(ActivityNote note) => OnUi(() =>
     {
-        Add(_currentPass, note.Kind == ActivityNoteKind.Tool
-            ? ActivityEntry.Event(ActivityWording.GlyphFor(note.Text), ActivityWording.Describe(note.Text))
-            : ActivityEntry.Event("◆", note.Text));
+        Add(_currentPass, note.Kind switch
+        {
+            ActivityNoteKind.Tool => ActivityEntry.Event(
+                ActivityWording.GlyphFor(note.Text), ActivityWording.Describe(note.Text)),
+            ActivityNoteKind.Handover => ActivityEntry.Event("→", note.Text),
+            _ => ActivityEntry.Event("◆", note.Text),
+        });
 
         // Un evento cierra el bloque de texto en curso: lo siguiente que diga el modelo es otra
         // cosa, y pegarlo al párrafo anterior lo haría ilegible.
         _currentText = null;
-        Touch();
+
+        // La entrega ABRE la espera; todo lo demás la cierra, porque todo lo demás es algo que ha
+        // llegado (F30 §1b).
+        if (note.Kind == ActivityNoteKind.Handover)
+        {
+            TurnSent();
+        }
+        else
+        {
+            Touch();
+        }
+
         Changed?.Invoke();
     });
 

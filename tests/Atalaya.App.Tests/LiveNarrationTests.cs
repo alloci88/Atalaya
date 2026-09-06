@@ -210,6 +210,62 @@ public sealed class LiveNarrationTests : IDisposable
             + "si narrar costara una herramienta de más, sobraría aquí");
     }
 
+    /// <summary>
+    /// <b>F30 §1b — el hueco entre pasadas tiene dueño, y se marca en el orden en que ocurre.</b>
+    /// <para>
+    /// <b>Lo medido.</b> Entre cerrar una pasada y el primer evento de la siguiente, Atalaya tarda
+    /// <b>16 ms</b> —releer los 149 hallazgos del hub real del usuario y recomponer el prompt— y una
+    /// pasada dura <b>16,9 s</b> de media (26 unidades, 92 pasadas, 1.559 s de sesiones reales). El
+    /// <b>99,9 %</b> del silencio es el modelo. Por eso los dos tramos se marcan: el de Atalaya con
+    /// su medida, ya terminado, y la entrega, a partir de la cual el pie cuenta.
+    /// </para>
+    /// <para>
+    /// <b>Lo que se fija es el ORDEN</b>, que es lo único que puede romperse en silencio: preparar
+    /// va antes de entregar, y entregar va antes de que llegue nada del modelo. Si algún día la
+    /// entrega se emitiera después del primer evento del turno, el pie anclaría la espera en el
+    /// sitio equivocado y diría que se espera a un modelo que ya está contestando.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task El_turno_se_marca_como_entregado_antes_de_que_llegue_nada_del_modelo()
+    {
+        var order = new List<ActivityNote>();
+
+        await Run(
+            audit: _ => new[] { NewFinding("fuga de stream") },
+            wire: c => c.ActivityNoted += order.Add);
+
+        int preparado = order.FindIndex(n => n.Text.StartsWith("Turno preparado", StringComparison.Ordinal));
+        int entregado = order.FindIndex(n => n.Kind == ActivityNoteKind.Handover);
+        int primeraHerramienta = order.FindIndex(n => n.Kind == ActivityNoteKind.Tool);
+
+        preparado.Should().BeGreaterThanOrEqualTo(0, "el tramo de Atalaya se dice, con su medida");
+        entregado.Should().BeGreaterThan(preparado,
+            "primero Atalaya termina lo suyo y después entrega: al revés, el hueco no tendría dueño");
+        primeraHerramienta.Should().BeGreaterThan(entregado,
+            "nada del modelo puede llegar antes de que el turno se haya entregado");
+
+        // Y la medida del tramo va en la línea: sin el número, «preparando» se lee como «Atalaya
+        // está tardando», que es justo lo que la medición desmiente.
+        order[preparado].Text.Should().MatchRegex(@"\d+ ms$");
+    }
+
+    /// <summary>
+    /// <b>Y el pie no le echa al modelo un tiempo que no es suyo</b> (F30 §1b). «Esperando al
+    /// modelo» solo existe con el turno EN EL AIRE: desde la entrega y hasta que llega la primera
+    /// señal. Mientras Atalaya prepara el suyo no se está esperando a nadie, y al terminar la
+    /// sesión tampoco.
+    /// </summary>
+    [Fact]
+    public async Task Esperando_al_modelo_solo_cuenta_con_el_turno_en_el_aire()
+    {
+        (LiveSessionService live, _) = await Run(audit: _ => new[] { NewFinding("fuga de stream") });
+
+        live.IsRunning.Should().BeFalse();
+        live.IsWaiting.Should().BeFalse("terminada la sesión no se espera a nadie");
+        live.SinceLastEvent.Should().Be(TimeSpan.Zero, "y el reloj de la espera no corre solo");
+    }
+
     /// <summary>Todas las líneas de actividad narradas en la sesión, de todas las unidades y pasadas.</summary>
     private static List<ActivityEntry> Narration(LiveSessionService live)
         => live.Units.SelectMany(u => u.Passes).SelectMany(p => p.Entries).Where(e => e.IsEvent).ToList();
@@ -417,7 +473,8 @@ public sealed class LiveNarrationTests : IDisposable
     /// <summary>
     /// Todo glifo que la narración pinta pertenece al repertorio conocido: los de hallazgo (＋ ⊕ ⚖
     /// ⚠ ✔), los de cierre de pasada (✓ seca, ↻ con aportación) y, desde F30 §1, los del hilo de
-    /// actividad — la herramienta (⚒), la lectura de un fichero (👁) y el hito de Atalaya (◆) —. Si
+    /// actividad — la herramienta (⚒), la lectura de un fichero (👁), el hito de Atalaya (◆) y la
+    /// entrega del turno al modelo (→) —. Si
     /// algún día se añade un suceso y se olvida su caso —o se cuela una etiqueta de otro sitio—, se
     /// ve aquí en vez de en una insignia que miente.
     /// <para>
@@ -435,7 +492,7 @@ public sealed class LiveNarrationTests : IDisposable
             reconcile: _ => new[] { new VerdictArgs(presente.Id.ToString(), "presente", "sigue") });
 
         Narration(live).Select(e => e.Glyph).Distinct()
-            .Should().BeSubsetOf(new[] { "＋", "⊕", "⚖", "⚠", "✔", "✓", "↻", "⚒", "👁", "◆" });
+            .Should().BeSubsetOf(new[] { "＋", "⊕", "⚖", "⚠", "✔", "✓", "↻", "⚒", "👁", "◆", "→" });
     }
 
     /// <summary>

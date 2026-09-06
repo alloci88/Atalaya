@@ -8,6 +8,18 @@ public enum ActivityNoteKind
 
     /// <summary>Un hito de la propia Atalaya: un corte, una reanudación fallida.</summary>
     Milestone,
+
+    /// <summary>
+    /// <b>La entrega al modelo</b> (F30 §1b): el turno acaba de salir y a partir de aquí lo que
+    /// pasa —o no pasa— es del modelo.
+    /// <para>
+    /// Tiene clase propia y no es un <see cref="Milestone"/> más porque el pie la usa para
+    /// <b>anclar la espera</b>: «esperando al modelo» empieza a contar en el envío, no en el último
+    /// evento, que es lo que hace que se lea como «Atalaya ya terminó lo suyo» en vez de como un
+    /// silencio sin dueño.
+    /// </para>
+    /// </summary>
+    Handover,
 }
 
 /// <summary>

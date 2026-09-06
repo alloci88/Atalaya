@@ -686,6 +686,13 @@ public sealed class SessionCoordinator
                     activityUnit = unit.Path;
                     activityPass = pass;
                     PassStarted?.Invoke(unit.Path, pass);
+
+                    // F30 §1b — EL TRAMO DE ATALAYA, cronometrado de verdad. Lo que va de aquí al
+                    // envío es todo lo que hace la aplicación entre una pasada y la siguiente:
+                    // releer los hallazgos vivos de la unidad y recomponer el prompt. Se mide en vez
+                    // de estimarse porque el número es el argumento: sin él, «guardando…» se lee
+                    // como «Atalaya está tardando», y no es verdad.
+                    var prep = System.Diagnostics.Stopwatch.StartNew();
                     IReadOnlyList<Finding> existing = _reconciliation.ExistingForUnit(request.Slug, unit.Path);
                     toolbox.BeginPass(existing);
                     // F17 §3: al auditor se le listan para reconciliar SOLO los de la temática del
@@ -731,6 +738,17 @@ public sealed class SessionCoordinator
                     var unitRequest = new AuditUnitRequest(
                         unit.Path, content, prompt, app.Stack, request.Mode, listed, patterns,
                         composed.StablePrefix, composed.UnitPart);
+
+                    // F30 §1b — LOS DOS TRAMOS DEL HUECO, cada uno con su hora. El primero es lo que
+                    // acaba de hacer Atalaya, ya terminado y con su medida; el segundo es la entrega
+                    // al modelo, y a partir de ahí el pie cuenta la espera. Con las dos horas
+                    // delante, el hueco deja de ser un silencio y pasa a tener dueño.
+                    prep.Stop();
+                    Note(ActivityNoteKind.Milestone,
+                        $"Turno preparado · {existing.Count} hallazgo(s) vivo(s) en la unidad "
+                        + $"· {prep.ElapsedMilliseconds} ms");
+                    Note(ActivityNoteKind.Handover, $"Pasada {pass} · enviada al modelo");
+
                     unitCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     try
                     {
