@@ -16458,3 +16458,38 @@ costó un rojo que solo aparecía al correr los dos tests juntos. Sirvió para l
 —descartar la costura y encontrar el fallo tragado— y queda anotado aquí para quien tenga que
 volver: para reproducir con dispatcher hace falta que la `Application` la cree **un solo** sitio del
 proceso.
+
+### D-1018 — El texto token a token bloqueaba el bucle que cierra el turno, y Copilot no publica sus argumentos
+
+**(1) La regresión de Claude Code, con el flujo real delante.** Se grabó un turno del CLI 2.1.263 con
+exactamente los flags con los que Atalaya lo invoca, y ahí está la forma: `system/init`, un
+`system/status` y un `rate_limit_event` que nadie esperaba, `message_start`, `content_block_start`,
+los `text_delta`, el `assistant` con el texto YA completo, `content_block_stop`, `message_delta` con
+el consumo final, `message_stop` y `result`. La grabación vive junto a los tests
+(`Grabaciones/turno-real.jsonl`) y se reproduce entera: es la diferencia entre probar lo que el CLI
+manda y probar lo que uno cree que manda. **La causa**: hasta la entrega 1, Claude entregaba su texto
+**una vez por mensaje** —el evento `assistant`, ya cerrado—; al empezar a leer `text_delta` pasó a
+entregarlo **token a token**, y `LiveSessionService.OnText` hacía un `Dispatcher.Invoke` **síncrono**
+por cada uno. A los 64 tokens/s medidos en D-1014 eso son sesenta y cuatro idas y vueltas al hilo de
+interfaz por segundo, cada una tocando una propiedad enlazada y disparando su maquetación — y el
+bucle que se queda esperando es **el mismo** que tiene que consumir `message_delta` (las cuentas de
+F21) y `result` (el fin del turno). De ahí el síntoma exacto que se reportó: la ventana responde
+—«Detener» funciona— y lo que no avanza es la sesión. **El arreglo**: el trozo se acumula en el hilo
+que lee, sin marshalear, y se vuelca de una vez en diferido; si ya hay un volcado pendiente no se
+encola otro. El orden se conserva porque el volcado es uno y escribe lo acumulado en orden, y porque
+**cualquier otro evento drena primero** lo pendiente antes de escribir lo suyo. Copilot no lo sufría
+porque sus deltas llegan en trozos gruesos, no por token; el defecto era de la casa que empezó a
+mandar más fino. **(2) Copilot no publica los argumentos de sus function tools.** Medido en el
+`dist`: entre el último texto (21:08:45) y la ejecución de la herramienta (21:09:22) hay **37 s** sin
+un solo evento. Es (a)/(b) de §2b, y no es nuestro: a Copilot las herramientas no le viajan por MCP
+sino como `AIFunctionDeclaration` locales, y el SDK no publica sus `InputDelta` —o los publica
+todos juntos al ejecutar—. **No se puede enseñar lo que no llega**, así que el tramo se cubre por
+donde sí se puede: el pie lo nombra —«esperando al modelo escribiendo el reporte · 37 s»— a partir
+del silencio que sigue al último delta de texto. Va escrito como lo que es, **una inferencia**:
+nadie ha visto esos tokens, y lo que la sostiene es D-1014 —la duración de una pasada es su salida
+de tokens (r = 0,985) y ahí caben exactamente los ~246 tokens por hallazgo—. Decirlo es más honrado
+que un «esperando» a secas, que se lee como un cuelgue. **Cobertura (N-5, N-7): tres tests sobre la
+grabación real** —el texto llega delta a delta y el `assistant` no lo duplica; las cuentas del turno
+salen enteras y `AccountingIsComplete` queda en pie, que es la condición del corte; y los eventos
+que no nos incumben se ignoran sin ruido—. **Ni un token más**: el turno grabado costó una llamada
+de dos tokens de salida, y nada de esto cambia el prompt ni añade llamadas.
