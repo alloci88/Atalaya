@@ -469,6 +469,16 @@ las seis reversiones de lo que se había movido sin pedirlo; con ellas entran N-
 
 ## Cerrado
 
+- **R7 · Los diálogos cerraban la aplicación** — el estilo base que R5 dio a los diez diálogos no
+  derivaba del implícito de WPF-UI, así que lo SUSTITUÍA con su plantilla: la ventana salía en
+  blanco y se cerraba al mostrarse. Arreglado en el estilo base —deriva del de la librería, y los
+  dos setters que tocan el handle bajan a la etiqueta de cada diálogo—; la barra de título se queda
+  sin estilo con clave, con sus tres propiedades declaradas. Red doble: el autochequeo instancia y
+  mide todos los diálogos (descubiertos por reflexión, con su test de completitud) y una regla
+  estática exige que ningún estilo con clave sobre un control de la librería sustituya al suyo —la
+  única de las dos que habría parado a R5—. Más: Cuenta deja de decir el hub dos veces y estrena
+  texto de ayuda, y «Actividad de sesiones» sube su canal entre columnas a 24 px. Ver D-1006.
+
 - **R6 · Ocho retoques de interfaz, vistos en el dist** — la fila de usuario del raíl con la
   plantilla de una entrada del menú; Cuenta y Nueva aplicación ancladas arriba y con aire sobre el
   título; las ocho columnas de «Actividad de sesiones» repartiendo el sobrante entre todas; el

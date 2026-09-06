@@ -15902,3 +15902,53 @@ divisas. La primera encontró **cuatro** que no lo cumplían y que nadie había 
 segunda encontró, antes de correr una sola vista, que `WindowStartupLocation` no es propiedad de
 dependencia y que el `Setter` que le había puesto al estilo de diálogo habría reventado **al abrir
 el primer diálogo**, con el build y los 2.453 tests en verde.
+
+---
+
+## R7 — Los diálogos cierran la aplicación, y dos retoques
+
+### D-1006 — Un estilo con clave sobre un control de la librería lo SUSTITUYE, y por eso se cerraba
+
+Un párrafo para la fase (N-7), y solo lo pedido (N-6). **(1) El cierre.** La causa está medida y no
+es de los diálogos: es del estilo base que R5 les puso. `Dialog` y `Dialog.TitleBar` se declararon
+**sin `BasedOn`**, y WPF-UI trae estilo implícito para `ui:FluentWindow` y para `ui:TitleBar`
+—comprobado leyendo las claves `typeof(...)` de los diccionarios fusionados—, así que un estilo con
+clave no añadía: **sustituía**, plantilla incluida. La ventana se quedaba sin el `ControlTemplate` de
+la librería, que es exactamente lo que se veía —«el diálogo aparece en blanco»—; y al mostrarse, WPF
+vuelve a resolver el estilo DENTRO de la creación de la ventana —`Window.Show` →
+`CreateSourceWindow` → `SetupInitialState` → `PresentationSource.RootChanged` → `OnInitialized` →
+`UpdateStyleProperty` → `StyleHelper.DoStyleInvalidations` → `ApplyStyleOrTemplateValue`— y ahí cae
+sobre `Window.CoerceAllowsTransparency`, que a esas alturas ya no admite cambio:
+`System.InvalidOperationException: No se puede cambiar AllowsTransparency después de mostrarse un
+elemento Window o de haber llamado a WindowInteropHelper.EnsureHandle`. En el hilo de interfaz eso no
+lo para nadie y la aplicación se va sin escribir en el log, que es lo que el log confirma: reinicios
+sin una sola línea de error. **La excepción está capturada en banco —sobre una ventana montada con
+los mismos diccionarios que `App.xaml`— pero NO sobre uno de los diálogos: en ningún montaje
+—construir, medir, `EnsureHandle`, o `ShowDialog` con la `MainWindow` real de dueña, en Debug y en el
+`dist`— he conseguido que reviente el diálogo. Lo que sí está probado es que sin `BasedOn` la ventana
+pierde su plantilla; el resto es la explicación más ajustada a lo observado, no una reproducción, y
+se dice así (N-2).** El arreglo es uno y va en el estilo base: `Dialog` deriva del implícito de la
+librería, y se le quitan dos setters que no pueden vivir en un estilo de ventana —`WindowBackdropType`
+y `ExtendsContentIntoTitleBar`, cuyo manejador toca el HANDLE y desde un estilo se aplican dentro de
+la creación—, que pasan a la etiqueta de cada diálogo, donde se aplican a tiempo. `Dialog.TitleBar`
+**se retira entero**: derivar tampoco valía ahí porque `{StaticResource {x:Type ui:TitleBar}}` no
+resuelve al cargar el diccionario —un `StaticResource` solo ve su ámbito y el de la aplicación—, así
+que sus tres propiedades se declaran en cada `ui:TitleBar`. **La red, que es lo que importa para que
+no haya tercera vez, son dos**: el autochequeo instancia y mide **todos** los diálogos, descubiertos
+por reflexión y con los argumentos del constructor creados sin ejecutarlo, con un test que recalcula
+la lista por su cuenta y exige que coincida —un diálogo nuevo entra solo—; y, porque **está medido
+que medir no habría bastado** (con el estilo de R5 puesto, el autochequeo da verde), una **regla
+estática** exige que todo estilo con clave sobre un control de WPF-UI derive del implícito de ese
+control. Ésa sí habría parado a R5 antes de compilar el `dist`: verificada al revés, falla nombrando
+`Dialog` y `Dialog.TitleBar`. **(2) Cuenta.** El hub se decía dos veces —la línea «Acceso al hub» y
+una tarjeta «Hub local» con el mismo estado, la misma fecha y la ruta—: se queda la línea, la ruta
+pasa a su tooltip, y los cuatro avisos que la tarjeta sí aportaba —resumen del pull, error de sync y
+las dos migraciones— se conservan bajo la lista de estados, porque ésos no repetían nada. La ayuda de
+«Estado de la conexión» pasa a una sola línea, sin «Más». **(3) Métricas.** El canal entre columnas de
+«Actividad de sesiones» sube de 12 a 24 px para las ocho —«Quién» acababa pegada a «Unidades» porque
+un nombre completo llena su columna—, «Quién» pide 200 y «Tipo» 160: medido, «Auditoría por lotes»
+ocupa 124 px y la columna deja 136 tras su canal, así que no vuelve a partirse. Los mínimos suman
+1.130 y siguen cabiendo a 1280. **Y una consecuencia del banco**: la prueba que monta una
+`Application` para cargar los diccionarios como los carga la aplicación corre en colección propia sin
+paralelismo — WPF admite una por dominio y con afinidad de hilo, y en paralelo no da rojo: cuelga el
+conjunto.
