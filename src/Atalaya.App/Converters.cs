@@ -325,6 +325,49 @@ public sealed class MiddleEllipsisConverter : IValueConverter
 }
 
 /// <summary>Niega un booleano. Lo pide el <c>MultiBinding</c> de «puede pero no debería verse».</summary>
+/// <summary>
+/// El icono VECTORIAL de una línea del hilo de actividad, a partir de su marca (F30 §1c).
+/// <para>
+/// <b>Por qué un converter y no un campo en el modelo.</b> La marca (<c>ActivityEntry.Glyph</c>) es
+/// el dato: dice de qué clase es la línea, y de ella cuelgan los tests que cuadran la narración con
+/// los contadores de la sesión. El dibujo es presentación, y cambiar de carácter a vector no puede
+/// obligar a tocar el modelo ni a reescribir esos tests. Aquí se traduce lo uno en lo otro.
+/// </para>
+/// <para>
+/// Devuelve <c>null</c> para las marcas que todavía son caracteres —las de hallazgo y cierre de
+/// pasada, anteriores a F30—, y la vista pinta entonces el carácter. Convivir es a propósito: esta
+/// tanda cambia las cuatro que se veían mal, no las siete que llevan bien desde F12.
+/// </para>
+/// </summary>
+public sealed class ActivityGlyphToIconConverter : IValueConverter
+{
+    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value as string switch
+        {
+            "⚒" => Controls.Icons.Tool,
+            "👁" => Controls.Icons.Eye,
+            "◆" => Controls.Icons.Milestone,
+            "→" => Controls.Icons.Handover,
+            _ => null,
+        };
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <inheritdoc cref="ActivityGlyphToIconConverter"/>
+/// <summary>Lo contrario: visible solo cuando la marca NO tiene icono y hay que pintar el carácter.</summary>
+public sealed class ActivityGlyphIsTextConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is string s && s is not ("⚒" or "👁" or "◆" or "→")
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
 public sealed class InverseBoolConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)

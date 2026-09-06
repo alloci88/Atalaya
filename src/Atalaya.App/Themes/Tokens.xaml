@@ -291,6 +291,11 @@
          miga—: va a la altura de la letra, no a la de una entrada de menú. -->
     <sys:Double x:Key="Icon.Size.Small">14</sys:Double>
 
+    <!-- EL CARRIL DE UN ICONO EN UNA FILA DE TEXTO (F30 §1c): 24 px, con el icono centrado dentro.
+         El icono mide 14 y el carril 24 para que la columna sea la misma tenga el icono que tenga —
+         y para que un carácter con otra métrica no pueda empujar el texto de al lado. -->
+    <sys:Double x:Key="Icon.Lane">24</sys:Double>
+
     <!-- La barra de «estás aquí» del raíl, y el margen que la separa de la entrada. Están aquí y
          no sueltas en el estilo porque `RailCollapsedFitsTheIcon` hace la cuenta con ellas: lo que
          se rompió en la Parte A fue justamente esa cuenta. -->

@@ -118,16 +118,34 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
     public string PerUnitText => _live.CostPerUnit is { } c ? $"media {c:0.##}/unidad" : string.Empty;
 
     /// <summary>
-    /// <b>«esperando al modelo · 42 s»</b> (F30 §3), y vacío mientras las cosas llegan solas.
+    /// <b>«esperando al modelo tras reportar 11 hallazgos · 38 s»</b> (F30 §3, ampliado en §1c), y
+    /// vacío mientras las cosas llegan solas.
     /// <para>
     /// El reloj sube porque el pie se repinta cada segundo desde F16-RETOQUE; lo que se añade es el
     /// dato, que hasta ahora no existía en ninguna parte: la vista no sabía cuándo había llegado
     /// la última señal de vida, así que no podía distinguir una espera larga de un cuelgue.
     /// </para>
+    /// <para>
+    /// <b>Y DE QUÉ se espera</b>, que es lo que convierte el minuto en algo que se entiende. El
+    /// silencio largo de una auditoría no es «el modelo no arranca»: es el modelo <b>escribiendo
+    /// los argumentos de la herramienta</b> —246 tokens por hallazgo a 64 tokens por segundo, los
+    /// dos medidos sobre el hub real; once hallazgos son unos 42 s— y esos tokens no se pueden
+    /// pintar todavía. Nombrar el tramo es lo más honrado que se puede decir mientras tanto.
+    /// </para>
     /// </summary>
-    public string WaitText => _live.IsWaiting
-        ? $"esperando al modelo · {(int)_live.SinceLastEvent.TotalSeconds} s"
-        : string.Empty;
+    public string WaitText
+    {
+        get
+        {
+            if (!_live.IsWaiting)
+            {
+                return string.Empty;
+            }
+
+            string after = _live.WaitingAfter is { Length: > 0 } a ? " " + a : string.Empty;
+            return $"esperando al modelo{after} · {(int)_live.SinceLastEvent.TotalSeconds} s";
+        }
+    }
 
     /// <summary>La espera ya es larga (90 s). Lo usa la vista para teñirla de ámbar.</summary>
     public bool WaitIsLong => _live.WaitIsLong;

@@ -142,4 +142,29 @@ public static class Icons
     /// </summary>
     public static Geometry Empty { get; } = P(
         "M4,13 L8,13 L9.5,16 L14.5,16 L16,13 L20,13 M4,13 L6.5,5.5 L17.5,5.5 L20,13 L20,18.5 L4,18.5 Z");
+
+    // ================================================================ El hilo de actividad (F30)
+
+    // POR QUÉ VECTORES Y NO GLIFOS DE TEXTO. El hilo entró en F30 §1 con caracteres —⚒ 👁 ◆ →—
+    // porque era lo rápido, y es frágil por dos motivos que se vieron en el `dist`: un carácter que
+    // la fuente de interfaz no tiene lo resuelve Windows con la fuente que encuentre, así que sale
+    // con otra métrica y con otro peso —el ⚒ se salía de su hueco y se solapaba con el texto—, y
+    // además no hereda el trazo ni el color del sistema. Es exactamente el argumento de D-944 para
+    // el resto de la casa, aplicado tarde. Estos cuatro son del mismo juego que los del raíl: 24×24,
+    // trazo abierto, sin relleno.
+
+    /// <summary>Una herramienta que el auditor ha invocado: los dos chevrones de una llamada.</summary>
+    public static Geometry Tool { get; } = P("M9,7 L4.5,12 L9,17 M15,7 L19.5,12 L15,17");
+
+    /// <summary>Ha leído un fichero. El ojo, que es lo que ya significa eso en el arreglo asistido.</summary>
+    public static Geometry Eye { get; } = P(
+        "M3,12 C6,7.5 9.5,5.5 12,5.5 C14.5,5.5 18,7.5 21,12 "
+        + "C18,16.5 14.5,18.5 12,18.5 C9.5,18.5 6,16.5 3,12 Z "
+        + "M12,9.5 A2.5,2.5 0 1 1 11.99,9.5 Z");
+
+    /// <summary>Un hito de la propia Atalaya: el rombo de un mojón, ni bueno ni malo.</summary>
+    public static Geometry Milestone { get; } = P("M12,4 L20,12 L12,20 L4,12 Z");
+
+    /// <summary>El turno sale hacia el modelo. A partir de aquí, lo que pase es suyo.</summary>
+    public static Geometry Handover { get; } = P("M4,12 L19,12 M13.5,6.5 L20,12 L13.5,17.5");
 }

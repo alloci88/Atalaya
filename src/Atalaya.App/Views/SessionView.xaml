@@ -320,13 +320,45 @@
                                                                             Text="{Binding Time}"
                                                                             Style="{StaticResource Session.Log.Time}"
                                                                             Margin="{StaticResource Pad.S.Right}" />
-                                                                        <TextBlock
-                                                                            Grid.Column="1"
-                                                                            Text="{Binding Glyph}"
-                                                                            Width="18"
-                                                                            FontWeight="Bold"
-                                                                            Opacity="0.9"
-                                                                            VerticalAlignment="Top" />
+                                                                        <!-- EL ICONO, EN SU CARRIL (F30 §1c).
+                                                                             Era un carácter de 18 px de ancho con
+                                                                             `FontWeight=Bold`: los glifos que la fuente
+                                                                             de interfaz no tiene los resuelve Windows
+                                                                             con otra —otra métrica, otro peso— y el ⚒
+                                                                             se salía de su hueco y se solapaba con el
+                                                                             texto. Ahora hay un carril de
+                                                                             `Icon.Lane` px, el icono va CENTRADO en él
+                                                                             y quedan `Space.XS` hasta el texto, como el
+                                                                             resto de los iconos de la casa.
+
+                                                                             Los cuatro del hilo son VECTORES del mismo
+                                                                             juego que el raíl (D-944); los de hallazgo
+                                                                             y cierre de pasada siguen siendo caracteres
+                                                                             mientras nadie los toque, y por eso el
+                                                                             carril sabe pintar las dos cosas. -->
+                                                                        <Grid Grid.Column="1"
+                                                                              Width="{StaticResource Icon.Lane}"
+                                                                              Margin="{StaticResource Pad.XS.Right}"
+                                                                              VerticalAlignment="Top">
+                                                                            <Path Width="{StaticResource Icon.Size.Small}"
+                                                                                  Height="{StaticResource Icon.Size.Small}"
+                                                                                  HorizontalAlignment="Center"
+                                                                                  VerticalAlignment="Center"
+                                                                                  Stretch="Uniform"
+                                                                                  Fill="{x:Null}"
+                                                                                  Stroke="{DynamicResource Brush.TextMuted}"
+                                                                                  StrokeThickness="{StaticResource Icon.Stroke}"
+                                                                                  StrokeStartLineCap="Round"
+                                                                                  StrokeEndLineCap="Round"
+                                                                                  StrokeLineJoin="Round"
+                                                                                  Data="{Binding Glyph, Converter={StaticResource ActivityGlyphToIcon}}" />
+                                                                            <TextBlock Text="{Binding Glyph}"
+                                                                                       HorizontalAlignment="Center"
+                                                                                       VerticalAlignment="Center"
+                                                                                       FontWeight="Bold"
+                                                                                       Foreground="{DynamicResource Brush.TextMuted}"
+                                                                                       Visibility="{Binding Glyph, Converter={StaticResource ActivityGlyphIsText}}" />
+                                                                        </Grid>
                                                                         <Border
                                                                             Grid.Column="2"
                                                                             CornerRadius="3"

@@ -66,6 +66,49 @@ public static class ActivityWording
     public static string GlyphFor(string entry)
         => Tool(entry) == "read_signatures" ? "👁" : "⚒";
 
+    /// <summary>
+    /// <b>De qué se está esperando</b> (F30 §1c): lo que el pie pone detrás de «esperando al
+    /// modelo». Vacío cuando no hay nada útil que decir — mejor la frase corta que un relleno.
+    /// <para>
+    /// Existe porque el tramo importa. Un silencio tras <c>submit_findings</c> es el modelo
+    /// escribiendo los argumentos del siguiente paso, y son <b>246 tokens por hallazgo</b> a
+    /// <b>64 tokens por segundo</b> (medidos los dos sobre el hub real): reportar once son unos
+    /// <b>42 s</b> en los que no puede llegar nada. Decir tras qué se espera convierte ese minuto
+    /// en algo que se entiende.
+    /// </para>
+    /// </summary>
+    public static string After(ActivityNote note)
+    {
+        if (note.Kind == ActivityNoteKind.Handover)
+        {
+            return note.Pass > 0 ? $"tras enviar la pasada {note.Pass}" : "tras enviar el turno";
+        }
+
+        if (note.Kind != ActivityNoteKind.Tool)
+        {
+            return string.Empty;
+        }
+
+        string entry = note.Text;
+        return Tool(entry) switch
+        {
+            "submit_findings" => "tras " + Counted(entry, "reportar 1 hallazgo", "reportar", plural: true),
+            "submit_finding" => "tras reportar 1 hallazgo",
+            "report_verdicts" => "tras " + Counted(entry, "dar 1 veredicto", "dar", plural: true, noun: "veredictos"),
+            "add_locations" => "tras añadir ubicaciones",
+            "unit_done" => "tras cerrar la unidad",
+            "read_signatures" => "tras leer un fichero",
+            _ => string.Empty,
+        };
+    }
+
+    /// <summary>«reportar 11 hallazgos» / «reportar 1 hallazgo», con el número delante del nombre.</summary>
+    private static string Counted(string entry, string singular, string verb, bool plural, string noun = "hallazgos")
+    {
+        int n = Number(entry, "items");
+        return n == 1 ? singular : $"{verb} {n} {noun}";
+    }
+
     /// <summary>La frase que se lee. Ver la nota de la clase sobre lo que no reconoce.</summary>
     public static string Describe(string entry)
     {

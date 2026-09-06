@@ -261,47 +261,80 @@ public sealed partial class LiveSessionService : ObservableObject
 
     /// <summary>
     /// Se está esperando <b>al modelo</b> y ya se nota. Las dos mitades cuentan: que haya pasado el
-    /// silencio corto, y que el turno esté de verdad en el aire — mientras Atalaya prepara el suyo
-    /// no se está esperando a nadie, y decirlo sería echarle al modelo un tiempo que no es suyo.
+    /// silencio corto, y que haya una <b>petición en vuelo</b> — mientras Atalaya prepara el suyo o
+    /// la sesión ya ha terminado no se espera a nadie, y decirlo sería echarle al modelo un tiempo
+    /// que no es suyo.
     /// </summary>
-    public bool IsWaiting => IsRunning && _awaitingModel && SinceLastEvent.TotalSeconds >= QuietSeconds;
+    public bool IsWaiting => IsRunning && _inFlight && SinceLastEvent.TotalSeconds >= QuietSeconds;
+
+    /// <summary>
+    /// <b>Qué se estaba haciendo cuando se hizo el silencio</b> (F30 §1c): «tras reportar 11
+    /// hallazgos», «tras enviar la pasada 3». Vacío si no hay nada que decir.
+    /// <para>
+    /// Sin esto, el pie decía «esperando al modelo» y punto, que no distingue el tramo largo de
+    /// verdad —el modelo escribiendo los argumentos de una herramienta— de una pausa cualquiera. Y
+    /// el tramo importa: es donde está el minuto.
+    /// </para>
+    /// </summary>
+    public string WaitingAfter { get; private set; } = string.Empty;
 
     /// <summary>La espera es larga: el pie lo dice en ámbar.</summary>
     public bool WaitIsLong => IsRunning && SinceLastEvent.TotalSeconds >= LongWaitSeconds;
 
     /// <summary>
-    /// <b>El turno está en el aire</b> (F30 §1b): salió hacia el modelo y todavía no ha vuelto
-    /// nada de él.
+    /// <b>Hay una petición en vuelo</b> (F30 §1b, corregido en §1c): el turno salió hacia el modelo
+    /// y la pasada todavía no ha cerrado.
     /// <para>
-    /// Es lo que hace que el pie pueda decir «esperando al modelo» y no solo «no llega nada». La
-    /// diferencia importa porque <b>el hueco tiene dueño y se ha medido</b>: entre una pasada y la
-    /// siguiente Atalaya tarda <b>16 ms</b> —releer los 149 hallazgos del hub real y recomponer el
-    /// prompt— frente a los <b>16,9 s</b> que dura una pasada de media (26 unidades, 92 pasadas,
-    /// 1.559 s del hub del usuario). O sea: el <b>99,9 %</b> del silencio es el modelo. Anclar la
-    /// cuenta en el envío es decirlo sin tener que explicarlo.
+    /// <b>Vale para TODOS los tramos, y ahí estuvo el error.</b> §1b lo apagaba en cuanto llegaba
+    /// cualquier evento, con lo que la espera solo se contaba desde la entrega hasta la primera
+    /// señal — y el tramo largo de verdad no es ése. Un turno con herramientas tiene varios
+    /// silencios: mientras el modelo escribe los argumentos de <c>submit_findings</c>, y otra vez
+    /// desde el resultado de la herramienta hasta que vuelve a hablar. Los dos son el modelo
+    /// generando, y los dos hay que contarlos. Lo que un evento hace es <b>reiniciar el reloj</b>,
+    /// no aterrizar el turno; quien lo aterriza es el cierre de la pasada.
     /// </para>
     /// </summary>
-    private bool _awaitingModel;
+    private bool _inFlight;
 
     /// <summary>
     /// Señal de vida: la llama todo lo que llega del barrido. Un solo sitio, para que no pueda
     /// haber un evento que se pinte y no cuente como actividad.
     /// <para>
-    /// Y cierra la espera: si ha llegado algo, el turno ya no está en el aire. El único que la
-    /// abre es la entrega (<see cref="ActivityNoteKind.Handover"/>).
+    /// <b>Reinicia el reloj y NO cierra el vuelo.</b> Que el modelo haya dicho algo no significa
+    /// que haya terminado: entre un evento y el siguiente puede haber cuarenta segundos de
+    /// generación, que es exactamente el silencio que esta fase viene a nombrar.
     /// </para>
     /// </summary>
-    private void Touch()
+    /// <param name="after">
+    /// Qué acaba de pasar, para que el pie pueda decir de qué espera. Vacío deja lo anterior: los
+    /// eventos sin nombre —una muestra de consumo— no borran el contexto del último que sí lo tenía.
+    /// </param>
+    private void Touch(string after = "")
     {
         _lastEventUtc = DateTimeOffset.UtcNow;
-        _awaitingModel = false;
+        if (after.Length > 0)
+        {
+            WaitingAfter = after;
+        }
     }
 
-    /// <summary>El turno acaba de salir: la espera empieza aquí y no en el último evento.</summary>
-    private void TurnSent()
+    /// <summary>El turno acaba de salir: hay petición en vuelo y el reloj empieza aquí.</summary>
+    private void TurnSent(string after)
     {
         _lastEventUtc = DateTimeOffset.UtcNow;
-        _awaitingModel = true;
+        WaitingAfter = after;
+        _inFlight = true;
+    }
+
+    /// <summary>
+    /// La pasada cerró: ya no hay nada en vuelo. Lo que venga después es Atalaya preparando el
+    /// turno siguiente, y eso no se le apunta al modelo.
+    /// </summary>
+    private void TurnLanded()
+    {
+        _lastEventUtc = DateTimeOffset.UtcNow;
+        WaitingAfter = string.Empty;
+        _inFlight = false;
     }
 
     /// <summary>Línea de la barra de estado inferior mientras corre.</summary>
@@ -689,15 +722,15 @@ public sealed partial class LiveSessionService : ObservableObject
         // cosa, y pegarlo al párrafo anterior lo haría ilegible.
         _currentText = null;
 
-        // La entrega ABRE la espera; todo lo demás la cierra, porque todo lo demás es algo que ha
-        // llegado (F30 §1b).
+        // La entrega ABRE el vuelo; los demás eventos solo reinician el reloj y dicen de qué se
+        // espera a partir de ahora (F30 §1c). Cerrar el vuelo es cosa del cierre de la pasada.
         if (note.Kind == ActivityNoteKind.Handover)
         {
-            TurnSent();
+            TurnSent(ActivityWording.After(note));
         }
         else
         {
-            Touch();
+            Touch(ActivityWording.After(note));
         }
 
         Changed?.Invoke();
@@ -776,6 +809,10 @@ public sealed partial class LiveSessionService : ObservableObject
 
     private void OnPassFinished(string path, UnitPassRecord record) => OnUi(() =>
     {
+        // La pasada cerró: no queda petición en vuelo (F30 §1c). Lo que venga hasta la entrega
+        // siguiente es Atalaya, y son 16 ms.
+        TurnLanded();
+
         PassProgress? pass = _currentPass;
         if (pass is null)
         {
