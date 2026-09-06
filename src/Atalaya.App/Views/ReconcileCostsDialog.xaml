@@ -34,7 +34,7 @@
         <ScrollViewer Grid.Row="1" Margin="{StaticResource Pad.DialogList}"
                       VerticalScrollBarVisibility="Auto" Padding="{StaticResource Pad.XS.Right}">
             <StackPanel>
-                <TextBlock Text="{Binding AppName}" Style="{StaticResource Text.Lead}" FontWeight="SemiBold"
+                <TextBlock Text="{Binding AppName}" Style="{StaticResource Dialog.Title}"
                            TextWrapping="Wrap" />
                 <TextBlock Style="{StaticResource Text.Meta}" TextWrapping="Wrap"
                            Margin="{StaticResource Pad.XXS.Top}"

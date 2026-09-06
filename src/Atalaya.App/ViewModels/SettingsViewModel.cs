@@ -270,15 +270,6 @@ public sealed partial class SettingsViewModel : ViewModelBase
         CostCurrencies.Label(CostCurrency.Usd),
     };
 
-    /// <summary>
-    /// Qué significa elegir. Las dos mitades importan: de dónde sale cada unidad, y que el hub no
-    /// cambia — quien la mueva no está cambiando ninguna cifra compartida.
-    /// </summary>
-    public const string CurrencyHelp =
-        "AI credits es la unidad en la que factura GitHub y en la que grafica su panel; los dólares "
-        + "salen de ella a 0,01 $ por credit. Es una preferencia de esta máquina: el hub sigue "
-        + "guardando los mismos tokens y los mismos credits, y los informes registran las dos.";
-
     [ObservableProperty] private bool _isLightTheme;
     [ObservableProperty] private int _pollingSeconds;
     [ObservableProperty] private int _freshnessDays;

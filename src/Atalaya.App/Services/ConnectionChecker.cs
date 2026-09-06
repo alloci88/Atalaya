@@ -157,6 +157,11 @@ public sealed class ConnectionChecker
         }
         .Concat(providers.All.Select(p => new ConnectionStep(ProviderStepKey(p.ProviderId), $"{p.ProviderName} disponible")))
         .ToArray();
+
+        // Los dos grupos salen de la MISMA lista, rebanada por la clave. Construir dos listas
+        // aparte daría dos juegos de filas y solo uno se enteraría de la comprobación.
+        GitHubSteps = Steps.Where(s => !s.Key.StartsWith("provider:", StringComparison.Ordinal)).ToArray();
+        AuditorSteps = Steps.Where(s => s.Key.StartsWith("provider:", StringComparison.Ordinal)).ToArray();
     }
 
     /// <summary>La clave de la fila de un proveedor. En un sitio, para que las dos mitades casen.</summary>
@@ -164,6 +169,21 @@ public sealed class ConnectionChecker
 
     /// <summary>The four rows, created once and mutated in place (safe to bind).</summary>
     public IReadOnlyList<ConnectionStep> Steps { get; }
+
+    /// <summary>
+    /// <b>Las de GitHub</b> (R8): identidad, organización y hub. Son las tres que no se sustituyen
+    /// —sin ellas no hay autoría ni sitio donde escribir— y por eso van en su propio grupo, con su
+    /// subtítulo. Son las MISMAS instancias que <see cref="Steps"/>, no copias: la comprobación las
+    /// muta en el sitio y los dos grupos se enteran.
+    /// </summary>
+    public IReadOnlyList<ConnectionStep> GitHubSteps { get; }
+
+    /// <summary>
+    /// <b>Los auditores</b> (R8). Basta con uno, y cuál se usa se elige en Ajustes; el subtítulo
+    /// del grupo lo dice, que es donde antes había una frase de ayuda suelta que nadie relacionaba
+    /// con las filas de abajo.
+    /// </summary>
+    public IReadOnlyList<ConnectionStep> AuditorSteps { get; }
 
     private ConnectionStep Step(string key) => Steps.First(s => s.Key == key);
 

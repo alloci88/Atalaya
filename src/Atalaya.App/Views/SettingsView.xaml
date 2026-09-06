@@ -290,9 +290,11 @@
                              guarda al cambiarlo, como los demás ajustes (R5 §7). -->
                         <DockPanel Grid.Row="1" Style="{StaticResource Setting.Row}">
                             <StackPanel Style="{StaticResource Setting.Label}">
+                                <!-- SIN AYUDA (R8). Eran seis líneas para un desplegable de dos
+                                     opciones cuyos rótulos —«AI credits» y «Dólares (USD)»— ya
+                                     dicen todo lo que hay que decidir. La etiqueta y el control, y
+                                     nada más. -->
                                 <TextBlock Text="Mostrar el coste en" Style="{StaticResource Setting.Name}" />
-                                <TextBlock Style="{StaticResource Setting.Help}"
-                                           Text="{x:Static vm:SettingsViewModel.CurrencyHelp}" />
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Top"
                                         c:Stack.Gap="{StaticResource Space.S}">
@@ -305,16 +307,19 @@
                             </StackPanel>
                         </DockPanel>
 
-                        <!-- UNA línea, y el resto plegado: la de antes eran cuatro y había que
-                             leerlas enteras para llegar a la tabla, que es lo que se viene a ver. -->
-                        <StackPanel Grid.Row="2" Margin="{StaticResource Pad.M.Bottom}">
+                        <!-- UNA línea, y el resto plegado (R8). La visible dice qué son estos
+                             precios y de dónde salen —que es lo que hace falta para mirar la tabla—
+                             y baja de tres frases a dos. Lo que se pliega son las dos salvedades:
+                             una caja en blanco no es un cero, y Claude Code no entra aquí. Las dos
+                             importan el día que se editan; ninguna, el resto de los días. -->
+                        <StackPanel Grid.Row="2" Margin="{StaticResource Pad.L.Bottom}">
                             <TextBlock Style="{StaticResource Text.Small}"
                                        MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
-                                       Text="Los precios son los de la tabla pública de GitHub Copilot. Atalaya los siembra y los completa sola; aquí solo se corrige lo que no cuadre." />
+                                       Text="Precios de la tabla pública de GitHub Copilot, por millón de tokens. Atalaya los siembra y completa sola; aquí solo se corrige lo que no cuadre." />
                             <ToggleButton x:Name="MasTarifas" Style="{StaticResource Toggle.More}" />
                             <TextBlock Style="{StaticResource Setting.More}"
                                        MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
-                                       Text="De aquí sale el coste de cada sesión. La tabla vive en el hub y la ve todo el equipo, con el commit como atribución; añade aquí el precio de un modelo que Atalaya todavía no traiga. Caché escrita en blanco = ese modelo no la cobra aparte, y esos tokens son entrada normal; no es lo mismo que escribir un 0. Las sesiones de Claude Code no se tarifan: van contra tu suscripción y no entran en esta tabla."
+                                       Text="Caché escrita en blanco significa que ese modelo no la cobra aparte y esos tokens son entrada normal; no es lo mismo que escribir un 0. Las sesiones de Claude Code no se tarifan —van contra tu suscripción— y por eso no están en esta tabla."
                                        Visibility="{Binding IsChecked, ElementName=MasTarifas, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
 

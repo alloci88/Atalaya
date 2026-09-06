@@ -36,8 +36,8 @@
         <ui:TitleBar Background="{DynamicResource Brush.Bg}" Foreground="{DynamicResource Brush.Text}" ShowMaximize="False" ShowMinimize="False" Grid.Row="0" Title="Directivas del proyecto" />
 
         <StackPanel Grid.Row="1" Margin="{StaticResource Pad.DialogHead}">
-            <TextBlock Text="{Binding Title}" FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold" TextWrapping="Wrap" />
-            <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Small}"
+            <TextBlock Text="{Binding Title}" Style="{StaticResource Dialog.Title}" TextWrapping="Wrap" />
+            <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" Style="{StaticResource Dialog.Help}"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Text="Los ficheros de convenciones que el equipo mantiene en el repositorio de esta aplicación: instrucciones de agentes, ADRs, specs, skills. Atalaya solo registra CUÁLES son; su contenido se lee del clon cada vez que se usa, así que siempre viaja la versión vigente. Informan el criterio del auditor y el estilo del arreglo — nunca cambian las reglas de la herramienta." />
 
@@ -46,10 +46,10 @@
             <Border CornerRadius="6" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.S.Top}"
                     Background="{DynamicResource SubtleFillColorSecondaryBrush}">
                 <StackPanel>
-                    <TextBlock Text="{Binding BudgetLabel}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}" />
+                    <TextBlock Text="{Binding BudgetLabel}" TextWrapping="Wrap" Style="{StaticResource Dialog.Help}" />
                     <WrapPanel Margin="{StaticResource Pad.XS.Top}" VerticalAlignment="Center">
                         <TextBlock Text="Presupuesto (tokens) — 0 lo apaga" VerticalAlignment="Center"
-                                   Margin="{StaticResource Pad.XS.Right}" FontSize="{StaticResource FontSize.Small}" />
+                                   Margin="{StaticResource Pad.XS.Right}" Style="{StaticResource Dialog.Help}" />
                         <ui:TextBox Width="100" Margin="{StaticResource Pad.XS.Right}"
                                     Text="{Binding Budget, UpdateSourceTrigger=PropertyChanged}"
                                     ToolTip="Es de ESTA aplicación y vive en su app.json: un monorepo lleno de ADRs no necesita lo mismo que un proyecto con un CLAUDE.md." />
@@ -61,13 +61,13 @@
             <Border Margin="{StaticResource Pad.XS.Top}"
                     Style="{StaticResource Notice.Warning}"
                     Visibility="{Binding IsOverBudget, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock Text="{Binding OverBudgetNotice}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}" />
+                <TextBlock Text="{Binding OverBudgetNotice}" TextWrapping="Wrap" Style="{StaticResource Dialog.Help}" />
             </Border>
 
             <Border CornerRadius="6" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.XS.Top}"
                     Background="{DynamicResource SubtleFillColorTertiaryBrush}"
                     Visibility="{Binding HasScanNotice, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock Text="{Binding ScanNotice}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}" />
+                <TextBlock Text="{Binding ScanNotice}" TextWrapping="Wrap" Style="{StaticResource Dialog.Help}" />
             </Border>
 
             <TextBlock Text="No se ha detectado ningún fichero de directivas y no hay ninguno registrado. Si este proyecto tiene convenciones escritas en otro sitio, añádelas a mano abajo."
@@ -95,18 +95,18 @@
                                     <TextBlock Grid.Column="1" TextWrapping="Wrap" VerticalAlignment="Center"><Run Text="{Binding Path, Mode=OneWay}" FontFamily="Consolas" FontWeight="SemiBold" /></TextBlock>
                                 </Grid>
 
-                                <TextBlock Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Small}" TextWrapping="Wrap"
+                                <TextBlock Margin="{StaticResource Pad.XXS.Top}" Style="{StaticResource Dialog.Help}" TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                                     <Run Text="{Binding Kind, Mode=OneWay}" />
                                     <Run Text=" · " /><Run Text="{Binding Size, Mode=OneWay}" />
                                     <Run Text=" · " /><Run Text="{Binding Cost, Mode=OneWay}" />
                                     <Run Text=" · " /><Run Text="{Binding State, Mode=OneWay}" FontWeight="SemiBold" />
                                 </TextBlock>
-                                <TextBlock Text="{Binding Why}" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Small}" TextWrapping="Wrap"
+                                <TextBlock Text="{Binding Why}" Margin="{StaticResource Pad.XXS.Top}" Style="{StaticResource Dialog.Help}" TextWrapping="Wrap"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
                                 <WrapPanel Margin="{StaticResource Pad.S.Top}" VerticalAlignment="Center">
-                                    <TextBlock Text="Ámbito" VerticalAlignment="Center" Margin="{StaticResource Pad.BarItem}" FontSize="{StaticResource FontSize.Small}" />
+                                    <TextBlock Text="Ámbito" VerticalAlignment="Center" Margin="{StaticResource Pad.BarItem}" Style="{StaticResource Dialog.Help}" />
                                     <ComboBox Width="130" Margin="{StaticResource Pad.BarItem}"
                                               ItemsSource="{Binding Source={x:Static vm:DirectiveRow.ScopeOptions}}"
                                               SelectedItem="{Binding SelectedScope}"
@@ -115,7 +115,7 @@
                                                Command="{Binding DataContext.ApplyScopeCommand,
                                                           RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                CommandParameter="{Binding}" />
-                                    <TextBlock Text="Prioridad" VerticalAlignment="Center" Margin="{StaticResource Pad.BarItem}" FontSize="{StaticResource FontSize.Small}" />
+                                    <TextBlock Text="Prioridad" VerticalAlignment="Center" Margin="{StaticResource Pad.BarItem}" Style="{StaticResource Dialog.Help}" />
                                     <ui:TextBox Width="70" Margin="{StaticResource Pad.BarItem}"
                                                 Text="{Binding Order, UpdateSourceTrigger=PropertyChanged}"
                                                 ToolTip="Menor entra antes cuando el presupuesto no da para todo." />
@@ -137,7 +137,7 @@
                                 <Border CornerRadius="4" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.XS.Top}"
                                         Background="{DynamicResource ControlFillColorDefaultBrush}"
                                         Visibility="{Binding IsPreviewOpen, Converter={StaticResource BoolToVisibility}}">
-                                    <TextBlock Text="{Binding Preview}" FontFamily="Consolas" FontSize="{StaticResource FontSize.Small}"
+                                    <TextBlock Text="{Binding Preview}" FontFamily="Consolas" Style="{StaticResource Dialog.Help}"
                                                TextWrapping="Wrap" MaxHeight="240" />
                                 </Border>
                             </StackPanel>
@@ -149,7 +149,7 @@
 
         <!-- La válvula de F7 §1: lo que el catálogo no conoce se añade por su ruta. -->
         <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="{StaticResource Pad.DialogHead}">
-            <TextBlock Text="Añadir a mano" VerticalAlignment="Center" Margin="{StaticResource Pad.XS.Right}" FontSize="{StaticResource FontSize.Small}" />
+            <TextBlock Text="Añadir a mano" VerticalAlignment="Center" Margin="{StaticResource Pad.XS.Right}" Style="{StaticResource Dialog.Help}" />
             <ui:TextBox Width="420" Margin="{StaticResource Pad.XS.Right}"
                         PlaceholderText="ruta/relativa/al/repo/CONVENCIONES.md"
                         Text="{Binding ManualPath, UpdateSourceTrigger=PropertyChanged}"

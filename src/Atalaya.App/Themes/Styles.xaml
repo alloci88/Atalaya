@@ -1309,8 +1309,13 @@
     -->
 
 
-    <!-- El título de dentro del diálogo: 21, como el de una sección. La barra de arriba dice de
-         qué ventana se trata; esto dice de qué va lo que hay debajo. -->
+    <!-- EL TÍTULO DE DENTRO DEL DIÁLOGO: 21, el de una sección del sistema. La barra de arriba
+         dice de qué ventana se trata; esto dice de qué va lo que hay debajo.
+
+         R5 declaró estos dos estilos y NO los usó en ningún sitio —cero referencias—, así que los
+         diez diálogos siguieron escribiendo su título a 17 con el `FontWeight` a mano y su ayuda
+         suelta. Un estilo que nadie aplica no viste nada: es lo que hacía que, con el estilo base
+         de ventana puesto, por dentro siguieran pareciendo de fábrica (R8). -->
     <Style x:Key="Dialog.Title" TargetType="TextBlock" BasedOn="{StaticResource Text.H3}">
         <Setter Property="TextWrapping" Value="Wrap" />
         <Setter Property="Margin" Value="{StaticResource Pad.S.Bottom}" />

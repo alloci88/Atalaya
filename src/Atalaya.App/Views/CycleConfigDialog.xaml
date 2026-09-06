@@ -33,8 +33,8 @@
         <ui:TitleBar Background="{DynamicResource Brush.Bg}" Foreground="{DynamicResource Brush.Text}" ShowMaximize="False" ShowMinimize="False" Grid.Row="0" Title="{Binding Title}" />
 
         <StackPanel Grid.Row="1" Margin="{StaticResource Pad.Dialog}">
-            <TextBlock Text="{Binding AppName}" FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold" TextWrapping="Wrap" />
-            <TextBlock Text="{Binding Context}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Small}"
+            <TextBlock Text="{Binding AppName}" Style="{StaticResource Dialog.Title}" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding Context}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" Style="{StaticResource Dialog.Help}"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
             <!-- La temática: el catálogo cerrado de la casa, General primero y marcada como
@@ -46,15 +46,14 @@
                       DisplayMemberPath="Label"
                       Width="300" HorizontalAlignment="Left" Margin="{StaticResource Pad.XS.Top}"
                       ToolTip="Qué busca el auditor en este ciclo. Fuera de la temática no se reporta nada." />
-            <TextBlock Text="{Binding ThemeDescription}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Small}"
-                       Foreground="{DynamicResource Brush.TextMuted}" />
+            <TextBlock Text="{Binding ThemeDescription}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" Style="{StaticResource Dialog.Help}" />
 
             <!-- El aviso de cambiar con trabajo hecho. Solo aparece cuando cuesta algo. -->
             <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.S.Top}"
                         Visibility="{Binding HasWarning, Converter={StaticResource BoolToVisibility}}">
                 <TextBlock Text="⚠" Margin="{StaticResource Pad.XS.Right}"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
-                <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}" MaxWidth="470"
+                <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" Style="{StaticResource Dialog.Help}" MaxWidth="470"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
             </StackPanel>
 
@@ -69,10 +68,10 @@
                       DisplayMemberPath="Label"
                       Width="300" HorizontalAlignment="Left" Margin="{StaticResource Pad.XS.Top}"
                       ToolTip="Con qué modelo prefiere el equipo auditar este ciclo. Quien lance con otro verá un aviso, y podrá seguir." />
-            <TextBlock Text="{Binding ModelsNotice}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Small}"
+            <TextBlock Text="{Binding ModelsNotice}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" Style="{StaticResource Dialog.Help}"
                        Foreground="{DynamicResource Brush.Warning.Ink}"
                        Visibility="{Binding HasModelsNotice, Converter={StaticResource BoolToVisibility}}" />
-            <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Small}" Foreground="{DynamicResource Brush.TextMuted}"
+            <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" Style="{StaticResource Dialog.Help}" Foreground="{DynamicResource Brush.TextMuted}"
                        Text="Es una preferencia compartida, no una imposición: no todo el mundo tiene las dos casas. Al lanzar con otro proveedor o modelo, el diálogo de lanzar lo avisa y deja continuar." />
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="{StaticResource Pad.M.Top}">

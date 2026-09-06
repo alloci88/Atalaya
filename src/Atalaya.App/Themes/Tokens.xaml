@@ -399,6 +399,28 @@
          una fila de menú y aquí es la foto de quién eres, que es el dato de la tarjeta. -->
     <sys:Double x:Key="Avatar.Size">56</sys:Double>
 
+    <!-- EL RITMO DE CUENTA (R8). La vista estaba apelotonada: las tarjetas con 16 de relleno, sin
+         aire entre ellas y con el título encima pegado. Estos cuatro son los que la hacen respirar,
+         y salen de la escala de siempre —32, 24, 24— sin inventar ningún número. -->
+    <Thickness x:Key="Pad.AccountCard">32</Thickness>
+    <Thickness x:Key="Pad.AccountCardGap">0,0,0,24</Thickness>
+    <Thickness x:Key="Pad.AccountFirstCard">0,32,0,0</Thickness>
+
+    <!-- Una fila de estado: 48 de alto y 8 hasta la siguiente. El alto es fijo porque lo que la
+         llena cambia —una fila con detalle mide más que una sin él— y sin él la lista se movía al
+         comprobar. Y el círculo del icono, 24: el icono cabe dentro con su aire. -->
+    <sys:Double x:Key="Check.RowHeight">48</sys:Double>
+    <sys:Double x:Key="Check.CircleSize">24</sys:Double>
+    <Thickness x:Key="Pad.CheckRow">0,0,0,8</Thickness>
+    <Thickness x:Key="Pad.CheckGroup">0,0,0,8</Thickness>
+
+    <!-- El segundo rótulo de grupo lleva además aire POR ENCIMA: separa los auditores de las tres
+         de GitHub sin meter una raya entre ellos. -->
+    <Thickness x:Key="Pad.CheckGroupSecond">0,24,0,8</Thickness>
+
+    <!-- La botonera de Cuenta, a 24 de la última tarjeta. -->
+    <Thickness x:Key="Pad.AccountActions">0,24,0,0</Thickness>
+
     <!-- La tarjeta de «Acerca de»: una ficha, centrada en los dos ejes. 640 es lo que necesita su
          línea más larga —la descripción de dos renglones— sin estirarse a lo ancho de un monitor,
          que es lo que hacía que cuatro líneas parecieran una pantalla vacía. -->
@@ -424,12 +446,17 @@
          son los que necesita la forma de un diálogo —cuerpo, cabecera de una lista, la lista y su
          barra de acciones— y los usan los nueve. 24 y no 22: el ritmo es el mismo de las páginas.
     -->
-    <Thickness x:Key="Pad.Dialog">24,8,24,24</Thickness>
-    <Thickness x:Key="Pad.DialogHead">24,8,24,0</Thickness>
+    <!-- EL RELLENO DE UN DIÁLOGO ES EL DE UNA TARJETA: 24 (R8). Era 24 a los lados y 8 o 12
+         arriba, así que el contenido arrancaba pegado a la barra de título mientras respiraba por
+         los costados — el aire de una caja no puede depender del lado por el que se mire. Lo único
+         que no sube a 24 es el canal derecho de la lista con desplazamiento: ahí van los 16 de la
+         barra superpuesta (`Pad.Scroll`), que no es aire sino sitio reservado. -->
+    <Thickness x:Key="Pad.Dialog">24</Thickness>
+    <Thickness x:Key="Pad.DialogHead">24,24,24,0</Thickness>
     <!-- La lista deja 16 a la derecha en vez de 24: los 8 que faltan son el carril de la barra de
          desplazamiento, que se declara aparte en el `Padding` del propio scroll. -->
-    <Thickness x:Key="Pad.DialogList">24,12,16,0</Thickness>
-    <Thickness x:Key="Pad.DialogActions">24,12,24,20</Thickness>
+    <Thickness x:Key="Pad.DialogList">24,24,16,0</Thickness>
+    <Thickness x:Key="Pad.DialogActions">24,24,24,24</Thickness>
 
     <Thickness x:Key="Pad.L.Top">0,24,0,0</Thickness>
     <Thickness x:Key="Pad.L.Left">24,0,0,0</Thickness>

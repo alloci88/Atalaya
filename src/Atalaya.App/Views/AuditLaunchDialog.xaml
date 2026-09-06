@@ -35,8 +35,7 @@
         <StackPanel Grid.Row="1" Margin="{StaticResource Pad.Dialog}">
             <TextBlock
                 Text="{Binding Headline}"
-                FontSize="{StaticResource FontSize.Lead}"
-                FontWeight="SemiBold"
+                Style="{StaticResource Dialog.Title}"
                 TextWrapping="Wrap" />
 
             <TextBlock
@@ -50,7 +49,7 @@
                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1" CornerRadius="6" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.M.Top}">
                 <StackPanel>
-                    <TextBlock Text="Estimación de coste" FontSize="{StaticResource FontSize.Small}" FontWeight="SemiBold"
+                    <TextBlock Text="Estimación de coste" Style="{StaticResource Dialog.Help}" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     <TextBlock x:Name="BreakdownText"
                                Text="{Binding Breakdown}"
@@ -59,7 +58,7 @@
                                Margin="{StaticResource Pad.XS.Top}" />
                     <TextBlock Text="{Binding Provenance}"
                                TextWrapping="Wrap"
-                               FontSize="{StaticResource FontSize.Small}"
+                               Style="{StaticResource Dialog.Help}"
                                Margin="{StaticResource Pad.XS.Top}"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                 </StackPanel>
@@ -72,7 +71,7 @@
                 <TextBlock Text="⚠" Margin="{StaticResource Pad.XS.Right}"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
                 <TextBlock Text="{Binding PreferenceNotice}"
-                           TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}" MaxWidth="440"
+                           TextWrapping="Wrap" Style="{StaticResource Dialog.Help}" MaxWidth="440"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
             </StackPanel>
 
@@ -82,13 +81,13 @@
                 <TextBlock Text="⚠" Margin="{StaticResource Pad.XS.Right}"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
                 <TextBlock Text="El número es orientativo: hay poco gasto medido detrás."
-                           TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}"
+                           TextWrapping="Wrap" Style="{StaticResource Dialog.Help}"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
             </StackPanel>
 
             <TextBlock Text="{Binding Reassurance}"
                        TextWrapping="Wrap"
-                       FontSize="{StaticResource FontSize.Small}"
+                       Style="{StaticResource Dialog.Help}"
                        Margin="{StaticResource Pad.S.Top}"
                        Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
 

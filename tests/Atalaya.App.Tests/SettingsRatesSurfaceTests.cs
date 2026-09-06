@@ -141,7 +141,9 @@ public sealed class SettingsRatesSurfaceTests
             "la tabla es la de Copilot y se titula por lo que es");
         xaml.Should().Contain("la tabla pública de GitHub Copilot",
             "de dónde salen los precios, dicho donde se corrigen");
-        xaml.Should().Contain("Atalaya los siembra y los completa sola",
+        // R8 recorta la frase —de tres oraciones a dos— pero la regla es la misma: la pantalla
+        // tiene que decir que la tabla se rellena sola.
+        xaml.Should().Contain("Atalaya los siembra y completa sola",
             "y que no hay que rellenarla a mano");
 
         typeof(SettingsViewModel).GetProperty("CanManageRates").Should().NotBeNull();

@@ -28,6 +28,93 @@
          se centrara en vertical, el contenido saltaría al cambiar de sección o al aparecer un
          aviso. `VerticalAlignment` se escribe aunque hoy ya sea el efecto por defecto — es lo que
          impide que un cambio futuro en el patrón de página lo mueva sin que nadie lo note. -->
+    <UserControl.Resources>
+
+        <!-- UNA FILA DE ESTADO (R8). 48 de alto, 8 hasta la siguiente, el icono en un círculo de 24,
+             la palabra a la derecha alineada con el TÍTULO —no con el bloque, que crece cuando hay
+             detalle— y el detalle debajo, a 14. Antes era una rejilla de tres filas sin alto fijo:
+             las que tenían detalle medían el doble que las que no, y la lista bailaba al comprobar.
+
+             Es un recurso y no dos copias porque la usan los dos grupos, GitHub y auditores, y dos
+             plantillas iguales acaban siendo distintas. -->
+        <DataTemplate x:Key="CheckRow">
+            <Grid MinHeight="{StaticResource Check.RowHeight}"
+                  Margin="{StaticResource Pad.CheckRow}"
+                  ToolTip="{Binding Tooltip}"
+                  Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibility}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- El icono, dentro de su círculo. El círculo es lo que da a las cuatro filas la
+                     misma columna izquierda tenga el estado que tenga, incluido el giro de
+                     «comprobando», que mide distinto que un glifo. -->
+                <Border Grid.Row="0" Grid.Column="0"
+                        Width="{StaticResource Check.CircleSize}"
+                        Height="{StaticResource Check.CircleSize}"
+                        CornerRadius="{StaticResource Radius.Pill}"
+                        Background="{DynamicResource Brush.Surface2}"
+                        VerticalAlignment="Center"
+                        Margin="{StaticResource Pad.S.Right}">
+                    <Grid>
+                        <Path Style="{StaticResource Check.Glyph}"
+                              Width="{StaticResource Icon.Size.Small}"
+                              Height="{StaticResource Icon.Size.Small}" />
+                        <Grid Style="{StaticResource Check.Spinner}"
+                              Width="{StaticResource Icon.Size.Small}"
+                              Height="{StaticResource Icon.Size.Small}">
+                            <ui:ProgressRing IsIndeterminate="True"
+                                             Width="{StaticResource Icon.Size.Small}"
+                                             Height="{StaticResource Icon.Size.Small}" />
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <TextBlock Grid.Row="0" Grid.Column="1"
+                           Text="{Binding Title}"
+                           Style="{StaticResource Text.Default}"
+                           VerticalAlignment="Center"
+                           TextWrapping="Wrap" />
+
+                <!-- La palabra, en la fila del TÍTULO: así queda a su altura aunque debajo haya
+                     detalle. Centrada en la primera fila, no en la rejilla entera. -->
+                <TextBlock Grid.Row="0" Grid.Column="2"
+                           Style="{StaticResource Check.Word}"
+                           Margin="{StaticResource Pad.S.Left}" />
+
+                <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2"
+                           Text="{Binding Detail}"
+                           Style="{StaticResource Text.Small}"
+                           TextWrapping="Wrap"
+                           Visibility="{Binding Detail, Converter={StaticResource NotEmptyToVisibility}}" />
+
+                <Button Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
+                        Content="Ver la documentación de GitHub"
+                        Style="{StaticResource Button.Link}"
+                        Command="{Binding DataContext.OpenHelpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                        CommandParameter="{Binding HelpUrl}"
+                        HorizontalAlignment="Left"
+                        Visibility="{Binding HelpUrl, Converter={StaticResource NotEmptyToVisibility}}" />
+            </Grid>
+        </DataTemplate>
+
+        <!-- El subtítulo de un grupo: 13 y terciario. Es un rótulo, no un título. -->
+        <Style x:Key="CheckGroup" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+            <Setter Property="FontSize" Value="{StaticResource FontSize.Meta}" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextFaint}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="{StaticResource Pad.CheckGroup}" />
+        </Style>
+
+    </UserControl.Resources>
+
     <c:PageShell Title="Cuenta"
                  Subtitle="Tu identidad de GitHub, lo que hace falta para auditar y el clon del hub en esta máquina."
                  VerticalAlignment="Top"
@@ -39,11 +126,15 @@
              encima y por debajo de cada fila de estado. Se aprieta el aire y no la letra —los
              tamaños son los de la escala y no se tocan—, que es lo que permite que la vista quepa
              sin quitarle nada de lo que dice. -->
-        <StackPanel Margin="{StaticResource Pad.XS.Bottom}">
+        <!-- 32 BAJO EL TÍTULO DE LA VISTA, antes de la primera tarjeta (R8). El patrón de
+             página deja 24 entre la cabecera y el cuerpo; aquí el cuerpo empieza con una tarjeta de
+             32 de relleno, y con 24 el título se le quedaba encima. -->
+        <StackPanel Margin="{StaticResource Pad.AccountFirstCard}">
 
             <!-- ============ DESCONECTADO: bienvenida + un botón ============ -->
             <StackPanel Visibility="{Binding IsDisconnected, Converter={StaticResource BoolToVisibility}}">
-                <Border Style="{StaticResource Card}">
+                <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.AccountCard}"
+                        Margin="{StaticResource Pad.AccountCardGap}">
                     <StackPanel c:Stack.Gap="{StaticResource Space.M}">
                         <TextBlock Style="{StaticResource Text.Body}"
                                    Text="Conecta tu cuenta de GitHub de la organización: es la que te da identidad, autoría y acceso al hub de auditorías, y hace falta audites con quien audites. Con ella entra además tu asiento de Copilot." />
@@ -80,7 +171,8 @@
 
             <!-- ============ AUTORIZANDO: el código en grande ============ -->
             <StackPanel Visibility="{Binding IsAuthorizing, Converter={StaticResource BoolToVisibility}}">
-                <Border Style="{StaticResource Card}">
+                <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.AccountCard}"
+                        Margin="{StaticResource Pad.AccountCardGap}">
                     <StackPanel c:Stack.Gap="{StaticResource Space.M}">
                         <TextBlock Text="Introduce este código en GitHub" Style="{StaticResource Text.Lead}" />
 
@@ -124,7 +216,8 @@
                         c:Stack.Gap="{StaticResource Space.S}">
 
                 <!-- · La identidad · -->
-                <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.M}">
+                <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.AccountCard}"
+                        Margin="{StaticResource Pad.AccountCardGap}">
                     <DockPanel>
                         <Border DockPanel.Dock="Left"
                                 Width="{StaticResource Avatar.Size}" Height="{StaticResource Avatar.Size}"
@@ -171,76 +264,25 @@
                 </Border>
 
                 <!-- · Estado de la conexión · -->
-                <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.M}">
+                <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.AccountCard}"
+                        Margin="{StaticResource Pad.AccountCardGap}">
                     <StackPanel>
-                        <TextBlock Text="Estado de la conexión" Style="{StaticResource Text.Lead}"
-                                   FontWeight="SemiBold" />
-                        <!-- UNA LÍNEA, Y SIN «MÁS» (R6 §2). Eran dos redacciones del mismo aviso
-                             —una corta y otra plegada— y ninguna decía lo que hace falta saber
-                             para leer la lista: cuáles son obligatorias y dónde se elige el
-                             auditor. Ahora lo dice una sola, y no hay nada que desplegar. -->
-                        <TextBlock Style="{StaticResource Setting.Help}"
-                                   Text="Las tres primeras son necesarias y las da GitHub. De los dos auditores basta con uno; cuál se usa se elige en Ajustes → Proveedor y modelo." />
+                        <TextBlock Text="Estado de la conexión" Style="{StaticResource Dialog.Title}" />
 
-                        <!-- LA LISTA DE ESTADOS. Icono + color + palabra, los tres siempre: el
-                             color solo no se lee sin distinguirlo y el glifo solo no significa
-                             nada. El motivo de un fallo va en la línea de DEBAJO, con el mismo
-                             margen izquierdo que el título (D-983 §10). -->
-                        <ItemsControl ItemsSource="{Binding Checker.Steps}"
-                                      Margin="{StaticResource Pad.XS.Top}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <!-- R6 §2: lo que no cabe en la línea va detrás de ella. Hoy
-                                         solo el hub lo usa, para la ruta del clon en esta máquina. -->
-                                    <Grid Margin="{StaticResource Pad.XXS.Bottom}"
-                                          ToolTip="{Binding Tooltip}"
-                                          Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibility}}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                        </Grid.RowDefinitions>
+                        <!-- DOS GRUPOS, CADA UNO CON SU RÓTULO (R8). Aquí había una frase de ayuda
+                             que intentaba explicar de una vez las tres de GitHub y las dos de los
+                             auditores, y que además se leía lejos de las filas que describía. El
+                             rótulo de cada grupo dice lo suyo justo encima de lo que nombra, y la
+                             frase desaparece: donde se elige el auditor lo dice el segundo. -->
+                        <TextBlock Text="GitHub" Style="{StaticResource CheckGroup}" />
+                        <ItemsControl ItemsSource="{Binding Checker.GitHubSteps}"
+                                      ItemTemplate="{StaticResource CheckRow}" />
 
-                                        <Grid Grid.Row="0" Grid.Column="0"
-                                              Margin="{StaticResource Pad.S.Right}">
-                                            <Path Style="{StaticResource Check.Glyph}" />
-                                            <Grid Style="{StaticResource Check.Spinner}">
-                                                <ui:ProgressRing IsIndeterminate="True"
-                                                                 Width="{StaticResource Icon.Size}"
-                                                                 Height="{StaticResource Icon.Size}" />
-                                            </Grid>
-                                        </Grid>
-
-                                        <DockPanel Grid.Row="0" Grid.Column="1">
-                                            <TextBlock DockPanel.Dock="Right"
-                                                       Style="{StaticResource Check.Word}"
-                                                       Margin="{StaticResource Pad.S.Left}" />
-                                            <TextBlock Text="{Binding Title}"
-                                                       Style="{StaticResource Text.Default}"
-                                                       VerticalAlignment="Center"
-                                                       TextWrapping="Wrap" />
-                                        </DockPanel>
-
-                                        <TextBlock Grid.Row="1" Grid.Column="1"
-                                                   Text="{Binding Detail}"
-                                                   Style="{StaticResource Text.Small}"
-                                                   Visibility="{Binding Detail, Converter={StaticResource NotEmptyToVisibility}}" />
-
-                                        <Button Grid.Row="2" Grid.Column="1"
-                                                Content="Ver la documentación de GitHub"
-                                                Style="{StaticResource Button.Link}"
-                                                Command="{Binding DataContext.OpenHelpCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                CommandParameter="{Binding HelpUrl}"
-                                                HorizontalAlignment="Left"
-                                                Visibility="{Binding HelpUrl, Converter={StaticResource NotEmptyToVisibility}}" />
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <TextBlock Style="{StaticResource CheckGroup}"
+                                   Margin="{StaticResource Pad.CheckGroupSecond}"
+                                   Text="Auditores · basta con uno, se elige en Ajustes → Proveedor y modelo" />
+                        <ItemsControl ItemsSource="{Binding Checker.AuditorSteps}"
+                                      ItemTemplate="{StaticResource CheckRow}" />
 
                         <!-- LOS AVISOS DEL HUB SE QUEDAN AQUÍ (R6 §2). Lo que se ha retirado es
                              la tarjeta «Hub local», que repetía el estado y la fecha que ya dice la
@@ -277,7 +319,10 @@
                      CENTRADA CON LA TARJETA DE ENCIMA (R4 §2): iba pegada al margen izquierdo de
                      una columna centrada de 920, así que los tres botones quedaban en una esquina
                      de la vista en vez de bajo el bloque al que pertenecen. · -->
+                <!-- Y a 24 de la tarjeta (R8): la última tarjeta ya trae los suyos por debajo,
+                     así que el margen de aquí es el que separa el bloque de su botonera. -->
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                            Margin="{StaticResource Pad.AccountActions}"
                             c:Stack.Gap="{StaticResource Space.S}">
                     <Button Content="Comprobar conexión" Command="{Binding CheckConnectionCommand}"
                             Style="{StaticResource Button.Primary}" />
