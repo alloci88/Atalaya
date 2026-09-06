@@ -16165,3 +16165,42 @@ busca el tope por su forma (`Header.*MaxWidth`) porque ahora lo lleva la pieza q
 siempre la fila, y el del orden de las acciones cuenta los botones por descendencia porque el
 destructivo viaja con su razón. Lo demás de esta fase es colocación, y colocación se mira abriendo
 el `dist` (N-8).
+
+---
+
+## R12 — El identificador es dato, no rótulo
+
+### D-1011 — La sesión llamaba «xblast» a la aplicación que el Portafolio llama «XBLAST»
+
+Un párrafo para la fase (N-7) y solo lo pedido (N-6). **El defecto**: la misma aplicación tenía dos
+nombres en la misma ventana. Portafolio e Inventario decían «XBLAST» —el nombre— y la sesión en vivo
+decía «xblast» —el identificador del hub— en la miga, en la cabecera («Lotes · xblast») y en la barra
+de estado («Auditando xblast»). No era una errata de una vista: era que el identificador, que existe
+para leer y escribir en el hub, se estaba usando para rotular. **La causa**, y por qué se rompe en
+silencio: el identificador SIEMPRE está a mano —viaja en la `SessionRequest`— y el nombre hay que ir
+a buscarlo al hub, así que la forma cómoda de escribir una etiqueta es también la incorrecta, no
+falla nunca y solo se ve cuando alguien mira las dos pantallas seguidas. `LiveSessionService` ni
+siquiera tenía el nombre: gana `AppName`, que se resuelve una vez al arrancar
+(`TryReadApp(slug)?.Name`, con el identificador de respaldo por si la aplicación ya no está en el
+hub — un rótulo vacío sería peor que uno feo), y de ahí salen los tres sitios: `HeaderText`,
+`ProgressLine` y `SessionViewModel.AppLabel`, que es de donde la carcasa saca la miga **y el rótulo
+del grupo del raíl** —el mismo defecto, en un sitio que el parte no nombraba—. Cae con ellos la
+línea del arreglo asistido, «Arreglando MEJ-0053 en xblast», que es la misma tira de la misma barra
+con el mismo error; `LiveFixService` ya tenía el nombre resuelto y solo le faltaba usarlo. **El
+resto se comprobó y está bien**: Informes resuelve `app.Name ?? slug` al construir cada entrada y el
+visor lo hereda; Métricas pasa por `NameOf(slug)`; Hallazgos rellena su filtro con
+`TryReadApp(slug)?.Name ?? slug`; y los informes escritos —sesión, verificación, arreglo y cierre—
+ya abrían con el nombre. **Lo que NO se toca, y por qué**: los mensajes donde el identificador es lo
+único que queda —««xblast» ya no está en el hub», los commits del sync, los nombres de fichero de un
+informe descargado—. Ahí no hay nombre que leer, y ninguno de los tres es un rótulo de la
+aplicación: son el rastro de una llave. **Cobertura (N-5, N-7): un test de regla con dos mitades**,
+porque el defecto tiene dos puertas. La primera es la que pedía el encargo —ninguna plantilla enlaza
+el identificador en un `Text`, `Content`, `Header` o `ToolTip`, y se dejó pasar a propósito un
+`CommandParameter`, donde el identificador es exactamente lo que tiene que ser—; hoy está limpia, así
+que **cierra** la puerta en vez de abrirla, y se comprobó plantando un
+`Text="{Binding Live.AppSlug}"` en una vista para ver que salta. La segunda es la que de verdad se
+usó: la sesión no enlazaba ningún identificador, se lo daban ya escrito, así que se arranca una
+sesión de verdad sobre un hub con `xblast`/`XBLAST` y se leen los tres —miga, cabecera y barra de
+estado— exigiendo que digan el nombre y que **no** contengan el identificador. Y **un test existente
+se corrige, no se relaja**: el de la tira del modo exhaustivo montaba su servicio a mano con solo el
+identificador puesto; ahora pone también el nombre, que es lo que la tira dice.
