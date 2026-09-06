@@ -499,6 +499,49 @@ public sealed partial class LiveSessionService : ObservableObject
         return true;
     }
 
+    /// <summary>
+    /// <b>Vigila la tarea de la sesión</b> (F30 §2c): si termina en excepción, lo dice en vez de
+    /// dejar la pantalla girando.
+    /// <para>
+    /// <b>El agujero que cierra.</b> Quien lanza una sesión la descartaba —<c>_ = StartAsync(…)</c>—,
+    /// que es lo normal para algo que no se espera. El problema es lo que pasa cuando falla: los
+    /// fallos que <c>RunAsync</c> lanza DENTRO de su <c>try</c> ya se cuentan y se cierran bien,
+    /// pero los de antes —construir el coordinador, resolver un servicio— salían por arriba, no los
+    /// recogía nadie y la sesión se quedaba con <c>IsRunning</c> en true: el giro puesto, «Detener»
+    /// sin nada que detener y ni una línea que dijera qué pasó. Reproducido: basta con que el
+    /// contenedor no sepa construir una dependencia.
+    /// </para>
+    /// </summary>
+    public void Observe(Task session) => _ = ObserveAsync(session);
+
+    private async Task ObserveAsync(Task session)
+    {
+        try
+        {
+            await session;
+        }
+        catch (OperationCanceledException)
+        {
+            // Detener es un final legítimo, no un fallo.
+        }
+        catch (Exception ex)
+        {
+            // `Fail` deja el estado terminal visible y suelta el giro; sin esto, la única señal
+            // sería una pantalla parada.
+            Fail(ex.Message, offersModelChange: false, ex.ToString());
+        }
+        finally
+        {
+            if (IsRunning)
+            {
+                // La red de la red: pase lo que pase, una sesión que ya no corre no puede seguir
+                // diciendo que corre.
+                IsRunning = false;
+                Changed?.Invoke();
+            }
+        }
+    }
+
     /// <summary>Detener: la parada ordenada de F5.1b. No hay un segundo camino de parada.</summary>
     public void Stop()
     {

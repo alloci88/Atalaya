@@ -1471,7 +1471,12 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
         // estimación, mismo barrido, misma reconciliación—; sirve para que Métricas pueda algún día
         // separar la cobertura inicial del mantenimiento sin reinterpretar sesiones antiguas.
         SessionTrigger trigger = _selectionFromDrift ? SessionTrigger.Deriva : SessionTrigger.Manual;
-        _ = _live.StartAsync(new SessionRequest(Slug, mode, paths, paths.Count, trigger), paths);
+        // LA TAREA SE OBSERVA (F30 §2c). Se descartaba con `_ =`, y con ella cualquier fallo que
+        // `RunAsync` lanzara ANTES de su propio try —construir el coordinador, resolver un
+        // servicio—: la sesión se quedaba con `IsRunning` en true, el giro puesto y «Detener» sin
+        // nada que detener, para siempre y sin una línea en ninguna parte. Un fallo tiene que
+        // verse; una sesión colgada sin causa es lo único que no puede pasar.
+        _live.Observe(_live.StartAsync(new SessionRequest(Slug, mode, paths, paths.Count, trigger), paths));
         await _navigation.NavigateToAsync<SessionViewModel>();
     }
 }

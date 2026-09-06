@@ -115,7 +115,15 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
         _live.Calls, _live.InputTokens, _live.OutputTokens,
         _live.CacheReadTokens, _live.CacheWriteTokens, _live.CostResult, _live.Provider);
 
-    public string PerUnitText => _live.CostPerUnit is { } c ? $"media {c:0.##}/unidad" : string.Empty;
+    /// <summary>
+    /// <b>La media por unidad, en la divisa activa</b> (F30 §2c). Se escribía con
+    /// <c>{c:0.##}</c> a mano, así que el pie decía «0,32 $ · media 31,7/unidad»: el mismo pie, la
+    /// misma sesión, dos unidades — y la de la media, ninguna. Es el defecto de R11 §1f otra vez, en
+    /// el segmento de al lado; el argumento entero está en F29 §2.
+    /// </summary>
+    public string PerUnitText => _live.CostPerUnit is { } c
+        ? $"media {CostFormat.Of(c)}/unidad"
+        : string.Empty;
 
     /// <summary>
     /// <b>«esperando al modelo tras reportar 11 hallazgos · 38 s»</b> (F30 §3, ampliado en §1c), y
