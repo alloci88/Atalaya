@@ -16108,3 +16108,60 @@ ninguna parte o miente. Y **dos tests existentes se corrigen, no se relajan**: e
 `Maximized = false` al reabrir pasa a proteger el rectángulo de restauración, y el de la cabecera
 lee la identidad de la fila de línea base y mira el último **botón**, porque detrás va ahora la razón
 del apagado y una razón no es una acción.
+
+---
+
+## R11 — La sesión en vivo respira, y tres restos de R10
+
+### D-1010 — Se cambian las PIEZAS, no cada vista; y un coste escrito a mano decía otra divisa
+
+Un párrafo para la fase (N-7) y solo lo pedido (N-6). Sigue el desfase de rótulo de R10: el prompt
+llegó como «R8» y la fase se numera **R11 / D-1010**, porque R8 y R9 ya están en `main`. **(1) La
+sesión en vivo y la última sesión son la MISMA plantilla**, así que lo que se toca son sus piezas.
+**(a)** La cabecera de una unidad pasa a ser una fila de 48 con la insignia de estado en un círculo
+de 24 —el glifo suelto se perdía contra una ruta en seminegrita—, la ruta a 15 y, a la derecha, el
+resumen de la unidad en 13 secundario. **(b)** Cada pasada, fila de 40 con «Pasada n» a 15 y su
+resumen en **pastillas** en vez de una frase con puntos medios: los tres números siguen yendo
+siempre y en el mismo orden (F12 §H.2 no se toca, cambia la forma), los nuevos en éxito cuando los
+hay, el resto en neutro y «seca» en ámbar apagado. **(c)** El texto del auditor gana bloque propio
+—`Brush.Surface2`, relleno de 16, monoespaciado a 14 con interlineado 1,5 y unos 100 caracteres de
+medida— y cada mensaje su hora en el margen; lo de «la última pasada abierta y las anteriores
+plegadas» ya lo hacía el servicio desde F12 y se ha comprobado, no se ha vuelto a escribir.
+**(d)** La cola pasa a 280 px y sus unidades dejan de ser tarjetas: fila de 44 con la insignia, el
+nombre y **una** línea debajo —«2 pasadas · 0,12 $», o el estado en palabras mientras no haya nada
+que resumir—, y la que se está auditando se distingue con `Brush.Section.Active`, el fondo de
+selección del sistema, en vez de con un borde. **(e)** Con cero hallazgos, el panel de la derecha
+enseña el estado vacío del sistema en lugar de cuatro contadores a cero: «los cuatro se pintan
+siempre» vale mientras haya partido que marcar. **(f)** Y el defecto: la cabecera de unidad decía
+«coste 15» mientras el pie de la misma pantalla decía «0,12 $». Salía de un `$" · coste {c:0.##}"`
+escrito a mano en `LiveSessionService` — la única cifra de coste de la aplicación que no pasa por
+`CostFormat`, y por tanto la única que no sabe en qué divisa está la máquina. Los dos resúmenes de
+la unidad se derivan ahora de sus datos y el coste sale de `CostFormat.Of`. **El test de F29 §2 se
+amplía**, que es lo que faltaba: miraba los XAML, y por ahí no se coló — se coló por el C# que los
+llena, así que ahora recorre también los cinco ficheros que dan de comer a Sesión en vivo, Última
+sesión y Arreglo asistido y falla si una cadena nombra el coste con una cifra formateada dentro.
+**(2) La cabecera del arreglo, entera sobre una línea base.** R10 metió título, identificador y
+aplicación en `c:BaselineRow` y dejó fuera el enlace y el distintivo, que siguieron quedando altos
+por el mismo motivo: apoyados por su borde inferior, no por su base. Un `TextBlock` sabe decir dónde
+tiene la suya; un botón o una pastilla, no — así que `BaselineRow` busca ahora el primer texto de su
+árbol visual y mide dónde cae. Eso obliga a **colocar dos veces**: la plantilla de un control no
+existe hasta que se mide, y la posición de ese texto dentro de él no se conoce hasta que el hijo se
+ha colocado; la primera pasada de `Arrange` es la que hace aparecer esa geometría. Con los cinco
+dentro de la fila desaparecen la rejilla y el tope de la identidad: la fila empaqueta a la izquierda
+y mide de izquierda a derecha, así que el enlace y el distintivo quedan pegados al título y lo que
+cede sigue siendo lo último. **(3) Un arreglo detenido sin cambios no abre secciones vacías.**
+«Ficheros tocados» salía con su titular y nada debajo —que se lee como una lista que no ha cargado,
+no como una lista vacía— y «Resultado del último build/tests» gastaba un titular de sección para
+decir «no se ha pedido». Sin ficheros, el bloque no se pinta; sin compilación, una línea —«No se
+pidió compilar»— y ninguna sección. **(4) «Descartar todo» y su razón, a 8 px y sin pisarse.** El
+chip de P-27 que entró en R10 §7 iba suelto en la barra de acciones, y ahí no tenía ni hueco propio
+ni tope: dentro de un `StackPanel` horizontal los hijos se miden con ancho **infinito**, así que el
+`Wrap` de `Reason.Text` no envuelve nunca y la pastilla crece hasta que la cabecera la recorta
+contra el botón que explica —el mismo mecanismo de UI-0009, una zona más a la derecha—. El botón y
+su razón pasan a ser una pieza en su propio panel, con los 8 px de Inventario y un tope que la hace
+envolver en vez de empujar. **Cobertura (N-5, N-7)**: **ningún test nuevo**; se amplía el de F29 §2,
+que es lo que el encargo pedía, y **dos existentes se corrigen sin relajarse** — el de la cabecera
+busca el tope por su forma (`Header.*MaxWidth`) porque ahora lo lleva la pieza que puede crecer y no
+siempre la fila, y el del orden de las acciones cuenta los botones por descendencia porque el
+destructivo viaja con su razón. Lo demás de esta fase es colocación, y colocación se mira abriendo
+el `dist` (N-8).
