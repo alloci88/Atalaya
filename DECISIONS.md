@@ -15605,3 +15605,39 @@ D-977 decidió que era «un instrumento de esta fase»; se ha necesitado en F26 
 UI-AUDIT-1, y la tercera vez hubo que rescatarlo del scratchpad de otra sesión. `scripts/` no es
 producto, y ahí ya viven `PromptBench` e `IconGen`. Con N-8, además, queda claro para qué sirve:
 **auditorías a demanda, no desarrollo**.
+
+## R4 — Seis retoques de interfaz, vistos en el dist
+
+### D-1002 — R4: seis colocaciones, y la franja de 48 px que salía en dos vistas
+
+Seis retoques de colocación pedidos por escrito tras revisar el `dist` de F27, uno por punto y nada
+más (N-6), con **una entrada** y **sin tests nuevos** (N-7) y el ciclo `cambio → build → tests →
+dist → parar` (N-8). **(1) El pie del raíl.** La fila de usuario ya estaba en los carriles de una
+entrada —misma x del icono, misma x del nombre—, pero el aire del pie del raíl caía entero por
+debajo de ella, así que dentro del rectángulo que abre la línea quedaba pegada arriba: `Pad.RailUser`
+pone los mismos 16 por encima y se retira el hueco entre entradas, que ahí no separa de nada.
+**(2) Cuenta** cabe a 1920×1080 sin desplazamiento apretando **aire y no letra** —el faldón de 24, el
+hueco entre tarjetas a 12, el relleno de las tres a 16 y el aire de cada fila de estado solo por
+debajo—, y su botonera se centra con la tarjeta a la que pertenece en vez de irse al margen de una
+columna centrada. **(3) «Baseline del sistema v4»** se va entero de Nueva aplicación: era su
+**última entrada en la interfaz** —F5.9 §1 ya lo había sacado del menú—, así que `Atalaya.ImportV4`
+y su servicio siguen en la solución pero desde la aplicación no se llega a ellos por ningún sitio, y
+así lo dice ahora el test que vigilaba lo contrario. **(4) La tabla de sesiones** dejaba «sin
+cambios» y «20,2 AI credits» a cero píxeles de distancia —se leían como una sola cifra— mientras
+«Aplicación» se quedaba sola con los ~600 sobrantes: las tres columnas que pueden crecer pasan a
+estrella y reparten 2 : 1 : 1 con su mínimo declarado, el aire entre columnas es un margen de 12 en
+la celda, y «Coste y tokens» se alinea a la derecha como las demás cifras (P-08). **(5) El pie del
+arreglo asistido** se muda dentro de la rejilla de los dos paneles, como fila que cruza sus tres
+columnas: su ancho y el de los paneles eran dos medidas independientes que había que mantener
+iguales a mano, y dos números así acaban siendo distintos (D-966); ahora son los mismos carriles.
+
+**Y la franja vacía era de la carcasa, no de las dos vistas (5 y 6).** El mismo hueco al pie de
+Arreglo asistido y de Sesión en vivo apuntaba a una causa común, y estaba en `MainWindow`: el carril
+de avisos de F27 llevaba su margen de 24 en el `ItemsControl`, y **el margen de un elemento cuenta en
+la medida aunque no tenga nada dentro**, así que la fila medía 48 px con cero avisos —justo lo
+contrario de lo que prometía su propio comentario, «sin avisos vale cero»— y se los quitaba a la
+página en todas las vistas. Con el margen en un disparador de `HasItems`, la fila vale cero de
+verdad, los paneles y las tres columnas recuperan esos 48 px y llegan hasta su pie. Vale la pena
+apuntar por qué no se vio: el `dist` arrancaba, los 1.928 tests estaban en verde y el autochequeo
+también. Un hueco de 48 px no rompe nada —solo se ve—, que es exactamente la clase de defecto para
+la que existe N-8: lo encuentra quien abre la aplicación, no quien la construye.

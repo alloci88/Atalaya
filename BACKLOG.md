@@ -469,6 +469,15 @@ las seis reversiones de lo que se había movido sin pedirlo; con ellas entran N-
 
 ## Cerrado
 
+- **R4 · Seis retoques de interfaz, vistos en el dist** — la fila de usuario del raíl centrada en su
+  rectángulo; Cuenta cabe a 1920×1080 sin desplazamiento y con la botonera centrada con su tarjeta;
+  «Baseline del sistema v4» retirado de Nueva aplicación (el importador se queda en la solución, sin
+  ninguna entrada en la interfaz); las columnas de «Actividad de sesiones» repartidas con su aire y
+  sus cifras a la derecha; el pie del arreglo asistido dentro de la rejilla de sus dos paneles. Y la
+  causa común de los puntos 5 y 6: el carril de avisos de la carcasa medía 48 px vacíos siempre —el
+  margen iba en el `ItemsControl` y el margen cuenta sin contenido—, y se los quitaba a la página en
+  todas las vistas. Ver D-1002.
+
 - **BUGFIX-RELEASE · El intermitente tenía nombre, y era un defecto de producción** — cierra «un
   test intermitente bajo carga» que R1 dejó abierto sin poder nombrarlo. No era «tiempo de espera
   del CLI falso bajo paralelismo», como se sospechaba: era `LiveFixService.OnUi`, que ejecutaba en

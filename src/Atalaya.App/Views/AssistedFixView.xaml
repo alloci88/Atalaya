@@ -151,8 +151,9 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <!-- El pie de sesión ya no tiene fila propia aquí: se ha mudado dentro del cuerpo,
+                 que es lo que le da exactamente el ancho de los dos paneles (R4 §5). -->
             <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- ================================ CABECERA ================================ -->
@@ -424,6 +425,17 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="1.15*" MinWidth="360" />
             </Grid.ColumnDefinitions>
+            <!-- EL PIE VIVE EN ESTA MISMA REJILLA (R4 §5). Estaba en una fila de la rejilla raíz,
+                 así que su ancho y el de los dos paneles eran dos medidas independientes que había
+                 que mantener iguales a mano —y dos números así acaban siendo distintos (D-966)—.
+                 Ahora es la fila de abajo de la rejilla de los paneles, cruzando sus tres columnas:
+                 empieza donde empieza la conversación y acaba donde acaba «Cambios en tu clon»
+                 porque son literalmente los mismos carriles, y lo seguirá haciendo cuando el
+                 separador se arrastre o cambie el reparto. -->
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
             <!-- · Conversación (la protagonista) · -->
             <Border Grid.Column="0" Background="{DynamicResource Brush.Bg}" CornerRadius="8" Padding="{StaticResource Pad.XXS}"
@@ -694,40 +706,42 @@
                     </Grid>
                 </DockPanel>
             </Border>
+
+            <!-- ================================ PIE ================================ -->
+            <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                    Background="{DynamicResource Brush.Surface2}" CornerRadius="8"
+                    Padding="{StaticResource Pad.Field}" Margin="{StaticResource Pad.S.Top}">
+                <!-- F17-RETOQUE: el WrapPanel bajaba de línea lo que no cabía, y el StackPanel de la
+                     auditoría lo cortaba; ninguno de los dos abreviaba. Ahora los textos van en una
+                     FooterLine que reparte por prioridad —llamadas → coste → tokens— y nunca trunca;
+                     el detalle entero está en su tooltip. El anillo de build y el ajuste del ámbito
+                     quedan a la derecha, en columna propia, para que no compitan con los textos. -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <c:FooterLine x:Name="Footer" Grid.Column="0" Segments="{Binding Footer}" VerticalAlignment="Center"
+                                  Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="{StaticResource Pad.M.Left}">
+                    <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="{StaticResource Pad.S.Right}" VerticalAlignment="Center"
+                                     Visibility="{Binding Fix.IsBuilding, Converter={StaticResource BoolToVisibility}}" />
+                    <!-- H9.1 §2: el ámbito de la compilación es decisión del USUARIO. El agente no
+                         puede tocarlo: él no sabe si este cambio puede haber roto a un vecino, ni paga
+                         el tiempo de averiguarlo.
+
+                         F16-RETOQUE §2·3 — y vive AQUÍ, no en la cabecera. Estaba entre los botones de
+                         la barra de acciones, que es donde va lo que se pulsa para que pase algo; esto
+                         no hace nada al marcarlo, cambia lo que hará el siguiente build. Su sitio es
+                         al lado del resultado de ese build, que es donde se ve su consecuencia. -->
+                    <CheckBox Content="Compilar solución completa" IsChecked="{Binding BuildFullSolution}"
+                              VerticalAlignment="Center" FontSize="{StaticResource FontSize.Meta}"
+                              Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                              ToolTip="Por defecto se compila solo el proyecto de los ficheros tocados y sus tests, que es lo que el veredicto puede atribuir al cambio. Marcando esto se compila la solución entera y los errores se cuentan contra una línea base del mismo commit." />
+                    </StackPanel>
+                </Grid>
+            </Border>
         </Grid>
 
-        <!-- ================================ PIE ================================ -->
-        <Border Grid.Row="3" Background="{DynamicResource Brush.Surface2}" CornerRadius="8" Padding="{StaticResource Pad.Field}" Margin="{StaticResource Pad.S.Top}"
-                Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibility}}">
-            <!-- F17-RETOQUE: el WrapPanel bajaba de línea lo que no cabía, y el StackPanel de la
-                 auditoría lo cortaba; ninguno de los dos abreviaba. Ahora los textos van en una
-                 FooterLine que reparte por prioridad —llamadas → coste → tokens— y nunca trunca;
-                 el detalle entero está en su tooltip. El anillo de build y el ajuste del ámbito
-                 quedan a la derecha, en columna propia, para que no compitan con los textos. -->
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <c:FooterLine x:Name="Footer" Grid.Column="0" Segments="{Binding Footer}" VerticalAlignment="Center"
-                              Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="{StaticResource Pad.M.Left}">
-                <ui:ProgressRing IsIndeterminate="True" Width="14" Height="14" Margin="{StaticResource Pad.S.Right}" VerticalAlignment="Center"
-                                 Visibility="{Binding Fix.IsBuilding, Converter={StaticResource BoolToVisibility}}" />
-                <!-- H9.1 §2: el ámbito de la compilación es decisión del USUARIO. El agente no
-                     puede tocarlo: él no sabe si este cambio puede haber roto a un vecino, ni paga
-                     el tiempo de averiguarlo.
-
-                     F16-RETOQUE §2·3 — y vive AQUÍ, no en la cabecera. Estaba entre los botones de
-                     la barra de acciones, que es donde va lo que se pulsa para que pase algo; esto
-                     no hace nada al marcarlo, cambia lo que hará el siguiente build. Su sitio es
-                     al lado del resultado de ese build, que es donde se ve su consecuencia. -->
-                <CheckBox Content="Compilar solución completa" IsChecked="{Binding BuildFullSolution}"
-                          VerticalAlignment="Center" FontSize="{StaticResource FontSize.Meta}"
-                          Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                          ToolTip="Por defecto se compila solo el proyecto de los ficheros tocados y sus tests, que es lo que el veredicto puede atribuir al cambio. Marcando esto se compila la solución entera y los errores se cuentan contra una línea base del mismo commit." />
-                </StackPanel>
-            </Grid>
-        </Border>
     </Grid>
 </UserControl>

@@ -106,10 +106,18 @@
                          carriles que una entrada del menú —usa el mismo estilo `RailRow`, así que
                          no es «parecida»: es la misma fila—. La línea fina de encima la separa del
                          menú sin meter un hueco, que es lo que la haría bailar al plegar. -->
+                    <!-- Y VA CENTRADA EN SU RECTÁNGULO (R4 §1). El aire del pie del raíl caía
+                         entero por debajo de la fila —16 abajo, cero arriba—, así que dentro del
+                         rectángulo que abre la línea el avatar y el nombre quedaban altos, pegados
+                         a ella. `Pad.RailUser` pone los mismos 16 por encima y el gap de entrada
+                         (`Pad.RailItemGap`, que separa una entrada de la siguiente) se retira: aquí
+                         no hay entrada siguiente, y esos 4 descolocaban el centro. -->
                     <Border DockPanel.Dock="Bottom"
                             BorderBrush="{DynamicResource Brush.Line}"
-                            BorderThickness="{StaticResource Border.Top}">
+                            BorderThickness="{StaticResource Border.Top}"
+                            Padding="{StaticResource Pad.RailUser}">
                         <Button Style="{StaticResource RailRow}"
+                                Margin="{StaticResource Pad.Zero}"
                                 Command="{Binding ShowAccountCommand}"
                                 ToolTip="{Binding AccountTooltip}">
                             <Grid>
@@ -446,13 +454,30 @@
                      Ahora tienen una fila entre la página y el pie: EMPUJAN el contenido en vez de
                      taparlo, se apilan hacia abajo y desaparecen sin dejar hueco —la fila mide Auto
                      y sin avisos vale cero—. -->
+                <!-- Y SIN AVISOS VALE CERO DE VERDAD (R4 §5 y §6). El margen de 24 iba en el
+                     `ItemsControl`, y el margen de un elemento cuenta en la medida aunque no tenga
+                     nada dentro: la fila medía 48 px SIEMPRE. Era la franja vacía que salía en el
+                     pie de Arreglo asistido y en el de Sesión en vivo —la misma en las dos, porque
+                     el defecto no era de ninguna de las dos vistas sino de la carcasa—, y esos 48
+                     px se los quitaba a la página, que es donde viven los paneles. El aire sigue
+                     estando cuando hay un aviso; sin avisos, el carril mide lo que dice su
+                     comentario. -->
                 <ItemsControl
                     Grid.Row="4"
                     ItemsSource="{Binding Toasts}"
                     HorizontalAlignment="Right"
-                    Margin="{StaticResource Pad.L}"
                     Focusable="False"
                     IsHitTestVisible="True">
+                <ItemsControl.Style>
+                    <Style TargetType="ItemsControl">
+                        <Setter Property="Margin" Value="{StaticResource Pad.L}" />
+                        <Style.Triggers>
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter Property="Margin" Value="{StaticResource Pad.Zero}" />
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </ItemsControl.Style>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Button

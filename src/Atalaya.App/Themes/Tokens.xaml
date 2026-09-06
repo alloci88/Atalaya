@@ -180,6 +180,13 @@
          exactamente el defecto de D-963 por el otro extremo: allí no cabía a lo ancho, aquí a lo
          alto. Un alto fijo obliga a hacer la cuenta. -->
     <Thickness x:Key="Pad.RailItem">0,6</Thickness>
+    <!-- LA FILA DE USUARIO, CENTRADA EN EL RECTÁNGULO QUE HAY BAJO LA LÍNEA (R4 §1). La fila mide
+         lo que una entrada del menú, pero el aire del pie del raíl —los 16 de `Pad.Rail`— caía
+         ENTERO por debajo de ella: dentro del rectángulo que la línea abre, el avatar y el nombre
+         quedaban pegados al borde de arriba y se leían altos. Con los mismos 16 por encima, el aire
+         es el mismo arriba y abajo y la fila queda en el centro. Los carriles —la x del avatar y la
+         del nombre— no se tocan: ya son los de una entrada (D-966). -->
+    <Thickness x:Key="Pad.RailUser">0,16,0,0</Thickness>
     <Thickness x:Key="Pad.RailChip">0,0,8,0</Thickness>
     <Thickness x:Key="Pad.RailLabel">12,0,0,0</Thickness>
     <!-- EL RITMO VERTICAL DEL RAÍL (F26 §C, segunda revisión). El aire va ANTES de cada grupo, no

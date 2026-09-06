@@ -54,25 +54,33 @@ public sealed class FailureBannerLayoutTests
     /// La regla que se rompió, dicha en una línea: nadie comparte fila con nadie. Dos hijos en la
     /// misma fila de un <c>Grid</c> no reparten espacio — se superponen.
     /// </summary>
+    /// <remarks>
+    /// Se pregunta a la rejilla RAÍZ cargada, no al texto del fichero: desde R4 §5 el pie del
+    /// arreglo asistido vive dentro de la rejilla del cuerpo —para compartir sus carriles con los
+    /// dos paneles— y tiene allí su propia fila 1, que no es ésta. Contar `Grid.Row="1"` en el
+    /// XAML entero contaba filas de otras rejillas y decía que había una superposición que no
+    /// existe.
+    /// </remarks>
     [Theory]
     [MemberData(nameof(Views))]
     public void Ningun_elemento_comparte_fila_con_el_banner_de_fallo(string view)
-    {
-        var rows = Regex.Matches(Xaml(view), @"Grid\.Row=""(\d)""")
-            .Select(m => m.Groups[1].Value)
-            .ToList();
+        => OnUiThread(() =>
+        {
+            List<FrameworkElement> inRow = InRow(LoadRoot(view), 1);
 
-        rows.Should().Contain("1", "el banner ocupa la fila 1");
-        rows.Count(r => r == "1").Should().Be(1,
-            "dos elementos en la misma fila se pintan uno encima del otro, y gana el que se "
-            + "declara después: un aviso que hay que leer no puede depender de eso");
-    }
+            inRow.Should().ContainSingle(
+                "dos elementos en la misma fila se pintan uno encima del otro, y gana el que se "
+                + "declara después: un aviso que hay que leer no puede depender de eso");
+        });
 
     [Theory]
-    [MemberData(nameof(Views))]
-    public void El_grid_declara_una_fila_por_cada_bloque(string view)
-        => Regex.Matches(Xaml(view), @"<RowDefinition\b").Count.Should().Be(4,
-            "cabecera, banner, cuerpo y pie: cuatro bloques, cuatro filas");
+    [InlineData("SessionView.xaml", 4)]
+    [InlineData("AssistedFixView.xaml", 3)]
+    public void El_grid_declara_una_fila_por_cada_bloque(string view, int rows)
+        => OnUiThread(() => LoadRoot(view).RowDefinitions.Count.Should().Be(rows,
+            "cabecera, banner y cuerpo son bloques de la raíz en las dos; el pie lo es solo en "
+            + "Sesión en vivo, porque en Arreglo asistido se ha mudado dentro del cuerpo para "
+            + "medir exactamente lo que miden los dos paneles juntos (R4 §5)"));
 
     /// <summary>
     /// Sin <c>VerticalAlignment="Top"</c>: era el parche con el que la superposición «casi»

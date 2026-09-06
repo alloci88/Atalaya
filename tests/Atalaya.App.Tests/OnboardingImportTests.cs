@@ -94,9 +94,11 @@ public sealed class OnboardingImportTests : IDisposable
         Repo("src/Atalaya.App/ViewModels/ImportViewModel.cs").NotExist();
         Source("src/Atalaya.App/App.xaml").Should().NotContain("ImportViewModel");
 
-        // Y el importador sigue entero: solo cambió desde dónde se le llama.
+        // Y el importador sigue entero —el servicio, y `Atalaya.ImportV4` en la solución—: lo que
+        // ya no hay es desde dónde llamarlo. R4 §3 retiró de «Nueva aplicación» el bloque del
+        // baseline v4, que era su ÚLTIMA entrada en la interfaz desde que F5.9 §1 lo sacó del menú.
         typeof(ImportService).Should().NotBeNull();
-        Source("src/Atalaya.App/Views/OnboardingView.xaml").Should().Contain("PickBaselineCommand");
+        Source("src/Atalaya.App/Views/OnboardingView.xaml").Should().NotContain("PickBaselineCommand");
     }
 
     // ============================================ Con CodeAudit/ presente

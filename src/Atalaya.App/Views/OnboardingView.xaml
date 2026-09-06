@@ -176,7 +176,7 @@
             </Border>
 
             <!-- ============================================ Dónde está en esta máquina -->
-            <Border Style="{StaticResource Card}" Margin="{StaticResource Pad.M.Bottom}">
+            <Border Style="{StaticResource Card}">
                 <StackPanel>
                     <TextBlock Text="El clon en esta máquina" Style="{StaticResource Text.Lead}" FontWeight="SemiBold"
                                Margin="{StaticResource Pad.M.Bottom}" />
@@ -228,68 +228,13 @@
                 </StackPanel>
             </Border>
 
-            <!-- F5.9 §1: el importador v4 ya no es un destino del menú. Es un paso OPCIONAL de
-                 esta alta, porque traerse lo que el sistema anterior sabía de la app y dar la app
-                 de alta son el mismo gesto y se hace una sola vez por aplicación. -->
-            <Border Style="{StaticResource Card}" Margin="{StaticResource Pad.M.Bottom}">
-                <StackPanel>
-                    <TextBlock Text="Baseline del sistema v4 (opcional)"
-                               Style="{StaticResource Text.Lead}" FontWeight="SemiBold"
-                               Margin="{StaticResource Pad.XXS.Bottom}" />
-                    <TextBlock Style="{StaticResource Text.Small}" Margin="{StaticResource Pad.M.Bottom}"
-                               Text="Si esta aplicación ya se auditaba con el sistema v4, su carpeta CodeAudit/ se puede importar ahora: hallazgos, silencios, histórico e informes entran con el alta." />
-
-                    <DockPanel Style="{StaticResource Setting.Row}">
-                        <StackPanel Style="{StaticResource Setting.Label}">
-                            <TextBlock Text="Carpeta CodeAudit/" Style="{StaticResource Setting.Name}" />
-                            <TextBlock Text="{Binding BaselineNotice}" Style="{StaticResource Setting.Help}"
-                                       Visibility="{Binding BaselineNotice, Converter={StaticResource NotEmptyToVisibility}}" />
-                        </StackPanel>
-                        <DockPanel>
-                            <Button DockPanel.Dock="Right" Content="Elegir…"
-                                    Command="{Binding PickBaselineCommand}"
-                                    Style="{StaticResource Button.Secondary}"
-                                    Margin="{StaticResource Pad.XS.Left}" />
-                            <ui:TextBox Text="{Binding CodeAuditPath, UpdateSourceTrigger=PropertyChanged}"
-                                        PlaceholderText="Se busca sola dentro del clon" />
-                        </DockPanel>
-                    </DockPanel>
-
-                    <DockPanel Style="{StaticResource Setting.Row}" Margin="{StaticResource Pad.Zero}">
-                        <StackPanel Style="{StaticResource Setting.Label}" />
-                        <!-- DockPanel y no StackPanel horizontal: un StackPanel da a sus hijos
-                             ancho INFINITO, así que la razón no envolvía nunca y se salía de la
-                             tarjeta, cortada a mitad de «CodeAudit» contra el borde. La casilla
-                             ocupa lo suyo y la razón recibe lo que queda. -->
-                        <DockPanel>
-                            <CheckBox DockPanel.Dock="Left" Content="Importar el baseline al crear la aplicación"
-                                      IsChecked="{Binding ImportBaseline}"
-                                      IsEnabled="{Binding HasBaseline}"
-                                      Margin="{StaticResource Pad.S.Right}"
-                                      VerticalAlignment="Center" />
-                            <!-- Un control apagado lleva su razón al lado, también cuando es una
-                                 casilla (UI-0038): estaba deshabilitada y no decía por qué. -->
-                            <Border Style="{StaticResource Reason.Chip}"
-                                    Visibility="{Binding HasBaselineBlockedReason, Converter={StaticResource BoolToVisibility}}">
-                                <TextBlock Text="{Binding BaselineBlockedReason}" Style="{StaticResource Reason.Text}" />
-                            </Border>
-                        </DockPanel>
-                    </DockPanel>
-
-                    <!-- La salida del importador se queda a la vista: no es el aviso de una
-                         acción (eso va por toast, F5.7 §4) sino lo que no se pudo importar.
-                         Sin margen propio: vacío tiene que ocupar CERO, o la tarjeta se queda con
-                         un hueco al pie en el caso normal, que es el de no importar nada. -->
-                    <ItemsControl ItemsSource="{Binding ImportLog}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding}" Style="{StaticResource Text.Mono}"
-                                           TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </Border>
+            <!-- AQUÍ ESTABA «BASELINE DEL SISTEMA V4 (OPCIONAL)», Y SE VA ENTERO (R4 §3).
+                 La tarjeta, la fila de la carpeta CodeAudit/, la casilla de importar y el aviso que
+                 salía recortado: no se va a usar. El importador (`Atalaya.ImportV4`) se queda en la
+                 solución y su servicio también, pero esta era su ÚNICA entrada en la aplicación
+                 —desde que F5.9 §1 lo sacó del menú—, así que a partir de aquí no se llega a él desde
+                 la interfaz por ningún sitio. Las dos tarjetas que quedan ocupan el hueco y «Crear e
+                 inventariar» queda debajo, a la vista y sin desplazar. -->
 
         </StackPanel>
         </ScrollViewer>

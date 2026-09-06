@@ -28,7 +28,12 @@
                  Subtitle="Tu identidad de GitHub, lo que hace falta para auditar y el clon del hub en esta máquina."
                  BodyWidth="{StaticResource Form.MaxWidth}">
     <ScrollViewer Style="{StaticResource Scroll}" VerticalScrollBarVisibility="Auto">
-        <StackPanel Margin="{StaticResource Pad.L.Bottom}">
+        <!-- CABE ENTERA A 1920×1080, SIN DESPLAZAMIENTO (R4 §2). Lo que sobraba era AIRE, no
+             contenido: 24 de faldón al pie, 16 entre tarjetas, 20 dentro de cada una y 4 por
+             encima y por debajo de cada fila de estado. Se aprieta el aire y no la letra —los
+             tamaños son los de la escala y no se tocan—, que es lo que permite que la vista quepa
+             sin quitarle nada de lo que dice. -->
+        <StackPanel Margin="{StaticResource Pad.XS.Bottom}">
 
             <!-- ============ DESCONECTADO: bienvenida + un botón ============ -->
             <StackPanel Visibility="{Binding IsDisconnected, Converter={StaticResource BoolToVisibility}}">
@@ -110,10 +115,10 @@
 
             <!-- ============ CONECTADO: identidad, estados, hub y acciones ============ -->
             <StackPanel Visibility="{Binding IsConnected, Converter={StaticResource BoolToVisibility}}"
-                        c:Stack.Gap="{StaticResource Space.M}">
+                        c:Stack.Gap="{StaticResource Space.S}">
 
                 <!-- · La identidad · -->
-                <Border Style="{StaticResource Card}">
+                <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.M}">
                     <DockPanel>
                         <Border DockPanel.Dock="Left"
                                 Width="{StaticResource Avatar.Size}" Height="{StaticResource Avatar.Size}"
@@ -160,7 +165,7 @@
                 </Border>
 
                 <!-- · Estado de la conexión · -->
-                <Border Style="{StaticResource Card}">
+                <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.M}">
                     <StackPanel>
                         <TextBlock Text="Estado de la conexión" Style="{StaticResource Text.Lead}"
                                    FontWeight="SemiBold" />
@@ -176,10 +181,10 @@
                              nada. El motivo de un fallo va en la línea de DEBAJO, con el mismo
                              margen izquierdo que el título (D-983 §10). -->
                         <ItemsControl ItemsSource="{Binding Checker.Steps}"
-                                      Margin="{StaticResource Pad.S.Top}">
+                                      Margin="{StaticResource Pad.XS.Top}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Margin="{StaticResource Pad.XXS.V}"
+                                    <Grid Margin="{StaticResource Pad.XXS.Bottom}"
                                           Visibility="{Binding IsVisible, Converter={StaticResource BoolToVisibility}}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
@@ -231,7 +236,7 @@
                 </Border>
 
                 <!-- · El hub local · -->
-                <Border Style="{StaticResource Card}">
+                <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.M}">
                     <StackPanel>
                         <TextBlock Text="Hub local" Style="{StaticResource Text.Lead}" FontWeight="SemiBold" />
                         <!-- ICONO + COLOR + PALABRA, TAMBIÉN AQUÍ (UI-0036, D-989). Era una
@@ -282,8 +287,12 @@
                     </StackPanel>
                 </Border>
 
-                <!-- · La botonera. UN primario, y el destructivo el último y perfilado (D-949). · -->
-                <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
+                <!-- · La botonera. UN primario, y el destructivo el último y perfilado (D-949).
+                     CENTRADA CON LA TARJETA DE ENCIMA (R4 §2): iba pegada al margen izquierdo de
+                     una columna centrada de 920, así que los tres botones quedaban en una esquina
+                     de la vista en vez de bajo el bloque al que pertenecen. · -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                            c:Stack.Gap="{StaticResource Space.S}">
                     <Button Content="Comprobar conexión" Command="{Binding CheckConnectionCommand}"
                             Style="{StaticResource Button.Primary}" />
                     <Button Content="Sincronizar ahora" Command="{Binding SyncNowCommand}"

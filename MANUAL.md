@@ -40,8 +40,7 @@ algo está hecho como está, `DECISIONS.md`.
    commits. No hay PAT que pegar ni URL que escribir.
 3. **Nueva aplicación.** Elige el repositorio en el desplegable —son los de tu
    organización— y señala dónde lo tienes clonado. El nombre lo pone él. El asistente
-   escanea el clon, arma el inventario y, si encuentra un baseline v4 (`CodeAudit/`),
-   te ofrece importarlo.
+   escanea el clon y arma el inventario.
 4. **Inventario → Auditar selección.** Elige unidades y lanza. El progreso se sigue
    en **Sesión en vivo**.
 
@@ -741,8 +740,11 @@ sí ocupa el ancho entero, porque lo que lleva dentro son tablas.
 
 ### Nueva aplicación
 
-El asistente de alta: repositorio, clon local, escaneo inicial y —si procede—
-importación del baseline v4. Publica una sola vez, al final.
+El asistente de alta: repositorio, clon local y escaneo inicial. Publica una sola vez, al final.
+
+**Ya no importa el baseline del sistema v4.** El bloque «Baseline del sistema v4 (opcional)»
+—la carpeta `CodeAudit/`, la casilla de importar y su aviso— se retiró en R4: no se usa. El
+importador sigue en la solución, pero desde la aplicación no se llega a él por ningún sitio.
 
 **El repositorio se elige, no se escribe.** El desplegable trae los repositorios de tu
 organización —la misma cuenta de GitHub que ya tienes conectada— y enseña solo el nombre corto:

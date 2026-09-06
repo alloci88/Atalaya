@@ -632,25 +632,42 @@
 
                             <Grid Margin="{StaticResource Pad.Row}"
                                   Visibility="{Binding HasSessions, Converter={StaticResource BoolToVisibility}}">
+                                <!-- EL SOBRANTE SE REPARTE CON LA DERECHA (R4 §4). «Hallazgos»
+                                     tenia 110 fijos y «Coste y tokens» 170 pegado a continuacion,
+                                     sin un solo pixel entre ellos: «sin cambios» acaba en el borde
+                                     de su columna y «20,2 AI credits» empieza en ese mismo borde,
+                                     asi que las dos se leian pegadas —«sin cambios20,2 AI
+                                     credits»— y parecian una sola. Mientras, «Aplicacion» se
+                                     llevaba sola los ~600 px sobrantes para meter un nombre de
+                                     repositorio.
+
+                                     Ahora las tres columnas que pueden crecer son estrella y se
+                                     reparten el sobrante 2 : 1 : 1, cada una con su minimo
+                                     declarado; las demas bajan al ancho que su dato necesita. El
+                                     aire entre columnas es un margen de 12 en la celda, el mismo en
+                                     la cabecera y en la fila, para que ninguna cifra vuelva a tocar
+                                     a la siguiente. La suma de los minimos sigue cabiendo a 1280. -->
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="150" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="140" />
-                                    <ColumnDefinition Width="140" />
-                                    <ColumnDefinition Width="150" />
-                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="130" />
+                                    <ColumnDefinition Width="2*" MinWidth="140" />
+                                    <ColumnDefinition Width="120" />
+                                    <ColumnDefinition Width="130" />
+                                    <ColumnDefinition Width="130" />
                                     <ColumnDefinition Width="110" />
-                                    <ColumnDefinition Width="170" />
+                                    <ColumnDefinition Width="*" MinWidth="120" />
+                                    <ColumnDefinition Width="*" MinWidth="170" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Fecha" Style="{StaticResource Table.Header}" />
-                                <TextBlock Grid.Column="1" Text="Aplicación" Style="{StaticResource Table.Header}" />
-                                <TextBlock Grid.Column="2" Text="Tipo" Style="{StaticResource Table.Header}" />
+                                <TextBlock Grid.Column="0" Text="Fecha" Style="{StaticResource Table.Header}" Margin="{StaticResource Pad.S.Right}" />
+                                <TextBlock Grid.Column="1" Text="Aplicación" Style="{StaticResource Table.Header}" Margin="{StaticResource Pad.S.Right}" />
+                                <TextBlock Grid.Column="2" Text="Tipo" Style="{StaticResource Table.Header}" Margin="{StaticResource Pad.S.Right}" />
                                 <!-- F16 §C: con dos casas, saber cuál gastó es parte de leer la fila. -->
-                                <TextBlock Grid.Column="3" Text="Proveedor" Style="{StaticResource Table.Header}" />
-                                <TextBlock Grid.Column="4" Text="Quién" Style="{StaticResource Table.Header}" />
-                                <TextBlock Grid.Column="5" Text="Unidades" Style="{StaticResource Table.Header.Number}" />
-                                <TextBlock Grid.Column="6" Text="Hallazgos" Style="{StaticResource Table.Header.Number}" />
-                                <TextBlock Grid.Column="7" Text="Coste y tokens" Style="{StaticResource Table.Header}" />
+                                <TextBlock Grid.Column="3" Text="Proveedor" Style="{StaticResource Table.Header}" Margin="{StaticResource Pad.S.Right}" />
+                                <TextBlock Grid.Column="4" Text="Quién" Style="{StaticResource Table.Header}" Margin="{StaticResource Pad.S.Right}" />
+                                <TextBlock Grid.Column="5" Text="Unidades" Style="{StaticResource Table.Header.Number}" Margin="{StaticResource Pad.S.Right}" />
+                                <TextBlock Grid.Column="6" Text="Hallazgos" Style="{StaticResource Table.Header.Number}" Margin="{StaticResource Pad.S.Right}" />
+                                <!-- «Coste y tokens» es una CIFRA, y va donde van las cifras: a la
+                                     derecha, como «Unidades» y «Hallazgos» (P-08). -->
+                                <TextBlock Grid.Column="7" Text="Coste y tokens" Style="{StaticResource Table.Header.Number}" />
                             </Grid>
 
                             <ItemsControl ItemsSource="{Binding Sessions}"
@@ -663,39 +680,41 @@
                                             CommandParameter="{Binding}"
                                             ToolTip="Abrir el informe de esta sesión">
                                             <Grid>
+                                                <!-- LAS MISMAS OCHO QUE LA CABECERA (R4 §4). -->
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="150" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="140" />
-                                                    <ColumnDefinition Width="140" />
-                                                    <ColumnDefinition Width="150" />
-                                                    <ColumnDefinition Width="100" />
+                                                    <ColumnDefinition Width="130" />
+                                                    <ColumnDefinition Width="2*" MinWidth="140" />
+                                                    <ColumnDefinition Width="120" />
+                                                    <ColumnDefinition Width="130" />
+                                                    <ColumnDefinition Width="130" />
                                                     <ColumnDefinition Width="110" />
-                                                    <ColumnDefinition Width="170" />
+                                                    <ColumnDefinition Width="*" MinWidth="120" />
+                                                    <ColumnDefinition Width="*" MinWidth="170" />
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{Binding When}" Style="{StaticResource Table.Cell}" />
-                                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                <TextBlock Grid.Column="0" Text="{Binding When}" Style="{StaticResource Table.Cell}" Margin="{StaticResource Pad.S.Right}" />
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="{StaticResource Pad.S.Right}">
                                                     <Rectangle Width="9" Height="9" RadiusX="2" RadiusY="2"
                                                                Fill="{Binding AppBrush}" VerticalAlignment="Center" />
                                                     <TextBlock Text="{Binding AppName}" Style="{StaticResource Table.Cell.Strong}"
                                                                Margin="{StaticResource Pad.XS.Left}" />
                                                 </StackPanel>
-                                                <TextBlock Grid.Column="2" Text="{Binding Type}" Style="{StaticResource Table.Cell}" />
+                                                <TextBlock Grid.Column="2" Text="{Binding Type}" Style="{StaticResource Table.Cell}" Margin="{StaticResource Pad.S.Right}" />
                                                 <TextBlock Grid.Column="3" Text="{Binding Provider}" Style="{StaticResource Table.Cell}"
+                                                           Margin="{StaticResource Pad.S.Right}"
                                                            ToolTip="{Binding Provider}" />
-                                                <TextBlock Grid.Column="4" Text="{Binding By}" Style="{StaticResource Table.Cell}" />
+                                                <TextBlock Grid.Column="4" Text="{Binding By}" Style="{StaticResource Table.Cell}" Margin="{StaticResource Pad.S.Right}" />
                                                 <!-- Cifras a la derecha y tabulares, como en Informes (P-08, UI-0030). -->
-                                                <TextBlock Grid.Column="5" Text="{Binding Units}" Style="{StaticResource Cell.Number}" />
-                                                <TextBlock Grid.Column="6" Text="{Binding Findings}" Style="{StaticResource Cell.Number}" />
+                                                <TextBlock Grid.Column="5" Text="{Binding Units}" Style="{StaticResource Cell.Number}" Margin="{StaticResource Pad.S.Right}" />
+                                                <TextBlock Grid.Column="6" Text="{Binding Findings}" Style="{StaticResource Cell.Number}" Margin="{StaticResource Pad.S.Right}" />
                                                 <!-- F16-RETOQUE §1 — el coste y, debajo, los tokens.
                                                      Una sesión que no se tarifa dice «suscripción» y
                                                      sus tokens son lo que deja comparar su peso con
                                                      el de cualquier otra. -->
                                                 <StackPanel Grid.Column="7">
-                                                    <TextBlock Text="{Binding Cost}" Style="{StaticResource Table.Cell}"
+                                                    <TextBlock Text="{Binding Cost}" Style="{StaticResource Cell.Number}"
                                                                ToolTip="{Binding CostDetail}" />
                                                     <TextBlock Text="{Binding Tokens}" Style="{StaticResource Text.Meta}"
-                                                               TextWrapping="Wrap"
+                                                               TextWrapping="Wrap" TextAlignment="Right"
                                                                ToolTip="{Binding TokensDetail}"
                                                                Visibility="{Binding Tokens, Converter={StaticResource NotEmptyToVisibility}}" />
                                                 </StackPanel>
