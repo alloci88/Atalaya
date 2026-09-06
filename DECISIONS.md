@@ -15691,3 +15691,168 @@ ahora»**; donde vale ya —el tema, la frescura, el sondeo del hub— dice que 
 el editor, que se aplica la próxima vez que abras código. La regla de BUGFIX-AJUSTES §3 no cambia
 —cada control dice **cuándo** surte efecto— y su test se amplía a las formas nuevas de decirlo, no
 se relaja.
+
+---
+
+## F29 — El coste que faltaba, y en qué moneda se cuenta
+
+### D-1004 — El hueco de coste es de la aplicación; la divisa, de la máquina
+
+Una entrada para la fase entera (N-7). Va en este orden: primero lo que se midió, después lo que se
+decidió con ello.
+
+#### El diagnóstico, con las cifras del hub del usuario (N-2)
+
+**1. ¿Sigue D-788 recalculando solo tras R2? Sí.** El coste es un derivado que se calcula en cada
+lectura y `ModelRatesService` relee la tabla del disco en cada consulta, así que añadir una tarifa
+corrige las sesiones viejas sin migrar ni reescribir nada. Está fijado por un test nuevo: una sesión
+con un modelo sin tarifa da `RateMissing`; se añade la tarifa; la misma sesión, releída de su
+fichero intacto, vale 2 credits. **No era un defecto**, así que lo que queda sin coste son solo las
+sesiones cuyo modelo no puede tener tarifa — que es justo lo que se ve en el hub del usuario.
+
+**2. ¿Por qué hay sesiones con modelo `auto`? Porque se registró lo que se PIDIÓ, y `auto` no es un
+modelo.** Copilot enruta por llamada cuando se le deja elegir. Y **el modelo real sí está**: cada
+llamada llega con el suyo desde el propio proveedor —`AssistantUsageData.Model`, que `UsageAdapter`
+copia a `UsageSample.Model` y `SessionCoordinator` guarda en `CallSample.Model`—, así que **no hay
+dato nuevo que empezar a registrar**: ya se registraba. En la sesión `auto` del hub del usuario están
+las **86 llamadas con su modelo**, ninguna en blanco, y sus tokens suman **exactamente** los de la
+sesión (1.856.006 / 57.550 / 1.579.791 / 124.072). Los modelos que de verdad contestaron fueron tres:
+`gpt-5.3-codex` (35 llamadas), `gpt-5.4-mini` (28) y `claude-haiku-4.5` (23).
+
+**3. Cuántas sesiones sin coste hay, por aplicación y por motivo.** Una sola:
+
+| Aplicación | Sesiones | Sin coste | Motivo |
+| --- | --- | --- | --- |
+| `xblast` | 11 | **1** | modelo desconocido (`auto`); las otras diez son `claude-opus-4.7`, que sí tiene tarifa |
+
+Valorada llamada a llamada da **91,6 AI credits (0,92 $)**, y el total de la aplicación pasa de
+**321,2 credits (3,21 $)** a **412,8 (4,13 $)**. Ninguna sesión del hub está parada por una tarifa
+que falte: la tabla tiene 31 y las cubre todas.
+
+#### `auto` deja de ser un «modelo sin tarifa»
+
+Es la causa del síntoma que abrió la fase: el aviso ámbar decía «auto (copilot) · 1 sesión» y pedía
+configurar un precio que **no debe existir** —no hay ninguna tarifa publicada para «lo que el
+enrutador decida»—, así que añadirlas todas no lo arreglaba. `ModelIds.IsPlaceholder` lo reconoce
+como lo que es: una palabra que ocupa el sitio de un modelo sin nombrar ninguno. El motivo pasa de
+«tarifa no configurada» a **«modelo desconocido»**, y deja de aparecer en la lista de modelos a los
+que les falta tarifa. **No es una lista de modelos** —lo que el guarda de F5.15 prohíbe—: es la lista
+de las palabras que no lo son, y ninguna de ellas caduca.
+
+#### El aviso y la acción se mudan a la aplicación
+
+El coste es de la sesión y la sesión es de una aplicación, así que el hueco es de la aplicación y no
+de la pantalla de precios. Tres sitios, y solo tres:
+
+- **Portafolio**: una insignia ámbar discreta junto a la línea de última sesión —«3 sesiones sin
+  coste»— con el motivo resumido en su tooltip. **Avisa y no actúa**, y no está cuando no hay nada.
+- **Inventario → Resumen del ciclo**: la misma frase, con **«Reconciliar costes»** al lado, como
+  «Gestionar». Es el **único** sitio desde el que se lanza.
+- **Ajustes → Tarifas**: pierde el bloque ámbar y su lista, y queda una línea neutra —«Sesiones sin
+  coste: 3 en 1 aplicación · se reconcilian desde el inventario de cada aplicación»— con enlace al
+  Portafolio. **Y neutra, no ámbar**: desde allí no se puede hacer nada, y un color de alarma sobre
+  algo que no tiene botón se aprende a ignorar. Tarifas es para precios.
+
+Los tres salen de **una sola cuenta** (`CostReconciliationService`): tres cuentas parecidas del mismo
+hueco acaban diciendo tres números distintos en la misma sesión de trabajo.
+
+#### Reconciliar no escribe un coste: escribe lo que faltaba para calcularlo
+
+Es la decisión que gobierna todo lo demás. **D-788 sigue mandando**: los tokens son el hecho y los
+credits un derivado que se recalcula en cada lectura. Guardar el número que salió aquel día sería la
+segunda verdad que D-788 fue a eliminar, y una tarifa corregida mañana ya no lo alcanzaría — hay un
+test que corrige el precio después de reconciliar y exige que el coste cambie con él.
+
+Lo que se guarda es **cómo se cierra el hueco**, en tres formas y solo tres:
+
+- **Por llamada** — las llamadas dicen con qué modelo contestó cada una, ese modelo tiene tarifa y
+  sus tokens son **exactamente** los de la sesión. Las tres condiciones son la misma exigencia dicha
+  tres veces: que sumar el coste de las llamadas dé el coste de la sesión y no una parte de él. Es
+  la fórmula de siempre aplicada N veces, no una segunda aritmética. Y es una **medida**, así que no
+  lleva marca.
+- **Tarifa añadida** — alguien puso el precio que faltaba en la tabla del hub. No hay nada que
+  elegir; lo único que se escribe es cuándo se cerró.
+- **Tarifa asignada** — nadie midió con qué modelo corrió, así que una persona **elige** con cuál
+  valorarla. El coste que sale es **estimado**, sale con un asterisco allá donde se enseñe, su
+  tooltip dice con qué tarifa, quién la asignó y cuándo, y **la marca no se quita nunca**: asignar
+  una tarifa no convierte en medido lo que no se midió. Un test reconcilia dos veces con tarifas
+  distintas y exige que mande la primera y que la marca siga puesta.
+
+**El orden importa y es éste**: primero la fórmula de siempre. Una sesión cuyo modelo tiene tarifa se
+valora con ella y la reconciliación no pinta nada, ni aunque alguien le asignara otra en su día. La
+reconciliación solo contesta donde la fórmula dice «no puedo».
+
+**Y la sesión no se toca.** La reconciliación vive en `apps/{slug}/cost-reconciliations/{ulid}.json`,
+carpeta propia, un fichero por sesión, merge-friendly — el mismo argumento por el que los arreglos de
+F9 §2 viven en `fixes/` y no dentro de la sesión que los produjo: una sesión es el registro inmutable
+de lo que pasó aquel día, y esto es una decisión posterior sobre cómo valorarla, tomada por otra
+persona y otro día. Se publica con su commit, que es su atribución, igual que la tabla de tarifas
+(D-786).
+
+**El diálogo se compromete con lo que había al abrirlo.** Añadir la tarifa que faltaba cierra el
+hueco **por sí sola** —eso es D-788 haciendo su trabajo, y R2 y él **se quedan**: reconciliar es para
+lo que esos dos no alcanzan—, así que sin fijar el alcance el grupo desaparecería del diálogo en vez
+de pasar a «listo para calcular», y sus informes se quedarían sin la línea que dice cuándo se
+calculó. El inventario recuerda lo que un diálogo dejó a medias mientras sigas en su página; salir la
+olvida, y es correcto: es el hilo de una gestión, no un dato del hub.
+
+#### Un informe ya escrito no se reescribe
+
+F23 sigue entero: **el informe es lo que se vio ese día**. Al reconciliar, la **lista** de Informes
+enseña el coste calculado —es un derivado, se recalcula al leerla— y el informe abierto lleva al pie
+de su cabecera, **fuera del documento**, «Coste calculado a posteriori el 06/09/2026». Hay un test
+que compara el fichero byte a byte antes y después.
+
+#### La divisa: `CostFormat`, y una sola conversión
+
+`CreditText` pasa a llamarse **`CostFormat`**, porque los credits han dejado de ser la única unidad
+en la que se enseña un coste. Sigue siendo **el único sitio** donde un coste se convierte en texto, y
+ahora es también el único que sabe en qué unidad: `CostFormat.Currency`, estática como
+`AppCulture` y como el tema, por el mismo motivo —la lee todo lo que escribe un coste, y pasarla de
+mano en mano por doce firmas acabaría con una que no la recibe—.
+
+- **La preferencia es de la máquina** y vive en Ajustes → Tarifas, primera fila («Mostrar el coste
+  en»), guardada al cambiarla (R5). Por la regla de F13 no puede ser otra cosa: no gobierna nada
+  compartido —el hub sigue guardando los mismos tokens y los mismos credits—, solo cómo lee las
+  cifras quien está delante. Dos personas del mismo equipo pueden mirar el mismo panel en unidades
+  distintas sin cambiarle el número a nadie.
+- **La conversión es la de D-786**, en un solo sitio y con nombre: `CreditCalculator.UsdPerCredit`.
+  Dólares con dos decimales y símbolo detrás («2,45 $»), como ya escribía Métricas; credits con uno,
+  como hasta hoy. **Y la regla del redondeo se mantiene en la unidad nueva**: por debajo del céntimo
+  se dice «< 0,01», nunca un «0,00 $» que afirmaría que fue gratis (BUGFIX-REDONDEO).
+- **Ningún XAML escribe la unidad a mano**, y hay un test que recorre los 284 textos literales de las
+  vistas buscando «credits» o «$». La única cabecera que nombra el dólar —la de la tabla de
+  tarifas— tampoco lo escribe: sale de `CostFormat.RateColumnUnit`, porque **no es la divisa de
+  presentación** sino la unidad de una lista de precios publicada, que está en dólares por millón de
+  tokens y ahí seguirá.
+- **Los informes registran las dos y no miran la preferencia**: «185,3 AI credits (1,85 $)» en la
+  cabecera de F23 y en el anexo. Un informe se lee dentro de años, en otro puesto y con otra
+  preferencia puesta; si dijera solo una, haría falta saber a cuánto estaba el credit aquel día.
+
+#### Lo que NO se ha tocado
+
+La fórmula del coste (D-786/D-788) y la siembra de R2, la estructura del informe más allá de las dos
+líneas de arriba, ningún informe ya escrito, y nada de la interfaz fuera de la lista de cambios
+visibles: insignia en la tarjeta del Portafolio, línea y enlace en el resumen del ciclo, el diálogo
+nuevo, la línea neutra de Tarifas y la fila de divisa.
+
+#### Cobertura (15 tests nuevos, 1.944 en total, todo en verde)
+
+Solo reglas (N-5, N-7), y cada una protege algo que se rompería en silencio:
+
+- **El diagnóstico**: que añadir una tarifa siga recalculando sola una sesión vieja (D-788 tras R2),
+  y que `auto` no se liste como modelo al que le falta tarifa.
+- **Reconciliar**: sin tarifa + tarifa añadida + reconciliar → coste y «parcial» fuera; `auto` con el
+  modelo real en las llamadas → coste **por llamada** y **sin** marca; `auto` sin modelo real → sin
+  coste hasta asignar una tarifa, y **con** marca; reconciliar otra vez no convierte un estimado en
+  medido; la sesión no se reescribe y la reconciliación va a su carpeta; no se guarda un importe, y
+  la tarifa corregida después sigue mandando; un informe ya escrito no cambia; una sesión sin tokens
+  no cuenta como sesión sin coste (D-787).
+- **La divisa**: la misma cifra en las dos unidades con la conversión de D-786; un gasto por debajo
+  del céntimo no se redondea a cero; el informe escribe las dos pase lo que pase con la preferencia;
+  **ningún XAML escribe la unidad a mano**; y la preferencia se guarda como palabra, con lo
+  desconocido cayendo a credits.
+
+**Aceptación humana, que es del usuario** (N-8): abrir el `dist`, ver la insignia en la tarjeta de
+`xblast`, reconciliar su sesión `auto` y comprobar que los 91,6 credits que salen por llamada cuadran
+con lo que espera; y mover la divisa a dólares para ver que el cambio alcanza a las seis pantallas.

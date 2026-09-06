@@ -153,6 +153,14 @@ esta máquina pone «vincula tu clon para ver la deriva» y no un cero: la deriv
 calcula del historial local, y no tenerlo no es lo mismo que no haber cambiado
 nada. Ver «Auditar lo que ha cambiado», más abajo.
 
+Y si alguna sesión de esa aplicación **se quedó sin coste**, la tarjeta lo dice con una
+insignia ámbar discreta junto a la línea de última sesión: **«3 sesiones sin coste»**, con
+el motivo en su tooltip. Pasa cuando se auditó con un modelo que todavía no tenía tarifa, o
+con **`auto`** —el enrutador de Copilot, que elige modelo por llamada y no es un modelo, así
+que ninguna tarifa lo cubre—. La insignia **avisa y no actúa**: se cierran desde
+**Inventario → Resumen del ciclo → Reconciliar costes**, que es el único sitio desde el que
+se lanza. Sin sesiones sin coste, no hay insignia.
+
 ### Inventario
 
 Las unidades de la aplicación en el ciclo vigente, por módulos, con su estado
@@ -816,7 +824,7 @@ un scroll largo:
 | --- | --- |
 | **Proveedor y modelo** | Con quién auditas y con qué modelo, y el botón de actualizar la lista |
 | **Auditoría** | El tope de pasadas del barrido, el **modo exhaustivo** y el interruptor del **arreglo asistido** |
-| **Tarifas** | La tabla de precios por modelo de la organización, con los modelos usados que aún no tienen tarifa |
+| **Tarifas** | En qué divisa se enseña el coste, y la tabla de precios por modelo de la organización |
 | **Apariencia** | Tema claro / oscuro |
 | **Avanzado** | Editor preferido, frescura, sincronización del hub, timeout y la zona peligrosa |
 
@@ -938,6 +946,55 @@ Ajustes es **dónde se editan**, no dónde se guardan.
 
 El detalle de qué contiene la tabla, qué significa cada columna y por qué los modelos de Claude Code
 no están, en **[Las tarifas se editan, y viven en el hub](#las-tarifas-se-editan-y-viven-en-el-hub)**.
+
+#### En qué divisa se enseña el coste
+
+La primera fila de la sección: **«Mostrar el coste en»**, con dos opciones —**AI credits** o
+**Dólares (USD)**—. Se guarda al cambiarla, como el resto de los ajustes, y se aplica al momento en
+**todas** las pantallas donde salga un coste: el pie de la sesión en vivo y del arreglo, las
+tarjetas del Portafolio, Métricas, la lista de Informes y la ficha de un hallazgo.
+
+- **AI credits** es la unidad en la que factura GitHub y en la que grafica el panel de tu
+  organización: es la que puedes cuadrar contra la factura. Un decimal.
+- **Dólares** salen de ella a **0,01 $ por credit**, con dos decimales y el símbolo detrás
+  («2,45 $»). Es la unidad con la que se decide con un presupuesto delante.
+
+**Es una preferencia de tu máquina.** El hub sigue guardando los mismos tokens y los mismos
+credits, así que cambiarla no le cambia ninguna cifra a nadie del equipo: tu compañero puede estar
+mirando el mismo panel en la otra unidad. Y **los informes registran las dos** —«185,3 AI credits
+(1,85 $)»— en la cabecera y en el anexo: un informe se lee dentro de años, en otro puesto, y no
+puede depender de lo que alguien tuviera elegido el día que se generó.
+
+#### Sesiones sin coste: dónde se reconcilian
+
+En esta sección solo verás una **línea neutra** con el recuento —«Sesiones sin coste: 3 en 1
+aplicación · se reconcilian desde el inventario de cada aplicación»— y un enlace al Portafolio.
+Tarifas es para precios; **el hueco es de las aplicaciones**, porque el coste es de la sesión y la
+sesión es de una aplicación.
+
+Se cierran en **Inventario → Resumen del ciclo → Reconciliar costes**. El diálogo agrupa las
+sesiones **por motivo**:
+
+- **Modelo sin tarifa.** Dice qué modelo y cuántas sesiones esperan por él, y lleva a esta pantalla
+  a añadirlo. Al volver y reabrir el diálogo, el grupo pasa a **«listo para calcular»**.
+- **Modelo desconocido (`auto`).** Si las llamadas de la sesión guardaron con qué modelo contestó
+  cada una —lo normal desde hace tiempo—, se calcula **llamada a llamada** con la tarifa de cada
+  una y el diálogo enseña qué modelos fueron: eso es un coste **medido**. Si no lo guardaron, eliges
+  con qué tarifa valorarlas, y entonces el coste queda marcado como **estimado** —«coste estimado
+  con tarifa de claude-opus-4.7, asignada por alopezciller el 06/09/2026»—: sale con un asterisco
+  allá donde se enseñe, con esa frase en su tooltip, y **la marca no se quita nunca**. Un coste
+  estimado no se confunde con uno medido.
+
+El botón dice cuántas va a cerrar —**«Reconciliar 3 sesiones»**— y, si no puede cerrar ninguna, dice
+por qué. Al pulsarlo, lo que faltaba se escribe en el hub y se publica con tu nombre en el commit,
+como cualquier otro cambio compartido. **No se guarda un importe**: se guarda con qué valorar cada
+sesión, y el coste se sigue calculando de sus tokens en cada lectura — así, si mañana se corrige una
+tarifa, esas sesiones se corrigen con las demás.
+
+Después desaparecen la insignia, la línea del resumen y el «parcial» de Métricas, e **Informes
+enseña el coste en la lista**. Los informes ya escritos **no se reescriben** —un informe es lo que se
+vio aquel día—, pero al abrir uno de esas sesiones verás al pie de su cabecera: **«Coste calculado a
+posteriori el 06/09/2026»**.
 
 ---
 

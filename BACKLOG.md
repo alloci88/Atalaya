@@ -469,6 +469,17 @@ las seis reversiones de lo que se había movido sin pedirlo; con ellas entran N-
 
 ## Cerrado
 
+- **F29 · El coste que faltaba, y en qué moneda se cuenta** — el hueco de coste deja Ajustes y se
+  muda a la aplicación: insignia en la tarjeta del Portafolio, línea y **«Reconciliar costes»** en el
+  resumen del ciclo, y un diálogo que agrupa las sesiones sin coste por motivo. `auto` deja de ser un
+  «modelo sin tarifa» —no es un modelo— y las sesiones enrutadas se valoran **llamada a llamada** con
+  el modelo real que ya venía registrado; lo que nadie midió se valora con una tarifa elegida y queda
+  marcado como **estimado para siempre**. Reconciliar no guarda un importe: guarda con qué valorar, y
+  el coste sigue derivándose en cada lectura (D-788). Los informes ya escritos no se reescriben; el
+  abierto lleva «Coste calculado a posteriori». Y el coste se puede enseñar en **dólares**: un solo
+  formateador (`CostFormat`) con la divisa activa, ninguna unidad escrita a mano en XAML, y las dos
+  cifras siempre en los informes. Ver D-1004.
+
 - **R5 · Ajustes se guarda solo** — fuera «Guardar», «Descartar» y «Hay cambios sin guardar» de las
   cuatro secciones de preferencias: cada ajuste se escribe al cambiarlo y lo dice un «Guardado ✓» al
   lado del control, que se desvanece a los dos segundos. Tarifas conserva sus botones porque escribe
