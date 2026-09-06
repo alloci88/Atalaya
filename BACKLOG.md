@@ -4,8 +4,8 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-06 (F30 §2e — la lentitud de Claude Code, medida en cuatro configuraciones
-y resuelta: no era la tubería, era el razonamiento que no se veía).
+Última revisión: 2026-09-07 (F30 §3 — un solo componente de conversación para el arreglo, la
+sesión en vivo y la última sesión).
 
 ## En vuelo
 
@@ -76,6 +76,21 @@ y resuelta: no era la tubería, era el razonamiento que no se veía).
   - **`tour.ps1` con `powershell -File` no encuentra el `dist`**: `$PSScriptRoot` no está disponible
     al evaluar los valores por defecto de `param()` en esa forma de invocación. Por el camino
     documentado funciona.
+
+- **F30 §3 — un solo componente de conversación. ENTREGADA** (D-1020). El componente del arreglo
+  asistido pasa a ser el de la casa: un modelo común (`ConversationEntry`), una plantilla por clase
+  de evento en `Themes/Conversation.xaml` y tres vistas usándolo. El árbol de expanders de R11 se
+  retira a favor de una columna con separadores de pasada y de unidad; `RunOrQueue` sale del arreglo
+  y gobierna las escrituras de las dos vistas.
+
+  **Lo que queda apuntado:**
+
+  - **El hilo de «Última sesión» detrás del resumen.** Cuando una sesión cierra con resumen, la
+    pantalla de cierre sustituye a las tres columnas (F5), así que el hilo plegado solo se ve en las
+    sesiones que acaban sin resumen. Devolverlo es una disposición nueva y nadie la ha pedido.
+  - **Las marcas que siguen siendo caracteres.** ＋ ⊕ ⚠ ✔ ✓ ↻ ✂ no tienen vector, como quedó en
+    F30 §1c. Esta tanda añadió los dos que el encargo nombraba —juzgar y cerrar unidad— y no las
+    siete que llevan bien desde F12.
 
 - **F30 §2e — la lentitud de Claude Code. ENTREGADA** (D-1019). Medida con el banco de M2 en cuatro
   configuraciones: **la pasada no se ha alargado** —54,0 s antes de la entrega 1 contra 52,3 s en

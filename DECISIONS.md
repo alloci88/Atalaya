@@ -16600,3 +16600,82 @@ que el rótulo pasa a «Última sesión».
 
 **Ni un token más**: no se toca el prompt, no se añade ninguna llamada y no se le pide al modelo
 nada distinto. Todo lo de aquí es leer lo que ya llegaba, no bloquear al que lo lee, y decirlo.
+
+
+## F30 · Entrega 3: un solo componente de conversación
+
+### D-1020 — La auditoría se lee como el arreglo porque es la misma pieza, no una copia suya
+
+Un párrafo para la fase (N-7) y solo lo pedido (N-6). **El estado del que se sale.** Había **dos
+implementaciones de una conversación**: la del arreglo asistido (F16) —dos voces, burbuja por
+intervención— y el hilo de actividad de la auditoría (F30 §1), líneas en un carril dentro de un
+árbol de expanders unidad → pasada (R11), con la prosa en un bloque monoespaciado aparte. Dos copias
+de lo mismo divergen igual que dos cálculos de la misma verdad (F5.14), y ya habían empezado: una
+decía «el modelo» y la otra «Agente», una sellaba la hora y no la enseñaba, y el mismo suceso
+—«ha leído un fichero»— se dibujaba con un ojo en una pantalla y con un carácter en la otra.
+**Lo que entra.** Un modelo común —`ConversationEntry`: emisor, **clase de evento**, hora, marca,
+gravedad y texto— del que cuelgan los `FixMessage` del arreglo y los `ActivityEntry` de la auditoría;
+y **un** componente, `Themes/Conversation.xaml`, con **una plantilla por clase** resuelta por
+`ConversationTemplates`. Las tres vistas —Arreglo asistido, Sesión en vivo y Última sesión— lo usan;
+ninguna declara ya una burbuja. **Varias clases comparten plantilla a propósito**: un hito, una
+entrega y el cierre de una unidad se leen igual y lo que los distingue es el icono, que sale del
+dato; duplicar la burbuja por clase sería exactamente lo que esta fase retira. Lo que la regla
+prohíbe es una clase **sin** plantilla — no revienta, no avisa y pinta el `ToString` del objeto en
+medio del hilo. **El árbol de expanders se retira** y el hilo pasa a ser una columna que se lee de
+arriba abajo, con **separadores de sección**: «Pasada 2 · turno del hilo» con las pastillas de R11
+§1b, y un separador de unidad cuando hay más de una. Se pliegan pulsándolos, pero ya no empiezan
+plegados: en vivo se ve todo —plegar la pasada anterior escondía lo que el usuario acababa de ver
+pasar— y al terminar la sesión queda abierta solo la última pasada de cada unidad. La columna de
+unidades y el panel de hallazgos se quedan como estaban; pulsar una unidad **lleva a su tramo** del
+hilo, que es lo que convierte esa columna en un índice en vez de una lista. **`RunOrQueue` sale del
+arreglo y pasa a ser una pieza** (`ConversationWrites`): una escritura a la vez en la colección
+—BUGFIX-RELEASE §1— para las dos vistas, y por ahí escriben también el volcado diferido del texto
+(§2d) y las colas de §2e, que conservan su prioridad `Send` y por tanto su orden. **Lo que NO
+cambia, que es lo que más importa aquí**: no se toca la lógica de sesión, de arreglo, de narración
+ni de coste. Se narra **lo mismo, en el mismo orden y con la misma hora**; lo único que cambia de
+las palabras es que la voz de enfrente se llama **Agente** en las tres vistas —«Pasada 3 · enviada
+al agente», y el pie «esperando al agente»—, que es lo que el arreglo ya decía desde F16.
+**Cobertura (N-5, N-7): un test de regla nuevo con dos mitades, y cinco migrados con nombre.** El
+nuevo protege la única regla que esta fase estrena y la única que puede romperse en silencio: la
+primera mitad exige que **cada clase de evento tenga su plantilla** —se monta el diccionario entero
+en el orden de `App.xaml` y se pide la de cada clase— y que **ninguna clave que el componente pide
+falte**, porque una plantilla resuelve sus `StaticResource` al pintarse y no al cargarse, así que
+una clave ausente espera a la primera burbuja; la segunda exige que **ninguna vista se declare su
+propia burbuja**, que es la puerta por la que se vuelve al estado de partida. Las dos se
+comprobaron con cebo: renombrando la clave de `Conversation.Hallazgo` y plantando un
+`{Binding Speaker}` en `SessionView`, se ponen rojas. **Migrados, uno a uno**: `LiveNarrationTests`
+no pierde ninguna regla —el orden de los hitos, la herramienta narrada antes del cierre de su
+pasada, el espejo con la sesión persistida, el inventario de glifos y el coste por `CostFormat`
+siguen igual, porque la **marca sigue siendo el dato** y solo cambia cómo se dibuja (D-1014);
+`SessionViewModelTests` cambia `ActivityKind.Texto/Evento` por `ConversationKind.Prosa` y `IsEvent`,
+que es la misma pregunta con el vocabulario común; `AssistedFixTests` y `AssistedFixClaudeTests`
+cambian `FixVoice` por `ConversationVoice`, `IsSystem` por `IsAtalaya` y `FixQuestion.Kind` por
+`.Ask` —el `Kind` de una entrada es ahora su clase de evento, y una pregunta no podía tener dos—; y
+en `AssistedFixViewTests` los tres que leían las plantillas dentro de la vista las leen donde ahora
+están, sin relajar lo que exigen: el de las opciones enteras y el de la tarjeta de pregunta miran el
+componente, y el del globo que envuelve pasa de mirar un atributo a exigir que **ninguno** de los
+tres estilos de texto pierda el `Wrap` y que ninguna burbuja monte su contenido en un `StackPanel`
+horizontal —la regla es la misma y ahora se cumple en un sitio para todas—. **Y el test de tamaños
+de rejilla de D-1005 cazó lo suyo**: el carril del nombre entró como `Width` de una
+`ColumnDefinition`, que es un `Double` donde se espera un `GridLength` y revienta **al abrir la
+vista**, no al compilar; está donde tiene que estar, en el hijo. **Los cambios visibles, por vista
+(N-6).** *Sesión en vivo y Última sesión*: (1) el hilo pasa a burbujas con emisor y hora, y se
+retiran los dos niveles de expander; (2) separador de pasada «Pasada 2 · turno del hilo» con sus
+pastillas, y separador de unidad —con su insignia, su ruta y su resumen— solo cuando hay más de una;
+(3) todo abierto en vivo, y al terminar solo la última pasada de cada unidad; (4) la fila de la cola
+se pulsa y lleva a su tramo, con el cursor de mano; (5) el texto de los sucesos deja de ser
+monoespaciado —lo sigue siendo la prosa del agente, que es un registro—; (6) «Razonando…» sale en
+cursiva y apagado; (7) `report_verdicts` gana la balanza y `unit_done` la caja, los dos vectores del
+juego del raíl; (8) la entrega dice «enviada al agente»; (9) en el panel de hallazgos, 16 px arriba y
+abajo de la fila de gravedad, y el título «Hallazgos» en la misma fila que «Unidad 1 de 1». *Arreglo
+asistido*: (10) cada burbuja enseña su **hora**, que se sellaba desde F16 y no se pintaba; (11) el
+fondo de la burbuja pasa a la superficie del tema —eran cuatro `#22…` fijos, o sea el mismo gris en
+los dos temas— y quien habla lo sigue diciendo el nombre de la izquierda; (12) la prosa del agente
+pasa a monoespaciada, como el registro que es. **Ni un token más**: no se toca el prompt, no se
+añade ninguna llamada y no se le pide al agente nada distinto; todo lo de aquí es dónde y con qué
+forma se pinta lo que ya llegaba.
+
+**Lo que queda dicho y no hecho (N-2).** Con una sesión que termina y deja resumen, la pantalla de
+cierre **sustituye** a las tres columnas desde F5, así que el hilo plegado de «Última sesión» se ve
+en las sesiones que acaban sin resumen —una detenida, una fallida— y no en las que cierran bien. No
+se toca: devolver el hilo detrás del resumen es una disposición nueva y nadie la ha pedido.
