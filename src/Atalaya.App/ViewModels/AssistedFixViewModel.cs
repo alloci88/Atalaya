@@ -311,6 +311,13 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
         ? $"Se compiló {v.TargetLabel}."
         : string.Empty;
 
+    /// <summary>
+    /// Se llegó a compilar (R11 §3). Sin esto, la pantalla de cierre abría una sección entera
+    /// —titular, veredicto, ámbito y la caja de la salida— para decir «build/tests: no se ha
+    /// pedido»: cuatro huecos donde no hay ningún dato. Cuando no se pidió, una línea y nada más.
+    /// </summary>
+    public bool HasBuildResult => _fix.HasBuildResult;
+
     /// <summary>El recordatorio que no puede faltar en la pantalla de cierre.</summary>
     public const string UncommittedReminder =
         "Los cambios están en tu clon sin commitear — revisa y commitea cuando estés conforme.";
@@ -722,6 +729,7 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
         OnPropertyChanged(nameof(TouchedText));
         OnPropertyChanged(nameof(BuildText));
         OnPropertyChanged(nameof(BuildScopeText));
+        OnPropertyChanged(nameof(HasBuildResult));
         OnPropertyChanged(nameof(ClosedWithoutChanges));
         OnPropertyChanged(nameof(ClosedWithChanges));
         OnPropertyChanged(nameof(ClosingHeadline));

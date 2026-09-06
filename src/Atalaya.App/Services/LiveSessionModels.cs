@@ -54,6 +54,16 @@ public sealed partial class ActivityEntry : ObservableObject
     /// <summary>Icono del evento; vacío para el texto del agente.</summary>
     public string Glyph { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Cuándo llegó (R11 §1c). La narración de una sesión larga se lee como un registro, y un
+    /// registro sin horas no permite responder a lo único que se le pregunta cuando algo va lento:
+    /// «¿cuánto lleva ahí?». Se sella al crear la entrada, no al pintarla.
+    /// </summary>
+    public DateTimeOffset At { get; init; } = DateTimeOffset.Now;
+
+    /// <summary>La hora tal y como se lee en el margen: <c>14:22:07</c>.</summary>
+    public string Time => At.ToLocalTime().ToString("HH:mm:ss", AppCulture.Display);
+
     /// <summary>Severidad, cuando la línea narra un hallazgo: da color al chip.</summary>
     public Severity? Severity { get; init; }
 
@@ -69,6 +79,31 @@ public sealed partial class ActivityEntry : ObservableObject
         => new() { Kind = ActivityKind.Texto, Text = text };
 }
 
+/// <summary>El tono de una pastilla de resumen de pasada. Tres, y ninguno más.</summary>
+public enum PassTone
+{
+    /// <summary>Un dato: cuántos confirmó, cuántos disputó. Ni bueno ni malo.</summary>
+    Neutral,
+
+    /// <summary>La pasada aportó algo: hallazgos nuevos.</summary>
+    Success,
+
+    /// <summary>Algo que mirar: una pasada seca, que es la que no encontró nada.</summary>
+    Warning,
+}
+
+/// <summary>
+/// Un dato del resumen de una pasada, como pastilla (R11 §1b): «3 nuevos», «4 confirmados»,
+/// «seca».
+/// <para>
+/// Antes esto era UNA frase con puntos medios —«Pasada 2 — 0 nuevo(s) · 4 confirmado(s) · 0
+/// disputado(s) · seca»— y para saber si la pasada había aportado algo había que leerla entera. Con
+/// tres pastillas la respuesta se ve sin leer, que es el principio 4 aplicado al sitio donde más
+/// veces se mira.
+/// </para>
+/// </summary>
+public sealed record PassChip(string Label, PassTone Tone);
+
 /// <summary>Una pasada del barrido, como sección colapsable de la columna de actividad.</summary>
 public sealed partial class PassProgress : ObservableObject
 {
@@ -76,11 +111,24 @@ public sealed partial class PassProgress : ObservableObject
 
     public ObservableCollection<ActivityEntry> Entries { get; } = new();
 
+    /// <summary>El rótulo de la fila: «Pasada 2», y nada más. El resumen son las pastillas.</summary>
+    public string Title => $"Pasada {Index}";
+
+    /// <summary>
+    /// Lo que hizo la pasada, en pastillas. <b>Los tres números van siempre y en el mismo orden</b>
+    /// (F12 §H.2): una pasada de reconciliación que confirma siete hallazgos no puede resumirse
+    /// como «seca», que se lee como «aquí no ha pasado nada». Lo que cambia respecto a F12 es la
+    /// forma, no lo que se cuenta.
+    /// </summary>
     [ObservableProperty]
-    private string _headline = string.Empty;
+    private IReadOnlyList<PassChip> _chips = Array.Empty<PassChip>();
 
     [ObservableProperty]
     private bool _isExpanded = true;
+
+    /// <summary>«1 nuevo» / «3 nuevos»: el plural concuerda, como en el resto de la aplicación.</summary>
+    public static string Counted(int count, string singular, string plural)
+        => $"{count} {(count == 1 ? singular : plural)}";
 }
 
 /// <summary>
@@ -127,9 +175,47 @@ public sealed partial class UnitProgress : ObservableObject
     [ObservableProperty]
     private bool _isExpanded;
 
-    /// <summary>Resumen de una línea para la fila de la cola, ya cerrada la unidad.</summary>
-    [ObservableProperty]
-    private string _resultLine = string.Empty;
+    /// <summary>
+    /// <b>El resumen de la unidad, a la derecha de su cabecera</b> (R11 §1a): «2 pasadas ·
+    /// 0 hallazgos · 0,12 $». Vacío mientras la unidad no ha terminado — un resumen de algo que
+    /// todavía está pasando no resume nada.
+    /// <para>
+    /// <b>Y el coste pasa por <see cref="CostFormat"/></b> (R11 §1f). Se escribía aquí a mano
+    /// —<c>$" · coste {c:0.##}"</c>— así que la tarjeta decía «coste 15» en credits mientras el pie
+    /// de la misma pantalla decía «0,12 $»: el mismo número, dos unidades y ninguna dicha. Es
+    /// exactamente el defecto que F29 §2 vino a cerrar, escapado por un sitio que aquel test no
+    /// miraba porque no es un XAML.
+    /// </para>
+    /// </summary>
+    public string SummaryLine => PassCount == 0 && Findings == 0 && Cost is null && Tokens == 0
+        ? string.Empty
+        : string.Join(" · ", new[]
+        {
+            PassProgress.Counted(PassCount, "pasada", "pasadas"),
+            PassProgress.Counted(Findings, "hallazgo", "hallazgos"),
+            CostOrTokens,
+        });
+
+    /// <summary>
+    /// La ÚNICA línea que va debajo del nombre en la fila de la cola (R11 §1d): el resumen sin los
+    /// hallazgos —la columna mide 280 px y ahí lo que se busca es por dónde va y cuánto lleva
+    /// gastado— y, mientras no haya nada que resumir, el estado en palabras.
+    /// <para>
+    /// Es una sola propiedad y no dos porque la fila tiene un solo renglón: eran tres líneas
+    /// —nombre, estado y resultado— y por eso la unidad ocupaba una tarjeta en vez de una fila.
+    /// </para>
+    /// </summary>
+    public string QueueLine => PassCount == 0 && Cost is null && Tokens == 0
+        ? StateLabel
+        : $"{PassProgress.Counted(PassCount, "pasada", "pasadas")} · {CostOrTokens}";
+
+    /// <summary>
+    /// El coste en la divisa activa, o los tokens cuando no hay coste que calcular. Un solo sitio,
+    /// para que las dos líneas de arriba no puedan decirlo de dos maneras.
+    /// </summary>
+    private string CostOrTokens => Cost is { } credits
+        ? CostFormat.Of(credits)
+        : $"{Tokens} tokens";
 
     public string StateGlyph => State switch
     {
@@ -159,9 +245,29 @@ public sealed partial class UnitProgress : ObservableObject
     {
         OnPropertyChanged(nameof(StateGlyph));
         OnPropertyChanged(nameof(StateLabel));
+        RefreshSummaries();
     }
 
-    partial void OnCurrentPassChanged(int value) => OnPropertyChanged(nameof(StateLabel));
+    partial void OnCurrentPassChanged(int value)
+    {
+        OnPropertyChanged(nameof(StateLabel));
+        RefreshSummaries();
+    }
+
+    // Los dos resúmenes son derivados: se recalculan cuando cambia cualquiera de sus tres piezas.
+    partial void OnPassCountChanged(int value) => RefreshSummaries();
+
+    partial void OnFindingsChanged(int value) => RefreshSummaries();
+
+    partial void OnCostChanged(decimal? value) => RefreshSummaries();
+
+    partial void OnTokensChanged(long value) => RefreshSummaries();
+
+    private void RefreshSummaries()
+    {
+        OnPropertyChanged(nameof(SummaryLine));
+        OnPropertyChanged(nameof(QueueLine));
+    }
 
     /// <summary>
     /// Nombres de la cola para un lote (F5.3): el del fichero a secas, y para los que chocan, el

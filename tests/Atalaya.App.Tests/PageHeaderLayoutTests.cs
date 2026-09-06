@@ -299,9 +299,13 @@ public sealed class PageHeaderLayoutTests
             FillWithLongText(header);
             ViewLayout.Layout(root, 1124, 768);
 
+            // POR DESCENDENCIA, no por hijos directos: desde R11 §4 «Descartar todo» y la razón
+            // de su apagado viajan juntos en su propio panel —la razón necesita hueco y tope
+            // propios, y sueltos en la barra no tenía ninguno de los dos—. Lo que este test
+            // protege es el ORDEN de las acciones dentro de la zona, y ése no depende de cuántos
+            // paneles haya por medio.
             var bar = (FrameworkElement)header.Children[1];
-            List<FrameworkElement> buttons = ((Panel)bar).Children
-                .OfType<FrameworkElement>()
+            List<Button> buttons = ViewLayout.Descendants<Button>(bar)
                 .Where(c => c.Visibility == Visibility.Visible)
                 .ToList();
 
@@ -310,13 +314,11 @@ public sealed class PageHeaderLayoutTests
             // parecía un grupo. Aquí el destructivo se reconoce por su ROTULO y no por su estilo
             // porque el banco de geometría quita los `Style=` a propósito —mide la vista, no el
             // tema— así que preguntar por el estilo aquí no preguntaría por nada.
-            var danger = buttons.OfType<Button>()
-                .Single(b => (b.Content as string) == "Descartar todo");
+            var danger = buttons.Single(b => (b.Content as string) == "Descartar todo");
 
-            // El ÚLTIMO BOTÓN, no el último hijo: desde R10 §7 detrás puede ir el chip que dice
-            // por qué «Descartar todo» está apagado (P-27), y una razón no es una acción.
-            buttons.OfType<Button>().Last()
-                .Should().BeSameAs(danger, "la que deshace el trabajo va al final, no en medio");
+            // El ÚLTIMO BOTÓN, no el último elemento: detrás va el chip que dice por qué
+            // «Descartar todo» está apagado (P-27, R10 §7), y una razón no es una acción.
+            buttons[^1].Should().BeSameAs(danger, "la que deshace el trabajo va al final, no en medio");
 
             // LO QUE YA NO SE COMPRUEBA, y por qué. Hasta aquí este test exigía además que el
             // destructivo llevara MÁS aire que el resto (F16-RETOQUE §2·4, «la separación ES la
@@ -406,8 +408,13 @@ public sealed class PageHeaderLayoutTests
         identidad.Should().Contain(
             "{StaticResource Text.Name}",
             "el recorte de un nombre lo pone la primitiva del sistema, no la vista (P-01)");
-        identidad.Should().Contain(
-            "MaxWidth=\"{StaticResource Header.IdentityMaxWidth}\"",
+        // UN TOPE DE LA CABECERA, y de la escala: el que necesite cada vista. En la sesión en vivo
+        // lo lleva la fila entera —lo último que hay es el subtítulo, y es lo que tiene que ceder—;
+        // en el arreglo asistido lo lleva el nombre de la aplicación, que es la única pieza de las
+        // cinco que puede ser larga (R11 §2). Lo que no puede faltar es el tope: sin él, el recorte
+        // no llega a activarse hasta que ya ha empujado a los demás fuera de la pantalla.
+        identidad.Should().MatchRegex(
+            @"MaxWidth=""\{StaticResource Header\.[A-Za-z]+MaxWidth\}""",
             "sin un tope, el recorte no llega a activarse hasta que ya ha empujado a los demás");
         identidad.Should().Contain("ToolTip=", "y lo que no cabe se lee entero al pasar por encima");
 

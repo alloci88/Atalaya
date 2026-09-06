@@ -162,47 +162,26 @@
              Grid sin columnas, que no reparte: superpone. Con el distintivo de proveedor de F16,
              «Pausar» acabó pintado encima de «Volver al hallazgo». -->
         <c:PageHeader Grid.Row="0" Margin="{StaticResource Pad.S.Bottom}">
-            <!-- Identidad. Es un Grid y no un StackPanel a propósito: un StackPanel da a sus hijos
-                 ancho infinito, así que el recorte con puntos suspensivos no llega a ocurrir nunca
-                 y el texto se sale por el borde. La columna estrella del final absorbe el hueco
-                 cuando sobra sitio, para que el distintivo y el enlace queden pegados al título.
-
-                 F16-RETOQUE §2·2 — el identificador aparece UNA vez. Salía truncado junto al
+            <!-- F16-RETOQUE §2·2 — el identificador aparece UNA vez. Salía truncado junto al
                  título («BUG-0012…») y otra vez entero dentro del rótulo del enlace, que es
                  leerlo dos veces y ninguna bien. Ahora vive en la fila de identidad, corto y
                  entero, y el enlace dice solo a dónde lleva. Lo que cede cuando falta sitio es el
                  nombre de la aplicación, que es lo único de esta zona que puede ser largo. -->
-            <Grid VerticalAlignment="Center">
-                <Grid.ColumnDefinitions>
-                    <!-- LA IDENTIDAD ENTERA EN UNA CELDA, sobre una sola línea base (R10 §6). Eran
-                         tres columnas, y por eso «MEJ-0058» y «XBLAST» no compartían base con
-                         «Arreglo asistido»: WPF no alinea líneas base entre celdas de un `Grid`, y
-                         lo único que había —`VerticalAlignment="Center"`— iguala el centro de las
-                         CAJAS, así que la caja pequeña del nombre salía alta y la del
-                         identificador, que sí compartía párrafo con el título, se leía a su base.
-                         `c:BaselineRow` reparte a lo ancho como repartían las columnas —de
-                         izquierda a derecha con lo que queda, así que lo que cede es lo último, el
-                         nombre de la aplicación— y apoya las tres en la misma base.
+            <!-- LA FILA ENTERA SOBRE UNA SOLA LÍNEA BASE (R10 §6, ampliado en R11 §2). Eran tres
+                 columnas de un `Grid`, y por eso «MEJ-0058» y «XBLAST» no compartían base con
+                 «Arreglo asistido»: WPF no alinea líneas base entre celdas, y lo único que había
+                 —`VerticalAlignment="Center"`— iguala el centro de las CAJAS. R10 metió los tres
+                 textos en un `c:BaselineRow` y dejó fuera el enlace y el distintivo, que siguieron
+                 quedando altos por lo mismo. Ahora entran los cinco: identificador, aplicación,
+                 enlace y pastilla apoyan en la base del título.
 
-                         La celda es `Auto` y el tope lo lleva la fila: así el enlace y el
-                         distintivo quedan pegados a la identidad en vez de esperar al final de una
-                         columna estrella que nadie llena. -->
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <!-- LA PASTILLA VA EN UNA COLUMNA QUE PUEDE ENCOGER (UI-0011). En `Auto` no
-                         encoge nunca: la rejilla le da lo que pide, la fila se sale y la recorta
-                         la cabecera, que es como el distintivo acababa en «Age». En estrella cede
-                         cuando falta sitio, y `c:ChipHost` la retira entera en cuanto lo que le
-                         queda no le llega. A anchos amplios no se mueve nada: la identidad va en
-                         una celda `Auto` con su propio tope, así que el sobrante cae aquí. -->
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <!-- Las tres piezas de la identidad, en la misma fila y sobre la misma base.
-                     El hueco entre ellas lo pone la fila una sola vez (`Gap`), y no el margen de
-                     cada una: era de lo que salían las tres separaciones distintas. -->
-                <c:BaselineRow Grid.Column="0" Gap="{StaticResource Space.S}" VerticalAlignment="Center"
-                               MaxWidth="{StaticResource Header.IdentityMaxWidth}"
-                               HorizontalAlignment="Left">
+                 Ya no hace falta rejilla ni tope: la fila empaqueta a la izquierda, así que el
+                 enlace y el distintivo quedan pegados a la identidad sin que nadie tenga que
+                 reservarles una columna. Y sigue midiendo de izquierda a derecha con lo que queda,
+                 que es lo que hace que ceda lo último —el distintivo, que `c:ChipHost` retira
+                 entero si no cabe (UI-0011)— y no el título. -->
+            <c:BaselineRow Gap="{StaticResource Space.S}" VerticalAlignment="Center"
+                           HorizontalAlignment="Left">
                     <!-- EL TÍTULO LO DICE EL VIEW-MODEL, no el XAML (UI-0029). Estaba escrito aquí
                          a mano, así que al terminar el arreglo la entrada del raíl pasaba a
                          «Último arreglo» y la página seguía diciendo «Arreglo asistido»: en la
@@ -226,7 +205,6 @@
                                Foreground="{DynamicResource Brush.TextMuted}"
                                MaxWidth="{StaticResource Header.AppNameMaxWidth}"
                                ToolTip="{Binding AppNameText}" />
-                </c:BaselineRow>
                 <!-- H9.1 §1: el camino de vuelta al hallazgo, disponible mientras haya sesión que
                      mirar —corriendo, terminada o fallida—, no solo en la pantalla de cierre.
 
@@ -236,9 +214,12 @@
                      dato — y el dato, además, está entero en el informe. -->
                 <!-- R6 §7: el enlace del SISTEMA, no el `LinkButton` de antes de F26 —que pinta con
                      las brochas de la librería y no con la paleta de la casa—. Es uno de los seis
-                     controles que no daban ninguna señal al pasar el ratón. -->
-                <Button Grid.Column="1" Content="{Binding BackToFindingLabel}" Command="{Binding BackToFindingCommand}"
-                        Style="{StaticResource Button.Link}" VerticalAlignment="Center" Margin="{StaticResource Pad.M.Left}"
+                     controles que no daban ninguna señal al pasar el ratón.
+
+                     SIN margen propio (R11 §2): el hueco lo pone el `Gap` de la fila, una vez y
+                     para todos. -->
+                <Button Content="{Binding BackToFindingLabel}" Command="{Binding BackToFindingCommand}"
+                        Style="{StaticResource Button.Link}"
                         FontSize="{StaticResource FontSize.Small}"
                         ToolTip="Abre la ficha del hallazgo que originó este arreglo">
                     <Button.Visibility>
@@ -261,14 +242,13 @@
                      quedaba no se podía interpretar. «Age» no es una versión corta de «Agente
                      falso · claude-opus-4.7»: es otra palabra. `c:ChipHost` la retira entera
                      cuando no cabe; el dato sigue en el tooltip. -->
-                <c:ChipHost Grid.Column="2" VerticalAlignment="Center" Margin="{StaticResource Pad.M.Left}"
-                            Visibility="{Binding HasEngine, Converter={StaticResource BoolToVisibility}}">
+                <c:ChipHost Visibility="{Binding HasEngine, Converter={StaticResource BoolToVisibility}}">
                     <Border Style="{StaticResource Pill}"
                             ToolTip="El proveedor y el modelo que están haciendo este arreglo. Quedan escritos en el informe.">
                         <TextBlock Text="{Binding EngineText}" Style="{StaticResource Pill.Text}" />
                     </Border>
                 </c:ChipHost>
-            </Grid>
+            </c:BaselineRow>
             <!-- Barra de acciones. F16-RETOQUE §2·3 y §2·4, dos reglas:
 
                  · Aquí solo va lo que SE PULSA. «Compilar solución completa» no es una acción sino
@@ -309,17 +289,26 @@
                      macizo arriba a la derecha mientras el paso siguiente real, «Verificar
                      ahora», estaba abajo. El macizo se reserva para el diálogo de confirmación,
                      que es donde destruir es lo que se ha venido a hacer. -->
-                <Button Content="Descartar todo" Command="{Binding DiscardAllCommand}"
-                        Style="{StaticResource Button.Danger}"
-                        IsEnabled="{Binding CanDiscardAll}"
-                        ToolTip="Devuelve cada fichero tocado a como estaba antes de esta sesión." />
-                <!-- LA RAZÓN, PEGADA AL BOTÓN APAGADO (P-27, R10 §7). Un arreglo que terminó sin
-                     tocar nada no tiene qué descartar, y hasta ahora el botón seguía encendido
-                     para contestar con un aviso flotante al pulsarlo. -->
-                <Border Style="{StaticResource Reason.Chip}"
-                        Visibility="{Binding HasDiscardBlockedReason, Converter={StaticResource BoolToVisibility}}">
-                    <TextBlock Text="{Binding DiscardBlockedReason}" Style="{StaticResource Reason.Text}" />
-                </Border>
+                <!-- EL BOTÓN Y SU RAZÓN SON UNA PIEZA (P-27, R10 §7, colocada en R11 §4). Iban
+                     sueltos en la barra, y ahí la razón no tenía ni hueco propio ni tope: un
+                     `StackPanel` horizontal mide a sus hijos con ancho INFINITO, así que el `Wrap`
+                     de `Reason.Text` no envuelve nunca y la pastilla crece cuanto haga falta hasta
+                     que la cabecera la recorta contra el botón que explica. Dentro de su propio
+                     panel, la razón va a 8 px del botón —el mismo hueco que en Inventario, con la
+                     misma pastilla ámbar del sistema— y con un tope que la hace envolver en vez de
+                     empujar. -->
+                <StackPanel Orientation="Horizontal">
+                    <Button Content="Descartar todo" Command="{Binding DiscardAllCommand}"
+                            Style="{StaticResource Button.Danger}"
+                            IsEnabled="{Binding CanDiscardAll}"
+                            ToolTip="Devuelve cada fichero tocado a como estaba antes de esta sesión." />
+                    <Border Style="{StaticResource Reason.Chip}"
+                            Margin="{StaticResource Pad.XS.Left}"
+                            MaxWidth="{StaticResource Reason.MaxWidth}"
+                            Visibility="{Binding HasDiscardBlockedReason, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="{Binding DiscardBlockedReason}" Style="{StaticResource Reason.Text}" />
+                    </Border>
+                </StackPanel>
             </StackPanel>
         </c:PageHeader>
 
@@ -640,7 +629,12 @@
                             <TextBlock Text="{Binding Fix.Risks}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}" Foreground="{DynamicResource Brush.Warning.Ink}"
                                        Visibility="{Binding Fix.Risks, Converter={StaticResource NotEmptyToVisibility}}" />
 
-                            <TextBlock Text="Ficheros tocados" Style="{StaticResource SectionTitle}" Margin="{StaticResource Pad.SectionGapWide}" />
+                            <!-- EL BLOQUE NO SE PINTA SI NO HAY FICHEROS (R11 §3). Con «Arreglo
+                                 detenido · no hay cambios en tu clon» arriba, «Ficheros tocados»
+                                 salía igual: un titular con nada debajo, que se lee como una lista
+                                 que no ha cargado y no como una lista vacía. -->
+                            <TextBlock Text="Ficheros tocados" Style="{StaticResource SectionTitle}" Margin="{StaticResource Pad.SectionGapWide}"
+                                       Visibility="{Binding HasFiles, Converter={StaticResource BoolToVisibility}}" />
                             <ItemsControl ItemsSource="{Binding Files}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -664,10 +658,19 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
+                            <!-- Y EL BUILD, IGUAL (R11 §3). Sin compilación pedida, esto era un
+                                 titular de sección con «build/tests: no se ha pedido» debajo:
+                                 dos líneas para decir que no hay nada. Cuando no se pidió, una
+                                 línea y ninguna sección. -->
+                            <TextBlock Text="No se pidió compilar" Style="{StaticResource Help}"
+                                       Margin="{StaticResource Pad.SectionGapWide}"
+                                       Visibility="{Binding HasBuildResult, Converter={StaticResource InverseBoolToVisibility}}" />
                             <TextBlock Text="Resultado del último build/tests" Style="{StaticResource SectionTitle}"
-                                       Margin="{StaticResource Pad.SectionGapWide}" />
+                                       Margin="{StaticResource Pad.SectionGapWide}"
+                                       Visibility="{Binding HasBuildResult, Converter={StaticResource BoolToVisibility}}" />
                             <TextBlock Text="{Binding BuildText}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XXS.Bottom}"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       Visibility="{Binding HasBuildResult, Converter={StaticResource BoolToVisibility}}" />
                             <!-- Qué se compiló, dicho aparte: un veredicto sin ámbito no se puede
                                  interpretar (H9.1 §2). -->
                             <TextBlock Text="{Binding BuildScopeText}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Bottom}"

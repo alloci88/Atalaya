@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Atalaya.App.Services;
 using Atalaya.Domain.Model;
 using FluentAssertions;
@@ -99,6 +99,63 @@ public sealed class CostCurrencyTests : IDisposable
 
         offenders.Should().BeEmpty(
             "la unidad del coste la escribe CostFormat con la divisa activa, no la vista");
+    }
+
+    /// <summary>
+    /// <b>Y NINGÚN TEXTO QUE ALIMENTA UNA PLANTILLA, TAMPOCO</b> (R11 §1f). La regla de arriba
+    /// mira los XAML, y por ahí no se coló: se coló por el C# que los llena.
+    /// <para>
+    /// <b>El defecto que lo trae.</b> La cabecera de una unidad de la sesión en vivo decía
+    /// «coste 15» mientras el pie de esa misma pantalla decía «0,12 $»: el mismo número, dos
+    /// unidades, y la de arriba sin ninguna. Salía de un <c>" · coste {c:0.##}"</c> escrito a mano
+    /// en <c>LiveSessionService</c>, que no pasa por <see cref="CostFormat"/> y por tanto no se
+    /// entera de la divisa. F29 §2 cerró esa puerta en las vistas y ésta se quedó abierta.
+    /// </para>
+    /// <para>
+    /// Se recorren los ficheros que dan de comer a Sesión en vivo, Última sesión y Arreglo
+    /// asistido —las plantillas donde se le escapó—, y se busca lo que sabe escribir un coste sin
+    /// preguntar: la palabra «coste» o «credits» dentro de una cadena, con una cifra formateada
+    /// dentro. La lista es corta a propósito: no es un barrido del repositorio, es la puerta por
+    /// la que ya se coló una vez.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Ningun_texto_de_la_sesion_ni_del_arreglo_escribe_un_coste_a_mano()
+    {
+        string[] fuentes =
+        {
+            "src/Atalaya.App/Services/LiveSessionService.cs",
+            "src/Atalaya.App/Services/LiveSessionModels.cs",
+            "src/Atalaya.App/Services/LiveFixService.cs",
+            "src/Atalaya.App/ViewModels/SessionViewModel.cs",
+            "src/Atalaya.App/ViewModels/AssistedFixViewModel.cs",
+        };
+
+        var offenders = new List<string>();
+        foreach (string relative in fuentes)
+        {
+            string path = Path.Combine(RepoRoot(), relative.Replace('/', Path.DirectorySeparatorChar));
+            File.Exists(path).Should().BeTrue($"{relative} tiene que existir para que esto mida algo");
+
+            // Fuera los comentarios: hablan del coste todo el rato y no escriben nada en pantalla.
+            string code = Regex.Replace(
+                File.ReadAllText(path), @"^\s*(?://|///).*$", string.Empty, RegexOptions.Multiline);
+
+            foreach (Match m in Regex.Matches(code, "\"[^\"\n]*(?:coste|credits)[^\"\n]*\""))
+            {
+                // Una cadena que nombra el coste y mete una cifra con formato numérico dentro —o
+                // que escribe la unidad a mano— es exactamente la forma del defecto.
+                if (Regex.IsMatch(m.Value, @"\{[^}]*:[0#.,]+\}")
+                    || Regex.IsMatch(m.Value, @"\bcredits\b", RegexOptions.IgnoreCase))
+                {
+                    offenders.Add($"{relative}: {m.Value}");
+                }
+            }
+        }
+
+        offenders.Should().BeEmpty(
+            "el coste lo escribe CostFormat, que es lo único que sabe en qué divisa está esta "
+            + "máquina; una cifra formateada a mano dice otra cosa que el pie de la misma pantalla");
     }
 
     /// <summary>

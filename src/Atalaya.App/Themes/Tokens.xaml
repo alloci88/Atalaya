@@ -404,6 +404,30 @@
          Acompaña a la frase, no la sustituye. -->
     <sys:Double x:Key="Icon.Size.Empty">40</sys:Double>
 
+    <!-- ============================================================ La sesión en vivo (R11 §1)
+
+         Las tres alturas de fila de la narración. Están aquí y no en la vista porque la sesión en
+         vivo y la última sesión son la MISMA plantilla, y porque una fila que mide 48 en un sitio
+         y 44 en otro deja de leerse como una lista.
+
+         El insignia de estado es un círculo de 24: el glifo suelto de 18 px se perdía contra una
+         ruta en seminegrita de 15, que es justo lo que no puede pasarle a la única pieza de la
+         fila que dice si la unidad va bien. -->
+    <sys:Double x:Key="Session.UnitRowHeight">48</sys:Double>
+    <sys:Double x:Key="Session.PassRowHeight">40</sys:Double>
+    <sys:Double x:Key="Session.QueueRowHeight">44</sys:Double>
+    <sys:Double x:Key="Session.StateBadge">24</sys:Double>
+
+    <!-- EL ANCHO DE UNA LÍNEA DE TEXTO MONOESPACIADO: unos 100 caracteres a 14 px, que es la
+         medida de lectura de un registro. Más largo y el ojo pierde el renglón al volver; más
+         corto y la salida del auditor se parte cada dos palabras. -->
+    <sys:Double x:Key="Read.MonoMaxWidth">840</sys:Double>
+
+    <!-- El tope de la razón de un botón apagado. No es decoración: sin él, dentro de una barra
+         horizontal la pastilla se mide con ancho infinito, no envuelve nunca y empuja hasta que la
+         cabecera la recorta (R11 §4). -->
+    <sys:Double x:Key="Reason.MaxWidth">220</sys:Double>
+
     <!-- El avatar de la TARJETA de identidad de Cuenta. No es el del raíl (24): allí acompaña a
          una fila de menú y aquí es la foto de quién eres, que es el dato de la tarjeta. -->
     <sys:Double x:Key="Avatar.Size">56</sys:Double>

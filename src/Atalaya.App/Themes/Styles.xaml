@@ -1872,6 +1872,95 @@
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
+    <!-- ================================================================ La sesión en vivo (R11 §1)
+
+         LA INSIGNIA DE ESTADO: un círculo de 24 con el glifo dentro. El glifo suelto se perdía
+         contra la ruta en seminegrita de 15 que va a su lado, y es la única pieza de la fila que
+         dice si la unidad va bien. El color sigue saliendo de `Unit.State`, que es donde vive la
+         correspondencia estado→tinta; lo que se añade aquí es el disco que lo hace visible. -->
+    <Style x:Key="Unit.State.Badge" TargetType="Border">
+        <Setter Property="Width" Value="{StaticResource Session.StateBadge}" />
+        <Setter Property="Height" Value="{StaticResource Session.StateBadge}" />
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.Pill}" />
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface2}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <!-- LAS PASTILLAS DEL RESUMEN DE UNA PASADA (R11 §1b). Tres tonos y ninguno más: neutro para
+         un dato, éxito para lo que la pasada aportó, y ámbar APAGADO —relleno teñido, no vivo—
+         para la pasada seca, que es un aviso y no un error.
+
+         `DataTrigger` sobre `Tone` y no un converter, por lo de siempre (D-971): un pincel resuelto
+         en C# se queda con el color del tema que hubiera al pintarlo. -->
+    <Style x:Key="Pill.Pass" TargetType="Border" BasedOn="{StaticResource Pill}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Tone}" Value="Success">
+                <Setter Property="Background" Value="{DynamicResource Brush.Success.Soft}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Tone}" Value="Warning">
+                <Setter Property="Background" Value="{DynamicResource Brush.Warning.Soft}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="Pill.Pass.Text" TargetType="TextBlock" BasedOn="{StaticResource Pill.Text}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Tone}" Value="Success">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Success.Ink}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding Tone}" Value="Warning">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.Ink}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- UNA FILA DE LA COLA. Sin tarjeta por unidad (R11 §1d): eran veinte tarjetitas de 5 px de
+         radio en una columna de 250, y lo que se leía era el marco, no el nombre. Lo que distingue
+         a la unidad que se está auditando es el fondo de selección del sistema, el mismo que marca
+         la sección activa de Ajustes. -->
+    <Style x:Key="Session.QueueRow" TargetType="Border">
+        <Setter Property="MinHeight" Value="{StaticResource Session.QueueRowHeight}" />
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.M}" />
+        <Setter Property="Padding" Value="{StaticResource Pad.RowTight}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding State}" Value="Auditando">
+                <Setter Property="Background" Value="{DynamicResource Brush.Section.Active}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- EL BLOQUE DE TEXTO DEL AUDITOR (R11 §1c). Lo que sale del agente es un registro, y un
+         registro se lee en monoespaciado, con aire entre renglones y con una medida: 14 px, 1,5 de
+         interlineado y unos cien caracteres de ancho. Salía a 13 con interlineado normal y a todo
+         el ancho de la columna, que es la forma más rápida de que nadie lo lea. -->
+    <Style x:Key="Session.Log" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface2}" />
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.M}" />
+        <Setter Property="Padding" Value="{StaticResource Pad.M}" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <Style x:Key="Session.Log.Text" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Mono}" />
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Small}" />
+        <Setter Property="LineHeight" Value="{StaticResource LineHeight.Body}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="MaxWidth" Value="{StaticResource Read.MonoMaxWidth}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+    </Style>
+
+    <!-- La hora, en el margen izquierdo: es referencia, no contenido. El suelo de la escala y la
+         tinta más apagada, que es lo que la deja legible sin competir con el texto. -->
+    <Style x:Key="Session.Log.Time" TargetType="TextBlock" BasedOn="{StaticResource Text.Meta}">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Mono}" />
+        <Setter Property="LineHeight" Value="{StaticResource LineHeight.Body}" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+
     <!-- Quien habla en la conversación del arreglo. -->
     <Style x:Key="Voice.Name" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />

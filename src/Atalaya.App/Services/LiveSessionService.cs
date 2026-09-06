@@ -631,7 +631,7 @@ public sealed partial class LiveSessionService : ObservableObject
             _currentPass.IsExpanded = false;
         }
 
-        _currentPass = new PassProgress { Index = pass, Headline = $"Pasada {pass}" };
+        _currentPass = new PassProgress { Index = pass };
         unit.Passes.Add(_currentPass);
         _currentText = null;
         OnPropertyChanged(nameof(ProgressLine));
@@ -657,11 +657,30 @@ public sealed partial class LiveSessionService : ObservableObject
         // pasada de reconciliación que confirmaba siete hallazgos se titulaba «seca», que se lee
         // como «aquí no ha pasado nada»: lo que no aportó fueron NUEVOS, y confirmar siete es
         // trabajo hecho y pagado. Los tres números van siempre, en el mismo orden.
-        pass.Headline =
-            $"Pasada {record.Index} — {record.New} nuevo(s) · {record.Confirmed} confirmado(s) · "
-            + $"{record.Disputed} disputado(s)"
-            + (record.LocationsAdded > 0 ? $" · {record.LocationsAdded} ubicación(es)" : "")
-            + (record.Dry ? " · seca" : "");
+        //
+        // R11 §1b — y van en PASTILLAS, no en una frase con puntos medios. Lo que se cuenta es lo
+        // mismo; lo que cambia es que ahora se ve sin leer: los nuevos en verde cuando los hay, el
+        // resto en neutro, y la pasada seca en ámbar apagado.
+        var chips = new List<PassChip>
+        {
+            new(PassProgress.Counted(record.New, "nuevo", "nuevos"),
+                record.New > 0 ? PassTone.Success : PassTone.Neutral),
+            new(PassProgress.Counted(record.Confirmed, "confirmado", "confirmados"), PassTone.Neutral),
+            new(PassProgress.Counted(record.Disputed, "disputado", "disputados"), PassTone.Neutral),
+        };
+
+        if (record.LocationsAdded > 0)
+        {
+            chips.Add(new PassChip(
+                PassProgress.Counted(record.LocationsAdded, "ubicación", "ubicaciones"), PassTone.Neutral));
+        }
+
+        if (record.Dry)
+        {
+            chips.Add(new PassChip("seca", PassTone.Warning));
+        }
+
+        pass.Chips = chips;
 
         // Los veredictos van en las DOS ramas (F5.14). Estaban solo en la de la pasada con
         // aportación, así que el caso más común —una pasada seca en la que el auditor confirmó
@@ -705,8 +724,6 @@ public sealed partial class LiveSessionService : ObservableObject
         unit.Cost = usage.Cost;
         unit.Tokens = usage.InputTokens + usage.OutputTokens;
         unit.CurrentPass = 0;
-        unit.ResultLine = $"{unit.Findings} hallazgo(s) · {unit.PassCount} pasada(s)"
-            + (usage.Cost is { } c ? $" · coste {c:0.##}" : $" · {unit.Tokens} tokens");
 
         if (verdict.Verdict is "presupuesto-superado" or "incompleta"
             || verdict.CoverageIncomplete || verdict.RejectedPayloads > 0)

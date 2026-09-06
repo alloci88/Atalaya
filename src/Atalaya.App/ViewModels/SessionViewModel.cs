@@ -172,6 +172,14 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
         .Select(s => new SeverityChip(s, Findings.Count(f => f.Severity == s)))
         .ToList();
 
+    /// <summary>
+    /// Hay algo que marcar (R11 §1e). Con la sesión recién arrancada, el panel de hallazgos
+    /// enseñaba «0 Críticas · 0 Altas · 0 Medias · 0 Bajas» y nada más — un marcador anunciando que
+    /// no hay partido—. Sin hallazgos manda el estado vacío del sistema; en cuanto llega el
+    /// primero, vuelven los cuatro contadores y la lista, como hasta ahora.
+    /// </summary>
+    public bool HasFindings => Findings.Count > 0;
+
     /// <summary>La pantalla de cierre sustituye a la linea fugaz de estado cuando termina.</summary>
     public bool ShowSummary => !_live.IsRunning && _live.HasFinished && Summary.Count > 0;
 
@@ -363,5 +371,6 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
         OnPropertyChanged(nameof(MediumCount));
         OnPropertyChanged(nameof(LowCount));
         OnPropertyChanged(nameof(SeverityChips));
+        OnPropertyChanged(nameof(HasFindings));
     }
 }

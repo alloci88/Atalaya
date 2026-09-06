@@ -110,8 +110,10 @@
 
         <!-- Cuerpo: tres columnas -->
         <Grid Grid.Row="2">
+            <!-- 280 en la cola (R11 §1d): a 250 el nombre de la unidad y su resumen se partían en
+                 dos líneas cada uno, y una columna que envuelve todo deja de leerse como una lista. -->
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="250" />
+                <ColumnDefinition Width="280" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="300" />
             </Grid.ColumnDefinitions>
@@ -128,44 +130,49 @@
                         <ItemsControl ItemsSource="{Binding Units}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Padding="{StaticResource Pad.Pill}" Margin="{StaticResource Pad.XXS.V}" CornerRadius="5" Background="{DynamicResource Brush.Bg}">
-                                        <StackPanel>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="*" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock
-                                                    Grid.Column="0"
-                                                    Text="{Binding StateGlyph}"
-                                                    Style="{StaticResource Unit.State.Glyph}"
-                                                    Width="18" />
-                                                <!-- F5.3: SOLO el nombre del fichero. La ruta completa está en el
-                                                     tooltip y en la cabecera de actividad; recortada aquí no
-                                                     identificaba nada y se comía la columna. -->
-                                                <TextBlock
-                                                    Grid.Column="1"
-                                                    Text="{Binding ShortName}"
-                                                    ToolTip="{Binding Path}"
-                                                    Style="{StaticResource Text.Name}"
-                                                    FontSize="{StaticResource FontSize.Meta}"
-                                                    VerticalAlignment="Center" />
-                                            </Grid>
+                                    <!-- UNA FILA, NO UNA TARJETA (R11 §1d). Eran veinte tarjetitas
+                                         de 5 px de radio apiladas en una columna estrecha, cada una
+                                         con tres líneas dentro: lo que se leía era el marco. Ahora
+                                         es una fila de 44 con la insignia, el nombre y una sola
+                                         línea debajo; la que se está auditando se distingue por el
+                                         fondo de selección del sistema y no por un borde. -->
+                                    <Border Style="{StaticResource Session.QueueRow}" ToolTip="{Binding Path}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <Border Grid.Column="0" Grid.RowSpan="2"
+                                                    Style="{StaticResource Unit.State.Badge}"
+                                                    Margin="{StaticResource Pad.XS.Right}">
+                                                <TextBlock Text="{Binding StateGlyph}"
+                                                           Style="{StaticResource Unit.State.Glyph}"
+                                                           HorizontalAlignment="Center" />
+                                            </Border>
+                                            <!-- F5.3: SOLO el nombre del fichero. La ruta completa está en el
+                                                 tooltip y en la cabecera de actividad; recortada aquí no
+                                                 identificaba nada y se comía la columna. -->
+                                            <TextBlock
+                                                Grid.Column="1" Grid.Row="0"
+                                                Text="{Binding ShortName}"
+                                                Style="{StaticResource Text.Name}"
+                                                FontSize="{StaticResource FontSize.Small}"
+                                                VerticalAlignment="Center" />
                                             <!-- Lo apagado se apaga cambiando de COLOR, no bajando
                                                  la opacidad (D-983 §4, UI-0008): con `Opacity=0.65`
                                                  encima del verde, «completa» daba 1,66:1 en claro. -->
                                             <TextBlock
-                                                Text="{Binding StateLabel}"
-                                                Style="{StaticResource Unit.State}"
-                                                Margin="{StaticResource Pad.M.Left}" />
-                                            <TextBlock
-                                                Text="{Binding ResultLine}"
+                                                Grid.Column="1" Grid.Row="1"
+                                                Text="{Binding QueueLine}"
+                                                Style="{StaticResource Text.Name}"
                                                 FontSize="{StaticResource FontSize.Meta}"
-                                                Opacity="0.75"
-                                                Margin="{StaticResource Pad.M.Left}"
-                                                TextWrapping="Wrap"
-                                                Visibility="{Binding ResultLine, Converter={StaticResource NotEmptyToVisibility}}" />
-                                        </StackPanel>
+                                                Foreground="{DynamicResource Brush.TextMuted}"
+                                                VerticalAlignment="Center" />
+                                        </Grid>
                                     </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -198,19 +205,34 @@
                                          `PathText` acortaba contra un ancho que no era el que se
                                          ve (P-01, UI-0009). -->
                                     <Expander IsExpanded="{Binding IsExpanded}"
-                                              Margin="{StaticResource Pad.XXS.Bottom}"
+                                              Margin="{StaticResource Pad.XS.Bottom}"
                                               HorizontalContentAlignment="Stretch">
                                         <Expander.Header>
-                                            <!-- REJILLA Y NO `StackPanel` HORIZONTAL (P-01, UI-0009). Un
+                                            <!-- LA CABECERA DE UNA UNIDAD, EN UNA FILA DE 48 (R11 §1a):
+                                                 insignia de estado, ruta a 15 en seminegrita, y a la
+                                                 derecha el resumen de la unidad en 13 secundario. Con la
+                                                 ruta suelta a 13 y nada más, la fila no se distinguía del
+                                                 texto que colgaba de ella.
+
+                                                 REJILLA Y NO `StackPanel` HORIZONTAL (P-01, UI-0009). Un
                                                  StackPanel horizontal da a sus hijos ancho INFINITO, así
                                                  que la ruta salía entera y se cortaba contra el galón de
                                                  desplegar SIN elipsis: se leía «…/Servicios/FormateadorInfc⌄»,
                                                  que parece un nombre de fichero. Con una columna estrella,
                                                  `PathText` sabe cuánto sitio hay y acorta por el medio. -->
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding StateGlyph}"
-                                                           Style="{StaticResource Unit.State.Glyph}"
-                                                           Margin="{StaticResource Pad.XS.Right}" />
+                                            <Grid MinHeight="{StaticResource Session.UnitRowHeight}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border Grid.Column="0"
+                                                        Style="{StaticResource Unit.State.Badge}"
+                                                        Margin="{StaticResource Pad.XS.Right}">
+                                                    <TextBlock Text="{Binding StateGlyph}"
+                                                               Style="{StaticResource Unit.State.Glyph}"
+                                                               HorizontalAlignment="Center" />
+                                                </Border>
                                                 <!-- EL TOPE LO PONE LA FILA (UI-0009). La cabecera de un
                                                      `Expander` se mide con ancho INFINITO y su galón se
                                                      pinta encima, sin quitarle sitio: la ruta salía entera
@@ -218,41 +240,95 @@
                                                      «FormateadorInfc⌄» —que parece un nombre de fichero—.
                                                      Con un `MaxWidth` calculado sobre el ancho de la fila
                                                      (`Minus`, el mismo truco de D-1000 §1), `PathText` sabe
-                                                     contra qué acortar. `Expander.HeaderInset` es lo que la
-                                                     cabecera no puede usar: el galón y su aire. -->
-                                                <c:PathText Full="{Binding Path}"
+                                                     contra qué acortar. Lo que se descuenta es lo que la
+                                                     cabecera no puede usar: el galón, la insignia y el
+                                                     resumen de la derecha. -->
+                                                <c:PathText Grid.Column="1" Full="{Binding Path}"
                                                             Style="{StaticResource Text.Path}"
+                                                            FontSize="{StaticResource FontSize.Body}"
                                                             FontWeight="SemiBold"
+                                                            Foreground="{DynamicResource Brush.Text}"
                                                             VerticalAlignment="Center"
-                                                            MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Expander}, Converter={StaticResource Minus}, ConverterParameter=80}"
+                                                            MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Expander}, Converter={StaticResource Minus}, ConverterParameter=320}"
                                                             ToolTip="{Binding Path}" />
-                                            </StackPanel>
+                                                <TextBlock Grid.Column="2" Text="{Binding SummaryLine}"
+                                                           Style="{StaticResource Text.Name}"
+                                                           FontSize="{StaticResource FontSize.Meta}"
+                                                           Foreground="{DynamicResource Brush.TextMuted}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="{StaticResource Pad.S.Left}"
+                                                           Visibility="{Binding SummaryLine, Converter={StaticResource NotEmptyToVisibility}}" />
+                                            </Grid>
                                         </Expander.Header>
                                         <ItemsControl ItemsSource="{Binding Passes}" Margin="{StaticResource Pad.M.Left}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
                                                     <Expander IsExpanded="{Binding IsExpanded}" Margin="{StaticResource Pad.XXS.Bottom}">
+                                                        <!-- LA PASADA: fila de 40, «Pasada n» a 15, y su
+                                                             resumen en pastillas (R11 §1b). Era una frase
+                                                             con puntos medios a 13 —«Pasada 2 — 0 nuevo(s)
+                                                             · 4 confirmado(s) · 0 disputado(s) · seca»— que
+                                                             había que leer entera para saber si la pasada
+                                                             había aportado algo. -->
                                                         <Expander.Header>
-                                                            <TextBlock Text="{Binding Headline}" FontSize="{StaticResource FontSize.Meta}" Opacity="0.85" />
+                                                            <Grid MinHeight="{StaticResource Session.PassRowHeight}">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Grid.Column="0" Text="{Binding Title}"
+                                                                           FontSize="{StaticResource FontSize.Body}"
+                                                                           VerticalAlignment="Center" />
+                                                                <ItemsControl Grid.Column="1" ItemsSource="{Binding Chips}"
+                                                                              VerticalAlignment="Center"
+                                                                              Margin="{StaticResource Pad.S.Left}">
+                                                                    <ItemsControl.ItemsPanel>
+                                                                        <ItemsPanelTemplate>
+                                                                            <WrapPanel />
+                                                                        </ItemsPanelTemplate>
+                                                                    </ItemsControl.ItemsPanel>
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate>
+                                                                            <Border Style="{StaticResource Pill.Pass}"
+                                                                                    Margin="{StaticResource Pad.Chip}">
+                                                                                <TextBlock Text="{Binding Label}"
+                                                                                           Style="{StaticResource Pill.Pass.Text}" />
+                                                                            </Border>
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                            </Grid>
                                                         </Expander.Header>
-                                                        <ItemsControl ItemsSource="{Binding Entries}" Margin="{StaticResource Pad.S.Left}">
+                                                        <!-- EL REGISTRO DEL AUDITOR (R11 §1c): su bloque, su
+                                                             medida y su hora. Salía como texto suelto a 13 a
+                                                             todo el ancho de la columna, sin nada que dijera
+                                                             dónde empieza y dónde acaba lo que dijo el
+                                                             agente. -->
+                                                        <Border Style="{StaticResource Session.Log}">
+                                                        <ItemsControl ItemsSource="{Binding Entries}">
                                                             <ItemsControl.ItemTemplate>
                                                                 <DataTemplate>
                                                                     <Grid Margin="{StaticResource Pad.XXS.V}">
                                                                         <Grid.ColumnDefinitions>
                                                                             <ColumnDefinition Width="Auto" />
                                                                             <ColumnDefinition Width="Auto" />
+                                                                            <ColumnDefinition Width="Auto" />
                                                                             <ColumnDefinition Width="*" />
                                                                         </Grid.ColumnDefinitions>
                                                                         <TextBlock
                                                                             Grid.Column="0"
+                                                                            Text="{Binding Time}"
+                                                                            Style="{StaticResource Session.Log.Time}"
+                                                                            Margin="{StaticResource Pad.S.Right}" />
+                                                                        <TextBlock
+                                                                            Grid.Column="1"
                                                                             Text="{Binding Glyph}"
                                                                             Width="18"
                                                                             FontWeight="Bold"
                                                                             Opacity="0.9"
                                                                             VerticalAlignment="Top" />
                                                                         <Border
-                                                                            Grid.Column="1"
+                                                                            Grid.Column="2"
                                                                             CornerRadius="3"
                                                                             Width="6" Height="6"
                                                                             Margin="{StaticResource Pad.XS}"
@@ -260,16 +336,15 @@
                                                                             Style="{StaticResource Dot.Sev}"
                                                                             Visibility="{Binding Severity, Converter={StaticResource SeverityToVisibility}}" />
                                                                         <TextBlock
-                                                                            Grid.Column="2"
+                                                                            Grid.Column="3"
                                                                             Text="{Binding Text}"
-                                                                            TextWrapping="Wrap"
-                                                                            FontFamily="Consolas"
-                                                                            FontSize="{StaticResource FontSize.Meta}"
+                                                                            Style="{StaticResource Session.Log.Text}"
                                                                             FontWeight="{Binding Kind, Converter={StaticResource ActivityKindToWeight}}" />
                                                                     </Grid>
                                                                 </DataTemplate>
                                                             </ItemsControl.ItemTemplate>
                                                         </ItemsControl>
+                                                        </Border>
                                                     </Expander>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
@@ -299,8 +374,16 @@
                              su plural, y a cero se apaga.
 
                              Se enlazan por `ItemsSource` y no a mano: es lo que permite que el
-                             estilo mire `Severity` y `Count` sin que la vista repita el color. -->
-                        <ItemsControl ItemsSource="{Binding SeverityChips}" Margin="{StaticResource Pad.XS.Top}">
+                             estilo mire `Severity` y `Count` sin que la vista repita el color.
+
+                             R11 §1e — PERO NO CUANDO SON CUATRO CEROS. «Los cuatro se pintan
+                             siempre» vale mientras haya algo que marcar; con la sesión recién
+                             arrancada, lo único que llenaba la columna eran «0 Críticas · 0 Altas ·
+                             0 Medias · 0 Bajas», que es un marcador enseñando que no hay partido.
+                             Sin hallazgos manda el estado vacío del sistema, que dice lo mismo en
+                             una frase y sin fingir que hay datos. -->
+                        <ItemsControl ItemsSource="{Binding SeverityChips}" Margin="{StaticResource Pad.XS.Top}"
+                                      Visibility="{Binding HasFindings, Converter={StaticResource BoolToVisibility}}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <WrapPanel />
@@ -317,7 +400,12 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </StackPanel>
-                    <ScrollViewer Style="{StaticResource Scroll}" VerticalScrollBarVisibility="Auto">
+                    <c:EmptyState DockPanel.Dock="Top"
+                                  Glyph="{x:Static c:Icons.Findings}"
+                                  Message="Todavía ningún hallazgo"
+                                  Visibility="{Binding HasFindings, Converter={StaticResource InverseBoolToVisibility}}" />
+                    <ScrollViewer Style="{StaticResource Scroll}" VerticalScrollBarVisibility="Auto"
+                                  Visibility="{Binding HasFindings, Converter={StaticResource BoolToVisibility}}">
                         <ItemsControl ItemsSource="{Binding Findings}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
