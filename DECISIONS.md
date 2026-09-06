@@ -16422,3 +16422,39 @@ exactamente lo que nadie pidió. **Dato que acota el terreno**: a Copilot las he
 viajan por MCP sino como `AIFunctionDeclaration` locales, así que lo que se está preguntando es si
 el SDK publica los deltas de argumentos de una *function tool* — y eso no está escrito en ninguna
 parte que se pueda leer. **Ni un token más**: la traza lee eventos que ya llegaban.
+
+### D-1017 — Una sesión colgada sin causa, y la media por unidad en otra divisa
+
+**Lo que se buscaba y lo que se encontró.** El cuelgue reportado —la sesión no cierra tras el
+`unit_done` de la última unidad, el pie girando, «Detener» sin respuesta— se persiguió montando un
+banco con un `Dispatcher` de verdad girando en su hilo STA, que es lo que ningún test de narración
+tenía: **sin `Application`, `LiveSessionService.OnUi` ejecuta en línea y la costura entre el hilo del
+barrido y el de la interfaz no existe en las pruebas**. Con el banco montado, **la sesión cierra**:
+una unidad con hallazgos, narración conectada y dispatcher real, 330 ms. Así que **el cuelgue no
+está en esa costura**, y eso descarta la hipótesis principal —un manejador de narración que espera
+al hilo de interfaz mientras el hilo de interfaz espera al cierre—. Queda por confirmar, y hace
+falta la máquina del usuario: los dos candidatos que el banco no ejercita son el `CommitAndPush` del
+final —una publicación por red, sin token de cancelación, que encaja con que «Detener» no responda—
+y el cierre de la sesión del SDK de Copilot. **Lo que sí se encontró, y es del producto.** El banco
+se colgó diez segundos sin decir nada, y la causa era una dependencia sin registrar **en el propio
+banco**; pero el mecanismo por el que un fallo se convierte en un cuelgue mudo es de la aplicación:
+quien lanza una sesión descartaba su tarea —`_ = _live.StartAsync(…)`—, así que los fallos que
+`RunAsync` lanza **antes** de su propio `try` —construir el coordinador, resolver un servicio— no
+los recogía nadie y la sesión se quedaba con `IsRunning` en true: el giro puesto, «Detener» sin nada
+que detener y ni una línea que dijera qué había pasado. Es **exactamente la forma** del cuelgue
+reportado, así que la red entra aunque su causa concreta siga sin confirmar: `Observe` vigila la
+tarea, convierte la excepción en el estado terminal de siempre —con su motivo visible— y, pase lo
+que pase, suelta el giro. Una sesión colgada sin causa es lo único que no puede pasar. **Y la
+segunda, que es de una línea**: el pie escribía `media {c:0.##}/unidad` a mano, así que decía
+«0,32 $ · media 31,7/unidad» —el mismo pie, la misma sesión, dos unidades y la de la media,
+ninguna—. Pasa por `CostFormat.Of`, como todo lo demás desde F29 §2; es el defecto de R11 §1f otra
+vez, en el segmento de al lado. **Cobertura (N-5, N-7): dos tests.** El del fallo tragado provoca el
+reventón a propósito y exige que la sesión deje de correr y que el motivo quede escrito; el otro
+corre una sesión normal con la narración conectada y exige que cierre — sin él, el primero pasaría
+igual con una sesión que no arranca nunca. **Y el banco del dispatcher se retira**, dicho con su
+motivo: `Application.Current` es del dominio entero, así que dos clases que levanten su propio hilo
+de interfaz acaban marshaleando a un dispatcher muerto y el conjunto se cuelga entero — se vio, y
+costó un rojo que solo aparecía al correr los dos tests juntos. Sirvió para lo que se montó
+—descartar la costura y encontrar el fallo tragado— y queda anotado aquí para quien tenga que
+volver: para reproducir con dispatcher hace falta que la `Application` la cree **un solo** sitio del
+proceso.
