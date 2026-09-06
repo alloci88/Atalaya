@@ -90,7 +90,6 @@ public sealed class SettingsRatesSurfaceTests
             SettingsViewModel vm = ViewModel(paths, settings);
             vm.ExhaustiveSweep.Should().BeFalse();
             vm.ExhaustiveSweep = true;
-            vm.SaveCommand.Execute(null);
 
             var releida = new SettingsService(paths);
             releida.Load();

@@ -229,7 +229,7 @@ public sealed class SettingsViewTests
         xaml.Should().Contain("Tiempo máximo de espera por una respuesta del modelo");
     }
 
-    // ---------- §4. El guardado, por toast ----------
+    // ---------- §4. El guardado se ve, y cada control dice cuando aplica ----------
 
     /// <summary>
     /// BUGFIX-AJUSTES §3 — cada control dice CUÁNDO surte efecto. Descubrir a base de prueba y
@@ -256,7 +256,12 @@ public sealed class SettingsViewTests
                 continue;
             }
 
-            row.Should().MatchRegex("Aplica al|Aplica a las",
+            // R5 amplía las formas de decirlo, no la regla. Sin barra de guardar, «aplica al
+            // guardar» dejó de ser cierto en ninguna fila: las que gobiernan lo que se lanza dicen
+            // «Aplica a las sesiones que lances a partir de ahora» y las que valen ya —el tema, la
+            // frescura, el sondeo— dicen «Se aplica al momento» o cuándo se nota. Lo que sigue sin
+            // valer es no decirlo.
+            row.Should().MatchRegex("[Aa]plica (al|a las|la próxima)",
                 $"este control no dice cuándo surte efecto → {Head(row)}");
         }
     }

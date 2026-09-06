@@ -59,6 +59,44 @@ public sealed record ModelOption(string Id, string Label)
 }
 
 /// <summary>
+/// La marca «Guardado ✓» de UN ajuste (R5). Observable y por ajuste, no una bandera de la página:
+/// lo que se guarda es un interruptor concreto y lo que lo dice tiene que estar a su lado.
+/// </summary>
+public sealed partial class SettingSaved : ObservableObject
+{
+    [ObservableProperty] private bool _shown;
+}
+
+/// <summary>
+/// Las marcas, indexadas por el nombre del ajuste. Es un indexador y no diez propiedades porque la
+/// vista enlaza <c>Saved[MaxPassesPerUnit].Shown</c> y así añadir un ajuste no obliga a añadir aquí
+/// nada: la marca nace la primera vez que alguien pregunta por ella.
+/// </summary>
+public sealed class SettingSavedMarks
+{
+    private readonly Dictionary<string, SettingSaved> _marks = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// La marca de un ajuste. SIEMPRE la misma instancia para el mismo nombre: un enlace de WPF se
+    /// engancha al objeto que recibe, y devolver uno nuevo cada vez dejaría la vista escuchando a
+    /// una marca que nadie vuelve a encender.
+    /// </summary>
+    public SettingSaved this[string field]
+    {
+        get
+        {
+            if (!_marks.TryGetValue(field, out SettingSaved? mark))
+            {
+                mark = new SettingSaved();
+                _marks[field] = mark;
+            }
+
+            return mark;
+        }
+    }
+}
+
+/// <summary>
 /// Ajustes (§8) — preferencias ÚNICAMENTE desde F2 (D4): todo lo de la conexión vive en «Cuenta».
 /// <para>
 /// F5.7 la deja en cuatro secciones con un mismo ritmo —General, Auditoría, Sincronización y una
@@ -164,9 +202,6 @@ public sealed partial class SettingsViewModel : ViewModelBase
         // Hasta que el proveedor conteste, el desplegable enseña el modelo configurado: así nunca
         // está vacío ni «elige» en silencio uno distinto del que se está usando.
         Models.Add(ModelOption.Unverified(_selectedModelId));
-
-        // La foto de lo guardado, contra la que se mide «hay cambios sin guardar».
-        Snapshot();
     }
 
     // --- Proveedor de auditoría (F14) ---
@@ -534,117 +569,127 @@ public sealed partial class SettingsViewModel : ViewModelBase
         return applied;
     }
 
-    // ================================================================ Cambios sin guardar (§C)
+    // ================================================================ Se guarda al cambiar (R5)
 
     /// <summary>
-    /// <b>Hay cambios sin guardar</b> (F26 Parte C).
+    /// <b>Los ajustes que esta página edita</b>, en UN sitio. De aquí sale qué cambio dispara un
+    /// guardado, así que añadir un ajuste a la página es añadirlo aquí — y si se olvida, el ajuste
+    /// deja de guardarse en silencio, que es exactamente lo que un test recorre por reflexión.
     /// <para>
-    /// Antes no se veía: se tocaban tres interruptores, se cambiaba de página y no pasaba nada —
-    /// ni se guardaba ni se avisaba—. El botón «Guardar» estaba al fondo de un scroll de dos
-    /// pantallas, así que ni siquiera estaba a la vista mientras se editaba. Ahora la barra vive
-    /// al pie de la vista, con el primario dentro, y esta marca dice si hay algo que salvar.
-    /// </para>
-    /// <para>
-    /// <b>Lo que NO cambia es el comportamiento de guardar</b>: sigue siendo explícito, con sus
-    /// mínimos aplicados y contados, y su toast. Esto es la señal, no una autoguarda.
+    /// Es la misma razón por la que D-987 calculaba la marca de sucio con una huella y no campo a
+    /// campo: diez ganchos que hay que mantener iguales acaban siendo nueve (D-966).
     /// </para>
     /// </summary>
-    [ObservableProperty] private bool _isDirty;
-
-    /// <summary>Lo guardado, tal y como lo dejó el último <c>Save</c> (o el arranque).</summary>
-    private string _saved = string.Empty;
-
-    /// <summary>
-    /// Los valores editables, en una cadena. Compararlos así —y no campo a campo— es lo que hace
-    /// que añadir un ajuste a la página no obligue a acordarse de tocar la comparación: se añade
-    /// aquí, en un sitio, y la marca de sucio sigue siendo cierta.
-    /// </summary>
-    private string Fingerprint() => string.Join(
-        '',
-        Editor,
-        IsLightTheme,
-        PollingSeconds,
-        FreshnessDays,
-        MaxPassesPerUnit,
-        CopilotTimeoutMinutes,
-        EnableAssistedFix,
-        ExhaustiveSweep,
-        SelectedProviderId,
-        SelectedModelId);
-
-    private void Snapshot()
+    public static readonly IReadOnlyList<string> Editable = new[]
     {
-        _saved = Fingerprint();
-        IsDirty = false;
-    }
+        nameof(Editor),
+        nameof(IsLightTheme),
+        nameof(PollingSeconds),
+        nameof(FreshnessDays),
+        nameof(MaxPassesPerUnit),
+        nameof(CopilotTimeoutMinutes),
+        nameof(EnableAssistedFix),
+        nameof(ExhaustiveSweep),
+        nameof(SelectedProviderId),
+        nameof(SelectedModelId),
+    };
 
     /// <summary>
-    /// Cualquier cambio de un campo editable recalcula la marca. Se hace aquí y no con diez
-    /// <c>partial void On…Changed</c> porque diez ganchos que hay que mantener iguales acaban
-    /// siendo nueve.
+    /// Las marcas «Guardado ✓», una por ajuste. La vista enlaza la del control que pinta; el
+    /// view-model solo dice cuál se acaba de guardar.
+    /// </summary>
+    public SettingSavedMarks Saved { get; } = new();
+
+    /// <summary>
+    /// Guardando. Volcar los mínimos aplicados de vuelta a las cajas cambia propiedades editables,
+    /// y sin esta bandera cada corrección dispararía otro guardado — y ese, otro.
+    /// </summary>
+    private bool _persisting;
+
+    /// <summary>
+    /// <b>Cada ajuste se guarda en el momento de cambiarlo</b> (R5, sustituye a D-987).
+    /// <para>
+    /// D-987 puso la barra al pie con «Guardar», «Descartar» y «Hay cambios sin guardar» porque el
+    /// botón vivía al fondo de un scroll de dos pantallas y cambiar de página perdía lo tocado en
+    /// silencio. Resolvía el síntoma dejando la causa: que hubiera un paso entre tocar un ajuste y
+    /// que el ajuste valiera. Sin ese paso no hay nada que perder, nada que descartar y nada de lo
+    /// que avisar al salir — con lo que <b>P-19</b> (confirmar la salida con cambios sin guardar)
+    /// deja de tener trabajo que hacer.
+    /// </para>
+    /// <para>
+    /// El enganche es UNO —esta notificación— y no diez <c>partial void On…Changed</c>, por lo
+    /// mismo que la huella de D-987: diez ganchos iguales acaban siendo nueve.
+    /// </para>
+    /// <para>
+    /// <b>Tarifas no entra aquí</b>: escribe en el hub, que es un fichero del equipo con su commit
+    /// y su atribución, y eso se pulsa. Por eso conserva su «Guardar tarifas».
+    /// </para>
     /// </summary>
     protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
     {
         base.OnPropertyChanged(e);
 
-        if (e.PropertyName is nameof(IsDirty) or nameof(Section) or nameof(IsBusy))
+        if (_persisting || e.PropertyName is null || !Editable.Contains(e.PropertyName))
         {
             return;
         }
 
-        IsDirty = _saved.Length > 0 && Fingerprint() != _saved;
+        Persist(e.PropertyName);
     }
 
     /// <summary>
-    /// Descartar: las cajas vuelven a lo que hay escrito en el fichero. No borra nada ni escribe
-    /// nada — es el «no era esto» de quien ha tocado un número y ya no sabe cuál era.
+    /// Escribe los ajustes y enciende la marca del campo que lo provocó.
+    /// <para>
+    /// <b>El toast solo sale cuando hay algo que decir.</b> Un aviso por cada interruptor sería
+    /// ruido —la marca de al lado ya dice que se ha guardado—, pero un mínimo aplicado se sigue
+    /// contando: un valor corregido en silencio se vive igual que un ajuste que no ajusta
+    /// (BUGFIX-AJUSTES). Escribes 0, no pasa nada, y no hay forma de saber qué número mandó.
+    /// </para>
     /// </summary>
-    [RelayCommand]
-    private void Discard()
+    private void Persist(string field)
     {
-        AppSettings s = _settings.Current;
-        Editor = s.Editor;
-        IsLightTheme = string.Equals(s.Theme, "light", StringComparison.OrdinalIgnoreCase);
-        PollingSeconds = s.PollingSeconds;
-        FreshnessDays = s.Thresholds.FreshnessDays;
-        MaxPassesPerUnit = s.MaxPassesPerUnit;
-        CopilotTimeoutMinutes = s.CopilotTimeoutMinutes;
-        EnableAssistedFix = s.EnableAssistedFix;
-        ExhaustiveSweep = s.ExhaustiveSweep;
-        if (_providers is not null)
+        _persisting = true;
+        try
         {
-            SelectedProviderId = _providers.Current.ProviderId;
+            var corrections = new List<string>();
+            _settings.Save(BuildSettings(corrections));
+
+            // Las cajas enseñan lo que de verdad quedó guardado, que es donde se ve el mínimo.
+            MaxPassesPerUnit = _settings.Current.MaxPassesPerUnit;
+            PollingSeconds = _settings.Current.PollingSeconds;
+            CopilotTimeoutMinutes = _settings.Current.CopilotTimeoutMinutes;
+            FreshnessDays = _settings.Current.Thresholds.FreshnessDays;
+
+            // Solo cuando es el tema lo que ha cambiado: sustituir la paleta en cada guardado
+            // sería rehacer los diccionarios al mover cualquier interruptor.
+            if (field == nameof(IsLightTheme))
+            {
+                ThemeService.Apply(IsLightTheme ? "light" : "dark");
+            }
+
+            if (corrections.Count > 0)
+            {
+                _toasts.Show("Ajustes guardados, con correcciones — "
+                    + string.Join(" · ", corrections) + ".");
+            }
+
+            Flash(field);
         }
-
-        SelectedModelId = string.IsNullOrWhiteSpace(SelectedProviderId)
-            ? s.CopilotModel
-            : _settings.ModelFor(SelectedProviderId);
-
-        Snapshot();
-        _toasts.Show("Cambios descartados.");
+        finally
+        {
+            _persisting = false;
+        }
     }
 
-    [RelayCommand]
-    private void Save()
+    /// <summary>
+    /// Enciende la marca del ajuste. Baja y sube —un pulso— para que dos guardados seguidos del
+    /// mismo campo vuelvan a empezar la cuenta en vez de dejarla desvaneciéndose.
+    /// </summary>
+    private void Flash(string field)
     {
-        var corrections = new List<string>();
-        _settings.Save(BuildSettings(corrections));
-
-        // Las cajas enseñan lo que de verdad quedó guardado. Antes solo se refrescaban tres; el
-        // umbral y la frescura se quedaban enseñando un número que el fichero no tenía.
-        MaxPassesPerUnit = _settings.Current.MaxPassesPerUnit;
-        PollingSeconds = _settings.Current.PollingSeconds;
-        CopilotTimeoutMinutes = _settings.Current.CopilotTimeoutMinutes;
-        FreshnessDays = _settings.Current.Thresholds.FreshnessDays;
-        ThemeService.Apply(IsLightTheme ? "light" : "dark");
-        // Lo guardado pasa a ser la nueva referencia: sin esto la barra seguiría diciendo «hay
-        // cambios sin guardar» justo después de guardarlos.
-        Snapshot();
-        // Toast global (F5.3): el aviso vivía al fondo de la página y no se veía sin bajar hasta
-        // él — justo debajo del botón que lo provocaba, pero fuera de la pantalla.
-        _toasts.Show(corrections.Count == 0
-            ? "Ajustes guardados."
-            : "Ajustes guardados, con correcciones — " + string.Join(" · ", corrections) + ".");
+        SettingSaved mark = Saved[field];
+        mark.Shown = false;
+        mark.Shown = true;
     }
 
     // ---------- Zona peligrosa (F5.7 §5) ----------

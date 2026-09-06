@@ -469,6 +469,12 @@ las seis reversiones de lo que se había movido sin pedirlo; con ellas entran N-
 
 ## Cerrado
 
+- **R5 · Ajustes se guarda solo** — fuera «Guardar», «Descartar» y «Hay cambios sin guardar» de las
+  cuatro secciones de preferencias: cada ajuste se escribe al cambiarlo y lo dice un «Guardado ✓» al
+  lado del control, que se desvanece a los dos segundos. Tarifas conserva sus botones porque escribe
+  en el hub del equipo. Los «Aplica al guardar» pasan a decir cuándo surte efecto de verdad.
+  Sustituye a D-987 y deja **P-19** sin objeto. Ver D-1003.
+
 - **R4 · Seis retoques de interfaz, vistos en el dist** — la fila de usuario del raíl centrada en su
   rectángulo; Cuenta cabe a 1920×1080 sin desplazamiento y con la botonera centrada con su tarjeta;
   «Baseline del sistema v4» retirado de Nueva aplicación (el importador se queda en la solución, sin

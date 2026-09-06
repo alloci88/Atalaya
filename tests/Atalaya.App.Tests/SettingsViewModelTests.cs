@@ -65,7 +65,6 @@ public sealed class SettingsViewModelTests : IDisposable
             "el valor de fábrica: 4 pasadas productivas + las 2 secas que cierran (F16 §D)");
 
         vm.MaxPassesPerUnit = 2;
-        vm.SaveCommand.Execute(null);
 
         new SettingsService(_paths).Load().MaxPassesPerUnit.Should().Be(2);
     }
@@ -76,7 +75,6 @@ public sealed class SettingsViewModelTests : IDisposable
         SettingsViewModel vm = NewViewModel();
 
         vm.MaxPassesPerUnit = 1;
-        vm.SaveCommand.Execute(null);
 
         _settings.Current.MaxPassesPerUnit.Should().Be(1,
             "con tope 1 el barrido es una pasada única, que es lo que evita un selector de modo");
@@ -88,7 +86,6 @@ public sealed class SettingsViewModelTests : IDisposable
         SettingsViewModel vm = NewViewModel();
 
         vm.MaxPassesPerUnit = 0;
-        vm.SaveCommand.Execute(null);
 
         _settings.Current.MaxPassesPerUnit.Should().Be(1);
         vm.MaxPassesPerUnit.Should().Be(1, "y la caja enseña lo que de verdad quedó guardado");
@@ -112,22 +109,25 @@ public sealed class SettingsViewModelTests : IDisposable
         SettingsViewModel vm = NewViewModel();
         typeof(SettingsViewModel).GetProperty(property)!.SetValue(vm, value);
 
-        vm.SaveCommand.Execute(null);
 
         _toasts.Items.Should().Contain(t => t.Text.Contains(what) && t.Text.Contains($"el mínimo es {minimum}"));
         typeof(SettingsViewModel).GetProperty(property)!.GetValue(vm).Should().Be(minimum,
             "y la caja enseña lo que de verdad quedó guardado");
     }
 
-    /// <summary>Y cuando no hay nada que corregir el aviso no inventa correcciones.</summary>
+    /// <summary>
+    /// Y cuando no hay nada que corregir NO hay aviso (R5). Un toast por cada interruptor sería
+    /// ruido —la marca de al lado ya dice que se ha guardado—; el toast se reserva para lo que hay
+    /// que leer, que es un mínimo aplicado.
+    /// </summary>
     [Fact]
-    public void Sin_correcciones_el_aviso_es_el_de_siempre()
+    public void Un_guardado_limpio_no_arma_ruido()
     {
         SettingsViewModel vm = NewViewModel();
 
-        vm.SaveCommand.Execute(null);
+        vm.MaxPassesPerUnit = 3;
 
-        _toasts.Items.Should().Contain(t => t.Text == "Ajustes guardados.");
+        _toasts.Items.Should().BeEmpty("lo que dice que se ha guardado es la marca del control");
     }
 
     /// <summary>
@@ -140,7 +140,6 @@ public sealed class SettingsViewModelTests : IDisposable
         SettingsViewModel vm = NewViewModel();
 
         vm.FreshnessDays = 30;
-        vm.SaveCommand.Execute(null);
 
         vm.FreshnessDays.Should().Be(30);
         new SettingsService(_paths).Load().Thresholds.FreshnessDays.Should().Be(30);
@@ -178,7 +177,6 @@ public sealed class SettingsViewModelTests : IDisposable
 
         SettingsViewModel vm = NewViewModel();
         vm.PollingSeconds = 90;
-        vm.SaveCommand.Execute(null);
 
         AppSettings reloaded = new SettingsService(_paths).Load();
         reloaded.PollingSeconds.Should().Be(90);
@@ -189,18 +187,21 @@ public sealed class SettingsViewModelTests : IDisposable
     // ---------- 1b. El guardado se ve (F5.7 §4) ----------
 
     /// <summary>
-    /// El aviso vivía al fondo de la página: aparecía justo debajo del botón que lo provocaba
-    /// pero fuera de la pantalla, así que guardar no daba ninguna señal. Ahora es un toast, que
-    /// se ve sin hacer scroll y caduca solo.
+    /// El guardado se ve JUNTO AL CONTROL que se acaba de cambiar (R5). Antes el aviso vivía al
+    /// fondo de la página —justo debajo del botón que lo provocaba, pero fuera de la pantalla—;
+    /// después fue un toast en la esquina; ahora es una marca en la fila que se ha tocado, que es
+    /// donde está mirando el ojo.
     /// </summary>
     [Fact]
-    public void Guardar_avisa_por_toast_y_no_por_un_texto_al_pie()
+    public void El_guardado_se_ve_junto_al_control_que_se_ha_cambiado()
     {
         SettingsViewModel vm = NewViewModel();
 
-        vm.SaveCommand.Execute(null);
+        vm.EnableAssistedFix = !vm.EnableAssistedFix;
 
-        _toasts.Items.Should().Contain(t => t.Text.Contains("Ajustes guardados"));
+        vm.Saved[nameof(SettingsViewModel.EnableAssistedFix)].Shown.Should().BeTrue();
+        vm.Saved[nameof(SettingsViewModel.FreshnessDays)].Shown.Should().BeFalse(
+            "la marca es del ajuste que se ha tocado, no de la página");
     }
 
     // ---------- 2. Selector de modelo ----------
@@ -238,7 +239,6 @@ public sealed class SettingsViewModelTests : IDisposable
         await vm.LoadAsync();
 
         vm.SelectedModelId = "claude-sonnet-4.5";
-        vm.SaveCommand.Execute(null);
 
         new SettingsService(_paths).Load().CopilotModel.Should().Be("claude-sonnet-4.5");
     }
@@ -448,7 +448,6 @@ public sealed class SettingsViewModelTests : IDisposable
 
         // Y Ajustes sigue siendo usable: guardar no se rompe ni pierde el modelo.
         vm.MaxPassesPerUnit = 3;
-        vm.SaveCommand.Execute(null);
         AppSettings reloaded = new SettingsService(_paths).Load();
         reloaded.MaxPassesPerUnit.Should().Be(3);
         reloaded.CopilotModel.Should().Be("modelo-elegido");

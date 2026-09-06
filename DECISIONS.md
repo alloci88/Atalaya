@@ -14885,6 +14885,12 @@ pendiente.
 
 ### D-987 — La barra de guardar, y el primario que cambia con la sección
 
+> **SUSTITUIDA POR D-1003 (R5).** La barra —«Guardar», «Descartar» y «Hay cambios sin guardar»— se
+> retira de las cuatro secciones que guardan preferencias de esta máquina: cada ajuste se guarda al
+> cambiarlo. Lo que sigue vivo de esta entrada es la parte de Tarifas (un primario, y el de la
+> sección que estás editando) y el porqué de la huella, que R5 hereda en la lista `Editable`. Se
+> deja escrita entera porque explica de dónde viene el problema que R5 resuelve por la raíz.
+
 **Guardar estaba al fondo de un scroll de dos pantallas.** Se editaba sin tenerlo delante, y
 cambiar de página no avisaba de nada: se perdía lo tocado en silencio.
 
@@ -15641,3 +15647,47 @@ verdad, los paneles y las tres columnas recuperan esos 48 px y llegan hasta su p
 apuntar por qué no se vio: el `dist` arrancaba, los 1.928 tests estaban en verde y el autochequeo
 también. Un hueco de 48 px no rompe nada —solo se ve—, que es exactamente la clase de defecto para
 la que existe N-8: lo encuentra quien abre la aplicación, no quien la construye.
+
+## R5 — Ajustes se guarda solo
+
+### D-1003 — R5: cada ajuste se guarda al cambiarlo, y la señal se muda al lado del control
+
+**Sustituye a D-987.** Aquella entrada puso al pie de Ajustes una barra con «Guardar», «Descartar»
+y «Hay cambios sin guardar» porque el botón vivía al fondo de un scroll de dos pantallas y cambiar
+de página perdía lo tocado en silencio. Arreglaba el síntoma y dejaba la causa: **que hubiera un
+paso entre mover un interruptor y que el interruptor valiera**. Ese paso no aporta nada en una
+página de preferencias de esta máquina —no hay nada que revisar antes de aplicar, ni nadie más a
+quien afecte— y es el que obliga a inventar todo lo demás: una marca de sucio, un botón que la
+apaga, otro que la revierte, y una confirmación al salir. Ahora **cada ajuste se guarda en el
+momento de cambiarlo** y junto al control aparece **«Guardado ✓»** —13 px, tinta secundaria— que se
+desvanece a los dos segundos. La señal deja de hablar de la página entera y pasa a hablar del
+interruptor que acabas de mover: donde está la mano y donde está mirando el ojo. Con eso **P-19**
+—confirmar la salida de Ajustes con cambios sin guardar— **deja de tener trabajo que hacer**: no
+queda ningún cambio sin guardar del que avisar.
+
+**Lo que NO se toca es Tarifas.** Conserva «Guardar tarifas» (primario) y «Añadir modelo», bajo la
+tabla y alineados con su borde izquierdo, porque ahí sí hay un paso: la tabla **vive en el hub**
+(D-786), la ve todo el equipo y se publica con un commit y su atribución. Guardar en el fichero de
+tu máquina al mover un interruptor es cómodo; publicar en el fichero del equipo a cada tecla no lo
+es. Esa es la línea, y es la misma que separa un ajuste local de una política compartida (F13,
+D-769).
+
+**Tres detalles del cómo.** (1) El enganche es **uno** —la notificación de propiedad de la propia
+página, filtrada por una lista `Editable`— y no diez `partial void On…Changed`: es la razón de la
+huella de D-987 aplicada a otra cosa, porque diez ganchos que hay que mantener iguales acaban
+siendo nueve (D-966); un test recorre por reflexión las observables de la página y exige que
+ninguna que sea un ajuste se quede fuera de la lista. (2) **El toast solo sale cuando hay algo que
+leer**: un aviso por interruptor sería ruido, pero un mínimo aplicado se sigue contando —escribir 0
+y que pase a 15 sin decirlo se vive igual que un ajuste que no ajusta (BUGFIX-AJUSTES)—. Y (3) **el
+desvanecido lo hace la vista**, no un reloj del view-model: un temporizador tendría que volver al
+hilo de interfaz para apagar la marca y una prueba tendría que esperar dos segundos de verdad; el
+view-model solo dice «esto se acaba de guardar» y cuánto dura en pantalla es cosa de su estilo. La
+marca es un control (`SavedMark`) y no un `TextBlock` por fila, porque son diez filas y lo único
+que cambia de una a otra es a qué ajuste mira.
+
+**Y los textos dejan de mentir.** «Aplica al guardar» no significaba nada sin un guardar que pulsar:
+donde el ajuste gobierna lo que se lanza, ahora dice **«Aplica a las sesiones que lances a partir de
+ahora»**; donde vale ya —el tema, la frescura, el sondeo del hub— dice que se aplica al momento, y
+el editor, que se aplica la próxima vez que abras código. La regla de BUGFIX-AJUSTES §3 no cambia
+—cada control dice **cuándo** surte efecto— y su test se amplía a las formas nuevas de decirlo, no
+se relaja.

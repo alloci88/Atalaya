@@ -1227,6 +1227,51 @@
         <Setter Property="Margin" Value="{StaticResource Pad.XXS.Top}" />
     </Style>
 
+    <!-- ================================================================ «Guardado ✓» (R5)
+
+         Ajustes ya no tiene barra de guardar: cada ajuste se guarda en el momento de cambiarlo, y
+         lo que dice que ha pasado es esta marca, AL LADO del control que se acaba de tocar. Es el
+         cambio de una señal global —«hay cambios sin guardar», que hablaba de la página entera— por
+         una local, que habla del interruptor que acabas de mover: donde está la mano y donde está
+         mirando el ojo.
+
+         Nace con opacidad 0 y ocupa su sitio desde el principio: si apareciera y desapareciera del
+         flujo, el control de al lado daría un salto cada vez que se guarda.
+
+         Dos segundos, y se va desvaneciendo el último medio: un aviso que se queda es un aviso que
+         se deja de leer, y uno que desaparece de golpe parece un parpadeo de la aplicación. -->
+    <Style TargetType="{x:Type c:SavedMark}">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Opacity" Value="0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type c:SavedMark}">
+                    <TextBlock Text="Guardado ✓"
+                               FontSize="{StaticResource FontSize.Meta}"
+                               Foreground="{DynamicResource Brush.TextMuted}"
+                               VerticalAlignment="Center" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="Shown" Value="True">
+                <Trigger.EnterActions>
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="Opacity">
+                                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                                <LinearDoubleKeyFrame KeyTime="0:0:1.5" Value="1" />
+                                <LinearDoubleKeyFrame KeyTime="0:0:2" Value="0" />
+                            </DoubleAnimationUsingKeyFrames>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </Trigger.EnterActions>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- Los campos con ancho digno. El numérico cabe cuatro cifras cómodas; el desplegable, el
          nombre de un modelo con su multiplicador. -->
     <Style x:Key="Field.Number" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">

@@ -343,10 +343,12 @@
          empezar la fila de botones que los guarda — «Guardar» alineado con lo que guarda. -->
     <Thickness x:Key="Pad.SettingControlColumn">344,0,0,0</Thickness>
 
-    <!-- El margen de la fila de botones de Ajustes: esa misma sangría, más su aire arriba y abajo. -->
-    <Thickness x:Key="Pad.SettingActions">344,8,0,16</Thickness>
+    <!-- AQUÍ ESTABA `Pad.SettingActions`, el margen de la fila «Guardar · Descartar» de las otras
+         cuatro secciones. Esa fila se retiró en R5 —cada ajuste se guarda al cambiarlo— y el token
+         se va con ella: un token que nadie consume es un número que alguien vuelve a usar mal.
+         Queda el de Tarifas, que es la única barra que sigue habiendo. -->
 
-    <!-- Y el de Tarifas, SIN sangría: la tabla ocupa la columna entera, así que sus botones se
+    <!-- El de Tarifas, SIN sangría: la tabla ocupa la columna entera, así que sus botones se
          alinean con su borde izquierdo y no con la columna de controles de un formulario. -->
     <Thickness x:Key="Pad.RatesActions">0,12,0,16</Thickness>
 

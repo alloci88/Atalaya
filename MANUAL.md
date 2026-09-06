@@ -820,10 +820,15 @@ un scroll largo:
 | **Apariencia** | Tema claro / oscuro |
 | **Avanzado** | Editor preferido, frescura, sincronización del hub, timeout y la zona peligrosa |
 
-**Guardar está siempre a la vista**, en la barra del pie. Cuando hay algo cambiado sin guardar la
-barra lo dice —«Hay cambios sin guardar»— y aparece **Descartar**, que devuelve las cajas a lo que
-hay escrito en el fichero. En la sección **Tarifas** esa barra guarda la tabla del hub, que es lo
-que se está editando ahí.
+**No hay que guardar: cada ajuste se guarda en cuanto lo cambias.** Mueves el interruptor o
+escribes el número y, al lado del control, aparece **«Guardado ✓»** un par de segundos. No hay botón
+de guardar, ni de descartar, ni aviso de cambios pendientes — porque no quedan cambios pendientes.
+Si escribes un número por debajo de su mínimo, la caja se queda con el mínimo y un aviso te dice
+cuál era.
+
+**La excepción es Tarifas**, que sí tiene sus botones —**Guardar tarifas** y **Añadir modelo**—
+debajo de la tabla: esa tabla no es de tu máquina, vive en el hub y la ve todo el equipo, así que se
+publica cuando tú lo dices.
 
 Cada ajuste cuenta en **una línea** qué hace y cuándo aplica; lo que necesita más explicación vive
 detrás de un **«Más»** en la misma fila, plegado.

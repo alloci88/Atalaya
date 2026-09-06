@@ -1558,6 +1558,11 @@ D-1000 §2) y P-28 (el banco de capturas, contra D-977).
 
 ### P-19 — Un aviso al salir de Ajustes con cambios sin guardar
 
+> **Sin objeto desde R5 (D-1003):** Ajustes guarda cada cambio en el momento de hacerlo, así que ya
+> no hay cambios sin guardar con los que salir. La propuesta se queda escrita porque el contrato que
+> pedía —que una página pueda vetar la salida— sigue siendo útil para «Nueva aplicación» a medio
+> rellenar, y ese es el argumento que habría que volver a hacer.
+
 - **Qué.** Salir de Ajustes por el raíl o por la miga con la marca de sucio puesta abre una
   confirmación de tres salidas: Guardar, Descartar, Seguir editando.
 - **Por qué.** D-987 dice con todas las letras que cambiar de página perdía lo tocado en silencio, y

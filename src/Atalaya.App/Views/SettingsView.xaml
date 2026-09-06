@@ -13,7 +13,9 @@
         editaba. Ahora son CINCO SECCIONES navegables por una lista lateral —el mismo gesto que el
         raíl una capa más abajo—, cada ajuste es una fila con el mismo ritmo (etiqueta y UNA línea
         de ayuda a la izquierda, control a la derecha) y lo que no cabe en esa línea vive detrás de
-        un «más». La barra de guardar está siempre al pie, con su primario dentro.
+        un «más». Y desde R5 no hay barra de guardar: cada ajuste se guarda al cambiarlo y lo dice
+        con un «Guardado ✓» al lado del control. La única que queda es la de Tarifas, que escribe en
+        el hub del equipo.
 
         El orden de las secciones es el del trabajo: con quién auditas · cómo audita · lo que
         cuesta · cómo se ve · lo demás.
@@ -100,9 +102,23 @@
                      línea: a media altura de glifo, sin elipsis y sin nada que dijera que había
                      más. El degradado lo dice. -->
                 <Grid Grid.Row="0">
+                <!-- EL TOPE SOLO DESCUENTA LA BARRA DONDE HAY BARRA (R5). Los 64 px que dejaba
+                     libres para los botones eran ciertos en las cinco secciones; ahora solo Tarifas
+                     tiene botones, y en las otras cuatro ese hueco sería una franja muerta al pie. -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              MaxHeight="{Binding ActualHeight, ElementName=SettingsColumn, Converter={StaticResource Minus}, ConverterParameter=64}"
                               Padding="{StaticResource Pad.Scroll}">
+                    <ScrollViewer.Style>
+                        <Style TargetType="ScrollViewer">
+                            <Setter Property="MaxHeight"
+                                    Value="{Binding ActualHeight, ElementName=SettingsColumn}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ShowRates}" Value="True">
+                                    <Setter Property="MaxHeight"
+                                            Value="{Binding ActualHeight, ElementName=SettingsColumn, Converter={StaticResource Minus}, ConverterParameter=64}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ScrollViewer.Style>
                 <Grid>
 
                     <!-- ============================== Proveedor y modelo ============================== -->
@@ -120,13 +136,17 @@
                                            Text="{Binding ProviderNotice}"
                                            Visibility="{Binding IsChecked, ElementName=MasProveedor, Converter={StaticResource BoolToVisibility}}" />
                             </StackPanel>
-                            <ComboBox ItemsSource="{Binding Providers}"
-                                      AutomationProperties.Name="Proveedor"
-                                      SelectedValue="{Binding SelectedProviderId}"
-                                      SelectedValuePath="Id"
-                                      DisplayMemberPath="Name"
-                                      MinWidth="{StaticResource Field.SelectWidth}"
-                                      HorizontalAlignment="Left" VerticalAlignment="Top" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top"
+                                        c:Stack.Gap="{StaticResource Space.S}">
+                                <ComboBox ItemsSource="{Binding Providers}"
+                                          AutomationProperties.Name="Proveedor"
+                                          SelectedValue="{Binding SelectedProviderId}"
+                                          SelectedValuePath="Id"
+                                          DisplayMemberPath="Name"
+                                          MinWidth="{StaticResource Field.SelectWidth}"
+                                          HorizontalAlignment="Left" />
+                                <c:SavedMark Shown="{Binding Saved[SelectedProviderId].Shown}" />
+                            </StackPanel>
                         </DockPanel>
 
                         <DockPanel Style="{StaticResource Setting.Row}">
@@ -149,6 +169,7 @@
                                               MinWidth="{StaticResource Field.SelectWidth}" />
                                     <Button Content="Actualizar lista" Command="{Binding RefreshModelsCommand}"
                                             Style="{StaticResource Button.Secondary}" />
+                                    <c:SavedMark Shown="{Binding Saved[SelectedModelId].Shown}" />
                                 </StackPanel>
 
                                 <!-- El aviso de la lista de modelos, por el recurso del sistema: el
@@ -183,8 +204,11 @@
                                            Text="De él salen también las DOS pasadas secas seguidas con las que el barrido se da por terminado: con un tope de 6 quedan 4 pasadas que puedan aportar algo. Con 1, cada auditoría es una pasada única. Si se agota el tope sin llegar a las dos secas, la unidad queda marcada como «cobertura posiblemente incompleta». La que esté en curso termina con el tope que tenía. Mínimo 1."
                                            Visibility="{Binding IsChecked, ElementName=MasPasadas, Converter={StaticResource BoolToVisibility}}" />
                             </StackPanel>
-                            <TextBox Text="{Binding MaxPassesPerUnit}" Style="{StaticResource Field.Number}"
-                                     VerticalAlignment="Top" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top"
+                                        c:Stack.Gap="{StaticResource Space.S}">
+                                <TextBox Text="{Binding MaxPassesPerUnit}" Style="{StaticResource Field.Number}" />
+                                <c:SavedMark Shown="{Binding Saved[MaxPassesPerUnit].Shown}" />
+                            </StackPanel>
                         </DockPanel>
 
                         <!-- R2 §1 — MODO EXHAUSTIVO. Va junto al tope porque los dos gobiernan lo
@@ -209,6 +233,7 @@
                                       Data="{x:Static c:Icons.Warning}"
                                       Stroke="{DynamicResource Brush.Warning.Ink}"
                                       ToolTip="{Binding ExhaustiveNotice}" />
+                                <c:SavedMark Shown="{Binding Saved[ExhaustiveSweep].Shown}" />
                             </StackPanel>
                         </DockPanel>
 
@@ -219,14 +244,18 @@
                             <StackPanel Style="{StaticResource Setting.Label}">
                                 <TextBlock Text="Arreglo asistido" Style="{StaticResource Setting.Name}" />
                                 <TextBlock Style="{StaticResource Setting.Help}"
-                                           Text="Habilita «Arreglar con agente» en la ficha de un hallazgo. Aplica al guardar." />
+                                           Text="Habilita «Arreglar con agente» en la ficha de un hallazgo. Aplica a las sesiones que lances a partir de ahora." />
                                 <ToggleButton x:Name="MasArreglo" Style="{StaticResource Toggle.More}" />
                                 <TextBlock Style="{StaticResource Setting.More}"
                                            Text="El agente arregla sobre tu clon local explicando lo que hace y pidiéndote permiso para tocar ficheros que no son del hallazgo. Nunca commitea ni publica nada, y exige que no tengas cambios sin commitear. El generador de prompt de arreglo funciona igual con esto apagado."
                                            Visibility="{Binding IsChecked, ElementName=MasArreglo, Converter={StaticResource BoolToVisibility}}" />
                             </StackPanel>
-                            <ui:ToggleSwitch IsChecked="{Binding EnableAssistedFix}"
-                                             HorizontalAlignment="Left" VerticalAlignment="Top" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top"
+                                        c:Stack.Gap="{StaticResource Space.S}">
+                                <ui:ToggleSwitch IsChecked="{Binding EnableAssistedFix}"
+                                                 HorizontalAlignment="Left" VerticalAlignment="Center" />
+                                <c:SavedMark Shown="{Binding Saved[EnableAssistedFix].Shown}" />
+                            </StackPanel>
                         </DockPanel>
 
                     </StackPanel>
@@ -414,10 +443,14 @@
                             <StackPanel Style="{StaticResource Setting.Label}">
                                 <TextBlock Text="Tema claro" Style="{StaticResource Setting.Name}" />
                                 <TextBlock Style="{StaticResource Setting.Help}"
-                                           Text="Cambia el tema oscuro por el claro. Aplica al guardar, sin reiniciar la aplicación." />
+                                           Text="Cambia el tema oscuro por el claro. Se aplica al momento, sin reiniciar la aplicación." />
                             </StackPanel>
-                            <ui:ToggleSwitch IsChecked="{Binding IsLightTheme}"
-                                             HorizontalAlignment="Left" VerticalAlignment="Top" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top"
+                                        c:Stack.Gap="{StaticResource Space.S}">
+                                <ui:ToggleSwitch IsChecked="{Binding IsLightTheme}"
+                                                 HorizontalAlignment="Left" VerticalAlignment="Center" />
+                                <c:SavedMark Shown="{Binding Saved[IsLightTheme].Shown}" />
+                            </StackPanel>
                         </DockPanel>
 
                         <!-- NO hay control de escala tipográfica, y no se inventa uno: la escala es
@@ -444,49 +477,62 @@
                             <StackPanel Style="{StaticResource Setting.Label}">
                                 <TextBlock Text="Editor preferido" Style="{StaticResource Setting.Name}" />
                                 <TextBlock Style="{StaticResource Setting.Help}"
-                                           Text="Con qué editor se abre el código desde la ficha de un hallazgo. Aplica al guardar." />
+                                           Text="Con qué editor se abre el código desde la ficha de un hallazgo. Se aplica la próxima vez que abras código." />
                             </StackPanel>
-                            <ComboBox SelectedValue="{Binding Editor}" SelectedValuePath="Tag"
-                                      AutomationProperties.Name="Editor de código"
-                                      MinWidth="{StaticResource Field.SelectWidth}"
-                                      HorizontalAlignment="Left" VerticalAlignment="Top">
-                                <ComboBoxItem Content="Visual Studio" Tag="vs" />
-                                <ComboBoxItem Content="VS Code" Tag="vscode" />
-                            </ComboBox>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top"
+                                        c:Stack.Gap="{StaticResource Space.S}">
+                                <ComboBox SelectedValue="{Binding Editor}" SelectedValuePath="Tag"
+                                          AutomationProperties.Name="Editor de código"
+                                          MinWidth="{StaticResource Field.SelectWidth}"
+                                          HorizontalAlignment="Left">
+                                    <ComboBoxItem Content="Visual Studio" Tag="vs" />
+                                    <ComboBoxItem Content="VS Code" Tag="vscode" />
+                                </ComboBox>
+                                <c:SavedMark Shown="{Binding Saved[Editor].Shown}" />
+                            </StackPanel>
                         </DockPanel>
 
                         <DockPanel Style="{StaticResource Setting.Row}">
                             <StackPanel Style="{StaticResource Setting.Label}">
                                 <TextBlock Text="Frescura (días)" Style="{StaticResource Setting.Name}" />
                                 <TextBlock Style="{StaticResource Setting.Help}"
-                                           Text="A partir de cuántos días sin reconfirmarse un hallazgo se marca como pendiente de revisión. Aplica al guardar. Mínimo 1 día." />
+                                           Text="A partir de cuántos días sin reconfirmarse un hallazgo se marca como pendiente de revisión. Se aplica al momento. Mínimo 1 día." />
                             </StackPanel>
-                            <TextBox Text="{Binding FreshnessDays}" Style="{StaticResource Field.Number}"
-                                     VerticalAlignment="Top" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top"
+                                        c:Stack.Gap="{StaticResource Space.S}">
+                                <TextBox Text="{Binding FreshnessDays}" Style="{StaticResource Field.Number}" />
+                                <c:SavedMark Shown="{Binding Saved[FreshnessDays].Shown}" />
+                            </StackPanel>
                         </DockPanel>
 
                         <DockPanel Style="{StaticResource Setting.Row}">
                             <StackPanel Style="{StaticResource Setting.Label}">
                                 <TextBlock Text="Sincronización del hub (segundos)" Style="{StaticResource Setting.Name}" />
                                 <TextBlock Style="{StaticResource Setting.Help}"
-                                           Text="Cada cuántos segundos se buscan cambios de tus compañeros en el hub. Aplica al guardar, sin reiniciar. El mínimo es 15." />
+                                           Text="Cada cuántos segundos se buscan cambios de tus compañeros en el hub. Se aplica al momento, sin reiniciar. El mínimo es 15." />
                             </StackPanel>
-                            <TextBox Text="{Binding PollingSeconds}" Style="{StaticResource Field.Number}"
-                                     VerticalAlignment="Top" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top"
+                                        c:Stack.Gap="{StaticResource Space.S}">
+                                <TextBox Text="{Binding PollingSeconds}" Style="{StaticResource Field.Number}" />
+                                <c:SavedMark Shown="{Binding Saved[PollingSeconds].Shown}" />
+                            </StackPanel>
                         </DockPanel>
 
                         <DockPanel Style="{StaticResource Setting.Row}">
                             <StackPanel Style="{StaticResource Setting.Label}">
                                 <TextBlock Text="Timeout de Copilot (minutos)" Style="{StaticResource Setting.Name}" />
                                 <TextBlock Style="{StaticResource Setting.Help}"
-                                           Text="Tiempo máximo de espera por una respuesta del modelo antes de dar el turno por fallido. Aplica al guardar, en el siguiente turno." />
+                                           Text="Tiempo máximo de espera por una respuesta del modelo antes de dar el turno por fallido. Aplica a las sesiones que lances a partir de ahora." />
                                 <ToggleButton x:Name="MasTimeout" Style="{StaticResource Toggle.More}" />
                                 <TextBlock Style="{StaticResource Setting.More}"
                                            Text="Vale también para cada compilación del arreglo asistido. Mínimo 1 minuto."
                                            Visibility="{Binding IsChecked, ElementName=MasTimeout, Converter={StaticResource BoolToVisibility}}" />
                             </StackPanel>
-                            <TextBox Text="{Binding CopilotTimeoutMinutes}" Style="{StaticResource Field.Number}"
-                                     VerticalAlignment="Top" />
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top"
+                                        c:Stack.Gap="{StaticResource Space.S}">
+                                <TextBox Text="{Binding CopilotTimeoutMinutes}" Style="{StaticResource Field.Number}" />
+                                <c:SavedMark Shown="{Binding Saved[CopilotTimeoutMinutes].Shown}" />
+                            </StackPanel>
                         </DockPanel>
 
                         <!-- ZONA PELIGROSA. Va al final, y lo que la marca es el color del sistema
@@ -531,39 +577,16 @@
 
                 <!-- ==================================================== Las acciones
 
-                     Debajo de la última fila y ALINEADAS CON LA COLUMNA DE CONTROLES: «Guardar»
-                     empieza donde empiezan los desplegables que guarda, que es donde el ojo ya
-                     está. Vivían en una barra al ancho de la ventana, a 1.400 px del formulario.
+                     AQUÍ ESTABAN «GUARDAR», «DESCARTAR» Y «HAY CAMBIOS SIN GUARDAR», Y SE VAN (R5).
+                     Cada ajuste se guarda en el momento de cambiarlo, así que no queda nada que
+                     guardar a mano, nada que descartar y nada de lo que avisar: lo que dice que se
+                     ha guardado es la marca «Guardado ✓» que aparece al lado del control que se
+                     acaba de tocar. El porqué está en D-1003, que sustituye a D-987.
 
-                     UN primario, y el de la sección que estás editando (principio 4): en Tarifas se
-                     guarda la tabla del hub, que es otra cosa y otro sitio. Dos «Guardar» a la vez
-                     habrían dejado al usuario decidiendo cuál era el suyo.
+                     La única barra que queda es la de Tarifas, y queda por lo que la separa de las
+                     otras cuatro: escribe en el hub del equipo, con su commit y su atribución. Eso
+                     se pulsa.
                 -->
-                <StackPanel Grid.Row="1" Orientation="Horizontal"
-                            Margin="{StaticResource Pad.SettingActions}"
-                            c:Stack.Gap="{StaticResource Space.S}"
-                            Visibility="{Binding ShowRates, Converter={StaticResource InverseBoolToVisibility}}">
-                    <!-- Deshabilitado mientras no haya nada que guardar: un primario encendido que
-                         no hace nada es un primario que se aprende a ignorar. -->
-                    <Button Content="Guardar" Command="{Binding SaveCommand}"
-                            Style="{StaticResource Button.Primary}"
-                            IsEnabled="{Binding IsDirty}" />
-                    <!-- SIN PASTILLA DE RAZÓN (F27, cierre). P-27 —«el primario apagado dice por
-                         qué al lado»— NO aplica aquí: «Guardar» apagado ya lo dice entero, porque
-                         lo único que puede encenderlo es haber cambiado algo, y eso lo sabe quien
-                         acaba de no cambiarlo. La pastilla añadía una etiqueta ámbar permanente en
-                         el estado NORMAL de la pantalla —el de no haber tocado nada—, que es lo
-                         contrario de lo que un aviso debe hacer. La regla sigue valiendo donde hay
-                         una condición que el usuario no puede deducir: «marca al menos una unidad»,
-                         «elige un repositorio». N-6. -->
-                    <Button Content="Descartar" Command="{Binding DiscardCommand}"
-                            Style="{StaticResource Button.Secondary}"
-                            Visibility="{Binding IsDirty, Converter={StaticResource BoolToVisibility}}" />
-                    <TextBlock Text="Hay cambios sin guardar" Style="{StaticResource Text.Small}"
-                               Foreground="{DynamicResource Brush.Warning.Ink}"
-                               VerticalAlignment="Center"
-                               Visibility="{Binding IsDirty, Converter={StaticResource BoolToVisibility}}" />
-                </StackPanel>
 
                 <!-- En Tarifas, bajo la TABLA y alineadas con su borde izquierdo: la tabla ocupa la
                      columna entera, así que aquí la sangría de los controles no aplica. -->
@@ -571,8 +594,11 @@
                             Margin="{StaticResource Pad.RatesActions}"
                             c:Stack.Gap="{StaticResource Space.S}"
                             Visibility="{Binding ShowRates, Converter={StaticResource BoolToVisibility}}">
-                    <!-- LA MISMA REGLA QUE LAS OTRAS CUATRO SECCIONES (P-27, UI-0038): apagado
-                         mientras no haya nada que guardar, y con la razón al lado. -->
+                    <!-- Apagado mientras no haya nada que guardar. P-27 no aplica —apagado ya lo
+                         dice entero, porque lo único que puede encenderlo es haber tocado la tabla
+                         (F27, cierre)—, y es la única «marca de sucio» que sobrevive a R5: aquí sí
+                         hay un paso entre editar y publicar, porque lo que se publica es del
+                         equipo. -->
                     <Button Content="Guardar tarifas" Command="{Binding Rates.SaveCommand}"
                             Style="{StaticResource Button.Primary}"
                             IsEnabled="{Binding Rates.IsDirty}" />
