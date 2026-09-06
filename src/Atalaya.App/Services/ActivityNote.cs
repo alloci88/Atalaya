@@ -121,6 +121,18 @@ public static class ActivityWording
     /// </para>
     public const string AfterText = "escribiendo el reporte de hallazgos";
 
+    /// <summary>
+    /// <b>La herramienta que todavía no existe</b> (F30 §3c). Las seis del auditor tienen su frase;
+    /// ésta es la red por si mañana hay una séptima, y dice lo único que se puede decir sin
+    /// inventar. <b>No nombra la herramienta</b> — era el caso que escribía «Llamando a unit_done…»
+    /// — y son constantes para que el test que exige una frase propia por herramienta pueda
+    /// distinguir «tiene la suya» de «se ha quedado con la genérica» sin repetir el texto.
+    /// </summary>
+    public const string UnknownTool = "Llamando a una herramienta…";
+
+    /// <inheritdoc cref="UnknownTool"/>
+    public const string UnknownWaiting = "escribiendo una llamada";
+
     /// <summary>La frase por defecto: hay turno en el aire y no se sabe decir nada más preciso.</summary>
     /// <remarks>
     /// <b>«al agente», no «al modelo»</b> (F30 §3). La voz de enfrente se llama Agente en toda la
@@ -178,7 +190,15 @@ public static class ActivityWording
     }
 
     /// <summary>
-    /// Cómo se lee una herramienta que el modelo TODAVÍA está escribiendo (F30 §2).
+    /// Cómo se lee una herramienta que el agente TODAVÍA está escribiendo (F30 §2).
+    /// <para>
+    /// <b>Ningún nombre interno llega a la pantalla</b> (F30 §3c). El hilo decía «Llamando a
+    /// unit_done…» —el identificador de la herramienta, tal cual— porque las que no tenían frase
+    /// caían en un caso por defecto que lo escribía. Un identificador con guion bajo no es una
+    /// frase: es una pista de que la aplicación está enseñando su cocina. Las seis herramientas del
+    /// auditor tienen la suya, y el caso por defecto ya no nombra ninguna. Los nombres internos
+    /// viven donde sirven, que es el anexo técnico del informe.
+    /// </para>
     /// <para>
     /// <b>Sin denominador, y no es un olvido.</b> Lo que llega es un array que se está escribiendo:
     /// cuántos elementos va a tener no se sabe hasta que cierra. Se dice lo que hay —«3
@@ -199,7 +219,8 @@ public static class ActivityWording
             "report_verdicts" => "veredictos",
             "add_locations" => "ubicaciones",
             "read_signatures" => "la lectura",
-            _ => tool.Tool,
+            "unit_done" => "el cierre",
+            _ => "elementos",
         };
 
         if (tool.Phase == ToolStreamPhase.Started || tool.Items == 0)
@@ -209,8 +230,9 @@ public static class ActivityWording
                 "submit_findings" or "submit_finding" => "Reportando hallazgos…",
                 "report_verdicts" => "Juzgando los hallazgos existentes…",
                 "add_locations" => "Añadiendo ubicaciones…",
-                "read_signatures" => "Leyendo el fichero…",
-                _ => $"Llamando a {tool.Tool}…",
+                "read_signatures" => "Leyendo la unidad…",
+                "unit_done" => "Cerrando la pasada…",
+                _ => UnknownTool,
             };
         }
 
@@ -235,8 +257,9 @@ public static class ActivityWording
             "submit_findings" or "submit_finding" => AfterText,
             "report_verdicts" => "escribiendo los veredictos",
             "add_locations" => "escribiendo las ubicaciones",
-            "read_signatures" => "pidiendo un fichero",
-            _ => $"escribiendo la llamada a {tool.Tool}",
+            "read_signatures" => "pidiendo la unidad",
+            "unit_done" => "cerrando la pasada",
+            _ => UnknownWaiting,
         };
     }
 

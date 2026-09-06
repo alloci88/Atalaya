@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 using Xunit;
@@ -198,6 +198,95 @@ public sealed class PaletteContrastTests
             + "—#FAFAFA en claro, #202020 en oscuro— y sale de otro programa:"
             + Environment.NewLine + string.Join(Environment.NewLine, descalzos));
     }
+
+    /// <summary>
+    /// <b>Las tintas del componente de conversación salen de la paleta medida</b> (F30 §3b).
+    /// <para>
+    /// <b>De dónde viene.</b> Los separadores de pasada no se leían en tema oscuro. La causa no era
+    /// un color mal elegido: era que <b>no había color elegido</b>. El separador es un
+    /// <c>ToggleButton</c> con plantilla propia, y una plantilla propia deja fuera el estilo
+    /// implícito del control —con él, su <c>Foreground</c>—, así que el título heredaba el del
+    /// control: un valor que no sale de <c>Palette.*.xaml</c> y que por tanto no mide nadie. De paso
+    /// la tarjeta de pregunta arrastraba desde F16 dos brochas de WPF-UI
+    /// (<c>TextFillColorPrimaryBrush</c>, <c>TextFillColorSecondaryBrush</c>), que son lo mismo por
+    /// otra puerta.
+    /// </para>
+    /// <para>
+    /// <b>Por qué es de regla y por qué aquí.</b> Los pares de arriba miden combinaciones de la
+    /// paleta; una tinta que no es de la paleta no aparece en ninguna combinación y pasa el test en
+    /// verde mientras el texto es ilegible. El hueco no era el cálculo: era el inventario de lo que
+    /// se pinta. Estas plantillas son nuevas —viven en <c>Themes/</c>, no en una vista— y ninguno de
+    /// los tests de color las miraba.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Cada_tinta_de_la_conversacion_es_una_de_las_medidas()
+    {
+        string body = Component();
+        var forasteras = new List<string>();
+
+        foreach (Match m in Regex.Matches(
+            body, @"(?:Foreground|Stroke)=""\{DynamicResource ([A-Za-z0-9._]+)\}""|"
+                + @"<Setter\s+Property=""(?:Foreground|Stroke)""\s+Value=""\{DynamicResource ([A-Za-z0-9._]+)\}"""))
+        {
+            string brush = m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value;
+
+            if (!brush.StartsWith("Brush.", StringComparison.Ordinal)
+                || !MeasuredInks.Contains(brush["Brush.".Length..], StringComparer.Ordinal))
+            {
+                forasteras.Add(brush);
+            }
+        }
+
+        forasteras.Should().BeEmpty(
+            "una tinta que no está en la paleta no la mide nadie, y el texto se queda sin contraste "
+            + "sin que ningún test se entere: " + string.Join(", ", forasteras.Distinct()));
+    }
+
+    /// <summary>
+    /// Y la otra mitad del mismo defecto: <b>ningún control de la conversación deja su tinta sin
+    /// declarar</b>. Un <c>ControlTemplate</c> propio se lleva por delante el <c>Foreground</c> que
+    /// traía el estilo implícito, y todo lo que se ponga dentro —hoy el título del separador de
+    /// pasada, mañana lo que sea— hereda un color que no es de la paleta. Declararlo en el estilo es
+    /// lo que hace que el contenido no tenga que acordarse.
+    /// </summary>
+    [Fact]
+    public void Ningun_control_de_la_conversacion_deja_su_tinta_sin_declarar()
+    {
+        string body = Component();
+        var mudos = new List<string>();
+
+        foreach (Match style in Regex.Matches(body, @"<Style\b[^>]*x:Key=""([^""]+)""[^>]*>"))
+        {
+            int end = body.IndexOf("</Style>", style.Index, StringComparison.Ordinal);
+            string declared = body[style.Index..(end < 0 ? body.Length : end)];
+
+            if (declared.Contains("<ControlTemplate", StringComparison.Ordinal)
+                && !declared.Contains("Property=\"Foreground\"", StringComparison.Ordinal))
+            {
+                mudos.Add(style.Groups[1].Value);
+            }
+        }
+
+        mudos.Should().BeEmpty(
+            "una plantilla de control propia pierde el Foreground del estilo implícito y lo que va "
+            + "dentro hereda un color que no mide nadie: " + string.Join(", ", mudos));
+    }
+
+    /// <summary>Las once tintas que <see cref="Pairs"/> mide sobre las tres superficies.</summary>
+    private static readonly string[] MeasuredInks =
+    {
+        "Text", "TextMuted", "TextFaint",
+        "Primary.Ink", "Success.Ink", "Warning.Ink", "Danger.Ink",
+        "Sev.Crit", "Sev.High", "Sev.Med", "Sev.Low",
+    };
+
+    /// <summary>El componente de conversación, sin comentarios (F30 §3).</summary>
+    private static string Component()
+        => Regex.Replace(
+            File.ReadAllText(Path.Combine(
+                RepoRoot(), "src", "Atalaya.App", "Themes", "Conversation.xaml")),
+            "<!--.*?-->", string.Empty, RegexOptions.Singleline);
 
     [Theory]
     [MemberData(nameof(Pairs))]

@@ -344,10 +344,16 @@ vuelve a hablar. Mientras Atalaya prepara lo suyo no dice nada, porque ahí no s
 > antes, las dos eran la pantalla quieta. Por eso la línea «11 hallazgos nuevos» aparece al
 > **final** de ese tramo y no al principio.
 
-**Y ese tramo ya se ve.** Mientras el modelo escribe una llamada, el hilo lo cuenta: primero
+**Y ese tramo ya se ve.** Mientras el agente escribe una llamada, el hilo lo cuenta: primero
 **«Reportando hallazgos…»** y después **«Recibiendo hallazgos · 3 · Credenciales embebidas…»**, con
 el número subiendo según cada uno se completa. Cuando la herramienta se ejecuta, esa línea se
-sustituye por la definitiva («11 hallazgos nuevos»). Lo mismo con los veredictos y las ubicaciones.
+sustituye por la definitiva («11 hallazgos nuevos»). Lo mismo con lo demás: **«Juzgando los
+hallazgos existentes…»**, **«Añadiendo ubicaciones…»**, **«Leyendo la unidad…»** y **«Cerrando la
+pasada…»**.
+
+> **Nunca por su nombre interno.** Lo que el hilo enseña es lo que la herramienta HACE, no cómo se
+> llama por dentro. Los identificadores —`submit_findings`, `unit_done`— viven en el anexo técnico
+> del informe, que es donde sirven para algo.
 
 > **No dice «3 de 11», y es a propósito.** Lo que llega es una lista que se está escribiendo:
 > cuántos va a tener no se sabe hasta que cierra. Se cuenta lo que hay; poner un total sería

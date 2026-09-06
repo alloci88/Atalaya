@@ -1,4 +1,4 @@
-<UserControl
+﻿<UserControl
     x:Class="Atalaya.App.Views.SessionView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -297,9 +297,19 @@
                                                                     </Grid.ColumnDefinitions>
                                                                     <Path Grid.Column="0" Style="{StaticResource Conversation.Section.Chevron}"
                                                                           Margin="{StaticResource Pad.XS.Right}" />
+                                                                    <!-- EL TÍTULO DECLARA SU TINTA (F30 §3b).
+                                                                         Sin ella heredaba la del
+                                                                         `ToggleButton`, que con
+                                                                         plantilla propia no es de la
+                                                                         paleta: en tema oscuro el
+                                                                         separador no se leía.
+                                                                         `Brush.Text` sobre el fondo del
+                                                                         panel y sobre el realce del
+                                                                         ratón, los dos medidos. -->
                                                                     <TextBlock Grid.Column="1" Text="{Binding SectionTitle}"
                                                                                FontSize="{StaticResource FontSize.Body}"
                                                                                FontWeight="SemiBold"
+                                                                               Foreground="{DynamicResource Brush.Text}"
                                                                                VerticalAlignment="Center" />
                                                                     <ItemsControl Grid.Column="2" ItemsSource="{Binding Chips}"
                                                                                   VerticalAlignment="Center"

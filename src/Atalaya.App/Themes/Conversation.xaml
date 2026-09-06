@@ -255,8 +255,11 @@
                 Style="{StaticResource Notice.Ask}">
             <StackPanel>
                 <TextBlock Text="{Binding Header}" Style="{StaticResource Notice.Ask.Header}" />
+                <!-- La tinta de la casa y no la de WPF-UI (F30 §3b): `Brush.Text` sobre el
+                     `Warning.Soft` de la tarjeta y sobre el `Surface2` al que pasa una vez
+                     contestada; los dos pares están medidos. -->
                 <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Small}"
-                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                           Foreground="{DynamicResource Brush.Text}" />
 
                 <!-- Opciones cerradas -->
                 <ItemsControl ItemsSource="{Binding Choices}" Margin="{StaticResource Pad.S.Top}"
@@ -319,7 +322,7 @@
 
                 <!-- Ya contestada -->
                 <TextBlock Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Foreground="{DynamicResource Brush.TextMuted}"
                            Visibility="{Binding IsAnswered, Converter={StaticResource BoolToVisibility}}">
                     <Run Text="Tu respuesta:" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding Answer, Mode=OneWay}" />
                 </TextBlock>
@@ -344,6 +347,14 @@
          que servía: plegar. -->
     <Style x:Key="Conversation.Section" TargetType="ToggleButton">
         <Setter Property="Background" Value="Transparent" />
+        <!-- LA TINTA SE DECLARA, y es la primera línea del estilo por lo que costó (F30 §3b).
+             Un `ControlTemplate` propio deja fuera el estilo implícito del control, así que el
+             `Foreground` que traía se pierde y lo que va dentro del separador —el título de la
+             pasada, que no declaraba el suyo— hereda el del control: un color que no sale de la
+             paleta y que en tema oscuro no se leía. `Brush.Text` sobre `Brush.Bg` (el panel) y
+             sobre `Brush.Surface2` (el realce del ratón) son los dos pares que
+             `PaletteContrastTests` mide. -->
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Focusable" Value="True" />

@@ -365,6 +365,90 @@ public sealed class LiveNarrationTests : IDisposable
                 "el tramo que la traza midió en 22 s de los 62 de una pasada tiene nombre propio");
     }
 
+    /// <summary>
+    /// <b>NINGUNA FRASE DEL HILO NI DEL PIE NOMBRA UNA HERRAMIENTA POR SU NOMBRE INTERNO</b>
+    /// (F30 §3c).
+    /// <para>
+    /// <b>El parte.</b> El hilo decía «Llamando a unit_done…». No era una herramienta olvidada: era
+    /// la única de las seis sin frase, y el caso por defecto escribía el identificador tal cual. Un
+    /// nombre con guion bajo no es una frase — es la aplicación enseñando su cocina en la pantalla
+    /// donde el usuario mira mientras trabaja. Los identificadores viven en el anexo técnico del
+    /// informe, que es donde sirven para algo.
+    /// </para>
+    /// <para>
+    /// <b>Por qué se pregunta por la LISTA DE HERRAMIENTAS y no por las cinco de siempre.</b>
+    /// Porque lo que se rompe en silencio es <b>añadir la séptima</b>: se declara en
+    /// <c>AuditorTools</c>, el auditor la llama, y el hilo la anuncia por su identificador sin que
+    /// falle nada. Preguntándole a la lista de verdad, una herramienta nueva sin frase pone esto en
+    /// rojo el día que se declara y no el día que alguien mira una captura.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Ninguna_frase_del_hilo_nombra_una_herramienta_por_su_nombre_interno()
+    {
+        // `ForAudit` solo guarda el toolbox dentro de los manejadores, y aquí no se invoca ninguno:
+        // lo que se le pide es el inventario de herramientas, no ejecutarlas.
+        IReadOnlyList<Atalaya.ClaudeCode.McpTool> tools =
+            Atalaya.ClaudeCode.AuditorTools.ForAudit(null!);
+
+        tools.Should().NotBeEmpty("sin herramientas esto no estaría mirando nada");
+
+        // La traza cruda tal y como `SessionToolbox` la escribe, con todos los campos que las
+        // frases leen: así lo que se mide es la frase de verdad y no una inventada aquí.
+        string Trace(string tool) => tool switch
+        {
+            "add_locations" => "add_locations · id='HAL-0412' locs=2",
+            "submit_finding" => "submit_finding · title='credenciales embebidas' locs=1",
+            "read_signatures" => "read_signatures · path='src/A.cs'",
+            "unit_done" => "unit_done · unit='src/A.cs' summary='hecho'",
+            _ => $"{tool} · items=3",
+        };
+
+        foreach (Atalaya.ClaudeCode.McpTool tool in tools)
+        {
+            var frases = new List<(string Donde, string Texto)>
+            {
+                ("el hilo, escribiéndose", ActivityWording.Writing(
+                    new ToolStream(ToolStreamPhase.Started, tool.Name))),
+                ("el hilo, recibiendo", ActivityWording.Writing(
+                    new ToolStream(ToolStreamPhase.Input, tool.Name, 3, "Credenciales embebidas"))),
+                ("el pie", ActivityWording.WaitingFor(
+                    new ToolStream(ToolStreamPhase.Started, tool.Name))),
+                ("el hilo, ejecutada", ActivityWording.Describe(Trace(tool.Name))),
+                ("el pie, tras ejecutarla", ActivityWording.After(
+                    new ActivityNote(UnitPath, 1, ActivityNoteKind.Tool, Trace(tool.Name)))),
+            };
+
+            foreach ((string donde, string texto) in frases)
+            {
+                texto.Should().NotBeNullOrWhiteSpace(
+                    "«{0}» tiene que poder decirse en {1}", tool.Name, donde);
+                texto.Should().NotContain(tool.Name,
+                    "en {0}, «{1}» sale por su nombre interno en vez de por lo que hace: «{2}»",
+                    donde, tool.Name, texto);
+
+                // Y no vale con no nombrarla: la red de la herramienta desconocida dice «llamando a
+                // una herramienta», que para una de las seis es no decir nada. Cada una tiene la
+                // suya, y es esta mitad la que lo exige — sin ella, borrar un caso del switch
+                // pasaría en verde con una frase vacía de contenido.
+                texto.Should().NotBe(ActivityWording.UnknownTool,
+                    "«{0}» se ha quedado con la frase de la herramienta que no existe, en {1}",
+                    tool.Name, donde);
+                texto.Should().NotBe(ActivityWording.UnknownWaiting,
+                    "«{0}» se ha quedado con la frase de la herramienta que no existe, en {1}",
+                    tool.Name, donde);
+            }
+        }
+
+        // Y la que todavía no existe tampoco se anuncia por su identificador: el caso por defecto
+        // es el que escribía «Llamando a unit_done…», y es el que tenía que dejar de nombrarlas.
+        var nueva = new ToolStream(ToolStreamPhase.Started, "una_herramienta_que_no_existe");
+        ActivityWording.Writing(nueva).Should().Be(ActivityWording.UnknownTool);
+        ActivityWording.WaitingFor(nueva).Should().Be(ActivityWording.UnknownWaiting);
+        ActivityWording.UnknownTool.Should().NotContain("_", "ni la red nombra un identificador");
+        ActivityWording.UnknownWaiting.Should().NotContain("_");
+    }
+
     /// <summary>Todas las líneas de actividad narradas en la sesión, de todas las unidades y pasadas.</summary>
     private static List<ActivityEntry> Narration(LiveSessionService live)
         => live.Units.SelectMany(u => u.Passes).SelectMany(p => p.Entries).Where(e => e.IsEvent).ToList();
