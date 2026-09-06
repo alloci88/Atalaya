@@ -91,6 +91,19 @@ public static class ActivityWording
     /// en algo que se entiende.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// <b>Lo que viene después del texto</b> (F30 §2d): el modelo escribiendo el reporte.
+    /// <para>
+    /// Es una <b>inferencia</b>, y se dice como tal aquí para que nadie la confunda con una medida:
+    /// nadie ha visto llegar esos tokens —Copilot no publica los argumentos de sus function tools
+    /// (§2b)—. Lo que la sostiene es D-1014: la duración de una pasada es su salida de tokens
+    /// (r = 0,985), y el tramo entre el último texto y la ejecución de la herramienta es
+    /// exactamente donde caben los ~246 tokens por hallazgo que hay que escribir. Decirlo es más
+    /// honrado que un «esperando» a secas, que se lee como un cuelgue.
+    /// </para>
+    /// </summary>
+    public const string AfterText = "escribiendo el reporte";
+
     public static string After(ActivityNote note)
     {
         if (note.Kind == ActivityNoteKind.Handover)

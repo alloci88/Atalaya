@@ -759,6 +759,7 @@ public sealed partial class LiveSessionService : ObservableObject
     /// </summary>
     private void OnActivityNoted(ActivityNote note) => OnUi(() =>
     {
+        FlushText();
         // F30 §2 — LA LÍNEA DE «SE ESTÁ ESCRIBIENDO» SE REESCRIBE, no se apila. El modelo emite un
         // trozo por elemento completado, así que apilarlas dejaría once líneas casi iguales donde
         // hay un solo gesto. Se sustituye el texto de la que ya hay, y la ejecución la releva por
@@ -860,6 +861,7 @@ public sealed partial class LiveSessionService : ObservableObject
 
     private void OnPassStarted(string path, int pass) => OnUi(() =>
     {
+        FlushText();
         Touch();
         UnitProgress? unit = Units.FirstOrDefault(u => u.Path == path);
         if (unit is null)
@@ -883,6 +885,7 @@ public sealed partial class LiveSessionService : ObservableObject
 
     private void OnPassFinished(string path, UnitPassRecord record) => OnUi(() =>
     {
+        FlushText();
         // La pasada cerró: no queda petición en vuelo (F30 §1c). Lo que venga hasta la entrega
         // siguiente es Atalaya, y son 16 ms.
         TurnLanded();
@@ -993,6 +996,7 @@ public sealed partial class LiveSessionService : ObservableObject
 
     private void OnFinding(Finding finding, string kind) => OnUi(() =>
     {
+        FlushText();
         Touch();
         string title = finding.Title;
         string alias = finding.DisplayId ?? finding.Id.ToString();
@@ -1049,27 +1053,101 @@ public sealed partial class LiveSessionService : ObservableObject
     /// Texto del agente. Se acumula en la última entrada de texto de la pasada en curso: los
     /// deltas llegan en trozos de pocos caracteres y una fila por trozo haría inmanejable la lista.
     /// </summary>
-    private void OnText(string chunk) => OnUi(() =>
+    // -------------------------------------------------- F30 §2d: el texto no bloquea el flujo
+
+    private readonly object _textGate = new();
+
+    private readonly System.Text.StringBuilder _pendingText = new();
+
+    private bool _textFlushQueued;
+
+    /// <summary>
+    /// <b>El texto del modelo, SIN bloquear el hilo que lo lee</b> (F30 §2d).
+    /// <para>
+    /// <b>La regresión que cierra.</b> Hasta la entrega 1, Claude Code entregaba su texto UNA vez
+    /// por mensaje —el evento <c>assistant</c>, ya cerrado—. Al empezar a leer <c>text_delta</c>
+    /// pasó a entregarlo <b>token a token</b>, y esto hacía un <c>Dispatcher.Invoke</c>
+    /// <b>síncrono</b> por cada uno: a los 64 tokens/s medidos, sesenta y cuatro idas y vueltas al
+    /// hilo de interfaz por segundo, cada una tocando una propiedad enlazada y disparando su
+    /// maquetación. El bucle de lectura es el MISMO que tiene que consumir <c>message_delta</c>
+    /// —las cuentas de F21— y <c>result</c> —el fin del turno—, así que quedarse detrás de la
+    /// interfaz es quedarse sin cerrar el turno. La ventana respondía (el hilo de interfaz estaba
+    /// bien); lo que no avanzaba era la sesión.
+    /// </para>
+    /// <para>
+    /// <b>Lo que se hace.</b> El trozo se acumula en el hilo que lee —sin marshalear— y se vuelca
+    /// de una vez, en diferido. Si ya hay un volcado pendiente no se encola otro: lo que llegue
+    /// mientras tanto viaja en el mismo. El orden se conserva porque el volcado es uno y escribe lo
+    /// acumulado en el orden en que llegó, y porque cualquier otro evento <b>drena primero</b> lo
+    /// que haya pendiente antes de escribir lo suyo.
+    /// </para>
+    /// </summary>
+    private void OnText(string chunk)
     {
         if (string.IsNullOrEmpty(chunk))
         {
             return;
         }
 
-        Touch();
+        bool encolar;
+        lock (_textGate)
+        {
+            _pendingText.Append(chunk);
+            encolar = !_textFlushQueued;
+            _textFlushQueued = true;
+        }
+
+        // Señal de vida sin pasar por la interfaz: es un campo, no una escritura de pantalla.
+        //
+        // F30 §2d — y deja apuntado que lo último fue TEXTO. Con eso el pie puede nombrar el
+        // tramo que viene después: el silencio que sigue al último delta de texto es, medido en
+        // D-1014, el modelo escribiendo los argumentos de la herramienta. Copilot no publica esos
+        // argumentos (§2b), así que ahí no hay nada que contar — pero sí se puede decir qué está
+        // pasando, que es lo que hace falta para no creer que se ha caído.
+        Touch(ActivityWording.AfterText);
+
+        if (encolar)
+        {
+            PostUi(FlushText);
+        }
+    }
+
+    /// <summary>
+    /// Vuelca de una vez lo que el modelo lleva escrito. Corre SIEMPRE en el hilo de interfaz: lo
+    /// llama el volcado diferido, y lo llaman los demás eventos antes de escribir lo suyo para que
+    /// el hilo no se desordene.
+    /// </summary>
+    private void FlushText()
+    {
+        string text;
+        lock (_textGate)
+        {
+            _textFlushQueued = false;
+            if (_pendingText.Length == 0)
+            {
+                return;
+            }
+
+            text = _pendingText.ToString();
+            _pendingText.Clear();
+        }
 
         if (_currentText is null)
         {
-            _currentText = ActivityEntry.Text_(chunk);
+            _currentText = ActivityEntry.Text_(text);
             Add(_currentPass, _currentText);
-            return;
+        }
+        else
+        {
+            _currentText.Text += text;
         }
 
-        _currentText.Text += chunk;
-    });
+        Changed?.Invoke();
+    }
 
     private void OnUsage(LiveUsage u) => OnUi(() =>
     {
+        FlushText();
         Touch();
         InputTokens = u.InputTokens;
         OutputTokens = u.OutputTokens;
@@ -1230,6 +1308,25 @@ public sealed partial class LiveSessionService : ObservableObject
             // F9.2 §2: cerrar no maquilla. Si el codigo se movio mientras duraba el ciclo, la
             // pantalla de cierre lo dice — es lo que el ciclo siguiente hereda como pendiente.
             + (result.CycleClosed && result.CycleAging.Sentence is { } aged ? " " + aged : "");
+    }
+
+    /// <summary>
+    /// Como <see cref="OnUi"/> pero <b>sin esperar</b> (F30 §2d): se deja puesto y se vuelve. Es lo
+    /// que necesita el texto, que llega token a token desde el bucle que además tiene que consumir
+    /// las cuentas y el fin del turno — bloquearlo por cada token es lo que dejaba la sesión sin
+    /// cerrar.
+    /// </summary>
+    private static void PostUi(Action action)
+    {
+        Dispatcher? dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            action();
+        }
+        else
+        {
+            dispatcher.BeginInvoke(action);
+        }
     }
 
     /// <summary>Los eventos del coordinador llegan de un hilo de fondo; hay que marshalear.</summary>
