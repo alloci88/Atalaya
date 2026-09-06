@@ -16269,3 +16269,36 @@ deba ir en el mismo commit que todo lo demás, y merece su verificación aparte.
 con §0(c) —no hay nada que sacar del hilo de interfaz— y lo que queda es progreso sobre los pasos
 que de verdad tardan, que no son el escaneo. Lo de esta parte se sostiene solo y se puede abrir en
 el `dist` sin lo demás.
+
+### D-1013 — El hueco entre pasadas es del modelo en un 99,9 %, y ahora se ve quién lo ocupa
+
+**Lo medido, primero.** El hueco de varios segundos entre el cierre de una pasada y el primer evento
+de la siguiente tiene dos tramos, y no se parecen en nada. **(a) El tramo de Atalaya**: entre pasada
+y pasada la aplicación hace exactamente dos cosas —releer los hallazgos vivos de la unidad
+(`ExistingForUnit`, que lista TODOS los de la aplicación y filtra) y recomponer el prompt—. Medido
+sobre una copia del hub real del usuario (N-2), **149 hallazgos, la unidad más cargada con 29
+vivos**: leer y filtrar **14 ms**, escribir 11 hallazgos **3 ms** (0,2 ms cada uno) → **16 ms en
+total**. Y no hay git por medio: el `CommitAndPush` es **una vez por sesión**, al final, no entre
+pasadas. **(b) El tramo del modelo**: de los `usageBreakdown` de las sesiones reales —**26 unidades,
+92 pasadas, 127 llamadas, 1.559 s**— salen **16,9 s por pasada** y **12,3 s por llamada**. O sea que
+de un hueco de diecisiete segundos, Atalaya ocupa dieciséis milésimas: el **99,9 %** es el modelo.
+**Lo que se hace con eso.** Dos hitos en el hilo, cada uno con su hora: «Turno preparado · N
+hallazgo(s) vivo(s) en la unidad · 16 ms» —el tramo de Atalaya, ya terminado y **con su medida
+real**, cronometrada en la propia pasada y no estimada— y «Pasada N · enviada al modelo», que es la
+entrega. Con las dos horas delante, el silencio deja de ser un silencio y pasa a tener dueño.
+**Y el pie ancla la espera en el envío**: «esperando al modelo» solo existe con el turno EN EL AIRE
+—desde la entrega hasta la primera señal—, así que mientras Atalaya prepara el suyo no dice que se
+espera a nadie. La entrega tiene clase propia (`ActivityNoteKind.Handover`) justamente por eso: no es
+un hito más, es lo que mueve el reloj. **Lo que NO se hace, y por qué.** El encargo pedía el par
+«Guardando 11 hallazgos en el hub…» → «Guardados». No entra como par: la operación dura **3 ms**, y
+un estado en curso que se resuelve en tres milésimas no se llega a leer nunca y, peor, afirma que
+Atalaya está tardando justo donde la medida dice que no. El tramo se enseña **terminado y con su
+número**, que informa de lo mismo sin mentir en la dirección fácil; y lo que se guarda ya tenía su
+línea con su hora desde §1 («11 hallazgos nuevos»), así que entre esa hora y la del turno preparado
+se lee el tramo entero. **Ni un token más**: no se toca el orden de nada, no se añade una llamada y
+el cronómetro mide un trabajo que ya se hacía. **Cobertura (N-5, N-7): dos tests de regla y un
+inventario ampliado.** El del **orden** —preparar va antes de entregar, y entregar antes de que
+llegue nada del modelo— es lo único que puede romperse en silencio: con la entrega emitida tarde, el
+pie anclaría la espera en el sitio equivocado y diría que se espera a un modelo que ya está
+contestando. El segundo fija que «esperando al modelo» **solo** cuenta con el turno en el aire. Y el
+inventario de glifos suma el de la entrega (→).

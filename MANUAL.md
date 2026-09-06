@@ -298,11 +298,22 @@ y los **hitos** de Atalaya, como una reanudación fallida o un corte que no se p
 > llama. Enseñarlas no cuesta ni una llamada ni un token: son cosas que Atalaya ya apuntaba y
 > guardaba para el informe.
 
-**«Esperando al modelo · 42 s».** Cuando pasan más de **20 segundos** sin que llegue nada, el pie
-lo dice con el reloj subiendo, y a los **90 segundos** lo pone en negrita. No es un error ni un
-aviso: es la diferencia entre *el modelo está pensando* y *esto se ha caído*, que hasta ahora se
-veían exactamente igual —la pantalla parada—. Quien decide cuándo se corta de verdad sigue siendo
-el tope de tokens de Ajustes.
+**El hueco entre pasadas, con dueño.** Al cerrar una pasada verás dos líneas seguidas: **«Turno
+preparado · N hallazgos vivos en la unidad · 16 ms»** —lo que hace Atalaya: releer los hallazgos de
+la unidad y recomponer el prompt— y **«Pasada 3 · enviada al modelo»**. A partir de la segunda, el
+tiempo que pase es del modelo.
+
+> **Y los números no dejan lugar a dudas.** Medido sobre el hub real: Atalaya tarda **16 ms** entre
+> una pasada y la siguiente, y una pasada dura **17 segundos** de media. El **99,9 %** del silencio
+> es el modelo pensando. Las dos líneas están para que eso se vea sin tener que creérselo.
+
+**«Esperando al modelo · 42 s».** Con el turno ya entregado, si pasan más de **20 segundos** sin
+que llegue nada el pie lo dice con el reloj subiendo, y a los **90 segundos** lo pone en negrita. La
+cuenta **empieza en el envío**, no en el último evento: mientras Atalaya prepara lo suyo no se está
+esperando a nadie, y echarle al modelo un tiempo que no es suyo sería mentir en la dirección fácil.
+No es un error ni un aviso: es la diferencia entre *el modelo está pensando* y *esto se ha caído*,
+que hasta ahora se veían exactamente igual —la pantalla parada—. Quien decide cuándo se corta de
+verdad sigue siendo el tope de tokens de Ajustes.
 
 Cada unidad se audita en **pasadas**, y cada pasada dice lo que hizo: **nuevos ·
 confirmados · disputados**. Una pasada que no aporta hallazgos nuevos se llama **seca**, y
