@@ -9,7 +9,7 @@ namespace Atalaya.App.Views;
 /// qué propone el catálogo, qué presupuesto consume lo activado, activar, ordenar, previsualizar y
 /// añadir a mano— vive en <see cref="DirectivesViewModel"/>; aquí solo se enlaza y se cierra.
 /// </summary>
-public partial class DirectivesDialog : FluentWindow
+public partial class DirectivesDialog : AtalayaDialog
 {
     public DirectivesDialog(DirectivesViewModel viewModel)
     {

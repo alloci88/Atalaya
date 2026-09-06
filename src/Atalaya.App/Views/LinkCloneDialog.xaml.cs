@@ -9,7 +9,7 @@ namespace Atalaya.App.Views;
 /// validación del remoto, el progreso del clonado y la oferta de re-escanear— vive en
 /// <see cref="LinkCloneViewModel"/>; aquí solo se enlaza y se cierra.
 /// </summary>
-public partial class LinkCloneDialog : FluentWindow
+public partial class LinkCloneDialog : AtalayaDialog
 {
     public LinkCloneDialog(LinkCloneViewModel viewModel)
     {

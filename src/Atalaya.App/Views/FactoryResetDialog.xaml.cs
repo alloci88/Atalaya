@@ -9,7 +9,7 @@ namespace Atalaya.App.Views;
 /// rojo— vive en <see cref="FactoryResetConfirmation"/>; aquí solo se enlaza y se devuelve el sí
 /// o el no.
 /// </summary>
-public partial class FactoryResetDialog : FluentWindow
+public partial class FactoryResetDialog : AtalayaDialog
 {
     public FactoryResetDialog(FactoryResetConfirmation confirmation)
     {

@@ -194,18 +194,14 @@
                                 ToolTip="Ver cuánto suprime cada patrón, afinar su ejemplar, des-silenciarlo o cambiar su caducidad." />
                     </Grid>
 
-                    <Grid Margin="{StaticResource Pad.XXS.Top}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource PanelLine}" VerticalAlignment="Center"
-                                   ToolTip="{Binding DirectivesTooltip}"><Run Text="Directivas: " /><Run Text="{Binding ActiveDirectives, Mode=OneWay}" FontWeight="Bold" /></TextBlock>
-                        <Button Grid.Column="1" Content="Gestionar" Style="{StaticResource Button.Link}"
-                                VerticalAlignment="Center"
-                                Command="{Binding ManageDirectivesCommand}"
-                                ToolTip="Activar los ficheros de convenciones del proyecto, decidir a qué flujo aplica cada uno, ordenarlos y ver cuánto presupuesto consumen." />
-                    </Grid>
+                    <!-- DIRECTIVAS, OCULTO (R9). La línea «Directivas: 0 · Gestionar» sale del
+                         resumen y el diálogo deja de ser alcanzable desde la interfaz: la capacidad
+                         no se usa por ahora y una fila que siempre dice cero es una fila que enseña
+                         a no mirar el panel. NO se borra nada — el servicio, el diálogo, su
+                         view-model y sus tests siguen enteros, y las directivas que ya estén
+                         registradas en el hub siguen viajando en los prompts—: lo único que cambia
+                         es que no hay puerta. Volver a abrirla es devolver estas nueve líneas.
+                         Ver D-1008. -->
 
                     <!-- F13: el umbral de tamaño es política de la aplicación y se edita aquí,
                          junto a lo demás que gobierna qué se reporta. En Ajustes no está: aquello

@@ -9,7 +9,7 @@ namespace Atalaya.App.Views;
 /// evidencia, y la resolución por código eliminado— vive en <see cref="DeletedUnitsViewModel"/>;
 /// aquí solo se enlaza y se cierra.
 /// </summary>
-public partial class DeletedUnitsDialog : FluentWindow
+public partial class DeletedUnitsDialog : AtalayaDialog
 {
     public DeletedUnitsDialog(DeletedUnitsViewModel viewModel)
     {

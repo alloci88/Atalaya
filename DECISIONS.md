@@ -15996,3 +15996,48 @@ palabra por palabra, que se actualiza a la nueva sin cambiar lo que protege. La 
 va en el parte, renderizada fuera de pantalla con un proyecto de consola del scratchpad: mide, coloca
 y rasteriza el árbol sin abrir ninguna ventana, que es lo que permite enseñar una pantalla sin
 secuestrar el ratón de nadie (N-8).
+
+---
+
+## R9 — Los diálogos, por fin, y Directivas se oculta
+
+### D-1008 — Un estilo no alcanza al marco: los diálogos pasan a heredar de una ventana propia
+
+Un párrafo para la fase (N-7). **Por qué hicieron falta cuatro rondas, dicho entero**: R5 les puso un
+estilo con clave; R7 descubrió que sustituía al implícito de la librería —plantilla incluida— y lo
+hizo derivar; R8 aplicó los estilos de texto que R5 había declarado y nunca usado. Y seguían sin
+verse del sistema porque **lo que quedaba fuera del alcance de un estilo era el MARCO**: la barra de
+título de Windows, con su título pequeño encima del título del cuerpo —dos títulos— y su gris
+alrededor. Un estilo solo llega al árbol visual del contenido; la barra de título no está ahí. Y mi
+banco de capturas tampoco lo veía, porque rasterizaba `Window.Content`: por eso las tres veces di por
+bueno lo que el usuario veía mal. **Lo que se hace ahora**: los diez diálogos heredan de
+`AtalayaDialog : FluentWindow`, que fija fondo, tinta y tipografía **en el constructor** —por
+referencia dinámica, así que siguen al tema— y apaga el telón y extiende el contenido sobre la barra
+de título; y una cabecera propia (`DialogHeader`) dibuja el título a 21 y el cerrar con el icono de
+la casa, con arrastre desde ella porque sin barra de Windows no queda de qué tirar. El estilo con
+clave `Dialog` **se retira**: ya no lo usa nadie, y dejarlo huérfano era invitar al siguiente diálogo
+a repetir el viaje. De paso se quita el título duplicado del cuerpo, que al aparecer la cabecera
+pasó a decir dos veces lo mismo. **Lo que NO se hace, y por qué**: fusionar los diccionarios de tema
+en los `Resources` de cada diálogo. No hace falta —un `DynamicResource` sin suerte en la ventana sube
+a `Application.Resources`, y por eso `MainWindow` tampoco los fusiona— y haría daño: copiar la paleta
+la congelaría en el tema que hubiera al abrir, y `ThemeService` sustituye la del nivel de aplicación.
+Que la resolución funciona no se argumenta, **se comprueba**: `--selfcheck` exige ahora a cada diálogo
+resolver `Brush.Bg` y `FontSize.Body` **desde su propio árbol**, y falla nombrando el diálogo si
+alguno deja de verlos. Ésa es la red que habría cantado las tres veces. **El inventario de ventanas**,
+recorrido entero: once tipos, y ninguno fuera —`MainWindow` (la principal, que no es un diálogo),
+`AtalayaDialog` (la base, abstracta a propósito para que el recorrido no la instancie) y los diez
+diálogos: `AuditLaunchDialog`, `CycleConfigDialog`, `DeleteAppDialog`, `DeletedUnitsDialog`,
+`DirectivesDialog`, `FactoryResetDialog`, `LinkCloneDialog`, `PatternSilencesDialog`,
+`ReconcileCostsDialog`, `ThresholdsDialog`. «Configurar ciclo» y «el diálogo del alta» son **la
+misma clase**: el alta abre `CycleConfigFlow.AskAsync(..., CycleConfigReason.Alta)`. Quedan fuera de
+esta ventana los `MessageBox` nativos de `App` y `MainWindow` —el error fatal y las dos
+confirmaciones de cierre—, que son diálogos de Windows y ninguna clase base puede vestir; se anota
+para que nadie los busque aquí. **Cuenta** (§2): el segundo grupo respira como el primero — 24 por
+encima hasta la última fila de GitHub y 16 por debajo, ocho más que el primero porque su rótulo es
+una línea larga y con el mismo hueco se leía pegado a la fila que abre. **Directivas, oculto** (§5):
+la línea «Directivas: N · Gestionar» sale del resumen del ciclo y el diálogo deja de ser alcanzable
+desde la interfaz; el panel se queda con patrones silenciados y umbrales, sin hueco. **No se borra
+nada**: el servicio, el diálogo, su view-model y sus tests siguen enteros, y las directivas ya
+registradas en el hub siguen viajando en los prompts. Lo único que cambia es que no hay puerta —la
+capacidad no se usa por ahora y una fila que siempre dice cero enseña a no mirar el panel—, y volver
+a abrirla es devolver nueve líneas de XAML.

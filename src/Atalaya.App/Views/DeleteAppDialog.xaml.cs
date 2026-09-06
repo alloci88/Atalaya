@@ -9,7 +9,7 @@ namespace Atalaya.App.Views;
 /// botón rojo— vive en <see cref="DeleteAppConfirmation"/>; aquí solo se enlaza y se devuelve el
 /// sí o el no.
 /// </summary>
-public partial class DeleteAppDialog : FluentWindow
+public partial class DeleteAppDialog : AtalayaDialog
 {
     public DeleteAppDialog(DeleteAppConfirmation confirmation)
     {

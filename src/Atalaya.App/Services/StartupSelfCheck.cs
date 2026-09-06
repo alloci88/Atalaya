@@ -275,6 +275,22 @@ public static class StartupSelfCheck
             window.Measure(size);
             window.Arrange(new System.Windows.Rect(new System.Windows.Point(0, 0), size));
             window.UpdateLayout();
+
+            // Y QUE EL TEMA LLEGA DENTRO (R9). Medir prueba que el árbol se construye; esto prueba
+            // que las claves de la casa se resuelven DESDE la ventana del diálogo, que es la
+            // pregunta que las tres rondas anteriores dejaron sin contestar. Si algún día un
+            // diálogo dejara de ver la paleta —por un `Resources` propio que la tape, por abrirse
+            // fuera del árbol de la aplicación—, esto se pone rojo antes de que nadie lo abra.
+            foreach (string clave in new[] { "Brush.Bg", "FontSize.Body" })
+            {
+                if (window.TryFindResource(clave) is null)
+                {
+                    throw new InvalidOperationException(
+                        $"{type.Name} no resuelve «{clave}» desde su propio árbol: el diálogo no ve "
+                        + "el tema de la aplicación y se pintará con los colores de fábrica.");
+                }
+            }
+
             painted.Add(type.Name);
         }
 

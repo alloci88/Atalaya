@@ -9,7 +9,7 @@ namespace Atalaya.App.Views;
 /// dice cada estado, cuánto trabaja cada patrón, editar el ejemplar, des-silenciar y cambiar
 /// caducidad— vive en <see cref="PatternSilencesViewModel"/>; aquí solo se enlaza y se cierra.
 /// </summary>
-public partial class PatternSilencesDialog : FluentWindow
+public partial class PatternSilencesDialog : AtalayaDialog
 {
     public PatternSilencesDialog(PatternSilencesViewModel viewModel)
     {

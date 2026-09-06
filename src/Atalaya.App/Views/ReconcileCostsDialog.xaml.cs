@@ -9,7 +9,7 @@ namespace Atalaya.App.Views;
 /// coste, qué se puede cerrar y qué se escribe— vive en <see cref="ReconcileCostsViewModel"/> y en
 /// <c>CostReconciliationService</c>; aquí solo se enlaza y se cierra.
 /// </summary>
-public partial class ReconcileCostsDialog : FluentWindow
+public partial class ReconcileCostsDialog : AtalayaDialog
 {
     public ReconcileCostsDialog(ReconcileCostsViewModel viewModel)
     {

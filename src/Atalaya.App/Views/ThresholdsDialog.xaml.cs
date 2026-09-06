@@ -9,7 +9,7 @@ namespace Atalaya.App.Views;
 /// publicar— vive en <see cref="ThresholdsViewModel"/> y en <c>ThresholdPolicyService</c>; aquí
 /// solo se enlaza y se cierra.
 /// </summary>
-public partial class ThresholdsDialog : FluentWindow
+public partial class ThresholdsDialog : AtalayaDialog
 {
     public ThresholdsDialog(ThresholdsViewModel viewModel)
     {

@@ -1249,54 +1249,23 @@
         </Setter>
     </Style>
 
-    <!-- ================================================================ UN DIÁLOGO (R5 §6, R6 §1)
+    <!-- ================================================================ UN DIÁLOGO
 
-         F27 les puso fondo y primario y ahí se quedó: por dentro seguían siendo ventanas de
-         fábrica —el título de la barra a 13, las ayudas a 13, «Cerrar» sin estilo, y una franja
-         negra de Windows encima del crema porque `FluentWindow` pinta su propio telón—. Diez
-         diálogos, diez maneras. Esto es la única, y el próximo diálogo también la lleva: que es la
-         mitad del encargo.
+         AQUÍ VIVÍA EL ESTILO `Dialog`, y su historia entera es el argumento de por qué ya no está.
+         R5 se lo puso a los diez diálogos con clave y sin `BasedOn`, y eso sustituía al estilo
+         implícito de la librería —plantilla incluida—: la ventana salía en blanco y se cerraba al
+         mostrarse (R7). R7 le dio el `BasedOn` y lo dejó vivo; R8 aplicó por fin los estilos de
+         texto que R5 había declarado sin usar. Y seguía sin verse del sistema, porque lo que
+         ninguna de las tres podía tocar era el MARCO: la barra de título de Windows con su título
+         pequeño encima del del cuerpo, y su gris alrededor.
 
-         · · ·
-
-         Y ÉSTA FUE LA CAUSA DEL CIERRE (R6 §1). Tal y como R5 lo dejó, este estilo no derivaba de
-         nada: su `BasedOn` era null. WPF-UI trae un estilo IMPLÍCITO para `ui:FluentWindow`
-         —comprobado: la clave `typeof(FluentWindow)` está en los diccionarios fusionados— y un
-         estilo con clave que no derive de él lo SUSTITUYE entero, plantilla incluida. La ventana se
-         quedaba sin el `ControlTemplate` de la librería, y de ahí que el diálogo apareciera en
-         blanco; al mostrarse, WPF vuelve a resolver el estilo dentro de la creación de la ventana
-         —`Window.Show` → `CreateSourceWindow` → `SetupInitialState` →
-         `PresentationSource.RootChanged` → `OnInitialized` → `UpdateStyleProperty` →
-         `StyleHelper.DoStyleInvalidations` → `ApplyStyleOrTemplateValue`— y cae sobre
-         `Window.CoerceAllowsTransparency`, que a esas alturas ya no puede cambiar:
-
-             System.InvalidOperationException: No se puede cambiar AllowsTransparency después de
-             mostrarse un elemento Window o de haber llamado a WindowInteropHelper.EnsureHandle.
-
-         En el hilo de interfaz eso no lo para nadie, y la aplicación se cierra.
-
-         El arreglo es UNO y va aquí, no diálogo a diálogo: **derivar del implícito de la librería**
-         en vez de sustituirlo. La ventana conserva su plantilla, su chrome y sus valores, y lo
-         nuestro solo añade fondo, tinta y tipografía. Lo vigila `DialogStyleTests`.
-
-         Y se van dos setters que no pueden vivir en un estilo de ventana: `WindowBackdropType` y
-         `ExtendsContentIntoTitleBar` son propiedades de WPF-UI cuyo manejador toca el HANDLE, y
-         desde un estilo se aplican tarde —dentro de la creación—, que es justo el momento en que
-         tocarlo revienta. Las dos se declaran en la etiqueta de cada diálogo, donde se aplican a
-         tiempo. La franja oscura no vuelve: el telón queda detrás del fondo opaco que este estilo
-         pinta, y de la barra de título, que lleva el suyo.
+         Un estilo no alcanza eso. Lo que lo alcanza es una CLASE: `AtalayaDialog`, de la que
+         heredan los diez, que fija fondo, tinta y tipografía en el constructor —donde se aplican a
+         tiempo, que es la lección de R7— y dibuja su propia cabecera. El estilo con clave se
+         retira: dejarlo sin dueño era invitar a que el siguiente diálogo volviera a usarlo y a
+         repetir el viaje.
     -->
-    <Style x:Key="Dialog" TargetType="ui:FluentWindow"
-           BasedOn="{StaticResource {x:Type ui:FluentWindow}}">
-        <Setter Property="Background" Value="{DynamicResource Brush.Bg}" />
-        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
-        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}" />
-        <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
-        <Setter Property="ShowInTaskbar" Value="False" />
-        <!-- `WindowStartupLocation` NO se puede poner desde aquí: es una propiedad CLR de `Window`
-             y no una de dependencia, así que un `Setter` sobre ella revienta AL CARGAR el estilo
-             —no al compilar—. Cada diálogo la declara en su etiqueta, que es donde ya estaba. -->
-    </Style>
+
 
     <!-- La barra de título de un diálogo: el MISMO fondo que el diálogo, y sin maximizar ni
          minimizar — una ventana modal de 600 px no se maximiza. -->
@@ -1325,6 +1294,50 @@
     <Style x:Key="Dialog.Help" TargetType="TextBlock" BasedOn="{StaticResource Text.Small}">
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
+
+    <!-- ================================================================ LA CABECERA DE UN DIÁLOGO
+
+         El título del diálogo y su botón de cerrar, en la tipografía y los colores de la casa. Es
+         lo que sustituye a `ui:TitleBar`, que pintaba la barra de la librería —título pequeño, su
+         propio gris— encima del título que el cuerpo ya decía: dos títulos, y uno de otro programa.
+    -->
+    <Style TargetType="{x:Type c:DialogHeader}">
+        <Setter Property="Background" Value="{DynamicResource Brush.Bg}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+        <Setter Property="Padding" Value="{StaticResource Pad.DialogHeader}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type c:DialogHeader}">
+                    <Border Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}">
+                        <DockPanel>
+                            <!-- Cerrar, a la derecha y declarado ANTES: es la columna que no cede,
+                                 igual que en las cabeceras de página. -->
+                            <Button x:Name="PART_Close"
+                                    DockPanel.Dock="Right"
+                                    Style="{StaticResource Button.Ghost}"
+                                    Padding="{StaticResource Pad.XS}"
+                                    Margin="{StaticResource Pad.Zero}"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="Cerrar"
+                                    ToolTip="Cerrar">
+                                <Path Style="{StaticResource Icon}"
+                                      Data="{x:Static c:Icons.Cross}"
+                                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Button>
+
+                            <TextBlock Text="{TemplateBinding Title}"
+                                       Style="{StaticResource Dialog.Title}"
+                                       Margin="{StaticResource Pad.Zero}"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </DockPanel>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
 
     <!-- ================================================================ El patrón de página (P-02)
 

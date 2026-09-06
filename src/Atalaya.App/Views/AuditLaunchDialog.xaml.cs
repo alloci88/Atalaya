@@ -13,7 +13,7 @@ namespace Atalaya.App.Views;
 /// elegido las unidades. Lo que el diálogo aporta no es fricción, es el número.
 /// </para>
 /// </summary>
-public partial class AuditLaunchDialog : FluentWindow
+public partial class AuditLaunchDialog : AtalayaDialog
 {
     public AuditLaunchDialog(AuditLaunchConfirmation confirmation)
     {

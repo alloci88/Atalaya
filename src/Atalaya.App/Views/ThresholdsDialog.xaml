@@ -1,16 +1,13 @@
-<ui:FluentWindow
+<v:AtalayaDialog
     x:Class="Atalaya.App.Views.ThresholdsDialog"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:c="clr-namespace:Atalaya.App.Controls"
+    xmlns:v="clr-namespace:Atalaya.App.Views"
     Title="Umbrales de la aplicación"
     Width="620"
-    Height="480"
-    ShowInTaskbar="False"
-    WindowStartupLocation="CenterOwner"
-    Style="{StaticResource Dialog}"
-    WindowBackdropType="None"
-    ExtendsContentIntoTitleBar="True">
+    Height="480">
     <Grid Background="{DynamicResource Brush.Bg}">
         <!-- EL DIÁLOGO PINTA SU FONDO (UI-0013). `FluentWindow` aplica su propio telón por
              debajo —`#FAFAFA` en claro, `#202020` en oscuro, los colores de fábrica de
@@ -30,11 +27,12 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Background="{DynamicResource Brush.Bg}" Foreground="{DynamicResource Brush.Text}" ShowMaximize="False" ShowMinimize="False" Grid.Row="0" Title="Umbrales de la aplicación" />
+        <c:DialogHeader Grid.Row="0" Title="Umbrales de la aplicación" />
 
         <ScrollViewer Grid.Row="1" Margin="{StaticResource Pad.DialogList}" VerticalScrollBarVisibility="Auto" Padding="{StaticResource Pad.XS.Right}">
             <StackPanel>
-                <TextBlock Text="{Binding AppName}" Style="{StaticResource Dialog.Title}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding AppName}" FontWeight="SemiBold"
+                           Margin="{StaticResource Pad.S.Bottom}" TextWrapping="Wrap" />
                 <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" Style="{StaticResource Dialog.Help}"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                            Text="Esto es política de la aplicación, no una preferencia tuya: vive en el hub, vale para todo el equipo y queda en el historial de git quién la cambió y cuándo. Clasifica el inventario que todos compartís, así que si cada máquina llevara el suyo, la clasificación cambiaría con quien re-escaneara el último." />
@@ -70,4 +68,4 @@
             <Button Content="Cerrar" Margin="{StaticResource Pad.XS.Left}" Click="OnClose" />
         </StackPanel>
     </Grid>
-</ui:FluentWindow>
+</v:AtalayaDialog>

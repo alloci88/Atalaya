@@ -414,9 +414,11 @@
     <Thickness x:Key="Pad.CheckRow">0,0,0,8</Thickness>
     <Thickness x:Key="Pad.CheckGroup">0,0,0,8</Thickness>
 
-    <!-- El segundo rótulo de grupo lleva además aire POR ENCIMA: separa los auditores de las tres
-         de GitHub sin meter una raya entre ellos. -->
-    <Thickness x:Key="Pad.CheckGroupSecond">0,24,0,8</Thickness>
+    <!-- EL SEGUNDO GRUPO RESPIRA COMO EL PRIMERO (R9). Por encima, 24 hasta la última fila de
+         GitHub; por debajo, 8 más que el primero —16 en vez de 8—, porque su rótulo es una línea
+         larga y con el mismo hueco se leía pegado a la fila que abre. Los dos grupos quedan con el
+         mismo aire alrededor; lo que cambia es que uno de los rótulos pesa más que el otro. -->
+    <Thickness x:Key="Pad.CheckGroupSecond">0,24,0,16</Thickness>
 
     <!-- La botonera de Cuenta, a 24 de la última tarjeta. -->
     <Thickness x:Key="Pad.AccountActions">0,24,0,0</Thickness>
@@ -453,6 +455,10 @@
          barra superpuesta (`Pad.Scroll`), que no es aire sino sitio reservado. -->
     <Thickness x:Key="Pad.Dialog">24</Thickness>
     <Thickness x:Key="Pad.DialogHead">24,24,24,0</Thickness>
+
+    <!-- La cabecera propia del diálogo: 24 a los lados como todo lo demás, y menos abajo porque el
+         cuerpo trae el suyo. Arriba, 16: sin barra de Windows no hay nada por encima que compense. -->
+    <Thickness x:Key="Pad.DialogHeader">24,16,16,8</Thickness>
     <!-- La lista deja 16 a la derecha en vez de 24: los 8 que faltan son el carril de la barra de
          desplazamiento, que se declara aparte en el `Padding` del propio scroll. -->
     <Thickness x:Key="Pad.DialogList">24,24,16,0</Thickness>

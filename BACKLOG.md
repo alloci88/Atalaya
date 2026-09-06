@@ -469,6 +469,13 @@ las seis reversiones de lo que se había movido sin pedirlo; con ellas entran N-
 
 ## Cerrado
 
+- **R9 · Los diálogos por fin, y Directivas oculto** — los diez heredan de `AtalayaDialog`, que fija
+  fondo, tinta y tipografía en el constructor y dibuja su propia cabecera: fuera la barra de título
+  de Windows y el título duplicado. El estilo con clave `Dialog` se retira. `--selfcheck` comprueba
+  además que cada diálogo resuelve `Brush.Bg` y `FontSize.Body` desde su propio árbol. Cuenta iguala
+  el aire de sus dos grupos, y Directivas deja de ser alcanzable desde la interfaz sin borrar código.
+  Ver D-1008.
+
 - **R8 · Cuenta respira, y los diálogos por el sistema de verdad** — R5 declaró `Dialog.Title` y
   `Dialog.Help` y no los usó en ningún sitio, así que los diez diálogos seguían con su título a 17
   a mano y sus ayudas sueltas; ahora los aplican, y el relleno sube a 24 uniformes. Cuenta parte la

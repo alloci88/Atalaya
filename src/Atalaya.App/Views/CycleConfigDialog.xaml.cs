@@ -8,7 +8,7 @@ namespace Atalaya.App.Views;
 /// «Configurar ciclo» (F17 §4). Toda la regla vive en <see cref="CycleConfigViewModel"/>; aquí
 /// solo se enlaza y se devuelve el sí o el no.
 /// </summary>
-public partial class CycleConfigDialog : FluentWindow
+public partial class CycleConfigDialog : AtalayaDialog
 {
     public CycleConfigDialog(CycleConfigViewModel viewModel)
     {
