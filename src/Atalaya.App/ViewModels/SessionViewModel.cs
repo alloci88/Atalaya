@@ -303,6 +303,19 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
     }
 
     /// <summary>
+    /// Del desglose a la ficha del hallazgo (R10 §5). Una fila que nombra un hallazgo y no lleva a
+    /// él obliga a apuntarse el título e ir a buscarlo en Hallazgos, que es el camino que la
+    /// pantalla de cierre existe para ahorrar. La pastilla de gravedad va DENTRO de la fila y no
+    /// intercepta el clic: las dos hacen lo mismo porque son la misma fila.
+    /// </summary>
+    [RelayCommand]
+    private Task OpenFinding(SummaryItem? item)
+        => _navigation is null || item is not { HasFinding: true }
+            ? Task.CompletedTask
+            : _navigation.NavigateToAsync<FindingDetailViewModel>(
+                vm => vm.Load(_live.AppSlug, item.FindingId));
+
+    /// <summary>
     /// Abre el informe de esta sesion en la vista Informes (F6.3).
     /// <para>
     /// Antes lo lanzaba al bloc de notas del sistema con un <c>Process.Start</c>. Eran dos formas

@@ -20,37 +20,27 @@
              StackPanel en un Grid sin columnas no reparten espacio, se superponen. Aquí la
              izquierda es corta y no se había notado todavía. -->
         <c:PageHeader Grid.Row="0" Margin="{StaticResource Pad.S.Bottom}">
-            <Grid VerticalAlignment="Center">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <!-- La que encoge, acotada por los dos lados. Ver AssistedFixView: mismo
-                         reparto, y el mismo suelo por el mismo motivo. -->
-                    <ColumnDefinition Width="*" MinWidth="60" MaxWidth="420" />
-                </Grid.ColumnDefinitions>
-                <!-- TÍTULO Y SUBTÍTULO EN EL MISMO `TextBlock` (D-983).
+            <!-- TÍTULO Y SUBTÍTULO SOBRE LA MISMA LÍNEA BASE, y con el mismo hueco que en el
+                 arreglo asistido (R10 §6). D-983 los metió en un solo `TextBlock` porque los `Run`
+                 de un párrafo sí comparten base, y eso resolvía la altura pero no la separación:
+                 lo que había entre las dos piezas era un `Run` de un espacio —tres píxeles y
+                 medio—, no el hueco de la escala. `c:BaselineRow` da las dos cosas y devuelve a
+                 cada pieza su propio elemento, con su recorte y su tooltip.
 
-                     Eran dos TextBlock en dos celdas, el subtítulo con `VerticalAlignment="Bottom"`.
-                     Alinear por abajo iguala el borde inferior de dos CAJAS, y la caja de un texto
-                     de 13 tiene menos hueco bajo la letra que la de uno de 26: el subtítulo se
-                     sentaba por debajo de la base del título. WPF no alinea líneas base entre
-                     celdas de un Grid —no existe `VerticalAlignment="Baseline"`— pero sí entre los
-                     `Run` de un mismo TextBlock, que es su maquetación de texto de siempre. Una
-                     línea, dos tamaños, una base.
-
-                     Y el recorte sigue cayendo donde debe: corta por el FINAL de la línea, o sea
-                     por el subtítulo, que es el dato; el título no se toca. -->
-                <TextBlock Grid.Column="0" Grid.ColumnSpan="2" VerticalAlignment="Center"
-                           Style="{StaticResource Text.Name}"
+                 El recorte sigue cayendo donde debe: la fila mide de izquierda a derecha con lo
+                 que queda, así que lo que se queda sin sitio es lo ÚLTIMO —el subtítulo, que es el
+                 dato—; el título no se toca. -->
+            <c:BaselineRow Gap="{StaticResource Space.S}" VerticalAlignment="Center"
                            MaxWidth="{StaticResource Header.IdentityMaxWidth}"
                            HorizontalAlignment="Left"
                            ToolTip="{Binding Live.HeaderText}">
-                    <Run Text="{Binding Title, Mode=OneWay}"
-                         FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
-                    <Run Text=" " />
-                    <Run Text="{Binding Live.HeaderText, Mode=OneWay}"
-                         Foreground="{DynamicResource Brush.TextMuted}" />
-                </TextBlock>
-            </Grid>
+                <TextBlock Text="{Binding Title, Mode=OneWay}"
+                           Style="{StaticResource Text.Name}"
+                           FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Live.HeaderText, Mode=OneWay}"
+                           Style="{StaticResource Text.Name}"
+                           Foreground="{DynamicResource Brush.TextMuted}" />
+            </c:BaselineRow>
             <!-- F16-RETOQUE §2·1: el aire entre piezas lo pone cada barra; el que separa esta zona
                  de la identidad lo pone c:PageHeader, que es quien reparte. -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -444,7 +434,7 @@
                                              líneas que no hablan de hallazgos (unidades,
                                              incidencias) siguen siendo una lista: ahí la unidad
                                              ya ES la línea. -->
-                                        <ItemsControl ItemsSource="{Binding Groups}" Margin="{StaticResource Pad.Indent.L}"
+                                        <ItemsControl ItemsSource="{Binding Groups}" Margin="{StaticResource Pad.Indent.L.Block}"
                                                       Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibility}}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
@@ -481,11 +471,54 @@
                                                                     FontSize="{StaticResource FontSize.Meta}"
                                                                     Foreground="{DynamicResource Brush.TextFaint}"
                                                                     ToolTip="{Binding Subtitle}" />
+                                                        <!-- CADA HALLAZGO ES UNA FILA QUE SE PULSA, con su
+                                                             gravedad en la pastilla del SISTEMA (R10 §5).
+                                                             Salía como «[Crítica] Título» en texto plano, a 25 px
+                                                             por línea y sin color: la única pantalla de la
+                                                             aplicación donde la gravedad no se veía sin leer, y a
+                                                             40 px de la cabecera «1 Crítica · 1 Media · 2 Bajas»,
+                                                             que sí la pinta. Y no llevaba a ninguna parte: había
+                                                             que apuntarse el título e ir a buscarlo a Hallazgos.
+
+                                                             12 px más de sangría que la ruta (`Pad.S.Left`, sobre
+                                                             el mismo origen que ella) y `Control.MinHeight` de
+                                                             alto, que son los 36 de una fila de la casa. -->
                                                         <ItemsControl ItemsSource="{Binding Items}" Margin="{StaticResource Pad.S.Left}">
                                                             <ItemsControl.ItemTemplate>
                                                                 <DataTemplate>
-                                                                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap"
-                                                                               FontSize="{StaticResource FontSize.Meta}" Opacity="0.85" Margin="{StaticResource Pad.XXS.V}" />
+                                                                    <!-- La pastilla va DENTRO del botón, así que
+                                                                         pulsarla es pulsar la fila: no hay dos
+                                                                         blancos con dos comportamientos. -->
+                                                                    <Button MinHeight="{StaticResource Control.MinHeight}"
+                                                                            Background="Transparent" BorderThickness="0"
+                                                                            Padding="{StaticResource Pad.Zero}"
+                                                                            HorizontalContentAlignment="Left"
+                                                                            HorizontalAlignment="Stretch"
+                                                                            Cursor="Hand"
+                                                                            Foreground="{DynamicResource Brush.Text}"
+                                                                            IsEnabled="{Binding HasFinding}"
+                                                                            ToolTip="Abre la ficha de este hallazgo"
+                                                                            Command="{Binding DataContext.OpenFindingCommand,
+                                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                            CommandParameter="{Binding}">
+                                                                        <!-- Rejilla y no `StackPanel` horizontal: un
+                                                                             StackPanel mide a sus hijos con ancho
+                                                                             infinito y el título largo no envolvería. -->
+                                                                        <Grid>
+                                                                            <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="Auto" />
+                                                                                <ColumnDefinition Width="*" />
+                                                                            </Grid.ColumnDefinitions>
+                                                                            <Border Grid.Column="0" Style="{StaticResource Pill.Sev}" MinWidth="0"
+                                                                                    Margin="{StaticResource Pad.XS.Right}" VerticalAlignment="Center">
+                                                                                <TextBlock Text="{Binding Severity, Converter={StaticResource SeverityToLabel}}"
+                                                                                           Style="{StaticResource Pill.Sev.Text}" />
+                                                                            </Border>
+                                                                            <TextBlock Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap"
+                                                                                       FontSize="{StaticResource FontSize.Meta}"
+                                                                                       VerticalAlignment="Center" />
+                                                                        </Grid>
+                                                                    </Button>
                                                                 </DataTemplate>
                                                             </ItemsControl.ItemTemplate>
                                                         </ItemsControl>

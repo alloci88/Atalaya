@@ -645,7 +645,13 @@ public static class ReportBuilder
             }
 
             string line = f.Locations.Count > 0 ? $" — línea {f.Locations[0].Line}" : string.Empty;
-            sb.AppendLine($"#### [{f.Severity}] {Alias(f)}{f.Title}{line}");
+
+            // EL ROTULADO ÚNICO TAMBIÉN AQUÍ (F27 raíz 1, R10 §4). Esto escribía el enum en crudo
+            // —«Critica», sin tilde— y era el ÚNICO sitio del informe que lo hacía. El visor
+            // reconoce la gravedad de un encabezado por su nombre bien escrito, así que «Media» y
+            // «Baja» salían como pastilla de color y la crítica —la que más importa ver— como
+            // texto entre corchetes. El nombre sale de `SeverityNames`, como en toda la aplicación.
+            sb.AppendLine($"#### [{SeverityNames.Display(f.Severity)}] {Alias(f)}{f.Title}{line}");
             sb.AppendLine($"- `{f.RuleId}` · {f.Pillar}"
                 + (f.Confidence == usual ? string.Empty : $" · confianza {f.Confidence}"));
             sb.AppendLine($"- {f.Description}");
@@ -1027,10 +1033,21 @@ public static class ReportBuilder
             sb.AppendLine("- ⚠ **Sesión detenida por el usuario**: el agente no llegó a cerrar el arreglo.");
         }
 
+        // UN ARREGLO QUE NO TOCÓ NADA NO TIENE NADA QUE COMMITEAR (R10 §7). El aviso de cabecera
+        // y la sección de sugerencia de commit se escribían siempre, así que el informe de una
+        // sesión detenida antes de la primera edición advertía sobre unos cambios inexistentes y
+        // proponía un mensaje de commit para ellos. Es la misma regla que la pantalla de cierre, y
+        // está aquí porque el informe se lee después, cuando ya nadie recuerda que no hubo cambios.
+        bool touched = files.Count > 0;
+
         sb.AppendLine();
-        sb.AppendLine("> **Estos cambios NO están commiteados.** El arreglo asistido escribe en el clon "
-            + "local de quien lo lanzó y ahí se queda: revisar, commitear y publicar sigue siendo suyo. "
-            + "Y arreglar no resuelve el hallazgo — la resolución llega verificando, con evidencia.");
+        sb.AppendLine(touched
+            ? "> **Estos cambios NO están commiteados.** El arreglo asistido escribe en el clon "
+              + "local de quien lo lanzó y ahí se queda: revisar, commitear y publicar sigue siendo suyo. "
+              + "Y arreglar no resuelve el hallazgo — la resolución llega verificando, con evidencia."
+            : "> **No hay cambios en el clon.** Esta sesión terminó sin tocar ningún fichero — se "
+              + "detuvo, se descartó o el agente no llegó a editar—, así que no hay nada que revisar "
+              + "ni que commitear. El hallazgo sigue exactamente como estaba.");
         sb.AppendLine();
 
         AppendDirectives(sb, session);
@@ -1066,18 +1083,22 @@ public static class ReportBuilder
 
         AppendBuildSection(sb, build, tests);
 
-        sb.AppendLine();
-        sb.AppendLine("## Sugerencia de commit");
-        sb.AppendLine();
-        sb.AppendLine("```");
-        sb.AppendLine(commitTitle.Trim());
-        if (!string.IsNullOrWhiteSpace(commitDescription))
+        if (touched)
         {
             sb.AppendLine();
-            sb.AppendLine(commitDescription.Trim());
+            sb.AppendLine("## Sugerencia de commit");
+            sb.AppendLine();
+            sb.AppendLine("```");
+            sb.AppendLine(commitTitle.Trim());
+            if (!string.IsNullOrWhiteSpace(commitDescription))
+            {
+                sb.AppendLine();
+                sb.AppendLine(commitDescription.Trim());
+            }
+
+            sb.AppendLine("```");
         }
 
-        sb.AppendLine("```");
         sb.AppendLine();
         Sign(sb, organization);
         return sb.ToString();

@@ -854,21 +854,49 @@ public sealed class FindingsViewTests : IDisposable
     }
 
     /// <summary>
-    /// Y de la segunda vez en adelante se respeta lo que el usuario dejó — incluido haberla dejado
-    /// pequeña, que es una decisión suya y no un defecto que corregir.
+    /// <b>Y ARRANCA MAXIMIZADA SIEMPRE, no solo la primera vez</b> (R10 §1). El principio 1 es
+    /// «pantalla completa por defecto»; D-956 lo cumplía únicamente en el estreno, así que bastaba
+    /// con restaurar la ventana una tarde para que Atalaya abriera pequeña el resto de su vida —y
+    /// era exactamente la queja que trajo F26, vuelta a aparecer por la puerta de atrás—.
+    /// <para>
+    /// Este test mira las dos ramas de <c>Resolve</c> a la vez porque el defecto vive justo en la
+    /// diferencia entre ellas: sin estado guardado ya salía maximizada, y con estado guardado no.
+    /// Y se rompe EN SILENCIO — la ventana abre, se ve y funciona; solo abre pequeña—.
+    /// </para>
     /// </summary>
     [Fact]
-    public void Despues_de_la_primera_vez_manda_lo_que_el_usuario_dejo()
+    public void El_arranque_es_maximizado_con_y_sin_estado_guardado()
+    {
+        var screen = new System.Windows.Rect(0, 0, 1920, 1080);
+
+        WindowPlacementService.Resolve(new WindowPlacement(), screen)
+            .Maximized.Should().BeTrue("sin nada guardado, se estrena a pantalla completa");
+
+        WindowPlacementService.Resolve(
+                new WindowPlacement
+                {
+                    Saved = true, Maximized = false, Left = 100, Top = 80, Width = 1400, Height = 900,
+                },
+                screen)
+            .Maximized.Should().BeTrue("y con la ventana dejada pequeña, también");
+    }
+
+    /// <summary>
+    /// Lo guardado no deja de servir: es el rectángulo al que la ventana vuelve cuando el usuario
+    /// la RESTAURA. Se aplica antes de maximizar, que es lo que lo convierte en el de restauración
+    /// — y por eso sigue teniendo que salir entero de <c>Resolve</c>.
+    /// </summary>
+    [Fact]
+    public void Lo_que_el_usuario_dejo_sigue_siendo_el_rectangulo_de_restaurar()
     {
         var saved = new WindowPlacement
         {
             Saved = true, Maximized = false, Left = 100, Top = 80, Width = 1400, Height = 900,
         };
 
-        var (maximized, left, top, width, height) = WindowPlacementService.Resolve(
+        var (_, left, top, width, height) = WindowPlacementService.Resolve(
             saved, new System.Windows.Rect(0, 0, 1920, 1080));
 
-        maximized.Should().BeFalse();
         left.Should().Be(100);
         top.Should().Be(80);
         width.Should().Be(1400);

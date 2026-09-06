@@ -1,5 +1,7 @@
-﻿using Atalaya.App.Services;
+﻿using Atalaya.App;
+using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
+using Atalaya.Domain;
 using FluentAssertions;
 using Xunit;
 
@@ -136,6 +138,54 @@ public sealed class ReportReadingTests
         MarkdownFlowDocument.HeadingSeverity(heading)!.Value.Severity.Should().Be("Alta");
         MarkdownFlowDocument.HeadingSeverity(heading)!.Value.Title
             .Should().StartWith("Posible NullReferenceException");
+    }
+
+    /// <summary>
+    /// <b>LOS CUATRO NIVELES PINTAN PASTILLA</b> (R10 §4). En el <c>dist</c> «Media» y «Baja»
+    /// salían como pastilla de color y «[Critica]» como texto plano en negrita, en el mismo
+    /// informe y a tres líneas de distancia.
+    /// <para>
+    /// Eran dos defectos encadenados y este test ata los dos. <b>Uno</b>: el escritor del informe
+    /// ponía el enum en crudo —«Critica», sin tilde— y era el único sitio que se había quedado
+    /// fuera del rotulado único de F27 raíz 1. <b>Dos</b>: el resolutor solo entendía la grafía con
+    /// tilde, así que ni siquiera reconocía lo que el propio escritor había escrito. Las otras tres
+    /// gravedades no llevan tilde y por eso funcionaban — lo que hacía que el fallo pareciera
+    /// cosmético de una y no de la regla entera.
+    /// </para>
+    /// <para>
+    /// Se cuenta sobre <c>HeadingSeverity</c> porque es exactamente lo que decide la pastilla: el
+    /// renderizador pinta una por encabezado en el que esto devuelve algo, y ninguna donde
+    /// devuelve <c>null</c>. Contarlas así mide la regla sin levantar una <c>Application</c>.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Un_informe_con_los_cuatro_niveles_pinta_cuatro_pastillas()
+    {
+        // Escritas como las escribe el informe, por el mismo sitio del que salen allí.
+        string informe = string.Join("\n\n", Enum.GetValues<Severity>()
+            .Select(s => $"#### [{SeverityNames.Display(s)}] Un hallazgo de ejemplo — línea 12"));
+
+        var doc = Markdig.Markdown.Parse(informe);
+        var headings = doc.OfType<Markdig.Syntax.HeadingBlock>().ToList();
+
+        headings.Should().HaveCount(4, "hay cuatro niveles de gravedad y cuatro encabezados");
+        headings.Select(h => MarkdownFlowDocument.HeadingSeverity(h)?.Severity)
+            .Should().Equal("Crítica", "Alta", "Media", "Baja");
+    }
+
+    /// <summary>
+    /// Y un informe YA ESCRITO no se reescribe (F29): los que salieron antes de R10 dicen
+    /// «[Critica]» sin tilde, y son el registro de lo que pasó. El resolutor acepta las dos
+    /// grafías y devuelve siempre la buena, para que la pastilla de un informe viejo no se pinte
+    /// sin tilde al lado de las de uno nuevo.
+    /// </summary>
+    [Fact]
+    public void La_grafia_vieja_sin_tilde_se_sigue_reconociendo_y_se_rotula_bien()
+    {
+        var doc = Markdig.Markdown.Parse("#### [Critica] Credenciales embebidas en el código");
+        var heading = doc.OfType<Markdig.Syntax.HeadingBlock>().Single();
+
+        MarkdownFlowDocument.HeadingSeverity(heading)!.Value.Severity.Should().Be("Crítica");
     }
 
     private static string Root()

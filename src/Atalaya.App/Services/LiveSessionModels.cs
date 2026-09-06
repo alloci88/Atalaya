@@ -1,5 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 using Atalaya.Domain;
+using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -231,8 +232,18 @@ public sealed record SeverityChip(Severity Severity, int Count)
 /// Un hallazgo dentro del desglose de una línea del resumen (F12 §H.1): además de la frase que se
 /// lee, de qué UNIDAD es y con qué severidad. Sin esas dos cosas el desglose no se puede agrupar,
 /// que es exactamente por lo que salía como una lista corrida.
+/// <para>
+/// <b>Y de qué hallazgo</b> (R10 §5). La gravedad se pinta con la pastilla del sistema y la fila
+/// entera lleva a la ficha, así que el desglose necesita saber a quién lleva. Es opcional porque
+/// las líneas que no hablan de un hallazgo concreto —una unidad incompleta, un corte— usan la
+/// misma fila.
+/// </para>
 /// </summary>
-public sealed record SummaryItem(string Unit, Severity Severity, string Text);
+public sealed record SummaryItem(string Unit, Severity Severity, string Text, Ulid FindingId = default)
+{
+    /// <summary>Hay ficha a la que ir. Sin esto la fila se pinta igual pero no se pulsa.</summary>
+    public bool HasFinding => FindingId != default;
+}
 
 /// <summary>
 /// Los hallazgos de una unidad dentro del desglose de una línea (F12 §H.1). Es el MISMO patrón que

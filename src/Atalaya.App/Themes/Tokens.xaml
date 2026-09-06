@@ -134,6 +134,11 @@
     <Thickness x:Key="Pad.Indent.L">60,4,0,8</Thickness>
     <Thickness x:Key="Pad.Indent.XL">76,8,0,8</Thickness>
 
+    <!-- La misma sangría cuando lo que cuelga es un BLOQUE que se despliega y no una línea: 16
+         arriba y abajo, para que el desglose se lea como algo que se ha abierto dentro de la lista
+         y no como dos filas más pegadas a las de al lado. -->
+    <Thickness x:Key="Pad.Indent.L.Block">60,16,0,16</Thickness>
+
     <!-- Una fila apretada: la de un evento de sesión, donde caben muchas y el aire de una fila
          normal las separaría más de lo que las agrupa. -->
     <Thickness x:Key="Pad.RowTight">8,4</Thickness>
@@ -211,6 +216,10 @@
     <CornerRadius x:Key="Radius.M">6</CornerRadius>
     <CornerRadius x:Key="Radius.L">10</CornerRadius>
     <CornerRadius x:Key="Radius.Pill">999</CornerRadius>
+
+    <!-- Solo las esquinas de ABAJO, para lo que se apoya en el borde inferior de una tarjeta: el
+         cuerpo desplegado de un `Expander`, que arriba tiene que quedar a ras de su cabecera. -->
+    <CornerRadius x:Key="Radius.M.Bottom">0,0,6,6</CornerRadius>
 
     <!-- EL ANILLO DE FOCO (P-04, UI-0015). Dos gruesos y un desplazamiento, y los tres aquí porque
          los consume el `FocusVisualStyle` del sistema: 2 px de anillo —1 no se ve a 150 %—, 1 px

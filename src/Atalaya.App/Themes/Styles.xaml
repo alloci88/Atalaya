@@ -1172,13 +1172,40 @@
          principal de esas dos pantallas. No se rehace el control: se le da a su cabecera la misma
          chapa, el mismo redondeo y los mismos estados que a un botón de la casa, que es lo que
          hace que abrir una unidad se sienta como pulsar cualquier otra cosa.
+
+         Y R10 §2 LE DEVUELVE LA TARJETA, que es lo que R6 se llevó por delante sin decirlo. La
+         plantilla que entró aquí era un `StackPanel` transparente, y al sustituir a la implícita
+         de WPF-UI —esta hoja se fusiona DESPUÉS que `ui:ControlsDictionary`, así que un estilo
+         sin clave sobre el mismo tipo la reemplaza entera— se fueron con ella el fondo, el borde
+         y el redondeo que hacían de cada unidad una tarjeta y de cada pasada un acordeón. En el
+         `dist` la ruta de la unidad, las líneas «Pasada n — …» y el texto del auditor salían
+         sueltos sobre el fondo de la columna. El desplegable vuelve a ser una superficie: tarjeta
+         fuera, `Brush.Surface2` dentro.
+
+         Y EL GALÓN NO SE PINTA ENCIMA DEL ICONO DE ESTADO. El giro de abrir era
+         `RotateTransform CenterX="12" CenterY="12"` sobre un `Path` de `Icon.Size.Small` = **14**
+         px, cuyo centro real es (7,7): girar 90° alrededor de (12,12) no gira el galón, lo
+         TRASLADA —su centro pasa de (7,7) a (17,7), diez píxeles a la derecha, fuera de su propia
+         caja y encima del glifo de estado que va justo detrás—. Se veía solo con la unidad
+         desplegada, que es como sale por defecto. El centro se pide con `RenderTransformOrigin`,
+         que es relativo y no puede quedarse desfasado si el tamaño del icono cambia.
     -->
     <Style TargetType="Expander">
         <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
-        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
+        <Setter Property="BorderThickness" Value="{StaticResource Border.Hairline}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Expander">
+                    <!-- LA TARJETA. Es lo que hace que una unidad se lea como una pieza y no como
+                         tres párrafos sueltos sobre el fondo de la columna. -->
+                    <Border x:Name="Card"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{StaticResource Radius.M}"
+                            SnapsToDevicePixels="True">
                     <StackPanel>
                         <ToggleButton x:Name="Head"
                                       IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
@@ -1201,6 +1228,7 @@
                                                   Height="{StaticResource Icon.Size.Small}"
                                                   Margin="{StaticResource Pad.XS.Right}"
                                                   VerticalAlignment="Center"
+                                                  RenderTransformOrigin="0.5,0.5"
                                                   Stretch="Uniform"
                                                   Fill="{x:Null}"
                                                   Stroke="{DynamicResource Brush.TextMuted}"
@@ -1221,9 +1249,13 @@
                                             <Setter TargetName="Chrome" Property="Opacity" Value="0.8" />
                                         </Trigger>
                                         <Trigger Property="IsChecked" Value="True">
+                                            <!-- El centro es el del PROPIO galón
+                                                 (`RenderTransformOrigin`, arriba) y no un (12,12)
+                                                 heredado del lienzo de 24 en el que se dibujó la
+                                                 geometría. -->
                                             <Setter TargetName="Chevron" Property="RenderTransform">
                                                 <Setter.Value>
-                                                    <RotateTransform Angle="90" CenterX="12" CenterY="12" />
+                                                    <RotateTransform Angle="90" />
                                                 </Setter.Value>
                                             </Setter>
                                         </Trigger>
@@ -1237,8 +1269,18 @@
                             <ContentPresenter ContentSource="Header" />
                         </ToggleButton>
 
-                        <ContentPresenter x:Name="Body" Visibility="Collapsed" />
+                        <!-- EL CUERPO, EN `Brush.Surface2`: lo desplegado se lee como el interior
+                             de la tarjeta —un escalón por debajo de su cabecera— y no como texto
+                             cayendo sobre el fondo de la vista. -->
+                        <Border x:Name="Body"
+                                Background="{DynamicResource Brush.Surface2}"
+                                CornerRadius="{StaticResource Radius.M.Bottom}"
+                                Padding="{StaticResource Pad.S}"
+                                Visibility="Collapsed">
+                            <ContentPresenter />
+                        </Border>
                     </StackPanel>
+                    </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsExpanded" Value="True">
                             <Setter TargetName="Body" Property="Visibility" Value="Visible" />

@@ -733,13 +733,17 @@ public sealed partial class LiveSessionService : ObservableObject
         string alias = finding.DisplayId ?? finding.Id.ToString();
         string unit = finding.Locations.Count > 0 ? finding.Locations[0].Path : "(sin ubicación)";
 
-        SummaryItem Item(string text) => new(unit, finding.Severity, text);
+        SummaryItem Item(string text) => new(unit, finding.Severity, text, finding.Id);
 
         switch (kind)
         {
             case "nuevo":
                 Findings.Add(finding);
-                _new.Add(Item($"[{SeverityNames.Display(finding.Severity)}] {title}"));
+                // SIN el corchete de gravedad delante (R10 §5): la pinta la pastilla del
+                // sistema, que es la misma de la cabecera del resumen y la del informe. Escrito
+                // aquí era texto plano de 25 px sin color dentro de una línea que sí tenía sitio
+                // para la pastilla.
+                _new.Add(Item(title));
                 Add(_currentPass, ActivityEntry.Event("＋", $"Hallazgo: {title}", finding.Severity));
                 break;
 

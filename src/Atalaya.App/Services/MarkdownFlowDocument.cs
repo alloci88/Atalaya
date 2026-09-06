@@ -95,9 +95,15 @@ public static class MarkdownFlowDocument
     /// 27 Altas</c>). Son los DOS sitios donde el informe habla de gravedad, y los dos se pintan
     /// con la pastilla del sistema en vez de con texto entre corchetes.
     /// </summary>
+    /// <summary>
+    /// <b>«Critica» sin tilde también cuenta</b> (R10 §4, F29). El escritor del informe ya pone la
+    /// tilde, pero los informes que se escribieron antes NO se reescriben —son el registro de lo
+    /// que pasó— y los suyos dicen «Critica». Un resolutor que solo entiende la grafía nueva deja
+    /// sin pastilla justo la gravedad más alta de todo lo ya archivado.
+    /// </summary>
     private static readonly Regex SeverityMarks = new(
-        @"\[(?<b>Crítica|Alta|Media|Baja)\]"
-        + @"|(?<n>\d+)\s+(?<w>Críticas|Crítica|Altas|Alta|Medias|Media|Bajas|Baja)\b",
+        @"\[(?<b>Crítica|Critica|Alta|Media|Baja)\]"
+        + @"|(?<n>\d+)\s+(?<w>Críticas|Crítica|Criticas|Critica|Altas|Alta|Medias|Media|Bajas|Baja)\b",
         RegexOptions.Compiled);
 
     private static readonly MarkdownPipeline Pipeline = new MarkdownPipelineBuilder()
@@ -243,8 +249,14 @@ public static class MarkdownFlowDocument
     internal static (string Severity, string Title)? HeadingSeverity(HeadingBlock heading)
     {
         string text = PlainText(heading.Inline).TrimStart();
-        Match m = Regex.Match(text, @"^\[(Crítica|Alta|Media|Baja)\]\s*");
-        return m.Success ? (m.Groups[1].Value, text[m.Length..]) : null;
+        // Las dos grafías de «Crítica», por lo mismo que en `SeverityMarks`: un informe ya escrito
+        // no se reescribe. Lo que se DEVUELVE es siempre la buena: se acepta la vieja para no
+        // dejar sin pastilla lo ya archivado, no para volver a pintarla sin tilde al lado de las
+        // demás.
+        Match m = Regex.Match(text, @"^\[(Crítica|Critica|Alta|Media|Baja)\]\s*");
+        return m.Success
+            ? (m.Groups[1].Value == "Critica" ? "Crítica" : m.Groups[1].Value, text[m.Length..])
+            : null;
     }
 
     /// <summary>El texto de un encabezado sin su formato. Solo se usa para leerlo, no para pintarlo.</summary>
@@ -704,7 +716,7 @@ public static class MarkdownFlowDocument
             // Cuatro rellenos para cuatro niveles (P-05, UI-0034): crítica y alta compartían
             // `Danger.Soft` —la escala se leía como tres— y la baja se pintaba del azul de
             // «estás aquí». Cada nivel tiene ahora el suyo, igual que en `Pill.Sev`.
-            "Crítica" or "Críticas" => ("Brush.Sev.Crit.Soft", "Brush.Sev.Crit"),
+            "Crítica" or "Críticas" or "Critica" or "Criticas" => ("Brush.Sev.Crit.Soft", "Brush.Sev.Crit"),
             "Alta" or "Altas" => ("Brush.Sev.High.Soft", "Brush.Sev.High"),
             "Media" or "Medias" => ("Brush.Sev.Med.Soft", "Brush.Sev.Med"),
             _ => ("Brush.Sev.Low.Soft", "Brush.Sev.Low"),

@@ -78,9 +78,11 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>
-    /// Coloca la ventana donde estaba (F26 Parte A, D-956). La PRIMERA vez, maximizada: Atalaya se
-    /// desarrolló y se probó en una ventana pequeña, y estrenarla así es empezar por el peor
-    /// tamaño que tiene. Después, lo que el usuario dejara.
+    /// Coloca la ventana donde estaba (F26 Parte A, D-956) y la maximiza. <b>Siempre</b>: el
+    /// principio 1 es «pantalla completa por defecto», y hacerlo solo la primera vez dejaba a
+    /// Atalaya abriendo pequeña para siempre en cuanto alguien restauraba la ventana una tarde.
+    /// El tamaño y la posición guardados se siguen aplicando ANTES de maximizar, que es lo que
+    /// convierte a ese rectángulo en el de restauración.
     /// </summary>
     private void ApplySavedPlacement()
     {

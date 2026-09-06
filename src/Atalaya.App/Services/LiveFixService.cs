@@ -613,9 +613,14 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         }
 
         HasFinished = true;
-        StatusMessage = interrupted
-            ? "Arreglo detenido. Lo aplicado sigue en tu clon, sin commitear."
-            : "Arreglo terminado. Los cambios están en tu clon, sin commitear.";
+        // TRES FINALES Y NO DOS (R10 §7). El de «sin ficheros tocados» se contaba como uno de los
+        // otros, así que una sesión detenida antes de la primera edición decía «lo aplicado sigue
+        // en tu clon» sin que hubiera nada aplicado.
+        StatusMessage = Files.Count == 0
+            ? "El agente no llegó a escribir nada: tu clon está como lo dejaste."
+            : interrupted
+                ? "Arreglo detenido. Lo aplicado sigue en tu clon, sin commitear."
+                : "Arreglo terminado. Los cambios están en tu clon, sin commitear.";
         Changed?.Invoke();
         Completed?.Invoke(
             $"Arreglo asistido de {FindingAlias}: {Files.Count} fichero(s) tocado(s). "

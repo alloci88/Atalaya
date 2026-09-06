@@ -169,64 +169,64 @@
 
                  F16-RETOQUE §2·2 — el identificador aparece UNA vez. Salía truncado junto al
                  título («BUG-0012…») y otra vez entero dentro del rótulo del enlace, que es
-                 leerlo dos veces y ninguna bien. Ahora vive aquí, en su propia columna Auto —es
-                 corto, cabe entero y nunca se recorta— y el enlace dice solo a dónde lleva. Lo
-                 que cede cuando falta sitio es el nombre de la aplicación, que es lo único de
-                 esta zona que puede ser largo. -->
+                 leerlo dos veces y ninguna bien. Ahora vive en la fila de identidad, corto y
+                 entero, y el enlace dice solo a dónde lleva. Lo que cede cuando falta sitio es el
+                 nombre de la aplicación, que es lo único de esta zona que puede ser largo. -->
             <Grid VerticalAlignment="Center">
                 <Grid.ColumnDefinitions>
+                    <!-- LA IDENTIDAD ENTERA EN UNA CELDA, sobre una sola línea base (R10 §6). Eran
+                         tres columnas, y por eso «MEJ-0058» y «XBLAST» no compartían base con
+                         «Arreglo asistido»: WPF no alinea líneas base entre celdas de un `Grid`, y
+                         lo único que había —`VerticalAlignment="Center"`— iguala el centro de las
+                         CAJAS, así que la caja pequeña del nombre salía alta y la del
+                         identificador, que sí compartía párrafo con el título, se leía a su base.
+                         `c:BaselineRow` reparte a lo ancho como repartían las columnas —de
+                         izquierda a derecha con lo que queda, así que lo que cede es lo último, el
+                         nombre de la aplicación— y apoya las tres en la misma base.
+
+                         La celda es `Auto` y el tope lo lleva la fila: así el enlace y el
+                         distintivo quedan pegados a la identidad en vez de esperar al final de una
+                         columna estrella que nadie llena. -->
                     <ColumnDefinition Width="Auto" />
-                    <!-- El identificador: Auto y sin recorte. Un alias a medias no identifica. -->
-                    <ColumnDefinition Width="Auto" />
-                    <!-- El nombre de la app va en la columna que ENCOGE, y acotada por los dos
-                         lados: estrella para que se quede con lo que sobre y ceda lo que haga
-                         falta, MaxWidth para que cuando sobre sitio no empuje al distintivo y al
-                         enlace al extremo, y MinWidth porque una columna estrella SÍ llega a cero
-                         — y un TextBlock en una celda de cero ancho no desaparece: pinta sus
-                         puntos suspensivos encima de la pieza siguiente. Con un suelo, o cabe
-                         recortado o lo recorta la cabecera, pero nunca se pinta sobre nadie. -->
-                    <ColumnDefinition Width="*" MinWidth="60" MaxWidth="220" />
                     <ColumnDefinition Width="Auto" />
                     <!-- LA PASTILLA VA EN UNA COLUMNA QUE PUEDE ENCOGER (UI-0011). En `Auto` no
                          encoge nunca: la rejilla le da lo que pide, la fila se sale y la recorta
                          la cabecera, que es como el distintivo acababa en «Age». En estrella cede
                          cuando falta sitio, y `c:ChipHost` la retira entera en cuanto lo que le
-                         queda no le llega. A anchos amplios no se mueve nada: la columna 2 está
-                         topada en 220, así que el sobrante caía aquí de todos modos. -->
+                         queda no le llega. A anchos amplios no se mueve nada: la identidad va en
+                         una celda `Auto` con su propio tope, así que el sobrante cae aquí. -->
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <!-- Título e identificador en el MISMO TextBlock, por lo mismo que en
-                     SessionView (D-983): dos tamaños en una fila comparten línea base solo si
-                     comparten párrafo. `VerticalAlignment="Bottom"` igualaba cajas, no bases, y
-                     el alias quedaba hundido respecto al título. -->
-                <TextBlock Grid.Column="0" Grid.ColumnSpan="2" VerticalAlignment="Center"
-                           Style="{StaticResource Text.Name}"
-                           MaxWidth="{StaticResource Header.IdentityMaxWidth}"
-                           HorizontalAlignment="Left"
-                           ToolTip="El hallazgo que se está arreglando">
+                <!-- Las tres piezas de la identidad, en la misma fila y sobre la misma base.
+                     El hueco entre ellas lo pone la fila una sola vez (`Gap`), y no el margen de
+                     cada una: era de lo que salían las tres separaciones distintas. -->
+                <c:BaselineRow Grid.Column="0" Gap="{StaticResource Space.S}" VerticalAlignment="Center"
+                               MaxWidth="{StaticResource Header.IdentityMaxWidth}"
+                               HorizontalAlignment="Left">
                     <!-- EL TÍTULO LO DICE EL VIEW-MODEL, no el XAML (UI-0029). Estaba escrito aquí
                          a mano, así que al terminar el arreglo la entrada del raíl pasaba a
                          «Último arreglo» y la página seguía diciendo «Arreglo asistido»: en la
                          misma pantalla, los tres sitios que dicen dónde estás decían dos cosas.
                          Ahora el rótulo del raíl, el título y el último eslabón de la miga salen
                          de la misma propiedad. -->
-                    <Run Text="{Binding Title, Mode=OneWay}"
-                         FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
-                    <Run Text=" " />
-                    <Run Text="{Binding FindingAliasText, Mode=OneWay}" FontWeight="SemiBold"
-                         Foreground="{DynamicResource Brush.TextMuted}" />
-                </TextBlock>
-                <!-- SIN HorizontalAlignment="Left": con alineación distinta de Stretch, WPF
-                     arregla el texto a su tamaño DESEADO —hasta su MaxWidth— y no al de su celda,
-                     así que en cuanto la columna estrella encogía por debajo de 220 el nombre se
-                     metía 20 px dentro del distintivo de al lado. Estirado, ocupa su columna y ni
-                     un píxel más, que es justo lo que el recorte necesita para activarse. -->
-                <TextBlock Grid.Column="2" Text="{Binding AppNameText}"
-                           Style="{StaticResource Text.Name}"
-                           Foreground="{DynamicResource Brush.TextFaint}"
-                           VerticalAlignment="Center" Margin="{StaticResource Pad.S.Left}"
-                           MaxWidth="{StaticResource Header.AppNameMaxWidth}"
-                           ToolTip="{Binding AppNameText}" />
+                    <TextBlock Text="{Binding Title, Mode=OneWay}"
+                               Style="{StaticResource Text.Name}"
+                               FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
+                    <!-- El identificador, sin recorte: un alias a medias no identifica. -->
+                    <TextBlock Text="{Binding FindingAliasText, Mode=OneWay}"
+                               Style="{StaticResource Text.Name}" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Brush.TextMuted}"
+                               ToolTip="El hallazgo que se está arreglando" />
+                    <!-- El nombre de la aplicación: lo único de la zona que puede ser largo, así
+                         que es lo que cede. Con el MISMO tamaño y la MISMA tinta secundaria que el
+                         identificador (R10 §6): iba en `Brush.TextFaint`, un tercer nivel de gris
+                         para una pieza que es hermana de la de al lado. -->
+                    <TextBlock Text="{Binding AppNameText}"
+                               Style="{StaticResource Text.Name}"
+                               Foreground="{DynamicResource Brush.TextMuted}"
+                               MaxWidth="{StaticResource Header.AppNameMaxWidth}"
+                               ToolTip="{Binding AppNameText}" />
+                </c:BaselineRow>
                 <!-- H9.1 §1: el camino de vuelta al hallazgo, disponible mientras haya sesión que
                      mirar —corriendo, terminada o fallida—, no solo en la pantalla de cierre.
 
@@ -237,7 +237,7 @@
                 <!-- R6 §7: el enlace del SISTEMA, no el `LinkButton` de antes de F26 —que pinta con
                      las brochas de la librería y no con la paleta de la casa—. Es uno de los seis
                      controles que no daban ninguna señal al pasar el ratón. -->
-                <Button Grid.Column="3" Content="{Binding BackToFindingLabel}" Command="{Binding BackToFindingCommand}"
+                <Button Grid.Column="1" Content="{Binding BackToFindingLabel}" Command="{Binding BackToFindingCommand}"
                         Style="{StaticResource Button.Link}" VerticalAlignment="Center" Margin="{StaticResource Pad.M.Left}"
                         FontSize="{StaticResource FontSize.Small}"
                         ToolTip="Abre la ficha del hallazgo que originó este arreglo">
@@ -261,7 +261,7 @@
                      quedaba no se podía interpretar. «Age» no es una versión corta de «Agente
                      falso · claude-opus-4.7»: es otra palabra. `c:ChipHost` la retira entera
                      cuando no cabe; el dato sigue en el tooltip. -->
-                <c:ChipHost Grid.Column="4" VerticalAlignment="Center" Margin="{StaticResource Pad.M.Left}"
+                <c:ChipHost Grid.Column="2" VerticalAlignment="Center" Margin="{StaticResource Pad.M.Left}"
                             Visibility="{Binding HasEngine, Converter={StaticResource BoolToVisibility}}">
                     <Border Style="{StaticResource Pill}"
                             ToolTip="El proveedor y el modelo que están haciendo este arreglo. Quedan escritos en el informe.">
@@ -311,7 +311,15 @@
                      que es donde destruir es lo que se ha venido a hacer. -->
                 <Button Content="Descartar todo" Command="{Binding DiscardAllCommand}"
                         Style="{StaticResource Button.Danger}"
+                        IsEnabled="{Binding CanDiscardAll}"
                         ToolTip="Devuelve cada fichero tocado a como estaba antes de esta sesión." />
+                <!-- LA RAZÓN, PEGADA AL BOTÓN APAGADO (P-27, R10 §7). Un arreglo que terminó sin
+                     tocar nada no tiene qué descartar, y hasta ahora el botón seguía encendido
+                     para contestar con un aviso flotante al pulsarlo. -->
+                <Border Style="{StaticResource Reason.Chip}"
+                        Visibility="{Binding HasDiscardBlockedReason, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="{Binding DiscardBlockedReason}" Style="{StaticResource Reason.Text}" />
+                </Border>
             </StackPanel>
         </c:PageHeader>
 
@@ -575,14 +583,22 @@
                     Visibility="{Binding ShowClosing, Converter={StaticResource BoolToVisibility}}">
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Margin="{StaticResource Pad.M.Bottom}">
-                        <TextBlock Text="Arreglo terminado" FontSize="{StaticResource FontSize.H3}" FontWeight="SemiBold" />
+                        <!-- EL TITULAR LO DICE EL VIEW-MODEL (R10 §7): sin ficheros tocados no hay
+                             nada que dar por terminado, y «Arreglo terminado» sobre un clon intacto
+                             es la primera de las cuatro cosas que esta pantalla afirmaba de más. -->
+                        <TextBlock Text="{Binding ClosingHeadline}" FontSize="{StaticResource FontSize.H3}" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding Fix.StatusMessage}" TextWrapping="Wrap" Opacity="0.8"
                                    FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Top}" />
                         <!-- UN AVISO ES ICONO, TEXTO Y —SI LA HAY— LA ACCIÓN (UI-0052). Aquí
                              «esto es un aviso» viajaba solo en el color: relleno ámbar y una frase,
                              sin el icono que llevan los de Métricas y Ajustes. El mismo control
-                             salía en tres formas distintas según la vista. -->
-                        <Border Style="{StaticResource Notice.Warning}" Margin="{StaticResource Pad.S.Top}">
+                             salía en tres formas distintas según la vista.
+
+                             Y SOLO SI HAY CAMBIOS (R10 §7): decir «los cambios están en tu clon sin
+                             commitear» cuando no hay ninguno no es un matiz, es una advertencia
+                             falsa que manda a mirar un `git status` limpio. -->
+                        <Border Style="{StaticResource Notice.Warning}" Margin="{StaticResource Pad.S.Top}"
+                                Visibility="{Binding ClosedWithChanges, Converter={StaticResource BoolToVisibility}}">
                             <DockPanel>
                                 <Path DockPanel.Dock="Left" Style="{StaticResource Notice.Icon}"
                                       Data="{x:Static c:Icons.Warning}"
@@ -594,11 +610,17 @@
                         </Border>
                     </StackPanel>
 
+                    <!-- LAS ACCIONES QUE APLICAN, Y NINGUNA MÁS (R10 §7). Sin ficheros tocados
+                         quedan dos: leer lo que pasó y abrir el clon. «Verificar ahora» mediría un
+                         cambio que no existe y «Me quedo los cambios» cerraría un conjunto vacío;
+                         las dos preguntan por algo que nadie escribió. -->
                     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="{StaticResource Pad.M.Top}">
-                        <Button Style="{StaticResource Button.Primary}" Content="Verificar ahora" Command="{Binding VerifyNowCommand}" />
+                        <Button Style="{StaticResource Button.Primary}" Content="Verificar ahora" Command="{Binding VerifyNowCommand}"
+                                Visibility="{Binding ClosedWithChanges, Converter={StaticResource BoolToVisibility}}" />
                         <Button Content="Abrir en el editor" Command="{Binding OpenInEditorCommand}" Margin="{StaticResource Pad.XS.Left}" />
                         <Button Content="Ver informe" Command="{Binding OpenReportCommand}" Margin="{StaticResource Pad.XS.Left}" />
-                        <Button Content="Me quedo los cambios" Command="{Binding FinishCommand}" Margin="{StaticResource Pad.XS.Left}" />
+                        <Button Content="Me quedo los cambios" Command="{Binding FinishCommand}" Margin="{StaticResource Pad.XS.Left}"
+                                Visibility="{Binding ClosedWithChanges, Converter={StaticResource BoolToVisibility}}" />
                     </StackPanel>
 
                     <!-- LA BARRA FIJA NO SIEGA UNA LÍNEA (UI-0037). Recortaba el contenido en
@@ -667,10 +689,16 @@
                                 </ScrollViewer>
                             </Border>
 
-                            <!-- · La sugerencia de commit, en su tarjeta propia y EDITABLE · -->
+                            <!-- · La sugerencia de commit, en su tarjeta propia y EDITABLE ·
+
+                                 SOLO SI HAY QUE COMMITEAR ALGO (R10 §7). Era la pieza más dañina de
+                                 las cuatro que sobraban en un arreglo sin cambios: un título y una
+                                 descripción redactados para un trabajo que nadie hizo, listos para
+                                 copiar y commitear. -->
                             <Border CornerRadius="8" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.M.Top}"
                                     Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                                    Visibility="{Binding ClosedWithChanges, Converter={StaticResource BoolToVisibility}}">
                                 <StackPanel>
                                     <TextBlock Text="Sugerencia de commit" Style="{StaticResource SectionTitle}" />
                                     <TextBlock Style="{StaticResource Help}" Margin="{StaticResource Pad.XS.Bottom}"

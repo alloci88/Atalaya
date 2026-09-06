@@ -313,7 +313,10 @@ public sealed class PageHeaderLayoutTests
             var danger = buttons.OfType<Button>()
                 .Single(b => (b.Content as string) == "Descartar todo");
 
-            buttons[^1].Should().BeSameAs(danger, "la que deshace el trabajo va al final, no en medio");
+            // El ÚLTIMO BOTÓN, no el último hijo: desde R10 §7 detrás puede ir el chip que dice
+            // por qué «Descartar todo» está apagado (P-27), y una razón no es una acción.
+            buttons.OfType<Button>().Last()
+                .Should().BeSameAs(danger, "la que deshace el trabajo va al final, no en medio");
 
             // LO QUE YA NO SE COMPRUEBA, y por qué. Hasta aquí este test exigía además que el
             // destructivo llevara MÁS aire que el resto (F16-RETOQUE §2·4, «la separación ES la
@@ -384,14 +387,22 @@ public sealed class PageHeaderLayoutTests
     /// hasta que ya ha empujado a los demás fuera de la pantalla.
     /// </para>
     /// </summary>
+    /// <remarks>
+    /// <b>Se lee de la fila de identidad</b> (R10 §6). Era un único <c>TextBlock</c> que abarcaba
+    /// dos columnas; ahora las piezas son hermanas dentro de un <c>c:BaselineRow</c>, para que
+    /// compartan línea base. La regla no cambia y se comprueba igual: la primitiva del sistema, un
+    /// tope, y el tooltip que devuelve entero lo que se recorta.
+    /// </remarks>
     [Theory]
     [MemberData(nameof(Views))]
     public void Un_titulo_largo_se_recorta_y_se_lee_en_el_tooltip(string view)
     {
         string identidad = Regex.Match(
             ViewLayout.Xaml(view),
-            @"<TextBlock Grid.Column=""0"" Grid.ColumnSpan=""2""(?:[^>""]|""[^""]*"")*?>").Value;
+            @"<c:BaselineRow\b.*?</c:BaselineRow>",
+            RegexOptions.Singleline).Value;
 
+        identidad.Should().NotBeEmpty("la identidad de la cabecera es una fila de línea base");
         identidad.Should().Contain(
             "{StaticResource Text.Name}",
             "el recorte de un nombre lo pone la primitiva del sistema, no la vista (P-01)");

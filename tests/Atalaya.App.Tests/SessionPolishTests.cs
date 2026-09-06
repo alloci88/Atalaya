@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Anchoring;
@@ -19,6 +19,36 @@ public sealed class SessionPolishTests
     // ============================================================ §H.1 · resumen por clase
 
     private static SummaryItem It(string unit, Severity sev, string text) => new(unit, sev, text);
+
+    /// <summary>
+    /// <b>EL DESGLOSE DE «NUEVOS» LLEVA AL HALLAZGO, Y LA GRAVEDAD NO ES TEXTO</b> (R10 §5).
+    /// <para>
+    /// Cada hallazgo del desglose salía como «[Crítica] Título» en texto plano: la única pantalla
+    /// de la aplicación donde la gravedad no se veía sin leer, a cuarenta píxeles de la cabecera
+    /// «1 Crítica · 1 Media · 2 Bajas», que sí la pinta. Y no llevaba a ninguna parte, así que la
+    /// pantalla de cierre obligaba a apuntarse el título e ir a buscarlo a Hallazgos.
+    /// </para>
+    /// <para>
+    /// Las dos mitades son <b>datos</b> y por eso tienen test: el corchete se quita del texto —lo
+    /// dice la pastilla— y el identificador del hallazgo viaja con la fila. Volver a escribir el
+    /// corchete o dejar de pasar el id no rompe nada: la pantalla se pinta igual y deja de llevar
+    /// a ningún sitio, que es la forma más silenciosa de perder una función.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Cada_hallazgo_del_desglose_trae_su_gravedad_aparte_y_el_camino_a_su_ficha()
+    {
+        Ulid id = new UlidFactory(SystemClock.Instance).NewUlid();
+        var item = new SummaryItem("Core/Motor.cs", Severity.Critica, "El total aplica un factor fijo", id);
+
+        item.Text.Should().NotContain("[", "la gravedad la pinta la pastilla, no un corchete en el texto");
+        item.HasFinding.Should().BeTrue();
+        item.FindingId.Should().Be(id);
+
+        // Y una fila que no habla de un hallazgo concreto sigue existiendo, sin camino: es la que
+        // usan las líneas de unidades e incidencias.
+        It("Core/Motor.cs", Severity.Baja, "unidad incompleta").HasFinding.Should().BeFalse();
+    }
 
     /// <summary>
     /// El desglose agrupa por clase y ordena como la vista de Hallazgos: primero la que trae lo más

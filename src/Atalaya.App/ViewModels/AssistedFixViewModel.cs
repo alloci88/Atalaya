@@ -315,6 +315,51 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
     public const string UncommittedReminder =
         "Los cambios están en tu clon sin commitear — revisa y commitea cuando estés conforme.";
 
+    // ------------------------------------------------------------------ un arreglo sin cambios
+
+    /// <summary>
+    /// <b>El arreglo terminó sin tocar un solo fichero</b> (R10 §7): lo detuvieron, se descartó, o
+    /// el agente nunca llegó a editar. Los tres acaban igual y la pantalla tiene que decir lo
+    /// mismo en los tres.
+    /// <para>
+    /// <b>Lo que hacía antes.</b> Enseñaba la pantalla de cierre entera: el aviso ámbar «Los
+    /// cambios están en tu clon sin commitear», la tarjeta «Sugerencia de commit» con un mensaje
+    /// redactado para un cambio que no existe, «Verificar ahora» —verificar qué— y «Me quedo los
+    /// cambios» —cuáles—. Cuatro piezas que no aplican, y la más peligrosa es la sugerencia de
+    /// commit: describe un trabajo que nadie hizo, y quien la copie commitea una mentira.
+    /// </para>
+    /// </summary>
+    public bool ClosedWithoutChanges => ShowClosing && Files.Count == 0;
+
+    /// <summary>Lo contrario, que es lo que la vista necesita para ENSEÑAR lo que sí aplica.</summary>
+    public bool ClosedWithChanges => ShowClosing && Files.Count > 0;
+
+    /// <summary>
+    /// El titular de la pantalla de cierre. Sin ficheros tocados no hay nada que dar por
+    /// terminado: lo que hay es una sesión que paró sin dejar rastro, y eso se dice.
+    /// </summary>
+    public string ClosingHeadline => Files.Count == 0
+        ? "Arreglo detenido · no hay cambios en tu clon"
+        : "Arreglo terminado";
+
+    /// <summary>
+    /// Hay algo que descartar. Antes esto se comprobaba DENTRO del comando y se contestaba con un
+    /// aviso flotante —«No hay ningún cambio que descartar»—, o sea: un botón encendido que al
+    /// pulsarlo dice que no. Apagado con la razón al lado es el patrón de la casa (P-27).
+    /// </summary>
+    public bool CanDiscardAll => Files.Count > 0 || _fix.HasPendingChanges;
+
+    /// <summary>
+    /// La razón, para el chip pegado al botón. Vacía mientras se pueda pulsar, y vacía también
+    /// mientras la sesión corre: ahí un arreglo que todavía no ha escrito nada es lo normal y no
+    /// hace falta explicárselo a nadie.
+    /// </summary>
+    public string DiscardBlockedReason => !CanDiscardAll && HasSession && !IsRunning
+        ? "no hay cambios"
+        : string.Empty;
+
+    public bool HasDiscardBlockedReason => DiscardBlockedReason.Length > 0;
+
     public override Task LoadAsync()
     {
         RefreshPending();
@@ -380,9 +425,10 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
     [RelayCommand]
     private void DiscardAll()
     {
-        if (Files.Count == 0 && !_fix.HasPendingChanges)
+        // El botón ya está apagado en este caso (`CanDiscardAll`), con la razón al lado. Esto se
+        // queda como red: un comando también se puede invocar desde el teclado.
+        if (!CanDiscardAll)
         {
-            _toasts.Show("No hay ningún cambio que descartar.");
             return;
         }
 
@@ -676,6 +722,12 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
         OnPropertyChanged(nameof(TouchedText));
         OnPropertyChanged(nameof(BuildText));
         OnPropertyChanged(nameof(BuildScopeText));
+        OnPropertyChanged(nameof(ClosedWithoutChanges));
+        OnPropertyChanged(nameof(ClosedWithChanges));
+        OnPropertyChanged(nameof(ClosingHeadline));
+        OnPropertyChanged(nameof(CanDiscardAll));
+        OnPropertyChanged(nameof(DiscardBlockedReason));
+        OnPropertyChanged(nameof(HasDiscardBlockedReason));
     }
 }
 

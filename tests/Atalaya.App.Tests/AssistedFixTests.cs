@@ -786,6 +786,60 @@ public sealed class AssistedFixTests : IDisposable
         => (await FinishedFix()).Close(keepChanges: false).Should().BeFalse(
             "sería quitar de la vista el único camino al descarte");
 
+    /// <summary>
+    /// <b>UN ARREGLO QUE NO TOCÓ NADA NO OFRECE NADA QUE HACER CON LO QUE NO HAY</b> (R10 §7).
+    /// <para>
+    /// Detenido, descartado, o el agente no llegó a editar: los tres acaban con «Ficheros tocados:
+    /// ninguno», y con los tres la pantalla de cierre seguía enseñando el aviso ámbar «los cambios
+    /// están en tu clon sin commitear», la tarjeta «Sugerencia de commit», «Verificar ahora» y «Me
+    /// quedo los cambios». Cuatro piezas que hablan de un cambio inexistente, y la peor es la
+    /// sugerencia de commit: redacta el mensaje de un trabajo que nadie hizo, listo para copiar.
+    /// </para>
+    /// <para>
+    /// <b>La vista Y el informe</b>, porque el informe es el que se lee después, cuando ya nadie
+    /// recuerda que no hubo cambios. Y es una regla que se rompe en silencio: nada falla, la
+    /// pantalla se pinta entera y lo único que pasa es que miente.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Un_arreglo_sin_ficheros_tocados_no_ofrece_verificar_ni_quedarse_los_cambios()
+    {
+        // El agente cierra sin editar: es lo que deja una sesión detenida a tiempo.
+        var agent = new FakeCopilotAgent(fixScript: _ => new[]
+        {
+            new FixStep(Done: new FixDoneArgs(
+                "Se revisó la unidad y no se llegó a tocar nada.", "Arregla (BUG-0003)", "", null)),
+        });
+
+        LiveFixService fix = Service(agent);
+        await fix.StartAsync(new FixSessionRequest(Slug, _findingId));
+
+        fix.HasFinished.Should().BeTrue();
+        fix.Files.Should().BeEmpty("el agente no editó");
+
+        // ---- la vista
+        var vm = new AssistedFixViewModel(fix, _toasts, new ScriptedDiscard(answer: false));
+
+        vm.ClosedWithoutChanges.Should().BeTrue();
+        vm.ClosedWithChanges.Should().BeFalse(
+            "de esto cuelgan el aviso ámbar, la sugerencia de commit, «Verificar ahora» y «Me quedo los cambios»");
+        vm.ClosingHeadline.Should().Be("Arreglo detenido · no hay cambios en tu clon");
+        vm.CanDiscardAll.Should().BeFalse("no hay nada que descartar");
+        vm.DiscardBlockedReason.Should().Be("no hay cambios", "y el botón apagado dice por qué (P-27)");
+
+        // «Qué cambió y por qué» sí se enseña, con lo que haya: es lo único que esta pantalla
+        // tiene que contar.
+        fix.Summary.Should().NotBeEmpty();
+
+        // ---- el informe
+        string report = File.ReadAllText(fix.ReportPath!);
+
+        report.Should().Contain("No hay cambios en el clon");
+        report.Should().NotContain("Estos cambios NO están commiteados");
+        report.Should().NotContain("## Sugerencia de commit");
+        report.Should().Contain("## Qué cambió y por qué");
+    }
+
     /// <summary>Una sesión de arreglo TERMINADA con su edición aplicada, lista para cerrar.</summary>
     private async Task<LiveFixService> FinishedFix()
     {
