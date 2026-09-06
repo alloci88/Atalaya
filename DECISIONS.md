@@ -16679,3 +16679,55 @@ forma se pinta lo que ya llegaba.
 cierre **sustituye** a las tres columnas desde F5, así que el hilo plegado de «Última sesión» se ve
 en las sesiones que acaban sin resumen —una detenida, una fallida— y no en las que cierran bien. No
 se toca: devolver el hilo detrás del resumen es una disposición nueva y nadie la ha pedido.
+
+
+### D-1021 — Dos maneras de enseñar algo que no se había elegido: un color y un nombre
+
+Un párrafo (N-7) y solo lo pedido (N-6), sobre el `dist` de D-1020. **(a) Los separadores de pasada
+no se leían en tema oscuro.** La causa no era un color mal medido: era que **no había color
+elegido**. El separador es un `ToggleButton` con `ControlTemplate` propio, y una plantilla propia
+deja fuera el estilo implícito del control —y con él su `Foreground`—, así que el título, que no
+declaraba el suyo, heredaba el del control: un valor que no sale de `Palette.*.xaml` y que por tanto
+**no mide nadie**. Se arregla en los dos sitios que hacían falta: el estilo `Conversation.Section`
+declara `Brush.Text` —así lo hereda todo lo que se ponga dentro de un separador, hoy y mañana— y el
+título lo declara también, porque es la pieza que hay que poder leer. Los dos pares son de los
+medidos: `Text` sobre `Bg` (el panel) y sobre `Surface2` (el realce del ratón), en claro y en
+oscuro. De paso caen **dos brochas de WPF-UI** que la tarjeta de pregunta arrastraba desde F16
+(`TextFillColorPrimaryBrush`, `TextFillColorSecondaryBrush`): son lo mismo por otra puerta —tinta
+que la paleta no declara— y pasan a `Brush.Text` y `Brush.TextMuted`, sobre el `Warning.Soft` de la
+tarjeta y el `Surface2` al que pasa una vez contestada, los dos medidos. **(b) El hilo decía
+«Llamando a unit_done…».** De las seis herramientas del auditor, cinco tenían su frase en castellano
+y `unit_done` no, así que caía en el caso por defecto — que escribía el identificador tal cual. Un
+nombre con guion bajo no es una frase: es la aplicación enseñando su cocina en la pantalla donde el
+usuario mira mientras trabaja. Entran «Cerrando la pasada…» para `unit_done`, `read_signatures` pasa
+de «Leyendo el fichero…» a **«Leyendo la unidad…»**, y **el caso por defecto deja de nombrar
+ninguna** —«Llamando a una herramienta…», «escribiendo una llamada»—, también en el pie. Los
+identificadores se quedan donde sirven, que es el anexo técnico del informe.
+
+**Cobertura (N-5, N-7): tres tests de regla, uno por puerta, los tres comprobados con cebo.**
+**(1)** «toda tinta del componente es una de las medidas» y **(2)** «ningún control del componente
+deja su tinta sin declarar» viven en `PaletteContrastTests`, que era exactamente el sitio con el
+hueco: los pares de arriba miden combinaciones **de la paleta**, y una tinta que no es de la paleta
+no aparece en ninguna combinación — pasa en verde mientras el texto es ilegible. El hueco no era el
+cálculo, era el inventario de lo que se pinta, y estas plantillas son nuevas, viven en `Themes/` y
+no las miraba ninguno de los tests de color. **(3)** «ninguna frase del hilo ni del pie nombra una
+herramienta por su nombre interno», en `LiveNarrationTests`, y le pregunta a la **lista de
+herramientas de verdad** (`AuditorTools.ForAudit`) en vez de a las cinco de siempre: lo que se rompe
+en silencio es añadir la séptima, que se declara, se llama y se anuncia por su identificador sin que
+falle nada. Tiene **dos mitades y las dos hacen falta**: que la frase no contenga el nombre, y que
+**no sea la genérica** — el primer cebo lo enseñó, porque al quitarle el caso a `unit_done` la
+prueba pasaba en verde con «Llamando a una herramienta…», que para una de las seis es no decir nada.
+Por eso las dos frases de la red son constantes públicas: el test necesita poder distinguir «tiene
+la suya» de «se ha quedado con la del desconocido» sin repetir el texto.
+
+**Lo que se conserva y por qué.** El caso por defecto de la línea de una herramienta **ya ejecutada**
+sigue devolviendo la traza cruda (D-1012): ahí el texto lleva los contadores y es la única evidencia
+que hay de una herramienta que nadie ha nombrado todavía. Con el test (3) puesto, esa red no se
+alcanza —una herramienta nueva sin frase pone la suite en rojo el día que se declara—, así que deja
+de ser una vía por la que un identificador llegue a la pantalla y pasa a ser lo que debe ser: el
+último recurso.
+
+**Y una imprecisión que se deja dicha (N-2).** `read_signatures` no lee la unidad: lee las **firmas
+de una dependencia** suya, y la línea de la herramienta ya ejecutada lo dice con su ruta («Ha leído
+src/Otro.cs»). La frase en vuelo es la que pidió el usuario, literal; la exacta sería «Leyendo una
+dependencia…». Se cambia con una palabra si quiere.

@@ -4,8 +4,9 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-07 (F30 §3 — un solo componente de conversación para el arreglo, la
-sesión en vivo y la última sesión).
+Última revisión: 2026-09-07 (F30 §3 — un solo componente de conversación, y los dos retoques que
+salieron de mirarlo en el `dist`: el contraste de los separadores y los nombres internos de las
+herramientas).
 
 ## En vuelo
 
@@ -77,7 +78,12 @@ sesión en vivo y la última sesión).
     al evaluar los valores por defecto de `param()` en esa forma de invocación. Por el camino
     documentado funciona.
 
-- **F30 §3 — un solo componente de conversación. ENTREGADA** (D-1020). El componente del arreglo
+- **F30 §3 — un solo componente de conversación. ENTREGADA** (D-1020). Revisada por el usuario en el
+  `dist` y **corregida** (D-1021): los separadores de pasada no se leían en oscuro —un
+  `ControlTemplate` propio se lleva por delante el `Foreground` del estilo implícito y lo de dentro
+  heredaba una tinta que no es de la paleta—, y el hilo decía «Llamando a unit_done…» porque era la
+  única de las seis herramientas sin frase en castellano. `PaletteContrastTests` cubre ahora las
+  plantillas de `Themes/`, y las frases se comprueban contra la lista de herramientas de verdad. El componente del arreglo
   asistido pasa a ser el de la casa: un modelo común (`ConversationEntry`), una plantilla por clase
   de evento en `Themes/Conversation.xaml` y tres vistas usándolo. El árbol de expanders de R11 se
   retira a favor de una columna con separadores de pasada y de unidad; `RunOrQueue` sale del arreglo
