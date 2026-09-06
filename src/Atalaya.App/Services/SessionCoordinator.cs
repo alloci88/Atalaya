@@ -568,6 +568,19 @@ public sealed class SessionCoordinator
         void OnToolInvoked(string entry) => Note(ActivityNoteKind.Tool, entry);
 
         toolbox.ToolInvoked += OnToolInvoked;
+
+        // F30 §2 — y cada herramienta MIENTRAS el modelo la escribe, para el proveedor que sepa
+        // contarlo. La línea se va reescribiendo hasta que la ejecución la sustituye por la
+        // definitiva; ahí está el tramo largo que D-1014 midió.
+        void OnToolStreamed(ToolStream tool)
+            => ActivityNoted?.Invoke(new ActivityNote(
+                activityUnit, activityPass, ActivityNoteKind.ToolWriting, ActivityWording.Writing(tool)));
+
+        var narrating = _agent as INarratingAuditor;
+        if (narrating is not null)
+        {
+            narrating.ToolStreamed += OnToolStreamed;
+        }
         var auditedPaths = new HashSet<string>(StringComparer.Ordinal);
         int incompleteUnits = 0;
 
@@ -1023,6 +1036,10 @@ public sealed class SessionCoordinator
         {
             _agent.TextStreamed -= OnText;
             toolbox.ToolInvoked -= OnToolInvoked;
+            if (narrating is not null)
+            {
+                narrating.ToolStreamed -= OnToolStreamed;
+            }
             _agent.UsageReported -= OnUsage;
             if (claude is not null)
             {

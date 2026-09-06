@@ -1,4 +1,6 @@
-﻿namespace Atalaya.App.Services;
+﻿using Atalaya.Agents;
+
+namespace Atalaya.App.Services;
 
 /// <summary>De qué habla una línea del hilo de actividad (F30 §1).</summary>
 public enum ActivityNoteKind
@@ -8,6 +10,18 @@ public enum ActivityNoteKind
 
     /// <summary>Un hito de la propia Atalaya: un corte, una reanudación fallida.</summary>
     Milestone,
+
+    /// <summary>
+    /// <b>Una herramienta que el modelo está ESCRIBIENDO</b> (F30 §2): todavía no se ha ejecutado.
+    /// <para>
+    /// Se distingue de <see cref="Tool"/> —que es la herramienta ya ejecutada— porque la línea es
+    /// la misma y se va reescribiendo: «Reportando hallazgos…» y luego «Recibiendo hallazgos · 3 ·
+    /// Credenciales embebidas…», hasta que la ejecución la sustituye por la definitiva. Es el tramo
+    /// donde D-1014 midió el minuto: reportar once hallazgos son ~2.700 tokens de escritura, unos
+    /// 42 s en los que hasta ahora no llegaba nada.
+    /// </para>
+    /// </summary>
+    ToolWriting,
 
     /// <summary>
     /// <b>La entrega al modelo</b> (F30 §1b): el turno acaba de salir y a partir de aquí lo que
@@ -108,6 +122,46 @@ public static class ActivityWording
         int n = Number(entry, "items");
         return n == 1 ? singular : $"{verb} {n} {noun}";
     }
+
+    /// <summary>
+    /// Cómo se lee una herramienta que el modelo TODAVÍA está escribiendo (F30 §2).
+    /// <para>
+    /// <b>Sin denominador, y no es un olvido.</b> Lo que llega es un array que se está escribiendo:
+    /// cuántos elementos va a tener no se sabe hasta que cierra. Se dice lo que hay —«3
+    /// hallazgos»—, nunca «3 de 11», porque el once habría que inventarlo y esta fase tiene
+    /// prohibido inventar progreso. El número definitivo lo da la línea de la ejecución.
+    /// </para>
+    /// </summary>
+    public static string Writing(ToolStream tool)
+    {
+        string verb = tool.Tool switch
+        {
+            "submit_findings" or "submit_finding" => "hallazgos",
+            "report_verdicts" => "veredictos",
+            "add_locations" => "ubicaciones",
+            "read_signatures" => "la lectura",
+            _ => tool.Tool,
+        };
+
+        if (tool.Phase == ToolStreamPhase.Started || tool.Items == 0)
+        {
+            return tool.Tool switch
+            {
+                "submit_findings" or "submit_finding" => "Reportando hallazgos…",
+                "report_verdicts" => "Juzgando los hallazgos existentes…",
+                "add_locations" => "Añadiendo ubicaciones…",
+                "read_signatures" => "Leyendo el fichero…",
+                _ => $"Llamando a {tool.Tool}…",
+            };
+        }
+
+        string tail = tool.Last is { Length: > 0 } last ? $" · {Trim(last)}" : string.Empty;
+        return $"Recibiendo {verb} · {tool.Items}{tail}";
+    }
+
+    /// <summary>Un título largo no puede empujar la fila: se corta con puntos suspensivos.</summary>
+    private static string Trim(string text)
+        => text.Length <= 60 ? text : text[..59].TrimEnd() + "…";
 
     /// <summary>La frase que se lee. Ver la nota de la clase sobre lo que no reconoce.</summary>
     public static string Describe(string entry)

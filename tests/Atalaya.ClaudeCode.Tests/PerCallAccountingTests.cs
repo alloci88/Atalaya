@@ -1,4 +1,4 @@
-using Atalaya.Agents;
+﻿using Atalaya.Agents;
 using Atalaya.ClaudeCode;
 using FluentAssertions;
 using Xunit;
@@ -167,7 +167,192 @@ public sealed class PerCallAccountingTests
         outcome.TerminalReason.Should().Be("aborted_tools");
     }
 
+    // ================================================================ F30 §2 · narrar no toca las cuentas
+
+    /// <summary>
+    /// <b>LA CONDICIÓN INNEGOCIABLE DE F30 §2.</b> Leer los eventos de contenido —el texto según se
+    /// escribe y los argumentos de la herramienta— no puede mover la condición del corte.
+    /// <para>
+    /// <b>Por qué es la que da miedo.</b> Los casos nuevos viven en el MISMO <c>switch</c> que
+    /// gobierna <see cref="ClaudeStreamReader.AccountingIsComplete"/>, y de esa condición depende si
+    /// se corta la pasada. Un corte disparado con una petición en vuelo <b>se factura y no aparece
+    /// en ningún sitio</b>: medido en F21, al interrumpir a mitad de respuesta el modelo principal
+    /// desaparece entero del <c>modelUsage</c> del evento final. O sea que un fallo aquí no se ve —
+    /// se paga.
+    /// </para>
+    /// <para>
+    /// Este test es <see cref="Con_una_peticion_en_vuelo_las_cuentas_NO_estan"/> otra vez, con el
+    /// flujo que ahora se lee de verdad: bloques de contenido abriéndose, texto llegando a trozos y
+    /// los argumentos de una herramienta escribiéndose. Con todo eso por medio, las cuentas tienen
+    /// que decir exactamente lo mismo.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Con_los_eventos_de_contenido_por_medio_las_cuentas_dicen_lo_mismo()
+    {
+        var reader = new ClaudeStreamReader();
+        var pipe = new BlockingReader(Init(), Start("msg_1", 2, 11_322, 13_681));
+
+        Task<ClaudeRunOutcome> reading = reader.ReadAsync(pipe, CancellationToken.None);
+        await pipe.Drained;
+
+        reader.AccountingIsComplete.Should().BeFalse("hay un mensaje abierto y sin cerrar");
+
+        // Y ahora todo lo que F30 §2 añade a la lectura, con la petición TODAVÍA en vuelo.
+        pipe.Push(TextBlockStart(0));
+        pipe.Push(TextDelta(0, "Reviso la unidad"));
+        pipe.Push(BlockStop(0));
+        pipe.Push(ToolBlockStart(1, "mcp__atalaya__submit_findings"));
+        pipe.Push(InputDelta(1, """{"findings":[{"title":"Credenciales embebidas"},"""));
+        pipe.Push(InputDelta(1, """{"title":"Fuga de stream"}]}"""));
+        await pipe.Drained;
+
+        reader.AccountingIsComplete.Should().BeFalse(
+            "narrar no cierra ninguna llamada: la petición sigue en vuelo y cortar aquí se pagaría");
+        reader.SettledCalls.Should().Be(0);
+
+        pipe.Push(Delta(input: 2, output: 40, cacheRead: 11_322, cacheWrite: 13_681));
+        await pipe.Drained;
+
+        reader.AccountingIsComplete.Should().BeTrue("el mensaje cerró y trajo su consumo final");
+        reader.SettledCalls.Should().Be(1);
+
+        pipe.Close();
+        await reading;
+    }
+
+    /// <summary>
+    /// <b>Y el coste sale idéntico</b> (F30, «ni un token más»). El mismo flujo, con y sin los
+    /// eventos de contenido por medio, tiene que dar las mismas llamadas y los mismos tokens en los
+    /// cuatro conceptos. Es la otra mitad de la verificación: la de arriba mira el corte, ésta mira
+    /// la factura.
+    /// </summary>
+    [Fact]
+    public async Task Narrar_no_cambia_ni_una_llamada_ni_un_token()
+    {
+        var sin = new List<UsageSample>();
+        ClaudeRunOutcome a = await Read(
+            sin,
+            Init(),
+            Start("msg_1", input: 2, cacheRead: 11_322, cacheWrite: 12_753),
+            Assistant("msg_1", input: 2, output: 7),
+            Delta(input: 2, output: 6_835, cacheRead: 11_322, cacheWrite: 12_753),
+            Result(modelInput: 2, modelOutput: 6_835, cacheRead: 11_322, cacheWrite: 12_753));
+
+        var con = new List<UsageSample>();
+        ClaudeRunOutcome b = await Read(
+            con,
+            Init(),
+            Start("msg_1", input: 2, cacheRead: 11_322, cacheWrite: 12_753),
+            TextBlockStart(0),
+            TextDelta(0, "Reviso "),
+            TextDelta(0, "la unidad."),
+            BlockStop(0),
+            ToolBlockStart(1, "mcp__atalaya__submit_findings"),
+            InputDelta(1, """{"findings":[{"title":"Credenciales embebidas"},"""),
+            InputDelta(1, """{"title":"Fuga de stream"}]}"""),
+            BlockStop(1),
+            Assistant("msg_1", input: 2, output: 7),
+            Delta(input: 2, output: 6_835, cacheRead: 11_322, cacheWrite: 12_753),
+            Result(modelInput: 2, modelOutput: 6_835, cacheRead: 11_322, cacheWrite: 12_753));
+
+        con.Sum(s => s.Calls).Should().Be(sin.Sum(s => s.Calls), "ni una llamada más");
+        con.Sum(s => s.InputTokens).Should().Be(sin.Sum(s => s.InputTokens), "ni un token de entrada");
+        con.Sum(s => s.OutputTokens).Should().Be(sin.Sum(s => s.OutputTokens), "ni de salida");
+        con.Sum(s => s.CacheReadTokens).Should().Be(sin.Sum(s => s.CacheReadTokens));
+        con.Sum(s => s.CacheWriteTokens).Should().Be(sin.Sum(s => s.CacheWriteTokens));
+        b.ToolCalls.Should().Be(a.ToolCalls);
+        b.Usage!.OutputTokens.Should().Be(a.Usage!.OutputTokens);
+    }
+
+    /// <summary>
+    /// <b>Y lo que se narra es lo que hace falta para que el minuto se entienda</b> (F30 §2): la
+    /// herramienta se anuncia al EMPEZAR, y los elementos van apareciendo según se completan.
+    /// <para>
+    /// <b>El total no viaja, y no es un olvido.</b> Lo que llega es un array que se está
+    /// escribiendo: cuántos va a tener no se sabe hasta que cierra. Se cuenta lo que hay; inventar
+    /// el denominador sería inventar progreso, que esta fase tiene prohibido.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task La_herramienta_se_anuncia_al_empezar_y_sus_elementos_segun_se_escriben()
+    {
+        var narrado = new List<ToolStream>();
+
+        await new ClaudeStreamReader(onTool: narrado.Add).ReadAsync(
+            new StringReader(string.Join('\n',
+                Init(),
+                Start("msg_1", 2, 0, 0),
+                ToolBlockStart(0, "mcp__atalaya__submit_findings"),
+                InputDelta(0, """{"findings":[{"title":"Credenciales emb"""),
+                InputDelta(0, """ebidas","severity":"critica"},"""),
+                InputDelta(0, """{"title":"Fuga de stream"}]}"""),
+                BlockStop(0))),
+            CancellationToken.None);
+
+        narrado[0].Phase.Should().Be(ToolStreamPhase.Started);
+        narrado[0].Tool.Should().Be("submit_findings", "sin el prefijo del servidor MCP");
+        narrado[0].Items.Should().Be(0, "al empezar no hay nada escrito todavía");
+
+        // Un trozo a mitad de título NO cuenta: se cuenta cuando la comilla cierra.
+        List<ToolStream> input = narrado.Where(t => t.Phase == ToolStreamPhase.Input).ToList();
+        input.Select(t => t.Items).Should().Equal(1, 2);
+        input[0].Last.Should().Be("Credenciales embebidas");
+        input[^1].Last.Should().Be("Fuga de stream");
+    }
+
+    /// <summary>
+    /// <b>El texto se pinta delta a delta y NO se repite</b> (F30 §2). Claude Code lo mandaba
+    /// entero al cerrar el mensaje —así que la pantalla se quedaba quieta y luego escupía el
+    /// párrafo—, y los trozos sí llegaban: se descartaban. Ahora salen según llegan, y el evento
+    /// <c>assistant</c> que los repite al final ya no vuelve a emitirlos.
+    /// </summary>
+    [Fact]
+    public async Task El_texto_llega_delta_a_delta_y_el_mensaje_completo_no_lo_repite()
+    {
+        var texto = new List<string>();
+
+        await new ClaudeStreamReader(onText: texto.Add).ReadAsync(
+            new StringReader(string.Join('\n',
+                Init(),
+                Start("msg_1", 2, 0, 0),
+                TextBlockStart(0),
+                TextDelta(0, "Reviso "),
+                TextDelta(0, "la unidad."),
+                BlockStop(0),
+                Assistant("msg_1", input: 2, output: 7),
+                Delta(input: 2, output: 7, cacheRead: 0, cacheWrite: 0))),
+            CancellationToken.None);
+
+        string.Concat(texto).Should().Be("Reviso la unidad.");
+        texto.Should().HaveCount(2, "dos trozos, y el mensaje completo no cuenta como un tercero");
+    }
+
     // ---------------------------------------------------------------- ayudas
+
+    /// <summary>Los eventos CRUDOS de contenido, que son los que F30 §2 empieza a leer.</summary>
+    private static string TextBlockStart(int index)
+        => "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_start\",\"index\":"
+         + index + ",\"content_block\":{\"type\":\"text\",\"text\":\"\"}}}";
+
+    private static string ToolBlockStart(int index, string name)
+        => "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_start\",\"index\":"
+         + index + ",\"content_block\":{\"type\":\"tool_use\",\"id\":\"tu_1\",\"name\":\""
+         + name + "\",\"input\":{}}}}";
+
+    private static string TextDelta(int index, string text)
+        => "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":"
+         + index + ",\"delta\":{\"type\":\"text_delta\",\"text\":"
+         + System.Text.Json.JsonSerializer.Serialize(text) + "}}}";
+
+    private static string InputDelta(int index, string partial)
+        => "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":"
+         + index + ",\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":"
+         + System.Text.Json.JsonSerializer.Serialize(partial) + "}}}";
+
+    private static string BlockStop(int index)
+        => "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_stop\",\"index\":"
+         + index + "}}";
 
     private static Task<ClaudeRunOutcome> Read(List<UsageSample> samples, params string[] lines)
         => new ClaudeStreamReader(onUsage: samples.Add)

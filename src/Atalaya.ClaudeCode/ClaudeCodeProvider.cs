@@ -28,7 +28,7 @@ namespace Atalaya.ClaudeCode;
 /// nunca falla mudo.
 /// </para>
 /// </summary>
-public sealed class ClaudeCodeProvider : IAssistedFixProvider, IThreadedAuditor
+public sealed class ClaudeCodeProvider : IAssistedFixProvider, IThreadedAuditor, INarratingAuditor
 {
     /// <summary>
     /// El identificador que se escribe en sesiones, hallazgos e informes. Constante, y no un
@@ -89,6 +89,14 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider, IThreadedAuditor
     /// pasada que costó una llamada de más tiene que decir por qué (N-2).
     /// </summary>
     public event Action<string>? CutSkipped;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// F30 §2 — el CLI ya mandaba esto (<c>input_json_delta</c>, con
+    /// <c>--include-partial-messages</c>, que se pide desde F21) y el lector lo descartaba. No hay
+    /// nada que pedirle al modelo: se lee lo que ya venía.
+    /// </remarks>
+    public event Action<ToolStream>? ToolStreamed;
 
     /// <param name="modelProvider">
     /// El modelo elegido en Ajustes. Es una FUNCIÓN y se llama en CADA sesión, por la misma razón
@@ -343,7 +351,8 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider, IThreadedAuditor
             usage => UsageReported?.Invoke(usage with { Model = usage.Model ?? ModelName }),
             Explain,
             _logger,
-            cut);
+            cut,
+            tool => ToolStreamed?.Invoke(tool));
     }
 
     /// <summary>El mismo desenlace que una pasada suelta: un fallo del CLI es una excepción tipada.</summary>
@@ -488,7 +497,8 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider, IThreadedAuditor
                 conversation.NextTurn ?? (_ => Task.FromResult<string?>(null)),
                 () => fix.Closed,
                 conversation.Ready,
-                ct);
+                ct,
+                onTool: tool => ToolStreamed?.Invoke(tool));
 
             if (outcome.Failed)
             {
@@ -563,7 +573,8 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider, IThreadedAuditor
                 text => TextStreamed?.Invoke(text),
                 usage => UsageReported?.Invoke(usage with { Model = usage.Model ?? ModelName }),
                 ct,
-                cutting);
+                cutting,
+                tool => ToolStreamed?.Invoke(tool));
 
             if (cutting is { Cut: false, NotCutBecause: { } why })
             {

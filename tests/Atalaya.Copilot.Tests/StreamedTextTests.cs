@@ -1,3 +1,4 @@
+﻿using Atalaya.Agents;
 using Atalaya.Copilot;
 using FluentAssertions;
 using GitHub.Copilot;
@@ -87,6 +88,84 @@ public sealed class StreamedTextTests
 
         string.Concat(text).Should().Be("unodos");
     }
+
+    // ================================================================ F30 §2 · la herramienta que se escribe
+
+    /// <summary>
+    /// <b>La herramienta se anuncia al EMPEZAR y sus elementos van apareciendo</b> (F30 §2).
+    /// <para>
+    /// El SDK ya mandaba las dos cosas —<c>ToolExecutionStartEvent</c> y
+    /// <c>AssistantToolCallDeltaEvent</c>, que trae <c>InputDelta</c>— y <c>OnSessionEvent</c> las
+    /// tiraba: de la sesentena de tipos que declara, se atendían tres. Ahí estaba el minuto que
+    /// D-1014 midió: reportar once hallazgos son ~2.700 tokens de escritura, unos 42 s, y no se
+    /// veía nada hasta que la herramienta se ejecutaba.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void A_tool_is_announced_when_it_starts_and_counted_as_it_is_written()
+    {
+        var agent = new RealCopilotAgent();
+        var narrated = new List<ToolStream>();
+        agent.ToolStreamed += narrated.Add;
+
+        agent.OnSessionEvent(ToolStart("t1", "mcp__atalaya__submit_findings"));
+        agent.OnSessionEvent(ToolDelta("t1", "submit_findings", """{"findings":[{"title":"Credenciales emb"""));
+        agent.OnSessionEvent(ToolDelta("t1", "submit_findings", """ebidas"},"""));
+        agent.OnSessionEvent(ToolDelta("t1", "submit_findings", """{"title":"Fuga de stream"}]}"""));
+
+        narrated[0].Phase.Should().Be(ToolStreamPhase.Started);
+        narrated[0].Tool.Should().Be("submit_findings", "sin el prefijo del servidor MCP");
+
+        List<ToolStream> input = narrated.Where(t => t.Phase == ToolStreamPhase.Input).ToList();
+        input.Select(t => t.Items).Should().Equal(new[] { 1, 2 },
+            "un título a medias no cuenta hasta que su comilla cierra");
+        input[^1].Last.Should().Be("Fuga de stream");
+    }
+
+    /// <summary>
+    /// Y el trozo que no completa nada <b>no</b> repinta: a 64 tokens por segundo serían decenas de
+    /// avisos por segundo sin una sola información nueva.
+    /// </summary>
+    [Fact]
+    public void A_chunk_that_completes_nothing_says_nothing()
+    {
+        var agent = new RealCopilotAgent();
+        var narrated = new List<ToolStream>();
+        agent.ToolStreamed += narrated.Add;
+
+        agent.OnSessionEvent(ToolDelta("t1", "submit_findings", """{"findings":[{"tit"""));
+        agent.OnSessionEvent(ToolDelta("t1", "submit_findings", """le":"a med"""));
+
+        narrated.Should().BeEmpty("todavía no hay ni un elemento entero que enseñar");
+    }
+
+    /// <summary>
+    /// Dos llamadas a la vez no se estorban: cada una lleva su propia cuenta, igual que los
+    /// mensajes de texto.
+    /// </summary>
+    [Fact]
+    public void Two_tool_calls_are_counted_independently()
+    {
+        var agent = new RealCopilotAgent();
+        var narrated = new List<ToolStream>();
+        agent.ToolStreamed += narrated.Add;
+
+        agent.OnSessionEvent(ToolDelta("t1", "submit_findings", """{"findings":[{"title":"uno"}"""));
+        agent.OnSessionEvent(ToolDelta("t2", "report_verdicts", """{"verdicts":[{"verdict":"presente"}"""));
+        agent.OnSessionEvent(ToolDelta("t1", "submit_findings", ""","{"title":"dos"}]}"""));
+
+        narrated.Where(t => t.Tool == "submit_findings").Select(t => t.Items).Should().Equal(new[] { 1, 2 });
+        narrated.Where(t => t.Tool == "report_verdicts").Select(t => t.Items).Should().Equal(new[] { 1 });
+    }
+
+    private static ToolExecutionStartEvent ToolStart(string id, string name)
+        => new() { Data = new ToolExecutionStartData { ToolCallId = id, ToolName = name } };
+
+    private static AssistantToolCallDeltaEvent ToolDelta(string id, string name, string chunk)
+        => new()
+        {
+            Data = new AssistantToolCallDeltaData { ToolCallId = id, ToolName = name, InputDelta = chunk },
+        };
 
     [Fact]
     public void Empty_chunks_never_reach_the_view()

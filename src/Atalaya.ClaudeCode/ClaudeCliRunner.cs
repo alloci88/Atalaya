@@ -232,12 +232,17 @@ public sealed class ClaudeCliRunner
     /// Corre una sesión de punta a punta. Cancelar mata el proceso: un CLI vivo tras cancelar es
     /// un zombi gastando cuota, que es el fallo que D-086 costó descubrir en el runtime de Copilot.
     /// </summary>
+    /// <param name="onTool">
+    /// La herramienta que el modelo está escribiendo (F30 §2). Es lo que hace visible el tramo
+    /// largo de una pasada; ver <see cref="ToolStream"/>.
+    /// </param>
     public async Task<ClaudeRunOutcome> RunAsync(
         ClaudeRun run,
         Action<string>? onText,
         Action<UsageSample>? onUsage,
         CancellationToken ct,
-        ClaudeCut? cut = null)
+        ClaudeCut? cut = null,
+        Action<ToolStream>? onTool = null)
     {
         // Para cortar hay que poder hablarle al CLI mientras corre —su orden de interrupción viaja
         // por la entrada `stream-json`—, así que una sesión con corte es conversacional aunque solo
@@ -254,8 +259,8 @@ public sealed class ClaudeCliRunner
         // aplicación, cerrando stdin — y el momento es el mismo se haya cortado o no: en cuanto
         // llega el evento final del turno, que es el que trae las cuentas.
         var reader = cut is null
-            ? new ClaudeStreamReader(onText, onUsage)
-            : new ClaudeStreamReader(onText, onUsage, _ => CloseInput(process));
+            ? new ClaudeStreamReader(onText, onUsage, onTool: onTool)
+            : new ClaudeStreamReader(onText, onUsage, _ => CloseInput(process), onTool);
 
         using var finished = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
@@ -453,7 +458,8 @@ public sealed class ClaudeCliRunner
         Func<bool> closed,
         Action<IFixSteering>? ready,
         CancellationToken ct,
-        ClaudeCut? cut = null)
+        ClaudeCut? cut = null,
+        Action<ToolStream>? onTool = null)
     {
         using Process process = Start(Describe(run with { Conversational = true }));
 
@@ -464,7 +470,7 @@ public sealed class ClaudeCliRunner
         var turns = Channel.CreateUnbounded<ClaudeTurn>();
         var pen = new SemaphoreSlim(1, 1);
 
-        var reader = new ClaudeStreamReader(onText, onUsage, turn => turns.Writer.TryWrite(turn));
+        var reader = new ClaudeStreamReader(onText, onUsage, turn => turns.Writer.TryWrite(turn), onTool);
 
         ready?.Invoke(new ConversationSteering(process, _trace));
 

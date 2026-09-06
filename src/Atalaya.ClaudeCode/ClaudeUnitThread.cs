@@ -68,6 +68,9 @@ internal sealed class ClaudeUnitThread : IUnitThread
     /// </summary>
     private readonly ClaudeCut? _cut;
 
+    /// <summary>La herramienta que el modelo escribe, para el hilo de actividad (F30 §2).</summary>
+    private readonly Action<ToolStream>? _onTool;
+
     internal ClaudeUnitThread(
         ClaudeCliRunner runner,
         ClaudeRun template,
@@ -77,7 +80,8 @@ internal sealed class ClaudeUnitThread : IUnitThread
         Action<UsageSample>? onUsage,
         Func<ClaudeRunOutcome, Exception?> explain,
         ILogger logger,
-        ClaudeCut? cut = null)
+        ClaudeCut? cut = null,
+        Action<ToolStream>? onTool = null)
     {
         _runner = runner;
         _template = template;
@@ -88,6 +92,7 @@ internal sealed class ClaudeUnitThread : IUnitThread
         _explain = explain;
         _logger = logger;
         _cut = cut;
+        _onTool = onTool;
     }
 
     /// <inheritdoc/>
@@ -218,7 +223,8 @@ internal sealed class ClaudeUnitThread : IUnitThread
             closed: () => false,
             ready: null,
             ct,
-            _cut);
+            _cut,
+            _onTool);
 
     /// <summary>
     /// Lo llama el runner justo cuando un turno acaba. Dos cosas, en este orden: relevar a quien

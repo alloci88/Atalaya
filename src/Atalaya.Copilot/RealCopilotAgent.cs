@@ -118,6 +118,22 @@ public sealed class RealCopilotAgent : IAssistedFixProvider, IThreadedAuditor, I
 
     public event Action<string>? TextStreamed;
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// F30 §2 — el SDK ya mandaba esto y <see cref="OnSessionEvent"/> lo tiraba: de la sesentena de
+    /// tipos de evento que declara, aquí se atendían tres. Los que hacían falta son
+    /// <c>ToolExecutionStartEvent</c> —la herramienta arranca— y <c>AssistantToolCallDeltaEvent</c>,
+    /// que trae <c>InputDelta</c>: los argumentos <b>según el modelo los escribe</b>, que es donde
+    /// D-1014 midió que está el minuto de silencio.
+    /// </remarks>
+    public event Action<ToolStream>? ToolStreamed;
+
+    /// <summary>
+    /// Los argumentos que lleva escritos cada llamada a herramienta viva, por su id. Se tiran al
+    /// terminar: es un contador vivo, no un registro.
+    /// </summary>
+    private readonly Dictionary<string, ToolCallInput> _writing = new(StringComparer.Ordinal);
+
     public event Action<UsageSample>? UsageReported;
 
     public async Task<bool> EnsureReadyAsync(CancellationToken ct) => (await CheckAsync(ct)).Ready;
@@ -599,6 +615,53 @@ public sealed class RealCopilotAgent : IAssistedFixProvider, IThreadedAuditor, I
         {
             case AssistantUsageEvent usage:
                 UsageReported?.Invoke(UsageAdapter.From(usage.Data));
+                break;
+
+            // F30 §2 — LA HERRAMIENTA, SEGÚN SE ESCRIBE. Los dos casos son puramente aditivos: no
+            // tocan el consumo ni el texto, solo cuentan lo que ya llegaba y se tiraba.
+            case ToolExecutionStartEvent started when started.Data?.ToolName is { Length: > 0 } name:
+                lock (_writing)
+                {
+                    if (started.Data.ToolCallId is { Length: > 0 } id)
+                    {
+                        _writing.Remove(id);
+                    }
+                }
+
+                ToolStreamed?.Invoke(new ToolStream(ToolStreamPhase.Started, ToolCallInput.Short(name)));
+                break;
+
+            case AssistantToolCallDeltaEvent piece
+                when piece.Data is { ToolCallId.Length: > 0 } d && d.InputDelta is { Length: > 0 } written:
+                ToolStream? advance = null;
+                lock (_writing)
+                {
+                    if (!_writing.TryGetValue(d.ToolCallId, out ToolCallInput? input))
+                    {
+                        input = new ToolCallInput(ToolCallInput.Short(d.ToolName ?? string.Empty));
+                        _writing[d.ToolCallId] = input;
+                    }
+
+                    if (input.Append(written))
+                    {
+                        advance = new ToolStream(
+                            ToolStreamPhase.Input, input.Tool, input.Items, input.Last);
+                    }
+                }
+
+                if (advance is not null)
+                {
+                    ToolStreamed?.Invoke(advance);
+                }
+
+                break;
+
+            case ToolExecutionCompleteEvent done when done.Data?.ToolCallId is { Length: > 0 } finished:
+                lock (_writing)
+                {
+                    _writing.Remove(finished);
+                }
+
                 break;
 
             case AssistantMessageDeltaEvent delta:

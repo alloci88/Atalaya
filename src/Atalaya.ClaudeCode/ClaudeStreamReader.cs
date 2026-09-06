@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Atalaya.Agents;
 
 namespace Atalaya.ClaudeCode;
@@ -71,6 +71,20 @@ public sealed class ClaudeStreamReader
     private readonly Action<string>? _onText;
     private readonly Action<UsageSample>? _onUsage;
     private readonly Action<ClaudeTurn>? _onTurn;
+    private readonly Action<ToolStream>? _onTool;
+
+    /// <summary>
+    /// Los mensajes cuyo texto ya se ha emitido delta a delta (F30 §2). Es el mismo mecanismo que
+    /// Copilot tiene desde F5.2: si los trozos ya salieron, el texto completo del evento
+    /// <c>assistant</c> —que llega después y trae lo mismo— <b>no</b> se vuelve a emitir.
+    /// </summary>
+    private readonly HashSet<string> _streamed = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Los argumentos que el modelo lleva escritos de cada bloque de herramienta abierto, por
+    /// índice de bloque. Se tiran al cerrarse el bloque: no son un registro, son un contador vivo.
+    /// </summary>
+    private readonly Dictionary<int, ToolCallInput> _toolInputs = new();
 
     /// <summary>Peticiones al modelo abiertas y todavía sin cerrar. Ver <see cref="AccountingIsComplete"/>.</summary>
     private int _openCalls;
@@ -117,14 +131,21 @@ public sealed class ClaudeStreamReader
     /// <c>AssistantMessageDeltaEvent</c> en Copilot: se emite el TEXTO, no un punto por evento
     /// (F5.2).
     /// </param>
+    /// <param name="onTool">
+    /// La llamada a herramienta <b>según el modelo la escribe</b> (F30 §2). Es lo que hace visible
+    /// el tramo largo de una pasada: reportar once hallazgos son ~2.700 tokens de escritura —unos
+    /// 42 s al caudal medido— y hasta aquí no se veía nada hasta que la herramienta se ejecutaba.
+    /// </param>
     public ClaudeStreamReader(
         Action<string>? onText = null,
         Action<UsageSample>? onUsage = null,
-        Action<ClaudeTurn>? onTurn = null)
+        Action<ClaudeTurn>? onTurn = null,
+        Action<ToolStream>? onTool = null)
     {
         _onText = onText;
         _onUsage = onUsage;
         _onTurn = onTurn;
+        _onTool = onTool;
     }
 
     /// <summary>
@@ -223,7 +244,12 @@ public sealed class ClaudeStreamReader
                 case "assistant":
                     (int calls, string text) = ReadAssistant(e);
                     toolCalls += calls;
-                    if (text.Length > 0)
+
+                    // F30 §2 — si el texto de este mensaje YA salió delta a delta, no se repite.
+                    // Mismo mecanismo que Copilot desde F5.2. Ojo: esto NO toca las cuentas —
+                    // `OpenCall` y `ReadCallUsage` siguen corriendo igual, pase lo que pase con el
+                    // texto—, porque de ellas depende el corte de F21.
+                    if (text.Length > 0 && !_streamed.Remove(MessageId(e)))
                     {
                         _onText?.Invoke(text);
                     }
@@ -247,14 +273,64 @@ public sealed class ClaudeStreamReader
                     break;
 
                 // Los eventos CRUDOS de la API, que el CLI reenvía con
-                // `--include-partial-messages`. Solo interesan los dos que enmarcan una llamada:
-                // `message_start` la abre y `message_delta` la cierra CON SU CONSUMO FINAL. Es lo
-                // que hace que las cuentas existan antes del evento final (F21 §1) — el `usage`
-                // del evento `assistant` es parcial y se queda corto (medido: decía 5 donde el
-                // `result` decía 20). Lo demás del flujo crudo —cada trocito de texto— se ignora.
+                // `--include-partial-messages`. Dos de ellos son LAS CUENTAS y no se tocan:
+                // `message_start` abre una llamada y `message_delta` la cierra CON SU CONSUMO
+                // FINAL. Es lo que hace que las cuentas existan antes del evento final (F21 §1) —
+                // el `usage` del evento `assistant` es parcial y se queda corto (medido: decía 5
+                // donde el `result` decía 20).
+                //
+                // F30 §2 AÑADE CASOS, NO LOS CAMBIA. Los tres de contenido —`content_block_start`,
+                // `content_block_delta` y `content_block_stop`— eran los que se descartaban con un
+                // «lo demás se ignora», y son justo los que traen lo que el usuario no veía: el
+                // texto según se escribe y los argumentos de la herramienta según se escriben.
+                // Ninguno toca `_openCalls`, `_settledCalls` ni `_sawPartialMessages`, que son los
+                // tres campos de los que depende `AccountingIsComplete` y con ella el corte: por
+                // construcción, narrar no puede mover la condición que decide si se corta.
                 case "stream_event" when e.TryGetProperty("event", out JsonElement raw):
                     switch (Str(raw, "type"))
                     {
+                        // El modelo abre un bloque. Si es una herramienta, empieza a escribirla.
+                        case "content_block_start" when raw.TryGetProperty("content_block", out JsonElement block):
+                            if (Str(block, "type") == "tool_use")
+                            {
+                                string tool = ToolCallInput.Short(Str(block, "name"));
+                                _toolInputs[BlockIndex(raw)] = new ToolCallInput(tool);
+                                _onTool?.Invoke(new ToolStream(ToolStreamPhase.Started, tool));
+                            }
+
+                            break;
+
+                        // Y lo va escribiendo. Dos clases de trocito, y las dos interesan: el texto
+                        // que el usuario lee, y los argumentos que hasta ahora eran el silencio.
+                        case "content_block_delta" when raw.TryGetProperty("delta", out JsonElement piece):
+                            switch (Str(piece, "type"))
+                            {
+                                case "text_delta" when Str(piece, "text") is { Length: > 0 } chunk:
+                                    if (currentCall.Length > 0)
+                                    {
+                                        _streamed.Add(currentCall);
+                                    }
+
+                                    _onText?.Invoke(chunk);
+                                    break;
+
+                                case "input_json_delta"
+                                    when _toolInputs.TryGetValue(BlockIndex(raw), out ToolCallInput? writing):
+                                    if (writing.Append(Str(piece, "partial_json")))
+                                    {
+                                        _onTool?.Invoke(new ToolStream(
+                                            ToolStreamPhase.Input, writing.Tool, writing.Items, writing.Last));
+                                    }
+
+                                    break;
+                            }
+
+                            break;
+
+                        case "content_block_stop":
+                            _toolInputs.Remove(BlockIndex(raw));
+                            break;
+
                         case "message_start":
                             _sawPartialMessages = true;
                             Interlocked.Increment(ref _openCalls);
@@ -360,6 +436,12 @@ public sealed class ClaudeStreamReader
         => e.TryGetProperty("message", out JsonElement message) && message.ValueKind == JsonValueKind.Object
             ? Str(message, "id")
             : string.Empty;
+
+    /// <summary>El índice del bloque de contenido. Cero si no viene, que es el primero.</summary>
+    private static int BlockIndex(JsonElement raw)
+        => raw.TryGetProperty("index", out JsonElement v) && v.ValueKind == JsonValueKind.Number
+            ? v.GetInt32()
+            : 0;
 
     private static (int ToolCalls, string Text) ReadAssistant(JsonElement e)
     {

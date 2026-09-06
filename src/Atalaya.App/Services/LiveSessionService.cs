@@ -237,6 +237,12 @@ public sealed partial class LiveSessionService : ObservableObject
     private DateTimeOffset? _lastEventUtc;
 
     /// <summary>
+    /// La línea de «el modelo está escribiendo esta herramienta» que hay viva, si la hay (F30 §2).
+    /// Se reescribe con cada elemento nuevo y se suelta en cuanto pasa cualquier otra cosa.
+    /// </summary>
+    private ActivityEntry? _writingLine;
+
+    /// <summary>
     /// A partir de cuántos segundos sin noticias se dice que se está esperando. Por debajo, callar
     /// es lo correcto: una llamada tarda lo que tarda y anunciar cada pausa de tres segundos sería
     /// ruido. Encima, el silencio deja de ser normal y hay que nombrarlo.
@@ -710,6 +716,31 @@ public sealed partial class LiveSessionService : ObservableObject
     /// </summary>
     private void OnActivityNoted(ActivityNote note) => OnUi(() =>
     {
+        // F30 §2 — LA LÍNEA DE «SE ESTÁ ESCRIBIENDO» SE REESCRIBE, no se apila. El modelo emite un
+        // trozo por elemento completado, así que apilarlas dejaría once líneas casi iguales donde
+        // hay un solo gesto. Se sustituye el texto de la que ya hay, y la ejecución la releva por
+        // la definitiva.
+        if (note.Kind == ActivityNoteKind.ToolWriting)
+        {
+            if (_writingLine is not null && _currentPass?.Entries.Contains(_writingLine) == true)
+            {
+                _writingLine.Text = note.Text;
+            }
+            else
+            {
+                _writingLine = ActivityEntry.Event("⚒", note.Text);
+                Add(_currentPass, _writingLine);
+            }
+
+            _currentText = null;
+            Touch(string.Empty);
+            Changed?.Invoke();
+            return;
+        }
+
+        // Cualquier otra cosa cierra la línea en curso: lo que venga es otro gesto.
+        _writingLine = null;
+
         Add(_currentPass, note.Kind switch
         {
             ActivityNoteKind.Tool => ActivityEntry.Event(
