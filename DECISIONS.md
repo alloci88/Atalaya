@@ -15856,3 +15856,49 @@ Solo reglas (N-5, N-7), y cada una protege algo que se rompería en silencio:
 **Aceptación humana, que es del usuario** (N-8): abrir el `dist`, ver la insignia en la tarjeta de
 `xblast`, reconciliar su sesión `auto` y comprobar que los 91,6 credits que salen por llamada cuadran
 con lo que espera; y mover la divisa a dólares para ver que el cambio alcanza a las seis pantallas.
+
+---
+
+## R6 — Ocho retoques, vistos en el dist
+
+### D-1005 — Ocho puntos, dos reglas y una cifra que estaba cien veces mal
+
+Un párrafo para la fase entera (N-7), y solo lo que se pidió (N-6). **(1)** La fila de usuario del
+raíl pasa a usar la MISMA plantilla que una entrada del menú (`RailUser`): declaraba sus carriles a
+mano y coincidían por copia —medido: avatar y nombre ya caían en x=16 y x=60, la x de los iconos y
+la de los nombres, y el bloque ya iba centrado en su rectángulo—, así que lo que cambia no es dónde
+está sino que ahora **no puede separarse**, y de paso la chapa de hover es la de una entrada; la
+duplicación es lo que había hecho volver aquí dos veces (D-966). **(2)** Cuenta y Nueva aplicación
+se anclan arriba explícitamente y ganan 24 px sobre el título (`Pad.FormTop`), que con los 24 de la
+carcasa hacen los 48 pedidos; el ancho **no se toca**: el encargo pedía subirlo de ~560 a 800 y está
+medido en **920** desde F26, así que bajarlo a 800 sería estrecharlo — se deja y se dice. **(3)** Las
+ocho columnas de «Actividad de sesiones» pasan a ser estrella con su mínimo (110 · 160/máx 320 · 150
+· 130 · 180 · 100 · 110 · 160), así que el sobrante se reparte entre todas en vez de acumularse en
+tres, y «Quién» recorta con elipsis y tooltip. **(4)** El vacío de Hallazgos adopta el ritmo del
+`EmptyState` del sistema: 12 del icono a la frase, **16** de la frase al botón. **(5)** Las cuatro
+cifras de gravedad de cada tarjeta se centran en sus columnas, y los cuatro azulejos de totales se
+retiran: el reparto se lee ahora en la línea del subtítulo —«1 aplicación · 114 hallazgos abiertos ·
+0 críticas · 28 altas…»— con el color de cada gravedad puesto por `DataTrigger` y no por un pincel
+devuelto del view-model (D-971), conservando la regla de que **el cero no se pinta de peligro**
+(UI-0051); la rejilla de tarjetas sube una fila. **(6)** Los diez diálogos heredan un único estilo
+base (`Dialog`, `Dialog.TitleBar`): fondo, tipografía y tinta de la casa, la barra de título con el
+fondo del diálogo y **sin el telón de Mica** —que era la franja negra sobre el crema—, y sus ayudas
+suben de 13 a 14; el estilo existe para que el próximo diálogo no vuelva a salir de fábrica.
+**(7)** Los treinta botones de la sesión en vivo y del arreglo asistido eran `ui:Button` de la
+librería, que **no recibe el estilo implícito de la casa** —apunta a `Button`, no a `ui:Button`—: de
+ahí que ni cambiaran de color, ni acusaran el clic, ni pusieran el cursor de mano; pasan a `Button`
+con su estilo, «Volver al hallazgo» al enlace del sistema, y los desplegables de unidad y pasada
+—`Expander`, hasta hoy con la plantilla de fábrica de WPF— reciben cabecera con chapa, galón que
+gira y los mismos estados. **(8)** Y la gráfica de coste era la ÚNICA vía que no pasaba por
+`CostFormat`: pintaba el número en credits y le pegaba detrás la unidad activa, así que con la
+divisa en dólares decía «490 $» donde la tarjeta del mismo periodo decía «4,91 $» — exactamente lo
+que F29 §2 quiso impedir con un solo formateador. `ChartPlot` gana `IsCost` y sus marcas y tooltips
+salen de `CostFormat.Tick`; de paso, el «≈» de la línea de resumen enseña la OTRA divisa en vez de
+repetir la misma. **Dos reglas nuevas, y ninguna más**: que ningún estilo de botón o enlace del
+sistema se quede sin `IsMouseOver` e `IsPressed` —resolviendo `BasedOn` hasta la plantilla que cada
+uno acaba usando—, y que el eje de una gráfica de coste diga lo mismo que `CostFormat` en las dos
+divisas. La primera encontró **cuatro** que no lo cumplían y que nadie había pedido revisar:
+`Setting.Section`, `RailItem`, `LinkButton` y el propio `Button.Link`; las cuatro las arregla. La
+segunda encontró, antes de correr una sola vista, que `WindowStartupLocation` no es propiedad de
+dependencia y que el `Setter` que le había puesto al estilo de diálogo habría reventado **al abrir
+el primer diálogo**, con el build y los 2.453 tests en verde.

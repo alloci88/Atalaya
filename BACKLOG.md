@@ -469,6 +469,17 @@ las seis reversiones de lo que se había movido sin pedirlo; con ellas entran N-
 
 ## Cerrado
 
+- **R6 · Ocho retoques de interfaz, vistos en el dist** — la fila de usuario del raíl con la
+  plantilla de una entrada del menú; Cuenta y Nueva aplicación ancladas arriba y con aire sobre el
+  título; las ocho columnas de «Actividad de sesiones» repartiendo el sobrante entre todas; el
+  vacío de Hallazgos con el ritmo del sistema; las cifras de gravedad centradas y los cuatro
+  azulejos de totales mudados a la línea del subtítulo; los diez diálogos heredando un estilo base
+  —tipografía, botones y barra de título sin la franja de Windows—; los botones de la sesión en
+  vivo y del arreglo asistido pasando de `ui:Button` a los del sistema, con los `Expander` de
+  unidad y pasada respondiendo por fin; y la gráfica de coste pasando por `CostFormat`, que decía
+  «490 $» donde la tarjeta decía «4,91 $». Dos reglas nuevas: estados en todo botón y enlace del
+  sistema, y el eje de coste contra `CostFormat`. Ver D-1005.
+
 - **F29 · El coste que faltaba, y en qué moneda se cuenta** — el hueco de coste deja Ajustes y se
   muda a la aplicación: insignia en la tarjeta del Portafolio, línea y **«Reconciliar costes»** en el
   resumen del ciclo, y un diálogo que agrupa las sesiones sin coste por motivo. `auto` deja de ser un
