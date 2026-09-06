@@ -331,6 +331,59 @@ public sealed class PerCallAccountingTests
     // ---------------------------------------------------------------- ayudas
 
     /// <summary>Los eventos CRUDOS de contenido, que son los que F30 §2 empieza a leer.</summary>
+    /// <summary>
+    /// <b>EL RAZONAMIENTO SE NARRA</b> (F30 §2e), que es la mitad del silencio que el usuario
+    /// llamó «barely usable».
+    /// <para>
+    /// La traza de eventos del CLI 2.1.263 lo dejó medido: en una pasada de 62 s sobre
+    /// <c>CalculadoraCarga.cs</c> con Opus, <b>22 s son dos bloques de pensamiento</b> —455 y 1.291
+    /// tokens de razonamiento— antes de que el modelo escriba el primer carácter de nada. El evento
+    /// llegaba y se tiraba, así que la pantalla no tenía absolutamente nada que decir en ese tramo:
+    /// exactamente el mismo defecto que la entrega 1 arregló para los argumentos de la herramienta,
+    /// un bloque más arriba.
+    /// </para>
+    /// <para>
+    /// <b>Y la segunda mitad es la que no puede romperse en silencio</b>: esto vive en el mismo
+    /// <c>switch</c> que gobierna <c>AccountingIsComplete</c>, que es la condición del corte de F21
+    /// — y un corte con una petición en vuelo se factura y no aparece en ningún sitio. Narrar el
+    /// razonamiento no puede mover esa condición.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task El_razonamiento_se_narra_y_no_toca_las_cuentas()
+    {
+        var narrado = new List<ToolStream>();
+
+        var reader = new ClaudeStreamReader(onTool: narrado.Add);
+        await reader.ReadAsync(
+            new StringReader(string.Join("\n",
+                Init(),
+                Start("msg_1", 2, 0, 0),
+                ThinkingBlockStart(0),
+                ThinkingDelta(0),
+                ThinkingDelta(0),
+                BlockStop(0))),
+            CancellationToken.None);
+
+        narrado.Should().ContainSingle("el aviso es UNO por bloque: los trozos de pensamiento "
+            + "llegan sin texto, y tocarlos reiniciaría el reloj del pie —que es justo el que "
+            + "tiene que subir mientras dura el tramo")
+            .Which.Phase.Should().Be(ToolStreamPhase.Reasoning);
+
+        reader.AccountingIsComplete.Should().BeFalse(
+            "la petición sigue en vuelo: narrar el razonamiento no puede cerrar una llamada");
+        reader.SettledCalls.Should().Be(0);
+    }
+
+    private static string ThinkingBlockStart(int index)
+        => "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_start\",\"index\":"
+         + index + ",\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}}";
+
+    /// <summary>Sin texto: es como llegan de verdad (medido contra el CLI 2.1.263).</summary>
+    private static string ThinkingDelta(int index)
+        => "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_delta\",\"index\":"
+         + index + ",\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"\"}}}";
+
     private static string TextBlockStart(int index)
         => "{\"type\":\"stream_event\",\"event\":{\"type\":\"content_block_start\",\"index\":"
          + index + ",\"content_block\":{\"type\":\"text\",\"text\":\"\"}}}";

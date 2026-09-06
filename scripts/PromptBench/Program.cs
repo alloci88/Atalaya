@@ -91,8 +91,13 @@ if (mode == "barrido")
     // antes de F25, prompt entero por pasada y corte incluido. Es la única forma de medir el margen
     // del hilo contra la producción que llevaba el corte puesto.
     bool corteEnHilo = argv.Contains("--corte-en-hilo");
+    // F30 §2e — la misma unidad SIN los eventos crudos del CLI. Es la configuración (c) de la
+    // medida de la lentitud: sin ella, quitar `--include-partial-messages` habria sido una
+    // suposicion, y con ella es una fila de la tabla.
+    bool sinCrudos = argv.Contains("--sin-eventos-crudos");
     return await SweepBench.RunAsync(
-        units, cloneRoot ?? root, model, maxPasses, tandas, !noCut, style, theme, corteEnHilo);
+        units, cloneRoot ?? root, model, maxPasses, tandas, !noCut, style, theme, corteEnHilo,
+        !sinCrudos);
 }
 
 AuditorBrief brief = PillarBrief.Parts(TechStack.DotNet);

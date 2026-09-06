@@ -243,11 +243,18 @@ public sealed partial class LiveSessionService : ObservableObject
     private ActivityEntry? _writingLine;
 
     /// <summary>
-    /// A partir de cuántos segundos sin noticias se dice que se está esperando. Por debajo, callar
-    /// es lo correcto: una llamada tarda lo que tarda y anunciar cada pausa de tres segundos sería
-    /// ruido. Encima, el silencio deja de ser normal y hay que nombrarlo.
+    /// A partir de cuántos segundos sin noticias se dice qué se está esperando.
+    /// <para>
+    /// <b>Cinco, y no veinte</b> (F30 §2e). §3 los puso en veinte con el argumento de que una
+    /// llamada tarda 11,8 s de media y anunciar cada pausa corta sería ruido. El argumento se cayó
+    /// en cuanto la línea pasó a decir <b>de qué</b> se espera: «escribiendo el reporte de
+    /// hallazgos · 8 s» no es ruido, es la única información que hay en pantalla en ese tramo. Y
+    /// con veinte no llegaba a salir nunca en el sitio donde más falta hace —tras la prosa del
+    /// modelo—, porque cada delta de texto reinicia el reloj y lo que viene detrás son huecos que
+    /// no alcanzan el umbral desde el último.
+    /// </para>
     /// </summary>
-    public const int QuietSeconds = 20;
+    public const int QuietSeconds = 5;
 
     /// <summary>Y a partir de cuántos la espera pasa a ámbar: sigue siendo legal, pero ya es larga.</summary>
     public const int LongWaitSeconds = 90;
@@ -594,6 +601,29 @@ public sealed partial class LiveSessionService : ObservableObject
         Budget = null;
         Cost = null;
         Calls = 0;
+
+        // F30 §2e — Y EL PIE SE LIMPIA ENTERO. Estos cuatro se quedaban con lo de la sesión
+        // anterior, así que al arrancar una con Copilot el pie enseñaba «incluido en tu suscripción
+        // de Claude» hasta que llegaba la primera muestra de consumo — el pie de una sesión
+        // hablando de otra, que es peor que no decir nada. Van aquí, con el resto de los
+        // contadores, y no en el sitio donde se leen: quien arranca una sesión limpia la pantalla,
+        // no quien la pinta.
+        Provider = null;
+        CostResult = CostResult.Unavailable(CostUnavailable.TokensMissing);
+        CostUnit = CostFormat.Unit;
+
+        // Y el estado de espera, que también es del pie: una sesión nueva no espera a nadie
+        // todavía, y el reloj de la espera no puede arrancar heredado.
+        _lastEventUtc = null;
+        _inFlight = false;
+        WaitingAfter = string.Empty;
+        _writingLine = null;
+        lock (_textGate)
+        {
+            _pendingText.Clear();
+            _textFlushQueued = false;
+        }
+
         SessionId = string.Empty;
         ReportPath = string.Empty;
         HasFinished = false;
@@ -757,7 +787,7 @@ public sealed partial class LiveSessionService : ObservableObject
     /// escrita dos veces.
     /// </para>
     /// </summary>
-    private void OnActivityNoted(ActivityNote note) => OnUi(() =>
+    private void OnActivityNoted(ActivityNote note) => PostUi(() =>
     {
         FlushText();
         // F30 §2 — LA LÍNEA DE «SE ESTÁ ESCRIBIENDO» SE REESCRIBE, no se apila. El modelo emite un
@@ -777,7 +807,12 @@ public sealed partial class LiveSessionService : ObservableObject
             }
 
             _currentText = null;
-            Touch(string.Empty);
+
+            // F30 §2e — y el pie dice de qué es este tramo. Antes se tocaba el reloj sin cambiar la
+            // frase, así que un turno que empieza escribiendo la herramienta sin decir una palabra
+            // —el caso normal de una unidad sin hallazgos vivos— dejaba el pie en «esperando al
+            // modelo» mientras el modelo llevaba medio minuto escribiendo el reporte.
+            Touch(note.Waiting);
             Changed?.Invoke();
             return;
         }
@@ -1145,7 +1180,7 @@ public sealed partial class LiveSessionService : ObservableObject
         Changed?.Invoke();
     }
 
-    private void OnUsage(LiveUsage u) => OnUi(() =>
+    private void OnUsage(LiveUsage u) => PostUi(() =>
     {
         FlushText();
         Touch();
@@ -1311,10 +1346,25 @@ public sealed partial class LiveSessionService : ObservableObject
     }
 
     /// <summary>
-    /// Como <see cref="OnUi"/> pero <b>sin esperar</b> (F30 §2d): se deja puesto y se vuelve. Es lo
-    /// que necesita el texto, que llega token a token desde el bucle que además tiene que consumir
-    /// las cuentas y el fin del turno — bloquearlo por cada token es lo que dejaba la sesión sin
-    /// cerrar.
+    /// Como <see cref="OnUi"/> pero <b>sin esperar</b> (F30 §2d): se deja puesto y se vuelve.
+    /// <para>
+    /// <b>Por aquí pasa TODO lo que emite el hilo que lee el proveedor</b> (F30 §2e): el texto, el
+    /// consumo y las líneas del hilo de actividad. Ese hilo es el que consume la tubería de salida
+    /// del CLI, y un proceso cuya tubería de salida se llena <b>se bloquea escribiendo</b> hasta
+    /// que alguien lea. Así que la regla es: lee, encola y sigue. Nada de esperar a la interfaz —
+    /// que además es exactamente el fallo que §2d encontró con el texto, aquí extendido a los
+    /// otros dos canales por el mismo motivo, antes de que vuelva a pasar.
+    /// </para>
+    /// <para>
+    /// <b>Y el orden se conserva</b>, que es lo que obliga a la prioridad explícita. Los eventos que
+    /// no vienen del lector —cerrar una pasada, terminar una unidad— siguen usando
+    /// <see cref="OnUi"/>, y <c>Dispatcher.Invoke(Action)</c> encola en <c>Send</c>, que es la
+    /// prioridad MÁS alta: dejar esto en la de por defecto (<c>Normal</c>) haría que el cierre de
+    /// una pasada adelantara por la izquierda a las líneas que el modelo acababa de mandar, y el
+    /// hilo de actividad contaría los hechos desordenados. Con las dos en <c>Send</c> hay una sola
+    /// cola y se sirve en el orden en que se llenó. El volcado del texto pendiente lo hace cada
+    /// entrada al empezar, ya en el hilo de interfaz.
+    /// </para>
     /// </summary>
     private static void PostUi(Action action)
     {
@@ -1325,7 +1375,7 @@ public sealed partial class LiveSessionService : ObservableObject
         }
         else
         {
-            dispatcher.BeginInvoke(action);
+            dispatcher.BeginInvoke(DispatcherPriority.Send, action);
         }
     }
 

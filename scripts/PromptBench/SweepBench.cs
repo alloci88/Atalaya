@@ -40,7 +40,7 @@ internal static class SweepBench
         IReadOnlyList<string> units, string cloneRoot, string? model,
         int maxPasses, int tandas, bool cut = true,
         AuditStyle style = AuditStyle.Libre, AuditTheme tema = AuditTheme.General,
-        bool corteEnHilo = false)
+        bool corteEnHilo = false, bool eventosCrudos = true)
     {
         if (!Directory.Exists(cloneRoot))
         {
@@ -68,6 +68,7 @@ internal static class SweepBench
             + $"· modelo {model ?? "(por defecto)"}"
             + (cut ? " · con corte" : " · SIN corte")
             + (corteEnHilo ? " · CORTE DENTRO DEL HILO" : string.Empty)
+            + (eventosCrudos ? string.Empty : " · SIN eventos crudos")
             + $" · brazo {style}"
             + (tema == AuditTheme.General ? string.Empty : $" · lupa {tema}"));
         Console.WriteLine($"Clon: {cloneRoot}");
@@ -78,7 +79,8 @@ internal static class SweepBench
         for (int tanda = 1; tanda <= tandas; tanda++)
         {
             int code = await OneAsync(
-                units, cloneRoot, model, maxPasses, bridge, tanda, cut, style, tema, corteEnHilo);
+                units, cloneRoot, model, maxPasses, bridge, tanda, cut, style, tema, corteEnHilo,
+                eventosCrudos);
             if (code != 0)
             {
                 return code;
@@ -91,7 +93,7 @@ internal static class SweepBench
     private static async Task<int> OneAsync(
         IReadOnlyList<string> units, string cloneRoot, string? model,
         int maxPasses, string bridge, int tanda, bool cut, AuditStyle style, AuditTheme tema,
-        bool corteEnHilo)
+        bool corteEnHilo, bool eventosCrudos)
     {
         // Un hub NUEVO por tanda. Es la condición para que dos tandas sean dos muestras y no una
         // segunda auditoría: con el hub de la anterior, la tanda 2 vería sus hallazgos como
@@ -137,6 +139,7 @@ internal static class SweepBench
         {
             CutOnUnitDone = cut,
             CutInThread = corteEnHilo,
+            UsePartialMessages = eventosCrudos,
         };
         AgentReadiness ready = await provider.CheckAsync(CancellationToken.None);
         if (!ready.Ready)
@@ -176,10 +179,79 @@ internal static class SweepBench
             }
         };
 
+        // ---- F30 §2e · LOS TIEMPOS, que es lo que esta medida decide ----------------------
+        //
+        // La pregunta es si Atalaya se ha vuelto lenta desde la entrega 1, y para contestarla no
+        // basta la duración de la pasada: hace falta saber CUÁNTO TARDA EN LLEGAR LA PRIMERA
+        // SEÑAL del modelo desde que el turno sale. Si la tubería se llena y el CLI se bloquea
+        // escribiendo, ese hueco es donde se ve.
+        //
+        // El reloj arranca en la ENTREGA (`ActivityNoteKind.Handover`), que es el mismo instante
+        // que el pie usa para anclar la espera, y para en la primera señal — cualquiera: texto,
+        // consumo o herramienta escribiéndose. La segunda columna es el primer elemento COMPLETO
+        // de una llamada a herramienta («Recibiendo hallazgos · 1»), que es la línea que el
+        // usuario dice que tarda 81 s.
+        var pasos = new List<(int Pass, string Unit, double First, double FirstItem, double Total)>();
+        var desdeEnvio = new Stopwatch();
+        double first = -1, firstItem = -1;
+        int pasoPass = 0;
+        string pasoUnit = string.Empty;
+
+        void Signal()
+        {
+            if (first < 0 && desdeEnvio.IsRunning)
+            {
+                first = desdeEnvio.Elapsed.TotalSeconds;
+            }
+        }
+
+        coordinator.ActivityNoted += note =>
+        {
+            if (note.Kind != ActivityNoteKind.Handover)
+            {
+                Signal();
+                return;
+            }
+
+            desdeEnvio.Restart();
+            first = -1;
+            firstItem = -1;
+            pasoPass = note.Pass;
+            pasoUnit = note.Unit;
+        };
+
+        provider.TextStreamed += _ => Signal();
+        provider.UsageReported += _ => Signal();
+        provider.ToolStreamed += tool =>
+        {
+            Signal();
+            if (firstItem < 0 && tool.Items > 0)
+            {
+                firstItem = desdeEnvio.Elapsed.TotalSeconds;
+            }
+        };
+
+        coordinator.PassFinished += (path, _) =>
+        {
+            desdeEnvio.Stop();
+            pasos.Add((pasoPass, path, first, firstItem, desdeEnvio.Elapsed.TotalSeconds));
+        };
+
         var clock = Stopwatch.StartNew();
         SessionResult result = await coordinator.RunAsync(
             new SessionRequest("banco", AuditMode.Lotes, units), CancellationToken.None);
         clock.Stop();
+
+        Console.WriteLine();
+        Console.WriteLine("  Tiempos desde la entrega al modelo");
+        Console.WriteLine("  | Unidad | Pasada | 1ª señal | 1er elemento | Pasada |");
+        Console.WriteLine("  |---|---:|---:|---:|---:|");
+        foreach ((int p, string u, double f, double fi, double tot) in pasos)
+        {
+            Console.WriteLine(
+                $"  | {Short(u)} | {p} | {S(f)} | {S(fi)} | {tot.ToString("0.0", CultureInfo.InvariantCulture)} s |");
+        }
+
 
         AuditSession session = hub.Store.ListSessions("banco").Single();
         foreach (UnitVerdictRecord unit in session.Units)
@@ -274,6 +346,10 @@ internal static class SweepBench
     }
 
     private static string Short(string path) => Path.GetFileName(path);
+
+    /// <summary>Un tramo en segundos, o «—» si nunca llegó: un hueco no se rellena con un cero.</summary>
+    private static string S(double seconds)
+        => seconds < 0 ? "—" : seconds.ToString("0.0", CultureInfo.InvariantCulture) + " s";
 
     /// <summary>Un número con separador de millares, para que las columnas se lean de un vistazo.</summary>
     private static string N(long value) => value.ToString("N0", CultureInfo.InvariantCulture);

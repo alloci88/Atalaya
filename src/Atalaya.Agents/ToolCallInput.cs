@@ -1,5 +1,4 @@
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace Atalaya.Agents;
 
@@ -20,6 +19,15 @@ namespace Atalaya.Agents;
 /// Un elemento a medio escribir no cuenta hasta que su título está entero, que es exactamente lo
 /// que se quiere enseñar — un título cortado por la mitad no informa de nada.
 /// </para>
+/// <para>
+/// <b>Y se cuenta SOBRE LA MARCHA, carácter a carácter</b> (F30 §2e). La primera versión guardaba
+/// el JSON acumulado y pasaba una expresión regular por <b>todo</b> él en cada trozo: con ~2.700
+/// trozos por llamada y ~10 KB de argumentos eso es un barrido cuadrático dentro del bucle que lee
+/// la salida del CLI —medido: <b>19,5 ms de los 29 ms</b> que costaba consumir una llamada entera,
+/// dos tercios del gasto del lector—. El lector de un proceso vivo no puede hacer nada caro en
+/// línea: lo que tarde en volver a leer es tiempo que el CLI pasa bloqueado escribiendo. Ahora cada
+/// carácter se mira UNA vez y no se guarda el acumulado.
+/// </para>
 /// </summary>
 public sealed class ToolCallInput
 {
@@ -36,15 +44,28 @@ public sealed class ToolCallInput
         ["add_locations"] = "path",
     };
 
-    private readonly StringBuilder _json = new();
-    private readonly Regex? _key;
+    private readonly string? _marker;
+
+    /// <summary>La cadena que se está leyendo ahora mismo, ya sin comillas ni escapes.</summary>
+    private readonly StringBuilder _text = new();
+
+    private bool _inString;
+    private bool _escaped;
+
+    /// <summary>Los dígitos de un <c>\uXXXX</c> que puede venir partido entre dos trozos.</summary>
+    private int _unicodePending;
+    private int _unicodeValue;
+
+    /// <summary>La última cadena cerrada era la clave marcadora: falta ver sus dos puntos.</summary>
+    private bool _sawKey;
+
+    /// <summary>Ya han pasado los dos puntos: la cadena que cierre ahora es el valor.</summary>
+    private bool _expectValue;
 
     public ToolCallInput(string tool)
     {
         Tool = tool;
-        _key = Marker.TryGetValue(tool, out string? key)
-            ? new Regex("\"" + key + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")
-            : null;
+        _marker = Marker.TryGetValue(tool, out string? key) ? key : null;
     }
 
     /// <summary>El nombre corto de la herramienta, ya sin el prefijo del servidor.</summary>
@@ -74,20 +95,117 @@ public sealed class ToolCallInput
     /// </summary>
     public bool Append(string chunk)
     {
-        if (chunk.Length == 0 || _key is null)
+        if (chunk.Length == 0 || _marker is null)
         {
             return false;
         }
 
-        _json.Append(chunk);
-        MatchCollection found = _key.Matches(_json.ToString());
-        if (found.Count <= Items)
+        bool completed = false;
+        foreach (char c in chunk)
         {
-            return false;
+            completed |= Feed(c);
         }
 
-        Items = found.Count;
-        Last = found[^1].Groups[1].Value;
-        return true;
+        return completed;
     }
+
+    /// <summary>
+    /// Un carácter. El autómata es mínimo a propósito: solo distingue dentro/fuera de cadena, sus
+    /// escapes, y si la cadena que acaba de cerrar era la clave marcadora o su valor. Nada de esto
+    /// necesita ver el JSON entero, que es justo lo que lo hace barato.
+    /// </summary>
+    private bool Feed(char c)
+    {
+        if (_inString)
+        {
+            if (_unicodePending > 0)
+            {
+                _unicodeValue = (_unicodeValue * 16) + Hex(c);
+                if (--_unicodePending == 0)
+                {
+                    _text.Append((char)_unicodeValue);
+                }
+
+                return false;
+            }
+
+            if (_escaped)
+            {
+                _escaped = false;
+                switch (c)
+                {
+                    case 'u':
+                        _unicodePending = 4;
+                        _unicodeValue = 0;
+                        break;
+                    case 'n': _text.Append('\n'); break;
+                    case 'r': _text.Append('\r'); break;
+                    case 't': _text.Append('\t'); break;
+                    case 'b': _text.Append('\b'); break;
+                    case 'f': _text.Append('\f'); break;
+                    default: _text.Append(c); break;
+                }
+
+                return false;
+            }
+
+            switch (c)
+            {
+                case '\\':
+                    _escaped = true;
+                    return false;
+                case '"':
+                    _inString = false;
+                    return Closed();
+                default:
+                    _text.Append(c);
+                    return false;
+            }
+        }
+
+        switch (c)
+        {
+            case '"':
+                _inString = true;
+                _text.Clear();
+                return false;
+
+            // Los dos puntos son lo único que convierte una clave leída en «lo siguiente es su
+            // valor». Los espacios entre la clave y ellos no cuentan, que es lo que un modelo
+            // escribiendo JSON con sangría produce todo el rato.
+            case ':' when _sawKey:
+                _sawKey = false;
+                _expectValue = true;
+                return false;
+            case ' ' or '\t' or '\r' or '\n':
+                return false;
+            default:
+                _sawKey = false;
+                _expectValue = false;
+                return false;
+        }
+    }
+
+    /// <summary>Una cadena acaba de cerrar: o es la clave que marca, o es su valor, o no es nada.</summary>
+    private bool Closed()
+    {
+        if (_expectValue)
+        {
+            _expectValue = false;
+            Items++;
+            Last = _text.ToString();
+            return true;
+        }
+
+        _sawKey = _text.Length == _marker!.Length && _text.ToString() == _marker;
+        return false;
+    }
+
+    private static int Hex(char c) => c switch
+    {
+        >= '0' and <= '9' => c - '0',
+        >= 'a' and <= 'f' => c - 'a' + 10,
+        >= 'A' and <= 'F' => c - 'A' + 10,
+        _ => 0,
+    };
 }

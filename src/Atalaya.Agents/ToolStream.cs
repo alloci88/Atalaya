@@ -1,4 +1,4 @@
-namespace Atalaya.Agents;
+﻿namespace Atalaya.Agents;
 
 /// <summary>En qué punto está una llamada a herramienta que el modelo está escribiendo (F30 §2).</summary>
 public enum ToolStreamPhase
@@ -8,6 +8,25 @@ public enum ToolStreamPhase
 
     /// <summary>Han llegado más argumentos: ya se puede decir cuántos elementos van.</summary>
     Input,
+
+    /// <summary>
+    /// <b>El modelo está RAZONANDO</b> (F30 §2e): ha abierto un bloque de pensamiento y todavía no
+    /// ha empezado a escribir nada que se pueda enseñar.
+    /// <para>
+    /// Es el tramo que la medida de §2e encontró debajo del «barely usable», y con la traza de
+    /// eventos delante: de los 62 s de una pasada de <c>CalculadoraCarga.cs</c> con Opus,
+    /// <b>22 s son dos bloques de razonamiento</b> —455 y 1.291 tokens— en los que la pantalla no
+    /// tenía absolutamente nada que decir. El evento llegaba (<c>content_block_start</c> con
+    /// <c>type: thinking</c>) y se tiraba, igual que se tiraban los argumentos antes de la entrega 1.
+    /// </para>
+    /// <para>
+    /// <b>No lleva herramienta ni elementos</b>: no hay ninguna todavía. Y el CONTENIDO del
+    /// razonamiento no viaja —medido contra el CLI 2.1.263, los <c>thinking_delta</c> llegan sin
+    /// texto—, así que lo que se puede decir es que está pasando y cuánto lleva. Que es justo lo
+    /// que faltaba.
+    /// </para>
+    /// </summary>
+    Reasoning,
 }
 
 /// <summary>

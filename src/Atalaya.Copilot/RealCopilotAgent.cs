@@ -619,25 +619,26 @@ public sealed class RealCopilotAgent : IAssistedFixProvider, IThreadedAuditor, I
     /// eventos <b>a tiempo</b>, todos de golpe al final, o no los manda.
     /// </para>
     /// <para>
+    /// <b>F30 §2e — y ya no escribe desde este hilo.</b> La primera versión hacía un
+    /// <c>File.AppendAllText</c> por evento —abrir, escribir, cerrar— en el mismo hilo que consume
+    /// los eventos del SDK. Eso lo paga el consumo: un instrumento que altere lo que mide no vale.
+    /// Ahora encola y escribe <see cref="EventTrace"/>, en su hilo y con búfer.
+    /// </para>
+    /// <para>
     /// <b>Apagado por defecto y sin ajuste.</b> Es un instrumento de diagnóstico, no una función:
     /// una casilla en Ajustes obligaría a explicarla, y un fichero que crece solo en la máquina de
     /// todo el mundo es exactamente lo que nadie pidió. Una variable de entorno se pone para una
     /// sesión y se olvida.
     /// </para>
     /// </summary>
-    private static readonly string? TracePath =
-        Environment.GetEnvironmentVariable("ATALAYA_TRACE_EVENTS") is "1" or "true"
-            ? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Atalaya", "logs", "eventos-copilot.log")
-            : null;
+    private static readonly EventTrace? Traza = EventTrace.For("copilot");
 
     /// <summary>Lo escrito por cada llamada a herramienta, para poder decir «lleva N caracteres».</summary>
     private readonly Dictionary<string, int> _traced = new(StringComparer.Ordinal);
 
     private void Trace(SessionEvent ev)
     {
-        if (TracePath is null)
+        if (Traza is null)
         {
             return;
         }
@@ -665,17 +666,7 @@ public sealed class RealCopilotAgent : IAssistedFixProvider, IThreadedAuditor, I
             detail = $" id={c.Data?.ToolCallId} ok={c.Data?.Success}";
         }
 
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(TracePath)!);
-            File.AppendAllText(
-                TracePath,
-                $"{DateTimeOffset.Now:HH:mm:ss.fff} {ev.GetType().Name}{detail}{Environment.NewLine}");
-        }
-        catch (IOException)
-        {
-            // Un diagnóstico que tumbe la sesión que diagnostica no vale para nada.
-        }
+        Traza.Note($"{ev.GetType().Name}{detail}");
     }
 
     internal void OnSessionEvent(SessionEvent ev)

@@ -574,7 +574,8 @@ public sealed class SessionCoordinator
         // definitiva; ahí está el tramo largo que D-1014 midió.
         void OnToolStreamed(ToolStream tool)
             => ActivityNoted?.Invoke(new ActivityNote(
-                activityUnit, activityPass, ActivityNoteKind.ToolWriting, ActivityWording.Writing(tool)));
+                activityUnit, activityPass, ActivityNoteKind.ToolWriting, ActivityWording.Writing(tool),
+                ActivityWording.WaitingFor(tool)));
 
         var narrating = _agent as INarratingAuditor;
         if (narrating is not null)

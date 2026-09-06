@@ -81,6 +81,21 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider, IThreadedAuditor,
     /// </summary>
     public bool CutInThread { get; init; }
 
+    /// <summary>
+    /// <b>Los eventos crudos de la API</b> (<c>--include-partial-messages</c>). Encendido, y así se
+    /// queda en producción: sin ellos no hay consumo por llamada (F21 §1), no hay corte, y desde la
+    /// entrega 1 de F30 tampoco hay texto delta a delta ni herramienta según se escribe.
+    /// <para>
+    /// <b>Es una palanca de BANCO, y existe por una medida concreta</b> (F30 §2e). La sospecha era
+    /// que pedir los eventos crudos multiplicara tanto la salida del CLI que la tubería se llenara
+    /// y el proceso se bloqueara escribiendo. Apagarlos «por si acaso» habría tirado el streaming
+    /// entero sin saber si era eso; con la palanca, la misma unidad se mide con y sin ellos y la
+    /// tabla lo dice. La medida salió: <b>no era eso</b> (D-1019), y la palanca se queda desarmada
+    /// para poder repetirla el día que el CLI cambie de forma.
+    /// </para>
+    /// </summary>
+    public bool UsePartialMessages { get; init; } = true;
+
     /// <summary>El flag del CLI sin el que no hay cuentas por llamada, y por tanto no hay corte.</summary>
     private const string PartialMessagesFlag = "include-partial-messages";
 
@@ -276,7 +291,7 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider, IThreadedAuditor,
         // suponerlo: un flag desconocido no se ignora, tumba la invocación entera.
         //
         // Y el corte DEPENDE de ellos: sin cuentas por llamada sería un ahorro con un hueco dentro.
-        bool partial = await SupportsFlagAsync(PartialMessagesFlag, ct);
+        bool partial = UsePartialMessages && await SupportsFlagAsync(PartialMessagesFlag, ct);
         bool cut = CutOnUnitDone && partial;
 
         if (!UseSystemPromptPrefix || !request.CanSplit || !await SupportsSystemPromptFileAsync(ct))
@@ -320,7 +335,7 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider, IThreadedAuditor,
                 readiness.Message, readiness.Problem, readiness.Detail);
         }
 
-        bool partial = await SupportsFlagAsync(PartialMessagesFlag, ct);
+        bool partial = UsePartialMessages && await SupportsFlagAsync(PartialMessagesFlag, ct);
 
         string cli = ResolveCli()!;
         string workDirectory = _workDirectory();

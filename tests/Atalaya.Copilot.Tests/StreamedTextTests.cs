@@ -142,6 +142,14 @@ public sealed class StreamedTextTests
     /// <summary>
     /// Dos llamadas a la vez no se estorban: cada una lleva su propia cuenta, igual que los
     /// mensajes de texto.
+    /// <para>
+    /// F30 §2e — el trozo de cierre llevaba una comilla de más (<c>,"{"title"…</c>), y con ella el
+    /// JSON del turno no era JSON. La expresión regular que contaba antes no miraba si estaba
+    /// dentro de una cadena o fuera, así que lo daba por bueno; el autómata que la sustituye sí
+    /// —y por eso también deja de contar un <c>"title"</c> que aparezca DENTRO de la evidencia de
+    /// un hallazgo—. El dato se arregla: lo que este test protege es que dos llamadas simultáneas
+    /// no se mezclen, no que se tolere un array mal escrito.
+    /// </para>
     /// </summary>
     [Fact]
     public void Two_tool_calls_are_counted_independently()
@@ -152,7 +160,7 @@ public sealed class StreamedTextTests
 
         agent.OnSessionEvent(ToolDelta("t1", "submit_findings", """{"findings":[{"title":"uno"}"""));
         agent.OnSessionEvent(ToolDelta("t2", "report_verdicts", """{"verdicts":[{"verdict":"presente"}"""));
-        agent.OnSessionEvent(ToolDelta("t1", "submit_findings", ""","{"title":"dos"}]}"""));
+        agent.OnSessionEvent(ToolDelta("t1", "submit_findings", """,{"title":"dos"}]}"""));
 
         narrated.Where(t => t.Tool == "submit_findings").Select(t => t.Items).Should().Equal(new[] { 1, 2 });
         narrated.Where(t => t.Tool == "report_verdicts").Select(t => t.Items).Should().Equal(new[] { 1 });

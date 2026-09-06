@@ -872,6 +872,28 @@
         </Style.Triggers>
     </Style>
 
+    <!-- LA FILA DE GRAVEDAD ES OTRA COSA QUE UNA TARJETA DE RECUENTO (F30 §2e). UI-0051 dejó el
+         cero en neutro y sigue siendo lo correcto en una TARJETA, donde la pastilla va sola: ahí
+         el gris dice «de esto no hay» sin competir con nada.
+
+         En una FILA DE CUATRO no funciona. «0 Críticas» en gris entre «1 Alta», «3 Medias» y
+         «2 Bajas» en color no se lee como un cero: se lee como una pastilla rota, porque el ojo
+         compara las cuatro entre sí antes de leer ninguna. Las cuatro llevan su color siempre —la
+         fila es una escala y una escala con un hueco deja de serlo— y el cero se apaga al 50 %,
+         que dice lo mismo sin salirse de la serie.
+
+         Va sobre `Pill.Sev` y NO sobre `Pill.Sev.Count`: heredar de aquélla traería su relleno
+         neutro, que es justo lo que aquí no se quiere. La opacidad va en el borde y no en el
+         texto porque arrastra a los hijos: relleno y tinta se apagan a la vez y la pastilla sigue
+         siendo la misma pastilla. -->
+    <Style x:Key="Pill.Sev.Row" TargetType="Border" BasedOn="{StaticResource Pill.Sev}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding Count}" Value="0">
+                <Setter Property="Opacity" Value="0.5" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
     <Style x:Key="Pill.Sev.Text" TargetType="TextBlock" BasedOn="{StaticResource Pill.Text}">
         <Style.Triggers>
             <DataTrigger Binding="{Binding Severity}" Value="Critica">

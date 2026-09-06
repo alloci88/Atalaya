@@ -48,7 +48,17 @@ public enum ActivityNoteKind
 /// </summary>
 /// <param name="Unit">La unidad que se está auditando; vacía si el hito no es de ninguna.</param>
 /// <param name="Pass">La pasada en curso; 0 si todavía no ha empezado ninguna.</param>
-public sealed record ActivityNote(string Unit, int Pass, ActivityNoteKind Kind, string Text);
+/// <param name="Waiting">
+/// <b>Lo que el pie tiene que decir</b> mientras esto dure, sin el contador (F30 §2e). Vacío
+/// cuando el hito no cambia lo que se está esperando, y entonces se conserva lo anterior.
+/// <para>
+/// Viaja con la nota y no se deduce del texto en la capa que pinta, por lo mismo que el texto
+/// crudo viaja en <see cref="Text"/>: adivinar la frase del pie leyendo la de la pantalla sería
+/// dos verdades escritas en dos sitios, y un día dirían cosas distintas.
+/// </para>
+/// </param>
+public sealed record ActivityNote(
+    string Unit, int Pass, ActivityNoteKind Kind, string Text, string Waiting = "");
 
 /// <summary>
 /// Cómo se lee una llamada a herramienta en el hilo de actividad (F30 §1).
@@ -102,13 +112,31 @@ public static class ActivityWording
     /// honrado que un «esperando» a secas, que se lee como un cuelgue.
     /// </para>
     /// </summary>
-    public const string AfterText = "escribiendo el reporte";
+    /// <para>
+    /// <b>F30 §2e — la frase es COMPLETA, no un sufijo.</b> Hasta aquí el pie escribía siempre
+    /// «esperando al modelo» y esto añadía el tramo detrás, así que el tramo del reporte salía como
+    /// «esperando al modelo escribiendo el reporte»: dos verbos peleándose por la misma frase. Lo
+    /// que se está haciendo en ese tramo no es esperar, es recibir un reporte que se está
+    /// escribiendo, y se dice así.
+    /// </para>
+    public const string AfterText = "escribiendo el reporte de hallazgos";
 
+    /// <summary>La frase por defecto: hay turno en el aire y no se sabe decir nada más preciso.</summary>
+    public const string Waiting = "esperando al modelo";
+
+    /// <summary>
+    /// La frase entera que el pie escribe mientras dura el silencio, sin el contador. Vacía cuando
+    /// el evento no cambia lo que se está esperando —una muestra de consumo no lo cambia—, y
+    /// entonces se conserva la anterior.
+    /// </summary>
     public static string After(ActivityNote note)
     {
         if (note.Kind == ActivityNoteKind.Handover)
         {
-            return note.Pass > 0 ? $"tras enviar la pasada {note.Pass}" : "tras enviar el turno";
+            // §2e — y aquí ya no va el número de pasada. El pie lo dice dos segmentos antes
+            // («Unidad 1 de 1 · pasada 2»), y repetirlo gastaba el sitio del único dato que este
+            // segmento aporta, que es el tiempo.
+            return Waiting;
         }
 
         if (note.Kind != ActivityNoteKind.Tool)
@@ -117,7 +145,7 @@ public static class ActivityWording
         }
 
         string entry = note.Text;
-        return Tool(entry) switch
+        string after = Tool(entry) switch
         {
             "submit_findings" => "tras " + Counted(entry, "reportar 1 hallazgo", "reportar", plural: true),
             "submit_finding" => "tras reportar 1 hallazgo",
@@ -127,6 +155,8 @@ public static class ActivityWording
             "read_signatures" => "tras leer un fichero",
             _ => string.Empty,
         };
+
+        return after.Length == 0 ? Waiting : $"{Waiting} {after}";
     }
 
     /// <summary>«reportar 11 hallazgos» / «reportar 1 hallazgo», con el número delante del nombre.</summary>
@@ -147,6 +177,11 @@ public static class ActivityWording
     /// </summary>
     public static string Writing(ToolStream tool)
     {
+        if (tool.Phase == ToolStreamPhase.Reasoning)
+        {
+            return "Razonando…";
+        }
+
         string verb = tool.Tool switch
         {
             "submit_findings" or "submit_finding" => "hallazgos",
@@ -170,6 +205,28 @@ public static class ActivityWording
 
         string tail = tool.Last is { Length: > 0 } last ? $" · {Trim(last)}" : string.Empty;
         return $"Recibiendo {verb} · {tool.Items}{tail}";
+    }
+
+    /// <summary>
+    /// <b>Qué dice el pie mientras el modelo escribe esto</b> (F30 §2e). Es la mitad de la
+    /// información del tramo largo: «razonando · 18 s» y «escribiendo el reporte de hallazgos ·
+    /// 31 s» explican un silencio; «esperando al modelo» a secas se lee como un cuelgue.
+    /// </summary>
+    public static string WaitingFor(ToolStream tool)
+    {
+        if (tool.Phase == ToolStreamPhase.Reasoning)
+        {
+            return "razonando";
+        }
+
+        return tool.Tool switch
+        {
+            "submit_findings" or "submit_finding" => AfterText,
+            "report_verdicts" => "escribiendo los veredictos",
+            "add_locations" => "escribiendo las ubicaciones",
+            "read_signatures" => "pidiendo un fichero",
+            _ => $"escribiendo la llamada a {tool.Tool}",
+        };
     }
 
     /// <summary>Un título largo no puede empujar la fila: se corta con puntos suspensivos.</summary>

@@ -266,6 +266,105 @@ public sealed class LiveNarrationTests : IDisposable
         live.SinceLastEvent.Should().Be(TimeSpan.Zero, "y el reloj de la espera no corre solo");
     }
 
+    /// <summary>
+    /// <b>UNA SESIÓN NUEVA NO HEREDA EL PIE DE LA ANTERIOR</b> (F30 §2e).
+    /// <para>
+    /// <b>El parte.</b> Al arrancar una sesión con Copilot, el pie enseñaba «incluido en tu
+    /// suscripción de Claude» —de la sesión anterior, que había corrido con Claude Code— hasta que
+    /// llegaba la primera muestra de consumo. Es un pie hablando de otra sesión, y en la única
+    /// pantalla donde el usuario mira el coste mientras se gasta.
+    /// </para>
+    /// <para>
+    /// <b>Por qué no lo veía nadie.</b> <c>Reset</c> limpia dieciocho campos y estos tres no
+    /// estaban —el proveedor, el coste con su procedencia y su unidad—, así que el defecto solo
+    /// aparecía en la <b>segunda</b> sesión de una ejecución de la aplicación y solo si la primera
+    /// había sido de la otra casa. Un test que arranque una sola sesión no puede verlo; éste
+    /// arranca la segunda con el rastro de la primera puesto a mano, que es la única forma de
+    /// mirar el instante exacto en el que el defecto existía.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Una_sesion_nueva_no_hereda_el_pie_de_la_anterior()
+    {
+        (LiveSessionService live, _) = await Run(audit: _ => new[] { NewFinding("fuga de stream") });
+
+        // Lo que la sesión anterior dejó escrito en el pie.
+        live.Provider = "claude-code";
+        live.CostResult = new CostResult(12.5m, Model: "opus");
+        live.Calls = 7;
+        live.Close().Should().BeTrue();
+
+        // Y el instante EXACTO en el que arranca la siguiente: `Reset` es quien cierra con su
+        // aviso, así que el primer repintado de la sesión nueva es el que enseña lo que se hereda.
+        var first = new TaskCompletionSource<(string? Provider, CostResult Cost, int Calls)>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        void Snapshot() => first.TrySetResult((live.Provider, live.CostResult, live.Calls));
+        live.Changed += Snapshot;
+
+        await live.StartAsync(
+            new SessionRequest("app", AuditMode.Lotes, new[] { UnitPath }), new[] { UnitPath });
+        (string? provider, CostResult cost, int calls) = await first.Task;
+        live.Changed -= Snapshot;
+
+        provider.Should().BeNull("el pie no puede etiquetar con una casa la sesión de la otra");
+        cost.HasValue.Should().BeFalse("ni enseñar el coste de la sesión anterior como si fuera éste");
+        calls.Should().Be(0);
+
+        for (int i = 0; i < 400 && live.IsRunning; i++)
+        {
+            await Task.Delay(25);
+        }
+    }
+
+    /// <summary>
+    /// <b>NINGÚN TRAMO DEL MODELO SE QUEDA SIN FRASE EN EL PIE</b> (F30 §2e).
+    /// <para>
+    /// <b>El parte.</b> Tras la prosa del modelo el pie se quedaba en «Unidad 1 de 1 · 00:28 ·
+    /// 0 llamadas» y no volvía a decir nada, con el modelo escribiendo el reporte durante medio
+    /// minuto. Dos causas, y ésta es la de fondo: la línea de «el modelo está escribiendo esto»
+    /// tocaba el reloj de la espera <b>sin cambiar la frase</b>, así que el pie se quedaba con la
+    /// del hito anterior — y en una unidad sin hallazgos vivos, donde el modelo no dice ni una
+    /// palabra antes de reportar, esa frase era «esperando al modelo» a secas.
+    /// </para>
+    /// <para>
+    /// <b>Lo que se fija es que la frase EXISTA SIEMPRE</b>, para todas las formas de
+    /// <see cref="ToolStream"/>. Es lo único que puede romperse en silencio aquí: quien añada un
+    /// tramo nuevo —como el razonamiento en esta misma tanda— y olvide su frase deja el pie mudo
+    /// otra vez, y mudo es exactamente igual que colgado.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Todo_tramo_que_el_modelo_escribe_tiene_frase_para_el_pie()
+    {
+        ToolStream[] tramos =
+        [
+            new ToolStream(ToolStreamPhase.Reasoning, string.Empty),
+            new ToolStream(ToolStreamPhase.Started, "submit_findings"),
+            new ToolStream(ToolStreamPhase.Input, "submit_findings", 3, "Credenciales embebidas"),
+            new ToolStream(ToolStreamPhase.Started, "report_verdicts"),
+            new ToolStream(ToolStreamPhase.Started, "add_locations"),
+            new ToolStream(ToolStreamPhase.Started, "read_signatures"),
+            new ToolStream(ToolStreamPhase.Started, "una_herramienta_que_todavia_no_existe"),
+        ];
+
+        foreach (ToolStream tramo in tramos)
+        {
+            ActivityWording.Writing(tramo).Should().NotBeNullOrWhiteSpace(
+                "el hilo tiene que poder decir qué está pasando");
+            ActivityWording.WaitingFor(tramo).Should().NotBeNullOrWhiteSpace(
+                "y el pie también: sin frase se queda con la del hito anterior, que habla de otra cosa");
+
+            // Y la frase del pie es COMPLETA, no un sufijo de «esperando al modelo»: el pie la
+            // escribe tal cual y le pone el contador. Empezar por «esperando» daría «esperando al
+            // modelo escribiendo el reporte», que es la frase que §2e viene a arreglar.
+            ActivityWording.WaitingFor(tramo).Should().NotStartWith("esperando");
+        }
+
+        ActivityWording.WaitingFor(new ToolStream(ToolStreamPhase.Reasoning, string.Empty))
+            .Should().Be("razonando",
+                "el tramo que la traza midió en 22 s de los 62 de una pasada tiene nombre propio");
+    }
+
     /// <summary>Todas las líneas de actividad narradas en la sesión, de todas las unidades y pasadas.</summary>
     private static List<ActivityEntry> Narration(LiveSessionService live)
         => live.Units.SelectMany(u => u.Passes).SelectMany(p => p.Entries).Where(e => e.IsEvent).ToList();

@@ -86,6 +86,22 @@ public sealed class ClaudeStreamReader
     /// </summary>
     private readonly Dictionary<int, ToolCallInput> _toolInputs = new();
 
+    /// <summary>
+    /// <b>El volcado de eventos crudos</b> (F30 §2e), cuando <c>ATALAYA_TRACE_EVENTS</c> está
+    /// puesto; <c>null</c> el resto de las veces, que es siempre. Apunta la hora a la que llega
+    /// CADA línea del CLI, que es lo único que separa «el modelo está callado» de «Atalaya no está
+    /// leyendo» — y esa pregunta no se puede contestar desde el código.
+    /// <para>
+    /// Escribe en un hilo aparte y con búfer (ver <see cref="EventTrace"/>): el bucle que lee la
+    /// tubería no puede pararse a abrir un fichero, porque mientras no lee, el CLI se bloquea
+    /// escribiendo.
+    /// </para>
+    /// </summary>
+    private readonly EventTrace? _trace = EventTrace.For("claude");
+
+    /// <summary>Lo que lleva escrito cada bloque de herramienta, para poder decir «va por N».</summary>
+    private readonly Dictionary<int, int> _traced = new();
+
     /// <summary>Peticiones al modelo abiertas y todavía sin cerrar. Ver <see cref="AccountingIsComplete"/>.</summary>
     private int _openCalls;
 
@@ -230,6 +246,11 @@ public sealed class ClaudeStreamReader
                 continue;
             }
 
+            if (_trace is not null)
+            {
+                Trace(e);
+            }
+
             switch (Str(e, "type"))
             {
                 case "system" when Str(e, "subtype") == "init":
@@ -291,11 +312,26 @@ public sealed class ClaudeStreamReader
                     {
                         // El modelo abre un bloque. Si es una herramienta, empieza a escribirla.
                         case "content_block_start" when raw.TryGetProperty("content_block", out JsonElement block):
-                            if (Str(block, "type") == "tool_use")
+                            switch (Str(block, "type"))
                             {
-                                string tool = ToolCallInput.Short(Str(block, "name"));
-                                _toolInputs[BlockIndex(raw)] = new ToolCallInput(tool);
-                                _onTool?.Invoke(new ToolStream(ToolStreamPhase.Started, tool));
+                                case "tool_use":
+                                    string tool = ToolCallInput.Short(Str(block, "name"));
+                                    _toolInputs[BlockIndex(raw)] = new ToolCallInput(tool);
+                                    _onTool?.Invoke(new ToolStream(ToolStreamPhase.Started, tool));
+                                    break;
+
+                                // F30 §2e — EL RAZONAMIENTO, que era el resto del silencio. La
+                                // traza de eventos lo dejó a la vista: en una pasada de 62 s con
+                                // Opus, 22 s son dos bloques de éstos —455 y 1.291 tokens de
+                                // razonamiento— y la pantalla no decía nada porque nadie leía este
+                                // caso. Se avisa al ABRIRSE el bloque y una sola vez: los
+                                // `thinking_delta` que vienen detrás llegan SIN texto (medido
+                                // contra el CLI 2.1.263), así que no hay nada que contar con
+                                // ellos — y tocarlos reiniciaría el reloj del pie, que es
+                                // justamente el que tiene que subir mientras dura.
+                                case "thinking":
+                                    _onTool?.Invoke(new ToolStream(ToolStreamPhase.Reasoning, string.Empty));
+                                    break;
                             }
 
                             break;
@@ -429,6 +465,66 @@ public sealed class ClaudeStreamReader
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// <b>Una línea por evento del CLI, con su hora</b> (F30 §2e). Lo que se apunta de cada uno es
+    /// lo que separa las hipótesis: para un trozo de argumentos, <b>cuánto lleva escrito
+    /// acumulado</b>, que es lo que distingue «llegan según se escriben» de «llegan todos juntos al
+    /// final»; para un <c>message_delta</c>, los tokens de salida y los de razonamiento, que es lo
+    /// que distingue «el modelo está pensando» de «el modelo está callado».
+    /// <para>
+    /// Lo único que hace aquí es componer una cadena corta y encolarla. Ni abre ficheros ni espera
+    /// a nadie: quien escribe es el hilo de <see cref="EventTrace"/>.
+    /// </para>
+    /// </summary>
+    private void Trace(JsonElement e)
+    {
+        string type = Str(e, "type");
+        if (type != "stream_event" || !e.TryGetProperty("event", out JsonElement raw))
+        {
+            _trace!.Note(type + (Str(e, "subtype") is { Length: > 0 } sub ? "/" + sub : string.Empty));
+            return;
+        }
+
+        string inner = Str(raw, "type");
+        switch (inner)
+        {
+            case "content_block_start" when raw.TryGetProperty("content_block", out JsonElement block):
+                _traced[BlockIndex(raw)] = 0;
+                _trace!.Note($"{inner} bloque={BlockIndex(raw)} clase={Str(block, "type")}"
+                    + (Str(block, "name") is { Length: > 0 } name ? $" tool={name}" : string.Empty));
+                break;
+
+            case "content_block_delta" when raw.TryGetProperty("delta", out JsonElement piece):
+            {
+                string kind = Str(piece, "type");
+                string written = kind switch
+                {
+                    "input_json_delta" => Str(piece, "partial_json"),
+                    "text_delta" => Str(piece, "text"),
+                    "thinking_delta" => Str(piece, "thinking"),
+                    _ => string.Empty,
+                };
+
+                int block = BlockIndex(raw);
+                int total = (_traced.TryGetValue(block, out int had) ? had : 0) + written.Length;
+                _traced[block] = total;
+                _trace!.Note($"{kind} bloque={block} +{written.Length} acumulado={total}");
+                break;
+            }
+
+            case "message_delta" when raw.TryGetProperty("usage", out JsonElement final):
+                _trace!.Note($"{inner} salida={Long(final, "output_tokens")}"
+                    + (final.TryGetProperty("output_tokens_details", out JsonElement d)
+                        ? $" razonamiento={Long(d, "thinking_tokens")}"
+                        : string.Empty));
+                break;
+
+            default:
+                _trace!.Note(inner);
+                break;
+        }
     }
 
     /// <summary>El id del mensaje del modelo que trae este evento, o vacío si no lo dice.</summary>

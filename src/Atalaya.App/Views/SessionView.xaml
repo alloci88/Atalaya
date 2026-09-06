@@ -416,17 +416,28 @@
                              una frase y sin fingir que hay datos. -->
                         <ItemsControl ItemsSource="{Binding SeverityChips}" Margin="{StaticResource Pad.XS.Top}"
                                       Visibility="{Binding HasFindings, Converter={StaticResource BoolToVisibility}}">
+                            <!-- 2 x 2 SIEMPRE, y no un envoltorio que decide solo (F30 §2e). Era un
+                                 `WrapPanel`, así que la fila se partía en 3 + 1 según lo que
+                                 midieran los rótulos —«12 Críticas» ocupa más que «0 Críticas»— y
+                                 el marcador cambiaba de forma solo, a mitad de sesión, sin que
+                                 pasara nada.
+
+                                 Una sola fila no cabe y no es cuestión de ajustar un mínimo: esta
+                                 columna mide 300 px fijos, y cuatro pastillas cuyo ancho depende
+                                 de un número que crece no caben nunca de forma garantizada. Con la
+                                 rejilla, las cuatro ocupan la misma celda y la forma no depende de
+                                 los datos. -->
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
-                                    <WrapPanel />
+                                    <UniformGrid Rows="2" Columns="2" />
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Style="{StaticResource Pill.Sev.Count}" MinWidth="0"
+                                    <Border Style="{StaticResource Pill.Sev.Row}" MinWidth="0"
                                             Margin="{StaticResource Pad.Chip}">
                                         <TextBlock Text="{Binding Label}"
-                                                   Style="{StaticResource Pill.Sev.Count.Text}" />
+                                                   Style="{StaticResource Pill.Sev.Text}" />
                                     </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>

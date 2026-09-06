@@ -150,8 +150,12 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
                 return string.Empty;
             }
 
-            string after = _live.WaitingAfter is { Length: > 0 } a ? " " + a : string.Empty;
-            return $"esperando al modelo{after} · {(int)_live.SinceLastEvent.TotalSeconds} s";
+            // F30 §2e — LA FRASE VIENE ENTERA de `ActivityWording.After`, y aquí solo se le pone el
+            // contador. Antes esto escribía «esperando al modelo» y le pegaba el tramo detrás, y
+            // por eso el tramo del reporte salía como «esperando al modelo escribiendo el
+            // reporte»: quien sabe qué se está haciendo es quien narra el evento, no el pie.
+            string what = _live.WaitingAfter is { Length: > 0 } a ? a : ActivityWording.Waiting;
+            return $"{what} · {(int)_live.SinceLastEvent.TotalSeconds} s";
         }
     }
 
@@ -184,12 +188,13 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
 
             segments.Add(FooterSegment.Of(ElapsedText, opacity: 0.85));
 
-            // F30 §3 — QUÉ SE ESTÁ ESPERANDO, cuando el silencio deja de ser normal. Antes de los
-            // 20 s no se dice nada: una llamada tarda lo que tarda y anunciar cada pausa sería
-            // ruido. A partir de ahí el pie lo nombra con el tiempo subiendo, que es lo que
-            // distingue «el modelo está pensando» de «esto se ha caído» — hoy las dos cosas se ven
-            // igual, que es la pantalla quieta. No cede el sitio: es lo único que se puede leer
-            // cuando no está pasando nada más.
+            // F30 §3 — QUÉ SE ESTÁ ESPERANDO, cuando el silencio deja de ser normal. Es lo que
+            // distingue «el modelo está pensando» de «esto se ha caído», que sin esto se ven
+            // exactamente igual: la pantalla quieta. No cede el sitio, porque es lo único que se
+            // puede leer cuando no está pasando nada más.
+            //
+            // §2e — el umbral son 5 s y la frase la trae entera quien narra: «razonando · 12 s»,
+            // «escribiendo el reporte de hallazgos · 31 s», «esperando al modelo · 7 s».
             if (WaitText.Length > 0)
             {
                 segments.Add(FooterSegment.Of(WaitText, priority: 5, bold: _live.WaitIsLong));
