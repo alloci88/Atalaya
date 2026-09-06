@@ -132,6 +132,34 @@ public sealed class SessionToolbox : IAuditToolbox, ISweepCreations
     public List<string> ToolCallLog { get; } = new();
 
     /// <summary>
+    /// <b>La misma traza, pero EN EL MOMENTO</b> (F30 §1). Se dispara cuando la herramienta acaba
+    /// de ejecutarse, no cuando la pasada termina.
+    /// <para>
+    /// <b>De dónde viene.</b> <see cref="ToolCallLog"/> ya apuntaba cada llamada —una sesión real
+    /// de 86 llamadas dejó 136 notas de este tipo—, pero el coordinador las vuelca en
+    /// <c>session.Notes</c> al cerrar la pasada: para cuando se leen, ya han pasado los minutos en
+    /// los que el usuario miraba una pantalla quieta. El arreglo asistido no tiene ese problema
+    /// porque su toolbox avisa según trabaja (<c>FixToolbox.FileRead</c>, <c>Edited</c>…), y ésa es
+    /// la forma buena. Esto es la misma costura del lado de la auditoría.
+    /// </para>
+    /// <para>
+    /// <b>No cuesta un token.</b> No cambia el prompt, no añade una llamada y no le pide al modelo
+    /// que hable más: enseña lo que la aplicación ya sabía y se guardaba para el final.
+    /// </para>
+    /// </summary>
+    public event Action<string>? ToolInvoked;
+
+    /// <summary>
+    /// Apunta una llamada a herramienta: al registro de la pasada y, a la vez, al hilo de
+    /// actividad. Un solo sitio, para que no pueda haber una que se cuente y no se vea.
+    /// </summary>
+    private void Log(string entry)
+    {
+        ToolCallLog.Add(entry);
+        ToolInvoked?.Invoke(entry);
+    }
+
+    /// <summary>
     /// Veredictos que la app NO aplicó tal cual y por qué (F5.1b): un «arreglado» sin evidencia de
     /// cambio degradado a presente, o una discrepancia registrada como disputa. No son rechazos
     /// —el payload era válido y la app hizo algo con él—, así que van por su propio canal y NO
@@ -312,7 +340,7 @@ public sealed class SessionToolbox : IAuditToolbox, ISweepCreations
     {
         ToolCallCount++;
         int count = locations?.Length ?? 0;
-        ToolCallLog.Add($"add_locations · id='{findingId}' locs={count}");
+        Log($"add_locations · id='{findingId}' locs={count}");
 
         if (string.IsNullOrWhiteSpace(findingId))
         {
@@ -389,7 +417,7 @@ public sealed class SessionToolbox : IAuditToolbox, ISweepCreations
     {
         ToolCallCount++;
         int count = verdicts?.Length ?? 0;
-        ToolCallLog.Add($"report_verdicts · items={count}");
+        Log($"report_verdicts · items={count}");
         if (verdicts is null || verdicts.Length == 0)
         {
             string reason = "report_verdicts recibido sin veredictos (array nulo o vacío).";
@@ -529,7 +557,7 @@ public sealed class SessionToolbox : IAuditToolbox, ISweepCreations
     {
         ToolCallCount++;
         SubmitInvocations++;
-        ToolCallLog.Add($"submit_finding · title='{args?.Title ?? "(null)"}' locs={args?.Locations?.Length ?? 0}");
+        Log($"submit_finding · title='{args?.Title ?? "(null)"}' locs={args?.Locations?.Length ?? 0}");
         return SubmitFindingCore(args!);
     }
 
@@ -541,7 +569,7 @@ public sealed class SessionToolbox : IAuditToolbox, ISweepCreations
         ToolCallCount++;
         SubmitInvocations++;
         int count = findings?.Length ?? 0;
-        ToolCallLog.Add($"submit_findings · items={count}");
+        Log($"submit_findings · items={count}");
         // Un lote VACÍO es como el auditor dice "no hay nada nuevo en esta unidad", que es una
         // respuesta legítima y frecuente en un barrido que converge. No es un payload rechazado:
         // contarlo como tal pintaba un ⚠ en el informe donde no había ningún problema. La llamada
@@ -676,7 +704,7 @@ public sealed class SessionToolbox : IAuditToolbox, ISweepCreations
     {
         ToolCallCount++;
         int declared = suppressedByPattern?.Length ?? 0;
-        ToolCallLog.Add($"unit_done · unit='{unitPath}' summary='{Truncate(summary, 80)}'"
+        Log($"unit_done · unit='{unitPath}' summary='{Truncate(summary, 80)}'"
             + (declared > 0 ? $" suprimidos={declared} patrón(es)" : ""));
         LastUnitSummary = AuditorText.Clean(summary);
 
@@ -691,13 +719,13 @@ public sealed class SessionToolbox : IAuditToolbox, ISweepCreations
         string cited = (s?.PatternId ?? string.Empty).Trim();
         if (cited.Length == 0)
         {
-            ToolCallLog.Add("unit_done · supresión sin patternId, ignorada");
+            Log("unit_done · supresión sin patternId, ignorada");
             return;
         }
 
         if (s!.Count <= 0)
         {
-            ToolCallLog.Add($"unit_done · supresión de '{cited}' con count={s.Count}, ignorada");
+            Log($"unit_done · supresión de '{cited}' con count={s.Count}, ignorada");
             return;
         }
 
@@ -719,7 +747,7 @@ public sealed class SessionToolbox : IAuditToolbox, ISweepCreations
     public string ReadSignatures(string path)
     {
         ToolCallCount++;
-        ToolCallLog.Add($"read_signatures · path='{path}'");
+        Log($"read_signatures · path='{path}'");
         try
         {
             string abs = Path.Combine(_clonePath, path.Replace('/', Path.DirectorySeparatorChar));

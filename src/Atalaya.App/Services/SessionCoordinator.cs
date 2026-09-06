@@ -218,6 +218,26 @@ public sealed class SessionCoordinator
 
     public event Action<string, string>? UnitPhaseChanged;   // (path, phase)
 
+    /// <summary>
+    /// <b>Lo que está pasando, según pasa</b> (F30 §1): una llamada a herramienta que acaba de
+    /// ejecutarse, o un hito de la propia Atalaya —un corte que no se pudo hacer, una reanudación
+    /// fallida—.
+    /// <para>
+    /// <b>Por qué hacía falta.</b> Todo esto ya se apuntaba: las herramientas en
+    /// <c>SessionToolbox.ToolCallLog</c> y los hitos directamente en <c>session.Notes</c>. Pero las
+    /// dos cosas se vuelcan al CERRAR la pasada, así que durante los minutos que dura una llamada
+    /// —medido sobre las sesiones reales del hub: <b>11,8 s de media y hasta 48 s</b> entre una y
+    /// la siguiente— la pantalla no tenía nada que enseñar salvo la prosa del modelo, que es
+    /// opcional para él. Las herramientas no lo son.
+    /// </para>
+    /// <para>
+    /// Es puramente aditivo y no cuesta un token: no cambia el prompt, no añade llamadas y no le
+    /// pide al modelo que hable más. Enseña lo que la aplicación ya sabía y se guardaba para el
+    /// final.
+    /// </para>
+    /// </summary>
+    public event Action<ActivityNote>? ActivityNoted;
+
     // ---- Superficie de OBSERVACIÓN (F5.2) ----
     // Eventos puramente aditivos: emiten datos que el coordinador ya calculaba y no cambian
     // ninguna decisión. Existen porque V5 necesita narrar el barrido pasada a pasada, y antes
@@ -484,6 +504,14 @@ public sealed class SessionCoordinator
         // publicado el consumo de todas sus llamadas, o porque quedaba una herramienta a medias—
         // la pasada cuesta una llamada más, y eso NO puede quedar como una cifra sin causa (N-2).
         // Se pregunta por el tipo porque el corte es de esta casa: Copilot no tiene esta llamada.
+        // F30 §1 — la unidad y la pasada en curso, para poder situar cada llamada a herramienta y
+        // cada hito en el hilo de actividad. La toolbox no las conoce (ni tiene por qué: su trabajo
+        // es validar y persistir), así que las lleva quien conduce el barrido.
+        string activityUnit = string.Empty;
+        int activityPass = 0;
+        void Note(ActivityNoteKind kind, string text)
+            => ActivityNoted?.Invoke(new ActivityNote(activityUnit, activityPass, kind, text));
+
         var cutSkipped = new List<string>();
         void OnCutSkipped(string why)
         {
@@ -491,6 +519,11 @@ public sealed class SessionCoordinator
             {
                 cutSkipped.Add(why);
             }
+
+            // Y se dice MIENTRAS pasa: el corte que no se pudo hacer cuesta una llamada de
+            // cortesía más, y hasta aquí eso solo existía en el anexo del informe.
+            Note(ActivityNoteKind.Milestone,
+                $"No se pudo cortar la pasada: {why} — cuesta una llamada de cortesía más");
         }
 
         var claude = _agent as ClaudeCodeProvider;
@@ -529,6 +562,12 @@ public sealed class SessionCoordinator
         var toolbox = new SessionToolbox(
             request.Slug, request.Mode, stamp, _ingestion, _reconciliation, _hub.Store, clone!, OnFinding,
             patterns, theme);
+
+        // F30 §1 — cada herramienta, en cuanto se ejecuta. Es la misma costura que el arreglo
+        // asistido tiene desde F16 (`FixToolbox.FileRead`, `Edited`…), del lado de la auditoría.
+        void OnToolInvoked(string entry) => Note(ActivityNoteKind.Tool, entry);
+
+        toolbox.ToolInvoked += OnToolInvoked;
         var auditedPaths = new HashSet<string>(StringComparer.Ordinal);
         int incompleteUnits = 0;
 
@@ -644,6 +683,8 @@ public sealed class SessionCoordinator
                         }
                     }
 
+                    activityUnit = unit.Path;
+                    activityPass = pass;
                     PassStarted?.Invoke(unit.Path, pass);
                     IReadOnlyList<Finding> existing = _reconciliation.ExistingForUnit(request.Slug, unit.Path);
                     toolbox.BeginPass(existing);
@@ -718,6 +759,11 @@ public sealed class SessionCoordinator
                                 session.Notes.Add(
                                     $"{unit.Path} (pasada {pass}): la conversación de la unidad no pudo continuar "
                                     + $"—{broken.Message}—, así que la pasada se ha hecho con una petición nueva.");
+
+                                // Y se dice MIENTRAS pasa (F30 §1). Hasta aquí esto solo existía en
+                                // el anexo del informe, que se lee cuando ya ha terminado todo.
+                                Note(ActivityNoteKind.Milestone,
+                                    "Reanudación fallida, abriendo petición nueva");
                                 pendingRestart = "no se pudo continuar la conversación";
                                 await conversation.DisposeAsync();
                                 turnsInThread = 0;
@@ -958,6 +1004,7 @@ public sealed class SessionCoordinator
         finally
         {
             _agent.TextStreamed -= OnText;
+            toolbox.ToolInvoked -= OnToolInvoked;
             _agent.UsageReported -= OnUsage;
             if (claude is not null)
             {

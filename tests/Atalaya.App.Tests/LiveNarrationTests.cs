@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 using Atalaya.App.Services;
@@ -130,16 +130,27 @@ public sealed class LiveNarrationTests : IDisposable
     /// Corre una sesión de verdad a través del servicio en vivo, de modo que la narración se puebla
     /// por el mismo camino que en producción, y devuelve el servicio ya cerrado.
     /// </summary>
+    /// <param name="wire">
+    /// Se ejecuta sobre el coordinador recién creado, para poder escuchar sus eventos. Es la única
+    /// forma de comprobar el ORDEN en el que ocurren las cosas (F30 §1): desde fuera solo se ve el
+    /// resultado, y el resultado es el mismo se narre cuando se narre.
+    /// </param>
     private async Task<(LiveSessionService Live, SessionResult Result)> Run(
         Func<AuditUnitRequest, IEnumerable<SubmitFindingArgs>>? audit = null,
-        Func<AuditUnitRequest, IEnumerable<VerdictArgs>>? reconcile = null)
+        Func<AuditUnitRequest, IEnumerable<VerdictArgs>>? reconcile = null,
+        Action<SessionCoordinator>? wire = null)
     {
         var agent = new FakeCopilotAgent(auditScript: audit, reconcileScript: reconcile);
         SessionResult? captured = null;
         var live = new LiveSessionService(
-            () => new SessionCoordinator(
-                _hub, _provider.GetRequiredService<FindingIngestionService>(),
-                _provider.GetRequiredService<ReconciliationService>(), _machines, _ulids, agent, _settings),
+            () =>
+            {
+                var coordinator = new SessionCoordinator(
+                    _hub, _provider.GetRequiredService<FindingIngestionService>(),
+                    _provider.GetRequiredService<ReconciliationService>(), _machines, _ulids, agent, _settings);
+                wire?.Invoke(coordinator);
+                return coordinator;
+            },
             agent, _provider.GetRequiredService<OpenSessionStore>(), _hub);
         live.Completed += r => captured = r;
 
@@ -152,6 +163,51 @@ public sealed class LiveNarrationTests : IDisposable
         live.IsRunning.Should().BeFalse("la sesión de prueba tiene que haber terminado");
         captured.Should().NotBeNull("sin resultado no hay con qué contrastar la narración");
         return (live, captured!);
+    }
+
+    /// <summary>
+    /// <b>NI UN TOKEN MÁS</b> (F30, norma de la fase). Enseñar mejor lo que ya pasa no puede
+    /// cambiar lo que pasa.
+    /// <para>
+    /// <b>Cómo se comprueba, y por qué así.</b> El hilo de actividad es un ESPEJO de la traza que
+    /// la aplicación ya escribía: <c>SessionToolbox.ToolCallLog</c> lleva desde F3 apuntando cada
+    /// llamada a herramienta, y el coordinador la vuelca en las notas de la sesión. Lo que F30
+    /// cambia es cuándo se ve, no qué se hace. Así que lo que se exige es <b>uno a uno</b>: tantas
+    /// líneas narradas en vivo como líneas <c>tool ·</c> tiene la sesión persistida, ni una más.
+    /// Una narración que costara algo —una herramienta extra, un turno de cortesía— rompería esa
+    /// igualdad por arriba; una que se perdiera eventos, por abajo.
+    /// </para>
+    /// <para>
+    /// <b>Por qué no se comparan dos sesiones.</b> Era la primera idea y no vale: la segunda corre
+    /// sobre el hub que dejó la primera, así que reconcilia los hallazgos que la otra creó y sus
+    /// contadores son legítimamente distintos. Comparar eso habría medido el estado del hub, no el
+    /// coste de narrar.
+    /// </para>
+    /// <para>
+    /// Y protege el error concreto que esta fase podía cometer: pedirle al modelo que narre —una
+    /// frase en el prompt, una herramienta más— para que la pantalla tuviera algo que enseñar. Eso
+    /// es coste, y ésta es la red que lo cantaría.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Narrar_es_un_espejo_de_lo_que_ya_pasaba_y_no_cuesta_nada()
+    {
+        var narrado = new List<ActivityNote>();
+
+        await Run(
+            audit: _ => new[] { NewFinding("fuga de stream") },
+            wire: c => c.ActivityNoted += narrado.Add);
+
+        AuditSession persisted = _hub.Store.ListSessions("app").Should().ContainSingle().Subject;
+        List<string> enLasNotas = persisted.Notes
+            .Where(n => n.Contains(": tool · ", StringComparison.Ordinal))
+            .ToList();
+
+        enLasNotas.Should().NotBeEmpty("sin herramientas en las notas esto no compararía nada");
+
+        narrado.Where(n => n.Kind == ActivityNoteKind.Tool).Should().HaveCount(enLasNotas.Count,
+            "el hilo enseña las mismas llamadas que ya se apuntaban, ni una más ni una menos: "
+            + "si narrar costara una herramienta de más, sobraría aquí");
     }
 
     /// <summary>Todas las líneas de actividad narradas en la sesión, de todas las unidades y pasadas.</summary>
@@ -360,9 +416,15 @@ public sealed class LiveNarrationTests : IDisposable
 
     /// <summary>
     /// Todo glifo que la narración pinta pertenece al repertorio conocido: los de hallazgo (＋ ⊕ ⚖
-    /// ⚠ ✔) y los de cierre de pasada (✓ seca, ↻ con aportación). Si algún día se añade un suceso y
-    /// se olvida su caso —o se cuela una etiqueta de otro sitio—, se ve aquí en vez de en una
-    /// insignia que miente.
+    /// ⚠ ✔), los de cierre de pasada (✓ seca, ↻ con aportación) y, desde F30 §1, los del hilo de
+    /// actividad — la herramienta (⚒), la lectura de un fichero (👁) y el hito de Atalaya (◆) —. Si
+    /// algún día se añade un suceso y se olvida su caso —o se cuela una etiqueta de otro sitio—, se
+    /// ve aquí en vez de en una insignia que miente.
+    /// <para>
+    /// <b>La familia de F30 es propia a propósito</b>: una llamada a <c>submit_findings</c> con
+    /// cinco elementos es UN gesto del auditor, no cinco hallazgos, así que no puede llevar el ＋
+    /// que este mismo fichero cuenta contra los contadores de la sesión.
+    /// </para>
     /// </summary>
     [Fact]
     public async Task La_narracion_no_pinta_glifos_que_nadie_emite()
@@ -373,7 +435,52 @@ public sealed class LiveNarrationTests : IDisposable
             reconcile: _ => new[] { new VerdictArgs(presente.Id.ToString(), "presente", "sigue") });
 
         Narration(live).Select(e => e.Glyph).Distinct()
-            .Should().BeSubsetOf(new[] { "＋", "⊕", "⚖", "⚠", "✔", "✓", "↻" });
+            .Should().BeSubsetOf(new[] { "＋", "⊕", "⚖", "⚠", "✔", "✓", "↻", "⚒", "👁", "◆" });
+    }
+
+    /// <summary>
+    /// <b>F30 §1 — una herramienta llega al hilo ANTES de que la pasada termine.</b> Es la regla
+    /// entera de esta fase.
+    /// <para>
+    /// <b>El defecto.</b> Todo esto ya se apuntaba —<c>SessionToolbox.ToolCallLog</c> lleva desde
+    /// F3 registrando cada llamada: una sesión real de 86 llamadas dejó 136 notas de este tipo—,
+    /// pero el coordinador las vuelca en <c>session.Notes</c> al CERRAR la pasada. Para cuando se
+    /// pueden leer, ya han pasado los minutos en los que el usuario miraba una pantalla quieta:
+    /// medido sobre las sesiones reales del hub, <b>11,8 s de media entre llamada y llamada, y
+    /// hasta 48 s</b>. Lo único que podía aparecer en ese hueco era la prosa del modelo, y la prosa
+    /// es opcional para él; las herramientas no.
+    /// </para>
+    /// <para>
+    /// <b>Por qué se comprueba el ORDEN y no la presencia.</b> Que las líneas acaben estando no
+    /// distingue nada: también estaban antes, al final. Lo que esta fase cambia es CUÁNDO, así que
+    /// lo que se fija es que la primera herramienta se narre antes de que llegue el primer cierre
+    /// de pasada. Si algún día la emisión volviera al volcado del final, esto se pone rojo.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Una_herramienta_llega_al_hilo_antes_de_que_termine_la_pasada()
+    {
+        var order = new List<string>();
+
+        (LiveSessionService live, _) = await Run(
+            audit: _ => new[] { NewFinding("fuga de stream") },
+            wire: c =>
+            {
+                c.ActivityNoted += n => order.Add("herramienta · " + n.Text);
+                c.PassFinished += (_, _) => order.Add("fin de pasada");
+            });
+
+        int primeraHerramienta = order.FindIndex(x => x.StartsWith("herramienta ·", StringComparison.Ordinal));
+        int primerCierre = order.IndexOf("fin de pasada");
+
+        primeraHerramienta.Should().BeGreaterThanOrEqualTo(0,
+            "el auditor llamó a submit_findings y a unit_done: sin ninguna herramienta narrada, "
+            + "esto pasaría por vacío y no probaría nada");
+        primerCierre.Should().BeGreaterThan(primeraHerramienta,
+            "la herramienta se narra cuando se ejecuta, no cuando la pasada acaba");
+
+        // Y llega al hilo que se pinta, no solo al evento.
+        Narration(live).Should().Contain(e => e.Glyph == "⚒");
     }
 
     /// <summary>

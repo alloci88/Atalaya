@@ -228,6 +228,49 @@ public sealed partial class LiveSessionService : ObservableObject
 
     public double Progress => UnitCount == 0 ? 0 : (double)UnitIndex / UnitCount;
 
+    // ------------------------------------------------------------------ ¿está pensando o se cayó?
+
+    /// <summary>
+    /// Cuándo llegó la última señal de vida del barrido (F30 §3): un evento de herramienta, un
+    /// trozo de texto, una muestra de consumo o un cambio de pasada.
+    /// </summary>
+    private DateTimeOffset? _lastEventUtc;
+
+    /// <summary>
+    /// A partir de cuántos segundos sin noticias se dice que se está esperando. Por debajo, callar
+    /// es lo correcto: una llamada tarda lo que tarda y anunciar cada pausa de tres segundos sería
+    /// ruido. Encima, el silencio deja de ser normal y hay que nombrarlo.
+    /// </summary>
+    public const int QuietSeconds = 20;
+
+    /// <summary>Y a partir de cuántos la espera pasa a ámbar: sigue siendo legal, pero ya es larga.</summary>
+    public const int LongWaitSeconds = 90;
+
+    /// <summary>
+    /// <b>Cuánto lleva sin llegar nada</b> (F30 §3). Es la diferencia entre «el modelo está
+    /// pensando» y «esto se ha caído», que hoy se ven exactamente igual: la pantalla quieta.
+    /// <para>
+    /// Medido sobre las sesiones reales del hub —14 sesiones, 122 llamadas, 1.440 s— una llamada
+    /// tarda <b>11,8 s de media y hasta 48 s</b>. Con esos números, un silencio de 20 s ya merece
+    /// una palabra y uno de 90 merece un color; el corte de F19 sigue mandando cuándo se para.
+    /// </para>
+    /// </summary>
+    public TimeSpan SinceLastEvent => _lastEventUtc is { } at && IsRunning
+        ? DateTimeOffset.UtcNow - at
+        : TimeSpan.Zero;
+
+    /// <summary>Se está esperando al modelo y ya se nota.</summary>
+    public bool IsWaiting => IsRunning && SinceLastEvent.TotalSeconds >= QuietSeconds;
+
+    /// <summary>La espera es larga: el pie lo dice en ámbar.</summary>
+    public bool WaitIsLong => IsRunning && SinceLastEvent.TotalSeconds >= LongWaitSeconds;
+
+    /// <summary>
+    /// Señal de vida: la llama todo lo que llega del barrido. Un solo sitio, para que no pueda
+    /// haber un evento que se pinte y no cuente como actividad.
+    /// </summary>
+    private void Touch() => _lastEventUtc = DateTimeOffset.UtcNow;
+
     /// <summary>Línea de la barra de estado inferior mientras corre.</summary>
     /// <summary>
     /// <b>EL PROGRESO SE DICE UNA VEZ</b> (UI-0053). Esta tira decía «Auditando app · unidad 3/6 ·
@@ -571,6 +614,7 @@ public sealed partial class LiveSessionService : ObservableObject
         c.FindingReported += OnFinding;
         c.TextStreamed += OnText;
         c.UsageUpdated += OnUsage;
+        c.ActivityNoted += OnActivityNoted;
     }
 
     private void Unsubscribe(SessionCoordinator c)
@@ -583,7 +627,33 @@ public sealed partial class LiveSessionService : ObservableObject
         c.FindingReported -= OnFinding;
         c.TextStreamed -= OnText;
         c.UsageUpdated -= OnUsage;
+        c.ActivityNoted -= OnActivityNoted;
     }
+
+    /// <summary>
+    /// <b>Lo que acaba de pasar, en el hilo de la pasada</b> (F30 §1). Es la mitad que le faltaba a
+    /// la narración de una auditoría: hasta aquí, entre una llamada y la siguiente —11,8 s de media
+    /// en las sesiones reales del hub, y hasta 48 s— lo único que podía aparecer era la prosa del
+    /// modelo, que él decide si escribe. Las herramientas no son opcionales: si el auditor está
+    /// trabajando, las llama.
+    /// <para>
+    /// La frase la pone <see cref="ActivityWording"/> y no esta clase: el texto que llega es la
+    /// traza de diagnóstico que ya viaja a las notas de la sesión, y traducirla aquí sería tenerla
+    /// escrita dos veces.
+    /// </para>
+    /// </summary>
+    private void OnActivityNoted(ActivityNote note) => OnUi(() =>
+    {
+        Add(_currentPass, note.Kind == ActivityNoteKind.Tool
+            ? ActivityEntry.Event(ActivityWording.GlyphFor(note.Text), ActivityWording.Describe(note.Text))
+            : ActivityEntry.Event("◆", note.Text));
+
+        // Un evento cierra el bloque de texto en curso: lo siguiente que diga el modelo es otra
+        // cosa, y pegarlo al párrafo anterior lo haría ilegible.
+        _currentText = null;
+        Touch();
+        Changed?.Invoke();
+    });
 
     private void OnStarted(SessionStarted started)
     {
@@ -635,6 +705,7 @@ public sealed partial class LiveSessionService : ObservableObject
 
     private void OnPassStarted(string path, int pass) => OnUi(() =>
     {
+        Touch();
         UnitProgress? unit = Units.FirstOrDefault(u => u.Path == path);
         if (unit is null)
         {
@@ -763,6 +834,7 @@ public sealed partial class LiveSessionService : ObservableObject
 
     private void OnFinding(Finding finding, string kind) => OnUi(() =>
     {
+        Touch();
         string title = finding.Title;
         string alias = finding.DisplayId ?? finding.Id.ToString();
         string unit = finding.Locations.Count > 0 ? finding.Locations[0].Path : "(sin ubicación)";
@@ -825,6 +897,8 @@ public sealed partial class LiveSessionService : ObservableObject
             return;
         }
 
+        Touch();
+
         if (_currentText is null)
         {
             _currentText = ActivityEntry.Text_(chunk);
@@ -837,6 +911,7 @@ public sealed partial class LiveSessionService : ObservableObject
 
     private void OnUsage(LiveUsage u) => OnUi(() =>
     {
+        Touch();
         InputTokens = u.InputTokens;
         OutputTokens = u.OutputTokens;
         CacheReadTokens = u.CacheReadTokens;

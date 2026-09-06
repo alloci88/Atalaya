@@ -43,6 +43,10 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
             {
                 OnPropertyChanged(nameof(ElapsedText));
                 OnPropertyChanged(nameof(Footer));
+                // F30 §3 — la espera se cuenta con el mismo reloj que ya repinta el pie: sube sola
+                // sin que llegue ningún evento, que es justo cuando hace falta.
+                OnPropertyChanged(nameof(WaitText));
+                OnPropertyChanged(nameof(WaitIsLong));
             };
             _clock.Start();
         }
@@ -114,6 +118,21 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
     public string PerUnitText => _live.CostPerUnit is { } c ? $"media {c:0.##}/unidad" : string.Empty;
 
     /// <summary>
+    /// <b>«esperando al modelo · 42 s»</b> (F30 §3), y vacío mientras las cosas llegan solas.
+    /// <para>
+    /// El reloj sube porque el pie se repinta cada segundo desde F16-RETOQUE; lo que se añade es el
+    /// dato, que hasta ahora no existía en ninguna parte: la vista no sabía cuándo había llegado
+    /// la última señal de vida, así que no podía distinguir una espera larga de un cuelgue.
+    /// </para>
+    /// </summary>
+    public string WaitText => _live.IsWaiting
+        ? $"esperando al modelo · {(int)_live.SinceLastEvent.TotalSeconds} s"
+        : string.Empty;
+
+    /// <summary>La espera ya es larga (90 s). Lo usa la vista para teñirla de ámbar.</summary>
+    public bool WaitIsLong => _live.WaitIsLong;
+
+    /// <summary>
     /// El pie entero, por segmentos (F17-RETOQUE): progreso y tiempo, que no ceden; y el consumo
     /// —llamadas, coste, tokens— por el criterio común, con la media por unidad la última en
     /// quedarse. Aquí ya no hay un segundo bloque de tokens: el que había («tokens X in / Y out»)
@@ -138,6 +157,18 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
             }
 
             segments.Add(FooterSegment.Of(ElapsedText, opacity: 0.85));
+
+            // F30 §3 — QUÉ SE ESTÁ ESPERANDO, cuando el silencio deja de ser normal. Antes de los
+            // 20 s no se dice nada: una llamada tarda lo que tarda y anunciar cada pausa sería
+            // ruido. A partir de ahí el pie lo nombra con el tiempo subiendo, que es lo que
+            // distingue «el modelo está pensando» de «esto se ha caído» — hoy las dos cosas se ven
+            // igual, que es la pantalla quieta. No cede el sitio: es lo único que se puede leer
+            // cuando no está pasando nada más.
+            if (WaitText.Length > 0)
+            {
+                segments.Add(FooterSegment.Of(WaitText, priority: 5, bold: _live.WaitIsLong));
+            }
+
             segments.AddRange(CostFormat.UsageSegments(
                 _live.Calls, _live.InputTokens, _live.OutputTokens,
                 _live.CacheReadTokens, _live.CacheWriteTokens, _live.CostResult, _live.Provider,
@@ -377,6 +408,8 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
         OnPropertyChanged(nameof(LowCount));
         OnPropertyChanged(nameof(SeverityChips));
         OnPropertyChanged(nameof(HasFindings));
+        OnPropertyChanged(nameof(WaitText));
+        OnPropertyChanged(nameof(WaitIsLong));
         // De aquí salen el rótulo del grupo del raíl y el último eslabón de la miga (R12): la
         // aplicación no se sabe hasta que la sesión arranca, así que el aviso tiene que llegar.
         OnPropertyChanged(nameof(AppLabel));
