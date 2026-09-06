@@ -69,7 +69,12 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
     public string AppSlug => _live.AppSlug;
 
     /// <inheritdoc />
-    public string AppLabel => _live.AppSlug;
+    /// <remarks>
+    /// EL NOMBRE, NO EL IDENTIFICADOR (R12). De aquí salen el rótulo del grupo del raíl y el
+    /// último eslabón de la miga, así que devolver el identificador hacía que la carcasa llamara
+    /// «xblast» a la aplicación que el Portafolio llama «XBLAST», en la misma pantalla.
+    /// </remarks>
+    public string AppLabel => _live.AppName is { Length: > 0 } name ? name : _live.AppSlug;
 
     public ObservableCollection<UnitProgress> Units => _live.Units;
 
@@ -372,5 +377,8 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
         OnPropertyChanged(nameof(LowCount));
         OnPropertyChanged(nameof(SeverityChips));
         OnPropertyChanged(nameof(HasFindings));
+        // De aquí salen el rótulo del grupo del raíl y el último eslabón de la miga (R12): la
+        // aplicación no se sabe hasta que la sesión arranca, así que el aviso tiene que llegar.
+        OnPropertyChanged(nameof(AppLabel));
     }
 }

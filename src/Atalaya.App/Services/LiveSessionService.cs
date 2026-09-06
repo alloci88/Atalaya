@@ -120,6 +120,19 @@ public sealed partial class LiveSessionService : ObservableObject
 
     [ObservableProperty] private bool _isRunning;
     [ObservableProperty] private string _appSlug = string.Empty;
+
+    /// <summary>
+    /// <b>El nombre de la aplicación, que es lo que se ENSEÑA</b> (R12). El identificador del hub
+    /// —minúsculas, sin espacios— es un dato: sirve para leer y escribir, no para rotular. La
+    /// sesión no lo tenía, así que la miga decía «xblast», la cabecera «Lotes · xblast» y el pie
+    /// «Auditando xblast» mientras Portafolio e Inventario, dos clics más atrás, decían «XBLAST».
+    /// <para>
+    /// Con el identificador de respaldo, y no vacío: una aplicación que ya no está en el hub no
+    /// tiene nombre que leer, y quedarse sin rótulo sería peor que quedarse con el identificador.
+    /// </para>
+    /// </summary>
+    [ObservableProperty] private string _appName = string.Empty;
+
     [ObservableProperty] private string _headerText = string.Empty;
     [ObservableProperty] private string _statusMessage = string.Empty;
     [ObservableProperty] private int _unitIndex;
@@ -231,7 +244,7 @@ public sealed partial class LiveSessionService : ObservableObject
     /// </summary>
     public string ProgressLine => !IsRunning
         ? string.Empty
-        : $"Auditando {AppSlug}"
+        : $"Auditando {AppName}"
           + (Exhaustive ? $" · {AuditModes.Exhaustive}" : string.Empty);
 
     /// <summary>
@@ -355,6 +368,7 @@ public sealed partial class LiveSessionService : ObservableObject
         StatusMessage = string.Empty;
         HeaderText = string.Empty;
         AppSlug = string.Empty;
+        AppName = string.Empty;
         SessionId = string.Empty;
         ReportPath = string.Empty;
         StartedUtc = null;
@@ -409,7 +423,10 @@ public sealed partial class LiveSessionService : ObservableObject
         _unitsDone = 0;
 
         AppSlug = request.Slug;
-        HeaderText = $"{request.Mode} · {request.Slug}";
+        AppName = _hub?.Store.TryReadApp(request.Slug)?.Name is { Length: > 0 } name
+            ? name
+            : request.Slug;
+        HeaderText = $"{request.Mode} · {AppName}";
         UnitCount = displayPaths.Count;
         UnitIndex = 0;
         CurrentPassNumber = 0;

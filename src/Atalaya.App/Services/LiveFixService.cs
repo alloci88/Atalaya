@@ -236,7 +236,9 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
     /// <summary>Línea de la barra inferior mientras corre.</summary>
     public string ProgressLine => !IsRunning
         ? string.Empty
-        : $"Arreglando {FindingAlias} en {Slug}"
+        // Con el NOMBRE, no con el identificador (R12): la barra de estado es un rótulo, y la de
+        // la auditoría decía lo mismo de la otra manera a dos píxeles de distancia.
+        : $"Arreglando {FindingAlias} en {AppName}"
           + (IsPaused ? " · en pausa" : "")
           + (Files.Count > 0 ? $" · {Files.Count} fichero(s)" : "");
 

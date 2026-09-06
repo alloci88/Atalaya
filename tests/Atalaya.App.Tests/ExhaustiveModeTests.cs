@@ -238,14 +238,15 @@ public sealed class ExhaustiveModeTests : IDisposable
     {
         LiveSessionService live = Live(exhaustive: true);
 
-        live.ProgressLine.Should().Be("Auditando app · exhaustivo");
+        // Con el NOMBRE de la aplicación, no con su identificador (R12): la tira es un rótulo.
+        live.ProgressLine.Should().Be("Auditando App · exhaustivo");
         live.ProgressLine.Should().NotContain("unidad").And.NotContain("pasada",
             "el progreso lo dice la barra de la vista, y esta tira está a 44 px de ella");
         new SessionViewModel(live).Footer.Select(f => f.Full)
             .Should().ContainInOrder("Unidad 2 de 5", "exhaustivo");
 
         LiveSessionService normal = Live(exhaustive: false);
-        normal.ProgressLine.Should().Be("Auditando app");
+        normal.ProgressLine.Should().Be("Auditando App");
         new SessionViewModel(normal).Footer.Select(f => f.Full).Should().NotContain("exhaustivo");
     }
 
@@ -267,6 +268,7 @@ public sealed class ExhaustiveModeTests : IDisposable
         {
             IsRunning = true,
             AppSlug = "app",
+            AppName = "App",
             UnitIndex = 2,
             UnitCount = 5,
             CurrentPassNumber = 3,
