@@ -22,7 +22,7 @@ namespace Atalaya.Copilot;
 /// The agent only ever calls our registered tools; the permission handler rejects everything else
 /// (shell, files, network), so it can touch nothing. Compiled against SDK 1.0.11.
 /// </summary>
-public sealed class RealCopilotAgent : IAssistedFixProvider, IThreadedAuditor, IAsyncDisposable
+public sealed class RealCopilotAgent : IAssistedFixProvider, IThreadedAuditor, INarratingAuditor, IAsyncDisposable
 {
     private readonly string? _baseDirectory;
     private readonly ILogger _logger;
@@ -609,8 +609,79 @@ public sealed class RealCopilotAgent : IAssistedFixProvider, IThreadedAuditor, I
     /// mensaje completo solo se emite si de él no llegó ningún delta.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// <b>El volcado de eventos crudos del SDK</b>, para diagnosticar sin adivinar (F30 §2b).
+    /// <para>
+    /// Se enciende con la variable de entorno <c>ATALAYA_TRACE_EVENTS=1</c> y escribe una línea por
+    /// evento en <c>%LOCALAPPDATA%\Atalaya\logs\eventos-copilot.log</c>: la hora, el tipo, y para
+    /// los trozos de argumentos el id de la llamada y <b>cuánto lleva escrito acumulado</b>. Con eso
+    /// se responde la única pregunta que no se puede contestar leyendo código: si el SDK manda esos
+    /// eventos <b>a tiempo</b>, todos de golpe al final, o no los manda.
+    /// </para>
+    /// <para>
+    /// <b>Apagado por defecto y sin ajuste.</b> Es un instrumento de diagnóstico, no una función:
+    /// una casilla en Ajustes obligaría a explicarla, y un fichero que crece solo en la máquina de
+    /// todo el mundo es exactamente lo que nadie pidió. Una variable de entorno se pone para una
+    /// sesión y se olvida.
+    /// </para>
+    /// </summary>
+    private static readonly string? TracePath =
+        Environment.GetEnvironmentVariable("ATALAYA_TRACE_EVENTS") is "1" or "true"
+            ? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Atalaya", "logs", "eventos-copilot.log")
+            : null;
+
+    /// <summary>Lo escrito por cada llamada a herramienta, para poder decir «lleva N caracteres».</summary>
+    private readonly Dictionary<string, int> _traced = new(StringComparer.Ordinal);
+
+    private void Trace(SessionEvent ev)
+    {
+        if (TracePath is null)
+        {
+            return;
+        }
+
+        string detail = string.Empty;
+        if (ev is AssistantToolCallDeltaEvent d && d.Data is { } data)
+        {
+            int total;
+            lock (_traced)
+            {
+                string key = data.ToolCallId ?? "?";
+                total = _traced.TryGetValue(key, out int had) ? had : 0;
+                total += data.InputDelta?.Length ?? 0;
+                _traced[key] = total;
+            }
+
+            detail = $" tool={data.ToolName} id={data.ToolCallId} +{data.InputDelta?.Length ?? 0} acumulado={total}";
+        }
+        else if (ev is ToolExecutionStartEvent s)
+        {
+            detail = $" tool={s.Data?.ToolName} id={s.Data?.ToolCallId}";
+        }
+        else if (ev is ToolExecutionCompleteEvent c)
+        {
+            detail = $" id={c.Data?.ToolCallId} ok={c.Data?.Success}";
+        }
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(TracePath)!);
+            File.AppendAllText(
+                TracePath,
+                $"{DateTimeOffset.Now:HH:mm:ss.fff} {ev.GetType().Name}{detail}{Environment.NewLine}");
+        }
+        catch (IOException)
+        {
+            // Un diagnóstico que tumbe la sesión que diagnostica no vale para nada.
+        }
+    }
+
     internal void OnSessionEvent(SessionEvent ev)
     {
+        Trace(ev);
+
         switch (ev)
         {
             case AssistantUsageEvent usage:
