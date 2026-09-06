@@ -184,16 +184,6 @@ public sealed class ProgressToPercentConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
-/// <summary>Icono del tipo de entrada de actividad: evento con glifo, texto sin él.</summary>
-public sealed class ActivityKindToWeightConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => value is ActivityKind.Evento ? FontWeights.SemiBold : FontWeights.Normal;
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}
-
 /// <summary>Una severidad nula (evento que no narra un hallazgo) no pinta chip.</summary>
 public sealed class SeverityToVisibilityConverter : IValueConverter
 {
@@ -212,20 +202,6 @@ public sealed class DashedToArrayConverter : IValueConverter
 {
     public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
         => value is true ? new DoubleCollection(new double[] { 2, 1.5 }) : null;
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}
-
-/// <summary>El fondo de la burbuja: apenas un tinte, para separar sin gritar.</summary>
-public sealed class FixVoiceToFillConverter : IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value switch
-    {
-        FixVoice.Usuario => new SolidColorBrush(Color.FromArgb(0x22, 0x3F, 0xB9, 0x50)),
-        FixVoice.Sistema => new SolidColorBrush(Color.FromArgb(0x14, 0x80, 0x80, 0x80)),
-        _ => new SolidColorBrush(Color.FromArgb(0x1A, 0x6C, 0x93, 0xC0)),
-    };
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
@@ -324,43 +300,58 @@ public sealed class MiddleEllipsisConverter : IValueConverter
             : DefaultMax;
 }
 
-/// <summary>Niega un booleano. Lo pide el <c>MultiBinding</c> de «puede pero no debería verse».</summary>
 /// <summary>
-/// El icono VECTORIAL de una línea del hilo de actividad, a partir de su marca (F30 §1c).
+/// <b>El icono de una entrada de la conversación</b> (F30 §1c, ampliado en §3).
 /// <para>
-/// <b>Por qué un converter y no un campo en el modelo.</b> La marca (<c>ActivityEntry.Glyph</c>) es
-/// el dato: dice de qué clase es la línea, y de ella cuelgan los tests que cuadran la narración con
-/// los contadores de la sesión. El dibujo es presentación, y cambiar de carácter a vector no puede
-/// obligar a tocar el modelo ni a reescribir esos tests. Aquí se traduce lo uno en lo otro.
+/// <b>Por qué un converter y no un campo en el modelo.</b> La marca (<c>ConversationEntry.Glyph</c>)
+/// es el dato: dice de qué clase es la línea, y de ella cuelgan los tests que cuadran la narración
+/// con los contadores de la sesión. El dibujo es presentación, y cambiar de carácter a vector no
+/// puede obligar a tocar el modelo ni a reescribir esos tests.
+/// </para>
+/// <para>
+/// <b>La clase manda sobre la marca en un caso, y a propósito</b>: <c>unit_done</c> se apunta con la
+/// marca de una herramienta cualquiera —lo es en el registro— pero en el hilo es el cierre de un
+/// tramo y lleva su icono. Lo demás se lee de la marca, que es donde vive la diferencia entre leer
+/// un fichero y reportar.
 /// </para>
 /// <para>
 /// Devuelve <c>null</c> para las marcas que todavía son caracteres —las de hallazgo y cierre de
 /// pasada, anteriores a F30—, y la vista pinta entonces el carácter. Convivir es a propósito: esta
-/// tanda cambia las cuatro que se veían mal, no las siete que llevan bien desde F12.
+/// familia son las seis clases que llevan icono, no las siete marcas que llevan bien desde F12.
 /// </para>
 /// </summary>
-public sealed class ActivityGlyphToIconConverter : IValueConverter
+public sealed class ConversationIconConverter : IValueConverter
 {
-    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => value as string switch
+    /// <summary>El trazo de una entrada, o <c>null</c> si su marca se pinta como carácter.</summary>
+    public static Geometry? IconOf(ConversationEntry entry) => entry.Kind switch
+    {
+        ConversationKind.Unidad => Controls.Icons.UnitDone,
+        _ => entry.Glyph switch
         {
             "⚒" => Controls.Icons.Tool,
             "👁" => Controls.Icons.Eye,
             "◆" => Controls.Icons.Milestone,
             "→" => Controls.Icons.Handover,
+            "⚖" => Controls.Icons.Judge,
             _ => null,
-        };
+        },
+    };
+
+    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is ConversationEntry entry ? IconOf(entry) : null;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
 
-/// <inheritdoc cref="ActivityGlyphToIconConverter"/>
-/// <summary>Lo contrario: visible solo cuando la marca NO tiene icono y hay que pintar el carácter.</summary>
-public sealed class ActivityGlyphIsTextConverter : IValueConverter
+/// <inheritdoc cref="ConversationIconConverter"/>
+/// <summary>Lo contrario: visible solo cuando la entrada NO tiene icono y hay que pintar el carácter.</summary>
+public sealed class ConversationGlyphIsTextConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => value is string s && s is not ("⚒" or "👁" or "◆" or "→")
+        => value is ConversationEntry entry
+           && entry.Glyph.Length > 0
+           && ConversationIconConverter.IconOf(entry) is null
             ? Visibility.Visible
             : Visibility.Collapsed;
 
@@ -368,6 +359,7 @@ public sealed class ActivityGlyphIsTextConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
+/// <summary>Niega un booleano. Lo pide el <c>MultiBinding</c> de «puede pero no debería verse».</summary>
 public sealed class InverseBoolConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)

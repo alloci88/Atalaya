@@ -285,11 +285,33 @@ Aparece en el menú solo cuando hay una sesión (en curso o recién terminada), 
 punto late mientras corre. Enseña el progreso unidad a unidad, los hallazgos según
 van llegando, el coste y los tokens consumidos, y al terminar el resumen de cierre.
 
-**Lo que se ve mientras trabaja.** La columna del centro es el **hilo de actividad**: lo que va
-pasando, en orden y con su hora. Ahí salen las **herramientas** que el auditor usa —«5 hallazgos
+**Lo que se ve mientras trabaja.** La columna del centro es **la conversación**, la misma que el
+Arreglo asistido: dos voces —**Atalaya** a la izquierda y **Agente** enfrente—, y cada cosa que pasa
+en su **burbuja con su hora**. Ahí salen las **herramientas** que el auditor usa —«5 hallazgos
 nuevos», «4 veredictos sobre hallazgos existentes», «Añade 2 ubicaciones a HAL-0412», «Unidad
-cerrada»— en cuanto ocurren, y no al final de la pasada; la **prosa** del modelo cuando la escribe;
+cerrada»— en cuanto ocurren, y no al final de la pasada; la **prosa** del agente cuando la escribe;
 y los **hitos** de Atalaya, como una reanudación fallida o un corte que no se pudo hacer.
+
+**Qué es cada burbuja.**
+
+- **La prosa del agente** — monoespaciada, sin icono: es lo que está diciendo, tal cual.
+- **«Razonando…»** — en cursiva y apagada: el agente está pensando y no manda lo que piensa, así
+  que lo único que se puede decir es que está pasando (y el pie dice cuánto lleva).
+- **Una herramienta** — con su icono: el ojo cuando lee un fichero, los chevrones cuando reporta,
+  la balanza cuando juzga lo que ya existía, la caja cuando cierra la unidad.
+- **Un hallazgo nuevo** — con su **pastilla de gravedad** delante del título, la misma del informe
+  y de la vista de Hallazgos.
+- **Un hito de Atalaya** — el rombo: un turno preparado, un corte que no se pudo hacer, una
+  reanudación fallida, el cierre de una pasada.
+- **La entrega** — la flecha: «Pasada 3 · enviada al agente». A partir de ahí, el tiempo es suyo.
+- **Un error** — con la tinta de peligro, para que no se lea como una línea más.
+
+**El hilo se lee de arriba abajo**, sin abrir nada. Cada pasada abre su tramo con un separador
+—**«Pasada 2 · turno del hilo»** y sus pastillas de resumen: nuevos, confirmados, seca—, y en las
+sesiones de varias unidades hay también un separador por unidad. Los separadores se **pulsan para
+plegar** su tramo. Mientras la sesión corre está todo abierto; al terminar queda abierta solo la
+última pasada de cada unidad. Y **pulsar una unidad en la columna de la izquierda lleva a su tramo**
+del hilo. Si subes a leer, el hilo se queda donde está y aparece **«↓ Volver al final»**.
 
 > **Por qué importa.** Una llamada al modelo tarda unos doce segundos de media, y a veces
 > cuarenta y cinco. Antes, en ese hueco solo podía aparecer lo que el modelo escribiera por su
@@ -300,14 +322,14 @@ y los **hitos** de Atalaya, como una reanudación fallida o un corte que no se p
 
 **El hueco entre pasadas, con dueño.** Al cerrar una pasada verás dos líneas seguidas: **«Turno
 preparado · N hallazgos vivos en la unidad · 16 ms»** —lo que hace Atalaya: releer los hallazgos de
-la unidad y recomponer el prompt— y **«Pasada 3 · enviada al modelo»**. A partir de la segunda, el
-tiempo que pase es del modelo.
+la unidad y recomponer el prompt— y **«Pasada 3 · enviada al agente»**. A partir de la segunda, el
+tiempo que pase es del agente.
 
 > **Y los números no dejan lugar a dudas.** Medido sobre el hub real: Atalaya tarda **16 ms** entre
 > una pasada y la siguiente, y una pasada dura **17 segundos** de media. El **99,9 %** del silencio
 > es el modelo pensando. Las dos líneas están para que eso se vea sin tener que creérselo.
 
-**«Razonando · 18 s», «escribiendo el reporte de hallazgos · 31 s», «esperando al modelo · 7 s».**
+**«Razonando · 18 s», «escribiendo el reporte de hallazgos · 31 s», «esperando al agente · 7 s».**
 Mientras haya una petición en vuelo, si pasan **5 segundos** sin que llegue nada el pie dice **qué**
 se está esperando, con el reloj subiendo, y a los **90 segundos** lo pone en negrita. Se retira con
 el evento siguiente. Vale para **cualquier** hueco del turno, no solo para el primero: el que va
@@ -372,7 +394,8 @@ arreglo. Quien revise un diff tiene derecho a saber quién lo escribió.
 
 Dos paneles: la **conversación** —lo que el agente va explicando, y las preguntas
 como tarjetas con sus opciones— y el **diff**, una pestaña por fichero tocado, que
-compara con lo que había antes de empezar. Abajo: tiempo, coste, ficheros tocados y
+compara con lo que había antes de empezar. La conversación es **la misma pieza** que usa la Sesión
+en vivo, con las mismas burbujas y los mismos iconos: lo que aprendas aquí vale allí. Abajo: tiempo, coste, ficheros tocados y
 el resultado del último build.
 
 Arriba, la cabecera dice **qué hallazgo** se está arreglando —con su identificador entero, una

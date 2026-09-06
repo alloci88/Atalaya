@@ -262,12 +262,12 @@ public sealed class SessionViewModelTests : IDisposable
         var entries = live.Units.SelectMany(u => u.Passes).SelectMany(p => p.Entries).ToList();
         entries.Should().NotBeEmpty();
 
-        string texto = string.Concat(entries.Where(e => e.Kind == ActivityKind.Texto).Select(e => e.Text));
+        string texto = string.Concat(entries.Where(e => e.Kind == ConversationKind.Prosa).Select(e => e.Text));
         texto.Should().NotBeNullOrWhiteSpace();
         texto.Replace(".", string.Empty).Trim().Should().NotBeEmpty("una columna de puntos no narra nada");
 
-        entries.Should().Contain(e => e.Kind == ActivityKind.Evento && e.Text.Contains("Hallazgo"));
-        entries.Should().Contain(e => e.Kind == ActivityKind.Evento && e.Text.Contains("Pasada"));
+        entries.Should().Contain(e => e.IsEvent && e.Text.Contains("Hallazgo"));
+        entries.Should().Contain(e => e.IsEvent && e.Text.Contains("Pasada"));
     }
 
     /// <summary>

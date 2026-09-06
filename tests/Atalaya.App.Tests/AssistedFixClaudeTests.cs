@@ -153,11 +153,11 @@ public sealed class AssistedFixClaudeTests : IDisposable
 
         // --- la pregunta del agente llegó como TARJETA y se contestó ---
         asked.Should().HaveCount(2);
-        asked[0].Kind.Should().Be(FixAskKind.Decision);
+        asked[0].Ask.Should().Be(FixAskKind.Decision);
         asked[0].Answer.Should().Be("(A) excepcion");
 
         // --- el permiso fuera del hallazgo lo gobierna Atalaya, no el CLI ---
-        asked[1].Kind.Should().Be(FixAskKind.Autorizacion);
+        asked[1].Ask.Should().Be(FixAskKind.Autorizacion);
         asked[1].Context.Should().Be(CallerPath);
         File.ReadAllText(Path.Combine(_clone, CallerPath)).Should().Be(
             CallerCode, "un «no» deja el fichero exactamente como estaba");
@@ -173,7 +173,7 @@ public sealed class AssistedFixClaudeTests : IDisposable
 
         // --- narración, build por delegación y cierre ---
         fix.Conversation.OfType<FixMessage>().Should()
-            .Contain(m => m.Voice == FixVoice.Agente && m.Text.Contains("replanteo"));
+            .Contain(m => m.Voice == ConversationVoice.Agente && m.Text.Contains("replanteo"));
         fix.HasBuildResult.Should().BeTrue();
         fix.Summary.Should().Contain("longitud par");
         fix.Commit.Title.Should().Be("Valida longitud par en HexStringToByteArray (BUG-0003)");
@@ -384,7 +384,7 @@ public sealed class AssistedFixClaudeTests : IDisposable
         {
             foreach (object? item in e.NewItems ?? Array.Empty<object>())
             {
-                if (item is FixMessage { Voice: FixVoice.Agente } m && m.Text.Contains("Primer turno"))
+                if (item is FixMessage { Voice: ConversationVoice.Agente } m && m.Text.Contains("Primer turno"))
                 {
                     spoke.TrySetResult();
                 }
@@ -679,7 +679,7 @@ public sealed class AssistedFixClaudeTests : IDisposable
                 }
 
                 asked.Add(question);
-                fix.Answer(question, question.Kind == FixAskKind.Autorizacion
+                fix.Answer(question, question.Ask == FixAskKind.Autorizacion
                     ? (authorize ? LiveFixService.ApproveLabel : LiveFixService.DenyLabel)
                     : decision);
             }

@@ -167,4 +167,18 @@ public static class Icons
 
     /// <summary>El turno sale hacia el modelo. A partir de aquí, lo que pase es suyo.</summary>
     public static Geometry Handover { get; } = P("M4,12 L19,12 M13.5,6.5 L20,12 L13.5,17.5");
+
+    // F30 §3 — los dos que faltaban para que las seis clases de evento que llevan icono lo tengan
+    // vectorial: leer (Eye), reportar (Tool), juzgar, cerrar unidad, entrega (Handover) y hito
+    // (Milestone). Las marcas de hallazgo y de cierre de pasada siguen siendo caracteres mientras
+    // nadie las toque, exactamente como quedaron en F30 §1c.
+
+    /// <summary>Juzgar lo que ya existía: la balanza, que es lo que un veredicto es.</summary>
+    public static Geometry Judge { get; } = P(
+        "M12,5 L12,19 M7,19 L17,19 M4,8.5 L20,8.5 "
+        + "M4,8.5 L1.8,13 L6.2,13 Z M20,8.5 L17.8,13 L22.2,13 Z");
+
+    /// <summary>La unidad queda cerrada: la caja de la unidad, con su marca dentro.</summary>
+    public static Geometry UnitDone { get; } = P(
+        "M4.5,4.5 L19.5,4.5 L19.5,19.5 L4.5,19.5 Z M8,12 L11,15 L16,9");
 }

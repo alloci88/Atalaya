@@ -418,6 +418,15 @@
          El insignia de estado es un círculo de 24: el glifo suelto de 18 px se perdía contra una
          ruta en seminegrita de 15, que es justo lo que no puede pasarle a la única pieza de la
          fila que dice si la unidad va bien. -->
+    <!-- El carril del nombre de quien habla, a la izquierda de cada burbuja (F16, F30 §3). 76 es
+         lo que mide «Atalaya» a 13 en seminegrita con su aire, y va fijo para que las burbujas de
+         las tres vistas arranquen todas en la misma x. -->
+    <sys:Double x:Key="Conversation.VoiceLane">76</sys:Double>
+
+    <!-- La cabecera de una columna de la sesión: «Unidad 1 de 1» y «Hallazgos» ocupan la MISMA fila
+         (F30 §3 §4), que es lo que hace que las tres columnas arranquen a la misma altura. -->
+    <sys:Double x:Key="Session.PanelHeaderHeight">24</sys:Double>
+
     <sys:Double x:Key="Session.UnitRowHeight">48</sys:Double>
     <sys:Double x:Key="Session.PassRowHeight">40</sys:Double>
     <sys:Double x:Key="Session.QueueRowHeight">44</sys:Double>

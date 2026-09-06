@@ -3,63 +3,54 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Atalaya.App.Services;
 
-/// <summary>Quién habla en una línea de la conversación de arreglo.</summary>
-public enum FixVoice
-{
-    /// <summary>El agente, en streaming.</summary>
-    Agente,
-
-    /// <summary>El usuario, escribiendo en el campo de entrada.</summary>
-    Usuario,
-
-    /// <summary>La aplicación: una herramienta que corrió, un límite que se aplicó, un aviso.</summary>
-    Sistema,
-}
-
-/// <summary>Base de todo lo que aparece en el panel de conversación.</summary>
-public abstract partial class FixEntry : ObservableObject
-{
-    public DateTimeOffset Utc { get; init; } = DateTimeOffset.UtcNow;
-
-    public string Time => Utc.ToLocalTime().ToString("HH:mm:ss");
-}
-
 /// <summary>
-/// Una intervención. El texto es MUTABLE porque los deltas del streaming llegan en trozos de
-/// pocos caracteres y se acumulan en la última entrada del agente: una fila por trozo reventaría
-/// la lista, exactamente igual que en la sesión en vivo de auditoría (F5.2).
+/// <b>Una intervención del arreglo asistido</b>, sobre el modelo común de <see cref="ConversationEntry"/>
+/// (F30 §3).
+/// <para>
+/// Lo único que añade a la base es <b>cómo se decide su clase</b>: el arreglo apunta sus líneas de
+/// sistema con una marca —<c>👁</c> leer, <c>⚙</c> compilar, <c>⚠</c> un aviso— desde F16, y la
+/// clase se deriva de ella en un solo sitio. Escribirla en los treinta sitios que llaman a
+/// <see cref="System"/> sería la forma segura de que un día dos líneas iguales salieran distintas.
+/// </para>
 /// </summary>
-public sealed partial class FixMessage : FixEntry
+public sealed partial class FixMessage : ConversationEntry
 {
-    public required FixVoice Voice { get; init; }
-
-    /// <summary>Icono de la línea cuando es del sistema; vacío para el texto del agente.</summary>
-    public string Glyph { get; init; } = string.Empty;
-
-    [ObservableProperty]
-    private string _text = string.Empty;
-
-    public bool IsAgent => Voice == FixVoice.Agente;
-
-    public bool IsUser => Voice == FixVoice.Usuario;
-
-    public bool IsSystem => Voice == FixVoice.Sistema;
-
-    public string Speaker => Voice switch
-    {
-        FixVoice.Agente => "Agente",
-        FixVoice.Usuario => "Tú",
-        _ => "Atalaya",
-    };
-
     public static FixMessage Agent(string text)
-        => new() { Voice = FixVoice.Agente, Text = text };
+        => new() { Voice = ConversationVoice.Agente, Kind = ConversationKind.Prosa, Text = text };
 
     public static FixMessage User(string text)
-        => new() { Voice = FixVoice.Usuario, Text = text };
+        => new() { Voice = ConversationVoice.Usuario, Kind = ConversationKind.Prosa, Text = text };
 
     public static FixMessage System(string glyph, string text)
-        => new() { Voice = FixVoice.Sistema, Glyph = glyph, Text = text };
+        => new()
+        {
+            Voice = ConversationVoice.Atalaya,
+            Kind = KindOf(glyph),
+            Glyph = glyph,
+            Text = text,
+        };
+
+    /// <summary>
+    /// La clase de evento que le corresponde a una marca del arreglo. Lo que no reconoce es un
+    /// hito: es la clase neutra, y una marca nueva sin caso sale en el hilo con su forma de
+    /// siempre en vez de desaparecer.
+    /// </summary>
+    internal static ConversationKind KindOf(string glyph) => glyph switch
+    {
+        // Herramientas del agente: leer, editar, compilar, buscar llamadores.
+        "👁" or "✎" or "⚙" or "⌕" => ConversationKind.Herramienta,
+
+        // El resultado de una compilación es un veredicto sobre lo que el agente acaba de tocar.
+        "✓" => ConversationKind.Veredicto,
+
+        // Lo que hay que leer: un aviso, un permiso denegado, un build roto.
+        "⚠" or "⛔" or "✗" => ConversationKind.Error,
+
+        // Lo que sale hacia el agente.
+        "→" => ConversationKind.Entrega,
+
+        _ => ConversationKind.Hito,
+    };
 }
 
 /// <summary>Una opción de una pregunta, con su etiqueta tal y como la escribió el agente.</summary>
@@ -79,11 +70,17 @@ public enum FixAskKind
 /// Una pregunta esperando respuesta. Vive en la conversación —no en un diálogo modal— porque la
 /// decisión se toma leyendo lo que el agente acaba de explicar, y un modal tapa justo eso.
 /// </summary>
-public sealed partial class FixQuestion : FixEntry
+public sealed partial class FixQuestion : ConversationEntry
 {
-    public required string Text { get; init; }
+    /// <summary>La pregunta es del agente y tiene clase propia: su tarjeta no es una burbuja.</summary>
+    public FixQuestion()
+    {
+        Voice = ConversationVoice.Agente;
+        Kind = ConversationKind.Pregunta;
+    }
 
-    public required FixAskKind Kind { get; init; }
+    /// <summary>Qué clase de pregunta es. No es la clase de EVENTO, que la pone la base.</summary>
+    public required FixAskKind Ask { get; init; }
 
     /// <summary>Contexto de la aplicación: qué fichero y por qué, en las autorizaciones.</summary>
     public string Context { get; init; } = string.Empty;
@@ -107,7 +104,7 @@ public sealed partial class FixQuestion : FixEntry
 
     public bool IsPending => !IsAnswered;
 
-    public string Header => Kind == FixAskKind.Autorizacion
+    public string Header => Ask == FixAskKind.Autorizacion
         ? "El agente pide permiso"
         : "El agente necesita que decidas";
 }

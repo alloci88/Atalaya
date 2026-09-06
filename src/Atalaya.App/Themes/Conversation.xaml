@@ -1,0 +1,409 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:c="clr-namespace:Atalaya.App.Controls"
+    xmlns:services="clr-namespace:Atalaya.App.Services">
+
+    <!-- ================================================================================
+         LA CONVERSACIÓN DE ATALAYA (F30 §3)
+
+         UN componente, tres vistas: Arreglo asistido, Sesión en vivo y Última sesión. Había dos
+         implementaciones de lo mismo —la del arreglo (F16), que es la que gusta, y el hilo de
+         actividad de la auditoría (F30) montado sobre un árbol de expanders (R11)—, y dos copias de
+         una conversación acaban divergiendo igual que dos cálculos de la misma verdad (F5.14).
+
+         La regla: UNA PLANTILLA POR CLASE DE EVENTO, resuelta por `ConversationTemplates`. Varias
+         clases pueden compartir plantilla —un hito, una entrega y el cierre de una unidad se leen
+         igual y lo que los distingue es el icono, que sale del dato—; lo que no puede haber es una
+         clase sin plantilla, que se pintaría como el `ToString` del objeto en medio del hilo.
+         ================================================================================ -->
+
+    <services:ConversationTemplates x:Key="Conversation.Selector" />
+
+    <!-- ================================================================ Piezas de una burbuja -->
+
+    <!-- LA BURBUJA. Fondo de superficie del tema y no un tinte por voz escrito en ARGB: los tintes
+         del arreglo eran cuatro colores fijos, o sea el mismo gris en los dos temas. Quien habla lo
+         dice el nombre de la izquierda —`Voice.Name`, Atalaya en secundario y Agente en primario—,
+         que es información y no decoración. -->
+    <Style x:Key="Conversation.Bubble" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource Brush.Surface2}" />
+        <Setter Property="CornerRadius" Value="{StaticResource Radius.M}" />
+        <Setter Property="Padding" Value="{StaticResource Pad.Field}" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <!-- El texto de un suceso: se lee como una frase, no como un registro. -->
+    <Style x:Key="Conversation.Text" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Small}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Style.Triggers>
+            <!-- Lo único que distingue al error de los demás sucesos: la tinta. No es una plantilla
+                 aparte, porque su forma es la misma y duplicarla sería tener dos que mantener. -->
+            <DataTrigger Binding="{Binding Kind}" Value="Error">
+                <Setter Property="Foreground" Value="{DynamicResource Brush.Danger.Ink}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- LO QUE ESCRIBE EL AGENTE (R11 §1c, antes `Session.Log.Text`): monoespaciado, con aire entre
+         renglones y con una medida de unos cien caracteres. Es un registro, y un registro a todo el
+         ancho de la columna es la forma más rápida de que nadie lo lea. -->
+    <Style x:Key="Conversation.Prose.Text" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Mono}" />
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Small}" />
+        <Setter Property="LineHeight" Value="{StaticResource LineHeight.Body}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="MaxWidth" Value="{StaticResource Read.MonoMaxWidth}" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+    </Style>
+
+    <!-- El agente piensa y NO manda el contenido (F30 §2e): se dice que está pasando, en cursiva y
+         con la tinta secundaria, que es como se escribe algo que todavía no ha ocurrido. -->
+    <Style x:Key="Conversation.Reasoning.Text" TargetType="TextBlock" BasedOn="{StaticResource Conversation.Text}">
+        <Setter Property="FontStyle" Value="Italic" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+    </Style>
+
+    <!-- La hora va DENTRO de la burbuja, a su derecha: es referencia, no contenido, y es lo único
+         que responde a «¿cuánto lleva ahí?» cuando algo va lento. -->
+    <Style x:Key="Conversation.Time" TargetType="TextBlock" BasedOn="{StaticResource Text.Meta}">
+        <Setter Property="FontFamily" Value="{StaticResource Font.Mono}" />
+        <Setter Property="LineHeight" Value="{StaticResource LineHeight.Body}" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="Margin" Value="{StaticResource Pad.S.Left}" />
+    </Style>
+
+    <!-- EL CARRIL DEL ICONO (F30 §1c): 24 px, el icono centrado y `Space.XS` hasta el texto. Sabe
+         pintar las dos cosas porque las marcas de hallazgo y de cierre de pasada siguen siendo
+         caracteres: esta familia son las seis clases que llevan vector —leer, reportar, juzgar,
+         cerrar unidad, entrega e hito—, no las siete marcas que llevan bien desde F12. -->
+    <DataTemplate x:Key="Conversation.Icon">
+        <Grid Width="{StaticResource Icon.Lane}"
+              Margin="{StaticResource Pad.XS.Right}"
+              VerticalAlignment="Center">
+            <Path Width="{StaticResource Icon.Size.Small}"
+                  Height="{StaticResource Icon.Size.Small}"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  Stretch="Uniform"
+                  Fill="{x:Null}"
+                  Stroke="{DynamicResource Brush.TextMuted}"
+                  StrokeThickness="{StaticResource Icon.Stroke}"
+                  StrokeStartLineCap="Round"
+                  StrokeEndLineCap="Round"
+                  StrokeLineJoin="Round"
+                  Data="{Binding Converter={StaticResource ConversationIcon}}" />
+            <TextBlock Text="{Binding Glyph}"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontWeight="Bold"
+                       Foreground="{DynamicResource Brush.TextMuted}"
+                       Visibility="{Binding Converter={StaticResource ConversationGlyphIsText}}" />
+        </Grid>
+    </DataTemplate>
+
+    <!-- ================================================================ Una plantilla por clase -->
+
+    <!-- UN SUCESO: hito, entrega, herramienta, veredicto, cierre de unidad y error. El icono los
+         distingue y sale del dato; duplicar la burbuja una vez por clase sería exactamente lo que
+         esta fase vino a retirar. El error se tiñe, que es lo único que cambia. -->
+    <DataTemplate x:Key="Conversation.Evento">
+        <Grid Margin="{StaticResource Pad.XXS.V}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <!-- El carril va en el HIJO y la columna en `Auto`: un token de tamaño es un `Double`
+                 y `ColumnDefinition.Width` quiere un `GridLength`, así que puesto en la columna la
+                 vista revienta AL ABRIRSE y no al compilar (D-1005). -->
+            <TextBlock Grid.Column="0" Text="{Binding Speaker}"
+                       Width="{StaticResource Conversation.VoiceLane}"
+                       FontSize="{StaticResource FontSize.Meta}" FontWeight="SemiBold"
+                       VerticalAlignment="Top" Margin="{StaticResource Pad.XS}" TextAlignment="Right"
+                       Style="{StaticResource Voice.Name}" />
+            <Border Grid.Column="1" Style="{StaticResource Conversation.Bubble}">
+                <!-- Rejilla, NO StackPanel horizontal: un StackPanel horizontal mide a sus hijos
+                     con ancho INFINITO, así que TextWrapping no envuelve nada y el mensaje largo se
+                     sale del globo y se ve cortado. -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ContentPresenter Grid.Column="0" Content="{Binding}"
+                                      ContentTemplate="{StaticResource Conversation.Icon}" />
+                    <TextBlock Grid.Column="1" Text="{Binding Text}"
+                               Style="{StaticResource Conversation.Text}" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="2" Text="{Binding Time}"
+                               Style="{StaticResource Conversation.Time}" />
+                </Grid>
+            </Border>
+        </Grid>
+    </DataTemplate>
+
+    <!-- LA PROSA DEL AGENTE: su burbuja, monoespaciada, sin icono —no es un suceso, es lo que
+         está diciendo—. -->
+    <DataTemplate x:Key="Conversation.Prosa">
+        <Grid Margin="{StaticResource Pad.XXS.V}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <!-- El carril va en el HIJO y la columna en `Auto`: un token de tamaño es un `Double`
+                 y `ColumnDefinition.Width` quiere un `GridLength`, así que puesto en la columna la
+                 vista revienta AL ABRIRSE y no al compilar (D-1005). -->
+            <TextBlock Grid.Column="0" Text="{Binding Speaker}"
+                       Width="{StaticResource Conversation.VoiceLane}"
+                       FontSize="{StaticResource FontSize.Meta}" FontWeight="SemiBold"
+                       VerticalAlignment="Top" Margin="{StaticResource Pad.XS}" TextAlignment="Right"
+                       Style="{StaticResource Voice.Name}" />
+            <Border Grid.Column="1" Style="{StaticResource Conversation.Bubble}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="{Binding Text}"
+                               Style="{StaticResource Conversation.Prose.Text}" />
+                    <TextBlock Grid.Column="1" Text="{Binding Time}"
+                               Style="{StaticResource Conversation.Time}" />
+                </Grid>
+            </Border>
+        </Grid>
+    </DataTemplate>
+
+    <!-- EL RAZONAMIENTO: la misma burbuja del agente, en cursiva y secundario mientras dura. El
+         contenido del pensamiento no viaja (F30 §2e), así que lo que se dice es que está pasando. -->
+    <DataTemplate x:Key="Conversation.Razonamiento">
+        <Grid Margin="{StaticResource Pad.XXS.V}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <!-- El carril va en el HIJO y la columna en `Auto`: un token de tamaño es un `Double`
+                 y `ColumnDefinition.Width` quiere un `GridLength`, así que puesto en la columna la
+                 vista revienta AL ABRIRSE y no al compilar (D-1005). -->
+            <TextBlock Grid.Column="0" Text="{Binding Speaker}"
+                       Width="{StaticResource Conversation.VoiceLane}"
+                       FontSize="{StaticResource FontSize.Meta}" FontWeight="SemiBold"
+                       VerticalAlignment="Top" Margin="{StaticResource Pad.XS}" TextAlignment="Right"
+                       Style="{StaticResource Voice.Name}" />
+            <Border Grid.Column="1" Style="{StaticResource Conversation.Bubble}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="{Binding Text}"
+                               Style="{StaticResource Conversation.Reasoning.Text}" />
+                    <TextBlock Grid.Column="1" Text="{Binding Time}"
+                               Style="{StaticResource Conversation.Time}" />
+                </Grid>
+            </Border>
+        </Grid>
+    </DataTemplate>
+
+    <!-- UN HALLAZGO NUEVO: la pastilla de gravedad del sistema delante del título, la misma de la
+         cabecera del resumen y la del informe (R10 §5). La gravedad se ve sin leer. -->
+    <DataTemplate x:Key="Conversation.Hallazgo">
+        <Grid Margin="{StaticResource Pad.XXS.V}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <!-- El carril va en el HIJO y la columna en `Auto`: un token de tamaño es un `Double`
+                 y `ColumnDefinition.Width` quiere un `GridLength`, así que puesto en la columna la
+                 vista revienta AL ABRIRSE y no al compilar (D-1005). -->
+            <TextBlock Grid.Column="0" Text="{Binding Speaker}"
+                       Width="{StaticResource Conversation.VoiceLane}"
+                       FontSize="{StaticResource FontSize.Meta}" FontWeight="SemiBold"
+                       VerticalAlignment="Top" Margin="{StaticResource Pad.XS}" TextAlignment="Right"
+                       Style="{StaticResource Voice.Name}" />
+            <Border Grid.Column="1" Style="{StaticResource Conversation.Bubble}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Style="{StaticResource Pill.Sev}" MinWidth="0"
+                            VerticalAlignment="Center" Margin="{StaticResource Pad.XS.Right}">
+                        <TextBlock Text="{Binding Severity, Converter={StaticResource SeverityToLabel}}"
+                                   Style="{StaticResource Pill.Sev.Text}" />
+                    </Border>
+                    <TextBlock Grid.Column="1" Text="{Binding Text}"
+                               Style="{StaticResource Conversation.Text}" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="2" Text="{Binding Time}"
+                               Style="{StaticResource Conversation.Time}" />
+                </Grid>
+            </Border>
+        </Grid>
+    </DataTemplate>
+
+    <!-- · UNA PREGUNTA ESPERANDO RESPUESTA ·
+         Vive en la conversación —no en un diálogo modal— porque la decisión se toma leyendo lo que
+         el agente acaba de explicar, y un modal tapa justo eso (F16). Solo el arreglo asistido las
+         emite; sus comandos se resuelven contra el `UserControl` que la contenga. -->
+    <DataTemplate x:Key="Conversation.Pregunta" DataType="{x:Type services:FixQuestion}">
+        <Border CornerRadius="8" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.Indent.XL}"
+                Style="{StaticResource Notice.Ask}">
+            <StackPanel>
+                <TextBlock Text="{Binding Header}" Style="{StaticResource Notice.Ask.Header}" />
+                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Small}"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                <!-- Opciones cerradas -->
+                <ItemsControl ItemsSource="{Binding Choices}" Margin="{StaticResource Pad.S.Top}"
+                              Visibility="{Binding IsPending, Converter={StaticResource BoolToVisibility}}">
+                    <!-- Una opción por línea y a todo el ancho. Estas etiquetas no son «Sí/No»:
+                         son consecuencias —«(A) lanzar excepción y adaptar los 7 llamadores»— y
+                         se estarían eligiendo a ciegas si el botón las recortara. Nunca elipsis
+                         aquí: el botón crece con su texto. -->
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Margin="{StaticResource Pad.XS.Bottom}" HorizontalAlignment="Stretch"
+                                       HorizontalContentAlignment="Left"
+                                       Command="{Binding DataContext.ChooseCommand,
+                                                 RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                <Button.Content>
+                                    <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+                                </Button.Content>
+                                <Button.CommandParameter>
+                                    <MultiBinding Converter="{StaticResource QuestionChoicePair}">
+                                        <Binding Path="DataContext"
+                                                 RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
+                                        <Binding />
+                                    </MultiBinding>
+                                </Button.CommandParameter>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Texto libre -->
+                <Grid Margin="{StaticResource Pad.XXS.Top}">
+                    <Grid.Visibility>
+                        <MultiBinding Converter="{StaticResource AllTrueToVisibility}">
+                            <Binding Path="IsPending" />
+                            <Binding Path="AllowFreeform" />
+                        </MultiBinding>
+                    </Grid.Visibility>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <!-- Se estira: un ancho fijo de 420 no cabe en la columna izquierda de una
+                         pantalla de 1366 y empujaba el botón fuera de la tarjeta. -->
+                    <ui:TextBox Grid.Column="0" PlaceholderText="…o contesta con tus palabras"
+                                Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" />
+                    <!-- SECUNDARIO (UI-0021). Había DOS primarios a la vez en esta vista
+                         —éste y «Enviar» del compositor— además de un aviso macizo y un
+                         peligro macizo. De los dos campos de respuesta solo uno lleva el
+                         primario, y es el compositor: es el canal que siempre está ahí. -->
+                    <Button Grid.Column="1" Content="Responder" Margin="{StaticResource Pad.XS.Left}"
+                               Command="{Binding DataContext.AnswerFreeformCommand,
+                                         RelativeSource={RelativeSource AncestorType=UserControl}}"
+                               CommandParameter="{Binding}" />
+                </Grid>
+
+                <!-- Ya contestada -->
+                <TextBlock Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Visibility="{Binding IsAnswered, Converter={StaticResource BoolToVisibility}}">
+                    <Run Text="Tu respuesta:" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding Answer, Mode=OneWay}" />
+                </TextBlock>
+            </StackPanel>
+        </Border>
+    </DataTemplate>
+
+    <!-- ================================================================ El hilo y sus secciones -->
+
+    <!-- La lista de entradas de un tramo. El selector va aquí y no en cada vista por lo mismo que
+         las plantillas: dos sitios que eligen plantilla acaban eligiendo distinto. -->
+    <Style x:Key="Conversation.Entries" TargetType="ItemsControl">
+        <Setter Property="ItemTemplateSelector" Value="{StaticResource Conversation.Selector}" />
+    </Style>
+
+    <!-- UN SEPARADOR DE SECCIÓN dentro del hilo: la fila que dice dónde empieza una unidad o una
+         pasada, y que se pulsa para plegar su tramo.
+
+         Es un `ToggleButton` y no un `Expander` (F30 §3): el expander metía su propio marco, su
+         sangría y su galón, y con uno dentro de otro el hilo dejaba de ser una columna que se lee de
+         arriba abajo para ser un árbol que hay que abrir. Aquí lo único que queda del expander es lo
+         que servía: plegar. -->
+    <Style x:Key="Conversation.Section" TargetType="ToggleButton">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="True" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Padding" Value="{StaticResource Pad.RowTight}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Chrome"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="{StaticResource Radius.M}"
+                            Padding="{TemplateBinding Padding}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter VerticalAlignment="Center"
+                                          HorizontalAlignment="Stretch" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background"
+                                    Value="{DynamicResource Brush.Surface2}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- El galón de una sección: apunta a la derecha plegada y hacia abajo abierta. -->
+    <Style x:Key="Conversation.Section.Chevron" TargetType="Path">
+        <Setter Property="Width" Value="{StaticResource Icon.Size.Small}" />
+        <Setter Property="Height" Value="{StaticResource Icon.Size.Small}" />
+        <Setter Property="Stretch" Value="Uniform" />
+        <Setter Property="Fill" Value="{x:Null}" />
+        <Setter Property="Stroke" Value="{DynamicResource Brush.TextFaint}" />
+        <Setter Property="StrokeThickness" Value="{StaticResource Icon.Stroke}" />
+        <Setter Property="StrokeStartLineCap" Value="Round" />
+        <Setter Property="StrokeEndLineCap" Value="Round" />
+        <Setter Property="StrokeLineJoin" Value="Round" />
+        <Setter Property="Data" Value="{x:Static c:Icons.Chevron}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                <Setter Property="RenderTransform">
+                    <Setter.Value>
+                        <RotateTransform Angle="90" />
+                    </Setter.Value>
+                </Setter>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- La regla fina que abre el tramo. Un separador que solo es texto no separa nada. -->
+    <Style x:Key="Conversation.Section.Rule" TargetType="Border">
+        <Setter Property="Height" Value="1" />
+        <Setter Property="Background" Value="{DynamicResource Brush.Line}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="{StaticResource Pad.XS.Left}" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+</ResourceDictionary>

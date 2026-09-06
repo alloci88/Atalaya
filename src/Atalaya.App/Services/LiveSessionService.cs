@@ -742,12 +742,35 @@ public sealed partial class LiveSessionService : ObservableObject
             _openMarker = null;
             EndedUtc = DateTimeOffset.UtcNow;
             IsRunning = false;
+            FoldForLastSession();
             _cts?.Dispose();
             _cts = null;
             _busy.Exit(AgentWork.Auditoria);
             Changed?.Invoke();
         }
     }
+
+    /// <summary>
+    /// <b>Cómo queda el hilo cuando la sesión ya no corre</b> (F30 §3): todas las unidades abiertas
+    /// y, dentro de cada una, <b>solo la última pasada</b>.
+    /// <para>
+    /// En vivo interesa todo —se está mirando cómo pasa—; en Última sesión interesa dónde acabó
+    /// cada unidad, y las pasadas anteriores son historia que se despliega si se busca. Es la regla
+    /// que el servicio ya aplicaba EN VIVO desde F12 y que ahí estorbaba: escondía lo que se acababa
+    /// de ver.
+    /// </para>
+    /// </summary>
+    private void FoldForLastSession() => OnUi(() =>
+    {
+        foreach (UnitProgress unit in Units)
+        {
+            unit.IsExpanded = true;
+            for (int i = 0; i < unit.Passes.Count; i++)
+            {
+                unit.Passes[i].IsExpanded = i == unit.Passes.Count - 1;
+            }
+        }
+    });
 
     private void Subscribe(SessionCoordinator c)
     {
@@ -796,13 +819,18 @@ public sealed partial class LiveSessionService : ObservableObject
         // la definitiva.
         if (note.Kind == ActivityNoteKind.ToolWriting)
         {
+            // F30 §3 — y la CLASE va con el texto. El tramo empieza en «Razonando…» y sigue en
+            // «Reportando hallazgos…»: es la misma línea reescribiéndose —apilar dos cambiaría lo
+            // que se narra— pero no es la misma clase de evento, y la burbuja del razonamiento se
+            // lee en cursiva. Por eso `Kind` es mutable en la base.
             if (_writingLine is not null && _currentPass?.Entries.Contains(_writingLine) == true)
             {
                 _writingLine.Text = note.Text;
+                _writingLine.Kind = ActivityWording.KindOf(note);
             }
             else
             {
-                _writingLine = ActivityEntry.Event("⚒", note.Text);
+                _writingLine = ActivityEntry.Event("⚒", note.Text, kind: ActivityWording.KindOf(note));
                 Add(_currentPass, _writingLine);
             }
 
@@ -823,9 +851,11 @@ public sealed partial class LiveSessionService : ObservableObject
         Add(_currentPass, note.Kind switch
         {
             ActivityNoteKind.Tool => ActivityEntry.Event(
-                ActivityWording.GlyphFor(note.Text), ActivityWording.Describe(note.Text)),
-            ActivityNoteKind.Handover => ActivityEntry.Event("→", note.Text),
-            _ => ActivityEntry.Event("◆", note.Text),
+                ActivityWording.GlyphFor(note.Text), ActivityWording.Describe(note.Text),
+                kind: ActivityWording.KindOf(note)),
+            ActivityNoteKind.Handover => ActivityEntry.Event(
+                "→", note.Text, kind: ConversationKind.Entrega),
+            _ => ActivityEntry.Event("◆", note.Text, kind: ConversationKind.Hito),
         });
 
         // Un evento cierra el bloque de texto en curso: lo siguiente que diga el modelo es otra
@@ -878,12 +908,9 @@ public sealed partial class LiveSessionService : ObservableObject
 
         if (phase == "auditing")
         {
-            // Colapsa la unidad anterior y abre ésta: la actual siempre expandida.
-            if (_currentUnit is not null && !ReferenceEquals(_currentUnit, unit))
-            {
-                _currentUnit.IsExpanded = false;
-            }
-
+            // F30 §3 — EN VIVO NO SE PLIEGA NADA. El hilo es una sola columna que se lee de arriba
+            // abajo, y plegar la unidad anterior mientras la sesión corre esconde lo que el usuario
+            // acaba de ver pasar. Lo que se pliega —y solo al terminar— lo decide `FoldForLastSession`.
             _currentUnit = unit;
             unit.IsExpanded = true;
             unit.State = UnitRunState.Auditando;
@@ -906,11 +933,6 @@ public sealed partial class LiveSessionService : ObservableObject
 
         unit.CurrentPass = pass;
         CurrentPassNumber = pass;
-        if (_currentPass is not null)
-        {
-            _currentPass.IsExpanded = false;
-        }
-
         _currentPass = new PassProgress { Index = pass };
         unit.Passes.Add(_currentPass);
         _currentText = null;
@@ -975,6 +997,8 @@ public sealed partial class LiveSessionService : ObservableObject
         // pero contarlo agregado es la diferencia entre resumir y callar.
         Add(pass, ActivityEntry.Event(
             record.Dry ? "✓" : "↻",
+            kind: ConversationKind.Hito,
+            text:
             // F12 §E — una pasada seca ya no cierra la unidad, así que tampoco lo dice: hacen falta
             // DOS seguidas. Y «unidad completa» sobraba de todos modos — una unidad barrida es una
             // unidad de la que el auditor no saca más, que no es lo mismo que una unidad sin
@@ -1018,7 +1042,8 @@ public sealed partial class LiveSessionService : ObservableObject
 
         if (verdict.Verdict == "presupuesto-superado")
         {
-            Add(_currentPass, ActivityEntry.Event("✂", $"Cortada por presupuesto — {verdict.Summary}"));
+            Add(_currentPass, ActivityEntry.Event(
+                "✂", $"Cortada por presupuesto — {verdict.Summary}", kind: ConversationKind.Unidad));
         }
 
         _unitsDone++;
@@ -1048,26 +1073,31 @@ public sealed partial class LiveSessionService : ObservableObject
                 // aquí era texto plano de 25 px sin color dentro de una línea que sí tenía sitio
                 // para la pastilla.
                 _new.Add(Item(title));
-                Add(_currentPass, ActivityEntry.Event("＋", $"Hallazgo: {title}", finding.Severity));
+                Add(_currentPass, ActivityEntry.Event(
+                    "＋", $"Hallazgo: {title}", finding.Severity, ConversationKind.Hallazgo));
                 break;
 
             case "ubicaciones":
-                Add(_currentPass, ActivityEntry.Event("⊕", $"Ubicaciones añadidas a {alias}"));
+                Add(_currentPass, ActivityEntry.Event(
+                    "⊕", $"Ubicaciones añadidas a {alias}", kind: ConversationKind.Veredicto));
                 break;
 
             case "disputed":
                 _disputed.Add(Item($"{alias} «{title}» — el auditor sostiene que nunca fue un defecto"));
-                Add(_currentPass, ActivityEntry.Event("⚖", $"Disputado: {title}"));
+                Add(_currentPass, ActivityEntry.Event(
+                    "⚖", $"Disputado: {title}", kind: ConversationKind.Veredicto));
                 break;
 
             case "resolutionrefused":
                 _refused.Add(Item($"{alias} «{title}» — «arreglado» sin evidencia de cambio, degradado a presente"));
-                Add(_currentPass, ActivityEntry.Event("⚠", $"«Arreglado» sin evidencia de cambio: {title}"));
+                Add(_currentPass, ActivityEntry.Event(
+                    "⚠", $"«Arreglado» sin evidencia de cambio: {title}", kind: ConversationKind.Veredicto));
                 break;
 
             case "resolved":
                 _resolved.Add(Item($"{alias} «{title}»"));
-                Add(_currentPass, ActivityEntry.Event("✔", $"Resuelto: {title}"));
+                Add(_currentPass, ActivityEntry.Event(
+                    "✔", $"Resuelto: {title}", kind: ConversationKind.Veredicto));
                 break;
 
             case "needsreview":
@@ -1346,50 +1376,21 @@ public sealed partial class LiveSessionService : ObservableObject
     }
 
     /// <summary>
-    /// Como <see cref="OnUi"/> pero <b>sin esperar</b> (F30 §2d): se deja puesto y se vuelve.
+    /// <b>El único camino de escritura de la conversación</b> (BUGFIX-RELEASE §1, F30 §3). Marshalea
+    /// y, sobre todo, escribe <b>una a la vez</b>: la reentrada deja de ser reentrada y pasa a ser
+    /// el siguiente elemento de la cola. Es la misma pieza que usa el arreglo asistido.
     /// <para>
-    /// <b>Por aquí pasa TODO lo que emite el hilo que lee el proveedor</b> (F30 §2e): el texto, el
-    /// consumo y las líneas del hilo de actividad. Ese hilo es el que consume la tubería de salida
-    /// del CLI, y un proceso cuya tubería de salida se llena <b>se bloquea escribiendo</b> hasta
-    /// que alguien lea. Así que la regla es: lee, encola y sigue. Nada de esperar a la interfaz —
-    /// que además es exactamente el fallo que §2d encontró con el texto, aquí extendido a los
-    /// otros dos canales por el mismo motivo, antes de que vuelva a pasar.
-    /// </para>
-    /// <para>
-    /// <b>Y el orden se conserva</b>, que es lo que obliga a la prioridad explícita. Los eventos que
-    /// no vienen del lector —cerrar una pasada, terminar una unidad— siguen usando
-    /// <see cref="OnUi"/>, y <c>Dispatcher.Invoke(Action)</c> encola en <c>Send</c>, que es la
-    /// prioridad MÁS alta: dejar esto en la de por defecto (<c>Normal</c>) haría que el cierre de
-    /// una pasada adelantara por la izquierda a las líneas que el modelo acababa de mandar, y el
-    /// hilo de actividad contaría los hechos desordenados. Con las dos en <c>Send</c> hay una sola
-    /// cola y se sirve en el orden en que se llenó. El volcado del texto pendiente lo hace cada
-    /// entrada al empezar, ya en el hilo de interfaz.
+    /// <see cref="ConversationWrites.Post"/> es el camino de lo que emite el hilo que lee al
+    /// proveedor —el texto, el consumo y las líneas del hilo—: <b>no espera</b>, porque un proceso
+    /// cuya tubería de salida se llena se bloquea escribiendo (F30 §2e). <see cref="ConversationWrites.Send"/>
+    /// es el de lo demás, y las dos entran en la MISMA cola y en la misma prioridad, que es lo que
+    /// conserva el orden: con esto en <c>Normal</c>, el cierre de una pasada adelantaría por la
+    /// izquierda a las líneas que el agente acababa de mandar.
     /// </para>
     /// </summary>
-    private static void PostUi(Action action)
-    {
-        Dispatcher? dispatcher = Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
-        {
-            action();
-        }
-        else
-        {
-            dispatcher.BeginInvoke(DispatcherPriority.Send, action);
-        }
-    }
+    private readonly ConversationWrites _writes = new();
 
-    /// <summary>Los eventos del coordinador llegan de un hilo de fondo; hay que marshalear.</summary>
-    private static void OnUi(Action action)
-    {
-        Dispatcher? dispatcher = Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
-        {
-            action();
-        }
-        else
-        {
-            dispatcher.Invoke(action);
-        }
-    }
+    private void PostUi(Action action) => _writes.Post(action);
+
+    private void OnUi(Action action) => _writes.Send(action);
 }

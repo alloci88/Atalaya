@@ -24,11 +24,11 @@ public enum ActivityNoteKind
     ToolWriting,
 
     /// <summary>
-    /// <b>La entrega al modelo</b> (F30 §1b): el turno acaba de salir y a partir de aquí lo que
-    /// pasa —o no pasa— es del modelo.
+    /// <b>La entrega al agente</b> (F30 §1b): el turno acaba de salir y a partir de aquí lo que
+    /// pasa —o no pasa— es suyo.
     /// <para>
     /// Tiene clase propia y no es un <see cref="Milestone"/> más porque el pie la usa para
-    /// <b>anclar la espera</b>: «esperando al modelo» empieza a contar en el envío, no en el último
+    /// <b>anclar la espera</b>: «esperando al agente» empieza a contar en el envío, no en el último
     /// evento, que es lo que hace que se lea como «Atalaya ya terminó lo suyo» en vez de como un
     /// silencio sin dueño.
     /// </para>
@@ -122,7 +122,18 @@ public static class ActivityWording
     public const string AfterText = "escribiendo el reporte de hallazgos";
 
     /// <summary>La frase por defecto: hay turno en el aire y no se sabe decir nada más preciso.</summary>
-    public const string Waiting = "esperando al modelo";
+    /// <remarks>
+    /// <b>«al agente», no «al modelo»</b> (F30 §3). La voz de enfrente se llama Agente en toda la
+    /// conversación —lo era ya en el arreglo asistido desde F16—, y el pie de la misma pantalla no
+    /// puede llamarla de otra manera.
+    /// </remarks>
+    public const string Waiting = "esperando al agente";
+
+    /// <summary>
+    /// Lo que el hilo dice mientras el agente piensa (F30 §2e). Es una constante y no una cadena
+    /// suelta porque de ella depende la clase de la entrada: el razonamiento tiene burbuja propia.
+    /// </summary>
+    public const string Reasoning = "Razonando…";
 
     /// <summary>
     /// La frase entera que el pie escribe mientras dura el silencio, sin el contador. Vacía cuando
@@ -179,7 +190,7 @@ public static class ActivityWording
     {
         if (tool.Phase == ToolStreamPhase.Reasoning)
         {
-            return "Razonando…";
+            return Reasoning;
         }
 
         string verb = tool.Tool switch
@@ -228,6 +239,36 @@ public static class ActivityWording
             _ => $"escribiendo la llamada a {tool.Tool}",
         };
     }
+
+    /// <summary>
+    /// <b>De qué clase de evento es una nota</b> (F30 §3): con eso el hilo elige su plantilla, la
+    /// misma que usa el arreglo asistido para lo mismo.
+    /// <para>
+    /// Vive aquí y no en el emisor por lo mismo que la frase: lo que viaja por el canal es la traza
+    /// cruda, y la lectura —castellano, icono, forma— se hace una sola vez en la capa que pinta.
+    /// </para>
+    /// </summary>
+    public static ConversationKind KindOf(ActivityNote note) => note.Kind switch
+    {
+        ActivityNoteKind.Handover => ConversationKind.Entrega,
+
+        // El razonamiento no es una herramienta: no hay llamada, hay un agente pensando, y su
+        // burbuja se lee en cursiva mientras dura.
+        ActivityNoteKind.ToolWriting => note.Text == Reasoning
+            ? ConversationKind.Razonamiento
+            : ConversationKind.Herramienta,
+
+        // `unit_done` cierra la unidad. Es una herramienta como las otras en el registro, pero en
+        // el hilo es el final de un tramo y lleva su propio icono.
+        ActivityNoteKind.Tool => Tool(note.Text) switch
+        {
+            "unit_done" => ConversationKind.Unidad,
+            "report_verdicts" => ConversationKind.Veredicto,
+            _ => ConversationKind.Herramienta,
+        },
+
+        _ => ConversationKind.Hito,
+    };
 
     /// <summary>Un título largo no puede empujar la fila: se corta con puntos suspensivos.</summary>
     private static string Trim(string text)

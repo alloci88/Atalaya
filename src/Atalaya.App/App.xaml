@@ -24,6 +24,8 @@
                 <ResourceDictionary Source="pack://application:,,,/Themes/Tokens.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/Themes/Palette.Dark.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/Themes/Styles.xaml" />
+                <!-- F30 §3 — la conversación: va DESPUÉS de Styles porque se apoya en sus piezas. -->
+                <ResourceDictionary Source="pack://application:,,,/Themes/Conversation.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/Themes/Pages.xaml" />
             </ResourceDictionary.MergedDictionaries>
 

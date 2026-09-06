@@ -98,7 +98,7 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
     /// <summary>El estado real, enlazado directamente por la vista.</summary>
     public LiveFixService Fix => _fix;
 
-    public ObservableCollection<FixEntry> Conversation => _fix.Conversation;
+    public ObservableCollection<ConversationEntry> Conversation => _fix.Conversation;
 
     public ObservableCollection<FixFileChange> Files => _fix.Files;
 

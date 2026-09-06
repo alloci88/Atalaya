@@ -33,11 +33,9 @@
     <local:NotEmptyToVisibilityConverter x:Key="NotEmptyToVisibility" />
     <local:ProgressToPercentConverter x:Key="ProgressToPercent" />
     <local:MinusConverter x:Key="Minus" />
-    <local:ActivityKindToWeightConverter x:Key="ActivityKindToWeight" />
     <local:SeverityToVisibilityConverter x:Key="SeverityToVisibility" />
-    <local:ActivityGlyphToIconConverter x:Key="ActivityGlyphToIcon" />
-    <local:ActivityGlyphIsTextConverter x:Key="ActivityGlyphIsText" />
-    <local:FixVoiceToFillConverter x:Key="FixVoiceToFill" />
+    <local:ConversationIconConverter x:Key="ConversationIcon" />
+    <local:ConversationGlyphIsTextConverter x:Key="ConversationGlyphIsText" />
     <local:DiffKindToFillConverter x:Key="DiffKindToFill" />
     <local:SelectedTabToFillConverter x:Key="SelectedTabToFill" />
     <local:QuestionChoicePairConverter x:Key="QuestionChoicePair" />

@@ -30,115 +30,11 @@
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
         </Style>
 
-        <!-- · Una intervención de la conversación · -->
-        <DataTemplate DataType="{x:Type services:FixMessage}">
-            <Grid Margin="{StaticResource Pad.XXS.V}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="76" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="{Binding Speaker}" FontSize="{StaticResource FontSize.Meta}" FontWeight="SemiBold"
-                           VerticalAlignment="Top" Margin="{StaticResource Pad.XS}" TextAlignment="Right"
-                           Style="{StaticResource Voice.Name}" />
-                <Border Grid.Column="1" CornerRadius="6" Padding="{StaticResource Pad.Field}"
-                        Background="{Binding Voice, Converter={StaticResource FixVoiceToFill}}">
-                    <!-- Rejilla, NO StackPanel horizontal: un StackPanel horizontal mide a sus
-                         hijos con ancho INFINITO, así que TextWrapping no envuelve nada y el
-                         mensaje largo se sale del globo y se ve cortado. Con Auto+* el texto
-                         recibe el ancho que queda y crece hacia abajo. -->
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{Binding Glyph}" FontWeight="Bold" Margin="{StaticResource Pad.XS.Right}"
-                                   VerticalAlignment="Top" Opacity="0.9"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                   Visibility="{Binding Glyph, Converter={StaticResource NotEmptyToVisibility}}" />
-                        <TextBlock Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}"
-                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                    </Grid>
-                </Border>
-            </Grid>
-        </DataTemplate>
-
-        <!-- · Una pregunta esperando respuesta · -->
-        <DataTemplate DataType="{x:Type services:FixQuestion}">
-            <Border CornerRadius="8" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.Indent.XL}"
-                    Style="{StaticResource Notice.Ask}">
-                <StackPanel>
-                    <TextBlock Text="{Binding Header}" Style="{StaticResource Notice.Ask.Header}" />
-                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Small}"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-
-                    <!-- Opciones cerradas -->
-                    <ItemsControl ItemsSource="{Binding Choices}" Margin="{StaticResource Pad.S.Top}"
-                                  Visibility="{Binding IsPending, Converter={StaticResource BoolToVisibility}}">
-                        <!-- Una opción por línea y a todo el ancho. Estas etiquetas no son «Sí/No»:
-                             son consecuencias —«(A) lanzar excepción y adaptar los 7 llamadores»— y
-                             se estarían eligiendo a ciegas si el botón las recortara. Nunca elipsis
-                             aquí: el botón crece con su texto. -->
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <StackPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Button Margin="{StaticResource Pad.XS.Bottom}" HorizontalAlignment="Stretch"
-                                           HorizontalContentAlignment="Left"
-                                           Command="{Binding DataContext.ChooseCommand,
-                                                     RelativeSource={RelativeSource AncestorType=UserControl}}">
-                                    <Button.Content>
-                                        <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-                                    </Button.Content>
-                                    <Button.CommandParameter>
-                                        <MultiBinding Converter="{StaticResource QuestionChoicePair}">
-                                            <Binding Path="DataContext"
-                                                     RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
-                                            <Binding />
-                                        </MultiBinding>
-                                    </Button.CommandParameter>
-                                </Button>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-
-                    <!-- Texto libre -->
-                    <Grid Margin="{StaticResource Pad.XXS.Top}">
-                        <Grid.Visibility>
-                            <MultiBinding Converter="{StaticResource AllTrueToVisibility}">
-                                <Binding Path="IsPending" />
-                                <Binding Path="AllowFreeform" />
-                            </MultiBinding>
-                        </Grid.Visibility>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <!-- Se estira: un ancho fijo de 420 no cabe en la columna izquierda de una
-                             pantalla de 1366 y empujaba el botón fuera de la tarjeta. -->
-                        <ui:TextBox Grid.Column="0" PlaceholderText="…o contesta con tus palabras"
-                                    Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" />
-                        <!-- SECUNDARIO (UI-0021). Había DOS primarios a la vez en esta vista
-                             —éste y «Enviar» del compositor— además de un aviso macizo y un
-                             peligro macizo. De los dos campos de respuesta solo uno lleva el
-                             primario, y es el compositor: es el canal que siempre está ahí. -->
-                        <Button Grid.Column="1" Content="Responder" Margin="{StaticResource Pad.XS.Left}"
-                                   Command="{Binding DataContext.AnswerFreeformCommand,
-                                             RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                   CommandParameter="{Binding}" />
-                    </Grid>
-
-                    <!-- Ya contestada -->
-                    <TextBlock Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Meta}" TextWrapping="Wrap"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Visibility="{Binding IsAnswered, Converter={StaticResource BoolToVisibility}}">
-                        <Run Text="Tu respuesta:" FontWeight="SemiBold" /><Run Text=" " /><Run Text="{Binding Answer, Mode=OneWay}" />
-                    </TextBlock>
-                </StackPanel>
-            </Border>
-        </DataTemplate>
+        <!-- LAS BURBUJAS DE LA CONVERSACIÓN YA NO SE DECLARAN AQUÍ (F30 §3). Vivían en esta
+             vista —una plantilla para `FixMessage` y otra para `FixQuestion`— y la auditoría tenía
+             las suyas para lo mismo. Ahora hay UN componente en el sistema
+             (`Themes/Conversation.xaml`), con una plantilla por clase de evento, y lo usan las tres
+             vistas: Arreglo asistido, Sesión en vivo y Última sesión. -->
 
     </UserControl.Resources>
 
@@ -470,7 +366,8 @@
                     <Grid>
                         <ScrollViewer Style="{StaticResource Scroll}" x:Name="ConversationScroll" VerticalScrollBarVisibility="Auto"
                                       ScrollChanged="OnConversationScrollChanged">
-                            <ItemsControl ItemsSource="{Binding Conversation}" Margin="{StaticResource Pad.XS}" />
+                            <ItemsControl ItemsSource="{Binding Conversation}" Margin="{StaticResource Pad.XS}"
+                                          Style="{StaticResource Conversation.Entries}" />
                         </ScrollViewer>
                         <Rectangle Style="{StaticResource Scroll.Fade.Top}" />
                     </Grid>

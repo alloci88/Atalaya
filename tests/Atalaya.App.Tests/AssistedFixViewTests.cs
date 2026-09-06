@@ -50,12 +50,13 @@ public sealed class AssistedFixViewTests
     [Fact]
     public void Las_preguntas_se_pintan_dentro_de_la_conversacion()
     {
-        string xaml = Markup(ViewXaml());
+        string xaml = Markup(ConversationXaml());
 
         xaml.Should().Contain("DataType=\"{x:Type services:FixQuestion}\"");
         xaml.Should().Contain("ChooseCommand");
         xaml.Should().Contain("AnswerFreeformCommand");
         xaml.Should().NotContain("ShowDialog", "una pregunta modal taparía lo que hay que leer para contestarla");
+        Markup(ViewXaml()).Should().NotContain("ShowDialog");
     }
 
     [Fact]
@@ -148,14 +149,30 @@ public sealed class AssistedFixViewTests
     /// con ancho INFINITO: dentro de uno, <c>TextWrapping="Wrap"</c> no envuelve nada y el texto
     /// largo se sale del globo. Por eso el globo es una rejilla, y por eso esto es un test: el
     /// síntoma solo aparece con un mensaje largo, y los mensajes de prueba son cortos.
+    /// <para>
+    /// F30 §3 — la regla no cambia; cambia dónde se cumple. Con UN componente para las tres vistas,
+    /// el envoltorio lo ponen los estilos de texto —una vez, para todas las burbujas— y lo que hay
+    /// que exigir es que <b>ninguna</b> burbuja lo pierda y que ninguna monte su contenido en un
+    /// <c>StackPanel</c> horizontal.
+    /// </para>
     /// </summary>
     [Fact]
     public void El_globo_de_la_conversacion_envuelve_el_texto_en_vez_de_cortarlo()
     {
-        string globo = Between(Markup(ViewXaml()), "x:Type services:FixMessage", "</DataTemplate>");
+        string component = Markup(ConversationXaml());
 
-        globo.Should().Contain("TextWrapping=\"Wrap\"");
-        globo.Should().NotContain("StackPanel Orientation=\"Horizontal\"",
+        foreach (string style in new[]
+                 {
+                     "Conversation.Text", "Conversation.Prose.Text", "Conversation.Reasoning.Text",
+                 })
+        {
+            string declared = Between(component, "x:Key=\"" + style + "\"", "</Style>");
+            (declared.Contains("TextWrapping\" Value=\"Wrap\"")
+                || declared.Contains("BasedOn=\"{StaticResource Conversation.Text}\""))
+                .Should().BeTrue($"«{style}» tiene que envolver: sin eso el texto largo se sale del globo");
+        }
+
+        component.Should().NotContain("StackPanel Orientation=\"Horizontal\"",
             "un StackPanel horizontal da ancho infinito y deja el Wrap sin efecto");
     }
 
@@ -167,7 +184,7 @@ public sealed class AssistedFixViewTests
     [Fact]
     public void Las_opciones_de_elicitacion_se_muestran_enteras()
     {
-        string pregunta = Between(Markup(ViewXaml()), "x:Type services:FixQuestion", "</UserControl.Resources>");
+        string pregunta = Between(Markup(ConversationXaml()), "x:Type services:FixQuestion", "</ResourceDictionary>");
 
         pregunta.Should().Contain("<TextBlock Text=\"{Binding Label}\" TextWrapping=\"Wrap\" />",
             "la etiqueta de la opción va en un TextBlock que envuelve, no como Content de una línea");
@@ -381,6 +398,15 @@ public sealed class AssistedFixViewTests
 
     private static string ReadView(string name)
         => File.ReadAllText(Path.Combine(RepoRoot(), "src", "Atalaya.App", "Views", name));
+
+    /// <summary>
+    /// El componente de conversación (F30 §3). Las burbujas y la tarjeta de pregunta ya no se
+    /// declaran en esta vista: viven en el sistema y las usan las tres. Lo que estos tests protegen
+    /// no ha cambiado —que el globo envuelva, que las opciones se lean enteras—, así que se leen
+    /// donde ahora está lo que protegen.
+    /// </summary>
+    private static string ConversationXaml()
+        => File.ReadAllText(Path.Combine(RepoRoot(), "src", "Atalaya.App", "Themes", "Conversation.xaml"));
 
     private static string RepoRoot()
     {

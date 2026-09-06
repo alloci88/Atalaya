@@ -106,6 +106,13 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
         : $"Unidad {Math.Max(1, _live.UnitIndex)} de {_live.UnitCount}";
 
     /// <summary>
+    /// <b>Hay más de una unidad que separar</b> (F30 §3). El hilo gana un separador por unidad para
+    /// poder saltar entre ellas; con una sola, la ruta ya está en la cabecera de la página y el
+    /// separador solo gastaría una fila diciendo lo que ya se lee arriba.
+    /// </summary>
+    public bool HasManyUnits => _live.Units.Count > 1;
+
+    /// <summary>
     /// El pie dice del coste EXACTAMENTE lo que dirá el informe de esta sesión (F16 §B). Decía
     /// «coste no informado por el SDK», que era una frase acuñada para Copilot —y que además nombra
     /// un SDK que con Claude Code no existe— mientras el informe de la misma sesión decía «tarifa
@@ -421,6 +428,7 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
     {
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(ProgressText));
+        OnPropertyChanged(nameof(HasManyUnits));
         OnPropertyChanged(nameof(CostText));
         OnPropertyChanged(nameof(PerUnitText));
         OnPropertyChanged(nameof(Footer));

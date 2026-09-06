@@ -755,13 +755,13 @@ public sealed class SessionCoordinator
 
                     // F30 §1b — LOS DOS TRAMOS DEL HUECO, cada uno con su hora. El primero es lo que
                     // acaba de hacer Atalaya, ya terminado y con su medida; el segundo es la entrega
-                    // al modelo, y a partir de ahí el pie cuenta la espera. Con las dos horas
+                    // al agente, y a partir de ahí el pie cuenta la espera. Con las dos horas
                     // delante, el hueco deja de ser un silencio y pasa a tener dueño.
                     prep.Stop();
                     Note(ActivityNoteKind.Milestone,
                         $"Turno preparado · {existing.Count} hallazgo(s) vivo(s) en la unidad "
                         + $"· {prep.ElapsedMilliseconds} ms");
-                    Note(ActivityNoteKind.Handover, $"Pasada {pass} · enviada al modelo");
+                    Note(ActivityNoteKind.Handover, $"Pasada {pass} · enviada al agente");
 
                     unitCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     try

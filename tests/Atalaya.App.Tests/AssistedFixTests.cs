@@ -522,12 +522,12 @@ public sealed class AssistedFixTests : IDisposable
 
         // La elicitación ocurrió y se contestó.
         answered.Should().ContainSingle();
-        answered[0].Kind.Should().Be(FixAskKind.Decision);
+        answered[0].Ask.Should().Be(FixAskKind.Decision);
         answered[0].Answer.Should().Be("(A) excepción");
 
         // La narración llegó, y el diff también.
         fix.Conversation.OfType<FixMessage>().Should()
-            .Contain(m => m.Voice == FixVoice.Agente && m.Text.Contains("validar la longitud"));
+            .Contain(m => m.Voice == ConversationVoice.Agente && m.Text.Contains("validar la longitud"));
         fix.Files.Should().ContainSingle();
         fix.Files[0].RelativePath.Should().Be(UnitPath);
         fix.Files[0].Added.Should().BeGreaterThan(0);
@@ -621,7 +621,7 @@ public sealed class AssistedFixTests : IDisposable
         {
             foreach (object? item in e.NewItems ?? Array.Empty<object>())
             {
-                if (item is FixQuestion { Kind: FixAskKind.Autorizacion } question)
+                if (item is FixQuestion { Ask: FixAskKind.Autorizacion } question)
                 {
                     fix.Answer(question, LiveFixService.DenyLabel);
                 }
@@ -653,9 +653,9 @@ public sealed class AssistedFixTests : IDisposable
 
         delivered.Should().ContainSingle().Which.Should().Contain("no toques Reader.cs");
         fix.Conversation.OfType<FixMessage>().Should()
-            .Contain(m => m.Voice == FixVoice.Usuario && m.Text == "no toques Reader.cs");
+            .Contain(m => m.Voice == ConversationVoice.Usuario && m.Text == "no toques Reader.cs");
         fix.Conversation.OfType<FixMessage>().Should()
-            .Contain(m => m.IsSystem && m.Text.Contains("en cuanto lo termine"));
+            .Contain(m => m.IsAtalaya && m.Text.Contains("en cuanto lo termine"));
     }
 
     /// <summary>Descartar desde el view-model: pregunta antes, y cancelar no toca nada.</summary>
@@ -1085,7 +1085,7 @@ public sealed class AssistedFixTests : IDisposable
         // Y se dice en la conversación, una vez y sin drama.
         fix.TestSituation.HasTests.Should().BeFalse();
         fix.Conversation.OfType<FixMessage>().Should()
-            .Contain(m => m.IsSystem && m.Text.Contains("no tiene proyectos de tests"));
+            .Contain(m => m.IsAtalaya && m.Text.Contains("no tiene proyectos de tests"));
     }
 
     /// <summary>

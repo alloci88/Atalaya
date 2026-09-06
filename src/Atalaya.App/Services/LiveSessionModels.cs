@@ -29,54 +29,38 @@ public enum UnitRunState
     NoLocalizada,
 }
 
-/// <summary>Qué es una línea de la columna de actividad.</summary>
-public enum ActivityKind
-{
-    /// <summary>Texto tal cual lo emite el agente.</summary>
-    Texto,
-
-    /// <summary>Un evento de herramienta, de una línea y con icono.</summary>
-    Evento,
-}
-
 /// <summary>
-/// Una línea de la columna de actividad (V5, columna 2).
+/// <b>Una entrada de la conversación de una auditoría</b>, sobre el modelo común de
+/// <see cref="ConversationEntry"/> (F30 §3).
 /// <para>
-/// El texto es mutable a propósito: los deltas del streaming llegan en trozos diminutos y se
-/// acumulan en la ÚLTIMA entrada de texto en vez de crear una fila por trozo, que reventaría la
-/// lista con miles de elementos.
+/// Era una línea de una columna con su carril de icono y su propia plantilla; ahora es una burbuja
+/// de la misma conversación que el arreglo asistido, y lo único que queda aquí son las dos formas
+/// de crearla: un evento —con su marca, su clase y, si narra un hallazgo, su gravedad— y el texto
+/// del agente, que se va acumulando.
 /// </para>
 /// </summary>
-public sealed partial class ActivityEntry : ObservableObject
+public sealed partial class ActivityEntry : ConversationEntry
 {
-    public required ActivityKind Kind { get; init; }
-
-    /// <summary>Icono del evento; vacío para el texto del agente.</summary>
-    public string Glyph { get; init; } = string.Empty;
-
     /// <summary>
-    /// Cuándo llegó (R11 §1c). La narración de una sesión larga se lee como un registro, y un
-    /// registro sin horas no permite responder a lo único que se le pregunta cuando algo va lento:
-    /// «¿cuánto lleva ahí?». Se sella al crear la entrada, no al pintarla.
+    /// Todo lo que NO es la prosa del agente. Se conserva con este nombre porque de él cuelgan los
+    /// tests que cuadran la narración con los contadores de la sesión (F5.14).
     /// </summary>
-    public DateTimeOffset At { get; init; } = DateTimeOffset.Now;
+    public bool IsEvent => Kind != ConversationKind.Prosa;
 
-    /// <summary>La hora tal y como se lee en el margen: <c>14:22:07</c>.</summary>
-    public string Time => At.ToLocalTime().ToString("HH:mm:ss", AppCulture.Display);
-
-    /// <summary>Severidad, cuando la línea narra un hallazgo: da color al chip.</summary>
-    public Severity? Severity { get; init; }
-
-    [ObservableProperty]
-    private string _text = string.Empty;
-
-    public bool IsEvent => Kind == ActivityKind.Evento;
-
-    public static ActivityEntry Event(string glyph, string text, Severity? severity = null)
-        => new() { Kind = ActivityKind.Evento, Glyph = glyph, Severity = severity, Text = text };
+    public static ActivityEntry Event(
+        string glyph, string text, Severity? severity = null,
+        ConversationKind kind = ConversationKind.Hito)
+        => new()
+        {
+            Voice = ConversationVoice.Atalaya,
+            Kind = kind,
+            Glyph = glyph,
+            Severity = severity,
+            Text = text,
+        };
 
     public static ActivityEntry Text_(string text)
-        => new() { Kind = ActivityKind.Texto, Text = text };
+        => new() { Voice = ConversationVoice.Agente, Kind = ConversationKind.Prosa, Text = text };
 }
 
 /// <summary>El tono de una pastilla de resumen de pasada. Tres, y ninguno más.</summary>
@@ -113,6 +97,16 @@ public sealed partial class PassProgress : ObservableObject
 
     /// <summary>El rótulo de la fila: «Pasada 2», y nada más. El resumen son las pastillas.</summary>
     public string Title => $"Pasada {Index}";
+
+    /// <summary>
+    /// <b>El separador de sección dentro del hilo</b> (F30 §3): «Pasada 2 · turno del hilo».
+    /// <para>
+    /// Dice lo que la pasada ES desde F25 y M2: un turno de la misma conversación con el agente, no
+    /// un intento nuevo. Con el árbol de expanders retirado, el hilo se lee de arriba abajo y esta
+    /// línea es lo único que dice dónde empieza cada turno.
+    /// </para>
+    /// </summary>
+    public string SectionTitle => $"Pasada {Index} · turno del hilo";
 
     /// <summary>
     /// Lo que hizo la pasada, en pastillas. <b>Los tres números van siempre y en el mismo orden</b>
@@ -172,8 +166,13 @@ public sealed partial class UnitProgress : ObservableObject
     [ObservableProperty]
     private long _tokens;
 
+    /// <summary>
+    /// <b>Abierta por defecto</b> (F30 §3). Mientras la sesión corre, el hilo se lee entero de
+    /// arriba abajo: plegar es del usuario. Al terminar, <c>LiveSessionService</c> deja abierta solo
+    /// la última pasada de cada unidad, que es lo que se va a mirar de una sesión ya cerrada.
+    /// </summary>
     [ObservableProperty]
-    private bool _isExpanded;
+    private bool _isExpanded = true;
 
     /// <summary>
     /// <b>El resumen de la unidad, a la derecha de su cabecera</b> (R11 §1a): «2 pasadas ·
