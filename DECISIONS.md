@@ -16041,3 +16041,70 @@ nada**: el servicio, el diálogo, su view-model y sus tests siguen enteros, y la
 registradas en el hub siguen viajando en los prompts. Lo único que cambia es que no hay puerta —la
 capacidad no se usa por ahora y una fila que siempre dice cero enseña a no mirar el panel—, y volver
 a abrirla es devolver nueve líneas de XAML.
+
+---
+
+## R10 — Siete retoques, vistos en el dist tras R9
+
+### D-1009 — Dos regresiones con causa medida, una advertencia que mentía, y el arranque que nunca fue
+
+Un párrafo para la fase (N-7) y solo lo pedido (N-6). El prompt llegó rotulado «R7», pero R7, R8 y
+R9 ya están en `main` con D-1006, D-1007 y D-1008: la fase se numera **R10** para que un hash no
+apunte a dos sitios. **(1) La ventana arranca maximizada SIEMPRE.** El principio 1 de F26 dice
+«pantalla completa por defecto» y D-956 lo cumplía solo la primera vez —después mandaba lo guardado—,
+así que restaurar la ventana una tarde dejaba a Atalaya abriendo pequeña el resto de su vida: la
+queja que trajo F26, entrando por la puerta de atrás. `Resolve` devuelve `Maximized` en las dos
+ramas; lo guardado no se tira, sigue aplicándose antes de maximizar y es el rectángulo al que la
+ventana vuelve al restaurarla. **(2) La tarjeta de unidad y los acordeones de pasada, con la causa
+medida.** Los dos defectos salen del estilo implícito de `Expander` que entró en R6 §7: al no llevar
+clave, **sustituye entero** al de `ui:ControlsDictionary` —`Styles.xaml` se fusiona después—, y lo
+que entró en su lugar era un `StackPanel` transparente, así que se fueron con él el fondo, el borde
+y el redondeo que hacían la tarjeta; en el `dist`, la ruta de la unidad, las «Pasada n — …» y el
+texto del auditor caían sueltos sobre el fondo de la columna. Y el galón encima del icono de estado
+es aritmética, no apreciación: giraba con `RotateTransform CenterX="12" CenterY="12"` sobre un `Path`
+de `Icon.Size.Small` = **14** px, cuyo centro es (7,7) — girar 90° alrededor de (12,12) no lo gira,
+lo **traslada** de (7,7) a (17,7), diez píxeles a la derecha, fuera de su caja y sobre el glifo que
+va detrás, y solo con la unidad desplegada, que es como sale por defecto. El `Expander` recupera su
+tarjeta (`Brush.Surface` + `Brush.Line` + `Radius.M`), el cuerpo va en `Brush.Surface2`, el galón
+sigue a la izquierda del texto y el centro del giro se pide con `RenderTransformOrigin`, que es
+relativo y no puede volver a quedarse desfasado. Alcanza también al arreglo asistido y al informe,
+que comparten el control. **(3) Umbrales**: el párrafo de política se queda en «Vale para todo el
+equipo: vive en el hub y queda quién lo cambió.» **(4) «[Critica]» no era una pastilla porque eran
+dos fallos encadenados**: el escritor del informe ponía el enum en crudo —sin tilde, el único sitio
+que se había quedado fuera del rotulado único de F27 raíz 1— y el resolutor solo entendía la grafía
+con tilde, así que ni siquiera reconocía lo que él mismo escribía; «Media» y «Baja» no llevan tilde y
+por eso funcionaban, lo que hacía parecer cosmético de una lo que era de la regla. El escritor pasa
+por `SeverityNames.Display`, el resolutor acepta las dos grafías —los informes ya escritos **no se
+reescriben** (F29)— y devuelve siempre la buena, para que una pastilla vieja no salga sin tilde al
+lado de una nueva. **(5) El desglose de «Nuevos»** deja de ser «[Crítica] Título» en texto plano: el
+corchete sale del texto —lo dice la pastilla del sistema, la misma de la cabecera y del informe—,
+cada fila mide `Control.MinHeight` (36), va 12 px más adentro que la ruta, el bloque desplegado abre
+con 16 arriba y abajo, y la fila entera —pastilla incluida, porque la pastilla va **dentro** del
+botón— lleva a la ficha del hallazgo: `SummaryItem` viaja ahora con su id. **(6) La identidad de la
+cabecera comparte línea base.** WPF no alinea líneas base entre celdas de un `Grid` y lo único que
+había, `VerticalAlignment="Center"`, iguala el centro de las **cajas**: por eso «XBLAST» salía alto
+y «MEJ-0058» —que sí compartía párrafo con el título— se leía a su base. Meter las tres en un
+`TextBlock` no valía: un `Run` no acepta margen, `MaxWidth` ni tooltip, y el nombre de la aplicación
+necesita los tres. Entra `c:BaselineRow`, un panel de doce líneas que mide de izquierda a derecha
+—así lo que cede es lo último, que es lo que se quería— y apoya a sus hijos en la misma base, con un
+solo `Gap` de 12; «XBLAST» pasa al tamaño y la tinta secundaria del identificador. Vale para
+«Arreglo asistido», «Último arreglo» y «Lotes · xblast». **(7) Un arreglo que no tocó nada deja de
+ofrecer qué hacer con lo que no hay.** Con «Ficheros tocados: ninguno» la pantalla seguía enseñando
+el aviso ámbar de cambios sin commitear, la tarjeta «Sugerencia de commit», «Verificar ahora» y «Me
+quedo los cambios» — cuatro piezas que hablan de un cambio inexistente, y la peor es la sugerencia
+de commit: redacta el mensaje de un trabajo que nadie hizo, listo para copiar. La regla es una y
+cubre los tres finales (detenido, descartado, o el agente no llegó a editar): resumen «Arreglo
+detenido · no hay cambios en tu clon», «Qué cambió y por qué» con lo que haya, y dos acciones —«Ver
+informe» y «Abrir en el editor»—; «Descartar todo» se apaga con la razón al lado (P-27) en vez de
+contestar con un aviso flotante al pulsarlo. Y **el informe también**, que es el que se lee después,
+cuando ya nadie recuerda que no hubo cambios: sin sección de commit, y «Estos cambios NO están
+commiteados» sustituido por «No hay cambios en el clon». **Cobertura (N-5, N-7): cuatro tests de
+regla y ninguno de forma**, uno por cada punto que trae regla nueva —el arranque maximizado con y
+sin estado guardado; los cuatro niveles de gravedad pintando cuatro pastillas, más la grafía vieja;
+el desglose llevando gravedad e id aparte; y el arreglo sin ficheros tocados, comprobado a la vez en
+la vista y en el informe—. Los cuatro protegen algo que se rompe **en silencio**: nada falla, la
+pantalla se pinta entera y lo único que pasa es que abre pequeña, no pinta un color, no lleva a
+ninguna parte o miente. Y **dos tests existentes se corrigen, no se relajan**: el que fijaba
+`Maximized = false` al reabrir pasa a proteger el rectángulo de restauración, y el de la cabecera
+lee la identidad de la fila de línea base y mira el último **botón**, porque detrás va ahora la razón
+del apagado y una razón no es una acción.
