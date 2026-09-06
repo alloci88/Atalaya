@@ -16493,3 +16493,110 @@ grabación real** —el texto llega delta a delta y el `assistant` no lo duplica
 salen enteras y `AccountingIsComplete` queda en pie, que es la condición del corte; y los eventos
 que no nos incumben se ignoran sin ruido—. **Ni un token más**: el turno grabado costó una llamada
 de dos tokens de salida, y nada de esto cambia el prompt ni añade llamadas.
+
+## F30 · Entrega 2e: la lentitud, medida
+
+### D-1019 — La pasada no se ha alargado ni un segundo: lo que faltaba era enseñar el razonamiento
+
+**LA TABLA, que es lo que decide.** El banco de M2 (`barrido`) sobre `CalculadoraCarga.cs` del clon
+de AtalayaBanco, CLI **2.1.263**, modelo **opus** (el de los Ajustes del usuario), tope 1 pasada,
+una tanda por configuración. El reloj arranca en la **entrega** —`ActivityNoteKind.Handover`, el
+mismo instante que ancla la espera del pie— y la instrumentación del banco es la única diferencia
+entre las filas.
+
+| | 1.ª señal | 1.er elemento | **Pasada 1** | Salida | Llamadas |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **(a)** `1629da0`, el commit anterior a la entrega 1 | 13,7 s | — | **54,0 s** | 4.321 | 3 |
+| **(b)** HEAD (`a9d0d72`, con §2d) | 13,7 s | 16,9 s | **52,3 s** | — | 3 |
+| **(c)** HEAD **sin** `--include-partial-messages` | 13,5 s | — | **59,2 s** | 4.556 | 3 |
+| **(d)** HEAD arreglado, con `ATALAYA_TRACE_EVENTS` | 9,4 s | 27,8 s | **62,1 s** | 4.924 | 3 |
+
+La columna «1.er elemento» está vacía en (a) y en (c) porque en esas dos **no se puede** decir: en
+(a) todavía no se leían los argumentos de la herramienta, y en (c) no llegan. Y las cuatro
+duraciones son la misma cifra dicha cuatro veces: **4.321/54,0 = 80 tok/s, 4.556/59,2 = 77,
+4.924/62,1 = 79**. La duración de una pasada es su salida de tokens, exactamente como midió D-1014
+(r = 0,985), y la dispersión de la tabla —±9 % en el tiempo, ±13 % en la salida— es la del modelo,
+no la nuestra.
+
+**Así que la sospecha se descarta, con su medida.** No es la tubería: quitar
+`--include-partial-messages` sale **7 s más lento** y encima ciega el tramo entero, así que el
+anti-objetivo de la fase queda cumplido por la vía buena — se midió antes de tocarlo, y no había
+nada que tocar (la palanca se queda desarmada en `ClaudeCodeProvider.UsePartialMessages`, como
+`UseSystemPromptPrefix`). No es la traza: en `a9d0d72`, `ATALAYA_TRACE_EVENTS` **no existía para
+Claude Code** —una sola referencia en todo el árbol, en `RealCopilotAgent`—, así que (d) era (b)
+byte a byte; la fila de arriba es ya con la traza construida y encendida. No es el volcado diferido
+de §2d, que (a) no tenía y da lo mismo. Y no es el CLI: las cuatro filas corren el mismo 2.1.263.
+**Claude Code no se ha vuelto lento. Lo que pasa es que se ve menos de lo que tarda.**
+
+**DÓNDE ESTÁ EL SILENCIO, con la traza delante.** La configuración (d) dejó los 651 eventos del
+turno con su hora, y el reparto no admite discusión: **arranque del CLI 1,6 s · razonamiento 6,6 s ·
+`read_signatures` (52 caracteres de argumentos) · hueco entre llamadas 1,3 s · razonamiento 15,5 s ·
+`submit_findings`, 5.593 caracteres de argumentos, 27,8 s · `unit_done`, 1.106 caracteres, 5,6 s ·
+la prosa final, 98 caracteres, 0,7 s · `result`**. Total 61,2 s, de los cuales **22,1 s —el 36 %—
+son dos bloques de pensamiento** (455 y 1.291 tokens de razonamiento, declarados en el
+`message_delta`) en los que la pantalla no tenía absolutamente nada que decir. El CLI los manda
+—`content_block_start` con `type: thinking`— y Atalaya los tiraba, que es **el mismo defecto que la
+entrega 1 arregló un bloque más abajo**, con los argumentos de la herramienta. Los 81 s que el
+usuario cronometró hasta el primer «Recibiendo hallazgos» son eso: el razonamiento, más el arranque,
+sobre una unidad mayor que ésta. **El arreglo cuesta cero tokens**: se lee lo que ya venía. El hilo
+dice «Razonando…» y el pie, «razonando · 18 s», con el reloj subiendo; el contenido del pensamiento
+**no** viaja —medido: los `thinking_delta` llegan sin texto—, así que se dice que está pasando y
+cuánto lleva, que es lo que faltaba.
+
+**Y LO QUE SÍ ERA NUESTRO, arreglado aunque no fuera el minuto.** La regla no se negocia —el bucle
+que lee la tubería de un proceso vivo no puede hacer nada caro en línea, porque mientras no lee, el
+CLI **se bloquea escribiendo**— y había tres cosas que la rompían. **(1) `ToolCallInput` era
+cuadrático**: guardaba el JSON acumulado y le pasaba una expresión regular entera **por cada trozo**.
+Medido con la forma real (argumentos en trozos del tamaño de un token): 11 hallazgos **24,3 ms →
+0,1 ms**, 50 **489,5 → 0,5**, 200 **5.456 → 2,6**. A once no era el problema del usuario; a
+doscientos son cinco segundos y medio con el CLI parado, y ésa es la avería que no se ve venir.
+Ahora es un autómata de un carácter —y de paso deja de contar un `"title"` que aparezca **dentro**
+de la evidencia de un hallazgo, que la regex sí contaba: el dato de un test de Copilot llevaba una
+comilla de más y por eso pasaba—. **(2) `OnActivityNoted` y `OnUsage` hacían `Dispatcher.Invoke`
+síncrono** desde el hilo que lee — la misma forma exacta del cuelgue de §2d, en los dos canales que
+§2d no tocó. Encolan, como el texto, y el orden se conserva porque los tres van a la misma cola. **(3)
+La traza de Copilot abría y cerraba el fichero por evento**, desde el hilo que consume el SDK: un
+instrumento que altera lo que mide. Ahora hay una sola (`EventTrace`, en el vocabulario común, para
+las dos casas) que encola sin bloquear y escribe en su hilo con búfer, volcando cuando la cola se
+vacía.
+
+**Cobertura (N-5, N-7): cuatro tests de regla.** El del **coste de consumir la grabación real**
+—`turno-real.jsonl` reproducido 200 veces, 2.400 eventos, tope 250 ms— salta ante cualquier cosa cara
+por evento: una escritura a disco, una ida al hilo de interfaz. El del **crecimiento**
+—200 hallazgos, 183 KB de argumentos en trozos de token, 45.867 eventos, tope 1,5 s— es el que fija
+que contar lo escrito no cueste su cuadrado; comprobado con cebo: devolviendo `ToolCallInput` a la
+regex, se pone rojo con 3.130 ms. El del **razonamiento** exige que se narre y, en la misma prueba,
+que `AccountingIsComplete` no se mueva — vive en el `switch` del que depende el corte de F21. Y el de
+la **frase del pie** exige que ningún tramo del modelo se quede sin una, que es lo que dejaba el pie
+mudo. Más el de §3, abajo. Los 2.491 de la suite, en verde.
+
+**Las otras cuatro, en una línea cada una.** **§2 · el pie que no volvía**: el umbral baja de **20 s
+a 5 s** y la frase la trae entera quien narra —«escribiendo el reporte de hallazgos · 31 s»,
+«razonando · 18 s», «esperando al modelo · 7 s»—; el defecto de fondo era que la línea de «el modelo
+está escribiendo esto» tocaba el reloj **sin cambiar la frase**, así que en una unidad sin hallazgos
+vivos —donde el modelo no dice una palabra antes de reportar— el pie se quedaba en «esperando al
+modelo» a secas o en nada, y con veinte segundos no llegaba a salir nunca detrás de la prosa porque
+cada delta reinicia el reloj. **§3 · el pie heredado**: `Reset` limpiaba dieciocho campos y no el
+proveedor, el coste con su procedencia ni su unidad, así que la segunda sesión de una ejecución
+enseñaba «incluido en tu suscripción de Claude» de la primera hasta la primera muestra de consumo —
+van con el resto de los contadores, y con ellos el estado de espera, que también es del pie.
+**§4a · el cero de la fila**: UI-0051 dejó el cero neutro y sigue siendo lo correcto en una tarjeta,
+donde la pastilla va sola; en una **fila de cuatro** el gris entre tres colores no se lee como un
+cero sino como una pastilla rota, porque el ojo compara las cuatro antes de leer ninguna — las
+cuatro llevan su color siempre y el cero se apaga al 50 % (`Pill.Sev.Row`, sobre `Pill.Sev` y no
+sobre `Pill.Sev.Count`, que traería el relleno neutro). **§4b · el 3 + 1**: era un `WrapPanel`, así
+que la forma dependía de lo que midieran los rótulos y cambiaba sola a mitad de sesión; una fila de
+cuatro **no cabe y no es cuestión de ajustar un mínimo** —la columna mide 300 px fijos y el ancho de
+una pastilla crece con su número—, así que van en **2 × 2 siempre**, en una rejilla uniforme.
+
+**§5 · que la sesión cierra, y con qué evidencia.** La tanda (d) es una sesión real de punta a punta
+—el `SessionCoordinator` de producción, el CLI de verdad, el servidor MCP de verdad— con la traza
+puesta: **cierra**. Unidad cerrada con su veredicto, sesión escrita en el hub con sus tres llamadas y
+su desglose, informe generado, 62,7 s. Los tiempos por tramo son los del párrafo de arriba. **Lo que
+esa tanda NO cubre, y se dice**: la costura de WPF, porque el banco es una consola y ahí
+`Application.Current` es null. De esa mitad responden el test de §2c que exige que una sesión con la
+narración conectada cierre, y el `dist` en las manos del usuario (N-8) — que es donde se comprueba
+que el rótulo pasa a «Última sesión».
+
+**Ni un token más**: no se toca el prompt, no se añade ninguna llamada y no se le pide al modelo
+nada distinto. Todo lo de aquí es leer lo que ya llegaba, no bloquear al que lo lee, y decirlo.

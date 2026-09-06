@@ -307,16 +307,20 @@ tiempo que pase es del modelo.
 > una pasada y la siguiente, y una pasada dura **17 segundos** de media. El **99,9 %** del silencio
 > es el modelo pensando. Las dos líneas están para que eso se vea sin tener que creérselo.
 
-**«Esperando al modelo tras reportar 11 hallazgos · 38 s».** Mientras haya una petición en vuelo, si
-pasan más de **20 segundos** sin que llegue nada el pie lo dice con el reloj subiendo, y a los **90
-segundos** lo pone en negrita. Vale para **cualquier** hueco del turno, no solo para el primero: el
-que va desde que el modelo deja de escribir hasta que reporta, y el que va desde que reporta hasta
-que vuelve a hablar. Mientras Atalaya prepara lo suyo no dice nada, porque ahí no se espera a nadie.
+**«Razonando · 18 s», «escribiendo el reporte de hallazgos · 31 s», «esperando al modelo · 7 s».**
+Mientras haya una petición en vuelo, si pasan **5 segundos** sin que llegue nada el pie dice **qué**
+se está esperando, con el reloj subiendo, y a los **90 segundos** lo pone en negrita. Se retira con
+el evento siguiente. Vale para **cualquier** hueco del turno, no solo para el primero: el que va
+desde que el modelo deja de escribir hasta que reporta, y el que va desde que reporta hasta que
+vuelve a hablar. Mientras Atalaya prepara lo suyo no dice nada, porque ahí no se espera a nadie.
 
-> **Y el minuto tiene explicación.** El silencio largo no es que el modelo no arranque: es el modelo
-> **escribiendo**. Reportar un hallazgo le cuesta unos **246 tokens** de escritura, y escribe a unos
-> **64 por segundo**: once hallazgos son **unos 42 segundos**. Por eso la línea «11 hallazgos
-> nuevos» aparece al **final** de ese tramo y no al principio.
+> **Y el minuto tiene explicación, en dos mitades.** La primera es el modelo **razonando** antes de
+> escribir nada: medido con la traza del CLI sobre una unidad pequeña con Opus, **22 de los 62
+> segundos** de la pasada son dos bloques de pensamiento. La segunda es el modelo **escribiendo el
+> reporte**: un hallazgo le cuesta unos **246 tokens**, y escribe a unos **64 por segundo**, así que
+> once hallazgos son **unos 42 segundos**. Las dos salen ahora en el hilo y en el pie según pasan;
+> antes, las dos eran la pantalla quieta. Por eso la línea «11 hallazgos nuevos» aparece al
+> **final** de ese tramo y no al principio.
 
 **Y ese tramo ya se ve.** Mientras el modelo escribe una llamada, el hilo lo cuenta: primero
 **«Reportando hallazgos…»** y después **«Recibiendo hallazgos · 3 · Credenciales embebidas…»**, con

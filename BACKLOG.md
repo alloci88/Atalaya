@@ -4,8 +4,8 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-05 (F27 y su cierre — la auditoría de la interfaz arreglada por causa, y
-las seis reversiones de lo que se había movido sin pedirlo; con ellas entran N-6, N-7 y N-8).
+Última revisión: 2026-09-06 (F30 §2e — la lentitud de Claude Code, medida en cuatro configuraciones
+y resuelta: no era la tubería, era el razonamiento que no se veía).
 
 ## En vuelo
 
@@ -76,6 +76,26 @@ las seis reversiones de lo que se había movido sin pedirlo; con ellas entran N-
   - **`tour.ps1` con `powershell -File` no encuentra el `dist`**: `$PSScriptRoot` no está disponible
     al evaluar los valores por defecto de `param()` en esa forma de invocación. Por el camino
     documentado funciona.
+
+- **F30 §2e — la lentitud de Claude Code. ENTREGADA** (D-1019). Medida con el banco de M2 en cuatro
+  configuraciones: **la pasada no se ha alargado** —54,0 s antes de la entrega 1 contra 52,3 s en
+  HEAD, y las cuatro filas a ~79 tokens de salida por segundo—, y el silencio que se leía como
+  lentitud es el modelo **razonando** (22 de 62 s en la unidad medida) sin una línea en pantalla.
+  Con él entran la traza de eventos de Claude Code (`ATALAYA_TRACE_EVENTS`, hilo aparte y búfer,
+  común a las dos casas), el lector sin nada caro en línea —`ToolCallInput` pasa de cuadrático a
+  lineal, 5.456 ms → 2,6 ms con 200 hallazgos— y los cuatro retoques de §§2–5.
+
+  **Lo que queda apuntado:**
+
+  - **La sesión de Claude Code en el `dist`, con los ojos del usuario.** El banco es una consola, así
+    que la costura de WPF —el rótulo «Última sesión», el pie contando, el hilo con «Razonando…»— la
+    cubren los tests y el `dist` (N-8). Es la aceptación de §5.
+  - **La palanca `UsePartialMessages` queda desarmada**, como `UseSystemPromptPrefix`: sirve para
+    repetir la medida el día que el CLI cambie de forma, no para apagar el streaming.
+  - **El contenido del razonamiento no se puede enseñar.** Medido contra el CLI 2.1.263: los
+    `thinking_delta` llegan sin texto. Si un día lo trajeran, el hilo ya tiene dónde ponerlo.
+  - **Copilot no tiene tramo de razonamiento** porque su SDK no lo publica; ahí el pie sigue
+    infiriéndolo del silencio que sigue al texto (D-1018), y eso no ha cambiado.
 
 - **F24 — el símbolo debería ir por UBICACIÓN, no por hallazgo.** Hoy `Finding.Symbol` es **uno para
   todo el hallazgo**, y un defecto sistémico tiene N ubicaciones en N miembros distintos. El auditor
