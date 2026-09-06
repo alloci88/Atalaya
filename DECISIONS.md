@@ -16389,3 +16389,36 @@ cuatro conceptos. Los dos se comprobaron con un cebo: haciendo que `content_bloc
 `_settledCalls`, el primero se pone rojo. Con eso, los 106 tests de Claude Code —incluidos los diez
 de F21 que ya protegían el corte— siguen en verde. **Ni un token más**: no se cambia el prompt, no se
 añade ninguna llamada y no se le pide al modelo que hable más; se lee lo que ya venía y se tiraba.
+
+### D-1016 — El evento estaba, y no lo escuchaba nadie: era (c)
+
+**No hizo falta la sesión real para responder.** El encargo pedía volcar los eventos crudos de una
+unidad con hallazgos y decir cuál de las tres era. La respuesta se lee en la declaración de la clase:
+`RealCopilotAgent` recibió su evento `ToolStreamed` en la entrega 1, lo llena bien y se probó bien —
+pero **nunca declaró `INarratingAuditor`**. El coordinador se suscribe con
+`_agent as INarratingAuditor`, así que el `as` daba null, nadie escuchaba, y el evento se disparaba
+contra el vacío. Es **(c)**, un fallo nuestro, y de una línea. Claude Code sí la declaraba, así que
+el defecto era solo de Copilot — que es justo la casa con la que se probó.
+
+**Por qué los tests no lo vieron, que es lo que importa.** Los de Copilot se suscriben a
+`agent.ToolStreamed` sobre el tipo CONCRETO, y eso compila y funciona sin la interfaz: probaban que
+el evento se emite bien —que era lo que se quería probar— y no que alguien pudiera llegar a él. Las
+dos mitades eran correctas y no se tocaban; lo que no cubría nadie era la costura. El test que entra
+mira exactamente eso y pregunta lo mismo que pregunta el coordinador: no si el tipo tiene un miembro
+con ese nombre, sino si **se le puede asignar** la interfaz. Va con su hermano general —cualquier
+tipo que declare un evento `ToolStreamed` tiene que declarar la interfaz por la que se escucha—, que
+es el que sobrevive al proveedor siguiente. Los dos se comprobaron devolviendo la declaración a como
+estaba: los dos se ponen rojos.
+
+**Y el volcado queda hecho, por si hace falta.** Descartada (c), quedan (a) —el SDK no emite esos
+eventos para nuestras herramientas— y (b) —los emite todos juntos al final—, y ésas **solo** se
+responden con una sesión real: son comportamiento del SDK, no código nuestro. Se deja instrumentado:
+con `ATALAYA_TRACE_EVENTS=1` en el entorno, cada evento del SDK escribe una línea en
+`%LOCALAPPDATA%\Atalaya\logs\eventos-copilot.log` con su hora, su tipo y —para los trozos de
+argumentos— el id de la llamada y **cuánto lleva escrito acumulado**, que es lo que distingue (a) de
+(b) de un vistazo. Apagado por defecto y sin ajuste en la interfaz: es un instrumento de
+diagnóstico, no una función, y un fichero que crece solo en la máquina de todo el mundo es
+exactamente lo que nadie pidió. **Dato que acota el terreno**: a Copilot las herramientas no le
+viajan por MCP sino como `AIFunctionDeclaration` locales, así que lo que se está preguntando es si
+el SDK publica los deltas de argumentos de una *function tool* — y eso no está escrito en ninguna
+parte que se pueda leer. **Ni un token más**: la traza lee eventos que ya llegaban.
