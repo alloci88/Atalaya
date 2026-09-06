@@ -16302,3 +16302,53 @@ llegue nada del modelo— es lo único que puede romperse en silencio: con la en
 pie anclaría la espera en el sitio equivocado y diría que se espera a un modelo que ya está
 contestando. El segundo fija que «esperando al modelo» **solo** cuenta con el turno en el aire. Y el
 inventario de glifos suma el de la entrega (→).
+
+### D-1014 — El minuto es el modelo escribiendo los argumentos de la herramienta, y no se puede pintar
+
+**D-1013 midió mal, y lo dice aquí.** Promedió por pasada —16,9 s— y con eso el minuto que el usuario
+ve no aparece por ninguna parte. La media tapaba la forma: **la duración de una pasada es su salida
+de tokens, y casi nada más**. Sobre las 98 pasadas reales del hub, la correlación entre tokens de
+salida y duración es **r = 0,985**; con los de entrada, solo 0,774. El caudal medido es de **64
+tokens de salida por segundo** (mediana, 98 pasadas). O sea que una pasada no tarda «lo que tarde el
+modelo en arrancar»: tarda **lo que tenga que escribir**.
+
+**Dónde está el minuto, entonces.** Un hallazgo cuesta, en el JSON que el auditor tiene que generar
+para reportarlo, **885 caracteres de mediana ≈ 246 tokens** (medido sobre los 163 hallazgos reales
+de xblast). Reportar once son **~2.700 tokens ≈ 42 s a 64 tok/s**, y reportar cinco, ~19 s. Ese
+tramo va **ANTES** de que la herramienta se ejecute, no después: el modelo escribe los argumentos,
+la herramienta corre en **3 ms** y solo entonces aparece «11 hallazgos nuevos». Por eso la línea
+marca 12 s y el silencio fue mucho mayor — la línea llega al final del tramo, no al principio. Y ese
+tramo es **invisible por construcción**: los tokens de los argumentos llegan como
+`AssistantToolCallDeltaEvent.InputDelta` en Copilot y `input_json_delta` en Claude Code, y Atalaya
+los descarta (F30 §0). El segundo silencio —del resultado de la herramienta al evento siguiente— es
+lo mismo otra vez: el modelo escribiendo `unit_done`.
+
+**Lo que la línea de tiempo NO puede dar con lo que hay guardado.** El encargo pedía los tramos
+exactos —último delta → inicio de `submit_findings` → fin → siguiente evento → cierre—, y los
+registros persistidos no llegan: `usageBreakdown` guarda duración, llamadas y tokens **por pasada**,
+y las notas no llevan hora. La descomposición de arriba es aritmética sobre lo que sí hay (r=0,985,
+64 tok/s, 246 tokens por hallazgo), no una medida directa de cada tramo; para tenerla habría que
+sellar cada evento con su hora en la sesión, que es trabajo de §5 y no se ha hecho aquí.
+
+**Y la corrección de §1b, que estaba mal.** Anclar «esperando al modelo» SOLO a la entrega dejaba sin
+contar justo el tramo del minuto: la espera se apagaba con el primer evento del turno y ya no volvía,
+así que el hueco entre el último delta y `submit_findings` —y el que va del resultado al evento
+siguiente— no se contaban. Ahora la cuenta vale para **cualquier tramo con petición en vuelo**: el
+vuelo lo abre la entrega y lo cierra el **cierre de la pasada**, y los eventos solo reinician el
+reloj. Y el pie dice de qué espera: «esperando al modelo tras reportar 11 hallazgos · 38 s», porque
+el tramo es la mitad de la información — «tras reportar once» explica cuarenta segundos; «esperando»
+a secas, no.
+
+**Los iconos del hilo pasan a vectores.** Los cuatro que entraron en §1 eran caracteres —⚒ 👁 ◆ →— y
+es frágil por lo que D-944 ya dijo del resto de la casa: un glifo que la fuente de interfaz no tiene
+lo resuelve Windows con otra, con otra métrica y otro peso, y el ⚒ se salía de su hueco y se
+solapaba con el texto. Ahora son `Icons.Tool`, `Eye`, `Milestone` y `Handover`, del mismo juego que
+el raíl, y van en un **carril de 24 px** con el icono centrado y `Space.XS` hasta el texto. El
+carril sabe pintar las dos cosas porque las marcas de hallazgo y de cierre de pasada siguen siendo
+caracteres: esta tanda cambia las cuatro que se veían mal, no las siete que llevan bien desde F12.
+La marca sigue siendo el DATO (`ActivityEntry.Glyph`, del que cuelgan los tests que cuadran la
+narración con los contadores) y el dibujo es presentación: la traducción vive en un converter, así
+que cambiar de carácter a vector no obliga a tocar el modelo.
+
+**Ni un token más**: no se toca el orden de nada, no se añade ninguna llamada, y todo lo de aquí es
+aritmética sobre registros que ya existían o presentación.

@@ -307,10 +307,19 @@ tiempo que pase es del modelo.
 > una pasada y la siguiente, y una pasada dura **17 segundos** de media. El **99,9 %** del silencio
 > es el modelo pensando. Las dos líneas están para que eso se vea sin tener que creérselo.
 
-**«Esperando al modelo · 42 s».** Con el turno ya entregado, si pasan más de **20 segundos** sin
-que llegue nada el pie lo dice con el reloj subiendo, y a los **90 segundos** lo pone en negrita. La
-cuenta **empieza en el envío**, no en el último evento: mientras Atalaya prepara lo suyo no se está
-esperando a nadie, y echarle al modelo un tiempo que no es suyo sería mentir en la dirección fácil.
+**«Esperando al modelo tras reportar 11 hallazgos · 38 s».** Mientras haya una petición en vuelo, si
+pasan más de **20 segundos** sin que llegue nada el pie lo dice con el reloj subiendo, y a los **90
+segundos** lo pone en negrita. Vale para **cualquier** hueco del turno, no solo para el primero: el
+que va desde que el modelo deja de escribir hasta que reporta, y el que va desde que reporta hasta
+que vuelve a hablar. Mientras Atalaya prepara lo suyo no dice nada, porque ahí no se espera a nadie.
+
+> **Y el minuto tiene explicación.** El silencio largo no es que el modelo no arranque: es el modelo
+> **escribiendo**. Reportar un hallazgo le cuesta unos **246 tokens** de escritura, y escribe a unos
+> **64 por segundo**: once hallazgos son **unos 42 segundos** en los que, por dentro, no para — pero
+> lo que escribe son los datos del reporte, y eso Atalaya todavía no lo puede pintar. Por eso la
+> línea «11 hallazgos nuevos» aparece al **final** de ese tramo y no al principio. Decirte tras qué
+> se espera es lo más honrado que se puede hacer mientras tanto.
+
 No es un error ni un aviso: es la diferencia entre *el modelo está pensando* y *esto se ha caído*,
 que hasta ahora se veían exactamente igual —la pantalla parada—. Quien decide cuándo se corta de
 verdad sigue siendo el tope de tokens de Ajustes.
