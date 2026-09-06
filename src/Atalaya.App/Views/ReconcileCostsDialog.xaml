@@ -9,6 +9,7 @@
     Height="540"
     ShowInTaskbar="False"
     WindowStartupLocation="CenterOwner"
+    Style="{StaticResource Dialog}"
     ExtendsContentIntoTitleBar="True">
     <!--
         F29 §1 — RECONCILIAR ES UN DIÁLOGO, y se abre desde el resumen del ciclo de la aplicación
@@ -27,7 +28,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0" Title="Reconciliar costes" ShowMaximize="False" ShowMinimize="False" />
+        <ui:TitleBar Style="{StaticResource Dialog.TitleBar}" Grid.Row="0" Title="Reconciliar costes" />
 
         <ScrollViewer Grid.Row="1" Margin="{StaticResource Pad.DialogList}"
                       VerticalScrollBarVisibility="Auto" Padding="{StaticResource Pad.XS.Right}">

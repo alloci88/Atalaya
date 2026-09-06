@@ -16,6 +16,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:c="clr-namespace:Atalaya.App.Controls">
 
     <!-- ================================================================ Tipografía por defecto
@@ -385,6 +386,13 @@
                             <Setter TargetName="Label" Property="TextElement.Foreground"
                                     Value="{DynamicResource Brush.Primary.Fill}" />
                         </Trigger>
+                        <!-- Y EL PULSADO (R6 §7). Tenía hover y no tenía esto: un enlace que se
+                             aclara al pasar por encima y no acusa el clic deja al usuario sin saber
+                             si ha pulsado. Es la misma señal que da la chapa de un botón, en la
+                             única forma que tiene un texto: bajar la tinta un punto. -->
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Label" Property="Opacity" Value="0.7" />
+                        </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="Label" Property="TextElement.Foreground"
                                     Value="{DynamicResource Brush.TextMuted}" />
@@ -629,6 +637,53 @@
         <StackPanel />
     </ItemsPanelTemplate>
 
+    <!-- LA FILA DE USUARIO USA LA MISMA PLANTILLA QUE UNA ENTRADA (R6 §1).
+
+         Hasta aquí la fila del pie declaraba SUS PROPIOS carriles a mano en `MainWindow.xaml`
+         —marcador, canal de iconos, texto— y confiaba en que los tres números coincidieran con los
+         de `RailItem`. Coincidían, pero por copia: dos geometrías que hay que mantener iguales
+         acaban siendo distintas (D-966), y ésta ya ha ido y vuelto dos veces. Ahora la fila hereda
+         la plantilla: el mismo carril de marcador de 8, la misma chapa con su margen de 8 a la
+         derecha y su relleno, el mismo canal de iconos de 40 y el mismo carril de texto. El avatar
+         y el nombre caen en la x de los iconos y de los nombres porque son LAS MISMAS COLUMNAS,
+         no porque alguien haya vuelto a escribir los números.
+
+         Sin marcador: el pie no es un sitio al que se «esté». El carril se queda —vacío— porque es
+         lo que mantiene la x; quitarlo movería la fila 8 px respecto al menú.
+    -->
+    <Style x:Key="RailUser" TargetType="Button" BasedOn="{StaticResource RailRow}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="{Binding Source={StaticResource Rail.MarkerLane}}" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border x:Name="Chrome" Grid.Column="1"
+                                Background="{TemplateBinding Background}"
+                                Margin="{StaticResource Pad.RailChip}"
+                                CornerRadius="{StaticResource Radius.M}"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter VerticalAlignment="Center"
+                                              HorizontalAlignment="Stretch" />
+                        </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Surface2}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.8" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="RailItem" TargetType="Button" BasedOn="{StaticResource RailRow}">
         <Setter Property="Template">
             <Setter.Value>
@@ -749,6 +804,11 @@
                             <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Surface2}" />
                             <Setter TargetName="Glyph" Property="Stroke" Value="{DynamicResource Brush.Text}" />
                             <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+                        </Trigger>
+                        <!-- Y el pulsado (R6 §7): una entrada del menú acusa el clic como cualquier
+                             otra chapa de la casa. Lo encontró el guarda de estados nuevo. -->
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.8" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -970,6 +1030,12 @@
                             <Setter TargetName="Label" Property="Foreground"
                                     Value="{DynamicResource TextFillColorPrimaryBrush}" />
                         </Trigger>
+                        <!-- Y el pulsado (R6 §7). Este estilo es anterior a F26 y solo lo usa ya la
+                             ficha del hallazgo, que en esta fase no se toca; lo que sí se le exige
+                             —como a todos— es que acuse el clic. -->
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Label" Property="Opacity" Value="0.7" />
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -1096,6 +1162,139 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- ================================================================ El desplegable de una unidad
+
+         LA CABECERA DE UN `Expander` RESPONDE (R6 §7). Los de la sesión en vivo y el arreglo
+         asistido —unidad y pasada— usaban la plantilla de fábrica de WPF: ni cambio de color al
+         pasar por encima, ni señal al pulsar, ni cursor de mano, en una fila que ES el gesto
+         principal de esas dos pantallas. No se rehace el control: se le da a su cabecera la misma
+         chapa, el mismo redondeo y los mismos estados que a un botón de la casa, que es lo que
+         hace que abrir una unidad se sienta como pulsar cualquier otra cosa.
+    -->
+    <Style TargetType="Expander">
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Expander">
+                    <StackPanel>
+                        <ToggleButton x:Name="Head"
+                                      IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                      Cursor="Hand"
+                                      Focusable="True"
+                                      FocusVisualStyle="{StaticResource Focus.Visual}"
+                                      HorizontalContentAlignment="Stretch">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border x:Name="Chrome"
+                                            Background="Transparent"
+                                            CornerRadius="{StaticResource Radius.M}"
+                                            Padding="{StaticResource Pad.RowTight}"
+                                            SnapsToDevicePixels="True">
+                                        <DockPanel>
+                                            <!-- El galón, a la izquierda y girando al abrir: es lo
+                                                 que dice que la fila se despliega antes de tocarla. -->
+                                            <Path x:Name="Chevron" DockPanel.Dock="Left"
+                                                  Width="{StaticResource Icon.Size.Small}"
+                                                  Height="{StaticResource Icon.Size.Small}"
+                                                  Margin="{StaticResource Pad.XS.Right}"
+                                                  VerticalAlignment="Center"
+                                                  Stretch="Uniform"
+                                                  Fill="{x:Null}"
+                                                  Stroke="{DynamicResource Brush.TextMuted}"
+                                                  StrokeThickness="{StaticResource Icon.Stroke}"
+                                                  StrokeStartLineCap="Round"
+                                                  StrokeEndLineCap="Round"
+                                                  StrokeLineJoin="Round"
+                                                  Data="{x:Static c:Icons.Chevron}" />
+                                            <ContentPresenter VerticalAlignment="Center" />
+                                        </DockPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="Chrome" Property="Background"
+                                                    Value="{DynamicResource Brush.Surface2}" />
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="Chrome" Property="Opacity" Value="0.8" />
+                                        </Trigger>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="Chevron" Property="RenderTransform">
+                                                <Setter.Value>
+                                                    <RotateTransform Angle="90" CenterX="12" CenterY="12" />
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Trigger>
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter Property="Opacity" Value="0.6" />
+                                            <Setter Property="Cursor" Value="Arrow" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                            <ContentPresenter ContentSource="Header" />
+                        </ToggleButton>
+
+                        <ContentPresenter x:Name="Body" Visibility="Collapsed" />
+                    </StackPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsExpanded" Value="True">
+                            <Setter TargetName="Body" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ================================================================ UN DIÁLOGO (R6 §6)
+
+         F27 les puso fondo y primario y ahí se quedó: por dentro seguían siendo ventanas de
+         fábrica —el título de la barra a 13, las ayudas a 13, «Cerrar» sin estilo, y una franja
+         negra de Windows encima del crema porque `FluentWindow` pinta su propio telón—. Diez
+         diálogos, diez maneras.
+
+         Esto es la única: fondo, tipografía y tinta de la casa, sin telón del sistema y sin barra
+         de estado. Todos los diálogos lo declaran, y el próximo también — que es la mitad del
+         encargo: que el siguiente no vuelva a salir de fábrica.
+    -->
+    <Style x:Key="Dialog" TargetType="ui:FluentWindow">
+        <Setter Property="Background" Value="{DynamicResource Brush.Bg}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+        <Setter Property="FontFamily" Value="{StaticResource Font.Ui}" />
+        <Setter Property="FontSize" Value="{StaticResource FontSize.Body}" />
+        <!-- SIN TELÓN DEL SISTEMA. Es lo que pinta la franja oscura sobre el crema: el backdrop de
+             Mica se dibuja POR DEBAJO de la ventana y asoma en la barra de título, que es la única
+             zona que la aplicación no cubría con su propio fondo. -->
+        <Setter Property="WindowBackdropType" Value="None" />
+        <Setter Property="ExtendsContentIntoTitleBar" Value="True" />
+        <Setter Property="ShowInTaskbar" Value="False" />
+        <!-- `WindowStartupLocation` NO se puede poner desde aquí: es una propiedad CLR de `Window`
+             y no una de dependencia, así que un `Setter` sobre ella revienta AL CARGAR el estilo
+             —no al compilar—. Cada diálogo la declara en su etiqueta, que es donde ya estaba. -->
+    </Style>
+
+    <!-- La barra de título de un diálogo: el MISMO fondo que el diálogo, y sin maximizar ni
+         minimizar — una ventana modal de 600 px no se maximiza. -->
+    <Style x:Key="Dialog.TitleBar" TargetType="ui:TitleBar">
+        <Setter Property="Background" Value="{DynamicResource Brush.Bg}" />
+        <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+        <Setter Property="ShowMaximize" Value="False" />
+        <Setter Property="ShowMinimize" Value="False" />
+    </Style>
+
+    <!-- El título de dentro del diálogo: 21, como el de una sección. La barra de arriba dice de
+         qué ventana se trata; esto dice de qué va lo que hay debajo. -->
+    <Style x:Key="Dialog.Title" TargetType="TextBlock" BasedOn="{StaticResource Text.H3}">
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Margin" Value="{StaticResource Pad.S.Bottom}" />
+    </Style>
+
+    <!-- Y su ayuda: 14, la misma que la de un ajuste. NUNCA 13, que es lo que había. -->
+    <Style x:Key="Dialog.Help" TargetType="TextBlock" BasedOn="{StaticResource Text.Small}">
+        <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
     <!-- ================================================================ El patrón de página (P-02)
@@ -1335,6 +1534,12 @@
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Brush.Surface2}" />
                             <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+                        </Trigger>
+                        <!-- Y EL PULSADO (R6 §7). Lo encontró el guarda de estados nuevo: la lista
+                             de secciones de Ajustes tenía hover y no acusaba el clic. Misma señal
+                             que la de cualquier chapa de la casa. -->
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.8" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

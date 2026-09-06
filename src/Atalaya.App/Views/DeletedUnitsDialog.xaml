@@ -8,6 +8,7 @@
     Height="560"
     ShowInTaskbar="False"
     WindowStartupLocation="CenterOwner"
+    Style="{StaticResource Dialog}"
     ExtendsContentIntoTitleBar="True">
     <Grid Background="{DynamicResource Brush.Bg}">
         <!-- EL DIÁLOGO PINTA SU FONDO (UI-0013). `FluentWindow` aplica su propio telón por
@@ -29,11 +30,11 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0" Title="Unidades que ya no existen" ShowMaximize="False" ShowMinimize="False" />
+        <ui:TitleBar Style="{StaticResource Dialog.TitleBar}" Grid.Row="0" Title="Unidades que ya no existen" />
 
         <StackPanel Grid.Row="1" Margin="{StaticResource Pad.DialogHead}">
             <TextBlock Text="{Binding Title}" FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold" TextWrapping="Wrap" />
-            <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Meta}"
+            <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Small}"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        Text="Hallazgos activos cuyo fichero ya no está en el repositorio. No se pueden verificar —no queda nada que mirar— y no se resuelven solos: sin una decisión tuya se quedan activos para siempre. Ojo con el fichero troceado: sale como borrado más unidades nuevas, y coserlo a ojo sería inventar." />
             <TextBlock Text="Ningún hallazgo activo se ha quedado sin código."
@@ -56,13 +57,13 @@
                                           VerticalAlignment="Top" Margin="{StaticResource Pad.XS.Right}" />
                                 <StackPanel Grid.Column="1">
                                     <TextBlock FontWeight="SemiBold" TextWrapping="Wrap"><Run Text="{Binding Alias, Mode=OneWay}" FontFamily="Consolas" /><Run Text=" · " /><Run Text="{Binding Title, Mode=OneWay}" /></TextBlock>
-                                    <TextBlock Text="{Binding UnitPath}" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Meta}"
+                                    <TextBlock Text="{Binding UnitPath}" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Small}"
                                                TextWrapping="Wrap" FontFamily="Consolas"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     <!-- La evidencia, escrita. Cuando no se localiza el commit, lo
                                          dice: una evidencia ausente no se sustituye por una frase
                                          que suene a que la hay. -->
-                                    <TextBlock Text="{Binding Evidence}" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Meta}"
+                                    <TextBlock Text="{Binding Evidence}" Margin="{StaticResource Pad.XXS.Top}" FontSize="{StaticResource FontSize.Small}"
                                                TextWrapping="Wrap"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                 </StackPanel>

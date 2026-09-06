@@ -9,6 +9,7 @@
     ResizeMode="NoResize"
     ShowInTaskbar="False"
     WindowStartupLocation="CenterOwner"
+    Style="{StaticResource Dialog}"
     ExtendsContentIntoTitleBar="True">
     <Grid Background="{DynamicResource Brush.Bg}">
         <!-- EL DIÁLOGO PINTA SU FONDO (UI-0013). `FluentWindow` aplica su propio telón por
@@ -28,7 +29,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0" Title="Lanzar auditoría" ShowMaximize="False" ShowMinimize="False" />
+        <ui:TitleBar Style="{StaticResource Dialog.TitleBar}" Grid.Row="0" Title="Lanzar auditoría" />
 
         <StackPanel Grid.Row="1" Margin="{StaticResource Pad.Dialog}">
             <TextBlock
@@ -48,7 +49,7 @@
                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1" CornerRadius="6" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.M.Top}">
                 <StackPanel>
-                    <TextBlock Text="Estimación de coste" FontSize="{StaticResource FontSize.Meta}" FontWeight="SemiBold"
+                    <TextBlock Text="Estimación de coste" FontSize="{StaticResource FontSize.Small}" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                     <TextBlock x:Name="BreakdownText"
                                Text="{Binding Breakdown}"
@@ -57,7 +58,7 @@
                                Margin="{StaticResource Pad.XS.Top}" />
                     <TextBlock Text="{Binding Provenance}"
                                TextWrapping="Wrap"
-                               FontSize="{StaticResource FontSize.Meta}"
+                               FontSize="{StaticResource FontSize.Small}"
                                Margin="{StaticResource Pad.XS.Top}"
                                Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                 </StackPanel>
@@ -70,7 +71,7 @@
                 <TextBlock Text="⚠" Margin="{StaticResource Pad.XS.Right}"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
                 <TextBlock Text="{Binding PreferenceNotice}"
-                           TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" MaxWidth="440"
+                           TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}" MaxWidth="440"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
             </StackPanel>
 
@@ -80,13 +81,13 @@
                 <TextBlock Text="⚠" Margin="{StaticResource Pad.XS.Right}"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
                 <TextBlock Text="El número es orientativo: hay poco gasto medido detrás."
-                           TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}"
+                           TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
             </StackPanel>
 
             <TextBlock Text="{Binding Reassurance}"
                        TextWrapping="Wrap"
-                       FontSize="{StaticResource FontSize.Meta}"
+                       FontSize="{StaticResource FontSize.Small}"
                        Margin="{StaticResource Pad.S.Top}"
                        Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
 

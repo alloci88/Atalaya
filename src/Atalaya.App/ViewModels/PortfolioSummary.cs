@@ -56,4 +56,22 @@ public sealed record PortfolioSummary(int Apps, int Critica, int Alta, int Media
         1 => "1 hallazgo abierto",
         _ => $"{Total} hallazgos abiertos",
     };
+
+    /// <summary>
+    /// <b>El reparto por gravedad, en la misma línea del subtítulo</b> (R6 §5b). Fue una tira de
+    /// cuatro azulejos que ocupaba una banda entera para decir cuatro números; en un renglón se
+    /// leen igual y la rejilla de tarjetas —que es a lo que se viene— sube una pantalla.
+    /// <para>
+    /// Aquí solo va el TEXTO. El color de cada mitad lo pone la vista con un disparador sobre su
+    /// recuento, no un pincel devuelto desde aquí: un pincel ya resuelto no se entera de que el
+    /// tema ha cambiado (D-971).
+    /// </para>
+    /// </summary>
+    public string CriticaLabel => $"· {Critica} críticas";
+
+    public string AltaLabel => $"· {Alta} altas";
+
+    public string MediaLabel => $"· {Media} medias";
+
+    public string BajaLabel => $"· {Baja} bajas";
 }

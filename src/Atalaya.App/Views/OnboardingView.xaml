@@ -40,9 +40,12 @@
         <!-- EL PATRÓN DE PÁGINA (P-02). El formulario se centra en su ancho máximo, como en la
              Parte C y como Cuenta; lo que cambia es que el TÍTULO se centra con él en vez de
              quedarse en el margen. El ancho es el de siempre (920) y lo declara la página. -->
+        <!-- ANCLADA ARRIBA, Y CON AIRE SOBRE EL TÍTULO (R6 §2). Ver la nota de `AccountView`. -->
         <c:PageShell Grid.Row="0"
                      Title="Nueva aplicación"
                      Subtitle="Registra un repo auditable: detecta el stack y construye el inventario del primer ciclo."
+                     VerticalAlignment="Top"
+                     Margin="{StaticResource Pad.FormTop}"
                      BodyWidth="{StaticResource Form.MaxWidth}">
         <Grid>
         <ScrollViewer VerticalScrollBarVisibility="Auto"

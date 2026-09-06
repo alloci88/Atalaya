@@ -54,13 +54,13 @@
             <!-- F16-RETOQUE §2·1: el aire entre piezas lo pone cada barra; el que separa esta zona
                  de la identidad lo pone c:PageHeader, que es quien reparte. -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <ui:Button Content="Detener" Command="{Binding StopCommand}" Appearance="Danger"
+                <Button Style="{StaticResource Button.Danger}" Content="Detener" Command="{Binding StopCommand}"
                            Margin="{StaticResource Pad.S.Right}"
                            Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibility}}" />
                 <!-- BUGFIX-CIERRE: una sesion terminada se puede ARCHIVAR. Antes se quedaba fija en
                      el rail, sin salida, ocupando una entrada para siempre. Y solo en lo terminal:
                      mientras corre, el boton de al lado es «Detener», que es otra cosa. -->
-                <ui:Button Content="Cerrar" Command="{Binding CloseCommand}" Appearance="Secondary"
+                <Button Content="Cerrar" Command="{Binding CloseCommand}"
                            ToolTip="Archiva esta pantalla: desaparece del menu lateral y vuelves al Portafolio. No borra nada — la sesion, sus hallazgos y su informe siguen en el hub."
                            Visibility="{Binding CanClose, Converter={StaticResource BoolToVisibility}}" />
             </StackPanel>
@@ -94,12 +94,12 @@
                          Margin="{StaticResource Pad.XS.Top}" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
                 <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.S.Top}">
-                    <ui:Button Content="{Binding DetailToggleLabel}" Appearance="Secondary" FontSize="{StaticResource FontSize.Meta}"
+                    <Button Content="{Binding DetailToggleLabel}" FontSize="{StaticResource FontSize.Meta}"
                                Command="{Binding ToggleFailureDetailCommand}"
                                Visibility="{Binding HasFailureDetail, Converter={StaticResource BoolToVisibility}}" />
-                    <ui:Button Content="Copiar error" Appearance="Secondary" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Left}"
+                    <Button Content="Copiar error" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Left}"
                                Command="{Binding CopyFailureCommand}" />
-                    <ui:Button Content="Elegir modelo en Ajustes" Appearance="Primary" Margin="{StaticResource Pad.XS.Left}"
+                    <Button Style="{StaticResource Button.Primary}" Content="Elegir modelo en Ajustes" Margin="{StaticResource Pad.XS.Left}"
                                Command="{Binding FixModelCommand}"
                                Visibility="{Binding FailureOffersModelChange, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
@@ -189,7 +189,7 @@
                     Visibility="{Binding ShowSummary, Converter={StaticResource InverseBoolToVisibility}}">
                 <DockPanel>
                     <Grid DockPanel.Dock="Bottom" Margin="{StaticResource Pad.RowTight}">
-                        <ui:Button
+                        <Button
                             Content="↓ Volver al final"
                             Command="{Binding BackToBottomCommand}"
                             Padding="{StaticResource Pad.Pill}"

@@ -393,16 +393,22 @@
         <!-- ==================================================== Sin resultados -->
         <Border Grid.Row="2" Style="{StaticResource Card}" VerticalAlignment="Top"
                 Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
-            <StackPanel HorizontalAlignment="Center" c:Stack.Gap="{StaticResource Space.S}"
-                        Margin="{StaticResource Pad.XL}">
+            <!-- EL RITMO DEL ESTADO VACÍO DEL SISTEMA (R6 §4). El `Stack.Gap` de 12 valía para
+                 separar el icono de la frase, pero dejaba el botón pegado a ella: en los demás
+                 vacíos —los que pinta el control `EmptyState`— la frase va a 12 del icono y la
+                 acción a 16 de la frase, y ésta era la única que no. Se escriben los dos márgenes,
+                 que es lo que hace la plantilla del sistema. -->
+            <StackPanel HorizontalAlignment="Center" Margin="{StaticResource Pad.XL}">
                 <Path Style="{StaticResource Icon}" Data="{x:Static c:Icons.Findings}"
                       Width="32" Height="32" HorizontalAlignment="Center" />
                 <TextBlock Text="Sin hallazgos con estos filtros"
-                           Style="{StaticResource Text.H3}" HorizontalAlignment="Center" />
+                           Style="{StaticResource Text.H3}" HorizontalAlignment="Center"
+                           Margin="{StaticResource Pad.S.Top}" />
                 <Button Content="Limpiar filtros"
                         Command="{Binding ClearFiltersCommand}"
                         Style="{StaticResource Button.Primary}"
                         HorizontalAlignment="Center"
+                        Margin="{StaticResource Pad.M.Top}"
                         Visibility="{Binding HasActiveFilters, Converter={StaticResource BoolToVisibility}}" />
             </StackPanel>
         </Border>

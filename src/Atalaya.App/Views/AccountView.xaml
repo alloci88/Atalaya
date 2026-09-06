@@ -24,8 +24,14 @@
          TÍTULO se centre con ella: el defecto era que la cabecera se quedaba en el margen mientras
          el cuerpo se iba al centro, con 530 px en blanco entre los dos. Uno de los dos tenía que
          moverse, y el que se mueve es el título. -->
+    <!-- ANCLADA ARRIBA, Y CON AIRE SOBRE EL TÍTULO (R6 §2). Un formulario se lee desde arriba: si
+         se centrara en vertical, el contenido saltaría al cambiar de sección o al aparecer un
+         aviso. `VerticalAlignment` se escribe aunque hoy ya sea el efecto por defecto — es lo que
+         impide que un cambio futuro en el patrón de página lo mueva sin que nadie lo note. -->
     <c:PageShell Title="Cuenta"
                  Subtitle="Tu identidad de GitHub, lo que hace falta para auditar y el clon del hub en esta máquina."
+                 VerticalAlignment="Top"
+                 Margin="{StaticResource Pad.FormTop}"
                  BodyWidth="{StaticResource Form.MaxWidth}">
     <ScrollViewer Style="{StaticResource Scroll}" VerticalScrollBarVisibility="Auto">
         <!-- CABE ENTERA A 1920×1080, SIN DESPLAZAMIENTO (R4 §2). Lo que sobraba era AIRE, no

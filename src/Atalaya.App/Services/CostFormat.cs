@@ -159,6 +159,18 @@ public static class CostFormat
         return Math.Round(usd, 2, MidpointRounding.AwayFromZero).ToString("0.00", AppCulture.Display);
     }
 
+    /// <summary>
+    /// <b>Una MARCA de un eje, en la divisa activa</b> (R6 §8). Es la misma conversión que
+    /// <see cref="Number"/> y por el mismo camino —de aquí no sale ninguna cifra que no haya pasado
+    /// por esta clase—, pero sin la regla del «no escribas un cero donde hubo gasto»: una marca de
+    /// una rejilla no es un gasto, es dónde cae el 0, el 1,25 y el 2,50 de la escala, y un «&lt; 0,01»
+    /// colgado del eje no dice nada de nada.
+    /// </summary>
+    public static string Tick(decimal credits)
+        => Currency == CostCurrency.Usd
+            ? (credits * CreditCalculator.UsdPerCredit).ToString("0.##", AppCulture.Display)
+            : credits.ToString("0.#", AppCulture.Display);
+
     /// <summary>El importe con su unidad, en la divisa activa: «68,2 credits» o «0,68 $».</summary>
     public static string Of(decimal? credits)
         => credits is null ? Unknown : $"{Number(credits)} {Unit}";

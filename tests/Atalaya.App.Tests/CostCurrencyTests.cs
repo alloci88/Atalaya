@@ -15,6 +15,7 @@ namespace Atalaya.App.Tests;
 /// diciendo «AI credits» con la preferencia en dólares, y nadie lo vería hasta mirarla.
 /// </para>
 /// </summary>
+[Collection(CurrencyCollection.Name)]
 public sealed class CostCurrencyTests : IDisposable
 {
     private readonly CostCurrency _previous = CostFormat.Currency;

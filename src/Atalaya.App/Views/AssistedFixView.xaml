@@ -85,21 +85,21 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <ui:Button Margin="{StaticResource Pad.XS.Bottom}" HorizontalAlignment="Stretch"
+                                <Button Margin="{StaticResource Pad.XS.Bottom}" HorizontalAlignment="Stretch"
                                            HorizontalContentAlignment="Left"
                                            Command="{Binding DataContext.ChooseCommand,
                                                      RelativeSource={RelativeSource AncestorType=UserControl}}">
-                                    <ui:Button.Content>
+                                    <Button.Content>
                                         <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
-                                    </ui:Button.Content>
-                                    <ui:Button.CommandParameter>
+                                    </Button.Content>
+                                    <Button.CommandParameter>
                                         <MultiBinding Converter="{StaticResource QuestionChoicePair}">
                                             <Binding Path="DataContext"
                                                      RelativeSource="{RelativeSource AncestorType=ItemsControl}" />
                                             <Binding />
                                         </MultiBinding>
-                                    </ui:Button.CommandParameter>
-                                </ui:Button>
+                                    </Button.CommandParameter>
+                                </Button>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
@@ -124,7 +124,7 @@
                              —éste y «Enviar» del compositor— además de un aviso macizo y un
                              peligro macizo. De los dos campos de respuesta solo uno lleva el
                              primario, y es el compositor: es el canal que siempre está ahí. -->
-                        <ui:Button Grid.Column="1" Content="Responder" Margin="{StaticResource Pad.XS.Left}"
+                        <Button Grid.Column="1" Content="Responder" Margin="{StaticResource Pad.XS.Left}"
                                    Command="{Binding DataContext.AnswerFreeformCommand,
                                              RelativeSource={RelativeSource AncestorType=UserControl}}"
                                    CommandParameter="{Binding}" />
@@ -234,9 +234,12 @@
                      recorta la identidad por la derecha, así que el orden decide qué se pierde
                      primero: entre un camino que se pulsa y un dato que se lee, se pierde el
                      dato — y el dato, además, está entero en el informe. -->
+                <!-- R6 §7: el enlace del SISTEMA, no el `LinkButton` de antes de F26 —que pinta con
+                     las brochas de la librería y no con la paleta de la casa—. Es uno de los seis
+                     controles que no daban ninguna señal al pasar el ratón. -->
                 <Button Grid.Column="3" Content="{Binding BackToFindingLabel}" Command="{Binding BackToFindingCommand}"
-                        Style="{StaticResource LinkButton}" VerticalAlignment="Center" Margin="{StaticResource Pad.M.Left}"
-                        FontSize="{StaticResource FontSize.Meta}"
+                        Style="{StaticResource Button.Link}" VerticalAlignment="Center" Margin="{StaticResource Pad.M.Left}"
+                        FontSize="{StaticResource FontSize.Small}"
                         ToolTip="Abre la ficha del hallazgo que originó este arreglo">
                     <Button.Visibility>
                         <MultiBinding Converter="{StaticResource AllTrueToVisibility}">
@@ -347,11 +350,11 @@
                                                            Margin="{StaticResource Pad.XXS.Top}" Opacity="0.8" />
                                             </StackPanel>
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                <ui:Button Content="Descartar" Appearance="Danger" Margin="{StaticResource Pad.XS.Left}"
+                                                <Button Style="{StaticResource Button.Danger}" Content="Descartar" Margin="{StaticResource Pad.XS.Left}"
                                                            Command="{Binding DataContext.DiscardPendingCommand,
                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                            CommandParameter="{Binding}" />
-                                                <ui:Button Content="Los mantengo" Margin="{StaticResource Pad.XS.Left}"
+                                                <Button Content="Los mantengo" Margin="{StaticResource Pad.XS.Left}"
                                                            Command="{Binding DataContext.KeepPendingCommand,
                                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                            CommandParameter="{Binding}" />
@@ -395,12 +398,12 @@
                            Text="{Binding FailureCloneNote}" />
 
                 <StackPanel Orientation="Horizontal" Margin="{StaticResource Pad.S.Top}">
-                    <ui:Button Content="{Binding DetailToggleLabel}" Appearance="Secondary" FontSize="{StaticResource FontSize.Meta}"
+                    <Button Content="{Binding DetailToggleLabel}" FontSize="{StaticResource FontSize.Meta}"
                                Command="{Binding ToggleFailureDetailCommand}"
                                Visibility="{Binding HasFailureDetail, Converter={StaticResource BoolToVisibility}}" />
-                    <ui:Button Content="Copiar error" Appearance="Secondary" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Left}"
+                    <Button Content="Copiar error" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Left}"
                                Command="{Binding CopyFailureCommand}" />
-                    <ui:Button Content="Elegir modelo en Ajustes" Appearance="Primary" Margin="{StaticResource Pad.XS.Left}"
+                    <Button Style="{StaticResource Button.Primary}" Content="Elegir modelo en Ajustes" Margin="{StaticResource Pad.XS.Left}"
                                Command="{Binding FixModelCommand}"
                                Visibility="{Binding FailureOffersModelChange, Converter={StaticResource BoolToVisibility}}" />
                 </StackPanel>
@@ -453,11 +456,11 @@
                                     Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}"
                                     KeyDown="OnDraftKeyDown"
                                     IsEnabled="{Binding IsRunning}" />
-                        <ui:Button Grid.Column="1" Content="Enviar" Margin="{StaticResource Pad.XS.Left}" Appearance="Primary"
+                        <Button Style="{StaticResource Button.Primary}" Grid.Column="1" Content="Enviar" Margin="{StaticResource Pad.XS.Left}"
                                    Command="{Binding SendCommand}" IsEnabled="{Binding IsRunning}" />
                     </Grid>
                     <Grid DockPanel.Dock="Bottom" Margin="{StaticResource Pad.RowTight}">
-                        <ui:Button Content="↓ Volver al final" Command="{Binding BackToBottomCommand}"
+                        <Button Content="↓ Volver al final" Command="{Binding BackToBottomCommand}"
                                    Padding="{StaticResource Pad.Pill}" FontSize="{StaticResource FontSize.Meta}" HorizontalAlignment="Right"
                                    Visibility="{Binding AutoScroll, Converter={StaticResource InverseBoolToVisibility}}" />
                     </Grid>
@@ -592,10 +595,10 @@
                     </StackPanel>
 
                     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="{StaticResource Pad.M.Top}">
-                        <ui:Button Content="Verificar ahora" Command="{Binding VerifyNowCommand}" Appearance="Primary" />
-                        <ui:Button Content="Abrir en el editor" Command="{Binding OpenInEditorCommand}" Margin="{StaticResource Pad.XS.Left}" />
-                        <ui:Button Content="Ver informe" Command="{Binding OpenReportCommand}" Margin="{StaticResource Pad.XS.Left}" />
-                        <ui:Button Content="Me quedo los cambios" Command="{Binding FinishCommand}" Margin="{StaticResource Pad.XS.Left}" />
+                        <Button Style="{StaticResource Button.Primary}" Content="Verificar ahora" Command="{Binding VerifyNowCommand}" />
+                        <Button Content="Abrir en el editor" Command="{Binding OpenInEditorCommand}" Margin="{StaticResource Pad.XS.Left}" />
+                        <Button Content="Ver informe" Command="{Binding OpenReportCommand}" Margin="{StaticResource Pad.XS.Left}" />
+                        <Button Content="Me quedo los cambios" Command="{Binding FinishCommand}" Margin="{StaticResource Pad.XS.Left}" />
                     </StackPanel>
 
                     <!-- LA BARRA FIJA NO SIEGA UNA LÍNEA (UI-0037). Recortaba el contenido en
@@ -696,8 +699,7 @@
                                                 AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90"
                                                 VerticalScrollBarVisibility="Auto"
                                                 PreviewMouseWheel="OnInnerScroll" />
-                                    <ui:Button Content="Copiar" Command="{Binding CopyCommitCommand}"
-                                               Appearance="Primary" HorizontalAlignment="Left" Margin="{StaticResource Pad.S.Top}" />
+                                    <Button Style="{StaticResource Button.Primary}" Content="Copiar" Command="{Binding CopyCommitCommand}" HorizontalAlignment="Left" Margin="{StaticResource Pad.S.Top}" />
                                 </StackPanel>
                             </Border>
                         </StackPanel>

@@ -116,13 +116,15 @@
                             BorderBrush="{DynamicResource Brush.Line}"
                             BorderThickness="{StaticResource Border.Top}"
                             Padding="{StaticResource Pad.RailUser}">
-                        <Button Style="{StaticResource RailRow}"
+                        <Button Style="{StaticResource RailUser}"
                                 Margin="{StaticResource Pad.Zero}"
                                 Command="{Binding ShowAccountCommand}"
                                 ToolTip="{Binding AccountTooltip}">
+                            <!-- LOS CARRILES LOS PONE LA PLANTILLA (R6 §1). Aquí solo quedan los dos
+                                 de dentro de la chapa —canal de iconos y texto—, exactamente como en
+                                 la entrada de un menú; el del marcador va en `RailUser`. -->
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="{Binding Source={StaticResource Rail.MarkerLane}}" />
                                     <ColumnDefinition Width="{Binding Source={StaticResource Rail.IconChannel}}" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
@@ -134,7 +136,7 @@
                                      Suelto al final de la fila era una cuarta cosa que alinear; en
                                      la esquina del avatar es lo que ya se mira para saber quién
                                      eres, diciendo además si puedes trabajar. -->
-                                <Grid Grid.Column="1"
+                                <Grid Grid.Column="0"
                                       Width="{StaticResource Rail.AvatarSize}"
                                       Height="{StaticResource Rail.AvatarSize}"
                                       HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -154,7 +156,7 @@
                                              StrokeThickness="{StaticResource Rail.BadgeRing}" />
                                 </Grid>
 
-                                <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                <StackPanel Grid.Column="1" Orientation="Horizontal"
                                             Margin="{StaticResource Pad.RailLabel}"
                                             VerticalAlignment="Center"
                                             Visibility="{Binding RailCollapsed, Converter={StaticResource InverseBoolToVisibility}}">

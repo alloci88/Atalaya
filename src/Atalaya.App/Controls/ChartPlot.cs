@@ -79,6 +79,20 @@ public sealed class ChartPlot : Canvas
         nameof(Unit), typeof(string), typeof(ChartPlot),
         new PropertyMetadata(string.Empty, OnVisualChanged));
 
+    /// <summary>
+    /// <b>Los valores de esta gráfica son COSTES en credits</b> (R6 §8), así que se escriben con
+    /// <see cref="Services.CostFormat"/> y no con un formato numérico suelto.
+    /// <para>
+    /// Sin esto, la gráfica de coste pintaba el número tal cual y le pegaba detrás la unidad activa:
+    /// con la divisa en dólares el tooltip decía «490 $» donde la tarjeta del periodo decía «4,91 $»
+    /// —la misma cifra, cien veces más grande, en la misma pantalla—. Es exactamente lo que F29 §2
+    /// quiso impedir con un único formateador: la gráfica era la única vía que no pasaba por él.
+    /// </para>
+    /// </summary>
+    public static readonly DependencyProperty IsCostProperty = DependencyProperty.Register(
+        nameof(IsCost), typeof(bool), typeof(ChartPlot),
+        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
+
     public static readonly DependencyProperty AxisBrushProperty = DependencyProperty.Register(
         nameof(AxisBrush), typeof(Brush), typeof(ChartPlot),
         new PropertyMetadata(Brushes.Gray, OnVisualChanged));
@@ -123,6 +137,13 @@ public sealed class ChartPlot : Canvas
     {
         get => (string)GetValue(UnitProperty);
         set => SetValue(UnitProperty, value);
+    }
+
+    /// <inheritdoc cref="IsCostProperty"/>
+    public bool IsCost
+    {
+        get => (bool)GetValue(IsCostProperty);
+        set => SetValue(IsCostProperty, value);
     }
 
     public Brush AxisBrush
@@ -463,7 +484,15 @@ public sealed class ChartPlot : Canvas
 
     // ---------- Utilidades ----------
 
-    private string Format(double value) => value.ToString(ValueFormat, CultureInfo.CurrentCulture);
+    /// <summary>
+    /// El número de una marca o de un tooltip. Un coste NO se formatea aquí: se le pide a
+    /// <see cref="Services.CostFormat"/>, que es el único sitio que sabe en qué divisa se enseña
+    /// (F29 §2). Lo demás —hallazgos, resoluciones— son recuentos y llevan su formato numérico.
+    /// </summary>
+    private string Format(double value)
+        => IsCost
+            ? Services.CostFormat.Tick((decimal)value)
+            : value.ToString(ValueFormat, CultureInfo.CurrentCulture);
 
     private Size Measure(string text)
     {

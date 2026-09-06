@@ -372,6 +372,13 @@
          es dejar aire a los dos lados y no todo a la derecha). -->
     <sys:Double x:Key="Form.MaxWidth">920</sys:Double>
 
+    <!-- EL AIRE SOBRE EL TÍTULO DE UN FORMULARIO (R6 §2). La carcasa deja 24 entre la barra de
+         miga y el contenido de cualquier página, que es lo que una lista necesita; Cuenta y Nueva
+         aplicación arrancan con un título y un formulario, y ahí 24 los pega a la barra. Estos 24
+         más los de la carcasa hacen los 48 que el título pide para respirar. Es un margen y no un
+         relleno de la página: solo lo llevan estas dos. -->
+    <Thickness x:Key="Pad.FormTop">0,24,0,0</Thickness>
+
     <!-- LA MEDIDA DE LECTURA de un informe: ~80-90 caracteres a 15 px. No baja más porque un
          informe también lleva tablas, y una columna de 600 px las parte; el anexo técnico, que es
          quien trae las más anchas, se lee en su propio panel a ancho completo. -->

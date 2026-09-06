@@ -21,7 +21,6 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -29,9 +28,64 @@
         <Grid Grid.Row="0" Margin="{StaticResource Pad.L.Bottom}">
             <StackPanel>
                 <TextBlock Text="Portafolio" Style="{StaticResource Text.H1}" />
-                <TextBlock Text="{Binding Summary.Headline}"
-                           Style="{StaticResource Text.Small}"
-                           Margin="{StaticResource Pad.XXS.Top}" />
+                <!-- «1 aplicación · 114 abiertos · 0 críticas · 28 altas · 64 medias · 22 bajas».
+                     Cada cifra con su color, que es lo que deja recorrer la línea sin leerla; con
+                     cero de una gravedad, esa mitad se apaga y no grita (UI-0051). Son `Run` del
+                     MISMO `TextBlock` porque comparten línea base, que es lo único que la comparte
+                     en WPF (D-983 §9). -->
+                <TextBlock Style="{StaticResource Text.Small}"
+                           Margin="{StaticResource Pad.XXS.Top}"
+                           TextWrapping="Wrap">
+                    <Run Text="{Binding Summary.Headline, Mode=OneWay}" />
+                    <Run Text="{Binding Summary.CriticaLabel, Mode=OneWay}">
+                        <Run.Style>
+                            <Style TargetType="Run">
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.Sev.Crit}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Summary.Critica}" Value="0">
+                                        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Run.Style>
+                    </Run>
+                    <Run Text="{Binding Summary.AltaLabel, Mode=OneWay}">
+                        <Run.Style>
+                            <Style TargetType="Run">
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.Sev.High}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Summary.Alta}" Value="0">
+                                        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Run.Style>
+                    </Run>
+                    <Run Text="{Binding Summary.MediaLabel, Mode=OneWay}">
+                        <Run.Style>
+                            <Style TargetType="Run">
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.Sev.Med}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Summary.Media}" Value="0">
+                                        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Run.Style>
+                    </Run>
+                    <Run Text="{Binding Summary.BajaLabel, Mode=OneWay}">
+                        <Run.Style>
+                            <Style TargetType="Run">
+                                <Setter Property="Foreground" Value="{DynamicResource Brush.Sev.Low}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Summary.Baja}" Value="0">
+                                        <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Run.Style>
+                    </Run>
+                </TextBlock>
             </StackPanel>
 
             <!-- El único primario de la vista (principio 4). -->
@@ -44,93 +98,21 @@
 
         <!-- ==================================================== El resumen del portafolio
 
-             Ocupa el ancho que antes se quedaba vacío, y contesta la pregunta que se hace al abrir
-             Atalaya por la mañana: ¿cuánto hay abierto y de qué gravedad? Las cifras grandes; las
-             etiquetas, debajo y pequeñas.
+             FUE UNA TIRA DE CUATRO AZULEJOS, Y AHORA ES LA LÍNEA DEL TÍTULO (R6 §5b).
+
+             Los azulejos ocupaban una banda entera —200 px de alto con cuatro cifras dentro— para
+             decir cuatro números que caben en un renglón, y empujaban la rejilla de tarjetas hacia
+             abajo: lo que se viene a ver aquí son las aplicaciones, y quedaban por debajo del
+             pliegue en cuanto la ventana no era enorme. El total por gravedad se lee igual de bien
+             en el subtítulo, con el color de cada gravedad haciendo el trabajo que hacía el borde
+             del azulejo, y la rejilla sube.
+
+             El color se conserva porque es lo que permite recorrer la línea sin leerla; y el cero
+             sigue sin pintarse de peligro (UI-0051): lo decide `PortfolioSummary`, no la vista.
         -->
-        <!-- EL CERO NO SE PINTA DE PELIGRO (UI-0051). Con cero críticas el azulejo conservaba su
-             borde rojo y la cifra iba en `Sev.Crit`: el color decía «hay una crítica» donde el
-             número decía lo contrario, y es lo primero que se ve al abrir la aplicación. El color
-             de gravedad aparece cuando hay algo de esa gravedad. -->
-        <!-- LA TIRA DE GRAVEDADES, COMO EN LA PARTE B (F27, cierre). F27 la había ceñido al
-             contenido de cada azulejo (UI-0020); el usuario mandó dejarla como estaba. N-6. -->
-        <c:ColumnsPanel Grid.Row="1"
-                        MinColumnWidth="200" MaxColumns="4"
-                        Gap="{StaticResource Space.M}"
-                        Margin="{StaticResource Pad.L.Bottom}"
-                        Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
-            <Border>
-                <Border.Style>
-                    <Style TargetType="Border" BasedOn="{StaticResource Stat.Card}">
-                        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Sev.Crit}" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding Summary.Critica}" Value="0">
-                                <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
-                <StackPanel>
-                    <TextBlock Text="{Binding Summary.Critica}" Style="{StaticResource Stat.Number.Sev}"
-                               Foreground="{DynamicResource Brush.Sev.Crit}" />
-                    <TextBlock Text="Críticas" Style="{StaticResource Stat.Label}" />
-                </StackPanel>
-            </Border>
-            <Border>
-                <Border.Style>
-                    <Style TargetType="Border" BasedOn="{StaticResource Stat.Card}">
-                        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Sev.High}" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding Summary.Alta}" Value="0">
-                                <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
-                <StackPanel>
-                    <TextBlock Text="{Binding Summary.Alta}" Style="{StaticResource Stat.Number.Sev}"
-                               Foreground="{DynamicResource Brush.Sev.High}" />
-                    <TextBlock Text="Altas" Style="{StaticResource Stat.Label}" />
-                </StackPanel>
-            </Border>
-            <Border>
-                <Border.Style>
-                    <Style TargetType="Border" BasedOn="{StaticResource Stat.Card}">
-                        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Sev.Med}" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding Summary.Media}" Value="0">
-                                <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
-                <StackPanel>
-                    <TextBlock Text="{Binding Summary.Media}" Style="{StaticResource Stat.Number.Sev}"
-                               Foreground="{DynamicResource Brush.Sev.Med}" />
-                    <TextBlock Text="Medias" Style="{StaticResource Stat.Label}" />
-                </StackPanel>
-            </Border>
-            <Border>
-                <Border.Style>
-                    <Style TargetType="Border" BasedOn="{StaticResource Stat.Card}">
-                        <Setter Property="BorderBrush" Value="{DynamicResource Brush.Sev.Low}" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding Summary.Baja}" Value="0">
-                                <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
-                <StackPanel>
-                    <TextBlock Text="{Binding Summary.Baja}" Style="{StaticResource Stat.Number.Sev}"
-                               Foreground="{DynamicResource Brush.Sev.Low}" />
-                    <TextBlock Text="Bajas" Style="{StaticResource Stat.Label}" />
-                </StackPanel>
-            </Border>
-        </c:ColumnsPanel>
 
         <!-- ==================================================== Sin aplicaciones -->
-        <Border Grid.Row="2"
+        <Border Grid.Row="1"
                 Style="{StaticResource Card}"
                 VerticalAlignment="Top"
                 Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
@@ -150,7 +132,7 @@
         </Border>
 
         <!-- ==================================================== La rejilla de aplicaciones -->
-        <ScrollViewer Style="{StaticResource Scroll}" Grid.Row="2"
+        <ScrollViewer Style="{StaticResource Scroll}" Grid.Row="1"
                       VerticalScrollBarVisibility="Auto"
                       Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
             <ItemsControl ItemsSource="{Binding Apps}">
@@ -236,25 +218,33 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
+                                    <StackPanel Grid.Column="0" HorizontalAlignment="Center">
                                         <TextBlock Text="{Binding Critica}" Style="{StaticResource Stat.Number.Sev}"
+                                                   HorizontalAlignment="Center"
                                                    Foreground="{DynamicResource Brush.Sev.Crit}" />
-                                        <TextBlock Text="Críticas" Style="{StaticResource Stat.Label}" />
+                                        <TextBlock Text="Críticas" Style="{StaticResource Stat.Label}"
+                                                   HorizontalAlignment="Center" />
                                     </StackPanel>
-                                    <StackPanel Grid.Column="1">
+                                    <StackPanel Grid.Column="1" HorizontalAlignment="Center">
                                         <TextBlock Text="{Binding Alta}" Style="{StaticResource Stat.Number.Sev}"
+                                                   HorizontalAlignment="Center"
                                                    Foreground="{DynamicResource Brush.Sev.High}" />
-                                        <TextBlock Text="Altas" Style="{StaticResource Stat.Label}" />
+                                        <TextBlock Text="Altas" Style="{StaticResource Stat.Label}"
+                                                   HorizontalAlignment="Center" />
                                     </StackPanel>
-                                    <StackPanel Grid.Column="2">
+                                    <StackPanel Grid.Column="2" HorizontalAlignment="Center">
                                         <TextBlock Text="{Binding Media}" Style="{StaticResource Stat.Number.Sev}"
+                                                   HorizontalAlignment="Center"
                                                    Foreground="{DynamicResource Brush.Sev.Med}" />
-                                        <TextBlock Text="Medias" Style="{StaticResource Stat.Label}" />
+                                        <TextBlock Text="Medias" Style="{StaticResource Stat.Label}"
+                                                   HorizontalAlignment="Center" />
                                     </StackPanel>
-                                    <StackPanel Grid.Column="3">
+                                    <StackPanel Grid.Column="3" HorizontalAlignment="Center">
                                         <TextBlock Text="{Binding Baja}" Style="{StaticResource Stat.Number.Sev}"
+                                                   HorizontalAlignment="Center"
                                                    Foreground="{DynamicResource Brush.Sev.Low}" />
-                                        <TextBlock Text="Bajas" Style="{StaticResource Stat.Label}" />
+                                        <TextBlock Text="Bajas" Style="{StaticResource Stat.Label}"
+                                                   HorizontalAlignment="Center" />
                                     </StackPanel>
                                 </Grid>
 

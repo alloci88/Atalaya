@@ -9,6 +9,7 @@
     ResizeMode="NoResize"
     ShowInTaskbar="False"
     WindowStartupLocation="CenterOwner"
+    Style="{StaticResource Dialog}"
     ExtendsContentIntoTitleBar="True">
     <Grid Background="{DynamicResource Brush.Bg}">
         <!-- EL DIÁLOGO PINTA SU FONDO (UI-0013). `FluentWindow` aplica su propio telón por
@@ -28,7 +29,7 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0" Title="Eliminar aplicación" ShowMaximize="False" ShowMinimize="False" />
+        <ui:TitleBar Style="{StaticResource Dialog.TitleBar}" Grid.Row="0" Title="Eliminar aplicación" />
 
         <StackPanel Grid.Row="1" Margin="{StaticResource Pad.Dialog}">
             <TextBlock
@@ -42,7 +43,7 @@
                 <StackPanel>
                     <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" />
                     <TextBlock Text="{Binding Reassurance}" TextWrapping="Wrap"
-                               Foreground="{DynamicResource Brush.TextMuted}" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Top}" />
+                               Foreground="{DynamicResource Brush.TextMuted}" FontSize="{StaticResource FontSize.Small}" Margin="{StaticResource Pad.XS.Top}" />
                 </StackPanel>
             </Border>
 

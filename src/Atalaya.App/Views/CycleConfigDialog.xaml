@@ -9,6 +9,7 @@
     ResizeMode="NoResize"
     ShowInTaskbar="False"
     WindowStartupLocation="CenterOwner"
+    Style="{StaticResource Dialog}"
     ExtendsContentIntoTitleBar="True">
     <Grid Background="{DynamicResource Brush.Bg}">
         <!-- EL DIÁLOGO PINTA SU FONDO (UI-0013). `FluentWindow` aplica su propio telón por
@@ -28,11 +29,11 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0" Title="{Binding Title}" ShowMaximize="False" ShowMinimize="False" />
+        <ui:TitleBar Style="{StaticResource Dialog.TitleBar}" Grid.Row="0" Title="{Binding Title}" />
 
         <StackPanel Grid.Row="1" Margin="{StaticResource Pad.Dialog}">
             <TextBlock Text="{Binding AppName}" FontSize="{StaticResource FontSize.Lead}" FontWeight="SemiBold" TextWrapping="Wrap" />
-            <TextBlock Text="{Binding Context}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Meta}"
+            <TextBlock Text="{Binding Context}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Small}"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
 
             <!-- La temática: el catálogo cerrado de la casa, General primero y marcada como
@@ -44,7 +45,7 @@
                       DisplayMemberPath="Label"
                       Width="300" HorizontalAlignment="Left" Margin="{StaticResource Pad.XS.Top}"
                       ToolTip="Qué busca el auditor en este ciclo. Fuera de la temática no se reporta nada." />
-            <TextBlock Text="{Binding ThemeDescription}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Meta}"
+            <TextBlock Text="{Binding ThemeDescription}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Small}"
                        Foreground="{DynamicResource Brush.TextMuted}" />
 
             <!-- El aviso de cambiar con trabajo hecho. Solo aparece cuando cuesta algo. -->
@@ -52,7 +53,7 @@
                         Visibility="{Binding HasWarning, Converter={StaticResource BoolToVisibility}}">
                 <TextBlock Text="⚠" Margin="{StaticResource Pad.XS.Right}"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
-                <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" MaxWidth="470"
+                <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Small}" MaxWidth="470"
                            Foreground="{DynamicResource SystemFillColorCautionBrush}" />
             </StackPanel>
 
@@ -67,10 +68,10 @@
                       DisplayMemberPath="Label"
                       Width="300" HorizontalAlignment="Left" Margin="{StaticResource Pad.XS.Top}"
                       ToolTip="Con qué modelo prefiere el equipo auditar este ciclo. Quien lance con otro verá un aviso, y podrá seguir." />
-            <TextBlock Text="{Binding ModelsNotice}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Meta}"
+            <TextBlock Text="{Binding ModelsNotice}" TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Small}"
                        Foreground="{DynamicResource Brush.Warning.Ink}"
                        Visibility="{Binding HasModelsNotice, Converter={StaticResource BoolToVisibility}}" />
-            <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Meta}" Foreground="{DynamicResource Brush.TextMuted}"
+            <TextBlock TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}" FontSize="{StaticResource FontSize.Small}" Foreground="{DynamicResource Brush.TextMuted}"
                        Text="Es una preferencia compartida, no una imposición: no todo el mundo tiene las dos casas. Al lanzar con otro proveedor o modelo, el diálogo de lanzar lo avisa y deja continuar." />
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="{StaticResource Pad.M.Top}">

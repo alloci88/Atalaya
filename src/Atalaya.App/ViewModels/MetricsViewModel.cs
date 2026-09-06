@@ -1027,7 +1027,10 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
         if (d.CostInPeriod is { } total)
         {
-            yield return $"≈ {CostFormat.Dollars(total)}";
+            // R6 §8 — LA OTRA divisa, no la misma otra vez. Con la preferencia en dólares esto
+            // repetía el número del azulejo con el mismo símbolo detrás; lo útil es siempre el
+            // equivalente, y de decidir cuál es se encarga `CostFormat`.
+            yield return $"≈ {CostFormat.Equivalent(total)}";
         }
     }
 
