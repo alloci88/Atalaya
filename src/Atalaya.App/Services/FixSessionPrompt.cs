@@ -105,8 +105,11 @@ public static class FixSessionPrompt
         sb.AppendLine("## Cómo trabajas aquí");
         sb.AppendLine();
         sb.AppendLine(
-            $"- `read_file(path)` — lee ficheros del clon. Tienes **{readBudget} lecturas**; la "
-            + "respuesta te dice cuántas te quedan.");
+            $"- `read_file(path, startLine, endLine)` — lee ficheros del clon. Tienes "
+            + $"**{readBudget} lecturas**; la respuesta te dice cuántas te quedan. Un fichero que "
+            + "no cabe de una vez vuelve **por líneas completas diciéndote cuántas tiene y cuáles "
+            + "van**: pide el resto por rango, tantas veces como haga falta. **Jamás le pidas al "
+            + "usuario que te pegue código o líneas** — tienes la herramienta para leerlo.");
         sb.AppendLine(
             "- `apply_edit(path, reason, edits)` — la **única** forma de modificar código. Sobre "
             + "los ficheros de las ubicaciones de arriba (y sus ficheros de test) se aplica sin "

@@ -27,7 +27,11 @@ public static class FixToolText
     public const string ReadFileDescription =
         "Lee un fichero del clon (ruta relativa a la raíz del repositorio). Tienes un "
         + "PRESUPUESTO de lecturas y la respuesta te dice cuántas te quedan: no explores, "
-        + "lee lo que necesites para arreglar.";
+        + "lee lo que necesites para arreglar. startLine y endLine (base 1, opcionales) piden un "
+        + "RANGO de líneas. Si el fichero no cabe entero, se te devuelve el primer trozo por "
+        + "líneas completas y la respuesta trae totalLines, firstLine, lastLine y un notice con el "
+        + "startLine del trozo siguiente: cualquier fichero se puede leer entero pidiéndolo por "
+        + "partes. Nunca le pidas al usuario que te pegue código.";
 
     public const string ApplyEdit = "apply_edit";
 

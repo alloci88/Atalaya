@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Nodes;
 using Atalaya.Agents;
 using Atalaya.ClaudeCode;
@@ -237,7 +237,13 @@ public sealed class FixSurfaceTests
 
         public FixDoneArgs? Done { get; private set; }
 
-        public ReadFileResult ReadFile(string path) => new(true, "contenido", null, 29);
+        public List<(string Path, int? Start, int? End)> Reads { get; } = new();
+
+        public ReadFileResult ReadFile(string path, int? startLine = null, int? endLine = null)
+        {
+            Reads.Add((path, startLine, endLine));
+            return new(true, "contenido", null, 29, TotalLines: 3, FirstLine: 1, LastLine: 3);
+        }
 
         public ApplyEditResult ApplyEdit(string path, string reason, FixEdit[] edits)
         {

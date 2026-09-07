@@ -17188,3 +17188,127 @@ migrado»: en cuanto se escribe, el ajuste deja de decir «custom» y no hay nad
 editor desinstalado, los toasts de la ficha y el tope de D-208 —que tiene su propio parte abierto en
 el backlog—. Seis casos menos (2.011 en la aplicación): ocho de «Otro» que se van, dos de la
 mudanza que entran.
+## BUGFIX-LECTURA — El usuario no es la herramienta de lectura del agente
+
+Una sesión de arreglo real sobre `XBLASTCommon/Class/EpirocUtils.cs` (MEJ-0058, informe
+`01M1XQXFMBTZW48GRVMK9M904T`, 2026-09-07) acabó **sin tocar un solo fichero**, con esta declaración
+del agente: «no consigo leer completo `EpirocUtils.cs` (excede el límite de `read_file` y la caché
+temporal está fuera de alcance)». Y la tarjeta que sacó antes de rendirse ofrecía tres opciones, las
+tres malas: **«Pégame en el chat las líneas 185 al final (Recomendado)»**, arreglar a ciegas sin
+verlas, o cancelar. La primera convierte a la persona que está mirando en el dispositivo de lectura
+del agente.
+
+### D-1032 — La causa, medida antes de tocar nada (N-2): las cuatro medidas, y una sorpresa
+
+- **El tope existe, pero NO lo tocó este fichero.** `FixToolbox.MaxFileChars` = **120.000
+  caracteres**, y `git cat-file -s 5b659a4:XBLASTCommon/Class/EpirocUtils.cs` —el commit que el
+  propio informe declara— da **21.710 bytes, 441 líneas**. Cabía **cinco veces y media**. Es decir:
+  el fichero se le devolvió **entero**, sin recorte y sin coletilla, y el agente **se inventó** un
+  límite que no había alcanzado. Eso no exculpa a la herramienta: la acusa. Si la respuesta no dice
+  nunca cuánto mide el fichero ni cuánto va, el agente no tiene con qué distinguir «esto es todo»
+  de «esto es un trozo», y lo rellena de su cuenta.
+- **Y con un fichero que sí lo supera, el resultado era peor que un error.** Medido sobre uno de
+  **360.045 caracteres (3× el tope)**: se devolvían 120.053 caracteres —**cortados a mitad de
+  línea**, 1.481 líneas de 4.445, **2.964 perdidas**— con la coletilla «… [recortado: el fichero
+  tiene 360.045 caracteres] …». Avisaba, sí, pero **en caracteres, sin decir cuántas líneas iban, y
+  sin ninguna forma de pedir el resto**: `ReadFile(string path)` no admitía rango ni
+  desplazamiento. Y no es un caso de laboratorio: en el clon de xblast hay **15 ficheros de código
+  por encima del tope**, el mayor `XBLASTCore/Forms/FormOptions.Designer.cs` con **637.248
+  caracteres y 8.701 líneas**. Hasta hoy sus **7.055 últimas líneas eran inalcanzables**.
+- **El temporal estaba bien bloqueado, y ése no es el defecto.** Reproducido: `read_file` con la
+  ruta absoluta del temporal y con `..\..\Temp\…` devuelve las dos veces «Esa ruta está fuera del
+  clon de la aplicación» — el bloqueo **canónico** de D-549, funcionando. Y el `view` que el agente
+  dijo tener bloqueado no es ninguna de las cuatro tools: es del runtime, y lo rechazó el
+  `OnPermissionRequest` que rechaza todo lo demás. **Las dos negativas son correctas.** Lo que
+  faltaba no era una rendija: era la otra vía.
+- **El encargo no decía nada, y ahí está la otra mitad del defecto.** El bloque «Cómo trabajas
+  aquí» (D-543) tenía 1.467 caracteres y **cero** menciones a «tope», «rango», «grande» o
+  «recortado». Un agente que no sabe que hay una salida no la usa: pregunta.
+- **La recurrencia, con el número y con su límite.** De **14 informes de arreglo** en el hub, **1**
+  declara el tope de lectura como causa de haber abandonado y **3** cerraron sin tocar ningún
+  fichero. **Cuántas tarjetas pidieron pegar código no se puede contar, y se dice**: ni el informe
+  ni el registro guardan el texto de un `ask_user`. Lo que sí es medible es el precio de esa única
+  sesión: **340.089 tokens de entrada, 11 llamadas, 45,9 AI credits** para acabar en «ningún
+  fichero modificado».
+
+**La regla que entra: cualquier fichero del clon se lee entero, por trozos, sin ayuda de nadie.**
+
+**`read_file(path, startLine, endLine)`, y el rango es solo para VER.** `apply_edit` no cambia
+(D-545): sigue siendo fragmento literal, porque un número de línea deja de significar nada en
+cuanto se aplica la primera edición sobre el mismo fichero. **No hay quinta tool** — siguen siendo
+cuatro (D-543), con dos argumentos opcionales más en una de ellas.
+
+**Y lo que no cabe se dice, no se corta en silencio.** El troceo es **por líneas enteras** —que es
+justamente lo que permite volver a pegarlas— y la respuesta lleva `totalLines`, `firstLine`,
+`lastLine` y un `notice`: «fichero de N líneas; devueltas 1–M; pide el resto con `read_file(path,
+startLine, endLine)` — el siguiente trozo empieza en startLine M+1». El aviso va en **campo aparte**
+del contenido a propósito: metido dentro, la concatenación de los trozos dejaría de ser el fichero.
+Un rango imposible se contesta con las líneas que el fichero **sí** tiene, que es lo que el agente
+necesita para corregirse. Y el caso raro se dice en vez de fingirse: una **línea sola** más larga
+que el tope vuelve truncada **declarándolo** (en el clon de xblast la más larga tiene 2.979
+caracteres, así que hoy no ocurre).
+
+**No se sube el tope**, y es anti-objetivo declarado: un tope mayor solo mueve el problema al
+fichero siguiente. **El presupuesto tampoco se toca, y se mide por qué no hace falta:** un trozo
+cuesta **una** lectura, no una por línea, así que con 120.000 caracteres y **30 lecturas** (D-543)
+caben 3,6 millones de caracteres — y los quince ficheros de código que superan el tope se leen
+enteros en **2 a 6 trozos**. **Lo que NO alcanza, y se dice:** los `.resx` gordos de formularios
+—`FormTextureSelector.resx`, 7,4 millones de caracteres— pedirían **62 trozos**, más que el
+presupuesto entero. Ahí `read_file` seguirá diciendo la verdad («devueltas 1–M de N») y el agente se
+quedará sin lecturas antes del final; subir el presupuesto es una decisión del usuario y hoy ninguna
+sesión la ha pedido, porque nadie arregla un hallazgo leyendo un `.resx` de traducciones.
+
+**El encargo lo dice en una línea**, en «Cómo trabajas aquí» y por delante del hallazgo: que la
+lectura tiene tope, que el resto se pide por rango, y que **jamás se le pide al usuario que pegue
+código o líneas — tiene la herramienta para leerlo**. **El coste del agente, contado:** la viñeta
+pasa de 108 a 384 caracteres (+276, el bloque de 1.467 a 1.743) y la descripción de la tool más el
+esquema de los dos argumentos suman 501 más — **≈194 tokens por sesión**. Frente a los 340.089
+tokens de entrada que costó la sesión que se rindió, es el 0,06 %.
+
+**Y la puerta se cierra por el otro lado.** Si aun así el agente construye un `ask_user` cuyas
+opciones piden pegar código, `FixAskGuard` lo ve **antes de pintar la tarjeta** y le devuelve, como
+decisión y no como error —igual que un permiso denegado (D-546)—: «No: léelo tú con
+`read_file(path, startLine, endLine)`. El usuario NO es tu herramienta de lectura». Sin tarjeta y
+sin molestar a nadie. **La regla es deliberadamente tonta y falla hacia dejar pasar**: un verbo de
+pegar y un sustantivo de código, en la pregunta o en cualquiera de las opciones, y nada de intentar
+entender la frase. Lleva **una** excepción, medida y no imaginada: en los informes del hub
+«copy-paste» y «copia-pega» aparecen **nombrando el olor de código** —«los 6 bloques están
+copiados… se elimina el copy-paste»—, que no le pide nada a nadie; esas dos formas compuestas se
+retiran antes de mirar. Una tarjeta de más cuesta un clic; una de menos deja al agente esperando una
+respuesta que nadie va a dar.
+
+**Cambios visibles (N-6): dos líneas del hilo, ninguna de disposición.**
+
+Ninguna vista cambia de sitio. Lo que cambia es **qué tarjetas dejan de aparecer**, y dos líneas de
+narración:
+
+- **El hito que explica la pausa** (patrón de D-1022 §3): «El agente ha pedido que le pegaras
+  código. Se le ha devuelto a `read_file(startLine, endLine)` sin molestarte: no hay nada que
+  contestar». Sin él, el usuario ve al agente detenerse un momento sin motivo — y una tarjeta que
+  desaparece sin explicación es peor que la tarjeta.
+- **La línea de lectura dice el tramo** cuando lo hubo: «Ha leído
+  `XBLASTCore/Forms/FormOptions.Designer.cs` (líneas 1–1.646 de 8.701)». Seis líneas «Ha leído
+  FormOptions.Designer.cs» seguidas parecen un bucle, y son el fichero entero leído por trozos.
+
+**Cobertura (N-5): cinco tests de regla, cebo de 5 de 5.**
+
+**El fichero de 3× el tope se lee entero por trozos y la concatenación es el original byte a byte**
+—el mismo criterio con el que se restauran los snapshots (D-560)—, en **4 lecturas**. **La lectura
+sin rango de un fichero grande** trae el aviso con N y M, el `startLine` del trozo siguiente, y
+**acaba en línea entera**. **Un rango fuera del fichero** contesta cuántas líneas tiene de verdad.
+**El encargo** contiene la instrucción y la prohibición (test de texto, uno solo, como el de «cómo
+trabajas aquí»). Y el quinto es el que importa, ejercitado con **Atalaya.FakeCli sobre la cadena de
+producción entera** (F16) igual que «intentar salirse del hallazgo y que se lo nieguen»: el guion
+reproduce la tarjeta de verdad —«Pégame en el chat las líneas 185 al final (Recomendado)»—, **no
+llega a la conversación**, al agente le vuelve el «no» con la salida en la misma frase, el hilo lleva
+su hito, y acto seguido el mismo guion lee el resto por rango y **sí** pinta la tarjeta del olor de
+código, que es legítima. **Cebo: con la herramienta y la regla anteriores, los 5 se ponen rojos.**
+La tanda queda en **2.551 casos** (2.016 en la aplicación).
+
+**Lo que NO se ha tocado**: las otras tres tools, el ámbito del hallazgo (D-546), el bloqueo fuera
+del clon (D-549) —el temporal sigue bloqueado, y bien—, el generador de prompt de siempre (D-544),
+el presupuesto de lecturas y ninguna vista. **Lo que NO se ha comprobado, y se dice**: ninguna de
+estas sesiones ha hablado con Copilot ni con Claude de verdad — la cadena está ejercitada de punta a
+punta con el CLI falso (D-561 sigue vigente), y la verificación final es un fichero grande de xblast
+con un modelo delante. Y sigue sin poder contarse cuántas tarjetas de «pégame» hubo antes: eso pide
+guardar el texto de las preguntas en el informe, que es otro parte.

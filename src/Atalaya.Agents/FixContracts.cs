@@ -27,7 +27,25 @@ public sealed record FixEdit(string OldText, string NewText, bool ReplaceAll = f
 /// <summary>Lo que devuelve <c>read_file</c>. Un fallo es un resultado, nunca una excepción.</summary>
 /// <param name="Remaining">Lecturas que le quedan al agente. Va en la respuesta para que pueda
 /// administrarse solo en vez de descubrir el tope cuando ya se lo ha gastado.</param>
-public sealed record ReadFileResult(bool Ok, string? Content = null, string? Error = null, int Remaining = 0);
+/// <param name="TotalLines">Cuántas líneas tiene el fichero ENTERO.</param>
+/// <param name="FirstLine">Primera línea de <paramref name="Content"/>, base 1.</param>
+/// <param name="LastLine">Última línea de <paramref name="Content"/>, base 1.</param>
+/// <param name="Notice">
+/// Lo que falta por leer, dicho con letras (BUGFIX-LECTURA). Va aparte de
+/// <paramref name="Content"/> —que es el fichero y nada más, para que los trozos concatenen byte a
+/// byte— y solo aparece cuando queda fichero por detrás: un agente que ve un texto acabado a mitad
+/// de línea y NO lee cuánto le falta, se lo inventa, y lo que se inventó una vez fue pedirle al
+/// usuario que le pegara el resto.
+/// </param>
+public sealed record ReadFileResult(
+    bool Ok,
+    string? Content = null,
+    string? Error = null,
+    int Remaining = 0,
+    int TotalLines = 0,
+    int FirstLine = 0,
+    int LastLine = 0,
+    string? Notice = null);
 
 /// <summary>Lo que devuelve <c>apply_edit</c>.</summary>
 /// <param name="Denied">
@@ -58,8 +76,19 @@ public sealed record FixDoneArgs(
 /// </summary>
 public interface IFixToolbox
 {
-    /// <summary>Lee un fichero del clon. Con presupuesto: explorar no es arreglar.</summary>
-    ReadFileResult ReadFile(string path);
+    /// <summary>
+    /// Lee un fichero del clon. Con presupuesto: explorar no es arreglar.
+    /// <para>
+    /// <b>Y con rango, para que ningún fichero quede fuera de alcance</b> (BUGFIX-LECTURA). Sin
+    /// rango se devuelve el fichero entero si cabe, y si no, el primer trozo <b>diciendo cuántas
+    /// líneas tiene y cuáles van</b>. El rango es solo para VER: se sigue editando por fragmento
+    /// literal (D-545), porque un número de línea deja de significar nada en cuanto se aplica la
+    /// primera edición.
+    /// </para>
+    /// </summary>
+    /// <param name="startLine">Primera línea a devolver, base 1. Null = desde el principio.</param>
+    /// <param name="endLine">Última línea a devolver, base 1. Null = hasta donde quepa.</param>
+    ReadFileResult ReadFile(string path, int? startLine = null, int? endLine = null);
 
     /// <summary>
     /// La ÚNICA vía de modificación. Sobre los ficheros del hallazgo (y sus tests) se aplica

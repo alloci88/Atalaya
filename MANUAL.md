@@ -449,6 +449,11 @@ pie, y el desglose, en el informe.
 - El campo de entrada de abajo está **siempre** disponible: escribe y pulsa Enter para
   dirigirle («no toques ese fichero», «prefiero TryParse»). Si está a mitad de un paso,
   el mensaje se le entrega al empezar el siguiente, y la aplicación te lo dice.
+- **Un fichero grande no te convierte en su lector.** El agente lee por trozos —la respuesta le
+  dice cuántas líneas tiene el fichero y por dónde sigue—, así que cualquier fichero del clon le
+  cabe entero aunque tenga nueve mil líneas. Si aun así te pide en una tarjeta que le pegues
+  código, **la tarjeta no llega**: Atalaya se la devuelve mandándole leerlo con su herramienta, y
+  te lo cuenta en el hilo.
 - **Los ficheros del hallazgo se editan directamente; cualquier otro te pide permiso**, uno a
   uno, con el fichero y el motivo del agente delante. Un «no» se le devuelve como decisión, no
   como error: replantea el arreglo sin ese fichero y no vuelve a pedirlo. **Esto lo gobierna

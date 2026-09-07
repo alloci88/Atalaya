@@ -902,13 +902,26 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
     /// <inheritdoc />
     public Task<string?> AskAsync(
         string question, IReadOnlyList<string> choices, bool allowFreeform, CancellationToken ct)
-        => AskCoreAsync(new FixQuestion
+    {
+        // BUGFIX-LECTURA — la puerta por el otro lado. Una tarjeta que le pide al usuario que
+        // pegue código lo convierte en la herramienta de lectura del agente, y el agente TIENE la
+        // herramienta. Se le devuelve el no como decisión, sin tarjeta y sin molestar a nadie.
+        if (FixAskGuard.AsksTheUserToPasteCode(question, choices))
+        {
+            Say(FixMessage.System("◆",
+                "El agente ha pedido que le pegaras código. Se le ha devuelto a "
+                + "read_file(startLine, endLine) sin molestarte: no hay nada que contestar."));
+            return Task.FromResult<string?>(FixAskGuard.Refusal);
+        }
+
+        return AskCoreAsync(new FixQuestion
         {
             Text = string.IsNullOrWhiteSpace(question) ? "El agente necesita una respuesta." : question,
             Ask = FixAskKind.Decision,
             Choices = choices.Select(c => new FixChoice(c)).ToList(),
             AllowFreeform = allowFreeform || choices.Count == 0,
         });
+    }
 
     /// <inheritdoc />
     public async Task<bool> ApproveFileAsync(string relativePath, string reason, CancellationToken ct)
@@ -1078,8 +1091,10 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         toolbox.Done -= OnDone;
     }
 
-    private void OnFileRead(string path, bool found)
-        => Say(FixMessage.System("👁", found ? $"Ha leído {path}" : $"Buscó {path} y no está en el clon"));
+    private void OnFileRead(string path, bool found, string range)
+        => Say(FixMessage.System("👁", found
+            ? $"Ha leído {path}" + (range.Length > 0 ? $" ({range})" : string.Empty)
+            : $"Buscó {path} y no está en el clon"));
 
     private void OnEdited(FixEditApplied edit) => OnUi(() =>
     {

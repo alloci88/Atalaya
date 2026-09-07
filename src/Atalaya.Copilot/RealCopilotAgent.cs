@@ -416,7 +416,8 @@ public sealed class RealCopilotAgent : IAssistedFixProvider, IThreadedAuditor, I
     {
         IFixToolbox toolbox = conversation.Toolbox;
 
-        ReadFileResult ReadFile(string path) => toolbox.ReadFile(path);
+        ReadFileResult ReadFile(string path, int? startLine, int? endLine)
+            => toolbox.ReadFile(path, startLine, endLine);
 
         ApplyEditResult ApplyEdit(string path, string reason, FixEdit[] edits)
             => toolbox.ApplyEdit(path, reason ?? string.Empty, edits ?? Array.Empty<FixEdit>());

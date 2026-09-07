@@ -60,7 +60,12 @@ public sealed class FixToolbox : IFixToolbox
     /// <summary>Cuántos ficheros puede leer el agente. Explorar no es arreglar (F6.8, D-526).</summary>
     public const int DefaultReadBudget = 30;
 
-    /// <summary>Tope de lo que se le devuelve de un fichero. Un fichero enorme no cabe en un turno.</summary>
+    /// <summary>
+    /// Tope de lo que se le devuelve de un fichero EN UNA LECTURA. Un fichero enorme no cabe en un
+    /// turno — pero cabe en varios: desde BUGFIX-LECTURA lo que no entra no se pierde, se pide por
+    /// rango, y la respuesta dice cuántas líneas quedan. Subir el tope solo movería el problema al
+    /// siguiente fichero.
+    /// </summary>
     public const int MaxFileChars = 120_000;
 
     private readonly string _cloneRoot;
@@ -110,8 +115,12 @@ public sealed class FixToolbox : IFixToolbox
         _readsLeft = Math.Max(1, readBudget);
     }
 
-    /// <summary>Se ha leído un fichero. La vista lo narra.</summary>
-    public event Action<string, bool>? FileRead;
+    /// <summary>
+    /// Se ha leído un fichero. La vista lo narra. El tercer argumento es el rango, cuando lo hubo:
+    /// seis líneas «Ha leído FormOptions.Designer.cs» seguidas parecen un bucle, y son el fichero
+    /// entero leído por trozos (BUGFIX-LECTURA).
+    /// </summary>
+    public event Action<string, bool, string>? FileRead;
 
     /// <summary>Se ha aplicado una edición. Lleva las dos versiones para el diff.</summary>
     public event Action<FixEditApplied>? Edited;
@@ -139,7 +148,7 @@ public sealed class FixToolbox : IFixToolbox
 
     // ------------------------------------------------------------------ read_file
 
-    public ReadFileResult ReadFile(string path)
+    public ReadFileResult ReadFile(string path, int? startLine = null, int? endLine = null)
     {
         if (!TryResolve(path, out string relative, out string full, out string? error))
         {
@@ -161,28 +170,107 @@ public sealed class FixToolbox : IFixToolbox
 
         if (!File.Exists(full))
         {
-            FileRead?.Invoke(relative, false);
+            FileRead?.Invoke(relative, false, string.Empty);
             return new ReadFileResult(false, Error: $"{relative} no existe en el clon.", Remaining: _readsLeft);
         }
 
+        string text;
         try
         {
-            string text = File.ReadAllText(full);
-            bool trimmed = text.Length > MaxFileChars;
-            if (trimmed)
-            {
-                text = text[..MaxFileChars]
-                    + $"\n\n… [recortado: el fichero tiene {text.Length} caracteres] …";
-            }
-
-            FileRead?.Invoke(relative, true);
-            return new ReadFileResult(true, text, Remaining: _readsLeft);
+            text = File.ReadAllText(full);
         }
         catch (Exception ex)
         {
             return new ReadFileResult(false, Error: $"No se pudo leer {relative}: {ex.Message}",
                 Remaining: _readsLeft);
         }
+
+        return Slice(relative, text, startLine, endLine);
+    }
+
+    /// <summary>
+    /// El trozo pedido, y lo que falta DICHO (BUGFIX-LECTURA).
+    /// <para>
+    /// <b>Se corta por líneas enteras, nunca a mitad.</b> Lo que había antes se llevaba los
+    /// primeros 120.000 caracteres y ahí acababa —a media línea, con una coletilla que decía
+    /// cuántos caracteres tenía el fichero y ninguna forma de pedir el resto—. Cortar por línea es
+    /// lo que hace que los trozos se puedan volver a pegar: la concatenación de los rangos
+    /// consecutivos es el fichero, carácter por carácter, que es el mismo criterio con el que se
+    /// restauran los snapshots (D-560).
+    /// </para>
+    /// </summary>
+    private ReadFileResult Slice(string relative, string text, int? startLine, int? endLine)
+    {
+        // El comienzo de cada línea, y el final del texto como centinela: con esto un rango es una
+        // resta de índices y no hay que recomponer separadores —que es donde se pierde el byte a
+        // byte cuando un fichero mezcla \r\n y \n—.
+        var starts = new List<int> { 0 };
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\n' && i + 1 < text.Length)
+            {
+                starts.Add(i + 1);
+            }
+        }
+
+        int total = starts.Count;
+        starts.Add(text.Length);
+
+        int first = Math.Max(1, startLine ?? 1);
+        if (first > total)
+        {
+            return new ReadFileResult(false,
+                Error: $"{relative} tiene {total} líneas y has pedido desde la {first}. "
+                    + "Pide un startLine dentro del fichero.",
+                Remaining: _readsLeft, TotalLines: total);
+        }
+
+        int last = Math.Min(total, endLine is > 0 ? endLine.Value : total);
+        if (last < first)
+        {
+            return new ReadFileResult(false,
+                Error: $"endLine ({endLine}) es anterior a startLine ({first}). Manda el rango al derecho.",
+                Remaining: _readsLeft, TotalLines: total);
+        }
+
+        int from = starts[first - 1];
+        string content = text[from..starts[last]];
+        string? notice = null;
+
+        if (content.Length > MaxFileChars)
+        {
+            // Cuántas líneas ENTERAS caben en el tope. Si no cabe ni una, el fichero tiene una
+            // línea más larga que el tope y se dice con esas palabras en vez de fingir un rango.
+            int fits = last;
+            while (fits > first && starts[fits] - from > MaxFileChars)
+            {
+                fits--;
+            }
+
+            if (fits == first && starts[fits] - from > MaxFileChars)
+            {
+                content = content[..MaxFileChars];
+                return new ReadFileResult(true, content, Remaining: _readsLeft,
+                    TotalLines: total, FirstLine: first, LastLine: first,
+                    Notice: $"fichero de {total} líneas; la línea {first} tiene "
+                        + $"{starts[first] - from} caracteres y no cabe entera: van sus primeros "
+                        + $"{MaxFileChars}. El resto de esa línea no se puede pedir por rango.");
+            }
+
+            last = fits;
+            content = text[from..starts[last]];
+        }
+
+        if (last < total)
+        {
+            notice = $"fichero de {total} líneas; devueltas {first}–{last}; pide el resto con "
+                + $"read_file(path, startLine, endLine) — el siguiente trozo empieza en "
+                + $"startLine {last + 1}.";
+        }
+
+        FileRead?.Invoke(relative, true, first == 1 && last == total ? string.Empty : $"líneas {first}–{last} de {total}");
+        return new ReadFileResult(true, content, Remaining: _readsLeft,
+            TotalLines: total, FirstLine: first, LastLine: last, Notice: notice);
     }
 
     // ------------------------------------------------------------------ apply_edit

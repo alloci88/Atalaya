@@ -518,6 +518,17 @@ editores es la única puerta).
 
 ## Cerrado
 
+- **BUGFIX-LECTURA · El usuario deja de ser la herramienta de lectura del agente** — una sesión de
+  arreglo terminó con cero ficheros tocados y una tarjeta que pedía «Pégame en el chat las líneas
+  185 al final». Medido: el fichero cabía cinco veces y media en el tope, así que el agente se
+  inventó un límite porque la respuesta nunca decía cuánto medía el fichero; y con un fichero que sí
+  lo supera se cortaba a mitad de línea sin forma de pedir el resto (15 ficheros de código de xblast
+  lo superan, el mayor con 8.701 líneas). `read_file` pasa a admitir **startLine/endLine** y a
+  devolver `totalLines`/`firstLine`/`lastLine` con el `startLine` del trozo siguiente, troceando por
+  líneas enteras; el encargo lo dice en una línea; y un `ask_user` que pide pegar código **no se
+  pinta**: se le devuelve al agente como decisión. Sin quinta tool, sin subir el tope y sin relajar
+  el bloqueo fuera del clon. Cinco tests de regla, cebo 5 de 5. Ver D-1032.
+
 - **R13-2 · Se quita «Otro (comando personalizado)»** — decisión del usuario: la caja de texto con
   su sintaxis costaba más de lo que valía. Fuera la opción del desplegable, la fila «Comando del
   editor», los marcadores `{file}` `{line}` `{col}`, el ajuste `editorCommand` y sus ocho casos. **El

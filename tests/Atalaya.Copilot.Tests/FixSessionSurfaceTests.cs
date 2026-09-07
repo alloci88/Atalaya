@@ -1,4 +1,4 @@
-using Atalaya.Copilot;
+﻿using Atalaya.Copilot;
 using FluentAssertions;
 using GitHub.Copilot;
 using GitHub.Copilot.Rpc;
@@ -171,7 +171,8 @@ public sealed class FixSessionSurfaceTests
 
     private sealed class RecordingToolbox : IFixToolbox
     {
-        public ReadFileResult ReadFile(string path) => new(true, "x");
+        public ReadFileResult ReadFile(string path, int? startLine = null, int? endLine = null)
+            => new(true, "x");
 
         public ApplyEditResult ApplyEdit(string path, string reason, FixEdit[] edits) => new(true);
 

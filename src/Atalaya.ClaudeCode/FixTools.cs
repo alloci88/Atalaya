@@ -71,8 +71,12 @@ public static class FixTools
             new(
                 FixToolText.ReadFile,
                 FixToolText.ReadFileDescription,
-                Schema.Object(("path", Schema.Text("Ruta del fichero, relativa a la raíz del clon."), true)),
-                args => toolbox.ReadFile(Text(args, "path"))),
+                Schema.Object(
+                    ("path", Schema.Text("Ruta del fichero, relativa a la raíz del clon."), true),
+                    ("startLine", Schema.Integer("Primera línea a devolver, base 1. Omítelo para empezar por el principio."), false),
+                    ("endLine", Schema.Integer("Última línea a devolver, base 1. Omítelo para leer hasta donde quepa."), false)),
+                args => toolbox.ReadFile(
+                    Text(args, "path"), Number(args, "startLine"), Number(args, "endLine"))),
 
             new(
                 FixToolText.ApplyEdit,
@@ -170,6 +174,26 @@ public static class FixTools
                 _ => value.ToString(),
             }
             : string.Empty;
+
+    /// <summary>
+    /// Un entero opcional. Tolerante en la forma —un modelo que manda <c>"185"</c> con comillas no
+    /// puede tumbar la lectura— y <c>null</c> cuando no viene o no es un número: ahí el toolbox
+    /// hace lo de siempre, que es leer desde el principio.
+    /// </summary>
+    private static int? Number(JsonElement args, string name)
+    {
+        if (args.ValueKind != JsonValueKind.Object || !args.TryGetProperty(name, out JsonElement value))
+        {
+            return null;
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.Number when value.TryGetInt32(out int n) => n,
+            JsonValueKind.String when int.TryParse(value.GetString(), out int n) => n,
+            _ => null,
+        };
+    }
 
     private static bool? Flag(JsonElement args, string name)
     {

@@ -611,6 +611,73 @@ public sealed class AssistedFixClaudeTests : IDisposable
             .And.Contain("no el coste de esta sesión y no entra en ninguna métrica");
     }
 
+    /// <summary>
+    /// <b>La tarjeta que pide pegar código no llega a la vista, y el «no» vuelve al agente</b>
+    /// (BUGFIX-LECTURA). Es la misma propiedad que «intentar salirse del hallazgo y que se lo
+    /// nieguen», sobre la cadena de producción entera: un agente que se convence de que no puede
+    /// leer un fichero construye igual la tarjeta —la de verdad decía «Pégame en el chat las
+    /// líneas 185 al final (Recomendado)»—, y ahí Atalaya lo devuelve a su herramienta sin
+    /// molestar a nadie.
+    /// <para>
+    /// El guion lleva además la tarjeta que <b>SÍ</b> tiene que pasar: la del olor de código, que
+    /// nombra el «copy-paste» sin pedirle nada al usuario. Si la regla se pusiera lista, se
+    /// llevaría por delante una decisión legítima — y la norma es al contrario: en la duda, la
+    /// tarjeta pasa.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Un_ask_user_que_pide_pegar_codigo_no_se_pinta_y_vuelve_al_agente_como_decision()
+    {
+        Script(
+            "text El metodo es largo: lo leo por trozos.",
+            $$"""call read_file {"path":"{{Json(UnitPath)}}","startLine":1,"endLine":4}""",
+            """call ask_user {"question":"El fichero no cabe en una lectura y el temporal esta bloqueado. Que hago?","choices":["Pegame en el chat las lineas 185 al final del metodo (Recomendado)","Confia en el patron y anade el logging sin ver esas lineas","Cancela"]}""",
+            "text Cierto: puedo leerlo yo por rango.",
+            $$"""call read_file {"path":"{{Json(UnitPath)}}","startLine":5}""",
+            """call ask_user {"question":"Los seis bloques del deck son copy-paste del mismo codigo. Los unifico con un array o los dejo?","choices":["Unifica","Dejalos"]}""",
+            $$"""call apply_edit {"path":"{{Json(UnitPath)}}","reason":"es donde esta el defecto","edits":[{"oldText":"var bytes = new byte[hex.Length / 2];","newText":"if (hex.Length % 2 != 0)\r\n        {\r\n            throw new ArgumentException(\"longitud impar\", nameof(hex));\r\n        }\r\n\r\n        var bytes = new byte[hex.Length / 2];"}]}""",
+            """call fix_done {"summary":"Valida la longitud par.","commitTitle":"Valida longitud par en HexStringToByteArray (BUG-0003)","commitDescription":"Antes truncaba en silencio.","risks":""}""");
+
+        LiveFixService fix = Service();
+        var asked = new List<FixQuestion>();
+        AnswerCards(fix, asked, decision: "Unifica", authorize: true);
+
+        await fix.StartAsync(new FixSessionRequest(Slug, _findingId));
+
+        fix.HasFailed.Should().BeFalse(fix.FailureMessage);
+        fix.HasFinished.Should().BeTrue();
+
+        // --- la del «pégame» NO se pintó; la del olor de código, sí ---
+        asked.Should().ContainSingle("solo una de las dos preguntas era para el usuario");
+        asked[0].Text.Should().Contain("copy-paste");
+        asked[0].Answer.Should().Be("Unifica");
+        fix.Conversation.OfType<FixQuestion>().Should()
+            .NotContain(q => q.Text.Contains("Pegame") || q.Choices.Any(c => c.Label.Contains("Pegame")));
+
+        // --- y al agente le llegó el NO como decisión, con la salida en la misma frase ---
+        string[] answers = Transcript()
+            .Where(l => l.StartsWith("ask_user ->", StringComparison.Ordinal)).ToArray();
+        answers.Should().HaveCount(2);
+        answers[0].Should().Contain("con read_file(path, startLine, endLine)")
+            .And.Contain("NO es tu herramienta de")
+            .And.Contain("No vuelvas a pedir");
+        answers[1].Should().Contain("Unifica");
+
+        // --- el hilo explica la pausa que el usuario no ha visto (patrón de D-1022 §3) ---
+        fix.Conversation.OfType<FixMessage>().Should().Contain(
+            m => m.Voice == ConversationVoice.Atalaya && m.Text.Contains("pegaras código"),
+            "una tarjeta que desaparece sin explicación es un agente que parece colgado");
+
+        // --- y el rango funcionó de punta a punta: dos lecturas, cada una con su tramo ---
+        string[] reads = Transcript()
+            .Where(l => l.StartsWith("read_file ->", StringComparison.Ordinal)).ToArray();
+        reads.Should().HaveCount(2);
+        reads[0].Should().Contain("\"FirstLine\":1").And.Contain("\"LastLine\":4");
+        reads[1].Should().Contain("\"FirstLine\":5");
+        fix.Conversation.OfType<FixMessage>().Should()
+            .Contain(m => m.Text.Contains($"Ha leído {UnitPath} (líneas 1–4 de"));
+    }
+
     // ================================================================= ayudas
 
     /// <summary>El proveedor de PRODUCCIÓN, apuntando al CLI falso y al puente de verdad.</summary>

@@ -327,6 +327,127 @@ public sealed class AssistedFixTests : IDisposable
         third.Error.Should().Contain("Presupuesto de lecturas agotado");
     }
 
+    // ============================================ BUGFIX-LECTURA: leer por trozos, sin el usuario
+
+    /// <summary>
+    /// <b>Un fichero de tres veces el tope se lee ENTERO, por trozos, y vuelve a ser el fichero.</b>
+    /// Es la promesa entera de BUGFIX-LECTURA en un test: mientras la respuesta diga cuánto falta,
+    /// el agente encadena rangos hasta el final y lo que junta es el original —el mismo criterio
+    /// byte a byte con el que se restauran los snapshots (D-560)—. Sin el rango, la primera lectura
+    /// devolvía 120.000 caracteres cortados a mitad de línea y el resto no había forma de pedirlo.
+    /// </summary>
+    [Fact]
+    public void Un_fichero_de_tres_veces_el_tope_se_lee_entero_por_trozos_y_concatena_byte_a_byte()
+    {
+        string original = Grande(FixToolbox.MaxFileChars * 3);
+        string ruta = Path.Combine(_clone, "Grande.cs");
+        File.WriteAllText(ruta, original, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+        FixToolbox toolbox = Toolbox(new ScriptedApprovals(answer: true));
+        var juntado = new StringBuilder();
+        int desde = 1;
+        int vueltas = 0;
+        int total;
+
+        do
+        {
+            ReadFileResult trozo = toolbox.ReadFile("Grande.cs", desde);
+            trozo.Ok.Should().BeTrue(trozo.Error);
+            trozo.FirstLine.Should().Be(desde);
+            juntado.Append(trozo.Content);
+            total = trozo.TotalLines;
+            desde = trozo.LastLine + 1;
+            vueltas++;
+        }
+        while (desde <= total && vueltas < 10);
+
+        vueltas.Should().Be(4, "tres trozos de tope más el rabo; y ninguno cuesta más de una lectura");
+        juntado.ToString().Should().Be(original);
+        new UTF8Encoding(false).GetBytes(juntado.ToString()).Should().Equal(File.ReadAllBytes(ruta));
+    }
+
+    /// <summary>
+    /// <b>La lectura SIN rango de un fichero grande no corta en silencio.</b> Dice cuántas líneas
+    /// tiene el fichero, cuáles van y por dónde sigue — y corta por línea entera, que es lo que
+    /// permite volver a pegarlas—. Es la diferencia entre un agente que pide el trozo siguiente y
+    /// uno que se inventa un límite y le pide al usuario que le pegue el resto.
+    /// </summary>
+    [Fact]
+    public void La_lectura_sin_rango_de_un_fichero_grande_dice_cuantas_lineas_tiene_y_cuales_devuelve()
+    {
+        string original = Grande(FixToolbox.MaxFileChars * 3);
+        File.WriteAllText(Path.Combine(_clone, "Grande.cs"), original);
+        int lineas = original.Split('\n').Length - 1;
+
+        ReadFileResult primero = Toolbox(new ScriptedApprovals(answer: true)).ReadFile("Grande.cs");
+
+        primero.Ok.Should().BeTrue();
+        primero.TotalLines.Should().Be(lineas);
+        primero.FirstLine.Should().Be(1);
+        primero.LastLine.Should().BeLessThan(lineas);
+        primero.Notice.Should().NotBeNull()
+            .And.Contain($"fichero de {lineas} líneas")
+            .And.Contain($"devueltas 1–{primero.LastLine}")
+            .And.Contain("startLine")
+            .And.Contain($"startLine {primero.LastLine + 1}");
+        primero.Content.Should().EndWith("\r\n", "se corta por línea entera, nunca a mitad");
+        primero.Content!.Length.Should().BeLessOrEqualTo(FixToolbox.MaxFileChars);
+    }
+
+    /// <summary>
+    /// El rango es para VER, no para editar: <c>apply_edit</c> sigue siendo fragmento literal
+    /// (D-545). Y un rango imposible se contesta con el número de líneas que sí tiene, que es lo
+    /// que el agente necesita para corregirse.
+    /// </summary>
+    [Fact]
+    public void Un_rango_fuera_del_fichero_dice_cuantas_lineas_tiene_de_verdad()
+    {
+        FixToolbox toolbox = Toolbox(new ScriptedApprovals(answer: true));
+
+        int lineas = OriginalCode.Split('\n').Length - 1;   // el fichero acaba en salto
+        ReadFileResult fuera = toolbox.ReadFile(UnitPath, lineas + 100);
+
+        fuera.Ok.Should().BeFalse();
+        fuera.Error.Should().Contain($"tiene {lineas} líneas");
+        fuera.TotalLines.Should().Be(lineas);
+    }
+
+    /// <summary>
+    /// <b>El encargo dice cómo se lee un fichero que no cabe, y que al usuario no se le pide que
+    /// pegue código.</b> Es el test de texto de «Cómo trabajas aquí» (D-543): la herramienta sin la
+    /// instrucción no arregla nada, porque un agente que no sabe que existe el rango no lo usa.
+    /// </summary>
+    [Fact]
+    public async Task El_encargo_dice_como_leer_un_fichero_que_no_cabe_y_que_no_se_pide_pegar_codigo()
+    {
+        string? prompt = null;
+        var agent = new FakeCopilotAgent(fixScript: request =>
+        {
+            prompt = request.Prompt;
+            return Array.Empty<FixStep>();
+        });
+
+        await Service(agent).StartAsync(new FixSessionRequest(Slug, _findingId));
+
+        prompt.Should().NotBeNull();
+        prompt!.Should().Contain("read_file(path, startLine, endLine)");
+        prompt.Should().Contain("pide el resto por rango");
+        prompt.Should().Contain("Jamás le pidas al usuario que te pegue código o líneas");
+    }
+
+    /// <summary>Líneas numeradas, para que un trozo se reconozca por su contenido.</summary>
+    private static string Grande(int minChars)
+    {
+        var sb = new StringBuilder(minChars + 128);
+        for (int n = 1; sb.Length < minChars; n++)
+        {
+            sb.Append("// linea ").Append(n).Append(' ')
+              .Append('x', 60).Append("\r\n");
+        }
+
+        return sb.ToString();
+    }
+
     /// <summary>Un fragmento ambiguo se rechaza en vez de cambiar «la primera aparición».</summary>
     [Fact]
     public void Un_fragmento_que_aparece_varias_veces_se_rechaza_salvo_replaceAll()
