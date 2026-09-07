@@ -4,25 +4,10 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-07 (BUGFIX-PUSH — la sesión que no arrancaba estaba dentro de un push sin
-reloj; y el banco de concurrencia que salió de ahí encontró una pérdida silenciosa de reclamaciones
-que queda ABIERTA).
+Última revisión: 2026-09-07 (F31 — el hub bajo concurrencia real: la pérdida silenciosa de
+reclamaciones que BUGFIX-PUSH dejó abierta queda CERRADA, y el hub tiene por fin su banco de carga).
 
 ## En vuelo
-
-- **BUGFIX-PUSH · la publicación concurrente pierde reclamaciones. ABIERTO, con reproducción.**
-  Con dos clones publicando a la vez contra el `--bare`, **las dos llamadas devuelven `true` y en el
-  hub queda una sola reclamación**: la del que pierde la carrera se queda en su clon creyendo que se
-  publicó. Rojo 2 de cada 3 vueltas, y quién pierde es aleatorio. La reproducción está en
-  `ConcurrentClaimsTests`, **saltada a propósito** hasta que se cierre.
-  - **Una causa ya corregida y que no basta**: `Network.Push` no lanza cuando el remoto rechaza la
-    referencia —llega por `OnPushStatusError`, y sin manejador se descartaba—, así que un
-    `non-fast-forward` volvía como éxito. Ya se recoge y se reintenta; el test mejora y no pasa
-    siempre.
-  - **Dónde mirar después**: el `Integrate`/rebase de `Pull`, que corre DENTRO de `Push` y se traga
-    sus excepciones desde D-007. Un rebase que falla ahí deja el push saliendo igual.
-  - Es el primer uso concurrente real del hub, y la prueba de carga que la promesa
-    «pull/rebase/push + resolución de conflictos» nunca tuvo.
 
 - **F26 — Atalaya se ve como lo que hace.** El sistema visual y las vistas pasadas por él. Se
   entrega en tres partes, cada una con revisión visual del usuario antes de la siguiente.
@@ -523,6 +508,17 @@ que queda ABIERTA).
   esquina.
 
 ## Cerrado
+
+- **F31 · Dos personas a la vez: el hub bajo concurrencia real** — cerrada la pérdida silenciosa de
+  reclamaciones que BUGFIX-PUSH dejó abierta, y **no estaba donde se dijo**: no en el rebase de
+  `Pull`, sino en aceptar el silencio de `Network.Push` como prueba de haber publicado. Ninguna
+  publicación devuelve éxito sin releer el remoto y ver su commit en la punta;
+  `ConcurrentClaimsTests` deja de estar saltado, 20 vueltas verdes de 20. Con ella: el banco de
+  concurrencia (`scripts/BancoCarga`, N personas con sesiones de verdad contra el `--bare`, tanda
+  de N=3 × 10 min con 203 sesiones y 18 hallazgos de 18 en el hub), lo pendiente publicado solo en
+  el arranque y dicho en Cuenta y el piloto, el candado huérfano detectado y limpiado sin
+  silencio, las reglas de conflicto por tipo con su test cada una, y quién está auditando **con
+  nombre** en Portafolio e Inventario. Ver D-1023…D-1028.
 
 - **R9 · Los diálogos por fin, y Directivas oculto** — los diez heredan de `AtalayaDialog`, que fija
   fondo, tinta y tipografía en el constructor y dibuja su propia cabecera: fuera la barra de título
