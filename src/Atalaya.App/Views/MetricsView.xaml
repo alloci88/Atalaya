@@ -611,7 +611,7 @@
                                      aquí. Sin esa frase, cambiar el periodo y ver los mismos números
                                      se lee como un fallo. -->
                                 <TextBlock Style="{StaticResource Text.Small}"
-                                           Text="Cuánto tiempo llevan abiertos los hallazgos activos, contando desde que se detectaron — a día de hoy, sin recortar por el periodo. Si el peso se va a la derecha, la deuda no rota: se pudre." />
+                                           Text="Cuánto tiempo llevan abiertos los hallazgos activos, contando desde que se detectaron — a día de hoy, sin recortar por el periodo. Cuanto más peso a la derecha, más tiempo lleva la deuda sin resolverse." />
 
                                 <ItemsControl ItemsSource="{Binding AgeLegend}"
                                               ItemTemplate="{StaticResource LegendEntry}"
@@ -650,8 +650,19 @@
                              la lista ya está filtrada, así que el color no distinguiría nada. La
                              barra va en un neutro de la casa y es SOLO escala. -->
                         <Border Style="{StaticResource Card}">
-                            <StackPanel>
-                                <Grid>
+                            <!-- LAS CINCO FILAS, CENTRADAS EN LO QUE SOBRA. La tarjeta mide lo que
+                                 su vecina —la rejilla iguala altos (D-990)— y cinco filas ocupan
+                                 bastante menos que una gráfica de 200 px, así que en una pila
+                                 quedaban pegadas arriba con media tarjeta vacía debajo. Con la
+                                 cabecera y el subtítulo en filas `Auto` y la lista en la que sobra,
+                                 el bloque se centra sin que nada cambie de sitio. -->
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
@@ -665,10 +676,12 @@
                                             Command="{Binding CopyTopRulesCommand}"
                                             ToolTip="Copia las cinco reglas y su número, una por línea." />
                                 </Grid>
-                                <TextBlock Style="{StaticResource Text.Small}"
-                                           Text="Las cinco reglas que más hallazgos generaron dentro del periodo, con cuántos. Cuenta lo detectado, esté hoy activo o resuelto: produjo trabajo igual." />
+                                <TextBlock Grid.Row="1" Style="{StaticResource Text.Small}"
+                                           Text="Las cinco reglas con más hallazgos detectados en el periodo. Se cuentan todos, sigan activos o ya estén resueltos." />
 
-                                <ItemsControl ItemsSource="{Binding TopRules}" Margin="{StaticResource Pad.S.Top}"
+                                <ItemsControl Grid.Row="2" ItemsSource="{Binding TopRules}"
+                                              Margin="{StaticResource Pad.S.Top}"
+                                              VerticalAlignment="Center"
                                               Grid.IsSharedSizeScope="True"
                                               Visibility="{Binding HasTopRules, Converter={StaticResource BoolToVisibility}}">
                                     <ItemsControl.ItemTemplate>
@@ -721,9 +734,11 @@
                                 </ItemsControl>
 
                                 <c:EmptyState
+                                    Grid.Row="2"
+                                    VerticalAlignment="Center"
                                     Message="Se activará cuando se detecte algún hallazgo dentro del periodo."
                                     Visibility="{Binding HasTopRules, Converter={StaticResource InverseBoolToVisibility}}" />
-                            </StackPanel>
+                            </Grid>
                         </Border>
                     </c:ColumnsPanel>
 

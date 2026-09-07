@@ -200,6 +200,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
         RangeOptions = new ObservableCollection<RangeOption>
         {
+            new(MetricsRange.Week1, "1 semana"),
             new(MetricsRange.Weeks4, "4 semanas"),
             new(MetricsRange.Weeks8, "8 semanas"),
             new(MetricsRange.Weeks26, "26 semanas"),

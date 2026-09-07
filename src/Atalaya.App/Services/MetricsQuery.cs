@@ -6,6 +6,13 @@ namespace Atalaya.App.Services;
 /// <summary>El rango temporal del panel (F5.9 §3). Los filtros afectan a TODO el panel.</summary>
 public enum MetricsRange
 {
+    /// <summary>
+    /// La última semana. Cubos DIARIOS, así que la regla del eje (F35 §1.2) se cumple entera con
+    /// ellos: siete cubos son siete días y son más de dos, de modo que aquí el eje nunca recorta
+    /// nada. El periodo anterior son los siete días de antes.
+    /// </summary>
+    Week1,
+
     Weeks4,
     Weeks8,
     Weeks26,
@@ -1314,6 +1321,7 @@ public sealed class MetricsQuery
         DateTime to = Local(now).Date.AddDays(1);
         int weeks = range switch
         {
+            MetricsRange.Week1 => 1,
             MetricsRange.Weeks4 => 4,
             MetricsRange.Weeks26 => 26,
             _ => 8,
@@ -1351,7 +1359,7 @@ public sealed class MetricsQuery
     /// </summary>
     internal static MetricsGranularity GranularityFor(MetricsRange range, DateTimeOffset from, DateTimeOffset to)
     {
-        if (range == MetricsRange.Weeks4)
+        if (range is MetricsRange.Week1 or MetricsRange.Weeks4)
         {
             return MetricsGranularity.Diaria;
         }

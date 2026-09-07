@@ -18357,3 +18357,33 @@ La tanda queda en **2.647 casos** (2.112 en la aplicación).
 **Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8. Que el número encima de la barra
 más alta no se pegue al borde de arriba, que 190 px basten para los nombres de regla que hay, y que
 las dos tarjetas se lean bien lado a lado, lo mira el usuario en el `dist`.
+
+### D-1043 — Cuatro retoques vistos en el dist: el hueco de una tarjeta, dos frases y una semana
+
+Los cuatro salen de mirar el `dist` de `6106187`, y son de presentación: ninguno toca una cifra.
+
+**(1) Las cinco filas del top se centran en su tarjeta.** La tarjeta mide lo que su vecina —la
+rejilla iguala altos (D-990)— y cinco filas ocupan bastante menos que una gráfica de 200 px, así
+que en una pila quedaban pegadas arriba con media tarjeta vacía debajo. La cabecera y el subtítulo
+pasan a filas `Auto` y la lista a la que sobra, centrada: el bloque se centra sin que nada cambie
+de sitio ni de estilo.
+
+**(2) y (3) Dos subtítulos.** «Si el peso se va a la derecha, la deuda no rota: se pudre» pasa a
+**«Cuanto más peso a la derecha, más tiempo lleva la deuda sin resolverse»**, y el del top pasa a
+**«Las cinco reglas con más hallazgos detectados en el periodo. Se cuentan todos, sigan activos o
+ya estén resueltos»**. Mismo sitio, mismo estilo; dicen lo mismo sin metáfora.
+
+**(4) El selector estrena «1 semana», delante de las que había.** El periodo anterior son los siete
+días previos, como en cualquier otro rango: el mismo número de días inmediatamente antes (F35 §1.3).
+Los cubos son **diarios**, y con eso la regla del eje se cumple entera por construcción —siete cubos
+son siete días y son más de dos—, así que con este periodo el eje no recorta nunca, ni siquiera
+cuando la única actividad es de hoy. **El valor por defecto sigue siendo cuatro semanas.**
+
+**Cobertura (N-5): dos casos.** Una fila más en el reparto de grano y cubos por rango —una semana,
+siete cubos diarios, sin recorte—, y uno propio que comprueba lo que D-593 exige también aquí: que
+el último cubo **contiene hoy** —empieza en la medianoche de hoy y el rango termina en la de
+mañana, y el hallazgo de hoy cae en él— y que el periodo anterior son exactamente los siete días de
+antes (hace quince queda fuera; hace diez, dentro). Los dos tests que recorren `MetricsRange`
+entero ejercitan el valor nuevo solos. La tanda queda en **2.649 casos** (2.114 en la aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8.

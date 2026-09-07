@@ -520,8 +520,8 @@ se quedan** en tu clon: la próxima vez que abras, esta pantalla te ofrece desca
 ### Métricas
 
 El panel de mando, filtrable por **aplicación** y **periodo** — y los dos filtros
-afectan a todo lo de abajo, sin excepción. Al abrir son **todas las aplicaciones y cuatro
-semanas**.
+afectan a todo lo de abajo, sin excepción. El periodo se elige entre **1 semana, 4 semanas, 26
+semanas y todo**; al abrir son **todas las aplicaciones y cuatro semanas**.
 
 **Cuatro cifras arriba**, cada una con un número grande, la línea que dice de dónde sale y una
 flecha contra el **periodo anterior** —los mismos días inmediatamente antes—. La flecha va en
@@ -607,17 +607,16 @@ Debajo, diez gráficas:
 
 7. **Antigüedad de la deuda** — barras por aplicación con los hallazgos activos repartidos por
    cuánto llevan abiertos desde que se detectaron: `< 1 sem`, `1–4`, `4–12` y `> 12`. Cada barra
-   lleva su número encima, y un cubo sin nada se ve vacío, con su rótulo. Es la gráfica
-   que dice si la deuda **rota o se pudre**: si el peso se va a la derecha, lo que hay abierto lleva
-   meses ahí. Cada activo cae en exactamente un cubo, así que **la suma de todas las barras es la
-   deuda activa** de la segunda tarjeta. Como el rosco de severidad, **el periodo no la recorta**:
+   lleva su número encima, y un cubo sin nada se ve vacío, con su rótulo. **Cuanto más peso a la
+   derecha, más tiempo lleva la deuda sin resolverse.** Cada activo cae en exactamente un cubo, así
+   que **la suma de todas las barras es la deuda activa** de la segunda tarjeta. Como el rosco de severidad, **el periodo no la recorta**:
    es la foto de hoy — recortarla vaciaría por definición los cubos de más de cuatro semanas cada
    vez que eligieras «4 semanas», que es justo lo que vienes a mirar.
-8. **Top 5 reglas del periodo** — las cinco reglas que más hallazgos generaron dentro del periodo,
-   con cuántos. Cada regla es una **barra proporcional a la que más produjo** —la primera llena el
-   hueco— con su número **al final de la barra**, no al otro extremo de la pantalla; el nombre va a
-   la izquierda, recortado con puntos si no cabe y entero en el tooltip. Cuenta lo **detectado**,
-   esté hoy activo o resuelto: produjo trabajo igual. Las barras van en un neutro: **sin color de
+8. **Top 5 reglas del periodo** — las cinco reglas con más hallazgos **detectados** en el periodo;
+   se cuentan todos, sigan activos o ya estén resueltos. Cada regla es una **barra proporcional a la
+   que más produjo** —la primera llena el hueco— con su número **al final de la barra**, no al otro
+   extremo de la pantalla; el nombre va a la izquierda, recortado con puntos si no cabe y entero en
+   el tooltip. Las barras van en un neutro: **sin color de
    gravedad**, porque una regla no es una gravedad —la misma regla produce hallazgos críticos y
    bajos—, y sin color de aplicación, porque la lista ya está filtrada. Un empate se rompe por el
    nombre, siempre igual, para que la lista no baile entre dos cargas. Con **Copiar**.

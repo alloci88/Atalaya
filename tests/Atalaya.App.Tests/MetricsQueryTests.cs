@@ -882,6 +882,7 @@ public sealed class MetricsQueryTests : IDisposable
     }
 
     [Theory]
+    [InlineData(MetricsRange.Week1, MetricsGranularity.Diaria, 7, 6)]
     [InlineData(MetricsRange.Weeks4, MetricsGranularity.Diaria, 28, 27)]
     [InlineData(MetricsRange.Weeks8, MetricsGranularity.Semanal, 8, 55)]
     [InlineData(MetricsRange.Weeks26, MetricsGranularity.Semanal, 26, 181)]
@@ -1444,5 +1445,37 @@ public sealed class MetricsQueryTests : IDisposable
 
         (Build(range: MetricsRange.Weeks4).To - Build(range: MetricsRange.Weeks4).From)
             .TotalDays.Should().Be(28);
+    }
+
+    /// <summary>
+    /// <b>Una semana: siete días, siete cubos diarios, y el último contiene HOY</b> (D-593). La
+    /// regla del eje se cumple entera con esos cubos —siete días y más de dos—, así que aquí no
+    /// recorta nada, ni siquiera cuando la única actividad es de hoy mismo.
+    /// </summary>
+    [Fact]
+    public void Una_semana_son_siete_cubos_diarios_y_el_ultimo_contiene_hoy()
+    {
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now));
+
+        MetricsDashboard d = Build(range: MetricsRange.Week1);
+
+        (d.To - d.From).TotalDays.Should().Be(7);
+        d.Granularity.Should().Be(MetricsGranularity.Diaria);
+        d.Flow.Should().HaveCount(7, "siete cubos de un día");
+        d.AxisIsTrimmed.Should().BeFalse("siete cubos diarios ya cumplen el mínimo: no hay qué recortar");
+
+        // El último cubo CONTIENE hoy: empieza en la medianoche de hoy y termina en la de mañana.
+        d.Cost[^1].From.Should().Be(MetricsQuery.Instant(Now.ToLocalTime().Date));
+        d.To.Should().Be(MetricsQuery.Instant(Now.ToLocalTime().Date.AddDays(1)));
+        d.Flow[^1].New.Should().Be(1, "el hallazgo de hoy cae en el último cubo");
+
+        // Y el periodo anterior son los SIETE días de antes —del 8 al 15—, no otra ventana.
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Resuelto, Now.AddDays(-30), Now.AddDays(-15)));
+        Build(range: MetricsRange.Week1).ResolvedPreviousPeriod.Should()
+            .Be(0, "hace quince días queda por delante de los siete anteriores");
+
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Resuelto, Now.AddDays(-30), Now.AddDays(-10)));
+        Build(range: MetricsRange.Week1).ResolvedPreviousPeriod.Should()
+            .Be(1, "hace diez días cae dentro de los siete anteriores a los siete últimos");
     }
 }
