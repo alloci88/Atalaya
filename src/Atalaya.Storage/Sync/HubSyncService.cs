@@ -90,6 +90,7 @@ public sealed class HubSyncService : IDisposable
     {
         if (Repository.IsValid(_paths.Root))
         {
+            ClearStaleLocks();
             _ = Repo;
             RepointOriginIfNeeded(repoUrl);
             return;
@@ -106,6 +107,92 @@ public sealed class HubSyncService : IDisposable
 
         Repository.Clone(repoUrl, _paths.Root, options);
         _repo = new Repository(_paths.Root);
+    }
+
+    /// <summary>
+    /// Candados que estaban en el clon al abrirlo y se limpiaron, en rutas relativas al
+    /// <c>.git</c>. Vacío es lo normal.
+    /// </summary>
+    public IReadOnlyList<string> ClearedStaleLocks => _clearedLocks;
+
+    /// <summary>
+    /// Candados que están ahí y NO se pudieron quitar porque alguien los tiene abiertos: hay otra
+    /// operación de git viva sobre este mismo clon. No son huérfanos y no se tocan.
+    /// </summary>
+    public IReadOnlyList<string> LocksInUse => _locksInUse;
+
+    private readonly List<string> _clearedLocks = new();
+    private readonly List<string> _locksInUse = new();
+
+    /// <summary>
+    /// <b>Un candado de una sesión muerta no se hereda en silencio</b> (F31 §2).
+    /// <para>
+    /// Cerrar Atalaya a la fuerza en mitad de una escritura deja un <c>index.lock</c> —o el
+    /// candado de una referencia— en el clon. Git no lo quita solo: la siguiente sesión se
+    /// encuentra un clon que rechaza toda escritura, con un mensaje de libgit2 que no le dice a
+    /// nadie qué hacer. Esto pasa al arrancar, que es cuando se sabe que no hay operación nuestra
+    /// en vuelo.
+    /// </para>
+    /// <para>
+    /// <b>Cómo se distingue el huérfano del vivo, sin adivinar.</b> No por la fecha del fichero:
+    /// una operación lenta y legítima envejece igual que un cadáver. Un candado vivo lo tiene
+    /// <b>abierto</b> el proceso que lo puso, y Windows no deja borrar un fichero con un asa
+    /// abierta. Así que se intenta borrar: si sale, era huérfano y ya no está; si no sale, hay
+    /// alguien dentro, no se toca nada y se dice. Las dos cosas se cuentan; ninguna se calla.
+    /// </para>
+    /// </summary>
+    private void ClearStaleLocks()
+    {
+        _clearedLocks.Clear();
+        _locksInUse.Clear();
+
+        string gitDir = Path.Combine(_paths.Root, ".git");
+        if (!Directory.Exists(gitDir))
+        {
+            return;
+        }
+
+        foreach (string lockFile in LockFiles(gitDir))
+        {
+            string rel = Path.GetRelativePath(gitDir, lockFile).Replace(Path.DirectorySeparatorChar, '/');
+            try
+            {
+                File.Delete(lockFile);
+                _clearedLocks.Add(rel);
+                _log.LogWarning(
+                    "Candado huérfano en el clon del hub: {Lock}. Lo dejó una sesión que no llegó a "
+                    + "cerrarse; se ha quitado.", rel);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Alguien lo tiene abierto: hay una operación de git viva sobre este clon. No es
+                // huérfano, así que no es nuestro para quitarlo.
+                _locksInUse.Add(rel);
+                _log.LogWarning(ex, "Candado en uso en el clon del hub: {Lock}", rel);
+            }
+        }
+    }
+
+    private static IEnumerable<string> LockFiles(string gitDir)
+    {
+        foreach (string name in new[] { "index.lock", "HEAD.lock", "config.lock" })
+        {
+            string path = Path.Combine(gitDir, name);
+            if (File.Exists(path))
+            {
+                yield return path;
+            }
+        }
+
+        // Los candados de referencia bloquean el push igual que el del índice bloquea el commit.
+        string refs = Path.Combine(gitDir, "refs");
+        if (Directory.Exists(refs))
+        {
+            foreach (string path in Directory.EnumerateFiles(refs, "*.lock", SearchOption.AllDirectories))
+            {
+                yield return path;
+            }
+        }
     }
 
     private void RepointOriginIfNeeded(string repoUrl)

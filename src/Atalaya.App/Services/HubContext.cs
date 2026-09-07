@@ -153,6 +153,15 @@ public sealed class HubContext
     /// <summary>Non-null when the deployment moved the hub and we re-pointed the existing clone.</summary>
     public string? RemoteRepointedTo => Sync?.RemoteRepointedTo;
 
+    /// <summary>
+    /// Candados huérfanos que se encontraron y quitaron al abrir el clon (F31 §2), y los que
+    /// alguien tenía abiertos y por eso no se tocaron. Vacíos es lo normal.
+    /// </summary>
+    public IReadOnlyList<string> ClearedStaleLocks => Sync?.ClearedStaleLocks ?? Array.Empty<string>();
+
+    /// <inheritdoc cref="ClearedStaleLocks"/>
+    public IReadOnlyList<string> LocksInUse => Sync?.LocksInUse ?? Array.Empty<string>();
+
     /// <summary>When the hub was last successfully pulled, for the Cuenta page.</summary>
     public DateTimeOffset? LastSync { get; private set; }
 

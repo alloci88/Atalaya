@@ -87,6 +87,13 @@ public sealed partial class AccountViewModel : ViewModelBase
     [ObservableProperty] private string _tlsNotice = string.Empty;
     [ObservableProperty] private string _migrationNotice = string.Empty;
 
+    /// <summary>
+    /// Lo que se encontró trabado en el clon al abrirlo (F31 §2). Un candado huérfano se quita
+    /// solo, pero <b>no en silencio</b>: es la huella de una sesión que se cerró a la fuerza, y
+    /// quien lo lea sabrá si aquella vez perdió algo.
+    /// </summary>
+    [ObservableProperty] private string _lockNotice = string.Empty;
+
     /// <summary>Where the hub clone lives on this machine — the first thing to check when sync misbehaves.</summary>
     public string HubClonePath => _hub.HubPaths.Root;
 
@@ -162,10 +169,38 @@ public sealed partial class AccountViewModel : ViewModelBase
               + "desbloquee los endpoints CRL/OCSP."
             : string.Empty;
 
+        LockNotice = BuildLockNotice();
+
         MigrationNotice = _hub.RemoteRepointedTo is { } moved
             ? $"El hub del despliegue ha cambiado: este clon se ha re-apuntado a {moved}. "
               + "Tu historial local se conserva y se publicará en el siguiente push."
             : string.Empty;
+    }
+
+    /// <summary>
+    /// El aviso de los candados, en las dos mitades que puede tener: lo que se quitó y lo que hay
+    /// alguien usando. Nunca se calla ninguna de las dos.
+    /// </summary>
+    private string BuildLockNotice()
+    {
+        var parts = new List<string>();
+        if (_hub.ClearedStaleLocks.Count > 0)
+        {
+            parts.Add(
+                $"Se han quitado {_hub.ClearedStaleLocks.Count} candado(s) que quedaron en el clon "
+                + $"({string.Join(", ", _hub.ClearedStaleLocks)}): los dejó una sesión que no llegó "
+                + "a cerrarse. El clon ya vuelve a escribir.");
+        }
+
+        if (_hub.LocksInUse.Count > 0)
+        {
+            parts.Add(
+                $"Hay {_hub.LocksInUse.Count} candado(s) en uso en el clon "
+                + $"({string.Join(", ", _hub.LocksInUse)}): otra operación de git lo tiene abierto, "
+                + "así que no se ha tocado.");
+        }
+
+        return string.Join(" ", parts);
     }
 
     [RelayCommand]
