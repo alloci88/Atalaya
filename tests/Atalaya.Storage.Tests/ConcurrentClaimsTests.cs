@@ -24,24 +24,12 @@ namespace Atalaya.Storage.Tests;
 /// Contra el <c>--bare</c> local y sin red, como manda N-1.
 /// </para>
 /// <para>
-/// <b>LO QUE ESTE TEST ENCONTRÓ, Y QUE SIGUE ABIERTO.</b> Con los dos clones publicando a la vez,
-/// <b>las dos llamadas devuelven <c>true</c> y las dos dejan la salud en verde</b>, y sin embargo
-/// en el hub queda <b>una sola</b> reclamación: la del que perdió la carrera se queda en su clon,
-/// creyendo que se publicó. Medido: <b>rojo 2 de cada 3 vueltas</b>, y quién pierde es aleatorio.
-/// Es una pérdida de datos silenciosa en la pieza que existe precisamente para que dos máquinas no
-/// auditen la misma unidad.
-/// </para>
-/// <para>
-/// <b>Lo que ya se corrigió por el camino y NO basta</b>: <c>Network.Push</c> no lanza cuando el
-/// otro lado rechaza la referencia —el rechazo llega por <c>OnPushStatusError</c> y sin manejador
-/// se descarta—, así que se instaló el manejador y el rechazo pasa a reintentarse. Con eso el test
-/// pasa a veces, no siempre: queda al menos una segunda causa por encontrar, probablemente en el
-/// <c>Integrate</c>/rebase de <c>Pull</c>, que se ejecuta dentro del propio <c>Push</c> y se traga
-/// sus excepciones a propósito desde D-007.
-/// </para>
-/// <para>
-/// <b>Por qué se queda saltado y no borrado.</b> Es la reproducción del defecto, y una reproducción
-/// vale más que la descripción. Va en el backlog como lo que es: abierto.
+/// <b>Lo que encontró, y cómo se cerró (F31).</b> Con los dos clones publicando a la vez, las dos
+/// llamadas devolvían <c>true</c> y en el hub quedaba <b>una sola</b> reclamación: la del que
+/// perdía la carrera se quedaba en su clon creyendo que se publicó. La causa que faltaba no estaba
+/// en el rebase, sino en qué se aceptaba como prueba de haber publicado: <c>Network.Push</c> vuelve
+/// sin excepción y sin rechazo aunque el hub NO se haya quedado con el commit. Ahora una
+/// publicación no se da por buena hasta releer el remoto y ver el commit propio en su punta.
 /// </para>
 /// </summary>
 public sealed class ConcurrentClaimsTests : IDisposable
@@ -58,9 +46,7 @@ public sealed class ConcurrentClaimsTests : IDisposable
         return (sync, new HubStore(paths));
     }
 
-    [Fact(Skip = "DEFECTO ABIERTO — reproduce la pérdida de reclamaciones descrita arriba. "
-                + "Rojo 2 de cada 3 vueltas; se deja puesto porque es la reproducción, y saltado "
-                + "porque el defecto todavía no está arreglado.")]
+    [Fact]
     public void Dos_sesiones_reclamando_a_la_vez_terminan_las_dos_y_no_se_pisan()
     {
         // Una línea base que las dos comparten, para que las dos tengan de dónde divergir.

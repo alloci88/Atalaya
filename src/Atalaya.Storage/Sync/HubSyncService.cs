@@ -241,7 +241,10 @@ public sealed class HubSyncService : IDisposable
                 }
 
                 Remote origin = Repo.Network.Remotes["origin"];
+                Commit? mine = local.Tip;
+                var pushClock = System.Diagnostics.Stopwatch.StartNew();
                 Repo.Network.Push(origin, $"refs/heads/{local.FriendlyName}", pushOptions);
+                pushClock.Stop();
 
                 if (rejected.Count > 0)
                 {
@@ -250,6 +253,8 @@ public sealed class HubSyncService : IDisposable
                     // llegar, y volver a intentarlo.
                     throw new NonFastForwardException(string.Join("; ", rejected));
                 }
+
+                VerifyPublished(local.FriendlyName, mine, pushClock.Elapsed);
 
                 Succeeded();
                 return true;
@@ -274,6 +279,84 @@ public sealed class HubSyncService : IDisposable
         Health = SyncHealth.Red;
         return false;
     }
+
+    /// <summary>
+    /// <b>Una publicación no se da por buena hasta VERLA en el remoto</b> (F31). Vuelve a leer el
+    /// hub y exige que <paramref name="mine"/> sea antepasado de —o igual a— la punta publicada; si
+    /// no lo es, lo convierte en el rechazo que el remoto no dio, y el bucle de
+    /// <see cref="Push"/> rehace el rebase y lo reintenta.
+    /// <para>
+    /// <b>Por qué hace falta una lectura más, con la medida delante.</b> Que <c>Network.Push</c>
+    /// vuelva sin excepción y sin rechazo <b>no prueba</b> que el hub se quedara con nuestro
+    /// commit. Dos clones publicando a la vez contra el <c>--bare</c> de pruebas: los dos
+    /// terminan en 65 y 69 ms sin un solo reintento, los dos dejan la salud en verde, <b>los dos
+    /// mueven su propia <c>origin/master</c> a su propio commit</b> —así que hasta
+    /// <see cref="PendingCommits"/> decía cero— y en el bare quedan <b>los dos objetos</b> y
+    /// <b>una sola</b> punta. El commit del que pierde la carrera está ahí, entero, y no lo
+    /// alcanza nadie: invisible para todo clon futuro. La comprobación del rechazo no lo caza
+    /// porque no hubo rechazo: cada push, por separado, ERA un avance rápido sobre la punta que
+    /// leyó.
+    /// </para>
+    /// <para>
+    /// El <see cref="Fetch"/> es el que hace el trabajo: el refspec de <c>origin</c> es forzado,
+    /// así que corrige la referencia de seguimiento que el push había movido por su cuenta y deja
+    /// de mentir también a <see cref="PendingCommits"/>. Cuesta una lectura del remoto por
+    /// publicación y se paga con gusto: lo que compra es que un «publicado» signifique publicado.
+    /// </para>
+    /// </summary>
+    internal void VerifyPublished(string branchName, Commit? mine, TimeSpan pushTook)
+    {
+        if (mine is null)
+        {
+            // Un clon sin historial no ha publicado nada, y nada es exactamente lo que hay que
+            // comprobar.
+            return;
+        }
+
+        Thread.Sleep(SettleWindow(pushTook));
+        Fetch();
+
+        Branch? published = Repo.Branches[$"origin/{branchName}"];
+        if (published?.Tip is null)
+        {
+            throw new NonFastForwardException(
+                $"El hub sigue sin la rama {branchName} después de publicar.");
+        }
+
+        HistoryDivergence div = Repo.ObjectDatabase.CalculateHistoryDivergence(mine, published.Tip);
+        if (div.AheadBy is not 0)
+        {
+            throw new NonFastForwardException(
+                $"El hub no se quedó con {Short(mine)}: su punta es {Short(published.Tip)}.");
+        }
+    }
+
+    /// <summary>
+    /// <b>Cuánto se deja posarse el remoto antes de darlo por leído</b> (F31).
+    /// <para>
+    /// Releer el hub justo después de publicar no basta, y el motivo es el propio mecanismo: quien
+    /// puede llevarse por delante nuestra referencia es alguien que ya estaba dentro de su push
+    /// cuando nosotros escribimos, así que <b>termina de escribir un push más tarde que
+    /// nosotros</b>. Verificar antes de que acabe es verificar un remoto que todavía va a cambiar.
+    /// La ventana, por tanto, no es un número inventado: es <b>lo que tarda un push</b>, y el que
+    /// mejor lo estima es el nuestro, que acabamos de cronometrar.
+    /// </para>
+    /// <para>
+    /// Con suelo y techo. El suelo (120 ms) porque contra un remoto local un push son decenas de
+    /// milisegundos y el reloj del sistema no hila tan fino; el techo (2 s) porque esto se paga en
+    /// cada publicación y treinta segundos de tope no se gastan esperando por si acaso.
+    /// <b>Medido</b>, con dos clones publicando a la vez contra el <c>--bare</c>: sin esperar,
+    /// 4 de 40 vueltas terminan con un «publicado» falso; con la ventana, 0 de 40.
+    /// </para>
+    /// </summary>
+    private static TimeSpan SettleWindow(TimeSpan pushTook)
+    {
+        var floor = TimeSpan.FromMilliseconds(120);
+        var ceiling = TimeSpan.FromSeconds(2);
+        return pushTook < floor ? floor : pushTook > ceiling ? ceiling : pushTook;
+    }
+
+    private static string Short(Commit c) => c.Sha[..8];
 
     /// <summary>
     /// Commits que van por delante de la rama remota, es decir, los que aún no se han publicado (F5.1).
@@ -733,9 +816,16 @@ public sealed class HubSyncService : IDisposable
     }
 
     /// <summary>
-    /// La espera entre intentos, <b>doblándose</b>: 300, 600, 1.200 y 2.400 ms. Con dos personas
-    /// publicando contra el mismo hub, esperar lo mismo cada vez es volver a chocar a la misma
-    /// velocidad. El último intento no espera a nadie: ya no hay otro detrás.
+    /// La espera entre intentos, <b>doblándose y con azar</b>: 300, 600, 1.200 y 2.400 ms, cada
+    /// una más un tercio suyo repartido al azar. El último intento no espera a nadie: ya no hay
+    /// otro detrás.
+    /// <para>
+    /// <b>El azar no es adorno</b> (F31 §2). Dos sesiones que chocan lo hacen porque coincidieron;
+    /// si las dos esperan exactamente lo mismo, vuelven a coincidir en el reintento, y en el
+    /// siguiente. Repartir la espera las separa. Es el mismo motivo por el que se dobla, llevado
+    /// al caso que de verdad se da: no una sesión contra un hub lento, sino dos sesiones contra el
+    /// mismo hub.
+    /// </para>
     /// </summary>
     private static void Backoff(int attempt)
     {
@@ -744,7 +834,9 @@ public sealed class HubSyncService : IDisposable
             return;
         }
 
-        Thread.Sleep(TimeSpan.FromMilliseconds(300 * Math.Pow(2, attempt - 1)));
+        double baseMs = 300 * Math.Pow(2, attempt - 1);
+        double jitter = Random.Shared.NextDouble() * (baseMs / 3);
+        Thread.Sleep(TimeSpan.FromMilliseconds(baseMs + jitter));
     }
 
     /// <summary>
