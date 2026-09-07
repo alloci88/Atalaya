@@ -107,4 +107,51 @@ public sealed class PortfolioQueryTests : IDisposable
     {
         try { Directory.Delete(_root, true); } catch { }
     }
+
+    [Fact]
+    public void La_tarjeta_dice_QUIEN_esta_auditando_y_cuantas_unidades()
+    {
+        _store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 1 });
+        _store.WriteClaim("app", new Claim
+        {
+            Unit = "a.cs", Module = "M", By = "Daniel Rodriguez", Machine = "PC", Utc = Now, TtlMinutes = 30,
+        });
+        _store.WriteClaim("app", new Claim
+        {
+            Unit = "b.cs", Module = "M", By = "Daniel Rodriguez", Machine = "PC", Utc = Now, TtlMinutes = 30,
+        });
+        _store.WriteClaim("app", new Claim
+        {
+            Unit = "c.cs", Module = "M", By = "Maria Lopez", Machine = "PC2", Utc = Now, TtlMinutes = 30,
+        });
+
+        AppCard card = new PortfolioQuery(_store, new FakeTime(Now.AddMinutes(5))).Build("app")!;
+
+        card.AuditingNow.Should().BeTrue();
+        card.HasAuditors.Should().BeTrue();
+        card.AuditingWithoutName.Should().BeFalse("hay nombres que poner");
+
+        // LAS DOS PERSONAS, no la primera, y la que mas lleva delante.
+        card.Auditors.Select(a => a.Name).Should().Equal("Daniel Rodriguez", "Maria Lopez");
+        card.Auditors[0].Label.Should().Be("Daniel Rodriguez está auditando ahora · 2 unidades");
+        card.Auditors[1].Label.Should().Be("Maria Lopez está auditando ahora · 1 unidad");
+    }
+
+    [Fact]
+    public void Una_reclamacion_callada_deja_de_anunciar_a_su_dueno()
+    {
+        _store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 1 });
+        _store.WriteClaim("app", new Claim
+        {
+            Unit = "a.cs", Module = "M", By = "Daniel Rodriguez", Machine = "PC", Utc = Now, TtlMinutes = 600,
+        });
+
+        // El TTL lo escribe quien crea la reclamacion y aqui son diez horas; el margen de lectura
+        // son treinta minutos. Manda el mas estricto: un portatil cerrado no tiene al equipo
+        // entero viendo «auditando ahora» hasta que a su TTL le de la gana.
+        AppCard card = new PortfolioQuery(_store, new FakeTime(Now.AddHours(2))).Build("app")!;
+
+        card.AuditingNow.Should().BeFalse();
+        card.Auditors.Should().BeEmpty();
+    }
 }

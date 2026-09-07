@@ -864,4 +864,76 @@ public sealed class InventoryViewTests : IDisposable
         _provider.Dispose();
         try { Directory.Delete(_root, true); } catch { }
     }
+
+    // ============================================ F31 §4 quien esta trabajando, en el inventario
+
+    [Fact]
+    public async Task Una_unidad_que_otro_esta_auditando_dice_QUIEN_y_DESDE_CUANDO()
+    {
+        SeedInventory(("M", "src/M/A.cs", UnitState.Pendiente));
+        var desde = DateTimeOffset.UtcNow.AddMinutes(-8);
+        _hub.Store.WriteClaim("app", new Claim
+        {
+            Unit = "src/M/A.cs", Module = "M", By = "Daniel Rodriguez",
+            Machine = "PC-daniel", Utc = desde, TtlMinutes = 30,
+        });
+
+        InventoryViewModel vm = await Loaded();
+        UnitNode unidad = Unit(vm, "src/M/A.cs");
+
+        unidad.IsClaimedByOther.Should().BeTrue();
+        unidad.ClaimedBy.Should().Be("Daniel Rodriguez");
+        unidad.ClaimLabel.Should().Be(
+            $"Daniel Rodriguez · auditando desde las {desde.ToLocalTime():HH:mm}",
+            "sin la hora no se sabe si lleva dos minutos o dos horas");
+    }
+
+    [Fact]
+    public async Task Y_no_se_puede_marcar_para_auditar_mientras_la_reclamacion_este_viva()
+    {
+        SeedInventory(
+            ("M", "src/M/A.cs", UnitState.Pendiente),
+            ("M", "src/M/B.cs", UnitState.Pendiente));
+        _hub.Store.WriteClaim("app", new Claim
+        {
+            Unit = "src/M/A.cs", Module = "M", By = "Daniel Rodriguez",
+            Machine = "PC-daniel", Utc = DateTimeOffset.UtcNow, TtlMinutes = 30,
+        });
+
+        InventoryViewModel vm = await Loaded();
+        UnitNode reclamada = Unit(vm, "src/M/A.cs");
+        UnitNode libre = Unit(vm, "src/M/B.cs");
+
+        reclamada.IsSelectable.Should().BeFalse();
+        libre.IsSelectable.Should().BeTrue();
+
+        // Y NO BASTA CON APAGAR LA CASILLA: la marca puede venir de la cabecera del modulo o de un
+        // boton de la barra, asi que el view-model tiene que rechazarla tambien.
+        reclamada.IsSelected = true;
+        reclamada.IsSelected.Should().BeFalse("otro la esta auditando");
+        vm.SelectedCount.Should().Be(0);
+
+        libre.IsSelected = true;
+        vm.SelectedCount.Should().Be(1, "la que no esta cogida se marca como siempre");
+    }
+
+    [Fact]
+    public async Task Una_reclamacion_callada_deja_de_bloquear_la_unidad()
+    {
+        SeedInventory(("M", "src/M/A.cs", UnitState.Pendiente));
+
+        // TTL largo, pero callada desde hace horas. Manda el margen de LECTURA: una sesion muerta
+        // no puede bloquear una unidad para siempre.
+        _hub.Store.WriteClaim("app", new Claim
+        {
+            Unit = "src/M/A.cs", Module = "M", By = "Daniel Rodriguez",
+            Machine = "PC-daniel", Utc = DateTimeOffset.UtcNow.AddHours(-3), TtlMinutes = 600,
+        });
+
+        InventoryViewModel vm = await Loaded();
+        UnitNode unidad = Unit(vm, "src/M/A.cs");
+
+        unidad.IsClaimedByOther.Should().BeFalse();
+        unidad.IsSelectable.Should().BeTrue();
+    }
 }

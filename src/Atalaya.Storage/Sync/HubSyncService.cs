@@ -66,6 +66,14 @@ public sealed class HubSyncService : IDisposable
     /// </summary>
     public event Action<int>? PushRetrying;
 
+    /// <summary>
+    /// Cada publicación que TERMINA, con si salió y cuánto tardó (F31 §1). Existe para el banco de
+    /// carga: la cifra por la que existe esta fase es cuánto llega a quedarse bloqueada una
+    /// publicación, y medirla desde fuera solo ve las que pasan por «Sincronizar ahora» — no las
+    /// que hace la sesión por su cuenta, que son las que se colgaron el día 6.
+    /// </summary>
+    public event Action<bool, TimeSpan>? Published;
+
     private Repository Repo => _repo ??= new Repository(_paths.Root);
 
     private Signature Signature => new(_identity, DateTimeOffset.Now);
@@ -648,6 +656,7 @@ public sealed class HubSyncService : IDisposable
                 _log.LogInformation(
                     "Push: {Outcome} «{Message}» en {Ms} ms", ok ? "publicado" : "rechazado", message,
                     clock.ElapsedMilliseconds);
+                Published?.Invoke(ok, clock.Elapsed);
                 return ok;
             }
         }
@@ -656,6 +665,7 @@ public sealed class HubSyncService : IDisposable
             _log.LogWarning(ex.InnerException, "Push: reventó «{Message}» tras {Ms} ms", message,
                 clock.ElapsedMilliseconds);
             Failed(ex.InnerException, SyncHealth.Red);
+            Published?.Invoke(false, clock.Elapsed);
             return false;
         }
 
@@ -672,6 +682,7 @@ public sealed class HubSyncService : IDisposable
         Health = SyncHealth.Red;
         LastError = TimedOut(timeout);
         _log.LogWarning("Push: sin respuesta en {Ms} ms «{Message}»", clock.ElapsedMilliseconds, message);
+        Published?.Invoke(false, clock.Elapsed);
         return false;
     }
 

@@ -162,9 +162,38 @@
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                                                 VerticalAlignment="Top"
                                                 c:Stack.Gap="{StaticResource Space.XS}">
+                                        <!-- CON EL NOMBRE, NO UNA X (F31 §4). Sin servidor no hay
+                                             presencia: la reclamacion reciente es la unica senal
+                                             de que alguien esta trabajando, y un nombre es lo
+                                             unico que convierte «esta ocupada» en «habla con
+                                             Daniel antes de tocarla». Si coinciden varias
+                                             personas, salen todas. -->
+                                        <ItemsControl ItemsSource="{Binding Auditors}"
+                                                      Visibility="{Binding HasAuditors, Converter={StaticResource BoolToVisibility}}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal"
+                                                                c:Stack.Gap="{StaticResource Space.XS}" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Style="{StaticResource Pill}"
+                                                            Background="{DynamicResource Brush.Success.Soft}">
+                                                        <TextBlock Text="{Binding Label}"
+                                                                   Style="{StaticResource Pill.Text}"
+                                                                   Foreground="{DynamicResource Brush.Success.Ink}" />
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <!-- Mi propia sesion recien lanzada: hay actividad y
+                                             todavia no hay reclamacion publicada de la que sacar
+                                             un nombre. Se anuncia igual, sin fingir de quien es. -->
                                         <Border Style="{StaticResource Pill}"
                                                 Background="{DynamicResource Brush.Success.Soft}"
-                                                Visibility="{Binding AuditingNow, Converter={StaticResource BoolToVisibility}}">
+                                                Visibility="{Binding AuditingWithoutName, Converter={StaticResource BoolToVisibility}}">
                                             <TextBlock Text="auditando ahora"
                                                        Style="{StaticResource Pill.Text}"
                                                        Foreground="{DynamicResource Brush.Success.Ink}" />

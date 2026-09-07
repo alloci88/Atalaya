@@ -18,6 +18,22 @@ public static class PortfolioOrder
 }
 
 /// <summary>A computed portfolio card for one app (§8 V1). Never stored — always derived.</summary>
+/// <summary>
+/// Una persona auditando una aplicación ahora mismo, con cuántas unidades tiene cogidas (F31 §4).
+/// <para>
+/// Sin servidor no hay presencia: la única señal de que alguien está trabajando es su reclamación
+/// reciente. Por eso esto se deduce de los claims vivos y no de una lista de conectados que no
+/// existe.
+/// </para>
+/// </summary>
+public sealed record Auditor(string Name, int Units)
+{
+    /// <summary>«Daniel Rodríguez está auditando ahora · 3 unidades».</summary>
+    public string Label => Units == 1
+        ? $"{Name} está auditando ahora · 1 unidad"
+        : $"{Name} está auditando ahora · {Units} unidades";
+}
+
 public sealed record AppCard(
     string Slug,
     string Name,
@@ -37,6 +53,27 @@ public sealed record AppCard(
     bool AuditingNow,
     IReadOnlyList<int> Trend)
 {
+    /// <summary>
+    /// <b>Quién</b> está auditando ahora mismo, y cuánto (F31 §4). Vacía cuando no hay nadie o
+    /// cuando quien audita soy yo desde esta máquina.
+    /// <para>
+    /// Va aparte de <see cref="AuditingNow"/> y no lo sustituye porque las dos preguntas son
+    /// distintas: la papelera solo necesita saber si hay ALGUIEN, y quien mira la tarjeta necesita
+    /// saber QUIÉN. Un nombre es lo único que convierte «esta aplicación está ocupada» en «habla
+    /// con Daniel antes de tocarla».
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<Auditor> Auditors { get; init; } = Array.Empty<Auditor>();
+
+    /// <summary>Hay nombres que enseñar, que no es lo mismo que haber actividad.</summary>
+    public bool HasAuditors => Auditors.Count > 0;
+
+    /// <summary>
+    /// Hay actividad pero sin nombre que ponerle: es mi propia sesión, recién lanzada y todavía
+    /// sin reclamaciones publicadas. Se anuncia igual, sin fingir que sé de quién es.
+    /// </summary>
+    public bool AuditingWithoutName => AuditingNow && Auditors.Count == 0;
+
     private readonly CloneLink? _link;
 
     /// <summary>
@@ -200,7 +237,18 @@ public sealed class PortfolioQuery
         // El margen lo pone quien lee (ClaimRules.MaxSilence), no quien escribió el claim: un
         // portátil cerrado a mitad de sesión no puede tener al equipo entero viendo «auditando
         // ahora» hasta que a su TTL le dé la gana.
-        bool auditingNow = _store.ListClaims(slug).Any(c => c.AnnouncesActivityAt(now));
+        var vivos = _store.ListClaims(slug).Where(c => c.AnnouncesActivityAt(now)).ToList();
+        bool auditingNow = vivos.Count > 0;
+
+        // TODAS las personas, no la primera: si coinciden tres, la tarjeta las dice las tres. Y
+        // con cuántas unidades lleva cada una, que es lo que separa «acaba de empezar» de «lleva
+        // media aplicación».
+        var auditores = vivos
+            .GroupBy(c => c.By, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new Auditor(g.Key, g.Count()))
+            .OrderByDescending(a => a.Units)
+            .ThenBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
 
         return new AppCard(
             slug, app.Name, app.Stack, app.CurrentCycle,
@@ -212,6 +260,7 @@ public sealed class PortfolioQuery
             BuildTrend(active, now))
         {
             Theme = inv?.Theme ?? AuditTheme.General,
+            Auditors = auditores,
         };
     }
 

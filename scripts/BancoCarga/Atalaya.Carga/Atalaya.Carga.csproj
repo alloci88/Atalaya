@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- EL BANCO DE CONCURRENCIA (F31 §1). NO está en `Atalaya.sln`, igual que `Atalaya.Shots`,
+       `PromptBench` e `IconGen`, y por lo mismo: no es producto ni suite, y meterlo en la solución
+       haría que cada build de la aplicación arrastrara una tanda de carga que solo se corre a mano
+       y en cada release.
+
+       Referencia a `Atalaya.App` porque monta SESIONES DE VERDAD -el mismo `SessionCoordinator`,
+       el mismo `HubContext`, la misma tubería de ingesta- contra el agente falso y un `bare`
+       temporal. Un banco que reimplementara la sesión mediría su propia reimplementación. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Atalaya.Carga</RootNamespace>
+    <AssemblyName>Atalaya.Carga</AssemblyName>
+    <NoWarn>$(NoWarn);CS8618;CS8600;CS8602;CS8604</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Atalaya.App\Atalaya.App.csproj" />
+  </ItemGroup>
+
+</Project>

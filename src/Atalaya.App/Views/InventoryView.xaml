@@ -530,7 +530,12 @@
                                                 <!-- La casilla se llama como su unidad (UI-0016):
                                                      las 923 llegaban sin nombre y un lector de
                                                      pantalla anunciaba «casilla» 923 veces. -->
+                                                <!-- APAGADA CUANDO OTRO LA ESTA AUDITANDO (F31 §4).
+                                                     El motivo va al lado, en la pastilla de la
+                                                     columna 4, y no en un tooltip: hay que saber
+                                                     que existe para verlo (D-944.4). -->
                                                 <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}"
+                                                          IsEnabled="{Binding IsSelectable}"
                                                           AutomationProperties.Name="{Binding FileName}"
                                                           VerticalAlignment="Center" />
 
@@ -573,11 +578,21 @@
                                                     </StackPanel>
                                                 </Border>
 
-                                                <TextBlock Grid.Column="4"
-                                                           Text="{Binding ClaimedBy, StringFormat='🔒 {0}'}"
-                                                           Style="{StaticResource Text.Meta}"
-                                                           VerticalAlignment="Center"
-                                                           Margin="{StaticResource Pad.XS.Left}" />
+                                                <!-- QUIEN LA ESTA AUDITANDO Y DESDE CUANDO (F31 §4).
+                                                     Pastilla de estado DEL SISTEMA, distinta de la
+                                                     de la columna 2: aquella dice en que punto esta
+                                                     la unidad, esta dice quien la tiene ahora. Con
+                                                     el NOMBRE, no una X: sin servidor, la
+                                                     reclamacion reciente es la unica senal que hay
+                                                     de que alguien esta trabajando. -->
+                                                <Border Grid.Column="4" Style="{StaticResource Pill}"
+                                                        Margin="{StaticResource Pad.XS.Left}"
+                                                        VerticalAlignment="Center"
+                                                        Visibility="{Binding IsClaimedByOther, Converter={StaticResource BoolToVisibility}}">
+                                                    <TextBlock Text="{Binding ClaimLabel}"
+                                                               Style="{StaticResource Pill.Text}"
+                                                               VerticalAlignment="Center" />
+                                                </Border>
                                             </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>

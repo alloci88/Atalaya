@@ -1,0 +1,5 @@
+# Lo que se versiona es el INSTRUMENTO, no lo que produce.
+#
+# El parte de una tanda concreta va al parte de su fase cuando es evidencia de algo que se decidió,
+# y a la basura cuando no. Las tandas escriben en %TEMP%, no aquí.
+*.md.out

@@ -14,6 +14,38 @@ public sealed partial class UnitNode : ObservableObject
     public UnitState State { get; init; }
     public string? ClaimedBy { get; init; }
 
+    /// <summary>
+    /// Desde cuándo la está auditando quien la reclamó (F31 §4). <c>null</c> cuando no hay
+    /// reclamación viva.
+    /// <para>
+    /// Va con el nombre y no en un tooltip porque la pregunta que se hace quien mira el inventario
+    /// no es «¿está cogida?» sino «¿la cojo yo?», y eso no se contesta sin saber si lleva dos
+    /// minutos o dos horas.
+    /// </para>
+    /// </summary>
+    public DateTimeOffset? ClaimedSince { get; init; }
+
+    /// <summary>Reclamada y viva por OTRA persona: ni se selecciona ni se audita.</summary>
+    public bool IsClaimedByOther => !string.IsNullOrWhiteSpace(ClaimedBy);
+
+    /// <summary>
+    /// «Daniel Rodríguez · auditando desde las 10:42». Es una pastilla de estado DEL SISTEMA, no
+    /// del código: distinta de «Pendiente» y de «Auditada», que dicen en qué punto está la unidad,
+    /// no quién la tiene ahora mismo.
+    /// </summary>
+    public string ClaimLabel => ClaimedBy is null
+        ? string.Empty
+        : ClaimedSince is { } desde
+            ? $"{ClaimedBy} · auditando desde las {desde.ToLocalTime():HH:mm}"
+            : $"{ClaimedBy} · auditando ahora";
+
+    /// <summary>
+    /// Se puede marcar para auditar. Lo que lo apaga es la reclamación viva de otra persona: dejar
+    /// marcarla sería dejar que dos máquinas auditen la misma unidad, que es exactamente lo que
+    /// las reclamaciones vienen a evitar.
+    /// </summary>
+    public bool IsSelectable => !IsClaimedByOther;
+
     [ObservableProperty]
     private bool _isSelected;
 

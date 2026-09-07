@@ -638,9 +638,19 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
         // misma página no puede quedar diciendo que se puede auditar.
         Link = _links.For(app);
         InventoryCycle? inv = _hub.Store.TryReadInventory(Slug, CycleN);
+        // LA MISMA REGLA DE LECTURA QUE EL PORTAFOLIO (F31 §4). Antes bastaba con que el claim no
+        // hubiera caducado, y eso dejaba una unidad bloqueada hasta el TTL entero aunque quien la
+        // tuviera llevara media hora sin dar señales. `AnnouncesActivityAt` es el margen que decide
+        // QUIEN LEE, y no puede ser uno aquí y otro en la tarjeta de la aplicación: serían dos
+        // verdades sobre la misma pregunta.
+        //
+        // Y las MÍAS no cuentan: una reclamación propia es mi sesión en curso, no un compañero
+        // que me impide trabajar.
+        string yo = _hub.ResolveIdentity().Name;
         var claims = _hub.Store.ListClaims(Slug)
-            .Where(c => !c.IsExpiredAt(DateTimeOffset.UtcNow))
-            .ToDictionary(c => c.UnitHash, c => c.By);
+            .Where(c => c.AnnouncesActivityAt(DateTimeOffset.UtcNow))
+            .Where(c => !string.Equals(c.By, yo, StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(c => c.UnitHash, c => c);
 
         var units = inv?.Units ?? new List<InventoryUnit>();
         _allUnits = units;
@@ -746,7 +756,8 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
                     Module = u.Module,
                     Loc = u.Loc,
                     State = u.State,
-                    ClaimedBy = claims.TryGetValue(u.UnitHash, out string? by) ? by : null,
+                    ClaimedBy = claims.TryGetValue(u.UnitHash, out Claim? claim) ? claim.By : null,
+                    ClaimedSince = claim?.Utc,
                     Drift = DriftOf(u),
                 };
 
@@ -776,6 +787,15 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
 
     private void OnUnitSelectionChanged(UnitNode unit)
     {
+        // UNA UNIDAD QUE OTRO ESTÁ AUDITANDO NO SE MARCA (F31 §4), y da igual por dónde llegue la
+        // marca: la casilla de la fila, la cabecera del módulo o un botón de la barra. La casilla
+        // se apaga en la vista, pero apagarla solo cierra UNA de las tres puertas.
+        if (unit.IsClaimedByOther && unit.IsSelected)
+        {
+            unit.SetSelectedQuietly(false);
+            return;
+        }
+
         // Tocar la selección a mano deja de ser «lo que propuso la deriva» (F9 §6).
         _selectionFromDrift = false;
         if (unit.IsSelected)
