@@ -74,5 +74,13 @@ public sealed class FixRecord
     /// </summary>
     public string? CommitSha { get; set; }
 
+    /// <summary>
+    /// Con quién quedó firmado ese commit, como «Nombre &lt;correo&gt;» (BUGFIX-F32-2). Se
+    /// guarda para que la pantalla lo siga diciendo al volver por «Último arreglo», que se
+    /// reconstruye de aquí. Opcional, como <see cref="CommitSha"/>: los registros anteriores
+    /// se leen sin tocarlos.
+    /// </summary>
+    public string? CommitAuthor { get; set; }
+
     public List<FixFileStamp> Files { get; set; } = new();
 }

@@ -462,6 +462,10 @@ pie, y el desglose, en el informe.
   commiteado, la línea roja dice qué quedó sin anotar, y se reintenta solo la próxima vez que
   entres aquí. Si falla el **último**, dice «pendiente de publicar» y sale con lo pendiente,
   como todo lo demás.
+- **El commit sale con la identidad de git de ESE clon**, y la línea del hash te la enseña
+  —«· como Su Nombre &lt;correo&gt;»— para que la veas **antes de pushear**. Si no es la tuya,
+  cámbiala con `git config user.name` y `git config user.email` en ese clon. Atalaya no se
+  inventa un autor ni adivina si el que hay es un marcador.
 - **Descartar todo** devuelve cada fichero tocado a como estaba, byte a byte, con
   confirmación previa.
 - **Detener** para al agente; lo que ya haya aplicado se queda.

@@ -518,6 +518,15 @@ editores es la única puerta).
 
 ## Cerrado
 
+- **BUGFIX-F32-2 · El autor en la línea del hash, y los tres bytes que se caían** — dos cosas
+  que se vieron con el primer commit real. El commit salió como «Su Nombre» (el `user.name`
+  de ese clon): correcto por D-1033, pero invisible hasta después; ahora la línea del hash
+  dice con quién se commiteó, leído del commit y sin heurísticas de marcador. Y la línea 1
+  aparecía quitada y puesta en el diff: medido sobre los blobs, era la **marca de orden**
+  (`ef bb bf`), que `File.WriteAllText` no devolvía — **no** el `autocrlf` del clon, que
+  normaliza fines de línea y nunca toca el BOM—. Regla nueva: una edición conserva BOM, fin
+  de línea y final de fichero. Seis casos de regla, cebo en los dos. Ver D-1035.
+
 - **BUGFIX-F32 · El botón que cerraba la aplicación** — pulsar «Me quedo los cambios» cerraba
   Atalaya sin dejar traza. La pila estaba en el Visor de sucesos (1026): el commit corre fuera
   del hilo de interfaz y el aviso del servicio acababa tocando el comando enlazado desde un

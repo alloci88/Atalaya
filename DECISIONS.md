@@ -17557,3 +17557,85 @@ publicar»). La tanda queda en **2.567 casos** (2.032 en la aplicación).
 definición y el segundo depende del recolector—, así que de ésos se prueba el parte que escriben
 (`Describe`) y no el enganche. Y no se ha vuelto a pulsar el botón en el `dist` con una sesión real:
 lo que se ha reproducido es el cruce de hilo que lo cerraba, con la pila del evento 1026 delante.
+## BUGFIX-F32-2 — Con quién se commitea, y los tres bytes que se caían
+
+### D-1035 — El autor se enseña, y una edición conserva los bytes que no toca
+
+**Los dos vienen del mismo commit real**, `5249598bf` de xblast, y ninguno es una crítica a F32: son
+lo que se ve cuando el arreglo llega hasta el final por primera vez.
+
+**El autor, en la línea del hash.** Aquel commit salió como **«Su Nombre»**, que es lo que tenía el
+`user.name` de ese clon. Atalaya hizo **lo correcto** —D-1033: la identidad del clon, sin inventar
+otra—, pero el usuario no tenía dónde verlo hasta que el commit ya estaba hecho. Ahora la línea lo
+dice: «Commiteado `5249598` · 1 fichero · **como Su Nombre &lt;correo&gt;** · pendiente de tu push».
+**Sin heurísticas**: no hay ninguna regla de «esto parece un marcador» — Atalaya no puede saber si
+«Su Nombre» es un relleno o el nombre de alguien, y el que sí puede saberlo lo tiene delante justo
+antes de pushear. El dato se lee **del commit ya creado** (`repo.Head.Tip.Author`) y no de la
+configuración: la configuración se puede haber leído de otro sitio o venir del entorno, y lo que
+importa es lo que va a salir en el historial. Se guarda en el registro junto al hash
+(`FixRecord.CommitAuthor`, opcional como todo lo de D-571) para que «Último arreglo» lo siga
+diciendo.
+
+**Y los tres bytes, medidos antes de tocar nada (N-2).** En el diff de `5249598bf` la línea 1
+—`#region INFORMATION`— salía quitada y puesta, idéntica. Sobre los blobs:
+
+```
+5249598bf^ : efbb bf23 7265 6769 6f6e 2049 4e46 4f52   ...#region INFOR
+5249598bf  : 2372 6567 696f 6e20 494e 464f 524d 4154   #region INFORMAT
+```
+
+```
+-M-oM-;M-?#region INFORMATION$
++#region INFORMATION$
+```
+
+**Qué cambió: la marca de orden (BOM), `ef bb bf`, que estaba y dejó de estar.** No es un fin de
+línea: el blob tiene `0a` —LF— **antes y después**, y el final de fichero no se movió.
+
+**Y quién lo cambió: la escritura, no el clon.** El clon tiene `core.autocrlf = true` y un
+`.gitattributes` con `* text=auto`, así que git **sí** normaliza fines de línea al commitear — pero
+eso funcionaba igual antes y después, y **git no añade ni quita marcas de orden**. Reproducido con
+el toolbox de verdad sobre tres ficheros: con BOM + CRLF, **48 → 45 bytes** (los tres del
+preámbulo); sin BOM + LF, **42 → 42, idénticos**; y con BOM y sin salto final, **46 → 43**. Los
+CRLF se conservaban en los tres (3→3, 2→2) y el final de fichero también. La causa es
+`File.WriteAllText(full, next)`, que escribe UTF-8 **sin** preámbulo: `ReadAllText` se comía el BOM
+al leer y nadie lo devolvía al escribir. **Cada edición de un fichero con BOM se llevaba sus tres
+bytes.**
+
+**La regla que entra: escribir una edición conserva BOM, fin de línea y final de fichero — los
+bytes fuera del fragmento sustituido son los mismos.** Es el mismo criterio byte a byte con el que
+se restauran los snapshots (D-560), aplicado a la escritura en vez de a la restauración. Se escribe
+con la codificación que el fichero **ya tenía**, mirando su preámbulo real y no su extensión: un
+fichero sin BOM se escribe sin BOM —ponérselo «por consistencia» sería el mismo defecto al revés— y
+uno **nuevo** sale sin BOM, que es lo que hacía antes y lo correcto. Se reconocen los cuatro
+preámbulos de Unicode y no solo el de UTF-8: `ReadAllText` sabe decodificar un UTF-16, así que
+escribirlo como UTF-8 habría transcodificado el fichero entero — un defecto mucho mayor que el que
+se arregla aquí, y que estaba a un fichero de distancia.
+
+**`apply_edit` no cambia** (D-545): sigue siendo fragmento literal, y lo que se ha corregido es
+**cómo se guardan** los bytes, no cómo se decide qué sustituir. **Y la atribución de D-685 sigue
+igual de sana**: `NormalizedContentHash` no toca el preámbulo, así que antes la huella y el blob
+coincidían los dos **sin** BOM y ahora coinciden los dos **con** él. Lo que cambia es que el fichero
+del usuario deja de moverse por debajo.
+
+**Lo visible (N-6): una línea, y una que deja de aparecer.** La del hash gana «· como Nombre
+&lt;correo&gt;», en Arreglo terminado y en Último arreglo. Y la línea 1 de un fichero con BOM deja
+de salir en el diff del commit — que no es un cambio de la interfaz de Atalaya, pero es lo que el
+usuario ve en la suya. Nada más se mueve: ni qué se commitea, ni con qué mensaje, ni con qué
+identidad (D-1033), ni el `StepList` ni sus cinco pasos (D-1034).
+
+**Cobertura (N-5): seis casos de regla, cebo comprobado en los dos.** El del autor pone en el clon
+una identidad **distinta** de la de la máquina y de la del hub y exige que sea **ésa** la que sale,
+leída del commit, en la línea y en el registro — y que sobreviva a volver por «Último arreglo»—.
+El de los bytes es una `[Theory]` de cuatro: BOM×CRLF, BOM×LF, sin-BOM×CRLF y sin-BOM×LF, y en las
+cuatro exige que después de un `apply_edit` **haya exactamente un byte distinto en todo el fichero**
+—el que se pidió cambiar—, con el preámbulo, el recuento de CR y el último byte iguales. Más el
+caso contrario: un fichero **creado** por el agente no estrena marca de orden. **Cebos**: con el
+escritor anterior, los dos casos con BOM se ponen rojos por tres bytes exactos y los dos sin BOM
+siguen verdes —que es justo lo que decía la medida—; y sin el autor en la línea, el suyo. La tanda
+queda en **2.573 casos** (2.038 en la aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: no hay ningún fichero UTF-16 ni UTF-32 en el clon de
+xblast, así que esas tres ramas del detector se prueban por construcción y no contra un caso real.
+Y el commit `5249598bf` **ya está hecho**: esto no lo arregla hacia atrás — si se quiere el BOM de
+vuelta en `Hull.cs`, es un cambio del usuario en su clon.

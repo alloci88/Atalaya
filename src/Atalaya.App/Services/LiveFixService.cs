@@ -1072,6 +1072,14 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
     /// </summary>
     [ObservableProperty] private string? _committedSha;
 
+    /// <summary>
+    /// <b>Con quién quedó firmado</b>, como «Nombre &lt;correo&gt;» (BUGFIX-F32-2). Sale en la
+    /// línea del hash para que se vea <b>antes de pushear</b>: el commit lleva la identidad de
+    /// git del clon (D-1033) y ésa puede ser un marcador —en xblast era «Su Nombre»— sin que
+    /// Atalaya tenga forma de saberlo. Se enseña; juzga el usuario.
+    /// </summary>
+    [ObservableProperty] private string? _committedAuthor;
+
     /// <summary>Hay un commit en marcha: el botón se apaga mientras corre el <c>pre-commit</c>.</summary>
     [ObservableProperty] private bool _isCommitting;
 
@@ -1088,9 +1096,10 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
 
         try
         {
-            string? recorded = _hub.Store.ListFixes(Slug)
-                .FirstOrDefault(f => string.Equals(f.Id.ToString(), SessionId, StringComparison.Ordinal))
-                ?.CommitSha;
+            FixRecord? record = _hub.Store.ListFixes(Slug)
+                .FirstOrDefault(f => string.Equals(f.Id.ToString(), SessionId, StringComparison.Ordinal));
+            string? recorded = record?.CommitSha;
+            CommittedAuthor ??= record?.CommitAuthor;
 
             // El commit MANDA sobre el registro. Si se hizo y la anotación no llegó a
             // escribirse, lo que hay que corregir es el registro, no olvidar el commit: por eso
@@ -1246,6 +1255,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         // registro, no el repositorio.
         AcceptChanges();
         CommittedSha = sha;
+        CommittedAuthor = result.Author;
         StatusMessage = "Arreglo terminado. Los cambios están commiteados en tu clon.";
         Say(FixMessage.System("◆",
             $"Commiteado {sha} · {paths.Count} fichero(s). El push sigue siendo tuyo."));
@@ -1316,6 +1326,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         }
 
         record.CommitSha = sha;
+        record.CommitAuthor = CommittedAuthor;
         _hub.Store.WriteFix(record);
     }
 

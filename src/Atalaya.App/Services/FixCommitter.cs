@@ -10,7 +10,15 @@ namespace Atalaya.App.Services;
 /// devuelve 1— lleva pegada la COLA de su salida, que es donde el hook dice qué le ha molestado
 /// (mismo criterio que el resumen de compilar, D-548).
 /// </param>
-public sealed record FixCommitResult(bool Ok, string? Sha = null, string? Error = null);
+/// <param name="Author">
+/// <b>La identidad con la que git firmó el commit</b>, como «Nombre &lt;correo&gt;»
+/// (BUGFIX-F32-2). Se lee del commit YA CREADO y no de la configuración: es lo único que
+/// prueba con quién salió — la configuración se puede haber leído de otro sitio, o venir del
+/// entorno—. Y se enseña <b>sin juzgarla</b>: Atalaya no tiene forma de saber si «Su Nombre»
+/// es un marcador o el nombre de alguien.
+/// </param>
+public sealed record FixCommitResult(
+    bool Ok, string? Sha = null, string? Error = null, string? Author = null);
 
 /// <summary>
 /// <b>git no hizo el commit, y su motivo tiene que llegar a la línea del paso</b>
@@ -166,7 +174,7 @@ public sealed class FixCommitter
 
             string sha = GitInfo.HeadSha(cloneRoot);
             return sha is { Length: > 0 } && sha != "unknown"
-                ? new FixCommitResult(true, sha)
+                ? new FixCommitResult(true, sha, Author: AuthorOf(cloneRoot!))
                 : Fail("git dijo que el commit salió bien, pero no se pudo leer el nuevo HEAD.");
         }
         catch (Exception ex)
@@ -183,6 +191,24 @@ public sealed class FixCommitter
             {
                 // Un temporal que no se deja borrar no puede tumbar un commit que ya se hizo.
             }
+        }
+    }
+
+    /// <summary>
+    /// Con quién quedó firmado el commit que se acaba de hacer. Del commit, no del config:
+    /// es lo que el usuario va a ver en el historial cuando publique (BUGFIX-F32-2).
+    /// </summary>
+    private static string? AuthorOf(string cloneRoot)
+    {
+        try
+        {
+            using var repo = new Repository(cloneRoot);
+            Signature? who = repo.Head.Tip?.Author;
+            return who is null ? null : $"{who.Name} <{who.Email}>";
+        }
+        catch (Exception)
+        {
+            return null;   // El commit está hecho; no poder leer el autor no lo deshace.
         }
     }
 

@@ -1,3 +1,4 @@
+using System.Text;
 using Atalaya.Copilot;
 
 namespace Atalaya.App.Services;
@@ -390,7 +391,14 @@ public sealed class FixToolbox : IFixToolbox
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-            File.WriteAllText(full, next);
+
+            // BUGFIX-F32-2 — SE ESCRIBE CON LA CODIFICACIÓN QUE EL FICHERO YA TENÍA. Un
+            // `File.WriteAllText(full, next)` a secas escribe UTF-8 SIN marca de orden, así que
+            // cada edición de un fichero con BOM se llevaba sus tres bytes por delante y el diff
+            // enseñaba la línea 1 quitada y puesta, idéntica. Medido en el clon de xblast:
+            // `Hull.cs` pasó de 48 a 45 bytes en la cabecera, y el diff mostraba
+            // `-M-oM-;M-?#region INFORMATION` / `+#region INFORMATION`.
+            File.WriteAllText(full, next, EncodingOf(full));
         }
         catch (Exception ex)
         {
@@ -535,6 +543,78 @@ public sealed class FixToolbox : IFixToolbox
 
         return false;
     }
+
+    /// <summary>
+    /// <b>La codificación con la que hay que volver a escribir un fichero: la que ya tenía</b>
+    /// (BUGFIX-F32-2).
+    /// <para>
+    /// <b>La regla es conservar, no normalizar.</b> Los bytes que están fuera del fragmento
+    /// sustituido tienen que salir iguales — es el mismo criterio byte a byte con el que se
+    /// restauran los snapshots (D-560)—, y la marca de orden es uno de ellos. Los fines de línea
+    /// ya se conservaban solos: <c>ReadAllText</c> los deja dentro de la cadena y
+    /// <c>WriteAllText</c> los devuelve tal cual; lo único que se perdía era el preámbulo.
+    /// </para>
+    /// <para>
+    /// Se mira el preámbulo <b>real</b> y no la extensión: un fichero <b>sin</b> BOM se escribe
+    /// sin BOM, y ponérselo «por consistencia» sería el mismo defecto al revés. Un fichero nuevo
+    /// —que no existe todavía— sale sin BOM, que es lo que hacía antes y lo correcto.
+    /// </para>
+    /// <para>
+    /// Y se reconocen los cuatro preámbulos de Unicode, no solo el de UTF-8: <c>ReadAllText</c>
+    /// ya sabe decodificar un UTF-16, así que si al escribir se le pusiera UTF-8 el fichero se
+    /// transcodificaría entero. Un fichero sin preámbulo se lee y se escribe como UTF-8, que es
+    /// lo que se venía haciendo.
+    /// </para>
+    /// </summary>
+    internal static Encoding EncodingOf(string full)
+    {
+        Span<byte> head = stackalloc byte[4];
+        int read = 0;
+        try
+        {
+            using FileStream file = File.OpenRead(full);
+            read = file.Read(head);
+        }
+        catch (Exception)
+        {
+            return NoPreamble;   // No poder mirarlo no puede impedir escribirlo.
+        }
+
+        ReadOnlySpan<byte> start = head[..read];
+
+        // El de UTF-32 LE empieza por los mismos dos bytes que el de UTF-16 LE, así que se mira
+        // antes: al revés, ningún UTF-32 LE se reconocería nunca.
+        if (start.StartsWith(new byte[] { 0xFF, 0xFE, 0x00, 0x00 }))
+        {
+            return new UTF32Encoding(bigEndian: false, byteOrderMark: true);
+        }
+
+        if (start.StartsWith(new byte[] { 0x00, 0x00, 0xFE, 0xFF }))
+        {
+            return new UTF32Encoding(bigEndian: true, byteOrderMark: true);
+        }
+
+        if (start.StartsWith(new byte[] { 0xEF, 0xBB, 0xBF }))
+        {
+            return new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
+        }
+
+        if (start.StartsWith(new byte[] { 0xFF, 0xFE }))
+        {
+            return new UnicodeEncoding(bigEndian: false, byteOrderMark: true);
+        }
+
+        if (start.StartsWith(new byte[] { 0xFE, 0xFF }))
+        {
+            return new UnicodeEncoding(bigEndian: true, byteOrderMark: true);
+        }
+
+        return NoPreamble;
+    }
+
+    /// <summary>UTF-8 a secas. Es lo que se le pone a un fichero que no traía preámbulo.</summary>
+    private static readonly Encoding NoPreamble =
+        new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
     private static string SafeRead(string full)
     {

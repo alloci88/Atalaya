@@ -395,10 +395,28 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
     /// La linea que sustituye a las tres piezas. Dice el hash, cuanto entro y -lo que Atalaya
     /// no hace y nunca hara- que publicar sigue siendo del usuario.
     /// </summary>
-    public string CommittedLine => IsCommitted
-        ? $"Commiteado {_fix.CommittedSha} · {Files.Count} fichero{(Files.Count == 1 ? string.Empty : "s")}"
-          + " · pendiente de tu push"
-        : string.Empty;
+    public string CommittedLine
+    {
+        get
+        {
+            if (!IsCommitted)
+            {
+                return string.Empty;
+            }
+
+            // BUGFIX-F32-2 — EL AUTOR VA EN ESTA LÍNEA. El commit sale con la identidad de git
+            // del clon (D-1033), y en xblast ésa era «Su Nombre»: un marcador que se publicó
+            // sin que nadie lo viera. Se enseña aquí, donde el usuario está mirando justo
+            // antes de pushear, y sin heurísticas de «esto parece un marcador» — Atalaya no
+            // puede saberlo, y el que sí puede lo tiene delante.
+            string autor = _fix.CommittedAuthor is { Length: > 0 } who
+                ? $" · como {who}"
+                : string.Empty;
+
+            return $"Commiteado {_fix.CommittedSha} · {Files.Count} "
+                + $"fichero{(Files.Count == 1 ? string.Empty : "s")}{autor} · pendiente de tu push";
+        }
+    }
 
     /// <summary>
     /// Se puede commitear. El titulo vacio lo apaga: un commit sin asunto no se hace, y

@@ -1463,7 +1463,9 @@ public sealed class AssistedFixTests : IDisposable
 
         vm.IsCommitted.Should().BeTrue();
         vm.ClosedUncommitted.Should().BeFalse("ni aviso ámbar, ni tarjeta, ni botón");
-        vm.CommittedLine.Should().Be($"Commiteado {result.Sha} · 1 fichero · pendiente de tu push");
+        vm.CommittedLine.Should().StartWith($"Commiteado {result.Sha} · 1 fichero")
+            .And.EndWith("· pendiente de tu push")
+            .And.Contain("· como ", "con quién se commiteó, antes de pushear (BUGFIX-F32-2)");
         vm.CanDiscardAll.Should().BeFalse();
         vm.DiscardBlockedReason.Should().Be($"ya commiteado ({result.Sha})");
         vm.CanCommitChanges.Should().BeFalse("no se commitea dos veces");
@@ -1672,6 +1674,125 @@ public sealed class AssistedFixTests : IDisposable
         _hub.Store.ListFixes(Slug).Single().CommitSha.Should().Be(result.Sha);
     }
 
+    // ====================================== BUGFIX-F32-2: el autor, y los bytes de fuera
+
+    /// <summary>
+    /// <b>La línea del hash dice CON QUIÉN se commiteó</b> (BUGFIX-F32-2).
+    /// <para>
+    /// El commit sale con la identidad de git <b>del clon</b> (D-1033), que puede no ser la de la
+    /// máquina ni la del hub — en xblast era «Su Nombre», un marcador, y se publicó sin que nadie
+    /// lo viera—. Este test pone en el clon una identidad distinta de las otras dos y exige que sea
+    /// <b>ésa</b> la que sale: la del commit, no la que Atalaya usa para el hub.
+    /// </para>
+    /// <para>
+    /// Y se enseña <b>sin juzgarla</b>: no hay ninguna heurística de «esto parece un marcador».
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task La_linea_del_hash_dice_la_identidad_con_la_que_se_commiteo()
+    {
+        const string Nombre = "Otro Autor";
+        const string Correo = "otro@ejemplo.invalid";
+        using (var repo = new LibGit2Sharp.Repository(_clone))
+        {
+            repo.Config.Set("user.name", Nombre, LibGit2Sharp.ConfigurationLevel.Local);
+            repo.Config.Set("user.email", Correo, LibGit2Sharp.ConfigurationLevel.Local);
+        }
+
+        LiveFixService fix = await FixedSession();
+        FixCommitResult result = fix.CommitChanges();
+        result.Ok.Should().BeTrue(result.Error);
+
+        // Del COMMIT, no de la configuración: es lo que se verá en el historial al publicar.
+        using (var repo = new LibGit2Sharp.Repository(_clone))
+        {
+            repo.Head.Tip!.Author.Name.Should().Be(Nombre);
+        }
+
+        fix.CommittedAuthor.Should().Be($"{Nombre} <{Correo}>");
+
+        var vm = new AssistedFixViewModel(fix, _toasts, new ScriptedDiscard(answer: true));
+        vm.CommittedLine.Should().Be(
+            $"Commiteado {result.Sha} · 1 fichero · como {Nombre} <{Correo}> · pendiente de tu push");
+
+        // Ni la del hub ni la de la máquina: la del clon.
+        vm.CommittedLine.Should().NotContain(_hub.ResolveIdentity().Name);
+        vm.CommittedLine.Should().NotContain(Environment.UserName);
+
+        // Y sobrevive a volver por «Último arreglo», porque se guarda con el hash.
+        _hub.Store.ListFixes(Slug).Single().CommitAuthor.Should().Be($"{Nombre} <{Correo}>");
+        fix.CommittedAuthor = null;
+        await vm.LoadAsync();
+        vm.CommittedLine.Should().Contain($"como {Nombre} <{Correo}>");
+    }
+
+    /// <summary>
+    /// <b>Escribir una edición conserva BOM, fin de línea y final de fichero</b> (BUGFIX-F32-2):
+    /// los bytes que están <b>fuera</b> del fragmento sustituido son los mismos, que es el criterio
+    /// byte a byte de D-560.
+    /// <para>
+    /// <b>De dónde sale.</b> En el diff de <c>5249598bf</c> de xblast la línea 1 salía quitada y
+    /// puesta, idéntica: <c>-M-oM-;M-?#region INFORMATION</c> / <c>+#region INFORMATION</c>. Medido
+    /// sobre el blob, el fichero pasó de empezar por <c>ef bb bf</c> a no hacerlo — tres bytes—.
+    /// No era el <c>autocrlf</c> del clon: los fines de línea del blob eran LF antes y después, y
+    /// git no añade ni quita marcas de orden. Era <c>File.WriteAllText</c>, que escribe UTF-8
+    /// <b>sin</b> preámbulo.
+    /// </para>
+    /// <para>
+    /// Cebo: con el escritor anterior, el caso con BOM se pone rojo por tres bytes exactos.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData(true, "\r\n")]
+    [InlineData(false, "\n")]
+    [InlineData(true, "\n")]
+    [InlineData(false, "\r\n")]
+    public void Una_edicion_conserva_los_bytes_de_fuera_del_fragmento(bool conBom, string salto)
+    {
+        string texto = "#region INFORMATION" + salto + "int x = 1;" + salto + "#endregion" + salto;
+        string rel = "Common/Codificado.cs";
+        string abs = Path.Combine(_clone, rel);
+        File.WriteAllText(abs, texto, new UTF8Encoding(encoderShouldEmitUTF8Identifier: conBom));
+        byte[] antes = File.ReadAllBytes(abs);
+        Commit();
+
+        FixToolbox toolbox = Toolbox(new ScriptedApprovals(answer: true), scoped: rel);
+        toolbox.ApplyEdit(rel, "cambia el uno por el dos",
+            new[] { new FixEdit("int x = 1;", "int x = 2;") })
+            .Applied.Should().BeTrue();
+
+        byte[] despues = File.ReadAllBytes(abs);
+
+        // El fragmento mide lo mismo, así que TODO lo demás tiene que ser idéntico: un solo byte
+        // distinto en todo el fichero, el «1» que pasó a «2».
+        despues.Length.Should().Be(antes.Length, "no sobra ni falta un byte fuera del fragmento");
+        antes.Where((b, i) => b != despues[i]).Should().ContainSingle(
+            "lo único que cambia es lo que se pidió cambiar");
+
+        // Y las tres cosas que se perdían, dichas una a una.
+        HasBom(despues).Should().Be(conBom, "la marca de orden se conserva, esté o no esté");
+        despues.Count(b => b == (byte)'\r').Should().Be(antes.Count(b => b == (byte)'\r'),
+            "los fines de línea se conservan; no se normaliza nada");
+        despues[^1].Should().Be(antes[^1], "el final del fichero, igual");
+    }
+
+    /// <summary>Un fichero NUEVO sale sin marca de orden: ponérsela sería el mismo defecto al revés.</summary>
+    [Fact]
+    public void Un_fichero_creado_por_el_agente_no_estrena_marca_de_orden()
+    {
+        FixToolbox toolbox = Toolbox(new ScriptedApprovals(answer: true));
+
+        toolbox.ApplyEdit("Tests/CommonStaticsTests.cs", "cubre el defecto",
+            new[] { new FixEdit(string.Empty, "// test nuevo\r\n") })
+            .Applied.Should().BeTrue();
+
+        byte[] escrito = File.ReadAllBytes(Path.Combine(_clone, "Tests/CommonStaticsTests.cs"));
+        HasBom(escrito).Should().BeFalse();
+    }
+
+    private static bool HasBom(byte[] b)
+        => b.Length >= 3 && b[0] == 0xEF && b[1] == 0xBB && b[2] == 0xBF;
+
     /// <summary>Una sesión terminada con un fichero tocado, lista para commitear.</summary>
     private async Task<LiveFixService> FixedSession(IProcessRunner? git = null)
     {
@@ -1721,10 +1842,11 @@ public sealed class AssistedFixTests : IDisposable
             Launcher(), _busy, new BuildRunner(new NoProcess()));
 
     private FixToolbox Toolbox(
-        IFixApprovals approvals, int readBudget = FixToolbox.DefaultReadBudget, FixSnapshotSet? set = null)
+        IFixApprovals approvals, int readBudget = FixToolbox.DefaultReadBudget,
+        FixSnapshotSet? set = null, string? scoped = null)
         => new(
             _clone,
-            new[] { UnitPath },
+            new[] { scoped ?? UnitPath },
             _snapshots,
             set ?? _snapshots.Begin(Guid.NewGuid().ToString("N"), Slug, _clone, "BUG-0003", "t"),
             approvals,
