@@ -1138,13 +1138,33 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
         }
 
         Location loc = Finding.Locations[0];
+
+        // D-021 — la línea que se manda es la RE-ANCLADA cuando la hay. El panel del snippet ya
+        // resolvió dónde está el código de verdad: mandar `loc.Line` cuando la unidad ha cambiado
+        // es mandar a leer otra cosa creyendo que es la suya. Y cuando no se ancla, se abre en la
+        // original y el toast lo dice, en vez de fingir precisión.
+        (int line, LineOrigin origin) = LineToOpen(loc);
+
         _toasts.Show("Abriendo en el editor…");
-        bool opened = await _editor.OpenAsync(Slug, loc.Path, loc.Line);
-        if (!opened)
-        {
-            _toasts.Show("No se pudo abrir el editor. Revisa el editor configurado en Ajustes y la ruta del clon.");
-        }
+        EditorOpenResult result = await _editor.OpenAsync(Slug, loc.Path, line, origin, loc.Line);
+        _toasts.Show(EditorLauncher.Toast(result));
     }
+
+    /// <summary>
+    /// Qué línea se abre y de dónde sale (D-021). El estado del snippet es quien lo sabe: es el
+    /// mismo cálculo que ya pinta el panel, así que la ficha y el editor no pueden discrepar.
+    /// </summary>
+    internal (int Line, LineOrigin Origin) LineToOpen(Location loc) => SnippetState switch
+    {
+        // El código está, pero en otro sitio: ahí se va, diciendo de dónde venía.
+        SnippetState.Movido or SnippetState.Reanclado when SnippetHighlightLine > 0
+            => (SnippetHighlightLine, LineOrigin.Reanclada),
+
+        // Ni el código anclado ni el símbolo aparecen: la original, y se dice.
+        SnippetState.Cambiado or SnippetState.NoLocalizado => (loc.Line, LineOrigin.SinAnclar),
+
+        _ => (loc.Line, LineOrigin.Anclada),
+    };
 
     /// <summary>
     /// Lo que dice el botón mientras se busca quién usa el código (F6.8 §3): la recolección

@@ -781,6 +781,65 @@ public sealed class FindingDetailTests : IDisposable
     public async Task Un_arranque_que_funciona_devuelve_exito()
         => (await EditorLauncher.WithTimeout(() => true, TimeSpan.FromSeconds(5))).Should().BeTrue();
 
+    /// <summary>
+    /// <b>R13 §0(b) / D-021 — la línea que se manda es la RE-ANCLADA cuando la hay.</b>
+    /// <para>
+    /// El código de la unidad cambió y además se desplazó: el hallazgo sigue diciendo la 9, pero su
+    /// miembro está ahora en la 10. Abrir en la 9 sería mandar a leer otra cosa creyendo que es la
+    /// suya, así que se abre en la 10 <b>diciendo de dónde venía</b>.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void La_linea_que_se_abre_es_la_reanclada_cuando_la_hay()
+    {
+        Finding f = Seed();
+        f.Symbol = "Repositorio.Guardar";
+        _hub.Store.WriteFinding("alpha", f);
+
+        string abs = Path.Combine(_clone, "src", "Repositorio.cs");
+        File.WriteAllText(abs, "// una línea nueva arriba del todo\n" + Fuente.Replace(
+            "var stream = File.OpenWrite(dato);", "using var stream = File.OpenWrite(dato);"));
+
+        FindingDetailViewModel vm = Open(f);
+        vm.SnippetState.Should().Be(SnippetState.Reanclado);
+
+        (int line, LineOrigin origin) = vm.LineToOpen(vm.Finding!.Locations[0]);
+
+        line.Should().Be(LineaDelHallazgo + 1, "el miembro está una línea más abajo");
+        origin.Should().Be(LineOrigin.Reanclada);
+    }
+
+    /// <summary>
+    /// Y cuando NO se ancla, la original — <b>diciéndolo</b>. Inventarse una línea sería peor que
+    /// no tenerla: el toast dice «(original; la unidad ha cambiado)» y quien lee decide.
+    /// </summary>
+    [Fact]
+    public void Si_no_se_ancla_se_abre_la_original_y_se_dice()
+    {
+        Finding f = Seed();
+        string abs = Path.Combine(_clone, "src", "Repositorio.cs");
+        File.WriteAllText(abs, Fuente.Replace(
+            "var stream = File.OpenWrite(dato);", "using var stream = File.OpenWrite(dato);"));
+
+        FindingDetailViewModel vm = Open(f);
+        vm.SnippetState.Should().Be(SnippetState.NoLocalizado);
+
+        (int line, LineOrigin origin) = vm.LineToOpen(vm.Finding!.Locations[0]);
+
+        line.Should().Be(LineaDelHallazgo, "la que dijo el auditor, tal cual");
+        origin.Should().Be(LineOrigin.SinAnclar);
+    }
+
+    /// <summary>Con el ancla en su sitio no hay nada que contar: la línea guardada es la buena.</summary>
+    [Fact]
+    public void Con_el_codigo_anclado_se_abre_la_linea_guardada()
+    {
+        FindingDetailViewModel vm = Open(Seed());
+
+        vm.LineToOpen(vm.Finding!.Locations[0])
+            .Should().Be((LineaDelHallazgo, LineOrigin.Anclada));
+    }
+
     [Fact]
     public async Task Abrir_en_el_editor_sin_clon_avisa_del_fallo()
     {
@@ -790,7 +849,9 @@ public sealed class FindingDetailTests : IDisposable
 
         await vm.OpenInEditorCommand.ExecuteAsync(null);
 
-        LastToast().Should().Contain("No se pudo abrir el editor");
+        // R13 §3: el fallo dice QUÉ editor y POR QUÉ. «No se pudo abrir el editor» a secas dejaba
+        // al usuario adivinando entre el ajuste, el clon y el editor que no está.
+        LastToast().Should().Contain("No se pudo abrir").And.Contain("no hay clon");
     }
 
     // =========================================================== §1 y §4 — lo que se fue de la vista

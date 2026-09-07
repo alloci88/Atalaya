@@ -121,8 +121,22 @@ public sealed class AppSettings
     /// </summary>
     public bool RequireTlsRevocationCheck { get; set; }
 
-    /// <summary>Preferred editor for "open in editor" (§8): "vs" or "vscode".</summary>
-    public string Editor { get; set; } = "vs";
+    /// <summary>
+    /// El editor de «Abrir en el editor» (§8), por su id del <c>EditorRegistry</c> (R13).
+    /// <para>
+    /// Hasta R13 solo valían <c>"vs"</c> y <c>"vscode"</c> porque eran los dos casos de un
+    /// <c>if</c>; ahora es el id de una ficha del registro, y los ids viejos siguen valiendo
+    /// —son los mismos dos— para no cambiarle el editor a nadie al actualizar.
+    /// </para>
+    /// </summary>
+    public string Editor { get; set; } = EditorRegistry.VisualStudioId;
+
+    /// <summary>
+    /// El comando de «Otro» (R13 §1), con <c>{file}</c>, <c>{line}</c> y <c>{col}</c>. Solo se usa
+    /// cuando <see cref="Editor"/> es <c>"custom"</c>. Es la puerta para cualquier editor que no
+    /// esté en la tabla, y es lo que evita tener que mantener la tabla para siempre.
+    /// </summary>
+    public string EditorCommand { get; set; } = string.Empty;
 
     /// <summary>"dark" or "light".</summary>
     public string Theme { get; set; } = "dark";

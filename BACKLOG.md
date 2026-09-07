@@ -4,8 +4,8 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-07 (F30 §4 — los pasos de una operación: el alta, el re-escaneo, la
-verificación y reconciliar costes dejan de esperar en silencio).
+Última revisión: 2026-09-07 (R13 — el editor que eliges es el que abre, y abre en la línea del
+hallazgo).
 
 ## En vuelo
 
@@ -473,6 +473,15 @@ verificación y reconciliar costes dejan de esperar en silencio).
 
 ## Aplazado a decisión
 
+- **El tope de 10 s de abrir el editor (D-208) no corta.** Medido en R13 (D-1030):
+  `EditorLauncher.WithTimeout` hace el `WhenAny` con el `Task.Delay` y después
+  `return await running`, así que espera al arranque hasta el final pase lo que pase. Su test pasa
+  porque comprueba el **valor** devuelto, no el reloj: el caso del tope de 120 ms tarda **6,1 s** de
+  reloj —los 5 s del arranque simulado— contra 1,15 s del caso de control. Se ve, no se toca: el
+  tope quedaba explícitamente fuera del alcance de R13 («se conserva tal cual»), y un hallazgo es
+  una propuesta hasta que el usuario la acepta (N-6). Arreglarlo es devolver el resultado del
+  `WhenAny` y decidir qué hacer con el arranque que sigue vivo en segundo plano.
+
 - **Integración con Microsoft Planner.** El prompt de F6.2 está listo; falta el registro de la
   aplicación en Entra ID y decidir el momento.
 
@@ -508,6 +517,18 @@ verificación y reconciliar costes dejan de esperar en silencio).
   esquina.
 
 ## Cerrado
+
+- **R13 · El editor que eliges es el que abre** — los editores dejan de ser dos casos de un `if` y
+  pasan a ser **datos**: `EditorRegistry` declara por editor su nombre, sus ejecutables, dónde
+  buscarlos y **su sintaxis de línea o que no la tiene** (Visual Studio, VS Code, Notepad++, Rider,
+  Android Studio, IntelliJ IDEA, NetBeans, Sublime Text, el manejador del sistema y **«Otro»**, con
+  el comando del usuario). Ajustes › Avanzado ofrece **solo lo instalado** —detectado por registro
+  de Windows, PATH y carpetas conocidas—, enseña el campo del comando solo con «Otro» y estrena
+  **«Probar»**, que abre de verdad y dice qué comando lanzó. Los dos «Abrir en el editor» —ficha y
+  arreglo terminado— pasan por el mismo lanzador, que lee el ajuste en cada pulsación, manda la
+  **línea re-anclada** cuando la hay (D-021) y cuenta en el toast qué hizo y con qué línea. Un
+  editor que ya no está falla con su motivo: no se cae a otro en silencio. Causa medida de los dos
+  defectos y lo que queda abierto, en **D-1030**.
 
 - **F30 §4 · Los pasos de una operación** — `StepList`, componente del sistema para cualquier
   operación de varios pasos que dure segundos: cada paso con su estado y su reloj, vertical u

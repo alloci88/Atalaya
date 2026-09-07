@@ -449,6 +449,11 @@ public partial class App : Application
         services.AddSingleton<ILinkCloneDialog, LinkCloneDialogHost>();
         services.AddSingleton<LinkCloneFlow>();
 
+        // R13 — los editores son datos, y quién está instalado se pregunta UNA vez por sesión: la
+        // detección toca disco y registro, y el desplegable de Ajustes se construye cada vez que
+        // se abre la página.
+        services.AddSingleton<IEditorProbe, SystemEditorProbe>();
+        services.AddSingleton<EditorDetector>();
         services.AddSingleton<EditorLauncher>();
         // F5.9: abrir el informe de una sesion desde el registro de operaciones.
         services.AddSingleton<IFileOpener, ShellFileOpener>();

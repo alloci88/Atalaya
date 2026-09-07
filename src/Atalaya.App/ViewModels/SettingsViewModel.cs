@@ -147,6 +147,22 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// </summary>
     private readonly ModelRatesService? _rates;
 
+    /// <summary>
+    /// Quién está instalado en esta máquina (R13 §2). Opcional como el resto: los tests que solo
+    /// ejercitan los ajustes numéricos no montan una detección, y sin ella la lista sale con lo
+    /// que siempre está —el manejador del sistema y «Otro»— en vez de reventar.
+    /// </summary>
+    private readonly EditorDetector? _editors;
+
+    /// <summary>El mismo lanzador que usa la ficha del hallazgo: «Probar» prueba lo que se usa.</summary>
+    private readonly EditorLauncher? _launcher;
+
+    /// <summary>En qué aplicación se está, para probar contra SU repositorio.</summary>
+    private readonly ActiveApp? _activeApp;
+
+    /// <summary>El fichero con el que probar cuando no hay ninguna aplicación abierta.</summary>
+    private readonly string _ownFile;
+
     /// <summary>Plazo para que el SDK conteste con su catálogo antes de rendirse.</summary>
     private static readonly TimeSpan ModelListTimeout = TimeSpan.FromSeconds(30);
 
@@ -160,7 +176,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
         NavigationService navigation,
         AuditorProviderRegistry? providers = null,
         ModelRatesService? rates = null,
-        CostReconciliationService? costGaps = null)
+        CostReconciliationService? costGaps = null,
+        EditorDetector? editors = null,
+        EditorLauncher? launcher = null,
+        ActiveApp? activeApp = null,
+        AppPaths? paths = null)
     {
         _settings = settings;
         _agent = agent;
@@ -173,8 +193,14 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _rates = rates;
         Rates = rates is null ? null : new ModelRatesViewModel(rates, costGaps);
         BuildSections();
+        _editors = editors;
+        _launcher = launcher;
+        _activeApp = activeApp;
+        _ownFile = paths?.SettingsJson ?? string.Empty;
         AppSettings s = settings.Current;
         _editor = s.Editor;
+        _editorCommand = s.EditorCommand;
+        BuildEditorOptions(s.Editor);
         _showCostIn = CostCurrencies.Label(CostCurrencies.Parse(s.CostCurrency));
         _isLightTheme = string.Equals(s.Theme, "light", StringComparison.OrdinalIgnoreCase);
         _pollingSeconds = s.PollingSeconds;
@@ -255,6 +281,91 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public override string RailKey => "settings";
 
     [ObservableProperty] private string _editor;
+
+    /// <summary>
+    /// El comando de «Otro» (R13 §1). Es la puerta para cualquier editor que no esté en la tabla —y
+    /// lo que evita tener que mantener la tabla para siempre—, así que se guarda como cualquier
+    /// otro ajuste y se prueba con el mismo botón.
+    /// </summary>
+    [ObservableProperty] private string _editorCommand = string.Empty;
+
+    /// <summary>
+    /// Los editores que se ofrecen: <b>solo los que están en esta máquina</b>, más el manejador del
+    /// sistema y «Otro», que están siempre.
+    /// <para>
+    /// Ofrecer un editor no instalado es ofrecer un fallo, y hasta R13 ese fallo era mudo: elegir
+    /// Visual Studio sin Visual Studio abría el fichero con el manejador del sistema y decía que
+    /// todo había ido bien. El editor que el ajuste ya nombraba se queda en la lista aunque no se
+    /// encuentre, <b>marcado</b>: quitarlo cambiaría el ajuste del usuario por la espalda, que es
+    /// otra forma del mismo defecto.
+    /// </para>
+    /// </summary>
+    public List<EditorOption> EditorOptions { get; } = [];
+
+    /// <summary>El campo del comando solo ocupa sitio cuando hay un comando que escribir.</summary>
+    public bool ShowEditorCommand => string.Equals(Editor, EditorRegistry.CustomId, StringComparison.Ordinal);
+
+    // La lista NO se reconstruye al cambiar de editor: sustituir el ItemsSource mientras el
+    // desplegable está eligiendo es la forma más rápida de que WPF devuelva un SelectedValue nulo
+    // y el ajuste cambie solo. Se construye al abrir la página y al pulsar «Probar», y ahí se
+    // restaura la selección a mano.
+    partial void OnEditorChanged(string value) => OnPropertyChanged(nameof(ShowEditorCommand));
+
+    private void BuildEditorOptions(string configured)
+    {
+        IReadOnlyList<DetectedEditor> offered = _editors?.Offer(configured)
+            ?? EditorRegistry.All
+                .Where(e => e.Kind != EditorKind.Program)
+                .Select(e => new DetectedEditor(e, null, Detected: true))
+                .ToList();
+
+        EditorOptions.Clear();
+        EditorOptions.AddRange(offered.Select(d => new EditorOption(d.Editor.Id, d.Label)));
+        OnPropertyChanged(nameof(EditorOptions));
+
+        // Y si el cambio de lista se ha llevado por delante la selección, se devuelve: un ajuste
+        // que cambia sin que nadie lo toque es el defecto de esta tanda con otra cara.
+        if (!string.Equals(Editor, configured, StringComparison.Ordinal))
+        {
+            _persisting = true;
+            try
+            {
+                Editor = configured;
+            }
+            finally
+            {
+                _persisting = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// <b>Probar</b> (R13 §2): abre un fichero de verdad en una línea conocida y dice qué comando
+    /// se lanzó y si volvió. Sin esto, la única forma de saber si el editor elegido funciona era
+    /// necesitarlo.
+    /// </summary>
+    [RelayCommand]
+    private async Task TestEditor()
+    {
+        if (_launcher is null)
+        {
+            _toasts.Show("No se puede probar el editor desde aquí.");
+            return;
+        }
+
+        // Se vuelve a mirar quién está instalado: instalar un editor y probarlo tiene que ser un
+        // gesto, no un reinicio.
+        _editors?.Refresh();
+        BuildEditorOptions(Editor);
+
+        EditorOpenResult result = await _launcher.TestAsync(_activeApp?.Slug, _ownFile);
+
+        // El comando va SIEMPRE que se haya llegado a construir, abriera o no: cuando no abre es
+        // justo cuando hace falta verlo — sobre todo si lo escribió el usuario.
+        _toasts.Show(result.Command.Length > 0
+            ? $"{EditorLauncher.Toast(result)} · lanzado: {result.Command}"
+            : EditorLauncher.Toast(result));
+    }
 
     /// <summary>
     /// <b>En qué divisa se enseña el coste</b> (F29 §2). Es una preferencia de esta máquina —el hub
@@ -528,6 +639,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     {
         AppSettings s = _settings.Current;
         s.Editor = Editor;
+        s.EditorCommand = EditorCommand.Trim();
         s.CostCurrency = CostCurrencies.Save(SelectedCurrency);
         s.Theme = IsLightTheme ? "light" : "dark";
         s.PollingSeconds = Floor(
@@ -614,6 +726,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public static readonly IReadOnlyList<string> Editable = new[]
     {
         nameof(Editor),
+        nameof(EditorCommand),
         nameof(ShowCostIn),
         nameof(IsLightTheme),
         nameof(PollingSeconds),

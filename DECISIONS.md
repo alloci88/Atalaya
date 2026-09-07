@@ -17071,3 +17071,91 @@ que lo leen el resumen y los informes.
 
 **Ni un token más**: no se toca el prompt, no se añade ninguna llamada y no se le pide al modelo nada
 distinto. Todo lo de aquí es contar lo que ya se estaba haciendo.
+
+---
+
+## R13 — El editor que eliges es el que abre, y abre en la línea del hallazgo
+
+### D-1030 — Los dos defectos, medidos antes de tocar nada (N-2), y el registro que los cierra
+
+**La causa de (a), «no se respeta el ajuste».** El ajuste se guardaba bien y se releía bien: el
+lanzador lee `_settings.Current.Editor` en cada pulsación, y el test de BUGFIX-AJUSTES §3 que lo
+comprueba ya estaba en verde. Lo que fallaba estaba **dos líneas más abajo**. `EditorLauncher.Open`
+era un `if` de dos casos: `vscode` → `code -g`, y **todo lo demás** → `devenv /edit`. Con el ajuste
+en Visual Studio se lanzaba `Process.Start("devenv", …)`, y `devenv` **no está en el PATH**: Visual
+Studio solo lo pone en el símbolo del sistema para desarrolladores, no en el del usuario. Medido en
+esta máquina: `where devenv` → «no se pudo encontrar ningún archivo», y `Process.Start` con
+`UseShellExecute=false` → `Win32Exception: El sistema no puede encontrar el archivo especificado`.
+Y ahí venía el remate: ese `catch` **caía al manejador del sistema** —el último recurso de D-208—,
+que abrió el fichero sin excepción y **devolvió `true`**. El usuario elegía Visual Studio, se le
+abría lo que Windows tuviera asociado, y la función informaba de éxito. No es que el ajuste no se
+leyera: es que el fallo de leerlo era mudo. (En esta máquina, además, `.cs` **no tiene asociación**
+y el único editor instalado es Notepad++ — el desplegable de R13 ofrece exactamente eso.)
+
+**Y solo hay dos sitios con «Abrir en el editor»**, comprobado sobre el árbol entero: la **ficha del
+hallazgo** (`FindingDetailViewModel`) y el **arreglo terminado** (`AssistedFixViewModel`). Los dos
+pasaban ya por `EditorLauncher`; la lista de hallazgos y los informes no tienen ese botón —el de los
+informes es `IFileOpener`, que abre el informe con el manejador del sistema y no es esto—. El
+«camino único» de §3 no había que crearlo: había que arreglarlo.
+
+**La causa de (b), «no abre en la línea».** Dos, y distintas. La primera es que `devenv /edit
+"fichero"` **no lleva línea** —ni la lleva ningún conmutador de `devenv`: ir a la línea con la
+instancia en marcha exige la automatización DTE por COM, que aquí no se ha podido medir y por tanto
+**no se finge**—, así que en el caso por defecto la línea sencillamente se tiraba, sin decirlo. La
+segunda es que se mandaba `Finding.Locations[0].Line` **a secas**. Ese número es el bueno cuando
+`AnchorRepair` (D-226) ha podido corregirlo, pero **cuando la unidad ha cambiado no se corrige a
+propósito**: el hash no aparece, la ficha re-ancla por símbolo y pinta `SnippetHighlightLine`, y era
+esa línea —la que el usuario está viendo— la que no se le mandaba al editor. Abrir en la 142 un
+fichero cuyo miembro está ahora en la 149 es mandar a leer otra cosa creyendo que es la suya.
+
+**El arreglo: los editores dejan de ser un `switch` y pasan a ser datos.** `EditorRegistry` es una
+tabla con, por editor, nombre visible, ejecutables candidatos, dónde buscarlos y **su sintaxis de
+línea o la declaración explícita de que no la tiene**. No hay tercera opción y ese es el punto: un
+test recorre la tabla y falla si alguna ficha se queda sin declarar una cosa o la otra, que es
+exactamente el hueco por el que Visual Studio se colaba. Entran Visual Studio (sin línea, dicho),
+VS Code, Notepad++, Rider, Android Studio, IntelliJ IDEA, NetBeans, Sublime Text, el manejador del
+sistema (sin línea, dicho) y **«Otro»**, con el comando que escribe el usuario y sus marcadores
+`{file}`, `{line}` y `{col}`. Eclipse queda fuera **porque no se ha comprobado** una sintaxis de
+línea fiable, y lo cubre «Otro» — que es lo que evita tener que mantener la tabla para siempre.
+Construir el comando es una **función pura** sobre la tabla, así que se prueba entera sin ningún
+editor instalado: el patrón que D-208 estrenó con el tope de tiempo.
+
+**Detectar, y no ofrecer lo que no hay.** `EditorDetector` busca cada ejecutable en el registro de
+Windows (`App Paths`, que es lo que rellena casi todo instalador), en el PATH y en las carpetas de
+instalación conocidas —con un `*` por segmento, porque Visual Studio se instala por año × edición y
+los JetBrains por versión, y adivinar el año sería adivinar—. El desplegable de Ajustes enseña
+**solo lo detectado**, más el manejador del sistema y «Otro». Ofrecer un editor que no está es
+ofrecer un fallo. La única excepción, declarada: **el editor que el ajuste ya nombraba se queda en
+la lista aunque no se encuentre**, marcado «(no encontrado)» — quitarlo cambiaría el ajuste del
+usuario por la espalda, que es el mismo defecto con otra cara. Y por lo mismo la lista **no se
+reconstruye al cambiar de editor**: sustituir el `ItemsSource` mientras el desplegable elige es la
+forma más rápida de que WPF devuelva un `SelectedValue` nulo y el ajuste cambie solo.
+
+**Lo que ahora se dice, y antes se callaba.** Todo «Abrir en el editor» pasa por el lanzador, que
+lee el ajuste en cada pulsación, construye el comando desde la tabla y conserva el tope de D-208 tal
+cual. El toast cuenta lo que ha hecho: «Abierto en VS Code · línea 142»; «Abierto en Visual Studio ·
+sin ir a la línea 142 (no lo permite desde la línea de comandos)»; «línea 149 (antes 142)» cuando es
+la re-anclada; «línea 142 (original; la unidad ha cambiado)» cuando no se ancla. Y **el editor que
+ya no está falla con su motivo y pide revisar el ajuste**: no se cae a otro en silencio, que era el
+defecto (a) entero. Se añade **«Probar»** al lado del desplegable —abre un fichero del repositorio
+de la aplicación activa en una línea conocida y dice qué comando lanzó— porque hasta ahora la única
+forma de saber si tu editor funcionaba era necesitarlo, y un comando personalizado mal escrito no se
+puede descubrir tres días después delante de un hallazgo. La regla de BUGFIX-AJUSTES §3 no se relaja:
+las dos filas nuevas dicen cuándo surten efecto y su test las recorre igual.
+
+**Cobertura: 26 casos nuevos, 2.017 en la aplicación, todo en verde.** Diez del registro —el comando
+de cada editor, que ninguno cae en un caso por defecto, que Visual Studio declara su «sin línea», y
+«Otro» sustituyendo los tres marcadores, fallando con motivo sin `{file}` y sin comando, avisando sin
+`{line}`, y separando el programa de sus argumentos—; trece del lanzador y de Ajustes —el ajuste que
+manda para cada editor con todos instalados a la vez, el cambio entre dos aperturas, el editor
+ausente que falla sin abrir otro, la detección por registro y por PATH, el desplegable que solo
+ofrece lo que hay, el configurado ausente que se queda marcado, el campo de «Otro» que solo sale con
+«Otro», «Probar», y los cuatro toasts—; y tres de la ficha: la línea re-anclada, la original cuando
+no se ancla, y la guardada cuando el ancla está en su sitio.
+
+**Lo que se ha visto y NO se ha tocado, porque no se ha pedido (N-6).** `EditorLauncher.WithTimeout`
+**no corta**: hace el `WhenAny` y luego `return await running`, así que espera al arranque hasta el
+final pase lo que pase. Su test pasa porque comprueba el valor, no el reloj — medido: el caso del
+tope de 120 ms tarda **6,1 s** de reloj contra 1,15 s del caso de control, los 5 s del arranque
+simulado. El tope de D-208 estaba fuera del alcance de esta tanda («se conserva tal cual»), así que
+se deja escrito aquí y en el backlog: es un hallazgo, no un encargo.

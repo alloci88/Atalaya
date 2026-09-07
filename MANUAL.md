@@ -240,6 +240,14 @@ asignar, cambiar severidad, resolver a mano con justificación, cerrar una dispu
   clon, o si el símbolo no se puede buscar, el prompt sale igual diciendo que va sin la
   lista: nunca deja entender que un método no se usa cuando lo que pasa es que no se ha
   podido mirar. Una vez generado, los metadatos enseñan **Usado desde: N sitios**.
+- **Abrir en el editor** abre el fichero en el editor que hayas elegido en *Ajustes → Avanzado*, y
+  **te dice lo que ha hecho**: «Abierto en VS Code · línea 142». Si el editor no sabe ir a la línea,
+  lo dice con su motivo —«Abierto en Visual Studio · sin ir a la línea 142 (no lo permite desde la
+  línea de comandos)»—; si el código se ha movido y se ha vuelto a anclar, dice de dónde venía
+  —«línea 149 (antes 142)»—; y si no se ha podido anclar, abre en la línea original diciéndolo
+  —«línea 142 (original; la unidad ha cambiado)»—. Si el editor elegido no está en la máquina, falla
+  con el motivo y te pide que revises el ajuste: **nunca abre con otro editor sin decírtelo**. El
+  mismo botón, con los mismos avisos, está en la barra de un **arreglo terminado**.
 - **Verificar ahora** vuelve a preguntar al auditor si el defecto sigue ahí. Lo que se le
   enseña es el **método completo** que contiene el punto del hallazgo, no la línea suelta:
   con una línea sola no se puede juzgar nada que no quepa en esa línea. Si el método no se
@@ -979,8 +987,59 @@ Cada control dice bajo su caja **cuándo surte efecto**, porque no todos aplican
 | **Tarifas** | Lo que cuesta un millón de tokens de cada modelo, y con ello el coste de toda sesión | Al guardar la tabla; los costes ya enseñados se recalculan |
 | **Sincronización del hub (s)** | Cada cuánto se buscan cambios de tus compañeros | Al guardar, sin reiniciar |
 | **Timeout de Copilot (min)** | Espera máxima por una respuesta del modelo, y por cada compilación del arreglo | Al guardar, en el siguiente turno |
-| **Editor preferido** | Con qué editor se abre el código | Al guardar |
+| **Editor preferido** | Con qué editor se abre el código | La próxima vez que abras código |
+| **Comando del editor** («Otro») | El comando con el que abrir un fichero, si tu editor no está en la lista | La próxima vez que abras código |
 | **Tema claro** | El aspecto de la aplicación | Al guardar |
+
+#### Editor preferido, «Otro» y «Probar»
+
+**El desplegable enseña solo los editores que hay en esta máquina.** Se buscan en el registro de
+Windows, en el PATH y en las carpetas de instalación habituales; el que no aparezca es que no se ha
+encontrado. Un editor no instalado no se ofrece, porque elegirlo sería elegir un fallo diez segundos
+después. Están siempre, además de los encontrados:
+
+- **Manejador del sistema** — abre el fichero con la aplicación que Windows le asocie. No lleva a la
+  línea, y se te dice.
+- **Otro (comando personalizado)** — la puerta para cualquier editor que no esté en la lista.
+
+Los editores que conoce, y si saben ir a la línea:
+
+| Editor | Va a la línea |
+| --- | --- |
+| **Visual Studio** | **No.** `devenv /Edit` abre el fichero y no admite número de línea; se abre el fichero y el aviso te dice en qué línea estaba |
+| **VS Code** | Sí (`code -g fichero:línea:columna`), reutilizando la ventana abierta |
+| **Notepad++** | Sí (`-n{línea}`) |
+| **JetBrains Rider** | Sí (`--line`), reutilizando la instancia |
+| **Android Studio** | Sí (`--line`) |
+| **IntelliJ IDEA** | Sí (`--line`) |
+| **NetBeans** | Sí (`--open fichero:línea`) |
+| **Sublime Text** | Sí (`fichero:línea:columna`) |
+| **Manejador del sistema** | No |
+| **Otro** | Lo que tú escribas |
+
+**«Otro»** hace aparecer, debajo del desplegable, el campo **Comando del editor**. Escribes el
+comando entero y Atalaya sustituye tres marcadores: `{file}` por la ruta del fichero, `{line}` por
+la línea y `{col}` por la columna. **Entrecomilla las rutas**, que casi siempre llevan espacios. Un
+ejemplo:
+
+```
+"C:\Program Files\Notepad++\notepad++.exe" -n{line} "{file}"
+```
+
+Si el comando no contiene `{file}` no se lanza nada: no dice qué fichero abrir, y se te dice. Si no
+contiene `{line}`, se abre el fichero y el aviso te cuenta que tu comando no lleva línea. El campo
+solo aparece con «Otro» elegido; en el resto de los casos no ocupa sitio.
+
+**«Probar»**, al lado del desplegable, abre de verdad un fichero del repositorio de la aplicación en
+la que estés —o uno propio de Atalaya, si no hay ninguna abierta— en una línea conocida, y te dice
+**qué comando ha lanzado** y si volvió. Es la forma de saber que tu editor funciona antes de
+necesitarlo, y de ver un comando personalizado mal escrito al escribirlo y no tres días después
+delante de un hallazgo. También vuelve a mirar qué editores hay: instalar uno y probarlo es un
+gesto, no un reinicio.
+
+**Si el editor elegido deja de estar** —lo desinstalas—, abrir falla diciendo cuál falta y que
+revises el ajuste. **No se abre con otro editor a tus espaldas**: se queda en la lista marcado «(no
+encontrado)» para que veas qué tenías puesto.
 
 **Si escribes un número imposible, se te dice.** Cada campo numérico tiene un mínimo —15 s la
 sincronización, 1 el resto— y al guardar, si hubo que aplicarlo, el aviso dice cuál era y la caja

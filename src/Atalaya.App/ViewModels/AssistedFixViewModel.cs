@@ -590,10 +590,10 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
             return;
         }
 
-        if (!await _editor.OpenAsync(_fix.Slug, file.RelativePath, 1))
-        {
-            _toasts.Show("No se pudo abrir el editor. Revisa el editor configurado en Ajustes.");
-        }
+        // El fichero tocado se abre por el principio: aquí no hay hallazgo ni línea que re-anclar,
+        // y el toast lo cuenta igual que en la ficha — mismo camino, mismo mensaje (R13 §3).
+        EditorOpenResult result = await _editor.OpenAsync(_fix.Slug, file.RelativePath, 1);
+        _toasts.Show(EditorLauncher.Toast(result));
     }
 
     /// <summary>
