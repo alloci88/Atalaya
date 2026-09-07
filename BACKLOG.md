@@ -509,6 +509,15 @@ editores es la única puerta).
 
 ## Cerrado
 
+- **F35-3 · La gráfica que se calculaba bien y no se dibujaba** — «Antigüedad de la deuda» salía
+  vacía en el `dist` con el dato, el tamaño y la visibilidad correctos: el control nace colapsado y
+  el view-model le asignaba la serie ANTES de encender su interruptor, así que el único `Rebuild`
+  con datos se encontraba sin tamaño. Arreglado **en el control** —mientras quede algo por dibujar,
+  la siguiente pasada de layout lo dibuja—, porque una regla que depende del orden de asignación no
+  es una regla. De paso, «Top 5 reglas» se rehace como barras horizontales con el número al final
+  de la barra, y las dos gráficas pasan a compartir fila. **La regla que queda: un test de gráfica
+  comprueba lo que se dibuja, no solo lo que se calcula.** Ver D-1042.
+
 - **F35 · Entrega 1 — Periodo, ejes y las cuatro tarjetas** — el panel por defecto pasa a **cuatro
   semanas**, el eje de toda gráfica con tiempo empieza en el **primer tramo con actividad** (mínimo
   siete días y dos cubos; el último sigue conteniendo hoy) y las cuatro cifras de cabecera son

@@ -603,18 +603,24 @@ Debajo, diez gráficas:
    (hallazgos activos a día de hoy: el periodo no la recorta). Un clic en un tramo abre
    Hallazgos con esa app y esa severidad; en el centro, esa app entera.
 6. **Flujo de hallazgos** — lo que entra, lo que se cierra y cuántos quedan vivos.
+**Estas dos van juntas, una al lado de la otra** (y en ventana estrecha, una debajo de la otra):
+
 7. **Antigüedad de la deuda** — barras por aplicación con los hallazgos activos repartidos por
-   cuánto llevan abiertos desde que se detectaron: `< 1 sem`, `1–4`, `4–12` y `> 12`. Es la gráfica
+   cuánto llevan abiertos desde que se detectaron: `< 1 sem`, `1–4`, `4–12` y `> 12`. Cada barra
+   lleva su número encima, y un cubo sin nada se ve vacío, con su rótulo. Es la gráfica
    que dice si la deuda **rota o se pudre**: si el peso se va a la derecha, lo que hay abierto lleva
    meses ahí. Cada activo cae en exactamente un cubo, así que **la suma de todas las barras es la
    deuda activa** de la segunda tarjeta. Como el rosco de severidad, **el periodo no la recorta**:
    es la foto de hoy — recortarla vaciaría por definición los cubos de más de cuatro semanas cada
    vez que eligieras «4 semanas», que es justo lo que vienes a mirar.
 8. **Top 5 reglas del periodo** — las cinco reglas que más hallazgos generaron dentro del periodo,
-   con cuántos. Cuenta lo **detectado**, esté hoy activo o resuelto: produjo trabajo igual. Van sin
-   color de gravedad, porque una regla no es una gravedad — la misma regla produce hallazgos
-   críticos y bajos. Un empate se rompe por el nombre, siempre igual, para que la lista no baile
-   entre dos cargas. Con **Copiar**.
+   con cuántos. Cada regla es una **barra proporcional a la que más produjo** —la primera llena el
+   hueco— con su número **al final de la barra**, no al otro extremo de la pantalla; el nombre va a
+   la izquierda, recortado con puntos si no cabe y entero en el tooltip. Cuenta lo **detectado**,
+   esté hoy activo o resuelto: produjo trabajo igual. Las barras van en un neutro: **sin color de
+   gravedad**, porque una regla no es una gravedad —la misma regla produce hallazgos críticos y
+   bajos—, y sin color de aplicación, porque la lista ya está filtrada. Un empate se rompe por el
+   nombre, siempre igual, para que la lista no baile entre dos cargas. Con **Copiar**.
 9. **Ciclos y temáticas** — la secuencia de ciclos de cada aplicación: **no es una
    línea de tiempo**, es la lista de capítulos. Una fila por aplicación (en el orden
    del Portafolio, con el nombre en una columna fija) y, en cada fila, sus ciclos **en

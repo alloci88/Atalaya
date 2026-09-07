@@ -18275,3 +18275,85 @@ de la de cobertura, y que las barras de antigüedad no salgan demasiado finas co
 aplicaciones, lo mira el usuario en el `dist`. En este hub, además, **los cuatro cubos de antigüedad
 salen con todo en el primero**: el hub tiene cuatro días de vida, así que la gráfica dice la verdad
 y todavía no dice nada interesante.
+
+## F35-3 — La gráfica que se calculaba bien y no se dibujaba
+
+### D-1042 — Un test de gráfica comprueba lo que se DIBUJA, no solo lo que se calcula
+
+**§0 · La causa, medida y aislada** (N-2). El síntoma: en el `dist` de `1463340`, «Antigüedad de la
+deuda» enseñaba título, subtítulo y leyenda y **nada más**. El dato estaba —el cuadre de D-1041 dio
+390·0·0·0 y 5·0·0·0—, así que se midió el dibujo, paso a paso, descartando una hipótesis por medida:
+
+| Se sospechaba | Medido | Veredicto |
+|---|---|---|
+| `AxisScale` con un solo cubo con datos daría 0 o infinito | `AxisScale.For(390)` → máximo **400**, marcas 0·100·200·300·400 | ✅ correcto |
+| El ancho de barra agrupada con dos series saldría 0 px | 41,9 px por barra con dos series | ✅ correcto |
+| `ChartPlot` dibujaría barras solo en el modo de tiempo | el control solo, a 600×200 con las dos series reales: **21 hijos, 6 cajas, alturas 163,8 y 2,1** | ✅ dibuja |
+| El panel no le daría tamaño | la vista real, colocada a 1440×900: la cuarta gráfica mide **1365×200** | ✅ tiene sitio |
+| El view-model no produciría la serie | `AgeSeries` = 2 series de barras con \[390,0,0,0\] y \[5,0,0,0\] | ✅ correcta |
+
+Con todas las piezas correctas por separado, se reprodujo el **conjunto**: la vista de verdad, con
+el contenedor real de la aplicación, el hub de esta máquina y **la secuencia de verdad** —la
+navegación PINTA la página y la carga llega después, que es asíncrona—. Ahí sí:
+`1365×200 · Visible · series=2 · **hijos=0**`.
+
+**La causa.** El control nace `Collapsed`: su visibilidad cuelga de un `HasX` que empieza en false.
+`ApplyAges` asignaba las series **antes** de encender ese interruptor, así que el único `Rebuild`
+que llevaba datos se encontró con `ActualWidth` 0 y se fue sin dibujar; cuando el interruptor lo
+hizo visible y el layout le dio su tamaño, ya no volvió a pasar por ahí. El dibujo se quedó en la
+única pasada que no podía hacerlo. **Las otras tres gráficas se libraban por casualidad**: sus
+view-models encienden el interruptor antes de asignar la serie (`HasCost` en la línea 782 y
+`CostSeries` en la 785; `HasFlow` el primero de `ApplyFlow`). Comprobado invirtiendo el orden en
+`ApplyAges`: 0 hijos → 21.
+
+**El arreglo va en el CONTROL, no en el llamante.** Una regla que depende de en qué orden asigne
+quien llama no es una regla: es una trampa esperando al siguiente. `ChartPlot` apunta con qué
+tamaño dibujó lo que tiene y si quedó algo pendiente, y **mientras quede pendiente, la siguiente
+pasada de layout lo dibuja**. No hay bucle: un dibujo con éxito apunta su tamaño y deja de estar
+pendiente, y entonces la comprobación no hace nada. Con eso, las cuatro gráficas son inmunes al
+orden — incluida la que se arregla hoy y las tres que se salvaban por suerte.
+
+**§0 · Por qué el test no lo vio, y la regla que queda.** El test de la Entrega 2 comprobaba los
+rótulos de los cubos, cuántas series había, que fueran barras y de qué color: **todo del
+view-model**, es decir las ENTRADAS de la gráfica. Con eso en verde, la gráfica salía vacía. Y el
+otro test miraba los cubos, que son el dato. Entre los dos verificaban el cálculo dos veces y el
+dibujo ninguna. **La regla: un test de gráfica comprueba lo que se DIBUJA —cuántas barras hay, qué
+alto tienen, qué dice el eje—, no solo lo que se calcula.** El test que se retira se sustituye por
+uno que monta el control, lo mide, lo coloca y cuenta lo que salió, sin XAML.
+
+**§1 · Lo visible (N-6), y es toda la lista.**
+
+1. **«Antigüedad de la deuda» pinta**: los cuatro cubos con su rótulo, una barra por aplicación con
+   alto proporcional, el eje en números redondos y **el número encima de cada barra con datos**
+   (`ShowBarValues`, apagado por defecto: en una gráfica de veintiocho cubos los números se
+   pisarían). Un cubo vacío se ve vacío, con su rótulo y sin barra — un «0» flotando sobre la nada
+   es ruido, y el hueco ya lo dice.
+2. **«Top 5 reglas» se rehace como barras horizontales**: el nombre a la izquierda con ancho fijo
+   —para que todas las barras arranquen en la misma x; una barra que empieza donde acaba su texto
+   no se puede comparar con la de al lado—, recortado con puntos y entero en el tooltip; una barra
+   proporcional a la regla que más produjo, y **el número al final de la barra**. La proporción
+   viaja como dos `GridLength` de estrella calculadas en el view-model: la barra se reparte el ancho
+   que haya sin que nadie mida píxeles, y se puede comprobar sin pintar. La barra va en
+   `Brush.LineStrong`, un neutro que ya existe: **ni color de aplicación** —la lista está filtrada,
+   así que no distinguiría nada— **ni de severidad** (D-316).
+3. **Las dos comparten fila** en `ColumnsPanel` (D-970/D-990): mismo alto, ancho repartido, y en
+   ventana estrecha bajan. Es lo que quita los dos mil píxeles entre el nombre de una regla y su
+   número. El «Copiar» del top sigue donde estaba y **el texto que copia no cambia**.
+
+Nada más se mueve: ni las cifras, ni el cálculo de los cubos, ni el top, ni el resto de Métricas.
+El `ruleId` deja de estar en el tooltip de la fila —ahora lleva el nombre entero, que es lo que se
+recorta—; sigue en el modelo y en el informe.
+
+**Cobertura (N-5): cuatro casos, tres de ellos sobre el dibujo.** (a) La antigüedad **dibujada**:
+con 390 y 5 en el primer cubo, dos barras opacas de alto mayor que cero y con una diez veces más
+alta que la otra, los cuatro rótulos de cubo, el eje redondo en 400 y los números 390 y 5 encima de
+sus barras — más el color de app (D-314) y que el control no tiene ninguna propiedad de segundo eje
+(D-313). (b) **La regresión exacta**: con el dato asignado mientras el control está colapsado y sin
+tamaño, la gráfica dibuja igual. (c) El top: la primera barra ocupa una estrella entera, las demás
+su proporción, las dos columnas suman uno, y el texto copiado es el de la Entrega 2. (d) La fila:
+dos tarjetas de contenidos desiguales salen con el mismo alto y el mismo ancho, y a 500 px bajan.
+La tanda queda en **2.647 casos** (2.112 en la aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8. Que el número encima de la barra
+más alta no se pegue al borde de arriba, que 190 px basten para los nombres de regla que hay, y que
+las dos tarjetas se lean bien lado a lado, lo mira el usuario en el `dist`.

@@ -1,5 +1,8 @@
 ﻿using System.Text.RegularExpressions;
+using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
+using Rectangle = System.Windows.Shapes.Rectangle;
 using Atalaya.App.Controls;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
@@ -346,7 +349,8 @@ public sealed class MetricsPanelTests : IDisposable
         // así que sus títulos ya no están en el XAML: los escribe el view-model.
         xaml.Should().Contain("{Binding Cards}").And.Contain("CopyCardCommand");
         Regex.Matches(xaml, "c:ColumnsPanel").Count.Should()
-            .Be(1, "la rejilla de las cifras iguala altos (D-970), y es la única");
+            .Be(3, "la rejilla de las cifras (una etiqueta, es plantilla de panel) y la fila de "
+                   + "antigüedad y top de reglas (apertura y cierre)");
 
         foreach (string chart in new[]
                  {
@@ -1040,25 +1044,230 @@ public sealed class MetricsPanelTests : IDisposable
             "Auditoría", "Verificación", "Arreglo", "Gestión");
     }
 
-    /// <summary>La barra de antigüedad va con el color de la APP, el mismo de sus otras gráficas.</summary>
+    /// <summary>
+    /// <b>La antigüedad SE DIBUJA</b> (F35-3 §0), y con el color de la app (D-314).
+    /// <para>
+    /// <b>Sustituye al test que no veía nada.</b> El de la Entrega 2 comprobaba los rótulos de los
+    /// cubos, el número de series, que fueran barras y su color — todo del view-model, o sea las
+    /// ENTRADAS de la gráfica. Con eso en verde, la gráfica salía vacía en el <c>dist</c>: no había
+    /// una sola afirmación sobre lo que se dibuja. La regla que queda: <b>un test de gráfica
+    /// comprueba lo que se dibuja, no solo lo que se calcula.</b>
+    /// </para>
+    /// </summary>
     [Fact]
-    public async Task La_antiguedad_va_con_el_color_de_la_aplicacion()
+    public async Task La_antiguedad_se_dibuja_con_su_eje_sus_rotulos_y_el_color_de_la_app()
     {
         _hub.Store.WriteApp(new AppConfig { Slug = "xblast", Name = "XBLAST", RepoUrl = "u", CurrentCycle = 1 });
-        WriteFinding("xblast", DateTimeOffset.UtcNow.AddDays(-2));
+        _hub.Store.WriteApp(new AppConfig { Slug = "otra", Name = "Otra", RepoUrl = "u", CurrentCycle = 1 });
+        for (int i = 0; i < 390; i++)
+        {
+            WriteFinding("xblast", DateTimeOffset.UtcNow.AddDays(-2));
+        }
+
+        for (int i = 0; i < 5; i++)
+        {
+            WriteFinding("otra", DateTimeOffset.UtcNow.AddDays(-2));
+        }
+
         WriteSession("xblast", cost: 50m);
 
         MetricsViewModel vm = Panel();
         await vm.LoadAsync();
 
+        // Lo que se calcula: dos series de barras, con los cuatro cubos y el color de cada app.
         vm.AgeLabels.Should().Equal("< 1 sem", "1–4 sem", "4–12 sem", "> 12 sem");
-        vm.AgeSeries.Should().HaveCount(1);
-        vm.AgeSeries[0].Kind.Should().Be(ChartSeriesKind.Bar);
-        Hex(vm.AgeSeries[0].Stroke).Should().Be(Hex(vm.CostSeries[0].Stroke),
-            "la misma app, el mismo color que en la gráfica de coste (D-314)");
+        vm.AgeSeries.Should().HaveCount(2);
+        vm.AgeSeries.Should().OnlyContain(s => s.Kind == ChartSeriesKind.Bar);
+        Hex(vm.AgeSeries.Single(s => s.Key == "xblast").Stroke).Should()
+            .Be(Hex(vm.CostSeries[0].Stroke), "la misma app, el mismo color que en coste (D-314)");
+
+        // Y LO QUE SE DIBUJA, que es lo que faltaba. Se sacan CIFRAS del hilo de UI, no los
+        // objetos: un `DependencyObject` solo lo puede leer el hilo que lo creó.
+        var barras = new List<double>();
+        var textos = new List<string>();
+        ViewLayout.OnUiThread(() =>
+        {
+            ChartPlot plot = Paint(vm.AgeSeries, vm.AgeLabels, barValues: true);
+
+            // Las barras son las cajas OPACAS: las cuatro transparentes son las columnas del
+            // tooltip, una por cubo.
+            barras.AddRange(plot.Children.OfType<Rectangle>()
+                .Where(r => r.Fill is SolidColorBrush { Color.A: 0xFF })
+                .Select(r => r.Height));
+            textos.AddRange(plot.Children.OfType<TextBlock>().Select(t => t.Text));
+        });
+
+        // Una barra por aplicación en el único cubo con hallazgos. Un cubo vacío se ve vacío: con
+        // su rótulo y sin barra.
+        barras.Should().HaveCount(2, "una barra por aplicación en el único cubo con hallazgos");
+        barras.Should().OnlyContain(h => h > 0);
+        barras.Max().Should().BeGreaterThan(barras.Min() * 10, "390 y 5 no pueden salir del mismo alto");
+
+        // El eje llega a un número REDONDO por encima del dato (D-313: marcas 1-2-5).
+        AxisScale eje = AxisScale.For(390);
+        eje.Max.Should().Be(400).And.BeGreaterThanOrEqualTo(390);
+        textos.Should().Contain("400").And.Contain("0");
+
+        // Los cuatro rótulos de cubo, y el número encima de cada barra con datos (§1.1).
+        textos.Should().Contain(new[] { "< 1 sem", "1–4 sem", "4–12 sem", "> 12 sem" });
+        textos.Should().Contain("390").And.Contain("5");
 
         // UN solo eje: el control no tiene ninguna propiedad de segundo eje (D-313).
         typeof(ChartPlot).GetProperties().Should().NotContain(p => p.Name.Contains("Secondary"));
+    }
+
+    /// <summary>
+    /// <b>La gráfica dibuja aunque el dato llegue mientras está colapsada</b> (F35-3 §0). Ésta es
+    /// la regresión exacta: el control nace <c>Collapsed</c> —su visibilidad cuelga de un
+    /// <c>HasX</c> que empieza en false—, el view-model le asigna la serie ANTES de encender ese
+    /// interruptor, y aquel <c>Rebuild</c> se encontraba con ancho 0 y se iba sin dibujar. Las
+    /// otras tres gráficas se libraban por casualidad, porque sus view-models encienden el
+    /// interruptor primero: una regla que depende de en qué orden asigne quien llama no es una
+    /// regla, y por eso el arreglo está en el control.
+    /// </summary>
+    [Fact]
+    public void La_grafica_dibuja_aunque_el_dato_llegue_estando_colapsada()
+    {
+        int hijos = 0;
+        int barras = 0;
+
+        ViewLayout.OnUiThread(() =>
+        {
+            var plot = new ChartPlot
+            {
+                ValueFormat = "0",
+                Height = 200,
+                AxisBrush = Brushes.Gray,
+                GridBrush = Brushes.Gray,
+                Visibility = Visibility.Collapsed,
+            };
+            var host = new Border { Width = 600, Height = 400, Child = new StackPanel { Children = { plot } } };
+            ViewLayout.Layout(host, 600, 400);
+
+            // El orden hostil: primero el dato —con el control todavía colapsado y sin tamaño—, y
+            // el interruptor después.
+            plot.Labels = new[] { "< 1 sem", "1–4 sem", "4–12 sem", "> 12 sem" };
+            plot.Series = new[]
+            {
+                new ChartSeries("a", "A", Brushes.Blue, new double[] { 390, 0, 0, 0 }, ChartSeriesKind.Bar),
+            };
+            plot.Visibility = Visibility.Visible;
+
+            host.UpdateLayout();
+            hijos = plot.Children.Count;
+            barras = plot.Children.OfType<Rectangle>()
+                .Count(r => r.Fill is SolidColorBrush { Color.A: 0xFF });
+        });
+
+        hijos.Should().BeGreaterThan(0, "con tamaño y datos, la gráfica tiene que haber pintado algo");
+        barras.Should().Be(1);
+    }
+
+    /// <summary>
+    /// <b>El top de reglas son barras proporcionales</b> (F35-3 §1.2): la primera llena el hueco y
+    /// las demás guardan su proporción contra ella. Y el texto que se copia no cambia.
+    /// </summary>
+    [Fact]
+    public async Task El_top_de_reglas_dibuja_barras_proporcionales_a_la_primera()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 1 });
+        foreach ((string rule, int n) in new[]
+                 {
+                     ("errores.null.desreferencia", 10),
+                     ("errores.calculo.negocio", 5),
+                     ("mejoras.estilo.nomenclatura", 1),
+                 })
+        {
+            for (int i = 0; i < n; i++)
+            {
+                WriteFinding("app", DateTimeOffset.UtcNow.AddDays(-2), rule: rule);
+            }
+        }
+
+        MetricsViewModel vm = Panel();
+        await vm.LoadAsync();
+
+        vm.TopRules.Select(r => r.Count).Should().Equal(10, 5, 1);
+
+        // La más larga llena el espacio: una estrella entera, y nada a su derecha salvo el número.
+        vm.TopRules[0].Share.Value.Should().Be(1);
+        vm.TopRules[0].Rest.Value.Should().Be(0);
+
+        // Y las demás, su proporción contra ella. Las dos columnas siempre suman uno.
+        vm.TopRules[1].Share.Value.Should().BeApproximately(0.5, 0.0001);
+        vm.TopRules[2].Share.Value.Should().BeApproximately(0.1, 0.0001);
+        vm.TopRules.Should().OnlyContain(r => r.Share.IsStar && r.Rest.IsStar);
+        vm.TopRules.Should().OnlyContain(r => Math.Abs(r.Share.Value + r.Rest.Value - 1) < 0.0001);
+
+        // El texto copiado es el mismo de la Entrega 2: cambia el dibujo, no lo que se lleva.
+        vm.CopyTopRulesCommand.Should().BeOfType<RelayCommand>();
+        string esperado = string.Join(
+            "\n", new[] { "10 · Posible desreferencia nula", "5 · Error de cálculo de negocio", "1 · Nomenclatura/estilo" });
+        string.Join("\n", vm.TopRules.Select(r => $"{r.Count} · {r.Name}")).Should().Be(esperado);
+    }
+
+    /// <summary>
+    /// <b>Antigüedad y Top 5 comparten fila</b> (F35-3 §1.3, D-990): mismo alto, ancho repartido, y
+    /// en ventana estrecha bajan. Es lo que quita los dos mil píxeles entre un nombre y su número.
+    /// </summary>
+    [Fact]
+    public void Las_dos_graficas_pequenas_comparten_fila_y_alto()
+    {
+        var anchos = new List<double>();
+        var altos = new List<double>();
+        var estrecho = new List<double>();
+
+        ViewLayout.OnUiThread(() =>
+        {
+            // Las dos tarjetas, con CONTENIDO de altos distintos —como las de verdad—: si se les
+            // fijara el alto a mano no habría nada que igualar.
+            var panel = new ColumnsPanel { MinColumnWidth = 420, MaxColumns = 2, Gap = 16 };
+            panel.Children.Add(new Border { Background = Brushes.Gray, Child = new Border { Height = 300 } });
+            panel.Children.Add(new Border { Background = Brushes.Gray, Child = new Border { Height = 180 } });
+
+            ViewLayout.Layout(panel, 1400, 900);
+            foreach (FrameworkElement child in panel.Children.OfType<FrameworkElement>())
+            {
+                anchos.Add(child.ActualWidth);
+                altos.Add(child.ActualHeight);
+            }
+
+            // Estrecho: la segunda baja, y las dos ocupan el ancho entero.
+            ViewLayout.Layout(panel, 500, 900);
+            estrecho.AddRange(panel.Children.OfType<FrameworkElement>().Select(c => c.ActualWidth));
+        });
+
+        anchos.Should().HaveCount(2);
+        anchos[0].Should().Be(anchos[1], "el ancho se reparte entre las dos");
+        altos[0].Should().Be(altos[1], "la rejilla iguala: las dos al alto de la más alta (D-990)");
+        estrecho.Should().OnlyContain(w => w > 400, "a 500 px caben en una sola columna y bajan");
+
+        // Y en la vista son ESTAS dos las que van juntas, en ese orden.
+        string xaml = Markup(Source("src/Atalaya.App/Views/MetricsView.xaml"));
+        int fila = xaml.LastIndexOf("<c:ColumnsPanel", StringComparison.Ordinal);
+        int antiguedad = xaml.IndexOf("Antigüedad de la deuda", StringComparison.Ordinal);
+        int top = xaml.IndexOf("Top 5 reglas del periodo", StringComparison.Ordinal);
+        antiguedad.Should().BeGreaterThan(fila).And.BeLessThan(top);
+    }
+
+    /// <summary>Pinta unas series en un <see cref="ChartPlot"/> ya medido, y devuelve el control.</summary>
+    private static ChartPlot Paint(
+        IReadOnlyList<ChartSeries> series, IReadOnlyList<string> labels, bool barValues)
+    {
+        var plot = new ChartPlot
+        {
+            ValueFormat = "0",
+            Width = 640,
+            Height = 200,
+            AxisBrush = Brushes.Gray,
+            GridBrush = Brushes.Gray,
+            ShowBarValues = barValues,
+            Labels = labels,
+            Series = series,
+        };
+
+        ViewLayout.Layout(plot, 640, 200);
+        return plot;
     }
 
     /// <summary>Los cinco de arriba, escritos, y su «Copiar» (F33).</summary>
@@ -1149,13 +1358,14 @@ public sealed class MetricsPanelTests : IDisposable
         return session;
     }
 
-    private void WriteFinding(string slug, DateTimeOffset detected, Severity severity = Severity.Alta)
+    private void WriteFinding(
+        string slug, DateTimeOffset detected, Severity severity = Severity.Alta, string rule = "criterio.x")
     {
         var stamp = new DetectionStamp(detected, AuditMode.Lotes, "abc", "alvaro");
         _hub.Store.WriteFinding(slug, new Finding
         {
             Id = _ulids.NewUlid(),
-            RuleId = "criterio.x",
+            RuleId = rule,
             Pillar = Pillar.Errores,
             Tag = FindingTag.Criterio,
             Severity = severity,

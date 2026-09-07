@@ -589,101 +589,143 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- ============ Gráfica 4b: antigüedad de la deuda (F35 §2.7) ============ -->
-                    <!-- Debajo del flujo: una dice cuánta deuda entra y sale, la otra cuánto
-                         tiempo lleva ahí la que queda. UN eje (D-313) —los cuatro cubos son
-                         conteos de hallazgos— y color de APLICACIÓN (D-314), el mismo de siempre. -->
-                    <Border Style="{StaticResource Block}">
-                        <StackPanel>
-                            <TextBlock Text="Antigüedad de la deuda" Style="{StaticResource Text.Lead}"
-                                       FontWeight="SemiBold" />
-                            <!-- Como en el rosco de severidad: se DICE que el periodo no manda
-                                 aquí. Sin esa frase, cambiar el periodo y ver los mismos números
-                                 se lee como un fallo. -->
-                            <TextBlock Style="{StaticResource Text.Small}"
-                                       Text="Cuánto tiempo llevan abiertos los hallazgos activos, contando desde que se detectaron — a día de hoy, sin recortar por el periodo. Si el peso se va a la derecha, la deuda no rota: se pudre." />
+                    <!-- ====== Gráficas 4b y 4c: antigüedad y top de reglas, EN LA MISMA FILA ======
 
-                            <ItemsControl ItemsSource="{Binding AgeLegend}"
-                                          ItemTemplate="{StaticResource LegendEntry}"
-                                          Margin="{StaticResource Pad.XS.Top}"
-                                          Visibility="{Binding ShowAgeLegend, Converter={StaticResource BoolToVisibility}}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                            </ItemsControl>
+                         F35-3 §1.3 — las dos van juntas en `ColumnsPanel` (D-970/D-990): reparte el
+                         ancho entero y da a las dos el alto de la más alta; en ventana estrecha,
+                         bajan. Sueltas y a ancho completo, el top de reglas dejaba dos mil píxeles
+                         entre el nombre de una regla y su número, que es la distancia a la que un
+                         dato deja de leerse como el dato de esa fila. -->
+                    <c:ColumnsPanel MinColumnWidth="420" MaxColumns="2"
+                                    Gap="{StaticResource Space.M}"
+                                    Margin="{StaticResource Pad.M.Bottom}">
 
-                            <controls:ChartPlot
-                                Height="200"
-                                Margin="{StaticResource Pad.XS.Top}"
-                                Series="{Binding AgeSeries}"
-                                Labels="{Binding AgeLabels}"
-                                ValueFormat="0"
-                                Unit="hallazgos activos"
-                                AxisBrush="{DynamicResource Brush.TextMuted}"
-                                GridBrush="{DynamicResource Brush.Line}"
-                                Visibility="{Binding HasAges, Converter={StaticResource BoolToVisibility}}" />
+                        <!-- ============ Antigüedad de la deuda (F35 §2.7) ============ -->
+                        <!-- UN eje (D-313) —los cuatro cubos son conteos de hallazgos— y color de
+                             APLICACIÓN (D-314), el mismo de siempre. -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="Antigüedad de la deuda" Style="{StaticResource Text.Lead}"
+                                           FontWeight="SemiBold" />
+                                <!-- Como en el rosco de severidad: se DICE que el periodo no manda
+                                     aquí. Sin esa frase, cambiar el periodo y ver los mismos números
+                                     se lee como un fallo. -->
+                                <TextBlock Style="{StaticResource Text.Small}"
+                                           Text="Cuánto tiempo llevan abiertos los hallazgos activos, contando desde que se detectaron — a día de hoy, sin recortar por el periodo. Si el peso se va a la derecha, la deuda no rota: se pudre." />
 
-                            <c:EmptyState
-                                Message="Se activará cuando haya algún hallazgo activo."
-                                Visibility="{Binding HasAges, Converter={StaticResource InverseBoolToVisibility}}" />
-                        </StackPanel>
-                    </Border>
+                                <ItemsControl ItemsSource="{Binding AgeLegend}"
+                                              ItemTemplate="{StaticResource LegendEntry}"
+                                              Margin="{StaticResource Pad.XS.Top}"
+                                              Visibility="{Binding ShowAgeLegend, Converter={StaticResource BoolToVisibility}}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
 
-                    <!-- ============ Gráfica 4c: top 5 reglas del periodo (F35 §2.8) ============ -->
-                    <!-- Pequeña y sin color de severidad (D-316): una regla no es una gravedad —la
-                         misma regla produce hallazgos críticos y bajos—. La barra es solo escala. -->
-                    <Border Style="{StaticResource Block}">
-                        <StackPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Top 5 reglas del periodo"
-                                           Style="{StaticResource Text.Lead}" FontWeight="SemiBold" />
-                                <Button Grid.Column="1" Content="Copiar"
-                                        Style="{StaticResource Button.Link}"
-                                        FontSize="{StaticResource FontSize.Meta}"
-                                        VerticalAlignment="Top" HorizontalAlignment="Right"
-                                        Command="{Binding CopyTopRulesCommand}"
-                                        ToolTip="Copia las cinco reglas y su número, una por línea." />
-                            </Grid>
-                            <TextBlock Style="{StaticResource Text.Small}"
-                                       Text="Las cinco reglas que más hallazgos generaron dentro del periodo, con cuántos. Cuenta lo detectado, esté hoy activo o resuelto: produjo trabajo igual." />
+                                <!-- `ShowBarValues`: cuatro cubos son pocos, y con el número encima
+                                     no hace falta apuntar con el ratón para leer la cifra. -->
+                                <controls:ChartPlot
+                                    Height="200"
+                                    Margin="{StaticResource Pad.XS.Top}"
+                                    Series="{Binding AgeSeries}"
+                                    Labels="{Binding AgeLabels}"
+                                    ValueFormat="0"
+                                    Unit="hallazgos activos"
+                                    ShowBarValues="True"
+                                    AxisBrush="{DynamicResource Brush.TextMuted}"
+                                    GridBrush="{DynamicResource Brush.Line}"
+                                    Visibility="{Binding HasAges, Converter={StaticResource BoolToVisibility}}" />
 
-                            <ItemsControl ItemsSource="{Binding TopRules}" Margin="{StaticResource Pad.S.Top}"
-                                          Grid.IsSharedSizeScope="True"
-                                          Visibility="{Binding HasTopRules, Converter={StaticResource BoolToVisibility}}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="{StaticResource Pad.XXS.V}">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" SharedSizeGroup="ReglaCuenta" />
-                                            </Grid.ColumnDefinitions>
-                                            <!-- El nombre con la primitiva de recorte de un nombre
-                                                 (P-01) y el id completo en el tooltip: el título
-                                                 es lo que se lee, el id es lo que se busca. -->
-                                            <TextBlock Grid.Column="0" Text="{Binding Name}"
-                                                       Style="{StaticResource Text.Name}"
-                                                       Foreground="{DynamicResource Brush.Text}"
-                                                       Margin="{StaticResource Pad.S.Right}"
-                                                       ToolTip="{Binding RuleId}" />
-                                            <!-- La cifra a la derecha y tabular, como en Informes (P-08). -->
-                                            <TextBlock Grid.Column="1" Text="{Binding Count}"
-                                                       Style="{StaticResource Cell.Number}" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                                <c:EmptyState
+                                    Message="Se activará cuando haya algún hallazgo activo."
+                                    Visibility="{Binding HasAges, Converter={StaticResource InverseBoolToVisibility}}" />
+                            </StackPanel>
+                        </Border>
 
-                            <c:EmptyState
-                                Message="Se activará cuando se detecte algún hallazgo dentro del periodo."
-                                Visibility="{Binding HasTopRules, Converter={StaticResource InverseBoolToVisibility}}" />
-                        </StackPanel>
-                    </Border>
+                        <!-- ============ Top 5 reglas del periodo (F35 §2.8) ============ -->
+                        <!-- Sin color de severidad (D-316): una regla no es una gravedad —la misma
+                             regla produce hallazgos críticos y bajos—. Y sin color de aplicación:
+                             la lista ya está filtrada, así que el color no distinguiría nada. La
+                             barra va en un neutro de la casa y es SOLO escala. -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Top 5 reglas del periodo"
+                                               Style="{StaticResource Text.Lead}" FontWeight="SemiBold" />
+                                    <Button Grid.Column="1" Content="Copiar"
+                                            Style="{StaticResource Button.Link}"
+                                            FontSize="{StaticResource FontSize.Meta}"
+                                            VerticalAlignment="Top" HorizontalAlignment="Right"
+                                            Command="{Binding CopyTopRulesCommand}"
+                                            ToolTip="Copia las cinco reglas y su número, una por línea." />
+                                </Grid>
+                                <TextBlock Style="{StaticResource Text.Small}"
+                                           Text="Las cinco reglas que más hallazgos generaron dentro del periodo, con cuántos. Cuenta lo detectado, esté hoy activo o resuelto: produjo trabajo igual." />
+
+                                <ItemsControl ItemsSource="{Binding TopRules}" Margin="{StaticResource Pad.S.Top}"
+                                              Grid.IsSharedSizeScope="True"
+                                              Visibility="{Binding HasTopRules, Converter={StaticResource BoolToVisibility}}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="{StaticResource Pad.XXS.V}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- El nombre: ancho FIJO para que las barras
+                                                     empiecen todas en la misma x —una barra que
+                                                     arranca donde acaba su texto no se puede
+                                                     comparar con la de al lado—, con elipsis y el
+                                                     nombre entero en el tooltip. -->
+                                                <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                                           Width="190"
+                                                           Style="{StaticResource Text.Small}"
+                                                           Foreground="{DynamicResource Brush.Text}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           TextWrapping="NoWrap"
+                                                           VerticalAlignment="Center"
+                                                           ToolTip="{Binding Name}" />
+
+                                                <!-- LA BARRA Y SU NÚMERO. Dos columnas de estrella
+                                                     que salen del dato (`Share`/`Rest`): la más
+                                                     larga llena el hueco y las demás guardan su
+                                                     proporción sin que nadie mida píxeles. El
+                                                     número va en la segunda, pegado al final de la
+                                                     barra — y esa columna lleva un mínimo para que
+                                                     la barra más larga no se lo coma. -->
+                                                <Grid Grid.Column="1" Margin="{StaticResource Pad.S.Left}">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="{Binding Share}" />
+                                                        <ColumnDefinition Width="{Binding Rest}" MinWidth="46" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border Grid.Column="0" Height="16"
+                                                            VerticalAlignment="Center"
+                                                            CornerRadius="{StaticResource Radius.S}"
+                                                            Background="{DynamicResource Brush.LineStrong}" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding Count}"
+                                                               Style="{StaticResource Cell.Number}"
+                                                               HorizontalAlignment="Left"
+                                                               VerticalAlignment="Center"
+                                                               Margin="{StaticResource Pad.XS.Left}" />
+                                                </Grid>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <c:EmptyState
+                                    Message="Se activará cuando se detecte algún hallazgo dentro del periodo."
+                                    Visibility="{Binding HasTopRules, Converter={StaticResource InverseBoolToVisibility}}" />
+                            </StackPanel>
+                        </Border>
+                    </c:ColumnsPanel>
 
                     <!-- ============ Gráfica 6: la cinta de ciclos (F17 §6) ============ -->
                     <Border Style="{StaticResource Block}">

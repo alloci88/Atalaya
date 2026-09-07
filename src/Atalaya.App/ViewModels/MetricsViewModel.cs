@@ -1,5 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Windows;
 using System.Windows.Media;
 using Atalaya.App.Controls;
 using Atalaya.App.Services;
@@ -64,6 +65,22 @@ public sealed record StatCard(
     /// </summary>
     public string CopyText => $"{Title}: {Amount} · {Subtitle} · {Trend}";
 }
+
+/// <summary>
+/// <b>Una fila del top de reglas, con su barra</b> (F35-3 §1.2). El nombre a la izquierda, una
+/// barra proporcional a la regla que más produjo, y el número <b>al final de la barra</b>.
+/// <para>
+/// <b>La proporción viaja como dos <c>GridLength</c>, no como un número con converter.</b> La
+/// barra tiene que repartirse el ancho que haya —que solo se conoce al colocar—, y dos columnas de
+/// estrella lo hacen sin que nadie mida nada. Salen de aquí ya calculadas porque son el DATO
+/// —cuánto de la más larga es ésta—, no una decisión de la vista, y así se pueden comprobar sin
+/// pintar.
+/// </para>
+/// </summary>
+/// <param name="Share">Lo que ocupa la barra: 1 estrella para la primera, la fracción para el resto.</param>
+/// <param name="Rest">Lo que queda a su derecha, donde va el número. Suman 1.</param>
+public sealed record RuleBar(
+    string RuleId, string Name, int Count, GridLength Share, GridLength Rest);
 
 /// <summary>Un rosco de cobertura con todo lo que la vista escribe alrededor.</summary>
 public sealed record CoverageCard(
@@ -499,7 +516,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
     /// Las cinco reglas que más hallazgos generaron en el periodo. <b>Sin color de severidad</b>
     /// (D-316): una regla no es una gravedad — la misma regla produce hallazgos críticos y bajos.
     /// </summary>
-    public ObservableCollection<RuleCount> TopRules { get; } = new();
+    public ObservableCollection<RuleBar> TopRules { get; } = new();
 
     [ObservableProperty] private bool _hasTopRules;
 
@@ -507,9 +524,20 @@ public sealed partial class MetricsViewModel : ViewModelBase
     private void ApplyTopRules(MetricsDashboard d)
     {
         TopRules.Clear();
+
+        // La más larga llena el espacio disponible; las demás, su proporción contra ella. Se
+        // divide entre el MÁXIMO y no entre la suma: la pregunta que contesta la fila es «¿cuánto
+        // produce ésta comparada con la que más?», no qué parte del total es.
+        int top = d.Rules.Count > 0 ? d.Rules.Max(r => r.Count) : 0;
         foreach (RuleCount rule in d.Rules)
         {
-            TopRules.Add(rule);
+            double share = top > 0 ? (double)rule.Count / top : 0;
+            TopRules.Add(new RuleBar(
+                rule.RuleId,
+                rule.Name,
+                rule.Count,
+                new GridLength(share, GridUnitType.Star),
+                new GridLength(1 - share, GridUnitType.Star)));
         }
 
         HasTopRules = TopRules.Count > 0;

@@ -93,6 +93,17 @@ public sealed class ChartPlot : Canvas
         nameof(IsCost), typeof(bool), typeof(ChartPlot),
         new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
 
+    /// <summary>
+    /// <b>El número encima de cada barra con datos</b> (F35-3 §1.1). Es opcional y por defecto va
+    /// apagado: en una gráfica de veintiocho cubos los números se pisarían unos a otros, y en una
+    /// de cuatro —los cubos de antigüedad— leer el valor exacto no puede costar apuntar con el
+    /// ratón. Solo se escribe sobre las barras que tienen algo: un «0» encima de un cubo vacío es
+    /// ruido, y el cubo vacío ya se ve vacío.
+    /// </summary>
+    public static readonly DependencyProperty ShowBarValuesProperty = DependencyProperty.Register(
+        nameof(ShowBarValues), typeof(bool), typeof(ChartPlot),
+        new PropertyMetadata(false, OnVisualChanged));
+
     public static readonly DependencyProperty AxisBrushProperty = DependencyProperty.Register(
         nameof(AxisBrush), typeof(Brush), typeof(ChartPlot),
         new PropertyMetadata(Brushes.Gray, OnVisualChanged));
@@ -146,6 +157,13 @@ public sealed class ChartPlot : Canvas
         set => SetValue(IsCostProperty, value);
     }
 
+    /// <inheritdoc cref="ShowBarValuesProperty"/>
+    public bool ShowBarValues
+    {
+        get => (bool)GetValue(ShowBarValuesProperty);
+        set => SetValue(ShowBarValuesProperty, value);
+    }
+
     public Brush AxisBrush
     {
         get => (Brush)GetValue(AxisBrushProperty);
@@ -158,19 +176,55 @@ public sealed class ChartPlot : Canvas
         set => SetValue(GridBrushProperty, value);
     }
 
+    /// <summary>
+    /// El tamaño con el que se dibujó lo que hay ahora, y si quedó algo por dibujar. Ver el
+    /// constructor.
+    /// </summary>
+    private Size _drawn = Size.Empty;
+
+    private bool _stale = true;
+
     public ChartPlot()
     {
         ClipToBounds = true;
         SizeChanged += (_, _) => Rebuild();
+
+        // F35-3 — Y TAMBIÉN EN CADA PASADA DE LAYOUT, si quedó algo pendiente de dibujar.
+        //
+        // El defecto, medido: la gráfica de antigüedad salía vacía en el `dist` teniendo el dato
+        // correcto, el tamaño correcto y siendo visible. La secuencia era ésta: el control nace
+        // `Collapsed` —su visibilidad cuelga de un `HasX` que empieza en false—, el view-model le
+        // asigna las series ANTES de encender ese interruptor, y ese `Rebuild` se encuentra con
+        // `ActualWidth` 0 y se va sin dibujar; cuando el interruptor lo hace visible y el layout le
+        // da su tamaño, no vuelve a pasar por aquí. El dibujo se quedaba en la única pasada que no
+        // podía hacerlo.
+        //
+        // Las otras tres gráficas se libraban por casualidad: sus view-models encienden el
+        // interruptor ANTES de asignar la serie. Una regla que depende de en qué orden asigne quien
+        // llama no es una regla, así que se arregla AQUÍ: mientras quede algo por dibujar, la
+        // siguiente pasada de layout lo dibuja. No hay bucle — un dibujo con éxito apunta su tamaño
+        // y deja de estar pendiente, y entonces esto no hace nada.
+        LayoutUpdated += (_, _) => RebuildIfStale();
     }
 
     private static void OnVisualChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         => ((ChartPlot)d).Rebuild();
 
+    /// <inheritdoc cref="ChartPlot()"/>
+    private void RebuildIfStale()
+    {
+        if (_stale || _drawn.Width != ActualWidth || _drawn.Height != ActualHeight)
+        {
+            Rebuild();
+        }
+    }
+
     private void Rebuild()
     {
         Children.Clear();
         _crosshair = null;
+        _stale = true;
+        _drawn = Size.Empty;
 
         var series = (Series ?? Array.Empty<ChartSeries>()).Where(s => s.Values.Count > 0).ToList();
         var labels = Labels ?? Array.Empty<string>();
@@ -210,6 +264,10 @@ public sealed class ChartPlot : Canvas
 
         AddCrosshair(plotTop, plotHeight);
         AddHitColumns(series, buckets, slot, plotLeft, plotTop, plotHeight);
+
+        // Dibujado, y con qué tamaño: la próxima pasada de layout ya no tiene nada que hacer.
+        _stale = false;
+        _drawn = new Size(w, h);
     }
 
     // ---------- Rejilla y ejes ----------
@@ -308,6 +366,7 @@ public sealed class ChartPlot : Canvas
                 }
 
                 double top = y(value);
+                double barLeft = groupLeft + s * (barWidth + 2);
                 var rect = new Rectangle
                 {
                     Width = barWidth,
@@ -316,9 +375,27 @@ public sealed class ChartPlot : Canvas
                     RadiusX = 1.5,
                     RadiusY = 1.5,
                 };
-                SetLeft(rect, groupLeft + s * (barWidth + 2));
+                SetLeft(rect, barLeft);
                 SetTop(rect, top);
                 Children.Add(rect);
+
+                if (!ShowBarValues)
+                {
+                    continue;
+                }
+
+                // El número, centrado sobre SU barra. Si la barra llega arriba del todo se escribe
+                // igualmente, pegado al borde: recortarlo dejaría sin cifra justo a la más alta.
+                var value_ = new TextBlock
+                {
+                    Text = Format(value),
+                    FontSize = 10,
+                    Foreground = AxisBrush,
+                };
+                Size size = Measure(value_.Text);
+                SetLeft(value_, barLeft + (barWidth - size.Width) / 2);
+                SetTop(value_, Math.Max(0, top - size.Height - 2));
+                Children.Add(value_);
             }
         }
     }
