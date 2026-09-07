@@ -620,32 +620,34 @@ Debajo, diez gráficas:
    gravedad**, porque una regla no es una gravedad —la misma regla produce hallazgos críticos y
    bajos—, y sin color de aplicación, porque la lista ya está filtrada. Un empate se rompe por el
    nombre, siempre igual, para que la lista no baile entre dos cargas. Con **Copiar**.
-9. **Ciclos y temáticas** — la secuencia de ciclos de cada aplicación: **no es una
-   línea de tiempo**, es la lista de capítulos. Una fila por aplicación (en el orden
-   del Portafolio, con el nombre en una columna fija) y, en cada fila, sus ciclos **en
-   orden, uno tras otro, como bloques del mismo ancho**: un ciclo de tres horas y uno de
-   tres semanas cuentan lo mismo como capítulo. Cada bloque dice «C2 · Seguridad» y,
-   debajo, sus fechas («14 ago – 2 sept», o «2 sept» si empezó y acabó el mismo día,
-   o «14 ago – en curso»); si el rótulo se lleva las dos líneas, las fechas caen —nunca
-   el identificador ni la temática— y el tooltip las trae. El color es el de la temática
-   (la misma paleta de siempre), y el ciclo abierto va el último, desvaneciéndose por la
-   derecha. **Un ciclo que cambió de temática a mitad se pinta partido** dentro de su
-   bloque, cada trozo con su color y en proporción a lo que duró cada lupa, con una
-   muesca en el cambio y un tooltip propio; el rótulo lo resume («C1 · Rendimiento →
-   Seguridad»). **Los huecos se cuentan, no se dibujan**: entre dos ciclos separados por
-   una semana o más aparece un separador discreto con el dato —«3 semanas sin
-   auditar»—, que informa más que un desierto de píxeles. Una aplicación sin ciclos
-   conserva su fila, rotulada «sin ciclos en este periodo»; solo cuenta como ciclo lo
-   que tiene apertura registrada o alguna sesión. El tooltip de cada bloque lleva el
-   ciclo, la temática, las fechas, las unidades auditadas sobre las auditables al
-   cierre, los hallazgos nuevos y resueltos y el coste en AI credits (solo lo
-   facturable). **Un clic abre el informe de cierre**; el ciclo abierto abre el
-   inventario. Con muchos ciclos la fila se desplaza dentro de su tarjeta, nunca la
-   página, y la vista **arranca por el final**: las filas se alinean por su último
-   capítulo, así que al abrir se ve el ciclo más reciente de todas; si retrocedes, se
-   respeta tu posición. El filtro de periodo recorta por pertenencia: se enseñan los
-   ciclos que lo solapan, y si alguno queda fuera la fila lo dice («2 ciclos anteriores
-   fuera del periodo») en vez de fabricar un eje.
+9. **Ciclos y temáticas** — la historia de auditoría de cada aplicación **sobre un eje de
+   tiempo**. Una fila por aplicación (en el orden del Portafolio, con su nombre y su punto de
+   color en una columna fija) y, en cada fila, sus ciclos colocados por fecha: **cada bloque
+   empieza donde empezó el ciclo y mide lo que duró**, así que un ciclo de cuatro días y uno de
+   seis meses ya no se parecen. El eje es **uno solo, compartido por todas las aplicaciones** —del
+   primer ciclo registrado hasta hoy, con un mínimo de cuatro semanas para que un ciclo corto no
+   llene la pantalla—, lleva marcas en fechas redondas (lunes, o día 1 según el rango) y una
+   **línea vertical en hoy**. El ciclo abierto llega hasta esa línea. **Este eje no lo recorta el
+   selector de periodo**: la cinta es historia, como la antigüedad de la deuda.
+
+   **El bloque enseña su avance**: se rellena de izquierda a derecha según su **cobertura**
+   —unidades auditadas sobre auditables, la misma cifra del tooltip—, en el color de su temática,
+   y lo que queda por auditar se ve en el neutro apagado del rosco de cobertura. El rótulo lo dice:
+   «C1 · General · 4 %». Si el ciclo no conserva su inventario no hay relleno ni porcentaje —no es
+   un 0 %, es que no se sabe—, y el rótulo se queda en «C1 · General». Cuando el bloque es estrecho
+   se escribe solo el identificador («C4»), y si ni eso cabe, el tooltip lo trae todo.
+
+   **Un ciclo que cambió de temática a mitad se pinta partido**, cada trozo con su color y en el
+   sitio del tiempo en que se cambió, con una muesca y un tooltip propio; el rótulo lo resume
+   («C1 · Rendimiento → Seguridad»). **Los huecos se ven**: entre dos ciclos, el tramo sin auditar
+   va en gris a trazos y ocupa lo que duró, con sus días encima si caben («12 d»). Una aplicación
+   sin ciclos conserva su fila, rotulada «sin ciclos registrados»; solo cuenta como ciclo lo que
+   tiene apertura registrada o alguna sesión. Un fin que no se pudo recuperar lleva el borde
+   derecho a puntos. El tooltip de cada bloque lleva el ciclo, la temática, las fechas, las
+   unidades auditadas sobre las auditables al cierre, los hallazgos nuevos y resueltos y el coste
+   en AI credits (solo lo facturable). **Un clic abre el informe de cierre**; el ciclo abierto abre
+   el inventario.
+
 10. **Actividad de sesiones** — el registro del periodo, con el **tipo** de cada sesión
    (auditoría, arreglo asistido, verificación, cierre…), su proveedor, su coste y sus
    **tokens**. Las de Claude Code dicen «suscripción» donde las otras dicen credits, y sus

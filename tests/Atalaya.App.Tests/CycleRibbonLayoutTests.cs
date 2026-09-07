@@ -9,12 +9,17 @@ using Xunit;
 namespace Atalaya.App.Tests;
 
 /// <summary>
-/// F17.2 — LA SECUENCIA DE CICLOS, MEDIDA: capítulos en orden, de ancho fijo, con sus fechas y
-/// sus huecos contados; la fila indivisible de F17.1 se conserva.
+/// F35-4 — LA CINTA SOBRE UN EJE DE TIEMPO, MEDIDA: cada bloque en la x de su fecha y con el
+/// ancho de su duración; los huecos ocupando lo que duraron; el relleno diciendo la cobertura.
 /// <para>
-/// Con datos DESIGUALES a propósito (D-843): una app con varios ciclos y huecos, una con uno solo,
-/// una sin ninguno, y un ciclo con dos temáticas. Es donde se rompe la correspondencia, y es donde
-/// se mide.
+/// Hasta F17.2 la cinta era una lista de capítulos de ancho fijo y estos tests medían eso. La
+/// pregunta que no podía contestar —«cuánto duró cada ciclo y cuánto se tardó en volver»— es la
+/// que trae el eje, y es lo que se mide aquí. Con datos DESIGUALES a propósito (D-843): una app
+/// con varios ciclos y un hueco largo, una con uno solo y recién abierto, y una sin ninguno.
+/// </para>
+/// <para>
+/// Y se mide <b>lo que se dibuja</b>, no solo lo que se calcula (D-1042): la geometría se afirma
+/// sin pintar, y el dibujo se cuenta sobre el control ya colocado.
 /// </para>
 /// </summary>
 public sealed class CycleRibbonLayoutTests
@@ -23,30 +28,37 @@ public sealed class CycleRibbonLayoutTests
 
     private static RibbonSlice Slice(Brush fill, DateTime a, DateTime b) => new(fill, a, b, new[] { "trozo" });
 
-    private static RibbonSpan Span(string label, DateTime a, DateTime b, bool open = false, string dates = "14 ago – 2 sept", params RibbonSlice[] slices)
-        => new(label, dates, slices.Length == 0 ? new[] { Slice(Brushes.SlateGray, a, b) } : slices, a, b, open, true, new[] { label });
+    private static RibbonSpan Span(
+        string label, DateTime a, DateTime b, bool open = false, string dates = "14 ago – 2 sept",
+        double? coverage = null, string shortLabel = "C1", params RibbonSlice[] slices)
+        => new(
+            label, dates, slices.Length == 0 ? new[] { Slice(Brushes.SlateGray, a, b) } : slices,
+            a, b, open, true, new[] { label }, null, shortLabel, coverage);
 
-    /// <summary>Varios ciclos con un hueco grande entre el segundo y el tercero.</summary>
+    /// <summary>Varios ciclos con un hueco de 20 días entre el segundo y el tercero.</summary>
     private static RibbonTrack Several() => new("Voladura", new[]
     {
-        Span("C1 · General", Today.AddDays(-120), Today.AddDays(-100)),
-        Span("C2 · Fiabilidad", Today.AddDays(-99), Today.AddDays(-80)),
-        Span("C3 · Mantenibilidad", Today.AddDays(-30), Today, open: true, dates: "3 ago – en curso"),
-    });
+        Span("C1 · General", Today.AddDays(-120), Today.AddDays(-100), coverage: 1.0, shortLabel: "C1"),
+        Span("C2 · Fiabilidad", Today.AddDays(-100), Today.AddDays(-50), coverage: 0.5, shortLabel: "C2"),
+        Span("C3 · Mantenibilidad", Today.AddDays(-30), Today, open: true,
+            dates: "3 ago – en curso", coverage: 0.25, shortLabel: "C3"),
+    }, Dot: Brushes.OrangeRed);
 
     private static RibbonTrack Single() => new("AtalayaBanco", new[]
     {
-        Span("C1 · Rendimiento → Seguridad", Today.AddHours(-3), Today, open: true, dates: "2 sept – en curso",
-            Slice(Brushes.Teal, Today.AddHours(-3), Today.AddHours(-1)), Slice(Brushes.Purple, Today.AddHours(-1), Today)),
-    });
+        Span("C1 · Rendimiento → Seguridad", Today.AddHours(-3), Today, open: true,
+            dates: "2 sept – en curso", coverage: 0.5, shortLabel: "C1",
+            Slice(Brushes.Teal, Today.AddHours(-3), Today.AddHours(-1)),
+            Slice(Brushes.Purple, Today.AddHours(-1), Today)),
+    }, Dot: Brushes.SteelBlue);
 
-    private static RibbonTrack None() => new("XBLAST", Array.Empty<RibbonSpan>());
+    private static RibbonTrack None() => new("XBLAST", Array.Empty<RibbonSpan>(), Dot: Brushes.Green);
 
     private static IReadOnlyList<RibbonTrack> Uneven() => new[] { Several(), Single(), None() };
 
     private static CycleRibbon Build(IReadOnlyList<RibbonTrack> tracks, double width)
     {
-        var ribbon = new CycleRibbon { Tracks = tracks };
+        var ribbon = new CycleRibbon { Tracks = tracks, Today = Today };
         ViewLayout.Layout(ribbon, width, 400);
         return ribbon;
     }
@@ -54,41 +66,114 @@ public sealed class CycleRibbonLayoutTests
     /// <summary>Los anchos de página de la casa (D-819), y uno estrecho de más.</summary>
     public static TheoryData<double> Widths => new() { 1124, 658, 441, 320 };
 
-    // ================================================================ orden y ancho fijo
+    // ================================================================ el eje
 
+    /// <summary>
+    /// <b>Un eje compartido por todas las aplicaciones</b>: del inicio del primer tramo de
+    /// cualquiera de ellas hasta hoy. Y nunca menos de cuatro semanas, para que un ciclo de cuatro
+    /// días no llene la pantalla y parezca un historial largo.
+    /// </summary>
+    [Fact]
+    public void El_eje_va_del_primer_tramo_hasta_hoy_y_nunca_mide_menos_de_cuatro_semanas()
+    {
+        RibbonGeometry largo = RibbonGeometry.For(Uneven(), Today, 1000);
+        largo.From.Should().Be(Today.AddDays(-120), "el primer tramo de CUALQUIER aplicación");
+        largo.To.Should().Be(Today, "el eje llega hasta hoy (D-593)");
+        largo.TodayX.Should().Be(1000);
+
+        // Una sola app con un ciclo de cuatro días: el eje se abre a cuatro semanas.
+        var corto = new[] { new RibbonTrack("Una", new[] { Span("C1 · General", Today.AddDays(-4), Today, open: true) }) };
+        RibbonGeometry suelo = RibbonGeometry.For(corto, Today, 1000);
+        suelo.Days.Should().Be(RibbonGeometry.MinAxisDays);
+        suelo.From.Should().Be(Today.AddDays(-28));
+        suelo.To.Should().Be(Today);
+
+        // Y el bloque ocupa lo suyo: cuatro días de veintiocho, contra el borde derecho.
+        RibbonBlock block = suelo.Blocks.Single();
+        block.Left.Should().BeApproximately(1000 * 24 / 28.0, 0.5);
+        block.Right.Should().BeApproximately(1000, 0.5);
+    }
+
+    /// <summary>Sin ningún tramo, el eje sigue siendo de cuatro semanas y no divide por cero.</summary>
+    [Fact]
+    public void Sin_tramos_el_eje_sigue_existiendo()
+    {
+        RibbonGeometry vacia = RibbonGeometry.For(new[] { None() }, Today, 800);
+
+        vacia.Days.Should().Be(RibbonGeometry.MinAxisDays);
+        vacia.Blocks.Should().BeEmpty();
+        vacia.Gaps.Should().BeEmpty();
+        vacia.Ticks.Should().NotBeEmpty("un eje sin datos sigue teniendo fechas");
+    }
+
+    /// <summary>Las marcas caen en fechas REDONDAS —lunes o día 1—, y cambian de grano con el rango.</summary>
+    [Fact]
+    public void Las_marcas_del_eje_son_fechas_redondas_y_cambian_de_grano()
+    {
+        // Cuatro semanas: lunes.
+        RibbonGeometry semanas = RibbonGeometry.For(
+            new[] { new RibbonTrack("Una", new[] { Span("C1", Today.AddDays(-20), Today) }) }, Today, 1000);
+        semanas.Ticks.Should().NotBeEmpty();
+        semanas.Ticks.Should().OnlyContain(t => t.When.DayOfWeek == DayOfWeek.Monday);
+
+        // Cuatro meses: día 1 de cada mes.
+        RibbonGeometry meses = RibbonGeometry.For(
+            new[] { new RibbonTrack("Una", new[] { Span("C1", Today.AddDays(-120), Today) }) }, Today, 1000);
+        meses.Ticks.Should().NotBeEmpty();
+        meses.Ticks.Should().OnlyContain(t => t.When.Day == 1);
+
+        // Dos años: trimestres.
+        RibbonGeometry anios = RibbonGeometry.For(
+            new[] { new RibbonTrack("Una", new[] { Span("C1", Today.AddDays(-730), Today) }) }, Today, 1000);
+        anios.Ticks.Should().OnlyContain(t => t.When.Day == 1 && (t.When.Month - 1) % 3 == 0);
+
+        // Y ninguna marca se sale del eje.
+        foreach (RibbonGeometry g in new[] { semanas, meses, anios })
+        {
+            g.Ticks.Should().OnlyContain(t => t.When >= g.From && t.When <= g.To);
+            g.Ticks.Should().OnlyContain(t => t.X >= 0 && t.X <= g.Width);
+        }
+    }
+
+    // ================================================================ posición y ancho
+
+    /// <summary>
+    /// <b>Cada bloque en la x de su inicio y con el ancho de su duración</b>, sobre el mismo eje
+    /// que las demás aplicaciones. Es lo que la cinta de capítulos no podía decir: ahí un ciclo de
+    /// cuatro días y uno de seis meses medían lo mismo y estaban en el mismo sitio.
+    /// </summary>
     [Theory]
     [MemberData(nameof(Widths))]
-    public void Los_ciclos_van_en_orden_como_bloques_del_mismo_ancho(double width)
-        => ViewLayout.OnUiThread(() =>
-        {
-            CycleRibbon ribbon = Build(Uneven(), width);
+    public void Cada_bloque_queda_en_la_fecha_de_su_inicio_y_mide_su_duracion(double width)
+    {
+        RibbonGeometry g = RibbonGeometry.For(Uneven(), Today, width);
+        double perDay = width / 120.0;
 
-            var blocks = ribbon.SpanShapes.Where(s => s.Row == 0).GroupBy(s => s.Span)
-                .Select(g => (Span: g.Key, Left: g.Min(s => ViewLayout.BoxOf(s.Shape, ribbon.Plot).Left), Right: g.Max(s => ViewLayout.BoxOf(s.Shape, ribbon.Plot).Right)))
-                .OrderBy(b => b.Left)
-                .ToList();
+        var fila = g.Blocks.Where(b => b.Row == 0).OrderBy(b => b.Left).ToList();
+        fila.Select(b => b.Span.Label).Should().Equal("C1 · General", "C2 · Fiabilidad", "C3 · Mantenibilidad");
 
-            blocks.Select(b => b.Span.Label).Should().Equal("C1 · General", "C2 · Fiabilidad", "C3 · Mantenibilidad"); // en orden, uno tras otro
-            blocks.Should().OnlyContain(b => Math.Abs(b.Right - b.Left - CycleRibbon.BlockWidth) < 0.5,
-                "ancho legible fijo: un ciclo de horas y uno de semanas cuentan lo mismo como capítulo");
-            for (int i = 1; i < blocks.Count; i++)
-            {
-                blocks[i].Left.Should().BeGreaterThan(blocks[i - 1].Right, "no se solapan");
-            }
-        });
+        fila[0].Left.Should().BeApproximately(0, 0.5, "el primer tramo abre el eje");
+        fila[0].Width.Should().BeApproximately(20 * perDay, 0.5, "veinte días");
+        fila[1].Left.Should().BeApproximately(20 * perDay, 0.5);
+        fila[1].Width.Should().BeApproximately(50 * perDay, 0.5, "cincuenta días");
+        fila[2].Width.Should().BeApproximately(30 * perDay, 0.5, "treinta días");
+        fila[2].Right.Should().BeApproximately(g.TodayX, 0.5, "el ciclo abierto llega a la línea de hoy");
 
-    /// <summary>La fila indivisible de F17.1, conservada: nombre y bloques a la misma altura, con y sin scroll.</summary>
+        // Y la fila de otra aplicación usa EL MISMO eje: su ciclo de tres horas es un hilo contra
+        // el borde derecho, no un bloque del mismo tamaño que uno de cincuenta días.
+        RibbonBlock banco = g.Blocks.Single(b => b.Row == 1);
+        banco.Right.Should().BeApproximately(g.TodayX, 0.5);
+        banco.Width.Should().BeLessThan(fila[1].Width / 10);
+        banco.Width.Should().BeGreaterThanOrEqualTo(RibbonGeometry.MinBlockWidth, "siempre hay dónde pulsar");
+    }
+
+    /// <summary>La fila indivisible de F17.1, conservada: nombre y bloques a la misma altura.</summary>
     [Theory]
     [MemberData(nameof(Widths))]
     public void Cada_nombre_queda_a_la_altura_de_su_fila(double width)
         => ViewLayout.OnUiThread(() =>
         {
             CycleRibbon ribbon = Build(Uneven(), width);
-            if (ribbon.Scroll.ScrollableWidth > 0)
-            {
-                ribbon.Scroll.ScrollToHorizontalOffset(ribbon.Scroll.ScrollableWidth / 2);
-                ribbon.UpdateLayout();
-            }
 
             for (int row = 0; row < ribbon.NameLabels.Count; row++)
             {
@@ -98,128 +183,220 @@ public sealed class CycleRibbonLayoutTests
                 foreach ((int r, _, Rectangle shape) in ribbon.SpanShapes.Where(s => s.Row == row))
                 {
                     Rect box = ViewLayout.BoxOf(shape, ribbon);
-                    Math.Abs(box.Top + box.Height / 2 - centre).Should().BeLessThan(1.5, $"el bloque de la fila {r} va a la altura de su nombre");
+                    Math.Abs(box.Top + box.Height / 2 - centre).Should()
+                        .BeLessThan(1.5, $"el bloque de la fila {r} va a la altura de su nombre");
                 }
             }
 
             ribbon.SpanShapes.Should().NotContain(s => s.Row == 2, "XBLAST no tiene bloques y nadie ocupa su fila");
         });
 
-    // ================================================================ el bloque partido
+    // ================================================================ el relleno de cobertura
 
+    /// <summary>
+    /// <b>El relleno dice la cobertura</b> (F35-4 §1.2): de izquierda a derecha, proporcional a
+    /// auditadas / auditables. Sin inventario conservado no hay relleno — y no es un 0 %: es que
+    /// no se sabe (D-318).
+    /// </summary>
     [Fact]
-    public void Un_ciclo_con_dos_lupas_se_parte_en_los_colores_y_proporciones_de_sus_periodos()
+    public void El_relleno_es_proporcional_a_la_cobertura_y_sin_inventario_no_lo_hay()
+    {
+        RibbonGeometry g = RibbonGeometry.For(Uneven(), Today, 1000);
+
+        RibbonBlock completo = g.Blocks.Single(b => b.Span.Label == "C1 · General");
+        RibbonBlock medio = g.Blocks.Single(b => b.Span.Label == "C2 · Fiabilidad");
+        RibbonBlock cuarto = g.Blocks.Single(b => b.Span.Label == "C3 · Mantenibilidad");
+
+        completo.FilledWidth.Should().BeApproximately(completo.Width, 0.001, "cobertura 1: relleno entero");
+        medio.FilledWidth.Should().BeApproximately(medio.Width / 2, 0.001);
+        cuarto.FilledWidth.Should().BeApproximately(cuarto.Width / 4, 0.001);
+
+        // Sin inventario conservado: ni relleno ni porcentaje.
+        var sinInventario = new[]
+        {
+            new RibbonTrack("Una", new[] { Span("C1 · General", Today.AddDays(-40), Today.AddDays(-10)) }),
+        };
+        RibbonGeometry sin = RibbonGeometry.For(sinInventario, Today, 1000);
+        sin.Blocks.Single().Span.Coverage.Should().BeNull();
+        sin.Blocks.Single().FilledWidth.Should().Be(0);
+    }
+
+    /// <summary>Y el relleno se DIBUJA: sobre el neutro, y solo hasta donde llega la cobertura.</summary>
+    [Fact]
+    public void El_relleno_se_dibuja_sobre_el_neutro()
         => ViewLayout.OnUiThread(() =>
         {
-            CycleRibbon ribbon = Build(new[] { Single() }, 900);
+            var tracks = new[]
+            {
+                new RibbonTrack("Una", new[]
+                {
+                    Span("C1 · General", Today.AddDays(-28), Today, open: true, coverage: 0.25),
+                }),
+            };
 
-            var parts = ribbon.SpanShapes.Where(s => s.Row == 0).ToList();
-            parts.Should().HaveCount(2);
-            parts[0].Shape.Fill.Should().BeSameAs(Brushes.Teal);
-            Rect first = ViewLayout.BoxOf(parts[0].Shape, ribbon.Plot);
-            Rect second = ViewLayout.BoxOf(parts[1].Shape, ribbon.Plot);
-            first.Right.Should().BeApproximately(second.Left, 0.5, "el corte es un solo punto");
-            (first.Width / (first.Width + second.Width)).Should().BeApproximately(2.0 / 3.0, 0.03, "dos horas de tres");
-            (first.Width + second.Width).Should().BeApproximately(CycleRibbon.BlockWidth, 0.5);
-            ribbon.BlockLabels.Single().Label.Text.Should().Be("C1 · Rendimiento → Seguridad");
+            var ribbon = new CycleRibbon
+            {
+                Tracks = tracks,
+                Today = Today,
+                PendingBrush = Brushes.Gainsboro,
+            };
+            ViewLayout.Layout(ribbon, 900, 200);
+
+            var shapes = ribbon.SpanShapes.Select(s => s.Shape).ToList();
+            shapes.Should().HaveCount(2, "el fondo neutro y el relleno de la temática");
+
+            Rectangle fondo = shapes.Single(r => ReferenceEquals(r.Fill, Brushes.Gainsboro));
+            Rectangle relleno = shapes.Single(r => !ReferenceEquals(r.Fill, Brushes.Gainsboro));
+            relleno.Width.Should().BeApproximately(fondo.Width / 4, 1.0, "un cuarto de cobertura");
+            Canvas.GetLeft(relleno).Should().BeApproximately(Canvas.GetLeft(fondo), 0.5, "de izquierda a derecha");
         });
 
+    // ================================================================ los huecos
+
+    /// <summary>
+    /// <b>Entre dos ciclos separados, el hueco se ve</b> y ocupa lo que duró (F35-4 §1.3). Sin
+    /// separación no hay hueco que dibujar.
+    /// </summary>
     [Fact]
-    public void Un_ciclo_con_una_lupa_es_un_solo_bloque()
-        => ViewLayout.OnUiThread(() =>
-        {
-            CycleRibbon ribbon = Build(new[] { new RibbonTrack("App", new[] { Span("C1 · General", Today.AddDays(-9), Today.AddDays(-2)) }) }, 900);
+    public void El_hueco_entre_dos_ciclos_ocupa_lo_que_duro_y_dice_sus_dias()
+    {
+        RibbonGeometry g = RibbonGeometry.For(Uneven(), Today, 1000);
+        double perDay = 1000 / 120.0;
 
-            ribbon.SpanShapes.Should().ContainSingle().Which.Shape.Width.Should().BeApproximately(CycleRibbon.BlockWidth, 0.5);
-        });
+        RibbonGap hueco = g.Gaps.Should().ContainSingle().Subject;
+        hueco.Row.Should().Be(0);
+        hueco.Days.Should().Be(20, "del fin del C2 al inicio del C3");
+        hueco.Text.Should().Be("20 d");
+        hueco.Width.Should().BeApproximately(20 * perDay, 0.5, "el hueco mide lo que duró");
 
-    // ================================================================ los huecos se cuentan
+        // Y encaja EXACTAMENTE entre los dos bloques: ni se solapa ni deja aire.
+        var fila = g.Blocks.Where(b => b.Row == 0).OrderBy(b => b.Left).ToList();
+        hueco.Left.Should().BeApproximately(fila[1].Right, 0.5);
+        hueco.Right.Should().BeApproximately(fila[2].Left, 0.5);
+    }
 
+    /// <summary>Dos ciclos sin separación —el cierre abre el siguiente— no tienen hueco.</summary>
     [Fact]
-    public void El_hueco_por_encima_del_umbral_se_escribe_y_por_debajo_no()
-        => ViewLayout.OnUiThread(() =>
+    public void Sin_separacion_no_hay_hueco()
+    {
+        var seguidos = new[]
         {
-            CycleRibbon ribbon = Build(new[] { Several() }, 1200);
+            new RibbonTrack("Una", new[]
+            {
+                Span("C1 · General", Today.AddDays(-40), Today.AddDays(-20)),
+                Span("C2 · General", Today.AddDays(-20), Today, open: true),
+            }),
+        };
 
-            (int row, TextBlock text) = ribbon.GapLabels.Should().ContainSingle("solo entre C2 y C3 hay más de una semana").Subject;
-            row.Should().Be(0);
-            text.Text.Should().Be("7 semanas sin auditar");
+        RibbonGeometry g = RibbonGeometry.For(seguidos, Today, 1000);
 
-            // Y el separador va ENTRE los dos bloques que separa.
-            double c2Right = ribbon.SpanShapes.Where(s => s.Span.Label == "C2 · Fiabilidad").Max(s => ViewLayout.BoxOf(s.Shape, ribbon.Plot).Right);
-            double c3Left = ribbon.SpanShapes.Where(s => s.Span.Label == "C3 · Mantenibilidad").Min(s => ViewLayout.BoxOf(s.Shape, ribbon.Plot).Left);
-            Rect gap = ViewLayout.BoxOf(text, ribbon.Plot);
-            gap.Left.Should().BeGreaterThan(c2Right);
-            gap.Right.Should().BeLessThan(c3Left);
-        });
+        g.Gaps.Should().BeEmpty("el fin de uno es el inicio del otro");
+        g.Blocks[0].Right.Should().BeApproximately(g.Blocks[1].Left, 0.001, "van pegados");
+    }
 
+    /// <summary>Un hueco de menos de un día no lleva número: no hay cifra que valga la pena.</summary>
+    [Fact]
+    public void Un_hueco_de_horas_no_escribe_un_cero()
+    {
+        var horas = new[]
+        {
+            new RibbonTrack("Una", new[]
+            {
+                Span("C1 · General", Today.AddDays(-40), Today.AddDays(-20)),
+                Span("C2 · General", Today.AddDays(-20).AddHours(6), Today, open: true),
+            }),
+        };
+
+        RibbonGap hueco = RibbonGeometry.For(horas, Today, 1000).Gaps.Should().ContainSingle().Subject;
+        hueco.Days.Should().Be(0);
+        hueco.Text.Should().BeEmpty();
+    }
+
+    // ================================================================ lo que se dibuja
+
+    /// <summary>
+    /// <b>Lo que se dibuja, no solo lo que se calcula</b> (D-1042): los bloques, los huecos, la
+    /// línea de hoy y las marcas del eje están ahí, y en su sitio.
+    /// </summary>
     [Theory]
-    [InlineData(0, null)]
-    [InlineData(1, null)]
-    [InlineData(6, null)]
-    [InlineData(7, "7 días sin auditar")]
-    [InlineData(13, "13 días sin auditar")]
-    [InlineData(21, "3 semanas sin auditar")]
-    [InlineData(60, "9 semanas sin auditar")]
-    [InlineData(61, "2 meses sin auditar")]
-    [InlineData(200, "7 meses sin auditar")]
-    public void El_hueco_se_dice_en_la_unidad_que_se_lee_de_un_vistazo(int days, string? expected)
-        => CycleRibbon.GapText(Today, Today.AddDays(days)).Should().Be(expected);
-
-    [Fact]
-    public void El_umbral_del_separador_es_una_semana()
-        => CycleRibbon.GapThreshold.Should().Be(TimeSpan.FromDays(7));
-
-    // ================================================================ arranque, fila vacía, aviso
-
-    [Fact]
-    public void Con_muchos_ciclos_la_vista_arranca_por_el_final_y_respeta_a_quien_retrocede()
+    [MemberData(nameof(Widths))]
+    public void La_cinta_dibuja_sus_bloques_sus_huecos_y_la_linea_de_hoy(double width)
         => ViewLayout.OnUiThread(() =>
         {
-            var many = new RibbonTrack("Larga", Enumerable.Range(1, 12)
-                .Select(n => Span($"C{n} · General", Today.AddDays(-13 * (13 - n)), Today.AddDays(-13 * (12 - n)), open: n == 12))
-                .ToList());
-            CycleRibbon ribbon = Build(new[] { many }, 700);
+            CycleRibbon ribbon = Build(Uneven(), width);
 
-            ribbon.Scroll.ScrollableWidth.Should().BeGreaterThan(0, "doce bloques no caben en 700 px");
-            ribbon.Scroll.HorizontalOffset.Should().BeApproximately(ribbon.Scroll.ScrollableWidth, 0.5, "el ciclo más reciente es lo relevante");
+            // Un bloque por ciclo: cuatro en total, y ninguno en la fila sin ciclos.
+            ribbon.SpanShapes.Select(s => s.Span).Distinct().Should().HaveCount(4);
+            ribbon.Geometry.Blocks.Should().HaveCount(4);
+            ribbon.EmptyLabels.Should().ContainSingle().Which.Row.Should().Be(2);
 
-            ribbon.Scroll.ScrollToHorizontalOffset(0);
-            ribbon.UpdateLayout();
-            ViewLayout.Layout(ribbon, 800, 400); // un cambio de tamaño no es un cambio de datos
+            // El hueco, dibujado y a trazos.
+            ribbon.GapLines.Should().ContainSingle();
+            ribbon.GapLines.Single().Line.StrokeDashArray.Should().NotBeEmpty("el hueco va a trazos");
 
-            ribbon.Scroll.HorizontalOffset.Should().Be(0, "quien retrocedió se queda donde estaba");
+            // La línea de hoy, en el extremo derecho del eje.
+            ribbon.TodayLine.Should().NotBeNull();
+            ribbon.TodayLine!.X1.Should().BeApproximately(ribbon.Geometry.TodayX, 0.5);
+
+            // Y el dibujo cuadra con la geometría: cada bloque, donde dijo que iría.
+            foreach (RibbonBlock block in ribbon.Geometry.Blocks)
+            {
+                var cajas = ribbon.SpanShapes
+                    .Where(s => ReferenceEquals(s.Span, block.Span))
+                    .Select(s => Canvas.GetLeft(s.Shape))
+                    .ToList();
+                cajas.Should().NotBeEmpty();
+                cajas.Min().Should().BeApproximately(block.Left, 0.5);
+            }
         });
 
     /// <summary>
-    /// Las filas se alinean por el FINAL: el último capítulo de cada aplicación queda en el mismo
-    /// borde derecho. Así, al arrancar por el final, se ve el ciclo más reciente de TODAS las
-    /// filas —y la fila vacía con su rótulo—, no solo la cola de la fila más larga.
+    /// La cinta dibuja aunque el ancho llegue DESPUÉS de los datos: nace dentro de un bloque que
+    /// empieza colapsado, y el primer intento se encuentra sin sitio (la regla de D-1042).
     /// </summary>
     [Fact]
-    public void Las_filas_se_alinean_por_el_final_y_al_arrancar_se_ve_el_ultimo_capitulo_de_todas()
+    public void La_cinta_dibuja_aunque_el_ancho_llegue_despues()
         => ViewLayout.OnUiThread(() =>
         {
-            CycleRibbon ribbon = Build(Uneven(), 441);
+            var ribbon = new CycleRibbon { Visibility = Visibility.Collapsed };
+            var host = new Border { Width = 900, Height = 300, Child = ribbon };
+            ViewLayout.Layout(host, 900, 300);
 
-            double lastOfSeveral = ribbon.SpanShapes.Where(s => s.Row == 0).Max(s => ViewLayout.BoxOf(s.Shape, ribbon.Plot).Right);
-            double lastOfSingle = ribbon.SpanShapes.Where(s => s.Row == 1).Max(s => ViewLayout.BoxOf(s.Shape, ribbon.Plot).Right);
-            double emptyRight = ViewLayout.BoxOf(ribbon.EmptyLabels.Single().Text, ribbon.Plot).Right;
-            lastOfSingle.Should().BeApproximately(lastOfSeveral, 0.5);
-            emptyRight.Should().BeApproximately(lastOfSeveral, 8, "el rótulo en cursiva mide unos píxeles distinto de su medida en redonda");
+            ribbon.Tracks = Uneven();
+            ribbon.Today = Today;
+            ribbon.Visibility = Visibility.Visible;
+            host.UpdateLayout();
 
-            ribbon.Scroll.ScrollableWidth.Should().BeGreaterThan(0, "tres bloques y dos huecos no caben en 441 px");
-            double viewLeft = ribbon.Scroll.HorizontalOffset;
-            double viewRight = viewLeft + ribbon.Scroll.ViewportWidth;
-            foreach (Rectangle shape in new[] { ribbon.SpanShapes.Last(s => s.Row == 0).Shape, ribbon.SpanShapes.Last(s => s.Row == 1).Shape })
-            {
-                Rect box = ViewLayout.BoxOf(shape, ribbon.Plot);
-                box.Right.Should().BeLessThanOrEqualTo(viewRight + 0.5).And.BeGreaterThan(viewLeft, "el último capítulo de cada fila está a la vista al arrancar");
-            }
-
-            emptyRight.Should().BeLessThanOrEqualTo(viewRight + 0.5).And.BeGreaterThan(viewLeft, "y la fila vacía dice lo suyo sin desplazar nada");
+            ribbon.SpanShapes.Should().NotBeEmpty("con sitio y datos, la cinta tiene que haber pintado");
+            ribbon.Geometry.Width.Should().BeGreaterThan(0);
         });
 
+    // ================================================================ los rótulos
+
+    /// <summary>
+    /// El rótulo entero cuando cabe; el corto («C1») cuando solo cabe él; nada —y el tooltip—
+    /// cuando ni eso. Con eje de tiempo hay bloques estrechos por definición, así que quedarse sin
+    /// identificador sería quedarse sin poder señalar el ciclo.
+    /// </summary>
+    [Fact]
+    public void El_rotulo_cae_al_corto_antes_que_desaparecer()
+        => ViewLayout.OnUiThread(() =>
+        {
+            CycleRibbon ribbon = Build(Uneven(), 1124);
+
+            (RibbonSpan Span, TextBlock Label, TextBlock? Dates) ancho =
+                ribbon.BlockLabels.Single(b => b.Span.Label == "C2 · Fiabilidad");
+            ancho.Label.Text.Should().Be("C2 · Fiabilidad", "cincuenta días dan de sobra");
+
+            // El de tres horas no da ni para el corto sobre un eje de 120 días: se calla y deja el
+            // tooltip, que es lo que no se pierde nunca.
+            (RibbonSpan Span, TextBlock Label, TextBlock? Dates) estrecho =
+                ribbon.BlockLabels.Single(b => b.Span.Label.StartsWith("C1 · Rendimiento"));
+            estrecho.Label.Text.Should().BeEmpty();
+            estrecho.Span.TooltipLines.Should().NotBeEmpty();
+        });
+
+    /// <summary>La aplicación sin ciclos conserva su fila, rotulada, con y sin sitio.</summary>
     [Theory]
     [MemberData(nameof(Widths))]
     public void La_aplicacion_sin_ciclos_tiene_su_fila_rotulada(double width)
@@ -227,68 +404,49 @@ public sealed class CycleRibbonLayoutTests
         {
             CycleRibbon ribbon = Build(Uneven(), width);
 
-            (int row, TextBlock text) = ribbon.EmptyLabels.Should().ContainSingle().Subject;
-            row.Should().Be(2);
-            text.Text.Should().Be("sin ciclos en este periodo");
-            Rect name = ViewLayout.BoxOf(ribbon.NameLabels[2], ribbon);
-            Rect empty = ViewLayout.BoxOf(text, ribbon);
-            Math.Abs(name.Top + name.Height / 2 - (empty.Top + empty.Height / 2)).Should().BeLessThan(1.5);
+            ribbon.NameLabels.Should().HaveCount(3);
+            (int Row, TextBlock Text) empty = ribbon.EmptyLabels.Should().ContainSingle().Subject;
+            empty.Row.Should().Be(2);
+            empty.Text.Text.Should().Be("sin ciclos registrados");
         });
 
+    /// <summary>El punto de color de la aplicación (D-314) va delante de su nombre, en su fila.</summary>
     [Fact]
-    public void Lo_que_el_periodo_deja_fuera_se_dice_al_principio_de_la_fila()
+    public void Cada_fila_lleva_el_punto_de_color_de_su_aplicacion()
         => ViewLayout.OnUiThread(() =>
         {
-            var track = new RibbonTrack("App", new[] { Span("C3 · General", Today.AddDays(-5), Today, open: true) }, Notice: "2 ciclos anteriores fuera del periodo");
-            CycleRibbon ribbon = Build(new[] { track }, 900);
+            CycleRibbon ribbon = Build(Uneven(), 1124);
 
-            (int row, TextBlock text) = ribbon.NoticeLabels.Should().ContainSingle().Subject;
-            row.Should().Be(0);
-            text.Text.Should().Be("2 ciclos anteriores fuera del periodo");
-            ViewLayout.BoxOf(text, ribbon.Plot).Right.Should().BeLessThan(ViewLayout.BoxOf(ribbon.SpanShapes.Single().Shape, ribbon.Plot).Left);
-        });
+            var dots = ribbon.Names.Children.OfType<Rectangle>().ToList();
+            dots.Should().HaveCount(3, "un punto por aplicación");
+            dots.Select(d => d.Fill).Should().BeEquivalentTo(
+                new Brush[] { Brushes.OrangeRed, Brushes.SteelBlue, Brushes.Green });
 
-    // ================================================================ sin truncados mudos
-
-    [Fact]
-    public void El_identificador_y_la_tematica_siempre_se_leen_y_las_fechas_caen_primero()
-        => ViewLayout.OnUiThread(() =>
-        {
-            var track = new RibbonTrack("App", new[]
+            // Y va DELANTE del nombre, no encima.
+            foreach (TextBlock name in ribbon.NameLabels)
             {
-                Span("C1 · General", Today.AddDays(-9), Today.AddDays(-2), dates: "24 ago – 31 ago"),
-                Span("C12 · Rendimiento → Concurrencia y asincronía", Today.AddDays(-1), Today, open: true, dates: "1 sept – en curso"),
-            });
-            CycleRibbon ribbon = Build(new[] { track }, 900);
-
-            (RibbonSpan _, TextBlock shortLabel, TextBlock? shortDates) = ribbon.BlockLabels[0];
-            shortLabel.Text.Should().Be("C1 · General");
-            shortDates.Should().NotBeNull("cabe: rótulo y fechas");
-            shortDates!.Text.Should().Be("24 ago – 31 ago");
-
-            (RibbonSpan longSpan, TextBlock longLabel, TextBlock? longDates) = ribbon.BlockLabels[1];
-            longLabel.Text.Should().Be("C12 · Rendimiento → Concurrencia y asincronía", "nunca se recorta el identificador ni la temática");
-            longLabel.DesiredSize.Height.Should().BeGreaterThan(shortLabel.DesiredSize.Height * 1.5, "envuelve a dos líneas en vez de recortarse");
-            longLabel.TextWrapping.Should().Be(TextWrapping.Wrap);
-            longLabel.TextTrimming.Should().Be(TextTrimming.None);
-            longDates.Should().BeNull("el rótulo se lleva las dos líneas: las fechas caen, y el tooltip las trae");
-            longSpan.Dates.Should().Be("1 sept – en curso");
+                Canvas.GetLeft(name).Should().BeGreaterThanOrEqualTo(CycleRibbon.DotSize);
+            }
         });
 
+    /// <summary>Un nombre que no cabe va con elipsis media y el nombre entero en el tooltip.</summary>
     [Fact]
     public void Un_nombre_que_no_cabe_va_con_elipsis_media_y_el_nombre_entero_en_el_tooltip()
         => ViewLayout.OnUiThread(() =>
         {
-            string longName = "Un nombre de aplicación larguísimo que no cabe en la columna";
-            CycleRibbon ribbon = Build(new[] { new RibbonTrack(longName, Array.Empty<RibbonSpan>()), None() }, 900);
+            var largo = new RibbonTrack(
+                "AplicacionDeNombreInterminableQueNoCabeEnLaColumnaDeNingunaManera",
+                new[] { Span("C1 · General", Today.AddDays(-10), Today, open: true) });
 
-            TextBlock label = ribbon.NameLabels[0];
-            label.Text.Should().Contain("…").And.NotBe(longName);
-            label.ToolTip.Should().Be(longName);
-            label.DesiredSize.Width.Should().BeLessThanOrEqualTo(ribbon.Names.Width);
-            ribbon.NameLabels[1].Text.Should().Be("XBLAST", "lo que cabe va entero");
+            CycleRibbon ribbon = Build(new[] { largo }, 900);
+            TextBlock name = ribbon.NameLabels.Single();
+
+            name.Text.Should().NotBe(largo.Name).And.Contain("…");
+            name.Text.Should().StartWith("Aplicacion");
+            name.ToolTip.Should().Be(largo.Name);
         });
 
+    /// <summary>La elipsis media conserva principio y final: es lo que distingue dos nombres largos.</summary>
     [Fact]
     public void La_elipsis_media_conserva_principio_y_final()
     {

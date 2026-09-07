@@ -1018,6 +1018,19 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
     [ObservableProperty] private bool _hasCycles;
 
+    /// <summary>
+    /// El extremo derecho del eje de la cinta (F35-4 §1.1). Sale del MISMO reloj que el resto del
+    /// panel —el agregado dice hasta dónde llega el periodo—, no de <c>DateTime.Now</c> dentro del
+    /// control: así la cinta y las cifras hablan del mismo «hoy».
+    /// </summary>
+    [ObservableProperty] private DateTime _cycleToday = DateTime.Now;
+
+    /// <summary>
+    /// El neutro de lo que queda por auditar dentro de un bloque: el MISMO relleno apagado que usa
+    /// el rosco de cobertura para lo pendiente (D-316), en su paso del tema vigente.
+    /// </summary>
+    [ObservableProperty] private Brush _cyclePendingBrush = Brushes.LightGray;
+
     private void ApplyCycles(MetricsDashboard d)
     {
         var themes = new SortedSet<AuditTheme>();
@@ -1038,8 +1051,15 @@ public sealed partial class MetricsViewModel : ViewModelBase
                         SliceTooltip(s, slice)));
                 }
 
+                // La cobertura del ciclo, para el relleno del bloque (F35-4 §1.2): la MISMA cifra
+                // que ya dice el tooltip. Sin inventario conservado no hay relleno ni porcentaje:
+                // un 0 % diría que no se auditó nada, y lo que pasa es que no se sabe (D-318).
+                double? coverage = s.HasInventory && s.Auditable > 0
+                    ? (double)s.Audited / s.Auditable
+                    : null;
+
                 spans.Add(new RibbonSpan(
-                    s.Label,
+                    coverage is { } pct ? $"{s.Label} · {PercentText.Of(pct)}" : s.Label,
                     CycleDates(s),
                     slices,
                     s.From.ToLocalTime().DateTime,
@@ -1047,13 +1067,21 @@ public sealed partial class MetricsViewModel : ViewModelBase
                     s.IsOpen,
                     s.EndIsKnown,
                     CycleTooltip(s),
-                    new CycleSpanRef(s.Slug, s.CycleN, s.IsOpen, s.ReportSessionId)));
+                    new CycleSpanRef(s.Slug, s.CycleN, s.IsOpen, s.ReportSessionId),
+                    s.ShortLabel,
+                    coverage));
             }
 
-            tracks.Add(new RibbonTrack(track.Name, spans, Notice: track.Notice));
+            tracks.Add(new RibbonTrack(track.Name, spans, Dot: SeriesBrush(track.Slug, d)));
         }
 
         CycleTracks = tracks;
+        // «Hoy» sale del reloj del AGREGADO —el extremo del periodo es la medianoche de mañana,
+        // así que un día menos es la de hoy—, no de `DateTime.Now` aquí: la cinta y las cifras
+        // tienen que hablar del mismo día. El ciclo abierto termina más tarde, en el instante en
+        // que se agregó, y la geometría estira el eje hasta él.
+        CycleToday = d.To.AddDays(-1).ToLocalTime().DateTime;
+        CyclePendingBrush = Brush(SeriesPalette.Pending.For(_dark));
         HasCycles = tracks.Count > 0;
 
         // La leyenda nombra las temáticas que se VEN, en el orden del catálogo. Color + nombre,

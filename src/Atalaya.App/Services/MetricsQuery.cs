@@ -280,22 +280,16 @@ public sealed record CycleSpan(
     public bool EndIsKnown => IsOpen || EndEdge == CycleEdge.Exact;
 }
 
-/// <summary>Una banda de la cinta: una aplicación y sus ciclos en orden.</summary>
-/// <param name="HiddenEarlier">
-/// Cuántos ciclos de la app quedaron ANTES del periodo elegido (F17.2). El periodo recorta por
-/// pertenencia —se enseñan los ciclos que lo solapan— y lo que deja fuera se dice con el número,
-/// en vez de fabricar un eje.
-/// </param>
-public sealed record CycleTrack(string Slug, string Name, IReadOnlyList<CycleSpan> Spans, int HiddenEarlier = 0)
-{
-    /// <summary>«2 ciclos anteriores fuera del periodo», o vacío.</summary>
-    public string Notice => HiddenEarlier switch
-    {
-        <= 0 => string.Empty,
-        1 => "1 ciclo anterior fuera del periodo",
-        _ => $"{HiddenEarlier} ciclos anteriores fuera del periodo",
-    };
-}
+/// <summary>
+/// Una banda de la cinta: una aplicación y <b>todos</b> sus ciclos, en orden.
+/// <para>
+/// Hasta F35-4 el periodo recortaba por pertenencia y lo que dejaba fuera se decía con un número
+/// —«2 ciclos anteriores fuera del periodo»—, porque no había eje donde ponerlos. Con eje de
+/// tiempo real ya no hace falta: la cinta es historia y va del primer ciclo hasta hoy, así que no
+/// queda nada fuera y no hay nada que avisar.
+/// </para>
+/// </summary>
+public sealed record CycleTrack(string Slug, string Name, IReadOnlyList<CycleSpan> Spans);
 
 /// <summary>Una línea del registro de operaciones (gráfica 4).</summary>
 /// <param name="Provider">
@@ -1232,16 +1226,18 @@ public sealed class MetricsQuery
                     SlicesOf(inv, b, end)));
             }
 
-            // El filtro de periodo recorta el eje: fuera de él no hay tramos. La banda se queda
-            // igualmente, vacía y rotulada: una fila ausente invita a que otro tramo ocupe su sitio.
-            var visible = spans.Where(s => s.To > from && s.From < to).ToList();
-            int hiddenEarlier = spans.Count(s => s.To <= from);
+            // F35-4 §1.1 — EL PERIODO NO RECORTA LA CINTA. Es historia, como la antigüedad de la
+            // deuda: su eje va del primer ciclo registrado hasta hoy, y recortarlo por la ventana
+            // del selector escondería justo los ciclos que explican de dónde viene la aplicación.
+            // Hasta aquí se recortaba por pertenencia y lo que quedaba fuera se decía con un
+            // número; ahora no queda nada fuera, así que no hay nada que decir.
+            var visible = spans;
 
             var live = app.Findings.Where(f => f.Status == FindingStatus.Activo).ToList();
             int critica = live.Count(f => f.Severity == Severity.Critica);
             int alta = live.Count(f => f.Severity == Severity.Alta);
             tracks.Add((
-                new CycleTrack(app.Slug, app.Name, visible, hiddenEarlier),
+                new CycleTrack(app.Slug, app.Name, visible),
                 PortfolioOrder.Key(critica, live.Count),
                 PortfolioOrder.Weight(critica, alta)));
         }

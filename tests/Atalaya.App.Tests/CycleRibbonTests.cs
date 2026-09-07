@@ -355,8 +355,18 @@ public sealed class CycleRibbonTests : IDisposable
 
     // ---------------------------------------------------------------- filtros y orden
 
+    /// <summary>
+    /// El filtro de APLICACIÓN deja una banda; el de periodo <b>ya no recorta la cinta</b>
+    /// (F35-4 §1.1).
+    /// <para>
+    /// Hasta aquí el periodo recortaba por pertenencia y lo que dejaba fuera se decía con un
+    /// número, porque no había eje donde ponerlo. Con eje de tiempo real la cinta es historia
+    /// —como la antigüedad de la deuda—: va del primer ciclo registrado hasta hoy, así que no
+    /// queda nada fuera y no hay nada que avisar.
+    /// </para>
+    /// </summary>
     [Fact]
-    public void El_filtro_de_aplicacion_deja_una_banda_y_el_de_periodo_recorta_sin_inventar()
+    public void El_filtro_de_aplicacion_deja_una_banda_y_el_de_periodo_no_recorta_la_cinta()
     {
         App("a", "Alpha", 2);
         App("b", "Beta", 1);
@@ -370,16 +380,15 @@ public sealed class CycleRibbonTests : IDisposable
         Tracks("b").Should().ContainSingle().Which.Name.Should().Be("Beta");
         Tracks(null, MetricsRange.All).Should().HaveCount(2);
 
-        // Cuatro semanas: el ciclo 1 de Alpha (hace 200-100 días) queda fuera; el 2 se ve, y se
-        // DICE que hay uno anterior fuera del periodo (F17.2: recortar por pertenencia, no
-        // fabricar un eje).
+        // Cuatro semanas: el ciclo 1 de Alpha (hace 200-100 días) SIGUE ESTANDO. Esconderlo
+        // escondería justo lo que explica de dónde viene la aplicación, y el eje tiene sitio para
+        // los dos.
         IReadOnlyList<CycleTrack> recent = Tracks(null, MetricsRange.Weeks4);
         CycleTrack alpha = recent.Single(t => t.Slug == "a");
-        alpha.Spans.Should().ContainSingle().Which.CycleN.Should().Be(2);
-        alpha.HiddenEarlier.Should().Be(1);
-        alpha.Notice.Should().Be("1 ciclo anterior fuera del periodo");
-        recent.Single(t => t.Slug == "b").Notice.Should().BeEmpty();
-        Tracks(null, MetricsRange.All).Single(t => t.Slug == "a").HiddenEarlier.Should().Be(0);
+        alpha.Spans.Select(s => s.CycleN).Should().Equal(1, 2);
+        alpha.Spans.Should().BeEquivalentTo(
+            Tracks(null, MetricsRange.All).Single(t => t.Slug == "a").Spans,
+            "la cinta no depende del periodo: los mismos tramos con cualquiera");
     }
 
     [Fact]
@@ -601,7 +610,7 @@ public sealed class CycleRibbonTests : IDisposable
 
         vm.CycleLegend.Select(l => l.Name).Should().Equal("Seguridad", "Rendimiento");
         vm.ShowCycleLegend.Should().BeTrue();
-        vm.CycleTracks.Single().Spans[0].Label.Should().Be("C1 · Rendimiento");
+        vm.CycleTracks.Single().Spans[0].Label.Should().Be("C1 · Rendimiento · 100 %");
         vm.CycleTracks.Single().Spans[1].IsOpen.Should().BeTrue();
     }
 

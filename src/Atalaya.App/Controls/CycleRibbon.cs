@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -23,6 +23,16 @@ public sealed record RibbonSlice(Brush Fill, DateTime From, DateTime To, IReadOn
 /// <param name="EndIsKnown">False cuando la fecha de cierre no se pudo recuperar: borde derecho a puntos.</param>
 /// <param name="TooltipLines">El tooltip del ciclo entero; el de cada trozo lo lleva el trozo.</param>
 /// <param name="Payload">Lo que se entrega al mando al pulsar. La cinta no sabe qué es.</param>
+/// <param name="ShortLabel">
+/// «C4»: lo que se escribe cuando el rótulo entero no cabe en el bloque. Con eje de tiempo el
+/// ancho es la duración, así que un ciclo corto sobre un eje largo mide poco por definición y
+/// quedarse sin identificador sería quedarse sin poder señalarlo.
+/// </param>
+/// <param name="Coverage">
+/// La cobertura del ciclo, 0..1 —auditadas de auditables, la misma cifra del tooltip (F35-4 §1.2)—,
+/// y <b>null cuando no se conserva el inventario</b> del ciclo: entonces no hay relleno ni
+/// porcentaje. Un 0 % diría que no se auditó nada, y lo que pasa es que no se sabe (D-318).
+/// </param>
 public sealed record RibbonSpan(
     string Label,
     string Dates,
@@ -32,20 +42,25 @@ public sealed record RibbonSpan(
     bool IsOpen,
     bool EndIsKnown,
     IReadOnlyList<string> TooltipLines,
-    object? Payload = null)
+    object? Payload = null,
+    string ShortLabel = "",
+    double? Coverage = null)
 {
     /// <summary>El relleno de la temática vigente: la última.</summary>
     public Brush Fill => Slices[^1].Fill;
 }
 
 /// <summary>Una fila de la secuencia: una aplicación con sus capítulos, en orden. Sin ninguno, se dice.</summary>
-/// <param name="EmptyText">Lo que se escribe en la fila cuando no tiene ningún capítulo en el periodo.</param>
-/// <param name="Notice">Lo que el periodo dejó fuera («2 ciclos anteriores fuera del periodo»), o vacío.</param>
+/// <param name="EmptyText">Lo que se escribe en la fila cuando la aplicación no tiene ningún ciclo.</param>
+/// <param name="Dot">
+/// El color de la aplicación (D-314), para el punto que va delante de su nombre (F35-4 §1.4): el
+/// mismo que lleva en la gráfica de coste y en su rosco de cobertura. Null lo omite.
+/// </param>
 public sealed record RibbonTrack(
     string Name,
     IReadOnlyList<RibbonSpan> Spans,
-    string EmptyText = "sin ciclos en este periodo",
-    string Notice = "");
+    string EmptyText = "sin ciclos registrados",
+    Brush? Dot = null);
 
 /// <summary>
 /// La secuencia de ciclos de Métricas (F17.2): una fila por aplicación y, en cada fila, sus
@@ -71,9 +86,13 @@ public sealed class CycleRibbon : Grid
     internal const double PadRight = 14;
     internal const double RowHeight = 44;
     internal const double RowGap = 10;
-    internal const double BlockWidth = 168;
-    internal const double BlockGap = 8;
-    internal const double MinSliceWidth = 6;
+    /// <summary>Lo que ocupa el eje debajo de las filas: sus marcas de fecha.</summary>
+    internal const double AxisHeight = 16;
+
+    /// <summary>El punto de color de la aplicación, delante de su nombre (F35-4 §1.4).</summary>
+    internal const double DotSize = 8;
+
+    private const double DotGap = 6;
     private const double GutterCap = 170;
     private const double GutterPad = 12;
     private const double OpenFade = 16;
@@ -81,18 +100,22 @@ public sealed class CycleRibbon : Grid
     private const double LabelSize = 11;
     private const double DatesSize = 10;
 
-    /// <summary>
-    /// A partir de cuánto tiempo sin auditar se escribe el hueco entre dos ciclos: una semana.
-    /// Por debajo, dos ciclos seguidos son continuación —el cierre abre el siguiente el mismo
-    /// día, o al día siguiente— y anotar «2 días sin auditar» sería ruido; a partir de una semana
-    /// ya es un dato que explica algo del historial.
-    /// </summary>
-    public static readonly TimeSpan GapThreshold = TimeSpan.FromDays(7);
 
     private readonly Canvas _names = new();
     private readonly Canvas _plot = new();
     private readonly ScrollViewer _scroll;
-    private bool _scrollToEndPending;
+
+    /// <summary>
+    /// Con qué ancho se dibujó lo que hay, y si quedó algo pendiente. Es la misma guarda que
+    /// D-1042 puso en <see cref="ChartPlot"/>, y por el mismo motivo: la cinta nace dentro de un
+    /// bloque que empieza colapsado, así que el primer dibujo se encuentra sin ancho y se va. Que
+    /// se dibuje o no no puede depender de en qué orden asigne quien llama.
+    /// </summary>
+    private double _drawnWidth = -1;
+
+    private bool _stale = true;
+
+
 
     public static readonly DependencyProperty TracksProperty = DependencyProperty.Register(
         nameof(Tracks), typeof(IReadOnlyList<RibbonTrack>), typeof(CycleRibbon),
@@ -109,6 +132,23 @@ public sealed class CycleRibbon : Grid
     public static readonly DependencyProperty SpanCommandProperty = DependencyProperty.Register(
         nameof(SpanCommand), typeof(ICommand), typeof(CycleRibbon),
         new PropertyMetadata(null));
+
+    /// <summary>
+    /// El neutro de <b>lo que queda por auditar</b> dentro de un bloque (F35-4 §1.2): el mismo
+    /// relleno apagado que usa el rosco de cobertura para lo pendiente. Llega de fuera porque
+    /// dentro de este control no se decide ningún color (D-832).
+    /// </summary>
+    public static readonly DependencyProperty PendingBrushProperty = DependencyProperty.Register(
+        nameof(PendingBrush), typeof(Brush), typeof(CycleRibbon),
+        new PropertyMetadata(Brushes.LightGray, OnVisualChanged));
+
+    /// <summary>
+    /// El extremo derecho del eje. Lo pone quien tiene el reloj, no el control: así se puede fijar
+    /// en un test y la cinta no depende de la hora de la máquina para poder afirmarse.
+    /// </summary>
+    public static readonly DependencyProperty TodayProperty = DependencyProperty.Register(
+        nameof(Today), typeof(DateTime), typeof(CycleRibbon),
+        new PropertyMetadata(DateTime.Now, OnDataChanged));
 
     public IReadOnlyList<RibbonTrack>? Tracks
     {
@@ -137,6 +177,32 @@ public sealed class CycleRibbon : Grid
         set => SetValue(SpanCommandProperty, value);
     }
 
+    /// <inheritdoc cref="PendingBrushProperty"/>
+    public Brush PendingBrush
+    {
+        get => (Brush)GetValue(PendingBrushProperty);
+        set => SetValue(PendingBrushProperty, value);
+    }
+
+    /// <inheritdoc cref="TodayProperty"/>
+    public DateTime Today
+    {
+        get => (DateTime)GetValue(TodayProperty);
+        set => SetValue(TodayProperty, value);
+    }
+
+    /// <summary>La tinta sobre el neutro de lo pendiente: la del tema, no una del control.</summary>
+    private Brush PendingInk => TextBrush;
+
+    /// <summary>Dónde quedó cada cosa. Se puede afirmar sin mirar un solo pincel.</summary>
+    internal RibbonGeometry Geometry { get; private set; } = RibbonGeometry.For(Array.Empty<RibbonTrack>(), DateTime.Now, 0);
+
+    /// <summary>La línea vertical de hoy, para poder afirmar que está y dónde.</summary>
+    internal Line? TodayLine { get; private set; }
+
+    /// <summary>Los tramos sin auditar dibujados, con su geometría.</summary>
+    internal List<(int Row, RibbonGap Gap, Line Line)> GapLines { get; } = new();
+
     /// <summary>El área desplazable, para poder afirmar dónde arranca y qué se ve.</summary>
     internal ScrollViewer Scroll => _scroll;
 
@@ -163,8 +229,6 @@ public sealed class CycleRibbon : Grid
     /// <summary>El rótulo de «sin ciclos» de cada fila vacía, con su fila.</summary>
     internal IReadOnlyList<(int Row, TextBlock Text)> EmptyLabels { get; private set; } = Array.Empty<(int, TextBlock)>();
 
-    /// <summary>El aviso de «fuera del periodo» de cada fila que lo lleva.</summary>
-    internal IReadOnlyList<(int Row, TextBlock Text)> NoticeLabels { get; private set; } = Array.Empty<(int, TextBlock)>();
 
     public CycleRibbon()
     {
@@ -188,51 +252,28 @@ public sealed class CycleRibbon : Grid
 
         SizeChanged += (_, _) => Rebuild();
         Loaded += (_, _) => Rebuild();
-        _scroll.LayoutUpdated += (_, _) => ApplyPendingScroll();
+
+        // La misma guarda que D-1042 puso en `ChartPlot`: mientras quede algo por dibujar —o el
+        // ancho haya cambiado—, la siguiente pasada de layout lo dibuja. La cinta vive dentro de
+        // un bloque que empieza colapsado, así que el primer dibujo se encuentra sin ancho.
+        LayoutUpdated += (_, _) =>
+        {
+            double width = _scroll.ViewportWidth > 0 ? _scroll.ViewportWidth : 0;
+            if (_stale || Math.Abs(_drawnWidth - Math.Max(0, width - PadRight)) > 0.5)
+            {
+                Rebuild();
+            }
+        };
     }
 
     private static void OnDataChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-    {
-        var ribbon = (CycleRibbon)d;
-        // Datos nuevos: la vista arranca por el final. Un cambio de tamaño no toca la posición.
-        ribbon._scrollToEndPending = true;
-        ribbon.Rebuild();
-    }
+        => ((CycleRibbon)d).Rebuild();
 
     private static void OnVisualChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         => ((CycleRibbon)d).Rebuild();
 
     /// <summary>Dónde empieza la fila <paramref name="row"/>. La misma cuenta para el nombre y para los bloques.</summary>
     internal static double RowTop(int row) => PadTop + row * (RowHeight + RowGap);
-
-    /// <summary>
-    /// El hueco entre dos ciclos, escrito: «3 semanas sin auditar». Null por debajo del umbral.
-    /// Días hasta dos semanas, semanas hasta dos meses, meses después: la unidad que se lee de un
-    /// vistazo sin tener que dividir.
-    /// </summary>
-    internal static string? GapText(DateTime previousEnd, DateTime nextStart)
-    {
-        TimeSpan gap = nextStart - previousEnd;
-        if (gap < GapThreshold)
-        {
-            return null;
-        }
-
-        int days = (int)Math.Round(gap.TotalDays);
-        if (days < 14)
-        {
-            return $"{days} días sin auditar";
-        }
-
-        if (days < 61)
-        {
-            int weeks = (int)Math.Round(days / 7.0);
-            return $"{weeks} semanas sin auditar";
-        }
-
-        int months = (int)Math.Round(days / 30.44);
-        return months == 1 ? "1 mes sin auditar" : $"{months} meses sin auditar";
-    }
 
     private void Rebuild()
     {
@@ -243,7 +284,7 @@ public sealed class CycleRibbon : Grid
         var labels = new List<(RibbonSpan, TextBlock, TextBlock?)>();
         var gaps = new List<(int, TextBlock)>();
         var empties = new List<(int, TextBlock)>();
-        var notices = new List<(int, TextBlock)>();
+        _stale = true;
 
         IReadOnlyList<RibbonTrack> tracks = Tracks ?? Array.Empty<RibbonTrack>();
         if (tracks.Count == 0)
@@ -252,72 +293,91 @@ public sealed class CycleRibbon : Grid
             _names.Height = 0;
             _plot.Width = 0;
             _plot.Height = 0;
+            Geometry = RibbonGeometry.For(tracks, Today, 0);
             Publish();
             return;
         }
 
-        double gutter = Math.Min(GutterCap, tracks.Max(t => Measure(t.Name, 12).Width)) + GutterPad;
-        double height = RowTop(tracks.Count) - RowGap + PadTop;
+        double gutter = Math.Min(GutterCap, tracks.Max(t => Measure(t.Name, 12).Width)) + DotSize + DotGap + GutterPad;
+        double height = RowTop(tracks.Count) - RowGap + PadTop + AxisHeight;
 
-        // LAS FILAS SE ALINEAN POR EL FINAL. El ciclo más reciente de cada aplicación queda en el
-        // mismo borde derecho, así que al arrancar por el final —que es donde está lo que
-        // importa— se ve el último capítulo de TODAS las filas, la fila vacía y su rótulo, y no
-        // solo la cola de la fila más larga. Una fila corta que empezara por la izquierda quedaría
-        // fuera de la vista inicial en cuanto otra fila tuviera más ciclos.
-        var rowWidths = tracks.Select(RowContentWidth).ToList();
-        double widest = Math.Max(1, rowWidths.Max());
+        // EL ÁREA DE DIBUJO ES LA QUE HAY: con eje de tiempo la cinta entera cabe siempre —va del
+        // primer ciclo a hoy—, así que no hay nada que desplazar. El ancho llega por el viewport, y
+        // hasta que el layout no lo dice vale 0: por eso se vuelve a dibujar cuando lo sabe.
+        double plotWidth = _scroll.ViewportWidth > 0 ? _scroll.ViewportWidth : ActualWidth - gutter;
+        plotWidth = Math.Max(0, plotWidth - PadRight);
+        if (plotWidth <= 0)
+        {
+            _names.Width = gutter;
+            _names.Height = height;
+            Geometry = RibbonGeometry.For(tracks, Today, 0);
+            Publish();
+            return;
+        }
+
+        RibbonGeometry geometry = RibbonGeometry.For(tracks, Today, plotWidth);
+        Geometry = geometry;
+
+        double axisTop = RowTop(tracks.Count) - RowGap + 2;
+        DrawAxis(geometry, axisTop, height);
 
         for (int row = 0; row < tracks.Count; row++)
         {
             RibbonTrack track = tracks[row];
             double top = RowTop(row);
 
-            TextBlock name = NameLabel(track.Name, gutter - GutterPad);
-            Canvas.SetLeft(name, 0);
+            TextBlock name = NameLabel(track.Name, gutter - GutterPad - DotSize - DotGap);
+            Canvas.SetLeft(name, DotSize + DotGap);
             Canvas.SetTop(name, top + (RowHeight - Measure(track.Name, 12).Height) / 2);
             _names.Children.Add(name);
             names.Add(name);
 
-            double x = 4 + (widest - rowWidths[row]);
-            if (track.Notice.Length > 0)
+            // EL PUNTO DE COLOR DE LA APLICACIÓN (D-314), delante de su nombre: el mismo color con
+            // el que sale en la gráfica de coste y en su rosco.
+            if (track.Dot is { } dot)
             {
-                TextBlock notice = Muted(track.Notice, 11);
-                Canvas.SetLeft(notice, x);
-                Canvas.SetTop(notice, top + (RowHeight - Measure(track.Notice, 11).Height) / 2);
-                _plot.Children.Add(notice);
-                notices.Add((row, notice));
-                x += Measure(track.Notice, 11).Width + 16;
+                var bullet = new Rectangle
+                {
+                    Width = DotSize,
+                    Height = DotSize,
+                    RadiusX = DotSize / 2,
+                    RadiusY = DotSize / 2,
+                    Fill = dot,
+                    IsHitTestVisible = false,
+                };
+                Canvas.SetLeft(bullet, 0);
+                Canvas.SetTop(bullet, top + (RowHeight - DotSize) / 2);
+                _names.Children.Add(bullet);
             }
 
             if (track.Spans.Count == 0)
             {
                 TextBlock empty = Muted(track.EmptyText, 11.5);
                 empty.FontStyle = FontStyles.Italic;
-                Canvas.SetLeft(empty, x);
+                Canvas.SetLeft(empty, 4);
                 Canvas.SetTop(empty, top + (RowHeight - Measure(track.EmptyText, 11.5).Height) / 2);
                 _plot.Children.Add(empty);
                 empties.Add((row, empty));
                 continue;
             }
 
-            RibbonSpan? previous = null;
-            foreach (RibbonSpan span in track.Spans)
+            foreach (RibbonGap gap in geometry.Gaps.Where(g => g.Row == row))
             {
-                if (previous is not null && GapText(previous.To, span.From) is { } gapText)
-                {
-                    x = DrawGap(row, gapText, x, top, gaps);
-                }
+                DrawGap(row, gap, top, gaps);
+            }
 
-                DrawBlock(row, span, x, top, shapes, labels);
-                x += BlockWidth + BlockGap;
-                previous = span;
+            foreach (RibbonBlock block in geometry.Blocks.Where(b => b.Row == row))
+            {
+                DrawBlock(block, top, shapes, labels);
             }
         }
 
         _names.Width = gutter;
         _names.Height = height;
-        _plot.Width = 4 + widest + PadRight;
+        _plot.Width = plotWidth + PadRight;
         _plot.Height = height;
+        _stale = false;
+        _drawnWidth = plotWidth;
         Publish();
 
         void Publish()
@@ -327,61 +387,65 @@ public sealed class CycleRibbon : Grid
             BlockLabels = labels;
             GapLabels = gaps;
             EmptyLabels = empties;
-            NoticeLabels = notices;
         }
     }
 
-    /// <summary>Cuánto ocupa el contenido de una fila: aviso, bloques y separadores, o el rótulo de vacío.</summary>
-    private double RowContentWidth(RibbonTrack track)
+    /// <summary>
+    /// El eje: marcas de fecha redondas abajo, sus guías verticales apagadas, y la <b>línea de
+    /// hoy</b>, que es el ancla de quien mira (D-593). Hoy no es una marca más: lleva línea propia.
+    /// </summary>
+    private void DrawAxis(RibbonGeometry geometry, double axisTop, double height)
     {
-        double width = track.Notice.Length > 0 ? Measure(track.Notice, 11).Width + 16 : 0;
-        if (track.Spans.Count == 0)
+        foreach (RibbonTick tick in geometry.Ticks)
         {
-            return width + Measure(track.EmptyText, 11.5).Width;
-        }
-
-        RibbonSpan? previous = null;
-        foreach (RibbonSpan span in track.Spans)
-        {
-            if (previous is not null && GapText(previous.To, span.From) is { } gapText)
+            var guide = new Line
             {
-                width += Measure(gapText, 10).Width + 20 + BlockGap;
-            }
+                X1 = tick.X,
+                X2 = tick.X,
+                Y1 = PadTop,
+                Y2 = axisTop,
+                Stroke = AxisBrush,
+                StrokeThickness = 1,
+                Opacity = 0.14,
+                IsHitTestVisible = false,
+            };
+            _plot.Children.Add(guide);
 
-            width += BlockWidth + BlockGap;
-            previous = span;
+            TextBlock label = Muted(tick.Text, DatesSize);
+            Size size = Measure(tick.Text, DatesSize);
+            Canvas.SetLeft(label, Math.Max(0, tick.X - size.Width / 2));
+            Canvas.SetTop(label, axisTop + 2);
+            _plot.Children.Add(label);
         }
 
-        return width - BlockGap;
+        var today = new Line
+        {
+            X1 = geometry.TodayX,
+            X2 = geometry.TodayX,
+            Y1 = PadTop - 2,
+            Y2 = axisTop,
+            Stroke = AxisBrush,
+            StrokeThickness = 1,
+            Opacity = 0.7,
+            StrokeDashArray = new DoubleCollection(new double[] { 3, 2 }),
+            IsHitTestVisible = false,
+        };
+        _plot.Children.Add(today);
+        TodayLine = today;
     }
 
-    /// <summary>Al cambiar los datos, la vista arranca por el final. Se aplica en cuanto el scroll sabe cuánto mide.</summary>
-    private void ApplyPendingScroll()
+    /// <summary>
+    /// El hueco sin auditar: el tramo entre dos ciclos, a trazos y en gris, con sus días encima
+    /// <b>si caben</b> (F35-4 §1.3). Ocupa lo que duró, que es de lo que se trata.
+    /// </summary>
+    private void DrawGap(int row, RibbonGap gap, double top, List<(int, TextBlock)> gaps)
     {
-        if (!_scrollToEndPending || _scroll.ViewportWidth <= 0)
-        {
-            return;
-        }
-
-        _scrollToEndPending = false;
-        if (_scroll.ScrollableWidth > 0)
-        {
-            _scroll.ScrollToRightEnd();
-        }
-    }
-
-    /// <summary>El separador de hueco: una línea a puntos con el dato encima. Devuelve la x siguiente.</summary>
-    private double DrawGap(int row, string text, double x, double top, List<(int, TextBlock)> gaps)
-    {
-        Size size = Measure(text, 10);
-        double width = size.Width + 20;
-
         var line = new Line
         {
-            X1 = x + 4,
-            X2 = x + width - 4,
-            Y1 = top + RowHeight / 2 + 8,
-            Y2 = top + RowHeight / 2 + 8,
+            X1 = gap.Left,
+            X2 = gap.Right,
+            Y1 = top + RowHeight / 2,
+            Y2 = top + RowHeight / 2,
             Stroke = AxisBrush,
             StrokeThickness = 1,
             Opacity = 0.5,
@@ -389,72 +453,106 @@ public sealed class CycleRibbon : Grid
             IsHitTestVisible = false,
         };
         _plot.Children.Add(line);
+        GapLines.Add((row, gap, line));
 
-        TextBlock label = Muted(text, 10);
-        Canvas.SetLeft(label, x + 10);
-        Canvas.SetTop(label, top + RowHeight / 2 - size.Height - 1);
-        _plot.Children.Add(label);
-        gaps.Add((row, label));
-
-        return x + width + BlockGap;
-    }
-
-    private void DrawBlock(int row, RibbonSpan span, double x, double top,
-        List<(int, RibbonSpan, Rectangle)> shapes, List<(RibbonSpan, TextBlock, TextBlock?)> labels)
-    {
-        // Los trozos, proporcionales a la DURACIÓN de cada periodo dentro del ciclo. El bloque es
-        // de ancho fijo —un ciclo de tres horas y uno de tres semanas cuentan lo mismo como
-        // capítulo—, pero dentro de él la historia de temáticas sí se reparte por lo que duró cada
-        // una, con un mínimo para que un cambio reciente no desaparezca.
-        double spanDays = Math.Max(1.0 / 1440, (span.To - span.From).TotalDays);
-        var widths = new double[span.Slices.Count];
-        double sum = 0;
-        for (int i = 0; i < span.Slices.Count; i++)
+        if (gap.Text.Length == 0)
         {
-            RibbonSlice slice = span.Slices[i];
-            double days = Math.Max(0, (slice.To - slice.From).TotalDays);
-            widths[i] = Math.Max(MinSliceWidth, BlockWidth * days / spanDays);
-            sum += widths[i];
+            return;
         }
 
-        double cursor = x;
-        for (int i = 0; i < span.Slices.Count; i++)
+        Size size = Measure(gap.Text, DatesSize);
+        if (size.Width + 4 > gap.Width)
         {
-            RibbonSlice slice = span.Slices[i];
-            bool last = i == span.Slices.Count - 1;
-            double w = last ? Math.Max(MinSliceWidth, x + BlockWidth - cursor) : widths[i] * BlockWidth / sum;
+            return;   // no cabe: el hueco se ve igual, y el tooltip del bloque trae las fechas
+        }
 
-            var rect = new Rectangle
+        TextBlock label = Muted(gap.Text, DatesSize);
+        Canvas.SetLeft(label, gap.Left + (gap.Width - size.Width) / 2);
+        Canvas.SetTop(label, top + RowHeight / 2 - size.Height - 2);
+        _plot.Children.Add(label);
+        gaps.Add((row, label));
+    }
+
+    private void DrawBlock(RibbonBlock block, double top,
+        List<(int, RibbonSpan, Rectangle)> shapes, List<(RibbonSpan, TextBlock, TextBlock?)> labels)
+    {
+        RibbonSpan span = block.Span;
+        double x = block.Left;
+        double width = block.Width;
+
+        // EL FONDO: lo que queda por auditar, en el neutro apagado del rosco de cobertura (D-316).
+        // Un rosco de cobertura no habla de gravedad y esto tampoco: aquí el color dice la lupa y
+        // el relleno dice cuánto se miró.
+        var track = new Rectangle
+        {
+            Width = width,
+            Height = RowHeight,
+            RadiusX = 4,
+            RadiusY = 4,
+            Fill = PendingBrush,
+            Cursor = Cursors.Hand,
+            ToolTip = BuildTooltip(span.TooltipLines),
+            Tag = span,
+        };
+        Canvas.SetLeft(track, x);
+        Canvas.SetTop(track, top);
+        Wire(track, span);
+        _plot.Children.Add(track);
+        shapes.Add((block.Row, span, track));
+
+        // EL RELLENO, de izquierda a derecha y proporcional a la cobertura, con el color de la
+        // temática. Los trozos de lupa siguen en su sitio del TIEMPO —el bloque ya es una escala
+        // temporal—, así que un ciclo que cambió de lupa enseña las dos donde tocan, y el relleno
+        // recorta por la derecha lo que todavía no se ha auditado.
+        double filled = block.FilledWidth;
+        if (filled > 0)
+        {
+            double spanDays = Math.Max(1.0 / 1440, (span.To - span.From).TotalDays);
+            double cursor = 0;
+            for (int i = 0; i < span.Slices.Count; i++)
             {
-                Width = w,
-                Height = RowHeight,
-                RadiusX = i == 0 || last ? 4 : 0,
-                RadiusY = i == 0 || last ? 4 : 0,
-                Fill = span.IsOpen && last ? OpenFill(slice.Fill, w) : slice.Fill,
-                Cursor = Cursors.Hand,
-                ToolTip = BuildTooltip(span.Slices.Count > 1 ? slice.TooltipLines.Concat(span.TooltipLines).ToList() : span.TooltipLines),
-                Tag = span,
-            };
-            Canvas.SetLeft(rect, cursor);
-            Canvas.SetTop(rect, top);
-            ToolTipService.SetInitialShowDelay(rect, 120);
-            ToolTipService.SetBetweenShowDelay(rect, 0);
-            object? payload = span.Payload;
-            rect.MouseLeftButtonUp += (_, e) =>
-            {
-                if (SpanCommand?.CanExecute(payload) == true)
+                RibbonSlice slice = span.Slices[i];
+                bool last = i == span.Slices.Count - 1;
+                double sliceWidth = last
+                    ? width - cursor
+                    : Math.Max(0, width * Math.Max(0, (slice.To - slice.From).TotalDays) / spanDays);
+                double drawn = Math.Min(sliceWidth, filled - cursor);
+                if (drawn > 0)
                 {
-                    SpanCommand.Execute(payload);
-                    e.Handled = true;
+                    var fill = new Rectangle
+                    {
+                        Width = drawn,
+                        Height = RowHeight,
+                        RadiusX = i == 0 ? 4 : 0,
+                        RadiusY = i == 0 ? 4 : 0,
+                        Fill = span.IsOpen && last ? OpenFill(slice.Fill, drawn) : slice.Fill,
+                        Cursor = Cursors.Hand,
+                        ToolTip = BuildTooltip(span.Slices.Count > 1
+                            ? slice.TooltipLines.Concat(span.TooltipLines).ToList()
+                            : span.TooltipLines),
+                        Tag = span,
+                    };
+                    Canvas.SetLeft(fill, x + cursor);
+                    Canvas.SetTop(fill, top);
+                    Wire(fill, span);
+                    _plot.Children.Add(fill);
+                    shapes.Add((block.Row, span, fill));
                 }
-            };
-            _plot.Children.Add(rect);
-            shapes.Add((row, span, rect));
 
-            // La marca del cambio de temática: una muesca clara entre un trozo y el siguiente.
-            if (!last)
+                cursor += sliceWidth;
+                if (cursor >= filled)
+                {
+                    break;
+                }
+            }
+
+            // La marca del cambio de lupa, en su sitio del tiempo y de alto completo: si cayera
+            // solo dentro del relleno desaparecería en cuanto la cobertura fuera corta.
+            double mark = 0;
+            for (int i = 0; i < span.Slices.Count - 1; i++)
             {
-                var mark = new Rectangle
+                mark += width * Math.Max(0, (span.Slices[i].To - span.Slices[i].From).TotalDays) / spanDays;
+                var notch = new Rectangle
                 {
                     Width = ChangeMark,
                     Height = RowHeight,
@@ -462,21 +560,19 @@ public sealed class CycleRibbon : Grid
                     Opacity = 0.9,
                     IsHitTestVisible = false,
                 };
-                Canvas.SetLeft(mark, cursor + w - ChangeMark / 2);
-                Canvas.SetTop(mark, top);
-                _plot.Children.Add(mark);
+                Canvas.SetLeft(notch, x + Math.Min(width - ChangeMark, mark) - (ChangeMark / 2));
+                Canvas.SetTop(notch, top);
+                _plot.Children.Add(notch);
             }
-
-            cursor += w;
         }
 
-        // El fin sin fecha recuperable se dice también en el dibujo: borde derecho a puntos.
+        // El fin sin fecha recuperable se dice también en el dibujo: borde derecho a puntos (D-831).
         if (!span.EndIsKnown && !span.IsOpen)
         {
             var edge = new Line
             {
-                X1 = x + BlockWidth,
-                X2 = x + BlockWidth,
+                X1 = x + width,
+                X2 = x + width,
                 Y1 = top,
                 Y2 = top + RowHeight,
                 Stroke = AxisBrush,
@@ -487,29 +583,43 @@ public sealed class CycleRibbon : Grid
             _plot.Children.Add(edge);
         }
 
-        // El rótulo: identificador y temática SIEMPRE, envolviendo a dos líneas si hace falta; las
-        // fechas debajo, y son ellas las que caen si el rótulo se lleva las dos líneas. El tooltip
-        // las trae. Nada se recorta a media palabra.
-        double inner = BlockWidth - 12;
-        Brush ink = InkFor(span.Slices[0].Fill);
-        FormattedText labelText = Format(span.Label, LabelSize, FontWeights.SemiBold, inner);
+        // EL RÓTULO. Con eje de tiempo el ancho es la duración, así que hay bloques estrechos por
+        // definición: se escribe el rótulo entero si cabe, el corto («C4») si solo cabe él, y nada
+        // —con el tooltip— cuando ni eso. Medido, no estimado por caracteres (D-832).
+        double inner = width - 12;
+        Brush ink = filled > Measure(span.Label, LabelSize).Width + 12
+            ? InkFor(span.Slices[0].Fill)
+            : PendingInk;
+
+        string? text = Fits(span.Label, inner) ? span.Label
+            : span.ShortLabel.Length > 0 && Fits(span.ShortLabel, inner) ? span.ShortLabel
+            : null;
+        if (text is null)
+        {
+            // Ni el corto cabe: se calla y queda el tooltip. Se apunta igual, con un rótulo vacío,
+            // para que se pueda afirmar que este bloque NO escribió nada.
+            labels.Add((span, new TextBlock { Text = string.Empty }, null));
+            return;
+        }
+
+        Size labelSize = Measure(text, LabelSize);
         var label = new TextBlock
         {
-            Text = span.Label,
+            Text = text,
             FontSize = LabelSize,
             FontWeight = FontWeights.SemiBold,
             Foreground = ink,
-            TextWrapping = TextWrapping.Wrap,
-            Width = inner,
             IsHitTestVisible = false,
         };
-        double oneLine = Format("Ag", LabelSize, FontWeights.SemiBold, inner).Height;
-        bool wrapped = labelText.Height > oneLine * 1.5;
-        double datesHeight = Measure(span.Dates, DatesSize).Height;
-        bool showDates = !wrapped && span.Dates.Length > 0 && labelText.Height + datesHeight + 2 <= RowHeight - 6;
 
-        double block = (showDates ? labelText.Height + 2 + datesHeight : labelText.Height);
-        double labelTop = top + Math.Max(3, (RowHeight - block) / 2);
+        double datesHeight = Measure(span.Dates, DatesSize).Height;
+        bool showDates = ReferenceEquals(text, span.Label)
+            && span.Dates.Length > 0
+            && Fits(span.Dates, inner, DatesSize)
+            && labelSize.Height + datesHeight + 2 <= RowHeight - 6;
+
+        double blockHeight = showDates ? labelSize.Height + 2 + datesHeight : labelSize.Height;
+        double labelTop = top + Math.Max(3, (RowHeight - blockHeight) / 2);
         Canvas.SetLeft(label, x + 6);
         Canvas.SetTop(label, labelTop);
         _plot.Children.Add(label);
@@ -526,11 +636,30 @@ public sealed class CycleRibbon : Grid
                 IsHitTestVisible = false,
             };
             Canvas.SetLeft(dates, x + 6);
-            Canvas.SetTop(dates, labelTop + labelText.Height + 2);
+            Canvas.SetTop(dates, labelTop + labelSize.Height + 2);
             _plot.Children.Add(dates);
         }
 
         labels.Add((span, label, dates));
+
+        bool Fits(string t, double available, double size = LabelSize)
+            => available > 0 && Measure(t, size).Width <= available;
+    }
+
+    /// <summary>El clic de un bloque: el mismo mando y la misma carga de siempre (D-831).</summary>
+    private void Wire(Rectangle shape, RibbonSpan span)
+    {
+        ToolTipService.SetInitialShowDelay(shape, 120);
+        ToolTipService.SetBetweenShowDelay(shape, 0);
+        object? payload = span.Payload;
+        shape.MouseLeftButtonUp += (_, e) =>
+        {
+            if (SpanCommand?.CanExecute(payload) == true)
+            {
+                SpanCommand.Execute(payload);
+                e.Handled = true;
+            }
+        };
     }
 
     private TextBlock Muted(string text, double size) => new()

@@ -18387,3 +18387,86 @@ antes (hace quince queda fuera; hace diez, dentro). Los dos tests que recorren `
 entero ejercitan el valor nuevo solos. La tanda queda en **2.649 casos** (2.114 en la aplicación).
 
 **Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8.
+
+## F35-4 — «Ciclos y temáticas»: una cinta con escala
+
+### D-1044 — La cinta pasa de lista de capítulos a eje de tiempo, y el bloque enseña su cobertura
+
+**§0 · El cuadre, contra el hub de esta máquina** (N-2), con el reloj fijado. Lo que D-831 produce
+—y que esta fase conserva entero— es esto:
+
+| App | Ciclo | Inicio (fuente) | Fin (fuente) | Duración | Cobertura |
+|---|---|---|---|---|---|
+| XBLAST | C1 · General | 04/09 13:32 (**inferido**: su primera sesión) | hoy (abierto) | 3,9 días | 38 / 888 = **4,3 %** |
+| Atalaya | C1 · General | 07/09 11:24 (**exacto**: apertura escrita) | hoy (abierto) | 1,0 días | 0 / 292 = **0 %** |
+
+Ninguna de las dos tiene ciclos anteriores ni huecos, así que **los huecos no se pueden cuadrar
+contra este hub y se dice**: van probados con datos escritos para el caso. Y con el eje ya puesto,
+la vista real pintada da: eje de **28 días** (el suelo, porque el primer ciclo es de hace cuatro),
+marcas en lunes —17 ago, 24 ago, 31 ago, 7 sept—, línea de hoy en el extremo derecho, el bloque de
+XBLAST en x=1.126 con 158 px de ancho y **6,8 px de relleno** (4,3 %), y el de Atalaya con 24,6 px
+y **sin relleno**. Cuadra con la tabla.
+
+**El defecto que arregla.** La cinta pintaba **bloques de ancho fijo, uno tras otro y sin eje**: un
+ciclo de cuatro días y uno de seis meses medían lo mismo y estaban en el mismo sitio. Contestaba
+«con qué lupas y en qué orden» —para lo que se hizo (F17.2)— y no podía contestar «cuánto duró cada
+uno y cuánto se tardó en volver», que es lo que se le pide a un historial.
+
+**§1 · Lo visible (N-6), y es toda la lista.**
+
+1. **Un eje de tiempo real, compartido por todas las aplicaciones**: del inicio del primer tramo de
+   cualquiera de ellas hasta **hoy**, con marcas en fechas **redondas** —lunes hasta dos meses, día
+   1 hasta poco más de un año, trimestres después— y una **línea vertical de hoy**, que no es una
+   marca más: es el ancla (D-593). Cada bloque empieza en su fecha y mide su duración; el abierto
+   llega a la línea de hoy. **Suelo de cuatro semanas**: sin él, una aplicación con un solo ciclo
+   de cuatro días llenaría la pantalla y la escala diría lo contrario de lo que hay.
+2. **El bloque enseña su avance**: relleno de izquierda a derecha proporcional a la cobertura
+   —auditadas de auditables, la misma cifra del tooltip—, en el color de la temática, y el resto en
+   el neutro apagado del rosco de cobertura (D-316). El rótulo lo dice: «C1 · General · 4,3 %» —el
+   porcentaje lo escribe `PercentText`, que es quien no deja que un 0,2 % se redondee a «0 %»—.
+   **Sin inventario conservado no hay relleno ni porcentaje**: un 0 % diría que no se auditó nada, y
+   lo que pasa es que no se sabe (D-318). Y el rótulo cae al corto («C4») antes que desaparecer:
+   con eje de tiempo hay bloques estrechos por definición, y quedarse sin identificador es quedarse
+   sin poder señalar el ciclo.
+3. **Los huecos se ven**: el tramo entre dos ciclos va a trazos y **ocupa lo que duró**, con sus
+   días encima si caben («12 d»). Antes se contaban con palabras —«3 semanas sin auditar»— porque
+   no había eje donde dibujarlos; ahora lo hay, y el subtítulo deja de prometer algo que no se veía.
+4. **El nombre de cada fila lleva el punto de color de su aplicación** (D-314), el mismo que en la
+   gráfica de coste y en su rosco.
+5. Tooltip y clic, **sin tocar** (D-831).
+6. Subtítulo nuevo, y **el periodo ya no recorta la cinta**: era lo que obligaba a decir «2 ciclos
+   anteriores fuera del periodo» en vez de dibujarlos. Con eje hay sitio para todos, así que el
+   recorte, el recuento y el aviso se retiran — esconder los ciclos viejos escondía justo lo que
+   explica de dónde viene la aplicación.
+7. Nada más se mueve: la tarjeta sigue en su sitio, entre el top de reglas y el registro.
+
+**Dos consecuencias del eje, declaradas.** El **desplazamiento horizontal** de F17.2 deja de tener
+sentido: la cinta va del primer ciclo a hoy y cabe entera, así que ya no hay nada que desplazar ni
+por dónde arrancar. Y el **ancho mínimo de bloque** deja de ser un ancho «legible» de 168 px para
+ser 3 px: el ancho es la duración y se respeta; el mínimo solo garantiza que un ciclo de minutos
+sobre un eje de meses siga teniendo dónde pulsar — y se gana **por la izquierda**, porque el fin del
+bloque es la fecha de fin y ésa no se mueve.
+
+**Y la guarda de D-1042 también aquí.** La cinta vive dentro de un bloque que empieza colapsado, y
+ahora todo su dibujo depende de un ancho que llega después: se le pone la misma comprobación que a
+`ChartPlot` —mientras quede algo por dibujar, la siguiente pasada de layout lo dibuja—. Comprobado
+pintando la vista de verdad con la secuencia de verdad, no solo con el control suelto.
+
+**Cobertura (N-5): 15 casos, la mitad sobre el dibujo.** `RibbonGeometry` se separa del control para
+poder afirmarla sin pintar un píxel (la misma razón de D-832): el eje va del primer tramo a hoy y
+nunca baja de cuatro semanas; sin tramos sigue existiendo y no divide por cero; las marcas caen en
+lunes, en día 1 o en trimestres según el rango y ninguna se sale; cada bloque queda en la x de su
+inicio y mide su duración **sobre los cuatro anchos de página de la casa**, con el abierto muriendo
+en la línea de hoy y el de tres horas siendo un hilo —no un bloque igual que uno de cincuenta
+días—; el relleno es proporcional a la cobertura y sin inventario no lo hay; el hueco encaja
+exactamente entre los dos bloques y dice sus días, sin separación no hay hueco, y uno de horas no
+escribe un cero. Del dibujo: los bloques, el hueco a trazos, la línea de hoy y la correspondencia
+entre lo dibujado y la geometría; que la cinta pinta aunque el ancho llegue después; el rótulo que
+cae al corto; la fila vacía rotulada, la fila indivisible y el punto de color de cada aplicación.
+Los tests de D-831 —extremos, fuentes, tooltip, clic— siguen verdes sin tocarlos; el del filtro de
+periodo cambia de expectativa, que es justo lo que esta entrega cambia. La tanda queda en
+**2.648 casos** (2.112 en la aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8. Que el relleno de un 4 % se vea
+—son siete píxeles—, que las marcas del eje no se pisen a 1.280, y que la fila de una aplicación
+recién dada de alta no quede como una raya contra el borde derecho, lo mira el usuario en el `dist`.

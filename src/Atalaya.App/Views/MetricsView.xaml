@@ -748,7 +748,7 @@
                             <TextBlock Text="Ciclos y temáticas" Style="{StaticResource Text.Lead}"
                                        FontWeight="SemiBold" />
                             <TextBlock Style="{StaticResource Text.Small}"
-                                       Text="Los ciclos de cada aplicación, en orden: un bloque por ciclo, coloreado por su temática, con sus fechas debajo y los huecos sin auditar contados. Pulsa un bloque para abrir el informe de su cierre; el ciclo abierto lleva al inventario." />
+                                       Text="Los ciclos de cada aplicación sobre el tiempo: un bloque por ciclo, coloreado por su temática y relleno según su cobertura; los huecos sin auditar, a trazos. Pulsa un bloque para abrir el informe de su cierre; el ciclo abierto lleva al inventario." />
 
                             <ItemsControl ItemsSource="{Binding CycleLegend}"
                                           ItemTemplate="{StaticResource LegendEntry}"
@@ -761,15 +761,23 @@
                                 </ItemsControl.ItemsPanel>
                             </ItemsControl>
 
-                            <!-- F17.1: la cinta lleva DENTRO su columna fija de nombres y su propio
-                                 desplazamiento horizontal (jamás el de la página): la fila es la
-                                 unidad indivisible, y nombre y banda no pueden moverse por separado. -->
+                            <!-- F17.1: la cinta lleva DENTRO su columna fija de nombres: la fila es
+                                 la unidad indivisible, y nombre y banda no pueden moverse por
+                                 separado. Desde F35-4 la cinta va sobre un EJE DE TIEMPO real —del
+                                 primer ciclo hasta hoy—, así que cabe entera y no hay nada que
+                                 desplazar.
+
+                                 `PendingBrush` y `Today` llegan de fuera por la misma razón que
+                                 `AxisBrush`: dentro del control no se decide ningún color (D-832),
+                                 y el reloj tampoco, para que se pueda fijar en un test. -->
                             <controls:CycleRibbon
                                 Margin="{StaticResource Pad.XS.Top}"
                                 Tracks="{Binding CycleTracks}"
+                                Today="{Binding CycleToday}"
                                 SpanCommand="{Binding OpenCycleCommand}"
                                 AxisBrush="{DynamicResource Brush.TextMuted}"
                                 TextBrush="{DynamicResource Brush.Text}"
+                                PendingBrush="{Binding CyclePendingBrush}"
                                 Visibility="{Binding HasCycles, Converter={StaticResource BoolToVisibility}}" />
 
                             <c:EmptyState
