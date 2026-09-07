@@ -295,10 +295,19 @@ public sealed class MetricsPanelTests : IDisposable
         MetricsViewModel vm = TestFactory.Metrics(_hub, _paths, _settings);
         await vm.LoadAsync();
 
-        vm.CostTotal.Should().Be(MetricsViewModel.Unknown);
-        vm.CostSummary.Should().Contain("Se activará cuando");
-        vm.CyclePct.Should().Be(MetricsViewModel.Unknown);
-        vm.CycleDetail.Should().Contain("Se activará cuando");
+        StatCard cost = vm.Cards.Single(c => c.Key == "cost");
+        cost.Value.Should().Be(MetricsViewModel.Unknown);
+        cost.Subtitle.Should().Contain("Se activará cuando");
+
+        StatCard coverage = vm.Cards.Single(c => c.Key == "coverage");
+        coverage.Value.Should().Be(MetricsViewModel.Unknown);
+        coverage.Subtitle.Should().Contain("Se activará cuando");
+
+        // Y sin resueltos, la cuarta tampoco inventa una división (F35 §1.3).
+        StatCard perResolution = vm.Cards.Single(c => c.Key == "cost-per-resolution");
+        perResolution.Value.Should().Be(MetricsViewModel.Unknown);
+        perResolution.Subtitle.Should().Be("sin resueltos en el periodo");
+
         vm.HasCost.Should().BeFalse();
     }
 
@@ -333,13 +342,11 @@ public sealed class MetricsPanelTests : IDisposable
 
         xaml.Should().Contain("{Binding AppOptions}").And.Contain("{Binding RangeOptions}");
 
-        foreach (string tile in new[]
-                 {
-                     "Hallazgos activos", "Resueltos en el periodo", "Coste del periodo", "Cobertura del ciclo",
-                 })
-        {
-            xaml.Should().Contain(tile);
-        }
+        // F35 §1.3 — las cuatro cifras son UNA plantilla sobre `Cards`, no cuatro bloques a mano,
+        // así que sus títulos ya no están en el XAML: los escribe el view-model.
+        xaml.Should().Contain("{Binding Cards}").And.Contain("CopyCardCommand");
+        Regex.Matches(xaml, "c:ColumnsPanel").Count.Should()
+            .Be(1, "la rejilla de las cifras iguala altos (D-970), y es la única");
 
         foreach (string chart in new[]
                  {
@@ -727,12 +734,185 @@ public sealed class MetricsPanelTests : IDisposable
         vm.ResolutionRanges.Should().HaveCount(vm.ResolutionLabels.Count);
         vm.FlowRanges.Should().HaveCount(vm.FlowLabels.Count);
 
-        // Ocho semanas → cubos semanales: el tramo dice más que la etiqueta.
+        // Con el periodo por defecto de F35 —cuatro semanas— los cubos son diarios y el tramo ES
+        // el día. La ambigüedad que el tooltip resuelve aparece con cubos de más de un día, así
+        // que se mira ahí: ocho semanas, cubos semanales.
+        vm.SelectedRange = vm.RangeOptions.Single(r => r.Range == MetricsRange.Weeks8);
+        await vm.LoadAsync();
         vm.CostRanges[^1].Should().Contain("–").And.NotBe(vm.CostLabels[^1]);
 
         string xaml = Markup(Source("src/Atalaya.App/Views/MetricsView.xaml"));
         Regex.Matches(xaml, "TooltipLabels=").Count.Should()
             .Be(3, "coste, resoluciones y flujo: las tres gráficas de eje temporal");
+    }
+
+
+    // ============================================ F35 §1.3 — las cuatro cifras, escritas
+
+    /// <summary>
+    /// Las cuatro tarjetas, en su orden, con su cifra y su línea de detalle. El orden importa: es
+    /// qué parte está mirada → cuánto queda → cuánto costó → a cómo sale cada arreglo.
+    /// </summary>
+    [Fact]
+    public async Task Las_cuatro_cifras_escriben_su_numero_su_linea_y_su_tendencia()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 3 });
+        WriteInventory("app", audited: 4, pending: 6, large: 2, cycle: 3);
+        WriteSession("app", cost: 200m, daysAgo: 3);
+        WriteFinding("app", DateTimeOffset.UtcNow.AddDays(-2));
+        WriteResolved("app", daysAgo: 1);
+
+        MetricsViewModel vm = Panel();
+        await vm.LoadAsync();
+
+        vm.Cards.Select(c => c.Key).Should().Equal(
+            new[] { "coverage", "debt", "cost", "cost-per-resolution" });
+
+        StatCard coverage = vm.Cards[0];
+        coverage.Title.Should().Be("Cobertura");
+        coverage.Value.Should().Be("40 %");
+        coverage.Subtitle.Should().Be("4 de 10 unidades · ciclo 3", "una sola app: se dice su ciclo");
+
+        StatCard debt = vm.Cards[1];
+        debt.Title.Should().Be("Deuda activa");
+        debt.Value.Should().Be("1");
+        debt.Subtitle.Should().Be(
+            "+1 nuevo · −1 resuelto en el periodo",
+            "el resuelto se detectó hace 31 días, así que no es nuevo de este periodo");
+
+        StatCard cost = vm.Cards[2];
+        cost.Value.Should().Be("200,0");
+        cost.Subtitle.Should().Be("1 sesión · 200,0 credits por unidad auditada");
+
+        StatCard perResolution = vm.Cards[3];
+        perResolution.Title.Should().Be("Coste por hallazgo resuelto");
+        perResolution.Value.Should().Be("200,0");
+        perResolution.Subtitle.Should().Be("1 resuelto · sin cifra del periodo anterior");
+
+        // Ninguna flecha se inventa un porcentaje (D-318). Hay periodo anterior —el resuelto se
+        // detectó antes— pero ninguna cifra de entonces con la que dividir, salvo la deuda: había
+        // uno vivo entonces y hay uno vivo hoy.
+        debt.Trend.Should().Be("igual que el periodo anterior");
+        coverage.Trend.Should().Be("sin cifra anterior con la que comparar");
+        cost.Trend.Should().Be("sin cifra anterior con la que comparar");
+        perResolution.Trend.Should().Be("sin cifra anterior con la que comparar");
+        vm.Cards.Should().OnlyContain(c => c.Tone == StatCard.Neutral, "ninguna se movió a mejor ni a peor");
+    }
+
+    /// <summary>
+    /// Con VARIAS aplicaciones no se enseña ningún ciclo: se dice cuántas son. Un ciclo sobre una
+    /// suma de ciclos distintos no significa nada.
+    /// </summary>
+    [Fact]
+    public async Task Con_varias_aplicaciones_la_cobertura_dice_cuantas_son_y_no_un_ciclo()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "a", Name = "A", RepoUrl = "u", CurrentCycle = 3 });
+        _hub.Store.WriteApp(new AppConfig { Slug = "b", Name = "B", RepoUrl = "u", CurrentCycle = 7 });
+        WriteInventory("a", audited: 4, pending: 6, large: 0, cycle: 3);
+        WriteInventory("b", audited: 1, pending: 9, large: 0, cycle: 7);
+
+        MetricsViewModel vm = Panel();
+        await vm.LoadAsync();
+
+        StatCard coverage = vm.Cards.Single(c => c.Key == "coverage");
+        coverage.Value.Should().Be("25 %", "5 de 20 unidades, no la media de 40 % y 10 %");
+        coverage.Subtitle.Should().Be("5 de 20 unidades · 2 aplicaciones");
+        coverage.Subtitle.Should().NotContain("ciclo");
+    }
+
+    /// <summary>
+    /// <b>El conmutador de unidad mueve las DOS tarjetas de coste y nada más</b> (F29 §2). La
+    /// cobertura y la deuda no son dinero: cambiar de divisa no puede tocarlas.
+    /// </summary>
+    [Fact]
+    public async Task Conmutar_la_divisa_cambia_las_dos_tarjetas_de_coste_y_ninguna_otra()
+    {
+        CostCurrency original = CostFormat.Currency;
+        try
+        {
+            _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 1 });
+            WriteInventory("app", audited: 1, pending: 1, large: 0);
+            WriteSession("app", cost: 200m, daysAgo: 3);
+            WriteResolved("app", daysAgo: 1);
+
+            CostFormat.Currency = CostCurrency.Credits;
+            MetricsViewModel enCredits = Panel();
+            await enCredits.LoadAsync();
+            var antes = enCredits.Cards.ToDictionary(c => c.Key);
+
+            CostFormat.Currency = CostCurrency.Usd;
+            MetricsViewModel enDolares = Panel();
+            await enDolares.LoadAsync();
+            var despues = enDolares.Cards.ToDictionary(c => c.Key);
+
+            // Las dos de dinero cambian: 200 credits son 2,00 $.
+            antes["cost"].Amount.Should().Be("200,0 credits");
+            despues["cost"].Amount.Should().Be("2,00 $");
+            antes["cost-per-resolution"].Amount.Should().Be("200,0 credits");
+            despues["cost-per-resolution"].Amount.Should().Be("2,00 $");
+
+            // Y las otras dos, ni una letra.
+            foreach (string key in new[] { "coverage", "debt" })
+            {
+                despues[key].Value.Should().Be(antes[key].Value);
+                despues[key].Subtitle.Should().Be(antes[key].Subtitle);
+            }
+        }
+        finally
+        {
+            CostFormat.Currency = original;
+        }
+    }
+
+    /// <summary>
+    /// <b>La tendencia lleva su signo, y el coste no lleva ninguno</b> (F35 §1.3): verde cuando la
+    /// cifra se mueve a mejor, rojo a peor, y apagado siempre en el coste — gastar más no es malo
+    /// por sí mismo.
+    /// </summary>
+    [Fact]
+    public async Task La_flecha_dice_si_es_buena_noticia_y_el_coste_no_juzga()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 1 });
+
+        // Periodo anterior (4 semanas antes): una sesión de 100 y un hallazgo viejo, todavía vivo.
+        WriteSession("app", cost: 100m, daysAgo: 40);
+        WriteFinding("app", DateTimeOffset.UtcNow.AddDays(-60));
+
+        // Periodo: otro hallazgo nuevo (la deuda sube: mala noticia) y más gasto.
+        WriteSession("app", cost: 300m, daysAgo: 3);
+        WriteFinding("app", DateTimeOffset.UtcNow.AddDays(-2));
+
+        MetricsViewModel vm = Panel();
+        await vm.LoadAsync();
+
+        StatCard debt = vm.Cards.Single(c => c.Key == "debt");
+        debt.Trend.Should().StartWith("▲ 100");
+        debt.Tone.Should().Be(StatCard.Bad, "subir la deuda es una mala noticia");
+
+        StatCard cost = vm.Cards.Single(c => c.Key == "cost");
+        cost.Trend.Should().StartWith("▲ 200");
+        cost.Tone.Should().Be(StatCard.Neutral, "el coste no lleva juicio de color");
+    }
+
+    /// <summary>
+    /// El «Copiar» de cada tarjeta (F33) se lleva el número, el subtítulo y la tendencia — con el
+    /// título delante, porque un «40 %» pegado en un correo no dice de qué es.
+    /// </summary>
+    [Fact]
+    public async Task Cada_tarjeta_se_copia_con_su_numero_su_linea_y_su_tendencia()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 3 });
+        WriteInventory("app", audited: 4, pending: 6, large: 0, cycle: 3);
+
+        MetricsViewModel vm = Panel();
+        await vm.LoadAsync();
+
+        vm.Cards.Single(c => c.Key == "coverage").CopyText.Should()
+            .Be("Cobertura: 40 % · 4 de 10 unidades · ciclo 3 · sin periodo anterior");
+
+        // Y el comando existe y acepta la tarjeta: es el gesto que la vista enlaza.
+        vm.CopyCardCommand.Should().BeOfType<RelayCommand<StatCard>>();
+        vm.CopyCardCommand.CanExecute(vm.Cards[0]).Should().BeTrue();
     }
 
     private MetricsViewModel Panel()
@@ -782,6 +962,28 @@ public sealed class MetricsPanelTests : IDisposable
             FirstDetected = stamp,
             LastConfirmed = stamp,
         });
+    }
+
+    /// <summary>El inventario de un ciclo, con sus unidades en cada estado.</summary>
+    private void WriteInventory(string slug, int audited, int pending, int large, int cycle = 1)
+    {
+        var inv = new InventoryCycle { CycleN = cycle };
+        for (int i = 0; i < audited; i++)
+        {
+            inv.Units.Add(new InventoryUnit { Path = $"a{i}.cs", Module = "m", State = UnitState.Auditada });
+        }
+
+        for (int i = 0; i < pending; i++)
+        {
+            inv.Units.Add(new InventoryUnit { Path = $"p{i}.cs", Module = "m", State = UnitState.Pendiente });
+        }
+
+        for (int i = 0; i < large; i++)
+        {
+            inv.Units.Add(new InventoryUnit { Path = $"g{i}.cs", Module = "m", State = UnitState.Grande });
+        }
+
+        _hub.Store.WriteInventory(slug, inv);
     }
 
     /// <summary>Un hallazgo resuelto hace N días: la resolución queda en el historial.</summary>

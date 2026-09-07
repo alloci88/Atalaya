@@ -137,19 +137,29 @@
 
                 <StackPanel Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
 
-                    <!-- ================= Las cuatro cifras =================
+                    <!-- ================= Las cuatro cifras (F35 §1.3) =================
+
+                         Cobertura · Deuda activa · Coste · Coste por hallazgo resuelto. Cada una
+                         es un número grande, una línea pequeña debajo y una flecha contra el
+                         periodo anterior, y las cuatro llevan «Copiar» (F33).
+
+                         UNA plantilla repetida, no cuatro bloques escritos a mano. Antes eran
+                         cuatro `Border` con cuatro maneras de poner la cifra y su unidad —y la de
+                         coste, con su desglose por proveedor y por fase, medía el triple que sus
+                         vecinas—: exactamente lo que `ColumnsPanel` tiene después que igualar.
 
                          En `ColumnsPanel` y no en un `UniformGrid` con márgenes a mano: el panel
                          reparte el ancho entero, y —lo que hacía falta aquí— DA A TODAS LAS
-                         TARJETAS DE UNA FILA EL ALTO DE LA MÁS ALTA (D-970). Antes cada tarjeta
-                         medía lo suyo y se centraba en la fila, así que ni los bordes de arriba ni
-                         las cifras caían a la misma altura: la de coste, que es la más larga,
-                         empujaba a las otras tres a flotar. -->
-                    <!-- F15 · R2 §2 — FALTA GASTO POR CONTAR: hay sesiones cuyo modelo no tiene
-                         tarifa. Vivía dentro del azulejo de coste, y afecta a las CUATRO cifras —el
-                         recuento de activos que salió de esas sesiones, la cobertura, todo—, así
-                         que va encima de la rejilla, que es lo que abarca. Un total al que le falta
-                         gasto se lee como si fuera el gasto entero. -->
+                         TARJETAS DE UNA FILA EL ALTO DE LA MÁS ALTA (D-970). -->
+                    <!-- LOS DOS AVISOS QUE ABARCAN LA REJILLA, no una tarjeta.
+
+                         F15 · R2 §2 — FALTA GASTO POR CONTAR: hay sesiones cuyo modelo no tiene
+                         tarifa. Afecta a las cuatro cifras, así que va encima de la rejilla.
+
+                         F35 §1.3 — y con él, la nota de la casa que NO FACTURA. Vivía dentro del
+                         azulejo de coste; explica dos de las cuatro cifras y es un párrafo, así
+                         que dentro de una tarjeta la haría el doble de alta que sus vecinas y la
+                         rejilla volvería a igualar por la peor (D-990). -->
                     <Border Style="{StaticResource Notice.Warning}"
                             Margin="{StaticResource Pad.M.Bottom}"
                             Visibility="{Binding CostPartialNotice, Converter={StaticResource NotEmptyToVisibility}}">
@@ -170,156 +180,87 @@
                         </DockPanel>
                     </Border>
 
-                    <c:ColumnsPanel MinColumnWidth="280" MaxColumns="4"
-                                    Gap="{StaticResource Space.M}"
-                                    Margin="{StaticResource Pad.M.Bottom}">
+                    <TextBlock Text="{Binding CostScopeNote}" Style="{StaticResource Text.Meta}"
+                               TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Bottom}"
+                               Visibility="{Binding CostScopeNote, Converter={StaticResource NotEmptyToVisibility}}" />
 
-                        <Border Style="{StaticResource Stat.Card}">
-                            <StackPanel>
-                                <TextBlock Text="Hallazgos activos" Style="{StaticResource Stat.Label}" />
-                                <TextBlock Text="{Binding ActiveTotal}" Style="{StaticResource Stat.Number}" />
+                    <ItemsControl ItemsSource="{Binding Cards}" Margin="{StaticResource Pad.M.Bottom}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <c:ColumnsPanel MinColumnWidth="260" MaxColumns="4"
+                                                Gap="{StaticResource Space.M}" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource Stat.Card}" ToolTip="{Binding ToolTip}">
+                                    <StackPanel>
+                                        <!-- El nombre a la izquierda y «Copiar» en la esquina
+                                             superior derecha, que es donde D-1038 lo puso en la
+                                             ficha del hallazgo: el mismo control de texto, no un
+                                             icono nuevo. -->
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding Title}"
+                                                       Style="{StaticResource Stat.Label}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <Button Grid.Column="1" Content="Copiar"
+                                                    Style="{StaticResource Button.Link}"
+                                                    FontSize="{StaticResource FontSize.Meta}"
+                                                    VerticalAlignment="Top" HorizontalAlignment="Right"
+                                                    Command="{Binding DataContext.CopyCardCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="Copia la cifra, su línea de detalle y la tendencia como texto." />
+                                        </Grid>
 
-                                <!-- Las pastillas del sistema, las mismas que Portafolio y
-                                     Hallazgos: fondo teñido y tinta de la paleta por `DataTrigger`,
-                                     que sí se reevalúa al cambiar de tema (D-971). -->
-                                <ItemsControl ItemsSource="{Binding ActiveChips}"
-                                              Margin="{StaticResource Pad.XS.Top}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <WrapPanel />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <!-- La cifra DELANTE y el nombre concordado (UI-0027), y
-                                                 el cero en neutro (UI-0051): «Crít 0» seguía
-                                                 teñido de rojo diciendo que hay una crítica
-                                                 justo donde el número dice que no hay ninguna. -->
-                                            <Border Style="{StaticResource Pill.Sev.Count}" MinWidth="0"
-                                                    Margin="{StaticResource Pad.Chip}">
-                                                <TextBlock Style="{StaticResource Pill.Sev.Count.Text}">
-                                                    <Run Text="{Binding Count, Mode=OneWay}" FontWeight="Bold" />
-                                                    <Run Text="{Binding Label, Mode=OneWay}" />
-                                                </TextBlock>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </Border>
+                                        <!-- La cifra y su unidad en UN `TextBlock` con dos `Run`:
+                                             es lo único que comparte línea base en WPF (D-983 §9,
+                                             D-990). Centrada, que es lo que iguala las cuatro. -->
+                                        <TextBlock HorizontalAlignment="Center"
+                                                   Margin="{StaticResource Pad.XS.Top}">
+                                            <Run Text="{Binding Value, Mode=OneWay}"
+                                                 FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
+                                            <Run Text="{Binding Unit, Mode=OneWay}"
+                                                 FontSize="{StaticResource FontSize.Small}"
+                                                 Foreground="{DynamicResource Brush.TextMuted}" />
+                                        </TextBlock>
 
-                        <Border Style="{StaticResource Stat.Card}">
-                            <StackPanel>
-                                <TextBlock Text="Resueltos en el periodo" Style="{StaticResource Stat.Label}" />
-                                <TextBlock Text="{Binding ResolvedInPeriod}" Style="{StaticResource Stat.Number}" />
-                                <TextBlock Text="{Binding ResolvedDelta}"
-                                           Foreground="{Binding ResolvedDeltaBrush}"
-                                           Style="{StaticResource Text.Small}"
-                                           Margin="{StaticResource Pad.XXS.Top}" />
-                            </StackPanel>
-                        </Border>
+                                        <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Text.Small}"
+                                                   TextWrapping="Wrap" TextAlignment="Center"
+                                                   HorizontalAlignment="Center"
+                                                   Margin="{StaticResource Pad.XXS.Top}" />
 
-                        <Border Style="{StaticResource Stat.Card}">
-                            <StackPanel>
-                                <TextBlock Text="Coste del periodo" Style="{StaticResource Stat.Label}" />
+                                        <!-- EL COLOR SALE DE UN NOMBRE, no de un pincel resuelto en
+                                             el view-model (D-971): un pincel ya calculado no se
+                                             entera de que el tema ha cambiado. Verde cuando la
+                                             cifra se movió a mejor, rojo a peor, y apagado cuando
+                                             no hay tendencia o es neutra —el coste lo es siempre—. -->
+                                        <TextBlock Text="{Binding Trend}"
+                                                   TextWrapping="Wrap" TextAlignment="Center"
+                                                   HorizontalAlignment="Center"
+                                                   Margin="{StaticResource Pad.XXS.Top}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource Text.Meta}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Tone}" Value="Good">
+                                                            <Setter Property="Foreground" Value="{DynamicResource Brush.Success.Ink}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding Tone}" Value="Bad">
+                                                            <Setter Property="Foreground" Value="{DynamicResource Brush.Danger.Ink}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
 
-                                <!-- F16-RETOQUE §1 — SIEMPRE hay total, porque todo lo que llega
-                                     aquí es de la misma naturaleza: la factura de la organización.
-                                     La cifra y su unidad van en UN `TextBlock` con dos `Run`: es lo
-                                     único que comparte línea base en WPF (D-983 §9). -->
-                                <TextBlock>
-                                    <Run Text="{Binding CostTotal, Mode=OneWay}"
-                                         FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
-                                    <Run Text=" " />
-                                    <Run Text="{Binding CostUnit, Mode=OneWay}"
-                                         FontSize="{StaticResource FontSize.Small}"
-                                         Foreground="{DynamicResource Brush.TextMuted}" />
-                                </TextBlock>
-
-                                <!-- UNA línea secundaria con las tres formas de mirar el mismo
-                                     total: por unidad, cuántas unidades y su equivalente en
-                                     dólares. Eran tres renglones sueltos del mismo peso que todo
-                                     lo demás, y con ellos el azulejo llegó a tener seis. -->
-                                <TextBlock Text="{Binding CostSummary}" Style="{StaticResource Text.Small}"
-                                           TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" />
-
-                                <!-- Y si más de una casa factura, además el reparto: saber de qué
-                                     bolsa salió el gasto es la mitad de poder cuadrarlo. -->
-                                <ItemsControl ItemsSource="{Binding CostByProvider}"
-                                              Margin="{StaticResource Pad.XXS.Top}"
-                                              Visibility="{Binding CostHasBreakdown, Converter={StaticResource BoolToVisibility}}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding}" Style="{StaticResource Text.Small}"
-                                                       Foreground="{DynamicResource Brush.Text}"
-                                                       FontWeight="SemiBold" />
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-
-                                <!-- F18 §1 — EN QUÉ se va. Dos filas de rejilla, etiqueta a la
-                                     izquierda y sus cifras a la derecha con dígitos tabulares: dos
-                                     fases que se comparan tienen que alinear. Eran dos cadenas
-                                     largas que envolvían en tres líneas cada una, con los tokens
-                                     dentro — y los tokens son del anexo del informe, no de aquí. -->
-                                <!-- LAS DOS FILAS COMPARTEN COLUMNA (UI-0033). Era un `DockPanel`:
-                                     la cifra, acoplada a la derecha, se quedaba con lo que pedía y
-                                     la etiqueta con lo que sobrara, así que a 1280
-                                     «Descubrimiento» se cortaba a mitad de la «o» final —sin
-                                     elipsis y sin un píxel de aire contra la columna de valores—
-                                     mientras «Arreglo», en la fila de al lado, dejaba 60 px de
-                                     hueco: las dos filas que existen para compararse no
-                                     compartían ni el ancho de su columna.
-
-                                     `IsSharedSizeScope` hace que la columna de cifras mida lo
-                                     mismo en todas las filas, así que las etiquetas empiezan y
-                                     acaban en la misma x; y la etiqueta usa `Text.Name`, que es la
-                                     primitiva de recorte de un nombre (P-01). -->
-                                <ItemsControl ItemsSource="{Binding CostByPhase}"
-                                              Margin="{StaticResource Pad.XS.Top}"
-                                              Grid.IsSharedSizeScope="True"
-                                              Visibility="{Binding HasPhases, Converter={StaticResource BoolToVisibility}}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid Margin="{StaticResource Pad.XXS.V}">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="FaseDetalle" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0"
-                                                           Text="{Binding Label}"
-                                                           Style="{StaticResource Text.Name}"
-                                                           FontSize="{StaticResource FontSize.Meta}"
-                                                           Foreground="{DynamicResource Brush.TextFaint}"
-                                                           Margin="{StaticResource Pad.S.Right}"
-                                                           ToolTip="{Binding Label}" />
-                                                <TextBlock Grid.Column="1"
-                                                           Text="{Binding Detail}"
-                                                           Style="{StaticResource Cell.Number}"
-                                                           FontSize="{StaticResource FontSize.Meta}" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-
-                                <!-- F16-RETOQUE §1 — por qué esta cifra no cubre toda la actividad
-                                     de más abajo: hubo sesiones de una casa que no factura. No es
-                                     un aviso de que falte una tarifa; es justo lo contrario. -->
-                                <TextBlock Text="{Binding CostScopeNote}" Style="{StaticResource Text.Meta}"
-                                           TextWrapping="Wrap" Margin="{StaticResource Pad.XS.Top}"
-                                           Visibility="{Binding CostScopeNote, Converter={StaticResource NotEmptyToVisibility}}" />
-                            </StackPanel>
-                        </Border>
-
-                        <Border Style="{StaticResource Stat.Card}">
-                            <StackPanel>
-                                <TextBlock Text="Cobertura del ciclo" Style="{StaticResource Stat.Label}" />
-                                <TextBlock Text="{Binding CyclePct}" Style="{StaticResource Stat.Number}" />
-                                <TextBlock Text="{Binding CycleDetail}" Style="{StaticResource Text.Meta}"
-                                           TextWrapping="Wrap" Margin="{StaticResource Pad.XXS.Top}" />
-                            </StackPanel>
-                        </Border>
-                    </c:ColumnsPanel>
 
                     <!-- ============ Gráfica 1: coste en el tiempo ============ -->
                     <Border Style="{StaticResource Block}">

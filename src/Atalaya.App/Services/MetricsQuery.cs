@@ -23,8 +23,99 @@ public enum MetricsGranularity
 /// <summary>Lo que el usuario ha elegido en la fila de filtros.</summary>
 public sealed record MetricsFilter(string? Slug, MetricsRange Range)
 {
-    /// <summary>Al abrir: todas las apps, ocho semanas.</summary>
-    public static MetricsFilter Default { get; } = new(null, MetricsRange.Weeks8);
+    /// <summary>
+    /// Al abrir: todas las apps, <b>cuatro semanas</b> (F35 §1.1). Eran ocho, y ocho semanas de
+    /// una herramienta que se usa desde hace días son seis semanas de línea plana delante de la
+    /// única en la que pasó algo. El eje ya no las dibuja (<see cref="MetricsQuery.AxisFrom"/>),
+    /// pero el periodo por defecto también decide qué es «el periodo anterior» de cada tendencia:
+    /// cuatro semanas comparan contra las cuatro de antes, que es la pregunta que alguien se hace
+    /// mirando este panel.
+    /// </summary>
+    public static MetricsFilter Default { get; } = new(null, MetricsRange.Weeks4);
+}
+
+/// <summary>
+/// Hacia qué lado es <b>bueno</b> que se mueva una métrica (F35 §1.3). Sin esto una flecha sería
+/// solo una dirección: bajar la deuda es una buena noticia y bajar la cobertura es una mala, y las
+/// dos son «▼».
+/// </summary>
+public enum TrendGoodness
+{
+    /// <summary>Subir es bueno: la cobertura.</summary>
+    UpIsGood,
+
+    /// <summary>Bajar es bueno: la deuda activa y el coste por hallazgo resuelto.</summary>
+    DownIsGood,
+
+    /// <summary>
+    /// Ni bueno ni malo: <b>el coste</b>. Gastar más no es malo por sí —puede ser que se esté
+    /// auditando más—, así que su flecha va en gris siempre. Pintarla de rojo convertiría el panel
+    /// en un juicio sobre una decisión que no ha tomado.
+    /// </summary>
+    Neutral,
+}
+
+/// <summary>
+/// El cambio de una cifra contra el <b>periodo anterior</b> —el mismo número de días
+/// inmediatamente antes— (F35 §1.3).
+/// <para>
+/// <b>Y D-318 manda aquí igual que en todo lo demás</b>: sin periodo anterior no hay tendencia, y
+/// una tendencia contra un cero no es un porcentaje infinito, es una división que no se puede
+/// hacer. En los dos casos <see cref="Percent"/> es <c>null</c> y la vista escribe la frase que
+/// dice por qué, nunca una flecha de relleno.
+/// </para>
+/// </summary>
+/// <param name="Percent">El cambio relativo, en puntos porcentuales del valor anterior.</param>
+/// <param name="Goodness">Hacia dónde es bueno moverse, que es lo que decide el color.</param>
+/// <param name="HasPreviousPeriod">
+/// Hubo actividad antes del periodo. <b>Distingue los dos motivos de que no haya flecha</b>, que no
+/// son el mismo: «no hay periodo anterior» —esta herramienta no estaba puesta— y «no hay cifra
+/// anterior con la que comparar» —lo hubo, y valía cero—. Decir lo primero cuando pasa lo segundo
+/// sería falso, y es la clase de frase que hace dudar de todo el panel.
+/// </param>
+public sealed record MetricTrend(double? Percent, TrendGoodness Goodness, bool HasPreviousPeriod)
+{
+    /// <summary>No hay con qué comparar. Es un estado, no un cero.</summary>
+    public static MetricTrend None(TrendGoodness goodness, bool hasPrevious = false)
+        => new(null, goodness, hasPrevious);
+
+    /// <summary>
+    /// La tendencia entre dos valores. Devuelve <see cref="None"/> —y por tanto ninguna flecha—
+    /// cuando no hay periodo anterior, cuando falta cualquiera de los dos valores, o cuando el
+    /// anterior es cero y no hay nada por lo que dividir.
+    /// </summary>
+    public static MetricTrend Between(
+        double? now, double? before, bool hasPrevious, TrendGoodness goodness)
+        => !hasPrevious || now is not { } n || before is not { } b || b == 0
+            ? None(goodness, hasPrevious)
+            : new MetricTrend((n - b) / b * 100.0, goodness, hasPrevious);
+
+    /// <inheritdoc cref="Between(double?, double?, bool, TrendGoodness)"/>
+    public static MetricTrend Between(
+        decimal? now, decimal? before, bool hasPrevious, TrendGoodness goodness)
+        => Between((double?)now, (double?)before, hasPrevious, goodness);
+
+    /// <summary>Hay con qué comparar y hay porcentaje que escribir.</summary>
+    public bool HasValue => Percent is not null;
+
+    /// <summary>La cifra no se ha movido. Se dice con palabras, no con una flecha a cero.</summary>
+    public bool IsFlat => Percent == 0;
+
+    /// <summary>«▲», «▼», o nada cuando no hay tendencia o no se movió.</summary>
+    public string Arrow => Percent switch
+    {
+        > 0 => "▲",
+        < 0 => "▼",
+        _ => string.Empty,
+    };
+
+    /// <summary>La cifra se movió hacia donde conviene. Falso también cuando es neutra o plana.</summary>
+    public bool IsGood => Goodness != TrendGoodness.Neutral && !IsFlat && Percent is { } p
+        && (Goodness == TrendGoodness.UpIsGood ? p > 0 : p < 0);
+
+    /// <summary>Se movió hacia donde no conviene.</summary>
+    public bool IsBad => Goodness != TrendGoodness.Neutral && !IsFlat && Percent is { } p
+        && (Goodness == TrendGoodness.UpIsGood ? p < 0 : p > 0);
 }
 
 /// <summary>El desglose por severidad de los hallazgos activos (tile 1).</summary>
@@ -334,8 +425,26 @@ public sealed record MetricsDashboard(
     IReadOnlyList<FlowBucket> Flow,
     IReadOnlyList<SessionRow> Sessions,
     IReadOnlyList<CycleTrack> Cycles,
-    IReadOnlyList<PhaseCost>? Phases = null)
+    IReadOnlyList<PhaseCost>? Phases = null,
+    // ---- F35 §1.3: lo que las cuatro cifras necesitan y no estaba agregado ----
+    bool HasPreviousPeriod = false,
+    int ScopeApps = 0,
+    int? ScopeCycle = null,
+    int CycleAuditedBefore = 0,
+    int CyclePendingBefore = 0,
+    int NewInPeriod = 0,
+    int ActiveAtPeriodStart = 0,
+    decimal? CostPreviousPeriod = null,
+    int SessionsInPeriod = 0,
+    DateTimeOffset? AxisStart = null)
 {
+    /// <summary>
+    /// El eje de las gráficas empieza DESPUÉS del comienzo del periodo (F35 §1.2): los tramos de
+    /// delante no tenían actividad y se han recortado. Se dice en la cabecera — un rótulo de
+    /// periodo que prometiera un eje que no se dibuja es el defecto de D-593 puesto del revés.
+    /// </summary>
+    public bool AxisIsTrimmed => AxisStart is { } start && start > From;
+
     /// <summary>El reparto por fase del periodo (F18 §1). Vacío cuando no hubo sesiones.</summary>
     public IReadOnlyList<PhaseCost> ByPhase => Phases ?? Array.Empty<PhaseCost>();
 
@@ -427,6 +536,69 @@ public sealed record MetricsDashboard(
     /// </summary>
     public bool HasResolutions => ResolutionSeries.Count > 0;
 
+    // ================================================== F35 §1.3 — las cuatro cifras
+    //
+    // Las cuatro salen de AQUÍ y no de cuatro cuentas parecidas repartidas por la vista: es la
+    // misma lección de D-591 y D-597 —una pregunta, una respuesta— aplicada a las tarjetas nuevas.
+
+    /// <summary>
+    /// <b>La cobertura del ciclo</b>, agregada como SUMA DE UNIDADES sobre lo auditable (D-322).
+    /// Se calcula por aplicación contra su ciclo en curso y se suma; nunca se promedian
+    /// porcentajes, y nunca se enseña un número de ciclo sobre una suma de ciclos distintos —para
+    /// eso está <see cref="ScopeCycle"/>, que solo existe con una aplicación en el filtro.
+    /// </summary>
+    public double? CoveragePct => CycleAudited + CyclePending == 0
+        ? null
+        : (double)CycleAudited / (CycleAudited + CyclePending);
+
+    /// <summary>
+    /// La misma cobertura <b>al cierre del periodo anterior</b>, reconstruida del inventario
+    /// vigente: una unidad contaba como auditada entonces si la sesión que la auditó había
+    /// arrancado ya. Es la única reconstrucción posible —el inventario es una foto de hoy— y por
+    /// eso una unidad auditada sin sesión que la date no puede contarse: cae en pendiente, que es
+    /// lo conservador (declararía menos cobertura, nunca más).
+    /// </summary>
+    public double? CoveragePctBefore => CycleAuditedBefore + CyclePendingBefore == 0
+        ? null
+        : (double)CycleAuditedBefore / (CycleAuditedBefore + CyclePendingBefore);
+
+    /// <inheritdoc cref="CoveragePct"/>
+    public MetricTrend CoverageTrend
+        => MetricTrend.Between(CoveragePct, CoveragePctBefore, HasPreviousPeriod, TrendGoodness.UpIsGood);
+
+    /// <summary>
+    /// <b>La deuda activa</b>: la de hoy, que es también la del cierre del periodo —el extremo
+    /// derecho del rango es siempre la medianoche de mañana—, así que decir «responde al periodo»
+    /// y decir «es la foto de hoy» (D-320) es decir lo mismo mientras el periodo termine en hoy.
+    /// Lo que sí cambia con el periodo es contra qué se compara: la deuda viva al empezarlo.
+    /// </summary>
+    public MetricTrend DebtTrend => MetricTrend.Between(
+        (double)ActiveTotal, ActiveAtPeriodStart, HasPreviousPeriod, TrendGoodness.DownIsGood);
+
+    /// <summary>
+    /// <b>El coste del periodo</b>, contra el anterior y <b>sin juicio de color</b>: gastar más no
+    /// es malo por sí mismo (<see cref="TrendGoodness.Neutral"/>).
+    /// </summary>
+    public MetricTrend CostTrend
+        => MetricTrend.Between(CostInPeriod, CostPreviousPeriod, HasPreviousPeriod, TrendGoodness.Neutral);
+
+    /// <summary>
+    /// <b>Lo que costó cada hallazgo resuelto</b> en el periodo. Sin resueltos NO es cero ni
+    /// infinito: es una división que no se puede hacer, y la tarjeta lo dice (D-318).
+    /// </summary>
+    public decimal? CostPerResolution => ResolvedInPeriod > 0 && CostInPeriod is { } c
+        ? c / ResolvedInPeriod
+        : null;
+
+    /// <inheritdoc cref="CostPerResolution"/>
+    public decimal? CostPerResolutionBefore => ResolvedPreviousPeriod > 0 && CostPreviousPeriod is { } c
+        ? c / ResolvedPreviousPeriod
+        : null;
+
+    /// <inheritdoc cref="CostPerResolution"/>
+    public MetricTrend CostPerResolutionTrend => MetricTrend.Between(
+        CostPerResolution, CostPerResolutionBefore, HasPreviousPeriod, TrendGoodness.DownIsGood);
+
     /// <summary>El nombre legible de una serie, incluida la agrupada.</summary>
     public string NameOf(string slug) => slug == OthersSlug
         ? OthersLabel
@@ -504,11 +676,22 @@ public sealed class MetricsQuery
         DateTimeOffset from = Instant(fromLocal);
         DateTimeOffset to = Instant(toLocal);
         MetricsGranularity granularity = GranularityFor(filter.Range, from, to);
-        IReadOnlyList<Bucket> buckets = Buckets(fromLocal, toLocal, granularity);
+
+        // F35 §1.2 — el eje empieza en el primer cubo CON ACTIVIDAD. Los cubos del periodo entero
+        // se calculan igual: el periodo sigue siendo el periodo (es lo que definen las cifras y el
+        // «periodo anterior»); lo que se recorta es lo que se DIBUJA.
+        IReadOnlyList<Bucket> buckets = AxisFrom(
+            Buckets(fromLocal, toLocal, granularity), scope.SelectMany(ActivityStamps));
 
         var findings = scope.SelectMany(a => a.Findings).ToList();
         var sessions = scope.SelectMany(a => a.Sessions).ToList();
         var inPeriod = sessions.Where(s => s.StartedUtc >= from && s.StartedUtc < to).ToList();
+
+        // ¿HAY periodo anterior contra el que comparar? (F35 §1.3). No es «hay días antes» —siempre
+        // los hay—: es si en esos días pasó algo. Sin una sola sesión ni un solo evento de hallazgo
+        // antes del periodo, comparar contra ellos sería comparar contra las semanas en las que
+        // esta herramienta todavía no existía, y de ahí no sale una tendencia: sale un ∞ %.
+        bool hasPrevious = scope.SelectMany(ActivityStamps).Any(s => s < from);
 
         var active = findings.Where(f => f.Status == FindingStatus.Activo).ToList();
         int Sev(Severity s) => active.Count(f => f.Severity == s);
@@ -560,6 +743,11 @@ public sealed class MetricsQuery
         int cycleAudited = 0;
         int cyclePending = 0;
         int cycleLarge = 0;
+
+        // La misma cobertura AL EMPEZAR EL PERIODO, para la tendencia de la tarjeta 1 (F35 §1.3).
+        int cycleAuditedBefore = 0;
+        int cyclePendingBefore = 0;
+
         var donuts = new List<CoverageDonut>();
         var severities = new List<SeverityDonut>();
         foreach (AppData app in scope)
@@ -583,6 +771,18 @@ public sealed class MetricsQuery
             cyclePending += pending;
             cycleLarge += large;
             donuts.Add(new CoverageDonut(app.Slug, app.Name, app.CurrentCycle, audited, pending, large));
+
+            // Al empezar el periodo, una unidad estaba auditada si la sesión que la auditó ya
+            // había arrancado. Sin sesión que la date cuenta como pendiente: es lo conservador
+            // —enseña menos cobertura de la que hubo, nunca más— y es lo único que se puede decir.
+            var startedAt = app.Sessions.ToDictionary(s => s.Id, s => s.StartedUtc);
+            int auditedBefore = units.Count(u =>
+                u.State == UnitState.Auditada
+                && u.AuditedInSession is { } id
+                && startedAt.TryGetValue(id, out DateTimeOffset when)
+                && when < from);
+            cycleAuditedBefore += auditedBefore;
+            cyclePendingBefore += audited + pending - auditedBefore;
         }
 
         (IReadOnlyList<string> series, bool hasOthers) = TopSeries(scope, a => CostIn(a.Sessions, from, to, rates));
@@ -624,7 +824,88 @@ public sealed class MetricsQuery
             FlowBuckets(findings, buckets),
             SessionRows(scope, inPeriod, rates),
             CycleTracks(scope, from, to, now, rates),
-            PhaseCosts(inPeriod, rates));
+            PhaseCosts(inPeriod, rates),
+            hasPrevious,
+            scope.Count,
+
+            // El número de ciclo SOLO con una aplicación en el filtro. Con varias no hay un ciclo:
+            // hay tantos como aplicaciones, y escribir uno sobre la suma de todas sería inventarse
+            // que van a la vez. Con varias se dice cuántas son, que es la verdad que cabe.
+            scope.Count == 1 ? scope[0].CurrentCycle : null,
+            cycleAuditedBefore,
+            cyclePendingBefore,
+            findings.Count(f => f.FirstDetected.Utc >= from && f.FirstDetected.Utc < to),
+            findings.Count(f => AliveAt(f, from)),
+
+            // El coste del periodo anterior sale de la MISMA función que el del periodo (D-597):
+            // dos ventanas de la misma cuenta, no dos cuentas.
+            byProvider.Count > 0 ? scope.Sum(a => CostIn(a.Sessions, from - span, from, rates)) : null,
+            inPeriod.Count,
+            buckets.Count > 0 ? buckets[0].From : null);
+    }
+
+    /// <summary>
+    /// <b>Cuándo pasó algo</b>: una sesión, la detección de un hallazgo o una de sus resoluciones
+    /// (F35 §1.2). Es la definición de «actividad» del eje y la de «hay periodo anterior», y es una
+    /// sola para que las dos no puedan discrepar. El coste no aporta sellos propios: un coste
+    /// siempre es el de una sesión, que ya está contada.
+    /// </summary>
+    private static IEnumerable<DateTimeOffset> ActivityStamps(AppData app)
+        => app.Sessions.Select(s => s.StartedUtc)
+            .Concat(app.Findings.Select(f => f.FirstDetected.Utc))
+            .Concat(app.Findings.SelectMany(ResolutionEvents));
+
+    /// <summary>Lo mínimo que puede medir un eje de tiempo. Ver <see cref="AxisFrom"/>.</summary>
+    internal const int MinAxisDays = 7;
+
+    /// <summary>
+    /// <b>El eje empieza en el primer cubo con actividad</b> (F35 §1.2).
+    /// <para>
+    /// Ocho semanas de línea plana no son ocho semanas de dato: son las semanas en las que esta
+    /// herramienta todavía no estaba puesta, dibujadas como si en ellas no hubiera pasado nada.
+    /// Las dos frases suenan igual y no lo son — «no hubo gasto» es una medida y «no había nada
+    /// que medir» es una ausencia, y un eje que las pinta iguales aplasta contra el suelo la única
+    /// semana con datos.
+    /// </para>
+    /// <para>
+    /// <b>Dos topes.</b> El eje nunca baja de <see cref="MinAxisDays"/> días ni de dos cubos: un
+    /// solo punto no es una gráfica, y una serie de un punto no dice si sube o baja. Y el último
+    /// cubo no se toca nunca, así que el eje sigue terminando en hoy (D-593).
+    /// </para>
+    /// <para>
+    /// Sin ninguna actividad en el periodo se cae al mínimo por la cola: las gráficas enseñarán su
+    /// estado vacío, y el eje que haya detrás no puede ser el de ocho semanas de nada.
+    /// </para>
+    /// </summary>
+    internal static IReadOnlyList<Bucket> AxisFrom(
+        IReadOnlyList<Bucket> buckets, IEnumerable<DateTimeOffset> stamps)
+    {
+        if (buckets.Count == 0)
+        {
+            return buckets;
+        }
+
+        var when = stamps.ToList();
+        int first = 0;
+        while (first < buckets.Count
+               && !when.Any(s => s >= buckets[first].From && s < buckets[first].To))
+        {
+            first++;
+        }
+
+        if (first == buckets.Count)
+        {
+            first = buckets.Count - 1;
+        }
+
+        DateTimeOffset end = buckets[^1].To;
+        while (first > 0
+               && ((end - buckets[first].From).TotalDays < MinAxisDays || buckets.Count - first < 2))
+        {
+            first--;
+        }
+
+        return first == 0 ? buckets : buckets.Skip(first).ToList();
     }
 
     /// <summary>

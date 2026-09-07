@@ -18,32 +18,52 @@ public sealed record RangeOption(MetricsRange Range, string Label);
 public sealed record LegendItem(string Name, Brush Brush, bool Dashed);
 
 /// <summary>
-/// Un chip de severidad del tile de activos (F5.9).
+/// <b>Una de las cuatro cifras de cabecera</b> (F35 §1.3): un número grande, una línea pequeña
+/// debajo y una flecha contra el periodo anterior.
 /// <para>
-/// <b>Lleva el NOMBRE de la severidad, no sus pinceles</b> (F26 Parte C). Traía el fondo y la
-/// tinta ya calculados, que es el defecto de D-971: un pincel resuelto no se entera de que el tema
-/// ha cambiado, y las cuatro pastillas de Métricas se quedaban con los colores del tema anterior.
-/// Con el nombre, la pastilla es la MISMA del Portafolio y de Hallazgos —los estilos
-/// <c>Pill.Sev</c> y <c>Pill.Sev.Text</c>, con sus <c>DataTrigger</c>— y no una cuarta forma de
-/// pintar una gravedad.
+/// Las cuatro son <b>el mismo objeto</b> y no cuatro azulejos escritos a mano en el XAML: eran
+/// cuatro bloques con cuatro maneras de poner la cifra, la unidad y su línea secundaria, y esa es
+/// exactamente la clase de cosa que se desincroniza en el primer retoque. Con un registro y una
+/// plantilla, «Copiar» se escribe una vez y las cuatro tarjetas no pueden diferir en su forma.
 /// </para>
 /// </summary>
-public sealed record MetricsSeverityChip(string Severity, string Label, int Count);
+/// <param name="Key">Cuál es. Lo usa el test y el comando de copiar; no se enseña.</param>
+/// <param name="Value">La cifra ya formateada, o «—» cuando no hay dato (D-318).</param>
+/// <param name="Unit">La unidad, cuando la cifra la lleva («$», «credits»). Va con la cifra en un
+/// solo <c>TextBlock</c> con dos <c>Run</c>, que es lo único que comparte línea base (D-990).</param>
+/// <param name="Subtitle">La línea pequeña de debajo: de dónde sale el número.</param>
+/// <param name="Trend">La tendencia ya escrita: «▲ 12,5 %», o la frase que dice por qué no la hay.</param>
+/// <param name="Tone">
+/// <c>Good</c>, <c>Bad</c> o <c>Neutral</c>. Es un NOMBRE, no un pincel: un pincel ya resuelto no
+/// se entera de que el tema ha cambiado (D-971), y esta línea la pinta un <c>DataTrigger</c> con
+/// los pinceles del sistema, igual que las pastillas de gravedad desde D-990.
+/// </param>
+public sealed record StatCard(
+    string Key,
+    string Title,
+    string Value,
+    string? Unit,
+    string Subtitle,
+    string Trend,
+    string Tone,
+    string ToolTip)
+{
+    public const string Good = "Good";
 
-/// <summary>
-/// Una fila del desglose por fase del azulejo de coste (F26 §C, revisión).
-/// <para>
-/// Antes era UNA cadena —«Descubrimiento · 5 sesión(es) · 97 llamada(s) · 4.381.463 tokens · 133,6
-/// AI credits»— que envolvía en tres líneas dentro de un azulejo de 280 px. Partida en etiqueta y
-/// detalle, la rejilla alinea las dos fases y se leen como lo que son: una comparación.
-/// </para>
-/// <para>
-/// <b>Sin los tokens.</b> No son de esta tarjeta: la tarjeta contesta «cuánto cuesta y en qué se
-/// va», y el recuento de tokens es instrumentación — vive en el anexo técnico del informe, que es
-/// donde D-993 lo puso.
-/// </para>
-/// </summary>
-public sealed record PhaseRow(string Label, string Detail);
+    public const string Bad = "Bad";
+
+    public const string Neutral = "Neutral";
+
+    /// <summary>La cifra con su unidad, para el texto que se copia.</summary>
+    public string Amount => string.IsNullOrEmpty(Unit) ? Value : $"{Value} {Unit}";
+
+    /// <summary>
+    /// <b>Lo que copia el «Copiar»</b> (F33, D-1038): el número, el subtítulo y la tendencia, como
+    /// texto plano. Lleva delante el título porque un «62 %» pegado en un correo no dice de qué es
+    /// —y el título es justamente lo que la tarjeta tiene y el portapapeles perdería—.
+    /// </summary>
+    public string CopyText => $"{Title}: {Amount} · {Subtitle} · {Trend}";
+}
 
 /// <summary>Un rosco de cobertura con todo lo que la vista escribe alrededor.</summary>
 public sealed record CoverageCard(
@@ -168,7 +188,9 @@ public sealed partial class MetricsViewModel : ViewModelBase
             new(MetricsRange.Weeks26, "26 semanas"),
             new(MetricsRange.All, "Todo"),
         };
-        _selectedRange = RangeOptions[1];
+        // CUATRO semanas al abrir (F35 §1.1), que es lo que dice MetricsFilter.Default: eran ocho,
+        // y las cuatro de delante eran línea plana. El selector conserva las cuatro opciones.
+        _selectedRange = RangeOptions.Single(r => r.Range == MetricsFilter.Default.Range);
     }
 
     public override string Title => "Métricas";
@@ -223,54 +245,56 @@ public sealed partial class MetricsViewModel : ViewModelBase
     /// <summary>«Del 1 de julio al 26 de agosto de 2026 · agregado por semana».</summary>
     [ObservableProperty] private string _periodLabel = string.Empty;
 
-    // ---------- Tiles ----------
-
-    [ObservableProperty] private int _activeTotal;
-
-    public ObservableCollection<MetricsSeverityChip> ActiveChips { get; } = new();
-
-    [ObservableProperty] private int _resolvedInPeriod;
-
-    [ObservableProperty] private string _resolvedDelta = string.Empty;
-
-    [ObservableProperty] private Brush _resolvedDeltaBrush = Brushes.Gray;
-
-    [ObservableProperty] private string _costTotal = Unknown;
-
-    [ObservableProperty] private string _costUnit = CostFormat.Unit;
+    // ---------- Las cuatro cifras (F35 §1.3) ----------
 
     /// <summary>
-    /// LA LÍNEA SECUNDARIA del azulejo de coste: «~8,4 por unidad · 16 unidades · ≈ 2,45 $».
+    /// <b>Cobertura, deuda activa, coste y coste por hallazgo resuelto</b>, en ese orden: qué parte
+    /// está mirada, cuánto queda por arreglar, cuánto costó y a cómo sale cada arreglo. Son las
+    /// cuatro preguntas que se hace quien abre este panel, y ninguna se contesta con un número que
+    /// no exista (D-318).
     /// <para>
-    /// Eran tres propiedades en tres líneas del mismo tamaño y el mismo color que todo lo demás
-    /// —coste por unidad, unidades y equivalente en dólares—, y con ellas el azulejo llegó a tener
-    /// seis renglones sin jerarquía. Son la misma respuesta vista de tres formas: van juntas, una
-    /// vez, debajo de la cifra.
+    /// Sustituyen a las cuatro de F5.9 —activos con sus pastillas, resueltos, coste y cobertura del
+    /// ciclo—. Lo que enseñaban no se pierde: las pastillas de gravedad son los roscos de severidad
+    /// de más abajo, los resueltos van en el subtítulo de la deuda y en el de la cuarta, la
+    /// cobertura del ciclo <b>es</b> la primera y el coste por unidad es el subtítulo de la tercera.
     /// </para>
     /// </summary>
-    [ObservableProperty] private string _costSummary = string.Empty;
+    public ObservableCollection<StatCard> Cards { get; } = new();
 
     /// <summary>
-    /// El coste POR PROVEEDOR, cuando hay más de una casa que facture en el periodo. Con una sola
-    /// —lo normal— el total del azulejo ya lo dice todo y el desglose sobra.
+    /// <b>Copia una tarjeta al portapapeles</b> (F33, D-1038): número, subtítulo y tendencia, con
+    /// el mismo aviso que las demás copias de la aplicación — y si el portapapeles no está
+    /// disponible se dice, en vez de fingir que se copió.
     /// </summary>
-    public ObservableCollection<string> CostByProvider { get; } = new();
+    [RelayCommand]
+    private void CopyCard(StatCard? card)
+    {
+        if (card is null)
+        {
+            return;
+        }
 
-    /// <summary>Hay más de una casa facturando: además del total, su reparto.</summary>
-    [ObservableProperty] private bool _costHasBreakdown;
-
-    /// <summary>
-    /// <b>En qué se va el dinero, por fase</b> (F18 §1): descubrimiento, verificación y arreglo.
-    /// Hasta aquí, contestar esa pregunta obligaba a abrir los informes uno a uno.
-    /// </summary>
-    public ObservableCollection<PhaseRow> CostByPhase { get; } = new();
-
-    /// <summary>Hubo actividad que repartir. Sin sesiones en el periodo el bloque no se pinta.</summary>
-    [ObservableProperty] private bool _hasPhases;
+        try
+        {
+            System.Windows.Clipboard.SetText(card.CopyText);
+            _toasts.Show($"«{card.Title}» copiado al portapapeles.");
+        }
+        catch (Exception)
+        {
+            _toasts.Show("No se pudo copiar la cifra: el portapapeles no estaba disponible.");
+        }
+    }
 
     /// <summary>
     /// Por qué el coste del periodo no cubre toda la actividad: hubo sesiones de una casa que no
     /// factura (F16-RETOQUE §1). Vacío cuando no las hubo.
+    /// <para>
+    /// <b>Sale de la tarjeta y sube a la banda de avisos</b> (F35 §1.3). Vivía dentro del azulejo
+    /// de coste, y afecta a DOS de las cuatro cifras —el coste y el coste por resuelto—, así que su
+    /// sitio es el mismo que el del aviso de tarifa que falta: encima de la rejilla, que es lo que
+    /// abarca. Y una tarjeta que es «un número, una línea y una flecha» no puede llevar dentro un
+    /// párrafo que la haría el doble de alta que sus tres vecinas (D-990: la rejilla iguala).
+    /// </para>
     /// </summary>
     [ObservableProperty] private string _costScopeNote = string.Empty;
 
@@ -297,12 +321,6 @@ public sealed partial class MetricsViewModel : ViewModelBase
     [RelayCommand]
     private Task ManageRatesAsync() => _navigation.NavigateToAsync<SettingsViewModel>();
 
-    /// <summary>El equivalente en dólares del total, para el tooltip. 1 credit = 0,01 $.</summary>
-    [ObservableProperty] private string _costInDollars = string.Empty;
-
-    [ObservableProperty] private string _cyclePct = Unknown;
-
-    [ObservableProperty] private string _cycleDetail = string.Empty;
 
     /// <summary>
     /// Lo que se escribe cuando no hay datos suficientes. NUNCA un cero con formato: «0,0 días»
@@ -312,6 +330,14 @@ public sealed partial class MetricsViewModel : ViewModelBase
     public const string Unknown = "—";
 
     // ---------- Gráfica 1: coste en el tiempo ----------
+
+    /// <summary>
+    /// La unidad en la que se rotula el eje de la gráfica de coste: la del conmutador de
+    /// Ajustes → Tarifas (F29 §2). La escribe <see cref="CostFormat"/>, que es el único sitio que
+    /// sabe en qué divisa se enseña un coste.
+    /// </summary>
+    [ObservableProperty] private string _costUnit = CostFormat.Unit;
+
 
     [ObservableProperty] private IReadOnlyList<ChartSeries> _costSeries = Array.Empty<ChartSeries>();
 
@@ -443,65 +469,163 @@ public sealed partial class MetricsViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// <b>Las cuatro cifras</b> (F35 §1.3). Todas se construyen igual —cifra, subtítulo, tendencia—
+    /// y ninguna escribe un número que no exista: sin periodo anterior no hay flecha, sin
+    /// inventario no hay porcentaje y sin resueltos no hay coste por resuelto (D-318).
+    /// </summary>
     private void ApplyTiles(MetricsDashboard d)
     {
-        ActiveTotal = d.ActiveTotal;
-        ActiveChips.Clear();
-        ActiveChips.Add(Chip(Severity.Critica, d.Active.Critica));
-        ActiveChips.Add(Chip(Severity.Alta, d.Active.Alta));
-        ActiveChips.Add(Chip(Severity.Media, d.Active.Media));
-        ActiveChips.Add(Chip(Severity.Baja, d.Active.Baja));
-
-        ResolvedInPeriod = d.ResolvedInPeriod;
-        int delta = d.ResolvedDelta;
-        ResolvedDelta = delta == 0
-            ? "igual que el periodo anterior"
-            : $"{(delta > 0 ? "▲" : "▼")} {Math.Abs(delta)} vs periodo anterior";
-        ResolvedDeltaBrush = delta switch
-        {
-            > 0 => Brush("#3FB950"),
-            < 0 => Brush("#E0A030"),
-            _ => Brush(_dark ? "#9A9A9A" : "#6B6B6B"),
-        };
-
-        CostUnit = d.CostUnit;
-        CostTotal = d.CostInPeriod is { } c ? CostFormat.Number(c) : Unknown;
-
+        // Los dos avisos que abarcan la rejilla entera, no una tarjeta: falta gasto por contar, y
+        // hubo actividad de una casa que no factura. Los dos explican las cifras de coste.
         CostPartialNotice = d.CostIsPartial ? d.PartialCostNotice : string.Empty;
         CostScopeNote = d.HasUntariffed ? d.UntariffedNotice : string.Empty;
-        CostByProvider.Clear();
-        foreach (string line in d.CostLines)
-        {
-            CostByProvider.Add(line);
-        }
+        CostUnit = d.CostUnit;
 
-        CostHasBreakdown = CostByProvider.Count > 1;
-
-        CostByPhase.Clear();
-        foreach (PhaseCost phase in d.ByPhase)
-        {
-            // Sin los tokens: son del anexo del informe, no del azulejo (ver `PhaseRow`).
-            string detail = $"{phase.Sessions} ses. · {phase.Calls} llam.";
-            CostByPhase.Add(new PhaseRow(
-                phase.Phase,
-                phase.Cost is { } coste ? $"{detail} · {CostFormat.WithUnit(coste, null)}" : detail));
-        }
-
-        HasPhases = CostByPhase.Count > 0;
-
-        CostSummary = d.CostInPeriod is null
-            ? "Se activará cuando alguna sesión registre coste"
-            : string.Join(" · ", Summary(d));
-
-        // BUGFIX-REDONDEO: con los enteros, para que 3 de 1.335 no se enseñe como «0 %».
-        CyclePct = d.HasCycleData
-            ? PercentText.Of(d.CycleAudited, d.CycleAudited + d.CyclePending)
-            : Unknown;
-        CycleDetail = d.HasCycleData
-            ? $"{d.CycleAudited} de {d.CycleAudited + d.CyclePending} unidades auditables"
-              + (d.CycleLarge > 0 ? $" · {d.CycleLarge} grandes excluidas" : string.Empty)
-            : "Se activará cuando haya un inventario del ciclo";
+        Cards.Clear();
+        Cards.Add(CardCoverage(d));
+        Cards.Add(CardDebt(d));
+        Cards.Add(CardCost(d));
+        Cards.Add(CardCostPerResolution(d));
     }
+
+    /// <summary>
+    /// <b>1 · Cobertura</b>: qué parte del inventario del ciclo en curso está auditada, sumada en
+    /// UNIDADES sobre lo auditable (D-322). El número de ciclo solo aparece con una aplicación en
+    /// el filtro; con varias se dice cuántas son, porque un ciclo sobre una suma de ciclos
+    /// distintos no significa nada.
+    /// </summary>
+    private static StatCard CardCoverage(MetricsDashboard d)
+    {
+        int auditable = d.CycleAudited + d.CyclePending;
+        string tail = d.ScopeCycle is { } cycle
+            ? $"ciclo {cycle}"
+            : d.ScopeApps == 1 ? "1 aplicación" : $"{d.ScopeApps} aplicaciones";
+
+        string tip = d.HasCycleData
+            ? $"Unidades auditadas del ciclo en curso sobre las auditables. "
+              + (d.CycleLarge > 0
+                  ? $"{N(d.CycleLarge)} unidad(es) grande(s) quedan fuera del cálculo: no caben en una tanda. "
+                  : string.Empty)
+              + "La tendencia compara con la cobertura que había al empezar el periodo."
+            : "Se activará cuando haya un inventario del ciclo.";
+
+        return Card(
+            "coverage",
+            "Cobertura",
+            d.HasCycleData ? PercentText.Of(d.CycleAudited, auditable) : Unknown,
+            null,
+            d.HasCycleData
+                ? $"{N(d.CycleAudited)} de {N(auditable)} unidades · {tail}"
+                : "Se activará cuando haya un inventario del ciclo",
+            d.CoverageTrend,
+            tip);
+    }
+
+    /// <summary>
+    /// <b>2 · Deuda activa</b>: los hallazgos vivos, y lo que entró y salió en el periodo. El
+    /// número es el de hoy —que es el del cierre del periodo, porque el periodo termina en hoy— y
+    /// la tendencia lo compara con la deuda que había al empezarlo.
+    /// </summary>
+    private static StatCard CardDebt(MetricsDashboard d)
+        => Card(
+            "debt",
+            "Deuda activa",
+            N(d.ActiveTotal),
+            null,
+            $"+{N(d.NewInPeriod)} {(d.NewInPeriod == 1 ? "nuevo" : "nuevos")} · "
+            + $"−{N(d.ResolvedInPeriod)} {(d.ResolvedInPeriod == 1 ? "resuelto" : "resueltos")} en el periodo",
+            d.DebtTrend,
+            "Hallazgos activos a día de hoy. El subtítulo cuenta lo que entró y lo que se saldó "
+            + "dentro del periodo; la tendencia compara con la deuda que había al empezarlo.");
+
+    /// <summary>
+    /// <b>3 · Coste</b> del periodo, en la unidad del conmutador de Ajustes → Tarifas. Su
+    /// tendencia va SIEMPRE en gris: gastar más no es malo por sí mismo, y pintarlo de rojo sería
+    /// un juicio sobre una decisión que este panel no ha tomado (<see cref="TrendGoodness.Neutral"/>).
+    /// </summary>
+    private static StatCard CardCost(MetricsDashboard d)
+    {
+        string sessions = d.SessionsInPeriod == 1 ? "1 sesión" : $"{N(d.SessionsInPeriod)} sesiones";
+        string subtitle = d.CostPerAuditedUnit is { } per
+            ? $"{sessions} · {CostFormat.Number(per)} {CostFormat.Unit} por unidad auditada"
+            : $"{sessions} · sin unidades auditadas en el periodo";
+
+        return Card(
+            "cost",
+            "Coste",
+            d.CostInPeriod is { } total ? CostFormat.Number(total) : Unknown,
+            d.CostInPeriod is null ? null : CostFormat.Unit,
+            d.CostInPeriod is null ? "Se activará cuando alguna sesión registre coste" : subtitle,
+            d.CostTrend,
+            d.CostInPeriod is { } c
+                ? $"{CostFormat.Caveat} Equivale a {CostFormat.Equivalent(c)}. "
+                  + "El «por unidad auditada» divide lo que costó AUDITAR, no todo el gasto: un "
+                  + "arreglo o una verificación no auditan ninguna unidad."
+                : CostFormat.Caveat);
+    }
+
+    /// <summary>
+    /// <b>4 · Coste por hallazgo resuelto</b>: el gasto del periodo repartido entre lo que se
+    /// saldó. Sin resueltos NO es cero ni infinito —es una división que no se puede hacer—, así
+    /// que se escribe «—» y se dice por qué (D-318).
+    /// </summary>
+    private static StatCard CardCostPerResolution(MetricsDashboard d)
+    {
+        string subtitle = d.ResolvedInPeriod == 0
+            ? "sin resueltos en el periodo"
+            : $"{N(d.ResolvedInPeriod)} {(d.ResolvedInPeriod == 1 ? "resuelto" : "resueltos")} · "
+              + (d.CostPerResolutionBefore is { } before
+                  ? $"{CostFormat.Number(before)} {CostFormat.Unit} el periodo anterior"
+                  : "sin cifra del periodo anterior");
+
+        return Card(
+            "cost-per-resolution",
+            "Coste por hallazgo resuelto",
+            d.CostPerResolution is { } v ? CostFormat.Number(v) : Unknown,
+            d.CostPerResolution is null ? null : CostFormat.Unit,
+            subtitle,
+            d.CostPerResolutionTrend,
+            "El coste del periodo dividido entre los hallazgos que se resolvieron en él. Cuenta "
+            + "EVENTOS de resolución: un hallazgo resuelto dos veces saldó deuda dos veces.");
+    }
+
+    /// <summary>
+    /// La tarjeta, con la tendencia ya escrita. Es el único sitio donde una tendencia se convierte
+    /// en texto, por lo mismo que <see cref="CostFormat"/> es el único que escribe un coste: cuatro
+    /// tarjetas escribiendo su flecha acabarían con cuatro maneras de decir «no hay con qué
+    /// comparar».
+    /// </summary>
+    private static StatCard Card(
+        string key, string title, string value, string? unit, string subtitle,
+        MetricTrend trend, string tip)
+        => new(
+            key,
+            title,
+            value,
+            unit,
+            subtitle,
+            TrendText(trend),
+            trend.IsGood ? StatCard.Good : trend.IsBad ? StatCard.Bad : StatCard.Neutral,
+            tip);
+
+    /// <summary>
+    /// La tendencia, en palabras. <b>Sin nada con qué comparar no se escribe una flecha a cero</b>:
+    /// se dice cuál de los dos motivos es —no hubo periodo anterior, o lo hubo y su cifra era
+    /// cero—, que es la diferencia entre «no cambió» y «no se sabe» (D-318).
+    /// </summary>
+    internal static string TrendText(MetricTrend trend)
+        => trend.Percent switch
+        {
+            null when !trend.HasPreviousPeriod => "sin periodo anterior",
+            null => "sin cifra anterior con la que comparar",
+            0 => "igual que el periodo anterior",
+            { } p => $"{trend.Arrow} {Math.Abs(p).ToString("0.#", CultureInfo.CurrentCulture)} % "
+                     + "vs periodo anterior",
+        };
+
+    /// <summary>Un entero con los separadores de miles de la máquina: 1.965, no 1965.</summary>
+    private static string N(int value) => value.ToString("N0", CultureInfo.CurrentCulture);
 
     /// <summary>
     /// La gráfica de coste. Se reconstruye desde el agregado ya en memoria, así que el toggle
@@ -944,7 +1068,16 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
         string from = d.From.ToLocalTime().ToString("d MMM", CultureInfo.CurrentCulture);
         string to = d.To.AddDays(-1).ToLocalTime().ToString("d MMM yyyy", CultureInfo.CurrentCulture);
-        return $"Del {from} al {to} · agregado {grain}";
+        string period = $"Del {from} al {to} · agregado {grain}";
+
+        // F35 §1.2 — cuando el eje se recorta, se DICE. Las cifras siguen siendo del periodo
+        // entero; las gráficas empiezan donde empezó a pasar algo, y un rótulo que prometiera un
+        // eje que no está dibujado es el defecto que arregló D-593 puesto del revés.
+        return d.AxisIsTrimmed && d.AxisStart is { } axis
+            ? period + " · las gráficas empiezan el "
+              + axis.ToLocalTime().ToString("d MMM", CultureInfo.CurrentCulture)
+              + ", el primer tramo con actividad"
+            : period;
     }
 
     // ---------- Gestos ----------
@@ -1009,48 +1142,7 @@ public sealed partial class MetricsViewModel : ViewModelBase
     /// <summary>Donde vive el informe de una sesión. Publico para poder comprobarlo sin abrir nada.</summary>
     public string ReportPathFor(string slug, string sessionId) => _hub.HubPaths.ReportFile(slug, sessionId);
 
-    /// <summary>
-    /// Las tres piezas de la línea secundaria, saltándose las que no hay: sin unidades auditadas no
-    /// se escribe «0 por unidad», que se leería como una medida y no lo es (D-318).
-    /// </summary>
-    private static IEnumerable<string> Summary(MetricsDashboard d)
-    {
-        if (d.CostPerAuditedUnit is { } per)
-        {
-            yield return $"~{CostFormat.Number(per)} por unidad";
-        }
-
-        if (d.UnitsAuditedInPeriod > 0)
-        {
-            yield return d.UnitsAuditedInPeriod == 1 ? "1 unidad" : $"{d.UnitsAuditedInPeriod} unidades";
-        }
-
-        if (d.CostInPeriod is { } total)
-        {
-            // R6 §8 — LA OTRA divisa, no la misma otra vez. Con la preferencia en dólares esto
-            // repetía el número del azulejo con el mismo símbolo detrás; lo útil es siempre el
-            // equivalente, y de decidir cuál es se encarga `CostFormat`.
-            yield return $"≈ {CostFormat.Equivalent(total)}";
-        }
-    }
-
     // ---------- Colores ----------
-
-    /// <summary>
-    /// Un chip por severidad, con el rótulo que usa toda la aplicación (UI-0027).
-    /// <para>
-    /// Decía «Crít» —abreviado y solo aquí—, con la cifra detrás: era uno de los cinco rotulados
-    /// que los cuatro niveles tenían repartidos por la interfaz. Ahora el nombre lo da
-    /// <see cref="SeverityNames"/> concordado con el recuento, y la cifra va delante como en todas
-    /// las demás. Que «Críticas» sea más largo que «Crít» lo resuelve el sitio, no la abreviatura:
-    /// los chips envuelven en un <c>WrapPanel</c>.
-    /// </para>
-    /// </summary>
-    private static MetricsSeverityChip Chip(Severity severity, int count)
-        => new(
-            severity.ToString(),
-            count == 1 ? SeverityNames.Display(severity) : SeverityNames.Plural(severity),
-            count);
 
     /// <summary>
     /// El color de una app: el del reparto del portafolio, en su paso para el tema vigente. Una

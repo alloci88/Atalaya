@@ -461,7 +461,9 @@ public sealed class MetricsQueryTests : IDisposable
         // Cuatro semanas: la resolución de hace 45 días queda fuera de la ventana.
         MetricsDashboard corto = Build("app", MetricsRange.Weeks4);
         corto.Resolutions.Sum(p => p.Of("app")).Should().Be(1m);
-        corto.Resolutions.Should().HaveCount(28, "grano diario, el mismo que la de coste");
+        corto.Granularity.Should().Be(MetricsGranularity.Diaria, "grano diario, el mismo que la de coste");
+        corto.Resolutions.Should().HaveCount(
+            7, "la única actividad del periodo es de hace dos días: el eje empieza ahí y el mínimo son 7 días");
 
         MetricsDashboard largo = Build("app", MetricsRange.Weeks26);
         largo.Resolutions.Sum(p => p.Of("app")).Should().Be(2m);
@@ -637,6 +639,10 @@ public sealed class MetricsQueryTests : IDisposable
         _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-40)));
         _hub.Store.WriteFinding("app", Finding(FindingStatus.Resuelto, Now.AddDays(-40), Now.AddDays(-10)));
 
+        // Una sesión en el primer tramo: sin ella el eje empezaría en el cubo del primer hallazgo
+        // (F35 §1.2) y este test no podría comprobar que hace ocho semanas no había ninguno.
+        Session("app", Now.AddDays(-55), cost: 1m);
+
         MetricsDashboard d = Build(range: MetricsRange.Weeks8);
 
         d.Flow.Should().HaveCount(8);
@@ -687,17 +693,22 @@ public sealed class MetricsQueryTests : IDisposable
     }
 
     [Theory]
-    [InlineData(MetricsRange.Weeks4, MetricsGranularity.Diaria, 28)]
-    [InlineData(MetricsRange.Weeks8, MetricsGranularity.Semanal, 8)]
-    [InlineData(MetricsRange.Weeks26, MetricsGranularity.Semanal, 26)]
+    [InlineData(MetricsRange.Weeks4, MetricsGranularity.Diaria, 28, 27)]
+    [InlineData(MetricsRange.Weeks8, MetricsGranularity.Semanal, 8, 55)]
+    [InlineData(MetricsRange.Weeks26, MetricsGranularity.Semanal, 26, 181)]
     public void Cada_rango_trae_su_grano_y_su_numero_de_cubos(
-        MetricsRange range, MetricsGranularity grain, int buckets)
+        MetricsRange range, MetricsGranularity grain, int buckets, int daysAgo)
     {
+        // Con actividad en el PRIMER tramo del periodo el eje no recorta nada (F35 §1.2), que es
+        // la condición en la que se puede comprobar el grano y el número de cubos de cada rango.
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-daysAgo)));
+
         MetricsDashboard d = Build(range: range);
 
         d.Granularity.Should().Be(grain);
         d.Flow.Should().HaveCount(buckets);
         d.Cost.Should().HaveCount(buckets);
+        d.AxisIsTrimmed.Should().BeFalse("hubo actividad en el primer tramo");
     }
 
     [Fact]
@@ -974,5 +985,275 @@ public sealed class MetricsQueryTests : IDisposable
         d.Sessions.Should().Contain(r => r.Mode == AuditMode.Verify && r.Cost == 12m);
         d.Sessions.Should().Contain(r => r.Mode == AuditMode.Lotes && r.Cost == 105m);
         d.Sessions.Should().Contain(r => r.Mode == AuditMode.Cierre && r.Cost == null);
+    }
+
+    // =============================================================== F35 §1 — las cuatro cifras
+
+    /// <summary>
+    /// El hub del cuadre de F35, con TODO calculado a mano en el comentario. Es la misma forma de
+    /// trabajar de H9.2: primero se escribe qué tiene que salir, y después se comprueba.
+    /// <para>
+    /// Reloj: 21/08/2026 12:00 UTC. Periodo (4 semanas): 25/07 → 22/08. Anterior: 27/06 → 25/07.
+    /// </para>
+    /// </summary>
+    private void FixtureDeLasCuatroCifras()
+    {
+        // --- Sesiones ---
+        // S1 (12/07, periodo ANTERIOR): 100 credits, audita 2 unidades.
+        // S2 (18/08, en periodo): 200 credits, audita 2 unidades.
+        // S3 (20/08, en periodo): 100 credits, arreglo — no audita ninguna.
+        AuditSession s1 = Session("app", Now.AddDays(-40), cost: 100m, units: 2);
+        AuditSession s2 = Session("app", Now.AddDays(-3), cost: 200m, units: 2);
+        Session("app", Now.AddDays(-1), AuditMode.Fix, cost: 100m);
+
+        // --- Inventario del ciclo 3: 4 auditadas, 6 pendientes, 2 grandes ---
+        // Dos las auditó S1 (antes del periodo) y dos S2 (dentro), así que la cobertura al empezar
+        // el periodo era 2/10 = 20 % y hoy es 4/10 = 40 %.
+        var inv = new InventoryCycle { CycleN = 3 };
+        for (int i = 0; i < 2; i++)
+        {
+            inv.Units.Add(new InventoryUnit
+            {
+                Path = $"vieja{i}.cs", Module = "m", State = UnitState.Auditada, AuditedInSession = s1.Id,
+            });
+        }
+
+        for (int i = 0; i < 2; i++)
+        {
+            inv.Units.Add(new InventoryUnit
+            {
+                Path = $"nueva{i}.cs", Module = "m", State = UnitState.Auditada, AuditedInSession = s2.Id,
+            });
+        }
+
+        for (int i = 0; i < 6; i++)
+        {
+            inv.Units.Add(new InventoryUnit { Path = $"p{i}.cs", Module = "m", State = UnitState.Pendiente });
+        }
+
+        for (int i = 0; i < 2; i++)
+        {
+            inv.Units.Add(new InventoryUnit { Path = $"g{i}.cs", Module = "m", State = UnitState.Grande });
+        }
+
+        _hub.Store.WriteInventory("app", inv);
+        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u/app", CurrentCycle = 3 });
+
+        // --- Hallazgos ---
+        // F1, F2: activos desde hace 100 días → vivos al empezar el periodo y vivos hoy.
+        // F3: detectado hace 100 días, resuelto hace 2 → vivo al empezar, no hoy.
+        // F4: detectado hace 100 días, resuelto hace 40 → resolución del periodo ANTERIOR.
+        // F5, F6: detectados dentro del periodo y activos → nuevos.
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-100)));
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-100)));
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Resuelto, Now.AddDays(-100), Now.AddDays(-2)));
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Resuelto, Now.AddDays(-100), Now.AddDays(-40)));
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-10)));
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-5)));
+    }
+
+    /// <summary>
+    /// <b>Las cuatro cifras, contra lo calculado a mano</b> (F35 §1.3). Cada una con su tendencia
+    /// contra el periodo anterior y con el signo que le toca: subir la cobertura es bueno, subir la
+    /// deuda es malo, y el coste no lleva juicio.
+    /// </summary>
+    [Fact]
+    public void Las_cuatro_cifras_y_sus_tendencias_salen_de_los_ficheros()
+    {
+        FixtureDeLasCuatroCifras();
+
+        MetricsDashboard d = Build(range: MetricsRange.Weeks4);
+
+        d.HasPreviousPeriod.Should().BeTrue("hubo una sesión y hallazgos antes del periodo");
+
+        // 1 · Cobertura: 4 de 10 auditables hoy, 2 de 10 al empezar. Las 2 grandes quedan fuera.
+        d.CycleAudited.Should().Be(4);
+        d.CyclePending.Should().Be(6);
+        d.CycleLarge.Should().Be(2);
+        d.CoveragePct.Should().BeApproximately(0.4, 0.0001);
+        d.CoveragePctBefore.Should().BeApproximately(0.2, 0.0001);
+        d.CoverageTrend.Percent.Should().BeApproximately(100.0, 0.0001, "del 20 % al 40 %");
+        d.CoverageTrend.IsGood.Should().BeTrue("subir la cobertura es bueno");
+        d.ScopeCycle.Should().Be(3, "una sola aplicación en el filtro");
+
+        // 2 · Deuda activa: 4 vivos hoy, 3 al empezar el periodo; +2 nuevos y −1 resuelto.
+        d.ActiveTotal.Should().Be(4);
+        d.ActiveAtPeriodStart.Should().Be(3);
+        d.NewInPeriod.Should().Be(2);
+        d.ResolvedInPeriod.Should().Be(1);
+        d.DebtTrend.Percent.Should().BeApproximately(100.0 / 3.0, 0.0001, "de 3 a 4");
+        d.DebtTrend.IsBad.Should().BeTrue("subir la deuda es malo");
+
+        // 3 · Coste: 300 en el periodo (200 + 100) contra 100 del anterior; 2 sesiones, 2 unidades
+        // auditadas, y el «por unidad» divide SOLO lo que costó auditar (D-592): 200 / 2 = 100.
+        d.CostInPeriod.Should().Be(300m);
+        d.CostPreviousPeriod.Should().Be(100m);
+        d.SessionsInPeriod.Should().Be(2);
+        d.UnitsAuditedInPeriod.Should().Be(2);
+        d.CostPerAuditedUnit.Should().Be(100m);
+        d.CostTrend.Percent.Should().BeApproximately(200.0, 0.0001);
+        d.CostTrend.IsGood.Should().BeFalse("el coste no lleva juicio de color");
+        d.CostTrend.IsBad.Should().BeFalse("ni bueno ni malo: gastar más no es malo por sí");
+
+        // 4 · Coste por hallazgo resuelto: 300 / 1 hoy, 100 / 1 antes.
+        d.ResolvedPreviousPeriod.Should().Be(1);
+        d.CostPerResolution.Should().Be(300m);
+        d.CostPerResolutionBefore.Should().Be(100m);
+        d.CostPerResolutionTrend.Percent.Should().BeApproximately(200.0, 0.0001);
+        d.CostPerResolutionTrend.IsBad.Should().BeTrue("que cada arreglo cueste más es peor");
+    }
+
+    /// <summary>
+    /// <b>La cobertura se agrega en UNIDADES, y con dos apps no se enseña ningún ciclo</b>
+    /// (F35, definiciones). Dos aplicaciones en ciclos distintos suman sus unidades; el número de
+    /// ciclo desaparece porque un ciclo sobre una suma de ciclos distintos no significa nada.
+    /// </summary>
+    [Fact]
+    public void La_cobertura_de_dos_apps_suma_unidades_y_no_ensena_ciclo()
+    {
+        App("otra", "Otra", cycle: 7);
+        Inventory("app", audited: 4, pending: 6, large: 2);
+        Inventory("otra", audited: 1, pending: 9, large: 0, cycle: 7);
+
+        MetricsDashboard todas = Build();
+
+        todas.ScopeApps.Should().Be(2);
+        todas.ScopeCycle.Should().BeNull("nunca un ciclo sobre una suma de ciclos distintos");
+        todas.CycleAudited.Should().Be(5, "4 + 1, en unidades");
+        todas.CyclePending.Should().Be(15, "6 + 9");
+        todas.CoveragePct.Should().BeApproximately(0.25, 0.0001, "5 de 20 auditables, no la media de 40 % y 10 %");
+
+        // Y con una sola en el filtro vuelve a haber ciclo, el suyo.
+        Build("otra").ScopeCycle.Should().Be(7);
+        Build("app").ScopeCycle.Should().Be(1);
+    }
+
+    /// <summary>
+    /// <b>Sin periodo anterior no hay tendencia</b> (D-318). No es que no se haya movido: es que no
+    /// hay con qué comparar, y las cuatro flechas se callan a la vez.
+    /// </summary>
+    [Fact]
+    public void Sin_actividad_antes_del_periodo_no_hay_ninguna_tendencia()
+    {
+        Inventory("app", audited: 1, pending: 1, large: 0);
+        Session("app", Now.AddDays(-3), cost: 50m, units: 1);
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-3)));
+
+        MetricsDashboard d = Build(range: MetricsRange.Weeks4);
+
+        d.HasPreviousPeriod.Should().BeFalse("no hay un solo sello anterior al periodo");
+        d.CoverageTrend.HasValue.Should().BeFalse();
+        d.DebtTrend.HasValue.Should().BeFalse();
+        d.CostTrend.HasValue.Should().BeFalse();
+        d.CostPerResolutionTrend.HasValue.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// Sin resueltos, el coste por hallazgo resuelto <b>no es cero ni infinito</b>: es una división
+    /// que no se puede hacer, y el agregado devuelve null para que la tarjeta escriba «—» (D-318).
+    /// </summary>
+    [Fact]
+    public void Sin_resueltos_no_hay_coste_por_resuelto()
+    {
+        Session("app", Now.AddDays(-3), cost: 50m, units: 1);
+
+        MetricsDashboard d = Build(range: MetricsRange.Weeks4);
+
+        d.ResolvedInPeriod.Should().Be(0);
+        d.CostInPeriod.Should().Be(50m, "sí hubo gasto");
+        d.CostPerResolution.Should().BeNull("no se reparte un gasto entre cero");
+    }
+
+    /// <summary>
+    /// Una tendencia contra CERO tampoco es un porcentaje: es una división por cero. Hay periodo
+    /// anterior —pasaron cosas—, pero la cifra de entonces era cero y no hay nada por lo que
+    /// dividir.
+    /// </summary>
+    [Fact]
+    public void Una_tendencia_contra_cero_no_se_escribe()
+    {
+        // Actividad antes del periodo (así que HAY periodo anterior), pero sin coste ninguno.
+        Session("app", Now.AddDays(-40), AuditMode.Verify, cost: null);
+        Session("app", Now.AddDays(-3), cost: 50m, units: 1);
+
+        MetricsDashboard d = Build(range: MetricsRange.Weeks4);
+
+        d.HasPreviousPeriod.Should().BeTrue();
+        d.CostPreviousPeriod.Should().Be(0m);
+        d.CostTrend.HasValue.Should().BeFalse("no se divide por cero para decir «∞ %»");
+    }
+
+    // =============================================================== F35 §1.2 — el eje
+
+    /// <summary>
+    /// <b>El eje empieza en el primer cubo con actividad</b> y el último sigue conteniendo hoy
+    /// (D-593). Las semanas de delante no son una línea plana de dato: son las semanas en las que
+    /// no había nada que medir.
+    /// </summary>
+    [Fact]
+    public void El_eje_empieza_en_el_primer_cubo_con_actividad_y_termina_en_hoy()
+    {
+        // Ocho semanas de periodo y la primera actividad hace 20 días: sobran cinco semanas.
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-20)));
+
+        MetricsDashboard d = Build(range: MetricsRange.Weeks8);
+
+        d.AxisIsTrimmed.Should().BeTrue();
+        d.Flow.Should().HaveCount(3, "el cubo del hallazgo y los dos que quedan hasta hoy");
+        d.Flow[0].New.Should().Be(1, "el primer cubo dibujado es el que trae la actividad");
+
+        // El último cubo contiene HOY: es el ancla de quien mira el panel (D-593).
+        d.Cost[^1].From.Should().BeOnOrBefore(Now);
+        MetricsQuery.Instant(Now.ToLocalTime().Date.AddDays(1)).Should().BeAfter(d.Cost[^1].From);
+
+        // Y el periodo NO se ha movido: las cifras siguen siendo de las ocho semanas.
+        (d.To - d.From).TotalDays.Should().Be(56);
+    }
+
+    /// <summary>
+    /// <b>El eje nunca baja de 7 días ni de dos cubos.</b> Con una sola tarde de actividad, un eje
+    /// que empezara ahí dibujaría un punto — y un punto no dice si algo sube o baja.
+    /// </summary>
+    [Fact]
+    public void El_eje_nunca_mide_menos_de_una_semana_ni_ensena_un_solo_punto()
+    {
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now));
+
+        MetricsDashboard diario = Build(range: MetricsRange.Weeks4);
+        diario.Granularity.Should().Be(MetricsGranularity.Diaria);
+        diario.Flow.Should().HaveCount(MetricsQuery.MinAxisDays, "el mínimo son 7 días");
+
+        MetricsDashboard semanal = Build(range: MetricsRange.Weeks8);
+        semanal.Granularity.Should().Be(MetricsGranularity.Semanal);
+        semanal.Flow.Should().HaveCount(2, "un cubo semanal ya mide 7 días, pero un punto no es una gráfica");
+    }
+
+    /// <summary>
+    /// Sin ninguna actividad en el periodo el eje cae al mínimo por la cola. Las gráficas enseñan
+    /// su estado vacío; lo que no puede quedar detrás es un eje de ocho semanas de nada.
+    /// </summary>
+    [Fact]
+    public void Un_periodo_entero_sin_actividad_deja_el_eje_en_el_minimo()
+    {
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-300)));
+
+        MetricsDashboard d = Build(range: MetricsRange.Weeks4);
+
+        d.Flow.Should().HaveCount(MetricsQuery.MinAxisDays);
+        d.Flow.Sum(b => b.New).Should().Be(0);
+    }
+
+    /// <summary>
+    /// El periodo por defecto son CUATRO semanas (F35 §1.1). Es lo que decide, además del eje, qué
+    /// es «el periodo anterior» de las cuatro tendencias.
+    /// </summary>
+    [Fact]
+    public void El_periodo_por_defecto_son_cuatro_semanas()
+    {
+        MetricsFilter.Default.Range.Should().Be(MetricsRange.Weeks4);
+        MetricsFilter.Default.Slug.Should().BeNull("todas las aplicaciones");
+
+        (Build(range: MetricsRange.Weeks4).To - Build(range: MetricsRange.Weeks4).From)
+            .TotalDays.Should().Be(28);
     }
 }

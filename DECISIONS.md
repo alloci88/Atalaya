@@ -18029,3 +18029,128 @@ tanda queda en **2.611 casos** (2.076 en la aplicación).
 cambio → build → tests → `dist` → parar (N-8): que el gris del botón apagado con dos razones
 posibles se lea bien, y que la tarjeta de la columna con el radio de la casa y el resaltado del
 hover se vea como una tarjeta y no como un botón, lo mira el usuario en el `dist`.
+
+## F35 · Entrega 1 — Periodo, ejes y las cuatro tarjetas
+
+### D-1040 — El panel contestaba cuatro preguntas que nadie se hacía, sobre un eje de semanas vacías
+
+**§0 · El cuadre, medido antes de tocar nada** (N-2, D-589). Se corrió el agregador real contra una
+**copia** del hub de esta máquina —`atalaya` (5 hallazgos, 0 sesiones, inventario de 297 unidades)
+y `xblast` (399 hallazgos, 69 sesiones, inventario de 923)— con el reloj fijado en **2026-09-07
+12:00 local**. «Esperado» sale de contar los ficheros con un script que **reimplementa la fórmula
+de credits desde `model-rates.json`**, para no comprobar el agregador consigo mismo; «Mostrado» es
+lo que devuelve `MetricsQuery.Build` con el filtro en «todas» y cuatro semanas.
+
+| Cifra | Esperado (ficheros) | Mostrado | Veredicto |
+|---|---|---|---|
+| Cobertura (todas) | 38 de 1.180 unidades · 2 aplicaciones | 3,22 % · 38/1.180 · 2 apps | ✅ |
+| Cobertura (solo xblast) | 38 de 888 · ciclo 1 | 4,28 % · 38/888 · ciclo 1 | ✅ |
+| Cobertura al empezar el periodo | 0 de 1.180 (todo se auditó en septiembre) | 0/1.180 | ✅ |
+| Deuda activa | 395 | 395 | ✅ |
+| Nuevos en el periodo | 404 | 404 | ✅ |
+| Resueltos en el periodo | 9 | 9 | ✅ |
+| Deuda al empezar el periodo | 0 | 0 | ✅ |
+| Coste del periodo | 2.658,7044 cr (26,59 $) | 2.658,7044 | ✅ |
+| Sesiones del periodo | 69 (38 lotes · 20 fix · 11 verify) | 69 | ✅ |
+| Coste por unidad auditada | 1.848,1595 / 43 = 42,98 cr | 42,98 | ✅ |
+| Coste por hallazgo resuelto | 2.658,7044 / 9 = 295,41 cr | 295,4116 | ✅ |
+| Periodo anterior (14/07–11/08) | **no hay**: 0 sellos antes del 11/08 | `HasPreviousPeriod = false` | ✅ |
+| Las cuatro tendencias | **ninguna** (D-318) | ninguna | ✅ |
+| Eje: primer cubo | 1 sept (la actividad empieza el 4; manda el mínimo de 7 días) | 1 sept, 7 cubos de 28 | ✅ |
+| Eje: último cubo | contiene hoy | 7 sept | ✅ |
+
+**Lo que el cuadre enseñó de paso, y explica la fase entera**: en este hub **no hay periodo
+anterior**. Todo lo registrado cabe en cuatro días, y el panel dibujaba ocho semanas —seis de ellas
+línea plana— y comparaba «resueltos» contra un cero que no era una medida, era una ausencia.
+
+**§0 · Las tarjetas que había, y qué pasa con cada una.** Ninguna se retira sin estar en esta lista.
+
+| Hoy | Qué pasa | Dónde queda lo que enseñaba |
+|---|---|---|
+| **Hallazgos activos** (cifra + 4 pastillas de gravedad) | Se convierte en **Deuda activa** | La cifra es la misma; **las pastillas se van**: el reparto por gravedad es la fila de roscos «Severidad por aplicación», que además lo da por aplicación y se puede pulsar |
+| **Resueltos en el periodo** (cifra + delta) | **Se va** | Los resueltos son el subtítulo de **Deuda activa** («−7 resueltos») y de **Coste por hallazgo resuelto**; el delta lo sustituye la tendencia, que ahora es un porcentaje y no un número absoluto |
+| **Coste del periodo** | Se convierte en **Coste** | La cifra y su unidad, igual |
+| ↳ su línea «~X por unidad · N unidades · ≈ Y $» | **Se va** el «≈ Y $» y las «N unidades» sueltas | El «por unidad auditada» es el subtítulo de la nueva; el equivalente en la otra divisa pasa al **tooltip** de la tarjeta |
+| ↳ el desglose **por proveedor** (solo con dos casas facturando) | **Se va** | La columna «Proveedor» del registro de actividad |
+| ↳ el reparto **por fase** (3 filas: descubrimiento, verificación, arreglo) | **Se va** | La columna «Tipo» del registro de actividad — y vuelve en la Entrega 2 como el rosco **«Coste por acción»**, con el mismo dato, por aplicación y con porcentajes |
+| ↳ la nota «N sesiones con Claude Code: no se tarifan» | **Se muda** encima de la rejilla | Explica dos de las cuatro cifras, no una, y es un párrafo: dentro de una tarjeta la haría el doble de alta que sus vecinas y `ColumnsPanel` igualaría por la peor (D-990) |
+| **Cobertura del ciclo** | Se convierte en **Cobertura** | La cifra es la misma; el «N grandes excluidas» pasa al **tooltip** |
+
+**§1.1 — Cuatro semanas por defecto.** `MetricsFilter.Default` y la selección inicial del
+desplegable. El selector conserva sus cuatro opciones. No es solo el eje: el periodo por defecto
+decide también qué es «el periodo anterior» de cada tendencia, y comparar contra ocho semanas de
+las que seis están vacías no compara nada.
+
+**§1.2 — La regla del eje, y por qué es una regla.** *En toda gráfica con tiempo, el eje empieza en
+el primer cubo con actividad dentro del periodo —una sesión, un evento de hallazgo, un coste—, con
+un mínimo de siete días y de dos cubos, y el último cubo sigue conteniendo hoy (D-593).* **La línea
+plana de las semanas sin Atalaya no es un dato**: «no hubo gasto» es una medida y «no había nada
+que medir» es una ausencia, y un eje que las pinta iguales aplasta contra el suelo la única semana
+con cifras. Los dos topes están por lo mismo que el eje va en números redondos (D-313): un solo
+punto no es una gráfica, y de una serie de un punto no se puede leer si sube o baja. **El periodo
+NO se mueve**: las cuatro cifras y el «periodo anterior» siguen siendo los del rango elegido; lo
+que se recorta es lo que se dibuja — y cuando se recorta, la cabecera lo dice, porque un rótulo que
+prometiera un eje que no está es el defecto de D-593 puesto del revés. La definición de «actividad»
+es **una** (`ActivityStamps`) y la comparten el eje y el «¿hay periodo anterior?», para que no
+puedan discrepar.
+
+**§1.3 — Las cuatro cifras.** Cobertura · Deuda activa · Coste · Coste por hallazgo resuelto: qué
+parte está mirada, cuánto queda por arreglar, cuánto costó y a cómo sale cada arreglo. Un número
+grande centrado, una línea pequeña debajo y una flecha contra el periodo anterior, y las cuatro con
+**Copiar** (F33, D-1038): el mismo botón de texto en la esquina superior derecha, el mismo toast, y
+si el portapapeles no está se dice en vez de fingir que se copió. El texto copiado lleva el título
+delante — un «62 %» pegado en un correo no dice de qué es.
+
+- **Son UNA plantilla sobre una lista, no cuatro bloques de XAML.** Eran cuatro `Border` con cuatro
+  maneras de poner la cifra y su unidad, y la de coste medía el triple que sus vecinas: exactamente
+  lo que `ColumnsPanel` tiene después que igualar (D-990). Con un `StatCard` y una plantilla, las
+  cuatro no pueden diferir en su forma y «Copiar» se escribe una vez.
+- **El color de la flecha sale de un NOMBRE, no de un pincel.** El view-model anterior resolvía el
+  verde del delta con un `#3FB950` a mano — el defecto de D-971, un pincel ya resuelto no se entera
+  de que el tema ha cambiado. La tarjeta lleva `Good`/`Bad`/`Neutral` y la pinta un `DataTrigger`
+  con `Brush.Success.Ink` y `Brush.Danger.Ink`, igual que las pastillas de gravedad desde D-990.
+- **La cobertura se agrega en UNIDADES**, aplicación por aplicación contra su ciclo en curso.
+  Nunca se promedian porcentajes (5 de 20 es 25 %, no la media de 40 % y 10 %) y **el número de
+  ciclo solo aparece con una aplicación en el filtro**; con varias se dice cuántas son. Un ciclo
+  sobre una suma de ciclos distintos no significa nada.
+- **La tendencia de la cobertura se reconstruye del inventario**: una unidad estaba auditada al
+  empezar el periodo si la sesión que la auditó ya había arrancado (`AuditedInSession`). Una
+  auditada sin sesión que la date **cuenta como pendiente**: es lo conservador —declara menos
+  cobertura de la que hubo, nunca más— y es lo único que se puede decir de ella.
+- **La deuda activa es la de hoy, que es la del cierre del periodo.** El extremo derecho del rango
+  es siempre la medianoche de mañana (D-593), así que «responde al periodo» y «es la foto de hoy»
+  (D-320) dicen lo mismo. Lo que sí cambia con el periodo es contra qué se compara: la deuda viva
+  al empezarlo, reconstruida con `AliveAt` (D-594).
+- **El coste no lleva juicio de color.** Gastar más puede ser que se esté auditando más: su flecha
+  va en gris siempre (`TrendGoodness.Neutral`). Pintarla de rojo convertiría el panel en un juicio
+  sobre una decisión que no ha tomado.
+- **D-318, tres veces.** Sin periodo anterior no hay flecha; con periodo anterior pero cifra
+  anterior cero **tampoco**, y las dos frases son distintas —«sin periodo anterior» y «sin cifra
+  anterior con la que comparar»— porque los dos motivos son distintos y decir el primero cuando
+  pasa el segundo sería falso. Y sin resueltos, el coste por hallazgo resuelto es «—» con su
+  frase: no es cero ni infinito, es una división que no se puede hacer.
+
+**La unidad se escribe como la escribe la aplicación.** El encargo pedía «4.960 cr»; la unidad que
+la aplicación usa en todas partes es **«credits»** (o «$»), y la escribe `CostFormat`, que es el
+único sitio que sabe en qué divisa se enseña un coste (F29 §2). Inventar aquí una abreviatura sería
+una quinta forma de nombrar la misma unidad — se usa la que hay.
+
+**Cobertura (N-5): 14 casos de regla, ninguno de forma.** Las cuatro cifras y sus cuatro
+tendencias sobre un hub escrito para el caso, **contra valores calculados a mano en el comentario
+del fixture** (cobertura del 20 % al 40 %, deuda de 3 a 4, coste de 100 a 300, coste por resuelto
+de 100 a 300); la agregación de cobertura con **dos apps en ciclos distintos** (suma de unidades y
+sin ciclo en el texto); sin actividad anterior, las cuatro flechas se callan a la vez; una
+tendencia contra cero no se escribe; sin resueltos no hay coste por resuelto; el eje empieza en el
+primer cubo con actividad, nunca baja de siete días ni de dos cubos, y su último cubo contiene hoy;
+un periodo entero sin actividad deja el eje en el mínimo; el periodo por defecto son cuatro
+semanas; conmutar $/créditos cambia **las dos tarjetas de coste y ninguna otra**; y el «Copiar» se
+lleva el título, el número, el subtítulo y la tendencia. Cuatro tests existentes cambian de
+expectativa —los que contaban cubos del periodo entero—: ese es justamente el comportamiento que
+esta entrega cambia, y ahora declaran por qué su eje no se recorta. La tanda queda en **2.625
+casos** (2.090 en la aplicación). De paso, `NoPhaseNamesTests` cazó un «(D-591)» que se me había
+colado en un tooltip: un código de decisión no es texto para el usuario.
+
+**Lo que NO se ha comprobado, y se dice**: el aspecto. Es una fase de presentación y el ciclo es
+cambio → build → tests → `dist` → parar (N-8). Que las cuatro tarjetas queden a la misma altura con
+subtítulos de longitudes distintas, que el «Copiar» de la esquina no apriete el título, y que el
+verde y el rojo de las flechas se lean en los dos temas, lo mira el usuario en el `dist`.

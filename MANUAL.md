@@ -520,10 +520,40 @@ se quedan** en tu clon: la próxima vez que abras, esta pantalla te ofrece desca
 ### Métricas
 
 El panel de mando, filtrable por **aplicación** y **periodo** — y los dos filtros
-afectan a todo lo de abajo.
+afectan a todo lo de abajo, sin excepción. Al abrir son **todas las aplicaciones y cuatro
+semanas**.
 
-Cuatro cifras arriba: hallazgos activos por severidad, resueltos en el periodo (con su
-delta), coste del periodo y cobertura del ciclo.
+**Cuatro cifras arriba**, cada una con un número grande, la línea que dice de dónde sale y una
+flecha contra el **periodo anterior** —los mismos días inmediatamente antes—. La flecha va en
+verde cuando la cifra se movió a mejor y en rojo cuando se movió a peor; el coste no lleva color,
+porque gastar más no es malo por sí mismo. Las cuatro tienen **Copiar**: se llevan al portapapeles
+el número, su línea y la tendencia.
+
+1. **Cobertura** — qué parte del inventario del ciclo en curso está auditada: «62 % · 412 de 665
+   unidades · ciclo 3». El número de ciclo solo aparece con **una** aplicación en el filtro; con
+   varias se dice cuántas son («1.140 de 1.965 unidades · 4 aplicaciones»), porque un ciclo sobre
+   una suma de ciclos distintos no significa nada. La cuenta se hace por aplicación contra su
+   propio ciclo y se suma en **unidades**, nunca promediando porcentajes. Subir es bueno.
+2. **Deuda activa** — los hallazgos vivos hoy, con lo que entró y lo que se saldó dentro del
+   periodo: «49 · +8 nuevos · −7 resueltos». La flecha compara con la deuda que había al empezar
+   el periodo. Bajar es bueno.
+3. **Coste** — lo que se gastó en el periodo, en la unidad que tengas puesta en **Ajustes →
+   Tarifas** (AI credits o dólares), con las sesiones que lo produjeron y lo que costó cada unidad
+   auditada: «1.240 $ · 31 sesiones · 3,0 $ por unidad auditada».
+4. **Coste por hallazgo resuelto** — el gasto del periodo repartido entre lo que se saldó: «177 $ ·
+   7 resueltos · 210 $ el periodo anterior». Bajar es bueno.
+
+**Ninguna cifra se inventa.** Si no hubo periodo anterior —esta herramienta no estaba puesta— no
+hay flecha, y lo dice. Si lo hubo pero su cifra era cero, tampoco: dividir por cero no da un
+porcentaje. Y sin resueltos en el periodo, el coste por hallazgo resuelto es **«—»** con su frase,
+no un cero ni un infinito.
+
+**El eje de tiempo empieza donde empezó a pasar algo.** En toda gráfica con tiempo, el eje arranca
+en el **primer tramo con actividad** dentro del periodo —una sesión, un hallazgo detectado, una
+resolución— y nunca mide menos de **siete días** ni enseña un solo punto. El último tramo sigue
+conteniendo **hoy**. Las semanas planas de antes de empezar a usar Atalaya no son un dato: son la
+ausencia de uno, y aplastaban contra el suelo la única semana con cifras. Cuando el eje se recorta,
+la cabecera lo dice («las gráficas empiezan el 1 sept, el primer tramo con actividad»).
 
 **Los porcentajes no redondean hacia una mentira.** Si hay una sola unidad auditada, la
 cobertura nunca se enseña como 0 % —3 de 1.335 son «0,2 %», no «0 %»—, y si queda una sola
@@ -533,19 +563,20 @@ salva, se dice **«< 0,1 %»** o **«> 99,9 %»**. El 0 % y el 100 % exactos sí
 verdad y significan algo. Los decimales solo salen cuando hacen falta — «42 %» se lee de un
 vistazo y «42,0 %» no dice nada más.
 
-El **coste del periodo** va en **AI credits** —la misma unidad que el panel de Copilot de tu
-organización— e incluye **todas** las sesiones de Copilot que gastaron: auditorías, arreglos
-asistidos y verificaciones. Debajo tienes el equivalente en dólares (1 credit = 0,01 $). Si alguna
-sesión usó un modelo sin tarifa, el azulejo lo dice —falta gasto por contar y no se disimula— y el
-enlace **Ajustes → Tarifas** te lleva a arreglarlo.
+El **coste** va en **AI credits** —la misma unidad que el panel de Copilot de tu
+organización— o en dólares, según el conmutador de Ajustes → Tarifas (1 credit = 0,01 $), e
+incluye **todas** las sesiones de Copilot que gastaron: auditorías, arreglos asistidos y
+verificaciones. Si alguna sesión usó un modelo sin tarifa, un aviso encima de las cuatro cifras lo
+dice —falta gasto por contar y no se disimula— y el enlace **Ajustes → Tarifas** te lleva a
+arreglarlo.
 
 **Esta cifra es la factura de tu organización, y solo eso.** Las sesiones de Claude Code no entran:
-ese consumo va contra la suscripción de quien las lanzó y no se tarifa. Si las hubo, el azulejo lo
-dice con cuántas fueron — no para que busques una tarifa que falta, sino para que sepas por qué el
-coste no cubre toda la actividad que ves más abajo. Esas sesiones **sí** están en la sexta gráfica,
-con su proveedor y sus tokens.
+ese consumo va contra la suscripción de quien las lanzó y no se tarifa. Si las hubo, encima de las
+cifras se dice con cuántas fueron — no para que busques una tarifa que falta, sino para que sepas
+por qué el coste no cubre toda la actividad que ves más abajo. Esas sesiones **sí** están en el
+registro de actividad, con su proveedor y sus tokens.
 
-El «por unidad auditada» que va debajo divide solo lo que costó **auditar** entre las unidades
+El «por unidad auditada» divide solo lo que costó **auditar** entre las unidades
 auditadas — un arreglo no audita ninguna unidad, así que repartir su gasto entre ellas daría un
 número que no significa nada. Cómo se calcula todo esto está en **[El coste, dicho como
 es](#el-coste-dicho-como-es)**.
@@ -1623,9 +1654,9 @@ No hace falta calcularlo a mano. El número está en tres sitios:
 - **En el informe de la sesión**, en una línea bajo los tokens:
   *«andamiaje ≈ 27.900 tokens/llamada · código auditado ≈ 600 (2,1 %) · 11 llamadas por unidad»*,
   más el desglose **pasada a pasada** con lo que aportó cada bloque y cuánto tardó.
-- **En Métricas**, bajo el coste del periodo: el reparto por **fase** —descubrimiento,
-  verificación y arreglo—, con sus sesiones, sus llamadas, sus tokens y su coste. Es la respuesta a
-  «¿en qué se me va el dinero?» sin abrir informes uno a uno.
+- **En el registro de actividad de Métricas**, fila a fila: el tipo de cada sesión —auditoría,
+  verificación, arreglo—, con su coste y sus tokens. Es la respuesta a «¿en qué se me va el
+  dinero?» sin abrir informes uno a uno.
 
 El informe añade además el diagnóstico de la **caché**: cuánto se escribió, cuánto era inevitable
 —una vez el prefijo estable, una vez la parte variable de cada prompt— y cuánto son

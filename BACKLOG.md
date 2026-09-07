@@ -509,6 +509,15 @@ editores es la única puerta).
 
 ## Cerrado
 
+- **F35 · Entrega 1 — Periodo, ejes y las cuatro tarjetas** — el panel por defecto pasa a **cuatro
+  semanas**, el eje de toda gráfica con tiempo empieza en el **primer tramo con actividad** (mínimo
+  siete días y dos cubos; el último sigue conteniendo hoy) y las cuatro cifras de cabecera son
+  ahora **Cobertura · Deuda activa · Coste · Coste por hallazgo resuelto**, cada una con su
+  tendencia contra el periodo anterior y su «Copiar». Cuadre a mano contra el hub de esta máquina
+  antes de tocar nada; la lista de qué pasa con cada tarjeta que había, en D-1040. **Pendiente: la
+  Entrega 2** (coste por acción, antigüedad de la deuda y top 5 de reglas), que no empieza hasta
+  que el usuario revise el `dist`. Ver D-1040.
+
 - **F33 · Un solo «Verificar ahora», y copiar el hallazgo y sus metadatos** — el aviso ámbar
   pierde su botón (era el mismo comando y el mismo rótulo que el de la botonera) y el de la
   botonera se pinta con el verde de «Arreglar con agente» mientras haya algo que verificar:
