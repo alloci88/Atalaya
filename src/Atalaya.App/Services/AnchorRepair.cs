@@ -52,14 +52,26 @@ public sealed class AnchorRepair
                 continue;
             }
 
-            int corrected = Correct(lines, loc);
+            (int corrected, bool rehash) = Correct(lines, loc);
             if (corrected == loc.Line || corrected < 1 || corrected > lines.Length)
             {
                 continue;
             }
 
             loc.Line = corrected;
-            loc.SnippetHash = CodeAnchor.ComputeSnippetHash(lines[corrected - 1]);
+
+            // BUGFIX-ANCLA — EL HASH SOLO SE REESCRIBE SI EL ANCLA SE ENCONTRÓ. Cuando no está
+            // en el fichero, el texto auditado se perdió y calcular un hash nuevo sobre la
+            // línea a la que se baja fabricaría un ancla a código que nadie auditó: la próxima
+            // lectura diría «anclado» y el aviso desaparecería para siempre, que es justo lo
+            // que D-226 prohíbe. Se mueve el número —para que deje de ser una llave— y se deja
+            // el ancla: el par pasa a decir «el texto auditado era éste, y donde vivía es
+            // ésta», que es la verdad. Un test de R13 §0(b) cazó la primera versión de esto.
+            if (rehash)
+            {
+                loc.SnippetHash = CodeAnchor.ComputeSnippetHash(lines[corrected - 1]);
+            }
+
             repaired++;
         }
 
@@ -71,8 +83,11 @@ public sealed class AnchorRepair
         return repaired;
     }
 
-    /// <summary>La línea a la que debería apuntar esta ubicación, o la que ya tiene.</summary>
-    private static int Correct(string[] lines, Location loc)
+    /// <summary>
+    /// La línea a la que debería apuntar esta ubicación —o la que ya tiene—, y si el ancla se
+    /// puede recalcular sobre ella.
+    /// </summary>
+    private static (int Line, bool Rehash) Correct(string[] lines, Location loc)
     {
         bool inRange = loc.Line >= 1 && loc.Line <= lines.Length;
 
@@ -91,9 +106,17 @@ public sealed class AnchorRepair
             anchored = LocationAnchor.FindByHash(lines, loc.SnippetHash, loc.Line);
         }
 
-        // El hash no está en el fichero: el código cambió de verdad. No se toca — es el único caso
-        // en el que el aviso de la ficha tiene que salir.
-        return anchored < 1 ? loc.Line : SymbolAnchor.FirstCodeLine(lines, loc.Path, anchored);
+        // BUGFIX-ANCLA — LOS DOS CASOS DE D-226 SON INDEPENDIENTES, y hasta aquí el (2) colgaba
+        // del (1): cuando el hash no aparecía se devolvía la línea sin más, así que un hallazgo
+        // anclado a una llave se quedaba anclado a una llave para siempre. Medido: 69 de 398
+        // ubicaciones del hub de xblast. Bajar una llave a la primera línea ejecutable de su
+        // miembro **no** es re-anclar por símbolo —eso es lo que D-226 prohíbe, y sigue
+        // prohibido—: es el mismo hecho demostrable del caso (2), y se puede demostrar sin el
+        // hash. Lo que sigue intacto es que un hash ausente **no mueve la ubicación de miembro**:
+        // se queda dentro del que ya tenía, y el aviso y el «Verificar ahora» siguen saliendo.
+        bool found = anchored >= 1;
+        int start = found ? anchored : loc.Line;
+        return (SymbolAnchor.FirstCodeLine(lines, loc.Path, start), found);
     }
 
     private static string[]? Read(Dictionary<string, string[]?> cache, string clonePath, string path)

@@ -179,7 +179,21 @@ public static partial class SymbolAnchor
         return member is null ? null : MemberLabel(member);
     }
 
-    /// <summary>Del <c>symbol</c> declarado salen sus partes, la más específica primero.</summary>
+    /// <summary>
+    /// Del <c>symbol</c> declarado salen sus partes, la más específica primero.
+    /// <para>
+    /// <b>Y la barra separa, que es lo que faltaba</b> (BUGFIX-ANCLA). Medido en el hub de
+    /// xblast: el auditor nombra varios miembros separándolos con <c>/</c>
+    /// —<c>Set/SetForUg*/SetFaceProfiling/ExtendCurrentTerrain</c>,
+    /// <c>cursorOverMe/isInPolygon/firstDistanceBorehole</c>—, y sin la barra en la lista eso
+    /// era <b>un solo token</b> que <see cref="IsIdentifier"/> rechazaba por llevar caracteres
+    /// que no son de identificador. Resultado: del símbolo no salía <b>ningún</b> candidato, la
+    /// cascada se quedaba con lo que adivinara del título —«Catch», de «Catch genérico que solo
+    /// loguea»— y el paso 3 fallaba con el miembro delante. El <c>*</c> también separa, así que
+    /// <c>SetForUg*</c> deja <c>SetForUg</c>: si ese miembro existe, casa; si no, se prueba el
+    /// siguiente candidato, que es exactamente lo que la cascada ya hacía.
+    /// </para>
+    /// </summary>
     private static IEnumerable<string> SplitSymbol(string? symbol)
     {
         if (string.IsNullOrWhiteSpace(symbol))
@@ -188,7 +202,12 @@ public static partial class SymbolAnchor
         }
 
         string[] parts = symbol.Split(
-            new[] { '.', '(', ')', ',', ' ', '<', '>', ':', '#' }, StringSplitOptions.RemoveEmptyEntries);
+            new[]
+            {
+                '.', '(', ')', ',', ' ', '<', '>', ':', '#',
+                '/', '\\', '|', '*', '+', ';',
+            },
+            StringSplitOptions.RemoveEmptyEntries);
         for (int i = parts.Length - 1; i >= 0; i--)
         {
             string p = parts[i].Trim();

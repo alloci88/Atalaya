@@ -673,7 +673,16 @@ public sealed class SessionToolbox : IAuditToolbox, ISweepCreations
     private Location BuildLocation(string path, int line, string? snippet)
     {
         string? hash = snippet is null ? null : CodeAnchor.ComputeSnippetHash(snippet);
-        return new Location(path, LocationAnchor.ResolveOnDisk(_clonePath, path, line, hash), hash);
+        int resolved = LocationAnchor.ResolveOnDisk(_clonePath, path, line, hash);
+
+        // BUGFIX-ANCLA — Y NUNCA SE GUARDA UNA LLAVE, UN COMENTARIO NI UN BLANCO. Hasta aquí
+        // solo se aplicaba el caso (1) de D-226 —buscar el snippet—, y cuando el snippet no
+        // aparecía se guardaba el número que dijo el LLM tal cual. Medido en el hub de xblast:
+        // 69 de 398 ubicaciones tenían como línea del hallazgo una llave, un comentario, un
+        // atributo o una línea en blanco. El caso (2) —bajar a la primera línea ejecutable del
+        // miembro— existía solo al abrir la ficha, y allí colgado del (1). Aquí se aplica
+        // siempre, que es donde nace el dato.
+        return LocationAnchor.OnFirstCodeLine(_clonePath, path, resolved, hash);
     }
 
     private SubmitFindingResult Reject(string reason, SubmitFindingArgs? args)

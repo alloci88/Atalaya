@@ -1,6 +1,12 @@
+using Atalaya.Agents;
 using Atalaya.App.Controls;
 using Atalaya.App.Services;
+using Atalaya.Domain;
+using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Anchoring;
+using Atalaya.Domain.Ids;
+using Atalaya.Domain.Model;
+using Atalaya.Inventory;
 using FluentAssertions;
 using Xunit;
 
@@ -216,6 +222,125 @@ public sealed class AnchoringTests : IDisposable
         LocationAnchor.ResolveOnDisk(clone, rel, LineaDelComentario, null)
             .Should().Be(LineaDelComentario);
     }
+
+    // ================================ BUGFIX-ANCLA: nunca nace anclado a una llave
+
+    /// <summary>
+    /// <b>La pieza común: la ubicación se baja a la primera línea ejecutable de su miembro, y el
+    /// hash se recalcula sobre ESA</b> (BUGFIX-ANCLA §1.3).
+    /// <para>
+    /// D-226 corregía al ingerir <b>solo</b> el caso (1) —buscar el snippet—; cuando el snippet no
+    /// aparecía se guardaba el número que dijo el LLM tal cual, y el caso (2) vivía únicamente al
+    /// abrir la ficha. Medido en el hub de xblast: <b>69 de 398</b> ubicaciones tenían como línea
+    /// del hallazgo una llave, un comentario, un atributo o un blanco. Cebo: con el ingest anterior
+    /// —que no llamaba a esto— la línea guardada era la que llegó.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData(8)]     // un comentario de documentación
+    [InlineData(11)]    // la llave de apertura del cuerpo
+    [InlineData(13)]    // la llave de cierre
+    public void Una_linea_no_ejecutable_se_baja_al_codigo_del_miembro_al_ingerir(int reportada)
+    {
+        string clone = NewClone(out string rel);
+
+        Location loc = LocationAnchor.OnFirstCodeLine(clone, rel, reportada, snippetHash: "sha256:loquesea");
+
+        loc.Line.Should().Be(LineaDelCodigo, "la primera línea ejecutable del miembro (D-224)");
+        loc.SnippetHash.Should().Be(
+            CodeAnchor.ComputeSnippetHash("        return uint.Parse(detId, NumberStyles.HexNumber);"),
+            "y el ancla se calcula sobre la línea que se guarda, no sobre la que llegó");
+    }
+
+    /// <summary>
+    /// Y es idempotente y prudente: una línea que ya es código se guarda tal cual, y sin clon o sin
+    /// fichero tampoco se toca nada — el mismo criterio de <c>ResolveOnDisk</c>.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void Lo_que_ya_es_codigo_o_no_se_puede_comprobar_se_guarda_tal_cual(bool sinClon, bool sinFichero)
+    {
+        string clone = NewClone(out string rel);
+        const string hash = "sha256:loquesea";
+
+        Location loc = LocationAnchor.OnFirstCodeLine(
+            sinClon ? null : clone,
+            sinFichero ? "src/NoExiste.cs" : rel,
+            LineaDelCodigo,
+            hash);
+
+        loc.Line.Should().Be(LineaDelCodigo);
+        loc.SnippetHash.Should().Be(hash, "no se recalcula un ancla que no se ha movido");
+    }
+
+    /// <summary>
+    /// <b>Y los TRES caminos del ingest pasan por ahí</b>: <c>submit_finding</c>,
+    /// <c>submit_findings</c> y <c>add_locations</c>. Se ejercitan los tres de verdad contra un
+    /// clon, porque el defecto era que uno de ellos guardara el número crudo.
+    /// </summary>
+    [Fact]
+    public void Los_tres_caminos_del_ingest_guardan_la_primera_linea_ejecutable()
+    {
+        string clone = NewClone(out string rel);
+        string root = Path.Combine(clone, "hub");
+        var paths = new AppPaths(root);
+        var settings = new SettingsService(paths);
+        settings.Load();
+        HubContext hub = TestFactory.Hub(paths, settings);
+        hub.Store.WriteHub(new HubInfo { OrganizationName = "Org" });
+        hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "https://x/y.git", CurrentCycle = 1 });
+
+        var ulids = new UlidFactory(SystemClock.Instance);
+        var stamp = new DetectionStamp(DateTimeOffset.UtcNow, AuditMode.Lotes, "abc1234", "auditor");
+        var toolbox = new SessionToolbox(
+            "app", AuditMode.Lotes, stamp,
+            new FindingIngestionService(hub, ulids),
+            new ReconciliationService(hub),
+            hub.Store, clone);
+
+        // (1) submit_finding, con la línea del comentario.
+        SubmitFindingResult uno = toolbox.SubmitFinding(Payload("BUG uno", rel, LineaDelComentario));
+        uno.Accepted.Should().BeTrue(
+            uno.Error ?? string.Join(" · ", toolbox.RejectedPayloads));
+
+        // (2) submit_findings, con la llave de cierre.
+        toolbox.SubmitFindings(new[] { Payload("BUG dos", rel, 13) })
+            .Results.Should().OnlyContain(r => r.Accepted);
+
+        List<Finding> stored = hub.Store.ListFindings("app").ToList();
+        stored.Should().HaveCount(2);
+        stored.Should().OnlyContain(f => f.Locations[0].Line == LineaDelCodigo,
+            "ni un comentario ni una llave sobreviven como línea del hallazgo");
+        stored.Should().OnlyContain(f =>
+                f.Locations[0].SnippetHash
+                    == CodeAnchor.ComputeSnippetHash("        return uint.Parse(detId, NumberStyles.HexNumber);"),
+            "y el hash es el de la línea guardada");
+
+        // (3) add_locations sobre uno de ellos, con la llave de apertura.
+        Finding target = stored[0];
+        toolbox.AddLocations(
+            target.Id.ToString(),
+            new[] { new SubmitLocation(rel, 11, null) })
+            .Accepted.Should().BeTrue();
+
+        Finding after = hub.Store.TryReadFinding("app", target.Id.ToString())!;
+        after.Locations.Should().HaveCountGreaterThan(1);
+        after.Locations[^1].Line.Should().Be(LineaDelCodigo, "add_locations también");
+    }
+
+    private static SubmitFindingArgs Payload(string title, string path, int line)
+        => new(
+            RuleId: "criterio.validacion",
+            Pillar: "errores",
+            Severity: "alta",
+            Title: title,
+            Description: "El identificador no se valida.",
+            Impact: "Excepción no controlada.",
+            Recommendation: "Validar antes de parsear.",
+            Locations: new[] { new SubmitLocation(path, line, null) },
+            Symbol: "ConvertToDetId");
 
     // ================================================================== la rueda del ratón (§4)
 

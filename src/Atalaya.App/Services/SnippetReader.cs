@@ -393,14 +393,18 @@ public static class SnippetReader
                     + "código del miembro que la contiene.", string.Empty);
         }
 
-        // El código exacto no aparece: queda el símbolo.
+        // El código exacto no aparece: queda el símbolo. Y CON EL SÍMBOLO A LA VISTA NUNCA SE
+        // DICE «NO LOCALIZADO» (BUGFIX-ANCLA): el miembro está en el fichero, se resalta su
+        // primera línea ejecutable y se dice la verdad —el ancla se perdió, el método está—.
+        // Esto NO re-ancla en disco: D-226 sigue prohibiéndolo desde la ficha; aquí se pinta
+        // bien y se pide una verificación, que es quien sí puede escribirlo.
         SymbolHit hit = SymbolAnchor.FindMember(lines, loc.Path, symbols);
         if (hit.Found)
         {
             return (SnippetState.Reanclado, hit.Line,
-                $"El código de la línea {loc.Line} ya no es el que se auditó (commit "
-                + $"{ShortSha(anchoredCommit)}). El hallazgo se ha re-anclado a «{hit.Member}», que "
-                + "es el miembro que nombra.", "Verifica para confirmarlo.");
+                $"El código anclado ya no está en la línea {loc.Line} (commit "
+                + $"{ShortSha(anchoredCommit)}); se enseña «{hit.Member}» actual.",
+                "Verifica para confirmarlo o cerrarlo.");
         }
 
         return (SnippetState.NoLocalizado, inRange ? loc.Line : lines.Length,

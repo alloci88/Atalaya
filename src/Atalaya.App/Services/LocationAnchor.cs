@@ -1,4 +1,5 @@
 using Atalaya.Domain.Anchoring;
+using Atalaya.Domain.Model;
 
 namespace Atalaya.App.Services;
 
@@ -57,6 +58,46 @@ public static class LocationAnchor
     /// no está— la que dijo el auditor, tal cual. Nunca inventa: solo corrige lo que puede
     /// comprobar.
     /// </summary>
+    /// <summary>
+    /// La ubicación bajada a la primera línea <b>ejecutable</b> del miembro que la contiene, con
+    /// su hash recalculado sobre esa línea (BUGFIX-ANCLA).
+    /// <para>
+    /// Es el caso (2) de D-226 aplicado <b>donde nace el dato</b>. Una llave de cierre no es el
+    /// hallazgo: es el final del método de al lado, y un hash calculado sobre <c>}</c> no vuelve
+    /// a casar con nada. Si la línea ya era código, se devuelve la ubicación tal cual —esto es
+    /// idempotente— y si no hay clon, fichero o miembro alrededor, también.
+    /// </para>
+    /// </summary>
+    public static Location OnFirstCodeLine(
+        string? clonePath, string path, int line, string? snippetHash)
+    {
+        if (string.IsNullOrWhiteSpace(clonePath))
+        {
+            return new Location(path, line, snippetHash);
+        }
+
+        try
+        {
+            string abs = Path.Combine(clonePath, path.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(abs))
+            {
+                return new Location(path, line, snippetHash);
+            }
+
+            string[] lines = File.ReadAllLines(abs);
+            int code = SymbolAnchor.FirstCodeLine(lines, path, line);
+            return code == line || code < 1 || code > lines.Length
+                ? new Location(path, line, snippetHash)
+                : new Location(path, code, CodeAnchor.ComputeSnippetHash(lines[code - 1]));
+        }
+        catch (Exception)
+        {
+            // Bajar la línea es una mejora, no un requisito: si el disco falla se guarda lo que
+            // había, igual que hace ResolveOnDisk.
+            return new Location(path, line, snippetHash);
+        }
+    }
+
     public static int ResolveOnDisk(string? clonePath, string path, int line, string? snippetHash)
     {
         if (string.IsNullOrWhiteSpace(clonePath) || string.IsNullOrEmpty(snippetHash))

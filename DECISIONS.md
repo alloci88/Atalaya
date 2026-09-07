@@ -17748,3 +17748,106 @@ avería que sufría el usuario, reproducida dentro de la suite. La cifra, del ba
 fallo de quien llamó** y no un éxito. Y no se ha probado con un editor real contra una unidad de red
 desconectada: eso es lo que originó D-208 y sigue sin poder reproducirse en una máquina de
 desarrollo.
+## BUGFIX-ANCLA — El falso «no localizado», y el verify que confirmaba sin re-anclar
+
+### D-1037 — La barra que no separaba, el ingest que guardaba llaves, y el veredicto que ya es la evidencia que D-226 pedía
+
+**Las cinco medidas del §0, y dos de ellas dicen otra cosa que el encargo.** Se midieron con el
+hallazgo real y el clon de X-BLAST antes de tocar una línea.
+
+**(1) La línea guardada y su ancla.** El hallazgo que el usuario describió **no** es el de
+`TranslateBoreholeCoordenatesUG`: es **BUG-0213**, `Object3DTerrain.cs:507`, de la misma tanda de
+las 08:32. La 507 es la **llave de cierre** de `TranslateBoreholeCoordenatesUG` (495–507), que es
+otro método — y por eso la ficha enseñaba ése mientras decía «no localizado»:
+`MethodBoundary.ForLine(507)` devuelve `495..507`, «Object3DTerrain.TranslateBoreholeCoordenatesUG».
+El `snippetHash` guardado **no aparece en el fichero**: ni en su línea, ni en ninguna otra, ni en
+ninguna ventana de 2 a 6 líneas. Y el fichero es **idéntico** en `5488137` y en HEAD, así que no es
+deriva: el ancla nació sin corresponder a nada. De paso, el que sí se nombraba —**BUG-0224**, línea
+505, una línea **en blanco**— **ya funcionaba**: su cascada da `Reanclado`, resalta la 497 y avisa.
+El defecto no estaba donde parecía.
+
+**(2) Por qué fallaba el paso 3, que no es ninguna de las tres hipótesis.** No busca el nombre
+cualificado como literal, Roslyn no se cae y el paso sí se ejecuta. Lo que pasa es que
+**`SplitSymbol` no separaba por `/`**, y el auditor nombra varios miembros así:
+`Set/SetForUg*/SetFaceProfiling/ExtendCurrentTerrain`. Sin la barra, eso era **un solo token** que
+`IsIdentifier` rechazaba —lleva `/` y `*`—, así que del símbolo salían **cero** candidatos y la
+cascada se quedaba con lo que adivinara del título: `[Catch]`, de «**Catch** genérico que solo
+loguea». Con `SetFaceProfiling` y `ExtendCurrentTerrain` declarados en el fichero, el paso 3 fallaba
+**con el miembro delante**. Igual en MEJ-0129
+(`cursorOverMe/isInPolygon/firstDistanceBorehole/lastDistanceBorehole` → `[DataMember, Campos]`).
+
+**(3) Por qué D-226 caso (2) no actuó, en sus dos mitades.** **Al ingerir: no estaba
+implementado.** `SessionToolbox.BuildLocation` llamaba a `LocationAnchor.ResolveOnDisk`, que es
+**solo** el caso (1) —buscar el snippet—, y cuando no lo encuentra devuelve `line` tal cual;
+`FirstCodeLine` no se llamaba desde ahí. Y sí, el camino de «Lotes» pasa por `SessionToolbox`: los
+tres —`submit_finding`, `submit_findings` y `add_locations`— funnelan por `BuildLocation`.
+**Al abrir la ficha: estaba, pero colgado del caso (1).** `AnchorRepair.Correct` acababa en
+`return anchored < 1 ? loc.Line : SymbolAnchor.FirstCodeLine(...)`: cuando el hash no aparece se
+devuelve la línea **sin bajarla**. Los dos casos de D-226 no eran independientes, y un hallazgo con
+el ancla perdida se quedaba anclado a una llave para siempre.
+
+**(4) Las cuentas.** Del hub de X-BLAST: **398** ubicaciones con línea, **159** de la tanda de las
+08:32, **19** que salen «no localizado» al abrirlas —**5** de esa tanda— y **69** con una llave, un
+comentario, un atributo o una línea en blanco como línea del hallazgo. Y no todas las 19 son falsas:
+**BUG-0101** nombra `TratamientoInicialLinea`, que **ya no existe** en `LogController.cs` (lo
+renombró un arreglo anterior), así que ése es un «no localizado» legítimo de D-494.
+
+**(5) El verify que confirma y no re-ancla.** Medido sobre BUG-0101, verificado y confirmado:
+`f.Confirm(AuditMode.Verify, stamp)` refresca `LastConfirmed` —su commit pasó de `5488137` a
+`5b659a4`— y **no toca `Locations[0]`**: ni la línea ni el `snippetHash`. Por eso el aviso seguía
+igual al volver a abrir la ficha.
+
+**Las cuatro reglas que entran.**
+
+**(a) Con el símbolo a la vista, nunca «no localizado».** La cascada ya lo hacía; lo que faltaba era
+que el símbolo produjera candidatos, así que `SplitSymbol` separa también por `/ \ | * + ;`. El `*`
+separa a propósito: `SetForUg*` deja `SetForUg`, y si ese miembro no existe se prueba el candidato
+siguiente, que es lo que la cascada ya hacía. El aviso pasa a decir «el código anclado ya no está en
+la línea N (commit X); se enseña «Miembro» actual. Verifica para confirmarlo o cerrarlo», y
+**«no localizado» queda para D-494**: sin ancla, sin símbolo y sin nada que enseñar. **Esto no
+cambia D-226**: desde la ficha no se re-ancla por símbolo en disco — se pinta bien y se dice la
+verdad.
+
+**(b) Verificar con veredicto que confirma re-ancla en disco.** Es la evidencia que D-226
+reservaba: el agente acaba de mirar el código de hoy y ha dicho que el defecto sigue en ese miembro.
+Se guarda la línea (la primera ejecutable del miembro juzgado), el hash de esa línea y el commit de
+hoy —que `Confirm` ya refrescaba—, y el historial lo dice **en el mismo evento**: «re-anclado
+507 → 497». Solo con `Basis == Simbolo`: con el ancla exacta no hay nada que mover, y con la unidad
+entera (D-813) no hay miembro al que apuntar, así que inventarse una línea sería lo que D-225
+prohíbe. Un «no concluyente» **no toca el ancla** — una no-respuesta no es evidencia de dónde está
+el código—. Idempotente: con la línea ya buena no escribe ni anota movimiento.
+
+**(c) Nunca se guarda una llave, un comentario ni un blanco.** `LocationAnchor.OnFirstCodeLine` baja
+la línea a la primera ejecutable de su miembro y **recalcula el hash sobre ésa**, y lo llaman los
+tres caminos del ingest por `BuildLocation`. D-224 ya lo hacía al pintar; ahora nace bien guardado.
+
+**(d) Los ya guardados se corrigen al abrir la ficha, con el ancla intacta.** Los dos casos de D-226
+dejan de estar encadenados. **Y aquí la primera versión estaba mal, y la cazó la suite**: recalculaba
+el hash sobre la línea nueva, con lo que la próxima lectura decía «anclado» y el aviso desaparecía
+para siempre — exactamente lo que D-226 prohíbe—. El test de R13 §0(b) se puso rojo. La versión que
+queda **mueve el número y deja el ancla**: el par pasa a decir «el texto auditado era éste, y donde
+vivía es ésta», que es la verdad, y el aviso y el «Verificar ahora» siguen saliendo.
+
+**Lo visible (N-6), y nada más.** En la **ficha**: con símbolo presente y ancla perdida se resalta la
+primera línea ejecutable del método y el aviso cambia de texto; el «no localizado» de verdad sigue
+igual, sin resaltado. En el **historial**: el evento de la verificación puede llevar «re-anclado
+N → M». No se toca el prompt del verificador (D-495) ni ninguna otra vista.
+
+**Cobertura (N-5): trece casos de regla, cebo comprobado en los dos que lo pedían.** El caso real
+reconstruido —línea guardada = llave de cierre, `symbol` con barras y comodín, ancla perdida— exige
+`Reanclado`, resaltado en la primera ejecutable y **nada** de «no localizado»; **cebo: sin la barra
+como separador, rojo**. Su contrario fija que D-494 sigue vivo: sin ancla y sin símbolo, «No
+localizado» y sin resaltar. Del ingest: una `[Theory]` de tres sobre la pieza común —comentario,
+llave de apertura, llave de cierre— más los **tres caminos** ejercitados de verdad contra un clon;
+**cebo: con el ingest anterior, el de los tres caminos se pone rojo** (los tres de la pieza siguen
+verdes, que es lo correcto: prueban la función, no el cableado). Del verify: confirma → línea, hash,
+commit y evento con «re-anclado»; ancla ya buena → no escribe ni anota; «no verificable» → intacto y
+`needsReview`. Y el de la ficha: la llave se baja y **el ancla se conserva**, dos veces seguidas. Los
+tests de D-505 y de D-813 siguen verdes sin tocarlos. La tanda queda en **2.587 casos** (2.052 en la
+aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: los **69** hallazgos ya guardados con una línea no
+ejecutable se corrigen **al abrir su ficha**, uno a uno — no hay barrido que los arregle de golpe, y
+no se ha hecho porque escribir 69 ficheros del hub sin que nadie los mire es justo lo que N-6
+desaconseja—. Y de los **19** «no localizado» no se ha comprobado cuántos dejan de serlo con la
+barra arreglada: hace falta abrirlos, que es del usuario.

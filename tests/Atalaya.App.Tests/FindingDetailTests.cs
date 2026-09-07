@@ -659,9 +659,105 @@ public sealed class FindingDetailTests : IDisposable
 
         vm.SnippetState.Should().Be(SnippetState.Reanclado);
         vm.SnippetTone.Should().Be(SnippetTone.Aviso);
-        vm.SnippetNotice.Should().Contain("ya no es el que se auditó");
-        vm.SnippetNotice.Should().Contain("Verifica para confirmarlo");
+        vm.SnippetNotice.Should().Contain("El código anclado ya no está en la línea");
+        vm.SnippetNotice.Should().Contain("se enseña «Repositorio.Guardar» actual",
+            "con el símbolo delante se dice QUÉ se enseña, no «no localizado» (BUGFIX-ANCLA)");
+        vm.SnippetNotice.Should().Contain("Verifica para confirmarlo o cerrarlo");
         vm.SnippetNoticeOffersVerify.Should().BeTrue();
+    }
+
+    // ============================================ BUGFIX-ANCLA: el falso «no localizado»
+
+    /// <summary>
+    /// <b>El caso real de xblast, reconstruido</b> (BUGFIX-ANCLA §0(a)): la línea guardada es la
+    /// <b>llave de cierre</b> de un método, el <c>symbol</c> nombra <b>varios</b> miembros
+    /// separados por barras —como los escribe el auditor de verdad— y el ancla no está en el
+    /// fichero.
+    /// <para>
+    /// <b>Lo que pasaba.</b> BUG-0213 decía «ni el código anclado en la línea 507 ni el símbolo del
+    /// hallazgo aparecen ya» <b>mientras enseñaba</b> el método de al lado — porque la 507 era su
+    /// llave de cierre—. Medido: de <c>Set/SetForUg*/SetFaceProfiling/ExtendCurrentTerrain</c> no
+    /// salía <b>ningún</b> candidato, porque <c>/</c> no separaba y el token entero no era un
+    /// identificador; la cascada se quedaba con lo que adivinaba del título («Catch») y el paso 3
+    /// fallaba con el miembro a la vista.
+    /// </para>
+    /// <para>
+    /// Cebo: sin la barra como separador, esto sale <c>NoLocalizado</c> y sin resaltado.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Con_el_simbolo_a_la_vista_nunca_se_dice_no_localizado()
+    {
+        Finding f = Seed(snippetHash: CodeAnchor.ComputeSnippetHash("lo que se auditó y ya no está"));
+
+        // La línea guardada es la llave de cierre del método, como en el caso real.
+        f.Locations[0].Line = 11;
+        f.Symbol = "Otro/Guardar*/TerceroQueNoExiste";
+        f.Title = "Fuga de descriptores en el flujo principal";
+        _hub.Store.WriteFinding("alpha", f);
+
+        FindingDetailViewModel vm = Open(f);
+
+        vm.SnippetState.Should().NotBe(SnippetState.NoLocalizado,
+            "el miembro está en el fichero: decir que no aparece es falso");
+        vm.SnippetState.Should().Be(SnippetState.Reanclado);
+        vm.SnippetHighlightLine.Should().Be(9, "la primera línea EJECUTABLE del miembro (D-224)");
+        vm.SnippetNotice.Should().Contain("se enseña «Repositorio.Guardar» actual");
+        vm.SnippetNotice.Should().NotContain("No localizado");
+        vm.SnippetNoticeOffersVerify.Should().BeTrue("es lo que sí puede re-anclarlo en disco");
+    }
+
+    /// <summary>
+    /// <b>Y «No localizado» sigue existiendo para lo que D-494 dice</b>: sin ancla que case, sin
+    /// símbolo en el fichero y sin nada que enseñar. No se ha convertido el estado en decorativo.
+    /// </summary>
+    [Fact]
+    public void Sin_ancla_y_sin_simbolo_sigue_siendo_no_localizado()
+    {
+        Finding f = Seed(snippetHash: CodeAnchor.ComputeSnippetHash("lo que se auditó y ya no está"));
+        f.Locations[0].Line = 11;
+        f.Symbol = "MiembroQueNoExiste/OtroQueTampoco";
+        f.Title = "Defecto en un miembro que ya no está";
+        _hub.Store.WriteFinding("alpha", f);
+
+        FindingDetailViewModel vm = Open(f);
+
+        vm.SnippetState.Should().Be(SnippetState.NoLocalizado);
+        vm.SnippetHighlightLine.Should().Be(0, "no se resalta ninguna línea (D-225)");
+        vm.SnippetNotice.Should().Contain("No localizado");
+    }
+
+    /// <summary>
+    /// <b>Una llave guardada como línea del hallazgo se corrige al abrir la ficha, pero el ancla NO
+    /// se reescribe</b> (BUGFIX-ANCLA §1.4, sobre D-226).
+    /// <para>
+    /// Los dos casos de D-226 dejan de estar encadenados: bajar una llave a la primera línea
+    /// ejecutable de su miembro es demostrable <b>sin</b> el hash. Lo que no se toca es el hash:
+    /// calcularlo sobre la línea nueva fabricaría un ancla a código que nadie auditó y el aviso
+    /// desaparecería para siempre — que es exactamente lo que D-226 prohíbe—.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Una_llave_guardada_se_baja_al_codigo_del_miembro_sin_tocar_el_ancla()
+    {
+        string perdido = CodeAnchor.ComputeSnippetHash("lo que se auditó y ya no está");
+        Finding f = Seed(snippetHash: perdido);
+        f.Locations[0].Line = 11;   // la llave de cierre de Guardar
+        f.Symbol = "Repositorio.Guardar";
+        _hub.Store.WriteFinding("alpha", f);
+
+        Open(f);
+
+        Finding stored = _hub.Store.TryReadFinding("alpha", f.Id.ToString())!;
+        stored.Locations[0].Line.Should().Be(9, "la llave se baja al código del miembro");
+        stored.Locations[0].SnippetHash.Should().Be(perdido,
+            "el ancla se conserva: el texto auditado se perdió y no se inventa otro");
+
+        // Y es idempotente: volver a abrirla no escribe nada nuevo.
+        Open(stored);
+        Finding otra = _hub.Store.TryReadFinding("alpha", f.Id.ToString())!;
+        otra.Locations[0].Line.Should().Be(9);
+        otra.Locations[0].SnippetHash.Should().Be(perdido);
     }
 
     /// <summary>
@@ -681,7 +777,7 @@ public sealed class FindingDetailTests : IDisposable
         vm.SnippetNotice.Should().Be(
             $"Resuelto — el código actual incluye el arreglo (verificado en abc, "
             + $"{DateTimeOffset.UtcNow.ToLocalTime():dd/MM/yyyy}).");
-        vm.SnippetNotice.Should().NotContain("ya no es el que se auditó");
+        vm.SnippetNotice.Should().NotContain("El código anclado ya no está");
         vm.SnippetNoticeOffersVerify.Should().BeFalse("un resuelto no pide que lo verifiquen desde aquí");
     }
 

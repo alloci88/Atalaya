@@ -267,6 +267,19 @@ asignar, cambiar severidad, resolver a mano con justificación, cerrar una dispu
   arregla, así que si el método sigue ahí se le enseña al auditor tal y como está hoy.
   Solo se dice «no localizado» cuando no queda nada que juzgar — ni el fragmento, ni el
   método, ni una unidad que haya cambiado.
+- **Qué significa cada aviso del código, y qué hace «Verificar ahora» con la línea.** Si el
+  fragmento anclado sigue ahí letra por letra, no hay aviso: está anclado y calla. Si el
+  fragmento ya no está **pero el método que el hallazgo nombra sí**, el aviso dice «el código
+  anclado ya no está en la línea N; se enseña «Miembro» actual» y se resalta la primera línea
+  de código de ese método — nunca una llave ni un comentario—. **«No localizado» solo sale
+  cuando no queda nada**: ni el fragmento, ni el método, ni una unidad que haya cambiado; y
+  entonces no se resalta ninguna línea.
+- **Y verificar es lo que mueve la línea en disco.** Desde la ficha nunca se re-ancla por
+  nombre: una coincidencia de nombre no prueba dónde está el defecto, y hacerlo silenciaría
+  el único caso que necesita que alguien mire. Cuando verificas y el veredicto es que **sigue
+  activo**, ahí sí: el auditor acaba de leer el código de hoy, así que se guarda la línea
+  nueva y el historial lo dice en el mismo evento («re-anclado 507 → 497»). Un **«no
+  concluyente» no toca la línea**, y si ya estaba bien no se escribe nada.
 - Si el auditor **mira el código y no puede decidir**, el resultado es **«No concluyente»**,
   no una confirmación: una no-respuesta no es evidencia de nada, así que no sube «Veces
   confirmado» ni la confianza. Se anota con su causa y con el paso siguiente — ampliar el

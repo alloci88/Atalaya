@@ -485,7 +485,8 @@ public sealed class VerifyCoordinator
         {
             CodeSpanLines span = MethodBoundary.ForLine(lines, hit.Line, loc.Path);
             string text = string.Join("\n", lines[(span.StartLine - 1)..span.EndLine]);
-            return VerifyAim.Judge(VerifyBasis.Simbolo, hit.Line, text, hit.Member);
+            return VerifyAim.Judge(VerifyBasis.Simbolo, hit.Line, text, hit.Member)
+                with { LineText = lines[hit.Line - 1] };
         }
 
         // (a3) Ni ancla ni símbolo. Aun así, si la unidad cambió hay algo que juzgar: la unidad.
@@ -567,6 +568,15 @@ public sealed class VerifyCoordinator
         /// </summary>
         public string? AnchoredSnippet { get; init; }
 
+        /// <summary>
+        /// El texto CRUDO de <see cref="Line"/>, cuando el objetivo salió del símbolo. Es lo
+        /// único que hace falta para re-anclar en disco si el veredicto confirma
+        /// (BUGFIX-ANCLA): con él se recalcula el <c>snippetHash</c> sin volver a abrir el
+        /// fichero — y sobre todo, sin volver a leerlo, que para entonces ya podría haber
+        /// cambiado debajo.
+        /// </summary>
+        public string? LineText { get; init; }
+
         public static VerifyAim Judge(VerifyBasis basis, int line, string? snippet, string? member)
             => new(true, basis, line, snippet, member, string.Empty);
 
@@ -644,7 +654,18 @@ public sealed class VerifyCoordinator
             {
                 case "confirmado":
                     f.Confirm(AuditMode.Verify, stamp); // refreshes lastConfirmed, no confidence change
+
+                    // BUGFIX-ANCLA — Y AQUÍ SÍ SE RE-ANCLA EN DISCO. D-226 reservaba esto para
+                    // cuando hubiera una persona o una evidencia detrás, y esto es exactamente
+                    // eso: el agente acaba de mirar el código de HOY y ha dicho que el defecto
+                    // sigue en ese miembro. La ficha no puede escribirlo —allí no hay más que
+                    // una coincidencia de nombre— pero un veredicto sí.
                     note = $"{Alias(f)}: confirmado — el defecto sigue ahí.";
+                    if (Reanchor(f, key) is { Length: > 0 } moved)
+                    {
+                        note += $" {moved}.";
+                    }
+
                     break;
 
                 case "resuelto":
@@ -710,6 +731,58 @@ public sealed class VerifyCoordinator
             _hub.Store.WriteFinding(_slug, f);
             _notes.Add(note);
             Applied++;
+        }
+
+        /// <summary>
+        /// <b>Deja el ancla donde el veredicto acaba de mirar</b> (BUGFIX-ANCLA), y lo dice en el
+        /// mismo evento de la verificación.
+        /// <para>
+        /// <b>Solo con el objetivo sacado del SÍMBOLO</b> y solo con veredicto que confirma. Con
+        /// el ancla exacta no hay nada que mover; con la unidad entera (D-813) no hay miembro al
+        /// que apuntar, así que inventarse una línea sería justo lo que D-225 prohíbe. Y un «no
+        /// concluyente» no toca nada: una no-respuesta no es evidencia de dónde está el código.
+        /// </para>
+        /// <para>
+        /// <b>Idempotente</b>, como el re-anclaje de D-226: si la línea ya era la buena no
+        /// escribe, así que verificar dos veces no ensucia el historial con un movimiento que no
+        /// hubo.
+        /// </para>
+        /// </summary>
+        /// <returns>La frase para el aviso y el historial, o vacío si no se movió nada.</returns>
+        private string Reanchor(Finding f, string key)
+        {
+            if (!_aimed.TryGetValue(key, out (Finding Finding, VerifyAim Aim) aimed)
+                || aimed.Aim.Basis != VerifyBasis.Simbolo
+                || aimed.Aim.Line < 1
+                || aimed.Aim.LineText is not { } text
+                || f.Locations.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            Location loc = f.Locations[0];
+            if (loc.Line == aimed.Aim.Line)
+            {
+                return string.Empty;   // Ya estaba donde tiene que estar.
+            }
+
+            string moved = $"re-anclado {loc.Line} → {aimed.Aim.Line}";
+            loc.Line = aimed.Aim.Line;
+            loc.SnippetHash = CodeAnchor.ComputeSnippetHash(text);
+
+            // Va en el MISMO evento que la verificación: son el mismo hecho —se miró el código
+            // de hoy y se dijo que el defecto sigue ahí—, y una segunda línea diciendo que
+            // además se movió el número se lee como si hubiera pasado otra cosa.
+            if (f.History.Count > 0)
+            {
+                HistoryEntry last = f.History[^1];
+                f.History[^1] = last with
+                {
+                    Detail = string.IsNullOrWhiteSpace(last.Detail) ? moved : $"{last.Detail} · {moved}",
+                };
+            }
+
+            return moved;
         }
 
         /// <summary>

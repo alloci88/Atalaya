@@ -509,6 +509,18 @@ editores es la única puerta).
 
 ## Cerrado
 
+- **BUGFIX-ANCLA · El falso «no localizado», y el verify que confirmaba sin re-anclar** — dos
+  síntomas reales medidos contra el clon. (a) BUG-0213 decía «ni el código anclado ni el
+  símbolo aparecen» **mientras enseñaba** el método de al lado: su línea era la llave de
+  cierre de otro método, y del `symbol` —`Set/SetForUg*/SetFaceProfiling/…`— no salía **ningún**
+  candidato porque `/` no separaba. (b) Verify confirmaba, refrescaba el commit y dejaba la
+  línea intacta. Cuentas del hub: 398 ubicaciones, **19** «no localizado», **69** ancladas a
+  una llave, un comentario o un blanco. Cuatro reglas: la barra separa; un veredicto que
+  confirma re-ancla en disco y lo dice en su evento; el ingest nunca guarda una línea no
+  ejecutable (los tres caminos); y los dos casos de D-226 dejan de estar encadenados —
+  moviendo el número **sin** reescribir el ancla, que es lo que la suite cazó al primer
+  intento—. Trece casos de regla, cebo en dos. Ver D-1037.
+
 - **BUGFIX-TIMEOUT · El tope de D-208 corta, y su test mide el reloj** — cierra el hallazgo que
   R13 dejó apuntado (D-1030). `EditorLauncher.WithTimeout` hacía el `WhenAny`, tiraba su
   resultado y volvía a esperar la tarea: 120 ms de tope sobre un arranque de 5 s daban **5,01 s**
