@@ -666,6 +666,158 @@ public sealed class FindingDetailTests : IDisposable
         vm.SnippetNoticeOffersVerify.Should().BeTrue();
     }
 
+    // ==================================================== F33: un solo «Verificar ahora», y copiar
+
+    /// <summary>
+    /// <b>«Pide verificación» es verdadero exactamente en los estados que lo piden</b> (F33), y se
+    /// mide sobre el MODELO: es lo que pone verde el botón de la botonera, y lo que hace que el
+    /// aviso no necesite un segundo botón con el mismo rótulo.
+    /// <para>
+    /// Los dos estados, y de dónde salen: el <b>anclaje</b> por <c>SnippetPanel.OffersVerify</c>
+    /// (D-225, BUGFIX-ANCLA) y el <b>arreglo sin verificar</b> por el historial (D-557).
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Con_el_ancla_perdida_el_hallazgo_pide_verificacion()
+    {
+        // Ancla que no casa y símbolo presente: es el estado Reanclado de BUGFIX-ANCLA.
+        Finding f = Seed(snippetHash: CodeAnchor.ComputeSnippetHash("lo que se auditó y ya no está"));
+        f.Symbol = "Repositorio.Guardar";
+        _hub.Store.WriteFinding("alpha", f);
+
+        FindingDetailViewModel vm = Open(f);
+
+        vm.SnippetState.Should().Be(SnippetState.Reanclado);
+        vm.IsVerificationPending.Should().BeTrue();
+    }
+
+    /// <summary>Con el ancla en su sitio y sin arreglo pendiente, no pide nada.</summary>
+    [Fact]
+    public void Con_el_ancla_en_su_sitio_no_pide_verificacion()
+    {
+        FindingDetailViewModel vm = Open(Seed());
+
+        vm.SnippetState.Should().Be(SnippetState.Anclado);
+        vm.IsVerificationPending.Should().BeFalse("no hay nada que verificar");
+    }
+
+    /// <summary>
+    /// <b>Arreglar no resuelve</b> (D-557): un <c>FixProposed</c> o un <c>FixCommitted</c> sin
+    /// veredicto después deja el hallazgo pidiendo verificación <b>aunque el ancla esté intacta</b>
+    /// — que es justo el caso que el aviso ámbar no cubre—.
+    /// </summary>
+    [Theory]
+    [InlineData(FindingEvent.FixProposed)]
+    [InlineData(FindingEvent.FixCommitted)]
+    public void Un_arreglo_sin_verificar_pide_verificacion(FindingEvent arreglo)
+    {
+        Finding f = Seed();
+        f.Record(new HistoryEntry(DateTimeOffset.UtcNow, arreglo, "alvaro", "arreglo asistido"));
+        _hub.Store.WriteFinding("alpha", f);
+
+        FindingDetailViewModel vm = Open(f);
+
+        vm.SnippetState.Should().Be(SnippetState.Anclado, "el ancla no se ha movido");
+        vm.IsVerificationPending.Should().BeTrue("pero arreglar no resuelve (D-557)");
+    }
+
+    /// <summary>
+    /// <b>Y en cuanto una verificación lo cierra, deja de pedirla</b>: el estado sale de la lista y
+    /// el botón vuelve a su estilo normal. Es la mitad del test que impide que el verde se quede
+    /// puesto para siempre.
+    /// </summary>
+    [Theory]
+    [InlineData(FindingEvent.Confirmed)]
+    [InlineData(FindingEvent.Inconclusive)]
+    [InlineData(FindingEvent.Disputed)]
+    public void Un_veredicto_posterior_al_arreglo_lo_cierra(FindingEvent veredicto)
+    {
+        Finding f = Seed();
+        f.Record(new HistoryEntry(DateTimeOffset.UtcNow.AddMinutes(-5), FindingEvent.FixCommitted, "alvaro", "commit"));
+        f.Record(new HistoryEntry(DateTimeOffset.UtcNow, veredicto, "alvaro", "verificado"));
+        _hub.Store.WriteFinding("alpha", f);
+
+        Open(f).IsVerificationPending.Should().BeFalse();
+    }
+
+    /// <summary>Y un arreglo POSTERIOR a un veredicto vuelve a pedirla: manda el orden, no la existencia.</summary>
+    [Fact]
+    public void Un_arreglo_posterior_al_veredicto_vuelve_a_pedir_verificacion()
+    {
+        Finding f = Seed();
+        f.Record(new HistoryEntry(DateTimeOffset.UtcNow.AddMinutes(-10), FindingEvent.Confirmed, "alvaro", "verificado"));
+        f.Record(new HistoryEntry(DateTimeOffset.UtcNow, FindingEvent.FixProposed, "alvaro", "arreglo"));
+        _hub.Store.WriteFinding("alpha", f);
+
+        Open(f).IsVerificationPending.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Sobre un resuelto o un silenciado no se pide nada, ni por el ancla ni por el arreglo: es la
+    /// misma regla que ya retiraba el «Verificar ahora» del aviso (<c>ForFinding</c>).
+    /// </summary>
+    [Theory]
+    [InlineData(FindingStatus.Resuelto)]
+    [InlineData(FindingStatus.Silenciado)]
+    public void Un_hallazgo_cerrado_no_pide_verificacion(FindingStatus status)
+    {
+        Finding f = Seed(status: status);
+        f.Record(new HistoryEntry(DateTimeOffset.UtcNow, FindingEvent.FixCommitted, "alvaro", "commit"));
+        _hub.Store.WriteFinding("alpha", f);
+
+        Open(f).IsVerificationPending.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// <b>«El hallazgo», copiado como texto plano</b> (F33): título, y después descripción, impacto
+    /// y recomendación con sus párrafos, en ese orden y separados por una línea en blanco. Sin
+    /// markdown y sin metadatos — esto se pega en un correo o en un prompt.
+    /// </summary>
+    [Fact]
+    public void El_texto_de_copiar_el_hallazgo_lleva_el_titulo_y_los_tres_parrafos_en_orden()
+    {
+        string text = FindingDetailViewModel.FindingText(Seed());
+
+        text.Should().Be(
+            "IDisposable sin liberar\n\n"
+            + "Descripción\nEl stream no se cierra.\n\n"
+            + "Impacto\nFuga de descriptores.\n\n"
+            + "Recomendación\nEnvolver en using.");
+        text.Should().NotContain("**").And.NotContain("#", "sin markdown");
+        text.Should().NotContain("BUG-0042", "sin metadatos: eso es el otro bloque");
+    }
+
+    /// <summary>
+    /// <b>«Metadatos», copiado como texto plano</b>: una línea por fila, <c>Etiqueta: valor</c>, en
+    /// el orden en que se ven — y el «(+N ubicaciones más)» <b>expandido</b> a las rutas reales,
+    /// porque copiado ese paréntesis no sirve de nada.
+    /// </summary>
+    [Fact]
+    public void El_texto_de_copiar_los_metadatos_va_en_orden_y_expande_las_ubicaciones()
+    {
+        Finding f = Seed();
+        f.Locations.Add(new Location("src/Otro.cs", 42, null));
+        f.Locations.Add(new Location("src/Tercero.cs", 7, null));
+        _hub.Store.WriteFinding("alpha", f);
+
+        FindingDetailViewModel vm = Open(f);
+        string text = FindingDetailViewModel.MetaText(vm.Meta, vm.Finding!);
+        string[] lines = text.Split('\n');
+
+        // El orden en que se ven, etiqueta por etiqueta.
+        lines[0].Should().StartWith("Regla: ");
+        lines.Select(l => l.Split(':')[0]).Should().ContainInOrder(
+            "Regla", "Qué busca", "Identificador", "Aplicación", "Unidad",
+            "Origen", "Temática", "Primera detección", "Última confirmación",
+            "Detectado con", "Veces confirmado", "Commit anclado");
+
+        // Y las ubicaciones, expandidas: ni el resumen ni el paréntesis.
+        text.Should().NotContain("ubicaciones más");
+        text.Should().Contain("Unidad: src/Repositorio.cs:9");
+        text.Should().Contain("src/Otro.cs:42");
+        text.Should().Contain("src/Tercero.cs:7");
+    }
+
     // ============================================ BUGFIX-ANCLA: el falso «no localizado»
 
     /// <summary>

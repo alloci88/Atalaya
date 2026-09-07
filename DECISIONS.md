@@ -17851,3 +17851,70 @@ ejecutable se corrigen **al abrir su ficha**, uno a uno — no hay barrido que l
 no se ha hecho porque escribir 69 ficheros del hub sin que nadie los mire es justo lo que N-6
 desaconseja—. Y de los **19** «no localizado» no se ha comprobado cuántos dejan de serlo con la
 barra arreglada: hace falta abrirlos, que es del usuario.
+## F33 — Un solo «Verificar ahora», y el hallazgo se puede copiar
+
+### D-1038 — Una acción, un botón: el estado se enseña con el estilo, no duplicando el control
+
+**Los estados que piden verificación, enumerados desde el modelo** (N-2), porque son los que
+gobiernan el cambio: el **anclaje**, por `SnippetPanel.OffersVerify` —`Cambiado`, `Movido`,
+`Reanclado`, `NoLocalizado` y `FicheroNoEncontrado` (D-225, BUGFIX-ANCLA)—, que el estado del
+hallazgo puede **retirar y nunca añadir**: sobre un resuelto o un silenciado no se pide nada; y el
+**arreglo sin verificar** (D-557), que **no existía como estado**: lo que el modelo guarda son los
+eventos, así que se calcula del historial —un `FixProposed` o un `FixCommitted` sin veredicto
+después— y manda el **orden**, no la existencia: un arreglo verificado ayer no pide nada, y un
+arreglo posterior a un veredicto vuelve a pedirlo. No hay ningún tercer estado que enseñe
+«Verificar ahora»: el único botón que lo hacía, fuera de la botonera, era el del aviso ámbar.
+
+**(1) Se quita el segundo botón.** Había **dos** «Verificar ahora» a la vez —uno dentro del aviso
+ámbar y otro en la botonera—, con el mismo rótulo y el **mismo comando**. Dos botones iguales no
+son dos caminos: son una duda sobre cuál es el bueno. El aviso conserva su texto entero y pierde
+solo el botón. **La regla que queda: una acción, un botón; el estado se enseña con el estilo, no
+duplicando el control.** El de la botonera se pone **verde de acento mientras el hallazgo esté en
+alguno de esos estados**, y el verde es **el de «Arreglar con agente»** —los cuatro setters de
+`Button.Success`, que es el color de lo que adelanta trabajo (D-949, D-976)—, no un tono nuevo. En
+cuanto una verificación resuelve el estado, vuelve a `Action`. Sin animación, sin distintivo y sin
+texto de más. Que los dos botones estén verdes a la vez es correcto y se acepta: los dos piden algo.
+
+**(2) y (3) Copiar «El hallazgo» y «Metadatos».** «El hallazgo» sale como texto plano —título, y
+después descripción, impacto y recomendación con sus párrafos, separados por línea en blanco—, sin
+markdown y sin metadatos. «Metadatos» sale con una línea por fila, `Etiqueta: valor`, en el orden en
+que se ven; y con **una excepción**: el «(+7 ubicaciones más)» de la fila «Unidad» se **expande** a
+las rutas reales, una por línea. En pantalla el resumen está bien porque las ubicaciones tienen su
+lista debajo; copiado no sirve de nada — quien lo pega en un correo quiere las rutas, que es justo
+lo que ese paréntesis esconde.
+
+**Y una desviación declarada, porque la medida contradice el encargo.** El encargo pedía reutilizar
+«el control de copiar con su icono» que ya existe en otra pantalla. **No existe**: medido, los
+`Clipboard.SetText` de la aplicación son cinco y los cinco cuelgan de **botones de texto** —«Copiar»
+en la sugerencia de commit, «Copiar código» en Cuenta, «Copiar error» en la sesión y en el arreglo, y
+el prompt de arreglo desde la botonera de la ficha—, y en `Icons` no hay **ningún** glifo de copiar
+(26 iconos, ninguno). Dibujar uno sería inventarse un icono, que es un anti-objetivo declarado de
+esta misma fase. Así que se reutiliza **el control que sí hay**: un botón de texto «Copiar» pequeño
+—`Button.Link` a `FontSize.Meta`, la forma de «Copiar error»— en la esquina superior derecha de cada
+bloque, con **el aviso que ya usan esas copias**: el toast del `ToastCenter`, y si el portapapeles no
+está disponible se dice en vez de fingir que se copió. Si se quiere el icono, es un icono nuevo en
+`Icons` y una decisión aparte.
+
+**Lo visible (N-6), y es toda la lista.** En la **ficha del hallazgo**: (a) el aviso ámbar pierde su
+botón y conserva su texto; (b) «Verificar ahora» de la botonera se pinta verde mientras haya algo
+que verificar; (c) «El hallazgo» y (d) «Metadatos» estrenan un «Copiar» en su esquina superior
+derecha. Nada más se mueve: ni el orden de los botones, ni el tamaño de los bloques, ni ningún otro
+texto. No se toca la lógica de verificación, ni el `StepList` (D-1029), ni el prompt del verificador,
+ni ninguna otra vista.
+
+**Cobertura (N-5): doce casos de regla, sobre el modelo y sin XAML.** Del estado: el ancla perdida
+lo pide; el ancla en su sitio, no; un arreglo sin verificar lo pide **con el ancla intacta** —los
+dos eventos, en `[Theory]`—, que es el caso que el aviso ámbar no cubría; un veredicto posterior lo
+cierra —confirmado, no concluyente y disputado—; un arreglo **posterior** al veredicto lo vuelve a
+pedir; y un hallazgo resuelto o silenciado no pide nada. Del texto: el del hallazgo, con su orden y
+sin markdown ni metadatos; y el de los metadatos, con las doce etiquetas **en orden** y las tres
+ubicaciones **expandidas**. **Cebos**: olvidando el estado de D-557 caen tres, y sin expandir las
+ubicaciones cae el de los metadatos — y el del anclaje sigue verde, que es lo correcto: son dos
+estados distintos y cada uno tiene su mitad. De paso, `PaletteResourceTests` cazó al primer intento
+un `Brush.Success` que no existe: el verde bueno es `Brush.Success.Fill`. La tanda queda en
+**2.599 casos** (2.064 en la aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: el aspecto. Es una fase de presentación y el ciclo es
+cambio → build → tests → `dist` → parar (N-8): que el verde del botón se lea bien al lado del de
+«Arreglar con agente», y que el «Copiar» de la esquina no apriete el titular, lo mira el usuario en
+el `dist`.

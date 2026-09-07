@@ -202,7 +202,23 @@
                 <!-- · Qué pasa, qué implica y qué hacer · -->
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="El hallazgo" Style="{StaticResource SectionTitle}" />
+                        <!-- F33 — el título y su «Copiar», que es el control que ya existe en
+                             la sugerencia de commit y en «Copiar error»: un botón de texto
+                             pequeño, con el mismo aviso. NO se dibuja un icono nuevo: en esta
+                             base de código no hay ninguno de copiar (medido), y dibujarlo
+                             sería inventarse un icono. -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="El hallazgo" Style="{StaticResource SectionTitle}" />
+                            <Button Grid.Column="1" Content="Copiar" Style="{StaticResource Button.Link}"
+                                    FontSize="{StaticResource FontSize.Meta}"
+                                    Command="{Binding CopyFindingCommand}"
+                                    VerticalAlignment="Top" HorizontalAlignment="Right"
+                                    ToolTip="Copia el título, la descripción, el impacto y la recomendación como texto plano." />
+                        </Grid>
                         <TextBlock Text="Descripción" Style="{StaticResource SubTitle}" />
                         <TextBlock Text="{Binding Finding.Description}" Style="{StaticResource BodyText}" />
                         <TextBlock Text="Impacto" Style="{StaticResource SubTitle}" Margin="{StaticResource Pad.SectionGap}" />
@@ -315,13 +331,12 @@
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
-                                <Button Grid.Column="2"
-                                           Content="Verificar ahora" Command="{Binding VerifyCommand}"
-                                           Padding="{StaticResource Pad.ButtonSmall}" FontSize="{StaticResource FontSize.Meta}"
-                                           IsEnabled="{Binding CanAudit}"
-                                           ToolTip="{Binding AuditDisabledTooltip}"
-                                           Margin="{StaticResource Pad.S.Left}" VerticalAlignment="Center"
-                                           Visibility="{Binding SnippetNoticeOffersVerify, Converter={StaticResource BoolToVisibility}}" />
+                                <!-- F33 — AQUÍ YA NO HAY BOTÓN. Había dos «Verificar ahora» a
+                                     la vez, éste y el de la botonera, con el mismo rótulo y el
+                                     MISMO comando: dos botones iguales no son dos caminos, son
+                                     una duda sobre cuál es el bueno. El aviso conserva su texto
+                                     entero; lo que dice que hay algo que hacer es el estilo del
+                                     botón que ya existe. -->
                             </Grid>
                         </Border>
 
@@ -450,7 +465,19 @@
                 <!-- · Metadatos: aquí aterriza el ruleId, con nombre · -->
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="Metadatos" Style="{StaticResource SectionTitle}" />
+                        <!-- F33 — mismo control, misma esquina. -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Metadatos" Style="{StaticResource SectionTitle}" />
+                            <Button Grid.Column="1" Content="Copiar" Style="{StaticResource Button.Link}"
+                                    FontSize="{StaticResource FontSize.Meta}"
+                                    Command="{Binding CopyMetaCommand}"
+                                    VerticalAlignment="Top" HorizontalAlignment="Right"
+                                    ToolTip="Copia una línea por dato, con las rutas de todas las ubicaciones." />
+                        </Grid>
                         <ItemsControl ItemsSource="{Binding Meta}"
                                       ItemTemplate="{StaticResource MetaRowTemplate}" />
                     </StackPanel>
@@ -518,10 +545,29 @@
                              CLASE de hallazgo. Uno medido no se pregunta, se mide: llamarlo igual
                              que a una verificación por LLM haría esperar tokens y una espera larga
                              donde solo hay una lectura de fichero. -->
-                        <Button Content="{Binding VerifyActionLabel}" Style="{StaticResource Action}"
+                        <!-- F33 — VERDE MIENTRAS PIDA VERIFICACIÓN, y el verde es EL de
+                             «Arreglar con agente» (`Action.Primary`, que es `Button.Success`):
+                             el color de lo que adelanta trabajo (D-949, D-976), no uno nuevo.
+                             Que los dos estén verdes a la vez es correcto — los dos piden algo—.
+                             En cuanto una verificación resuelve el estado, vuelve a su estilo.
+                             Sin animación, sin distintivo y sin texto de más: solo el estilo. -->
+                        <Button Content="{Binding VerifyActionLabel}"
                                    Command="{Binding VerifyCommand}"
                                    IsEnabled="{Binding CanAudit}"
-                                   ToolTip="{Binding VerifyHelp}" />
+                                   ToolTip="{Binding VerifyHelp}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource Action}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsVerificationPending}" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource Brush.Success.Fill}" />
+                                            <Setter Property="Foreground" Value="{DynamicResource Brush.Success.OnFill}" />
+                                            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Success.Fill}" />
+                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
 
                         <!-- F30 §4 — LOS PASOS, BAJO EL BOTÓN QUE LOS LANZA. Verificar dejaba esta
                              pantalla quieta lo que tardara el agente, con un toast que solo decía

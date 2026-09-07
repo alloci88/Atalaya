@@ -644,6 +644,10 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
         Severity = Finding.Severity;
         RuleText = Atalaya.Copilot.RuleCatalog.Find(Finding.RuleId)?.Look ?? string.Empty;
 
+        // F33 — arreglar no resuelve (D-557): un arreglo sin veredicto después sigue pidiendo una
+        // verificación aunque el ancla esté intacta, así que el botón tiene que enterarse.
+        HasUnverifiedFix = UnverifiedFix(Finding);
+
         // Antes de pintar nada: dejar las ubicaciones apuntando a donde está el código (D-226).
         // Sin esto, la ficha acertaba con la línea pero lo anunciaba en 24 de 25 hallazgos, y un
         // aviso que sale siempre es el banner que había que quitar. Es idempotente: en cuanto la
@@ -862,6 +866,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
         SnippetState = panel.State;
         SnippetTone = panel.Tone;
         SnippetNoticeOffersVerify = panel.CanVerify;
+        OnPropertyChanged(nameof(IsVerificationPending));
         SnippetFirstLine = panel.FirstLine;
         SnippetHighlightLine = panel.HighlightLine;
         SnippetNotice = panel.Notice;
@@ -1228,6 +1233,162 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
             : "Prompt de arreglo guardado en los comentarios (el portapapeles no estaba disponible).")
             + " " + ReferenceSummary(refs));
         Reload(id);
+    }
+
+    // ------------------------------------------------------------------ F33: pide verificación
+
+    /// <summary>
+    /// <b>Este hallazgo PIDE una verificación</b> (F33). Es lo que pone verde el botón de la
+    /// botonera, y lo que hace que el aviso no necesite un segundo botón con el mismo rótulo.
+    /// <para>
+    /// <b>Una acción, un botón.</b> Había dos «Verificar ahora» a la vez —uno dentro del aviso
+    /// ámbar y otro en la botonera— haciendo exactamente lo mismo con el mismo comando. Dos botones
+    /// iguales no son dos caminos: son una duda sobre cuál es el bueno. El estado se enseña con el
+    /// <b>estilo</b> del que ya está, no duplicándolo.
+    /// </para>
+    /// <para>
+    /// <b>Los dos estados que lo piden, y de dónde salen.</b> El <b>anclaje</b>, por
+    /// <c>SnippetPanel.OffersVerify</c> —cambiado, movido, re-anclado, no localizado y fichero que
+    /// ya no está (D-225, BUGFIX-ANCLA)—, que el estado del hallazgo puede retirar y nunca añadir:
+    /// sobre un resuelto o un silenciado no se pide nada. Y el <b>arreglo sin verificar</b> (D-557):
+    /// arreglar no resuelve, así que un <c>FixProposed</c> o un <c>FixCommitted</c> sin veredicto
+    /// después deja el hallazgo a medio cerrar aunque el ancla esté intacta.
+    /// </para>
+    /// </summary>
+    public bool IsVerificationPending => SnippetNoticeOffersVerify || HasUnverifiedFix;
+
+    /// <summary>
+    /// Hay un arreglo asistido posterior al último veredicto (D-557). Se mira el HISTORIAL y no un
+    /// campo, porque no existe ninguno: lo que el modelo guarda son los eventos, y el orden entre
+    /// ellos es el dato — un arreglo de ayer verificado hoy no pide nada.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsVerificationPending))]
+    private bool _hasUnverifiedFix;
+
+    /// <summary>
+    /// Los eventos que cierran la pregunta que abre un arreglo: un veredicto del verificador, o una
+    /// resolución por cualquier vía. Un <c>Reanchored</c> también cuenta — lo escribe el verify
+    /// cuando el auditor no llegó a pronunciarse pero sí se miró el código.
+    /// </summary>
+    private static readonly FindingEvent[] ClosesTheFix =
+    {
+        FindingEvent.Confirmed, FindingEvent.Resolved, FindingEvent.Disputed,
+        FindingEvent.Inconclusive, FindingEvent.Reanchored, FindingEvent.NotLocated,
+    };
+
+    private static bool UnverifiedFix(Finding f)
+    {
+        if (f.Status is FindingStatus.Resuelto or FindingStatus.Silenciado)
+        {
+            return false;
+        }
+
+        int fixedAt = -1;
+        int verifiedAt = -1;
+        for (int i = 0; i < f.History.Count; i++)
+        {
+            FindingEvent kind = f.History[i].Event;
+            if (kind is FindingEvent.FixProposed or FindingEvent.FixCommitted)
+            {
+                fixedAt = i;
+            }
+            else if (ClosesTheFix.Contains(kind))
+            {
+                verifiedAt = i;
+            }
+        }
+
+        return fixedAt >= 0 && verifiedAt < fixedAt;
+    }
+
+    // ------------------------------------------------------------------ F33: copiar los bloques
+
+    /// <summary>
+    /// <b>El hallazgo, como texto plano</b> (F33): el título y después descripción, impacto y
+    /// recomendación con sus párrafos, separados por una línea en blanco. Sin markdown y sin
+    /// metadatos — esto se pega en un correo o en un prompt, y unos asteriscos ahí son ruido.
+    /// </summary>
+    internal static string FindingText(Finding f)
+    {
+        var parts = new List<string> { f.Title.Trim() };
+        Append(parts, "Descripción", f.Description);
+        Append(parts, "Impacto", f.Impact);
+        Append(parts, "Recomendación", f.Recommendation);
+        return string.Join("\n\n", parts);
+
+        static void Append(List<string> into, string label, string? body)
+        {
+            if (!string.IsNullOrWhiteSpace(body))
+            {
+                into.Add($"{label}\n{body!.Trim()}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// <b>Los metadatos, como texto plano</b> (F33): una línea por fila, <c>Etiqueta: valor</c>, en
+    /// el orden en que se ven.
+    /// <para>
+    /// Con una excepción declarada: el «(+7 ubicaciones más)» de la fila «Unidad» se <b>expande</b>
+    /// a las rutas reales, una por línea. En pantalla el resumen está bien porque las ubicaciones
+    /// tienen su propia lista debajo; copiado no sirve de nada — quien lo pega en un correo quiere
+    /// las rutas, que es justo lo que ese paréntesis esconde.
+    /// </para>
+    /// </summary>
+    internal static string MetaText(IEnumerable<MetaRow> rows, Finding f)
+    {
+        var lines = new List<string>();
+        foreach (MetaRow row in rows)
+        {
+            if (row.Label == "Unidad" && f.Locations.Count > 1)
+            {
+                lines.Add($"{row.Label}: {f.Locations[0].Path}:{f.Locations[0].Line}");
+                foreach (Location extra in f.Locations.Skip(1))
+                {
+                    lines.Add($"{extra.Path}:{extra.Line}");
+                }
+
+                continue;
+            }
+
+            lines.Add($"{row.Label}: {row.Value}");
+        }
+
+        return string.Join("\n", lines);
+    }
+
+    /// <summary>Copia «El hallazgo» al portapapeles, con el mismo aviso que las demás copias.</summary>
+    [RelayCommand]
+    private void CopyFinding() => CopyToClipboard(
+        Finding is null ? string.Empty : FindingText(Finding), "El hallazgo");
+
+    /// <summary>Copia «Metadatos» al portapapeles.</summary>
+    [RelayCommand]
+    private void CopyMeta() => CopyToClipboard(
+        Finding is null ? string.Empty : MetaText(Meta, Finding), "Los metadatos");
+
+    /// <summary>
+    /// El portapapeles, con el mismo comportamiento que las copias que ya había: si no está
+    /// disponible se dice, en vez de fingir que se copió (el patrón de «Copiar error» y del prompt
+    /// de arreglo).
+    /// </summary>
+    private void CopyToClipboard(string text, string what)
+    {
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            Clipboard.SetText(text);
+            _toasts.Show($"{what} copiado al portapapeles.");
+        }
+        catch (Exception)
+        {
+            _toasts.Show($"No se pudo copiar {what.ToLowerInvariant()}: el portapapeles no estaba disponible.");
+        }
     }
 
     // ------------------------------------------------------------------ arreglar con agente (F6.9)

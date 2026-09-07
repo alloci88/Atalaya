@@ -274,6 +274,14 @@ asignar, cambiar severidad, resolver a mano con justificación, cerrar una dispu
   de código de ese método — nunca una llave ni un comentario—. **«No localizado» solo sale
   cuando no queda nada**: ni el fragmento, ni el método, ni una unidad que haya cambiado; y
   entonces no se resalta ninguna línea.
+- **Un solo «Verificar ahora».** El de la botonera, y **se pone verde** —el mismo verde de
+  «Arreglar con agente»— mientras el hallazgo tenga algo que verificar: el ancla perdida, o un
+  arreglo asistido del que todavía no hay veredicto. En cuanto se verifica, vuelve a su color.
+  El aviso del código ya no lleva su propio botón: era el mismo, con el mismo rótulo.
+- **«El hallazgo» y «Metadatos» se copian**, con el «Copiar» de su esquina. El hallazgo sale
+  como texto plano —título, descripción, impacto y recomendación—, listo para pegarlo en un
+  correo o en un prompt. Los metadatos salen con una línea por dato, y **las ubicaciones
+  enteras**: el «(+7 ubicaciones más)» que ves en pantalla se copia con las rutas de las siete.
 - **Y verificar es lo que mueve la línea en disco.** Desde la ficha nunca se re-ancla por
   nombre: una coincidencia de nombre no prueba dónde está el defecto, y hacerlo silenciaría
   el único caso que necesita que alguien mire. Cuando verificas y el veredicto es que **sigue

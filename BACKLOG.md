@@ -509,6 +509,16 @@ editores es la única puerta).
 
 ## Cerrado
 
+- **F33 · Un solo «Verificar ahora», y copiar el hallazgo y sus metadatos** — el aviso ámbar
+  pierde su botón (era el mismo comando y el mismo rótulo que el de la botonera) y el de la
+  botonera se pinta con el verde de «Arreglar con agente» mientras haya algo que verificar:
+  ancla perdida (D-225, BUGFIX-ANCLA) o arreglo sin veredicto (D-557, que no existía como
+  estado y se calcula del historial). Regla: **una acción, un botón; el estado se enseña con
+  el estilo**. Y «El hallazgo» y «Metadatos» estrenan «Copiar» — con el control de texto que
+  ya existe, porque **no hay ningún icono de copiar** en la base de código (medido) e
+  inventarlo era un anti-objetivo. Doce casos de regla sobre el modelo, cebo en dos. Ver
+  D-1038.
+
 - **BUGFIX-ANCLA · El falso «no localizado», y el verify que confirmaba sin re-anclar** — dos
   síntomas reales medidos contra el clon. (a) BUG-0213 decía «ni el código anclado ni el
   símbolo aparecen» **mientras enseñaba** el método de al lado: su línea era la llave de
