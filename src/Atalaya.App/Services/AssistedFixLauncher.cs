@@ -1,4 +1,4 @@
-using Atalaya.Domain.Model;
+﻿using Atalaya.Domain.Model;
 using Atalaya.Inventory;
 
 namespace Atalaya.App.Services;
@@ -23,6 +23,29 @@ public enum FixBlock
 
     /// <summary>El hallazgo no tiene ubicaciones en el código que arreglar.</summary>
     SinUbicaciones,
+
+    /// <summary>El hallazgo pide una verificación antes de volver a encargar un arreglo (F34).</summary>
+    VerificacionPendiente,
+}
+
+/// <summary>
+/// Qué verificación pide el hallazgo (F34, sobre los dos estados que enumeró F33/D-1038).
+/// <para>
+/// Viaja como PARÁMETRO y no se calcula aquí a propósito: quien sabe si el ancla se ha perdido o
+/// si hay un arreglo sin veredicto es la ficha —lo lee del panel del snippet y del historial—, y
+/// esta pieza solo mira el clon. Traerlo hecho evita una segunda copia de la regla de D-557.
+/// </para>
+/// </summary>
+public enum PendingVerification
+{
+    /// <summary>No hay nada que verificar.</summary>
+    Ninguna,
+
+    /// <summary>El ancla ya no está donde se detectó (D-225, BUGFIX-ANCLA).</summary>
+    AnclaPerdida,
+
+    /// <summary>Hay un arreglo posterior al último veredicto (D-557).</summary>
+    ArregloSinVerificar,
 }
 
 /// <summary>
@@ -103,7 +126,16 @@ public sealed class AssistedFixLauncher
     /// de arrancar —entre pintar el botón y pulsarlo el usuario ha podido tocar el clon—, y sin
     /// esto se encontraría a sí misma ocupando el agente y se negaría a empezar.
     /// </param>
-    public FixLaunchDecision Check(string slug, Finding? finding, bool ignoreBusy = false)
+    /// <param name="pending">
+    /// Lo que el hallazgo pide verificar (F34). <b>No se arregla lo que no está verificado</b>: un
+    /// agente que escribe sobre un ancla perdida edita una línea que ya no es la del hallazgo, y
+    /// encargar un segundo arreglo sin saber si el primero funcionó es apilar trabajo a ciegas
+    /// (D-557: arreglar no resuelve). Se mira <b>la última</b>, después del árbol sucio: los
+    /// cambios sin commitear son los que bloquean de verdad, y su razón gana.
+    /// </param>
+    public FixLaunchDecision Check(
+        string slug, Finding? finding, bool ignoreBusy = false,
+        PendingVerification pending = PendingVerification.Ninguna)
     {
         if (!_settings.Current.EnableAssistedFix)
         {
@@ -131,8 +163,27 @@ public sealed class AssistedFixLauncher
         }
 
         WorkingTreeState tree = WorkingTree.Inspect(link.Path);
-        return tree.Clean
-            ? FixLaunchDecision.Ok
-            : new FixLaunchDecision(FixBlock.ArbolSucio, tree.Message);
+        if (!tree.Clean)
+        {
+            return new FixLaunchDecision(FixBlock.ArbolSucio, tree.Message);
+        }
+
+        // F34 — y la última puerta: verificar antes de arreglar. Va aquí y no antes porque las
+        // otras cuatro se arreglan tocando el clon o Ajustes; esta se arregla con el botón de al
+        // lado, que sigue verde y encendido (F33). El generador de prompt tampoco se apaga: no
+        // cuesta nada y sirve para mirarlo a mano.
+        return pending switch
+        {
+            PendingVerification.AnclaPerdida => new FixLaunchDecision(
+                FixBlock.VerificacionPendiente,
+                "Verifica primero: el ancla se ha perdido. Pulsa «Verificar ahora» para volver a "
+                + "situarla antes de que el agente escriba sobre una línea que ya no es la del "
+                + "hallazgo."),
+            PendingVerification.ArregloSinVerificar => new FixLaunchDecision(
+                FixBlock.VerificacionPendiente,
+                "Verifica primero: hay un arreglo sin verificar. Pulsa «Verificar ahora» para "
+                + "saber si el anterior funcionó antes de encargar otro — arreglar no resuelve."),
+            _ => FixLaunchDecision.Ok,
+        };
     }
 }

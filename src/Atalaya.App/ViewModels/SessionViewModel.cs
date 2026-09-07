@@ -2,6 +2,7 @@
 using System.Windows.Threading;
 using Atalaya.App.Services;
 using Atalaya.Domain;
+using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -396,6 +397,34 @@ public sealed partial class SessionViewModel : ViewModelBase, IAppScoped
             ? Task.CompletedTask
             : _navigation.NavigateToAsync<FindingDetailViewModel>(
                 vm => vm.Load(_live.AppSlug, item.FindingId));
+
+    /// <summary>
+    /// <b>De la columna de hallazgos a la ficha, con la sesión corriendo detrás</b> (F34 §2). Un
+    /// hallazgo que aparece en la columna y no lleva a ninguna parte obliga a apuntarse el título
+    /// y a ir a buscarlo a Hallazgos cuando la sesión acabe — el mismo camino que la pantalla de
+    /// cierre existe para ahorrar (R10 §5), y aquí el trabajo sigue en marcha mientras tanto.
+    /// <para>
+    /// <b>Navegar no toca la sesión.</b> El estado vive en <see cref="LiveSessionService"/>, que es
+    /// singleton (D-572, F5.2 Hito 1): esta pantalla es una vista sobre él, así que irse deja la
+    /// auditoría corriendo y el raíl mantiene su entrada «Sesión en vivo» latiendo para volver.
+    /// </para>
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanOpenLiveFinding))]
+    private Task OpenLiveFinding(Finding? finding)
+        => _navigation is null || finding is null
+            ? Task.CompletedTask
+            : _navigation.NavigateToAsync<FindingDetailViewModel>(
+                vm => vm.Load(_live.AppSlug, finding.Id));
+
+    /// <summary>
+    /// <b>Solo lo que ya existe en el hub</b> (D-226). Un hallazgo nace GUARDADO: el ULID se acuña
+    /// en <c>FindingIngestionService.Create</c>, que escribe el fichero antes de avisar de que hay
+    /// uno nuevo, así que todo lo que entra en esta columna ya tiene ficha que abrir. Lo que no
+    /// llegó a aceptarse —un <c>submit_finding</c> rechazado— no llega aquí y no tiene ULID: sin
+    /// ULID no se resalta, no cambia el cursor y no se anuncia. O se abre, o no se ofrece.
+    /// </summary>
+    private static bool CanOpenLiveFinding(Finding? finding)
+        => finding is not null && finding.Id != Ulid.Empty;
 
     /// <summary>
     /// Abre el informe de esta sesion en la vista Informes (F6.3).

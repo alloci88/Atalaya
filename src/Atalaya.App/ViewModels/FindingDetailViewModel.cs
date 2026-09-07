@@ -1258,6 +1258,22 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
     public bool IsVerificationPending => SnippetNoticeOffersVerify || HasUnverifiedFix;
 
     /// <summary>
+    /// <b>CUÁL de los dos estados de F33 pide la verificación</b> (F34). Es lo que viaja a
+    /// <see cref="AssistedFixLauncher.Check"/> para que «Arreglar con agente» se apague con la
+    /// razón al lado, y la razón dice cuál es: un ancla perdida se recupera mirando el código y un
+    /// arreglo sin veredicto se cierra sabiendo si funcionó, así que no son la misma frase.
+    /// <para>
+    /// El anclaje va PRIMERO cuando coinciden: sin ancla no se sabe siquiera dónde miraría el
+    /// verificador el arreglo anterior, así que es la que hay que resolver antes.
+    /// </para>
+    /// </summary>
+    private PendingVerification PendingVerificationState => SnippetNoticeOffersVerify
+        ? PendingVerification.AnclaPerdida
+        : HasUnverifiedFix
+            ? PendingVerification.ArregloSinVerificar
+            : PendingVerification.Ninguna;
+
+    /// <summary>
     /// Hay un arreglo asistido posterior al último veredicto (D-557). Se mira el HISTORIAL y no un
     /// campo, porque no existe ninguno: lo que el modelo guarda son los eventos, y el orden entre
     /// ellos es el dato — un arreglo de ayer verificado hoy no pide nada.
@@ -1443,7 +1459,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
             return;
         }
 
-        FixLaunchDecision decision = _fixLauncher.Check(Slug, Finding);
+        FixLaunchDecision decision = _fixLauncher.Check(Slug, Finding, pending: PendingVerificationState);
         ShowAssistedFix = decision.Block != FixBlock.Desactivado;
         CanStartFix = decision.CanStart;
         AssistedFixBlock = decision.Message;
@@ -1464,7 +1480,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
 
         // Se vuelve a comprobar aquí, no solo al pintar: entre abrir la ficha y pulsar, el usuario
         // ha podido editar el clon o lanzar una auditoría.
-        FixLaunchDecision decision = _fixLauncher.Check(Slug, Finding);
+        FixLaunchDecision decision = _fixLauncher.Check(Slug, Finding, pending: PendingVerificationState);
         RefreshAssistedFix();
         if (!decision.CanStart)
         {

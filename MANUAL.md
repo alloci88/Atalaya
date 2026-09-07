@@ -232,7 +232,12 @@ asignar, cambiar severidad, resolver a mano con justificación, cerrar una dispu
 
 - **Arreglar con agente** abre una sesión en la que el agente arregla el hallazgo
   **sobre tu clon local**, explicándote lo que hace y preguntándote en las
-  decisiones. Ver *Arreglar con agente*, más abajo.
+  decisiones. Ver *Arreglar con agente*, más abajo. **No se arregla lo que no está
+  verificado**: mientras el hallazgo pida una verificación, el botón queda apagado con la razón al
+  lado —«Verifica primero: el ancla se ha perdido» o «Verifica primero: hay un arreglo sin
+  verificar»—, igual que cuando tienes cambios sin commitear, que es la razón que manda si
+  coinciden. *Verificar ahora* y el *prompt de arreglo* siguen encendidos: uno es la salida del
+  estado y el otro no cuesta nada.
 - El **prompt de arreglo** —el camino de siempre, intacto— viaja con **quién usa ese
   código**: los llamadores directos que hay en el clon local —ruta, línea, método que
   llama y la línea de la llamada—, y las
@@ -422,6 +427,12 @@ incompleta**, con todas las letras.
 
 > Y una unidad barrida **no es** una unidad sin defectos: es una unidad de la que el
 > auditor no saca más con este criterio.
+
+**Los hallazgos de la columna de la derecha se abren.** Cada tarjeta lleva a la ficha del hallazgo
+—se resalta al pasar por encima, con el cursor de mano y un «Ir al hallazgo»—, y **la sesión sigue
+corriendo detrás**: no se detiene ni se reinicia, y el menú lateral mantiene su entrada *Sesión en
+vivo* latiendo para volver cuando quieras. No hace falta esperar al resumen de cierre para mirar lo
+que acaba de aparecer.
 
 El resumen de cierre agrupa sus hallazgos **por clase**, con el recuento por severidad al
 lado, igual que la vista de Hallazgos. Cada línea se despliega de un clic.

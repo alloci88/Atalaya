@@ -7,6 +7,7 @@ using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Inventory;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Atalaya.App.Tests;
@@ -164,6 +165,132 @@ public sealed class SessionViewModelTests : IDisposable
 
         gate.Open();
         await Task.WhenAll(a, b, c);
+    }
+
+    // ---------- F34 §2: los hallazgos de la columna se abren ----------
+
+    /// <summary>
+    /// <b>Solo se abre lo que ya existe en el hub</b> (D-226). Un hallazgo nace GUARDADO: el ULID
+    /// se acuña en <c>FindingIngestionService.Create</c>, que escribe el fichero antes de avisar
+    /// de que hay uno nuevo, así que todo lo que llega a la columna ya tiene ficha que abrir. Lo
+    /// que no llegó a aceptarse no tiene ULID, y sin ULID el comando no está disponible: sin
+    /// resaltado, sin cursor de mano y sin tooltip. O se abre, o no se anuncia.
+    /// </summary>
+    [Fact]
+    public async Task Solo_se_abre_el_hallazgo_que_ya_esta_en_el_hub()
+    {
+        LiveSessionService live = NewLive();
+        await live.StartAsync(Request(), new[] { "A.cs" });
+        var vm = new SessionViewModel(live);
+
+        Finding guardado = live.Findings.Should().ContainSingle().Subject;
+        _hub.Store.TryReadFinding("app", guardado.Id.ToString())
+            .Should().NotBeNull("un hallazgo de la columna nace guardado en el hub (D-226)");
+        vm.OpenLiveFindingCommand.CanExecute(guardado).Should().BeTrue();
+
+        // Lo propuesto y todavía no aceptado no tiene ULID: no hay ficha que abrir.
+        var sinAceptar = new DetectionStamp(
+            DateTimeOffset.UtcNow, AuditMode.Lotes, "abc1234", "auditor");
+        var propuesto = new Finding
+        {
+            Title = "todavía no aceptado",
+            RuleId = "errores.recursos.no-liberado",
+            FirstDetected = sinAceptar,
+            LastConfirmed = sinAceptar,
+        };
+        propuesto.Id.Should().Be(Ulid.Empty);
+        vm.OpenLiveFindingCommand.CanExecute(propuesto).Should().BeFalse();
+        vm.OpenLiveFindingCommand.CanExecute(null).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// <b>Ir a la ficha no detiene ni reinicia la sesión</b> (D-572). El estado vive en el
+    /// servicio singleton y esta pantalla es una vista sobre él, así que navegar fuera —a la ficha
+    /// de un hallazgo que la propia sesión acaba de encontrar— deja la auditoría corriendo con el
+    /// mismo identificador, los mismos hallazgos y las mismas unidades. El camino de vuelta lo
+    /// pone el raíl, que mantiene su entrada «Sesión en vivo» mientras <c>IsRunning</c>.
+    /// </summary>
+    [Fact]
+    public async Task Abrir_un_hallazgo_no_detiene_la_sesion_en_curso()
+    {
+        var agent = new PausesAfterFirstUnit(new FakeCopilotAgent(_ => new[] { Sample() }));
+        LiveSessionService live = NewLive(agent);
+        Task run = live.StartAsync(Request("A.cs", "B.cs"), new[] { "A.cs", "B.cs" });
+        await agent.Paused;
+
+        var navigation = new NavigationService(Services());
+        var vm = new SessionViewModel(live, navigation);
+
+        live.IsRunning.Should().BeTrue("la sesión está a mitad de camino");
+        Finding hallazgo = live.Findings.Should().ContainSingle().Subject;
+        string sesion = live.SessionId;
+        int unidades = live.Units.Count;
+
+        await vm.OpenLiveFindingCommand.ExecuteAsync(hallazgo);
+
+        navigation.Current.Should().BeOfType<FindingDetailViewModel>("se ha ido a la ficha");
+        live.IsRunning.Should().BeTrue("y la sesión sigue en curso detrás");
+        live.SessionId.Should().Be(sesion, "es la MISMA sesión: no se ha reiniciado");
+        live.Findings.Should().ContainSingle("el hilo no se ha perdido");
+        live.Units.Should().HaveCount(unidades);
+
+        agent.Open();
+        await run;
+    }
+
+    /// <summary>El contenedor mínimo para que la navegación pueda resolver la ficha.</summary>
+    private IServiceProvider Services()
+    {
+        var toasts = new ToastCenter();
+        var services = new ServiceCollection();
+        services.AddTransient(_ => new FindingDetailViewModel(
+            _hub,
+            new GovernanceService(_hub, _ulids),
+            _machines,
+            new VerifyCoordinator(_hub, _machines, _ulids, new FakeCopilotAgent()),
+            new EditorLauncher(_settings, _machines),
+            toasts,
+            TestFactory.Links(_hub, _paths),
+            TestFactory.LinkFlow(_hub, _paths, toasts)));
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// Audita la primera unidad entera —así hay un hallazgo en la columna— y se queda esperando en
+    /// la segunda: la sesión está viva y a mitad cuando el test navega.
+    /// </summary>
+    private sealed class PausesAfterFirstUnit : IAuditorProvider
+    {
+        private readonly IAuditorProvider _inner;
+        private readonly TaskCompletionSource _gate = new();
+        private readonly TaskCompletionSource _paused = new();
+        private int _units;
+
+        public PausesAfterFirstUnit(IAuditorProvider inner) => _inner = inner;
+
+        /// <summary>Se cumple cuando la primera unidad ya está auditada y la segunda espera.</summary>
+        public Task Paused => _paused.Task;
+
+        public void Open() => _gate.TrySetResult();
+
+        public string? ModelName => _inner.ModelName;
+        public event Action<string>? TextStreamed { add { } remove { } }
+        public event Action<UsageSample>? UsageReported { add { } remove { } }
+
+        public Task<AgentReadiness> CheckAsync(CancellationToken ct) => _inner.CheckAsync(ct);
+        public Task<bool> EnsureReadyAsync(CancellationToken ct) => _inner.EnsureReadyAsync(ct);
+        public Task<IReadOnlyList<AgentModel>> ListModelsAsync(CancellationToken ct) => _inner.ListModelsAsync(ct);
+        public Task VerifyAsync(VerifyRequest r, IVerifyToolbox t, CancellationToken ct) => _inner.VerifyAsync(r, t, ct);
+
+        public async Task AuditUnitAsync(AuditUnitRequest r, IAuditToolbox t, CancellationToken ct)
+        {
+            await _inner.AuditUnitAsync(r, t, ct);
+            if (Interlocked.Increment(ref _units) == 1)
+            {
+                _paused.TrySetResult();
+                await _gate.Task;
+            }
+        }
     }
 
     // ---------- F5.2 Hito 1: la sesión sobrevive a la navegación ----------

@@ -4,6 +4,26 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:c="clr-namespace:Atalaya.App.Controls">
+    <UserControl.Resources>
+        <!-- F34 §2 — LA TARJETA DE UN HALLAZGO DE LA COLUMNA, QUE AHORA SE PULSA.
+
+             Es un `Button` y no un `Border` con un gesto encima, y va `BasedOn` el estilo implícito
+             de la casa (`Button.Secondary`): de ahí salen el resaltado de hover —el mismo
+             `Brush.Surface2` que enciende una fila del Inventario o cualquier botón de la
+             aplicación—, el cursor de mano y el apagado. No se dibuja un segundo resaltado: se
+             hereda el que ya hay.
+
+             Lo que se cambia del estilo base es lo que la convierte en tarjeta y no en botón: el
+             relleno de la superficie que ya tenía, sin borde, el contenido estirado a lo ancho y
+             sin la altura mínima de un control —una tarjeta mide lo que mide su texto—. -->
+        <Style x:Key="Session.FindingCard" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
+            <Setter Property="Background" Value="{DynamicResource Brush.Bg}" />
+            <Setter Property="BorderThickness" Value="{StaticResource Pad.Zero}" />
+            <Setter Property="Padding" Value="{StaticResource Pad.ButtonSmall}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="MinHeight" Value="0" />
+        </Style>
+    </UserControl.Resources>
     <Grid>
         <!-- BUGFIX-CUOTA: el aviso de error tiene FILA PROPIA. Vivia en la fila 1, la misma que el
              cuerpo de tres columnas, asi que los dos se pintaban uno encima del otro: el cuerpo se
@@ -424,7 +444,19 @@
                         <ItemsControl ItemsSource="{Binding Findings}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Background="{DynamicResource Brush.Bg}" CornerRadius="5" Padding="{StaticResource Pad.ButtonSmall}" Margin="{StaticResource Pad.XXS.V}">
+                                    <!-- El hallazgo LLEVA A SU FICHA (F34 §2), y la sesión sigue
+                                         corriendo detrás: el estado vive en el servicio singleton,
+                                         no en esta pantalla (D-572), y el raíl mantiene «Sesión en
+                                         vivo» latiendo para volver. El comando decide solo si se
+                                         ofrece: sin ULID en el hub no puede ejecutarse, y un botón
+                                         que no puede ejecutarse no se resalta, no cambia el cursor
+                                         y no enseña su tooltip. O se abre, o no se anuncia. -->
+                                    <Button Style="{StaticResource Session.FindingCard}"
+                                            Margin="{StaticResource Pad.XXS.V}"
+                                            ToolTip="Ir al hallazgo"
+                                            Command="{Binding DataContext.OpenLiveFindingCommand,
+                                                      RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}">
                                         <StackPanel>
                                             <StackPanel Orientation="Horizontal">
                                                 <!-- El enum EN CRUDO escribía «Critica» sin tilde a 40 px
@@ -441,7 +473,7 @@
                                             </StackPanel>
                                             <TextBlock Text="{Binding Title}" TextWrapping="Wrap" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XXS.Top}" />
                                         </StackPanel>
-                                    </Border>
+                                    </Button>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

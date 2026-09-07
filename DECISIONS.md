@@ -17918,3 +17918,114 @@ un `Brush.Success` que no existe: el verde bueno es `Brush.Success.Fill`. La tan
 cambio → build → tests → `dist` → parar (N-8): que el verde del botón se lea bien al lado del de
 «Arreglar con agente», y que el «Copiar» de la esquina no apriete el titular, lo mira el usuario en
 el `dist`.
+
+### D-1039 — No se arregla lo que no está verificado, y un hallazgo de la sesión en vivo se abre sin parar la sesión
+
+**§0 · Las tres medidas, antes de tocar nada** (N-2).
+
+**(a) Cómo se apaga hoy «Arreglar con agente», y con qué texto.** El mecanismo es
+`AssistedFixLauncher.Check` → `FixLaunchDecision(Block, Message)`: un solo método con **dos**
+llamantes —la ficha para pintar el botón y el arranque para volver a mirarlo entre pintar y pulsar—,
+y ninguna copia de la regla. La ficha lo vuelca en `CanStartFix` y `AssistedFixBlock`, y la vista
+enseña la razón en un `Reason.Chip` bajo el botón, con el icono de aviso y la tinta de aviso, visible
+exactamente cuando `ShowAssistedFix && !CanStartFix` (P-27: lo apagado lleva su razón al lado, no en
+un gris de 11 px). Son cinco motivos con cinco remedios. Y **una precisión sobre el encargo**: lo que
+apaga el botón no son los *commits pendientes de publicar* —eso no existe como puerta del arreglo—,
+sino los **cambios sin commitear**, `FixBlock.ArbolSucio`, cuyo texto es «Tienes cambios locales sin
+commitear (N): …. Commitea o descarta antes de lanzar el arreglo — es lo que hace posible deshacerlo
+después de un solo clic». Es la razón que el encargo llama «la de los commits», y es la que se
+reutiliza y la que gana.
+
+**(b) Qué pasa al navegar fuera de la sesión en vivo: sigue corriendo, y hay camino de vuelta.** El
+estado no vive en la pantalla: vive en `LiveSessionService`, que es **singleton** (D-572), y
+`SessionViewModel` es `Transient` y una **vista** sobre él —`LoadAsync` no ejecuta nada desde F5.2
+Hito 1, que es lo que cerró D-085—. El camino de vuelta ya existe y es el **raíl**: mientras
+`HasSession`, la entrada `session` cuelga del grupo de la aplicación activa con el rótulo que
+`SyncSession` calcula —«Sesión en vivo» mientras `IsRunning`, después «Última sesión» o «Sesión
+fallida»— y con `Pulsing = IsSessionRunning`. Estaba probado desde antes
+(`Coming_back_to_the_view_shows_the_real_state`). **Por eso el punto 2 se hace y no se inventa
+ningún enlace «Volver a la sesión en curso» en la miga**: el que hay basta, y añadir otro sería un
+segundo camino a lo mismo — exactamente lo que D-1038 acaba de quitar de la botonera.
+
+**(c) Cuándo existe en el hub un hallazgo de la columna: siempre, desde antes de aparecer.**
+`SessionToolbox.SubmitFinding` acepta, llama a `FindingIngestionService.Create`, y ese método acuña
+el ULID y **escribe el fichero** (`_hub.Store.WriteFinding`) **antes** de devolver; solo entonces se
+dispara `_onFinding(created, "nuevo")`, que es lo único que añade a `LiveSessionService.Findings`
+(D-226: las detecciones nacen guardadas). O sea: un `submit_finding` rechazado no llega a la columna,
+y lo que llega ya tiene ficha. La regla del punto 2 se escribe igual —el comando exige ULID— porque
+lo que se declara es la condición, no la casualidad de que hoy se cumpla siempre.
+
+**§1 · Verificar antes de arreglar.** F33 (D-1038) enumeró los dos estados que piden verificación
+—el **anclaje** por `SnippetPanel.OffersVerify` y el **arreglo sin veredicto** calculado del
+historial (D-557: arreglar no resuelve)— y los usó para poner verde «Verificar ahora». Faltaba la
+otra mitad, que es la que de verdad protege el clon: **mientras el hallazgo pida una verificación,
+«Arreglar con agente» se apaga**. Un agente que escribe sobre un ancla perdida edita una línea que
+ya no es la del hallazgo; y encargar un segundo arreglo sin saber si el primero funcionó es apilar
+trabajo a ciegas. **La regla, en una frase: no se arregla lo que no está verificado.**
+
+**Y se apaga por el camino que ya existe, no por uno nuevo.** `FixBlock` gana un sexto valor,
+`VerificacionPendiente`, y `Check` un parámetro `PendingVerification` —`Ninguna`, `AnclaPerdida`,
+`ArregloSinVerificar`—. Viaja como parámetro a propósito: quien sabe cuál de los dos estados es la
+ficha, que lo lee del panel del snippet y del historial; la pieza que mira el clon no tiene por qué
+aprender D-557 por segunda vez. La razón la escribe `Check` como las otras cinco, y **dice cuál de
+los dos es**, porque no se resuelven igual: «Verifica primero: el ancla se ha perdido. Pulsa
+«Verificar ahora» para volver a situarla antes de que el agente escriba sobre una línea que ya no es
+la del hallazgo» y «Verifica primero: hay un arreglo sin verificar. Pulsa «Verificar ahora» para
+saber si el anterior funcionó antes de encargar otro — arreglar no resuelve». **La comprobación va
+la última**, después del árbol sucio: si coinciden, gana la razón de los cambios sin commitear
+—es la que bloquea de verdad, y la otra aparece sola en cuanto se commitea—. En la vista **no se
+toca ni un píxel**: el chip de la razón, el tooltip y el gris del botón salen de donde salían.
+
+**Lo que no se apaga, y por qué.** «Verificar ahora» sigue encendido y **verde** (F33): es la salida
+del estado, y apagarla junto con la entrada dejaría el hallazgo sin ninguna acción. «Generar prompt
+de arreglo» tampoco: no cuesta nada y sirve justamente para mirarlo a mano. «Abrir en el editor» y
+«Ver informe», igual que ayer.
+
+**§2 · Los hallazgos de la columna de la sesión en vivo se abren.** Aparecían, y no llevaban a
+ninguna parte: para mirar uno había que apuntarse el título y esperar a que la sesión acabara para
+buscarlo en Hallazgos — el mismo camino que la pantalla de cierre existe para ahorrar (R10 §5), y
+aquí encima con el trabajo aún en marcha. Ahora cada tarjeta es un `Button` con
+`OpenLiveFindingCommand`, y **el resaltado de hover se hereda, no se dibuja**: el estilo va
+`BasedOn` el implícito de la casa (`Button.Secondary`), de donde salen el `Brush.Surface2` del hover
+—el mismo que enciende una fila del Inventario—, el cursor de mano y el apagado. Lo que se cambia
+del estilo base es solo lo que la convierte en tarjeta: la superficie `Brush.Bg` que ya tenía, sin
+borde, el contenido estirado y sin altura mínima de control. El tooltip dice «Ir al hallazgo».
+
+**Y el comando decide solo si se ofrece.** `CanOpenLiveFinding` es cierto exactamente cuando el
+hallazgo tiene ULID —o sea, cuando está en el hub (§0c)—. Un botón cuyo comando no puede ejecutarse
+no se resalta, no cambia el cursor y no enseña su tooltip: WPF no lo hace, no hay que apagarlo a
+mano. **O se abre, o no se anuncia**; sin estado intermedio.
+
+**La sesión no se toca para que sobreviva, porque ya sobrevivía** (§0b). Navegar a la ficha deja la
+auditoría corriendo con el mismo identificador, los mismos hallazgos y las mismas unidades, y el
+raíl mantiene su entrada latiendo. Eso es lo que se ha medido, no lo que se ha construido.
+
+**Lo visible (N-6), y es toda la lista.** En la **ficha del hallazgo**: (a) «Arreglar con agente»
+queda gris con su razón al lado mientras haya algo que verificar. En la **sesión en vivo**: (b) cada
+tarjeta de la columna de hallazgos se resalta al pasar el ratón, cambia el cursor, enseña «Ir al
+hallazgo» y lleva a la ficha. Y **una consecuencia de forma que se declara porque se ve**: la tarjeta
+pasa de `CornerRadius="5"` al `Radius.M` de la plantilla de botón de la casa, que es el precio de
+reutilizar el hover en vez de dibujar otro. Nada más se mueve: ni la columna, ni el hilo, ni el
+orden de la botonera, ni ningún texto.
+
+**Cobertura (N-5): doce casos de regla, sobre el modelo y sin XAML.** De §1, en
+`VerifyBeforeFixTests`, sobre `CanStartFix` y `AssistedFixBlock` de la ficha: el punto de partida
+—ancla en su sitio, árbol limpio: encendido y **sin razón**—; el ancla perdida apaga con su frase y
+el tooltip del botón apagado ES su razón; el arreglo sin verificar apaga con la suya **con el ancla
+intacta**, en `[Theory]` por los dos eventos; un veredicto posterior vuelve a encenderlo —los tres
+veredictos—, que es la mitad que impide que el apagado se quede puesto para siempre; los dos a la
+vez enseñan la razón de los cambios sin commitear y **no** la de verificar, y al commitear aparece
+la segunda; el prompt de arreglo y «Verificar ahora» siguen encendidos; y el botón se apaga pero no
+se esconde. De §2, en `SessionViewModelTests`: el comando está disponible para el hallazgo que el
+hub ya tiene y no para uno sin ULID ni para `null`; y navegar a la ficha **con la sesión a mitad**
+—un auditor que audita la primera unidad y espera en la segunda— la deja corriendo, con el mismo
+`SessionId`, los mismos hallazgos y las mismas unidades. **Cebos**: poniendo la puerta de la
+verificación **antes** del árbol sucio cae el de las dos razones a la vez; olvidando el orden del
+historial de D-557 caen cuatro; y aceptando cualquier hallazgo en el comando cae el del ULID. El
+test de los cambios sin commitear de F6.9 sigue verde **sin tocarlo**, que era la condición. La
+tanda queda en **2.611 casos** (2.076 en la aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: el aspecto. Es una fase de presentación y el ciclo es
+cambio → build → tests → `dist` → parar (N-8): que el gris del botón apagado con dos razones
+posibles se lea bien, y que la tarjeta de la columna con el radio de la casa y el resaltado del
+hover se vea como una tarjeta y no como un botón, lo mira el usuario en el `dist`.
