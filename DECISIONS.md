@@ -17672,24 +17672,45 @@ queda: un tope se prueba con RELOJ, no con valor.** Y con **las dos cotas** de `
 ve— y que haya **agotado** el tope —sin eso, un cortocircuito accidental pasaría por arreglo—.
 
 **El barrido del resto del código, con fichero y línea.** Se buscó el patrón —una espera con tope
-cuyo resultado se descarta y se vuelve a esperar la tarea original— en todo `src/`:
+cuyo resultado se descarta y se vuelve a esperar la tarea original— en todo `src/`. **El patrón
+de búsqueda, escrito, porque la primera versión se dejó fuera dos sitios**: la que se usó al
+principio no llevaba `WaitForExit(`, así que no vio ni el reloj del commit de F32 ni el del
+actualizador — los dos cortan, así que la conclusión no cambió, pero la lista estaba incompleta y
+una lista incompleta no prueba nada—. El completo es:
 
-- `EditorLauncher.cs:103` y `:114` — **el defecto, en las dos sobrecargas.** Las dos entran aquí.
-- `App.xaml.cs:560` — `if (!operation().Wait(TimeSpan.FromSeconds(10)))`: comprueba el resultado,
-  apunta y sigue. **Corta.** No se toca.
+```
+grep -rn "Task.WhenAny\|WaitAsync(\|\.Wait(\|WaitForExit(" src --include=*.cs
+```
+
+**El defecto, y solo aquí:**
+
+- `EditorLauncher.cs:103` y `:114` — **las dos sobrecargas.** Las dos entran aquí.
+
+**Cortan —comprueban el resultado del tope y actúan—, así que no se tocan:**
+
+- `App.xaml.cs:560` — `if (!operation().Wait(TimeSpan.FromSeconds(10)))`: apunta y sigue.
 - `RealCopilotAgent.cs:849` — `if (await Task.WhenAny(dispose, Task.Delay(DisposeTimeout)) != dispose)`:
-  compara y vuelve. **Corta.** No se toca.
+  compara y vuelve.
 - `ClaudeUnitThread.cs:135` — el `WhenAny` de tres, con `done == cancelled` decidido después.
-  **Corta.** No se toca.
-- `HubSyncService.cs:653` — `if (done.Task.Wait(timeout, ct))`, el reloj del push de D-1022.
-  **Corta**, y ya tiene sus dos cotas. No se toca.
-- `Atalaya.Mcp/Program.cs:49` — `await Task.WhenAny(toAtalaya, toClaude)`: no es un tope, es un
-  puente que acaba cuando acaba cualquiera de sus dos tuberías. **No es el mismo patrón.**
-- **El reloj de 3 min del commit de F32** (D-1033), que el encargo daba por seguro: **no es el mismo
-  defecto.** `SystemProcessRunner` mira el resultado de `WaitForExit(ms)` y además **mata** el
-  proceso — que es más de lo que se puede hacer con una llamada nativa—. Medido: 400 ms de tope
-  sobre un proceso de ~19 s vuelve en **0,46 s** con `TimedOut = true`. Su código no se toca; lo que
-  le faltaba era **la prueba**, y la tiene, con las mismas dos cotas.
+- `HubSyncService.cs:653` — `if (done.Task.Wait(timeout, ct))`, el reloj del push de D-1022, que
+  ya tiene sus dos cotas.
+- **`BuildRunner.cs:45` — el reloj de 3 min del commit de F32** (D-1033), que el encargo daba por
+  seguro: `finished = process.WaitForExit(ms)` y, si es `false`, `Kill(process)` y
+  `TimedOut: true`. **No es el mismo defecto**: comprueba el resultado y además **mata** el
+  proceso, que es más de lo que se puede hacer con una llamada nativa. Medido: 400 ms de tope
+  sobre un proceso de ~19 s vuelve en **0,46 s**. Su código no se toca; lo que le faltaba era
+  **la prueba**, y la tiene con las mismas dos cotas.
+- `Atalaya.Updater/Program.cs:65` y `:116` — el `WaitForExit(90 s)` del actualizador, que la
+  primera búsqueda tampoco vio. Comprobado: si el proceso no termina devuelve
+  `SwapOutcome.Intacta` con su motivo —«Atalaya sigue abierta pasado el tiempo de espera; no se
+  ha modificado nada»— en vez de pisar ficheros bloqueados.
+
+**No son topes, así que no hay nada que pueda dejar de cortar:**
+
+- `Atalaya.Mcp/Program.cs:49` — `await Task.WhenAny(toAtalaya, toClaude)`: un puente que acaba
+  cuando acaba cualquiera de sus dos tuberías.
+- `FixToolbox.cs:46`, `:283` y `:427` (la pausa del arreglo) y los ocho `WaitAsync(ct)` de
+  semáforos de `Atalaya.ClaudeCode` y `Atalaya.Copilot`: esperas **por testigo y sin plazo**.
 
 **El arreglo, que es de tres líneas.** `WithTimeout` devuelve **al vencer**, siempre:
 `first == running ? await running : onTimeout()`. La llamada nativa que no vuelve **se queda en su
