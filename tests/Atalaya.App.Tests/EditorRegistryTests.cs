@@ -28,9 +28,7 @@ public sealed class EditorRegistryTests
 
         foreach (EditorDefinition editor in EditorRegistry.All)
         {
-            EditorCommand command = EditorRegistry.Build(
-                editor, executable: FakeExe(editor), File1, line: 142,
-                custom: "\"C:\\mi\\ed.exe\" --ir {file}:{line}");
+            EditorCommand command = EditorRegistry.Build(editor, FakeExe(editor), File1, line: 142);
 
             command.Ok.Should().BeTrue($"«{editor.Name}» tiene que poder construir su comando");
             built[editor.Id] = command.Display;
@@ -45,7 +43,6 @@ public sealed class EditorRegistryTests
         built["netbeans"].Should().Contain("--open").And.Contain("Motor.cs:142");
         built["sublime"].Should().Contain("Motor.cs:142:1");
         built[EditorRegistry.SystemId].Should().Contain("Motor.cs");
-        built[EditorRegistry.CustomId].Should().Contain("--ir").And.Contain("Motor.cs:142");
 
         // Y ninguno construye el comando de otro: dos editores distintos, dos comandos distintos.
         built.Values.Distinct().Should().HaveCount(built.Count);
@@ -72,14 +69,6 @@ public sealed class EditorRegistryTests
                 continue;
             }
 
-            if (editor.Line.ByUser)
-            {
-                // «Otro» declara que la sintaxis la pone el usuario, y se comprueba al construir su
-                // comando. Es una declaración, no un hueco — y solo la tiene «Otro».
-                editor.Kind.Should().Be(EditorKind.Custom);
-                continue;
-            }
-
             editor.Line.WhyNot.Should().NotBeNullOrWhiteSpace(
                 $"«{editor.Name}» no admite línea, así que tiene que decir POR QUÉ: es lo que sale "
                 + "en el toast en vez de un salto que no ha ocurrido");
@@ -97,59 +86,6 @@ public sealed class EditorRegistryTests
         command.Arguments.Should().NotContain("142");
         command.NoLineReason.Should().Be("no lo permite desde la línea de comandos");
     }
-
-    // ------------------------------------------------------------------ «Otro»
-
-    /// <summary>«Otro» sustituye los TRES marcadores: uno sin sustituir llegaría literal al editor.</summary>
-    [Fact]
-    public void Otro_sustituye_los_tres_marcadores()
-    {
-        EditorCommand command = Custom("\"C:\\mi\\ed.exe\" --file {file} --line {line} --col {col}", line: 142);
-
-        command.Ok.Should().BeTrue();
-        command.FileName.Should().Be(@"C:\mi\ed.exe");
-        command.Arguments.Should().Be($"--file {File1} --line 142 --col 1");
-        command.Arguments.Should().NotContain("{");
-        command.CarriesLine.Should().BeTrue();
-    }
-
-    /// <summary>Y falla CON MOTIVO si el comando no dice qué fichero abrir.</summary>
-    [Fact]
-    public void Otro_sin_file_falla_con_motivo()
-    {
-        EditorCommand command = Custom("mi-editor.exe --line {line}", line: 142);
-
-        command.Ok.Should().BeFalse();
-        command.Error.Should().Contain("{file}");
-    }
-
-    /// <summary>«Otro» elegido y sin comando escrito también falla con motivo, no en silencio.</summary>
-    [Fact]
-    public void Otro_sin_comando_falla_con_motivo()
-        => Custom(string.Empty, line: 1).Error.Should().Contain("no has escrito ningún comando");
-
-    /// <summary>Un comando personalizado sin <c>{line}</c> abre sin línea, y lo dice.</summary>
-    [Fact]
-    public void Otro_sin_line_abre_sin_linea_y_lo_dice()
-    {
-        EditorCommand command = Custom("mi-editor.exe \"{file}\"", line: 142);
-
-        command.Ok.Should().BeTrue();
-        command.CarriesLine.Should().BeFalse();
-        command.NoLineReason.Should().Contain("{line}");
-    }
-
-    /// <summary>El ejecutable entrecomillado se separa por la comilla, no por el primer espacio.</summary>
-    [Theory]
-    [InlineData("\"C:\\Program Files\\ed\\ed.exe\" -n{line} \"{file}\"", "C:\\Program Files\\ed\\ed.exe")]
-    [InlineData("subl \"{file}:{line}\"", "subl")]
-    [InlineData("solo-el-programa", "solo-el-programa")]
-    public void El_programa_se_separa_de_sus_argumentos(string command, string expected)
-        => EditorRegistry.SplitCommand(command).Executable.Should().Be(expected);
-
-    private static EditorCommand Custom(string command, int line)
-        => EditorRegistry.Build(
-            EditorRegistry.Find(EditorRegistry.CustomId)!, executable: null, File1, line, custom: command);
 
     /// <summary>Un ejecutable de mentira: aquí no hay ningún editor instalado, ni hace falta.</summary>
     private static string? FakeExe(EditorDefinition editor)

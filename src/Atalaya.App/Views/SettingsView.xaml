@@ -504,8 +504,9 @@
                         <TextBlock Text="Avanzado" Style="{StaticResource Setting.SectionTitle}" />
 
                         <!-- R13 §2 — el desplegable enseña SOLO los editores detectados en esta
-                             máquina, más el manejador del sistema y «Otro». Un editor que no está
-                             instalado no se ofrece: elegirlo sería elegir un fallo. -->
+                             máquina, más el manejador del sistema. Un editor que no está instalado
+                             no se ofrece: elegirlo sería elegir un fallo. R13-2 retira «Otro»: el
+                             registro de editores es la única puerta. -->
                         <DockPanel Style="{StaticResource Setting.Row}">
                             <StackPanel Style="{StaticResource Setting.Label}">
                                 <TextBlock Text="Editor preferido" Style="{StaticResource Setting.Name}" />
@@ -523,25 +524,6 @@
                                 <Button Content="Probar" Command="{Binding TestEditorCommand}"
                                         AutomationProperties.Name="Probar el editor" />
                                 <c:SavedMark Shown="{Binding Saved[Editor].Shown}" />
-                            </StackPanel>
-                        </DockPanel>
-
-                        <!-- R13 §2 — el comando de «Otro» aparece SOLO cuando «Otro» está elegido:
-                             en el resto de los casos no ocupa sitio. -->
-                        <DockPanel Style="{StaticResource Setting.Row}"
-                                   Visibility="{Binding ShowEditorCommand, Converter={StaticResource BoolToVisibility}}">
-                            <StackPanel Style="{StaticResource Setting.Label}">
-                                <TextBlock Text="Comando del editor" Style="{StaticResource Setting.Name}" />
-                                <TextBlock Style="{StaticResource Setting.Help}"
-                                           Text="El comando con el que abrir un fichero: {file} es la ruta, {line} la línea y {col} la columna. Entrecomilla las rutas. Ejemplo: &quot;C:\Program Files\Notepad++\notepad++.exe&quot; -n{line} &quot;{file}&quot;. Se aplica la próxima vez que abras código." />
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Top"
-                                        c:Stack.Gap="{StaticResource Space.S}">
-                                <TextBox Text="{Binding EditorCommand, UpdateSourceTrigger=LostFocus}"
-                                         AutomationProperties.Name="Comando personalizado del editor"
-                                         MinWidth="{StaticResource Field.SelectWidth}"
-                                         HorizontalAlignment="Left" />
-                                <c:SavedMark Shown="{Binding Saved[EditorCommand].Shown}" />
                             </StackPanel>
                         </DockPanel>
 

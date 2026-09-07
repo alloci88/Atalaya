@@ -135,8 +135,8 @@ public sealed class EditorDetector
     }
 
     /// <summary>
-    /// Lo que se ofrece en Ajustes: lo detectado, más el manejador del sistema y «Otro» —que están
-    /// siempre—, más el editor que el ajuste nombre aunque ya no esté (marcado «no encontrado»).
+    /// Lo que se ofrece en Ajustes: lo detectado, más el manejador del sistema —que está siempre—,
+    /// más el editor que el ajuste nombre aunque ya no esté (marcado «no encontrado»).
     /// </summary>
     public IReadOnlyList<DetectedEditor> Offer(string? configured)
     {
@@ -161,7 +161,7 @@ public sealed class EditorDetector
         {
             if (editor.Kind != EditorKind.Program)
             {
-                // El manejador del sistema y «Otro» no se instalan: están siempre.
+                // El manejador del sistema no se instala: está siempre.
                 found.Add(new DetectedEditor(editor, null, Detected: true));
                 continue;
             }

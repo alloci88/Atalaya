@@ -150,7 +150,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// <summary>
     /// Quién está instalado en esta máquina (R13 §2). Opcional como el resto: los tests que solo
     /// ejercitan los ajustes numéricos no montan una detección, y sin ella la lista sale con lo
-    /// que siempre está —el manejador del sistema y «Otro»— en vez de reventar.
+    /// que siempre está —el manejador del sistema— en vez de reventar.
     /// </summary>
     private readonly EditorDetector? _editors;
 
@@ -199,7 +199,6 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _ownFile = paths?.SettingsJson ?? string.Empty;
         AppSettings s = settings.Current;
         _editor = s.Editor;
-        _editorCommand = s.EditorCommand;
         BuildEditorOptions(s.Editor);
         _showCostIn = CostCurrencies.Label(CostCurrencies.Parse(s.CostCurrency));
         _isLightTheme = string.Equals(s.Theme, "light", StringComparison.OrdinalIgnoreCase);
@@ -283,15 +282,8 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] private string _editor;
 
     /// <summary>
-    /// El comando de «Otro» (R13 §1). Es la puerta para cualquier editor que no esté en la tabla —y
-    /// lo que evita tener que mantener la tabla para siempre—, así que se guarda como cualquier
-    /// otro ajuste y se prueba con el mismo botón.
-    /// </summary>
-    [ObservableProperty] private string _editorCommand = string.Empty;
-
-    /// <summary>
     /// Los editores que se ofrecen: <b>solo los que están en esta máquina</b>, más el manejador del
-    /// sistema y «Otro», que están siempre.
+    /// sistema, que está siempre.
     /// <para>
     /// Ofrecer un editor no instalado es ofrecer un fallo, y hasta R13 ese fallo era mudo: elegir
     /// Visual Studio sin Visual Studio abría el fichero con el manejador del sistema y decía que
@@ -302,15 +294,10 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// </summary>
     public List<EditorOption> EditorOptions { get; } = [];
 
-    /// <summary>El campo del comando solo ocupa sitio cuando hay un comando que escribir.</summary>
-    public bool ShowEditorCommand => string.Equals(Editor, EditorRegistry.CustomId, StringComparison.Ordinal);
-
     // La lista NO se reconstruye al cambiar de editor: sustituir el ItemsSource mientras el
     // desplegable está eligiendo es la forma más rápida de que WPF devuelva un SelectedValue nulo
     // y el ajuste cambie solo. Se construye al abrir la página y al pulsar «Probar», y ahí se
     // restaura la selección a mano.
-    partial void OnEditorChanged(string value) => OnPropertyChanged(nameof(ShowEditorCommand));
-
     private void BuildEditorOptions(string configured)
     {
         IReadOnlyList<DetectedEditor> offered = _editors?.Offer(configured)
@@ -639,7 +626,6 @@ public sealed partial class SettingsViewModel : ViewModelBase
     {
         AppSettings s = _settings.Current;
         s.Editor = Editor;
-        s.EditorCommand = EditorCommand.Trim();
         s.CostCurrency = CostCurrencies.Save(SelectedCurrency);
         s.Theme = IsLightTheme ? "light" : "dark";
         s.PollingSeconds = Floor(
@@ -726,7 +712,6 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public static readonly IReadOnlyList<string> Editable = new[]
     {
         nameof(Editor),
-        nameof(EditorCommand),
         nameof(ShowCostIn),
         nameof(IsLightTheme),
         nameof(PollingSeconds),

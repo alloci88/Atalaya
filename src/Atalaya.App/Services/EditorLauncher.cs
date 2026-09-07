@@ -163,8 +163,7 @@ public sealed class EditorLauncher
                 $"{editor.Name} no está en esta máquina; revisa el editor en Ajustes › Avanzado");
         }
 
-        EditorCommand command = EditorRegistry.Build(
-            editor, executable, absolutePath, line, column: 1, custom: _settings.Current.EditorCommand);
+        EditorCommand command = EditorRegistry.Build(editor, executable, absolutePath, line);
 
         if (!command.Ok)
         {

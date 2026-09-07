@@ -4,8 +4,8 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-07 (R13 — el editor que eliges es el que abre, y abre en la línea del
-hallazgo).
+Última revisión: 2026-09-07 (R13-2 — se retira «Otro (comando personalizado)»: el registro de
+editores es la única puerta).
 
 ## En vuelo
 
@@ -518,13 +518,21 @@ hallazgo).
 
 ## Cerrado
 
+- **R13-2 · Se quita «Otro (comando personalizado)»** — decisión del usuario: la caja de texto con
+  su sintaxis costaba más de lo que valía. Fuera la opción del desplegable, la fila «Comando del
+  editor», los marcadores `{file}` `{line}` `{col}`, el ajuste `editorCommand` y sus ocho casos. **El
+  registro de editores queda como única puerta**: el que no esté en la tabla no se puede elegir, y
+  entra escribiendo su fila con la sintaxis de línea comprobada. Un ajuste que apuntara a «Otro»
+  pasa al **Manejador del sistema** al arrancar y se dice una vez. «Probar», la detección y el
+  «(no encontrado)» se quedan como estaban. Ver D-1031.
+
 - **R13 · El editor que eliges es el que abre** — los editores dejan de ser dos casos de un `if` y
   pasan a ser **datos**: `EditorRegistry` declara por editor su nombre, sus ejecutables, dónde
   buscarlos y **su sintaxis de línea o que no la tiene** (Visual Studio, VS Code, Notepad++, Rider,
   Android Studio, IntelliJ IDEA, NetBeans, Sublime Text, el manejador del sistema y **«Otro»**, con
-  el comando del usuario). Ajustes › Avanzado ofrece **solo lo instalado** —detectado por registro
-  de Windows, PATH y carpetas conocidas—, enseña el campo del comando solo con «Otro» y estrena
-  **«Probar»**, que abre de verdad y dice qué comando lanzó. Los dos «Abrir en el editor» —ficha y
+  el comando del usuario, **retirado en R13-2**). Ajustes › Avanzado ofrece **solo lo instalado**
+  —detectado por registro de Windows, PATH y carpetas conocidas— y estrena **«Probar»**, que abre de
+  verdad y dice qué comando lanzó. Los dos «Abrir en el editor» —ficha y
   arreglo terminado— pasan por el mismo lanzador, que lee el ajuste en cada pulsación, manda la
   **línea re-anclada** cuando la hay (D-021) y cuenta en el toast qué hizo y con qué línea. Un
   editor que ya no está falla con su motivo: no se cae a otro en silencio. Causa medida de los dos

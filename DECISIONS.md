@@ -17159,3 +17159,32 @@ final pase lo que pase. Su test pasa porque comprueba el valor, no el reloj — 
 tope de 120 ms tarda **6,1 s** de reloj contra 1,15 s del caso de control, los 5 s del arranque
 simulado. El tope de D-208 estaba fuera del alcance de esta tanda («se conserva tal cual»), así que
 se deja escrito aquí y en el backlog: es un hallazgo, no un encargo.
+
+### D-1031 — R13-2: «Otro» se retira, y el registro es la única puerta
+
+El comando personalizado nació en R13 como la puerta para cualquier editor que no estuviera en la
+tabla, y con eso venía todo lo demás: un ajuste más que guardar, una fila que aparece y desaparece,
+tres marcadores que sustituir, la partición del programa y sus argumentos, y sus modos de fallar —sin
+`{file}`, sin comando, sin `{line}`—. **El usuario ha decidido que eso es más lío del que vale**, y
+tiene la evidencia de su lado: el que necesita un editor que no está en la tabla es capaz de
+escribir su línea de comandos, pero el que abre Ajustes por primera vez se encuentra una caja de
+texto con una sintaxis que aprender.
+
+Se retira entero: la opción del desplegable, la fila «Comando del editor», la sustitución de
+`{file}`, `{line}` y `{col}`, el ajuste `editorCommand` y sus ocho casos de test. **El registro de
+editores pasa a ser la única puerta**: un editor que no esté en la tabla no se puede elegir, y
+entrar en ella sigue costando lo mismo que en R13 —una fila con su sintaxis de línea comprobada, o
+la declaración de que no la tiene—. Es un cambio de precio, no de principio: antes se pagaba con una
+caja de texto que todos ven; ahora se paga con una fila que escribe quien la comprueba.
+
+**La mudanza, que no es silenciosa.** Una máquina que tuviera «Otro» elegido —posible desde R13—
+se quedaría con un ajuste que nombra algo que ya no existe. Al arrancar pasa a **«Manejador del
+sistema»** —lo más parecido a «lo que tenías», que abre el fichero pase lo que pase, en vez de
+elegirle un editor a nadie— y se dice **una vez**, con la misma forma que la promoción del tope del
+barrido (D-765): la migración devuelve la frase y la carcasa la enseña. No hace falta bandera de «ya
+migrado»: en cuanto se escribe, el ajuste deja de decir «custom» y no hay nada que volver a mudar.
+
+**Lo que NO se ha tocado**: el resto del registro, la detección, «Probar», el «(no encontrado)» del
+editor desinstalado, los toasts de la ficha y el tope de D-208 —que tiene su propio parte abierto en
+el backlog—. Seis casos menos (2.011 en la aplicación): ocho de «Otro» que se van, dos de la
+mudanza que entran.

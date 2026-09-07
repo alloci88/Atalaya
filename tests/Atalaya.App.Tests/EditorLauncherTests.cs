@@ -118,7 +118,7 @@ public sealed class EditorLauncherTests : IDisposable
             .Select(d => d.Editor.Id).ToList();
 
         offered.Should().Contain("notepadpp");
-        offered.Should().Contain(EditorRegistry.SystemId).And.Contain(EditorRegistry.CustomId);
+        offered.Should().Contain(EditorRegistry.SystemId);
         offered.Should().NotContain(EditorRegistry.VisualStudioId, "Visual Studio no está en esta máquina");
     }
 
@@ -184,9 +184,9 @@ public sealed class EditorLauncherTests : IDisposable
     // ------------------------------------------------------------------ Ajustes (§2)
 
     /// <summary>
-    /// El desplegable de Ajustes enseña <b>lo que hay</b>: los detectados, el manejador del
-    /// sistema y «Otro». Ofrecer Visual Studio en una máquina sin Visual Studio es ofrecer el
-    /// fallo de los 10 s de D-208.
+    /// El desplegable de Ajustes enseña <b>lo que hay</b>: los detectados y el manejador del
+    /// sistema. Ofrecer Visual Studio en una máquina sin Visual Studio es ofrecer el fallo de los
+    /// 10 s de D-208.
     /// </summary>
     [Fact]
     public void Ajustes_solo_ofrece_los_editores_de_esta_maquina()
@@ -194,40 +194,60 @@ public sealed class EditorLauncherTests : IDisposable
         _probe.Install("notepad++.exe", @"C:\Program Files\Notepad++\notepad++.exe");
         SettingsViewModel vm = Settings();
 
-        vm.EditorOptions.Select(o => o.Id).Should()
-            .Contain(["notepadpp", EditorRegistry.SystemId, EditorRegistry.CustomId]);
+        vm.EditorOptions.Select(o => o.Id).Should().Contain(["notepadpp", EditorRegistry.SystemId]);
         vm.EditorOptions.Select(o => o.Id).Should().NotContain("vscode");
     }
 
-    /// <summary>El campo del comando solo ocupa sitio cuando «Otro» está elegido.</summary>
+    /// <summary>
+    /// <b>R13-2 — el ajuste no puede apuntar a una opción que ya no existe.</b> «Otro (comando
+    /// personalizado)» se retiró; una máquina que lo tuviera elegido pasa al manejador del sistema
+    /// al arrancar, y <b>se le dice</b>. Un ajuste que cambia solo y sin avisar se vive igual que
+    /// un ajuste que no ajusta (D-765).
+    /// </summary>
     [Fact]
-    public void El_campo_del_comando_sale_solo_con_Otro()
+    public void El_ajuste_que_apuntaba_a_Otro_se_muda_al_manejador_del_sistema_y_se_dice()
     {
-        SettingsViewModel vm = Settings();
+        Configure(SettingsService.RetiredCustomEditorId);
 
-        vm.Editor = EditorRegistry.SystemId;
-        vm.ShowEditorCommand.Should().BeFalse();
+        string? aviso = _settings.MigrateRetiredEditor();
 
-        vm.Editor = EditorRegistry.CustomId;
-        vm.ShowEditorCommand.Should().BeTrue();
+        aviso.Should().NotBeNullOrWhiteSpace("una mudanza silenciosa no se distingue de un fallo");
+        _settings.Current.Editor.Should().Be(EditorRegistry.SystemId);
+
+        var releido = new SettingsService(_paths);
+        releido.Load();
+        releido.Current.Editor.Should().Be(EditorRegistry.SystemId, "y queda escrito en el fichero");
+
+        // Y no vuelve a hablar: en cuanto está mudado no hay nada que mudar.
+        _settings.MigrateRetiredEditor().Should().BeNull();
+    }
+
+    /// <summary>Al que tiene un editor de verdad elegido no se le toca ni se le dice nada.</summary>
+    [Fact]
+    public void La_mudanza_no_toca_al_que_ya_tiene_un_editor_del_registro()
+    {
+        Configure("notepadpp");
+
+        _settings.MigrateRetiredEditor().Should().BeNull();
+        _settings.Current.Editor.Should().Be("notepadpp");
     }
 
     /// <summary>
     /// «Probar» abre de verdad y cuenta lo que ha pasado. Es la única forma de que el usuario sepa
-    /// que su editor —y sobre todo su comando personalizado— funciona antes de necesitarlo.
+    /// que su editor funciona antes de necesitarlo.
     /// </summary>
     [Fact]
     public async Task Probar_cuenta_lo_que_ha_pasado()
     {
         var toasts = new ToastCenter();
         SettingsViewModel vm = Settings(toasts);
-        vm.Editor = EditorRegistry.CustomId;
-        vm.EditorCommand = "no-existe-este-editor.exe --ir {file}:{line}";
+        vm.Editor = EditorRegistry.VisualStudioId;
 
         await vm.TestEditorCommand.ExecuteAsync(null);
 
-        // El editor de mentira no arranca, y por eso el toast dice el motivo en vez de callarse.
-        toasts.Items.Last().Text.Should().Contain("No se pudo abrir");
+        // Visual Studio no está en esta máquina de mentira, y por eso el toast dice el motivo en
+        // vez de callarse — ni de abrir con otro.
+        toasts.Items.Last().Text.Should().Contain("No se pudo abrir").And.Contain("Visual Studio");
     }
 
     // ------------------------------------------------------------------ el arnés
@@ -261,7 +281,7 @@ public sealed class EditorLauncherTests : IDisposable
     private EditorCommand Command(EditorDefinition editor, int line)
         => EditorRegistry.Build(
             editor, new EditorDetector(_probe).Locate(editor),
-            Path.Combine(_clone, "src", "Motor.cs"), line, custom: _settings.Current.EditorCommand);
+            Path.Combine(_clone, "src", "Motor.cs"), line);
 
     private static EditorOpenResult Result(
         int line, bool delivered, string name = "VS Code", string? noLineReason = null,

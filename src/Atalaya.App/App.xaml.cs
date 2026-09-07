@@ -87,6 +87,8 @@ public partial class App : Application
         // F16 §D: y el tope del barrido, por lo mismo — las máquinas traen el 5 escrito y el valor
         // por defecto nuevo no las alcanza. La frase que devuelve se enseña una vez, abajo.
         string? sweepNotice = settings.MigrateSweepCapDefault();
+        // R13-2: y el editor «Otro», que ya no existe. Mismo patrón: la frase se enseña una vez.
+        string? editorNotice = settings.MigrateRetiredEditor();
         ThemeService.Apply(settings.Current.Theme);
         // F29 §2 — la divisa, antes de que nada escriba un coste. Va aquí y no dentro de la primera
         // vista que la necesite por lo mismo que el tema: la leen el pie, las tarjetas, Métricas y
@@ -110,6 +112,7 @@ public partial class App : Application
         // justo la prueba que faltaba para poder borrar la copia de la anterior.
         main.ReportUpdateAftermath();
         main.ReportSettingsPromotion(sweepNotice);
+        main.ReportSettingsPromotion(editorNotice);
 
         // F8 §3: el chequeo de versión va DESPUÉS de que todo esté en marcha y sin await. Nada de
         // lo que hace la aplicación depende de su respuesta, así que nada puede esperarla: una

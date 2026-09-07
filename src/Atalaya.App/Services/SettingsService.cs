@@ -131,13 +131,6 @@ public sealed class AppSettings
     /// </summary>
     public string Editor { get; set; } = EditorRegistry.VisualStudioId;
 
-    /// <summary>
-    /// El comando de «Otro» (R13 §1), con <c>{file}</c>, <c>{line}</c> y <c>{col}</c>. Solo se usa
-    /// cuando <see cref="Editor"/> es <c>"custom"</c>. Es la puerta para cualquier editor que no
-    /// esté en la tabla, y es lo que evita tener que mantener la tabla para siempre.
-    /// </summary>
-    public string EditorCommand { get; set; } = string.Empty;
-
     /// <summary>"dark" or "light".</summary>
     public string Theme { get; set; } = "dark";
 
@@ -543,6 +536,40 @@ public sealed class SettingsService
             + "seguidas para darse por terminado, y esas dos salen del mismo tope. Con 6 vuelve a "
             + "haber 4 pasadas que puedan aportar algo. Puedes cambiarlo en Ajustes → Auditoría.";
     }
+
+    /// <summary>
+    /// El ajuste que apuntaba a «Otro» pasa a «Manejador del sistema» (R13-2, D-1031).
+    /// <para>
+    /// «Otro (comando personalizado)» existió entre R13 y R13-2. Una máquina que lo tuviera elegido
+    /// se quedaría con un ajuste que nombra una opción que ya no está: el desplegable no podría
+    /// enseñarlo y abrir código no sabría qué lanzar. Se muda al manejador del sistema —que abre el
+    /// fichero pase lo que pase— en vez de al editor de fábrica, porque es lo más parecido a «lo que
+    /// tú tenías puesto» sin elegir por nadie.
+    /// </para>
+    /// <para>
+    /// <b>Y no es silenciosa</b>, por la regla de D-765: devuelve la frase que la aplicación enseña
+    /// una vez. Un ajuste que cambia solo y sin avisar es indistinguible de un ajuste que no ajusta.
+    /// No hace falta bandera de «ya migrado»: en cuanto se escribe, el ajuste deja de decir
+    /// «custom» y no hay nada que volver a migrar.
+    /// </para>
+    /// </summary>
+    /// <returns>Qué contarle al usuario, o <c>null</c> si no había nada que mudar.</returns>
+    public string? MigrateRetiredEditor()
+    {
+        if (!string.Equals(Current.Editor, RetiredCustomEditorId, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        Current.Editor = EditorRegistry.SystemId;
+        Save(Current);
+
+        return "El editor «Otro (comando personalizado)» se ha retirado: tu editor preferido pasa a "
+            + "«Manejador del sistema». Puedes elegir otro en Ajustes → Avanzado.";
+    }
+
+    /// <summary>El id que tuvo «Otro» mientras existió. Se nombra para poder reconocerlo y mudarlo.</summary>
+    internal const string RetiredCustomEditorId = "custom";
 
     /// <summary>Compares two remote URLs ignoring case, a trailing slash and a trailing ".git".</summary>
     internal static bool SameRepo(string? a, string? b)
