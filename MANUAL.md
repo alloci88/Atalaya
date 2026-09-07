@@ -453,6 +453,15 @@ pie, y el desglose, en el informe.
   tarjeta y el botón desaparecen y en su lugar queda la línea del commit: «Commiteado `a1b2c3d`
   · 1 fichero · pendiente de tu push». **Publicar sigue siendo tuyo**: Atalaya no empuja nunca
   tu clon. Y arreglar sigue sin resolver el hallazgo — para eso está «Verificar ahora»—.
+- **Y los pasos se ven.** Al pulsarlo el botón se apaga y en su sitio salen los cinco: commitear
+  en tu clon, anotar el arreglo, anotar en el hallazgo, reescribir el informe y publicar en el
+  hub — cada uno con su estado y su tiempo, como en «Verificar ahora»—. **No hay «Cancelar»**:
+  lo primero que se hace es el commit, y después ya no habría nada que cancelar. Si falla el
+  **primero**, su línea se pone en rojo con el motivo y no cambia nada. Si falla alguno de los
+  **tres siguientes**, el commit está hecho y no se deshace: la pantalla pasa al estado
+  commiteado, la línea roja dice qué quedó sin anotar, y se reintenta solo la próxima vez que
+  entres aquí. Si falla el **último**, dice «pendiente de publicar» y sale con lo pendiente,
+  como todo lo demás.
 - **Descartar todo** devuelve cada fichero tocado a como estaba, byte a byte, con
   confirmación previa.
 - **Detener** para al agente; lo que ya haya aplicado se queda.

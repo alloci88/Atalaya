@@ -17318,6 +17318,11 @@ con un modelo delante. Y sigue sin poder contarse cuántas tarjetas de «pégame
 guardar el texto de las preguntas en el informe, que es otro parte.
 ## F32 — «Me quedo los cambios» commitea
 
+> **CORREGIDO en BUGFIX-F32 (D-1034).** Dos cosas de aquí eran falsas. «Sin `StepList`: es una
+> operación de una sola pieza» — son **cinco** pasos y ahora se ven—; y el botón, tal y como
+> quedó, **cerraba la aplicación**: el commit se hacía y lo demás no. Lo que sí sigue en pie es
+> todo lo demás de esta entrada — qué se commitea, con qué mensaje, y que Atalaya no empuja.
+
 ### D-1033 — SE REVOCA D-556: Atalaya SÍ commitea, y lo que quedaba a medias era la decisión, no el principio
 
 **La revocación, en cabecera y con su nombre.** **D-556 queda revocado por esta entrada.** Decía
@@ -17439,3 +17444,116 @@ prueba es que un git que rechaza se trata como rechazo, no que un hook concreto 
 mismo con el reloj: no hay test que agote los tres minutos. Y no se ha probado en una máquina sin
 `git` en el PATH; el camino existe y devuelve su motivo, pero el desenlace real ahí lo verá primero
 el usuario.
+## BUGFIX-F32 — El botón que cerraba la aplicación, y los cinco pasos que nadie veía
+
+### D-1034 — La pila primero (N-2): dos defectos, y el segundo llevaba ahí desde siempre
+
+Con el `dist` de F32, en uso real: arreglo terminado, un fichero tocado, pulsar «Me quedo los
+cambios» → **Atalaya se cierra**. Sin diálogo, sin toast y sin nada.
+
+**El registro de la aplicación no dice nada, y eso ya es el primer dato.** `atalaya-20260907_002.log`
+termina en `15:15:28 [INF] Push: publicado «fix: MEJ-0070 en xblast (1 fichero(s))» en 5984 ms` —el
+push del **cierre** del arreglo— y **ahí se corta**: ni una línea `[ERR]`, ni el «Application is
+shutting down…» que sí escriben los arranques normales. Murió sin pasar por ningún sitio que
+escriba.
+
+**El Visor de sucesos de Windows sí lo tenía, entero** (.NET Runtime, id 1026, 15:15:31):
+
+```
+System.InvalidOperationException: El subproceso que realiza la llamada no puede obtener acceso a
+este objeto porque el propietario es otro subproceso.
+   at System.Windows.Threading.Dispatcher.<VerifyAccess>g__ThrowVerifyAccess|7_0()
+   at CommunityToolkit.Mvvm.Input.AsyncRelayCommand.NotifyCanExecuteChanged()
+   at Atalaya.App.Services.LiveFixService.AcceptChanges() … LiveFixService.cs:line 1060
+   at Atalaya.App.Services.LiveFixService.CommitChanges() … LiveFixService.cs:line 1143
+   at Atalaya.App.ViewModels.AssistedFixViewModel.<CommitChanges>b__135_0() … línea 556
+   at System.Threading.Tasks.Task`1.InnerInvoke() …
+```
+
+**La causa, leída de la pila.** F32 puso el commit **fuera del hilo de interfaz** —`Task.Run`, porque
+detrás puede haber un `pre-commit` largo— y añadió `CommitChangesCommand.NotifyCanExecuteChanged()`
+al `OnFixChanged` del view-model. `AcceptChanges()` levanta `Changed`, el view-model lo atiende **en
+el hilo de fondo**, y ahí toca el comando: un `Button` enlazado a un `Command` se suscribe a
+`CanExecuteChanged`, así que levantarlo desde otro hilo termina en `Dispatcher.VerifyAccess`. Un
+`OnPropertyChanged` normal no lo habría hecho —WPF marshala cada enlace por su cuenta—; un comando
+enlazado, sí.
+
+**Y por qué los siete tests de F32 estaban en verde.** Porque llamaban a `fix.CommitChanges()` **en
+el hilo del test**, nunca por el comando; y sobre todo, **en un test no hay ningún `Button`
+enlazado**, así que `NotifyCanExecuteChanged()` no cruza a nadie y no puede fallar. Lo que faltaba
+probar no era el commit: era el camino. Eso es exactamente lo que la máquina real hace y el test no.
+
+**En qué paso murió, comprobado contra el clon y el hub.** El commit **se hizo**: `5249598bf`,
+15:15:31, «Acota iteraciones en OrderConcaveHullPoints (MEJ-0070)», árbol limpio. Y **nada más**:
+`fixes/01M1Y03KV222H24M59V5TEZEYX.json` con `"commitSha": null`, el historial de MEJ-0070 con su
+`fixProposed` y **sin** `fixCommitted`, y el informe todavía diciendo «Estos cambios NO están
+commiteados». Cuadra con la pila al carácter: reventó **dentro de `AcceptChanges()`**, después del
+commit y antes de `CommittedSha = sha`, así que no llegó a anotarse nada. El usuario se quedó con el
+commit hecho, la aplicación cerrada y el hub contando lo contrario.
+
+**Por qué no lo paró el manejador global: porque no había ninguno.** Medido —
+`grep DispatcherUnhandledException|AppDomain.CurrentDomain.UnhandledException|UnobservedTaskException`
+sobre `src/` no devuelve **nada**—. D-802 puso un `try` alrededor del **arranque** («un arranque que
+falla deja de morir en silencio») y de la aplicación **ya abierta** no se encargó nadie. **Es un
+segundo defecto, independiente del primero**: arreglar la excepción de F32 no lo habría tocado, y la
+siguiente habría cerrado Atalaya igual. Se arregla aquí, con su propia prueba.
+
+**Los dos arreglos.** **(1)** `OnFixChanged` **cruza al hilo de interfaz** si no está en él, en un
+solo sitio y no en cada uno de sus treinta llamantes — el que se olvide de cruzar es el que rompe—.
+Es la misma guarda que ya tenían `StepList` y la conversación (F30 §2d), con la misma salida en
+línea cuando no hay `Application`; el dispatcher se **captura al construir** el view-model, que es
+cuando se sabe cuál es. **(2)** `UnhandledErrors`: las del hilo de interfaz se **recogen** —se
+apuntan con su pila, se dicen y la aplicación **sigue viva**, porque perder la ventana es peor que
+perder la operación—; las de un hilo suelto y las de una tarea sin observar solo se pueden apuntar,
+y se apuntan. **La regla que queda: pulsar «Me quedo los cambios» nunca cierra la aplicación.** Si
+no puede terminar, dice **dónde se quedó**.
+
+**Y se corrige D-1033: no era «una operación de una sola pieza».** Aquella entrada decidió no poner
+`StepList` con esas palabras, y era falso: son **cinco** pasos —commitear, anotar el arreglo, anotar
+en el hallazgo, reescribir el informe, publicar en el hub—, cuatro de ellos escriben en sitios
+distintos, cualquiera puede fallar por su cuenta, y el usuario no veía ninguno. Entra el `StepList`
+de D-1029 con los pasos **sacados del servicio** —`Run` revienta con un identificador no declarado,
+así que la lista que se enseña es la que se ejecuta—, en la barra de acciones del arreglo terminado,
+en el sitio del botón que se apaga. **«Cancelar» no sale en ninguno**, y no es un olvido: el
+criterio de D-1029 es que se ofrece mientras no se haya escrito nada, y aquí **lo primero que se
+hace es el commit**. Antes de él no hay nada que esperar; después no hay ningún punto en el que
+cancelar deje el clon como estaba. Es el mismo razonamiento que dejó la verificación sin cancelar.
+
+**Qué hace cada fallo, que es la parte que importa.** **Paso 1** (commitear): línea roja con el
+motivo y **nada cambia** — el clon, el registro y la pantalla siguen como estaban, con su aviso, su
+tarjeta y su botón (D-1033 intacto)—; los cuatro siguientes ni se intentan, porque no hay nada que
+anotar. **Pasos 2, 3 y 4** (registro, historial, informe): el commit **ya está y no se deshace**
+—anti-objetivo declarado—, así que la pantalla pasa al estado commiteado **con la línea del hash**,
+que es lo que hay en el clon; cada uno falla por su cuenta sin llevarse a los siguientes —que el
+informe no se pueda reescribir no es motivo para dejar el hallazgo sin su evento—, lo que no se
+anotó **se dice**, y **se reintenta al volver por «Último arreglo»**, que es el mismo camino
+(D-572). Las tres piezas son idempotentes a propósito: el evento del historial **no se duplica**,
+porque un historial con dos veces el mismo commit se lee como dos commits. **Paso 5** (publicar):
+«no se pudo publicar · queda pendiente de publicar» (D-1025) y la operación **sigue**; lo escrito
+está en disco y sale con lo pendiente.
+
+**Lo visible (N-6), y nada más.** En el arreglo terminado, al pulsar «Me quedo los cambios» el botón
+se apaga y **en su fila salen los cinco pasos con su estado**, igual que los de «Verificar ahora» y
+en el mismo sitio. Al acabar bien, la pantalla queda como dice D-1033 —sin aviso, sin tarjeta, sin
+botón, con la línea del hash—. Si un paso falla, su línea en rojo con el motivo y el estado que le
+toque según el párrafo de arriba. Ninguna otra vista se mueve. Y no se toca **qué** se commitea ni
+**con qué mensaje** (D-1033), ni el `StepList` en sí (D-1029): se usa.
+
+**Cobertura (N-5): nueve tests de regla, cebo comprobado en dos.** De la excepción: un `Button`
+enlazado de verdad sobre un hilo STA y el aviso levantado desde un hilo de fondo — **cebo: quitando
+la guarda, el test falla con el texto exacto del evento 1026**, «el subproceso que realiza la llamada
+no puede obtener acceso a este objeto»—. Del manejador: una excepción no capturada en el hilo de
+interfaz se apunta **con su pila** y la aplicación sigue; **sin** el manejador no queda ni una línea
+—el cebo, escrito como test—; y el parte de una excepción envuelta lleva las capas. De los pasos: el
+de regla de D-1029 —`Executed == Plan`, misma lista y mismo orden, y ninguno cancelable—, **cebo: un
+`StepSpec` de más en el plan lo pone rojo**; y las cuatro ramas de fallo, una por test, con el estado
+del clon **y** de la pantalla comprobados en cada una: el commit que falla (nada cambia, los otros
+cuatro en pendiente), la anotación que falla (commit hecho, pantalla commiteada, `PendingStamp`), el
+reintento al volver (que además no duplica el evento) y el push que no sale («pendiente de
+publicar»). La tanda queda en **2.567 casos** (2.032 en la aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: el manejador de `AppDomain.UnhandledException` y el de
+`TaskScheduler.UnobservedTaskException` no tienen test propio —el primero mata el proceso por
+definición y el segundo depende del recolector—, así que de ésos se prueba el parte que escriben
+(`Describe`) y no el enganche. Y no se ha vuelto a pulsar el botón en el `dist` con una sesión real:
+lo que se ha reproducido es el cruce de hilo que lo cerraba, con la pila del evento 1026 delante.

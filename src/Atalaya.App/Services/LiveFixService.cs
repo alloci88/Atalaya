@@ -1088,14 +1088,60 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
 
         try
         {
-            CommittedSha = _hub.Store.ListFixes(Slug)
+            string? recorded = _hub.Store.ListFixes(Slug)
                 .FirstOrDefault(f => string.Equals(f.Id.ToString(), SessionId, StringComparison.Ordinal))
                 ?.CommitSha;
+
+            // El commit MANDA sobre el registro. Si se hizo y la anotación no llegó a
+            // escribirse, lo que hay que corregir es el registro, no olvidar el commit: por eso
+            // la memoria de esta sesión gana cuando el hub no lo sabe (BUGFIX-F32).
+            CommittedSha ??= recorded;
+
+            // Y se REINTENTA lo que quedó sin anotar. Volver por «Último arreglo» es el mismo
+            // camino (D-572), así que es también el momento natural de terminar lo que se quedó
+            // a medias: silencioso, porque el usuario ya leyó el aviso cuando pasó.
+            if (PendingStamp && CommittedSha is { Length: > 0 } sha)
+            {
+                RetryStamp(sha);
+            }
         }
         catch (Exception)
         {
             // No poder leer el hub no puede tumbar la pantalla; el estado se queda como estaba.
         }
+    }
+
+    /// <summary>
+    /// Termina lo que un fallo dejó sin anotar. Las tres piezas son idempotentes, así que
+    /// reintentarlas todas es más simple —y más seguro— que llevar la cuenta de cuál falló.
+    /// </summary>
+    private void RetryStamp(string sha)
+    {
+        bool ok = true;
+        foreach (Action stamp in new Action[]
+                 {
+                     () => StampRecord(sha), () => StampHistory(sha), () => StampReport(sha),
+                 })
+        {
+            try
+            {
+                stamp();
+            }
+            catch (Exception)
+            {
+                ok = false;   // Se vuelve a intentar la próxima vez que se entre.
+            }
+        }
+
+        if (!ok)
+        {
+            return;
+        }
+
+        PendingStamp = false;
+        Publish(sha);
+        Say(FixMessage.System("◆", $"Anotado el commit {sha} en el hub."));
+        Changed?.Invoke();
     }
 
     /// <summary>
@@ -1113,8 +1159,50 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
     /// es exactamente eso — primero el commit, y solo si vuelve bien se escribe lo demás.
     /// </para>
     /// </summary>
-    public FixCommitResult CommitChanges()
+    public const string PasoCommitear = "commitear";
+    public const string PasoAnotar = "anotar";
+    public const string PasoHistorial = "historial";
+    public const string PasoInforme = "informe";
+    public const string PasoPublicar = "publicar";
+
+    /// <summary>
+    /// <b>Los cinco pasos de quedarse los cambios</b>, y <b>ninguno se puede cancelar</b>
+    /// (BUGFIX-F32, que corrige a D-1033).
+    /// <para>
+    /// D-1033 dijo «sin StepList: es una operación de una sola pieza». <b>Era falso</b>: son
+    /// cinco, cuatro de ellos escriben en sitios distintos y cualquiera puede fallar por su
+    /// cuenta — y el usuario no veía ninguno.
+    /// </para>
+    /// <para>
+    /// <b>Y no hay «Cancelar», por el mismo criterio que la verificación</b> (D-1029): se
+    /// ofrece mientras no se haya escrito nada, y aquí <b>lo primero que se hace es el
+    /// commit</b>. Después de él no hay ningún punto en el que cancelar deje el clon como
+    /// estaba, y antes de él no hay nada que esperar. Un botón que no puede cumplir lo que
+    /// promete es peor que su ausencia.
+    /// </para>
+    /// </summary>
+    public static IReadOnlyList<StepSpec> CommitPlan { get; } = new[]
     {
+        new StepSpec(PasoCommitear, "Commitear en tu clon"),
+        new StepSpec(PasoAnotar, "Anotar el arreglo"),
+        new StepSpec(PasoHistorial, "Anotar en el hallazgo"),
+        new StepSpec(PasoInforme, "Reescribir el informe"),
+        new StepSpec(PasoPublicar, "Publicar en el hub"),
+    };
+
+    /// <summary>La lista lista para colgarla de la barra del arreglo terminado.</summary>
+    public static StepList NewCommitSteps(StepFlow flow = StepFlow.Vertical) => new(CommitPlan, flow);
+
+    /// <param name="steps">
+    /// Los pasos que se están enseñando (D-1029). Si no llega uno se crea aquí: el camino que
+    /// ejecuta es el mismo se enseñe o no, porque dos caminos serían dos comportamientos.
+    /// </param>
+    public FixCommitResult CommitChanges(StepList? steps = null)
+    {
+        steps ??= NewCommitSteps();
+
+        // Las guardas van ANTES de empezar ningún paso: son «no hay nada que hacer», no un
+        // paso que falla, y pintar una lista en rojo para decirlo sería inventarse un intento.
         if (CommittedSha is { Length: > 0 } already)
         {
             return new FixCommitResult(false,
@@ -1127,78 +1215,166 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         }
 
         List<string> paths = Files.Select(f => f.RelativePath).ToList();
-        FixCommitResult result = _committer.Commit(
-            _clonePath, paths, Commit.Title, Commit.Description);
-        if (!result.Ok)
+
+        // ---- 1. Commitear. Es el único cuyo fallo lo deja TODO como estaba (D-1033).
+        FixCommitResult result;
+        try
         {
-            return result;
+            result = steps.Run(PasoCommitear, () =>
+            {
+                FixCommitResult attempt = _committer.Commit(
+                    _clonePath, paths, Commit.Title, Commit.Description);
+
+                // El motivo viaja como excepción para que la línea del paso salga en rojo CON
+                // él: `StepList` lee `ex.Message`. No es un error de programa —un `pre-commit`
+                // que rechaza es un desenlace normal—, así que se recoge aquí mismo.
+                return attempt.Ok
+                    ? attempt
+                    : throw new FixCommitRejected(attempt.Error ?? "no se pudo commitear");
+            });
+        }
+        catch (FixCommitRejected rejected)
+        {
+            return new FixCommitResult(false, Error: rejected.Message);
         }
 
         string sha = result.Sha!;
 
-        // A partir de aquí el commit YA existe: lo que quede por escribir es contabilidad, y si
-        // algo de eso falla no se puede deshacer el commit ni fingir que no está. Se apunta el
-        // estado primero —que es lo que la pantalla lee— y el hub después, tragándose su fallo
-        // como el resto de la escritura del cierre.
+        // El commit YA existe y no se deshace por nada de lo que venga (anti-objetivo
+        // declarado). La pantalla pasa al estado commiteado AQUÍ, antes de anotar, porque es
+        // lo que hay en el clon: si el registro no se puede escribir, lo que miente es el
+        // registro, no el repositorio.
         AcceptChanges();
         CommittedSha = sha;
         StatusMessage = "Arreglo terminado. Los cambios están commiteados en tu clon.";
-
-        try
-        {
-            StampCommitInHub(sha);
-        }
-        catch (Exception ex)
-        {
-            Say(FixMessage.System("⚠",
-                $"El commit {sha} se hizo, pero no se pudo anotar en el hub: {ex.Message}"));
-        }
-
         Say(FixMessage.System("◆",
             $"Commiteado {sha} · {paths.Count} fichero(s). El push sigue siendo tuyo."));
+
+        // ---- 2, 3 y 4. Cada uno falla por su cuenta y no se lleva a los siguientes: son tres
+        // escrituras independientes, y que el informe no se pueda reescribir no es motivo para
+        // dejar el hallazgo sin su evento.
+        bool anotado = TryStamp(steps, PasoAnotar, () => StampRecord(sha));
+        bool historial = TryStamp(steps, PasoHistorial, () => StampHistory(sha));
+        bool informe = TryStamp(steps, PasoInforme, () => StampReport(sha));
+
+        // ---- 5. Publicar. Que el hub no conteste no tumba nada: lo escrito está en disco y
+        // sale con lo pendiente (D-1025).
+        if (!steps.Run(PasoPublicar, () => Publish(sha)))
+        {
+            steps.Fail(PasoPublicar, StepList.PendingPublish);
+        }
+
+        // Lo que no se anotó se DICE, y se reintenta al volver por «Último arreglo».
+        PendingStamp = !(anotado && historial && informe);
+        if (PendingStamp)
+        {
+            Say(FixMessage.System("⚠",
+                $"El commit {sha} está hecho, pero quedó sin anotar en el hub. Se reintenta al "
+                + "volver a esta pantalla."));
+        }
+
         Changed?.Invoke();
         return result;
     }
 
     /// <summary>
-    /// Deja el commit escrito donde se lee después: el registro del arreglo, el historial de la
-    /// ficha y el informe del hub. El estado del hallazgo NO se toca (D-557 sigue en pie).
+    /// Un paso de contabilidad: si falla, su línea queda en rojo con el motivo y la operación
+    /// <b>sigue</b>. Devuelve si salió.
     /// </summary>
-    private void StampCommitInHub(string sha)
+    private static bool TryStamp(StepList steps, string id, Action work)
+    {
+        try
+        {
+            steps.Run(id, work);
+            return true;
+        }
+        catch (Exception)
+        {
+            // El paso ya está en rojo con `ex.Message` en su línea, que es donde hay que
+            // leerlo. Aquí solo se decide que lo de después se intenta igual.
+            return false;
+        }
+    }
+
+    /// <summary>Quedó commiteado con algo sin anotar. Lo reintenta <see cref="RefreshCommitState"/>.</summary>
+    [ObservableProperty] private bool _pendingStamp;
+
+    /// <summary>
+    /// <b>El registro del arreglo</b> (D-685): gana el hash y <b>conserva la huella</b>, que
+    /// sigue siendo la prueba de atribución. Este hash es un atajo; sobrescribir la huella
+    /// habría cambiado una certeza por una referencia que una enmienda posterior invalida.
+    /// <para>Es idempotente: reintentarlo escribe lo mismo.</para>
+    /// </summary>
+    private void StampRecord(string sha)
     {
         FixRecord? record = _hub.Store.ListFixes(Slug)
             .FirstOrDefault(f => string.Equals(f.Id.ToString(), SessionId, StringComparison.Ordinal));
-        if (record is not null)
+        if (record is null)
         {
-            // La huella de contenido se CONSERVA: sigue siendo la prueba de atribución (D-685) y
-            // este hash es un atajo. Sobrescribirla por el commit habría cambiado una certeza por
-            // una referencia que una enmienda posterior invalida.
-            record.CommitSha = sha;
-            _hub.Store.WriteFix(record);
+            throw new InvalidOperationException(
+                "no se encontró el registro de este arreglo en el hub");
         }
 
-        Finding? stored = _hub.Store.TryReadFinding(Slug, FindingId.ToString());
-        if (stored is not null)
-        {
-            stored.Record(new HistoryEntry(
-                DateTimeOffset.UtcNow, FindingEvent.FixCommitted, Environment.UserName,
-                $"el usuario se quedó los cambios: commit {sha} "
-                + $"({Files.Count} fichero(s)), sin publicar")
-            {
-                SessionId = SessionId,
-            });
-            _hub.Store.WriteFinding(Slug, stored);
-        }
-
-        if (ReportPath is { Length: > 0 } && File.Exists(ReportPath))
-        {
-            string marked = ReportBuilder.MarkFixCommitted(File.ReadAllText(ReportPath), sha);
-            _hub.Store.WriteReport(Slug, SessionId, marked);
-        }
-
-        // El hub, que es otro repositorio: esto NO empuja el clon auditado.
-        _hub.Sync?.CommitAndPush($"fix: {FindingAlias} en {Slug} commiteado en {sha}");
+        record.CommitSha = sha;
+        _hub.Store.WriteFix(record);
     }
+
+    /// <summary>
+    /// <b>El historial de la ficha</b>: un <c>FixCommitted</c> junto al <c>FixProposed</c>. El
+    /// ESTADO del hallazgo no se toca (D-557 sigue en pie).
+    /// <para>
+    /// Idempotente <b>a propósito</b>: si el paso se reintenta al volver a la pantalla, el
+    /// evento no se duplica. Un historial con dos veces el mismo commit se lee como dos
+    /// commits.
+    /// </para>
+    /// </summary>
+    private void StampHistory(string sha)
+    {
+        Finding? stored = _hub.Store.TryReadFinding(Slug, FindingId.ToString());
+        if (stored is null)
+        {
+            throw new InvalidOperationException("el hallazgo ya no está en el hub");
+        }
+
+        if (stored.History.Any(h =>
+                h.Event == FindingEvent.FixCommitted
+                && (h.Detail ?? string.Empty).Contains(sha, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        stored.Record(new HistoryEntry(
+            DateTimeOffset.UtcNow, FindingEvent.FixCommitted, Environment.UserName,
+            $"el usuario se quedó los cambios: commit {sha} "
+            + $"({Files.Count} fichero(s)), sin publicar")
+        {
+            SessionId = SessionId,
+        });
+        _hub.Store.WriteFinding(Slug, stored);
+    }
+
+    /// <summary>
+    /// <b>El informe del hub</b>, que se escribió al cerrar diciendo lo contrario. Se sustituye
+    /// su párrafo de cabecera y nada más; <see cref="ReportBuilder.MarkFixCommitted"/> es
+    /// idempotente, así que un reintento no lo estropea.
+    /// </summary>
+    private void StampReport(string sha)
+    {
+        if (ReportPath is not { Length: > 0 } || !File.Exists(ReportPath))
+        {
+            throw new InvalidOperationException("el informe de este arreglo no está en el hub");
+        }
+
+        string marked = ReportBuilder.MarkFixCommitted(File.ReadAllText(ReportPath), sha);
+        _hub.Store.WriteReport(Slug, SessionId, marked);
+    }
+
+    /// <summary>
+    /// <b>El hub, que es OTRO repositorio</b>: esto no empuja el clon auditado, jamás. Un push
+    /// que no sale deja lo escrito «pendiente de publicar» (D-1025) y no tumba nada.
+    /// </summary>
+    private bool Publish(string sha)
+        => _hub.Sync?.CommitAndPush($"fix: {FindingAlias} en {Slug} commiteado en {sha}") ?? true;
 
     /// <summary>
     /// Sesiones de arreglo anteriores cuyos cambios siguen en el clon sin cerrar (F6.9 §4). Cerrar

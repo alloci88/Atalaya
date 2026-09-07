@@ -1486,6 +1486,192 @@ public sealed class AssistedFixTests : IDisposable
         vm.CommitButtonText.Should().Be(AssistedFixViewModel.CommitButtonLabel);
     }
 
+    // =============================================== BUGFIX-F32: los cinco pasos, y sus fallos
+
+    /// <summary>
+    /// <b>Los pasos que se enseñan son los que se ejecutan</b> (la regla de D-1029), aplicada a
+    /// quedarse los cambios. D-1033 dijo «sin StepList: es una operación de una sola pieza» y era
+    /// falso: son cinco, y el usuario no veía ninguno.
+    /// <para>
+    /// Cebo comprobado: un <c>StepSpec</c> de más en <c>CommitPlan</c> pone este test rojo.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Los_cinco_pasos_de_quedarse_los_cambios_son_los_que_se_ejecutan()
+    {
+        LiveFixService fix = await FixedSession();
+        StepList steps = LiveFixService.NewCommitSteps();
+
+        steps.Start();
+        FixCommitResult result = fix.CommitChanges(steps);
+        steps.Finish();
+
+        result.Ok.Should().BeTrue(result.Error);
+        steps.Executed.Should().Equal(steps.Plan, "misma lista, mismo orden");
+        steps.Plan.Should().Equal(new[] { "commitear", "anotar", "historial", "informe", "publicar" });
+        steps.Steps.Should().OnlyContain(s => s.State == StepState.Hecho);
+        steps.HasFailed.Should().BeFalse();
+
+        // «Cancelar» no sale en ninguno, y no es un olvido: el PRIMER paso escribe (D-1029).
+        steps.Steps.Should().OnlyContain(s => !s.Cancelable);
+        steps.CanCancel.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// <b>Rama 1 — falla el commit: no cambia nada</b> (D-1033). La línea del paso queda en rojo
+    /// con el motivo, y los cuatro siguientes ni se intentan: no hay nada que anotar.
+    /// </summary>
+    [Fact]
+    public async Task Si_falla_el_commit_el_paso_queda_rojo_y_no_se_intenta_ninguno_mas()
+    {
+        LiveFixService fix = await FixedSession(
+            new RejectingGit("pre-commit: falta la cabecera de licencia"));
+        byte[] antes = File.ReadAllBytes(Path.Combine(_clone, UnitPath));
+        string headAntes = GitInfo.HeadSha(_clone);
+        StepList steps = LiveFixService.NewCommitSteps();
+
+        steps.Start();
+        FixCommitResult result = fix.CommitChanges(steps);
+        steps.Finish();
+
+        result.Ok.Should().BeFalse();
+        steps.Executed.Should().Equal(new[] { "commitear" }, "sin commit no hay nada que anotar");
+        steps.Steps[0].State.Should().Be(StepState.Fallido);
+        steps.Steps[0].Reason.Should().Contain("falta la cabecera de licencia");
+        steps.Steps.Skip(1).Should().OnlyContain(s => s.State == StepState.Pendiente);
+        steps.HasFailed.Should().BeTrue();
+        steps.IsVisible.Should().BeTrue("lo que hay que leer después de un fallo se queda");
+
+        // Y el clon y la pantalla, intactos.
+        File.ReadAllBytes(Path.Combine(_clone, UnitPath)).Should().Equal(antes);
+        GitInfo.HeadSha(_clone).Should().Be(headAntes);
+        fix.CommittedSha.Should().BeNull();
+        fix.PendingStamp.Should().BeFalse();
+        var vm = new AssistedFixViewModel(fix, _toasts, new ScriptedDiscard(answer: true));
+        vm.ClosedUncommitted.Should().BeTrue("aviso, tarjeta y botón siguen ahí");
+    }
+
+    /// <summary>
+    /// <b>Rama 2 — falla una anotación: el commit NO se deshace</b> (anti-objetivo declarado). La
+    /// pantalla pasa al estado commiteado porque es lo que hay en el clon, la línea del paso queda
+    /// en rojo, y lo que no se anotó se dice.
+    /// <para>
+    /// Y los pasos siguientes se intentan igual: que el registro no se pueda escribir no es motivo
+    /// para dejar el hallazgo sin su evento.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Si_falla_una_anotacion_el_commit_se_queda_y_lo_que_no_se_anoto_se_dice()
+    {
+        LiveFixService fix = await FixedSession();
+
+        // El registro del arreglo desaparece del hub: `StampRecord` no tiene qué actualizar.
+        string registro = _hub.HubPaths.FixFile(Slug, fix.SessionId);
+        File.Exists(registro).Should().BeTrue();
+        File.Delete(registro);
+
+        StepList steps = LiveFixService.NewCommitSteps();
+        steps.Start();
+        FixCommitResult result = fix.CommitChanges(steps);
+        steps.Finish();
+
+        result.Ok.Should().BeTrue("el commit sí se hizo");
+        steps.Steps[0].State.Should().Be(StepState.Hecho);
+        steps.Steps[1].State.Should().Be(StepState.Fallido);
+        steps.Steps[1].Reason.Should().Contain("no se encontró el registro");
+        steps.Steps[2].State.Should().Be(StepState.Hecho, "el historial se anota igual");
+        steps.Steps[3].State.Should().Be(StepState.Hecho, "y el informe también");
+        steps.Executed.Should().Equal(steps.Plan);
+
+        // El commit está y no se deshace; la pantalla lo dice.
+        GitInfo.HeadSha(_clone).Should().Be(result.Sha);
+        fix.CommittedSha.Should().Be(result.Sha);
+        fix.PendingStamp.Should().BeTrue("quedó algo sin anotar, y se dice");
+        var vm = new AssistedFixViewModel(fix, _toasts, new ScriptedDiscard(answer: true));
+        vm.IsCommitted.Should().BeTrue();
+        vm.ClosedUncommitted.Should().BeFalse("sin aviso, sin tarjeta y sin botón");
+        vm.CommittedLine.Should().Contain(result.Sha!);
+    }
+
+    /// <summary>
+    /// <b>Y lo que quedó sin anotar se REINTENTA al volver por «Último arreglo»</b> — mismo camino,
+    /// misma pantalla (D-572). El evento del historial no se duplica: las tres piezas son
+    /// idempotentes.
+    /// </summary>
+    [Fact]
+    public async Task Lo_que_no_se_anoto_se_reintenta_al_volver_a_la_pantalla()
+    {
+        LiveFixService fix = await FixedSession();
+        string registro = _hub.HubPaths.FixFile(Slug, fix.SessionId);
+        string guardado = File.ReadAllText(registro);
+        File.Delete(registro);
+
+        FixCommitResult result = fix.CommitChanges();
+        result.Ok.Should().BeTrue(result.Error);
+        fix.PendingStamp.Should().BeTrue();
+
+        // El registro vuelve (el hub se sincronizó, el disco dejó de estar lleno, lo que sea).
+        File.WriteAllText(registro, guardado);
+        _hub.Store.ListFixes(Slug).Single().CommitSha.Should().BeNull();
+
+        // Volver por «Último arreglo» es ESTE camino.
+        var vm = new AssistedFixViewModel(fix, _toasts, new ScriptedDiscard(answer: true));
+        await vm.LoadAsync();
+
+        fix.PendingStamp.Should().BeFalse("se reintentó y salió");
+        _hub.Store.ListFixes(Slug).Single().CommitSha.Should().Be(result.Sha);
+
+        // Y el evento no se duplica, aunque el historial ya lo tuviera de la primera vuelta.
+        Finding stored = Finding()!;
+        stored.History.Count(h => h.Event == FindingEvent.FixCommitted).Should().Be(1);
+
+        await vm.LoadAsync();
+        Finding otraVez = Finding()!;
+        otraVez.History.Count(h => h.Event == FindingEvent.FixCommitted).Should().Be(1,
+            "entrar dos veces no escribe dos eventos");
+    }
+
+    /// <summary>
+    /// <b>Rama 3 — el hub no acepta el push: «pendiente de publicar» y la operación sigue</b>
+    /// (D-1025). El trabajo está en el clon y en el disco; lo que falta es que el equipo lo vea.
+    /// </summary>
+    [Fact]
+    public async Task Si_el_hub_no_acepta_el_push_queda_pendiente_de_publicar_y_lo_demas_esta_hecho()
+    {
+        // Un hub que SÍ tiene remoto —así que se intenta publicar— y cuyo remoto no está.
+        // Es el mismo desenlace que un hub que no contesta, sin sacar nada a la red (N-1).
+        LibGit2Sharp.Repository.Init(_hub.HubPaths.Root);
+        using (var hubRepo = new LibGit2Sharp.Repository(_hub.HubPaths.Root))
+        {
+            hubRepo.Network.Remotes.Add("origin", Path.Combine(_root, "no-existe.git"));
+        }
+
+        _hub.EnsureSync();
+
+        // El reloj, bajado EN ESTA INSTANCIA (el patrón de HubPublishTimeoutTests): lo que
+        // se prueba es que un push que no sale deja «pendiente de publicar», no cuánto se
+        // espera. Con los 30 s de producción este test solo tardaría un minuto.
+        _hub.Sync!.PushTimeout = TimeSpan.FromMilliseconds(300);
+
+        LiveFixService fix = await FixedSession();
+
+        StepList steps = LiveFixService.NewCommitSteps();
+        steps.Start();
+        FixCommitResult result = fix.CommitChanges(steps);
+        steps.Finish();
+
+        result.Ok.Should().BeTrue(result.Error);
+        steps.Executed.Should().Equal(steps.Plan);
+        steps.Steps[4].State.Should().Be(StepState.Fallido);
+        steps.Steps[4].Reason.Should().Be(StepList.PendingPublish);
+        steps.Steps.Take(4).Should().OnlyContain(s => s.State == StepState.Hecho);
+
+        // Lo escrito está escrito: publicar que falle no deshace nada.
+        fix.CommittedSha.Should().Be(result.Sha);
+        fix.PendingStamp.Should().BeFalse("lo del hub local se anotó; lo que falta es el push");
+        _hub.Store.ListFixes(Slug).Single().CommitSha.Should().Be(result.Sha);
+    }
+
     /// <summary>Una sesión terminada con un fichero tocado, lista para commitear.</summary>
     private async Task<LiveFixService> FixedSession(IProcessRunner? git = null)
     {

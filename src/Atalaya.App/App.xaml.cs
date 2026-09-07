@@ -44,6 +44,17 @@ public partial class App : Application
                 retainedFileCountLimit: 14)
             .CreateLogger();
 
+        // BUGFIX-F32 — Y LO QUE PASA DESPUÉS DE ARRANCAR, que hasta aquí no lo recogía nadie.
+        // D-802 puso un `try` alrededor del arranque; de la aplicación ya abierta no había
+        // ningún manejador, así que una excepción no capturada en cualquier sitio cerraba
+        // Atalaya sin diálogo, sin toast y sin una línea de registro. Va aquí: después del log
+        // —para que haya dónde apuntar— y antes de que exista nada que pueda fallar.
+        UnhandledErrors.InstallProcessWide(line => Log.Fatal(line));
+        UnhandledErrors.Install(
+            Dispatcher,
+            line => Log.Error(line),
+            message => MessageBox.Show(message, "Atalaya", MessageBoxButton.OK, MessageBoxImage.Warning));
+
         // `--selfcheck`: el arranque entero sin abrir nada, y 0 o 1 (BUGFIX-ARRANQUE). Lo corre el
         // workflow de release sobre el paquete recién comprimido; un binario que no arranca no
         // puede volver a publicarse.

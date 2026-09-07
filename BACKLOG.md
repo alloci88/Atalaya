@@ -518,6 +518,15 @@ editores es la única puerta).
 
 ## Cerrado
 
+- **BUGFIX-F32 · El botón que cerraba la aplicación** — pulsar «Me quedo los cambios» cerraba
+  Atalaya sin dejar traza. La pila estaba en el Visor de sucesos (1026): el commit corre fuera
+  del hilo de interfaz y el aviso del servicio acababa tocando el comando enlazado desde un
+  hilo de fondo. Medido: el commit **sí** se hizo (`5249598bf`) y no se anotó nada. **Dos**
+  causas y dos arreglos: el cruce de hilo, en un solo sitio; y el **manejador global que no
+  existía** —D-802 solo cubría el arranque—, que es un defecto aparte. Además se corrige
+  D-1033: no era una operación de una sola pieza, son **cinco pasos** y ahora se ven, con lo
+  que hace cada fallo. Nueve tests de regla, cebo en dos. Ver D-1034.
+
 - **F32 · «Me quedo los cambios» commitea** — se **revoca D-556**: el botón cerraba un registro
   interno y dejaba el clon exactamente como estaba (medido: mismo HEAD, mismo commit, fichero
   todavía sin commitear, y la pantalla sin cambiar). Ahora commitea **solo los ficheros del

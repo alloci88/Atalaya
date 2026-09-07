@@ -540,6 +540,14 @@
                                         Margin="{StaticResource Pad.XS.Top}"
                                         HorizontalAlignment="Left"
                                         Visibility="{Binding VerifySteps.IsVisible, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}" />
+
+                        <!-- BUGFIX-F32 - y los de «Me quedo los cambios», en la misma fila y
+                             con la misma forma: son cinco escrituras, no una pieza. D-1033
+                             dijo lo contrario y era falso. -->
+                        <ContentControl Content="{Binding CommitSteps}"
+                                        Margin="{StaticResource Pad.XS.Top}"
+                                        HorizontalAlignment="Left"
+                                        Visibility="{Binding CommitSteps.IsVisible, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}" />
                     </StackPanel>
 
                     <!-- LA BARRA FIJA NO SIEGA UNA LÍNEA (UI-0037). Recortaba el contenido en

@@ -13,6 +13,19 @@ namespace Atalaya.App.Services;
 public sealed record FixCommitResult(bool Ok, string? Sha = null, string? Error = null);
 
 /// <summary>
+/// <b>git no hizo el commit, y su motivo tiene que llegar a la línea del paso</b>
+/// (BUGFIX-F32). Viaja como excepción porque <see cref="StepList"/> pinta el fallo de un paso
+/// leyendo <c>ex.Message</c>; no es un error de programa —un <c>pre-commit</c> que rechaza es
+/// un desenlace normal— y por eso se recoge en el mismo método que la lanza.
+/// </summary>
+public sealed class FixCommitRejected : Exception
+{
+    public FixCommitRejected(string message) : base(message)
+    {
+    }
+}
+
+/// <summary>
 /// Commitea EXACTAMENTE los ficheros de un arreglo en el clon del usuario (F32, que revoca
 /// D-556).
 /// <para>

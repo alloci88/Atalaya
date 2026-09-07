@@ -41,6 +41,15 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
     private readonly DispatcherTimer? _clock;
 
     /// <summary>
+    /// El hilo al que hay que volver para avisar de un cambio (BUGFIX-F32). Se captura al
+    /// construir, que es cuando se sabe: el view-model nace en el hilo de interfaz. Con
+    /// <c>Application</c> es el suyo; sin ella —los tests— es el del hilo que lo creó, y ahí
+    /// <c>CheckAccess</c> dice que sí y todo sigue ejecutándose en línea como siempre.
+    /// </summary>
+    private readonly Dispatcher _dispatcher =
+        Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
+
+    /// <summary>
     /// F30 §4: «Verificar ahora» del arreglo terminado <b>verifica</b>. Opcional porque los tests
     /// que solo miran el estado del arreglo no montan un auditor; sin él, el botón sigue llevando a
     /// la ficha, que es lo que hacía antes.
@@ -52,6 +61,13 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
     /// desde donde se lanzó.
     /// </summary>
     public StepList VerifySteps { get; } = VerifyCoordinator.NewSteps();
+
+    /// <summary>
+    /// <b>Los pasos de quedarse los cambios</b> (BUGFIX-F32, que corrige a D-1033). Salen en la
+    /// misma fila que los de «Verificar ahora» y por la misma razón: son cinco escrituras que
+    /// duran segundos, y hasta aquí el botón se apagaba y no contaba ninguna.
+    /// </summary>
+    public StepList CommitSteps { get; } = LiveFixService.NewCommitSteps();
 
     public AssistedFixViewModel(
         LiveFixService fix,
@@ -550,20 +566,32 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
         }
 
         _fix.IsCommitting = true;
+        CommitSteps.Start();
         OnFixChanged();
         try
         {
-            FixCommitResult result = await Task.Run(() => _fix.CommitChanges());
+            FixCommitResult result = await Task.Run(() => _fix.CommitChanges(CommitSteps));
             if (!result.Ok)
             {
+                // El paso está en rojo con su motivo, que es donde hay que leerlo (D-1029). El
+                // toast lo repite para quien no estuviera mirando esa fila.
                 _toasts.Show(result.Error ?? "No se pudo commitear.");
                 return;
             }
 
             _toasts.Show($"Commiteado {result.Sha}. El push sigue siendo tuyo.");
         }
+        catch (Exception ex)
+        {
+            // BUGFIX-F32 — LA REGLA: pulsar este botón NUNCA cierra la aplicación. El manejador
+            // global (`UnhandledErrors`) es la red de todo lo demás; esto es el cinturón de
+            // este camino, y deja el motivo donde se estaba mirando en vez de en un registro.
+            CommitSteps.Fail(LiveFixService.PasoCommitear, ex.Message);
+            _toasts.Show($"No se pudo commitear: {ex.Message}");
+        }
         finally
         {
+            CommitSteps.Finish();
             _fix.IsCommitting = false;
             RefreshPending();
             OnFixChanged();
@@ -840,8 +868,33 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
 
     public bool HasPending => Pending.Count > 0;
 
+    /// <summary>
+    /// <b>Esto lo llaman hilos de fondo, y desde F32 toca algo que no se deja</b>
+    /// (BUGFIX-F32).
+    /// <para>
+    /// El servicio avisa desde donde esté trabajando —el agente, una compilación, el commit—, y
+    /// hasta F32 eso daba igual: <c>OnPropertyChanged</c> lo reparte WPF solo, marshalando cada
+    /// enlace. <c>NotifyCanExecuteChanged</c> <b>no</b>: un <c>Button</c> enlazado se suscribe a
+    /// <c>CanExecuteChanged</c>, y levantarlo desde un hilo de fondo termina en
+    /// <c>Dispatcher.VerifyAccess</c> — «el subproceso que realiza la llamada no puede obtener
+    /// acceso a este objeto»—. Ésa es la excepción que cerró la aplicación al pulsar «Me quedo
+    /// los cambios», y no salía en los tests porque en un test <b>no hay ningún Button
+    /// suscrito</b>: el aviso no llega a cruzar a nadie.
+    /// </para>
+    /// <para>
+    /// Se cruza aquí, en un solo sitio, y no en cada llamante: el que se olvide de cruzar es el
+    /// que rompe, y son treinta. Es la misma guarda que ya tienen <see cref="StepList"/> y la
+    /// conversación (F30 §2d), con la misma salida sin <c>Application</c> para los tests.
+    /// </para>
+    /// </summary>
     private void OnFixChanged()
     {
+        if (!_dispatcher.CheckAccess())
+        {
+            _dispatcher.BeginInvoke(DispatcherPriority.Send, new Action(OnFixChanged));
+            return;
+        }
+
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(IsRunning));
         OnPropertyChanged(nameof(IsPaused));
