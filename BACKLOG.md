@@ -4,11 +4,25 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-07 (F30 §3 — un solo componente de conversación, y los dos retoques que
-salieron de mirarlo en el `dist`: el contraste de los separadores y los nombres internos de las
-herramientas).
+Última revisión: 2026-09-07 (BUGFIX-PUSH — la sesión que no arrancaba estaba dentro de un push sin
+reloj; y el banco de concurrencia que salió de ahí encontró una pérdida silenciosa de reclamaciones
+que queda ABIERTA).
 
 ## En vuelo
+
+- **BUGFIX-PUSH · la publicación concurrente pierde reclamaciones. ABIERTO, con reproducción.**
+  Con dos clones publicando a la vez contra el `--bare`, **las dos llamadas devuelven `true` y en el
+  hub queda una sola reclamación**: la del que pierde la carrera se queda en su clon creyendo que se
+  publicó. Rojo 2 de cada 3 vueltas, y quién pierde es aleatorio. La reproducción está en
+  `ConcurrentClaimsTests`, **saltada a propósito** hasta que se cierre.
+  - **Una causa ya corregida y que no basta**: `Network.Push` no lanza cuando el remoto rechaza la
+    referencia —llega por `OnPushStatusError`, y sin manejador se descartaba—, así que un
+    `non-fast-forward` volvía como éxito. Ya se recoge y se reintenta; el test mejora y no pasa
+    siempre.
+  - **Dónde mirar después**: el `Integrate`/rebase de `Pull`, que corre DENTRO de `Push` y se traga
+    sus excepciones desde D-007. Un rebase que falla ahí deja el push saliendo igual.
+  - Es el primer uso concurrente real del hub, y la prueba de carga que la promesa
+    «pull/rebase/push + resolución de conflictos» nunca tuvo.
 
 - **F26 — Atalaya se ve como lo que hace.** El sistema visual y las vistas pasadas por él. Se
   entrega en tres partes, cada una con revisión visual del usuario antes de la siguiente.

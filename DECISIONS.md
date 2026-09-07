@@ -16731,3 +16731,86 @@ de ser una vía por la que un identificador llegue a la pantalla y pasa a ser lo
 de una dependencia** suya, y la línea de la herramienta ya ejecutada lo dice con su ruta («Ha leído
 src/Otro.cs»). La frase en vuelo es la que pidió el usuario, literal; la exacta sería «Leyendo una
 dependencia…». Se cambia con una palabra si quiere.
+
+
+## BUGFIX-PUSH — La sesión que no arrancaba estaba dentro de un `git push` sin reloj
+
+### D-1022 — No era la conversación: era una publicación que no podía volver
+
+**Lo primero, porque condiciona todo lo demás: 140937f queda limpio de sospecha, y con la pila
+delante.** El síntoma —la sesión no arranca en un minuto, «Detener» no responde— se leyó como un
+bloqueo de `ConversationWrites`. No lo es. En el volcado de hilos, **el hilo de interfaz está
+libre**, en `Dispatcher.PushFrameImpl` → `GetMessage`, o sea en su bucle de mensajes sin nada que
+hacer; **ningún hilo está dentro de `ConversationWrites`, ni de `Dispatcher.Invoke`, ni de
+`LiveSessionService`**. El que no vuelve es el de la sesión, y está aquí:
+`SessionCoordinator.PublishClaims` → `HubSyncService.CommitAndPush` → `Network.Push` →
+`git_remote_push`, en código nativo. Por eso la ventana respondía y la sesión no avanzaba, que son
+las dos mitades del parte; y por eso «Detener» no hacía nada: **no hay punto de cancelación al que
+llegar** dentro de una llamada nativa. Es exactamente el candidato que D-1017 nombró y no pudo
+confirmar —«el `CommitAndPush`, una publicación por red, sin token de cancelación, que encaja con
+que Detener no responda»—, confirmado, y en el arranque en vez de en el final.
+
+**El registro y el reflog del clon del usuario, que cuentan el resto.** 08:38 arranca la
+aplicación, 08:44:38 arranca el CLI de Copilot, **08:44:42 commit `claims:`**, 08:46:36 commit
+`session:` —o sea que la PRIMERA sesión llegó al final—, 08:47:09 cierre forzado. Segundo intento:
+08:48:33 arranque, 08:48:41 CLI, **08:48:43 commit `claims:`** y **nada más** hasta el cierre
+forzado de las 08:53:12. Ésa es la que se colgó, justo después del commit y dentro del push. Sin una
+sola línea en el registro, porque el push nunca volvió — que es el argumento más fuerte a favor del
+reloj: **un fallo que no deja traza es un fallo que no se puede diagnosticar**. **Lo que se
+descarta con evidencia**: no son credenciales (el mismo commit `1e636b5` se publicó después con la
+misma credencial, y hoy es ancestro de la punta del hub); no es un lock en el clon (ni un `.lock`,
+árbol limpio); y no es que el remoto no responda a secas (contesta en 1 s a una petición anónima).
+**Lo que NO se puede confirmar desde aquí, y se dice**: qué contestó GitHub a aquella petición
+concreta. No quedó registro, precisamente por lo que se arregla. Había otra persona publicando
+contra el mismo hub esa mañana —08:19, 08:32 y 09:07 en el reflog—, así que la contención es
+plausible como disparador; plausible no es medido.
+
+**El arreglo, en tres piezas.** **(1) Toda publicación lleva reloj**, y se hereda en los veintidós
+sitios que publican porque vive en `CommitAndPush`: la publicación corre en su propio hilo —de
+fondo— y se espera con tope (30 s) y con el token de la sesión. Un `CancellationToken` **no puede**
+interrumpir una llamada nativa ya iniciada; lo único que se puede hacer es **dejar de esperarla**, y
+eso es lo que se hace. El hilo huérfano se queda dentro de libgit2 hasta que salga, con la puerta
+echada —`Repository` no es seguro entre hilos, así que una segunda publicación mientras tanto falla
+en el acto y con su motivo en vez de corromper el clon— y **tragándose cualquier excepción**: una
+excepción sin recoger en un hilo suelto mata la aplicación entera, y el caso normal es encontrarse
+el repositorio ya liberado. Por lo mismo, `Dispose` **no cierra el repositorio debajo de un push en
+vuelo**: espera un momento y, si no lo suelta, prefiere dejar el handle sin liberar. **(2) La
+sesión termina con motivo visible**: el push del arranque lanza `HubPublishException` y el pie dice
+«No se pudo publicar en el hub en 30 s», sin envolverlo en «se ha interrumpido por un error». El del
+cierre **no** la lanza: ahí ya hay trabajo hecho, guardado y con informe, y tirarlo porque el hub no
+conteste sería el peor de los dos males — se dice, se apunta en las notas de la sesión, y el commit
+sale en la siguiente publicación que funcione. **(3) Los dos pushes se ven en el hilo** como hitos
+de Atalaya: «Publicando las reservas en el hub…» → «Reservas publicadas · 1,2 s», y los reintentos
+mientras pasan («Publicando en el hub… · reintento 2 de 5»). Eso es lo que el usuario vio como «no
+arranca»: no era que no arrancara, era que nadie lo contaba. **Y los reintentos suben de 3 a 5 con
+la espera doblándose** (300, 600, 1.200 y 2.400 ms, 4,5 s en total, holgadamente dentro del tope):
+eran tres con 150, 300 y 450 ms —nueve décimas— para un remoto que puede tener a otra persona
+empujando encima.
+
+**Cobertura (N-1, N-5): dos tests de regla, comprobados con cebo.** El del **reloj**
+(`DeadRemoteTests`) publica contra un socket que **acepta y no contesta nunca** en `127.0.0.1`: un
+`--bare` local cumple N-1 pero contesta al instante, así que no puede reproducir lo único que
+importa, que es la **ausencia** de respuesta — y esto tampoco sale de la máquina. Lleva **las dos
+cotas y las dos hacen falta**: que vuelva dentro del tope, y que haya **agotado** el tope, porque si
+libgit2 fallara rápido el test pasaría sin haber reproducido nada. El segundo exige que, mientras la
+vencida sigue dentro, la siguiente no entre a la vez. Y el de la **sesión**
+(`HubPublishTimeoutTests`) arranca una de verdad con el proveedor falso contra ese mismo remoto mudo
+y exige que **termine**, con `HasFailed` y el motivo escrito. Cebo: quitando el reloj, la tanda pasa
+de segundos a **más de 600 s sin volver** — que es el defecto, reproducido.
+
+**Y un defecto NUEVO, encontrado por el test de concurrencia y que queda ABIERTO.** El hub prometía
+desde el principio «pull → rebase → push con resolución de conflictos» y nadie lo había ejercitado
+con dos publicando **a la vez**: los tests de dos clones publican por turnos. Puesto el banco —dos
+clones contra el `--bare`, soltados con una barrera—, el resultado es que **las dos llamadas
+devuelven `true`, las dos dejan la salud en verde, y en el hub queda una sola reclamación**: la del
+que pierde la carrera se queda en su clon creyendo que se publicó. Rojo **2 de cada 3 vueltas**, y
+quién pierde es aleatorio. Es pérdida de datos silenciosa en la pieza que existe justamente para que
+dos máquinas no auditen la misma unidad. **Una causa ya está corregida y no basta**:
+`Network.Push` **no lanza** cuando el otro lado rechaza la referencia —el rechazo llega por
+`OnPushStatusError` y sin manejador se descarta en silencio—, así que un `non-fast-forward`, que es
+el caso NORMAL de un hub compartido, volvía como éxito; ahora se recoge y se reintenta. Con eso el
+test pasa **a veces**, no siempre, así que queda al menos una segunda causa por encontrar
+—probablemente en el `Integrate`/rebase de `Pull`, que corre dentro del propio `Push` y se traga sus
+excepciones a propósito desde D-007—. El test se queda en el repo **saltado y con su motivo**:
+una reproducción vale más que una descripción, y marcarla verde sería mentir. Va al backlog como lo
+que es.
