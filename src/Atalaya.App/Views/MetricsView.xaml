@@ -310,6 +310,69 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- ============ Gráfica 1b: coste por acción (F35 §2.6) ============ -->
+                    <!-- JUSTO debajo de «Coste en el tiempo»: una dice cuándo se gastó y la otra
+                         en qué. Misma rejilla y mismo tamaño que los roscos de cobertura.
+
+                         EL COLOR ES DE LA ACCIÓN, NO DE LA APLICACIÓN. Los cuatro tonos son
+                         reservados como las severidades (D-316) y son los MISMOS en todos los
+                         roscos de la fila: la aplicación va en el título. Si el color fuera de la
+                         app harían falta cuatro tonos por aplicación, y en la paleta no caben ni
+                         cuatro (D-315). -->
+                    <Border Style="{StaticResource Block}">
+                        <StackPanel>
+                            <TextBlock Text="Coste por acción" Style="{StaticResource Text.Lead}"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Style="{StaticResource Text.Small}"
+                                       Text="En qué se le fue el gasto del periodo a cada aplicación: auditar, verificar, arreglar o gestionar el ciclo. Los tramos de un rosco suman el coste del periodo de esa aplicación." />
+
+                            <ItemsControl ItemsSource="{Binding ActionLegend}"
+                                          ItemTemplate="{StaticResource LegendEntry}"
+                                          Margin="{StaticResource Pad.XS.Top}"
+                                          Visibility="{Binding HasActionCost, Converter={StaticResource BoolToVisibility}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+
+                            <ItemsControl ItemsSource="{Binding ActionCost}" Margin="{StaticResource Pad.S.Top}"
+                                          Visibility="{Binding HasActionCost, Converter={StaticResource BoolToVisibility}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="{StaticResource Pad.BarItem}"
+                                                    ToolTip="{Binding Detail}">
+                                            <Grid Width="{Binding DataContext.DonutSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                  Height="{Binding DataContext.DonutSize, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                  HorizontalAlignment="Center">
+                                                <controls:DonutRing Segments="{Binding Segments}"
+                                                                    RingThickness="14" SegmentGap="3" />
+                                            </Grid>
+                                            <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Small}"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource Brush.Text}"
+                                                       HorizontalAlignment="Center"
+                                                       Margin="{StaticResource Pad.XS.Top}" />
+                                            <TextBlock Text="{Binding CycleLabel}" Style="{StaticResource Text.Meta}"
+                                                       HorizontalAlignment="Center" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <c:EmptyState
+                                Glyph="{x:Static c:Icons.Metrics}"
+                                Message="Se activará cuando alguna sesión del periodo tenga coste facturable."
+                                Visibility="{Binding HasActionCost, Converter={StaticResource InverseBoolToVisibility}}" />
+                        </StackPanel>
+                    </Border>
+
                     <!-- ============ Gráfica 2: resoluciones en el tiempo ============ -->
                     <!-- Misma forma y mismo componente que la de coste, y va JUSTO debajo: se
                          leen en pareja («esto costó, esto saldó»). -->
@@ -523,6 +586,102 @@
                             <c:EmptyState
                                 Message="Se activará cuando haya hallazgos detectados o resueltos en el periodo."
                                 Visibility="{Binding HasFlow, Converter={StaticResource InverseBoolToVisibility}}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ============ Gráfica 4b: antigüedad de la deuda (F35 §2.7) ============ -->
+                    <!-- Debajo del flujo: una dice cuánta deuda entra y sale, la otra cuánto
+                         tiempo lleva ahí la que queda. UN eje (D-313) —los cuatro cubos son
+                         conteos de hallazgos— y color de APLICACIÓN (D-314), el mismo de siempre. -->
+                    <Border Style="{StaticResource Block}">
+                        <StackPanel>
+                            <TextBlock Text="Antigüedad de la deuda" Style="{StaticResource Text.Lead}"
+                                       FontWeight="SemiBold" />
+                            <!-- Como en el rosco de severidad: se DICE que el periodo no manda
+                                 aquí. Sin esa frase, cambiar el periodo y ver los mismos números
+                                 se lee como un fallo. -->
+                            <TextBlock Style="{StaticResource Text.Small}"
+                                       Text="Cuánto tiempo llevan abiertos los hallazgos activos, contando desde que se detectaron — a día de hoy, sin recortar por el periodo. Si el peso se va a la derecha, la deuda no rota: se pudre." />
+
+                            <ItemsControl ItemsSource="{Binding AgeLegend}"
+                                          ItemTemplate="{StaticResource LegendEntry}"
+                                          Margin="{StaticResource Pad.XS.Top}"
+                                          Visibility="{Binding ShowAgeLegend, Converter={StaticResource BoolToVisibility}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+
+                            <controls:ChartPlot
+                                Height="200"
+                                Margin="{StaticResource Pad.XS.Top}"
+                                Series="{Binding AgeSeries}"
+                                Labels="{Binding AgeLabels}"
+                                ValueFormat="0"
+                                Unit="hallazgos activos"
+                                AxisBrush="{DynamicResource Brush.TextMuted}"
+                                GridBrush="{DynamicResource Brush.Line}"
+                                Visibility="{Binding HasAges, Converter={StaticResource BoolToVisibility}}" />
+
+                            <c:EmptyState
+                                Message="Se activará cuando haya algún hallazgo activo."
+                                Visibility="{Binding HasAges, Converter={StaticResource InverseBoolToVisibility}}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ============ Gráfica 4c: top 5 reglas del periodo (F35 §2.8) ============ -->
+                    <!-- Pequeña y sin color de severidad (D-316): una regla no es una gravedad —la
+                         misma regla produce hallazgos críticos y bajos—. La barra es solo escala. -->
+                    <Border Style="{StaticResource Block}">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Top 5 reglas del periodo"
+                                           Style="{StaticResource Text.Lead}" FontWeight="SemiBold" />
+                                <Button Grid.Column="1" Content="Copiar"
+                                        Style="{StaticResource Button.Link}"
+                                        FontSize="{StaticResource FontSize.Meta}"
+                                        VerticalAlignment="Top" HorizontalAlignment="Right"
+                                        Command="{Binding CopyTopRulesCommand}"
+                                        ToolTip="Copia las cinco reglas y su número, una por línea." />
+                            </Grid>
+                            <TextBlock Style="{StaticResource Text.Small}"
+                                       Text="Las cinco reglas que más hallazgos generaron dentro del periodo, con cuántos. Cuenta lo detectado, esté hoy activo o resuelto: produjo trabajo igual." />
+
+                            <ItemsControl ItemsSource="{Binding TopRules}" Margin="{StaticResource Pad.S.Top}"
+                                          Grid.IsSharedSizeScope="True"
+                                          Visibility="{Binding HasTopRules, Converter={StaticResource BoolToVisibility}}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="{StaticResource Pad.XXS.V}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" SharedSizeGroup="ReglaCuenta" />
+                                            </Grid.ColumnDefinitions>
+                                            <!-- El nombre con la primitiva de recorte de un nombre
+                                                 (P-01) y el id completo en el tooltip: el título
+                                                 es lo que se lee, el id es lo que se busca. -->
+                                            <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                                       Style="{StaticResource Text.Name}"
+                                                       Foreground="{DynamicResource Brush.Text}"
+                                                       Margin="{StaticResource Pad.S.Right}"
+                                                       ToolTip="{Binding RuleId}" />
+                                            <!-- La cifra a la derecha y tabular, como en Informes (P-08). -->
+                                            <TextBlock Grid.Column="1" Text="{Binding Count}"
+                                                       Style="{StaticResource Cell.Number}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <c:EmptyState
+                                Message="Se activará cuando se detecte algún hallazgo dentro del periodo."
+                                Visibility="{Binding HasTopRules, Converter={StaticResource InverseBoolToVisibility}}" />
                         </StackPanel>
                     </Border>
 

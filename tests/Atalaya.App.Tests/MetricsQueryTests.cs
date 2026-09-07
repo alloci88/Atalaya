@@ -173,52 +173,241 @@ public sealed class MetricsQueryTests : IDisposable
     }
 
     /// <summary>
-    /// F18 §1 — <b>en qué se va el dinero, por fase</b>. Las tres cosas que se le piden a un modelo
-    /// cuestan muy distinto, y hasta aquí contestarlo obligaba a abrir los informes uno a uno.
+    /// F35 §2.6 — <b>en qué se le fue el gasto a cada aplicación, por acción</b>. Sustituye al
+    /// reparto por fase de F18: la misma pregunta, contestada por aplicación y con porcentajes.
     /// <para>
-    /// Los modos de gestión —cierre, reset— NO aparecen: no llaman a ningún modelo, y una fila a
-    /// cero solo ocupa sitio. Y el orden es el del trabajo: se descubre, se verifica, se arregla.
+    /// <b>Y los tramos suman el coste del periodo de esa aplicación</b>, que es la misma cifra que
+    /// la tarjeta de coste con esa aplicación en el filtro. No es una coincidencia: es la misma
+    /// función (D-591, D-597).
     /// </para>
     /// </summary>
     [Fact]
-    public void El_panel_reparte_el_gasto_por_fase()
+    public void El_coste_por_accion_reparte_y_suma_exactamente_el_coste_del_periodo()
     {
         FixtureDeLosTresTipos();
 
-        IReadOnlyList<PhaseCost> phases = Build().ByPhase;
+        MetricsDashboard d = Build();
+        ActionCostDonut donut = d.ByAction.Single(x => x.Slug == "app");
 
-        phases.Select(p => p.Phase).Should().Equal("Descubrimiento", "Verificación", "Arreglo");
-        phases[0].Sessions.Should().Be(1);
-        phases[0].Cost.Should().Be(105m);
-        phases[1].Cost.Should().Be(12m);
-        phases[2].Sessions.Should().Be(2, "los dos arreglos");
-        phases[2].Cost.Should().Be(90m);
-        phases[2].Line.Should().Contain("Arreglo · 2 sesión(es)").And.Contain("90,0 AI credits");
+        donut.Slices.Select(s => s.Action).Should().Equal(
+            AuditAction.Auditoria, AuditAction.Verificacion, AuditAction.Arreglo);
+        donut.Slices.Single(s => s.Action == AuditAction.Auditoria).Credits.Should().Be(105m);
+        donut.Slices.Single(s => s.Action == AuditAction.Verificacion).Credits.Should().Be(12m);
+        ActionSlice arreglo = donut.Slices.Single(s => s.Action == AuditAction.Arreglo);
+        arreglo.Credits.Should().Be(90m);
+        arreglo.Sessions.Should().Be(2, "los dos arreglos");
+
+        // El cuadre: los tramos son el coste del periodo, ni un credit de más ni de menos.
+        donut.Total.Should().Be(d.CostInPeriod!.Value);
     }
 
     /// <summary>
-    /// Una fase hecha con una casa que <b>no factura</b> tiene peso pero no tiene precio: sus
-    /// tokens se cuentan y su coste se calla. Un 0 diría que salió gratis, que es otra cosa.
+    /// El tramo de <b>gestión</b> existe aunque casi siempre salga a cero: cierre y reset no
+    /// llaman a ningún modelo hoy. Está para que la partición sea COMPLETA — el día que una de
+    /// esas sesiones gaste algo, el rosco lo enseñará en vez de perderlo, y el total seguirá
+    /// cuadrando con la tarjeta.
     /// </summary>
     [Fact]
-    public void Una_fase_sin_factura_ensena_tokens_y_no_coste()
+    public void Ninguna_sesion_se_cae_del_reparto_por_accion()
     {
+        foreach (AuditMode mode in Enum.GetValues<AuditMode>())
+        {
+            AuditActions.All.Should().Contain(AuditActions.Of(mode), $"{mode} tiene que caer en una acción");
+        }
+
+        Session("app", Now.AddDays(-2), cost: 105m, units: 1);
+        Session("app", Now.AddDays(-1), AuditMode.Cierre, cost: 30m);
+
+        MetricsDashboard d = Build();
+        ActionCostDonut donut = d.ByAction.Single(x => x.Slug == "app");
+
+        donut.Slices.Single(s => s.Action == AuditAction.Gestion).Credits.Should()
+            .Be(30m, "un cierre que costara algo no puede desaparecer del reparto");
+        donut.Total.Should().Be(d.CostInPeriod!.Value);
+    }
+
+    /// <summary>
+    /// Una sesión de una casa que <b>no factura</b> no aporta credits a ningún tramo — no los
+    /// tiene—, y el rosco sigue cuadrando con la tarjeta. Por qué el gasto no cubre toda la
+    /// actividad lo dice el aviso de encima de las cifras, no un tramo inventado.
+    /// </summary>
+    [Fact]
+    public void Una_sesion_que_no_factura_no_inventa_un_tramo()
+    {
+        Session("app", Now.AddDays(-2), cost: 105m, units: 1);
         AuditSession s = Session("app", Now, AuditMode.Verify, cost: 4m);
         s.Provider = ClaudeCode.ClaudeCodeProvider.Id;
         _hub.Store.WriteSession(s);
-        Query().Invalidate();
 
-        PhaseCost verify = Build().ByPhase.Single(p => p.Phase == "Verificación");
+        MetricsDashboard d = Build();
+        ActionCostDonut donut = d.ByAction.Single(x => x.Slug == "app");
 
-        verify.Cost.Should().BeNull();
-        verify.Tokens.Should().BeGreaterThan(0);
-        verify.Line.Should().NotContain("credits").And.Contain("tokens");
+        donut.Slices.Should().NotContain(x => x.Action == AuditAction.Verificacion);
+        donut.Total.Should().Be(d.CostInPeriod!.Value).And.Be(105m);
+        d.UntariffedSessions.Should().Be(1, "y eso es lo que lo explica");
     }
 
-    /// <summary>Sin sesiones en el periodo no hay reparto que enseñar, y no se pinta uno vacío.</summary>
+    /// <summary>
+    /// Una app sin gasto en el periodo conserva su rosco, vacío: una fila que solo trae a los que
+    /// gastaron hace creer que las demás no están (la misma regla que el rosco de severidad).
+    /// </summary>
     [Fact]
-    public void Sin_sesiones_no_hay_reparto_por_fase()
-        => Build().ByPhase.Should().BeEmpty();
+    public void Una_app_sin_gasto_conserva_su_rosco_vacio()
+    {
+        App("otra", "Otra");
+        Session("app", Now.AddDays(-2), cost: 105m, units: 1);
+
+        MetricsDashboard d = Build();
+
+        d.ByAction.Should().HaveCount(2);
+        d.ByAction.Single(x => x.Slug == "otra").HasData.Should().BeFalse();
+        d.ByAction.Single(x => x.Slug == "otra").Slices.Should().BeEmpty();
+    }
+
+    // =============================================================== F35 §2.7 — antigüedad
+
+    /// <summary>
+    /// <b>Cada activo cae en exactamente un cubo, y la suma es la deuda activa</b> (F35 §2.7). Es
+    /// el cuadre que impide que la gráfica y la tarjeta 2 cuenten deudas distintas.
+    /// </summary>
+    [Fact]
+    public void Cada_activo_cae_en_un_cubo_y_la_suma_es_la_deuda_activa()
+    {
+        // Uno en cada cubo: 3 días, 15, 60 y 200. Y un resuelto, que no es deuda.
+        foreach (int days in new[] { 3, 15, 60, 200 })
+        {
+            _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-days)));
+        }
+
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Resuelto, Now.AddDays(-90), Now.AddDays(-1)));
+
+        MetricsDashboard d = Build();
+        DebtAgeRow row = d.ByAge.Single(r => r.Slug == "app");
+
+        row.Counts.Should().Equal(1, 1, 1, 1);
+        row.Total.Should().Be(d.ActiveTotal, "la suma de las barras ES la deuda activa");
+        d.ByAge.Sum(r => r.Total).Should().Be(d.ActiveTotal);
+    }
+
+    /// <summary>
+    /// Los cubos no se solapan ni dejan hueco: son [0,7) [7,28) [28,84) [84,∞). Los bordes son
+    /// donde se equivoca una implementación, así que se prueban los bordes.
+    /// </summary>
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(6.9, 0)]
+    [InlineData(7, 1)]
+    [InlineData(27.9, 1)]
+    [InlineData(28, 2)]
+    [InlineData(83.9, 2)]
+    [InlineData(84, 3)]
+    [InlineData(5000, 3)]
+    public void Cada_edad_cae_en_exactamente_un_cubo(double days, int bucket)
+        => AgeBucket.IndexOf(days).Should().Be(bucket);
+
+    /// <summary>
+    /// <b>El periodo NO recorta la antigüedad</b> (D-320). Recortarla vaciaría por definición los
+    /// cubos de más de cuatro semanas cada vez que alguien eligiera «4 semanas», que es justo la
+    /// pregunta que la gráfica existe para contestar.
+    /// </summary>
+    [Fact]
+    public void La_antiguedad_no_la_recorta_el_periodo()
+    {
+        _hub.Store.WriteFinding("app", Finding(FindingStatus.Activo, Now.AddDays(-200)));
+
+        Build(range: MetricsRange.Weeks4).ByAge.Single().Counts.Should().Equal(0, 0, 0, 1);
+        Build(range: MetricsRange.Weeks26).ByAge.Single().Counts.Should().Equal(0, 0, 0, 1);
+    }
+
+    // =============================================================== F35 §2.8 — top 5 reglas
+
+    /// <summary>
+    /// <b>Las cinco que más produjeron, en orden, y solo del periodo</b> (F35 §2.8).
+    /// </summary>
+    [Fact]
+    public void El_top_de_reglas_ordena_cuenta_solo_el_periodo_y_se_queda_en_cinco()
+    {
+        // Seis reglas dentro del periodo, con recuentos distintos, y una vieja que queda fuera.
+        var counts = new (string Rule, int N)[]
+        {
+            ("errores.null.desreferencia", 6),
+            ("errores.calculo.negocio", 5),
+            ("mejoras.estilo.nomenclatura", 4),
+            ("optimizacion.consulta.n-mas-1", 3),
+            ("errores.async.mal-usado", 2),
+            ("mejoras.mantenibilidad.complejidad", 1),
+        };
+
+        foreach ((string rule, int n) in counts)
+        {
+            for (int i = 0; i < n; i++)
+            {
+                Finding f = Finding(FindingStatus.Activo, Now.AddDays(-3));
+                f.RuleId = rule;
+                _hub.Store.WriteFinding("app", f);
+            }
+        }
+
+        Finding vieja = Finding(FindingStatus.Activo, Now.AddDays(-200));
+        vieja.RuleId = "errores.null.desreferencia";
+        _hub.Store.WriteFinding("app", vieja);
+
+        IReadOnlyList<RuleCount> top = Build(range: MetricsRange.Weeks4).Rules;
+
+        top.Should().HaveCount(MetricsQuery.TopRuleCount);
+        top.Select(r => r.Count).Should().Equal(6, 5, 4, 3, 2);
+        top[0].RuleId.Should().Be("errores.null.desreferencia");
+        top[0].Count.Should().Be(6, "el hallazgo de hace 200 días es de otro periodo y no suma");
+
+        // Se lee el TÍTULO del catálogo, no el id.
+        top[0].Name.Should().Be("Posible desreferencia nula");
+        top.Should().NotContain(r => r.RuleId == "mejoras.mantenibilidad.complejidad", "la sexta no cabe");
+    }
+
+    /// <summary>
+    /// <b>El empate se rompe por el nombre, siempre igual.</b> Sin desempate, dos reglas con el
+    /// mismo recuento se intercambiarían según en qué orden devolviera el disco los ficheros, y la
+    /// lista bailaría entre dos cargas sin que nada hubiera cambiado.
+    /// </summary>
+    [Fact]
+    public void Un_empate_se_rompe_por_el_nombre_y_no_baila()
+    {
+        foreach (string rule in new[]
+                 {
+                     "mejoras.estilo.nomenclatura",           // «Nomenclatura/estilo»
+                     "mejoras.mantenibilidad.unidad-grande",  // «Unidad demasiado grande»
+                     "errores.async.mal-usado",               // «async/await mal usado»
+                 })
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                Finding f = Finding(FindingStatus.Activo, Now.AddDays(-3));
+                f.RuleId = rule;
+                _hub.Store.WriteFinding("app", f);
+            }
+        }
+
+        IReadOnlyList<RuleCount> top = Build().Rules;
+
+        top.Select(r => r.Name).Should().Equal(
+            "Nomenclatura/estilo", "Unidad demasiado grande", "async/await mal usado");
+        top.Select(r => r.Name).Should().BeEquivalentTo(Build().Rules.Select(r => r.Name),
+            "dos agregaciones del mismo hub dan el mismo orden");
+    }
+
+    /// <summary>
+    /// Una regla que el catálogo no conoce —un <c>criterio.&lt;área&gt;</c>— se enseña con su id.
+    /// Esconder la fila sería peor: esos hallazgos existen y producen trabajo igual.
+    /// </summary>
+    [Fact]
+    public void Una_regla_fuera_del_catalogo_se_ensena_con_su_id()
+    {
+        Finding f = Finding(FindingStatus.Activo, Now.AddDays(-3));
+        f.RuleId = "criterio.dominio";
+        _hub.Store.WriteFinding("app", f);
+
+        Build().Rules.Single().Name.Should().Be("criterio.dominio");
+    }
 
     // =============================================================== Tiles
 

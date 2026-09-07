@@ -352,35 +352,139 @@ public sealed record ProviderCost(
 }
 
 /// <summary>
-/// En qué se le va el dinero, por FASE del trabajo (F18 §1). Las tres fases son las tres cosas
-/// distintas que se le piden a un modelo, y cuestan muy distinto: <b>descubrimiento</b> (auditar,
-/// que barre cada unidad hasta agotarla), <b>verificación</b> (releer un puñado de hallazgos) y
-/// <b>arreglo</b> (una conversación larga sobre un solo defecto).
+/// <b>Qué clase de acción es una sesión</b> (F35 §2.6). Son cuatro y <b>cubren todos</b> los
+/// <see cref="AuditMode"/>: es una partición, no una selección.
 /// <para>
-/// Sale del modo de la sesión, que ya estaba escrito: no hay dato nuevo en el hub. Hasta F18, para
-/// contestar «¿en qué se me va el dinero?» había que abrir los informes uno a uno.
-/// </para>
-/// <para>
-/// <b>Los tokens van siempre; el coste, solo cuando lo hay.</b> Una fase hecha con una casa que no
-/// factura tiene peso pero no tiene precio, y poner un 0 diría que fue gratis.
+/// Que sea completa no es un detalle de estilo — es lo que hace que los tramos del rosco de coste
+/// por acción sumen <b>exactamente</b> el coste del periodo de esa aplicación. El reparto por fase
+/// que había antes se dejaba fuera el cierre y el reset «porque no llaman a ningún modelo», y eso
+/// funcionaba solo mientras siguieran costando cero: el día que una de esas sesiones gastara algo,
+/// el rosco diría un total y la tarjeta de coste otro (D-591: una pregunta, una respuesta).
 /// </para>
 /// </summary>
-/// <param name="Sessions">Cuántas sesiones del periodo fueron de esta fase.</param>
-/// <param name="Cost">Los credits facturados, o null si nada de esta fase factura.</param>
-public sealed record PhaseCost(
-    string Phase, int Sessions, int Calls, long Tokens, decimal? Cost)
+public enum AuditAction
 {
-    /// <summary>«Descubrimiento · 12 sesiones · 264 llamadas · 1.284.000 tokens · 193,3 AI credits».</summary>
-    public string Line
+    /// <summary>Lotes y los dos modos retirados que eran auditoría igual (integral, superficial).</summary>
+    Auditoria,
+
+    /// <summary>Comprobar si un hallazgo sigue ahí.</summary>
+    Verificacion,
+
+    /// <summary>El arreglo asistido.</summary>
+    Arreglo,
+
+    /// <summary>
+    /// Cierre de ciclo y reset. Hoy no llaman a ningún modelo y su tramo sale a cero —y un tramo a
+    /// cero no se dibuja—, pero existe para que la partición sea completa: es la diferencia entre
+    /// «no costó nada» y «no se contó».
+    /// </summary>
+    Gestion,
+}
+
+/// <summary>La acción de un modo, y cómo se llama. Un solo sitio, como <c>AuditModeNames</c>.</summary>
+public static class AuditActions
+{
+    public static AuditAction Of(AuditMode mode) => mode switch
     {
-        get
+        AuditMode.Lotes or AuditMode.Integral or AuditMode.Superficial => AuditAction.Auditoria,
+        AuditMode.Verify => AuditAction.Verificacion,
+        AuditMode.Fix => AuditAction.Arreglo,
+        _ => AuditAction.Gestion,
+    };
+
+    public static string Display(AuditAction action) => action switch
+    {
+        AuditAction.Auditoria => "Auditoría",
+        AuditAction.Verificacion => "Verificación",
+        AuditAction.Arreglo => "Arreglo",
+        _ => "Gestión",
+    };
+
+    /// <summary>Las cuatro, en el orden en que se leen: descubrir, comprobar, arreglar, gestionar.</summary>
+    public static IReadOnlyList<AuditAction> All { get; } = new[]
+    {
+        AuditAction.Auditoria, AuditAction.Verificacion, AuditAction.Arreglo, AuditAction.Gestion,
+    };
+}
+
+/// <summary>Un tramo del rosco de coste por acción: qué acción, cuánto costó y en cuántas sesiones.</summary>
+public sealed record ActionSlice(AuditAction Action, decimal Credits, int Sessions)
+{
+    public string Label => AuditActions.Display(Action);
+}
+
+/// <summary>
+/// El rosco de <b>coste por acción</b> de una aplicación (F35 §2.6): en qué se le fue el gasto del
+/// periodo. Los cuatro tramos suman <see cref="Total"/>, que es el coste del periodo de esa
+/// aplicación — la misma cifra que la tarjeta de coste filtrada a ella.
+/// </summary>
+public sealed record ActionCostDonut(string Slug, string Name, IReadOnlyList<ActionSlice> Slices)
+{
+    public decimal Total => Slices.Sum(s => s.Credits);
+
+    /// <summary>
+    /// Una app sin gasto en el periodo NO se omite de la fila: se dibuja vacía, igual que un rosco
+    /// de cobertura sin inventario (F6.5). Una fila con huecos dice quién no gastó; una fila que
+    /// solo trae a los que gastaron hace creer que las demás no están.
+    /// </summary>
+    public bool HasData => Total > 0m;
+}
+
+/// <summary>
+/// Un cubo de <b>antigüedad de la deuda</b> (F35 §2.7): cuántos hallazgos activos llevan abiertos
+/// ese tiempo desde que se detectaron.
+/// </summary>
+public sealed record AgeBucket(string Label, int From, int To)
+{
+    /// <summary>Los cuatro cubos, en orden y sin solapar: [0,7) [7,28) [28,84) [84,∞).</summary>
+    public static IReadOnlyList<AgeBucket> All { get; } = new[]
+    {
+        new AgeBucket("< 1 sem", 0, 7),
+        new AgeBucket("1–4 sem", 7, 28),
+        new AgeBucket("4–12 sem", 28, 84),
+        new AgeBucket("> 12 sem", 84, int.MaxValue),
+    };
+
+    /// <summary>En qué cubo cae una edad en días. Siempre cae en exactamente uno.</summary>
+    public static int IndexOf(double days)
+    {
+        for (int i = 0; i < All.Count; i++)
         {
-            string head = $"{Phase} · {Sessions} sesión(es) · {Calls} llamada(s) · "
-                + $"{Tokens.ToString("N0", AppCulture.Display)} tokens";
-            return Cost is { } c ? $"{head} · {CostFormat.WithUnit(c, null)}" : head;
+            if (days >= All[i].From && days < All[i].To)
+            {
+                return i;
+            }
         }
+
+        return All.Count - 1;
     }
 }
+
+/// <summary>
+/// La deuda VIVA de una aplicación repartida por antigüedad (F35 §2.7): la gráfica que dice si la
+/// deuda rota o se pudre.
+/// <para>
+/// <b>No la recorta el periodo</b>, igual que el rosco de severidad (D-320): es la foto de hoy, y
+/// su suma tiene que ser la deuda activa de la tarjeta 2. Recortarla por la ventana temporal daría
+/// una deuda más pequeña que la real — y además vaciaría por definición los cubos de más de cuatro
+/// semanas cada vez que alguien eligiera «4 semanas», que es justo la pregunta que la gráfica
+/// existe para contestar.
+/// </para>
+/// </summary>
+public sealed record DebtAgeRow(string Slug, string Name, IReadOnlyList<int> Counts)
+{
+    public int Total => Counts.Sum();
+}
+
+/// <summary>
+/// Una de las reglas que más hallazgos generaron <b>en el periodo</b> (F35 §2.8).
+/// </summary>
+/// <param name="RuleId">El id estable. Es lo que se cuenta; el nombre es cómo se lee.</param>
+/// <param name="Name">
+/// El título del catálogo. Una regla que el catálogo no conozca —un <c>criterio.&lt;área&gt;</c>, o
+/// una retirada— se enseña con su id: es lo que hay, y es mejor que esconder la fila.
+/// </param>
+public sealed record RuleCount(string RuleId, string Name, int Count);
 
 /// <summary>Una opción del selector de aplicación.</summary>
 public sealed record AppOption(string? Slug, string Name)
@@ -425,7 +529,7 @@ public sealed record MetricsDashboard(
     IReadOnlyList<FlowBucket> Flow,
     IReadOnlyList<SessionRow> Sessions,
     IReadOnlyList<CycleTrack> Cycles,
-    IReadOnlyList<PhaseCost>? Phases = null,
+    IReadOnlyList<ActionCostDonut>? ActionCost = null,
     // ---- F35 §1.3: lo que las cuatro cifras necesitan y no estaba agregado ----
     bool HasPreviousPeriod = false,
     int ScopeApps = 0,
@@ -436,7 +540,9 @@ public sealed record MetricsDashboard(
     int ActiveAtPeriodStart = 0,
     decimal? CostPreviousPeriod = null,
     int SessionsInPeriod = 0,
-    DateTimeOffset? AxisStart = null)
+    DateTimeOffset? AxisStart = null,
+    IReadOnlyList<DebtAgeRow>? DebtByAge = null,
+    IReadOnlyList<RuleCount>? TopRules = null)
 {
     /// <summary>
     /// El eje de las gráficas empieza DESPUÉS del comienzo del periodo (F35 §1.2): los tramos de
@@ -445,8 +551,20 @@ public sealed record MetricsDashboard(
     /// </summary>
     public bool AxisIsTrimmed => AxisStart is { } start && start > From;
 
-    /// <summary>El reparto por fase del periodo (F18 §1). Vacío cuando no hubo sesiones.</summary>
-    public IReadOnlyList<PhaseCost> ByPhase => Phases ?? Array.Empty<PhaseCost>();
+    /// <summary>El coste por acción de cada aplicación (F35 §2.6). Vacío sin aplicaciones.</summary>
+    public IReadOnlyList<ActionCostDonut> ByAction => ActionCost ?? Array.Empty<ActionCostDonut>();
+
+    /// <summary>La deuda viva por antigüedad, una fila por aplicación (F35 §2.7).</summary>
+    public IReadOnlyList<DebtAgeRow> ByAge => DebtByAge ?? Array.Empty<DebtAgeRow>();
+
+    /// <summary>Las cinco reglas que más hallazgos generaron en el periodo (F35 §2.8).</summary>
+    public IReadOnlyList<RuleCount> Rules => TopRules ?? Array.Empty<RuleCount>();
+
+    /// <summary>Hubo gasto que repartir en alguna aplicación. Sin él, el bloque dice por qué.</summary>
+    public bool HasActionCost => ByAction.Any(d => d.HasData);
+
+    /// <summary>Hay deuda viva que repartir por antigüedad.</summary>
+    public bool HasDebtAges => ByAge.Sum(r => r.Total) > 0;
 
     /// <summary>La clave con la que se agrupa lo que no tiene color propio.</summary>
     public const string OthersSlug = " otras";
@@ -824,7 +942,7 @@ public sealed class MetricsQuery
             FlowBuckets(findings, buckets),
             SessionRows(scope, inPeriod, rates),
             CycleTracks(scope, from, to, now, rates),
-            PhaseCosts(inPeriod, rates),
+            ActionCosts(scope, from, to, rates),
             hasPrevious,
             scope.Count,
 
@@ -841,7 +959,9 @@ public sealed class MetricsQuery
             // dos ventanas de la misma cuenta, no dos cuentas.
             byProvider.Count > 0 ? scope.Sum(a => CostIn(a.Sessions, from - span, from, rates)) : null,
             inPeriod.Count,
-            buckets.Count > 0 ? buckets[0].From : null);
+            buckets.Count > 0 ? buckets[0].From : null,
+            DebtAges(scope, now),
+            TopRules(findings, from, to));
     }
 
     /// <summary>
@@ -909,43 +1029,110 @@ public sealed class MetricsQuery
     }
 
     /// <summary>
-    /// El reparto por fase del periodo (F18 §1). El modo de la sesión ES la fase; los modos
-    /// retirados (Integral, Superficial) son auditoría igual, y los de gestión —cierre y reset— no
-    /// llaman a ningún modelo, así que no aparecen: una fila a cero solo ocupa sitio.
+    /// <b>El coste del periodo repartido por acción, aplicación a aplicación</b> (F35 §2.6).
+    /// <para>
+    /// Sale del modo de la sesión, que ya estaba escrito: no hay dato nuevo en el hub. Y los
+    /// tramos salen de <see cref="CostOf"/>, la misma función que suma la tarjeta de coste, así
+    /// que el rosco de una aplicación suma <b>exactamente</b> el coste que la tarjeta enseña con
+    /// esa aplicación en el filtro. No es una coincidencia que haya que vigilar: es la misma
+    /// cuenta partida en cuatro (D-591, D-597).
+    /// </para>
+    /// <para>
+    /// Un tramo a cero no se guarda —no se dibuja, y una leyenda con «Gestión 0 %» solo ocupa
+    /// sitio—, pero la acción existe en <see cref="AuditAction"/>: la partición es completa, así
+    /// que ninguna sesión puede caerse del reparto sin que nadie lo note.
+    /// </para>
     /// </summary>
-    private static IReadOnlyList<PhaseCost> PhaseCosts(
-        IReadOnlyList<AuditSession> sessions, CostLookup rates)
+    private static IReadOnlyList<ActionCostDonut> ActionCosts(
+        IReadOnlyList<AppData> scope, DateTimeOffset from, DateTimeOffset to, CostLookup rates)
     {
-        var order = new (string Name, Func<AuditSession, bool> Is)[]
+        var donuts = new List<ActionCostDonut>();
+        foreach (AppData app in scope)
         {
-            ("Descubrimiento", x => x.Mode is AuditMode.Lotes or AuditMode.Integral or AuditMode.Superficial),
-            ("Verificación", x => x.Mode == AuditMode.Verify),
-            ("Arreglo", x => x.Mode == AuditMode.Fix),
-        };
-
-        var rows = new List<PhaseCost>();
-        foreach ((string name, Func<AuditSession, bool> isPhase) in order)
-        {
-            var mine = sessions.Where(isPhase).ToList();
-            if (mine.Count == 0)
+            var mine = app.Sessions.Where(s => s.StartedUtc >= from && s.StartedUtc < to).ToList();
+            var slices = new List<ActionSlice>();
+            foreach (AuditAction action in AuditActions.All)
             {
-                continue;
+                var ofAction = mine.Where(s => AuditActions.Of(s.Mode) == action).ToList();
+                decimal credits = ofAction.Sum(s => CostOf(s, rates));
+                if (credits > 0m)
+                {
+                    slices.Add(new ActionSlice(action, credits, ofAction.Count));
+                }
             }
 
-            // Los tokens son de TODAS —es el peso, y siempre está—; el coste solo de las que
-            // facturan, y null cuando ninguna lo hace. Un 0 diría que la fase salió gratis.
-            long tokens = mine.Sum(x =>
-                Math.Max(0, x.Usage.InputTokens) + Math.Max(0, x.Usage.OutputTokens)
-                + Math.Max(0, x.Usage.CacheReadTokens) + Math.Max(0, x.Usage.CacheWriteTokens));
-
-            var billed = mine.Where(x => CreditCalculator.IsBilled(x.Provider)).ToList();
-            decimal? cost = billed.Count > 0 ? billed.Sum(x => CostOf(x, rates)) : null;
-
-            rows.Add(new PhaseCost(name, mine.Count, mine.Sum(x => Math.Max(0, x.Usage.Calls)), tokens, cost));
+            donuts.Add(new ActionCostDonut(app.Slug, app.Name, slices));
         }
 
-        return rows;
+        // El mismo orden que la fila de roscos de cobertura: el que más pesa, primero.
+        return donuts
+            .OrderByDescending(d => d.Total)
+            .ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
+
+    /// <summary>
+    /// <b>La deuda viva repartida por antigüedad</b> (F35 §2.7): la gráfica que dice si la deuda
+    /// rota o se pudre.
+    /// <para>
+    /// La edad se cuenta desde la <b>detección</b> del hallazgo hasta ahora, y cada activo cae en
+    /// exactamente un cubo, así que la suma de todas las barras es la deuda activa de la tarjeta 2.
+    /// No la recorta el periodo (D-320): recortarla vaciaría por definición los cubos de más de
+    /// cuatro semanas cada vez que alguien eligiera «4 semanas», que es justo lo que se viene a
+    /// mirar aquí.
+    /// </para>
+    /// </summary>
+    private static IReadOnlyList<DebtAgeRow> DebtAges(
+        IReadOnlyList<AppData> scope, DateTimeOffset now)
+    {
+        var rows = new List<DebtAgeRow>();
+        foreach (AppData app in scope)
+        {
+            var counts = new int[AgeBucket.All.Count];
+            foreach (Finding f in app.Findings.Where(f => f.Status == FindingStatus.Activo))
+            {
+                counts[AgeBucket.IndexOf((now - f.FirstDetected.Utc).TotalDays)]++;
+            }
+
+            rows.Add(new DebtAgeRow(app.Slug, app.Name, counts));
+        }
+
+        return rows
+            .OrderByDescending(r => r.Total)
+            .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>Cuántas reglas se listan. Cinco: la lista es para decidir, no para inventariar.</summary>
+    public const int TopRuleCount = 5;
+
+    /// <summary>
+    /// <b>Las reglas que más hallazgos generaron en el periodo</b> (F35 §2.8). Cuenta hallazgos
+    /// <b>detectados</b> dentro del periodo, sea cual sea su estado hoy: la pregunta es qué está
+    /// produciendo trabajo, y un hallazgo que ya se arregló lo produjo igual.
+    /// <para>
+    /// El empate se rompe por el <b>nombre</b> —el que se lee—, en orden ordinal: sin desempate,
+    /// dos reglas con el mismo recuento se intercambiarían de sitio según en qué orden devolviera
+    /// el disco los ficheros, y la lista bailaría entre dos cargas sin que nada hubiera cambiado.
+    /// </para>
+    /// </summary>
+    private static IReadOnlyList<RuleCount> TopRules(
+        IReadOnlyList<Finding> findings, DateTimeOffset from, DateTimeOffset to)
+        => findings
+            .Where(f => f.FirstDetected.Utc >= from && f.FirstDetected.Utc < to)
+            .GroupBy(f => f.RuleId, StringComparer.Ordinal)
+            .Select(g => new RuleCount(g.Key, RuleName(g.Key), g.Count()))
+            .OrderByDescending(r => r.Count)
+            .ThenBy(r => r.Name, StringComparer.Ordinal)
+            .Take(TopRuleCount)
+            .ToList();
+
+    /// <summary>
+    /// Cómo se lee una regla: el título del catálogo. Una que no esté —un <c>criterio.&lt;área&gt;</c>,
+    /// o una retirada— se enseña con su id: es lo que hay, y esconder la fila sería peor.
+    /// </summary>
+    internal static string RuleName(string ruleId)
+        => Copilot.RuleCatalog.Find(ruleId)?.Title ?? ruleId;
 
     // ---------- Gráfica 7: la cinta de ciclos (F17 §6) ----------
 

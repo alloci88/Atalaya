@@ -518,11 +518,12 @@ public sealed class CycleRibbonTests : IDisposable
         Regex.Matches(xaml, "<controls:CycleRibbon").Count.Should().Be(1);
         xaml.Should().NotContain("ViewportWidth=", "la cinta mide su propia ventana");
         xaml.Should().NotContain("RibbonFrom").And.NotContain("RibbonTo", "F17.2: ya no hay eje de calendario");
-        // Las OTRAS gráficas siguen ahí, y son tres. Esto decía que el fichero no contenía
+        // Las OTRAS gráficas de eje siguen ahí, y desde F35 §2.7 son cuatro: coste, resoluciones,
+        // flujo y antigüedad de la deuda. Esto decía que el fichero no contenía
         // «controls:ChartPlot» seguido de un salto de línea, y solo pasaba porque el fichero tenía
         // CRLF: con LF, la misma vista intacta lo rompía. Una regla que depende de los finales de
         // línea no es una regla (UI-AUDIT-1).
-        Regex.Matches(xaml, "<controls:ChartPlot").Count.Should().Be(3, "las demás gráficas no se tocan");
+        Regex.Matches(xaml, "<controls:ChartPlot").Count.Should().Be(4, "las demás gráficas no se tocan");
         xaml.Should().NotContain("x:Name=\"RibbonScroll\"", "el desplazamiento vive en el control, con la fila entera");
         xaml.Should().Contain("SpanCommand=\"{Binding OpenCycleCommand}\"");
         Regex.Matches(xaml, "Ciclos y temáticas").Count.Should().Be(1);

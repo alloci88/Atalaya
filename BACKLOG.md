@@ -515,8 +515,15 @@ editores es la única puerta).
   ahora **Cobertura · Deuda activa · Coste · Coste por hallazgo resuelto**, cada una con su
   tendencia contra el periodo anterior y su «Copiar». Cuadre a mano contra el hub de esta máquina
   antes de tocar nada; la lista de qué pasa con cada tarjeta que había, en D-1040. **Pendiente: la
-  Entrega 2** (coste por acción, antigüedad de la deuda y top 5 de reglas), que no empieza hasta
-  que el usuario revise el `dist`. Ver D-1040.
+  Entrega 2**, entregada aparte. Ver D-1040.
+
+- **F35 · Entrega 2 — Tres gráficas que faltaban** — **Coste por acción** (un rosco por aplicación
+  bajo «Coste en el tiempo», con cuatro tonos reservados que se ELIGIERON midiendo: no caben cuatro
+  tonos independientes, así que son una familia en cuatro pasos, a ΔE ≥ 20 de todo lo reservado);
+  **Antigüedad de la deuda** (barras por aplicación, cuatro cubos que suman la deuda activa); y
+  **Top 5 reglas del periodo** con «Copiar». De paso, las tres series del flujo salen de seis
+  literales del view-model a `FlowPalette` para poder afirmar la reserva, sin cambiar un color. Ver
+  D-1041.
 
 - **F33 · Un solo «Verificar ahora», y copiar el hallazgo y sus metadatos** — el aviso ámbar
   pierde su botón (era el mismo comando y el mismo rótulo que el de la botonera) y el de la

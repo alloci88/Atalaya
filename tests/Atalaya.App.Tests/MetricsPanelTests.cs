@@ -350,8 +350,9 @@ public sealed class MetricsPanelTests : IDisposable
 
         foreach (string chart in new[]
                  {
-                     "Coste en el tiempo", "Resoluciones en el tiempo", "Cobertura por aplicación",
-                     "Severidad por aplicación", "Flujo de hallazgos", "Ciclos y temáticas",
+                     "Coste en el tiempo", "Coste por acción", "Resoluciones en el tiempo",
+                     "Cobertura por aplicación", "Severidad por aplicación", "Flujo de hallazgos",
+                     "Antigüedad de la deuda", "Top 5 reglas del periodo", "Ciclos y temáticas",
                      "Actividad de sesiones",
                  })
         {
@@ -361,20 +362,32 @@ public sealed class MetricsPanelTests : IDisposable
         xaml.Should().Contain("{Binding Cumulative}", "el toggle «Acumulado» de la gráfica de coste");
         xaml.Should().Contain("{Binding CumulativeResolutions}", "y el suyo en la de resoluciones");
         Regex.Matches(xaml, "controls:ChartPlot").Count.Should()
-            .Be(3, "coste, resoluciones y flujo; ni una gráfica de más");
+            .Be(4, "coste, resoluciones, flujo y antigüedad; ni una gráfica de más");
 
         // La de resoluciones va JUSTO debajo de la de coste: se leen en pareja.
         xaml.IndexOf("Resoluciones en el tiempo", StringComparison.Ordinal).Should()
             .BeGreaterThan(xaml.IndexOf("Coste en el tiempo", StringComparison.Ordinal))
             .And.BeLessThan(xaml.IndexOf("Cobertura por aplicación", StringComparison.Ordinal));
         Regex.Matches(xaml, "controls:DonutRing").Count.Should()
-            .Be(2, "cobertura y severidad; cada fila es UNA plantilla repetida, no un rosco por app");
+            .Be(3, "cobertura, severidad y coste por acción; cada fila es UNA plantilla repetida");
+
+        // F35 §2 — cada gráfica nueva va DEBAJO de la suya: el coste por acción bajo el coste en
+        // el tiempo, y la antigüedad y el top de reglas bajo el flujo. La rejilla no se reordena.
+        xaml.IndexOf("Coste por acción", StringComparison.Ordinal).Should()
+            .BeGreaterThan(xaml.IndexOf("Coste en el tiempo", StringComparison.Ordinal))
+            .And.BeLessThan(xaml.IndexOf("Resoluciones en el tiempo", StringComparison.Ordinal));
+        xaml.IndexOf("Antigüedad de la deuda", StringComparison.Ordinal).Should()
+            .BeGreaterThan(xaml.IndexOf("Flujo de hallazgos", StringComparison.Ordinal))
+            .And.BeLessThan(xaml.IndexOf("Top 5 reglas del periodo", StringComparison.Ordinal));
         Regex.Matches(xaml, "controls:CycleRibbon").Count.Should().Be(1, "la cinta de ciclos (F17 §6)");
 
-        // La cinta va entre el flujo y el registro de sesiones: es historia, y el registro es el detalle.
+        // La cinta va entre el flujo y el registro de sesiones: es historia, y el registro es el
+        // detalle — y sigue siendo lo ÚLTIMO de la página (F35 §2.9).
         xaml.IndexOf("Ciclos y temáticas", StringComparison.Ordinal).Should()
-            .BeGreaterThan(xaml.IndexOf("Flujo de hallazgos", StringComparison.Ordinal))
+            .BeGreaterThan(xaml.IndexOf("Top 5 reglas del periodo", StringComparison.Ordinal))
             .And.BeLessThan(xaml.IndexOf("Actividad de sesiones", StringComparison.Ordinal));
+        xaml.LastIndexOf("Actividad de sesiones", StringComparison.Ordinal).Should()
+            .BeGreaterThan(xaml.LastIndexOf("Ciclos y temáticas", StringComparison.Ordinal));
 
         // La de severidad va justo debajo de la de cobertura: las dos son roscos y se leen juntas.
         xaml.IndexOf("Severidad por aplicación", StringComparison.Ordinal).Should()
@@ -914,6 +927,198 @@ public sealed class MetricsPanelTests : IDisposable
         vm.CopyCardCommand.Should().BeOfType<RelayCommand<StatCard>>();
         vm.CopyCardCommand.CanExecute(vm.Cards[0]).Should().BeTrue();
     }
+
+    // ============================================ F35 §2.6 — los cuatro tonos de acción
+
+    /// <summary>
+    /// <b>Los cuatro tonos de acción no pisan NADA reservado</b>, en los dos temas: ni un color de
+    /// aplicación, ni una severidad, ni uno de los tres de estado, ni una de las tres series del
+    /// flujo. Es la misma reserva de D-316, y se puede comprobar por la misma razón: los tonos
+    /// viven en una paleta, no dentro del método que los pinta.
+    /// <para>
+    /// No se comprueba solo que no COINCIDAN —dos colores distintos a un ΔE de 3 se confunden
+    /// igual—: se exige un margen medido. El de esta familia es ΔE ≥ 20 contra todo lo reservado.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Ningun_tono_de_accion_es_un_color_de_app_de_severidad_ni_de_estado()
+    {
+        foreach (bool dark in new[] { false, true })
+        {
+            var reserved = new List<(string Name, string Hex)>();
+            foreach (SeriesColor c in SeriesPalette.Steps
+                         .Append(SeriesPalette.Others).Append(SeriesPalette.Pending).Append(SeriesPalette.Large)
+                         .Concat(FlowPalette.All))
+            {
+                reserved.Add((c.Name, c.For(dark)));
+            }
+
+            foreach (Severity s in Enum.GetValues<Severity>())
+            {
+                reserved.Add((s.ToString(), SeverityPalette.Hex(s)));
+            }
+
+            foreach ((string key, string hex) in StatePalette(dark ? "Dark" : "Light"))
+            {
+                reserved.Add((key, hex));
+            }
+
+            foreach (SeriesColor tone in ActionPalette.All)
+            {
+                string hex = tone.For(dark);
+                foreach ((string name, string other) in reserved)
+                {
+                    hex.ToUpperInvariant().Should().NotBe(
+                        other.ToUpperInvariant(), $"«{tone.Name}» no puede ser «{name}»");
+                    Distance(hex, other).Should().BeGreaterThan(
+                        15, $"«{tone.Name}» tiene que distinguirse de «{name}» (tema {(dark ? "oscuro" : "claro")})");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Los cuatro se distinguen ENTRE SÍ en cada tema —si no, la leyenda sería lo único legible del
+    /// rosco— y cada uno tiene su paso propio para cada tema, aclarándose en oscuro (D-317).
+    /// </summary>
+    [Fact]
+    public void Los_cuatro_tonos_de_accion_se_distinguen_entre_si_y_tienen_dos_pasos()
+    {
+        foreach (SeriesColor tone in ActionPalette.All)
+        {
+            tone.Light.Should().MatchRegex("^#[0-9A-Fa-f]{6}$");
+            tone.Dark.Should().MatchRegex("^#[0-9A-Fa-f]{6}$");
+            Luma(tone.Dark).Should().BeGreaterThan(
+                Luma(tone.Light), $"«{tone.Name}» se aclara para fondo oscuro, como toda serie");
+        }
+
+        foreach (bool dark in new[] { false, true })
+        {
+            for (int i = 0; i < ActionPalette.All.Count; i++)
+            {
+                for (int j = i + 1; j < ActionPalette.All.Count; j++)
+                {
+                    Distance(ActionPalette.All[i].For(dark), ActionPalette.All[j].For(dark))
+                        .Should().BeGreaterThan(
+                            10,
+                            $"«{ActionPalette.All[i].Name}» y «{ActionPalette.All[j].Name}» son dos tramos "
+                            + "del mismo rosco");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// <b>El mismo tono en todas las aplicaciones</b> (F35 §2.6): la acción es lo que el color
+    /// dice, y la aplicación va en el título. Un tono que dependiera de la app necesitaría cuatro
+    /// por aplicación, y en la paleta no caben ni cuatro (D-315).
+    /// </summary>
+    [Fact]
+    public async Task El_rosco_de_accion_lleva_el_mismo_color_en_todas_las_aplicaciones()
+    {
+        foreach (string slug in new[] { "xblast", "otra" })
+        {
+            _hub.Store.WriteApp(new AppConfig { Slug = slug, Name = slug, RepoUrl = "u", CurrentCycle = 1 });
+            WriteSession(slug, cost: 50m);
+            WriteSession(slug, cost: 10m, mode: AuditMode.Fix, units: 0, daysAgo: 1);
+        }
+
+        MetricsViewModel vm = Panel();
+        await vm.LoadAsync();
+
+        vm.ActionCost.Should().HaveCount(2);
+        CoverageCard uno = vm.ActionCost[0];
+        CoverageCard otro = vm.ActionCost[1];
+
+        uno.Segments.Select(s => Hex(s.Brush)).Should().Equal(
+            otro.Segments.Select(s => Hex(s.Brush)),
+            "los tramos de las dos apps son los mismos cuatro tonos");
+        uno.Name.Should().NotBe(otro.Name, "lo que distingue a las dos es el título, no el color");
+
+        // Y la leyenda nombra las cuatro acciones, no las aplicaciones (D-296).
+        vm.ActionLegend.Select(l => l.Name).Should().Equal(
+            "Auditoría", "Verificación", "Arreglo", "Gestión");
+    }
+
+    /// <summary>La barra de antigüedad va con el color de la APP, el mismo de sus otras gráficas.</summary>
+    [Fact]
+    public async Task La_antiguedad_va_con_el_color_de_la_aplicacion()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "xblast", Name = "XBLAST", RepoUrl = "u", CurrentCycle = 1 });
+        WriteFinding("xblast", DateTimeOffset.UtcNow.AddDays(-2));
+        WriteSession("xblast", cost: 50m);
+
+        MetricsViewModel vm = Panel();
+        await vm.LoadAsync();
+
+        vm.AgeLabels.Should().Equal("< 1 sem", "1–4 sem", "4–12 sem", "> 12 sem");
+        vm.AgeSeries.Should().HaveCount(1);
+        vm.AgeSeries[0].Kind.Should().Be(ChartSeriesKind.Bar);
+        Hex(vm.AgeSeries[0].Stroke).Should().Be(Hex(vm.CostSeries[0].Stroke),
+            "la misma app, el mismo color que en la gráfica de coste (D-314)");
+
+        // UN solo eje: el control no tiene ninguna propiedad de segundo eje (D-313).
+        typeof(ChartPlot).GetProperties().Should().NotContain(p => p.Name.Contains("Secondary"));
+    }
+
+    /// <summary>Los cinco de arriba, escritos, y su «Copiar» (F33).</summary>
+    [Fact]
+    public async Task El_top_de_reglas_se_escribe_y_se_copia()
+    {
+        _hub.Store.WriteApp(new AppConfig { Slug = "app", Name = "App", RepoUrl = "u", CurrentCycle = 1 });
+        for (int i = 0; i < 3; i++)
+        {
+            WriteFinding("app", DateTimeOffset.UtcNow.AddDays(-2));
+        }
+
+        MetricsViewModel vm = Panel();
+        await vm.LoadAsync();
+
+        vm.HasTopRules.Should().BeTrue();
+        vm.TopRules.Should().HaveCount(1);
+        vm.TopRules[0].Count.Should().Be(3);
+        vm.CopyTopRulesCommand.Should().BeOfType<RelayCommand>();
+
+        // Y la fila no lleva color de severidad: una regla no es una gravedad (D-316).
+        string xaml = Markup(Source("src/Atalaya.App/Views/MetricsView.xaml"));
+        int block = xaml.IndexOf("Top 5 reglas del periodo", StringComparison.Ordinal);
+        string section = xaml[block..xaml.IndexOf("Ciclos y temáticas", StringComparison.Ordinal)];
+        section.Should().NotContain("Pill.Sev").And.NotContain("SeverityToBrush");
+    }
+
+    /// <summary>Los `Color` de estado declarados en la paleta de un tema, leídos del XAML.</summary>
+    private static IEnumerable<(string Key, string Hex)> StatePalette(string theme)
+    {
+        string xaml = Source($"src/Atalaya.App/Themes/Palette.{theme}.xaml");
+        foreach (Match m in Regex.Matches(xaml, @"<Color x:Key=""(Color\.(?:Success|Warning|Danger)\.[^""]+)"">\s*(#[0-9A-Fa-f]{6})\s*</Color>"))
+        {
+            yield return (m.Groups[1].Value, m.Groups[2].Value);
+        }
+    }
+
+    /// <summary>Distancia CIEDE76 entre dos colores. Por debajo de ~10 dos tonos se confunden.</summary>
+    private static double Distance(string a, string b)
+    {
+        (double L1, double A1, double B1) = Lab(a);
+        (double L2, double A2, double B2) = Lab(b);
+        return Math.Sqrt(((L1 - L2) * (L1 - L2)) + ((A1 - A2) * (A1 - A2)) + ((B1 - B2) * (B1 - B2)));
+    }
+
+    private static (double L, double A, double B) Lab(string hex)
+    {
+        var c = (Color)ColorConverter.ConvertFromString(hex);
+        double r = Linear(c.R / 255.0), g = Linear(c.G / 255.0), b = Linear(c.B / 255.0);
+        double x = ((r * 0.4124) + (g * 0.3576) + (b * 0.1805)) / 0.95047;
+        double y = (r * 0.2126) + (g * 0.7152) + (b * 0.0722);
+        double z = ((r * 0.0193) + (g * 0.1192) + (b * 0.9505)) / 1.08883;
+        double fx = F(x), fy = F(y), fz = F(z);
+        return ((116 * fy) - 16, 500 * (fx - fy), 200 * (fy - fz));
+
+        static double F(double t) => t > 0.008856 ? Math.Cbrt(t) : (7.787 * t) + (16.0 / 116);
+    }
+
+    private static double Linear(double c)
+        => c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
 
     private MetricsViewModel Panel()
         => TestFactory.Metrics(_hub, _paths, _settings, TestFactory.NavigationWith(TestFactory.Reports(_hub)),

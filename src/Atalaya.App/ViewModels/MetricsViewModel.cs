@@ -407,6 +407,139 @@ public sealed partial class MetricsViewModel : ViewModelBase
 
     // ---------- Gráfica 5: actividad de sesiones ----------
 
+    // ---------- Gráfica 1b: coste por acción (F35 §2.6) ----------
+
+    /// <summary>
+    /// Un rosco por aplicación con el coste del periodo repartido por acción. Misma rejilla y
+    /// mismo tamaño que los roscos de cobertura; el color lo ponen los cuatro tonos RESERVADOS de
+    /// <see cref="ActionPalette"/>, iguales en todas las aplicaciones — la aplicación va en el
+    /// título, no en el color.
+    /// </summary>
+    public ObservableCollection<CoverageCard> ActionCost { get; } = new();
+
+    /// <summary>Una leyenda para la fila entera, no una por rosco. Color + NOMBRE (D-296).</summary>
+    public ObservableCollection<LegendItem> ActionLegend { get; } = new();
+
+    [ObservableProperty] private bool _hasActionCost;
+
+    private void ApplyActionCost(MetricsDashboard d)
+    {
+        ActionCost.Clear();
+        foreach (ActionCostDonut donut in d.ByAction.Where(x => x.HasData))
+        {
+            var segments = donut.Slices
+                .Select(s => new DonutSegment(
+                    s.Label,
+                    (double)s.Credits,
+                    Brush(ActionPalette.Of(s.Action).For(_dark)),
+                    $"{s.Label}: {CostFormat.Number(s.Credits)} {CostFormat.Unit} "
+                    + $"({PercentText.Of((double)(s.Credits / donut.Total))}) · "
+                    + (s.Sessions == 1 ? "1 sesión" : $"{s.Sessions} sesiones")))
+                .ToList();
+
+            ActionCost.Add(new CoverageCard(
+                donut.Slug,
+                donut.Name,
+                $"{CostFormat.Number(donut.Total)} {CostFormat.Unit}",
+                string.Empty,
+                string.Join(" · ", segments.Select(s => s.Tooltip)),
+                segments,
+                true));
+        }
+
+        ActionLegend.Clear();
+        foreach (AuditAction action in AuditActions.All)
+        {
+            ActionLegend.Add(new LegendItem(
+                AuditActions.Display(action), Brush(ActionPalette.Of(action).For(_dark)), false));
+        }
+
+        HasActionCost = ActionCost.Count > 0;
+    }
+
+    // ---------- Gráfica 4b: antigüedad de la deuda (F35 §2.7) ----------
+
+    [ObservableProperty] private IReadOnlyList<ChartSeries> _ageSeries = Array.Empty<ChartSeries>();
+
+    [ObservableProperty] private IReadOnlyList<string> _ageLabels = Array.Empty<string>();
+
+    public ObservableCollection<LegendItem> AgeLegend { get; } = new();
+
+    [ObservableProperty] private bool _showAgeLegend;
+
+    [ObservableProperty] private bool _hasAges;
+
+    /// <summary>
+    /// Barras por aplicación sobre los cuatro cubos de antigüedad. <b>Un solo eje</b> (D-313) —son
+    /// todos conteos de hallazgos— y <b>color de aplicación</b> (D-314), el mismo que en la
+    /// gráfica de coste y en su rosco de cobertura.
+    /// </summary>
+    private void ApplyAges(MetricsDashboard d)
+    {
+        AgeLegend.Clear();
+        AgeLabels = AgeBucket.All.Select(b => b.Label).ToList();
+
+        var series = new List<ChartSeries>();
+        foreach (DebtAgeRow row in d.ByAge.Where(r => r.Total > 0))
+        {
+            var values = row.Counts.Select(c => (double)c).ToList();
+            series.Add(new ChartSeries(
+                row.Slug, row.Name, SeriesBrush(row.Slug, d), values, ChartSeriesKind.Bar));
+            AgeLegend.Add(new LegendItem(row.Name, SeriesBrush(row.Slug, d), false));
+        }
+
+        AgeSeries = series;
+        ShowAgeLegend = AgeLegend.Count >= 2;
+        HasAges = series.Count > 0;
+    }
+
+    // ---------- Gráfica 8: top 5 reglas del periodo (F35 §2.8) ----------
+
+    /// <summary>
+    /// Las cinco reglas que más hallazgos generaron en el periodo. <b>Sin color de severidad</b>
+    /// (D-316): una regla no es una gravedad — la misma regla produce hallazgos críticos y bajos.
+    /// </summary>
+    public ObservableCollection<RuleCount> TopRules { get; } = new();
+
+    [ObservableProperty] private bool _hasTopRules;
+
+
+    private void ApplyTopRules(MetricsDashboard d)
+    {
+        TopRules.Clear();
+        foreach (RuleCount rule in d.Rules)
+        {
+            TopRules.Add(rule);
+        }
+
+        HasTopRules = TopRules.Count > 0;
+    }
+
+    /// <summary>
+    /// Copia el top 5 como texto plano —una línea por regla, «N · Nombre»—, con el mismo aviso que
+    /// las demás copias (F33, D-1038).
+    /// </summary>
+    [RelayCommand]
+    private void CopyTopRules()
+    {
+        if (TopRules.Count == 0)
+        {
+            return;
+        }
+
+        string text = string.Join(
+            "\n", TopRules.Select(r => $"{r.Count} · {r.Name}"));
+        try
+        {
+            System.Windows.Clipboard.SetText(text);
+            _toasts.Show("Las reglas del periodo, copiadas al portapapeles.");
+        }
+        catch (Exception)
+        {
+            _toasts.Show("No se pudo copiar: el portapapeles no estaba disponible.");
+        }
+    }
+
     public ObservableCollection<SessionLine> Sessions { get; } = new();
 
     [ObservableProperty] private bool _hasSessions;
@@ -429,10 +562,13 @@ public sealed partial class MetricsViewModel : ViewModelBase
             SyncAppOptions(dashboard);
             ApplyTiles(dashboard);
             RebuildCostChart();
+            ApplyActionCost(dashboard);
             RebuildResolutionChart();
             ApplyCoverage(dashboard);
             ApplySeverity(dashboard);
             ApplyFlow(dashboard);
+            ApplyAges(dashboard);
+            ApplyTopRules(dashboard);
             ApplySessions(dashboard);
             ApplyCycles(dashboard);
 
@@ -821,9 +957,12 @@ public sealed partial class MetricsViewModel : ViewModelBase
         // Los tres son CONTEOS de hallazgos: comparten el único eje. Poner los activos en un eje
         // propio dejaría elegir la escala con la que se cruzan las barras y la línea, que es
         // exactamente la mentira que la regla del §2 prohibe.
-        Brush entran = Brush(_dark ? "#C88BE8" : "#8E44AD");
-        Brush salen = Brush(_dark ? "#5CD6A0" : "#1E8E5A");
-        Brush vivos = Brush(_dark ? "#93AEC0" : "#4E6472");
+        // F35 §2.6 — los tres salen de `FlowPalette` y no de seis literales aquí. Los valores son
+        // los mismos; lo que cambia es que ahora se puede COMPROBAR que ninguna paleta nueva los
+        // pisa, que es la razón por la que las severidades salieron de su convertidor (D-316).
+        Brush entran = Brush(FlowPalette.New.For(_dark));
+        Brush salen = Brush(FlowPalette.Resolved.For(_dark));
+        Brush vivos = Brush(FlowPalette.Alive.For(_dark));
 
         FlowSeries = new List<ChartSeries>
         {

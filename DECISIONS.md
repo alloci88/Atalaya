@@ -18154,3 +18154,124 @@ colado en un tooltip: un código de decisión no es texto para el usuario.
 cambio → build → tests → `dist` → parar (N-8). Que las cuatro tarjetas queden a la misma altura con
 subtítulos de longitudes distintas, que el «Copiar» de la esquina no apriete el título, y que el
 verde y el rojo de las flechas se lean en los dos temas, lo mira el usuario en el `dist`.
+
+## F35 · Entrega 2 — Tres gráficas que faltaban
+
+### D-1041 — Los cuatro tonos de acción se ELIGIERON midiendo, y el círculo cromático estaba lleno
+
+**§0 · Los tipos de sesión que existen, leídos del modelo** (D-595). `AuditMode` tiene siete
+valores: `Lotes`, los dos retirados que eran auditoría igual (`Integral`, `Superficial`), `Verify`,
+`Fix`, `Cierre` y `Reset`. En el hub de esta máquina, en el periodo: **38 lotes, 20 arreglos y 11
+verificaciones**; de cierre y reset, ninguna.
+
+**§0 · El cuadre de las tres, contra los ficheros** (N-2), con el reloj fijado en 2026-09-07 12:00
+local y el mismo script que reimplementa la fórmula de credits.
+
+| Cifra | Esperado (ficheros) | Mostrado | Veredicto |
+|---|---|---|---|
+| Coste por acción · xblast · Auditoría | 1.884,8101 cr | 1.884,8101 | ✅ |
+| Coste por acción · xblast · Verificación | 152,5233 cr | 152,5233 | ✅ |
+| Coste por acción · xblast · Arreglo | 621,3709 cr | 621,3709 | ✅ |
+| **Suma de los tramos** | **2.658,7044** | 2.658,7044 | ✅ **= la tarjeta de Coste** |
+| Coste por acción · atalaya | 0 (no tiene sesiones) | rosco vacío, conservado | ✅ |
+| Antigüedad · xblast | 390 · 0 · 0 · 0 | idem | ✅ |
+| Antigüedad · atalaya | 5 · 0 · 0 · 0 | idem | ✅ |
+| **Suma de todas las barras** | **395** | 395 | ✅ **= la tarjeta de Deuda activa** |
+| Top 5 (todas) | 89 · 53 · 43 · 38 · 22 | idem | ✅ |
+
+**Una diferencia de criterio, comprobada y declarada.** En el quinto puesto hay un **empate real a
+22** entre `criterio.dominio` y `errores.recursos.idisposable-no-liberado`. El script de cuadre
+desempataba por **id** y la aplicación desempata por **nombre** —que es lo que se lee y lo que se
+ordena—, así que el script decía «criterio.dominio» y la vista dice «IDisposable sin liberar». No
+es un defecto: son dos criterios deterministas y el de la vista es el declarado. Efecto secundario
+del orden ordinal: una regla de catálogo (título en mayúscula) gana siempre un empate contra un
+`criterio.<área>` (que se enseña con su id, en minúscula). Es arbitrario, es estable, y estable es
+lo que se pedía.
+
+**§1.6 · Coste por acción, y la decisión de color — que se midió antes de tomarla.**
+
+El encargo pedía «cuatro tonos de acción, reservados como las severidades, fuera de los seis de
+app, fuera de las severidades y fuera de los tres de estado». Se buscaron con un script que recorre
+el círculo cromático y calcula la distancia **CIEDE76** de cada candidato a todo lo reservado, en
+los dos temas. **Y el resultado fue que no caben cuatro tonos independientes.** La mejor
+combinación posible de cuatro colores distintos deja un **verde a ΔE 18,6 de los colores de
+estado** y un **carmín a 22 de «crítica»**: exactamente los dos significados que D-316 protege. No
+es una limitación del método — es lo que D-315 ya había dicho al quedarse en seis series: descontadas
+seis familias de aplicación, cuatro de severidad y tres de estado, el círculo está lleno.
+
+**Y estaba más lleno de lo que decía el inventario.** La búsqueda encontró de paso que las **tres
+series del flujo de hallazgos** —nuevos, resueltos, activos al cierre— vivían como **seis literales
+hexadecimales dentro de `MetricsViewModel.ApplyFlow`**. Son colores reservados de hecho, y
+escondidos ahí ninguna paleta nueva podía comprobar que no los pisaba: la primera propuesta de
+tonos, un púrpura que parecía limpio, chocaba a ΔE 12,8 con el morado de «nuevos». Salen a
+`FlowPalette` por el mismo motivo por el que las severidades salieron de `SeverityToBrushConverter`
+(D-316). **Los valores no cambian ni un dígito**: no es un cambio visible, es una reserva que ahora
+se puede afirmar.
+
+**La decisión.** Los cuatro tonos son **una sola familia en cuatro pasos**, no cuatro colores. Un
+cuarto significado nuevo no cabe; cuatro grados de **uno solo** —«acción»— sí, y por construcción no
+puede leerse como una gravedad ni como un estado. La familia es **ciruela (tono 306°)**, elegida
+por el script entre las 57 que cumplen todas las restricciones a la vez. Sus números, medidos:
+
+- **ΔE ≥ 20,1 en claro y ≥ 22,3 en oscuro** contra *todo* lo reservado —seis colores de aplicación
+  más «Otras» y los dos neutros del rosco, cuatro severidades, nueve colores de estado y las tres
+  series del flujo—, y sus vecinos más próximos son colores de **identidad** (el magenta de
+  aplicación, las series del flujo), nunca una severidad ni un estado.
+- Los cuatro pasos se distinguen entre sí: **ΔE ≥ 12,2**.
+- Cada paso contrasta al menos **3,2:1** con la superficie de su tema, que es el umbral de un
+  objeto gráfico.
+- Y cada uno tiene su valor propio para cada tema, aclarándose en oscuro (D-317).
+
+Viven en `ActionPalette`, con test, como `SeverityPalette` — y el test no comprueba solo que no
+coincidan: **exige el margen**, porque dos colores distintos a un ΔE de 3 se confunden igual.
+
+**§1.6 · Y las cuatro acciones son una PARTICIÓN, no una selección.** El reparto por fase de F18 se
+dejaba fuera el cierre y el reset «porque no llaman a ningún modelo». Eso funcionaba solo mientras
+siguieran costando cero: el día que una de esas sesiones gastara algo, el rosco diría un total y la
+tarjeta de Coste otro. `AuditAction` cubre los siete modos, así que **los tramos de un rosco suman
+exactamente el coste del periodo de esa aplicación** —la misma cifra que la tarjeta 3 filtrada a
+ella—, y no por vigilancia: por construcción, porque salen de la misma `CostOf` (D-591, D-597). El
+tramo de **Gestión** casi siempre sale a cero y entonces no se dibuja; existe para que ninguna
+sesión pueda caerse del reparto sin que nadie lo note. `PhaseCost` se retira: era la misma pregunta
+peor contestada, y mantener las dos habría sido dejar dos respuestas para una.
+
+**§1.7 · Antigüedad de la deuda.** Barras por aplicación sobre cuatro cubos que **no se solapan ni
+dejan hueco** —[0,7) [7,28) [28,84) [84,∞) días desde la detección—, un solo eje (D-313) porque los
+cuatro son conteos de hallazgos, y color de aplicación (D-314). **La suma de todas las barras es la
+deuda activa de la tarjeta 2**, y por eso **el periodo no la recorta** (D-320): recortarla vaciaría
+por definición los cubos de más de cuatro semanas cada vez que alguien eligiera «4 semanas», que es
+justo la pregunta que la gráfica existe para contestar. La vista lo dice en su línea de ayuda, igual
+que hace el rosco de severidad — sin esa frase, cambiar el periodo y ver los mismos números se lee
+como un fallo del programa.
+
+**§1.8 · Top 5 reglas del periodo.** Cuenta hallazgos **detectados** dentro del periodo, sea cual
+sea su estado hoy: la pregunta es qué está produciendo trabajo, y uno que ya se arregló lo produjo
+igual. Sin color de gravedad (D-316): una regla no es una gravedad — la misma regla produce
+hallazgos críticos y bajos. Se lee el **título del catálogo**; una regla que el catálogo no conozca
+—un `criterio.<área>`— se enseña con su id, porque esconder la fila sería peor. Con «Copiar» (F33).
+
+**Lo visible (N-6), y es toda la lista.** En Métricas: (a) un bloque **«Coste por acción»** debajo
+de «Coste en el tiempo»; (b) un bloque **«Antigüedad de la deuda»** debajo de «Flujo de hallazgos»;
+(c) un bloque **«Top 5 reglas del periodo»** debajo de ése. Nada más se mueve: el registro de
+sesiones sigue siendo lo último de la página, y hay un test que lo afirma. Los colores del flujo son
+los mismos de siempre.
+
+**Cobertura (N-5): 15 casos de regla.** Del coste por acción: el reparto con su cuadre contra la
+tarjeta; que **ningún modo se cae de la partición** (recorriendo el enum entero) y que un cierre con
+coste aparece en «Gestión» sin romper el total; que una sesión que no factura no inventa un tramo y
+el total sigue cuadrando; y que una app sin gasto conserva su rosco vacío. De la antigüedad: cada
+activo en un cubo y la suma igual a la deuda activa; **los ocho bordes** de los cuatro cubos en un
+`[Theory]` —los bordes son donde se equivoca una implementación—; y que el periodo no la recorta.
+Del top 5: orden, corte en cinco y solo el periodo; el empate resuelto por nombre y estable entre
+dos agregaciones; y una regla fuera del catálogo con su id. De la paleta: los cuatro tonos con su
+**margen** contra todo lo reservado en los dos temas, los cuatro distinguibles entre sí con sus dos
+pasos, y que el rosco de dos aplicaciones lleva **los mismos cuatro colores** —lo que las distingue
+es el título—. Más la barra de antigüedad con el color de su app y el top sin `Pill.Sev`. La tanda
+queda en **2.644 casos** (2.109 en la aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8. Que los cuatro tonos de ciruela se
+distingan de verdad en un rosco de 108 px, que la fila de roscos de acción no quede apretada al lado
+de la de cobertura, y que las barras de antigüedad no salgan demasiado finas con varias
+aplicaciones, lo mira el usuario en el `dist`. En este hub, además, **los cuatro cubos de antigüedad
+salen con todo en el primero**: el hub tiene cuatro días de vida, así que la gráfica dice la verdad
+y todavía no dice nada interesante.

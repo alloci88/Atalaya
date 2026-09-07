@@ -1,4 +1,4 @@
-using Atalaya.Domain;
+﻿using Atalaya.Domain;
 
 namespace Atalaya.App.Services;
 
@@ -42,6 +42,85 @@ public static class SeverityPalette
 
     /// <summary>Los cuatro, para poder afirmar que ninguna serie los usa.</summary>
     public static IReadOnlyList<string> All { get; } = new[] { Critica, Alta, Media, Baja };
+}
+
+/// <summary>
+/// Los tres colores del <b>flujo de hallazgos</b>, en un solo sitio (F35 §2.6).
+/// <para>
+/// Estaban a fuego dentro de <c>MetricsViewModel.ApplyFlow</c> como seis literales hexadecimales.
+/// No es solo el defecto de D-971 —un pincel resuelto en el view-model—: es que <b>son colores
+/// reservados de hecho</b> —«nuevos», «resueltos» y «activos al cierre» significan eso y solo eso
+/// en el panel— y, escondidos en un método, ninguna paleta nueva podía comprobar que no los
+/// pisaba. Salen aquí por el mismo motivo por el que las severidades salieron de
+/// <c>SeverityToBrushConverter</c> a <see cref="SeverityPalette"/> (D-316): para que la reserva
+/// sea comprobable.
+/// </para>
+/// <para>
+/// <b>Los valores no cambian</b>: son exactamente los que se venían pintando.
+/// </para>
+/// </summary>
+public static class FlowPalette
+{
+    public static SeriesColor New { get; } = new("nuevos", "#8E44AD", "#C88BE8");
+
+    public static SeriesColor Resolved { get; } = new("resueltos", "#1E8E5A", "#5CD6A0");
+
+    /// <summary>Los activos al cierre van con el neutro de «pizarra»: es la línea de contexto.</summary>
+    public static SeriesColor Alive { get; } = new("activos", "#4E6472", "#93AEC0");
+
+    public static IReadOnlyList<SeriesColor> All { get; } = new[] { New, Resolved, Alive };
+}
+
+/// <summary>
+/// <b>Los cuatro tonos de ACCIÓN</b>, reservados como las severidades (F35 §2.6, D-316).
+/// <para>
+/// <b>Qué reservan.</b> Auditar, verificar, arreglar y gestionar significan lo mismo en todo el
+/// panel, y —esto es lo que los hace tonos y no colores de serie— <b>son iguales en todas las
+/// aplicaciones</b>: el rosco de coste por acción de xblast y el de atalaya llevan los mismos
+/// cuatro. La aplicación va en el título del rosco, no en el color; si fuera al revés harían falta
+/// cuatro tonos por aplicación y no cabrían ni cuatro.
+/// </para>
+/// <para>
+/// <b>Por qué son una FAMILIA en cuatro pasos y no cuatro colores distintos.</b> Se midió antes de
+/// elegir (N-2). Lo reservado ya son trece familias —seis de aplicación más «Otras» y los dos
+/// neutros del rosco, cuatro de severidad, tres de estado y las tres del flujo—, y buscando cuatro
+/// tonos independientes con la distancia máxima a todas ellas, la mejor combinación posible mete
+/// un verde a ΔE 18,6 de los colores de estado y un carmín a 22 de «crítica»: exactamente los dos
+/// significados que D-316 protege. El círculo cromático está lleno, que es lo que D-315 ya había
+/// dicho al quedarse en seis series. Una sola familia en cuatro intensidades no es un cuarto
+/// significado nuevo: es uno solo —«acción»— en cuatro grados, y por eso no puede leerse como una
+/// gravedad ni como un estado.
+/// </para>
+/// <para>
+/// <b>La familia elegida, y su margen medido.</b> Ciruela (tono 306°). Distancia mínima a
+/// <b>todo</b> lo reservado: ΔE 20,1 en claro y 22,3 en oscuro; sus vecinos más próximos son
+/// colores de IDENTIDAD —el magenta de aplicación y las series del flujo—, nunca una severidad ni
+/// un estado. Los cuatro pasos se distinguen entre sí (ΔE ≥ 12,2) y cada uno contrasta al menos
+/// 3,2:1 con la superficie de su tema, que es el umbral de un objeto gráfico. Y cada paso tiene su
+/// valor propio para cada tema, aclarándose en oscuro (D-317).
+/// </para>
+/// </summary>
+public static class ActionPalette
+{
+    public static SeriesColor Auditoria { get; } = new("auditoría", "#5E315A", "#A25D9B");
+
+    public static SeriesColor Verificacion { get; } = new("verificación", "#80427A", "#B57DAF");
+
+    public static SeriesColor Arreglo { get; } = new("arreglo", "#A2539A", "#C79EC3");
+
+    public static SeriesColor Gestion { get; } = new("gestión", "#B672AF", "#DABED7");
+
+    public static SeriesColor Of(AuditAction action) => action switch
+    {
+        AuditAction.Auditoria => Auditoria,
+        AuditAction.Verificacion => Verificacion,
+        AuditAction.Arreglo => Arreglo,
+        _ => Gestion,
+    };
+
+    /// <summary>Los cuatro, para poder afirmar que no pisan nada reservado.</summary>
+    public static IReadOnlyList<SeriesColor> All { get; }
+        = new[] { Auditoria, Verificacion, Arreglo, Gestion };
 }
 
 /// <summary>

@@ -581,21 +581,41 @@ auditadas — un arreglo no audita ninguna unidad, así que repartir su gasto en
 número que no significa nada. Cómo se calcula todo esto está en **[El coste, dicho como
 es](#el-coste-dicho-como-es)**.
 
-Debajo, siete gráficas:
+Debajo, diez gráficas:
 
 1. **Coste en el tiempo** — una línea por aplicación, con toggle *Acumulado*.
-2. **Resoluciones en el tiempo** — cuántos hallazgos se dieron por resueltos en cada
+2. **Coste por acción** — un rosco por aplicación con el gasto del periodo repartido entre las
+   cuatro cosas que se hacen: **auditar**, **verificar**, **arreglar** y **gestionar** el ciclo
+   (cierre y reset). Cada tramo dice su porcentaje y su importe, y **los tramos de un rosco suman
+   el coste del periodo de esa aplicación** — la misma cifra que la tarjeta de Coste con esa
+   aplicación en el filtro. Los cuatro tonos son **los mismos en todas las aplicaciones**: aquí el
+   color dice la acción, y la aplicación va en el título. Los tonos están reservados como las
+   severidades: no son ni un color de aplicación, ni una gravedad, ni un verde/ámbar/rojo de
+   estado.
+3. **Resoluciones en el tiempo** — cuántos hallazgos se dieron por resueltos en cada
    tramo, por aplicación, contando todas las vías (veredicto del auditor, resolución
    manual y medida). Misma forma y **mismo color por aplicación** que la de coste, con
    su propio toggle *Acumulado*.
-3. **Cobertura por aplicación** — un rosco por app; un clic abre su inventario. Un tramo
+4. **Cobertura por aplicación** — un rosco por app; un clic abre su inventario. Un tramo
    diminuto pero real se dibuja igualmente: un rosco con 3 de 1.335 no puede parecerse a uno
    vacío, que significa lo contrario.
-4. **Severidad por aplicación** — un rosco por app con el reparto de su deuda **viva**
+5. **Severidad por aplicación** — un rosco por app con el reparto de su deuda **viva**
    (hallazgos activos a día de hoy: el periodo no la recorta). Un clic en un tramo abre
    Hallazgos con esa app y esa severidad; en el centro, esa app entera.
-5. **Flujo de hallazgos** — lo que entra, lo que se cierra y cuántos quedan vivos.
-6. **Ciclos y temáticas** — la secuencia de ciclos de cada aplicación: **no es una
+6. **Flujo de hallazgos** — lo que entra, lo que se cierra y cuántos quedan vivos.
+7. **Antigüedad de la deuda** — barras por aplicación con los hallazgos activos repartidos por
+   cuánto llevan abiertos desde que se detectaron: `< 1 sem`, `1–4`, `4–12` y `> 12`. Es la gráfica
+   que dice si la deuda **rota o se pudre**: si el peso se va a la derecha, lo que hay abierto lleva
+   meses ahí. Cada activo cae en exactamente un cubo, así que **la suma de todas las barras es la
+   deuda activa** de la segunda tarjeta. Como el rosco de severidad, **el periodo no la recorta**:
+   es la foto de hoy — recortarla vaciaría por definición los cubos de más de cuatro semanas cada
+   vez que eligieras «4 semanas», que es justo lo que vienes a mirar.
+8. **Top 5 reglas del periodo** — las cinco reglas que más hallazgos generaron dentro del periodo,
+   con cuántos. Cuenta lo **detectado**, esté hoy activo o resuelto: produjo trabajo igual. Van sin
+   color de gravedad, porque una regla no es una gravedad — la misma regla produce hallazgos
+   críticos y bajos. Un empate se rompe por el nombre, siempre igual, para que la lista no baile
+   entre dos cargas. Con **Copiar**.
+9. **Ciclos y temáticas** — la secuencia de ciclos de cada aplicación: **no es una
    línea de tiempo**, es la lista de capítulos. Una fila por aplicación (en el orden
    del Portafolio, con el nombre en una columna fija) y, en cada fila, sus ciclos **en
    orden, uno tras otro, como bloques del mismo ancho**: un ciclo de tres horas y uno de
@@ -621,7 +641,7 @@ Debajo, siete gráficas:
    respeta tu posición. El filtro de periodo recorta por pertenencia: se enseñan los
    ciclos que lo solapan, y si alguno queda fuera la fila lo dice («2 ciclos anteriores
    fuera del periodo») en vez de fabricar un eje.
-7. **Actividad de sesiones** — el registro del periodo, con el **tipo** de cada sesión
+10. **Actividad de sesiones** — el registro del periodo, con el **tipo** de cada sesión
    (auditoría, arreglo asistido, verificación, cierre…), su proveedor, su coste y sus
    **tokens**. Las de Claude Code dicen «suscripción» donde las otras dicen credits, y sus
    tokens siguen ahí: es con lo que puedes comparar el peso de dos sesiones de cualquier casa.
