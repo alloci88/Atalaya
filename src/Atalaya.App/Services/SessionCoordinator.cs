@@ -6,6 +6,7 @@ using Atalaya.Domain.Hashing;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Inventory;
+using Atalaya.Storage.Sync;
 
 namespace Atalaya.App.Services;
 
@@ -371,11 +372,23 @@ public sealed class SessionCoordinator
             sessionId, request.Slug, request.Mode, commit, by, Environment.MachineName, now,
             units.Select(u => u.Path).ToList(), session.Exhaustive));
 
+        // F30 §1 — la unidad y la pasada en curso, para poder situar cada llamada a herramienta y
+        // cada hito en el hilo de actividad. La toolbox no las conoce (ni tiene por qué: su trabajo
+        // es validar y persistir), así que las lleva quien conduce el barrido.
+        //
+        // BUGFIX-PUSH — y se declaran AQUÍ ARRIBA, antes del primer push, porque el primer hito que
+        // hay que narrar es justamente ése: publicar las reservas. Estaban doscientas líneas más
+        // abajo y por eso el arranque no tenía voz.
+        string activityUnit = string.Empty;
+        int activityPass = 0;
+        void Note(ActivityNoteKind kind, string text)
+            => ActivityNoted?.Invoke(new ActivityNote(activityUnit, activityPass, kind, text));
+
         bool stopped = ct.IsCancellationRequested;
         SessionFailure? providerFailure = null;
         if (!stopped)
         {
-            PublishClaims(request.Slug, units, inventory, by);
+            PublishClaims(request.Slug, units, inventory, by, Note, ct);
             stopped = ct.IsCancellationRequested;
         }
 
@@ -504,14 +517,6 @@ public sealed class SessionCoordinator
         // publicado el consumo de todas sus llamadas, o porque quedaba una herramienta a medias—
         // la pasada cuesta una llamada más, y eso NO puede quedar como una cifra sin causa (N-2).
         // Se pregunta por el tipo porque el corte es de esta casa: Copilot no tiene esta llamada.
-        // F30 §1 — la unidad y la pasada en curso, para poder situar cada llamada a herramienta y
-        // cada hito en el hilo de actividad. La toolbox no las conoce (ni tiene por qué: su trabajo
-        // es validar y persistir), así que las lleva quien conduce el barrido.
-        string activityUnit = string.Empty;
-        int activityPass = 0;
-        void Note(ActivityNoteKind kind, string text)
-            => ActivityNoted?.Invoke(new ActivityNote(activityUnit, activityPass, kind, text));
-
         var cutSkipped = new List<string>();
         void OnCutSkipped(string why)
         {
@@ -1100,9 +1105,31 @@ public sealed class SessionCoordinator
             app, session, newFindings, pending, large, _hub.OrganizationName, ModelRates());
         _hub.Store.WriteReport(request.Slug, sessionId.ToString(), report);
 
-        _hub.Sync?.CommitAndPush(
-            $"session: {request.Mode.ToString().ToLowerInvariant()} {request.Slug} {session.Units.Count} unidades"
-            + (interrupted ? " (detenida)" : ""));
+        // BUGFIX-PUSH — el del cierre también lleva reloj y voz, pero NO tumba la sesión: aquí ya
+        // hay trabajo hecho, guardado y con informe, y tirarlo porque el hub no contesta sería
+        // perder lo único que importa. Se dice que no se publicó y se apunta como incidencia; el
+        // commit se queda en el clon y sale en la siguiente publicación que funcione.
+        if (_hub.Sync is { } closing)
+        {
+            Note(ActivityNoteKind.Milestone, "Publicando la sesión en el hub…");
+            var closingClock = System.Diagnostics.Stopwatch.StartNew();
+            bool closingOk = closing.CommitAndPush(
+                $"session: {request.Mode.ToString().ToLowerInvariant()} {request.Slug} {session.Units.Count} unidades"
+                + (interrupted ? " (detenida)" : ""),
+                CancellationToken.None);
+            closingClock.Stop();
+
+            if (closingOk)
+            {
+                Note(ActivityNoteKind.Milestone, $"Sesión publicada · {Seconds(closingClock.Elapsed)}");
+            }
+            else
+            {
+                string why = closing.LastError ?? HubSyncService.TimedOut(closing.PushTimeout);
+                Note(ActivityNoteKind.Milestone, $"La sesión NO se publicó en el hub: {why}");
+                session.Notes.Add($"hub: la sesión no se publicó — {why}");
+            }
+        }
 
         // El alias legible se reparte TRAS el push (§2, D-228): numerar antes de publicar es lo
         // que hacía colisionar a dos máquinas que auditaban a la vez. Lo que se asigna aquí viaja
@@ -1221,7 +1248,23 @@ public sealed class SessionCoordinator
         return inventory.Units.Where(u => wanted.Contains(u.Path)).ToList();
     }
 
-    private void PublishClaims(string slug, IReadOnlyList<InventoryUnit> units, InventoryCycle inv, string by)
+    /// <summary>
+    /// Reserva las unidades y lo publica (§2).
+    /// <para>
+    /// <b>Con reloj, con voz y con final</b> (BUGFIX-PUSH). Era la primera cosa que hace una sesión
+    /// y la que la colgaba: un push sin reloj dentro de libgit2, sin una línea en pantalla y sin
+    /// nada que «Detener» pudiera cancelar. Ahora se narra mientras pasa y, si el hub no contesta a
+    /// tiempo, la sesión <b>termina con su motivo</b> en vez de quedarse colgada.
+    /// </para>
+    /// <para>
+    /// <b>Y termina, no continúa.</b> Las reservas son lo que impide que dos máquinas auditen la
+    /// misma unidad a la vez; seguir sin haberlas publicado es exactamente el caso que vinieron a
+    /// evitar. El commit se queda hecho en el clon y sale en la siguiente publicación que funcione.
+    /// </para>
+    /// </summary>
+    private void PublishClaims(
+        string slug, IReadOnlyList<InventoryUnit> units, InventoryCycle inv, string by,
+        Action<ActivityNoteKind, string> note, CancellationToken ct)
     {
         // El TTL sale del app.json, que es donde se configura (BUGFIX-AJUSTES). Estaba ahí desde
         // §2 y NADIE lo leía: todos los claims nacían con los 30 minutos por defecto del modelo, así
@@ -1240,8 +1283,45 @@ public sealed class SessionCoordinator
             });
         }
 
-        _hub.Sync?.CommitAndPush($"claims: {by} {units.Count} unidades en {slug}");
+        if (_hub.Sync is not { } sync)
+        {
+            return;
+        }
+
+        note(ActivityNoteKind.Milestone, "Publicando las reservas en el hub…");
+
+        // Y los reintentos se dicen mientras pasan: con otra persona publicando contra el mismo
+        // hub, el remoto se mueve debajo y hay que rehacer el rebase. Callarlo deja un silencio que
+        // se lee como un cuelgue, que es exactamente de lo que venimos.
+        void OnRetry(int attempt) => note(
+            ActivityNoteKind.Milestone,
+            $"Publicando en el hub… · reintento {attempt} de {HubSyncService.PushAttempts}");
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        sync.PushRetrying += OnRetry;
+        bool published;
+        try
+        {
+            published = sync.CommitAndPush($"claims: {by} {units.Count} unidades en {slug}", ct);
+        }
+        finally
+        {
+            sync.PushRetrying -= OnRetry;
+        }
+
+        clock.Stop();
+
+        if (!published)
+        {
+            throw new HubPublishException(sync.LastError ?? HubSyncService.TimedOut(sync.PushTimeout));
+        }
+
+        note(ActivityNoteKind.Milestone, $"Reservas publicadas · {Seconds(clock.Elapsed)}");
     }
+
+    /// <summary>«1,2 s», que es como se lee un tramo corto en el hilo.</summary>
+    private static string Seconds(TimeSpan elapsed)
+        => $"{elapsed.TotalSeconds.ToString("0.#", AppCulture.Display)} s";
 
     private void ReleaseClaims(string slug, IReadOnlyList<InventoryUnit> units)
     {

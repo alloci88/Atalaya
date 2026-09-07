@@ -701,6 +701,14 @@ public sealed partial class LiveSessionService : ObservableObject
 
             Completed?.Invoke(result);
         }
+        catch (HubPublishException hubEx)
+        {
+            // BUGFIX-PUSH — el hub no contestó a tiempo. Se dice tal cual y no envuelto en «se ha
+            // interrumpido por un error»: el motivo ya está escrito para leerse, dice dónde mirar
+            // —la red, la cuenta— y no se parece a un fallo del proveedor, que es la otra familia
+            // de fallos de esta pantalla. Lo que NO puede pasar es lo de hoy: quedarse girando.
+            Fail(hubEx.Message, offersModelChange: false);
+        }
         catch (AuditorModelUnavailableException modelEx)
         {
             // F5.15: el fallo con remedio de un clic. Se nombra el modelo y se ofrece Ajustes.

@@ -1,4 +1,4 @@
-using Atalaya.Domain.Model;
+﻿using Atalaya.Domain.Model;
 using Atalaya.Storage.Json;
 using LibGit2Sharp;
 using LibGit2Sharp.Handlers;
@@ -50,6 +50,21 @@ public sealed class HubSyncService : IDisposable
 
     /// <summary>Raised after a pull that changed files, so the UI can react live.</summary>
     public event Action<PullResult>? Pulled;
+
+    /// <summary>
+    /// <b>Cuántas veces se intenta publicar antes de rendirse</b> (BUGFIX-PUSH). Eran tres con
+    /// esperas de 150, 300 y 450 ms — nueve décimas en total, que es poco para un remoto con otra
+    /// persona empujando a la vez. Cinco, con la espera doblándose, dan cuatro segundos y medio de
+    /// margen y siguen cabiendo de sobra en el tope de treinta.
+    /// </summary>
+    public const int PushAttempts = 5;
+
+    /// <summary>
+    /// Se va a reintentar la publicación, con el número del intento que empieza (2…5). Existe para
+    /// que el hilo de la sesión pueda decirlo mientras pasa: un reintento callado es un silencio
+    /// más, y el silencio es lo que se lee como un cuelgue.
+    /// </summary>
+    public event Action<int>? PushRetrying;
 
     private Repository Repo => _repo ??= new Repository(_paths.Root);
 
@@ -194,13 +209,32 @@ public sealed class HubSyncService : IDisposable
     /// </summary>
     public bool Push()
     {
-        for (int attempt = 1; attempt <= 3; attempt++)
+        for (int attempt = 1; attempt <= PushAttempts; attempt++)
         {
+            if (attempt > 1)
+            {
+                PushRetrying?.Invoke(attempt);
+            }
+
             try
             {
                 Pull(); // rebase onto latest remote first
                 Branch local = Repo.Head;
-                var pushOptions = new PushOptions { CertificateCheck = CertificatePolicy.Check };
+
+                // EL RECHAZO DEL REMOTO HAY QUE PEDIRLO (BUGFIX-PUSH). `Network.Push` NO lanza
+                // cuando el otro lado rechaza la referencia: el rechazo llega por
+                // `OnPushStatusError`, y sin manejador se descarta en silencio. Sin esto, un push
+                // rechazado por non-fast-forward —el caso NORMAL cuando otra persona publica a la
+                // vez— volvía como éxito: `Succeeded()`, salud verde y `true`. El commit se quedaba
+                // en el clon de quien perdió la carrera, creyendo que estaba publicado, y su
+                // reclamación no llegaba al hub. Medido con dos clones empujando a la vez contra el
+                // `--bare` de pruebas: las dos publicaciones decían «sí» y en el hub había una.
+                var rejected = new List<string>();
+                var pushOptions = new PushOptions
+                {
+                    CertificateCheck = CertificatePolicy.Check,
+                    OnPushStatusError = e => rejected.Add($"{e.Reference}: {e.Message}"),
+                };
                 if (_credentials is not null)
                 {
                     pushOptions.CredentialsProvider = _credentials;
@@ -208,18 +242,31 @@ public sealed class HubSyncService : IDisposable
 
                 Remote origin = Repo.Network.Remotes["origin"];
                 Repo.Network.Push(origin, $"refs/heads/{local.FriendlyName}", pushOptions);
+
+                if (rejected.Count > 0)
+                {
+                    // Se convierte en lo que es —un rechazo— para que lo recoja el mismo bucle que
+                    // ya sabía qué hacer con él: esperar, rehacer el rebase sobre lo que acaba de
+                    // llegar, y volver a intentarlo.
+                    throw new NonFastForwardException(string.Join("; ", rejected));
+                }
+
                 Succeeded();
                 return true;
             }
             catch (NonFastForwardException)
             {
-                _log.LogInformation("Push rejected (remote moved); retry {Attempt}/3", attempt);
+                // El remoto se movió debajo: otra persona publicó mientras nosotros preparábamos.
+                // Es el caso NORMAL de un hub compartido, no una avería — se rehace el rebase y se
+                // vuelve a intentar.
+                _log.LogInformation(
+                    "Push rejected (remote moved); retry {Attempt}/{Of}", attempt, PushAttempts);
                 Backoff(attempt);
             }
             catch (LibGit2SharpException ex)
             {
-                _log.LogWarning(ex, "Push failed on attempt {Attempt}/3", attempt);
-                Failed(ex, attempt == 3 ? SyncHealth.Red : SyncHealth.Amber);
+                _log.LogWarning(ex, "Push failed on attempt {Attempt}/{Of}", attempt, PushAttempts);
+                Failed(ex, attempt == PushAttempts ? SyncHealth.Red : SyncHealth.Amber);
                 Backoff(attempt);
             }
         }
@@ -313,12 +360,154 @@ public sealed class HubSyncService : IDisposable
         Repo.Reset(ResetMode.Hard, target);
     }
 
+    /// <summary>
+    /// <b>Cuánto se espera a una publicación antes de darla por perdida</b> (BUGFIX-PUSH).
+    /// <para>
+    /// Treinta segundos: una publicación normal del hub tarda uno o dos, y quien está mirando una
+    /// sesión arrancar no puede esperar más que eso sin saber a qué. El número es público porque el
+    /// motivo que se le enseña al usuario lo lleva dentro y no puede decir uno distinto.
+    /// </para>
+    /// </summary>
+    public static readonly TimeSpan DefaultPushTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// El tope de ESTE servicio. Es de instancia y no una constante para que se pueda bajar donde
+    /// esperar treinta segundos no aporta nada —una prueba que comprueba justamente que el reloj
+    /// existe—, sin tocar un estático que comparte todo el proceso (R6 §8).
+    /// </summary>
+    public TimeSpan PushTimeout { get; set; } = DefaultPushTimeout;
+
+    /// <summary>
+    /// <b>Una publicación a la vez</b>. Cuando una vence, el hilo que la ejecuta <b>sigue vivo</b>
+    /// dentro de libgit2 —no hay forma de abortarlo— y <c>Repository</c> no es seguro entre hilos:
+    /// entrar con una segunda mientras la primera sigue dentro sería corromper el clon. La siguiente
+    /// falla en el acto y con su motivo, que es infinitamente mejor.
+    /// </summary>
+    private readonly SemaphoreSlim _pushGate = new(1, 1);
+
     /// <summary>Commit then push in one call — the common "after a user write" path.</summary>
     public bool CommitAndPush(string message)
+        => CommitAndPush(message, PushTimeout, CancellationToken.None);
+
+    /// <inheritdoc cref="CommitAndPush(string, TimeSpan, CancellationToken)"/>
+    public bool CommitAndPush(string message, CancellationToken ct)
+        => CommitAndPush(message, PushTimeout, ct);
+
+    /// <summary>
+    /// <b>Commit y push con reloj</b> (BUGFIX-PUSH). Nunca se queda esperando para siempre.
+    /// <para>
+    /// <b>El defecto que cierra, con la pila delante.</b> Una sesión no arrancaba y «Detener» no
+    /// respondía. El hilo de interfaz estaba <b>libre</b> —en su bucle de mensajes—, y el de la
+    /// sesión, dentro de <c>LibGit2Sharp.Network.Push</c> llamado desde
+    /// <c>SessionCoordinator.PublishClaims</c>, más de un minuto. libgit2 no pone reloj a su
+    /// transporte: una conexión que se queda a medias espera <b>indefinidamente</b>, sin excepción,
+    /// sin traza y sin nada que cancelar. Por eso «Detener» no hacía nada: no había ningún punto de
+    /// cancelación al que llegar.
+    /// </para>
+    /// <para>
+    /// <b>Por qué un hilo y no un token.</b> El <see cref="CancellationToken"/> no puede
+    /// interrumpir una llamada nativa que ya está dentro de libgit2. Lo único que se puede hacer es
+    /// <b>dejar de esperarla</b>: la publicación corre en su propio hilo —de fondo, para que no
+    /// pueda mantener vivo el proceso— y aquí se espera con reloj. Si vence, quien llamó se entera
+    /// y sigue su camino; el hilo huérfano terminará cuando libgit2 lo suelte, y hasta entonces
+    /// tiene la puerta echada para que nadie toque el repositorio a la vez.
+    /// </para>
+    /// <para>
+    /// <b>Y deja traza</b>, que es lo que faltaba: el defecto de hoy no dejó ni una línea en el
+    /// registro porque el push nunca volvió. Ahora se apunta cuándo empieza, cuánto tarda y cómo
+    /// acaba.
+    /// </para>
+    /// </summary>
+    /// <returns><c>true</c> si se publicó; <c>false</c> si venció el reloj o el push falló.</returns>
+    public bool CommitAndPush(string message, TimeSpan timeout, CancellationToken ct)
     {
-        Commit(message);
-        return Push();
+        if (!_pushGate.Wait(0, CancellationToken.None))
+        {
+            LastError = "Hay una publicación anterior que el hub todavía no ha soltado.";
+            Health = SyncHealth.Red;
+            _log.LogWarning("Push omitido: la publicación anterior sigue en vuelo. {Message}", message);
+            return false;
+        }
+
+        var done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        // El commit va DENTRO del hilo: también toca el repositorio, y la puerta que protege al
+        // push tiene que protegerlo a él por el mismo motivo.
+        // EL HILO HUÉRFANO NO PUEDE TIRAR EL PROCESO. Cuando el reloj vence, quien llamó se va y
+        // esto se queda dentro de libgit2; si al salir revienta —el caso normal es encontrarse el
+        // `Repository` ya liberado porque alguien cerró el hub mientras tanto— una excepción sin
+        // recoger en un hilo suelto mata la aplicación entera. Se traga TODO: nadie está
+        // escuchando, y lo que tenía que decirse ya se dijo cuando venció el reloj.
+        var worker = new Thread(() =>
+        {
+            try
+            {
+                Commit(message);
+                done.TrySetResult(Push());
+            }
+            catch (Exception ex)
+            {
+                done.TrySetException(ex);
+            }
+            finally
+            {
+                try
+                {
+                    _pushGate.Release();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // El servicio se cerró mientras esto seguía dentro. No hay puerta que soltar.
+                }
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "atalaya-hub-push",
+        };
+
+        _log.LogInformation("Push: empieza «{Message}» (tope {Seconds} s)", message, timeout.TotalSeconds);
+        worker.Start();
+
+        try
+        {
+            if (done.Task.Wait(timeout, ct))
+            {
+                bool ok = done.Task.GetAwaiter().GetResult();
+                _log.LogInformation(
+                    "Push: {Outcome} «{Message}» en {Ms} ms", ok ? "publicado" : "rechazado", message,
+                    clock.ElapsedMilliseconds);
+                return ok;
+            }
+        }
+        catch (AggregateException ex) when (ex.InnerException is not null)
+        {
+            _log.LogWarning(ex.InnerException, "Push: reventó «{Message}» tras {Ms} ms", message,
+                clock.ElapsedMilliseconds);
+            Failed(ex.InnerException, SyncHealth.Red);
+            return false;
+        }
+
+        // La tarea que nadie va a mirar queda OBSERVADA: si el push huérfano acaba reventando, su
+        // excepción muere aquí en vez de aparecer como `UnobservedTaskException` mucho después y
+        // lejos de su causa.
+        _ = done.Task.ContinueWith(
+            t => _ = t.Exception, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+        // Venció, o lo cancelaron. En los dos casos se DEJA DE ESPERAR y se dice por qué; el hilo
+        // sigue dentro de libgit2 y la puerta queda echada hasta que salga.
+        Health = SyncHealth.Red;
+        LastError = TimedOut(timeout);
+        _log.LogWarning("Push: sin respuesta en {Ms} ms «{Message}»", clock.ElapsedMilliseconds, message);
+        return false;
     }
+
+    /// <summary>El motivo, en las palabras con las que se le enseña al usuario.</summary>
+    public static string TimedOut(TimeSpan timeout)
+        => $"No se pudo publicar en el hub en {timeout.TotalSeconds:0.##} s.";
 
     private void Fetch()
     {
@@ -543,7 +732,47 @@ public sealed class HubSyncService : IDisposable
         return changes;
     }
 
-    private static void Backoff(int attempt) => Thread.Sleep(TimeSpan.FromMilliseconds(150 * attempt));
+    /// <summary>
+    /// La espera entre intentos, <b>doblándose</b>: 300, 600, 1.200 y 2.400 ms. Con dos personas
+    /// publicando contra el mismo hub, esperar lo mismo cada vez es volver a chocar a la misma
+    /// velocidad. El último intento no espera a nadie: ya no hay otro detrás.
+    /// </summary>
+    private static void Backoff(int attempt)
+    {
+        if (attempt >= PushAttempts)
+        {
+            return;
+        }
 
-    public void Dispose() => _repo?.Dispose();
+        Thread.Sleep(TimeSpan.FromMilliseconds(300 * Math.Pow(2, attempt - 1)));
+    }
+
+    /// <summary>
+    /// <b>No se cierra el repositorio debajo de un push en vuelo</b> (BUGFIX-PUSH). Tras un reloj
+    /// vencido el hilo sigue dentro de libgit2 con el <c>Repository</c> en la mano; liberarlo ahí
+    /// es un fallo nativo en un hilo que no lo puede contar. Se espera un momento a que suelte la
+    /// puerta y, si no lo hace, <b>se prefiere dejar el handle sin liberar</b>: un handle de más al
+    /// cerrar no se nota, y un cierre que revienta se nota siempre.
+    /// </summary>
+    public void Dispose()
+    {
+        bool free = _pushGate.Wait(TimeSpan.FromSeconds(2));
+        try
+        {
+            if (free)
+            {
+                _repo?.Dispose();
+                _repo = null;
+            }
+        }
+        finally
+        {
+            if (free)
+            {
+                _pushGate.Release();
+            }
+
+            _pushGate.Dispose();
+        }
+    }
 }
