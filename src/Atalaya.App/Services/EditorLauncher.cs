@@ -91,28 +91,76 @@ public sealed class EditorLauncher
     public Task<EditorOpenResult> OpenAsync(
         string slug, string relativePath, int line, LineOrigin origin = LineOrigin.Anclada,
         int originalLine = 0, CancellationToken ct = default)
-        => WithTimeout(() => Open(slug, relativePath, line, origin, originalLine), LaunchTimeout, ct);
+        => WithTimeout(
+            () => Open(slug, relativePath, line, origin, originalLine),
+            LaunchTimeout,
+            TimedOut,
+            ct);
+
+    /// <summary>
+    /// <b>Lo que se devuelve cuando el editor no contesta</b>: un fallo con su motivo, no un
+    /// éxito ni un silencio. La ficha ya sabe qué hacer con un fallo (R13 §3) y lo lee tal cual:
+    /// «No se pudo abrir en Visual Studio Code: no ha respondido en 10 s.»
+    /// </summary>
+    private EditorOpenResult TimedOut()
+        => EditorOpenResult.Failed(
+            EditorRegistry.NameOf(_settings.Current.Editor),
+            $"no ha respondido en {LaunchTimeout.TotalSeconds:0} s");
 
     /// <summary>
     /// El tope de tiempo, aislado de todo lo que toca el sistema para poder probarlo: un arranque
     /// que no vuelve tiene que resolverse en <c>false</c>, no colgar a quien espera.
     /// </summary>
-    internal static async Task<bool> WithTimeout(Func<bool> launch, TimeSpan timeout, CancellationToken ct = default)
-    {
-        Task<bool> running = Task.Run(launch, CancellationToken.None);
-        Task finished = await Task.WhenAny(running, Task.Delay(timeout, ct)).ConfigureAwait(false);
+    internal static Task<bool> WithTimeout(
+        Func<bool> launch, TimeSpan timeout, CancellationToken ct = default)
+        => WithTimeout(launch, timeout, () => false, ct);
 
-        // El arranque que se pasó de tiempo sigue su curso en segundo plano —no hay forma de
-        // abortar un Process.Start a medias—, pero la interfaz ya no lo espera.
-        return await running.ConfigureAwait(false);
-    }
-
-    /// <inheritdoc cref="WithTimeout(Func{bool}, TimeSpan, CancellationToken)"/>
-    internal static async Task<T> WithTimeout<T>(Func<T> launch, TimeSpan timeout, CancellationToken ct = default)
+    /// <summary>
+    /// <b>El tope CORTA</b> (BUGFIX-TIMEOUT).
+    /// <para>
+    /// <b>Lo que hacía antes.</b> Hacía el <c>WhenAny</c> —y tiraba su resultado— para acabar en
+    /// <c>return await running</c>: esperaba al arranque hasta el final pasara lo que pasara. El
+    /// tope no cortaba nada. Medido: con un tope de <b>120 ms</b> sobre un arranque de 5 s, el
+    /// reloj daba <b>5,01 s</b> y devolvía <c>true</c>; y con un arranque que no vuelve nunca,
+    /// no devolvía. Ése era el «Abriendo en el editor…» que D-208 dio por resuelto.
+    /// </para>
+    /// <para>
+    /// <b>Y no se intenta abortar la llamada</b>, por lo mismo que el reloj del push (D-1022):
+    /// un <see cref="CancellationToken"/> no interrumpe una llamada nativa ya iniciada — un
+    /// <c>Process.Start</c> resolviendo un <c>devenv</c> contra una unidad de red desconectada no
+    /// se puede cortar—. Lo único que se puede hacer es <b>dejar de esperarla</b>, y es lo que se
+    /// hace: el hilo se queda con su llamada hasta que el sistema la suelte, y su excepción —si
+    /// un día sale— se observa aquí para que no mate el proceso.
+    /// </para>
+    /// </summary>
+    /// <param name="onTimeout">
+    /// Qué se devuelve al vencer. Va como parámetro y no como un <c>default(T)</c> porque un
+    /// tope agotado <b>no es un valor vacío</b>: es un fallo, y quien llama es el único que sabe
+    /// cómo se escribe el suyo.
+    /// </param>
+    internal static async Task<T> WithTimeout<T>(
+        Func<T> launch, TimeSpan timeout, Func<T> onTimeout, CancellationToken ct = default)
     {
         Task<T> running = Task.Run(launch, CancellationToken.None);
-        Task finished = await Task.WhenAny(running, Task.Delay(timeout, ct)).ConfigureAwait(false);
-        return await running.ConfigureAwait(false);
+
+        // El hilo huérfano no puede tumbar la aplicación (D-1022): al vencer el tope ya no queda
+        // nadie esperando a esta tarea, y una excepción sin observar en una tarea abandonada es
+        // exactamente lo que el manejador global de BUGFIX-F32 acabaría apuntando sin que nadie
+        // pudiera hacer nada con ella.
+        _ = running.ContinueWith(
+            static t => _ = t.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+        // El reloj se apaga en cuanto deja de hacer falta: sin esto, cada apertura dejaría un
+        // temporizador de diez segundos vivo detrás.
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        Task delay = Task.Delay(timeout, stop.Token);
+        Task first = await Task.WhenAny(running, delay).ConfigureAwait(false);
+        stop.Cancel();
+
+        return first == running ? await running.ConfigureAwait(false) : onTimeout();
     }
 
     /// <summary>
@@ -208,7 +256,7 @@ public sealed class EditorLauncher
     /// <param name="slug">La aplicación activa. Sin ella se prueba con un fichero propio.</param>
     /// <param name="fallbackFile">El fichero al que recurrir cuando no hay clon a mano.</param>
     public Task<EditorOpenResult> TestAsync(string? slug, string fallbackFile, CancellationToken ct = default)
-        => WithTimeout(() => Test(slug, fallbackFile), LaunchTimeout, ct);
+        => WithTimeout(() => Test(slug, fallbackFile), LaunchTimeout, TimedOut, ct);
 
     /// <inheritdoc cref="TestAsync"/>
     public EditorOpenResult Test(string? slug, string fallbackFile)

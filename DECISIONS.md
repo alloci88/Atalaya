@@ -1803,6 +1803,12 @@ renumeradas desde 1 debajo de un hallazgo que vive en la línea 412.
 - **D-207 — `StatusMessage` desaparece de la ficha.** Ya no existe la propiedad: no hay dónde dejar
   un mensaje colgado. Toda acción avisa por el `ToastCenter` de F5.3, que caduca solo a los 8 s.
 
+> **NO ERA VERDAD hasta BUGFIX-TIMEOUT (D-1036).** «O abre, o falla a los 10 segundos, pero
+> termina»: no terminaba. `WithTimeout` hacía el `WhenAny` y volvía a esperar la tarea, así que
+> el tope no cortaba y un arranque que no vuelve colgaba a quien esperaba. El tope, la función
+> aparte y la llamada inyectada siguen siendo lo que dice esta entrada; lo que faltaba era
+> devolver al vencer — y un test que midiera el reloj en vez del valor.
+
 - **D-208 — Abrir el editor tiene tope de tiempo.** `Process.Start` parece instantáneo y no lo es:
   resolver `devenv` por el PATH, levantar el shim `code.cmd` o caer en el manejador del sistema
   puede bloquear el hilo varios segundos, y con una unidad de red desconectada, indefinidamente.
@@ -17639,3 +17645,85 @@ queda en **2.573 casos** (2.038 en la aplicación).
 xblast, así que esas tres ramas del detector se prueban por construcción y no contra un caso real.
 Y el commit `5249598bf` **ya está hecho**: esto no lo arregla hacia atrás — si se quiere el BOM de
 vuelta en `Hull.cs`, es un cambio del usuario en su clon.
+## BUGFIX-TIMEOUT — El tope de D-208 no cortaba, y su test no podía verlo
+
+### D-1036 — La causa es el `await` de después del `WhenAny`, y la regla es que un tope se prueba con reloj
+
+**La medida, reproducida (N-2) y peor de lo que D-1030 dejó apuntado.** `EditorLauncher.WithTimeout`
+hacía `Task.WhenAny(running, Task.Delay(timeout))`, **tiraba su resultado** —la variable `finished`
+no se leía— y acababa en `return await running`: esperaba al arranque hasta el final pasara lo que
+pasara. Con reloj, no con valor:
+
+| caso | reloj antes | reloj después |
+|---|---|---|
+| tope de **120 ms** sobre un arranque de 5 s | **5,01 s**, y devolvía `true` | **0,13 s**, y devuelve el fallo |
+| control: arranque de 1 s, tope de 30 s | 1,01 s | 1,01 s |
+| arranque que **no vuelve nunca**, tope de 120 ms | **no devolvía** | **0,12 s** |
+
+La tercera fila es el defecto de D-208 tal cual: «Abriendo en el editor…» para siempre. D-208 lo
+declaró resuelto —«o abre, o falla a los 10 segundos, pero termina»— y **no terminaba**.
+
+**Por qué su test no lo veía, que es la mitad interesante.** Comprobaba el **valor** devuelto, y el
+arranque simulado era `lento.Wait(TimeSpan.FromSeconds(5))`, que devuelve `false` **por su cuenta**
+a los cinco segundos. El test pasaba porque el valor era el esperado, **sin que el tope hubiera
+cortado nada**: exactamente la misma pantalla habría pasado con el tope quitado. **La regla que
+queda: un tope se prueba con RELOJ, no con valor.** Y con **las dos cotas** de `DeadRemoteTests`
+(D-1022), porque las dos hacen falta: que vuelva **dentro** de un margen —sin eso el defecto no se
+ve— y que haya **agotado** el tope —sin eso, un cortocircuito accidental pasaría por arreglo—.
+
+**El barrido del resto del código, con fichero y línea.** Se buscó el patrón —una espera con tope
+cuyo resultado se descarta y se vuelve a esperar la tarea original— en todo `src/`:
+
+- `EditorLauncher.cs:103` y `:114` — **el defecto, en las dos sobrecargas.** Las dos entran aquí.
+- `App.xaml.cs:560` — `if (!operation().Wait(TimeSpan.FromSeconds(10)))`: comprueba el resultado,
+  apunta y sigue. **Corta.** No se toca.
+- `RealCopilotAgent.cs:849` — `if (await Task.WhenAny(dispose, Task.Delay(DisposeTimeout)) != dispose)`:
+  compara y vuelve. **Corta.** No se toca.
+- `ClaudeUnitThread.cs:135` — el `WhenAny` de tres, con `done == cancelled` decidido después.
+  **Corta.** No se toca.
+- `HubSyncService.cs:653` — `if (done.Task.Wait(timeout, ct))`, el reloj del push de D-1022.
+  **Corta**, y ya tiene sus dos cotas. No se toca.
+- `Atalaya.Mcp/Program.cs:49` — `await Task.WhenAny(toAtalaya, toClaude)`: no es un tope, es un
+  puente que acaba cuando acaba cualquiera de sus dos tuberías. **No es el mismo patrón.**
+- **El reloj de 3 min del commit de F32** (D-1033), que el encargo daba por seguro: **no es el mismo
+  defecto.** `SystemProcessRunner` mira el resultado de `WaitForExit(ms)` y además **mata** el
+  proceso — que es más de lo que se puede hacer con una llamada nativa—. Medido: 400 ms de tope
+  sobre un proceso de ~19 s vuelve en **0,46 s** con `TimedOut = true`. Su código no se toca; lo que
+  le faltaba era **la prueba**, y la tiene, con las mismas dos cotas.
+
+**El arreglo, que es de tres líneas.** `WithTimeout` devuelve **al vencer**, siempre:
+`first == running ? await running : onTimeout()`. La llamada nativa que no vuelve **se queda en su
+hilo**, por lo mismo que razonó D-1022: un `CancellationToken` no interrumpe un `Process.Start` ya
+iniciado —resolviendo un `devenv` contra una unidad de red desconectada, por ejemplo—, así que lo
+único que se puede hacer es **dejar de esperarla**. Su excepción, si un día sale, **se observa** y no
+mata la aplicación; y el temporizador del tope se apaga en cuanto deja de hacer falta, para no dejar
+un reloj de diez segundos vivo por cada apertura.
+
+**Y lo que vuelve al vencer es un FALLO con motivo, no un éxito ni un silencio.** El `onTimeout` va
+como parámetro y no como un `default(T)` a propósito: un tope agotado no es un valor vacío, y quien
+llama es el único que sabe cómo se escribe el suyo. En el editor es
+`EditorOpenResult.Failed(nombre, "no ha respondido en 10 s")`, que la ficha ya sabe leer sin tocar
+nada (R13 §3) y sale como «No se pudo abrir en Visual Studio Code: no ha respondido en 10 s.». El
+tope sigue siendo **10 s** y sigue viviendo en la misma función con la llamada inyectada: lo que
+cambia es que ahora hace lo que decía.
+
+**Nada visible cambia** (N-6), y por eso esta entrega no lleva lista de cambios por vista: el toast
+del fallo ya existía y ya estaba redactado; lo que pasa es que antes **no llegaba nunca**, porque
+nadie devolvía. No se toca el registro de editores de R13, ni la detección, ni «Probar», ni el
+reloj del push, ni el prompt, ni las herramientas, ni el coste.
+
+**Cobertura (N-5): tres tests de regla, y el de D-208 se SUSTITUYE.** El del editor usa un arranque
+que **no vuelve nunca** —el caso de D-208, no un `Wait` de cinco segundos que se resuelve solo— y
+lleva las dos cotas. El de control exige que un arranque que sí vuelve **no** espere al tope, que es
+lo que distingue «corta» de «corta siempre». Y el tercero agota el reloj del proceso de F32.
+**El cebo es el más elocuente de la tanda: con el `WithTimeout` anterior, el test nuevo no falla —
+cuelga el testhost**, y vstest lo aborta con «Proceso de host de pruebas bloqueado». Es la misma
+avería que sufría el usuario, reproducida dentro de la suite. La cifra, del banco: 5,01 s frente a
+0,13 s para un tope de 120 ms. La tanda queda en **2.574 casos** (2.039 en la aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: la redacción exacta del fallo del tope
+(`EditorLauncher.TimedOut`) no tiene test propio — es privada y el único seam inyectable es
+`WithTimeout`, que es donde D-208 puso la costura—; lo que el test fija es que al vencer vuelve **el
+fallo de quien llamó** y no un éxito. Y no se ha probado con un editor real contra una unidad de red
+desconectada: eso es lo que originó D-208 y sigue sin poder reproducirse en una máquina de
+desarrollo.

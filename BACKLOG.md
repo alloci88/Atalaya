@@ -473,15 +473,6 @@ editores es la única puerta).
 
 ## Aplazado a decisión
 
-- **El tope de 10 s de abrir el editor (D-208) no corta.** Medido en R13 (D-1030):
-  `EditorLauncher.WithTimeout` hace el `WhenAny` con el `Task.Delay` y después
-  `return await running`, así que espera al arranque hasta el final pase lo que pase. Su test pasa
-  porque comprueba el **valor** devuelto, no el reloj: el caso del tope de 120 ms tarda **6,1 s** de
-  reloj —los 5 s del arranque simulado— contra 1,15 s del caso de control. Se ve, no se toca: el
-  tope quedaba explícitamente fuera del alcance de R13 («se conserva tal cual»), y un hallazgo es
-  una propuesta hasta que el usuario la acepta (N-6). Arreglarlo es devolver el resultado del
-  `WhenAny` y decidir qué hacer con el arranque que sigue vivo en segundo plano.
-
 - **Integración con Microsoft Planner.** El prompt de F6.2 está listo; falta el registro de la
   aplicación en Entra ID y decidir el momento.
 
@@ -517,6 +508,17 @@ editores es la única puerta).
   esquina.
 
 ## Cerrado
+
+- **BUGFIX-TIMEOUT · El tope de D-208 corta, y su test mide el reloj** — cierra el hallazgo que
+  R13 dejó apuntado (D-1030). `EditorLauncher.WithTimeout` hacía el `WhenAny`, tiraba su
+  resultado y volvía a esperar la tarea: 120 ms de tope sobre un arranque de 5 s daban **5,01 s**
+  de reloj, y un arranque que no vuelve **no devolvía nunca** — el «Abriendo en el editor…» de
+  D-208, que se dio por resuelto y no lo estaba—. Su test pasaba porque medía el valor. Ahora
+  devuelve al vencer con un fallo y su motivo; la llamada nativa se deja de esperar (D-1022) y
+  su excepción se observa. Barrido el resto del código: las otras cinco esperas con tope sí
+  cortan, y el reloj del commit de F32 también — solo le faltaba la prueba, y la tiene—. Regla:
+  **un tope se prueba con reloj, no con valor**, y con las dos cotas de D-1022. Cebo: con el
+  código anterior el test nuevo **cuelga el testhost**. Ver D-1036.
 
 - **BUGFIX-F32-2 · El autor en la línea del hash, y los tres bytes que se caían** — dos cosas
   que se vieron con el primer commit real. El commit salió como «Su Nombre» (el `user.name`

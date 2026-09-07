@@ -752,34 +752,100 @@ public sealed class FindingDetailTests : IDisposable
     }
 
     /// <summary>
-    /// El arranque del editor tiene tope: si no vuelve, se resuelve en fallo. Antes se quedaba
-    /// «Abriendo en el editor…» para siempre porque nadie ponía un límite.
+    /// <b>El tope del editor CORTA, y se mide con el RELOJ</b> (BUGFIX-TIMEOUT). Sustituye al
+    /// test de D-208.
+    /// <para>
+    /// <b>Por qué el de antes no lo veía.</b> Comprobaba el <b>valor</b> devuelto — y el arranque
+    /// simulado devolvía <c>false</c> por su cuenta a los 5 s, así que el test pasaba sin que el
+    /// tope hubiera cortado nada—. Medido: 120 ms de tope sobre un arranque de 5 s daban
+    /// <b>5,01 s</b> de reloj, contra 1,01 s del caso de control. Un tope se prueba con reloj.
+    /// </para>
+    /// <para>
+    /// <b>Y lleva las DOS cotas</b>, las de <c>DeadRemoteTests</c> (D-1022), porque las dos hacen
+    /// falta: que vuelva <b>dentro</b> de un margen —sin eso el defecto no se ve— y que haya
+    /// <b>agotado</b> el tope —sin eso, un cortocircuito accidental pasaría por arreglo—.
+    /// </para>
     /// </summary>
     [Fact]
-    public async Task El_arranque_del_editor_falla_por_tiempo_en_vez_de_colgarse()
+    public async Task El_tope_del_editor_devuelve_al_vencer_y_no_espera_al_arranque()
     {
-        // El arranque simulado se libera SIEMPRE —por el `using`, pase lo que pase con la
-        // aserción— y además tiene su propio tope. Un arnés que deja un hilo del pool bloqueado
-        // para siempre no prueba que el código no se cuelgue: cuelga el testhost.
-        using var lento = new ManualResetEventSlim(false);
-
-        bool opened = await EditorLauncher.WithTimeout(
-            () => lento.Wait(TimeSpan.FromSeconds(5)),
-            TimeSpan.FromMilliseconds(120));
+        // Un arranque que NO VUELVE NUNCA, que es el caso de D-208: un `Process.Start`
+        // resolviendo contra una unidad de red desconectada. Se libera siempre, pase lo que
+        // pase con la aserción: un arnés que deja un hilo del pool colgado cuelga el testhost.
+        using var nuncaVuelve = new ManualResetEventSlim(false);
+        var tope = TimeSpan.FromMilliseconds(120);
+        EditorOpenResult vencido = EditorOpenResult.Failed("Editor", "no ha respondido en 10 s");
 
         try
         {
-            opened.Should().BeFalse("el arranque no volvió dentro del tope");
+            var reloj = System.Diagnostics.Stopwatch.StartNew();
+            EditorOpenResult result = await EditorLauncher.WithTimeout(
+                () => { nuncaVuelve.Wait(); return EditorOpenResult.Failed("Editor", "abrió"); },
+                tope,
+                () => vencido);
+            reloj.Stop();
+
+            // (1) DEVUELVE. Sin esta cota el defecto no se ve: antes esto no volvía nunca.
+            reloj.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(1),
+                "el tope corta; no se espera al arranque");
+
+            // (2) Y HA AGOTADO EL TOPE. Sin esta, un cortocircuito pasaría por arreglo.
+            reloj.Elapsed.Should().BeGreaterThanOrEqualTo(tope,
+                "se espera lo que se prometió esperar, ni más ni menos");
+
+            // Y lo que vuelve es el FALLO de quien llamó, no un éxito ni un silencio.
+            result.Should().BeSameAs(vencido);
+            result.Opened.Should().BeFalse();
+            result.Failure.Should().Be("no ha respondido en 10 s");
         }
         finally
         {
-            lento.Set();
+            nuncaVuelve.Set();
         }
     }
 
+    /// <summary>
+    /// Y un arranque que sí vuelve NO se corta: devuelve lo suyo, y el reloj lo confirma — el
+    /// caso de control de la medida, que es lo que distingue «corta» de «corta siempre».
+    /// </summary>
     [Fact]
-    public async Task Un_arranque_que_funciona_devuelve_exito()
-        => (await EditorLauncher.WithTimeout(() => true, TimeSpan.FromSeconds(5))).Should().BeTrue();
+    public async Task Un_arranque_que_funciona_devuelve_exito_sin_agotar_el_tope()
+    {
+        var reloj = System.Diagnostics.Stopwatch.StartNew();
+        bool opened = await EditorLauncher.WithTimeout(() => true, TimeSpan.FromSeconds(30));
+        reloj.Stop();
+
+        opened.Should().BeTrue();
+        reloj.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5),
+            "no se espera al tope cuando el arranque ya volvió");
+    }
+
+    /// <summary>
+    /// <b>El otro reloj que el §0 mandó mirar: el del commit de F32</b> (D-1033), que no tenía
+    /// test que lo agotara.
+    /// <para>
+    /// <b>No es el mismo defecto, y por eso su código no se toca</b>: <c>SystemProcessRunner</c>
+    /// comprueba el resultado de <c>WaitForExit(ms)</c> y además <b>mata</b> el proceso — que es
+    /// más de lo que se puede hacer con una llamada nativa (D-1022)—. Medido: 400 ms de tope
+    /// sobre un proceso de ~19 s vuelve en <b>0,46 s</b>. Lo que faltaba era la prueba, con las
+    /// mismas dos cotas.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void El_reloj_del_proceso_corta_y_lo_dice()
+    {
+        var tope = TimeSpan.FromMilliseconds(400);
+        var reloj = System.Diagnostics.Stopwatch.StartNew();
+
+        ProcessOutcome outcome = new SystemProcessRunner().Run(
+            "cmd.exe", "/c ping -n 20 127.0.0.1", Path.GetTempPath(), tope, CancellationToken.None);
+
+        reloj.Stop();
+
+        reloj.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5), "el tope corta");
+        reloj.Elapsed.Should().BeGreaterThanOrEqualTo(tope, "y ha esperado lo que prometió");
+        outcome.TimedOut.Should().BeTrue("y se dice, en vez de devolver un resultado a medias");
+    }
 
     /// <summary>
     /// <b>R13 §0(b) / D-021 — la línea que se manda es la RE-ANCLADA cuando la hay.</b>
