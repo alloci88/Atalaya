@@ -443,6 +443,16 @@ pie, y el desglose, en el informe.
 
 - **Pausar** no congela al agente —eso no se puede prometer— sino lo que importa: no
   cae ni un cambio más en tu clon ni se compila nada hasta que continúes.
+- **Me quedo los cambios** **commitea** en tu clon, exactamente los ficheros de este arreglo
+  y ninguno más — lo que tengas tuyo a medias en otros ficheros, o ya preparado en el índice,
+  se queda fuera y como estaba—. El mensaje es el título y la descripción de la tarjeta **tal
+  y como los tengas al pulsar**, así que edítalos antes. Se respetan tus hooks: si un
+  `pre-commit` rechaza el commit, **no se commitea nada**, tus cambios siguen donde estaban y
+  te sale lo que el hook dijo; lo mismo si al clon le falta la identidad de git o si `git` no
+  está en el PATH. **Un commit que falla no descarta nada.** Si sale bien, el aviso ámbar, la
+  tarjeta y el botón desaparecen y en su lugar queda la línea del commit: «Commiteado `a1b2c3d`
+  · 1 fichero · pendiente de tu push». **Publicar sigue siendo tuyo**: Atalaya no empuja nunca
+  tu clon. Y arreglar sigue sin resolver el hallazgo — para eso está «Verificar ahora»—.
 - **Descartar todo** devuelve cada fichero tocado a como estaba, byte a byte, con
   confirmación previa.
 - **Detener** para al agente; lo que ya haya aplicado se queda.

@@ -73,6 +73,11 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
         _fix.Changed += OnFixChanged;
         _fix.PropertyChanged += (_, _) => OnFixChanged();
 
+        // El titulo se edita en la tarjeta y decide si el boton se puede pulsar (P-27): sin
+        // escuchar a la sugerencia, borrarlo dejaba el boton encendido hasta el siguiente
+        // cambio de cualquier otra cosa.
+        _fix.Commit.PropertyChanged += (_, _) => OnFixChanged();
+
         if (Application.Current is not null)
         {
             _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -356,6 +361,53 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
     /// <summary>Lo contrario, que es lo que la vista necesita para ENSEÑAR lo que sí aplica.</summary>
     public bool ClosedWithChanges => ShowClosing && Files.Count > 0;
 
+    // ------------------------------------------------------------------ commitear el arreglo
+
+    /// <summary>
+    /// El arreglo ya esta commiteado en el clon (F32, que revoca D-556). Es lo que parte la
+    /// pantalla de cierre en dos: mientras no lo esta, el aviso ambar, la tarjeta de sugerencia
+    /// y el boton; cuando lo esta, <b>ninguna de las tres</b> y una linea con el hash. Las
+    /// piezas se van ENTERAS: media tarjeta de sugerencia sobre un commit ya hecho es peor que
+    /// ninguna.
+    /// </summary>
+    public bool IsCommitted => _fix.CommittedSha is { Length: > 0 };
+
+    /// <summary>Lo que queda por commitear: el aviso, la tarjeta y el boton cuelgan de esto.</summary>
+    public bool ClosedUncommitted => ClosedWithChanges && !IsCommitted;
+
+    /// <summary>
+    /// La linea que sustituye a las tres piezas. Dice el hash, cuanto entro y -lo que Atalaya
+    /// no hace y nunca hara- que publicar sigue siendo del usuario.
+    /// </summary>
+    public string CommittedLine => IsCommitted
+        ? $"Commiteado {_fix.CommittedSha} · {Files.Count} fichero{(Files.Count == 1 ? string.Empty : "s")}"
+          + " · pendiente de tu push"
+        : string.Empty;
+
+    /// <summary>
+    /// Se puede commitear. El titulo vacio lo apaga: un commit sin asunto no se hace, y
+    /// averiguarlo despues de pulsar seria un boton encendido que al pulsarlo dice que no
+    /// (P-27).
+    /// </summary>
+    public bool CanCommitChanges
+        => ClosedUncommitted && !IsCommitting && _fix.Commit.Title.Trim().Length > 0;
+
+    /// <summary>Un commit en marcha: puede haber un <c>pre-commit</c> largo detras.</summary>
+    public bool IsCommitting => _fix.IsCommitting;
+
+    /// <summary>El rotulo, que no cambia: el gesto es el mismo, lo que cambia es que hace.</summary>
+    public const string CommitButtonLabel = "Me quedo los cambios";
+
+    public string CommitButtonText => IsCommitting ? "Commiteando…" : CommitButtonLabel;
+
+    /// <summary>La razon, para el chip pegado al boton. Vacia mientras se pueda pulsar.</summary>
+    public string CommitBlockedReason
+        => ClosedUncommitted && !IsCommitting && _fix.Commit.Title.Trim().Length == 0
+            ? "escribe el título del commit"
+            : string.Empty;
+
+    public bool HasCommitBlockedReason => CommitBlockedReason.Length > 0;
+
     /// <summary>
     /// El titular de la pantalla de cierre. Sin ficheros tocados no hay nada que dar por
     /// terminado: lo que hay es una sesión que paró sin dejar rastro, y eso se dice.
@@ -369,21 +421,33 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
     /// aviso flotante —«No hay ningún cambio que descartar»—, o sea: un botón encendido que al
     /// pulsarlo dice que no. Apagado con la razón al lado es el patrón de la casa (P-27).
     /// </summary>
-    public bool CanDiscardAll => Files.Count > 0 || _fix.HasPendingChanges;
+    /// <summary>
+    /// <b>Y ya no se puede descartar lo que esta commiteado</b> (F32). Revertir un commit es
+    /// otra operacion -con su propio commit, su propio mensaje y su propia decision- y esta
+    /// pantalla no la ofrece: dejar "Descartar todo" encendido despues de commitear prometeria
+    /// deshacer algo que ya esta en el historial.
+    /// </summary>
+    public bool CanDiscardAll => !IsCommitted && (Files.Count > 0 || _fix.HasPendingChanges);
 
     /// <summary>
     /// La razón, para el chip pegado al botón. Vacía mientras se pueda pulsar, y vacía también
     /// mientras la sesión corre: ahí un arreglo que todavía no ha escrito nada es lo normal y no
     /// hace falta explicárselo a nadie.
     /// </summary>
-    public string DiscardBlockedReason => !CanDiscardAll && HasSession && !IsRunning
-        ? "no hay cambios"
-        : string.Empty;
+    public string DiscardBlockedReason => IsCommitted
+        ? $"ya commiteado ({_fix.CommittedSha})"
+        : !CanDiscardAll && HasSession && !IsRunning
+            ? "no hay cambios"
+            : string.Empty;
 
     public bool HasDiscardBlockedReason => DiscardBlockedReason.Length > 0;
 
     public override Task LoadAsync()
     {
+        // F32 - volver por "Ultimo arreglo" es ESTE camino (D-572), asi que aqui es donde se
+        // relee del hub si el arreglo ya se commiteo. Sin esto habria dos verdades -la de
+        // memoria y la del `fixes/{ulid}.json`- y la pantalla se reconstruiria sin el hash.
+        _fix.RefreshCommitState();
         RefreshPending();
         OnFixChanged();
         return Task.CompletedTask;
@@ -465,14 +529,45 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
         OnFixChanged();
     }
 
-    /// <summary>Cierra el registro: el usuario da los cambios por buenos y se queda con ellos.</summary>
-    [RelayCommand]
-    private void Finish()
+    /// <summary>
+    /// <b>"Me quedo los cambios" COMMITEA</b> (F32, que revoca D-556). El clic es la decision
+    /// que D-556 queria dejar en manos de una persona; lo que ha cambiado es que ahora esa
+    /// decision hace algo. Se commitean exactamente los ficheros del arreglo, con el titulo y
+    /// la descripcion TAL Y COMO ESTEN en la tarjeta en este momento -son editables, y lo que
+    /// se commitea es lo que el usuario tiene delante, no lo que el agente sugirio-.
+    /// <para>
+    /// Va fuera del hilo de interfaz porque detras puede haber un <c>pre-commit</c> que tarde.
+    /// Y si falla, lo unico que pasa es un toast con el motivo: la pantalla no cambia y el clon
+    /// tampoco.
+    /// </para>
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanCommitChanges))]
+    private async Task CommitChanges()
     {
-        _fix.AcceptChanges();
-        _toasts.Show(UncommittedReminder);
-        RefreshPending();
+        if (!CanCommitChanges)
+        {
+            return;   // Red: el boton ya esta apagado, pero un comando entra tambien por teclado.
+        }
+
+        _fix.IsCommitting = true;
         OnFixChanged();
+        try
+        {
+            FixCommitResult result = await Task.Run(() => _fix.CommitChanges());
+            if (!result.Ok)
+            {
+                _toasts.Show(result.Error ?? "No se pudo commitear.");
+                return;
+            }
+
+            _toasts.Show($"Commiteado {result.Sha}. El push sigue siendo tuyo.");
+        }
+        finally
+        {
+            _fix.IsCommitting = false;
+            RefreshPending();
+            OnFixChanged();
+        }
     }
 
     /// <inheritdoc cref="SessionViewModel.CanClose"/>
@@ -783,6 +878,15 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
         OnPropertyChanged(nameof(CanDiscardAll));
         OnPropertyChanged(nameof(DiscardBlockedReason));
         OnPropertyChanged(nameof(HasDiscardBlockedReason));
+        OnPropertyChanged(nameof(IsCommitted));
+        OnPropertyChanged(nameof(ClosedUncommitted));
+        OnPropertyChanged(nameof(CommittedLine));
+        OnPropertyChanged(nameof(IsCommitting));
+        OnPropertyChanged(nameof(CommitButtonText));
+        OnPropertyChanged(nameof(CanCommitChanges));
+        OnPropertyChanged(nameof(CommitBlockedReason));
+        OnPropertyChanged(nameof(HasCommitBlockedReason));
+        CommitChangesCommand.NotifyCanExecuteChanged();
     }
 }
 

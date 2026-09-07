@@ -993,6 +993,46 @@ public static class ReportBuilder
     /// no puede dejar entender que el arreglo ya está publicado.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// El párrafo de cabecera de un informe de arreglo con ficheros tocados, mientras el commit no
+    /// se ha hecho. Es constante para poder <b>sustituirlo</b> más tarde sin volver a generar el
+    /// informe entero (<see cref="MarkFixCommitted"/>).
+    /// </summary>
+    public const string UncommittedNotice =
+        "> **Estos cambios NO están commiteados.** El arreglo asistido escribe en el clon "
+        + "local de quien lo lanzó y ahí se queda: revisar, commitear y publicar sigue siendo suyo. "
+        + "Y arreglar no resuelve el hallazgo — la resolución llega verificando, con evidencia.";
+
+    /// <summary>
+    /// El mismo párrafo cuando el usuario ya pulsó «Me quedo los cambios» y Atalaya commiteó
+    /// (F32).
+    /// </summary>
+    public static string CommittedNotice(string sha)
+        => $"> **Commiteados en `{sha}`.** El arreglo está commiteado en el clon local de quien lo "
+        + "lanzó, **sin publicar**: el push sigue siendo suyo. Y arreglar no resuelve el hallazgo "
+        + "— la resolución llega verificando, con evidencia.";
+
+    /// <summary>
+    /// Pone el commit en un informe YA ESCRITO, sustituyendo su párrafo de cabecera y nada más.
+    /// <para>
+    /// <b>Por qué se reescribe en vez de dejarlo como estaba, y por qué así.</b> El informe se
+    /// escribe en el hub al cerrar el arreglo, antes de que el usuario decida quedarse los
+    /// cambios: dejarlo tal cual haría que el informe del hub —el que lee quien no estaba
+    /// delante— afirmara «NO están commiteados» de un arreglo que sí lo está. Y se sustituye el
+    /// párrafo en lugar de volver a generar el informe porque regenerarlo obligaría a reconstruir
+    /// coste, consumo y veredicto desde el hub y podría salir distinto por motivos que no tienen
+    /// nada que ver con esto: cambiar una frase cambia una frase.
+    /// </para>
+    /// </summary>
+    /// <returns>
+    /// El informe con la frase nueva, o el mismo de entrada si no encuentra el párrafo — un
+    /// informe de otra época se queda como está en vez de perder nada.
+    /// </returns>
+    public static string MarkFixCommitted(string report, string sha)
+        => report.Contains(UncommittedNotice, StringComparison.Ordinal)
+            ? report.Replace(UncommittedNotice, CommittedNotice(sha), StringComparison.Ordinal)
+            : report;
+
     /// <param name="files">Ruta, recuento de líneas y si el fichero era del hallazgo.</param>
     /// <param name="build">Resumen del último build/tests, o null si no se llegó a pedir.</param>
     public static string BuildFixReport(
@@ -1042,9 +1082,7 @@ public static class ReportBuilder
 
         sb.AppendLine();
         sb.AppendLine(touched
-            ? "> **Estos cambios NO están commiteados.** El arreglo asistido escribe en el clon "
-              + "local de quien lo lanzó y ahí se queda: revisar, commitear y publicar sigue siendo suyo. "
-              + "Y arreglar no resuelve el hallazgo — la resolución llega verificando, con evidencia."
+            ? UncommittedNotice
             : "> **No hay cambios en el clon.** Esta sesión terminó sin tocar ningún fichero — se "
               + "detuvo, se descartó o el agente no llegó a editar—, así que no hay nada que revisar "
               + "ni que commitear. El hallazgo sigue exactamente como estaba.");

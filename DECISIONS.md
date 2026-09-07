@@ -4827,6 +4827,10 @@ truncaba en silencio rompe a cualquier llamador que dependiera del truncado.
 
 ### §5 — El cierre: lo que la aplicación hace y lo que no
 
+> **REVOCADO en F32 (D-1033).** «Me quedo los cambios» commitea. Lo que D-556 protegía —que
+> decide una persona— se conserva entero; lo que no se sostenía es que la decisión no pudiera
+> hacer nada. Sigue en pie que Atalaya **no empuja** y que el agente no tiene git (D-543).
+
 - **D-556 — Atalaya NO commitea, y la sugerencia de commit es exactamente eso: una sugerencia.**
   Título (≤72, imperativo, con el displayId) y descripción, EDITABLES in situ, con un botón de
   copiar que deja las dos cosas listas para pegar. No hay ni un botón que insinúe commitear o
@@ -17312,3 +17316,126 @@ estas sesiones ha hablado con Copilot ni con Claude de verdad — la cadena est�
 punta con el CLI falso (D-561 sigue vigente), y la verificación final es un fichero grande de xblast
 con un modelo delante. Y sigue sin poder contarse cuántas tarjetas de «pégame» hubo antes: eso pide
 guardar el texto de las preguntas en el informe, que es otro parte.
+## F32 — «Me quedo los cambios» commitea
+
+### D-1033 — SE REVOCA D-556: Atalaya SÍ commitea, y lo que quedaba a medias era la decisión, no el principio
+
+**La revocación, en cabecera y con su nombre.** **D-556 queda revocado por esta entrada.** Decía
+«Atalaya NO commitea, y la sugerencia de commit es exactamente eso: una sugerencia… no hay ni un
+botón que insinúe commitear o empujar, y un test lo fija. Lo que se ahorra es redactar; la decisión
+sigue siendo del humano». Lo que D-556 protegía era **quién decide**, y eso no cambia: nada se
+commitea sin que una persona pulse. Lo que no se sostiene con uso real es que la decisión **no
+pudiera hacer nada**. El usuario ya tenía delante el título y la descripción, ya los había editado,
+ya había revisado el diff — y el único gesto disponible era copiar dos campos y salir de la
+aplicación a commitear lo mismo con otra herramienta.
+
+**Medido antes de tocar nada (N-2): qué hacía «Me quedo los cambios» de principio a fin.** Sesión
+de arreglo completa sobre un clon de git de verdad, un fichero tocado, y el botón pulsado:
+
+- `AssistedFixViewModel.Finish()` llamaba a `LiveFixService.AcceptChanges()`, que hace **una sola
+  cosa**: `_snapshots.Close(_set)` — los snapshots pendientes pasan de 1 a 0—. Después, un toast
+  con el recordatorio y un refresco de la pantalla.
+- **El clon quedaba exactamente igual**: `HEAD` en `2ddb527` antes y después, **un** commit en el
+  repositorio antes y después, y `Common/CommonStatics.cs` en `ModifiedInWorkdir`.
+- **Y la pantalla, también igual**: `ClosedWithChanges` seguía en `true`, el titular seguía siendo
+  «Arreglo terminado», el `StatusMessage` seguía diciendo «Los cambios están en tu clon, sin
+  commitear», y el aviso ámbar, la tarjeta de sugerencia y el propio botón seguían ahí.
+- O sea: el único efecto durable del botón era **renunciar a poder descartar** desde una sesión
+  posterior. Un gesto que, leído por su rótulo, promete quedarse con el trabajo, y lo que hacía era
+  cerrar un registro interno.
+
+**Y cómo se guarda el estado, confirmado (D-685, D-572).** `apps/{slug}/fixes/{ulid}.json` se
+escribe al cerrar el arreglo con `path` + `contentHash` normalizado por fichero y el `baseCommit`
+del clon; el informe **ya está escrito en el hub** en ese momento, con el párrafo «Estos cambios NO
+están commiteados»; el historial de la ficha tiene su `FixProposed` y el hallazgo sigue `Activo`
+(D-557). La pantalla de cierre y «Último arreglo» son la misma vista sobre el mismo
+`LiveFixService` singleton, que es lo que D-572 quería: un solo camino.
+
+**La regla que queda.** **El clic del usuario es la decisión, y ahora la decisión hace lo que dice.**
+Se commitean **exactamente** los ficheros de `fixes/{ulid}.json` con el contenido que tienen en el
+árbol, con el título y la descripción **tal como estén en la tarjeta al pulsar** —son editables, y
+lo que se commitea es lo que el usuario tiene delante, no lo que sugirió el agente—, con la
+identidad de git del clon. **Nada más entra**: lo que el usuario tenga modificado en otros ficheros
+o preparado en su índice queda fuera del commit y como estaba (D-684 — su árbol es suyo).
+**Y Atalaya no empuja nunca** el clon auditado: el push sigue siendo del usuario, y ningún botón lo
+insinúa —el test que lo fija es el que sustituye al de D-556—.
+
+**Lo que NO se revoca**: el agente sigue sin shell, sin git y sin red (D-543) — ni un token de su
+encargo cambia—; quien commitea es la aplicación, cuando lo pulsa una persona. «Verificar ahora» no
+commitea. Y arreglar sigue sin resolver (D-557): el hallazgo sigue activo hasta que se verifique.
+
+**Por qué la línea de comandos de git, que es lo único que esta casa no hacía.** Todo lo demás usa
+LibGit2Sharp, y aquí no sirve: **libgit2 no ejecuta hooks**. Un repositorio corporativo con un
+`pre-commit` que formatea o que rechaza un fichero sin cabecera de licencia es exactamente el sitio
+donde Atalaya se despliega, y commitear por debajo de la política de la casa sin que nadie se
+entere es peor que no commitear. Con el CLI los hooks corren, y si uno devuelve 1 el commit no se
+hace y el usuario lee **la cola de lo que el hook le dijo** (mismo criterio que el resumen de
+compilar, D-548). **El precio, declarado: hace falta `git` en el PATH.** Si no está, el botón falla
+con su motivo — que es el mismo desenlace que cualquier otro fallo, y no un caso especial—.
+Y `--only` no es una comodidad: es la única forma de commitear unas rutas con el contenido del
+árbol **sin arrastrar el índice del usuario**; un `git add` seguido de `git commit` se habría
+llevado todo lo que estuviera preparado.
+
+**Un fallo no toca nada, y el orden del código es ese.** Todos los rechazos —clon que no es repo,
+sin ficheros, título vacío, identidad ausente— ocurren **antes** de llamar a git; el único que
+ocurre después es el de git, que no modifica el árbol de trabajo al abortar. Solo si el commit
+vuelve bien se cierra el registro de snapshots, se apunta el hash y se escribe en el hub. Lleva
+**reloj** (D-1022): tope de tres minutos —un `pre-commit` puede tardar— y al vencer se **mata el
+proceso**, que es más de lo que se podía hacer con una llamada nativa de libgit2. Un commit fallido
+jamás descarta nada.
+
+**Dónde queda escrito, y qué NO se pisa.** `FixRecord` gana `CommitSha` como propiedad opcional
+—los registros anteriores se leen igual (el patrón de D-571)— y **la huella de contenido se
+conserva**: sigue siendo la prueba de atribución de D-685 y el hash es un atajo. Sobrescribirla
+habría cambiado una certeza por una referencia que una enmienda posterior invalida. El historial de
+la ficha gana un `FixCommitted` **junto** al `FixProposed`, no en su lugar: son dos hechos, con dos
+fechas y dos autores posibles. Y **el informe del hub se reescribe**, que era una de las dos
+opciones del encargo y esta es la elegida y el porqué: el informe se escribe al cerrar el arreglo,
+antes de que el usuario decida, así que dejarlo tal cual haría que el informe —el que lee quien no
+estaba delante— afirmara «NO están commiteados» de algo que sí lo está. Se **sustituye el párrafo**
+en vez de regenerar el informe: regenerarlo obligaría a reconstruir coste, consumo y veredicto
+desde el hub y podría salir distinto por motivos ajenos a esto. Cambiar una frase cambia una frase.
+
+**Cambios visibles (N-6), y solo si el commit sale bien.** Ninguna vista se mueve de sitio. En la
+pantalla de cierre, tres piezas **se van enteras** —el aviso ámbar, la tarjeta «Sugerencia de
+commit» completa y el botón— y en su lugar queda **una línea** bajo el titular: «Commiteado
+`a1b2c3d` · 1 fichero · pendiente de tu push», con el `StatusMessage` pasando de «Los cambios están
+en tu clon, sin commitear» a «Los cambios están commiteados en tu clon». **«Descartar todo» se
+apaga con la razón al lado** (P-27): «ya commiteado (`a1b2c3d`)» — revertir un commit es otra
+operación, con su propio mensaje y su propia decisión, y esta pantalla no la ofrece—. «Verificar
+ahora», «Abrir en el editor» y «Ver informe» se quedan donde están. Mientras el commit corre, el
+botón se apaga y dice «Commiteando…», sin `StepList`: es una operación de una pieza. Si falla, un
+toast con el motivo y **nada más cambia**. Y volver por «Último arreglo» reconstruye el estado
+commiteado, porque `LoadAsync` relee `fixes/{ulid}.json`: un solo camino, una sola pantalla
+(D-572).
+
+**Y una corrección de texto que no es un retoque, declarada.** La tarjeta de sugerencia decía
+«Atalaya no commitea: esto solo te ahorra redactarlo». Esa frase ha quedado **falsa**, así que se
+sustituye por «Es lo que se commiteará al pulsar «Me quedo los cambios». Edítalo a tu gusto, o
+cópialo y commitea tú». Es la única línea de la tarjeta que cambia: su título, sus dos campos, el
+contador y «Copiar» se quedan exactamente como estaban.
+
+**Cobertura (N-5): siete tests de regla, cebo de 6 de 7.** Los dos que sostienen los anti-objetivos
+corren contra **git de verdad** sobre un clon local, sin red: **solo los ficheros del arreglo
+entran**, con dos cebos que son el caso real —un fichero ajeno modificado y otro ajeno ya preparado
+en el índice— y los dos quedan fuera del commit y como estaban; y **el mensaje es el editado**, con
+una línea del cuerpo empezando por `#` para fijar que `--cleanup=whitespace` no se la come. El
+**commit fallido** —un `pre-commit` doblado que devuelve 1— deja el fichero **byte a byte igual**
+(criterio de D-560), `HEAD` donde estaba, la pantalla sin commitear y el motivo con la cola del
+hook; **sin identidad** falla diciendo qué falta y sin inventar un autor. El **estado commiteado
+persiste**: `CommitSha` en el registro, la huella intacta, `FixCommitted` junto al `FixProposed`, el
+hallazgo todavía `Activo`, el informe con la frase nueva — y la pantalla reconstruida **desde el
+hub** da la variante sin aviso, sin tarjeta, sin botón, con la línea del hash y «Descartar todo»
+apagado con su razón. **Sin título** el botón se apaga con la razón al lado. Y el **circuito de
+D-813** se ejercita otra vez con el arreglo commiteado **por este camino**: verificar reconoce el
+cambio y llega a la unidad entera. Cebos comprobados: `commit -a` en vez de `--only` (1 rojo),
+mensaje sin la descripción editada (1), pantalla que no distingue commiteado (1), fallo que aun así
+cambia la pantalla (1) — y los dos de markup no los detecta ninguno de esos cebos porque miran el
+XAML, que es donde viven. La tanda queda en **2.558 casos** (2.023 en la aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: ningún test corre un `pre-commit` de verdad — el runner
+de proceso está doblado para ese caso, igual que D-561 dice de `dotnet build`—, así que lo que se
+prueba es que un git que rechaza se trata como rechazo, no que un hook concreto se ejecute. Lo
+mismo con el reloj: no hay test que agote los tres minutos. Y no se ha probado en una máquina sin
+`git` en el PATH; el camino existe y devuelve su motivo, pero el desenlace real ahí lo verá primero
+el usuario.

@@ -172,6 +172,34 @@ public sealed class VerifyAfterRestructureTests : IDisposable
     }
 
     /// <summary>
+    /// <b>Y commiteado por «Me quedo los cambios», también</b> (F32). Es el recorrido de
+    /// aceptación entero por el camino nuevo: arreglar → pulsar el botón → verificar. Importa
+    /// tenerlo aparte del commit hecho a mano porque el botón commitea <b>solo los ficheros del
+    /// arreglo</b> con <c>git commit --only</c>, y si eso dejara el árbol o el índice en un
+    /// estado raro, quien se lo comería sería el verify — que es el paso siguiente y el que
+    /// cuesta dinero.
+    /// </summary>
+    [Fact]
+    public async Task Y_commiteado_por_el_boton_del_arreglo_tambien_se_juzga_con_la_unidad()
+    {
+        Fix();
+
+        FixCommitResult commit = new FixCommitter().Commit(
+            _clone, new[] { UnitPath }, "Hace la caché de instancia (OPT-0002)",
+            "El campo estático compartía estado entre instancias.");
+        commit.Ok.Should().BeTrue(commit.Error);
+
+        var agent = new RecordingVerifier("resuelto", "Ya no hay estado estático.");
+        VerifyOutcome outcome = await Verify(agent);
+
+        agent.Targets.Should().ContainSingle().Which.Basis.Should().Be(VerifyBasis.Unidad);
+        agent.Targets[0].Snippet.Should().Contain("_entries").And.NotContain("_cache");
+        outcome.Applied.Should().Be(1);
+        _hub.Store.TryReadFinding(Slug, _findingId.ToString())!.Status
+            .Should().Be(FindingStatus.Resuelto);
+    }
+
+    /// <summary>
     /// <b>Y la salida sigue siendo un veredicto, no un callejón, aunque el modelo no cierre.</b> Si
     /// con la unidad entera delante sigue sin poder decidir, el desenlace es «no concluyente» con
     /// el paso siguiente escrito —re-auditar—, que es lo que F12 §A dejó decidido.

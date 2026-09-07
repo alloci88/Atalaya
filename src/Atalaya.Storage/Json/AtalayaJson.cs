@@ -132,6 +132,7 @@ public static class AtalayaJson
             (FindingEvent.Commented, "commented"),
             (FindingEvent.Recurrence, "recurrence"),
             (FindingEvent.FixProposed, "fixProposed"),
+            (FindingEvent.FixCommitted, "fixCommitted"),
             (FindingEvent.Disputed, "disputed"),
             (FindingEvent.DisputeCleared, "disputeCleared"),
             (FindingEvent.NotLocated, "notLocated"),

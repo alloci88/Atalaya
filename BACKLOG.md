@@ -518,6 +518,16 @@ editores es la única puerta).
 
 ## Cerrado
 
+- **F32 · «Me quedo los cambios» commitea** — se **revoca D-556**: el botón cerraba un registro
+  interno y dejaba el clon exactamente como estaba (medido: mismo HEAD, mismo commit, fichero
+  todavía sin commitear, y la pantalla sin cambiar). Ahora commitea **solo los ficheros del
+  arreglo** con el mensaje editado de la tarjeta, respetando hooks e identidad de git, con
+  reloj, y sin tocar el índice del usuario. Si falla no se toca nada. Al salir bien: se van el
+  aviso ámbar, la tarjeta y el botón, queda la línea con el hash, «Descartar todo» se apaga con
+  su razón, el registro gana `commitSha` (la huella de D-685 se conserva), la ficha gana un
+  evento `FixCommitted` y el informe cambia su párrafo. **Atalaya sigue sin empujar nunca.**
+  Siete tests de regla, cebo 6 de 7. Ver D-1033.
+
 - **BUGFIX-LECTURA · El usuario deja de ser la herramienta de lectura del agente** — una sesión de
   arreglo terminó con cero ficheros tocados y una tarjeta que pedía «Pégame en el chat las líneas
   185 al final». Medido: el fichero cabía cinco veces y media en el tope, así que el agente se

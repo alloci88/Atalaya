@@ -51,6 +51,7 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
     private readonly AssistedFixLauncher _launcher;
     private readonly AgentBusyGate _busy;
     private readonly BuildRunner _builds;
+    private readonly FixCommitter _committer;
     private readonly ModelResolver? _models;
     private readonly DirectiveService? _directives;
 
@@ -91,7 +92,8 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         AgentBusyGate busy,
         BuildRunner? builds = null,
         ModelResolver? models = null,
-        DirectiveService? directives = null)
+        DirectiveService? directives = null,
+        FixCommitter? committer = null)
     {
         _hub = hub;
         _fixer = fixer;
@@ -105,6 +107,10 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
         _builds = builds ?? new BuildRunner();
         _models = models;
         _directives = directives;
+        // F32 - quien commitea el clon del usuario cuando el lo pide. Es un seam por lo mismo que
+        // `BuildRunner`: una salvaguarda que solo se puede comprobar con un `git` de verdad
+        // delante no se comprueba nunca.
+        _committer = committer ?? new FixCommitter();
     }
 
     // ------------------------------------------------------------------ estado observable
@@ -1051,6 +1057,147 @@ public sealed partial class LiveFixService : ObservableObject, IUserQuestions, I
             _snapshots.Close(_set);
             Changed?.Invoke();
         }
+    }
+
+    // ------------------------------------------------------------------ «Me quedo los cambios»
+
+    /// <summary>
+    /// El commit del arreglo, si ya se hizo desde aquí (F32). Corto. <c>null</c> mientras no.
+    /// <para>
+    /// <b>Es un espejo del hub, no un estado suelto</b>: lo escribe
+    /// <see cref="CommitChanges"/> y lo relee <see cref="RefreshCommitState"/> del
+    /// <c>fixes/{ulid}.json</c>. Por eso volver por «Último arreglo» (D-572) reconstruye la
+    /// pantalla commiteada sin que haya dos verdades que puedan desincronizarse.
+    /// </para>
+    /// </summary>
+    [ObservableProperty] private string? _committedSha;
+
+    /// <summary>Hay un commit en marcha: el botón se apaga mientras corre el <c>pre-commit</c>.</summary>
+    [ObservableProperty] private bool _isCommitting;
+
+    /// <summary>
+    /// Relee del hub si este arreglo ya está commiteado. Lo llama la vista al entrar, que es el
+    /// mismo camino por el que se vuelve desde el raíl: un solo camino, una sola pantalla (D-572).
+    /// </summary>
+    public void RefreshCommitState()
+    {
+        if (SessionId.Length == 0 || Slug.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            CommittedSha = _hub.Store.ListFixes(Slug)
+                .FirstOrDefault(f => string.Equals(f.Id.ToString(), SessionId, StringComparison.Ordinal))
+                ?.CommitSha;
+        }
+        catch (Exception)
+        {
+            // No poder leer el hub no puede tumbar la pantalla; el estado se queda como estaba.
+        }
+    }
+
+    /// <summary>
+    /// <b>Commitea lo del arreglo, y solo lo del arreglo</b> (F32, que revoca D-556).
+    /// <para>
+    /// El clic del usuario ES la decisión que D-556 quería preservar: «Me quedo los cambios» no
+    /// significaba nada más que cerrar un registro, y el trabajo se quedaba a medio camino con un
+    /// mensaje ya redactado que había que copiar a mano. Lo que NO cambia: el agente sigue sin
+    /// shell, sin git y sin red (D-543) — quien commitea es la aplicación, cuando lo pulsa una
+    /// persona—, y el clon auditado <b>no se empuja nunca</b>.
+    /// </para>
+    /// <para>
+    /// <b>Si falla, no se toca nada.</b> Ni el árbol, ni el registro de snapshots, ni el informe,
+    /// ni el historial, ni la pantalla: se devuelve el motivo y se acabó. El orden de aquí abajo
+    /// es exactamente eso — primero el commit, y solo si vuelve bien se escribe lo demás.
+    /// </para>
+    /// </summary>
+    public FixCommitResult CommitChanges()
+    {
+        if (CommittedSha is { Length: > 0 } already)
+        {
+            return new FixCommitResult(false,
+                Error: $"Este arreglo ya está commiteado en {already}.");
+        }
+
+        if (!HasFinished || Files.Count == 0)
+        {
+            return new FixCommitResult(false, Error: "No hay cambios del arreglo que commitear.");
+        }
+
+        List<string> paths = Files.Select(f => f.RelativePath).ToList();
+        FixCommitResult result = _committer.Commit(
+            _clonePath, paths, Commit.Title, Commit.Description);
+        if (!result.Ok)
+        {
+            return result;
+        }
+
+        string sha = result.Sha!;
+
+        // A partir de aquí el commit YA existe: lo que quede por escribir es contabilidad, y si
+        // algo de eso falla no se puede deshacer el commit ni fingir que no está. Se apunta el
+        // estado primero —que es lo que la pantalla lee— y el hub después, tragándose su fallo
+        // como el resto de la escritura del cierre.
+        AcceptChanges();
+        CommittedSha = sha;
+        StatusMessage = "Arreglo terminado. Los cambios están commiteados en tu clon.";
+
+        try
+        {
+            StampCommitInHub(sha);
+        }
+        catch (Exception ex)
+        {
+            Say(FixMessage.System("⚠",
+                $"El commit {sha} se hizo, pero no se pudo anotar en el hub: {ex.Message}"));
+        }
+
+        Say(FixMessage.System("◆",
+            $"Commiteado {sha} · {paths.Count} fichero(s). El push sigue siendo tuyo."));
+        Changed?.Invoke();
+        return result;
+    }
+
+    /// <summary>
+    /// Deja el commit escrito donde se lee después: el registro del arreglo, el historial de la
+    /// ficha y el informe del hub. El estado del hallazgo NO se toca (D-557 sigue en pie).
+    /// </summary>
+    private void StampCommitInHub(string sha)
+    {
+        FixRecord? record = _hub.Store.ListFixes(Slug)
+            .FirstOrDefault(f => string.Equals(f.Id.ToString(), SessionId, StringComparison.Ordinal));
+        if (record is not null)
+        {
+            // La huella de contenido se CONSERVA: sigue siendo la prueba de atribución (D-685) y
+            // este hash es un atajo. Sobrescribirla por el commit habría cambiado una certeza por
+            // una referencia que una enmienda posterior invalida.
+            record.CommitSha = sha;
+            _hub.Store.WriteFix(record);
+        }
+
+        Finding? stored = _hub.Store.TryReadFinding(Slug, FindingId.ToString());
+        if (stored is not null)
+        {
+            stored.Record(new HistoryEntry(
+                DateTimeOffset.UtcNow, FindingEvent.FixCommitted, Environment.UserName,
+                $"el usuario se quedó los cambios: commit {sha} "
+                + $"({Files.Count} fichero(s)), sin publicar")
+            {
+                SessionId = SessionId,
+            });
+            _hub.Store.WriteFinding(Slug, stored);
+        }
+
+        if (ReportPath is { Length: > 0 } && File.Exists(ReportPath))
+        {
+            string marked = ReportBuilder.MarkFixCommitted(File.ReadAllText(ReportPath), sha);
+            _hub.Store.WriteReport(Slug, SessionId, marked);
+        }
+
+        // El hub, que es otro repositorio: esto NO empuja el clon auditado.
+        _hub.Sync?.CommitAndPush($"fix: {FindingAlias} en {Slug} commiteado en {sha}");
     }
 
     /// <summary>

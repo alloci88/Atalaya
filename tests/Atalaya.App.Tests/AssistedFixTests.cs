@@ -1288,6 +1288,240 @@ public sealed class AssistedFixTests : IDisposable
 
     // ================================================================= utilidades
 
+    // ============================================ F32: «Me quedo los cambios» commitea
+
+    /// <summary>
+    /// <b>Se commitean EXACTAMENTE los ficheros del arreglo, y ninguno más</b> (F32).
+    /// <para>
+    /// Con dos cebos que son el caso real y no un supuesto: un fichero ajeno modificado en el
+    /// árbol y otro ajeno ya preparado en el índice — el usuario puede tener cosas suyas a medias
+    /// (D-684) y su árbol es suyo—. Los dos tienen que quedar <b>fuera del commit y como
+    /// estaban</b>: uno modificado sin commitear, el otro todavía en el índice. Un `git add`
+    /// seguido de `git commit` se los habría llevado a los dos.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task El_commit_lleva_solo_los_ficheros_del_arreglo_y_deja_lo_del_usuario_como_estaba()
+    {
+        LiveFixService fix = await FixedSession();
+
+        // Cebo 1: un fichero ajeno modificado a mano DESPUÉS del arreglo.
+        string ajeno = Path.Combine(_clone, "Common", "Reader.cs");
+        File.AppendAllText(ajeno, "// mío, a medias\r\n");
+        string ajenoAntes = File.ReadAllText(ajeno);
+
+        // Cebo 2: otro ajeno, nuevo y ya PREPARADO en el índice.
+        string preparado = Path.Combine(_clone, "Common", "Mio.cs");
+        File.WriteAllText(preparado, "// esto lo iba a commitear yo\r\n");
+        using (var repo = new LibGit2Sharp.Repository(_clone))
+        {
+            LibGit2Sharp.Commands.Stage(repo, "Common/Mio.cs");
+        }
+
+        FixCommitResult result = fix.CommitChanges();
+
+        result.Ok.Should().BeTrue(result.Error);
+        result.Sha.Should().NotBeNullOrWhiteSpace();
+
+        using (var repo = new LibGit2Sharp.Repository(_clone))
+        {
+            // Lo que ENTRÓ: solo el fichero del arreglo.
+            LibGit2Sharp.Commit head = repo.Head.Tip!;
+            LibGit2Sharp.TreeChanges diff = repo.Diff.Compare<LibGit2Sharp.TreeChanges>(
+                head.Parents.First().Tree, head.Tree);
+            diff.Select(c => c.Path).Should().BeEquivalentTo(new[] { UnitPath });
+
+            // Lo del usuario, intacto: uno sin commitear y el otro todavía preparado.
+            LibGit2Sharp.RepositoryStatus status = repo.RetrieveStatus(
+                new LibGit2Sharp.StatusOptions { IncludeUntracked = true });
+            status.Modified.Select(e => e.FilePath).Should().Contain("Common/Reader.cs");
+            status.Added.Select(e => e.FilePath).Should().Contain("Common/Mio.cs",
+                "lo que el usuario tenía en el índice sigue en el índice (D-684)");
+        }
+
+        File.ReadAllText(ajeno).Should().Be(ajenoAntes);
+    }
+
+    /// <summary>
+    /// <b>El mensaje es el que el usuario tiene delante, no el que sugirió el agente.</b> La
+    /// tarjeta es editable (D-556 lo era y sigue siéndolo): lo que se commitea es el título y la
+    /// descripción tal y como están al pulsar, con una línea en blanco entre los dos.
+    /// </summary>
+    [Fact]
+    public async Task El_mensaje_del_commit_es_el_editado_no_el_sugerido()
+    {
+        LiveFixService fix = await FixedSession();
+        string sugerido = fix.Commit.Title;
+
+        fix.Commit.Title = "Valida la longitud antes de convertir (BUG-0003)";
+        fix.Commit.Description = "Lo he reescrito yo.\r\n\r\n# Y esta línea empieza por almohadilla.";
+
+        fix.CommitChanges().Ok.Should().BeTrue();
+
+        using var repo = new LibGit2Sharp.Repository(_clone);
+        string message = repo.Head.Tip!.Message;
+        message.Should().StartWith("Valida la longitud antes de convertir (BUG-0003)\n\n");
+        message.Should().Contain("Lo he reescrito yo.");
+        message.Should().Contain("# Y esta línea empieza por almohadilla.",
+            "una línea que empieza por # es texto del usuario, no un comentario que git se coma");
+        repo.Head.Tip.MessageShort.Should().NotBe(sugerido);
+    }
+
+    /// <summary>
+    /// <b>Un commit que falla no toca NADA.</b> Dos causas y un solo criterio: el árbol de trabajo
+    /// queda byte a byte igual (el de D-560), la pantalla sigue sin commit y el motivo llega.
+    /// <para>
+    /// El primer caso es el que de verdad pasa en un repositorio corporativo: un <c>pre-commit</c>
+    /// que devuelve 1. Y su salida vuelve con el motivo, porque es lo único con lo que el usuario
+    /// puede hacer algo.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Un_commit_que_falla_deja_el_arbol_igual_y_dice_por_que()
+    {
+        LiveFixService fix = await FixedSession(
+            new RejectingGit("pre-commit: falta la cabecera de licencia en CommonStatics.cs"));
+
+        byte[] antes = File.ReadAllBytes(Path.Combine(_clone, UnitPath));
+        string headAntes = GitInfo.HeadSha(_clone);
+
+        FixCommitResult result = fix.CommitChanges();
+
+        result.Ok.Should().BeFalse();
+        result.Error.Should().Contain("git rechazó el commit")
+            .And.Contain("siguen en el clon")
+            .And.Contain("falta la cabecera de licencia", "la cola de lo que dijo el hook");
+        File.ReadAllBytes(Path.Combine(_clone, UnitPath)).Should().Equal(antes);
+        GitInfo.HeadSha(_clone).Should().Be(headAntes);
+        fix.CommittedSha.Should().BeNull();
+
+        var vm = new AssistedFixViewModel(fix, _toasts, new ScriptedDiscard(answer: true));
+        vm.IsCommitted.Should().BeFalse();
+        vm.ClosedUncommitted.Should().BeTrue("la pantalla no cambia si el commit no se hizo");
+        vm.CanDiscardAll.Should().BeTrue("y se puede seguir descartando");
+    }
+
+    /// <summary>Sin identidad de git no se inventa un autor: se falla con el motivo (F32 §1).</summary>
+    [Fact]
+    public async Task Sin_identidad_de_git_no_se_commitea_y_se_dice_que_falta()
+    {
+        LiveFixService fix = await FixedSession();
+        using (var repo = new LibGit2Sharp.Repository(_clone))
+        {
+            repo.Config.Unset("user.name", LibGit2Sharp.ConfigurationLevel.Local);
+            repo.Config.Set("user.name", string.Empty, LibGit2Sharp.ConfigurationLevel.Local);
+        }
+
+        FixCommitResult result = fix.CommitChanges();
+
+        result.Ok.Should().BeFalse();
+        result.Error.Should().Contain("identidad de git").And.Contain("no se inventa un autor");
+        fix.CommittedSha.Should().BeNull();
+    }
+
+    /// <summary>
+    /// <b>El estado commiteado PERSISTE en <c>fixes/{ulid}.json</c></b> (F32 §1), y la pantalla se
+    /// reconstruye desde ahí: volver por «Último arreglo» es el mismo camino (D-572), así que es la
+    /// misma pantalla — sin aviso ámbar, sin tarjeta de sugerencia y sin botón—.
+    /// <para>
+    /// Y la huella de contenido de D-685 <b>se conserva</b>: sigue siendo la prueba de atribución;
+    /// el hash es un atajo.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task El_estado_commiteado_persiste_y_la_pantalla_se_reconstruye_desde_el_hub()
+    {
+        LiveFixService fix = await FixedSession();
+        FixCommitResult result = fix.CommitChanges();
+        result.Ok.Should().BeTrue(result.Error);
+
+        FixRecord record = _hub.Store.ListFixes(Slug).Single();
+        record.CommitSha.Should().Be(result.Sha);
+        record.Files.Should().ContainSingle()
+            .Which.ContentHash.Should().StartWith("sha256:", "la huella de D-685 se conserva");
+
+        // El evento del historial, JUNTO al FixProposed que ya estaba.
+        Finding stored = Finding()!;
+        stored.History.Select(h => h.Event).Should()
+            .Contain(FindingEvent.FixProposed).And.Contain(FindingEvent.FixCommitted);
+        stored.History.Last(h => h.Event == FindingEvent.FixCommitted).Detail
+            .Should().Contain(result.Sha!);
+        stored.Status.Should().Be(FindingStatus.Activo, "arreglar no resuelve (D-557)");
+
+        // El informe del hub deja de afirmar lo contrario de lo que pasó.
+        AuditSession session = _hub.Store.ListSessions(Slug).Single();
+        string report = File.ReadAllText(_hub.HubPaths.ReportFile(Slug, session.Id.ToString()));
+        report.Should().Contain($"Commiteados en `{result.Sha}`");
+        report.Should().NotContain("Estos cambios NO están commiteados");
+
+        // Y LA PANTALLA: se reconstruye del hub, no de la memoria.
+        fix.CommittedSha = null;
+        var vm = new AssistedFixViewModel(fix, _toasts, new ScriptedDiscard(answer: true));
+        vm.IsCommitted.Should().BeFalse("todavía no ha leído el hub");
+
+        await vm.LoadAsync();
+
+        vm.IsCommitted.Should().BeTrue();
+        vm.ClosedUncommitted.Should().BeFalse("ni aviso ámbar, ni tarjeta, ni botón");
+        vm.CommittedLine.Should().Be($"Commiteado {result.Sha} · 1 fichero · pendiente de tu push");
+        vm.CanDiscardAll.Should().BeFalse();
+        vm.DiscardBlockedReason.Should().Be($"ya commiteado ({result.Sha})");
+        vm.CanCommitChanges.Should().BeFalse("no se commitea dos veces");
+    }
+
+    /// <summary>Título vacío: el botón se apaga con la razón al lado (P-27), no falla al pulsar.</summary>
+    [Fact]
+    public async Task Sin_titulo_el_boton_de_commitear_se_apaga_con_su_razon()
+    {
+        LiveFixService fix = await FixedSession();
+        var vm = new AssistedFixViewModel(fix, _toasts, new ScriptedDiscard(answer: true));
+
+        vm.CanCommitChanges.Should().BeTrue();
+        vm.CommitBlockedReason.Should().BeEmpty();
+
+        fix.Commit.Title = "   ";
+
+        vm.CanCommitChanges.Should().BeFalse();
+        vm.CommitBlockedReason.Should().Be("escribe el título del commit");
+        vm.CommitButtonText.Should().Be(AssistedFixViewModel.CommitButtonLabel);
+    }
+
+    /// <summary>Una sesión terminada con un fichero tocado, lista para commitear.</summary>
+    private async Task<LiveFixService> FixedSession(IProcessRunner? git = null)
+    {
+        var agent = new FakeCopilotAgent(fixScript: _ => new[]
+        {
+            new FixStep(Edit: new FixStepEdit(UnitPath, "es donde está el defecto",
+                new[] { new FixEdit("var bytes = new byte[hex.Length / 2];",
+                    "if (hex.Length % 2 != 0) throw new ArgumentException(nameof(hex));\r\n"
+                    + "        var bytes = new byte[hex.Length / 2];") })),
+            new FixStep(Done: new FixDoneArgs(
+                "Valida la longitud.", "Arregla BUG-0003", "Antes truncaba en silencio.", null)),
+        });
+
+        LiveFixService fix = new(
+            _hub, () => agent, _machines, _ulids, _settings, new ReferenceCollector(), _snapshots,
+            Launcher(), _busy, new BuildRunner(new NoProcess()),
+            committer: new FixCommitter(git));
+
+        await fix.StartAsync(new FixSessionRequest(Slug, _findingId));
+        fix.HasFinished.Should().BeTrue(fix.FailureMessage);
+        fix.Files.Should().ContainSingle();
+        return fix;
+    }
+
+    /// <summary>Un git que rechaza el commit, como haría un <c>pre-commit</c> con política.</summary>
+    private sealed class RejectingGit : IProcessRunner
+    {
+        private readonly string _output;
+
+        public RejectingGit(string output) => _output = output;
+
+        public ProcessOutcome Run(
+            string fileName, string arguments, string workingDirectory, TimeSpan timeout, CancellationToken ct)
+            => new(1, _output, false);
+    }
+
     private Finding? Finding() => _hub.Store.TryReadFinding(Slug, _findingId.ToString());
 
     private AssistedFixLauncher Launcher() => Launcher(_settings);

@@ -74,7 +74,12 @@ public sealed class AssistedFixViewTests
         xaml.Should().Contain("{Binding InScope, Converter={StaticResource InverseBoolToVisibility}}");
     }
 
-    /// <summary>El recordatorio que no puede desaparecer nunca.</summary>
+    /// <summary>
+    /// El recordatorio que no puede desaparecer nunca <b>mientras no se haya commiteado</b>.
+    /// Desde F32 cuelga de <c>ClosedUncommitted</c> y no de <c>ClosedWithChanges</c>: con el
+    /// arreglo ya commiteado seguiria diciendo «estan en tu clon sin commitear» de algo que si
+    /// lo esta, que es exactamente la advertencia falsa que R10 §7 quito del caso sin cambios.
+    /// </summary>
     [Fact]
     public void La_pantalla_de_cierre_recuerda_que_los_cambios_estan_sin_commitear()
     {
@@ -83,22 +88,47 @@ public sealed class AssistedFixViewTests
         xaml.Should().Contain("sin commitear");
         xaml.Should().Contain("Arreglar no resuelve el hallazgo");
         AssistedFixViewModel.UncommittedReminder.Should().Contain("sin commitear");
+        xaml.Should().Contain(
+            "Visibility=\"{Binding ClosedUncommitted, Converter={StaticResource BoolToVisibility}}\"",
+            "el aviso ambar se va entero al commitear (F32)");
     }
 
     /// <summary>
-    /// La sugerencia de commit va en su tarjeta, EDITABLE, con su botón de copiar — y Atalaya no
-    /// commitea: no hay ni un botón que lo insinúe.
+    /// <b>La sugerencia de commit es editable, se copia — y se COMMITEA</b> (F32).
+    /// <para>
+    /// Este test SUSTITUYE al de D-556, que exigia que no hubiera «ni un boton que insinuara
+    /// commitear». No se relaja la regla: se cambia. Lo que D-556 protegia era que la decision
+    /// fuera de una persona, y sigue siendolo — el boton no se pulsa solo—. Lo que ya no se
+    /// sostiene es que la decision no pudiera hacer nada: el usuario acababa copiando el
+    /// mensaje a mano para commitear lo que Atalaya tenia delante.
+    /// </para>
+    /// <para>
+    /// Lo que sigue prohibido, y esto lo fija: <b>ningun boton que empuje</b>. El push del clon
+    /// auditado es del usuario y Atalaya no lo ofrece por ninguna parte.
+    /// </para>
     /// </summary>
     [Fact]
-    public void La_sugerencia_de_commit_es_editable_y_se_copia_pero_no_se_commitea()
+    public void La_sugerencia_de_commit_es_editable_se_copia_y_el_boton_commitea_pero_no_empuja()
     {
         string xaml = Markup(ViewXaml());
 
         xaml.Should().Contain("{Binding Commit.Title, UpdateSourceTrigger=PropertyChanged}");
         xaml.Should().Contain("{Binding Commit.Description, UpdateSourceTrigger=PropertyChanged}");
         xaml.Should().Contain("CopyCommitCommand");
-        xaml.Should().NotContain("CommitCommand\"", "la app no commitea; eso es del humano");
+
+        // El boton de siempre, con su rotulo de siempre, ahora atado al comando que commitea.
+        xaml.Should().Contain("CommitChangesCommand");
+        xaml.Should().Contain("{Binding CommitButtonText}");
+        xaml.Should().Contain("IsEnabled=\"{Binding CanCommitChanges}\"",
+            "sin titulo no se commitea, y el boton lo dice apagado (P-27)");
+        xaml.Should().Contain("{Binding CommitBlockedReason}", "la razon, pegada al boton");
+        xaml.Should().Contain("{Binding CommittedLine}", "y despues, la linea con el hash");
+
+        // LO QUE NO CAMBIA: Atalaya no empuja el clon auditado, y no lo insinua.
         xaml.Should().NotContain("PushCommand");
+        xaml.Should().NotContain("Content=\"Publicar\"");
+        xaml.Should().NotContain("PushChangesCommand");
+        AssistedFixViewModel.CommitButtonLabel.Should().Be("Me quedo los cambios");
     }
 
     /// <summary>«Verificar ahora» se SUGIERE al cerrar; nunca se ejecuta solo.</summary>

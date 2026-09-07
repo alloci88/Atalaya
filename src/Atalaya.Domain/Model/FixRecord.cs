@@ -25,10 +25,15 @@ public sealed record FixFileStamp(string Path, string ContentHash);
 /// unidades cambiadas y el ciclo no convergería jamás.
 /// </para>
 /// <para>
-/// <b>Por qué huellas de contenido y no el hash del commit.</b> Atalaya no commitea (D-556): al
-/// acabar un arreglo los cambios están en el clon del usuario, sin commitear, y el hash del commit
-/// que los recoja todavía no existe. Lo único que la aplicación sabe con certeza en ese momento es
-/// QUÉ dejó escrito, así que eso es lo que guarda.
+/// <b>Por qué huellas de contenido y no el hash del commit.</b> Al acabar un arreglo los cambios
+/// están en el clon del usuario, sin commitear, y el hash del commit que los recoja todavía no
+/// existe. Lo único que la aplicación sabe con certeza en ese momento es QUÉ dejó escrito, así que
+/// eso es lo que guarda.
+/// <br />
+/// <b>Sigue siendo así desde F32</b>, que revocó D-556 y dejó que «Me quedo los cambios» commitee:
+/// el commit es POSTERIOR y voluntario —el usuario puede no pulsarlo nunca, o publicarlo con su
+/// herramienta—, así que la huella no puede depender de él. Cuando sí se pulsa,
+/// <see cref="CommitSha"/> se rellena encima: un atajo, no la prueba.
 /// </para>
 /// </summary>
 public sealed class FixRecord
@@ -56,6 +61,18 @@ public sealed class FixRecord
     /// explicar en una frase por qué un arreglo dejó de reconocerse.
     /// </summary>
     public string? BaseCommit { get; set; }
+
+    /// <summary>
+    /// El commit que publicó este arreglo, cuando lo hizo la propia aplicación con «Me quedo los
+    /// cambios» (F32). Corto, como el resto de hashes que se enseñan.
+    /// <para>
+    /// <b>Es un atajo, no la prueba.</b> La atribución la sigue decidiendo la huella de contenido
+    /// de <see cref="Files"/> (D-685): un arreglo commiteado fuera de Atalaya —o enmendado
+    /// después— no tiene este dato y se reconoce igual. Va como propiedad opcional, así que los
+    /// registros escritos antes de F32 se leen sin tocarlos (el patrón de D-571).
+    /// </para>
+    /// </summary>
+    public string? CommitSha { get; set; }
 
     public List<FixFileStamp> Files { get; set; } = new();
 }

@@ -18,6 +18,17 @@ public enum FindingEvent
     FixProposed,
 
     /// <summary>
+    /// El usuario dio el arreglo por bueno y Atalaya lo commiteó en su clon (F32, que revoca
+    /// D-556). Va JUNTO al <see cref="FixProposed"/>, no en su lugar: son dos hechos distintos
+    /// —lo que el agente escribió y lo que el usuario decidió quedarse— y con fechas distintas.
+    /// <para>
+    /// No resuelve nada (D-557 sigue en pie): el hallazgo sigue activo hasta que se verifique. Y
+    /// no dice nada del remoto — publicar sigue siendo del usuario.
+    /// </para>
+    /// </summary>
+    FixCommitted,
+
+    /// <summary>
     /// El auditor sostuvo que esto nunca fue un defecto (F5.1b). NO cierra el hallazgo: lo deja
     /// marcado como disputado a la espera de que lo decida una persona.
     /// </summary>

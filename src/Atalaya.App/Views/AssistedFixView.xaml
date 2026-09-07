@@ -475,6 +475,15 @@
                         <TextBlock Text="{Binding ClosingHeadline}" FontSize="{StaticResource FontSize.H3}" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding Fix.StatusMessage}" TextWrapping="Wrap" Opacity="0.8"
                                    FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XS.Top}" />
+
+                        <!-- F32 - COMMITEADO. Ocupa el sitio de las tres piezas que se van:
+                             el aviso ambar, la tarjeta de sugerencia y el boton. Dice el
+                             hash, lo que entro, y lo unico que Atalaya no hace: publicar. -->
+                        <TextBlock Text="{Binding CommittedLine}" FontFamily="Consolas"
+                                   FontSize="{StaticResource FontSize.Meta}"
+                                   Margin="{StaticResource Pad.XS.Top}"
+                                   Foreground="{DynamicResource Brush.Success.Ink}"
+                                   Visibility="{Binding IsCommitted, Converter={StaticResource BoolToVisibility}}" />
                         <!-- UN AVISO ES ICONO, TEXTO Y —SI LA HAY— LA ACCIÓN (UI-0052). Aquí
                              «esto es un aviso» viajaba solo en el color: relleno ámbar y una frase,
                              sin el icono que llevan los de Métricas y Ajustes. El mismo control
@@ -484,7 +493,7 @@
                              commitear» cuando no hay ninguno no es un matiz, es una advertencia
                              falsa que manda a mirar un `git status` limpio. -->
                         <Border Style="{StaticResource Notice.Warning}" Margin="{StaticResource Pad.S.Top}"
-                                Visibility="{Binding ClosedWithChanges, Converter={StaticResource BoolToVisibility}}">
+                                Visibility="{Binding ClosedUncommitted, Converter={StaticResource BoolToVisibility}}">
                             <DockPanel>
                                 <Path DockPanel.Dock="Left" Style="{StaticResource Notice.Icon}"
                                       Data="{x:Static c:Icons.Warning}"
@@ -506,8 +515,22 @@
                                     Visibility="{Binding ClosedWithChanges, Converter={StaticResource BoolToVisibility}}" />
                             <Button Content="Abrir en el editor" Command="{Binding OpenInEditorCommand}" Margin="{StaticResource Pad.XS.Left}" />
                             <Button Content="Ver informe" Command="{Binding OpenReportCommand}" Margin="{StaticResource Pad.XS.Left}" />
-                            <Button Content="Me quedo los cambios" Command="{Binding FinishCommand}" Margin="{StaticResource Pad.XS.Left}"
-                                    Visibility="{Binding ClosedWithChanges, Converter={StaticResource BoolToVisibility}}" />
+                            <!-- F32 - COMMITEA (revoca D-556). Se apaga mientras corre -con
+                                 un `pre-commit` detras puede tardar- y con el titulo vacio,
+                                 y ahi la razon va pegada al boton (P-27). -->
+                            <StackPanel Orientation="Horizontal"
+                                        Visibility="{Binding ClosedUncommitted, Converter={StaticResource BoolToVisibility}}">
+                                <Button Content="{Binding CommitButtonText}" Command="{Binding CommitChangesCommand}"
+                                        Margin="{StaticResource Pad.XS.Left}"
+                                        IsEnabled="{Binding CanCommitChanges}"
+                                        ToolTip="Commitea en tu clon exactamente los ficheros de este arreglo, con el título y la descripción de aquí abajo. El push sigue siendo tuyo." />
+                                <Border Style="{StaticResource Reason.Chip}"
+                                        Margin="{StaticResource Pad.XS.Left}"
+                                        MaxWidth="{StaticResource Reason.MaxWidth}"
+                                        Visibility="{Binding HasCommitBlockedReason, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="{Binding CommitBlockedReason}" Style="{StaticResource Reason.Text}" />
+                                </Border>
+                            </StackPanel>
                         </StackPanel>
 
                         <!-- F30 §4 — «Verificar ahora» VERIFICA aquí, y sus pasos salen en la barra
@@ -608,11 +631,11 @@
                             <Border CornerRadius="8" Padding="{StaticResource Pad.Notice}" Margin="{StaticResource Pad.M.Top}"
                                     Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
                                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                                    Visibility="{Binding ClosedWithChanges, Converter={StaticResource BoolToVisibility}}">
+                                    Visibility="{Binding ClosedUncommitted, Converter={StaticResource BoolToVisibility}}">
                                 <StackPanel>
                                     <TextBlock Text="Sugerencia de commit" Style="{StaticResource SectionTitle}" />
                                     <TextBlock Style="{StaticResource Help}" Margin="{StaticResource Pad.XS.Bottom}"
-                                               Text="Atalaya no commitea: esto solo te ahorra redactarlo. Edítalo a tu gusto y cópialo." />
+                                               Text="Es lo que se commiteará al pulsar &#171;Me quedo los cambios&#187;. Edítalo a tu gusto, o cópialo y commitea tú." />
                                     <TextBlock Text="Título" FontSize="{StaticResource FontSize.Meta}" Margin="{StaticResource Pad.XXS}"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                                     <ui:TextBox Text="{Binding Commit.Title, UpdateSourceTrigger=PropertyChanged}" />
