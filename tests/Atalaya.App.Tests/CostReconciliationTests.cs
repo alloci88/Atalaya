@@ -1,4 +1,4 @@
-using Atalaya.App.Services;
+﻿using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
@@ -100,7 +100,7 @@ public sealed class CostReconciliationTests : IDisposable
     /// reconciliar — y el «parcial» fuera.
     /// </summary>
     [Fact]
-    public void Sin_tarifa_mas_tarifa_anadida_mas_reconciliar_da_coste_y_quita_el_parcial()
+    public async Task Sin_tarifa_mas_tarifa_anadida_mas_reconciliar_da_coste_y_quita_el_parcial()
     {
         _rates.Save(TestRates.Table());
         AuditSession sesion = Session("modelo-raro", outputTokens: 3_000);
@@ -124,7 +124,7 @@ public sealed class CostReconciliationTests : IDisposable
         grupo.IsReady.Should().BeTrue();
         dialogo.ReconcileLabel.Should().Be("Reconciliar 1 sesión");
 
-        dialogo.ReconcileCommand.Execute(null);
+        await dialogo.ReconcileCommand.ExecuteAsync(null);
 
         _reconciler.GapOf(Slug).Sessions.Should().Be(0,
             "ya no falta ninguna: el agregado deja de ser parcial");
@@ -156,7 +156,7 @@ public sealed class CostReconciliationTests : IDisposable
         });
         _hub.Store.WriteSession(sesion);
 
-        _reconciler.Reconcile(Slug).Should().Be(1);
+        _reconciler.Reconcile(Slug).Sessions.Should().Be(1);
 
         CostResult cost = _reconciler.LookupFor(Slug).Of(Reload(sesion.Id));
 
@@ -179,10 +179,10 @@ public sealed class CostReconciliationTests : IDisposable
 
         // Reconciliar sin elegir tarifa no cierra nada: inventar una «parecida» es lo que D-787
         // prohíbe.
-        _reconciler.Reconcile(Slug).Should().Be(0);
+        _reconciler.Reconcile(Slug).Sessions.Should().Be(0);
         _reconciler.GapOf(Slug).Sessions.Should().Be(1);
 
-        _reconciler.Reconcile(Slug, TestRates.Model).Should().Be(1);
+        _reconciler.Reconcile(Slug, TestRates.Model).Sessions.Should().Be(1);
 
         CostResult cost = _reconciler.LookupFor(Slug).Of(Reload(sesion.Id));
         cost.Credits.Should().Be(4m);
@@ -204,7 +204,7 @@ public sealed class CostReconciliationTests : IDisposable
         _hub.Store.WriteSession(Session(ModelIds.Auto, outputTokens: 1_000));
         _reconciler.Reconcile(Slug, TestRates.Model);
 
-        _reconciler.Reconcile(Slug, TestRates.LegacyModel).Should().Be(0, "ya no hay hueco que cerrar");
+        _reconciler.Reconcile(Slug, TestRates.LegacyModel).Sessions.Should().Be(0, "ya no hay hueco que cerrar");
 
         AuditSession sesion = _hub.Store.ListSessions(Slug).Single();
         CostResult cost = _reconciler.LookupFor(Slug).Of(sesion);

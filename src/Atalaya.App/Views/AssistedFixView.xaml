@@ -500,13 +500,23 @@
                          quedan dos: leer lo que pasó y abrir el clon. «Verificar ahora» mediría un
                          cambio que no existe y «Me quedo los cambios» cerraría un conjunto vacío;
                          las dos preguntan por algo que nadie escribió. -->
-                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="{StaticResource Pad.M.Top}">
-                        <Button Style="{StaticResource Button.Primary}" Content="Verificar ahora" Command="{Binding VerifyNowCommand}"
-                                Visibility="{Binding ClosedWithChanges, Converter={StaticResource BoolToVisibility}}" />
-                        <Button Content="Abrir en el editor" Command="{Binding OpenInEditorCommand}" Margin="{StaticResource Pad.XS.Left}" />
-                        <Button Content="Ver informe" Command="{Binding OpenReportCommand}" Margin="{StaticResource Pad.XS.Left}" />
-                        <Button Content="Me quedo los cambios" Command="{Binding FinishCommand}" Margin="{StaticResource Pad.XS.Left}"
-                                Visibility="{Binding ClosedWithChanges, Converter={StaticResource BoolToVisibility}}" />
+                    <StackPanel DockPanel.Dock="Bottom" Margin="{StaticResource Pad.M.Top}">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Style="{StaticResource Button.Primary}" Content="Verificar ahora" Command="{Binding VerifyNowCommand}"
+                                    Visibility="{Binding ClosedWithChanges, Converter={StaticResource BoolToVisibility}}" />
+                            <Button Content="Abrir en el editor" Command="{Binding OpenInEditorCommand}" Margin="{StaticResource Pad.XS.Left}" />
+                            <Button Content="Ver informe" Command="{Binding OpenReportCommand}" Margin="{StaticResource Pad.XS.Left}" />
+                            <Button Content="Me quedo los cambios" Command="{Binding FinishCommand}" Margin="{StaticResource Pad.XS.Left}"
+                                    Visibility="{Binding ClosedWithChanges, Converter={StaticResource BoolToVisibility}}" />
+                        </StackPanel>
+
+                        <!-- F30 §4 — «Verificar ahora» VERIFICA aquí, y sus pasos salen en la barra
+                             desde la que se pulsó. Antes solo navegaba a la ficha, donde había un
+                             segundo botón con el mismo rótulo. -->
+                        <ContentControl Content="{Binding VerifySteps}"
+                                        Margin="{StaticResource Pad.XS.Top}"
+                                        HorizontalAlignment="Left"
+                                        Visibility="{Binding VerifySteps.IsVisible, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}" />
                     </StackPanel>
 
                     <!-- LA BARRA FIJA NO SIEGA UNA LÍNEA (UI-0037). Recortaba el contenido en

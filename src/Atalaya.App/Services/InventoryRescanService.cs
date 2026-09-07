@@ -22,6 +22,36 @@ public sealed class InventoryRescanService
     private readonly DirectiveService? _directives;
     private readonly ILogger _log;
 
+    // Los identificadores de los pasos (F30 §4): con ellos ejecuta el servicio y con ellos cuadra
+    // el test lo que se enseña con lo que se hace.
+    public const string Escanear = "escanear";
+    public const string Inventario = "inventario";
+    public const string Medidas = "medidas";
+    public const string Publicar = "publicar";
+    public const string Directivas = "directivas";
+
+    /// <summary>
+    /// <b>Los pasos del re-escaneo</b>. Solo el primero se puede cancelar: leer el clon no escribe
+    /// nada, y a partir del inventario cancelar dejaría medio gesto puesto.
+    /// <para>
+    /// <b>Rótulos cortos, y no por capricho</b>: ésta es la única de las cuatro listas que se pinta
+    /// en horizontal, en una tira de una línea bajo la barra de herramientas. Cinco rótulos largos
+    /// no caben en la columna del inventario a 1280, y lo que sobra no se recorta con puntos
+    /// suspensivos: se sale por la derecha.
+    /// </para>
+    /// </summary>
+    public static IReadOnlyList<StepSpec> Plan { get; } = new[]
+    {
+        new StepSpec(Escanear, "Escanear el clon", Cancelable: true),
+        new StepSpec(Inventario, "Escribir el inventario"),
+        new StepSpec(Medidas, "Unidades grandes"),
+        new StepSpec(Publicar, "Publicar"),
+        new StepSpec(Directivas, "Convenciones nuevas"),
+    };
+
+    /// <summary>La lista lista para colgarla de la vista. Horizontal en la barra del inventario.</summary>
+    public static StepList NewSteps(StepFlow flow = StepFlow.Horizontal) => new(Plan, flow);
+
     /// <param name="measured">
     /// Quien pone al día los hallazgos que la app MIDE (F5.16). Opcional para no romper a quien
     /// construya el servicio a mano; en la aplicación va siempre puesto — sin él, re-escanear
@@ -53,8 +83,14 @@ public sealed class InventoryRescanService
     /// fichero que ya tenía 978.
     /// </para>
     /// </summary>
-    public RescanOutcome Rescan(string slug, string clonePath)
+    /// <param name="steps">
+    /// Los pasos que se están enseñando (F30 §4). Nunca es opcional de verdad: si no llega uno se
+    /// crea aquí, para que el camino que ejecuta sea EL MISMO se esté enseñando o no — dos caminos
+    /// serían dos comportamientos, y el que nadie mira es el que se rompe.
+    /// </param>
+    public RescanOutcome Rescan(string slug, string clonePath, StepList? steps = null)
     {
+        steps ??= NewSteps();
         AppConfig app = _hub.Store.TryReadApp(slug)
                         ?? throw new InvalidOperationException($"La aplicación «{slug}» ya no está en el hub.");
 
@@ -66,26 +102,37 @@ public sealed class InventoryRescanService
             + "caracteres (política de la aplicación).",
             slug, app.CurrentCycle, app.Thresholds.LargeUnitLoc, app.Thresholds.LargeUnitChars);
 
-        ScanOutput scan = _scanner.Scan(clonePath, app, app.CurrentCycle);
-        InventoryCycle? previous = _hub.Store.TryReadInventory(slug, app.CurrentCycle);
-        InventoryCycle merged = previous is null
-            ? scan.Inventory
-            : Rescanner.Reconcile(previous, scan.Inventory).Merged;
+        ScanOutput scan = steps.Run(Escanear, () => _scanner.Scan(clonePath, app, app.CurrentCycle));
 
-        _hub.Store.WriteInventory(slug, merged);
+        InventoryCycle merged = steps.Run(Inventario, () =>
+        {
+            InventoryCycle? previous = _hub.Store.TryReadInventory(slug, app.CurrentCycle);
+            InventoryCycle reconciled = previous is null
+                ? scan.Inventory
+                : Rescanner.Reconcile(previous, scan.Inventory).Merged;
+            _hub.Store.WriteInventory(slug, reconciled);
+            return reconciled;
+        });
 
-        MeasuredReconciliation measured = _measured?.Reconcile(slug, merged, clonePath)
-                                          ?? MeasuredReconciliation.Empty;
+        MeasuredReconciliation measured = steps.Run(
+            Medidas,
+            () => _measured?.Reconcile(slug, merged, clonePath) ?? MeasuredReconciliation.Empty);
 
         // Un solo push para el gesto entero: el inventario y sus hallazgos son la misma verdad.
-        _hub.Sync?.CommitAndPush($"inventory: rescan {slug} cycle {app.CurrentCycle}"
-            + (measured.Total > 0 ? $" (+{measured.Total} hallazgo(s) medidos)" : ""));
+        bool published = steps.Run(Publicar, () => _hub.Sync?.CommitAndPush(
+            $"inventory: rescan {slug} cycle {app.CurrentCycle}"
+            + (measured.Total > 0 ? $" (+{measured.Total} hallazgo(s) medidos)" : "")) ?? true);
+
+        if (!published)
+        {
+            steps.Fail(Publicar, StepList.PendingPublish);
+        }
 
         // F7 §1: el re-escaneo PROPONE directivas nuevas y no activa ninguna. Se cuentan aquí,
         // dentro del mismo gesto, porque el fichero de convenciones que alguien acaba de añadir al
         // repositorio llega al clon por el mismo camino que el código.
-        IReadOnlyList<string> newDirectives =
-            _directives?.NewCandidates(slug, clonePath) ?? Array.Empty<string>();
+        IReadOnlyList<string> newDirectives = steps.Run(
+            Directivas, () => _directives?.NewCandidates(slug, clonePath) ?? Array.Empty<string>());
 
         return new RescanOutcome(merged.Units.Count, measured, newDirectives);
     }

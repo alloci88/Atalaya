@@ -522,6 +522,14 @@
                                    Command="{Binding VerifyCommand}"
                                    IsEnabled="{Binding CanAudit}"
                                    ToolTip="{Binding VerifyHelp}" />
+
+                        <!-- F30 §4 — LOS PASOS, BAJO EL BOTÓN QUE LOS LANZA. Verificar dejaba esta
+                             pantalla quieta lo que tardara el agente, con un toast que solo decía
+                             que había empezado. El tiempo del agente es ahora un paso en curso con
+                             su reloj, como los demás. -->
+                        <ContentControl Content="{Binding VerifySteps}"
+                                        Margin="{StaticResource Pad.XS.Top}"
+                                        Visibility="{Binding VerifySteps.IsVisible, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}" />
                         <Button Content="{Binding Link.ActionLabel}" Style="{StaticResource Action}"
                                    Command="{Binding LinkCloneCommand}"
                                    ToolTip="{Binding Link.Tooltip}"

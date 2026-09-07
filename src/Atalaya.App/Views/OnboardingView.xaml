@@ -247,22 +247,31 @@
 
         <!-- F5.7 §4: sin texto de estado al pie. El resultado va por el toast global. -->
         <!-- Y la barra de acción, bajo la columna que cierra: centrada con ella. -->
-        <StackPanel Grid.Row="1" Orientation="Horizontal"
+        <StackPanel Grid.Row="1"
                     MaxWidth="{StaticResource Form.MaxWidth}" HorizontalAlignment="Center"
-                    Margin="{StaticResource Pad.SaveBar}"
-                    c:Stack.Gap="{StaticResource Space.S}">
-            <Button Content="Crear e inventariar" Command="{Binding CreateCommand}"
-                    Style="{StaticResource Button.Primary}"
-                    IsEnabled="{Binding CanCreate}"
-                    MinWidth="180" />
-            <Button Content="Cancelar" Command="{Binding CancelCommand}"
-                    ToolTip="Vuelve al portafolio sin crear nada." />
+                    Margin="{StaticResource Pad.SaveBar}">
+            <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
+                <Button Content="Crear e inventariar" Command="{Binding CreateCommand}"
+                        Style="{StaticResource Button.Primary}"
+                        IsEnabled="{Binding CanCreate}"
+                        MinWidth="180" />
+                <Button Content="Cancelar" Command="{Binding CancelCommand}"
+                        ToolTip="Vuelve al portafolio sin crear nada." />
 
-            <!-- La razón, pegada al botón apagado (P-27, UI-0038). -->
-            <Border Style="{StaticResource Reason.Chip}"
-                    Visibility="{Binding HasCreateBlockedReason, Converter={StaticResource BoolToVisibility}}">
-                <TextBlock Text="{Binding CreateBlockedReason}" Style="{StaticResource Reason.Text}" />
-            </Border>
+                <!-- La razón, pegada al botón apagado (P-27, UI-0038). -->
+                <Border Style="{StaticResource Reason.Chip}"
+                        Visibility="{Binding HasCreateBlockedReason, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="{Binding CreateBlockedReason}" Style="{StaticResource Reason.Text}" />
+                </Border>
+            </StackPanel>
+
+            <!-- F30 §4 — LOS PASOS DEL ALTA, bajo el botón que los lanza. Ni ventana nueva ni
+                 modal: el formulario se queda donde está y lo que pasaba en silencio pasa a la
+                 vista, en la misma columna. La lista se pinta sola por su tipo (Themes/StepList),
+                 así que aquí no hay ninguna plantilla que mantener. -->
+            <ContentControl Content="{Binding Steps}" Margin="{StaticResource Pad.S.Top}"
+                            HorizontalAlignment="Left"
+                            Visibility="{Binding Steps.IsVisible, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}" />
         </StackPanel>
     </Grid>
 </UserControl>

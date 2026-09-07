@@ -239,19 +239,48 @@ public sealed partial class ReconcileCostsViewModel : ObservableObject
     }
 
     /// <summary>
+    /// <b>Los pasos de reconciliar</b> (F30 §4), dentro del diálogo y bajo el botón. Uno solo: el
+    /// plan no depende de nada, y reintentar vuelve a ponerlo todo en pendiente.
+    /// </summary>
+    public StepList Steps { get; } = CostReconciliationService.NewSteps();
+
+    /// <summary>
     /// Escribe las reconciliaciones y las publica con su commit. Al terminar vuelve a leer: lo que
     /// se ha cerrado desaparece de la lista, que es la confirmación que hace falta.
+    /// <para>
+    /// <b>El diálogo no se cierra solo</b> (F30 §4): al terminar enseña lo que cerró y CUÁNTO
+    /// suma —«3 sesiones reconciliadas · 0,91 $»—, que es la pregunta por la que se abrió. Se
+    /// cierra con «Cerrar».
+    /// </para>
     /// </summary>
     [RelayCommand]
-    private void Reconcile()
+    private async Task Reconcile()
     {
-        int done = _reconciler.Reconcile(Slug, AssignedModel, Scope);
-        Changed |= done > 0;
-        Status = done == 0
-            ? "No se ha reconciliado ninguna sesión."
-            : done == 1
-                ? "1 sesión reconciliada y publicada en el hub."
-                : $"{done} sesiones reconciliadas y publicadas en el hub.";
-        Refresh();
+        Steps.Start();
+        try
+        {
+            // Fuera del hilo de interfaz: si no, el diálogo se congela y sus propios pasos no se
+            // pintarían — que es exactamente el defecto que esta pieza viene a cerrar.
+            ReconciliationOutcome done = await Task.Run(
+                () => _reconciler.Reconcile(Slug, AssignedModel, Scope, Steps));
+
+            Changed |= done.Sessions > 0;
+            Status = done.Sessions == 0
+                ? "No se ha reconciliado ninguna sesión."
+                : $"{Sesiones(done.Sessions)} · {CostFormat.Of(done.Credits)}";
+        }
+        catch (Exception ex)
+        {
+            Status = $"La reconciliación se ha parado: {ex.Message}";
+        }
+        finally
+        {
+            Steps.Finish();
+            Refresh();
+        }
     }
+
+    /// <summary>«1 sesión reconciliada» / «3 sesiones reconciliadas». Singular y plural, una vez.</summary>
+    private static string Sesiones(int n)
+        => n == 1 ? "1 sesión reconciliada" : $"{n} sesiones reconciliadas";
 }

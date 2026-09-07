@@ -4,8 +4,8 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-07 (F31 — el hub bajo concurrencia real: la pérdida silenciosa de
-reclamaciones que BUGFIX-PUSH dejó abierta queda CERRADA, y el hub tiene por fin su banco de carga).
+Última revisión: 2026-09-07 (F30 §4 — los pasos de una operación: el alta, el re-escaneo, la
+verificación y reconciliar costes dejan de esperar en silencio).
 
 ## En vuelo
 
@@ -508,6 +508,18 @@ reclamaciones que BUGFIX-PUSH dejó abierta queda CERRADA, y el hub tiene por fi
   esquina.
 
 ## Cerrado
+
+- **F30 §4 · Los pasos de una operación** — `StepList`, componente del sistema para cualquier
+  operación de varios pasos que dure segundos: cada paso con su estado y su reloj, vertical u
+  horizontal, sin porcentajes ni barras. Lo usan el **alta** (vertical, bajo «Crear e
+  inventariar»), el **re-escaneo** (una tira de 32 px bajo la barra del Inventario, que se va al
+  terminar), la **verificación** (bajo el botón de la ficha y en la barra del arreglo terminado —
+  donde «Verificar ahora» pasa a verificar de verdad) y **reconciliar costes** (dentro del
+  diálogo, que al acabar dice «3 sesiones reconciliadas · 0,91 $» y se cierra con «Cerrar»). El
+  alta sale del view-model a `AppOnboardingService` para que sus pasos se puedan cuadrar con los
+  que ejecuta. La regla —lo que se enseña es lo que se ejecuta— la sostiene un test que corre las
+  cuatro operaciones de verdad. «Cancelar» solo mientras no se haya escrito nada; en la
+  verificación, en ningún paso. Ver D-1029.
 
 - **F31 · Dos personas a la vez: el hub bajo concurrencia real** — cerrada la pérdida silenciosa de
   reclamaciones que BUGFIX-PUSH dejó abierta, y **no estaba donde se dijo**: no en el rebase de

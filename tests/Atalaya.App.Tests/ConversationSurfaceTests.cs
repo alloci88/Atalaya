@@ -44,14 +44,22 @@ public sealed class ConversationSurfaceTests
     }
 
     /// <summary>
-    /// Y lo que el diccionario no puede comprobar solo: <b>toda clave que el componente pide
+    /// Y lo que el diccionario no puede comprobar solo: <b>toda clave que un componente pide
     /// existe</b>. Las plantillas resuelven sus <c>StaticResource</c> cuando se <i>pintan</i>, no
     /// cuando se cargan, así que una clave que no está no revienta al montar el diccionario: espera
     /// a la primera burbuja. Es la regla de <c>Ninguna_vista_pide_una_clave_que_no_existe</c>,
-    /// extendida al único fichero de <c>Themes/</c> que declara plantillas.
+    /// que salta los ficheros de <c>Themes/</c>, aplicada a los que declaran PLANTILLAS — los
+    /// únicos donde una clave huérfana espera a que alguien pinte para tumbar la aplicación.
+    /// <para>
+    /// F30 §4 añade el segundo, <c>StepList.xaml</c>: es un <c>[Theory]</c> y no dos tests porque
+    /// la regla es una, y el tercer componente que se escriba tiene que entrar en esta lista y no
+    /// estrenar la suya.
+    /// </para>
     /// </summary>
-    [Fact]
-    public void El_componente_no_pide_ninguna_clave_que_no_exista()
+    [Theory]
+    [InlineData("Conversation.xaml")]
+    [InlineData("StepList.xaml")]
+    public void El_componente_no_pide_ninguna_clave_que_no_exista(string component)
     {
         var declared = new HashSet<string>(StringComparer.Ordinal);
         foreach (string file in Directory.EnumerateFiles(ThemesRoot(), "*.xaml"))
@@ -62,7 +70,7 @@ public sealed class ConversationSurfaceTests
             }
         }
 
-        string body = File.ReadAllText(Path.Combine(ThemesRoot(), "Conversation.xaml"));
+        string body = File.ReadAllText(Path.Combine(ThemesRoot(), component));
         var orphans = new List<string>();
 
         foreach (Match m in Regex.Matches(body, @"\{StaticResource ([A-Za-z0-9._]+)\}"))
@@ -74,8 +82,8 @@ public sealed class ConversationSurfaceTests
         }
 
         orphans.Should().BeEmpty(
-            "una clave que no existe revienta la burbuja al pintarla, no al cargar el diccionario: "
-            + string.Join(", ", orphans));
+            $"una clave que no existe revienta {component} al pintarlo, no al cargar el "
+            + "diccionario: " + string.Join(", ", orphans));
     }
 
     /// <summary>

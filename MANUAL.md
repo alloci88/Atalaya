@@ -178,7 +178,10 @@ ciclo** en la cabecera, y abre lo mismo como un cajón sobre la lista. Todo lo q
   siempre. Al lado, el **filtro de deriva** recorta la lista por lo que le ha
   pasado al código, que es una dimensión aparte del estado de auditoría.
 - **Re-escanear** vuelve a medir el clon: actualiza el inventario **y** los hallazgos
-  medidos en el mismo gesto, y cuenta en un aviso qué cambió.
+  medidos en el mismo gesto, y cuenta en un aviso qué cambió. Mientras dura, bajo la barra
+  aparece una **línea con sus pasos** —escanear el clon, escribir el inventario, unidades
+  grandes, publicar, convenciones nuevas— con el reloj de cada uno; se va sola al terminar, y
+  si algo falla se queda con el paso en rojo y su motivo.
 - **Reiniciar ciclo** abre uno nuevo con todo pendiente, sin borrar nada. Es
   distinto del cierre normal, que **siembra** el ciclo siguiente con la deriva
   del que termina (ver «Cambiar de ciclo», más abajo). Antes de reiniciar te
@@ -241,6 +244,16 @@ asignar, cambiar severidad, resolver a mano con justificación, cerrar una dispu
   enseña es el **método completo** que contiene el punto del hallazgo, no la línea suelta:
   con una línea sola no se puede juzgar nada que no quepa en esa línea. Si el método no se
   puede resolver, van las líneas de alrededor.
+- **Y ves sus pasos**, debajo del botón que los lanza: **preparar los hallazgos**, **componer el
+  encargo**, **juzgar con el agente**, **escribir el resultado y su informe** y **publicar en el
+  hub**, cada uno con su reloj. Lo que tarda el agente es el paso «juzgar», con el tiempo subiendo
+  — no una pantalla quieta. Si algo falla, esa línea se queda en rojo con el motivo. Aquí **no hay
+  «Cancelar»**: verificar escribe desde el primer paso —lo medido se mide y se aplica, y un
+  hallazgo que ya no se localiza deja su evento—, así que no hay ningún punto en el que cancelar
+  dejara el hub como estaba, y un botón que no puede cumplir lo que promete no se ofrece.
+- Los mismos pasos salen **en la barra de acciones de un arreglo terminado**: allí «Verificar
+  ahora» **verifica** —antes solo te llevaba a esta ficha— y, al acabar, te trae aquí, que es
+  donde está el veredicto que se acaba de escribir.
 - Un arreglo se confirma **juzgando el código que hay ahora**, no buscando el código
   viejo: que el fragmento auditado haya desaparecido es lo que pasa cuando algo se
   arregla, así que si el método sigue ahí se le enseña al auditor tal y como está hoy.
@@ -829,6 +842,21 @@ sí ocupa el ancho entero, porque lo que lleva dentro son tablas.
 
 El asistente de alta: repositorio, clon local y escaneo inicial. Publica una sola vez, al final.
 
+**Al pulsar «Crear e inventariar» ves los pasos.** El botón se apaga y debajo aparece la lista de lo
+que está pasando, con el reloj de cada uno: **escanear el clon**, **registrar la aplicación**,
+**escribir el inventario del ciclo**, **reconciliar las unidades grandes** y **publicar en el hub**
+(y, si en el clon hubiera un baseline del sistema v4, **importarlo** el primero). El formulario se
+queda donde está: no se abre ninguna ventana. Escanear tarda dos décimas; lo que se lleva el tiempo
+es lo de después, y por eso se cuenta.
+
+- **Si un paso falla**, su línea se pone en rojo con el motivo y el botón se vuelve a encender para
+  que puedas reintentar.
+- **Cancelar solo aparece mientras no se haya escrito nada** —durante el escaneo—. En cuanto la
+  aplicación queda registrada desaparece: cancelar a mitad dejaría media alta puesta.
+- **Si lo único que falla es publicar**, el alta *está*: queda en tu clon como «pendiente de
+  publicar» y sale sola en cuanto el hub conteste (ver *Trabajar en equipo*). Se te dice con esas
+  palabras y se sigue al inventario, como siempre.
+
 **Ya no importa el baseline del sistema v4.** El bloque «Baseline del sistema v4 (opcional)»
 —la carpeta `CodeAudit/`, la casilla de importar y su aviso— se retiró en R4: no se usa. El
 importador sigue en la solución, pero desde la aplicación no se llega a él por ningún sitio.
@@ -1069,6 +1097,13 @@ por qué. Al pulsarlo, lo que faltaba se escribe en el hub y se publica con tu n
 como cualquier otro cambio compartido. **No se guarda un importe**: se guarda con qué valorar cada
 sesión, y el coste se sigue calculando de sus tokens en cada lectura — así, si mañana se corrige una
 tarifa, esas sesiones se corrigen con las demás.
+
+**Mientras dura, el diálogo enseña sus pasos** bajo el botón: **leer las sesiones sin coste**,
+**calcular con la tarifa**, **escribir en el hub** y **publicar**, cada uno con su reloj. En los dos
+primeros hay **«Cancelar»** —todavía no se ha escrito nada, así que cancelar deja el hub exactamente
+como estaba—; a partir de escribir, no. Al terminar, el diálogo **no se cierra solo**: enseña lo que
+cerró y cuánto suma —**«3 sesiones reconciliadas · 0,91 $»**—, que es la pregunta por la que lo
+abriste. Se cierra con **Cerrar**.
 
 Después desaparecen la insignia, la línea del resumen y el «parcial» de Métricas, e **Informes
 enseña el coste en la lista**. Los informes ya escritos **no se reescriben** —un informe es lo que se

@@ -514,4 +514,24 @@
     <Thickness x:Key="Pad.L.Top">0,24,0,0</Thickness>
     <Thickness x:Key="Pad.L.Left">24,0,0,0</Thickness>
 
+    <!-- ============================================================ Los pasos (F30 §4)
+
+         LA TIRA MIDE 32 (`Step.StripHeight`). Es lo que ocupa el `StepList` horizontal bajo la
+         barra de herramientas del Inventario, y va aquí porque una tira que mide lo que le apetece
+         a cada vista deja de ser la misma tira: la altura es del componente, no de quien lo coloca.
+         32 es el escalón de la escala (`Space.XL`) y deja el icono de 14 con aire arriba y abajo
+         sin empujar la lista que hay debajo más de lo imprescindible.
+
+         EL RELOJ TIENE COLUMNA PROPIA (`Step.TimeWidth`). En vertical los tiempos se leen en
+         columna —«¿qué se llevó los segundos?» se contesta comparando, no leyendo— y para
+         compararlos tienen que caer todos a la misma x. 56 es lo que mide «0,0 s» a la escala meta
+         con sitio para «12 s» y «1 m 05 s» sin que la columna baile.
+    -->
+    <sys:Double x:Key="Step.StripHeight">32</sys:Double>
+    <sys:Double x:Key="Step.TimeWidth">56</sys:Double>
+
+    <!-- El aire de una fila de la lista vertical, y el hueco entre pasos de la tira horizontal. -->
+    <Thickness x:Key="Pad.StepRow">0,3</Thickness>
+    <Thickness x:Key="Pad.StepStrip">0,0,16,0</Thickness>
+
 </ResourceDictionary>

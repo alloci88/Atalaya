@@ -441,6 +441,10 @@ public partial class App : Application
         services.AddSingleton<CloneLinkService>();
         services.AddSingleton<MeasuredFindingService>();
         services.AddSingleton<InventoryRescanService>();
+
+        // F30 §4 — el alta, con sus pasos. Sale del view-model por lo mismo que el re-escaneo salió
+        // en F5.8: lo que se enseña tiene que poder cuadrarse con lo que se hace.
+        services.AddSingleton<AppOnboardingService>();
         services.AddSingleton<IFolderPicker, SystemFolderPicker>();
         services.AddSingleton<ILinkCloneDialog, LinkCloneDialogHost>();
         services.AddSingleton<LinkCloneFlow>();

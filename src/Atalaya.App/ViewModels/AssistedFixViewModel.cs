@@ -40,14 +40,29 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
     private readonly IFixDiscardConfirmer _confirmer;
     private readonly DispatcherTimer? _clock;
 
+    /// <summary>
+    /// F30 §4: «Verificar ahora» del arreglo terminado <b>verifica</b>. Opcional porque los tests
+    /// que solo miran el estado del arreglo no montan un auditor; sin él, el botón sigue llevando a
+    /// la ficha, que es lo que hacía antes.
+    /// </summary>
+    private readonly VerifyCoordinator? _verify;
+
+    /// <summary>
+    /// <b>Los pasos de esa verificación</b>, en la barra de acciones del arreglo terminado — que es
+    /// desde donde se lanzó.
+    /// </summary>
+    public StepList VerifySteps { get; } = VerifyCoordinator.NewSteps();
+
     public AssistedFixViewModel(
         LiveFixService fix,
         ToastCenter toasts,
         IFixDiscardConfirmer confirmer,
         NavigationService? navigation = null,
         EditorLauncher? editor = null,
-        IFixCloseConfirmer? closeConfirmer = null)
+        IFixCloseConfirmer? closeConfirmer = null,
+        VerifyCoordinator? verify = null)
     {
+        _verify = verify;
         _fix = fix;
         _toasts = toasts;
         _confirmer = confirmer;
@@ -585,6 +600,13 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
     /// «Verificar ahora» al terminar: SUGERIDO, nunca automático. Arreglar no resuelve — la
     /// resolución llega por la vía de siempre, con evidencia, y la decide el usuario cuando dé el
     /// cambio por bueno.
+    /// <para>
+    /// <b>Y verifica AQUÍ</b> (F30 §4). Hasta aquí solo navegaba a la ficha, donde había que
+    /// pulsar un segundo «Verificar ahora» con el mismo rótulo: dos botones iguales, uno de los
+    /// cuales no hacía lo que decía. Ahora la verificación se lanza desde donde se pulsó, con sus
+    /// pasos en la barra de acciones, y al acabar se sigue a la ficha — que es donde está el
+    /// veredicto que se acaba de escribir.
+    /// </para>
     /// </summary>
     [RelayCommand]
     private async Task VerifyNow()
@@ -596,6 +618,31 @@ public sealed partial class AssistedFixViewModel : ViewModelBase, IAppScoped
 
         Ulid id = _fix.FindingId;
         string slug = _fix.Slug;
+
+        if (_verify is not null)
+        {
+            IsBusy = true;
+            VerifySteps.Start();
+            try
+            {
+                VerifyOutcome outcome = await Task.Run(
+                    () => _verify.RunAsync(slug, new[] { id }, CancellationToken.None, VerifySteps));
+                _toasts.Show(outcome.Toast);
+            }
+            catch (Exception ex)
+            {
+                // El paso está en rojo con su motivo: NO se sigue a la ficha, porque lo que hay que
+                // leer está aquí.
+                _toasts.Show($"No se pudo verificar: {ex.Message}");
+                return;
+            }
+            finally
+            {
+                VerifySteps.Finish();
+                IsBusy = false;
+            }
+        }
+
         await _navigation.NavigateToAsync<FindingDetailViewModel>(vm => vm.Load(slug, id));
     }
 

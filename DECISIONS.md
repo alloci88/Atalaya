@@ -16992,3 +16992,82 @@ huérfana, cerrarla como interrumpida, publicar lo pendiente, y decirlo»— se 
 El banco del §1 lo ejercita en cada tanda: la persona que **se cae a mitad** deja sesión abierta y
 reclamaciones vivas, y al acabar la tanda el hub tiene **0 reclamaciones vivas** y sus hallazgos
 dentro.
+
+
+## F30 · Entrega 4: los pasos de una operación
+
+### D-1029 — Lo que tardaba en silencio ahora se ve, paso a paso, y quien lo enseña es quien lo hace
+
+Un párrafo para la fase (N-7) y solo lo pedido (N-6). **De dónde sale.** El §0 de F30 midió que
+escanear una aplicación son **175 ms** y que el tiempo del alta se lo llevan los pasos de después
+—escribir el inventario, reconciliar las unidades grandes, publicar en el hub—, **sin una sola
+señal**: el botón se apagaba y la pantalla se quedaba quieta. No había nada que sacar del hilo de
+interfaz (eso fue §2d) ni nada que contar por ficheros; lo que faltaba era que esos pasos se vieran,
+y que si uno falla se sepa **cuál**.
+
+**El componente.** `StepList` —modelo en `Services/StepList.cs`, dibujo en `Themes/StepList.xaml`—
+para cualquier operación de varios pasos que dure segundos. Cada paso: **pendiente** en terciario,
+**en curso** con giro y el reloj subiendo, **hecho** con check y su tiempo, **fallido** en peligro
+con el motivo **en la línea** (D-944.4: la razón va pegada a lo que la produce, no en un tooltip que
+hay que saber que existe). Vertical u horizontal; **una sola plantilla de fila** para los dos
+sentidos, porque lo único que cambia es el panel que las coloca y dos plantillas serían dos copias
+que divergen (F5.14, D-1020). **Ni porcentajes ni barras**: nadie sabe qué fracción de un alta es
+«escribir el inventario», y una barra que avanza a saltos inventados miente mejor que no tener
+ninguna. El tiempo se dice con la precisión que hace falta y ninguna más — por debajo del segundo
+con su decimal, porque «0 s» sobre los 175 ms medidos diría que no pasó nada.
+
+**La regla, que es lo único nuevo que puede romperse en silencio: los pasos que se enseñan son los
+que se ejecutan.** No se comprueba comparando dos listas escritas aparte —eso vuelve a divergir— sino
+haciendo que **haya una sola**: cada servicio ejecuta *por* su `StepList`, y `Run` revienta con un
+identificador que no esté declarado. Cuando nadie pasa una lista, el servicio **se hace una**, así
+que el camino es el mismo se esté enseñando o no: dos caminos serían dos comportamientos, y el que
+nadie mira es el que se rompe. Eso obligó a **sacar el alta del view-model** a un
+`AppOnboardingService` con sus dos mitades (el diálogo de la lupa del ciclo 1 sigue en medio, F17 §4)
+— mientras el alta vivía dentro de `OnboardingViewModel.Create` no había ninguna lista que cuadrar
+con ninguna otra, había un botón que se apagaba.
+
+**«Cancelar», solo donde puede cumplir lo que promete.** El criterio es el del encargo —que cancelar
+deje el hub como estaba— aplicado sin trampa: se ofrece **mientras no se haya escrito nada**, y en
+cuanto un paso escribe desaparece en vez de quedarse prometiendo. Sale, por tanto, en `escanear`
+(alta y re-escaneo) y en `leer`/`calcular` (reconciliar). **En la verificación no sale en ninguno**,
+y no es un olvido: verificar escribe desde el primer paso —lo que la aplicación mide se mide y se
+aplica ahí mismo (F5.16), y un hallazgo que ya no se localiza deja su evento antes de que nadie llame
+a ningún agente (F6.6)—, así que no hay un solo punto en el que cancelar deje el hub como estaba.
+
+**Publicar es un paso que puede fallar sin tumbar nada.** Cuando el hub no acepta el push, la línea
+se pone en rojo con «no se pudo publicar · queda pendiente de publicar» y la operación **sigue**: el
+trabajo está escrito en el clon y sale solo con lo pendiente (F31 §2). En el alta eso significa que
+la aplicación **está** —se va al inventario como siempre— y el aviso lo dice con esas palabras; lo
+contrario sería dejar una aplicación creada detrás de una pantalla que parece no haber hecho nada.
+
+**Cobertura (N-5, N-7): un test de regla con seis mitades, y una `[Theory]` ampliada.** El de regla
+—`StepListTests`— corre las cuatro operaciones de verdad contra un hub de verdad y exige
+`Executed == Plan`: **misma lista, mismo orden**. Sus seis mitades son las cuatro operaciones más las
+dos que podrían enseñar un paso que no se ejecuta: el alta **con** baseline v4, que es la única cuyo
+plan depende de algo, y la verificación **sin objetivos**, que antes se iba por un `return` temprano
+y habría dejado tres líneas en pendiente hasta que la lista desapareciera. Comprobado con cebo: un
+`StepSpec` de más en el plan del re-escaneo lo pone rojo. Y `El_componente_no_pide_ninguna_clave_que_no_exista`
+pasa a `[Theory]` sobre los **dos** ficheros de `Themes/` que declaran plantillas —la conversación y
+los pasos—: `Ninguna_vista_pide_una_clave_que_no_existe` salta `Themes/`, y ahí una clave huérfana no
+falla al cargar el diccionario, espera a que alguien pinte. Los 2.526 de la suite, en verde.
+
+**Lo visible, por vista (N-6).** **(1) Nueva aplicación**: bajo «Crear e inventariar», que se apaga,
+sale el `StepList` vertical con los pasos reales del alta —importar el baseline v4 solo si lo hay,
+escanear el clon, registrar la aplicación, escribir el inventario del ciclo, reconciliar las unidades
+grandes, publicar en el hub—. Sin ventana nueva ni modal: el formulario se queda donde está. Al
+terminar salta al inventario como hoy; si un paso falla, su línea en rojo con el motivo y el botón se
+vuelve a encender. **(2) Inventario**: una tira de 32 px bajo la barra de herramientas con los cinco
+pasos del re-escaneo en horizontal, que desaparece al terminar — sustituye al toast «Re-escaneando…»,
+que decía que había empezado y nada más. **(3) Ficha de hallazgo**: bajo «Verificar ahora», el
+`StepList` vertical con los cinco pasos del verify; **el tiempo del agente es un paso en curso con su
+reloj**, igual que los demás. **(4) Arreglo terminado**: los mismos pasos en la barra de acciones, y
+«Verificar ahora» **verifica ahí** — hasta aquí solo navegaba a la ficha, donde había un segundo
+botón con el mismo rótulo, uno de los cuales no hacía lo que decía; al acabar se sigue a la ficha,
+que es donde está el veredicto recién escrito. **(5) Reconciliar costes**: el `StepList` dentro del
+diálogo, bajo el botón, con los cuatro pasos del servicio; al terminar el diálogo enseña el resultado
+—«3 sesiones reconciliadas · 0,91 $»— y se cierra con «Cerrar», no solo. El importe **no se guarda**
+(el coste se sigue derivando en cada lectura, D-788): se vuelve a leer del hub por el mismo camino
+que lo leen el resumen y los informes.
+
+**Ni un token más**: no se toca el prompt, no se añade ninguna llamada y no se le pide al modelo nada
+distinto. Todo lo de aquí es contar lo que ya se estaba haciendo.

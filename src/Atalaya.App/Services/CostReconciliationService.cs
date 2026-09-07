@@ -28,6 +28,17 @@ public sealed record CostGapGroup(
     public int Count => Sessions.Count;
 }
 
+/// <summary>
+/// <b>Lo que cerró una reconciliación</b> (F30 §4): cuántas sesiones, y cuánto suman ya valoradas.
+/// <para>
+/// El importe no se guarda en ninguna parte —el coste se sigue derivando en cada lectura, que es
+/// D-788— pero <b>hay que decirlo aquí</b>: el diálogo se queda abierto al terminar, y «3 sesiones
+/// reconciliadas» a secas no contesta la pregunta por la que se abrió, que es cuánto costó aquello.
+/// </para>
+/// </summary>
+/// <param name="Credits">Los AI credits de esas sesiones. Null si ninguna se pudo valorar.</param>
+public sealed record ReconciliationOutcome(int Sessions, decimal? Credits);
+
 /// <summary>Cuántas sesiones sin coste tiene una aplicación. Lo que dice la insignia.</summary>
 public sealed record AppCostGap(string Slug, int Sessions, IReadOnlyList<CostGapGroup> Groups)
 {
@@ -71,6 +82,27 @@ public sealed record AppCostGap(string Slug, int Sessions, IReadOnlyList<CostGap
 /// </summary>
 public sealed class CostReconciliationService
 {
+    // Los identificadores de los pasos (F30 §4).
+    public const string Leer = "leer";
+    public const string Calcular = "calcular";
+    public const string Escribir = "escribir";
+    public const string Publicar = "publicar";
+
+    /// <summary>
+    /// <b>Los pasos de reconciliar</b>. Leer y calcular no escriben nada, así que hasta ahí
+    /// cancelar deja el hub exactamente como estaba; a partir de escribir, no se ofrece.
+    /// </summary>
+    public static IReadOnlyList<StepSpec> Plan { get; } = new[]
+    {
+        new StepSpec(Leer, "Leer las sesiones sin coste", Cancelable: true),
+        new StepSpec(Calcular, "Calcular con la tarifa", Cancelable: true),
+        new StepSpec(Escribir, "Escribir en el hub"),
+        new StepSpec(Publicar, "Publicar"),
+    };
+
+    /// <summary>La lista lista para colgarla del diálogo, bajo el botón.</summary>
+    public static StepList NewSteps(StepFlow flow = StepFlow.Vertical) => new(Plan, flow);
+
     private readonly HubContext _hub;
     private readonly ModelRatesService _rates;
     private readonly TimeProvider _time;
@@ -200,34 +232,68 @@ public sealed class CostReconciliationService
     /// La tarifa que el usuario eligió para las sesiones cuyo modelo no se sabe y cuyas llamadas
     /// tampoco lo dicen. Null si no eligió ninguna: entonces esas sesiones se quedan como están.
     /// </param>
-    public int Reconcile(
-        string slug, string? assignedModel = null, IReadOnlyCollection<Ulid>? scope = null)
+    /// <param name="steps">
+    /// Los pasos que se están enseñando (F30 §4). Si no llega uno se crea aquí: el camino que
+    /// ejecuta es el mismo se enseñe o no.
+    /// </param>
+    public ReconciliationOutcome Reconcile(
+        string slug, string? assignedModel = null, IReadOnlyCollection<Ulid>? scope = null,
+        StepList? steps = null)
     {
+        steps ??= NewSteps();
         ModelRateTable? rates = _rates.Current;
         string by = _hub.ResolveIdentity().Name;
         DateOnly today = DateOnly.FromDateTime(_time.GetUtcNow().UtcDateTime);
 
-        var written = new List<CostReconciliation>();
-        foreach (SessionCostGap gap in GapsFor(slug, scope))
+        IReadOnlyList<SessionCostGap> gaps = steps.Run(Leer, () => GapsFor(slug, scope));
+
+        List<(SessionCostGap Gap, CostReconciliation Decision)> decided = steps.Run(Calcular, () =>
+            gaps.Select(g => (Gap: g, Decision: Decide(g, rates, assignedModel, by, today)))
+                .Where(p => p.Decision is not null)
+                .Select(p => (p.Gap, Decision: p.Decision!))
+                .ToList());
+
+        steps.Run(Escribir, () =>
         {
-            CostReconciliation? decision = Decide(gap, rates, assignedModel, by, today);
-            if (decision is null)
+            foreach ((_, CostReconciliation decision) in decided)
             {
-                continue;
+                _hub.Store.WriteCostReconciliation(decision);
             }
+        });
 
-            _hub.Store.WriteCostReconciliation(decision);
-            written.Add(decision);
-        }
+        // El commit va SIEMPRE dentro de su paso, aunque no haya nada que publicar: un paso que a
+        // veces se ejecuta y a veces no es un paso que a veces se enseña, y la lista dejaría de
+        // ser la lista.
+        bool published = steps.Run(Publicar, () => decided.Count == 0
+            || (_hub.Sync?.CommitAndPush(
+                $"costes: {decided.Count} sesión(es) de {slug} reconciliadas por {by}") ?? true));
 
-        if (written.Count == 0)
+        if (!published)
         {
-            return 0;
+            steps.Fail(Publicar, StepList.PendingPublish);
         }
 
-        _hub.Sync?.CommitAndPush(
-            $"costes: {written.Count} sesión(es) de {slug} reconciliadas por {by}");
-        return written.Count;
+        return new ReconciliationOutcome(decided.Count, Valued(slug, decided.Select(d => d.Gap.Session)));
+    }
+
+    /// <summary>
+    /// <b>Cuánto suman las sesiones que se acaban de cerrar</b>, ya con su reconciliación escrita.
+    /// Se lee otra vez del hub a propósito: el coste es un derivado (D-788) y aquí se está diciendo
+    /// lo mismo que dirán el resumen y los informes, por el mismo camino.
+    /// </summary>
+    private decimal? Valued(string slug, IEnumerable<AuditSession> sessions)
+    {
+        CostLookup lookup = LookupFor(slug);
+        decimal? total = null;
+        foreach (AuditSession session in sessions)
+        {
+            if (lookup.Of(session).Credits is { } credits)
+            {
+                total = (total ?? 0m) + credits;
+            }
+        }
+
+        return total;
     }
 
     /// <summary>Qué se puede escribir de esta sesión, o null si todavía nada.</summary>

@@ -1,4 +1,4 @@
-using Atalaya.Copilot;
+﻿using Atalaya.Copilot;
 using Atalaya.Domain;
 using Atalaya.Domain.Anchoring;
 using Atalaya.Domain.Hashing;
@@ -40,6 +40,34 @@ public sealed class VerifyCoordinator
     /// </summary>
     private const int MaxUnitLines = 400;
 
+    // Los identificadores de los pasos (F30 §4).
+    public const string Preparar = "preparar";
+    public const string Enviar = "enviar";
+    public const string Juzgar = "juzgar";
+    public const string Escribir = "escribir";
+    public const string Publicar = "publicar";
+
+    /// <summary>
+    /// <b>Los pasos de una verificación</b>, y <b>ninguno se puede cancelar</b>.
+    /// <para>
+    /// No es un olvido: verificar <b>escribe desde el primer paso</b>. Lo que la aplicación mide se
+    /// mide y se aplica ahí mismo (F5.16), y un hallazgo que ya no se localiza deja su evento antes
+    /// de que nadie llame a ningún agente (F6.6). No hay, por tanto, ningún punto en el que
+    /// cancelar deje el hub como estaba — y donde no se puede cumplir, no se ofrece.
+    /// </para>
+    /// </summary>
+    public static IReadOnlyList<StepSpec> Plan { get; } = new[]
+    {
+        new StepSpec(Preparar, "Preparar los hallazgos"),
+        new StepSpec(Enviar, "Componer el encargo del verificador"),
+        new StepSpec(Juzgar, "Juzgar con el agente"),
+        new StepSpec(Escribir, "Escribir el resultado y su informe"),
+        new StepSpec(Publicar, "Publicar en el hub"),
+    };
+
+    /// <summary>La lista lista para colgarla del sitio desde el que se lanzó.</summary>
+    public static StepList NewSteps(StepFlow flow = StepFlow.Vertical) => new(Plan, flow);
+
     private readonly HubContext _hub;
     private readonly MachineConfigStore _machines;
     private readonly IUlidFactory _ulids;
@@ -63,8 +91,14 @@ public sealed class VerifyCoordinator
         _directives = directives;
     }
 
-    public async Task<VerifyOutcome> RunAsync(string slug, IReadOnlyList<Ulid> findingIds, CancellationToken ct)
+    /// <param name="steps">
+    /// Los pasos que se están enseñando (F30 §4). Si no llega uno se crea aquí: el camino que
+    /// ejecuta es el mismo se enseñe o no.
+    /// </param>
+    public async Task<VerifyOutcome> RunAsync(
+        string slug, IReadOnlyList<Ulid> findingIds, CancellationToken ct, StepList? steps = null)
     {
+        steps ??= NewSteps();
         string? clone = _machines.Load().ClonePathFor(slug);
         string commit = GitInfo.HeadSha(clone);
         string by = _hub.ResolveIdentity().Name;
@@ -101,82 +135,99 @@ public sealed class VerifyCoordinator
         // proponerlo desde la caja de herramientas obligaría a adivinarlo.
         var nextSteps = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        foreach (Ulid id in findingIds)
+        // ---------------------------------------------------------------- (1) preparar
+        // Leer cada hallazgo, medir lo que se mide y re-anclar lo que hay que preguntar. Escribe:
+        // por eso ni éste ni ninguno de los que siguen se pueden cancelar (ver `Plan`).
+        steps.Run(Preparar, () =>
         {
-            Finding? f = _hub.Store.TryReadFinding(slug, id.ToString());
-            if (f is null)
+            foreach (Ulid id in findingIds)
             {
-                notes.Add("Ese hallazgo ya no está en el hub.");
-                continue;
-            }
-
-            if (f.Locations.Count == 0)
-            {
-                notes.Add($"{Alias(f)}: no tiene ninguna ubicación en el código que verificar.");
-                continue;
-            }
-
-            // El desvío de F5.16: lo medido se mide, y no gasta ni un token.
-            if (_measured is not null && UnitMeasure.IsMeasured(f.RuleId))
-            {
-                MeasuredVerdict verdict = _measured.Verify(slug, f);
-                measuredMessages.Add(verdict.Message);
-                notes.Add(verdict.Message);
-                if (verdict.Applied)
+                Finding? f = _hub.Store.TryReadFinding(slug, id.ToString());
+                if (f is null)
                 {
-                    measuredApplied++;
+                    notes.Add("Ese hallazgo ya no está en el hub.");
+                    continue;
                 }
 
-                continue;
-            }
-
-            Location loc = f.Locations[0];
-            var stamp = new DetectionStamp(
-                utc, AuditMode.Verify, commit, by, TryHashUnit(clone, loc.Path),
-                _agent.ModelName, _agent.ProviderId);
-
-            VerifyAim aim = Aim(clone, f, loc, stamp);
-            if (!aim.Judgeable)
-            {
-                // Fase (a) agotada y sin nada que enseñar: AQUÍ sí es «no localizado». Y el evento
-                // lo dice con esas palabras: un hallazgo activo no puede «reabrirse» (F6.6).
-                f.NeedsReview = true;
-                f.Record(new HistoryEntry(utc, FindingEvent.NotLocated, by, $"{aim.Reason} · {judge}")
+                if (f.Locations.Count == 0)
                 {
-                    SessionId = sessionKey,
-                });
-                _hub.Store.WriteFinding(slug, f);
-                written++;
-                notes.Add($"{Alias(f)}: {aim.Reason}");
-                lost.Add(new ReportBuilder.VerifyLine(
-                    Alias(f), f.Title, f.Severity, loc.Path, loc.Line,
-                    VerifyBasis.Anclado, null, "no localizado", aim.Reason));
-                continue;
+                    notes.Add($"{Alias(f)}: no tiene ninguna ubicación en el código que verificar.");
+                    continue;
+                }
+
+                // El desvío de F5.16: lo medido se mide, y no gasta ni un token.
+                if (_measured is not null && UnitMeasure.IsMeasured(f.RuleId))
+                {
+                    MeasuredVerdict verdict = _measured.Verify(slug, f);
+                    measuredMessages.Add(verdict.Message);
+                    notes.Add(verdict.Message);
+                    if (verdict.Applied)
+                    {
+                        measuredApplied++;
+                    }
+
+                    continue;
+                }
+
+                Location loc = f.Locations[0];
+                var stamp = new DetectionStamp(
+                    utc, AuditMode.Verify, commit, by, TryHashUnit(clone, loc.Path),
+                    _agent.ModelName, _agent.ProviderId);
+
+                VerifyAim aim = Aim(clone, f, loc, stamp);
+                if (!aim.Judgeable)
+                {
+                    // Fase (a) agotada y sin nada que enseñar: AQUÍ sí es «no localizado». Y el evento
+                    // lo dice con esas palabras: un hallazgo activo no puede «reabrirse» (F6.6).
+                    f.NeedsReview = true;
+                    f.Record(new HistoryEntry(utc, FindingEvent.NotLocated, by, $"{aim.Reason} · {judge}")
+                    {
+                        SessionId = sessionKey,
+                    });
+                    _hub.Store.WriteFinding(slug, f);
+                    written++;
+                    notes.Add($"{Alias(f)}: {aim.Reason}");
+                    lost.Add(new ReportBuilder.VerifyLine(
+                        Alias(f), f.Title, f.Severity, loc.Path, loc.Line,
+                        VerifyBasis.Anclado, null, "no localizado", aim.Reason));
+                    continue;
+                }
+
+                string key = f.Id.ToString();
+                stamps[key] = stamp;
+                aimed[key] = (f, aim);
+                nextSteps[key] = NextStep(aim, loc.Path);
+                targets.Add(new VerifyTarget(
+                    key, loc.Path, aim.Line, aim.Snippet, f.Title, f.Description,
+                    aim.Basis, aim.Member, f.Recommendation, aim.AnchoredSnippet));
+            }
+        });
+
+        // ---------------------------------------------------------------- (2) enviar al agente
+        // Componer el encargo: la caja de herramientas, las directivas y el prompt. Con cero
+        // objetivos —todo medido, o nada que localizar— no hay encargo, pero el paso se ejecuta
+        // igual: una lista cuyos pasos aparecen y desaparecen deja de ser una lista.
+        VerifyToolbox? toolbox = null;
+        DirectiveBundle directives = DirectiveBundle.Empty;
+        string prompt = string.Empty;
+
+        steps.Run(Enviar, () =>
+        {
+            if (targets.Count == 0)
+            {
+                return;
             }
 
-            string key = f.Id.ToString();
-            stamps[key] = stamp;
-            aimed[key] = (f, aim);
-            nextSteps[key] = NextStep(aim, loc.Path);
-            targets.Add(new VerifyTarget(
-                key, loc.Path, aim.Line, aim.Snippet, f.Title, f.Description,
-                aim.Basis, aim.Member, f.Recommendation, aim.AnchoredSnippet));
-        }
+            toolbox = new VerifyToolbox(_hub, slug, stamps, nextSteps, sessionKey, judge, aimed);
 
-        if (targets.Count == 0)
-        {
-            Push(slug, written);
-            return new VerifyOutcome(measuredApplied, measuredMessages, notes);
-        }
-
-        var toolbox = new VerifyToolbox(_hub, slug, stamps, nextSteps, sessionKey, judge, aimed);
-
-        // F7 §3: el verificador juzga el mismo código que el auditor y necesita el mismo criterio.
-        // Sin las directivas de ámbito Auditoría confirmaría como defecto justo lo que la auditoría
-        // había aprendido a no reportar, y el hallazgo iría y vendría entre las dos.
-        DirectiveBundle directives = _directives?.Bundle(slug, clone, DirectiveScope.Auditoria)
-                                     ?? DirectiveBundle.Empty;
-        string prompt = PromptComposer.ComposeVerifyPrompt(targets, directives);
+            // F7 §3: el verificador juzga el mismo código que el auditor y necesita el mismo
+            // criterio. Sin las directivas de ámbito Auditoría confirmaría como defecto justo lo
+            // que la auditoría había aprendido a no reportar, y el hallazgo iría y vendría entre
+            // las dos.
+            directives = _directives?.Bundle(slug, clone, DirectiveScope.Auditoria)
+                         ?? DirectiveBundle.Empty;
+            prompt = PromptComposer.ComposeVerifyPrompt(targets, directives);
+        });
 
         // Lo que la verificación consume se REGISTRA, igual que en una auditoría o en un arreglo.
         // Hasta aquí no se anotaba: la sesión quedaba escrita con `usage` a cero, así que en las
@@ -193,64 +244,103 @@ public sealed class VerifyCoordinator
             }
         }
 
-        _agent.UsageReported += OnUsage;
-        try
+        // ---------------------------------------------------------------- (3) juzgar
+        // El tiempo del agente es UN PASO EN CURSO con su reloj subiendo, como los demás: es lo que
+        // más dura y es justo lo que la pantalla se callaba (F30 §2e).
+        await steps.RunAsync(Juzgar, async () =>
         {
-            await _agent.VerifyAsync(new VerifyRequest(prompt, targets), toolbox, ct);
-        }
-        finally
+            if (toolbox is null)
+            {
+                return;
+            }
+
+            _agent.UsageReported += OnUsage;
+            try
+            {
+                await _agent.VerifyAsync(new VerifyRequest(prompt, targets), toolbox, ct);
+            }
+            finally
+            {
+                _agent.UsageReported -= OnUsage;
+            }
+        });
+
+        if (toolbox is null)
         {
-            _agent.UsageReported -= OnUsage;
+            // Sin objetivos no hay nada que escribir ni informe que redactar, pero los dos pasos
+            // que quedan se ejecutan igual: lo hecho hasta aquí también se publica.
+            steps.Run(Escribir, () => { });
+            PushStep(steps, slug, written);
+            return new VerifyOutcome(measuredApplied, measuredMessages, notes);
         }
 
         notes.AddRange(toolbox.Notes);
 
-        // Lo que el auditor no contestó no se queda mudo: se anota lo que SÍ se pudo hacer —el
-        // re-anclaje— y se dice en el aviso. Un «no se pudo verificar» sin causa era el tercero de
-        // los tres defectos de este parte.
-        foreach ((string key, (Finding f, VerifyAim aim)) in aimed)
+        // ---------------------------------------------------------------- (4) escribir el resultado
+        steps.Run(Escribir, () =>
         {
-            if (toolbox.Judged(key))
+            // Lo que el auditor no contestó no se queda mudo: se anota lo que SÍ se pudo hacer —el
+            // re-anclaje— y se dice en el aviso. Un «no se pudo verificar» sin causa era el tercero de
+            // los tres defectos de este parte.
+            foreach ((string key, (Finding f, VerifyAim aim)) in aimed)
             {
-                continue;
+                if (toolbox.Judged(key))
+                {
+                    continue;
+                }
+
+                (FindingEvent kind, string detail, string note) = Silent(f, aim);
+                f.Record(new HistoryEntry(utc, kind, by, $"{detail} · {judge}") { SessionId = sessionKey });
+                _hub.Store.WriteFinding(slug, f);
+                written++;
+                notes.Add(note);
+                Location silentLoc = f.Locations.Count > 0 ? f.Locations[0] : new Location { Path = "?", Line = 0 };
+                lost.Add(new ReportBuilder.VerifyLine(
+                    Alias(f), f.Title, f.Severity, silentLoc.Path, silentLoc.Line,
+                    aim.Basis, aim.Member, "sin veredicto", detail));
             }
 
-            (FindingEvent kind, string detail, string note) = Silent(f, aim);
-            f.Record(new HistoryEntry(utc, kind, by, $"{detail} · {judge}") { SessionId = sessionKey });
-            _hub.Store.WriteFinding(slug, f);
-            written++;
-            notes.Add(note);
-            Location silentLoc = f.Locations.Count > 0 ? f.Locations[0] : new Location { Path = "?", Line = 0 };
-            lost.Add(new ReportBuilder.VerifyLine(
-                Alias(f), f.Title, f.Severity, silentLoc.Path, silentLoc.Line,
-                aim.Basis, aim.Member, "sin veredicto", detail));
-        }
+            AppConfig? app = _hub.Store.TryReadApp(slug);
+            var session = new AuditSession
+            {
+                Id = sessionId,
+                AppSlug = slug,
+                Mode = AuditMode.Verify,
+                By = by,
+                Machine = Environment.MachineName,
+                StartedUtc = utc,
+                EndedUtc = DateTimeOffset.UtcNow,
+                Commit = commit,
+                CycleN = app?.CurrentCycle ?? 1,
+                Model = _agent.ModelName,
+                Provider = _agent.ProviderId,
+                Usage = usage,
+                Directives = directives.Records.ToList(),
+            };
+            _hub.Store.WriteSession(session);
 
-        AppConfig? app = _hub.Store.TryReadApp(slug);
-        var session = new AuditSession
-        {
-            Id = sessionId,
-            AppSlug = slug,
-            Mode = AuditMode.Verify,
-            By = by,
-            Machine = Environment.MachineName,
-            StartedUtc = utc,
-            EndedUtc = DateTimeOffset.UtcNow,
-            Commit = commit,
-            CycleN = app?.CurrentCycle ?? 1,
-            Model = _agent.ModelName,
-            Provider = _agent.ProviderId,
-            Usage = usage,
-            Directives = directives.Records.ToList(),
-        };
-        _hub.Store.WriteSession(session);
+            // F16 §F — y su INFORME. Verificar cuesta dinero y decide estados; que fuera la única de
+            // las tres acciones sin informe era lo que la convertía en un fantasma.
+            WriteReport(slug, app, session, toolbox.Lines.Concat(lost).ToList(), notes);
+        });
 
-        // F16 §F — y su INFORME. Verificar cuesta dinero y decide estados; que fuera la única de
-        // las tres acciones sin informe era lo que la convertía en un fantasma.
-        WriteReport(slug, app, session, toolbox.Lines.Concat(lost).ToList(), notes);
-
-        Push(slug, written + toolbox.Applied);
+        // ---------------------------------------------------------------- (5) publicar
+        PushStep(steps, slug, written + toolbox.Applied);
         return new VerifyOutcome(toolbox.Applied + measuredApplied, measuredMessages, notes);
+    }
+
+    /// <summary>
+    /// El paso de publicar, con lo que ya sabía <see cref="Push"/>: se empuja cuando se ha escrito
+    /// algo, y si el hub no lo acepta la línea lo dice —el trabajo está en el clon y sale con lo
+    /// pendiente (F31)—, sin tumbar una verificación que ya está aplicada.
+    /// </summary>
+    private void PushStep(StepList steps, string slug, int changed)
+    {
+        bool published = steps.Run(Publicar, () => Push(slug, changed));
+        if (!published)
+        {
+            steps.Fail(Publicar, StepList.PendingPublish);
+        }
     }
 
     /// <summary>
@@ -297,14 +387,12 @@ public sealed class VerifyCoordinator
         }
     }
 
-    /// <summary>Se empuja cuando se ha escrito algo, y no por haber preguntado.</summary>
-    private void Push(string slug, int changed)
-    {
-        if (changed > 0)
-        {
-            _hub.Sync?.CommitAndPush($"verify: {slug} {changed} hallazgos");
-        }
-    }
+    /// <summary>
+    /// Se empuja cuando se ha escrito algo, y no por haber preguntado. Devuelve <c>false</c> solo
+    /// cuando había algo que publicar y el hub no lo aceptó.
+    /// </summary>
+    private bool Push(string slug, int changed)
+        => changed <= 0 || (_hub.Sync?.CommitAndPush($"verify: {slug} {changed} hallazgos") ?? true);
 
     /// <summary>
     /// Lo que se propone cuando no hay nada mejor que proponer: el objetivo ni siquiera llegó a

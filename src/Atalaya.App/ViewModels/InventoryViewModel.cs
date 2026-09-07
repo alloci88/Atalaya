@@ -32,6 +32,13 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
     /// <summary>F5.8 §2: el re-escaneo, ahora compartido con el flujo de vincular.</summary>
     private readonly InventoryRescanService _rescan;
 
+    /// <summary>
+    /// <b>Los pasos del re-escaneo</b> (F30 §4): una tira de una línea bajo la barra de
+    /// herramientas, que desaparece al terminar. Horizontal porque ahí no hay altura que gastar —y
+    /// porque el inventario que hay debajo no puede moverse mientras se re-escanea—.
+    /// </summary>
+    public StepList RescanSteps { get; } = InventoryRescanService.NewSteps();
+
     /// <summary>F5.10: la gestión de reglas excluidas de esta app.</summary>
     private readonly GovernanceService _governance;
 
@@ -1184,10 +1191,12 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
         string clone = Link.Path!;
 
         IsBusy = true;
-        _toasts.Show("Re-escaneando…");
+        RescanSteps.Start();
         try
         {
-            RescanOutcome outcome = await Task.Run(() => _rescan.Rescan(Slug, clone));
+            // F30 §4 — el aviso de «Re-escaneando…» lo sustituyen los pasos: decían lo mismo y
+            // decían menos, porque un toast no dice en cuál va ni cuál falló.
+            RescanOutcome outcome = await Task.Run(() => _rescan.Rescan(Slug, clone, RescanSteps));
             // F5.16: lo que le pasó a los hallazgos medidos se DICE. Un hallazgo que se resuelve en
             // silencio se lee como un hallazgo que ha desaparecido, y eso costó una investigación.
             // F7 §1: los candidatos nuevos se ANUNCIAN, no se activan. El aviso es informativo a
@@ -1204,10 +1213,12 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
         }
         catch (Exception ex)
         {
-            _toasts.Show($"Error: {ex.Message}");
+            // El paso que falló ya está en rojo con su motivo, en la tira: el toast solo lleva a él.
+            _toasts.Show($"El re-escaneo se ha parado: {ex.Message}");
         }
         finally
         {
+            RescanSteps.Finish();
             IsBusy = false;
             Rebuild();
 

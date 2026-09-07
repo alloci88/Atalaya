@@ -90,13 +90,24 @@
             </StackPanel>
         </ScrollViewer>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right"
-                    Margin="{StaticResource Pad.DialogActions}">
-            <Button Content="{Binding ReconcileLabel}" Command="{Binding ReconcileCommand}"
-                    Style="{StaticResource Button.Primary}"
-                    IsEnabled="{Binding CanReconcile}"
-                    ToolTip="{Binding DisabledReason}" />
-            <Button Content="Cerrar" Margin="{StaticResource Pad.XS.Left}" Click="OnClose" />
+        <StackPanel Grid.Row="2" Margin="{StaticResource Pad.DialogActions}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="{Binding ReconcileLabel}" Command="{Binding ReconcileCommand}"
+                        Style="{StaticResource Button.Primary}"
+                        IsEnabled="{Binding CanReconcile}"
+                        ToolTip="{Binding DisabledReason}" />
+                <Button Content="Cerrar" Margin="{StaticResource Pad.XS.Left}" Click="OnClose" />
+            </StackPanel>
+
+            <!-- F30 §4 — LOS PASOS, DENTRO DEL DIÁLOGO Y BAJO EL BOTÓN. Reconciliar lee las
+                 sesiones, calcula con la tarifa, escribe en el hub y publica; hasta aquí las cuatro
+                 cosas pasaban con el diálogo congelado y sin decir nada. Al terminar, arriba queda
+                 el resultado —«3 sesiones reconciliadas · 0,91 $»— y el diálogo se cierra con
+                 «Cerrar», no solo. -->
+            <ContentControl Content="{Binding Steps}"
+                            Margin="{StaticResource Pad.S.Top}"
+                            HorizontalAlignment="Right"
+                            Visibility="{Binding Steps.IsVisible, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}" />
         </StackPanel>
     </Grid>
 </v:AtalayaDialog>

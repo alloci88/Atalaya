@@ -271,6 +271,9 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <!-- F30 §4 — la tira de los pasos del re-escaneo. `Auto` y no una altura fija: sin
+                 re-escaneo la fila mide cero y la lista sube a donde estaba. -->
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
@@ -439,12 +442,27 @@
             </DockPanel>
         </Border>
 
+        <!-- ==================================================== Los pasos del re-escaneo (F30 §4)
+
+             UNA LÍNEA BAJO LA BARRA DE HERRAMIENTAS, y desaparece al terminar. Re-escanear se
+             anunciaba con un toast —«Re-escaneando…»— que decía que había empezado y nada más:
+             ni en qué paso iba, ni cuál falló. Aquí el mismo componente que el alta, en
+             horizontal, porque en esta pantalla no hay altura que gastar y porque el árbol de
+             módulos no puede saltar mientras se re-escanea.
+        -->
+        <!-- La visibilidad va AQUÍ además de dentro del componente: un contenedor con margen que
+             envuelve algo colapsado deja su margen puesto, y la lista se quedaría 12 px más abajo
+             para siempre sin que nada lo explicara. -->
+        <ContentControl Grid.Row="3" Grid.Column="0" Content="{Binding RescanSteps}"
+                        Margin="{StaticResource Pad.S.Bottom}" HorizontalAlignment="Left"
+                        Visibility="{Binding RescanSteps.IsVisible, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}" />
+
         <!-- ==================================================== La selección
 
              Solo cuando hay algo marcado. El contador es lo que se va a gastar, así que se lee
              antes de pulsar «Auditar selección» (F5.6 §3).
         -->
-        <Border Grid.Row="3" Grid.Column="0" Style="{StaticResource Notice.Info}"
+        <Border Grid.Row="4" Grid.Column="0" Style="{StaticResource Notice.Info}"
                 Margin="{StaticResource Pad.S.Bottom}"
                 Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
             <StackPanel Orientation="Horizontal" c:Stack.Gap="{StaticResource Space.S}">
@@ -458,7 +476,7 @@
         </Border>
 
         <!-- ==================================================== El árbol de módulos -->
-        <Border Grid.Row="4" Grid.Column="0" Style="{StaticResource Panel}"
+        <Border Grid.Row="5" Grid.Column="0" Style="{StaticResource Panel}"
                 Visibility="{Binding IsEmpty, Converter={StaticResource InverseBoolToVisibility}}">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="{StaticResource Pad.XS}">
                 <ItemsControl ItemsSource="{Binding Modules}">
@@ -605,7 +623,7 @@
         </Border>
 
         <!-- ==================================================== Sin inventario -->
-        <Border Grid.Row="4" Grid.Column="0" Style="{StaticResource Card}" VerticalAlignment="Top"
+        <Border Grid.Row="5" Grid.Column="0" Style="{StaticResource Card}" VerticalAlignment="Top"
                 Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
             <StackPanel HorizontalAlignment="Center" c:Stack.Gap="{StaticResource Space.S}"
                         Margin="{StaticResource Pad.XL}">
@@ -632,7 +650,7 @@
         -->
         <!-- Acoplado a la derecha cuando hay sitio. Cuando no lo hay, este panel NO se limita a
              desaparecer: se abre como cajón desde la cabecera (D-982). -->
-        <Border Grid.Row="1" Grid.Column="1" Grid.RowSpan="4"
+        <Border Grid.Row="1" Grid.Column="1" Grid.RowSpan="5"
                 Style="{StaticResource Card}"
                 Width="{StaticResource Cycle.PanelWidth}"
                 Margin="{StaticResource Pad.M.Left}"
@@ -647,7 +665,7 @@
              una capa. El velo apaga lo de debajo y cierra al pulsarlo, que es el gesto que todo
              el mundo prueba primero.
         -->
-        <Grid Grid.Row="0" Grid.RowSpan="5" Grid.Column="0" Grid.ColumnSpan="2"
+        <Grid Grid.Row="0" Grid.RowSpan="6" Grid.Column="0" Grid.ColumnSpan="2"
               Visibility="{Binding CycleDrawerOpen, Converter={StaticResource BoolToVisibility}}">
             <Button Command="{Binding ToggleCycleDrawerCommand}"
                     Background="{DynamicResource Brush.Scrim}" BorderThickness="{StaticResource Pad.Zero}"

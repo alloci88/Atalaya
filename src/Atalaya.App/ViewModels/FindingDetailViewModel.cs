@@ -45,6 +45,13 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
     private readonly GovernanceService _governance;
     private readonly MachineConfigStore _machines;
     private readonly VerifyCoordinator _verify;
+
+    /// <summary>
+    /// <b>Los pasos de la verificación</b> (F30 §4), bajo el botón que la lanza. En vertical:
+    /// aquí hay sitio, y un fallo tiene que caber con su motivo en la línea.
+    /// </summary>
+    public StepList VerifySteps { get; } = VerifyCoordinator.NewSteps();
+
     private readonly EditorLauncher _editor;
     private readonly ToastCenter _toasts;
     private readonly AnchorRepair? _anchors;
@@ -1090,12 +1097,15 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
 
         Ulid id = Id;
         IsBusy = true;
-        // F5.16: un hallazgo medido no va al auditor, se vuelve a medir — y eso tarda lo que tarda
-        // leer un fichero, así que el aviso lo dice para que nadie espere una llamada al modelo.
-        _toasts.Show(IsMeasured ? "Midiendo la unidad…" : "Verificando el hallazgo…");
+        VerifySteps.Start();
         try
         {
-            VerifyOutcome outcome = await Task.Run(() => _verify.RunAsync(Slug, new[] { id }, CancellationToken.None));
+            // F30 §4 — los pasos salen BAJO EL BOTÓN que se acaba de pulsar, no en un toast:
+            // «Verificando el hallazgo…» decía que había empezado y nada más, y esta pantalla se
+            // quedaba quieta lo que tardara el agente. Lo que tarda el agente es ahora un paso en
+            // curso con su reloj, igual que los demás.
+            VerifyOutcome outcome = await Task.Run(
+                () => _verify.RunAsync(Slug, new[] { id }, CancellationToken.None, VerifySteps));
 
             // F6.6 — el aviso dice el RESULTADO, no si hubo resultado. «El verify no pudo emitir
             // veredicto» era literalmente cierto y completamente inútil: no decía qué había pasado
@@ -1108,6 +1118,7 @@ public sealed partial class FindingDetailViewModel : ViewModelBase, IAppScoped
         }
         finally
         {
+            VerifySteps.Finish();
             IsBusy = false;
             Reload(id);
         }

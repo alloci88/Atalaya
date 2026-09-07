@@ -16,11 +16,8 @@ namespace Atalaya.App.ViewModels;
 public sealed partial class OnboardingViewModel : ViewModelBase
 {
     private readonly HubContext _hub;
-    private readonly InventoryScanner _scanner;
-    private readonly MachineConfigStore _machines;
     private readonly NavigationService _navigation;
     private readonly FindingIngestionService _ingestion;
-    private readonly MeasuredFindingService _measured;
 
     /// <summary>F5.7 §4: el resultado del alta se cuenta por el toast global.</summary>
     private readonly ToastCenter _toasts;
@@ -34,15 +31,19 @@ public sealed partial class OnboardingViewModel : ViewModelBase
 
     private readonly LinkCloneFlow _linkFlow;
 
-    /// <summary>
-    /// F5.9 §1: el importador v4 dejo de ser un destino del menu y es un PASO OPCIONAL de esta
-    /// alta. Dar de alta una app y traerse lo que el sistema anterior sabía de ella son el mismo
-    /// gesto, y se hace una sola vez por aplicación — con las demas apps de la empresa todavia
-    /// por dar de alta, tenía que estar aquí y no en un rincon permanente de la navegación.
-    /// </summary>
-    private readonly ImportService _import;
-
     private readonly IFolderPicker _picker;
+
+    /// <summary>
+    /// <b>Quien de verdad da de alta</b> (F30 §4). El escaneo, el registro, el inventario, las
+    /// unidades grandes y la publicación salieron del view-model para que los pasos que se enseñan
+    /// puedan cuadrarse con los que se ejecutan — mientras el alta vivía aquí dentro no había
+    /// ninguna lista que comparar con ninguna otra, había un botón que se apagaba.
+    /// <para>
+    /// Con él se va el importador v4 (F5.9 §1), que sigue siendo un paso opcional del alta: ahora
+    /// es el primero de la lista, y solo sale cuando hay baseline que traer.
+    /// </para>
+    /// </summary>
+    private readonly AppOnboardingService _onboarding;
 
     /// <summary>
     /// R3: los repositorios de la organización. El alta ya no pide escribir la URL — la elige de
@@ -55,30 +56,24 @@ public sealed partial class OnboardingViewModel : ViewModelBase
 
     public OnboardingViewModel(
         HubContext hub,
-        InventoryScanner scanner,
-        MachineConfigStore machines,
         NavigationService navigation,
         FindingIngestionService ingestion,
         ToastCenter toasts,
         CloneLinkService links,
         LinkCloneFlow linkFlow,
-        ImportService import,
         IFolderPicker picker,
-        MeasuredFindingService measured,
         RepositoryCatalog catalog,
+        AppOnboardingService onboarding,
         CycleConfigFlow? configFlow = null)
     {
+        _onboarding = onboarding;
         _configFlow = configFlow;
-        _measured = measured;
         _hub = hub;
-        _scanner = scanner;
-        _machines = machines;
         _navigation = navigation;
         _ingestion = ingestion;
         _toasts = toasts;
         _links = links;
         _linkFlow = linkFlow;
-        _import = import;
         _picker = picker;
         _catalog = catalog;
     }
@@ -433,12 +428,31 @@ public sealed partial class OnboardingViewModel : ViewModelBase
     /// Inventario y en Ajustes — se apaga cuando no puede hacer nada, y la razón va pegada a él.
     /// </para>
     /// </summary>
-    public string CreateBlockedReason => RepoUrl.Trim().Length == 0
-        ? "elige un repositorio"
-        : IsDuplicate ? "ese repositorio ya tiene aplicación" : string.Empty;
+    public string CreateBlockedReason => IsCreating
+        ? string.Empty
+        : RepoUrl.Trim().Length == 0
+            ? "elige un repositorio"
+            : IsDuplicate ? "ese repositorio ya tiene aplicación" : string.Empty;
+
+    /// <summary>
+    /// <b>Los pasos del alta</b> (F30 §4), bajo el botón. Se crea uno por intento porque el plan
+    /// depende de si hay baseline v4 que traer, y porque reintentar después de un fallo tiene que
+    /// empezar con todo en pendiente. Null mientras nadie haya pulsado.
+    /// </summary>
+    [ObservableProperty] private StepList? _steps;
+
+    /// <summary>
+    /// El alta está en marcha: el botón se apaga y bajo él salen los pasos. Es propio y no
+    /// <c>IsBusy</c> porque de él cuelga la puerta del primario, y la de la base no avisa.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanCreate))]
+    [NotifyPropertyChangedFor(nameof(CreateBlockedReason))]
+    [NotifyPropertyChangedFor(nameof(HasCreateBlockedReason))]
+    private bool _isCreating;
 
     /// <summary>Dar de alta se apaga mientras falte el repositorio o ya exista su aplicación.</summary>
-    public bool CanCreate => CreateBlockedReason.Length == 0;
+    public bool CanCreate => !IsCreating && CreateBlockedReason.Length == 0;
 
     /// <summary>Y hay algo que decir al lado del botón apagado.</summary>
     public bool HasCreateBlockedReason => CreateBlockedReason.Length > 0;
@@ -554,101 +568,66 @@ public sealed partial class OnboardingViewModel : ViewModelBase
 
         string slug = Slugify(Name);
         bool importing = ImportBaseline && HasBaseline;
+
+        if (DetectedStack == TechStack.Unknown)
+        {
+            DetectedStack = StackDetector.Detect(ClonePath);
+        }
+
+        // F30 §4 — LOS PASOS, bajo el botón y en la misma columna del formulario. Ni ventana nueva
+        // ni modal: lo que estaba pasando en silencio pasa a la vista, en el sitio donde se pulsó.
+        var request = new OnboardingRequest(
+            slug, Name.Trim(), RepoUrl.Trim(), ClonePath, DetectedStack, importing, CodeAuditPath);
+        StepList steps = AppOnboardingService.NewSteps(importing);
+        Steps = steps;
+        steps.Start();
+
+        IsCreating = true;
         IsBusy = true;
         ImportLog.Clear();
-        _toasts.Show(importing ? "Importando el baseline v4, escaneando y registrando…" : "Escaneando y registrando…");
         try
         {
             // F17 §4: el escaneo primero, el diálogo después, y el ciclo 1 se escribe con lo
-            // elegido. Los tres pasos se separan porque el diálogo vive en el hilo de la interfaz
+            // elegido. Las dos mitades se separan porque el diálogo vive en el hilo de la interfaz
             // y el escaneo no puede congelarla.
-            (IReadOnlyList<string> log, AppConfig app, ScanOutput scan) = await Task.Run(() =>
-            {
-                if (DetectedStack == TechStack.Unknown)
-                {
-                    DetectedStack = StackDetector.Detect(ClonePath);
-                }
-
-                // 1) El baseline v4, ANTES del escaneo. Trae su propio app.json (con el ciclo en
-                //    el que se quedó el sistema anterior) y su inventario con el estado auditado
-                //    de cada unidad. Importar DESPUÉS lo pisaría con lo que acabamos de escanear
-                //    y el alta perdería justo lo que se venía a rescatar.
-                IReadOnlyList<string> importLog = importing
-                    ? _import.Import(slug, Name.Trim(), RepoUrl.Trim(), CodeAuditPath, push: false)
-                    : Array.Empty<string>();
-
-                // 2) La app: la importada si la hay, con lo que el asistente sabe encima. El
-                //    ciclo NO se toca — es del sistema anterior y lo dice el baseline.
-                AppConfig app = _hub.Store.TryReadApp(slug) ?? new AppConfig
-                {
-                    Slug = slug,
-                    Name = Name.Trim(),
-                    RepoUrl = RepoUrl.Trim(),
-                    Stack = DetectedStack,
-                    CurrentCycle = 1,
-                };
-                app.Name = Name.Trim();
-                app.RepoUrl = RepoUrl.Trim();
-                app.Stack = DetectedStack;
-                app.CurrentCycle = Math.Max(1, app.CurrentCycle);
-
-                // El alta escanea con la política que la app estrena: la de fábrica, o la que
-                // traiga su app.json si ya existía en el hub (F13).
-                ScanOutput scan = _scanner.Scan(ClonePath, app, app.CurrentCycle);
-                app.Stack = scan.Stack;
-                _hub.Store.WriteApp(app);
-                return (importLog, app, scan);
-            });
+            OnboardingScan prepared = await Task.Run(() => _onboarding.Prepare(request, steps));
 
             // F17 §4: tras el escaneo y ANTES de abrir el ciclo 1, la lupa. General preseleccionada
             // y marcada como recomendada; cancelar deja los valores por defecto y el alta sigue.
-            InventoryCycle? previous = _hub.Store.TryReadInventory(slug, app.CurrentCycle);
-            CycleConfig config = previous?.Config ?? CycleConfig.Default;
+            CycleConfig config = prepared.Previous?.Config ?? CycleConfig.Default;
             if (_configFlow is not null)
             {
-                var preview = new CycleConfigPreview(slug, app.Name, app.CurrentCycle, config, 0);
+                var preview = new CycleConfigPreview(
+                    slug, prepared.App.Name, prepared.App.CurrentCycle, config, 0);
                 config = await _configFlow.AskAsync(preview, CycleConfigReason.Alta) ?? config;
             }
 
-            await Task.Run(() =>
-            {
-                // 3) El inventario del ciclo vigente sale del CÓDIGO que hay en el clon, pero
-                //    arrastrando el estado de lo que el baseline daba por auditado: es la misma
-                //    reconciliación del re-escaneo (D-302), no una segunda escrita aparte.
-                InventoryCycle inventory = previous is null
-                    ? scan.Inventory
-                    : Rescanner.Reconcile(previous, scan.Inventory).Merged;
-                inventory.Config = config;
-                inventory.OpenedUtc ??= DateTimeOffset.UtcNow;
-                inventory.OpenThemeHistory(config.Theme, inventory.OpenedUtc, _hub.ResolveIdentity().Name);
-                _hub.Store.WriteInventory(slug, inventory);
+            bool published = await Task.Run(() => _onboarding.Finish(request, prepared, config, steps));
 
-                // Los hallazgos de «unidad demasiado grande» los pone al día el MISMO servicio que
-                // los mantiene después (F5.16). Antes se creaban aquí con un bucle propio: dos
-                // caminos para el mismo hecho, y el de aquí no sabía resolver los que sobraran al
-                // re-vincular una app que ya existía.
-                _measured.Reconcile(slug, inventory, ClonePath);
-
-                _machines.SetClonePath(slug, ClonePath);
-                _hub.Sync?.CommitAndPush(importing
-                    ? $"app: onboard {slug} ({scan.Stack}) + import v4"
-                    : $"app: onboard {slug} ({scan.Stack})");
-            });
-
-            foreach (string line in log)
+            foreach (string line in prepared.ImportLog)
             {
                 ImportLog.Add(line);
             }
 
-            _toasts.Show(importing ? "Aplicación registrada con el baseline v4." : "Aplicación registrada.");
+            // Si lo único que falló fue publicar, el alta ESTÁ: queda en el clon y sale con lo
+            // pendiente (F31). Se dice —y se sigue al inventario, que es donde acaba un alta—
+            // porque lo contrario sería dejar la aplicación creada detrás de una pantalla que
+            // parece no haber hecho nada.
+            _toasts.Show(published
+                ? importing ? "Aplicación registrada con el baseline v4." : "Aplicación registrada."
+                : "Aplicación registrada en local · no se pudo publicar en el hub: queda pendiente "
+                  + "de publicar, y sale sola en cuanto el hub conteste.");
             await _navigation.NavigateToAsync<InventoryViewModel>(vm => vm.SetApp(slug));
         }
         catch (Exception ex)
         {
-            _toasts.Show($"Error: {ex.Message}");
+            // El paso ya se ha puesto en rojo con su motivo: el toast solo lleva a mirarlo.
+            _toasts.Show($"El alta se ha parado: {ex.Message}");
         }
         finally
         {
+            steps.Finish();
+            IsCreating = false;
             IsBusy = false;
         }
     }

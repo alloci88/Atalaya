@@ -161,19 +161,26 @@ internal static class TestFactory
         settings ??= Settings(paths);
         return new OnboardingViewModel(
             hub,
-            new InventoryScanner(),
-            machines,
             navigation,
             new FindingIngestionService(hub, ulids),
             toasts,
             Links(hub, paths),
             LinkFlow(hub, paths, toasts, settings: settings),
-            new ImportService(hub),
             picker ?? new NoFolderPicker(),
-            new MeasuredFindingService(hub, new FindingIngestionService(hub, ulids), machines),
             catalog ?? OfflineCatalog(hub, paths),
+            OnboardingService(hub, machines, ulids),
             flow);
     }
+
+    /// <summary>El servicio que da de alta, con sus piezas de verdad (F30 §4).</summary>
+    public static AppOnboardingService OnboardingService(
+        HubContext hub, MachineConfigStore machines, IUlidFactory ulids)
+        => new(
+            hub,
+            new InventoryScanner(),
+            machines,
+            new ImportService(hub),
+            new MeasuredFindingService(hub, new FindingIngestionService(hub, ulids), machines));
 
     /// <summary>
     /// El catálogo de repositorios SIN cuenta conectada (R3): pedirle la lista falla, que es
