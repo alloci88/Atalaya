@@ -1701,6 +1701,79 @@ tarjeta no puede estar mintiéndole al equipo el resto del día. Mejor no decir 
 
 ---
 
+## Trabajar en equipo
+
+Atalaya no tiene servidor. El hub es un repositorio de Git compartido y **cada uno trabaja en su
+propio clon**: eso es lo que permite auditar sin infraestructura, y también lo que hace que dos
+personas puedan tocar lo mismo a la vez. Esta sección cuenta qué pasa cuando coincidís.
+
+La regla de fondo, para no leer nada más: **ninguna resolución automática borra el trabajo de
+nadie**, y **nada se da por publicado hasta que está en el hub de verdad**.
+
+### Qué ves cuando otra persona está trabajando
+
+No hay lista de conectados porque no hay servidor. La señal es la **reclamación**: al empezar a
+auditar, tu Atalaya reserva las unidades en el hub, y esa reserva es lo que el resto ve.
+
+- **En el Portafolio**, la tarjeta de la aplicación dice quién está dentro y cuánto lleva cogido:
+  «Daniel Rodríguez está auditando ahora · 3 unidades». Si coincidís varias personas, salís todas.
+- **En el Inventario**, cada unidad que otra persona esté auditando lleva su nombre y desde qué
+  hora: «Daniel Rodríguez · auditando desde las 10:42». Es una pastilla aparte de «Pendiente» y
+  «Auditada»: aquéllas dicen por dónde va la unidad, ésta dice quién la tiene ahora mismo.
+- **Esas unidades no se pueden marcar** para auditar mientras la reserva siga viva, y el motivo está
+  al lado. No es un capricho: es lo que evita que dos personas paguen dos veces por auditar lo
+  mismo.
+
+**Las reservas caducan.** Si a alguien se le cierra el portátil a mitad, su reserva deja de
+anunciarse a la media hora de su última señal, y la unidad vuelve a quedar libre. Una sesión muerta
+no bloquea nada para siempre.
+
+### Qué pasa si tocáis lo mismo
+
+Depende del tipo de cosa, y en todos los casos **lo que pierde queda recuperable**:
+
+| Si dos personas tocan… | Gana… | Y lo otro… |
+|---|---|---|
+| **El mismo hallazgo** (veredicto, ubicaciones, estado) | El último por fecha | Queda en el historial del hallazgo, con su autor. No se pierde nada. |
+| **La misma unidad** (los dos la reserváis a la vez) | Quien la publicó antes | El otro lo ve al sincronizar —«X reclamó esa unidad antes que tú»—, no la audita, y se queda libre para otra cosa. |
+| **Vuestras sesiones e informes** | Nadie: cada sesión tiene su propio fichero | No hay conflicto posible. |
+| **Los índices** (inventario, ciclo, tarifas, patrones) | Se mezclan campo a campo cuando se puede | Cuando no se puede, gana el más reciente y queda anotado quién perdió y qué. |
+
+Nada de esto te pide que decidas nada mientras auditas: se resuelve al sincronizar y se te cuenta
+en el hilo de la sesión.
+
+### Qué pasa si el hub no responde
+
+- **Puedes seguir trabajando.** Lo que escribes se guarda en tu clon, commiteado, aunque no consiga
+  salir. Trabajar sin conexión es un estado normal, no una avería.
+- **Nunca se queda colgado.** Una publicación que no vuelve en 30 segundos se abandona con su
+  motivo escrito —«No se pudo publicar en el hub en 30 s»— y **Detener** responde siempre. Los
+  reintentos se ven mientras pasan, en el hilo de la sesión: «Publicando en el hub… · reintento 2
+  de 5».
+- **Lo que no salió, sale solo.** Cuenta y el piloto de la barra dicen cuánto hay esperando —«2
+  commits pendientes de publicar»—, y se publica en la siguiente sincronización: al arrancar, al
+  pulsar «Sincronizar ahora» o al terminar una sesión. **No tienes que acordarte tú.**
+- **Un «publicado» significa publicado.** Atalaya no da una publicación por buena hasta releer el
+  hub y ver tu trabajo dentro. Si no está, lo reintenta; y si aun así no entra, lo cuenta como
+  pendiente en vez de decirte que salió.
+
+### Si cierras Atalaya a la fuerza
+
+Pasa: se cuelga algo, o hay que matar el proceso con una sesión en marcha. **No pierdes lo
+auditado** —los hallazgos se guardan según llegan, no al final— y no tienes que arreglar nada a
+mano. La siguiente vez que abras Atalaya:
+
+1. Detecta la sesión que quedó abierta y **la cierra como interrumpida**, con lo que hubiera.
+2. **Suelta tus reservas**, para que tus compañeros dejen de ver esas unidades ocupadas.
+3. **Publica lo que quedara pendiente.**
+4. Te lo dice, y la sesión aparece en **Última sesión** marcada como interrumpida.
+
+Si el cierre pilló a Git a mitad de una escritura, además puede quedar un candado en tu clon que
+haría que nada se pudiera guardar. Atalaya lo detecta al abrir, lo quita y **te lo dice** en Cuenta.
+Si el candado resulta estar en uso —hay otra operación viva—, no lo toca y también te lo dice.
+
+---
+
 ## Cosas que conviene saber
 
 **Si Atalaya no arranca.** Ya no se muere en silencio: dice qué ha fallado, en una ventana, y lo

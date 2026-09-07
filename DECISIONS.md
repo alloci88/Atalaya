@@ -16814,3 +16814,181 @@ test pasa **a veces**, no siempre, así que queda al menos una segunda causa por
 excepciones a propósito desde D-007—. El test se queda en el repo **saltado y con su motivo**:
 una reproducción vale más que una descripción, y marcarla verde sería mentir. Va al backlog como lo
 que es.
+
+### D-1023 — La segunda causa no estaba en el rebase: estaba en qué se aceptaba como prueba
+
+**F31, el defecto que BUGFIX-PUSH dejó abierto.** D-1022 apuntó a que lo que faltaba estaba
+«probablemente en el `Integrate`/rebase de `Pull`». **No era ahí, y la medida lo dice sin margen.**
+Dos clones con una barrera contra el `--bare`: las dos publicaciones vuelven en **65 y 69 ms**, sin
+**un solo reintento**, las dos dejan la salud en verde, **las dos mueven su propia `origin/master`
+a su propio commit** —así que hasta `PendingCommits` decía cero—, y en el bare quedan **los dos
+objetos** y **una sola punta**. El rebase no llegó a correr: no hubo nada que rebasar, porque nadie
+se enteró de que había competencia. El commit del que pierde la carrera está ahí, entero, y **no lo
+alcanza nadie**: invisible para todo clon futuro.
+
+**La causa, aislada en libgit2.** Diez pushes simultáneos por transporte local: en **4 de 10**
+vueltas **ninguna de las dos partes recibe rechazo alguno** y la punta solo alcanza a una. Lo único
+que llega a saltar en las otras es `failed to create locked file 'refs/heads/master.lock'`, que es
+**contención de fichero, no comprobación de avance rápido**. Es decir: el transporte local **lee la
+punta, decide que su empuje es un avance rápido, y escribe** — y entre lo primero y lo último cabe
+el empuje del otro. No hay comparar-e-intercambiar. Sobre un hub de verdad esto lo arbitra
+`receive-pack` y el perdedor sí recibe su `non-fast-forward` —que es lo que la corrección de D-1022
+recoge—; sobre el `--bare` con el que manda probar N-1, no lo arbitra nadie.
+
+**La regla que entra, y por qué es de fondo y no del banco.** Que `Network.Push` vuelva sin
+excepción y sin rechazo **no prueba** que el hub se quedara con nuestro commit. Así que **ninguna
+publicación devuelve éxito sin releer el remoto y ver su commit en la punta**; si no está, se
+convierte en el rechazo que el remoto no dio y el mismo bucle rehace el rebase y reintenta. Cuesta
+**una lectura más del remoto por publicación** y compra que un «publicado» signifique publicado.
+El `Fetch` de la comprobación hace además un segundo trabajo: el refspec es forzado, así que
+**corrige la referencia de seguimiento que el push había movido por su cuenta** y `PendingCommits`
+deja de mentir — que es lo que hace que un commit pisado vuelva a contarse como pendiente y salga
+en la siguiente sincronización.
+
+**La ventana, que no es un número inventado.** Releer justo después no basta: **quien puede
+pisarnos ya estaba dentro de su push cuando escribimos**, luego termina un push más tarde que
+nosotros, y verificar antes de que acabe es verificar un remoto que todavía va a cambiar. La espera
+es por tanto **lo que tarda un push**, y el que mejor lo estima es el nuestro, recién cronometrado
+(suelo 120 ms porque contra un remoto local un push son decenas de milisegundos; techo 2 s porque
+esto se paga en cada publicación). **Medido**: sin esperar, **4 de 40** vueltas terminan con un
+«publicado» falso; con la ventana, **0 de 40**. Y la espera entre reintentos pasa a llevar
+**azar**: dos sesiones que chocaron lo hicieron porque coincidieron, y esperar lo mismo las dos es
+volver a coincidir.
+
+`ConcurrentClaimsTests` **deja de estar saltado**: 20 vueltas verdes de 20, en procesos distintos.
+Con él entran tres tests de la regla —el commit que está pasa, el que el hub no tiene se convierte
+en rechazo con los dos shas en el motivo, y el pisado vuelve a contarse como pendiente y sale en la
+siguiente publicación—.
+
+### D-1024 — El banco de concurrencia: la prueba de carga que el hub nunca tuvo
+
+**F31 §1.** El hub prometía desde el primer día «pull → rebase → push con resolución de
+conflictos» y **todos** los tests de dos clones publicaban **por turnos**, que es el caso fácil. La
+primera vez que dos personas coincidieron de verdad, una sesión se colgó. `scripts/BancoCarga` es
+lo que faltaba: **N personas auditando a la vez** contra el mismo `--bare`, con **sesiones de
+verdad** —el mismo `SessionCoordinator`, la misma tubería de ingesta— y el agente falso.
+
+**Sesiones de verdad y no una imitación**, por lo mismo que `Atalaya.Shots` monta la carcasa de
+verdad: un banco que reimplementara la sesión mediría su propia reimplementación. Y **tres ritmos**,
+porque tres personas iguales no se pisan de forma interesante: uno rápido (pausas de 2 s), uno lento
+(sesiones de cuatro unidades, pausas de 12 s) y **uno que se cae a mitad** sin cerrar la sesión ni
+soltar sus reclamaciones, que es lo que deja un cierre forzado.
+
+**Las cifras del hub se leen de un clon nuevo**, no se les preguntan a los participantes:
+preguntarle a quien publicó si publicó es preguntarle al sospechoso — que es exactamente el defecto
+que D-1023 acaba de cerrar. Para medir la publicación más larga **donde de verdad pasa**,
+`HubSyncService` publica un evento por publicación terminada: desde fuera solo se ven las que pasan
+por «Sincronizar ahora», y **las que se colgaron el día 6 eran las que hace la sesión por su
+cuenta**.
+
+**La tanda de N=3 durante 10 minutos**, que es la que fija la fase:
+
+| Persona | Ritmo | Sesiones | Hallazgos | Reintentos | Publicación más larga | Conflictos |
+|---|---|--:|--:|--:|--:|--:|
+| Álvaro | Rápido | 162 | 8 | 2 | 1,50 s | 8 |
+| Daniel | Lento | 40 | 8 | 8 | 1,52 s | 14 |
+| María | Se cayó | 1 | 2 | 0 | 0,34 s | 0 |
+
+**203 sesiones en el hub, 18 hallazgos en el hub contra 18 reportados** —nada se perdió—, **0
+reclamaciones vivas al acabar** (también las de la que se cayó), **ninguna rotura**, y la
+publicación más larga de toda la tanda **1,52 s contra un tope de 30**. Los 10 reintentos son la
+prueba de que la contención fue real y no una postura.
+
+**Corre en cada release, no en cada build**, y por eso está fuera de `Atalaya.sln` como `Banco`,
+`PromptBench` e `IconGen`: diez minutos son veinte veces la suite entera y lo que mide no cambia con
+un cambio de vista. Lo que corre en cada build es `ConcurrentClaimsTests`, que es la misma pregunta
+en pequeño.
+
+### D-1025 — Escritura al hub: nunca colgada, y lo que no sale no se queda esperando a nadie
+
+**F31 §2.** El reloj, la cancelación y los reintentos con tope los puso D-1022 y no se rehacen; se
+comprueban contra el banco del §1 y aguantan (publicación más larga 1,52 s con tope de 30). Lo que
+faltaba es lo de después.
+
+**Lo pendiente sale solo.** Un commit que no logró publicarse no se perdía —se quedaba commiteado en
+el clon—, pero **solo salía si a alguien se le ocurría pulsar «Sincronizar ahora»**: el arranque
+hacía pull y nada más. El empuje de lo pendiente pasa a vivir en el cuerpo que comparten arranque,
+«Sincronizar ahora» y fin de sesión, que es una regla en un sitio en vez de tres. Y **mientras no
+sale, se dice**: «2 commits pendientes de publicar», en Cuenta y **delante** del tooltip del piloto
+— delante porque es lo único que dice que hay trabajo tuyo que el equipo todavía no ve, y eso pesa
+más que el estado de la conexión que lo causó.
+
+**El candado huérfano, y cómo se distingue del vivo sin adivinar.** Cerrar a la fuerza en mitad de
+una escritura deja un `index.lock` —o el de una referencia, que bloquea el push igual— en el clon.
+Git no lo quita solo: la sesión siguiente se encuentra un clon que rechaza toda escritura y un
+mensaje de libgit2 que no le dice a nadie qué hacer. Se barre **al abrir el clon**, que es cuando se
+sabe que no hay operación nuestra en vuelo. Y la distinción **no se hace por la fecha** —una
+operación lenta y legítima envejece igual que un cadáver—, sino por el asa: un candado vivo lo tiene
+**abierto** quien lo puso y Windows no deja borrarlo. Se intenta borrar; si sale, era huérfano; si
+no sale, hay alguien dentro, **no se toca** y se dice. Las dos cosas se cuentan y **ninguna se
+calla**.
+
+**El azar en la espera** entra aquí y se justifica en D-1023: dos sesiones que chocan lo hacen
+porque coincidieron.
+
+### D-1026 — Conflictos por tipo de fichero: las dos que nadie había ejercitado, y una sorpresa
+
+**F31 §3.** Las reglas ya existían y ya tenían prueba con dos clones para **reclamaciones** (gana la
+que ya estaba publicada, y el que pierde se entera por el hilo) e **inventario** (merge por unidad).
+Faltaban las dos que exigen que los dos clones editen **lo mismo**:
+
+- **El mismo hallazgo tocado por dos**: gana el último por fecha y **el que pierde el veredicto no
+  pierde su entrada** — el historial queda unido, en orden y con su autor. Un hallazgo es un fichero
+  por ULID, así que aquí no hay conflicto de creación; el conflicto es de contenido y se resuelve
+  campo a campo.
+- **Dos sesiones a la vez**: un fichero por ULID, no hay nombre que compartir. Si esto llegara a
+  notificar un conflicto **sería un defecto**, y el test está puesto para cazarlo.
+
+**Y la sorpresa, que cambia una promesa.** «Lo que pierde queda recuperable en el historial de git»
+era verdad a medias: **el rebase reescribe el commit del que pierde**, así que su commit original
+**ya no está en la rama** y `git log` no lo encuentra. Vive entero en el **registro de referencias
+del clon** —el reflog—, que es de donde se recupera lo que un rebase deja atrás. La diferencia tiene
+consecuencias: **el reflog caduca** (noventa días por defecto), así que «recuperable» tiene fecha de
+caducidad y quien tenga que recuperar algo no puede enterarse dentro de un año. Queda **fijado en el
+test** en vez de supuesto.
+
+### D-1027 — Que se vea quién está trabajando, con nombre y no con una X
+
+**F31 §4.** Sin servidor no hay presencia: **la única señal de que alguien está trabajando es su
+reclamación reciente**. Lo que faltaba no era la señal, era decirla.
+
+**El Portafolio decía que había actividad; ahora dice de quién y cuánta.** «Daniel Rodríguez está
+auditando ahora · 3 unidades», y **si coinciden varias personas salen todas**, la que más lleva
+delante. Un nombre es lo único que convierte «esta aplicación está ocupada» en «habla con Daniel
+antes de tocarla». La bandera de sí/no se queda además de los nombres, porque la papelera solo
+necesita saber si hay **alguien** — y porque mi propia sesión recién lanzada tiene actividad antes
+de tener reclamación publicada, y ahí se anuncia sin fingir un nombre.
+
+**En el Inventario, la reclamación ajena pasa a ser una pastilla de estado del sistema** —«Daniel
+Rodríguez · auditando desde las 10:42»—, distinta de «Pendiente» y «Auditada»: aquellas dicen en qué
+punto está la unidad, ésta dice **quién la tiene ahora**. Con la hora, porque la pregunta de quien
+mira el inventario no es «¿está cogida?» sino «¿la cojo yo?», y eso no se contesta sin saber si
+lleva dos minutos o dos horas.
+
+**Y no se puede marcar para auditar.** Apagar la casilla **solo cierra una de las tres puertas**: la
+marca puede venir de la cabecera del módulo o de un botón de la barra, así que el view-model la
+rechaza también. El motivo va **al lado**, en la pastilla, y no en un tooltip (D-944.4).
+
+**La caducidad, unificada.** El Inventario miraba si la reclamación había caducado y el Portafolio
+si podía **anunciarse** (`ClaimRules.MaxSilence`, BUGFIX-ACTIVIDAD). Eran dos verdades sobre la
+misma pregunta, y la del Inventario era la mala: bloqueaba una unidad **hasta el TTL entero** aunque
+su dueño llevara media hora sin dar señales. Manda el margen de **lectura**, que es de quien lee y
+no de quien escribió la reclamación. Y las reclamaciones **propias** no cuentan: una reclamación mía
+es mi sesión en curso, no un compañero que me impide trabajar.
+
+### D-1028 — Sesión interrumpida: lo que ya estaba, y lo que le faltaba
+
+**F31 §5.** Cerrar a la fuerza con una sesión en marcha ya estaba resuelto desde D-110 y
+BUGFIX-ACTIVIDAD: al arrancar se detecta la marca de la sesión huérfana, **se cierra como
+interrumpida con lo que haya** —los hallazgos ya están en disco por la ingesta en vivo—, se sueltan
+sus reclamaciones y sus claims sueltos, y se cuenta. Nada de esto pide nada al usuario. **No se
+rehace** (N-6).
+
+Lo que le faltaba era la otra mitad, y es la de D-1025: **publicar lo pendiente**. La recuperación
+commiteaba y empujaba lo suyo, pero un commit anterior que no hubiera logrado salir seguía esperando
+un botón. Con el empuje de lo pendiente en el arranque, la frase del §5 —«detectar la sesión
+huérfana, cerrarla como interrumpida, publicar lo pendiente, y decirlo»— se cumple entera.
+
+El banco del §1 lo ejercita en cada tanda: la persona que **se cae a mitad** deja sesión abierta y
+reclamaciones vivas, y al acabar la tanda el hub tiene **0 reclamaciones vivas** y sus hallazgos
+dentro.
