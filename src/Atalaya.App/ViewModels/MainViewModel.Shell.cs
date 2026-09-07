@@ -113,7 +113,17 @@ public sealed partial class MainViewModel
     /// él</b>. El punto se queda (es lo que se ve de reojo) y la frase entera vive en su tooltip,
     /// que es donde se va a buscar cuando el color deje de ser verde.
     /// </summary>
-    public string SyncTooltip => SyncHealth switch
+    public string SyncTooltip => SyncPendingSuffix + SyncHealthTooltip;
+
+    /// <summary>
+    /// «2 commits pendientes de publicar · » delante de todo lo demás (F31 §2). Va PRIMERO porque
+    /// es lo único del piloto que dice que hay trabajo tuyo que el equipo todavía no ve, y eso
+    /// pesa más que el estado de la conexión que lo causó.
+    /// </summary>
+    private string SyncPendingSuffix
+        => _hub.PendingLabel is { Length: > 0 } pending ? pending + " · " : string.Empty;
+
+    private string SyncHealthTooltip => SyncHealth switch
     {
         Atalaya.Storage.Sync.SyncHealth.Green =>
             "Conectado a GitHub y al hub" + SyncStampSuffix,

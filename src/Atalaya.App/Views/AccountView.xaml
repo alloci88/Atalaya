@@ -308,6 +308,11 @@
                             Margin="{StaticResource Pad.XS.Top}"
                             Visibility="{Binding TlsNotice, Converter={StaticResource NotEmptyToVisibility}}" />
                         <TextBlock
+                            Text="{Binding PendingLabel}"
+                            Style="{StaticResource Text.Small}"
+                            Margin="{StaticResource Pad.XS.Top}"
+                            Visibility="{Binding PendingLabel, Converter={StaticResource NotEmptyToVisibility}}" />
+                        <TextBlock
                             Text="{Binding LockNotice}"
                             Style="{StaticResource Text.Small}"
                             Margin="{StaticResource Pad.XS.Top}"

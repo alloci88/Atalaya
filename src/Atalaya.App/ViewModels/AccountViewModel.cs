@@ -94,6 +94,9 @@ public sealed partial class AccountViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty] private string _lockNotice = string.Empty;
 
+    /// <summary>«2 commits pendientes de publicar», o vacío cuando el hub está al día.</summary>
+    [ObservableProperty] private string _pendingLabel = string.Empty;
+
     /// <summary>Where the hub clone lives on this machine — the first thing to check when sync misbehaves.</summary>
     public string HubClonePath => _hub.HubPaths.Root;
 
@@ -162,6 +165,11 @@ public sealed partial class AccountViewModel : ViewModelBase
             _ => "con errores",
         };
         SyncError = _hub.LastSyncError ?? string.Empty;
+
+        // LO QUE TODAVÍA NO HA VISTO EL EQUIPO (F31 §2). Un commit que no logró publicarse no se
+        // pierde —se queda en el clon y sale en la siguiente sincronización—, pero mientras tanto
+        // hay trabajo hecho que nadie más ve, y eso hay que poder mirarlo en algún sitio.
+        PendingLabel = _hub.PendingLabel;
         // Never silent: if we let a connection through without being able to check revocation, say so.
         TlsNotice = _hub.RevocationUncheckedHost is { } host
             ? $"Esta red no permite comprobar la revocación del certificado de {host}. "

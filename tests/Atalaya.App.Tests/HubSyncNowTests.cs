@@ -155,4 +155,53 @@ public sealed class HubSyncNowTests : IDisposable
             // Best-effort cleanup.
         }
     }
+
+    [Fact]
+    public void Un_commit_sin_publicar_sale_SOLO_en_el_arranque_siguiente()
+    {
+        HubContext primero = Hub();
+        primero.EnsureHub();
+        CommitLocallyWithoutPushing(primero, "lo que no llego a salir");
+        primero.PendingCommits.Should().Be(1);
+
+        // Se cierra sin sincronizar: el commit se queda en el clon, como cuando el hub no contesta.
+        primero.Sync!.Dispose();
+
+        // Y AL ARRANCAR OTRA VEZ SALE SOLO, sin que el usuario pulse nada (F31 §2). Antes esto lo
+        // hacia unicamente «Sincronizar ahora», asi que un commit que no logro publicarse esperaba
+        // a que a alguien se le ocurriera pulsar un boton.
+        HubContext segundo = Hub();
+        segundo.EnsureHub();
+
+        segundo.PendingCommits.Should().Be(0, "el arranque es una sincronizacion como las demas");
+        segundo.PendingLabel.Should().BeEmpty();
+
+        // Y esta de verdad en el hub, no solo en la cuenta local.
+        string testigo = Path.Combine(_root, "testigo");
+        using var sync = new HubSyncService(new HubPaths(testigo), ("Testigo", "t@example.invalid"));
+        sync.EnsureCloned(_remote);
+        sync.Pull();
+        new HubStore(new HubPaths(testigo)).TryReadApp("app")!.Name
+            .Should().Be("lo que no llego a salir");
+
+        segundo.Sync!.Dispose();
+    }
+
+    [Fact]
+    public void Y_mientras_no_sale_se_dice_cuanto_hay_pendiente()
+    {
+        HubContext hub = Hub();
+        hub.EnsureHub();
+
+        hub.PendingLabel.Should().BeEmpty("al dia no se dice nada");
+
+        CommitLocallyWithoutPushing(hub, "uno");
+        hub.PendingLabel.Should().Be("1 commit pendiente de publicar");
+
+        hub.Store.WriteApp(new AppConfig { Slug = "otra", Name = "dos", RepoUrl = "u" });
+        hub.Sync!.Commit("app: dos").Should().BeTrue();
+        hub.PendingLabel.Should().Be("2 commits pendientes de publicar");
+
+        hub.Sync.Dispose();
+    }
 }

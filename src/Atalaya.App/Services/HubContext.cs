@@ -203,10 +203,9 @@ public sealed class HubContext
             return HubSyncReport.None;
         }
 
-        // Se cuenta DESPUÉS del pull (y de las migraciones, que pueden commitear por su cuenta),
-        // así que el número significa "pendiente de publicar", no "pendiente desde el fetch".
-        int pending = Sync.PendingCommits;
-        bool pushed = pending == 0 || Sync.Push();
+        // El empuje de lo pendiente ya lo hizo `EnsureHubCore`, que es por donde pasan también el
+        // arranque y el fin de sesión: una sola regla y un solo sitio.
+        (int pending, bool pushed) = _lastPublish;
         SyncStateChanged?.Invoke();
         return new HubSyncReport(pulled.Changes.Count, pulled.Notifications, pending, pushed);
     }
@@ -227,7 +226,45 @@ public sealed class HubContext
         SeedModelRates();
         MigrateSilencesToUlidKeys();
         MigrateRuleExclusionsToPatterns();
+
+        // LO QUE NO SE PUDO PUBLICAR NO SE QUEDA ESPERANDO AL USUARIO (F31 §2). Antes solo
+        // «Sincronizar ahora» empujaba lo pendiente, así que un commit que no logró salir —el hub
+        // sin responder, un push que se pisó con otro— se quedaba en el clon hasta que a alguien
+        // se le ocurriera pulsar un botón. El arranque es una sincronización como las demás.
+        _lastPublish = PublishPending();
         return pulled;
+    }
+
+    private (int Pending, bool Pushed) _lastPublish;
+
+    /// <summary>
+    /// Commits que este clon tiene sin publicar ahora mismo. Se cuenta contra lo último que se
+    /// trajo, así que significa «pendientes de publicar» después de una sincronización.
+    /// </summary>
+    public int PendingCommits => Sync?.PendingCommits ?? 0;
+
+    /// <summary>«2 commits pendientes de publicar», o vacío cuando no hay nada atrás.</summary>
+    public string PendingLabel
+    {
+        get
+        {
+            int pending = PendingCommits;
+            return pending switch
+            {
+                0 => string.Empty,
+                1 => "1 commit pendiente de publicar",
+                _ => $"{pending} commits pendientes de publicar",
+            };
+        }
+    }
+
+    /// <summary>Saca lo que quedó sin publicar. Devuelve cuántos había y si salieron.</summary>
+    private (int Pending, bool Pushed) PublishPending()
+    {
+        // Se cuenta DESPUÉS del pull (y de las migraciones, que pueden commitear por su cuenta),
+        // así que el número significa "pendiente de publicar", no "pendiente desde el fetch".
+        int pending = Sync!.PendingCommits;
+        return (pending, pending == 0 || Sync.Push());
     }
 
     /// <summary>Same as <see cref="SyncNow"/>, off the UI thread.</summary>
