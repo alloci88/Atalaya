@@ -26,6 +26,30 @@ public sealed record RibbonGap(int Row, double Left, double Width, int Days, str
 public sealed record RibbonTick(DateTime When, double X, string Text);
 
 /// <summary>
+/// Cada cuánto se marca un eje de FECHAS, según lo que abarque (F35-4-R).
+/// <para>
+/// <b>Se escribe aquí una vez porque no lo había.</b> Las gráficas de tiempo del panel eligen su
+/// grano por el <b>rango del selector</b> —`MetricsRange` decide si los cubos son diarios,
+/// semanales o mensuales (D-1040)—, que es una decisión sobre cómo AGREGAR, y sus rótulos salen
+/// de los cubos ya agregados. La cinta no agrega nada: tiene un eje continuo y hay que decidir
+/// dónde poner las marcas a partir de cuántos días abarca. Son dos preguntas distintas, así que
+/// esto no duplica aquella regla; y queda con nombre y en un solo sitio para el día que otra
+/// gráfica de eje continuo la necesite.
+/// </para>
+/// </summary>
+public enum AxisGrain
+{
+    /// <summary>Hasta dos semanas: una marca por día («1 sept»).</summary>
+    Daily,
+
+    /// <summary>Hasta tres meses: una por semana, en lunes.</summary>
+    Weekly,
+
+    /// <summary>Más: una por mes, el día 1.</summary>
+    Monthly,
+}
+
+/// <summary>
 /// <b>Dónde va cada cosa de la cinta</b> (F35-4 §1.1), calculado sin pintar un píxel.
 /// <para>
 /// Hasta aquí la cinta era una lista de capítulos: bloques de ancho fijo, uno tras otro, sin eje.
@@ -162,10 +186,30 @@ public sealed class RibbonGeometry
         return new RibbonGeometry(from, to, geometry.Width, blocks, gaps, TicksFor(geometry));
     }
 
+    /// <summary>Hasta aquí, una marca por día.</summary>
+    public const double DailyUpToDays = 14;
+
+    /// <summary>Y hasta aquí, una por semana. Más allá, una por mes.</summary>
+    public const double WeeklyUpToDays = 92;
+
     /// <summary>
-    /// Las marcas del eje, en fechas <b>redondas</b>: lunes mientras el eje no pase de dos meses,
-    /// día 1 de cada mes hasta poco más de un año, y trimestres después. Es la misma escalera de
-    /// grano de F17.2, con la diferencia de que ahora las marcas caen donde cae la fecha.
+    /// El grano de las marcas de un eje de fechas de <paramref name="days"/> días. La regla, en un
+    /// solo sitio: hasta dos semanas se marca cada día, hasta tres meses cada semana, y después
+    /// cada mes.
+    /// </summary>
+    public static AxisGrain GrainFor(double days) => days switch
+    {
+        <= DailyUpToDays => AxisGrain.Daily,
+        <= WeeklyUpToDays => AxisGrain.Weekly,
+        _ => AxisGrain.Monthly,
+    };
+
+    /// <summary>El grano de ESTE eje.</summary>
+    public AxisGrain Grain => GrainFor(Days);
+
+    /// <summary>
+    /// Las marcas del eje, en fechas <b>redondas</b> y con el grano que le toque a su rango
+    /// (<see cref="GrainFor"/>): el día, el lunes de la semana o el día 1 del mes.
     /// <para>
     /// Hoy NO es una marca: es una línea propia, porque no es una fecha redonda — es el ancla.
     /// </para>
@@ -178,33 +222,33 @@ public sealed class RibbonGeometry
             return ticks;
         }
 
-        double days = axis.Days;
         DateTime cursor;
         Func<DateTime, DateTime> next;
         string format;
 
-        if (days <= 62)
+        switch (GrainFor(axis.Days))
         {
-            int back = ((int)axis.From.DayOfWeek + 6) % 7;   // al lunes de esa semana
-            cursor = axis.From.Date.AddDays(-back);
-            next = d => d.AddDays(7);
-            format = "d MMM";
-        }
-        else if (days <= 400)
-        {
-            cursor = new DateTime(axis.From.Year, axis.From.Month, 1);
-            next = d => d.AddMonths(1);
-            format = "MMM yy";
-        }
-        else
-        {
-            int quarter = ((axis.From.Month - 1) / 3 * 3) + 1;
-            cursor = new DateTime(axis.From.Year, quarter, 1);
-            next = d => d.AddMonths(3);
-            format = "MMM yy";
+            case AxisGrain.Daily:
+                cursor = axis.From.Date;
+                next = d => d.AddDays(1);
+                format = "d MMM";
+                break;
+
+            case AxisGrain.Weekly:
+                int back = ((int)axis.From.DayOfWeek + 6) % 7;   // al lunes de esa semana
+                cursor = axis.From.Date.AddDays(-back);
+                next = d => d.AddDays(7);
+                format = "d MMM";
+                break;
+
+            default:
+                cursor = new DateTime(axis.From.Year, axis.From.Month, 1);
+                next = d => d.AddMonths(1);
+                format = "MMM yy";
+                break;
         }
 
-        while (cursor <= axis.To && ticks.Count < 200)
+        while (cursor <= axis.To && ticks.Count < 400)
         {
             if (cursor >= axis.From)
             {

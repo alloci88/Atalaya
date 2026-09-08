@@ -26,6 +26,8 @@ public sealed class CycleRibbonLayoutTests
 {
     private static readonly DateTime Today = new(2026, 9, 2, 12, 0, 0);
 
+    private static System.Globalization.CultureInfo Cultura => System.Globalization.CultureInfo.CurrentCulture;
+
     private static RibbonSlice Slice(Brush fill, DateTime a, DateTime b) => new(fill, a, b, new[] { "trozo" });
 
     private static RibbonSpan Span(
@@ -114,34 +116,91 @@ public sealed class CycleRibbonLayoutTests
         vacia.Ticks.Should().NotBeEmpty("un eje sin datos sigue teniendo fechas");
     }
 
-    /// <summary>Las marcas caen en fechas REDONDAS —lunes o día 1—, y cambian de grano con el rango.</summary>
+    /// <summary>
+    /// <b>El grano de las marcas sale del rango</b> (F35-4-R): hasta dos semanas, una por día;
+    /// hasta tres meses, una por semana; más, una por mes. La regla vive en un solo sitio, con
+    /// nombre, y se comprueba en sus dos bordes — que es donde se equivoca una implementación.
+    /// </summary>
+    [Theory]
+    [InlineData(1, AxisGrain.Daily)]
+    [InlineData(13.9, AxisGrain.Daily)]
+    [InlineData(14, AxisGrain.Daily)]
+    [InlineData(14.1, AxisGrain.Weekly)]
+    [InlineData(60, AxisGrain.Weekly)]
+    [InlineData(92, AxisGrain.Weekly)]
+    [InlineData(92.1, AxisGrain.Monthly)]
+    [InlineData(365, AxisGrain.Monthly)]
+    public void El_grano_de_las_marcas_sale_del_rango(double days, AxisGrain expected)
+        => RibbonGeometry.GrainFor(days).Should().Be(expected);
+
+    /// <summary>
+    /// Y <b>cuántas marcas salen</b> de cada rango, con la fecha redonda que le toca a su grano.
+    /// </summary>
     [Fact]
-    public void Las_marcas_del_eje_son_fechas_redondas_y_cambian_de_grano()
+    public void Cada_rango_trae_su_numero_de_marcas()
     {
-        // Cuatro semanas: lunes.
-        RibbonGeometry semanas = RibbonGeometry.For(
-            new[] { new RibbonTrack("Una", new[] { Span("C1", Today.AddDays(-20), Today) }) }, Today, 1000);
-        semanas.Ticks.Should().NotBeEmpty();
+        // Diez días → una marca por DÍA. El eje empieza el 23 a mediodía, así que la primera
+        // medianoche que cae DENTRO es la del 24: del 24 de agosto al 2 de septiembre, diez.
+        RibbonGeometry dias = Axis(10);
+        dias.Grain.Should().Be(AxisGrain.Daily);
+        dias.Ticks.Should().HaveCount(10);
+        dias.Ticks.Select(t => t.When).Should().BeInAscendingOrder();
+        dias.Ticks.Select(t => t.When.Date).Should().OnlyHaveUniqueItems();
+        dias.Ticks.Should().OnlyContain(t => t.When.TimeOfDay == TimeSpan.Zero, "medianoche de cada día");
+        dias.Ticks[0].Text.Should().Be(Today.AddDays(-9).Date.ToString("d MMM", Cultura));
+        dias.Ticks[^1].When.Date.Should().Be(Today.Date, "la última marca es la de hoy");
+
+        // Sesenta días → una por SEMANA, en lunes: nueve lunes entre el 4 de julio y el 2 de sept.
+        RibbonGeometry semanas = Axis(60);
+        semanas.Grain.Should().Be(AxisGrain.Weekly);
+        semanas.Ticks.Should().HaveCount(9);
         semanas.Ticks.Should().OnlyContain(t => t.When.DayOfWeek == DayOfWeek.Monday);
 
-        // Cuatro meses: día 1 de cada mes.
-        RibbonGeometry meses = RibbonGeometry.For(
-            new[] { new RibbonTrack("Una", new[] { Span("C1", Today.AddDays(-120), Today) }) }, Today, 1000);
-        meses.Ticks.Should().NotBeEmpty();
+        // Doscientos días → una por MES, el día 1: de marzo a septiembre, siete.
+        RibbonGeometry meses = Axis(200);
+        meses.Grain.Should().Be(AxisGrain.Monthly);
+        meses.Ticks.Should().HaveCount(7);
         meses.Ticks.Should().OnlyContain(t => t.When.Day == 1);
 
-        // Dos años: trimestres.
-        RibbonGeometry anios = RibbonGeometry.For(
-            new[] { new RibbonTrack("Una", new[] { Span("C1", Today.AddDays(-730), Today) }) }, Today, 1000);
-        anios.Ticks.Should().OnlyContain(t => t.When.Day == 1 && (t.When.Month - 1) % 3 == 0);
+        // Dos años, también por mes: veinticuatro meses cumplidos más el del extremo.
+        RibbonGeometry anios = Axis(730);
+        anios.Grain.Should().Be(AxisGrain.Monthly);
+        anios.Ticks.Should().HaveCount(24);
+        anios.Ticks.Should().OnlyContain(t => t.When.Day == 1);
 
-        // Y ninguna marca se sale del eje.
-        foreach (RibbonGeometry g in new[] { semanas, meses, anios })
+        // Y ninguna marca se sale del eje, con cualquier rango.
+        foreach (RibbonGeometry g in new[] { dias, semanas, meses, anios })
         {
             g.Ticks.Should().OnlyContain(t => t.When >= g.From && t.When <= g.To);
             g.Ticks.Should().OnlyContain(t => t.X >= 0 && t.X <= g.Width);
         }
+
+        static RibbonGeometry Axis(int days) => RibbonGeometry.For(
+            new[] { new RibbonTrack("Una", new[] { Span("C1", Today.AddDays(-days), Today) }) }, Today, 1000);
     }
+
+    /// <summary>
+    /// Los rótulos que no caben se DILUYEN —se escribe uno de cada n—, pero las guías se dibujan
+    /// todas: son las que sitúan. Contando desde la última, así que la marca más reciente sale
+    /// siempre.
+    /// </summary>
+    [Fact]
+    public void Los_rotulos_del_eje_que_no_caben_se_diluyen()
+        => ViewLayout.OnUiThread(() =>
+        {
+            // Dos años por mes en una cinta estrecha: veinticuatro rótulos no caben en 320 px.
+            var largo = new[] { new RibbonTrack("Una", new[] { Span("C1", Today.AddDays(-730), Today) }) };
+            CycleRibbon estrecha = Build(largo, 320);
+
+            estrecha.Geometry.Ticks.Should().HaveCount(24, "las marcas son las que dice el grano");
+            estrecha.AxisLabels.Count.Should().BeLessThan(
+                estrecha.Geometry.Ticks.Count, "los rótulos que se pisarían no se escriben");
+            estrecha.AxisLabels.Should().NotBeEmpty();
+
+            // Con sitio de sobra se escriben todas.
+            CycleRibbon ancha = Build(new[] { new RibbonTrack("Una", new[] { Span("C1", Today.AddDays(-60), Today) }) }, 1124);
+            ancha.AxisLabels.Should().HaveCount(ancha.Geometry.Ticks.Count);
+        });
 
     // ================================================================ posición y ancho
 

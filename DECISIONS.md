@@ -18406,11 +18406,23 @@ la vista real pintada da: el eje arranca en el primer tramo —el ciclo de XBLAS
 hoy en el extremo derecho, el bloque de XBLAST llenando casi todo el eje con un **relleno del
 4,3 %** y el de Atalaya ocupando su cuarto final y **sin relleno**. Cuadra con la tabla.
 
-> **Retoque declarado.** El suelo del eje se midió primero en cuatro semanas y se bajó a **siete
-> días** antes de cerrar: con cuatro, un hub de cuatro días de vida dibujaba sus dos ciclos
-> apretados contra el borde derecho de tres semanas y media vacías — exactamente lo que la regla
-> del eje de D-1040 quita en las demás gráficas. Con el mismo suelo que ellas, la cinta empieza
-> donde empieza el dato.
+> **Dos retoques declarados, vistos en el `dist`.**
+>
+> **(a) El suelo del eje** se midió primero en cuatro semanas y se bajó a **siete días**: con
+> cuatro, un hub de cuatro días de vida dibujaba sus dos ciclos apretados contra el borde derecho
+> de tres semanas y media vacías — exactamente lo que la regla del eje de D-1040 quita en las demás
+> gráficas. Con el mismo suelo que ellas, la cinta empieza donde empieza el dato.
+>
+> **(b) El grano de las marcas** pasa a salir del rango en tres escalones —**hasta 14 días una por
+> día, hasta 92 una por semana, después una por mes**—, y la regla se escribe **una vez y con
+> nombre** (`RibbonGeometry.GrainFor`). No duplica la de las gráficas de tiempo: aquéllas eligen
+> grano por el **rango del selector** para decidir cómo AGREGAR los cubos (D-1040), y sus rótulos
+> salen de los cubos ya agregados; la cinta no agrega nada —tiene un eje continuo— y lo que decide
+> es dónde caen las marcas. Son dos preguntas distintas, y ahora la segunda tiene un solo sitio
+> para el día que otra gráfica de eje continuo la necesite. Con el grano fino aparecen ejes de
+> veinticuatro marcas, así que los rótulos que se pisarían **se diluyen** —uno de cada n, medido y
+> contando desde el más reciente, como el eje de `ChartPlot`—: las guías se dibujan todas, porque
+> son las que sitúan; lo que se ahorra es la tinta que no se podría leer.
 
 **El defecto que arregla.** La cinta pintaba **bloques de ancho fijo, uno tras otro y sin eje**: un
 ciclo de cuatro días y uno de seis meses medían lo mismo y estaban en el mismo sitio. Contestaba
@@ -18420,9 +18432,9 @@ uno y cuánto se tardó en volver», que es lo que se le pide a un historial.
 **§1 · Lo visible (N-6), y es toda la lista.**
 
 1. **Un eje de tiempo real, compartido por todas las aplicaciones**: del inicio del primer tramo de
-   cualquiera de ellas hasta **hoy**, con marcas en fechas **redondas** —lunes hasta dos meses, día
-   1 hasta poco más de un año, trimestres después— y una **línea vertical de hoy**, que no es una
-   marca más: es el ancla (D-593). Cada bloque empieza en su fecha y mide su duración; el abierto
+   cualquiera de ellas hasta **hoy**, con marcas en fechas **redondas** —el grano sale del rango:
+   hasta dos semanas una por día, hasta tres meses una por semana, y después una por mes— y una
+   **línea vertical de hoy**, que no es una marca más: es el ancla (D-593). Cada bloque empieza en su fecha y mide su duración; el abierto
    llega a la línea de hoy. **Suelo de siete días**, la misma regla que el resto de ejes del panel
    (D-1040): el eje empieza donde empieza el primer tramo, y solo se alarga hacia atrás cuando ese
    inicio queda a menos de una semana de hoy. Sin suelo, una aplicación con un ciclo de dos horas
@@ -18465,7 +18477,8 @@ pintando la vista de verdad con la secuencia de verdad, no solo con el control s
 poder afirmarla sin pintar un píxel (la misma razón de D-832): el eje va del primer tramo a hoy
 —sin alargarlo cuando el tramo ya pasa de una semana— y nunca baja de siete días; sin tramos sigue
 existiendo y no divide por cero; las marcas caen en
-lunes, en día 1 o en trimestres según el rango y ninguna se sale; cada bloque queda en la x de su
+el día, en lunes o en día 1 según el grano de su rango, con su recuento por rango y sus dos
+bordes (14 y 92 días), y ninguna se sale; cada bloque queda en la x de su
 inicio y mide su duración **sobre los cuatro anchos de página de la casa**, con el abierto muriendo
 en la línea de hoy y el de tres horas siendo un hilo —no un bloque igual que uno de cincuenta
 días—; el relleno es proporcional a la cobertura y sin inventario no lo hay; el hueco encaja
@@ -18475,7 +18488,7 @@ entre lo dibujado y la geometría; que la cinta pinta aunque el ancho llegue des
 cae al corto; la fila vacía rotulada, la fila indivisible y el punto de color de cada aplicación.
 Los tests de D-831 —extremos, fuentes, tooltip, clic— siguen verdes sin tocarlos; el del filtro de
 periodo cambia de expectativa, que es justo lo que esta entrega cambia. La tanda queda en
-**2.648 casos** (2.112 en la aplicación).
+**2.657 casos** (2.121 en la aplicación).
 
 **Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8. Que el relleno de un 4 % se vea
 —son siete píxeles—, que las marcas del eje no se pisen a 1.280, y que la fila de una aplicación

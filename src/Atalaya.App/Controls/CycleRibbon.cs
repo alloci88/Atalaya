@@ -203,6 +203,9 @@ public sealed class CycleRibbon : Grid
     /// <summary>Los tramos sin auditar dibujados, con su geometría.</summary>
     internal List<(int Row, RibbonGap Gap, Line Line)> GapLines { get; } = new();
 
+    /// <summary>Los rótulos del eje que SÍ se escribieron, después de diluir los que no caben.</summary>
+    internal List<TextBlock> AxisLabels { get; } = new();
+
     /// <summary>El área desplazable, para poder afirmar dónde arranca y qué se ve.</summary>
     internal ScrollViewer Scroll => _scroll;
 
@@ -284,6 +287,9 @@ public sealed class CycleRibbon : Grid
         var labels = new List<(RibbonSpan, TextBlock, TextBlock?)>();
         var gaps = new List<(int, TextBlock)>();
         var empties = new List<(int, TextBlock)>();
+        GapLines.Clear();
+        AxisLabels.Clear();
+        TodayLine = null;
         _stale = true;
 
         IReadOnlyList<RibbonTrack> tracks = Tracks ?? Array.Empty<RibbonTrack>();
@@ -396,8 +402,22 @@ public sealed class CycleRibbon : Grid
     /// </summary>
     private void DrawAxis(RibbonGeometry geometry, double axisTop, double height)
     {
-        foreach (RibbonTick tick in geometry.Ticks)
+        // Los rótulos se DILUYEN cuando no caben: se escribe uno de cada n, y se cuenta desde el
+        // último hacia atrás para que la marca más reciente salga siempre. Las guías se dibujan
+        // todas — son las que sitúan—; lo que se ahorra es la tinta que se pisaría. Es la misma
+        // regla que el eje de `ChartPlot`, y medida, no estimada por caracteres (D-832).
+        double widest = geometry.Ticks.Count == 0
+            ? 0
+            : geometry.Ticks.Max(t => Measure(t.Text, DatesSize).Width);
+        double slot = geometry.Ticks.Count > 1
+            ? geometry.Width / (geometry.Ticks.Count - 1)
+            : geometry.Width;
+        int every = Math.Max(1, (int)Math.Ceiling((widest + 10) / Math.Max(1, slot)));
+
+        for (int i = 0; i < geometry.Ticks.Count; i++)
         {
+            RibbonTick tick = geometry.Ticks[i];
+            bool writes = (geometry.Ticks.Count - 1 - i) % every == 0;
             var guide = new Line
             {
                 X1 = tick.X,
@@ -411,11 +431,17 @@ public sealed class CycleRibbon : Grid
             };
             _plot.Children.Add(guide);
 
+            if (!writes)
+            {
+                continue;
+            }
+
             TextBlock label = Muted(tick.Text, DatesSize);
             Size size = Measure(tick.Text, DatesSize);
             Canvas.SetLeft(label, Math.Max(0, tick.X - size.Width / 2));
             Canvas.SetTop(label, axisTop + 2);
             _plot.Children.Add(label);
+            AxisLabels.Add(label);
         }
 
         var today = new Line
