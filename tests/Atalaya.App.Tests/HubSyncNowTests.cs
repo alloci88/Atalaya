@@ -61,7 +61,7 @@ public sealed class HubSyncNowTests : IDisposable
         HubSyncReport report = hub.SyncNow();
 
         report.PendingCommits.Should().Be(1, "había exactamente un commit local sin publicar");
-        report.Pushed.Should().BeTrue();
+        report.Pushed.Should().BeTrue(hub.Why());
 
         // Y llegó al remoto de verdad: un clon independiente lo ve.
         string check = Path.Combine(_root, "check");
@@ -81,7 +81,7 @@ public sealed class HubSyncNowTests : IDisposable
         using var other = new HubSyncService(otherPaths, ("Otro", "otro@example.com"));
         other.EnsureCloned(_remote);
         new HubStore(otherPaths).WriteApp(new AppConfig { Slug = "suya", Name = "Suya", RepoUrl = "u" });
-        other.CommitAndPush("app: suya").Should().BeTrue();
+        other.CommitAndPush("app: suya").Should().BeTrue(other.Why());
 
         HubSyncReport report = hub.SyncNow();
 
@@ -99,7 +99,7 @@ public sealed class HubSyncNowTests : IDisposable
         HubSyncReport report = hub.SyncNow();
 
         report.PendingCommits.Should().Be(0);
-        report.Pushed.Should().BeTrue("no haber tenido nada que publicar no es un fallo");
+        report.Pushed.Should().BeTrue("no haber tenido nada que publicar no es un fallo · " + hub.Why());
         report.Describe().Should().Contain("nada pendiente de publicar");
     }
 
@@ -125,9 +125,9 @@ public sealed class HubSyncNowTests : IDisposable
         HubSyncReport report = hub.SyncNow();
 
         hub.IsCloned.Should().BeTrue();
-        hub.Health.Should().Be(SyncHealth.Green);
+        hub.Health.Should().Be(SyncHealth.Green, hub.Why());
         hub.Store.TryReadHub().Should().NotBeNull("un hub vacío se sigue inicializando");
-        report.Pushed.Should().BeTrue();
+        report.Pushed.Should().BeTrue(hub.Why());
     }
 
     [Fact]

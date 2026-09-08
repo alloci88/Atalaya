@@ -123,7 +123,7 @@ public sealed class FactoryResetTests : IDisposable
             SeedApp(hub, slug, slug.ToUpperInvariant());
         }
 
-        hub.Sync!.CommitAndPush($"app: onboard {slugs.Length}").Should().BeTrue();
+        hub.Sync!.CommitAndPush($"app: onboard {slugs.Length}").Should().BeTrue(hub.Sync!.Why());
         return hub;
     }
 

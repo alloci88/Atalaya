@@ -428,9 +428,9 @@ public sealed class ThresholdPolicySyncTests : IDisposable
         {
             Slug = "app", Name = "App", RepoUrl = RepoUrl, Stack = TechStack.DotNet, CurrentCycle = 1,
         });
-        ana.Sync!.CommitAndPush("app: alta").Should().BeTrue();
+        ana.Sync!.CommitAndPush("app: alta").Should().BeTrue(ana.Sync!.Why());
 
-        new ThresholdPolicyService(ana).Set("app", 30, 60_000).Published.Should().BeTrue();
+        new ThresholdPolicyService(ana).Set("app", 30, 60_000).Published.Should().BeTrue(ana.Why());
 
         // María: clona el hub y se trae la política sin haber tocado ningún ajuste suyo.
         (HubContext maria, AppPaths mariaPaths, MachineConfigStore mariaMachines) = User("maria");

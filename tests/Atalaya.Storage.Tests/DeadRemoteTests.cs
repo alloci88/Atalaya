@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using Atalaya.Storage.Sync;
+using Atalaya.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -106,7 +107,7 @@ public sealed class DeadRemoteTests : IDisposable
         clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(15),
             "el tope eran 2 s: sin reloj esto no vuelve nunca, que es el defecto que se cierra");
         sync.LastError.Should().NotBeNullOrWhiteSpace("un fallo sin motivo no se puede enseñar");
-        sync.Health.Should().Be(SyncHealth.Red);
+        sync.Health.Should().Be(SyncHealth.Red, sync.Why());
     }
 
     /// <summary>

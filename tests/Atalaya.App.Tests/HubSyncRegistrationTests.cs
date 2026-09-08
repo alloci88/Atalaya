@@ -48,7 +48,8 @@ public sealed class HubSyncRegistrationTests : IDisposable
         hub.EnsureHub();
 
         hub.IsCloned.Should().BeTrue();
-        hub.Health.Should().Be(SyncHealth.Green, "el piloto tiene que pasar a verde tras conectar");
+        hub.Health.Should().Be(SyncHealth.Green,
+            "el piloto tiene que pasar a verde tras conectar · " + hub.Why());
         hub.LastSync.Should().NotBeNull("«Última sincronización» no puede quedarse en «nunca»");
         hub.LastSyncError.Should().BeNull();
     }
@@ -148,13 +149,13 @@ public sealed class HubSyncRegistrationTests : IDisposable
         _account.Connect("gho_x", new GitHubUser(7, "ana", "Ana L.", null, null));
         HubContext hub = Hub();
         hub.EnsureHub();
-        hub.Health.Should().Be(SyncHealth.Green);
+        hub.Health.Should().Be(SyncHealth.Green, hub.Why());
 
         // The remote disappears (revoked access, network gone, repo removed).
         DeleteTree(_remote);
         await hub.PullAsync();
 
-        hub.Health.Should().NotBe(SyncHealth.Green);
+        hub.Health.Should().NotBe(SyncHealth.Green, hub.Why());
         hub.LastSyncError.Should().NotBeNullOrEmpty("sin esto el fallo solo se ve en el log");
     }
 

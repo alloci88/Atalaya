@@ -5,6 +5,7 @@ using Atalaya.Copilot;
 using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Ids;
 using Atalaya.Inventory;
+using Atalaya.Tests;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Atalaya.App.Tests;
@@ -429,6 +430,15 @@ internal static class TestFactory
             return viewModel;
         }
     }
+
+    /// <summary>
+    /// <b>BUGFIX-CI-2 — el motivo con el que afirma un test que mira la salud del hub.</b> Es el
+    /// mismo <see cref="Atalaya.Tests.HubDiagnostics.Why"/> de los tests de almacenamiento, por el
+    /// lado del <see cref="HubContext"/>: aquí el sync puede no existir todavía, y «no hay sync»
+    /// también es un motivo que hay que poder leer en un <c>.trx</c>.
+    /// </summary>
+    public static string Why(this HubContext hub)
+        => hub.Sync is null ? "el hub no tiene sync construido" : hub.Sync.Why();
 
     /// <summary>
     /// F3.1 Bloque 2: ningún test puede escribir en el almacén real. Si <see cref="AppPaths.Root"/>

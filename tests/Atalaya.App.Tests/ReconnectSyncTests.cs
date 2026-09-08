@@ -100,7 +100,7 @@ public sealed class ReconnectSyncTests : IDisposable
         // Estado de partida: cuenta conectada y hub sincronizado.
         _account.Connect("gho_viejo", new GitHubUser(7, "ana", "Ana L.", null, null));
         _hub.EnsureHub();
-        _hub.Health.Should().Be(SyncHealth.Green);
+        _hub.Health.Should().Be(SyncHealth.Green, _hub.Why());
 
         var stub = ScriptedLogin();
         AccountViewModel vm = NewViewModel(stub);
@@ -115,7 +115,8 @@ public sealed class ReconnectSyncTests : IDisposable
         await vm.ConnectCommand.ExecuteAsync(null);
 
         _account.Token.Should().Be("gho_nuevo");
-        _hub.Health.Should().Be(SyncHealth.Green, "el piloto tiene que refrescarse al reconectar");
+        _hub.Health.Should().Be(SyncHealth.Green,
+            "el piloto tiene que refrescarse al reconectar · " + _hub.Why());
         _hub.LastSync.Should().NotBeNull();
         vm.SyncSummary.Should().Contain("publicó 1 commit(s) local(es)");
 
@@ -130,7 +131,7 @@ public sealed class ReconnectSyncTests : IDisposable
     {
         _account.Connect("gho_viejo", new GitHubUser(7, "ana", "Ana L.", null, null));
         _hub.EnsureHub();
-        _hub.Health.Should().Be(SyncHealth.Green);
+        _hub.Health.Should().Be(SyncHealth.Green, _hub.Why());
 
         AccountViewModel vm = NewViewModel(ScriptedLogin());
         int announcements = 0;
@@ -139,7 +140,7 @@ public sealed class ReconnectSyncTests : IDisposable
         vm.DisconnectCommand.Execute(null);
 
         _hub.Health.Should().NotBe(SyncHealth.Green,
-            "ese verde lo ganó una credencial que ya no existe");
+            "ese verde lo ganó una credencial que ya no existe · " + _hub.Why());
         vm.SyncState.Should().Be("pendiente de sincronizar");
         announcements.Should().BeGreaterThan(0, "el piloto de la barra se entera por este evento");
     }
@@ -154,7 +155,7 @@ public sealed class ReconnectSyncTests : IDisposable
         await vm.ConnectCommand.ExecuteAsync(null);
 
         _hub.IsCloned.Should().BeTrue();
-        _hub.Health.Should().Be(SyncHealth.Green);
+        _hub.Health.Should().Be(SyncHealth.Green, _hub.Why());
         vm.SyncSummary.Should().NotBeEmpty();
     }
 

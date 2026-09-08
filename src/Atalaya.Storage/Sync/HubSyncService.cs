@@ -48,6 +48,20 @@ public sealed class HubSyncService : IDisposable
     /// </summary>
     public string? LastError { get; private set; }
 
+    /// <summary>
+    /// <b>El diario del último <see cref="Push"/> que agotó sus intentos</b> (BUGFIX-CI-2): qué
+    /// falló en cada uno de los cinco y cuánto tardó. <c>null</c> mientras la última publicación
+    /// haya salido bien.
+    /// <para>
+    /// Es diagnóstico y <b>no</b> se le enseña a nadie: para el usuario está
+    /// <see cref="LastError"/>, que es una frase. Esto existe porque un <c>false</c> pelado no se
+    /// puede diagnosticar desde el <c>.trx</c> que sube el workflow, que es la única ventana que
+    /// hay a un runner. El tiempo por intento va dentro a propósito: es lo que distingue un remoto
+    /// en disputa —rechazos rápidos— de una máquina lenta.
+    /// </para>
+    /// </summary>
+    public string? LastPublishFailure { get; private set; }
+
     /// <summary>Raised after a pull that changed files, so the UI can react live.</summary>
     public event Action<PullResult>? Pulled;
 
@@ -290,6 +304,7 @@ public sealed class HubSyncService : IDisposable
     {
         Health = SyncHealth.Green;
         LastError = null;
+        LastPublishFailure = null;
     }
 
     private void Failed(Exception ex, SyncHealth health)
@@ -304,6 +319,19 @@ public sealed class HubSyncService : IDisposable
     /// </summary>
     public bool Push()
     {
+        // BUGFIX-CI-2 — POR QUÉ NO SALIÓ, CUANDO NO SALE. Agotar los cinco intentos por rechazo
+        // devolvía `false` con la salud en rojo y SIN un motivo que leer: `LastError` se queda a
+        // `null` porque lo pone a null el `Pull()` de cada vuelta al salir bien, y el rechazo no
+        // lo escribía nadie. Medido con el cebo: quitando la línea de abajo, `LastError` es
+        // literalmente `<null>` al agotar. En esta máquina se depura con el registro delante; de un
+        // runner de Actions solo vuelve el `.trx`, y un `false` pelado no se diagnostica. Se apunta
+        // cada intento —qué pasó y cuánto tardó— y se escribe al agotar, en su PROPIA propiedad:
+        // `LastError` es lo que se le enseña al usuario (el globo del piloto, la página de Cuenta)
+        // y un diario de cinco intentos no es un mensaje para nadie. No cambia ni una decisión del
+        // bucle ni una palabra de lo que se ve: lo que se hacía se sigue haciendo, y además queda
+        // dicho donde un test lo puede leer.
+        var intentos = new List<string>();
+
         for (int attempt = 1; attempt <= PushAttempts; attempt++)
         {
             if (attempt > 1)
@@ -311,6 +339,7 @@ public sealed class HubSyncService : IDisposable
                 PushRetrying?.Invoke(attempt);
             }
 
+            var attemptClock = System.Diagnostics.Stopwatch.StartNew();
             try
             {
                 Pull(); // rebase onto latest remote first
@@ -354,26 +383,38 @@ public sealed class HubSyncService : IDisposable
                 Succeeded();
                 return true;
             }
-            catch (NonFastForwardException)
+            catch (NonFastForwardException ex)
             {
                 // El remoto se movió debajo: otra persona publicó mientras nosotros preparábamos.
                 // Es el caso NORMAL de un hub compartido, no una avería — se rehace el rebase y se
                 // vuelve a intentar.
                 _log.LogInformation(
                     "Push rejected (remote moved); retry {Attempt}/{Of}", attempt, PushAttempts);
+                intentos.Add(Intento(attempt, "rechazo", attemptClock, ex));
                 Backoff(attempt);
             }
             catch (LibGit2SharpException ex)
             {
                 _log.LogWarning(ex, "Push failed on attempt {Attempt}/{Of}", attempt, PushAttempts);
+                intentos.Add(Intento(attempt, "error de git", attemptClock, ex));
                 Failed(ex, attempt == PushAttempts ? SyncHealth.Red : SyncHealth.Amber);
                 Backoff(attempt);
             }
         }
 
         Health = SyncHealth.Red;
+        LastPublishFailure = $"No se publicó en {PushAttempts} intentos · {string.Join(" · ", intentos)}";
         return false;
     }
+
+    /// <summary>
+    /// Un intento fallido, en una línea: cuál de los cinco, qué clase de fallo, cuánto tardó y lo
+    /// que dijo git. El tiempo va porque es lo que distingue un remoto en disputa —rechazos
+    /// rápidos— de una máquina lenta, y esa pregunta no se puede contestar desde un `.trx` sin él.
+    /// </summary>
+    private static string Intento(
+        int attempt, string clase, System.Diagnostics.Stopwatch clock, Exception ex)
+        => $"{attempt}/{PushAttempts} {clase} tras {clock.ElapsedMilliseconds} ms: {ex.Message}";
 
     /// <summary>
     /// <b>Una publicación no se da por buena hasta VERLA en el remoto</b> (F31). Vuelve a leer el
@@ -619,25 +660,54 @@ public sealed class HubSyncService : IDisposable
         // escuchando, y lo que tenía que decirse ya se dijo cuando venció el reloj.
         var worker = new Thread(() =>
         {
+            bool published = false;
+            Exception? failure = null;
             try
             {
                 Commit(message);
-                done.TrySetResult(Push());
+                published = Push();
             }
             catch (Exception ex)
             {
-                done.TrySetException(ex);
+                failure = ex;
             }
-            finally
+
+            // LA PUERTA SE SUELTA ANTES DE AVISAR, Y ÉSE ES TODO EL ARREGLO (BUGFIX-CI-2).
+            //
+            // Estaba al revés: `done.TrySetResult(Push())` desbloqueaba a quien esperaba y sólo
+            // DESPUÉS corría el `finally` con el `Release()`. Entre las dos cosas cabe una
+            // publicación entera: quien volvía de aquí podía llamar otra vez y encontrarse la
+            // puerta todavía echada, y llevarse un `false` con la salud en ROJO por una
+            // publicación que había salido BIEN. Es la ventana de unas pocas instrucciones que en
+            // esta máquina no se ve nunca y en un runner de dos núcleos con el disco en disputa
+            // se abre de par en par: basta con que a este hilo lo desalojen justo aquí.
+            //
+            // Publican dos veces seguidas sobre el MISMO servicio `EnsureHubCore` —«hub: init» y
+            // las dos migraciones— y el arnés de `PublishVerificationTests`, que son exactamente
+            // los tests que caían en Actions y ninguno de los que no caían.
+            //
+            // El invariante de D-1022 no se toca, se afina: la puerta protege «puede haber un hilo
+            // DENTRO de libgit2». Cuando `Push()` ha vuelto ya no hay nadie dentro, así que éste es
+            // el sitio exacto. Si el reloj vence, este hilo sigue dentro de `Push()`, no ha llegado
+            // hasta aquí, y la puerta sigue echada — que es lo que aquella decisión compró.
+            try
             {
-                try
-                {
-                    _pushGate.Release();
-                }
-                catch (ObjectDisposedException)
-                {
-                    // El servicio se cerró mientras esto seguía dentro. No hay puerta que soltar.
-                }
+                _pushGate.Release();
+            }
+            catch (ObjectDisposedException)
+            {
+                // El servicio se cerró mientras esto seguía dentro. No hay puerta que soltar.
+            }
+
+            // Y se avisa al final, pase lo que pase: nadie puede quedarse esperando un reloj
+            // entero porque el `Release()` de arriba se quejara.
+            if (failure is null)
+            {
+                done.TrySetResult(published);
+            }
+            else
+            {
+                done.TrySetException(failure);
             }
         })
         {

@@ -1,5 +1,6 @@
 ﻿using Atalaya.Domain.Model;
 using Atalaya.Storage.Sync;
+using Atalaya.Tests;
 using FluentAssertions;
 using LibGit2Sharp;
 using Xunit;
@@ -39,7 +40,7 @@ public sealed class ConflictRulesTests : IDisposable
         aStore.WriteApp(Samples.App());
         Finding seed = Samples.Finding();
         aStore.WriteFinding("webapp", seed);
-        aSync.CommitAndPush("seed").Should().BeTrue();
+        aSync.CommitAndPush("seed").Should().BeTrue(aSync.Why());
 
         (HubSyncService bSync, HubStore bStore) = Clone("b", "maria");
 
@@ -58,8 +59,8 @@ public sealed class ConflictRulesTests : IDisposable
         bStore.WriteFinding("webapp", suyo);
         bSync.Commit("maria confirma");
 
-        aSync.Push().Should().BeTrue();
-        bSync.Push().Should().BeTrue();
+        aSync.Push().Should().BeTrue(aSync.Why());
+        bSync.Push().Should().BeTrue(bSync.Why());
 
         // GANA EL ULTIMO POR FECHA, Y EL OTRO NO SE PIERDE: sigue en el historial, con su autor.
         Finding merged = bStore.TryReadFinding("webapp", ulid)!;
@@ -82,7 +83,7 @@ public sealed class ConflictRulesTests : IDisposable
         (HubSyncService aSync, HubStore aStore) = Clone("a", "alvaro");
         aStore.WriteHub(Samples.Hub());
         aStore.WriteApp(Samples.App());
-        aSync.CommitAndPush("seed").Should().BeTrue();
+        aSync.CommitAndPush("seed").Should().BeTrue(aSync.Why());
 
         (HubSyncService bSync, HubStore bStore) = Clone("b", "maria");
 
@@ -96,13 +97,13 @@ public sealed class ConflictRulesTests : IDisposable
 
         aSync.Commit("session: alvaro");
         bSync.Commit("session: maria");
-        aSync.Push().Should().BeTrue();
+        aSync.Push().Should().BeTrue(aSync.Why());
 
         // Si esto llegara a notificar un conflicto, seria un DEFECTO: dos sesiones no comparten
         // fichero. El test esta aqui para cazarlo.
         var notifications = new List<string>();
         bSync.Pulled += r => notifications.AddRange(r.Notifications);
-        bSync.Push().Should().BeTrue();
+        bSync.Push().Should().BeTrue(bSync.Why());
         notifications.Should().BeEmpty("dos sesiones no pueden pisarse: cada una tiene su fichero");
 
         (HubSyncService cSync, HubStore cStore) = Clone("c", "quien-mira");
@@ -117,7 +118,7 @@ public sealed class ConflictRulesTests : IDisposable
         (HubSyncService aSync, HubStore aStore) = Clone("a", "alvaro");
         aStore.WriteHub(Samples.Hub());
         aStore.WriteApp(Samples.App());
-        aSync.CommitAndPush("seed").Should().BeTrue();
+        aSync.CommitAndPush("seed").Should().BeTrue(aSync.Why());
 
         (HubSyncService bSync, HubStore bStore) = Clone("b", "maria");
 
@@ -127,8 +128,8 @@ public sealed class ConflictRulesTests : IDisposable
         bStore.WriteClaim("webapp", Samples.Claim("src/Db/Pool.cs", "maria"));
         bSync.Commit("claim: maria");
 
-        aSync.Push().Should().BeTrue();
-        bSync.Push().Should().BeTrue();
+        aSync.Push().Should().BeTrue(aSync.Why());
+        bSync.Push().Should().BeTrue(bSync.Why());
 
         // La regla: gana la que ya estaba publicada.
         bStore.ListClaims("webapp").Should().ContainSingle().Which.By.Should().Be("alvaro");

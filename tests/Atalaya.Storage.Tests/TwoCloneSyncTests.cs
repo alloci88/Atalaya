@@ -1,6 +1,7 @@
 using Atalaya.Domain;
 using Atalaya.Domain.Model;
 using Atalaya.Storage.Sync;
+using Atalaya.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -29,7 +30,7 @@ public sealed class TwoCloneSyncTests : IDisposable
         aStore.WriteApp(Samples.App());
         Finding finding = Samples.Finding();
         aStore.WriteFinding("webapp", finding);
-        aSync.CommitAndPush("session: lotes webapp seed").Should().BeTrue();
+        aSync.CommitAndPush("session: lotes webapp seed").Should().BeTrue(aSync.Why());
 
         // B clones after the seed and immediately sees it.
         (HubSyncService bSync, HubStore bStore) = Clone("b", "maria");
@@ -37,7 +38,7 @@ public sealed class TwoCloneSyncTests : IDisposable
 
         // B adds a session and pushes.
         bStore.WriteSession(Samples.Session(by: "maria"));
-        bSync.CommitAndPush("session: lotes webapp 1 unidad").Should().BeTrue();
+        bSync.CommitAndPush("session: lotes webapp 1 unidad").Should().BeTrue(bSync.Why());
 
         // A pulls and converges.
         aSync.Pull();
@@ -52,7 +53,7 @@ public sealed class TwoCloneSyncTests : IDisposable
         (HubSyncService aSync, HubStore aStore) = Clone("a", "alvaro");
         aStore.WriteHub(Samples.Hub());
         aStore.WriteApp(Samples.App());
-        aSync.CommitAndPush("seed").Should().BeTrue();
+        aSync.CommitAndPush("seed").Should().BeTrue(aSync.Why());
 
         (HubSyncService bSync, HubStore bStore) = Clone("b", "maria");
 
@@ -64,12 +65,12 @@ public sealed class TwoCloneSyncTests : IDisposable
         bSync.Commit("claim: maria Pool.cs");
 
         // Alvaro pushes first — his claim reaches remote history.
-        aSync.Push().Should().BeTrue();
+        aSync.Push().Should().BeTrue(aSync.Why());
 
         // Maria pushes: rebase hits the claim conflict; Alvaro's already-published claim wins.
         var notifications = new List<string>();
         bSync.Pulled += r => notifications.AddRange(r.Notifications);
-        bSync.Push().Should().BeTrue();
+        bSync.Push().Should().BeTrue(bSync.Why());
 
         // The surviving claim on both sides belongs to Alvaro.
         Claim survivor = bStore.ListClaims("webapp").Should().ContainSingle().Subject;
@@ -89,7 +90,7 @@ public sealed class TwoCloneSyncTests : IDisposable
         aStore.WriteApp(Samples.App());
         aStore.WriteInventory("webapp", Samples.Inventory(1,
             ("a.cs", UnitState.Pendiente), ("b.cs", UnitState.Pendiente)));
-        aSync.CommitAndPush("seed inventory").Should().BeTrue();
+        aSync.CommitAndPush("seed inventory").Should().BeTrue(aSync.Why());
 
         (HubSyncService bSync, HubStore bStore) = Clone("b", "maria");
 
@@ -104,8 +105,8 @@ public sealed class TwoCloneSyncTests : IDisposable
         bStore.WriteInventory("webapp", bInv);
         bSync.Commit("audit b.cs");
 
-        aSync.Push().Should().BeTrue();
-        bSync.Push().Should().BeTrue(); // rebase merges the inventory per unit
+        aSync.Push().Should().BeTrue(aSync.Why());
+        bSync.Push().Should().BeTrue(bSync.Why()); // rebase merges the inventory per unit
 
         InventoryCycle merged = bStore.TryReadInventory("webapp", 1)!;
         merged.Units.Single(u => u.Path == "a.cs").State.Should().Be(UnitState.Auditada);

@@ -4,8 +4,8 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-08 (OMPT-BUGFIX-CI — los tests llevan su propia identidad de git; la
-máquina no cuenta).
+Última revisión: 2026-09-08 (BUGFIX-CI-2 — la puerta del push se soltaba tarde; un test de
+publicación afirma con el motivo).
 
 ## En vuelo
 
@@ -517,7 +517,43 @@ máquina no cuenta).
   sube el `.trx` de cada run (`if: always()`, BUGFIX-RELEASE §3): si vuelven a caer, se leen ahí los
   nombres y la pila, que es la única evidencia que falta.
 
+- **Tres defectos intermitentes del banco de BUGFIX-CI-2, diagnosticados y sin arreglar.** Ninguno
+  es la carrera de la puerta del push, así que no se arreglaron de paso (D-1056):
+  - **Interbloqueo de WPF que CUELGA el job, no lo pone rojo.** Una vuelta se quedó 2 h 28 min sin
+    escribir una línea. El volcado (`dotnet-stack`) enseña **dos hilos STA bloqueados en
+    constructores estáticos de WPF**, cada uno detrás de lo que el otro inicializa:
+    `ScrollViewer..cctor()` desde `CycleRibbonLayoutTests.La_cinta_dibuja_sus_bloques…` y
+    `TextBoxBase..cctor()`/`TextBox..cctor()` desde
+    `ConversationSurfaceTests.Cada_clase_de_evento_tiene_exactamente_una_plantilla`, los dos por
+    `ViewLayout.OnUiThread`, los dos tests en un `Thread.Join()` que no vuelve. Es el más caro de
+    los tres: en Actions se ve como un job parado hasta el tope. Lo que hay que decidir es si los
+    tests de maquetación comparten **un solo** hilo STA para toda la tanda —una colección de xUnit
+    sin paralelismo— en vez de uno por test.
+  - `MetricsPanelTests.Las_graficas_llevan_el_tramo_completo_de_cada_cubo_al_tooltip` — 1 de 40 con
+    `xUnit.MaxParallelThreads=16` y 1 de 20 en el banco lento. `IndexOutOfRangeException` dentro de
+    `ObservableCollection.InsertItem` (`MetricsViewModel.ApplyTiles`, un `Cards.Clear()` pisado por
+    un `Cards.Add()`): el `setter` de `SelectedRange` lanza un `LoadAsync()` **sin esperarlo**
+    (`Reload()`, `MetricsViewModel.cs:244`) y el test lanza otro. Bajo WPF los dos vuelven al
+    dispatcher y se serializan; en un test no hay `SynchronizationContext` y se pisan. Se arregla
+    serializando `LoadAsync` consigo mismo, que es un cambio de producto con su propia decisión.
+  - `SelfUpdateTests.El_progreso_de_descarga_no_inunda_la_interfaz` — 2 de 20 en el banco lento.
+    Mide un **ritmo** de notificaciones de progreso y se queda sin ninguna («Expected descarga not
+    to be empty») cuando la máquina va justa de núcleos. Lo que hay que decidir es si esa regla se
+    puede afirmar sin reloj.
+
 ## Cerrado
+
+- **BUGFIX-CI-2 · Un «publicado» que sale bien no puede tumbar al siguiente** — el hilo de
+  `CommitAndPush` avisaba al que esperaba (`done.TrySetResult(Push())`) **antes** de soltar la puerta
+  del push (`finally { _pushGate.Release(); }`), así que quien volvía con un `true` y publicaba otra
+  vez en el acto se encontraba la puerta echada y se llevaba un `false` con la salud en rojo por una
+  publicación que había salido bien. Invisible en una máquina ociosa; con **dos procesadores lógicos
+  y el disco en disputa**, 12 rojos de 20 ejecuciones, con los cinco tests del parte de Actions
+  dentro. Ahora se suelta antes de avisar —el invariante de D-1022 se afina, no se relaja— y no se
+  sube ningún tope. Además, la regla de tests: **un test de publicación afirma con el motivo**
+  (`sync.Why()`, en `tests/Shared/HubDiagnostics.cs`), y `HubSyncService` estrena
+  `LastPublishFailure`, el diario de los cinco intentos, **separado** de `LastError`, que es lo que
+  lee el usuario y no cambia. Ver D-1056.
 
 - **OMPT-BUGFIX-CI · Los tests llevan su propia identidad de git** — los repositorios temporales de
   los tests nacían sin `user.name` ni `user.email` y acababan commiteando con la identidad **global

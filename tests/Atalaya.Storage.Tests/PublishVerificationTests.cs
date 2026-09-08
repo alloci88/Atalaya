@@ -1,4 +1,5 @@
 ﻿using Atalaya.Storage.Sync;
+using Atalaya.Tests;
 using FluentAssertions;
 using LibGit2Sharp;
 using Xunit;
@@ -35,11 +36,11 @@ public sealed class PublishVerificationTests : IDisposable
         var store = new HubStore(new HubPaths(_remote.NewClonePath(name)));
         store.WriteHub(Samples.Hub());
         store.WriteApp(Samples.App());
-        sync.CommitAndPush("seed").Should().BeTrue();
+        sync.CommitAndPush("seed").Should().BeTrue(sync.Why());
 
         // Un segundo commit, para tener una punta ANTERIOR a la que retroceder.
         store.WriteClaim("webapp", Samples.Claim("src/Uno.cs", name));
-        sync.CommitAndPush("claims: " + name).Should().BeTrue();
+        sync.CommitAndPush("claims: " + name).Should().BeTrue(sync.Why());
         return (sync, _remote.NewClonePath(name));
     }
 
@@ -104,9 +105,57 @@ public sealed class PublishVerificationTests : IDisposable
         sync.PendingCommits.Should().Be(1, "el hub ya no lo tiene, así que está sin publicar");
 
         // Y la siguiente publicación lo saca.
-        sync.CommitAndPush("reintento").Should().BeTrue();
+        sync.CommitAndPush("reintento").Should().BeTrue(sync.Why());
         sync.Pull();
         sync.PendingCommits.Should().Be(0);
+
+        sync.Dispose();
+    }
+
+    /// <summary>
+    /// <b>Una publicación que no sale DICE POR QUÉ</b> (BUGFIX-CI-2).
+    /// <para>
+    /// <b>El defecto que cierra.</b> Agotar los cinco intentos por rechazo devolvía <c>false</c> con
+    /// la salud en rojo y <c>LastError</c> a <c>null</c> —lo pone a null el <see cref="HubSyncService.Pull"/>
+    /// de cada vuelta al salir bien—, así que el parte de un runner decía «Expected … to be True» y
+    /// nada más. En esta máquina se depura con el registro delante; del runner solo vuelve el
+    /// <c>.trx</c>, y un <c>false</c> pelado no se diagnostica.
+    /// </para>
+    /// <para>
+    /// <b>Cómo se provoca, y por qué así.</b> Contra el <c>--bare</c> de N-1 no se pueden pedir cinco
+    /// rechazos de verdad: el transporte local <b>no arbitra nada</b> (D-1023), así que todo push es
+    /// un avance rápido y nadie rechaza. Lo que sí se puede es dejar al clon <b>sin traerse su propia
+    /// rama</b>: el push escribe en el bare y la relectura de D-1023 no la ve nunca, que es
+    /// exactamente el rechazo que el bucle fabrica cuando el hub no se quedó con lo nuestro. Cinco
+    /// vueltas, y al final el motivo tiene que estar escrito.
+    /// </para>
+    /// <para>
+    /// Se mira <see cref="HubSyncService.LastPublishFailure"/> y <b>no</b> <c>LastError</c>: esa
+    /// otra es la frase que se le enseña al usuario —el globo del piloto, la página de Cuenta— y
+    /// no cambia, que es la mitad de esta corrección que no se ve.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Una_publicacion_que_agota_los_intentos_deja_dicho_por_que()
+    {
+        HubSyncService sync = Clone("a");
+        string path = _remote.NewClonePath("a");
+        new HubStore(new HubPaths(path)).WriteHub(Samples.Hub());
+
+        using (var repo = new Repository(path))
+        {
+            repo.Network.Remotes.Update(
+                "origin", r => r.FetchRefSpecs = new[] { "+refs/heads/nadie/*:refs/remotes/origin/nadie/*" });
+        }
+
+        sync.CommitAndPush("seed").Should().BeFalse("la relectura no puede ver la rama publicada");
+
+        sync.Health.Should().Be(SyncHealth.Red);
+        sync.LastPublishFailure.Should().NotBeNullOrWhiteSpace(
+                "un false sin motivo es lo único que llega de Actions, y no se diagnostica")
+            .And.Contain($"{HubSyncService.PushAttempts} intentos", "cuántas veces se intentó")
+            .And.Contain("sigue sin la rama", "y qué dijo cada intento")
+            .And.MatchRegex(@"tras \d+ ms", "y cuánto tardó, que es lo que separa disputa de lentitud");
 
         sync.Dispose();
     }

@@ -1,5 +1,6 @@
 using Atalaya.Domain.Model;
 using Atalaya.Storage.Sync;
+using Atalaya.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -53,7 +54,7 @@ public sealed class ConcurrentClaimsTests : IDisposable
         (HubSyncService seedSync, HubStore seedStore) = Clone("seed", "semilla");
         seedStore.WriteHub(Samples.Hub());
         seedStore.WriteApp(Samples.App());
-        seedSync.CommitAndPush("seed").Should().BeTrue();
+        seedSync.CommitAndPush("seed").Should().BeTrue(seedSync.Why());
 
         (HubSyncService aSync, HubStore aStore) = Clone("a", "alvaro");
         (HubSyncService bSync, HubStore bStore) = Clone("b", "daniel");

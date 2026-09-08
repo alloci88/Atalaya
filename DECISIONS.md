@@ -19188,3 +19188,119 @@ que es el punto del test: cada sesión con la suya—, así que se van de la fir
 queda en **0 avisos**.
 
 **Nada visible cambia**: no se ha tocado ni una vista, ni un texto de la aplicación, ni el producto.
+
+### D-1056 — Un «publicado» que sale bien no puede tumbar al siguiente: la puerta se soltaba tarde
+
+**El síntoma, y por qué no se podía diagnosticar.** Dos tandas de Actions dejaron cinco tests de
+publicación en rojo —`PublishVerificationTests` ×2, `ReconnectSyncTests` ×2 y
+`ThresholdPolicySyncTests`— con `CommitAndPush` devolviendo `false` o la salud en rojo, siempre
+verdes en la máquina de quien desarrolla. Lo que volvía del runner era «Expected … to be True», que
+no es un diagnóstico: es la constatación de que no se sabe nada. Del runner solo vuelve el `.trx`
+que el workflow sube (BUGFIX-RELEASE §3), así que **lo que no esté en el `because` no existe**.
+
+**Medida 1 — qué decía el servicio cuando devolvía `false`, con el cebo delante.** `Push()` tiene
+**un solo** `return false`, al agotar los cinco intentos, y llegaba ahí sin motivo: cada vuelta
+empieza por `Pull()`, que al salir bien llama a `Succeeded()` y pone `LastError` a `null`, y el
+`catch (NonFastForwardException)` —que es donde cae la relectura de D-1023— no lo escribía nunca.
+Comprobado con cebo: quitando la línea nueva, el test de esta fase dice literalmente
+`Expected sync.LastPublishFailure not to be <null> or whitespace … but found <null>`. Ahora se
+apunta cada intento —qué falló y **cuánto tardó**, que es lo que separa un remoto en disputa de una
+máquina lenta— y se escribe al agotar, en **`LastPublishFailure`**, propiedad nueva y de solo
+lectura. **No** en `LastError`: ésa es la frase que se le enseña al usuario —el globo del piloto,
+la página de Cuenta, el pie de una sesión— y un diario de cinco intentos no es un mensaje para
+nadie. Por eso nada visible cambia.
+
+**Medida 2 — el bucle, en dos condiciones.** Con **paralelismo máximo** (`xUnit.MaxParallelThreads=16`,
+20 vueltas sobre `Atalaya.Storage.Tests` y `Atalaya.App.Tests` = 40 ejecuciones): **1 rojo**, y **no
+es de publicación** —es una carrera de `MetricsViewModel`, abajo—. Ni un test de publicación cayó en
+las 40. Emulando el runner —**afinidad a dos procesadores lógicos** (un runner estándar tiene 2 vCPU)
+más un trabajo de fondo escribiendo, releyendo y borrando ficheros de 8 MB en la misma carpeta
+temporal, con `MaxParallelThreads=2`, 10 vueltas = 20 ejecuciones—: **12 rojos de 20**, y dentro
+están **los cinco tests del parte de Actions**, más `HubSyncNowTests`, `HubSyncRegistrationTests` ×3
+y `ReconnectSyncTests.Disconnecting…`. No hacía falta un disco lento de verdad: hacían falta pocos
+núcleos.
+
+**Medida 3 — qué comparten los cinco, leído y no supuesto.** **Nada** que pueda chocar: cada arnés
+se hace su raíz bajo `Path.GetTempPath()` con un `Guid` propio (`atalaya-tests`,
+`atalaya-reconnect`, `atalaya-politica-sync`), el nombre del `--bare` cuelga de esa raíz, en
+`Atalaya.Storage/Sync` **no hay un solo estático mutable**, y ni `src/` ni `tests/` tocan
+`Environment.CurrentDirectory`. Lo que sí comparten, y es lo que los separa de los verdes:
+**publican dos veces seguidas sobre el MISMO `HubSyncService`**. `EnsureHubCore` lo hace —«hub:
+init» y las dos migraciones— y el `Seeded()` de `PublishVerificationTests` también. Los tests de
+publicación que nunca cayeron —`TwoCloneSyncTests`, `ConflictRulesTests`— alternan entre **dos
+servicios distintos**.
+
+**La causa, y es del producto.** En el hilo de `CommitAndPush` estaba este orden:
+
+```
+done.TrySetResult(Push());   // el que espera queda libre AQUÍ
+…
+finally { _pushGate.Release(); }   // la puerta se suelta DESPUÉS
+```
+
+`TrySetResult` desbloquea el `done.Task.Wait(timeout, ct)` del que llamó **antes** de que el
+`finally` suelte la puerta. Entre las dos cosas cabe una publicación entera: quien volvía con un
+`true` podía llamar otra vez en el acto y encontrarse la puerta echada, y llevarse un `false` con la
+salud en **rojo** por una publicación que había salido **bien**. Es una ventana de unas pocas
+instrucciones —invisible en una máquina de 16 núcleos ociosa— que se abre de par en par en cuanto a
+ese hilo lo desalojan justo ahí, que es lo que pasa con 2 vCPU y el disco en disputa. El `because`
+lo dijo en la primera vuelta: *«Expected … to be True because **Hay una publicación anterior que el
+hub todavía no ha soltado.**»*.
+
+**Y no es solo un test en rojo.** En `HubSyncRegistrationTests.The_first_connect_seeds_the_model_rates_and_publishes_them`
+el desenlace es que `model-rates.json` **no llega al hub**: la publicación de las tarifas se rechaza
+en el acto porque la de «hub: init» todavía no había soltado la puerta. Una publicación que debía
+ocurrir se saltaba en silencio; la recogía la siguiente sincronización, pero mientras tanto el
+piloto se ponía rojo sin que nada estuviera mal.
+
+**El arreglo: soltar la puerta antes de avisar.** El hilo termina `Push()`, suelta, y **entonces**
+completa la tarea. El invariante de D-1022 no se relaja, se afina: la puerta protege «puede haber
+alguien DENTRO de libgit2», y cuando `Push()` ha vuelto ya no lo hay. Si el reloj vence, este hilo
+sigue dentro de `Push()`, no ha llegado al `Release()`, y la puerta sigue echada — que es
+exactamente lo que aquella decisión compró y lo que `DeadRemoteTests` exige. **No se sube ningún
+tope**: ni el reloj de 30 s de D-1022 ni la ventana de posarse de D-1023 tenían nada que ver, y
+subirlos habría tapado esto sin arreglarlo.
+
+**La regla que queda, y es de tests.** **Un test de publicación afirma CON EL MOTIVO; un
+`true`/`false` a secas no se acepta.** Las 49 afirmaciones sobre `CommitAndPush`, `Push`, `Health`,
+`Pushed` y `Published` pasan a llevar `sync.Why()` —el diario si lo hay, la frase del usuario si
+no—, con una sola implementación en `tests/Shared/HubDiagnostics.cs`, enlazada desde los dos
+proyectos que publican igual que la fábrica de git de D-1055. Es lo que convirtió «no se reproduce»
+en «la causa, en una vuelta».
+
+**Cobertura (N-5): uno.** `PublishVerificationTests.Una_publicacion_que_agota_los_intentos_deja_dicho_por_que`
+deja al clon sin traerse su propia rama —contra un `--bare` no se pueden pedir cinco rechazos de
+verdad, porque el transporte local **no arbitra nada** (D-1023)— y exige que al agotar los cinco
+intentos el motivo esté escrito, con el número de intentos, lo que dijo cada uno y el tiempo. Lo que
+se rompería en silencio sin él: volver a dejar el único `return false` del bucle sin motivo, que es
+la mitad de por qué esto costó dos tandas de Actions.
+
+**Después, en la misma condición**: **1 rojo de 20** —y no es de publicación, es la carrera de
+`MetricsViewModel` de abajo—. **Cero** fallos de publicación y **cero** cuelgues, contra 12 rojos de
+20 con diez de publicación dentro. La tanda entera queda verde en las dos condiciones de D-1055
+(**2.743 casos**).
+
+**Lo que NO se arregla aquí, y se dice (N-2).** El banco sacó **tres defectos más**, y ninguno es
+esta causa; van al BACKLOG con su diagnóstico en vez de arreglarse de paso, que sería otra entrega:
+`MetricsPanelTests.Las_graficas_llevan_el_tramo_completo_de_cada_cubo_al_tooltip` (1 de 40 con
+paralelismo máximo) revienta con `IndexOutOfRangeException` dentro de `ObservableCollection` porque
+el `setter` de `SelectedRange` lanza un `LoadAsync()` sin esperarlo (`Reload()`) y el test lanza
+otro: bajo WPF los dos vuelven al dispatcher y se serializan, en un test no hay
+`SynchronizationContext` y se pisan. Y
+`SelfUpdateTests.El_progreso_de_descarga_no_inunda_la_interfaz` (2 de 20 en el banco lento) mide un
+ritmo de notificaciones y se queda sin ninguna cuando la máquina va justa.
+
+**Y uno que no pone rojo: cuelga el job entero.** Una vuelta del banco lento se quedó **2 h 28 min
+sin escribir una línea**, y el volcado de pilas del `testhost` (`dotnet-stack`) dice qué pasaba:
+**dos hilos STA bloqueados en constructores estáticos de WPF**, cada uno detrás de lo que el otro
+está inicializando —`ScrollViewer..cctor()` por `CycleRibbonLayoutTests.La_cinta_dibuja_sus_bloques…`
+y `TextBoxBase..cctor()`/`TextBox..cctor()` por
+`ConversationSurfaceTests.Cada_clase_de_evento_tiene_exactamente_una_plantilla`—, los dos entrando
+por `ViewLayout.OnUiThread`, y los dos tests esperando en un `Thread.Join()` que no vuelve. Es un
+interbloqueo de inicializadores de tipo entre dos tests de maquetación que arrancan a la vez. En
+Actions no saldría como un rojo: saldría como un **job colgado hasta el tope**, que es peor de
+diagnosticar. Va al BACKLOG con la pila. Y el banco de esta fase se queda con **tope por
+ejecución**, para que un cuelgue se cuente y se mate en vez de bloquearlo.
+
+**Nada visible cambia**: ni una vista, ni un texto de la aplicación. `LastError` —lo único de esto
+que un usuario llega a leer— dice exactamente lo que decía.

@@ -132,12 +132,12 @@ public sealed class AppDeletionTests : IDisposable
         HubContext hub = Hub();
         hub.EnsureHub();
         SeedApp(hub);
-        hub.Sync!.CommitAndPush("app: onboard webapp").Should().BeTrue();
+        hub.Sync!.CommitAndPush("app: onboard webapp").Should().BeTrue(hub.Sync!.Why());
 
         AppDeletionResult result = Deletion(hub).Delete("webapp", "ana");
 
         result.Removed.Should().BeTrue();
-        result.Pushed.Should().BeTrue();
+        result.Pushed.Should().BeTrue(hub.Why());
         Directory.Exists(hub.HubPaths.AppDir("webapp")).Should().BeFalse();
         hub.Store.ListAppSlugs().Should().NotContain("webapp");
 
@@ -154,7 +154,7 @@ public sealed class AppDeletionTests : IDisposable
         HubContext hub = Hub();
         hub.EnsureHub();
         SeedApp(hub);
-        hub.Sync!.CommitAndPush("app: onboard webapp").Should().BeTrue();
+        hub.Sync!.CommitAndPush("app: onboard webapp").Should().BeTrue(hub.Sync!.Why());
 
         Deletion(hub).Delete("webapp", "ana");
 
@@ -169,7 +169,7 @@ public sealed class AppDeletionTests : IDisposable
         HubContext hub = Hub();
         hub.EnsureHub();
         SeedApp(hub);
-        hub.Sync!.CommitAndPush("app: onboard webapp").Should().BeTrue();
+        hub.Sync!.CommitAndPush("app: onboard webapp").Should().BeTrue(hub.Sync!.Why());
         _machines.Load().ClonePathFor("webapp").Should().NotBeNull();
 
         Deletion(hub).Delete("webapp", "ana");
@@ -186,7 +186,7 @@ public sealed class AppDeletionTests : IDisposable
         hub.EnsureHub();
         SeedApp(hub, "webapp", "Web App");
         SeedApp(hub, "otra", "Otra");
-        hub.Sync!.CommitAndPush("app: onboard x2").Should().BeTrue();
+        hub.Sync!.CommitAndPush("app: onboard x2").Should().BeTrue(hub.Sync!.Why());
 
         Deletion(hub).Delete("webapp", "ana");
 
@@ -225,7 +225,7 @@ public sealed class AppDeletionTests : IDisposable
         HubContext hub = Hub();
         hub.EnsureHub();
         SeedApp(hub);
-        hub.Sync!.CommitAndPush("app: onboard webapp").Should().BeTrue();
+        hub.Sync!.CommitAndPush("app: onboard webapp").Should().BeTrue(hub.Sync!.Why());
 
         // Maria clona y la ve.
         var mariaPaths = new HubPaths(Path.Combine(_root, "maria"));
@@ -234,7 +234,7 @@ public sealed class AppDeletionTests : IDisposable
         var mariaStore = new HubStore(mariaPaths);
         mariaStore.ListAppSlugs().Should().Contain("webapp");
 
-        Deletion(hub).Delete("webapp", "ana").Pushed.Should().BeTrue();
+        Deletion(hub).Delete("webapp", "ana").Pushed.Should().BeTrue(hub.Why());
 
         maria.Pull();
 
@@ -328,7 +328,7 @@ public sealed class AppDeletionTests : IDisposable
         HubContext hub = Hub();
         hub.EnsureHub();
         SeedApp(hub);
-        hub.Sync!.CommitAndPush("app: onboard webapp").Should().BeTrue();
+        hub.Sync!.CommitAndPush("app: onboard webapp").Should().BeTrue(hub.Sync!.Why());
 
         PortfolioViewModel vm = Portfolio(hub, new StubConfirmer(answer: false));
         await vm.LoadAsync();
@@ -349,7 +349,7 @@ public sealed class AppDeletionTests : IDisposable
         HubContext hub = Hub();
         hub.EnsureHub();
         SeedApp(hub);
-        hub.Sync!.CommitAndPush("app: onboard webapp").Should().BeTrue();
+        hub.Sync!.CommitAndPush("app: onboard webapp").Should().BeTrue(hub.Sync!.Why());
 
         var confirmer = new StubConfirmer(answer: true);
         PortfolioViewModel vm = Portfolio(hub, confirmer);
@@ -374,7 +374,7 @@ public sealed class AppDeletionTests : IDisposable
         HubContext hub = Hub();
         hub.EnsureHub();
         SeedApp(hub);
-        hub.Sync!.CommitAndPush("app: onboard webapp").Should().BeTrue();
+        hub.Sync!.CommitAndPush("app: onboard webapp").Should().BeTrue(hub.Sync!.Why());
 
         PortfolioViewModel vm = Portfolio(hub, new StubConfirmer(answer: true, typeTheName: false));
         await vm.LoadAsync();

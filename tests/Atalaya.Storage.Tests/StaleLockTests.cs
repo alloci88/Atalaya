@@ -1,4 +1,5 @@
 ﻿using Atalaya.Storage.Sync;
+using Atalaya.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -56,7 +57,7 @@ public sealed class StaleLockTests : IDisposable
         store.WriteHub(Samples.Hub());
         store.WriteApp(Samples.App());
 
-        reopened.CommitAndPush("después del candado").Should().BeTrue();
+        reopened.CommitAndPush("después del candado").Should().BeTrue(reopened.Why());
     }
 
     [Fact]
