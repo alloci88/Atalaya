@@ -271,8 +271,13 @@ public sealed class ReportVerifyFixPageTests
         page.Stats.Single(s => s.Key == "calls").Value.Should().Be("4");
         body.Should().Contain("**4 llamada(s) al modelo**", "las llamadas salen del mismo registro");
 
-        // Y las tres tarjetas de recuento se han ido: verificar se lanza desde la ficha de UNO.
-        page.Stats.Select(s => s.Key).Should().NotContain(new[] { "verified", "resolved", "active" });
+        // Y las tarjetas que no decidían nada se han ido: los tres recuentos —verificar se lanza
+        // desde la ficha de UNO— y la de gravedad, que era una tarjeta para dos palabras.
+        page.Stats.Select(s => s.Key).Should()
+            .NotContain(new[] { "verified", "resolved", "active", "severity" });
+        page.Stats.Should().HaveCount(4, "veredicto, coste, duración y llamadas");
+        page.Stats.Sum(s => s.Span).Should().Be(5,
+            "cinco unidades más la de acciones: seis, y la fila las reparte hasta el borde");
         // Y el rosco se ha ido con ellas: verificar sale de la ficha de UNO, así que era un rosco
         // de un solo tramo — que no es un reparto, es un círculo (F36-2b §3).
         ViewLayout.Xaml("ReportsView.xaml").Should().NotContain("vm:VerdictTile");
@@ -299,13 +304,20 @@ public sealed class ReportVerifyFixPageTests
 
         ReportStat veredicto = page.Stats.Single(s => s.Key == "verdict");
         veredicto.Value.Should().Be(enPantalla);
-        veredicto.Subtitle.Should().Be(subtitulo);
         veredicto.Tone.Should().Be(ReportVerdicts.Tone(ReportVerdicts.Of(escrito)));
 
-        // La gravedad va en su tarjeta, con la pastilla de siempre. Nunca como cifra.
-        ReportStat gravedad = page.Stats.Single(s => s.Key == "severity");
-        gravedad.Value.Should().BeEmpty("una gravedad no es un número");
-        gravedad.Chips.Select(c => c.Severity).Should().Equal("Alta");
+        // EL ALIAS Y LA GRAVEDAD, en la misma línea y con su pastilla: «BUG-0001 · Alta». La
+        // gravedad tenía tarjeta propia y no decide nada en una verificación — es de quién.
+        veredicto.Prefix.Should().Be("BUG-0001");
+        veredicto.Chips.Select(c => c.Severity).Should().Equal("Alta");
+        veredicto.Chips.Select(c => c.Text).Should().Equal("Alta");
+
+        // Y debajo, lo que hay que hacer con él cuando lo hay.
+        veredicto.Note.Should().Be(subtitulo);
+
+        // El subtítulo en texto sigue estando: es lo que se copia (misma regla que D-1050).
+        veredicto.Subtitle.Should().StartWith("BUG-0001 · Alta");
+        veredicto.CopyText.Should().Contain(veredicto.Subtitle);
     }
 
     /// <summary>
@@ -422,8 +434,8 @@ public sealed class ReportVerifyFixPageTests
         activo.HasReanchor.Should().BeTrue();
         activo.Reanchor.Should().Be("re-anclado 507 → 497");
         con.Lead.Should().Contain("· 1 re-anclado", "la frase lo cuenta");
-        con.Stats.Single(s => s.Key == "verdict").Subtitle.Should()
-            .Contain("re-anclado", "y la tarjeta del veredicto también");
+        // Con VARIOS veredictos la tarjeta cuenta cuántos se movieron, en su reparto.
+        con.Stats.Single(s => s.Key == "verdict").Subtitle.Should().EndWith("· 1 re-anclado");
         body.Should().NotContain("re-anclado 507",
             "el informe NO lo escribe: por eso hay que leerlo del evento");
 
@@ -437,6 +449,27 @@ public sealed class ReportVerifyFixPageTests
         sin.Verdicts.Should().OnlyContain(v => !v.HasReanchor);
         sin.Lead.Should().NotContain("re-anclado");
         sin.Stats.Single(s => s.Key == "verdict").Subtitle.Should().NotContain("re-anclado");
+
+        // Y con UNO —el caso normal— va debajo de la pastilla de gravedad, en su propia línea.
+        (ReportEntry solo, AuditSession sesion, string cuerpo) = VerifyCase(new[]
+        {
+            Line("BUG-0001", Severity.Alta, "confirmado", VerifyBasis.Simbolo),
+        });
+        var index = new ReportFindingIndex(
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["BUG-0001"] = findingId },
+            new Dictionary<string, string>())
+        {
+            Reanchors = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [ReportFindingIndex.MoveKey(sesion.Id.ToString(), findingId)] = "re-anclado 507 → 497",
+            },
+        };
+
+        ReportPage uno = ReportPage.Compose(solo, sesion, cuerpo, index);
+        ReportStat tarjeta = uno.Stats.Single(s => s.Key == "verdict");
+        tarjeta.Prefix.Should().Be("BUG-0001");
+        tarjeta.Chips.Select(c => c.Severity).Should().Equal("Alta");
+        tarjeta.Note.Should().Be("re-anclado 507 → 497");
     }
 
     // ================================================================ §3 · el estado del arreglo
@@ -1061,6 +1094,51 @@ public sealed class ReportVerifyFixPageTests
         }
 
         return File.ReadAllText(Path.Combine(dir!.FullName, "src", "Atalaya.App", "Themes", file));
+    }
+
+    /// <summary>
+    /// <b>Las dos tarjetas del cuerpo de un arreglo se leen como dos secciones</b>, no como dos
+    /// azulejos de cifra: mismo título —el de sección de la casa, no el rótulo de metadato—, mismo
+    /// relleno generoso, y la prosa centrada en su medida en vez de pegada al borde izquierdo.
+    /// <para>
+    /// Va sobre el marcado porque es donde vive la regla: las dos tienen que llevar <b>el mismo</b>
+    /// estilo de título. Que una lleve el de sección y la otra el de metadato no falla, se lee como
+    /// si una valiera más que la otra.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Las_dos_tarjetas_del_cuerpo_llevan_el_mismo_titulo_de_seccion()
+    {
+        string xaml = ViewLayout.Xaml("ReportsView.xaml");
+
+        int body = xaml.IndexOf("x:Name=\"FixBody\"", StringComparison.Ordinal);
+        body.Should().BeGreaterThan(0);
+        int end = xaml.IndexOf("LA SUGERENCIA DE COMMIT", body, StringComparison.Ordinal);
+        string cuerpo = xaml[body..end];
+
+        foreach (string titulo in new[] { "Qué cambió y por qué", "Compilación y tests" })
+        {
+            int at = cuerpo.IndexOf($"Text=\"{titulo}\"", StringComparison.Ordinal);
+            at.Should().BeGreaterThan(0);
+            cuerpo[at..].Should().StartWith($"Text=\"{titulo}\"")
+                .And.Contain("Style=\"{StaticResource Report.Card.Title}\"");
+        }
+
+        cuerpo.Should().NotContain("Stat.Label",
+            "un bloque de lectura no lleva el rótulo de un azulejo de cifra");
+
+        // El título es el de una sección de la casa, y su separación sale de un token.
+        int style = xaml.IndexOf("<Style x:Key=\"Report.Card.Title\"", StringComparison.Ordinal);
+        style.Should().BeGreaterThan(0);
+        xaml[style..xaml.IndexOf("</Style>", style, StringComparison.Ordinal)].Should()
+            .Contain("BasedOn=\"{StaticResource Text.Lead}\"")
+            .And.Contain("Value=\"{StaticResource Pad.S.Bottom}\"");
+
+        // Y las dos respiran por dentro y centran su prosa.
+        Squash(cuerpo).Should().Contain(Squash("Padding=\"{StaticResource Pad.L}\""));
+        cuerpo.Should().Contain("Document=\"{Binding StoryDocument}\"");
+        int prosa = cuerpo.IndexOf("Document=\"{Binding StoryDocument}\"", StringComparison.Ordinal);
+        cuerpo[prosa..].Should().Contain("HorizontalAlignment=\"Center\"");
     }
 
     private static string Squash(string text)

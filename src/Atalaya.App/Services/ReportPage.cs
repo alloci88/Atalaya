@@ -58,6 +58,33 @@ public sealed record ReportStat(
     /// </summary>
     public int Span { get; init; } = 1;
 
+    /// <summary>
+    /// Lo que va DELANTE de las pastillas, en la misma línea: hoy, el alias del hallazgo verificado
+    /// —«OPT-0007 · Baja»—. Vacío en las demás tarjetas.
+    /// </summary>
+    public string Prefix { get; init; } = string.Empty;
+
+    public bool HasPrefix => Prefix.Length > 0;
+
+    /// <summary>
+    /// La segunda línea del subtítulo, DEBAJO de las pastillas: el re-anclaje que el veredicto
+    /// escribió, o el paso siguiente de un «no localizado». Vacía en las demás tarjetas.
+    /// </summary>
+    public string Note { get; init; } = string.Empty;
+
+    public bool HasNote => Note.Length > 0;
+
+    /// <summary>
+    /// <b>El subtítulo se copia pero no se pinta.</b> Lo llevan las dos tarjetas del informe de
+    /// sesión cuyo detalle ya está dicho al lado —el reparto por gravedad, que es la tarjeta de
+    /// «Gravedad» entera, y el coste por unidad—: en pantalla sobran, pero «Copiar resumen» es un
+    /// texto que se pega en un correo sin la fila al lado, y ahí sí valen.
+    /// </summary>
+    public bool Quiet { get; init; }
+
+    /// <summary>El subtítulo se dibuja: hay texto, no hay pastillas que lo digan y no es callado.</summary>
+    public bool ShowSubtitle => Subtitle.Length > 0 && !HasChips && !Quiet;
+
     /// <summary>La cifra con su unidad, para el texto que se copia.</summary>
     public string Amount => string.IsNullOrEmpty(Unit) ? Value : $"{Value} {Unit}";
 
@@ -880,10 +907,11 @@ public sealed record ReportPage
             "Los hallazgos que esta sesión dio de alta. El reparto por gravedad es el de las "
             + "tarjetas de abajo, que son los mismos hallazgos.")
         {
-            // UNA PASTILLA POR GRAVEDAD PRESENTE, y ninguna por las que no hay: el color dice «hay
-            // algo de esta gravedad», y una pastilla a cero diría lo contrario de su número
-            // (UI-0051, D-318).
-            Chips = severities.Select(s => new ReportChip(s.Name, $"{s.Count} {Lower(s.Name, s.Count)}")).ToList(),
+            // EL NÚMERO SOLO. El reparto por gravedad lo dice entera la tarjeta de al lado —el
+            // rosco con su leyenda—, así que aquí eran las mismas cifras dos veces. El texto no se
+            // va: se calla en pantalla y se sigue copiando, porque «Copiar resumen» se pega en un
+            // correo donde esa tarjeta no está.
+            Quiet = true,
         });
 
         stats.Add(new ReportStat(
@@ -946,7 +974,13 @@ public sealed record ReportPage
             CostFormat.Marked(CostFormat.Number(credits), entry.CostIsEstimate),
             CostFormat.BillingUnit,
             each,
-            CostFormat.Both(credits));
+            CostFormat.Both(credits))
+        {
+            // «57,9 por unidad» iba en credits mientras la cifra sigue al conmutador de divisa, así
+            // que debajo de «0,58 $» decía otra cosa en otra unidad. Se calla en las tres, y se
+            // sigue copiando donde lo hay — que es donde no hay conmutador que mirar.
+            Quiet = true,
+        };
     }
 
     /// <summary>Lo que duró la sesión, con la misma forma que la escribe el informe.</summary>
@@ -1138,7 +1172,6 @@ public sealed record ReportPage
         return new List<ReportStat>
         {
             VerdictStat(verdicts),
-            SeverityStat(verdicts),
             CostStat(entry, 0, string.Empty),
             DurationStat(entry.Session),
             CallsStat(entry.Session),
@@ -1181,8 +1214,11 @@ public sealed record ReportPage
             };
         }
 
+        // LA GRAVEDAD VIVE AQUÍ, junto al alias y en su pastilla. Tenía tarjeta propia y era una
+        // tarjeta para un dato de dos palabras que además no decide nada en una verificación: lo
+        // que se decide es el veredicto, y la gravedad es de quién.
         ReportVerdict one = verdicts[0];
-        string subtitle = one.HasReanchor
+        string note = one.HasReanchor
             ? one.Reanchor
             : one.HasNextStep ? one.NextStep : string.Empty;
 
@@ -1191,44 +1227,22 @@ public sealed record ReportPage
             "Veredicto",
             Capitalize(one.Label),
             null,
-            subtitle,
+            JoinLine(" · ", one.Alias, one.Severity, note),
             "Lo que el instrumento dijo del hallazgo mirando el código de hoy.")
         {
             Span = 2,
             Tone = one.Tone,
+            Prefix = one.Alias,
+            Chips = one.Severity.Length == 0
+                ? Array.Empty<ReportChip>()
+                : new[] { new ReportChip(one.Severity, one.Severity) },
+            Note = note,
         };
     }
 
     /// <summary>«sigue activo» → «Sigue activo»: en una cifra de tarjeta, la primera va en alta.</summary>
     private static string Capitalize(string text)
         => text.Length == 0 ? text : char.ToUpper(text[0], AppCulture.Display) + text[1..];
-
-    /// <summary>
-    /// La gravedad del hallazgo verificado, con la pastilla de siempre. Con varios, una por gravedad
-    /// presente y ninguna por las que no hay — la misma regla que la tarjeta de hallazgos (UI-0051).
-    /// </summary>
-    private static ReportStat SeverityStat(IReadOnlyList<ReportVerdict> verdicts)
-    {
-        var chips = new[] { Severity.Critica, Severity.Alta, Severity.Media, Severity.Baja }
-            .Select(s => (Name: SeverityNames.Display(s),
-                          Count: verdicts.Count(v => v.Severity == SeverityNames.Display(s))))
-            .Where(x => x.Count > 0)
-            .ToList();
-
-        return new ReportStat(
-            "severity",
-            "Gravedad",
-            string.Empty,
-            null,
-            string.Join(" · ", chips.Select(c => verdicts.Count == 1 ? c.Name : $"{c.Count} {Lower(c.Name, c.Count)}")),
-            "La gravedad con la que se registró el hallazgo. No la decide la verificación.")
-        {
-            Chips = chips
-                .Select(c => new ReportChip(
-                    c.Name, verdicts.Count == 1 ? c.Name : $"{c.Count} {Lower(c.Name, c.Count)}"))
-                .ToList(),
-        };
-    }
 
     /// <summary>El reloj de pared, en su propia tarjeta. La misma de siempre.</summary>
     private static ReportStat DurationStat(AuditSession? session)

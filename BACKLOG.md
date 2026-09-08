@@ -521,6 +521,11 @@ editores es la única puerta).
   notas de la sesión (D-546) y su «+N más», se van «Ficheros» y «Cambios», la prosa y la
   compilación van mitad y mitad, y la sugerencia de commit se pliega cuando ya está commiteada. El
   coste pierde el «N por hallazgo», que no repartía nada y mezclaba unidades. Ver D-1053.
+  **Retocado sobre el dist** (D-1054): la tarjeta «Gravedad» de una verificación se va y la
+  gravedad se muda al subtítulo del veredicto, junto al alias («OPT-0007 · Baja»); las dos tarjetas
+  del cuerpo de un arreglo pasan al título de sección de la casa, con relleno grande y la prosa
+  centrada; y en el informe de sesión «Hallazgos nuevos» pierde el desglose y «Coste» el «por
+  unidad» — se callan en pantalla y se siguen copiando.
 
 - **F36 · Entrega 2 — Los informes de verificación y de arreglo** — los otros dos tipos heredan la
   página de F36-1b (portada, una fila en rejilla, «Ficha del documento» plegada, carril de 380,

@@ -19066,3 +19066,43 @@ aplicación).
 verificaciones y 20 arreglos— que los 33 se componen sin perder texto, que ninguno saca ya un
 asterisco suelto, que los 20 arreglos declaran estado y ámbito por fichero, y que ninguno de los 33
 pide carril. Cómo se ve, lo mira el usuario en el `dist`. Ciclo N-8.
+
+### D-1054 — Tres retoques de F36-2b: lo que ya se dice al lado se calla, y se sigue copiando
+
+**Retoques pedidos sobre el `dist`** (N-6).
+
+**La tarjeta «Gravedad» de una verificación se va, y la gravedad se muda al veredicto.** Era una
+tarjeta entera para dos palabras que además no deciden nada aquí: lo que se decide es si el hallazgo
+sigue vivo, y la gravedad es de quién. Pasa al subtítulo de «Veredicto», en su pastilla y junto al
+alias —«OPT-0007 · Baja»—, con el re-anclaje (D-1037) o el paso siguiente de un «no localizado» en
+una segunda línea debajo. La fila de una verificación queda en **seis unidades**: Veredicto (dos) ·
+Coste · Duración · Llamadas al modelo · Acciones.
+
+**Las dos tarjetas del cuerpo de un arreglo se leen como dos secciones, no como dos azulejos.**
+«Qué cambió y por qué» y «Compilación y tests» comparten ahora el título de sección de la casa
+—`Text.Lead` en semibold, el mismo de Métricas y de la ficha— y no el rótulo de metadato de una
+cifra, con su separación debajo; el relleno sube al paso grande (`Pad.L`) y la prosa se **centra en
+la tarjeta a su medida de lectura** en vez de quedarse pegada al borde izquierdo, que dejaba un
+palmo muerto a la derecha. Las dos siguen midiendo lo mismo de alto, que es lo que hace la rejilla
+(D-990).
+
+**Y en el informe de sesión, dos cifras dejan de decirse dos veces.** «Hallazgos nuevos» pierde su
+subtítulo y sus pastillas —el reparto por gravedad es la tarjeta de al lado, el rosco con su
+leyenda, entero— y queda el número solo. «Coste» pierde el «57,9 por unidad», por lo mismo que en
+verificación y en arreglo: iba siempre en credits mientras la cifra sigue al conmutador de divisa,
+así que debajo de «0,58 $» decía otra cosa en otra unidad.
+
+**Lo que no se pinta se sigue copiando.** Los dos subtítulos **no se borran**: se marcan como
+callados y siguen viajando en «Copiar resumen», que es un texto que se pega en un correo donde no
+está la fila de tarjetas al lado. Siguen siendo, letra por letra, lo que el informe escribió
+(D-591).
+
+**Cobertura (N-5)**: el caso de las pastillas de gravedad de D-1050 se reescribe —protegía que se
+pintaran y ahora protege que **se copien sin pintarse**, y que la única tarjeta de una sesión con
+subtítulo visible sea la de unidades—; el del veredicto único gana el alias, la pastilla y la nota;
+y entra uno nuevo sobre el marcado: las dos tarjetas del cuerpo de un arreglo llevan **el mismo**
+estilo de título —que una lleve el de sección y la otra el de metadato no falla, se lee como si una
+valiera más—, ese estilo es el de la casa, y las dos respiran y centran su prosa. La tanda queda en
+**2.740 casos** (2.205 en la aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8.

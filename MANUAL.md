@@ -905,9 +905,12 @@ dos** cuando lleva una lista dentro. En un informe de sesión son: hallazgos nue
 auditadas, coste y duración, el **rosco de gravedad** con su leyenda, las **barras de origen**
 —cuántos hallazgos vienen de una regla del catálogo y cuántos del criterio del auditor— y las
 **acciones**. En una ventana estrecha se reparten en varias filas, equilibradas, y cada una sigue
-llenando el ancho. El desglose por gravedad va en la tarjeta de hallazgos, con **las pastillas de
-color de siempre** y solo las gravedades que hay. Ninguna de esas cifras se calcula aquí: son las
-que el informe ya escribió.
+llenando el ancho. Ninguna de esas cifras se calcula aquí: son las que el informe ya escribió.
+
+«Hallazgos nuevos» enseña **el número solo**: el reparto por gravedad es la tarjeta de al lado —el
+rosco con su leyenda—, entera. Y «Coste» enseña **solo el coste**, en la unidad que tengas puesta.
+Lo que no se pinta **se sigue copiando**: «Copiar resumen» lleva el desglose por gravedad y el
+coste por unidad, porque se pega en un correo donde esa fila no está.
 
 La **última tarjeta son las acciones**, en los tres tipos: **Descargar .md**, **Copiar resumen** y,
 en un arreglo, **Ver el hallazgo**. Están en la fila y no en el carril porque el carril es opcional
@@ -960,12 +963,13 @@ La misma página, con lo que una verificación tiene que contestar. La frase de 
 desenlace de un vistazo: *«Se verificó 1 hallazgo · 1 sigue activo · 1 re-anclado · 15 AI credits ·
 2 llamadas · 48 s»*.
 
-En la fila: el **Veredicto** en grande y en su color —**Resuelto**, **Sigue activo**, **No
-localizado** o **No concluyente**—, que vale por dos tarjetas; la **Gravedad** del hallazgo en su
-pastilla; el **Coste**; la **Duración**; las **Llamadas al modelo**; y las **acciones**. Verificar
-se lanza desde la ficha de un hallazgo, así que no hay recuentos que repartir: con varios —el caso
-raro— la misma tarjeta los cuenta («2 resueltos · 1 sigue activo») y las tarjetas del cuerpo los
-listan.
+En la fila, seis unidades: el **Veredicto** en grande y en su color —**Resuelto**, **Sigue
+activo**, **No localizado** o **No concluyente**—, que vale por dos tarjetas; el **Coste**; la
+**Duración**; las **Llamadas al modelo**; y las **acciones**. Debajo del veredicto van el alias del
+hallazgo y su **gravedad en pastilla** —*«OPT-0007 · Baja»*—, que es de quién es el hallazgo y no
+la conclusión. Verificar se lanza desde la ficha de un hallazgo, así que no hay recuentos que
+repartir: con varios —el caso raro— la misma tarjeta los cuenta («2 resueltos · 1 sigue activo») y
+las tarjetas del cuerpo los listan.
 
 **Cada veredicto es una tarjeta**, en el orden del informe, con **el borde en el color del
 veredicto y no en el de la gravedad**: lo que se decide aquí es si el hallazgo sigue vivo. Lleva
@@ -974,8 +978,8 @@ su pastilla de veredicto, el alias y el título, la gravedad en pastilla pequeñ
 *no localizado* dice además qué hacer, con las mismas palabras que la ficha del hallazgo.
 
 Si el veredicto **re-ancló** el hallazgo —verificar también sirve para eso—, la tarjeta lo dice con
-una pastilla neutra *«re-anclado 507 → 497»*, la tarjeta del veredicto lo lleva de subtítulo y la
-frase lo cuenta. Sale del propio evento de la verificación, así que un informe anterior a que
+una pastilla neutra *«re-anclado 507 → 497»*, la tarjeta del veredicto lo lleva debajo de la
+gravedad y la frase lo cuenta. Sale del propio evento de la verificación, así que un informe anterior a que
 Atalaya re-anclara al verificar no la lleva. Un *no localizado* dice de subtítulo qué hacer con él.
 
 Cuando hay cuatro veredictos o más, el índice del carril va **por veredicto**, no por gravedad, con
@@ -1007,7 +1011,8 @@ que no lo anotó sale sin marcas. Se ven cuatro ficheros y el resto se despliega
 dentro de la tarjeta.
 
 En el cuerpo, **Qué cambió y por qué** y **Compilación y tests** van **mitad y mitad** cuando la
-ventana da de sí, y una debajo de otra cuando no; la prosa se lee en su medida de siempre. Los
+ventana da de sí, y una debajo de otra cuando no. Son dos secciones, con su título y su margen; la
+prosa se lee en su medida de siempre, centrada en su tarjeta. Los
 errores y la salida completa van plegados dentro de Compilación — son cientos de líneas de
 compilador. «Ficheros tocados» no se repite en lista: ya está en la barra. La **sugerencia de
 commit** está abierta mientras el arreglo siga *sin commitear*, que es cuando sirve; commiteado o

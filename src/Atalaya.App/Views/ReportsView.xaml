@@ -312,6 +312,16 @@
             </Style.Triggers>
         </Style>
 
+        <!-- EL TÍTULO DE UNA TARJETA DEL CUERPO. Es el de una sección de la casa —`Text.Lead` en
+             semibold, como los de Métricas y los de la ficha— y no el rótulo de metadato de un
+             azulejo de cifra: «Qué cambió y por qué» y «Compilación y tests» son dos bloques de
+             lectura, no dos números. Con su separación debajo. -->
+        <Style x:Key="Report.Card.Title" TargetType="TextBlock" BasedOn="{StaticResource Text.Lead}">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Text}" />
+            <Setter Property="Margin" Value="{StaticResource Pad.S.Bottom}" />
+        </Style>
+
         <!-- ======================================================= F36-2b · ficheros tocados
 
              CUATRO BARRAS A LA VISTA. Cada una mide una línea de ruta, una de barra y su hueco:
@@ -809,31 +819,60 @@
                                                  al lado diciendo lo mismo en color. En las demás
                                                  tarjetas sigue en texto — «1 completa · 849
                                                  pendientes» no es una escala de colores. -->
-                                            <ItemsControl ItemsSource="{Binding Chips}"
-                                                          HorizontalAlignment="Center"
-                                                          Margin="{StaticResource Pad.XS.Top}"
-                                                          Visibility="{Binding HasChips, Converter={StaticResource BoolToVisibility}}">
-                                                <ItemsControl.ItemsPanel>
-                                                    <ItemsPanelTemplate>
-                                                        <WrapPanel Orientation="Horizontal"
-                                                                   HorizontalAlignment="Center" />
-                                                    </ItemsPanelTemplate>
-                                                </ItemsControl.ItemsPanel>
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Border Style="{StaticResource Report.SevPill}">
-                                                            <TextBlock Text="{Binding Text}"
-                                                                       Style="{StaticResource Report.SevPill.Text}" />
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
+                                            <StackPanel Orientation="Horizontal"
+                                                        HorizontalAlignment="Center"
+                                                        Margin="{StaticResource Pad.XS.Top}"
+                                                        Visibility="{Binding HasChips, Converter={StaticResource BoolToVisibility}}">
+                                                <!-- EL ALIAS DELANTE DE LA PASTILLA: «OPT-0007 ·
+                                                     Baja». En una verificación la gravedad es de
+                                                     quién, no la conclusión, así que va aquí y no
+                                                     en una tarjeta para sí sola. -->
+                                                <TextBlock Text="{Binding Prefix}"
+                                                           Style="{StaticResource Text.Small}"
+                                                           VerticalAlignment="Center"
+                                                           Visibility="{Binding HasPrefix, Converter={StaticResource BoolToVisibility}}" />
+                                                <TextBlock Text="·" Style="{StaticResource Text.Small}"
+                                                           Foreground="{DynamicResource Brush.TextMuted}"
+                                                           VerticalAlignment="Center"
+                                                           Margin="{StaticResource Pad.XS.Left}"
+                                                           Visibility="{Binding HasPrefix, Converter={StaticResource BoolToVisibility}}" />
+                                                <ItemsControl ItemsSource="{Binding Chips}"
+                                                              VerticalAlignment="Center">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <WrapPanel Orientation="Horizontal"
+                                                                       HorizontalAlignment="Center" />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border Style="{StaticResource Report.SevPill}">
+                                                                <TextBlock Text="{Binding Text}"
+                                                                           Style="{StaticResource Report.SevPill.Text}" />
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
 
+                                            <!-- Y DEBAJO, lo que hay que hacer con él: el
+                                                 re-anclaje que el veredicto escribió (D-1037) o el
+                                                 paso siguiente de un «no localizado». -->
+                                            <TextBlock Text="{Binding Note}" Style="{StaticResource Text.Small}"
+                                                       TextWrapping="Wrap" TextAlignment="Center"
+                                                       HorizontalAlignment="Center"
+                                                       Margin="{StaticResource Pad.XXS.Top}"
+                                                       Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}" />
+
+                                            <!-- EL SUBTÍTULO EN TEXTO, cuando hay algo que decir y
+                                                 no lo dicen ya las pastillas ni la tarjeta de al
+                                                 lado. Un subtítulo «callado» sigue viajando en
+                                                 «Copiar resumen»: ahí no hay fila alrededor. -->
                                             <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Text.Small}"
                                                        TextWrapping="Wrap" TextAlignment="Center"
                                                        HorizontalAlignment="Center"
                                                        Margin="{StaticResource Pad.XXS.Top}"
-                                                       Visibility="{Binding HasChips, Converter={StaticResource InverseBoolToVisibility}}" />
+                                                       Visibility="{Binding ShowSubtitle, Converter={StaticResource BoolToVisibility}}" />
                                         </StackPanel>
                                     </Grid>
                                 </Border>
@@ -1359,16 +1398,22 @@
                                 </ItemsControl.ItemsPanel>
 
                                 <Border Style="{StaticResource Card}"
+                                        Padding="{StaticResource Pad.L}"
                                         Visibility="{Binding Page.HasStory, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel>
-                                        <TextBlock Text="Qué cambió y por qué" Style="{StaticResource Stat.Label}" />
+                                        <TextBlock Text="Qué cambió y por qué"
+                                                   Style="{StaticResource Report.Card.Title}" />
+                                        <!-- CENTRADO, no pegado al borde. La prosa se para en su
+                                             medida de lectura (F27) y la tarjeta mide bastante más:
+                                             alineada a la izquierda dejaba un palmo muerto a la
+                                             derecha en vez de un margen a cada lado. -->
                                         <FlowDocumentScrollViewer
                                             Document="{Binding StoryDocument}"
                                             VerticalScrollBarVisibility="Disabled"
                                             HorizontalScrollBarVisibility="Auto"
                                             IsToolBarVisible="False"
                                             Background="Transparent"
-                                            HorizontalAlignment="Left"
+                                            HorizontalAlignment="Center"
                                             Foreground="{DynamicResource Brush.Text}" />
                                     </StackPanel>
                                 </Border>
@@ -1380,9 +1425,11 @@
                                      ficheros medía cuarenta mil caracteres y treinta y ocho mil
                                      eran esto—. -->
                                 <Border Style="{StaticResource Card}"
+                                        Padding="{StaticResource Pad.L}"
                                         Visibility="{Binding Page.HasBuild, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel>
-                                        <TextBlock Text="Compilación y tests" Style="{StaticResource Stat.Label}" />
+                                        <TextBlock Text="Compilación y tests"
+                                                   Style="{StaticResource Report.Card.Title}" />
                                         <FlowDocumentScrollViewer
                                             Document="{Binding BuildDocument}"
                                             VerticalScrollBarVisibility="Disabled"

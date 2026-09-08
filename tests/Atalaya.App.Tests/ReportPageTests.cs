@@ -670,50 +670,54 @@ public sealed class ReportPageTests
     }
 
     /// <summary>
-    /// <b>El reparto por gravedad de la tarjeta va en PASTILLAS</b>, las del sistema (retoque de
-    /// F36-1b).
+    /// <b>«Hallazgos nuevos» y «Coste» se callan lo que ya se dice al lado, y lo siguen copiando</b>
+    /// (retoque de F36-2b).
     /// <para>
-    /// La gravedad se ve sin leer en Portafolio, en Hallazgos, en el informe (F27) y en el rosco
-    /// que está justo al lado de esta tarjeta — y aquí se pintaba en texto plano: «1 alta · 5
-    /// medias · 4 bajas». Una pastilla por gravedad PRESENTE, y ninguna por las que no hay: el
-    /// color dice «hay algo de esta gravedad» y una pastilla a cero diría lo contrario de su propio
-    /// número (UI-0051, D-318).
+    /// El reparto por gravedad estaba en la tarjeta de hallazgos —primero en texto, luego en
+    /// pastillas (D-1050)— y a su lado está el <b>rosco de gravedad con su leyenda</b>, que es esa
+    /// misma cuenta entera. Y «57,9 por unidad» iba en credits mientras la cifra de arriba sigue al
+    /// conmutador de divisa, así que debajo de «0,58 $» decía otra cosa en otra unidad — el mismo
+    /// defecto que se quitó en verificación y en arreglo.
     /// </para>
     /// <para>
-    /// <b>El texto no se pierde</b>: el subtítulo sigue diciendo lo mismo, porque es lo que se
-    /// copia. Lo que cambia es cómo se dibuja.
+    /// <b>El texto no se borra: se calla.</b> «Copiar resumen» se pega en un correo donde no está
+    /// la fila de tarjetas, así que ahí el desglose y el coste por unidad siguen valiendo — y
+    /// siguen siendo, letra por letra, lo que el informe escribió (D-591).
     /// </para>
     /// </summary>
     [Fact]
-    public void La_tarjeta_de_hallazgos_reparte_la_gravedad_en_pastillas()
+    public void Hallazgos_y_coste_copian_su_detalle_aunque_no_lo_pinten()
     {
-        ReportPage page = Page();
+        (ReportEntry entry, AuditSession session, string body) = Case();
+        ReportPage page = ReportPage.Compose(entry, session, body, Hub());
+
         ReportStat findings = page.Stats.Single(s => s.Key == "findings");
-
-        // Una por gravedad presente, en orden de gravedad y con la concordancia de siempre.
-        findings.HasChips.Should().BeTrue();
-        findings.Chips.Select(c => c.Severity).Should().Equal("Alta", "Media", "Baja");
-        findings.Chips.Select(c => c.Text).Should().Equal("1 alta", "1 media", "1 baja");
-        findings.Chips.Should().HaveSameCount(page.Severities,
-            "una pastilla por gravedad con datos, ni una más");
-
-        // Y el texto sigue ahí: es lo que se copia.
+        findings.Value.Should().Be("3", "queda el número solo, centrado");
+        findings.HasChips.Should().BeFalse("el reparto lo dice el rosco de al lado, entero");
+        findings.ShowSubtitle.Should().BeFalse();
         findings.Subtitle.Should().Be("1 alta · 1 media · 1 baja");
-        findings.CopyText.Should().Contain(findings.Subtitle);
+        findings.CopyText.Should().Contain(findings.Subtitle, "pero se sigue copiando");
+        body.Should().Contain("**Gravedad**: 1 Alta · 1 Media · 1 Baja",
+            "y sigue siendo el reparto que el informe escribió");
 
-        // Las demás tarjetas NO llevan pastillas: «1 completa · 849 pendientes» no es una escala de
-        // colores, y pintarla como si lo fuera sería inventarse un significado.
-        page.Stats.Where(s => s.Key != "findings").Should().OnlyContain(s => !s.HasChips);
+        ReportStat cost = page.Stats.Single(s => s.Key == "cost");
+        cost.ShowSubtitle.Should().BeFalse("«por unidad» iba en credits bajo una cifra que puede ir en dólares");
+        cost.Subtitle.Should().Be("29 por unidad");
+        cost.CopyText.Should().Contain("29 por unidad");
+        body.Should().Contain("29 por unidad");
 
-        // Y se DIBUJAN como pastillas, con los cuatro tonos reservados (D-316): el subtítulo en
-        // texto solo aparece cuando no hay pastillas que poner.
+        // Ninguna tarjeta de la fila de una sesión pinta ya su subtítulo salvo la de unidades, que
+        // dice algo que no está en ninguna otra parte.
+        page.Stats.Where(s => s.ShowSubtitle).Select(s => s.Key).Should().Equal("units");
+
+        // Y el rosco sigue llevando las cuatro gravedades reservadas: es donde vive el reparto.
         string xaml = ViewLayout.Xaml("ReportsView.xaml");
-        xaml.Should().Contain("ItemsSource=\"{Binding Chips}\"")
-            .And.Contain("Style=\"{StaticResource Report.SevPill}\"")
-            .And.Contain("Style=\"{StaticResource Report.SevPill.Text}\"");
-        foreach (string clave in new[] { "Brush.Sev.Crit.Soft", "Brush.Sev.High.Soft", "Brush.Sev.Med.Soft", "Brush.Sev.Low.Soft" })
+        foreach (string clave in new[]
+                 {
+                     "Brush.Sev.Crit", "Brush.Sev.High", "Brush.Sev.Med", "Brush.Sev.Low",
+                 })
         {
-            xaml.Should().Contain(clave, "los cuatro rellenos son los reservados, no unos nuevos");
+            xaml.Should().Contain(clave, "los cuatro tonos son los reservados, no unos nuevos");
         }
     }
 
