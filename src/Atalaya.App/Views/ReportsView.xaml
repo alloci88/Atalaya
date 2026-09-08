@@ -450,18 +450,6 @@
                                        Margin="{StaticResource Pad.S.Top}"
                                        Visibility="{Binding Page.Lead, Converter={StaticResource NotEmptyToVisibility}}" />
 
-                            <!-- Y LA CONCLUSIÓN (F36-1b §1.9). La frase dice cuánto hubo; ésta dice
-                                 si hay algo que mirar hoy. Va en el ámbar de lo que está ABIERTO
-                                 —el mismo de las citas de aviso—, y solo aparece con críticas o
-                                 altas: «0 críticos» sería un renglón para no decir nada (D-318). -->
-                            <TextBlock Text="{Binding Page.Conclusion}"
-                                       Style="{StaticResource Text.Small}"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource Brush.Warning.Ink}"
-                                       TextWrapping="Wrap"
-                                       Margin="{StaticResource Pad.XXS.Top}"
-                                       Visibility="{Binding Page.HasConclusion, Converter={StaticResource BoolToVisibility}}" />
-
                             <!-- F29 §1 — el informe NO se reescribe, así que lo que se calculó
                                  después se dice aquí y no dentro de su texto. -->
                             <TextBlock Text="{Binding CalculatedLaterLine}"
@@ -498,27 +486,39 @@
                                  cuatro cifras. -->
                             <DataTemplate DataType="{x:Type s:ReportStat}">
                                 <Border Style="{StaticResource Stat.Card}" ToolTip="{Binding ToolTip}">
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding Title}"
+                                    <!-- EL RÓTULO ARRIBA Y LO DEMÁS CENTRADO EN LO QUE SOBRE. La
+                                         rejilla estira las seis al alto de la más alta (D-990), así
+                                         que una tarjeta con subtítulo corto —«Duración»— se quedaba
+                                         con su cifra pegada al techo y un palmo de hueco debajo. La
+                                         fila de estrella es lo que reparte ese hueco por igual. -->
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Grid.Row="0" Text="{Binding Title}"
                                                    Style="{StaticResource Stat.Label}" />
 
-                                        <!-- La cifra y su unidad en UN `TextBlock` con dos `Run`:
-                                             es lo único que comparte línea base en WPF (D-983 §9,
-                                             D-990). Centrada, que es lo que iguala las cuatro. -->
-                                        <TextBlock HorizontalAlignment="Center"
-                                                   Margin="{StaticResource Pad.XS.Top}">
-                                            <Run Text="{Binding Value, Mode=OneWay}"
-                                                 FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
-                                            <Run Text="{Binding Unit, Mode=OneWay}"
-                                                 FontSize="{StaticResource FontSize.Small}"
-                                                 Foreground="{DynamicResource Brush.TextMuted}" />
-                                        </TextBlock>
+                                        <StackPanel Grid.Row="1" VerticalAlignment="Center">
+                                            <!-- La cifra y su unidad en UN `TextBlock` con dos
+                                                 `Run`: es lo único que comparte línea base en WPF
+                                                 (D-983 §9, D-990). -->
+                                            <TextBlock HorizontalAlignment="Center"
+                                                       Margin="{StaticResource Pad.XS.Top}">
+                                                <Run Text="{Binding Value, Mode=OneWay}"
+                                                     FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
+                                                <Run Text="{Binding Unit, Mode=OneWay}"
+                                                     FontSize="{StaticResource FontSize.Small}"
+                                                     Foreground="{DynamicResource Brush.TextMuted}" />
+                                            </TextBlock>
 
-                                        <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Text.Small}"
-                                                   TextWrapping="Wrap" TextAlignment="Center"
-                                                   HorizontalAlignment="Center"
-                                                   Margin="{StaticResource Pad.XXS.Top}" />
-                                    </StackPanel>
+                                            <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Text.Small}"
+                                                       TextWrapping="Wrap" TextAlignment="Center"
+                                                       HorizontalAlignment="Center"
+                                                       Margin="{StaticResource Pad.XXS.Top}" />
+                                        </StackPanel>
+                                    </Grid>
                                 </Border>
                             </DataTemplate>
 
@@ -529,12 +529,19 @@
                                  (D-316, F6.5), y solo con las gravedades que hay (D-318). -->
                             <DataTemplate DataType="{x:Type vm:SeverityTile}">
                                 <Border Style="{StaticResource Stat.Card}">
-                                    <StackPanel>
-                                        <TextBlock Text="Gravedad" Style="{StaticResource Stat.Label}" />
-                                        <Grid Margin="{StaticResource Pad.XS.Top}">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.Row="0" Text="Gravedad" Style="{StaticResource Stat.Label}" />
+                                        <!-- El rosco y su leyenda, centrados en lo que sobra: van
+                                             juntos y como un bloque, no pegados a una esquina. -->
+                                        <Grid Grid.Row="1" Margin="{StaticResource Pad.XS.Top}"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <Grid Grid.Column="0" Width="96" Height="96">
                                                 <c:DonutRing Segments="{Binding Segments}" RingThickness="14" />
@@ -565,7 +572,7 @@
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>
                                         </Grid>
-                                    </StackPanel>
+                                    </Grid>
                                 </Border>
                             </DataTemplate>
 
@@ -874,9 +881,12 @@
                             <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.M}"
                                     CornerRadius="{StaticResource Radius.M}">
                                 <StackPanel c:Stack.Gap="{StaticResource Space.XS}">
+                                    <!-- SIN RESALTE DE ACENTO: descargar el `.md` no es la
+                                         acción principal de esta página. Leer el informe lo es, y
+                                         eso no es un botón. -->
                                     <Button Content="Descargar .md"
                                             Command="{Binding DownloadCommand}"
-                                            Style="{StaticResource Button.Primary}"
+                                            Style="{StaticResource Button.Secondary}"
                                             HorizontalAlignment="Stretch"
                                             ToolTip="Guarda una copia del informe donde tú elijas" />
                                     <!-- «Copiar resumen» se lleva la frase y las cifras como texto:
@@ -895,12 +905,6 @@
                                             HorizontalAlignment="Stretch"
                                             ToolTip="Abre la ficha del hallazgo que arregló esta sesión"
                                             Visibility="{Binding CanOpenFinding, Converter={StaticResource BoolToVisibility}}" />
-                                    <Button Content="Ver hallazgos de esta sesión"
-                                            Command="{Binding OpenFindingsCommand}"
-                                            Style="{StaticResource Button.Secondary}"
-                                            HorizontalAlignment="Stretch"
-                                            ToolTip="Abre Hallazgos filtrado por esta aplicación"
-                                            Visibility="{Binding CanOpenFindings, Converter={StaticResource BoolToVisibility}}" />
                                 </StackPanel>
                             </Border>
 

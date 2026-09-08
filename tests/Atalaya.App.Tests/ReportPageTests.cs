@@ -205,7 +205,7 @@ public sealed class ReportPageTests
     {
         ReportPage page = Page();
 
-        page.Lead.Should().Be("Se auditaron 2 unidades de 851 · 3 hallazgos nuevos, 1 alta · 58,0 AI credits en 2 min 33 s");
+        page.Lead.Should().Be("Se auditaron 2 unidades de 851 · 3 hallazgos nuevos · 58,0 AI credits en 2 min 33 s");
     }
 
     /// <summary>
@@ -245,7 +245,7 @@ public sealed class ReportPageTests
 
         ReportPage page = ReportPage.Compose(entry, session, body);
 
-        page.Lead.Should().StartWith("Se auditó 1 unidad de 2 · 1 hallazgo nuevo, 1 crítica · ");
+        page.Lead.Should().StartWith("Se auditó 1 unidad de 2 · 1 hallazgo nuevo · ");
     }
 
     // ================================================================ sin registro
@@ -642,41 +642,6 @@ public sealed class ReportPageTests
         xaml.Should().Contain("<sys:Double x:Key=\"Rail.TwoLines\">36</sys:Double>")
             .And.Contain("MaxHeight=\"{StaticResource Rail.TwoLines}\"");
     }
-
-    /// <summary>
-    /// <b>La conclusión solo aparece cuando hay algo que decir</b> (F36-1b §1.9). La frase
-    /// ejecutiva dice cuánto hubo; ésta dice si hay que mirarlo hoy, y con medias y bajas no hay
-    /// nada que destacar: «0 críticos» sería un renglón para no decir nada (D-318).
-    /// </summary>
-    [Theory]
-    // Un solo alto: se nombra, porque no hay duda de cuál es.
-    [InlineData("Alta", 1, "Media", 3, "Requiere atención: 1 hallazgo alto — Título 1")]
-    // Varios de la misma gravedad: el recuento, sin nombrar. Elegir cuál se nombra no lo puede
-    // decidir la página.
-    [InlineData("Alta", 3, "Baja", 2, "Requiere atención: 3 hallazgos altos")]
-    // Las dos gravedades: las dos contadas, y ninguna nombrada — nombrar una dejaría la otra fuera.
-    [InlineData("Crítica", 2, "Alta", 3, "Requiere atención: 2 críticos y 3 altos")]
-    // Ni altas ni críticas: sin línea.
-    [InlineData("Media", 4, "Baja", 9, "")]
-    public void La_conclusion_solo_habla_de_criticas_y_altas(
-        string primera, int cuantas, string segunda, int cuantas2, string esperado)
-    {
-        var findings = new List<ReportFinding>();
-        for (int i = 0; i < cuantas; i++)
-        {
-            findings.Add(Card(primera, $"Título {i + 1}"));
-        }
-
-        for (int i = 0; i < cuantas2; i++)
-        {
-            findings.Add(Card(segunda, $"Otro {i + 1}"));
-        }
-
-        ReportPage.ConclusionText(findings).Should().Be(esperado);
-    }
-
-    private static ReportFinding Card(string severity, string title)
-        => new(severity, string.Empty, title, "u.cs", string.Empty, "R", string.Empty, string.Empty, null);
 
     private static string Squash(string text)
         => new string(text.Where(c => !char.IsWhiteSpace(c)).ToArray());

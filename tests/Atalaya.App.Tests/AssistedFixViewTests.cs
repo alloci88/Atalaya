@@ -321,7 +321,11 @@ public sealed class AssistedFixViewTests
         xaml.Should().Contain("OpenFindingCommand");
         xaml.Should().Contain("{Binding OpenFindingLabel}");
         xaml.Should().Contain("{Binding CanOpenFinding, Converter={StaticResource BoolToVisibility}}");
-        xaml.Should().Contain("OpenFindingsCommand", "el camino de siempre a la lista no se toca");
+
+        // El camino a la LISTA de hallazgos ya no está aquí, y no es un descuido: el carril lleva
+        // el índice de los de esta sesión y cada tarjeta su «Abrir». Lo que este test cuida es el
+        // camino al hallazgo del ARREGLO, que es el fino y el que no tiene otra puerta.
+        xaml.Should().NotContain("OpenFindingsCommand");
     }
 
     /// <summary>Y del historial de la ficha, al informe del arreglo que lo escribió.</summary>

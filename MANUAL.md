@@ -895,17 +895,14 @@ cómo lo escribas.
 Un clic abre el informe **como una página**, no como un markdown pintado. Arriba, una
 **portada** con el título, la aplicación con su punto de color, la fecha, el autor y el
 proveedor con su modelo, y debajo **una frase** que dice lo que pasó en esa sesión de un
-vistazo: *«Se auditaron 2 unidades de 851 · 3 hallazgos nuevos, 1 alta · 58 AI credits en
+vistazo: *«Se auditaron 2 unidades de 851 · 3 hallazgos nuevos · 58 AI credits en
 2 min 33 s»*. Lo que no hay, no se nombra.
 
-Después, **las cifras**: hallazgos nuevos, unidades auditadas, coste y duración, cada una
-con su **Copiar**, y al lado el **rosco de gravedad** y la **barra de origen** —cuántos
-hallazgos vienen de una regla del catálogo y cuántos del criterio del auditor—. Ninguna de
-esas cifras se calcula aquí: son las que el informe ya escribió.
-
-Debajo de la portada hay una línea que dice si **requiere atención**, y solo cuando la hay:
-*«Requiere atención: 1 hallazgo alto — Cast directo de dynamic a double sin validar null»*.
-Sin hallazgos altos ni críticos no hay línea.
+Después, en una sola fila, **las cifras y las dos gráficas**: hallazgos nuevos, unidades
+auditadas, coste y duración, más el **rosco de gravedad** con su leyenda y las **barras de
+origen** —cuántos hallazgos vienen de una regla del catálogo y cuántos del criterio del
+auditor, con su número y su porcentaje—. Ninguna de esas cifras se calcula aquí: son las que
+el informe ya escribió, y el desglose por gravedad está en su tarjeta y en el rosco.
 
 La **cabecera y el resumen** del informe van plegados en **Ficha del documento**, cerrado:
 dicen con otras palabras lo que la portada acaba de decir, y antes había que atravesarlos
@@ -931,8 +928,8 @@ baja debajo del texto. Desde el carril:
 - **Descargar .md** guarda una copia donde tú elijas, con un nombre que dice qué es
   (`atalaya-{app}-{tipo}-{fecha}.md`).
 - **Copiar resumen** se lleva la frase de portada y las cuatro cifras como texto: es el
-  informe en cinco líneas, para pegarlo en un correo sin adjuntar nada.
-- **Ver hallazgos de esta sesión** abre Hallazgos filtrado por esa aplicación.
+  informe en cinco líneas, para pegarlo en un correo sin adjuntar nada. Es el único copiar
+  de la página — las tarjetas no llevan el suyo porque éste ya se las lleva todas.
 - **Volver** —el eslabón «Informes» de la miga— devuelve la lista tal y como la dejaste, con
   sus filtros y su posición.
 

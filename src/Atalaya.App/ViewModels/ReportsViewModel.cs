@@ -380,18 +380,12 @@ public sealed partial class ReportsViewModel : ViewModelBase
     [ObservableProperty] private bool _hasTiles;
 
     /// <summary>
-    /// El enlace a los hallazgos solo aparece en informes de SESIÓN: un consolidado de cierre o un
-    /// reset no habla de una tanda concreta de hallazgos.
-    /// </summary>
-    /// <summary>
     /// «Coste calculado a posteriori el 06/09/2026» (F29 §1). Vacía cuando el informe se escribió
     /// con su coste ya calculado, que es lo normal.
     /// </summary>
     [ObservableProperty] private string _calculatedLaterLine = string.Empty;
 
     [ObservableProperty] private bool _hasCalculatedLater;
-
-    [ObservableProperty] private bool _canOpenFindings;
 
     /// <summary>
     /// El informe abierto es de un arreglo asistido y se sabe de qué hallazgo (H9.1 §1): hay
@@ -629,7 +623,6 @@ public sealed partial class ReportsViewModel : ViewModelBase
         CalculatedLaterLine = row.Entry.CalculatedLaterLine;
         HasCalculatedLater = row.Entry.CostCalculatedLater;
 
-        CanOpenFindings = row.Entry.Kind == ReportKind.Sesion;
         CanOpenFinding = row.Entry.HasFinding;
         OpenFindingLabel = string.IsNullOrWhiteSpace(row.Entry.FindingAlias)
             ? "Ver el hallazgo"
@@ -713,13 +706,6 @@ public sealed partial class ReportsViewModel : ViewModelBase
             _toasts.Show($"No se pudo guardar el informe: {ex.Message}");
         }
     }
-
-    /// <summary>Los hallazgos de la aplicación de este informe, en V3.</summary>
-    [RelayCommand]
-    private Task OpenFindings()
-        => OpenReport is not { } row
-            ? Task.CompletedTask
-            : _navigation.NavigateToAsync<FindingsViewModel>(vm => vm.SetApp(row.Slug));
 
     /// <summary>
     /// La ficha del hallazgo que arregló esta sesión (H9.1 §1). Mismo patrón que «Ver hallazgos de

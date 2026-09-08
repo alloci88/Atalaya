@@ -18819,3 +18819,38 @@ conclusión contra cuatro casos. La tanda queda en **2.698 casos** (2.163 en la 
 real y cuatro anchos— que los seis azulejos salen a 413×158 en una fila a 2.560, que las tarjetas se
 parten en dos columnas a 1.600 y en una a 1.599, y que no hay ninguna excepción al colocar. Cómo se
 ve, lo mira el usuario en el `dist`. Ciclo N-8.
+
+### D-1049 — Cinco retoques de F36-1b: lo que la rejilla estira hay que centrarlo, y lo que no escala se va
+
+**Retoques pedidos sobre el `dist`, uno por punto** (N-6).
+
+**El hueco que deja la rejilla se reparte.** `ColumnsPanel` estira las seis tarjetas al alto de la
+más alta (D-990), y el contenido se quedaba pegado al techo: «Duración», que no tiene subtítulo, con
+un palmo de hueco debajo, y el rosco con su leyenda descentrado en el suyo. El rótulo se queda
+arriba y **lo demás se centra en lo que sobre** — una fila de estrella—, así que las seis se leen
+igual midan lo que midan. Medido sobre la vista real: el centro del contenido cae en 0,44 en las
+cuatro cifras y en 0,50 y 0,48 en las dos gráficas, a los cuatro anchos.
+
+**«Requiere atención: …» se va entera, con su test.** No escalaba: con cinco unidades y ocho
+hallazgos graves la línea era una lista, y las reglas que la mantenían corta —nombrar el título solo
+con uno, callarse con las dos gravedades— eran parches sobre eso. La gravedad ya está donde se puede
+leer completa: el **rosco** y el **índice del carril**. Una línea que solo funciona con el informe
+pequeño no es una conclusión, es una casualidad.
+
+**Y la frase ejecutiva pierde el desglose** por lo mismo: «10 hallazgos nuevos» y no «10 hallazgos
+nuevos, 1 alta». Nombrar solo la más alta obligaba a elegir cuál y a callarse el resto; el desglose
+entero está en la tarjeta y en el rosco, dos centímetros más abajo.
+
+**Dos acciones bajan de rango.** «Descargar .md» deja de llevar el acento: la acción principal de
+esta página es leer el informe, y eso no es un botón. Y **«Ver hallazgos de esta sesión» se retira**
+—con su propiedad y su comando, que sin botón serían código muerto detrás de una puerta tapiada
+(D-981)—: el índice del carril lleva a cada hallazgo de esta sesión y cada tarjeta tiene su «Abrir»,
+que es más fino que un filtro por aplicación.
+
+**Cobertura (N-5)**: el caso de la conclusión se retira con ella; los dos de la frase ejecutiva
+cambian de expectativa —es el comportamiento que este retoque cambia—; y entra uno nuevo que ata la
+retirada del enlace: ni la propiedad, ni el comando, ni el rótulo en el marcado. El test de F32 que
+vigilaba el camino del informe de arreglo a SU hallazgo se queda, y ahora declara por qué el otro ya
+no está. La tanda queda en **2.693 casos** (2.158 en la aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8.

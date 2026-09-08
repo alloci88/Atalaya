@@ -430,7 +430,6 @@ public sealed class ReportsViewTests : IDisposable
         vm.Document.Should().NotBeNull();
         vm.ViewerTitle.Should().Contain("Informe de sesión");
         vm.ViewerSubtitle.Should().Contain("App").And.Contain("marta");
-        vm.CanOpenFindings.Should().BeTrue("es un informe de sesión");
 
         vm.BackCommand.Execute(null);
 
@@ -439,36 +438,20 @@ public sealed class ReportsViewTests : IDisposable
         vm.Rows.Should().ContainSingle();
     }
 
-    /// <summary>Un consolidado no habla de una tanda de hallazgos: no ofrece ese enlace.</summary>
+    /// <summary>
+    /// <b>El carril ya no lleva a la LISTA de hallazgos</b> (retoque de F36-1b). No es que el
+    /// camino se pierda: el índice del carril lleva a cada hallazgo de esta sesión y cada tarjeta
+    /// tiene su «Abrir», que es más fino que un filtro por aplicación. El botón, la propiedad y el
+    /// comando se van juntos — un comando que nadie ejecuta es código muerto detrás de una puerta
+    /// tapiada (D-981).
+    /// </summary>
     [Fact]
-    public async Task Un_consolidado_no_ofrece_el_enlace_a_los_hallazgos_de_la_sesion()
+    public void El_visor_ya_no_ofrece_el_enlace_a_la_lista_de_hallazgos()
     {
-        Session("app", mode: AuditMode.Cierre, markdown: "# Cierre de ciclo 1 — App");
+        typeof(ReportsViewModel).GetProperty("OpenFindingsCommand").Should().BeNull();
+        typeof(ReportsViewModel).GetProperty("CanOpenFindings").Should().BeNull();
 
-        ReportsViewModel vm = TestFactory.Reports(_hub);
-        await vm.LoadAsync();
-        vm.OpenCommand.Execute(vm.Rows[0]);
-
-        vm.CanOpenFindings.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task El_enlace_a_hallazgos_abre_V3_filtrado_por_esa_aplicacion()
-    {
-        App("xblast", "XBlast");
-        Session("xblast");
-
-        var findings = new FindingsViewModel(
-            _hub, new NavigationService(new EmptyProvider()), _settings, new GroupExpansionMemory());
-        NavigationService navigation = TestFactory.NavigationWith(findings);
-        ReportsViewModel vm = TestFactory.Reports(_hub, navigation);
-        await vm.LoadAsync();
-        vm.OpenCommand.Execute(vm.Rows[0]);
-
-        await vm.OpenFindingsCommand.ExecuteAsync(null);
-
-        navigation.Current.Should().BeSameAs(findings);
-        findings.SelectedApp!.Slug.Should().Be("xblast");
+        ViewLayout.Xaml("ReportsView.xaml").Should().NotContain("Ver hallazgos de esta sesión");
     }
 
     private sealed class EmptyProvider : IServiceProvider

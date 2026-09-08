@@ -186,15 +186,6 @@ public sealed record ReportPage
 
     public string Lead { get; private init; } = string.Empty;
 
-    /// <summary>
-    /// <b>Qué requiere atención</b> (F36-1b §1.9). La frase ejecutiva dice cuánto hubo; ésta dice
-    /// si hay algo que mirar HOY. Solo con críticas o altas: con medias y bajas no hay nada que
-    /// destacar, y una línea que dijera «0 críticos» gastaría un renglón en no decir nada (D-318).
-    /// </summary>
-    public string Conclusion { get; private init; } = string.Empty;
-
-    public bool HasConclusion => Conclusion.Length > 0;
-
     public string Provider { get; private init; } = string.Empty;
 
     public IReadOnlyList<ReportStat> Stats { get; private init; } = Array.Empty<ReportStat>();
@@ -305,12 +296,11 @@ public sealed record ReportPage
 
         var severities = CountSeverities(findings);
         var stats = SessionStats(entry, session, head, severities);
-        string lead = LeadText(entry, session, head, severities);
+        string lead = LeadText(entry, session, head);
 
         return page with
         {
             Lead = lead,
-            Conclusion = ConclusionText(findings),
             Stats = stats,
             Severities = severities,
             Origins = ReadOrigins(head),
@@ -594,47 +584,6 @@ public sealed record ReportPage
             : percent;
     }
 
-    /// <summary>
-    /// <b>Qué requiere atención</b> (F36-1b §1.9), por plantilla y sin modelo.
-    /// <para>
-    /// Solo con críticas o altas: son las dos gravedades que deciden si esto se mira hoy. Con
-    /// medias y bajas no hay nada que destacar y la línea no se escribe — «0 críticos» sería un
-    /// renglón para no decir nada (D-318).
-    /// </para>
-    /// <para>
-    /// <b>El título solo se nombra cuando hay UNO.</b> Con dos hallazgos de la misma gravedad,
-    /// elegir cuál se nombra sería una decisión que la página no puede tomar; entonces la línea se
-    /// queda en el recuento, que es lo que sí sabe.
-    /// </para>
-    /// </summary>
-    internal static string ConclusionText(IReadOnlyList<ReportFinding> findings)
-    {
-        var criticas = findings.Where(f => f.Severity == "Crítica").ToList();
-        var altas = findings.Where(f => f.Severity == "Alta").ToList();
-        if (criticas.Count == 0 && altas.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        // Con las DOS gravedades, la línea se queda en el recuento: nombrar el título de una
-        // crítica dejaría las altas sin nombrar en la misma frase, y son las dos que importan.
-        if (criticas.Count > 0 && altas.Count > 0)
-        {
-            return "Requiere atención: "
-                + $"{criticas.Count} crítico{(criticas.Count == 1 ? string.Empty : "s")}"
-                + $" y {altas.Count} alto{(altas.Count == 1 ? string.Empty : "s")}";
-        }
-
-        List<ReportFinding> top = criticas.Count > 0 ? criticas : altas;
-        string word = criticas.Count > 0 ? "crítico" : "alto";
-        string count = top.Count == 1
-            ? $"1 hallazgo {word}"
-            : $"{top.Count} hallazgos {word}s";
-
-        string named = top.Count == 1 ? $" — {top[0].Title}" : string.Empty;
-        return $"Requiere atención: {count}{named}";
-    }
-
     /// <summary>Lo que la línea de unidades dice además del recuento: «1 completa · 849 pendientes».</summary>
     internal static string UnitsDetail(string head)
     {
@@ -857,9 +806,13 @@ public sealed record ReportPage
     /// <b>La frase ejecutiva</b> (F36 §1.1): qué pasó en esta sesión, en un renglón, por plantilla
     /// determinista y sin modelo. Concordada, y lo que no hay no se nombra — una frase que dice
     /// «0 hallazgos, 0 críticas» gasta una línea en no decir nada.
+    /// <para>
+    /// <b>Sin desglose por gravedad</b>: cuántos hay de cada una lo dicen la tarjeta de hallazgos y
+    /// el rosco, que están dos centímetros más abajo. Nombrar solo la más alta obligaba además a
+    /// elegir cuál, y con dos altas la frase decía «2 altas» y se callaba las tres medias.
+    /// </para>
     /// </summary>
-    internal static string LeadText(
-        ReportEntry entry, AuditSession session, string head, IReadOnlyList<ReportSlice> severities)
+    internal static string LeadText(ReportEntry entry, AuditSession session, string head)
     {
         var parts = new List<string>();
 
@@ -885,12 +838,7 @@ public sealed record ReportPage
         else
         {
             string noun = nuevos == 1 ? "hallazgo nuevo" : "hallazgos nuevos";
-            // La gravedad más alta que hay, y solo ésa: es la que decide si esto se mira hoy. Sin
-            // hallazgos leídos en el cuerpo la frase se queda en el recuento, que es lo que se sabe.
-            string top = severities.Count > 0
-                ? $", {severities[0].Count} {Lower(severities[0].Name, severities[0].Count)}"
-                : string.Empty;
-            parts.Add(string.Create(AppCulture.Display, $"{nuevos} {noun}{top}"));
+            parts.Add(string.Create(AppCulture.Display, $"{nuevos} {noun}"));
         }
 
         string cost = entry.Cost is { } credits
