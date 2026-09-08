@@ -3,7 +3,10 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-    xmlns:c="clr-namespace:Atalaya.App.Controls">
+    xmlns:c="clr-namespace:Atalaya.App.Controls"
+    xmlns:s="clr-namespace:Atalaya.App.Services"
+    xmlns:vm="clr-namespace:Atalaya.App.ViewModels"
+    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
     <!--
         F26 Parte C — INFORMES.
 
@@ -85,6 +88,10 @@
              —«Crítica», con tilde—, así que los disparadores son sobre ese texto.
         -->
         <Thickness x:Key="Finding.Edge">3,1,1,1</Thickness>
+
+        <!-- DOS LÍNEAS de `LineHeight.Meta` (18), que es lo que el carril le da a un título de
+             hallazgo. Va como recurso y no como número suelto para que se lea de dónde sale. -->
+        <sys:Double x:Key="Rail.TwoLines">36</sys:Double>
 
         <!-- EL BORDE IZQUIERDO DICE LA GRAVEDAD sin leer, que es lo que la pastilla entre
              corchetes no hacía (F27, y aquí llevado a la tarjeta). Los cuatro tonos son los
@@ -394,17 +401,17 @@
 
         <!-- ================= El visor =================
 
-             F36 — DEJA DE SER UN MARKDOWN PINTADO. La pantalla se compone del REGISTRO de la
-             sesión —el JSON que ya tiene veredictos, tokens, coste y duración— con el markdown
-             como cuerpo. El `.md` ni se toca ni se reconstruye (D-441): lo que cambia es que la
-             cobertura se lee como barras y cada hallazgo como una tarjeta, con exactamente el
-             mismo texto dentro.
+             F36 — la pantalla se compone del REGISTRO de la sesión con el markdown como cuerpo. El
+             `.md` ni se toca ni se reconstruye (D-441).
 
-             Sin registro detrás —un informe importado de v4— no hay portada ni cifras: se pinta el
-             cuerpo como hasta aquí. No se inventa un número para llenar el hueco (D-318).
+             F36-1b — y deja de repetirse y de dejar media pantalla en blanco. Las cuatro cifras y
+             las dos gráficas van en UNA rejilla (D-990); la cabecera y el resumen —que son lo que
+             la portada acaba de decir— se pliegan en «Ficha del documento»; el cuerpo empieza por
+             los hallazgos y usa el ancho que hay, con la prosa en su medida de lectura (F27) y las
+             tarjetas en dos columnas cuando cabe.
         -->
         <Grid Visibility="{Binding IsViewing, Converter={StaticResource BoolToVisibility}}">
-            <ScrollViewer Style="{StaticResource Scroll}">
+            <ScrollViewer x:Name="PageScroll" Style="{StaticResource Scroll}">
                 <StackPanel>
 
                     <!-- · Portada · -->
@@ -443,6 +450,18 @@
                                        Margin="{StaticResource Pad.S.Top}"
                                        Visibility="{Binding Page.Lead, Converter={StaticResource NotEmptyToVisibility}}" />
 
+                            <!-- Y LA CONCLUSIÓN (F36-1b §1.9). La frase dice cuánto hubo; ésta dice
+                                 si hay algo que mirar hoy. Va en el ámbar de lo que está ABIERTO
+                                 —el mismo de las citas de aviso—, y solo aparece con críticas o
+                                 altas: «0 críticos» sería un renglón para no decir nada (D-318). -->
+                            <TextBlock Text="{Binding Page.Conclusion}"
+                                       Style="{StaticResource Text.Small}"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Brush.Warning.Ink}"
+                                       TextWrapping="Wrap"
+                                       Margin="{StaticResource Pad.XXS.Top}"
+                                       Visibility="{Binding Page.HasConclusion, Converter={StaticResource BoolToVisibility}}" />
+
                             <!-- F29 §1 — el informe NO se reescribe, así que lo que se calculó
                                  después se dice aquí y no dentro de su texto. -->
                             <TextBlock Text="{Binding CalculatedLaterLine}"
@@ -454,344 +473,404 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- · Las cifras y las gráficas, en la misma fila (F36 §1.2) ·
+                    <!-- · UNA FILA Y UNA REJILLA (F36-1b §1.1, D-990) ·
 
-                         Las tarjetas son las de F35 —número grande centrado, subtítulo y «Copiar»—
-                         y salen de UNA plantilla sobre una lista, no de cuatro bloques escritos a
-                         mano: es lo que impide que difieran en su forma (D-1040). Las gráficas van
-                         a su derecha porque contestan la misma pregunta que las cifras y a la misma
-                         altura, no en un bloque aparte más abajo. -->
-                    <Grid Margin="{StaticResource Pad.S.Bottom}"
-                          Visibility="{Binding Page.HasStats, Converter={StaticResource BoolToVisibility}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
+                         Cuatro cifras y dos gráficas, juntas: es lo único que las iguala en alto y
+                         les reparte el ancho. Fuera de la rejilla las tarjetas medían 130 y las
+                         gráficas 180, y la barra de origen se cortaba.
 
-                        <ItemsControl Grid.Column="0" ItemsSource="{Binding Page.Stats}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <c:ColumnsPanel MinColumnWidth="180" MaxColumns="4"
-                                                    Gap="{StaticResource Space.S}" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Style="{StaticResource Stat.Card}" ToolTip="{Binding ToolTip}">
-                                        <StackPanel>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{Binding Title}"
-                                                           Style="{StaticResource Stat.Label}" />
-                                                <Button Grid.Column="1" Content="Copiar"
-                                                        Style="{StaticResource Button.Link}"
-                                                        FontSize="{StaticResource FontSize.Meta}"
-                                                        VerticalAlignment="Top" HorizontalAlignment="Right"
-                                                        Command="{Binding DataContext.CopyStatCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                        CommandParameter="{Binding}"
-                                                        ToolTip="Copia la cifra y su línea de detalle como texto." />
+                         La colección es heterogénea y cada tipo trae su plantilla por `DataType`,
+                         que es como WPF elige plantilla sin que nadie escriba un selector. -->
+                    <ItemsControl ItemsSource="{Binding Tiles}"
+                                  Margin="{StaticResource Pad.S.Bottom}"
+                                  Visibility="{Binding HasTiles, Converter={StaticResource BoolToVisibility}}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <c:ColumnsPanel MinColumnWidth="{x:Static c:ReportLayout.TileMinWidth}" MaxColumns="6"
+                                                Gap="{StaticResource Space.S}" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+
+                        <ItemsControl.Resources>
+
+                            <!-- Una cifra. SIN «Copiar» desde F36-1b: eran cinco botones para una
+                                 sola cosa, y «Copiar resumen» del carril ya se lleva la frase y las
+                                 cuatro cifras. -->
+                            <DataTemplate DataType="{x:Type s:ReportStat}">
+                                <Border Style="{StaticResource Stat.Card}" ToolTip="{Binding ToolTip}">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}"
+                                                   Style="{StaticResource Stat.Label}" />
+
+                                        <!-- La cifra y su unidad en UN `TextBlock` con dos `Run`:
+                                             es lo único que comparte línea base en WPF (D-983 §9,
+                                             D-990). Centrada, que es lo que iguala las cuatro. -->
+                                        <TextBlock HorizontalAlignment="Center"
+                                                   Margin="{StaticResource Pad.XS.Top}">
+                                            <Run Text="{Binding Value, Mode=OneWay}"
+                                                 FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
+                                            <Run Text="{Binding Unit, Mode=OneWay}"
+                                                 FontSize="{StaticResource FontSize.Small}"
+                                                 Foreground="{DynamicResource Brush.TextMuted}" />
+                                        </TextBlock>
+
+                                        <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Text.Small}"
+                                                   TextWrapping="Wrap" TextAlignment="Center"
+                                                   HorizontalAlignment="Center"
+                                                   Margin="{StaticResource Pad.XXS.Top}" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+
+                            <!-- EL ROSCO DE GRAVEDAD, con su leyenda al lado (F36-1b §1.2). Un
+                                 rosco sin leyenda obliga a adivinar qué tramo es cuál por el color,
+                                 que es justo lo que la leyenda existe para no hacer. Va con los
+                                 cuatro colores reservados porque ahí la paleta semántica ES el dato
+                                 (D-316, F6.5), y solo con las gravedades que hay (D-318). -->
+                            <DataTemplate DataType="{x:Type vm:SeverityTile}">
+                                <Border Style="{StaticResource Stat.Card}">
+                                    <StackPanel>
+                                        <TextBlock Text="Gravedad" Style="{StaticResource Stat.Label}" />
+                                        <Grid Margin="{StaticResource Pad.XS.Top}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid Grid.Column="0" Width="96" Height="96">
+                                                <c:DonutRing Segments="{Binding Segments}" RingThickness="14" />
+                                                <TextBlock Text="{Binding Total}"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           FontSize="{StaticResource FontSize.Lead}"
+                                                           FontWeight="SemiBold" />
                                             </Grid>
+                                            <ItemsControl Grid.Column="1" ItemsSource="{Binding Legend}"
+                                                          VerticalAlignment="Center"
+                                                          Margin="{StaticResource Pad.S.Left}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal"
+                                                                    Margin="{StaticResource Pad.XXS.Bottom}">
+                                                            <Border Style="{StaticResource Report.SevDot}" />
+                                                            <TextBlock Text="{Binding Severity}"
+                                                                       Style="{StaticResource Text.Meta}"
+                                                                       VerticalAlignment="Center"
+                                                                       Margin="{StaticResource Pad.XS.Left}" />
+                                                            <TextBlock Text="{Binding Count}"
+                                                                       Style="{StaticResource Text.Meta}"
+                                                                       FontWeight="SemiBold"
+                                                                       VerticalAlignment="Center"
+                                                                       Margin="{StaticResource Pad.XS.Left}" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
 
-                                            <!-- La cifra y su unidad en UN `TextBlock` con dos
-                                                 `Run`: es lo único que comparte línea base en WPF
-                                                 (D-983 §9, D-990). -->
-                                            <TextBlock HorizontalAlignment="Center"
-                                                       Margin="{StaticResource Pad.XS.Top}">
-                                                <Run Text="{Binding Value, Mode=OneWay}"
-                                                     FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
-                                                <Run Text="{Binding Unit, Mode=OneWay}"
-                                                     FontSize="{StaticResource FontSize.Small}"
-                                                     Foreground="{DynamicResource Brush.TextMuted}" />
-                                            </TextBlock>
+                            <!-- EL ORIGEN, dos barras completas (F36-1b §1.3). La etiqueta va
+                                 ENCIMA de la barra y no a su izquierda: medido, «Criterio del
+                                 auditor» ocupa ~150 px de los ~400 de la tarjeta, y con la etiqueta
+                                 al lado la barra se quedaba en un muñón y el porcentaje se cortaba.
+                                 Encima, ninguno de los tres se recorta a ningún ancho.
 
-                                            <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Text.Small}"
-                                                       TextWrapping="Wrap" TextAlignment="Center"
-                                                       HorizontalAlignment="Center"
-                                                       Margin="{StaticResource Pad.XXS.Top}" />
-                                        </StackPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <StackPanel Grid.Column="1" Orientation="Horizontal"
-                                    Margin="{StaticResource Pad.S.Left}">
-
-                            <!-- EL ROSCO DE GRAVEDAD va justo con los cuatro colores reservados,
-                                 porque ahí la paleta semántica ES el dato (D-316, F6.5). -->
-                            <Border Style="{StaticResource Stat.Card}" Width="188"
-                                    Visibility="{Binding HasSeverityRing, Converter={StaticResource BoolToVisibility}}">
-                                <StackPanel>
-                                    <TextBlock Text="Gravedad" Style="{StaticResource Stat.Label}" />
-                                    <Grid Height="120" Margin="{StaticResource Pad.XS.Top}">
-                                        <c:DonutRing Segments="{Binding SeverityRing}" RingThickness="16" />
-                                        <TextBlock Text="{Binding SeverityTotal}"
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                   FontSize="{StaticResource FontSize.H3}" FontWeight="SemiBold" />
-                                    </Grid>
-                                </StackPanel>
-                            </Border>
-
-                            <!-- LA BARRA DE ORIGEN, en neutros (D-887, D-316). El origen no es una
-                                 gravedad ni un estado: pintarla con esos colores diría que un
-                                 hallazgo del criterio del auditor es más grave que uno del
-                                 catálogo, y no dice nada de eso. -->
-                            <Border Style="{StaticResource Stat.Card}" Width="240"
-                                    Margin="{StaticResource Pad.S.Left}"
-                                    ToolTip="De dónde salió cada hallazgo: de una regla del catálogo, o del juicio del auditor sin regla detrás."
-                                    Visibility="{Binding HasOrigin, Converter={StaticResource BoolToVisibility}}">
-                                <StackPanel>
-                                    <TextBlock Text="Origen" Style="{StaticResource Stat.Label}" />
-                                    <ItemsControl ItemsSource="{Binding OriginBars}"
-                                                  Margin="{StaticResource Pad.XS.Top}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <StackPanel Margin="{StaticResource Pad.XXS.Bottom}">
-                                                    <TextBlock Text="{Binding Name}" Style="{StaticResource Text.Meta}" />
-                                                    <Grid Margin="{StaticResource Pad.XXS.Top}">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="{Binding Share}" />
-                                                            <ColumnDefinition Width="{Binding Rest}" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <Rectangle Grid.Column="0" Height="10" RadiusX="3" RadiusY="3"
-                                                                   HorizontalAlignment="Stretch"
-                                                                   Fill="{DynamicResource Brush.TextMuted}" />
-                                                        <TextBlock Grid.Column="1" Text="{Binding Count}"
-                                                                   Style="{StaticResource Text.Meta}"
-                                                                   Margin="{StaticResource Pad.XS.Left}"
-                                                                   VerticalAlignment="Center" />
-                                                    </Grid>
-                                                </StackPanel>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
-                    </Grid>
-
-                    <!-- · Dos columnas cuando hay ancho: la lectura a la izquierda y el carril a
-                         la derecha. La medida de lectura de F27 NO se toca — el panel la respeta
-                         y baja el carril debajo cuando no cabe entero (`ReadingPanel`). · -->
-                    <c:ReadingPanel ReadWidth="{StaticResource Read.CardWidth}"
-                                    RailWidth="300"
-                                    Gap="{StaticResource Space.M}">
-
-                        <!-- · La lectura · -->
-                        <StackPanel>
-                            <Border Style="{StaticResource Card}">
-                                <StackPanel>
-                                    <!-- El cuerpo hasta la cobertura, y el resto detrás de las
-                                         barras: el texto es el mismo, lo que cambia es que dos de
-                                         sus secciones se pintan en vez de leerse como viñetas. -->
-                                    <FlowDocumentScrollViewer
-                                        Document="{Binding Document}"
-                                        VerticalScrollBarVisibility="Disabled"
-                                        HorizontalScrollBarVisibility="Auto"
-                                        IsToolBarVisible="False"
-                                        Background="Transparent"
-                                        Foreground="{DynamicResource Brush.Text}" />
-
-                                    <!-- ·· Cobertura: una barra de pasadas por unidad ··
-
-                                         «2 auditadas» tapa la diferencia que más importa: una
-                                         unidad que convergió está barrida y otra que agotó el tope
-                                         SEGUÍA ENCONTRANDO (D-887). La barra enseña cuántas pasadas
-                                         hicieron falta y cuáles trajeron algo; el motivo de cierre
-                                         va en texto, con las palabras que el informe ya escribió. -->
-                                    <StackPanel Margin="{StaticResource Pad.M.Top}"
-                                                Visibility="{Binding Page.HasCoverage, Converter={StaticResource BoolToVisibility}}">
-                                        <TextBlock Text="Cobertura" Style="{StaticResource Text.H3}"
-                                                   Margin="{StaticResource Pad.XS.Bottom}" />
-                                        <ItemsControl ItemsSource="{Binding Page.Coverage}">
+                                 En neutros (D-316, D-887): el origen no es una gravedad ni un
+                                 estado, y pintarlo con esos colores diría que un hallazgo del
+                                 criterio del auditor es más grave que uno del catálogo. -->
+                            <DataTemplate DataType="{x:Type vm:OriginTile}">
+                                <Border Style="{StaticResource Stat.Card}"
+                                        ToolTip="De dónde salió cada hallazgo: de una regla del catálogo, o del juicio del auditor sin regla detrás.">
+                                    <StackPanel>
+                                        <TextBlock Text="Origen" Style="{StaticResource Stat.Label}" />
+                                        <ItemsControl ItemsSource="{Binding Bars}"
+                                                      Margin="{StaticResource Pad.XS.Top}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <StackPanel Margin="{StaticResource Pad.S.Bottom}">
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <TextBlock Text="{Binding Name}"
-                                                                       Style="{StaticResource Text.Small}"
-                                                                       FontWeight="SemiBold" />
-                                                            <TextBlock Text="{Binding Where}"
+                                                    <StackPanel Margin="{StaticResource Pad.XS.Bottom}">
+                                                        <TextBlock Text="{Binding Name}"
+                                                                   Style="{StaticResource Text.Meta}"
+                                                                   TextWrapping="Wrap" />
+                                                        <Grid Margin="{StaticResource Pad.XXS.Top}">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="{Binding Share}" />
+                                                                <ColumnDefinition Width="{Binding Rest}" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <Rectangle Grid.Column="0" Height="10" RadiusX="3" RadiusY="3"
+                                                                       HorizontalAlignment="Stretch"
+                                                                       VerticalAlignment="Center"
+                                                                       Fill="{DynamicResource Brush.TextMuted}" />
+                                                            <TextBlock Grid.Column="1" Text="{Binding Tally}"
                                                                        Style="{StaticResource Text.Meta}"
                                                                        Margin="{StaticResource Pad.XS.Left}"
                                                                        VerticalAlignment="Center" />
-                                                        </StackPanel>
-
-                                                        <ItemsControl ItemsSource="{Binding Passes}"
-                                                                      Margin="{StaticResource Pad.XXS.Top}"
-                                                                      Visibility="{Binding HasPasses, Converter={StaticResource BoolToVisibility}}">
-                                                            <ItemsControl.ItemsPanel>
-                                                                <ItemsPanelTemplate>
-                                                                    <StackPanel Orientation="Horizontal" />
-                                                                </ItemsPanelTemplate>
-                                                            </ItemsControl.ItemsPanel>
-                                                            <ItemsControl.ItemTemplate>
-                                                                <DataTemplate>
-                                                                    <Border Width="26" Height="10" CornerRadius="3"
-                                                                            Margin="{StaticResource Pad.XXS.Right}"
-                                                                            ToolTip="{Binding New, StringFormat=Pasada con {0} hallazgo(s) nuevo(s)}">
-                                                                        <Border.Style>
-                                                                            <Style TargetType="Border">
-                                                                                <!-- Una pasada seca es un hueco, no un
-                                                                                     tramo de otro color: no trajo nada. -->
-                                                                                <Setter Property="Background"
-                                                                                        Value="{DynamicResource Brush.Surface2}" />
-                                                                                <Setter Property="BorderThickness"
-                                                                                        Value="{StaticResource Border.Hairline}" />
-                                                                                <Setter Property="BorderBrush"
-                                                                                        Value="{DynamicResource Brush.Line}" />
-                                                                                <Style.Triggers>
-                                                                                    <DataTrigger Binding="{Binding Found}" Value="True">
-                                                                                        <Setter Property="Background"
-                                                                                                Value="{DynamicResource Brush.Primary.Fill}" />
-                                                                                        <Setter Property="BorderBrush"
-                                                                                                Value="{DynamicResource Brush.Primary.Fill}" />
-                                                                                    </DataTrigger>
-                                                                                </Style.Triggers>
-                                                                            </Style>
-                                                                        </Border.Style>
-                                                                    </Border>
-                                                                </DataTemplate>
-                                                            </ItemsControl.ItemTemplate>
-                                                        </ItemsControl>
-
-                                                        <TextBlock Text="{Binding Reason}"
-                                                                   Style="{StaticResource Text.Meta}"
-                                                                   TextWrapping="Wrap"
-                                                                   Margin="{StaticResource Pad.XXS.Top}" />
-                                                        <TextBlock Style="{StaticResource Text.Meta}"
-                                                                   TextWrapping="Wrap"
-                                                                   Foreground="{DynamicResource Brush.TextMuted}"
-                                                                   Visibility="{Binding HasReviewed, Converter={StaticResource BoolToVisibility}}">
-                                                            <Run Text="Revisados: " />
-                                                            <Run Text="{Binding Reviewed, Mode=OneWay}" />
-                                                        </TextBlock>
+                                                        </Grid>
                                                     </StackPanel>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
                                     </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.Resources>
+                    </ItemsControl>
 
-                                    <!-- Lo que el informe escribe entre la cobertura y los
-                                         hallazgos: incidencias, patrones, directivas. Tal cual. -->
-                                    <FlowDocumentScrollViewer
-                                        Document="{Binding MiddleDocument}"
-                                        VerticalScrollBarVisibility="Disabled"
-                                        HorizontalScrollBarVisibility="Auto"
-                                        IsToolBarVisible="False"
-                                        Background="Transparent"
-                                        Foreground="{DynamicResource Brush.Text}"
-                                        Visibility="{Binding Page.HasMiddle, Converter={StaticResource BoolToVisibility}}" />
+                    <!-- · LA FICHA DEL DOCUMENTO, PLEGADA (F36-1b §1.5) ·
 
-                                    <!-- ·· Cada hallazgo, una tarjeta (F36 §1.5) ··
+                         La cabecera y el resumen del informe dicen, con otras palabras, lo que la
+                         portada acaba de decir: el H1, la lista de metadatos y el resumen se leían
+                         dos veces antes de llegar al primer hallazgo. Se pliegan; NO se borran ni
+                         se reescriben (D-441): quien quiera el documento tal cual lo despliega y
+                         ahí está, entero. -->
+                    <Expander Header="Ficha del documento"
+                              Margin="{StaticResource Pad.S.Bottom}"
+                              ToolTip="La cabecera y el resumen del informe, tal y como se escribieron."
+                              Visibility="{Binding Page.HasSheet, Converter={StaticResource BoolToVisibility}}">
+                        <Border Style="{StaticResource Card}">
+                            <FlowDocumentScrollViewer
+                                Document="{Binding Document}"
+                                VerticalScrollBarVisibility="Disabled"
+                                HorizontalScrollBarVisibility="Auto"
+                                IsToolBarVisible="False"
+                                Background="Transparent"
+                                Foreground="{DynamicResource Brush.Text}" />
+                        </Border>
+                    </Expander>
 
-                                         Borde izquierdo en su color de gravedad, pastilla de regla,
-                                         línea y «Abrir» a su ficha. La ruta es el título del grupo
-                                         y no se repite en cada tarjeta: es lo que F23 §5 ya había
-                                         hecho con el texto. -->
-                                    <ItemsControl x:Name="FindingCards"
-                                                  ItemsSource="{Binding Page.Groups}"
-                                                  Margin="{StaticResource Pad.M.Top}"
-                                                  Visibility="{Binding Page.HasFindings, Converter={StaticResource BoolToVisibility}}">
+                    <!-- · Dos columnas: la lectura a la izquierda y el carril a la derecha ·
+
+                         La columna de lectura se queda con el ancho que haya (F36-1b §1.7). La
+                         medida de lectura de F27 no se toca y no vive aquí: la aplica cada
+                         documento sobre SU prosa, así que un párrafo sigue midiendo 720 dentro de
+                         una columna de 2.100. Lo que usa el ancho es lo que no es prosa. -->
+                    <c:ReadingPanel x:Name="Reading"
+                                    RailWidth="{x:Static c:ReportLayout.RailWidth}"
+                                    ReadWidth="{x:Static c:ReportLayout.ReadWidth}"
+                                    Gap="{x:Static c:ReportLayout.Gap}">
+
+                        <!-- · La lectura · -->
+                        <StackPanel>
+
+                            <!-- ·· Cada hallazgo, una tarjeta (F36 §1.5), y PRIMERO (F36-1b §1.6) ··
+
+                                 Es reordenar trozos ya partidos, no reescribir el documento
+                                 (D-441): el `.md` sigue diciendo lo mismo en el mismo orden. Lo que
+                                 cambia es que en pantalla lo primero es lo que hay que decidir.
+
+                                 La ruta es el título del grupo y no se repite en cada tarjeta —es
+                                 lo que F23 §5 ya había hecho con el texto—, y las tarjetas de ese
+                                 grupo van en dos columnas cuando la ventana da de sí: una tarjeta
+                                 no es prosa. -->
+                            <ItemsControl x:Name="FindingCards"
+                                          ItemsSource="{Binding Page.Groups}"
+                                          Visibility="{Binding Page.HasFindings, Converter={StaticResource BoolToVisibility}}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="{StaticResource Pad.M.Bottom}">
+                                            <!-- `c:PathText` y no un `TextBlock`: `Text.Path` acorta
+                                                 POR EL MEDIO, y es lo que una ruta necesita (P-01) —
+                                                 el final de «.../SnippetScroll.cs» es lo que
+                                                 identifica el fichero. Y el estilo declara ese tipo:
+                                                 en un `TextBlock` revienta al colocar (D-1047). -->
+                                            <c:PathText Full="{Binding Unit}"
+                                                        Style="{StaticResource Text.Path}"
+                                                        FontSize="{StaticResource FontSize.Small}"
+                                                        Foreground="{DynamicResource Brush.TextMuted}"
+                                                        Margin="{StaticResource Pad.XS.Bottom}" />
+
+                                            <ItemsControl ItemsSource="{Binding Findings}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <c:ColumnsPanel
+                                                            MinColumnWidth="{x:Static c:ReportLayout.CardMinWidth}"
+                                                            MaxColumns="2"
+                                                            Gap="{x:Static c:ReportLayout.Gap}" />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Style="{StaticResource Finding.Card}"
+                                                                Margin="{StaticResource Pad.XS.Bottom}">
+                                                            <StackPanel>
+                                                                <Grid>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <TextBlock Grid.Column="0"
+                                                                               Text="{Binding Label}"
+                                                                               Style="{StaticResource Text.Small}"
+                                                                               FontWeight="SemiBold"
+                                                                               TextWrapping="Wrap" />
+                                                                    <Button Grid.Column="1" Content="Abrir"
+                                                                            Style="{StaticResource Button.Link}"
+                                                                            FontSize="{StaticResource FontSize.Meta}"
+                                                                            VerticalAlignment="Top"
+                                                                            Command="{Binding DataContext.OpenFindingCardCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                            CommandParameter="{Binding}"
+                                                                            ToolTip="Abre la ficha de este hallazgo"
+                                                                            Visibility="{Binding CanOpen, Converter={StaticResource BoolToVisibility}}" />
+                                                                </Grid>
+
+                                                                <StackPanel Orientation="Horizontal"
+                                                                            Margin="{StaticResource Pad.XXS.Top}">
+                                                                    <Border Style="{StaticResource Report.Rule}">
+                                                                        <TextBlock Text="{Binding RuleId}"
+                                                                                   Style="{StaticResource Pill.Text}" />
+                                                                    </Border>
+                                                                    <TextBlock Text="{Binding RuleDetail}"
+                                                                               Style="{StaticResource Text.Meta}"
+                                                                               VerticalAlignment="Center"
+                                                                               Margin="{StaticResource Pad.XS.Left}"
+                                                                               Visibility="{Binding HasRuleDetail, Converter={StaticResource BoolToVisibility}}" />
+                                                                    <TextBlock Text="{Binding Line}"
+                                                                               Style="{StaticResource Text.Meta}"
+                                                                               VerticalAlignment="Center"
+                                                                               Margin="{StaticResource Pad.XS.Left}"
+                                                                               Visibility="{Binding HasLine, Converter={StaticResource BoolToVisibility}}" />
+                                                                </StackPanel>
+
+                                                                <!-- La descripción y la recomendación,
+                                                                     dentro y tal cual, con su propia
+                                                                     medida de lectura: el documento la
+                                                                     lleva puesta (F27). -->
+                                                                <FlowDocumentScrollViewer
+                                                                    Document="{Binding Body, Converter={StaticResource MarkdownToDocument}}"
+                                                                    VerticalScrollBarVisibility="Disabled"
+                                                                    HorizontalScrollBarVisibility="Auto"
+                                                                    IsToolBarVisible="False"
+                                                                    Background="Transparent"
+                                                                    HorizontalAlignment="Left"
+                                                                    Foreground="{DynamicResource Brush.Text}"
+                                                                    Margin="{StaticResource Pad.XS.Top}" />
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- ·· Cobertura: una barra de pasadas por unidad, DESPUÉS ··
+
+                                 «2 auditadas» tapa la diferencia que más importa: una unidad que
+                                 convergió está barrida y otra que agotó el tope SEGUÍA ENCONTRANDO
+                                 (D-887). La barra enseña cuántas pasadas hicieron falta y cuáles
+                                 trajeron algo; el motivo de cierre va en texto, con las palabras
+                                 que el informe ya escribió. -->
+                            <Border Style="{StaticResource Card}"
+                                    Margin="{StaticResource Pad.S.Bottom}"
+                                    Visibility="{Binding Page.HasCoverage, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel>
+                                    <TextBlock Text="Cobertura" Style="{StaticResource Text.H3}"
+                                               Margin="{StaticResource Pad.XS.Bottom}" />
+                                    <ItemsControl ItemsSource="{Binding Page.Coverage}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <StackPanel Margin="{StaticResource Pad.S.Bottom}">
-                                                    <!-- `c:PathText` y no un `TextBlock`: `Text.Path`
-                                                         acorta POR EL MEDIO, y es lo que una ruta
-                                                         necesita (P-01) — el final de
-                                                         «.../Controls/SnippetScroll.cs» es lo que
-                                                         identifica el fichero. Y el estilo declara
-                                                         ese tipo, así que en un `TextBlock` no es
-                                                         que se vea peor: revienta al colocar. -->
-                                                    <c:PathText Full="{Binding Unit}"
-                                                                Style="{StaticResource Text.Path}"
-                                                                FontSize="{StaticResource FontSize.Small}"
-                                                                Foreground="{DynamicResource Brush.TextMuted}"
-                                                                Margin="{StaticResource Pad.XS.Bottom}" />
-                                                    <ItemsControl ItemsSource="{Binding Findings}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding Name}"
+                                                                   Style="{StaticResource Text.Small}"
+                                                                   FontWeight="SemiBold" />
+                                                        <TextBlock Text="{Binding Where}"
+                                                                   Style="{StaticResource Text.Meta}"
+                                                                   Margin="{StaticResource Pad.XS.Left}"
+                                                                   VerticalAlignment="Center" />
+                                                    </StackPanel>
+
+                                                    <ItemsControl ItemsSource="{Binding Passes}"
+                                                                  Margin="{StaticResource Pad.XXS.Top}"
+                                                                  Visibility="{Binding HasPasses, Converter={StaticResource BoolToVisibility}}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <StackPanel Orientation="Horizontal" />
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
-                                                                <Border Style="{StaticResource Finding.Card}"
-                                                                        Margin="{StaticResource Pad.XS.Bottom}">
-                                                                    <StackPanel>
-                                                                        <Grid>
-                                                                            <Grid.ColumnDefinitions>
-                                                                                <ColumnDefinition Width="*" />
-                                                                                <ColumnDefinition Width="Auto" />
-                                                                            </Grid.ColumnDefinitions>
-                                                                            <TextBlock Grid.Column="0"
-                                                                                       Text="{Binding Label}"
-                                                                                       Style="{StaticResource Text.Small}"
-                                                                                       FontWeight="SemiBold"
-                                                                                       TextWrapping="Wrap" />
-                                                                            <Button Grid.Column="1" Content="Abrir"
-                                                                                    Style="{StaticResource Button.Link}"
-                                                                                    FontSize="{StaticResource FontSize.Meta}"
-                                                                                    VerticalAlignment="Top"
-                                                                                    Command="{Binding DataContext.OpenFindingCardCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                                                    CommandParameter="{Binding}"
-                                                                                    ToolTip="Abre la ficha de este hallazgo"
-                                                                                    Visibility="{Binding CanOpen, Converter={StaticResource BoolToVisibility}}" />
-                                                                        </Grid>
-
-                                                                        <StackPanel Orientation="Horizontal"
-                                                                                    Margin="{StaticResource Pad.XXS.Top}">
-                                                                            <Border Style="{StaticResource Report.Rule}">
-                                                                                <TextBlock Text="{Binding RuleId}"
-                                                                                           Style="{StaticResource Pill.Text}" />
-                                                                            </Border>
-                                                                            <TextBlock Text="{Binding RuleDetail}"
-                                                                                       Style="{StaticResource Text.Meta}"
-                                                                                       VerticalAlignment="Center"
-                                                                                       Margin="{StaticResource Pad.XS.Left}"
-                                                                                       Visibility="{Binding HasRuleDetail, Converter={StaticResource BoolToVisibility}}" />
-                                                                            <TextBlock Text="{Binding Line}"
-                                                                                       Style="{StaticResource Text.Meta}"
-                                                                                       VerticalAlignment="Center"
-                                                                                       Margin="{StaticResource Pad.XS.Left}"
-                                                                                       Visibility="{Binding HasLine, Converter={StaticResource BoolToVisibility}}" />
-                                                                        </StackPanel>
-
-                                                                        <!-- La descripción y la recomendación, dentro y
-                                                                             tal cual: el mismo renderizador que el
-                                                                             resto del documento. -->
-                                                                        <FlowDocumentScrollViewer
-                                                                            Document="{Binding Body, Converter={StaticResource MarkdownToDocument}}"
-                                                                            VerticalScrollBarVisibility="Disabled"
-                                                                            HorizontalScrollBarVisibility="Auto"
-                                                                            IsToolBarVisible="False"
-                                                                            Background="Transparent"
-                                                                            Foreground="{DynamicResource Brush.Text}"
-                                                                            Margin="{StaticResource Pad.XS.Top}" />
-                                                                    </StackPanel>
+                                                                <Border Width="26" Height="10" CornerRadius="3"
+                                                                        Margin="{StaticResource Pad.XXS.Right}"
+                                                                        ToolTip="{Binding New, StringFormat=Pasada con {0} hallazgo(s) nuevo(s)}">
+                                                                    <Border.Style>
+                                                                        <Style TargetType="Border">
+                                                                            <!-- Una pasada seca es un hueco, no un
+                                                                                 tramo de otro color: no trajo nada. -->
+                                                                            <Setter Property="Background"
+                                                                                    Value="{DynamicResource Brush.Surface2}" />
+                                                                            <Setter Property="BorderThickness"
+                                                                                    Value="{StaticResource Border.Hairline}" />
+                                                                            <Setter Property="BorderBrush"
+                                                                                    Value="{DynamicResource Brush.Line}" />
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding Found}" Value="True">
+                                                                                    <Setter Property="Background"
+                                                                                            Value="{DynamicResource Brush.Primary.Fill}" />
+                                                                                    <Setter Property="BorderBrush"
+                                                                                            Value="{DynamicResource Brush.Primary.Fill}" />
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Border.Style>
                                                                 </Border>
                                                             </DataTemplate>
                                                         </ItemsControl.ItemTemplate>
                                                     </ItemsControl>
+
+                                                    <TextBlock Text="{Binding Reason}"
+                                                               Style="{StaticResource Text.Meta}"
+                                                               TextWrapping="Wrap"
+                                                               Margin="{StaticResource Pad.XXS.Top}" />
+                                                    <TextBlock Style="{StaticResource Text.Meta}"
+                                                               TextWrapping="Wrap"
+                                                               Foreground="{DynamicResource Brush.TextMuted}"
+                                                               Visibility="{Binding HasReviewed, Converter={StaticResource BoolToVisibility}}">
+                                                        <Run Text="Revisados: " />
+                                                        <Run Text="{Binding Reviewed, Mode=OneWay}" />
+                                                    </TextBlock>
                                                 </StackPanel>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
-
-                                    <!-- La firma cierra el DOCUMENTO, así que va detrás de las
-                                         tarjetas y no dentro de la última. -->
-                                    <FlowDocumentScrollViewer
-                                        Document="{Binding FootDocument}"
-                                        VerticalScrollBarVisibility="Disabled"
-                                        HorizontalScrollBarVisibility="Disabled"
-                                        IsToolBarVisible="False"
-                                        Background="Transparent"
-                                        Foreground="{DynamicResource Brush.Text}"
-                                        Visibility="{Binding Page.HasFoot, Converter={StaticResource BoolToVisibility}}" />
                                 </StackPanel>
                             </Border>
+
+                            <!-- Lo que el informe escribe entre la cobertura y los hallazgos:
+                                 incidencias, patrones, directivas. Tal cual, y pegado a la
+                                 cobertura, que es de lo que hablan. -->
+                            <Border Style="{StaticResource Card}"
+                                    Margin="{StaticResource Pad.S.Bottom}"
+                                    Visibility="{Binding Page.HasMiddle, Converter={StaticResource BoolToVisibility}}">
+                                <FlowDocumentScrollViewer
+                                    Document="{Binding MiddleDocument}"
+                                    VerticalScrollBarVisibility="Disabled"
+                                    HorizontalScrollBarVisibility="Auto"
+                                    IsToolBarVisible="False"
+                                    Background="Transparent"
+                                    HorizontalAlignment="Left"
+                                    Foreground="{DynamicResource Brush.Text}" />
+                            </Border>
+
+                            <!-- La firma cierra el DOCUMENTO, así que va al pie de todo. -->
+                            <FlowDocumentScrollViewer
+                                Document="{Binding FootDocument}"
+                                VerticalScrollBarVisibility="Disabled"
+                                HorizontalScrollBarVisibility="Disabled"
+                                IsToolBarVisible="False"
+                                Background="Transparent"
+                                HorizontalAlignment="Left"
+                                Foreground="{DynamicResource Brush.Text}"
+                                Visibility="{Binding Page.HasFoot, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
 
-                        <!-- · El carril · -->
-                        <StackPanel>
+                        <!-- · El carril. Se queda quieto al bajar por el cuerpo: un índice que se
+                             va por arriba en cuanto se hace scroll es un índice que no está. · -->
+                        <StackPanel x:Name="Rail">
+                            <StackPanel.RenderTransform>
+                                <TranslateTransform x:Name="RailShift" />
+                            </StackPanel.RenderTransform>
+
                             <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.M}"
                                     CornerRadius="{StaticResource Radius.M}">
                                 <StackPanel c:Stack.Gap="{StaticResource Space.XS}">
@@ -800,9 +879,10 @@
                                             Style="{StaticResource Button.Primary}"
                                             HorizontalAlignment="Stretch"
                                             ToolTip="Guarda una copia del informe donde tú elijas" />
-                                    <!-- «Copiar resumen» se lleva la frase y las tarjetas como
-                                         texto: es el informe en cinco líneas, para pegarlo en un
-                                         correo sin adjuntar el `.md` (F36 §1.3). -->
+                                    <!-- «Copiar resumen» se lleva la frase y las cifras como texto:
+                                         es el informe en cinco líneas, para pegarlo en un correo sin
+                                         adjuntar el `.md` (F36 §1.3). Desde F36-1b es el ÚNICO
+                                         copiar de la página: había cinco para una sola cosa. -->
                                     <Button Content="Copiar resumen"
                                             Command="{Binding CopySummaryCommand}"
                                             Style="{StaticResource Button.Secondary}"
@@ -841,27 +921,55 @@
                                                         Command="{Binding DataContext.GoToFindingCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding}"
                                                         ToolTip="{Binding Title}">
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <Border Style="{StaticResource Report.SevDot}" />
-                                                        <!-- EL RECORTE LO DECIDE LA PRIMITIVA, no
-                                                             esta vista (P-01): el título de un
-                                                             hallazgo es largo y aquí hay 300 px,
-                                                             así que se acorta por el final con
-                                                             elipsis y el título entero está en el
-                                                             tooltip. -->
-                                                        <TextBlock Text="{Binding Label}"
-                                                                   Style="{StaticResource Text.Name}"
-                                                                   FontSize="{StaticResource FontSize.Meta}"
-                                                                   Foreground="{DynamicResource Brush.TextMuted}"
-                                                                   Margin="{StaticResource Pad.XS.Left}"
-                                                                   VerticalAlignment="Center" />
-                                                    </StackPanel>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Grid.Column="0" Style="{StaticResource Report.SevDot}"
+                                                                VerticalAlignment="Top"
+                                                                Margin="{StaticResource Pad.XXS.Top}" />
+                                                        <StackPanel Grid.Column="1"
+                                                                    Margin="{StaticResource Pad.XS.Left}">
+                                                            <!-- El alias, cuando el informe lo escribe: es
+                                                                 como se nombra un hallazgo en una
+                                                                 conversación («BUG-0236»). -->
+                                                            <TextBlock Text="{Binding Alias}"
+                                                                       Style="{StaticResource Text.Meta}"
+                                                                       FontWeight="SemiBold"
+                                                                       Visibility="{Binding Alias, Converter={StaticResource NotEmptyToVisibility}}" />
+                                                            <!-- DOS LÍNEAS Y ELIPSIS. WPF no tiene
+                                                                 `MaxLines` —eso es de UWP—, así que el
+                                                                 tope son dos `LineHeight.Meta` y el
+                                                                 recorte lo pone `TextTrimming` sobre la
+                                                                 última línea que cabe. El título entero
+                                                                 está en el tooltip: recortar sin decirlo
+                                                                 es lo que P-01 prohíbe, y aquí se dice
+                                                                 con los puntos suspensivos. -->
+                                                            <TextBlock Text="{Binding Title}"
+                                                                       Style="{StaticResource Text.Meta}"
+                                                                       TextWrapping="Wrap"
+                                                                       MaxHeight="{StaticResource Rail.TwoLines}"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                        </StackPanel>
+                                                    </Grid>
                                                 </Button>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
                                 </StackPanel>
                             </Border>
+
+                            <!-- El anexo, SOLO COMO ENLACE (F36-1b §1.8). Trae tablas de nueve
+                                 columnas y en 380 px no se leen: el enlace salta al anexo, que se
+                                 despliega a ancho completo bajo el cuerpo (F27). -->
+                            <Button Content="Anexo técnico ↓"
+                                    Command="{Binding GoToAnnexCommand}"
+                                    Style="{StaticResource Button.Link}"
+                                    HorizontalAlignment="Left"
+                                    Margin="{StaticResource Pad.S.Top}"
+                                    ToolTip="Baja al anexo técnico, que se lee a ancho completo bajo el cuerpo"
+                                    Visibility="{Binding HasAnnex, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
                     </c:ReadingPanel>
 
@@ -869,7 +977,8 @@
                          que no hace falta para actuar sobre los hallazgos; se despliega debajo de
                          las dos columnas porque lo que lleva dentro son tablas de nueve columnas,
                          no prosa, y en una medida de lectura se parten. -->
-                    <Expander Header="Anexo técnico — diagnóstico"
+                    <Expander x:Name="Annex"
+                              Header="Anexo técnico — diagnóstico"
                               Margin="{StaticResource Pad.M.Top}"
                               Visibility="{Binding HasAnnex, Converter={StaticResource BoolToVisibility}}">
                         <FlowDocumentScrollViewer

@@ -18763,3 +18763,59 @@ hallazgo, 3 tramos de rosco y 2 barras de origen.
 
 **Lo que NO se ha comprobado, y se dice**: el aspecto, que sigue pendiente del `dist` (N-8). Lo que
 sí está comprobado ahora es que la vista **se coloca**, que es lo que faltaba.
+
+## F36-1b — El informe de sesión, segunda pasada
+
+### D-1048 — La rejilla incluye a las gráficas, la portada no se lee dos veces y el cuerpo usa el ancho
+
+**Tres cosas se deciden aquí, y las tres son la misma**: que la página deje de desperdiciar sitio y
+de repetirse.
+
+**(1) Una fila, una rejilla.** Las cuatro cifras iban en un `ColumnsPanel` y las dos gráficas en un
+`StackPanel` al lado: 130 px de alto contra 180, y la barra de origen cortada. Una rejilla que no
+incluye a la mitad de la fila no iguala nada — que es justo lo que D-990 vino a arreglar. Ahora los
+seis salen de **una colección** (`Tiles`) con una plantilla por `DataType`, así que la rejilla los
+iguala en alto y les reparte el ancho; en ventana estrecha bajan como baja siempre, y **no se le
+pone un tope por número de azulejos**, que es lo que D-970 ya probó y revirtió. De paso, el rosco
+gana su leyenda —un rosco sin leyenda obliga a adivinar el tramo por el color— y el origen pasa a
+dos barras completas con «4 · 40 %»: el porcentaje del criterio es el que el informe ya escribe y el
+del catálogo se obtiene **restando**, porque dos redondeos independientes dan barras que suman 99.
+
+**(2) La portada no se lee dos veces.** La cabecera y el resumen dicen, con otras palabras, lo que
+la portada acaba de decir: el H1, la lista de metadatos y el resumen se atravesaban antes de llegar
+al primer hallazgo. Se **pliegan** en «Ficha del documento», cerrado por defecto. No se borran ni se
+reescriben (D-441): el texto sigue entero a un clic, y el test comprueba que la suma de los cinco
+trozos sigue siendo el cuerpo. Y en pantalla los **hallazgos van antes que la cobertura**, porque
+reordenar trozos ya partidos es lo que D-441 permite y lo primero tiene que ser lo que hay que
+decidir. El `.md` no cambia.
+
+**(3) El cuerpo usa el ancho, y la prosa no.** La columna de lectura dejaba 1.200 px en blanco en un
+monitor de 2.560 porque se paraba en 764. La medida de lectura de F27 **no se toca y no vive en el
+panel**: la aplica cada documento sobre SU prosa, así que un párrafo sigue midiendo 720 dentro de
+una columna de 2.100. Lo que sí usa el ancho es lo que no es prosa — las tarjetas de hallazgo, en
+**dos columnas desde 1.600 px de ventana**, y las barras de cobertura—. El umbral y el ancho mínimo
+de una tarjeta son **el mismo número dicho dos veces**: el ancho se deriva del umbral, descontados
+los 22 px de página y barra de desplazamiento que se midieron sobre la vista real. El carril sube a
+380 —con 300 truncaba los títulos al segundo carácter útil—, se queda quieto al hacer scroll, y el
+anexo va en él **solo como enlace**: sus tablas son de nueve columnas y en 380 px no se leen, así
+que el enlace baja al anexo, que sigue a ancho completo (F27).
+
+**Y dos que sobraban**: los cinco «Copiar» —cuatro tarjetas y el resumen— para una sola cosa se
+quedan en uno, el del carril, que ya se lleva la frase y las cuatro cifras. Y la portada gana **una
+línea de conclusión** por plantilla, solo con críticas o altas: «Requiere atención: 1 hallazgo alto —
+Cast directo de dynamic a double sin validar null». Con las dos gravedades se cuentan las dos y no
+se nombra ninguna —nombrar una dejaría la otra fuera—; con varias de la misma, tampoco —elegir cuál
+no lo puede decidir la página—; sin altas ni críticas, sin línea (D-318).
+
+**Cobertura (N-5): 12 casos de regla.** La fila de seis al mismo alto sobre el panel de verdad y con
+contenidos desiguales, más que los seis salgan del mismo `ItemsControl`; las dos barras de origen
+con su número y su parte, sumando cien exacto, sobre tres repartos; la ficha con exactamente la
+cabecera y el resumen, el orden de pantalla leído del marcado y la suma de los cinco trozos igual al
+cuerpo; las dos columnas a 2.560, 1.600, 1.599 y 1.000 **contra la rejilla de verdad**, que es lo
+que ata el umbral del manual al que aplica el panel; el alias y el título enteros en el carril; y la
+conclusión contra cuatro casos. La tanda queda en **2.698 casos** (2.163 en la aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: el aspecto. Sí está medido —sobre la vista real, el hub
+real y cuatro anchos— que los seis azulejos salen a 413×158 en una fila a 2.560, que las tarjetas se
+parten en dos columnas a 1.600 y en una a 1.599, y que no hay ninguna excepción al colocar. Cómo se
+ve, lo mira el usuario en el `dist`. Ciclo N-8.

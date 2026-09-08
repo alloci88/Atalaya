@@ -35,6 +35,25 @@ public sealed record DateRangeOption(int? Days, string Label)
 }
 
 /// <summary>
+/// Una entrada de la leyenda del rosco de gravedad (F36-1b §1.2): la pastilla de su gravedad y su
+/// número. Solo las gravedades que existen — un rosco con leyenda de cuatro y tres tramos hace
+/// contar tramos para saber cuál falta (D-318).
+/// </summary>
+public sealed record SeverityLegendItem(string Severity, int Count);
+
+/// <summary>
+/// <b>El rosco de gravedad como AZULEJO de la fila</b> (F36-1b §1.1). Es un objeto y no un bloque
+/// de XAML suelto porque las cuatro cifras y las dos gráficas van en la MISMA rejilla: es lo único
+/// que las iguala en alto y les reparte el ancho (D-990). Fuera de la rejilla, las tarjetas medían
+/// 130 y las gráficas 180.
+/// </summary>
+public sealed record SeverityTile(
+    IReadOnlyList<DonutSegment> Segments, IReadOnlyList<SeverityLegendItem> Legend, string Total);
+
+/// <inheritdoc cref="SeverityTile"/>
+public sealed record OriginTile(IReadOnlyList<OriginBar> Bars);
+
+/// <summary>
 /// Una fila de la barra de origen del informe (F36 §1): de dónde salieron los hallazgos, del
 /// catálogo de reglas o del criterio del auditor (D-887).
 /// <para>
@@ -44,7 +63,8 @@ public sealed record DateRangeOption(int? Days, string Label)
 /// y los colores de esas dos familias están reservados (D-316).
 /// </para>
 /// </summary>
-public sealed record OriginBar(string Name, int Count, GridLength Share, GridLength Rest);
+/// <param name="Tally">«4 · 40 %»: el número y su parte, al final de la barra.</param>
+public sealed record OriginBar(string Name, string Tally, GridLength Share, GridLength Rest);
 
 /// <summary>Una fila de la lista de informes, ya escrita para la vista.</summary>
 public sealed class ReportRow
@@ -346,18 +366,18 @@ public sealed partial class ReportsViewModel : ViewModelBase
     /// <summary>«8 sep 2026 · 10:32 · alvaro · Claude Code · claude-opus-4.7» (F36 §1.1).</summary>
     [ObservableProperty] private string _coverMeta = string.Empty;
 
-    /// <summary>El rosco de gravedad de los hallazgos nuevos (`SeverityPalette`, D-316).</summary>
-    public ObservableCollection<DonutSegment> SeverityRing { get; } = new();
+    /// <summary>
+    /// <b>UNA fila y UNA rejilla</b> (F36-1b §1.1, D-990): las cuatro cifras y las dos gráficas,
+    /// juntas, para que la rejilla las iguale en alto y les reparta el ancho. Antes eran una
+    /// rejilla de tarjetas y, al lado, dos bloques sueltos de tamaño propio.
+    /// <para>
+    /// La colección es heterogénea a propósito: cada tipo trae su plantilla por
+    /// <c>DataType</c>, que es como WPF elige plantilla sin que nadie escriba un selector.
+    /// </para>
+    /// </summary>
+    public ObservableCollection<object> Tiles { get; } = new();
 
-    /// <summary>El número del centro del rosco: cuántos hallazgos nuevos hay en total.</summary>
-    [ObservableProperty] private string _severityTotal = string.Empty;
-
-    [ObservableProperty] private bool _hasSeverityRing;
-
-    /// <summary>La barra de origen (D-887). Vacía cuando el informe no lo escribe.</summary>
-    public ObservableCollection<OriginBar> OriginBars { get; } = new();
-
-    [ObservableProperty] private bool _hasOrigin;
+    [ObservableProperty] private bool _hasTiles;
 
     /// <summary>
     /// El enlace a los hallazgos solo aparece en informes de SESIÓN: un consolidado de cierre o un
@@ -586,7 +606,9 @@ public sealed partial class ReportsViewModel : ViewModelBase
             row.Entry, row.Entry.Session, cuerpo, _reports.FindingIndex(row.Slug));
         ApplyPageColors(row);
 
-        Document = MarkdownFlowDocument.Build(Page.HasCover ? Page.Body : cuerpo, OpenExternal);
+        // LA FICHA DEL DOCUMENTO va aparte y PLEGADA (F36-1b §1.5): es la cabecera y el resumen,
+        // o sea lo que la portada acaba de decir. El texto no se toca ni se borra; se pliega.
+        Document = MarkdownFlowDocument.Build(Page.HasCover ? Page.Sheet : cuerpo, OpenExternal);
         MiddleDocument = Page.HasMiddle ? MarkdownFlowDocument.Build(Page.Middle, OpenExternal) : null;
         FootDocument = Page.HasFoot ? MarkdownFlowDocument.Build(Page.Foot, OpenExternal) : null;
         // El anexo, SIN medida de lectura: sus tablas son de nueve columnas y en una columna de
@@ -628,10 +650,8 @@ public sealed partial class ReportsViewModel : ViewModelBase
         FootDocument = null;
         HasAnnex = false;
         Page = ReportPage.Plain;
-        SeverityRing.Clear();
-        OriginBars.Clear();
-        HasSeverityRing = false;
-        HasOrigin = false;
+        Tiles.Clear();
+        HasTiles = false;
         RaiseScopeChanged();
     }
 
@@ -732,32 +752,45 @@ public sealed partial class ReportsViewModel : ViewModelBase
             AppBrush = null;
         }
 
-        SeverityRing.Clear();
-        foreach (ReportSlice slice in Page.Severities)
+        Tiles.Clear();
+        foreach (ReportStat stat in Page.Stats)
         {
-            SeverityRing.Add(new DonutSegment(
-                slice.Name,
-                slice.Count,
-                Paint(SeverityPalette.Hex(SeverityOf(slice.Name))),
-                $"{slice.Name} — {slice.Count} hallazgo(s)"));
+            Tiles.Add(stat);
         }
 
-        HasSeverityRing = SeverityRing.Count > 0;
-        SeverityTotal = Page.Severities.Sum(s => s.Count).ToString(CultureInfo.CurrentCulture);
-
-        OriginBars.Clear();
-        int max = Page.Origins.Count == 0 ? 0 : Page.Origins.Max(o => o.Count);
-        foreach (ReportSlice origin in Page.Origins)
+        if (Page.Severities.Count > 0)
         {
-            double share = max == 0 ? 0 : (double)origin.Count / max;
-            OriginBars.Add(new OriginBar(
-                origin.Name,
-                origin.Count,
-                new GridLength(Math.Max(share, 0.001), GridUnitType.Star),
-                new GridLength(Math.Max(1 - share, 0.001), GridUnitType.Star)));
+            Tiles.Add(new SeverityTile(
+                Page.Severities
+                    .Select(s => new DonutSegment(
+                        s.Name,
+                        s.Count,
+                        Paint(SeverityPalette.Hex(SeverityOf(s.Name))),
+                        $"{s.Name} — {s.Count} hallazgo(s)"))
+                    .ToList(),
+                Page.Severities.Select(s => new SeverityLegendItem(s.Name, s.Count)).ToList(),
+                Page.Severities.Sum(s => s.Count).ToString(CultureInfo.CurrentCulture)));
         }
 
-        HasOrigin = OriginBars.Count > 0;
+        if (Page.Origins.Count > 0)
+        {
+            // La barra se reparte contra el TOTAL, no contra la mayor: dos barras que llegaran
+            // las dos al final dirían que las dos son el cien por cien.
+            int total = Page.Origins.Sum(o => o.Count);
+            Tiles.Add(new OriginTile(Page.Origins
+                .Select(o =>
+                {
+                    double share = total == 0 ? 0 : (double)o.Count / total;
+                    return new OriginBar(
+                        o.Name,
+                        o.Tally,
+                        new GridLength(Math.Max(share, 0.001), GridUnitType.Star),
+                        new GridLength(Math.Max(1 - share, 0.001), GridUnitType.Star));
+                })
+                .ToList()));
+        }
+
+        HasTiles = Tiles.Count > 0;
     }
 
     /// <summary>El nombre de una gravedad, de vuelta a su valor. El rotulado único de UI-0027.</summary>
@@ -793,16 +826,6 @@ public sealed partial class ReportsViewModel : ViewModelBase
         Copy(Page.Summary, "Resumen del informe");
     }
 
-    /// <summary>Una tarjeta suelta, con el mismo «Copiar» que las del panel.</summary>
-    [RelayCommand]
-    private void CopyStat(ReportStat? stat)
-    {
-        if (stat is not null)
-        {
-            Copy(stat.CopyText, stat.Title);
-        }
-    }
-
     private void Copy(string text, string what)
     {
         try
@@ -832,6 +855,15 @@ public sealed partial class ReportsViewModel : ViewModelBase
     /// —es colocación, no estado—, así que el view-model solo dice a cuál.
     /// </summary>
     public event Action<ReportFinding>? FindingRequested;
+
+    /// <summary>
+    /// Y el enlace del carril lleva al anexo, que vive a ancho completo bajo el cuerpo (F27). En el
+    /// carril va solo el ENLACE: el anexo trae tablas de nueve columnas y en 380 px no se leen.
+    /// </summary>
+    public event Action? AnnexRequested;
+
+    [RelayCommand]
+    private void GoToAnnex() => AnnexRequested?.Invoke();
 
     [RelayCommand]
     private void GoToFinding(ReportFinding? finding)

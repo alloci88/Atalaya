@@ -27,8 +27,19 @@ public sealed record ReportStat(
     public string CopyText => Subtitle.Length == 0 ? $"{Title}: {Amount}" : $"{Title}: {Amount} · {Subtitle}";
 }
 
-/// <summary>Un tramo de una gráfica del informe: un nombre y su recuento. Sin colores.</summary>
-public sealed record ReportSlice(string Name, int Count);
+/// <summary>
+/// Un tramo de una gráfica del informe: un nombre, su recuento y su parte del total. Sin colores.
+/// </summary>
+/// <param name="Share">
+/// «40 %», ya escrito. Los dos tramos de una barra de origen SUMAN 100 exacto: el segundo se
+/// calcula restando, no redondeando por su cuenta — dos redondeos independientes dan «17 % · 84 %»
+/// y una barra que no suma cien no es una proporción.
+/// </param>
+public sealed record ReportSlice(string Name, int Count, string Share = "")
+{
+    /// <summary>«4 · 40 %», que es lo que va al final de la barra.</summary>
+    public string Tally => Share.Length == 0 ? Count.ToString(AppCulture.Display) : $"{Count} · {Share}";
+}
 
 /// <summary>Una pasada del barrido de una unidad, para la barra de cobertura.</summary>
 public sealed record ReportPass(int Index, int New)
@@ -175,6 +186,15 @@ public sealed record ReportPage
 
     public string Lead { get; private init; } = string.Empty;
 
+    /// <summary>
+    /// <b>Qué requiere atención</b> (F36-1b §1.9). La frase ejecutiva dice cuánto hubo; ésta dice
+    /// si hay algo que mirar HOY. Solo con críticas o altas: con medias y bajas no hay nada que
+    /// destacar, y una línea que dijera «0 críticos» gastaría un renglón en no decir nada (D-318).
+    /// </summary>
+    public string Conclusion { get; private init; } = string.Empty;
+
+    public bool HasConclusion => Conclusion.Length > 0;
+
     public string Provider { get; private init; } = string.Empty;
 
     public IReadOnlyList<ReportStat> Stats { get; private init; } = Array.Empty<ReportStat>();
@@ -202,11 +222,14 @@ public sealed record ReportPage
     public IReadOnlyList<ReportFinding> Index { get; private init; } = Array.Empty<ReportFinding>();
 
     /// <summary>
-    /// El cuerpo hasta la cobertura. Lo que sigue va en <see cref="Middle"/> y en las tarjetas: el
-    /// TEXTO es el mismo, lo que cambia es que la cobertura y los hallazgos se pintan en vez de
-    /// leerse en una lista de viñetas.
+    /// <b>La ficha del documento</b> (F36-1b): la cabecera y el resumen del informe, que son
+    /// exactamente lo que la portada ya dice con otras palabras. Va PLEGADA encima del cuerpo — no
+    /// se borra ni se reescribe (D-441): quien quiera el documento tal cual lo despliega y ahí
+    /// está, entero. Lo que se gana es que el cuerpo empiece por lo que la portada no dice.
     /// </summary>
-    public string Body { get; private init; } = string.Empty;
+    public string Sheet { get; private init; } = string.Empty;
+
+    public bool HasSheet => Sheet.Trim().Length > 0;
 
     /// <summary>Lo que el informe escribe entre la cobertura y los hallazgos: incidencias, patrones,
     /// directivas, veredictos degradados. Se pinta tal cual, como hasta F36.</summary>
@@ -258,7 +281,7 @@ public sealed record ReportPage
         {
             HasCover = true,
             Provider = $"{ProviderNames.Display(session.Provider)} · {session.Model ?? "n/d"}",
-            Body = head,
+            Sheet = head,
             Middle = middle,
             Foot = foot,
             Findings = findings,
@@ -287,6 +310,7 @@ public sealed record ReportPage
         return page with
         {
             Lead = lead,
+            Conclusion = ConclusionText(findings),
             Stats = stats,
             Severities = severities,
             Origins = ReadOrigins(head),
@@ -546,11 +570,69 @@ public sealed record ReportPage
             return Array.Empty<ReportSlice>();
         }
 
+        int catalogo = int.Parse(m.Groups["c"].Value);
+        int criterio = int.Parse(m.Groups["j"].Value);
+
+        // EL PORCENTAJE DEL CRITERIO ES EL QUE EL INFORME ESCRIBE —`PercentText.Of(criterio, total)`,
+        // la misma función—, y el del catálogo se obtiene RESTANDO. Redondear los dos por separado
+        // da barras que suman 99 o 101, y una proporción que no suma cien no es una proporción.
+        int total = catalogo + criterio;
+        string suyo = PercentText.Of(criterio, total);
         return new[]
         {
-            new ReportSlice("Catálogo de reglas", int.Parse(m.Groups["c"].Value)),
-            new ReportSlice("Criterio del auditor", int.Parse(m.Groups["j"].Value)),
+            new ReportSlice("Catálogo de reglas", catalogo, Complement(suyo)),
+            new ReportSlice("Criterio del auditor", criterio, suyo),
         };
+    }
+
+    /// <summary>Lo que le falta a un porcentaje para cien, escrito igual que él.</summary>
+    private static string Complement(string percent)
+    {
+        string number = percent.Replace("%", string.Empty).Trim();
+        return double.TryParse(number, System.Globalization.NumberStyles.Any, AppCulture.Display, out double value)
+            ? PercentText.Of((100 - value) / 100.0)
+            : percent;
+    }
+
+    /// <summary>
+    /// <b>Qué requiere atención</b> (F36-1b §1.9), por plantilla y sin modelo.
+    /// <para>
+    /// Solo con críticas o altas: son las dos gravedades que deciden si esto se mira hoy. Con
+    /// medias y bajas no hay nada que destacar y la línea no se escribe — «0 críticos» sería un
+    /// renglón para no decir nada (D-318).
+    /// </para>
+    /// <para>
+    /// <b>El título solo se nombra cuando hay UNO.</b> Con dos hallazgos de la misma gravedad,
+    /// elegir cuál se nombra sería una decisión que la página no puede tomar; entonces la línea se
+    /// queda en el recuento, que es lo que sí sabe.
+    /// </para>
+    /// </summary>
+    internal static string ConclusionText(IReadOnlyList<ReportFinding> findings)
+    {
+        var criticas = findings.Where(f => f.Severity == "Crítica").ToList();
+        var altas = findings.Where(f => f.Severity == "Alta").ToList();
+        if (criticas.Count == 0 && altas.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        // Con las DOS gravedades, la línea se queda en el recuento: nombrar el título de una
+        // crítica dejaría las altas sin nombrar en la misma frase, y son las dos que importan.
+        if (criticas.Count > 0 && altas.Count > 0)
+        {
+            return "Requiere atención: "
+                + $"{criticas.Count} crítico{(criticas.Count == 1 ? string.Empty : "s")}"
+                + $" y {altas.Count} alto{(altas.Count == 1 ? string.Empty : "s")}";
+        }
+
+        List<ReportFinding> top = criticas.Count > 0 ? criticas : altas;
+        string word = criticas.Count > 0 ? "crítico" : "alto";
+        string count = top.Count == 1
+            ? $"1 hallazgo {word}"
+            : $"{top.Count} hallazgos {word}s";
+
+        string named = top.Count == 1 ? $" — {top[0].Title}" : string.Empty;
+        return $"Requiere atención: {count}{named}";
     }
 
     /// <summary>Lo que la línea de unidades dice además del recuento: «1 completa · 849 pendientes».</summary>

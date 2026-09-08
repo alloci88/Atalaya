@@ -1,3 +1,7 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using Atalaya.App.Controls;
 using Atalaya.App.Services;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
@@ -262,7 +266,7 @@ public sealed class ReportPageTests
         page.HasCover.Should().BeFalse();
         page.HasStats.Should().BeFalse();
         page.HasFindings.Should().BeFalse();
-        page.Body.Should().BeEmpty("la vista pinta el markdown entero, no el que compuso la página");
+        page.Sheet.Should().BeEmpty("la vista pinta el markdown entero, no el que compuso la página");
     }
 
     // ================================================================ las tarjetas de hallazgo
@@ -426,6 +430,253 @@ public sealed class ReportPageTests
         string rebuilt = string.Concat(head, cover, middle, findings, foot);
         Squash(rebuilt).Should().Be(Squash(body));
     }
+
+    // ================================================================ F36-1b · la segunda pasada
+
+    /// <summary>
+    /// <b>UNA fila y UNA rejilla</b> (F36-1b §1.1, D-990).
+    /// <para>
+    /// En el <c>dist</c> las cuatro cifras medían 130 px de alto y las dos gráficas, que iban FUERA
+    /// de la rejilla, 180. Una rejilla que no incluye a la mitad de la fila no iguala nada: eso es
+    /// exactamente lo que D-990 vino a arreglar y lo que se volvió a romper al poner las gráficas
+    /// en un <c>StackPanel</c> al lado.
+    /// </para>
+    /// <para>
+    /// Se comprueba sobre el panel de verdad y con contenidos de altos distintos —si se les fijara
+    /// el alto a mano no habría nada que igualar— y sobre el marcado, que los seis salgan del mismo
+    /// <c>ItemsControl</c>: dos colecciones distintas volverían a dar dos filas.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Las_cuatro_cifras_y_las_dos_graficas_van_en_la_misma_rejilla_y_al_mismo_alto()
+    {
+        var anchos = new List<double>();
+        var altos = new List<double>();
+
+        ViewLayout.OnUiThread(() =>
+        {
+            var panel = new ColumnsPanel
+            {
+                MinColumnWidth = ReportLayout.TileMinWidth,
+                MaxColumns = 6,
+                Gap = ReportLayout.Gap,
+            };
+
+            // Cuatro cifras bajas y dos gráficas altas, como las de verdad.
+            foreach (double height in new double[] { 90, 90, 90, 90, 150, 150 })
+            {
+                panel.Children.Add(new Border
+                {
+                    Background = Brushes.Gray,
+                    Child = new Border { Height = height },
+                });
+            }
+
+            ViewLayout.Layout(panel, 2538, 900);
+            foreach (FrameworkElement child in panel.Children.OfType<FrameworkElement>())
+            {
+                anchos.Add(child.ActualWidth);
+                altos.Add(child.ActualHeight);
+            }
+        });
+
+        anchos.Should().HaveCount(6);
+        anchos.Distinct().Should().ContainSingle("el ancho se reparte entre los seis");
+        altos.Distinct().Should().ContainSingle("la rejilla iguala: los seis al alto del más alto (D-990)");
+
+        // Y en la vista son los SEIS los que salen de la misma colección.
+        string xaml = ViewLayout.Xaml("ReportsView.xaml");
+        xaml.Should().Contain("ItemsSource=\"{Binding Tiles}\"",
+            "las cifras y las gráficas van en UNA colección; dos darían dos filas");
+        foreach (string tipo in new[] { "s:ReportStat", "vm:SeverityTile", "vm:OriginTile" })
+        {
+            xaml.Should().Contain($"DataType=\"{{x:Type {tipo}}}\"",
+                "cada azulejo trae su plantilla por tipo, dentro de la misma rejilla");
+        }
+    }
+
+    /// <summary>
+    /// <b>Las dos barras de origen llevan su número y su parte, y suman cien.</b>
+    /// <para>
+    /// Redondear los dos porcentajes por separado da barras que suman 99 o 101, y una proporción
+    /// que no suma cien no es una proporción. El del criterio es el que el informe ya escribe —la
+    /// misma función, <c>PercentText</c>— y el del catálogo se obtiene restando.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData(4, 6, "4 · 40 %", "6 · 60 %")]
+    [InlineData(1, 2, "1 · 33 %", "2 · 67 %")]
+    [InlineData(10, 0, "10 · 100 %", "0 · 0 %")]
+    public void El_origen_lleva_numero_y_porcentaje_y_las_dos_barras_suman_cien(
+        int catalogo, int criterio, string primera, string segunda)
+    {
+        string head = $"- Origen: {catalogo} del catálogo de reglas · {criterio} del criterio del "
+            + $"auditor ({PercentText.Of(criterio, catalogo + criterio)})";
+
+        var origins = ReportPage.ReadOrigins(head);
+
+        origins.Select(o => o.Tally).Should().Equal(primera, segunda);
+        (Percent(origins[0].Share) + Percent(origins[1].Share))
+            .Should().Be(100, "dos barras que no suman cien no son una proporción");
+
+        // Y el porcentaje del criterio es LITERALMENTE el que el informe escribió.
+        head.Should().Contain($"({origins[1].Share})");
+    }
+
+    private static double Percent(string text)
+        => double.Parse(text.Replace("%", string.Empty).Trim(), AppCulture.Display);
+
+    /// <summary>
+    /// <b>La ficha del documento se pliega; el cuerpo empieza por los hallazgos</b> (F36-1b §1.5 y
+    /// §1.6).
+    /// <para>
+    /// La cabecera y el resumen decían con otras palabras lo que la portada acaba de decir: el H1,
+    /// la lista de metadatos y el resumen se leían dos veces antes de llegar al primer hallazgo. Se
+    /// pliegan, <b>no se borran</b> (D-441): el test comprueba las dos mitades de eso —que la ficha
+    /// lleva exactamente la cabecera y el resumen, y que sumando todos los trozos sigue saliendo el
+    /// cuerpo entero—.
+    /// </para>
+    /// <para>
+    /// <b>El orden de PANTALLA no es el del documento</b>, y es a propósito: en pantalla lo primero
+    /// es lo que hay que decidir. El <c>.md</c> no cambia — reordenar trozos ya partidos es lo que
+    /// D-441 permite; reconstruir el markdown es lo que no.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void La_ficha_lleva_la_cabecera_y_el_resumen_y_el_cuerpo_empieza_por_los_hallazgos()
+    {
+        (ReportEntry entry, AuditSession session, string body) = Case();
+        ReportPage page = ReportPage.Compose(entry, session, body, Hub());
+
+        // La ficha: la cabecera y el resumen, y nada de lo que va después.
+        page.HasSheet.Should().BeTrue();
+        page.Sheet.Should().StartWith("# Informe de sesión")
+            .And.Contain("**Autor**:")
+            .And.Contain("## Resumen")
+            .And.Contain("Nuevos: 3");
+        page.Sheet.Should().NotContain("## Cobertura").And.NotContain("## Hallazgos nuevos");
+
+        // Y en la vista va PLEGADA y antes del cuerpo, con los hallazgos por delante de la
+        // cobertura: es el orden en pantalla, no el del documento.
+        string xaml = ViewLayout.Xaml("ReportsView.xaml");
+        int ficha = xaml.IndexOf("Header=\"Ficha del documento\"", StringComparison.Ordinal);
+        int hallazgos = xaml.IndexOf("x:Name=\"FindingCards\"", StringComparison.Ordinal);
+        int cobertura = xaml.IndexOf("Text=\"Cobertura\"", StringComparison.Ordinal);
+        ficha.Should().BeGreaterThan(0);
+        hallazgos.Should().BeGreaterThan(ficha, "la ficha va encima del cuerpo");
+        cobertura.Should().BeGreaterThan(hallazgos, "en pantalla, primero lo que hay que decidir");
+
+        // Y NADA SE PIERDE: los cinco trozos siguen siendo el cuerpo entero, en el orden del
+        // documento — que es el que el `.md` conserva.
+        (string head, string cover, string middle, string? findings, string foot) =
+            ReportPage.SplitBody(body);
+        head.Should().Be(page.Sheet, "la ficha es la primera parte del partido, sin tocar");
+        Squash(string.Concat(head, cover, middle, findings, foot)).Should().Be(Squash(body));
+    }
+
+    /// <summary>
+    /// <b>Las tarjetas de hallazgo no son prosa</b> (F36-1b §1.7): a partir de 1.600 px de ventana
+    /// van en dos columnas, y por debajo en una. La prosa sigue en su medida de lectura (F27), que
+    /// no vive aquí — la aplica cada documento sobre su propio texto.
+    /// <para>
+    /// El umbral y el ancho mínimo de una tarjeta son <b>el mismo número dicho dos veces</b>: el
+    /// ancho se DERIVA del umbral, así que la rejilla no puede partir por un sitio distinto del que
+    /// dice el manual. Este test lo comprueba contra la rejilla de verdad.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData(2560, 2)]
+    [InlineData(1600, 2)]
+    [InlineData(1599, 1)]
+    [InlineData(1000, 1)]
+    public void Las_tarjetas_de_hallazgo_van_en_dos_columnas_cuando_la_ventana_da_de_si(
+        double ventana, int columnas)
+    {
+        ReportLayout.CardColumns(ventana).Should().Be(columnas);
+
+        // Y la rejilla de verdad parte por el mismo sitio, con el ancho que le queda al cuerpo.
+        // Construir un `ColumnsPanel` toca la infraestructura de WPF, que exige STA.
+        int rejilla = 0;
+        ViewLayout.OnUiThread(() =>
+        {
+            var panel = new ColumnsPanel
+            {
+                MinColumnWidth = ReportLayout.CardMinWidth,
+                MaxColumns = 2,
+                Gap = ReportLayout.Gap,
+            };
+
+            rejilla = panel.ColumnsFor(ReportLayout.BodyWidth(ventana));
+        });
+
+        rejilla.Should().Be(
+            columnas, "el umbral que dice el manual y el que aplica la rejilla son el mismo");
+    }
+
+    /// <summary>
+    /// El carril enseña el <b>alias</b> y el título, y el título entero está en el tooltip. Un
+    /// título recortado sin decirlo es lo que P-01 prohíbe; recortado con puntos suspensivos y con
+    /// el entero a un palmo, no.
+    /// </summary>
+    [Fact]
+    public void Cada_entrada_del_carril_lleva_su_alias_y_su_titulo()
+    {
+        ReportPage page = Page();
+
+        ReportFinding con = page.Index.First(f => f.Alias.Length > 0);
+        con.Alias.Should().Be("ERR-0001");
+        con.Title.Should().Be("Título de ERR-0001");
+        con.Label.Should().Be("ERR-0001 · Título de ERR-0001");
+
+        // El título viaja ENTERO: la elipsis es del dibujo, no del modelo — recortar en el modelo
+        // haría que el tooltip mintiera igual que la línea.
+        var largo = new ReportFinding(
+            "Alta", string.Empty, new string('a', 300), "u.cs", string.Empty, "R", string.Empty, string.Empty, null);
+        largo.Title.Should().HaveLength(300);
+        largo.Label.Should().Be(largo.Title, "sin alias, la etiqueta es el título y nada más");
+
+        // Y el dibujo lo corta en DOS líneas: dos `LineHeight.Meta` y elipsis. WPF no tiene
+        // `MaxLines`, así que el tope es de alto — y por eso está escrito aquí, para que no se
+        // pierda el día que alguien lo quite.
+        string xaml = ViewLayout.Xaml("ReportsView.xaml");
+        xaml.Should().Contain("<sys:Double x:Key=\"Rail.TwoLines\">36</sys:Double>")
+            .And.Contain("MaxHeight=\"{StaticResource Rail.TwoLines}\"");
+    }
+
+    /// <summary>
+    /// <b>La conclusión solo aparece cuando hay algo que decir</b> (F36-1b §1.9). La frase
+    /// ejecutiva dice cuánto hubo; ésta dice si hay que mirarlo hoy, y con medias y bajas no hay
+    /// nada que destacar: «0 críticos» sería un renglón para no decir nada (D-318).
+    /// </summary>
+    [Theory]
+    // Un solo alto: se nombra, porque no hay duda de cuál es.
+    [InlineData("Alta", 1, "Media", 3, "Requiere atención: 1 hallazgo alto — Título 1")]
+    // Varios de la misma gravedad: el recuento, sin nombrar. Elegir cuál se nombra no lo puede
+    // decidir la página.
+    [InlineData("Alta", 3, "Baja", 2, "Requiere atención: 3 hallazgos altos")]
+    // Las dos gravedades: las dos contadas, y ninguna nombrada — nombrar una dejaría la otra fuera.
+    [InlineData("Crítica", 2, "Alta", 3, "Requiere atención: 2 críticos y 3 altos")]
+    // Ni altas ni críticas: sin línea.
+    [InlineData("Media", 4, "Baja", 9, "")]
+    public void La_conclusion_solo_habla_de_criticas_y_altas(
+        string primera, int cuantas, string segunda, int cuantas2, string esperado)
+    {
+        var findings = new List<ReportFinding>();
+        for (int i = 0; i < cuantas; i++)
+        {
+            findings.Add(Card(primera, $"Título {i + 1}"));
+        }
+
+        for (int i = 0; i < cuantas2; i++)
+        {
+            findings.Add(Card(segunda, $"Otro {i + 1}"));
+        }
+
+        ReportPage.ConclusionText(findings).Should().Be(esperado);
+    }
+
+    private static ReportFinding Card(string severity, string title)
+        => new(severity, string.Empty, title, "u.cs", string.Empty, "R", string.Empty, string.Empty, null);
 
     private static string Squash(string text)
         => new string(text.Where(c => !char.IsWhiteSpace(c)).ToArray());

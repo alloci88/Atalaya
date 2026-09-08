@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Atalaya.App.Controls;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 
@@ -15,6 +16,43 @@ public partial class ReportsView : UserControl
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
         Unloaded += (_, _) => Detach();
+        PageScroll.ScrollChanged += (_, _) => Stick();
+    }
+
+    /// <summary>
+    /// <b>El carril se queda quieto al bajar por el cuerpo</b> (F36-1b §1.8). Un índice que se va
+    /// por arriba en cuanto se hace scroll es un índice que no está.
+    /// <para>
+    /// Va en un manejador de <c>ScrollChanged</c> y no en el <c>Measure</c> del panel a propósito:
+    /// una excepción durante la colocación se reintenta en cada pasada de render y se lleva la
+    /// aplicación por delante (D-1047). Aquí, lo peor que puede pasar es que el carril no se pegue.
+    /// </para>
+    /// <para>
+    /// Y solo cuando va AL LADO: con el carril debajo del cuerpo —ventana estrecha— desplazarlo
+    /// sería empujarlo fuera de la página.
+    /// </para>
+    /// </summary>
+    private void Stick()
+    {
+        try
+        {
+            if (!Reading.SideBySide(Reading.ActualWidth))
+            {
+                RailShift.Y = 0;
+                return;
+            }
+
+            double top = Reading.TransformToAncestor(PageScroll).Transform(default).Y
+                + PageScroll.VerticalOffset;
+
+            RailShift.Y = ReportLayout.StickyOffset(
+                PageScroll.VerticalOffset, top, Reading.ActualHeight, Rail.ActualHeight);
+        }
+        catch (InvalidOperationException)
+        {
+            // El carril todavía no cuelga del desplazamiento: se queda donde está.
+            RailShift.Y = 0;
+        }
     }
 
     /// <summary>
@@ -33,6 +71,7 @@ public partial class ReportsView : UserControl
         {
             _bound = vm;
             vm.FindingRequested += ScrollTo;
+            vm.AnnexRequested += ShowAnnex;
         }
     }
 
@@ -41,12 +80,23 @@ public partial class ReportsView : UserControl
         if (_bound is not null)
         {
             _bound.FindingRequested -= ScrollTo;
+            _bound.AnnexRequested -= ShowAnnex;
             _bound = null;
         }
     }
 
     private void ScrollTo(ReportFinding finding)
         => Find(FindingCards, finding)?.BringIntoView();
+
+    /// <summary>
+    /// El enlace del carril despliega el anexo y baja hasta él. Desplegarlo es parte del gesto: un
+    /// enlace que lleva a un desplegable cerrado deja al lector delante de un título y nada más.
+    /// </summary>
+    private void ShowAnnex()
+    {
+        Annex.IsExpanded = true;
+        Annex.BringIntoView();
+    }
 
     private static FrameworkElement? Find(DependencyObject? root, object item)
     {

@@ -22,22 +22,30 @@ namespace Atalaya.App.Controls;
 /// </summary>
 public sealed class ReadingPanel : Panel
 {
-    /// <summary>La medida de lectura, más el relleno de su tarjeta (<c>Read.CardWidth</c>).</summary>
+    /// <summary>
+    /// El ancho MÍNIMO que la columna de lectura tiene que poder tener para que el carril quepa a
+    /// su lado. Ya no recorta la columna: la recortaba, y ése era el defecto.
+    /// </summary>
     public static readonly DependencyProperty ReadWidthProperty =
         DependencyProperty.Register(
             nameof(ReadWidth), typeof(double), typeof(ReadingPanel),
-            new FrameworkPropertyMetadata(764d, FrameworkPropertyMetadataOptions.AffectsMeasure));
+            new FrameworkPropertyMetadata(
+                ReportLayout.ReadWidth, FrameworkPropertyMetadataOptions.AffectsMeasure));
 
-    /// <summary>Lo que mide el carril cuando va al lado. Fijo: es un índice, no contenido.</summary>
+    /// <summary>
+    /// Lo que mide el carril cuando va al lado. Fijo: es un índice, no contenido.
+    /// </summary>
     public static readonly DependencyProperty RailWidthProperty =
         DependencyProperty.Register(
             nameof(RailWidth), typeof(double), typeof(ReadingPanel),
-            new FrameworkPropertyMetadata(300d, FrameworkPropertyMetadataOptions.AffectsMeasure));
+            new FrameworkPropertyMetadata(
+                ReportLayout.RailWidth, FrameworkPropertyMetadataOptions.AffectsMeasure));
 
     public static readonly DependencyProperty GapProperty =
         DependencyProperty.Register(
             nameof(Gap), typeof(double), typeof(ReadingPanel),
-            new FrameworkPropertyMetadata(16d, FrameworkPropertyMetadataOptions.AffectsMeasure));
+            new FrameworkPropertyMetadata(
+                ReportLayout.Gap, FrameworkPropertyMetadataOptions.AffectsMeasure));
 
     public double ReadWidth
     {
@@ -76,8 +84,8 @@ public sealed class ReadingPanel : Panel
 
         bool side = SideBySide(available.Width);
         double width = double.IsInfinity(available.Width) ? ReadWidth : available.Width;
-        double bodyWidth = side ? Math.Min(ReadWidth, width - Gap - RailWidth) : Math.Min(ReadWidth, width);
-        double railWidth = side ? RailWidth : Math.Min(ReadWidth, width);
+        double bodyWidth = side ? width - Gap - RailWidth : width;
+        double railWidth = side ? RailWidth : width;
 
         body.Measure(new Size(bodyWidth, double.PositiveInfinity));
         rail?.Measure(new Size(railWidth, double.PositiveInfinity));
@@ -101,7 +109,7 @@ public sealed class ReadingPanel : Panel
         UIElement? rail = InternalChildren.Count > 1 ? InternalChildren[1] : null;
 
         bool side = SideBySide(final.Width);
-        double bodyWidth = side ? Math.Min(ReadWidth, final.Width - Gap - RailWidth) : Math.Min(ReadWidth, final.Width);
+        double bodyWidth = side ? final.Width - Gap - RailWidth : final.Width;
 
         if (side)
         {

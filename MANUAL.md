@@ -903,17 +903,29 @@ con su **Copiar**, y al lado el **rosco de gravedad** y la **barra de origen** �
 hallazgos vienen de una regla del catálogo y cuántos del criterio del auditor—. Ninguna de
 esas cifras se calcula aquí: son las que el informe ya escribió.
 
-El **texto del informe** se lee a la izquierda, en su medida de lectura de siempre, con dos
-cambios de forma y ninguno de contenido: **la cobertura** se ve como una barra de pasadas
-por unidad —un tramo por pasada, hueco el que salió seco— con el motivo de cierre al lado, y
-**cada hallazgo es una tarjeta** con el borde de su gravedad, su regla, su línea y un
-**Abrir** que lleva a su ficha cuando el hallazgo sigue en el hub. Las citas van teñidas
-según lo que dicen: **ámbar** lo que queda abierto —*«NO están commiteados»*, *«no tiene
-proyecto de tests»*—, **verde** lo cerrado —*«Commiteados en `sha`»*— y neutro las
-explicaciones.
+Debajo de la portada hay una línea que dice si **requiere atención**, y solo cuando la hay:
+*«Requiere atención: 1 hallazgo alto — Cast directo de dynamic a double sin validar null»*.
+Sin hallazgos altos ni críticos no hay línea.
 
-A la derecha, si la ventana da de sí, un **carril** con el **índice de hallazgos por
-gravedad** —pulsa uno y salta a su tarjeta— y las acciones. En una ventana estrecha el carril
+La **cabecera y el resumen** del informe van plegados en **Ficha del documento**, cerrado:
+dicen con otras palabras lo que la portada acaba de decir, y antes había que atravesarlos
+para llegar al primer hallazgo. El texto sigue ahí entero, a un clic.
+
+El **cuerpo empieza por los hallazgos**, que es lo que hay que decidir; la **cobertura** va
+después. **Cada hallazgo es una tarjeta** con el borde de su gravedad, su regla, su línea y
+un **Abrir** que lleva a su ficha cuando el hallazgo sigue en el hub; agrupadas por fichero,
+con la ruta una sola vez. **A partir de 1.600 px de ventana las tarjetas se reparten en dos
+columnas** —una tarjeta no es prosa—, y por debajo van en una. La prosa, en cambio, se sigue
+leyendo en su medida de siempre por ancha que sea la ventana.
+
+La **cobertura** se ve como una barra de pasadas por unidad —un tramo por pasada, hueco el
+que salió seco— con el motivo de cierre al lado. Las citas van teñidas según lo que dicen:
+**ámbar** lo que queda abierto —*«NO están commiteados»*, *«no tiene proyecto de tests»*—,
+**verde** lo cerrado —*«Commiteados en `sha`»*— y neutro las explicaciones.
+
+A la derecha, si la ventana da de sí, un **carril** con las acciones y el **índice de
+hallazgos por gravedad** —cada entrada con su alias y su título; pulsa una y salta a su
+tarjeta—. El carril se queda quieto mientras bajas por el cuerpo. En una ventana estrecha
 baja debajo del texto. Desde el carril:
 
 - **Descargar .md** guarda una copia donde tú elijas, con un nombre que dice qué es
@@ -924,7 +936,8 @@ baja debajo del texto. Desde el carril:
 - **Volver** —el eslabón «Informes» de la miga— devuelve la lista tal y como la dejaste, con
   sus filtros y su posición.
 
-El **anexo técnico** sigue plegado y a ancho completo, ahora al pie de la página.
+El **anexo técnico** sigue plegado y a ancho completo al pie de la página; desde el carril
+se baja a él con **Anexo técnico ↓** — en 380 px no se leen unas tablas de nueve columnas.
 
 Un informe que no tenga sesión detrás —los importados de v4— se lee como siempre: su texto y
 nada más. No se inventa una cifra para llenar la portada.
