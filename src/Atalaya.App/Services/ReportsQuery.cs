@@ -89,7 +89,8 @@ public sealed record ReportEntry(
     string? FindingId = null,
     string? FindingAlias = null,
     bool Billed = true,
-    CostReconciliation? Reconciled = null)
+    CostReconciliation? Reconciled = null,
+    AuditSession? Session = null)
 {
     /// <summary>
     /// <b>El coste de esta sesión se calculó DESPUÉS de escribirse el informe</b> (F29 §1). La
@@ -113,6 +114,13 @@ public sealed record ReportEntry(
     /// traen, y ahí el enlace simplemente no aparece.
     /// </summary>
     public bool HasFinding => !string.IsNullOrWhiteSpace(FindingId);
+
+    /// <summary>
+    /// <b>El registro tiene datos que pintar</b> (F36). Es lo que enciende la portada y la fila de
+    /// cifras: un informe importado de v4 no tiene sesión detrás y se lee como hasta F36 —cuerpo y
+    /// nada más—, porque no hay de dónde sacar una cifra sin inventarla (D-318).
+    /// </summary>
+    public bool HasRecord => Session is not null;
 
     /// <summary>El nombre por defecto de la descarga: descriptivo y ordenable (F6.3 §2).</summary>
     public string DownloadName =>
@@ -197,6 +205,8 @@ public sealed class ReportsQuery
     private readonly object _gate = new();
     private IReadOnlyList<ReportEntry>? _cache;
     private readonly Dictionary<string, string> _contents = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ReportFindingIndex> _findings =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public ReportsQuery(HubContext hub)
     {
@@ -212,6 +222,7 @@ public sealed class ReportsQuery
         {
             _cache = null;
             _contents.Clear();
+            _findings.Clear();
         }
     }
 
@@ -313,6 +324,66 @@ public sealed class ReportsQuery
         {
             _contents[entry.Path] = text;
             return text;
+        }
+    }
+
+    /// <summary>
+    /// <b>Cómo llegar de un hallazgo de un informe a su ficha</b> (F36 §1.5). Ver
+    /// <see cref="ReportFindingIndex"/>: por alias cuando el informe lo escribe, y por unidad y
+    /// título —que es lo que sí escribe— cuando la pareja identifica a uno solo.
+    /// <para>
+    /// Cacheado y tirado con el resto de la lectura del hub: son cientos de ficheros pequeños y
+    /// abrir un informe no puede releerlos todos cada vez.
+    /// </para>
+    /// </summary>
+    public ReportFindingIndex FindingIndex(string slug)
+    {
+        lock (_gate)
+        {
+            if (_findings.TryGetValue(slug, out ReportFindingIndex? cached))
+            {
+                return cached;
+            }
+        }
+
+        var byAlias = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var byTitle = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var ambiguous = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (Finding f in _hub.Store.ListFindings(slug))
+            {
+                if (!string.IsNullOrWhiteSpace(f.DisplayId))
+                {
+                    byAlias[f.DisplayId!] = f.Id.ToString();
+                }
+
+                string unit = f.Locations.Count > 0 ? f.Locations[0].Path : string.Empty;
+                string key = ReportFindingIndex.Key(unit, f.Title);
+                // DOS HALLAZGOS CON EL MISMO TÍTULO EN LA MISMA UNIDAD no se pueden distinguir con
+                // lo que el informe escribe, así que ninguno de los dos se enlaza: un «Abrir» que
+                // lleva a la ficha equivocada afirma algo falso, y no tenerlo solo calla.
+                if (!byTitle.TryAdd(key, f.Id.ToString()))
+                {
+                    ambiguous.Add(key);
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Un hub ilegible deja las tarjetas sin «Abrir», no sin tarjetas.
+        }
+
+        foreach (string key in ambiguous)
+        {
+            byTitle.Remove(key);
+        }
+
+        var index = new ReportFindingIndex(byAlias, byTitle);
+        lock (_gate)
+        {
+            _findings[slug] = index;
+            return index;
         }
     }
 
@@ -429,7 +500,11 @@ public sealed class ReportsQuery
                 // F16-RETOQUE §1 — si su casa no factura, la fila no dice «—» (que es «no se
                 // sabe»): dice que va contra la suscripción, que sí se sabe.
                 Billed: CreditCalculator.IsBilled(session.Provider),
-                Reconciled: reconciled);
+                Reconciled: reconciled,
+                // F36 — la página del informe se compone del REGISTRO, así que viaja con la fila:
+                // volver a leerlo del disco al abrir sería una segunda lectura que puede diferir
+                // de la que llenó la lista.
+                Session: session);
         }
 
         // Sin sesión: lo único que se sabe es lo que el informe declara de sí mismo. Se lee la

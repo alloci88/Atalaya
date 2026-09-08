@@ -378,3 +378,24 @@ public sealed class ThemeToLabelConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }
+
+/// <summary>
+/// <b>Un trozo de markdown, ya pintado</b> (F36 §1.5). Lo usa la tarjeta de un hallazgo: su
+/// descripción y su recomendación son markdown del informe y se dibujan con el mismo renderizador
+/// que el resto del documento, no con un <c>TextBlock</c> que perdería las negritas y las listas.
+/// <para>
+/// Va sin manejador de enlaces a propósito: un enlace dentro de la descripción de un hallazgo se
+/// queda en texto, que es lo que ya hacía el renderizador sin destino utilizable. Abrir el
+/// navegador es del documento, y el documento lo pinta el view-model con su manejador.
+/// </para>
+/// </summary>
+public sealed class MarkdownToDocumentConverter : IValueConverter
+{
+    public object? Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is string text && !string.IsNullOrWhiteSpace(text)
+            ? Services.MarkdownFlowDocument.Build(text)
+            : null;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}

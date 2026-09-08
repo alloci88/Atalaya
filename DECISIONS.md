@@ -18534,3 +18534,120 @@ tiene `Surface3`, y que los tres estados de borde de la casa ya eran `Color.Prim
 queda en **2.661 casos** (2.125 en la aplicación).
 
 **Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8.
+
+## F36 · Entrega 1 — El informe deja de ser un markdown pintado
+
+### D-1046 — La página se compone del registro, y lo que el registro no tiene lo dice el propio documento
+
+**§0 · El censo, medido antes de tocar nada** (N-2). Se recorrió el hub de esta máquina: **72
+informes** (atalaya 1, xblast 71), **ninguno sin registro** —los 72 tienen su `sessions/{ulid}.json`,
+40 `lotes` · 20 `fix` · 12 `verify`—, y **6 sesiones con registro pero sin tokens** (5 lotes, 1 fix),
+que enseñan el coste como «—» y no caen a la lectura simple. Y **16 registros de arreglo**, de ellos
+3 con `commitSha` y 2 con `commitAuthor`.
+
+**Y el censo destapó lo que gobierna la entrega: el registro de una sesión no tiene la mitad de lo
+que la portada quería enseñar.** La tabla, dato a dato:
+
+| Dato | `sessions/{ulid}.json` | Markdown |
+|---|---|---|
+| Hallazgos nuevos (cifra) | ✅ `counters.new` | «Nuevos: 4» |
+| …su reparto por gravedad | ❌ | «Gravedad: 1 Crítica · 10 Altas…» y un `#### [Alta]` por hallazgo |
+| Unidades auditadas y cómo cerraron | ✅ `units[].verdict`, `.coverageIncomplete`, `.passes[]` | «Unidades: 1 auditada: 1 completa» |
+| …pendientes del inventario | ❌ (llega como parámetro) | «· 849 pendientes en el inventario» |
+| Coste y coste por unidad | ✅ `usage.*Tokens` → `CreditCalculator` | «58,0 AI credits · 29 por unidad» |
+| Duración | ✅ `startedUtc` / `endedUtc` | misma línea |
+| Origen catálogo / criterio | ❌ (es `Finding.Tag`, no viaja a la sesión) | «Origen: 3 del catálogo · 1 del criterio» |
+| Motivo de cierre de cada unidad | ❌ (se deduce al escribir, no se guarda) | «cerrada por tope: seguía encontrando, 1 en la última» |
+| App, fecha, autor, proveedor · modelo, ciclo, temática, modo | ✅ | cabecera |
+
+**Por qué no se puede reconstruir desde el hub, y está escrito en el propio código**: *«un hallazgo
+no guarda el ULID de la sesión que lo creó»* (`OpenSessionStore.cs:408`). Ninguno de los 418
+hallazgos de este hub lleva `sessionId` en su evento `detected`. Recontar la gravedad desde las
+fichas de hoy daría además **otra cifra**: un hallazgo reclasificado cambiaría la portada de un
+informe de hace dos meses, y el informe es lo que se vio aquel día (F23).
+
+**La decisión, entonces, es que hay DOS fuentes y solo dos.** Lo que el registro tiene sale del
+registro, con la **misma función** que usó el informe al escribirlo —`CreditCalculator`, no una
+segunda aritmética (D-591)—. Lo que el registro no tiene se lee **del cuerpo**, reconocido por
+texto igual que la pastilla de gravedad de F27, que es exactamente lo que la tarjeta de hallazgo ya
+tenía que hacer. **No es calcular de nuevo: es contar lo que la página va a pintar**, así que
+coincide con el documento por construcción. La tercera fuente —el hub— queda descartada por
+escrito. El `.md` no se toca, no se reconstruye y `ReportBuilder` no cambia ni una línea (D-441).
+
+**La única cifra que la página SUMA, y se dice**: el «de 851» de la frase de portada, que es lo
+auditado más lo pendiente. Los dos sumandos están en la misma línea del informe; **sin la cifra de
+pendientes el total no se escribe** —«1 unidad de 1» diría que está todo mirado cuando lo que pasa
+es que no se sabe cuánto hay (D-318)—.
+
+**El coste de la tarjeta es el RECONCILIADO, el mismo que la lista.** En dos informes de este hub
+no coincide con el que el `.md` escribió, y eso ya estaba resuelto: el informe no se reescribe
+(F23) y la línea «Coste calculado a posteriori el …» de F29 §1 explica la diferencia, ahora en la
+portada. Lo que D-591 exige no es que los dos textos sean idénticos, es que **haya una sola
+función**, y la hay.
+
+**§1 · Qué se ve, y qué no se ha movido.**
+
+- **Portada** a ancho completo: título, aplicación con su punto de color por hash de slug (D-314),
+  fecha, autor, proveedor · modelo, y **una frase ejecutiva** por plantilla determinista, sin
+  modelo: *«Se auditaron 2 unidades de 851 · 3 hallazgos nuevos, 1 alta · 58,0 AI credits en 2 min
+  33 s»*. Concordada de verdad —«Se auditó 1 unidad», «1 hallazgo nuevo»— y **lo que no hay no se
+  nombra**.
+- **Fila de cifras y gráficas**: *Hallazgos nuevos · Unidades auditadas · Coste · Duración*, con la
+  forma de F35 —número grande centrado, subtítulo y «Copiar»— y de **una plantilla sobre una
+  lista**, no de cuatro bloques de XAML (D-1040). A su derecha, el **rosco de gravedad** con los
+  cuatro colores reservados —ahí la paleta semántica ES el dato (D-316)— y la **barra de origen**
+  en neutros, porque el origen no es una gravedad ni un estado.
+- **Dos columnas cuando hay ancho** (`ReadingPanel`): la lectura a 720/764 px a la izquierda y un
+  carril de 300 a la derecha con las acciones —«Descargar .md», **«Copiar resumen»**, «Ver
+  hallazgos de esta sesión», «Ver el hallazgo»— y el **índice de hallazgos por gravedad**, que es
+  la lista de lo que hay que decidir en el orden en que se decide; pulsar una entrada lleva a su
+  tarjeta. **El carril baja debajo del cuerpo cuando no cabe entero**, y por eso es un panel y no
+  dos columnas de `Grid`: el ancho disponible solo se conoce en el `Measure` (D-970), y un carril
+  que cupiera encogiendo la columna de texto se comería la medida de lectura de F27, que es lo que
+  esta fase no toca.
+- **La cobertura pasa de viñetas a barras**: una barra de pasadas por unidad, un tramo por pasada y
+  el hueco para las secas, con el **motivo de cierre en texto** y la línea de «Revisados». Las
+  pasadas salen del registro; el motivo, del cuerpo — no se vuelve a deducir aquí, porque deducirlo
+  dos veces es cómo se llega a que el informe y su portada digan cosas distintas de la misma unidad
+  (D-887, D-591).
+- **Cada hallazgo del cuerpo es una tarjeta**: borde izquierdo en su color de gravedad, pastilla de
+  regla, línea, «Abrir» a su ficha, y la descripción y la recomendación dentro **tal cual**, con el
+  mismo renderizador que el resto del documento.
+- **Las citas se pintan según lo que dicen**: ámbar lo que queda abierto —«NO están commiteados»,
+  «no tiene proyecto de tests»—, verde lo cerrado —«Commiteados en `sha`»—, neutro las
+  explicaciones. Reconocido por texto, **sin cambiar una palabra**. Iban las tres con la misma raya
+  azul, así que el aviso de que un arreglo sigue sin publicar se leía igual que una nota didáctica.
+- **Nada más se mueve.** El texto es el mismo: el cuerpo se parte en cinco trozos —cabecera,
+  cobertura, lo de en medio, hallazgos y firma— y un test comprueba que entre todos suman el
+  documento entero. El anexo sigue plegado y **a ancho completo**, ahora debajo de las dos
+  columnas: sus tablas son de nueve columnas y en una medida de lectura se parten (F27).
+- **Sin registro no hay portada ni tarjetas**: se pinta el cuerpo como hasta hoy. Hoy no le pasa a
+  ningún informe del hub, y sigue existiendo porque un importado de v4 no declara nada de sí mismo.
+
+**«Abrir» necesitó una segunda llave, y el censo dice por qué.** La natural es el alias
+—«MEJ-0045»—, pero el informe se escribe al cerrar la sesión y **el alias se asigna después**: de
+los 24 informes con hallazgos de este hub, **cero** lo llevan en el encabezado, así que con esa
+sola llave el botón no habría aparecido nunca en nada de lo ya escrito. La segunda es lo que el
+informe **sí** escribe —la unidad y el título—, y no es un heurístico con margen: se resuelve solo
+cuando la pareja identifica a **un** hallazgo y a uno solo. En este hub es única en **418 de 418**;
+con dos candidatos no se enlaza ninguno, porque un «Abrir» que lleva a la ficha equivocada afirma
+algo falso y no tenerlo solo calla.
+
+**Cobertura (N-5): 17 casos de regla, ninguno de forma.** Cada cifra de tarjeta y de la frase se
+comprueba contra el informe que `ReportBuilder` escribió **para la misma sesión**, no contra
+constantes —un test que afirmara «10» seguiría pasando el día que las dos fuentes se separen—; la
+frase concuerda en singular y en plural; sin cifra de pendientes no se escribe el total; sin
+registro no hay portada ni tarjetas y el cuerpo se pinta entero; el índice lleva un hallazgo por
+entrada, va por gravedad y **son los mismos objetos** que las tarjetas; «Abrir» solo con ficha en el
+hub; la cobertura lleva las pasadas del registro y el motivo literal del informe; el origen sale de
+la línea que el informe escribe; el rosco no lleva las gravedades que no existen; «Copiar resumen»
+lleva la frase y luego las tarjetas, en ese orden; las cinco citas de los tres informes de ejemplo
+se clasifican por lo que dicen —incluida la commiteada, que va en verde **aunque siga diciendo «sin
+publicar»**— y las dos del arreglo se leen de las constantes de `ReportBuilder`, para que cambiarlas
+allí y no aquí sea un cambio que se ve; y el partido del cuerpo no pierde texto. La tanda queda en
+**2.680 casos** (2.145 en la aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: el aspecto. Que las cuatro tarjetas y las dos gráficas
+quepan en la misma fila sin apretarse, que el rosco y el borde de gravedad se lean en los dos temas,
+que el carril baje donde tiene que bajar y que las tarjetas de hallazgo no dejen la columna de
+lectura hecha una escalera, lo mira el usuario en el `dist`. Ciclo N-8.

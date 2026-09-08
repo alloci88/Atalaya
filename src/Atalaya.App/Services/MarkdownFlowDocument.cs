@@ -247,15 +247,28 @@ public static class MarkdownFlowDocument
     /// encabezado no empieza por una — que es el caso de todos los demás.
     /// </summary>
     internal static (string Severity, string Title)? HeadingSeverity(HeadingBlock heading)
+        => SeverityOf(PlainText(heading.Inline));
+
+    /// <summary>
+    /// La gravedad con la que abre un encabezado de hallazgo, sobre el TEXTO PLANO.
+    /// <para>
+    /// Vive separado de <see cref="HeadingSeverity"/> porque hay dos lectores del mismo encabezado:
+    /// el renderizador, que tiene delante el árbol de Markdig, y la página del informe (F36), que
+    /// parte el markdown por líneas para hacer una tarjeta de cada hallazgo. <b>El reconocimiento
+    /// tiene que ser el mismo</b> — si la tarjeta entendiera «[Crítica]» de otra manera que la
+    /// pastilla, un informe saldría con la pastilla puesta y sin tarjeta, o al revés.
+    /// </para>
+    /// </summary>
+    internal static (string Severity, string Title)? SeverityOf(string text)
     {
-        string text = PlainText(heading.Inline).TrimStart();
+        string head = (text ?? string.Empty).TrimStart();
         // Las dos grafías de «Crítica», por lo mismo que en `SeverityMarks`: un informe ya escrito
         // no se reescribe. Lo que se DEVUELVE es siempre la buena: se acepta la vieja para no
         // dejar sin pastilla lo ya archivado, no para volver a pintarla sin tilde al lado de las
         // demás.
-        Match m = Regex.Match(text, @"^\[(Crítica|Critica|Alta|Media|Baja)\]\s*");
+        Match m = Regex.Match(head, @"^\[(Crítica|Critica|Alta|Media|Baja)\]\s*");
         return m.Success
-            ? (m.Groups[1].Value == "Critica" ? "Crítica" : m.Groups[1].Value, text[m.Length..])
+            ? (m.Groups[1].Value == "Critica" ? "Crítica" : m.Groups[1].Value, head[m.Length..])
             : null;
     }
 
@@ -345,18 +358,42 @@ public static class MarkdownFlowDocument
         return list;
     }
 
+    /// <summary>
+    /// <b>Una cita se pinta según lo que DICE</b> (F36 §1.4). Las tres citas de nuestros informes
+    /// —«estos cambios NO están commiteados», «commiteados en `sha`», «verificar juzga el código
+    /// que hay ahora»— iban las tres con la misma raya azul, así que el aviso de que un arreglo
+    /// sigue sin publicar se leía igual que una nota explicativa. El reconocimiento es por texto,
+    /// como el de la gravedad de F27, y <b>no cambia una sola palabra del informe</b>.
+    /// </summary>
     private static WpfBlock Quote(QuoteBlock block, Action<string>? openLink)
     {
         var section = new Section
         {
             Margin = new Thickness(0, 0, 0, 10),
-            Padding = new Thickness(12, 2, 0, 2),
+            Padding = new Thickness(12, 6, 12, 6),
             BorderThickness = new Thickness(3, 0, 0, 0),
         };
 
-        Theme(section, WpfBlock.BorderBrushProperty,
-            "AccentTextFillColorPrimaryBrush", Brushes.SteelBlue);
-        Theme(section, TextElement.ForegroundProperty, "TextFillColorSecondaryBrush", Brushes.DimGray);
+        CalloutTone tone = ToneOf(PlainTextOf(block));
+        switch (tone)
+        {
+            case CalloutTone.Warning:
+                Theme(section, WpfBlock.BorderBrushProperty, "Brush.Warning.Fill", Brushes.Orange);
+                Theme(section, WpfBlock.BackgroundProperty, "Brush.Warning.Soft", Brushes.Transparent);
+                Theme(section, TextElement.ForegroundProperty, "TextFillColorPrimaryBrush", Brushes.Black);
+                break;
+            case CalloutTone.Done:
+                Theme(section, WpfBlock.BorderBrushProperty, "Brush.Success.Fill", Brushes.Green);
+                Theme(section, WpfBlock.BackgroundProperty, "Brush.Success.Soft", Brushes.Transparent);
+                Theme(section, TextElement.ForegroundProperty, "TextFillColorPrimaryBrush", Brushes.Black);
+                break;
+            default:
+                Theme(section, WpfBlock.BorderBrushProperty,
+                    "AccentTextFillColorPrimaryBrush", Brushes.SteelBlue);
+                Theme(section, TextElement.ForegroundProperty,
+                    "TextFillColorSecondaryBrush", Brushes.DimGray);
+                break;
+        }
 
         foreach (MdBlock child in block)
         {
@@ -367,6 +404,88 @@ public static class MarkdownFlowDocument
         }
 
         return section;
+    }
+
+    /// <summary>Qué clase de cita es (F36 §1.4).</summary>
+    internal enum CalloutTone
+    {
+        /// <summary>Una explicación. Es la mayoría y es lo que había hasta F36.</summary>
+        Neutral,
+
+        /// <summary>Algo queda abierto: sin commitear, sin localizar, sin tests, sin converger.</summary>
+        Warning,
+
+        /// <summary>Algo se cerró: commiteado, resuelto.</summary>
+        Done,
+    }
+
+    /// <summary>
+    /// Lo que ABRE una cita cerrada. Va delante de los avisos a propósito: el párrafo de un arreglo
+    /// commiteado sigue diciendo que publicar es del usuario, y con las palabras de aviso por
+    /// delante se pintaría de ámbar un arreglo que ya está commiteado.
+    /// </summary>
+    private static readonly string[] DoneMarks =
+    {
+        "commiteados en", "commiteado en", "está commiteado", "verificado con evidencia",
+        "el hallazgo queda resuelto",
+    };
+
+    /// <summary>Lo que deja algo ABIERTO. Son las frases que nuestros generadores escriben.</summary>
+    private static readonly string[] WarningMarks =
+    {
+        "no están commiteados", "sin commitear", "sin publicar", "no localizado", "no se localizó",
+        "seguía encontrando", "sin converger", "no tiene proyecto de tests", "no tiene proyectos de tests",
+        "no pasan", "sesión detenida", "cortada por presupuesto", "sigue activo",
+    };
+
+    /// <summary>
+    /// Clasifica una cita por su texto. Separado del dibujo para poder comprobar la REGLA —qué se
+    /// lee como aviso y qué como explicación— sin levantar una ventana.
+    /// </summary>
+    internal static CalloutTone ToneOf(string? text)
+    {
+        string t = TextSearch.Normalize(text);
+        if (t.Length == 0)
+        {
+            return CalloutTone.Neutral;
+        }
+
+        if (DoneMarks.Any(m => t.Contains(TextSearch.Normalize(m), StringComparison.Ordinal)))
+        {
+            return CalloutTone.Done;
+        }
+
+        return WarningMarks.Any(m => t.Contains(TextSearch.Normalize(m), StringComparison.Ordinal))
+            ? CalloutTone.Warning
+            : CalloutTone.Neutral;
+    }
+
+    /// <summary>El texto de un bloque y de todo lo que cuelga de él. Solo para leerlo.</summary>
+    private static string PlainTextOf(MdBlock block)
+    {
+        var sb = new System.Text.StringBuilder();
+        void Walk(MdBlock b)
+        {
+            switch (b)
+            {
+                case ParagraphBlock p:
+                    sb.Append(PlainText(p.Inline)).Append(' ');
+                    break;
+                case HeadingBlock h:
+                    sb.Append(PlainText(h.Inline)).Append(' ');
+                    break;
+                case ContainerBlock container:
+                    foreach (MdBlock child in container)
+                    {
+                        Walk(child);
+                    }
+
+                    break;
+            }
+        }
+
+        Walk(block);
+        return sb.ToString();
     }
 
     /// <summary>Un bloque de código: monoespaciado, con fondo propio y sin ajuste de línea.</summary>

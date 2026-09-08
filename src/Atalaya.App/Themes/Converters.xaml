@@ -31,6 +31,7 @@
     <local:SeverityToLabelConverter x:Key="SeverityToLabel" />
     <local:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
     <local:NotEmptyToVisibilityConverter x:Key="NotEmptyToVisibility" />
+    <local:MarkdownToDocumentConverter x:Key="MarkdownToDocument" />
     <local:ProgressToPercentConverter x:Key="ProgressToPercent" />
     <local:MinusConverter x:Key="Minus" />
     <local:SeverityToVisibilityConverter x:Key="SeverityToVisibility" />

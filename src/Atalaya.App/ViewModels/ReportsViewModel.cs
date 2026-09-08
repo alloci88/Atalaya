@@ -1,8 +1,12 @@
 ﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Windows;
 using System.Windows.Documents;
+using System.Windows.Media;
+using Atalaya.App.Controls;
 using Atalaya.App.Services;
+using Atalaya.Domain;
 using Atalaya.Domain.Ids;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -29,6 +33,18 @@ public sealed record DateRangeOption(int? Days, string Label)
 {
     public override string ToString() => Label;
 }
+
+/// <summary>
+/// Una fila de la barra de origen del informe (F36 §1): de dónde salieron los hallazgos, del
+/// catálogo de reglas o del criterio del auditor (D-887).
+/// <para>
+/// La proporción viaja como dos <c>GridLength</c>, igual que el top de reglas de F35-3: la barra
+/// se reparte el ancho que haya —que solo se conoce al colocar— y dos columnas de estrella lo
+/// hacen sin que nadie mida nada. <b>Va en neutros</b>: el origen no es una gravedad ni un estado,
+/// y los colores de esas dos familias están reservados (D-316).
+/// </para>
+/// </summary>
+public sealed record OriginBar(string Name, int Count, GridLength Share, GridLength Rest);
 
 /// <summary>Una fila de la lista de informes, ya escrita para la vista.</summary>
 public sealed class ReportRow
@@ -130,21 +146,34 @@ public sealed partial class ReportsViewModel : ViewModelBase
     private readonly NavigationService _navigation;
     private readonly IFileSaver _saver;
     private readonly ToastCenter _toasts;
+    private readonly HubContext _hub;
+    private readonly SettingsService _settings;
 
     private bool _suspendReload;
     private string? _pendingSlug;
     private string? _pendingReportId;
 
+    /// <summary>
+    /// El tema vigente, leído del mismo ajuste que la aplicación usa para aplicarlo (D-317). Los
+    /// colores de serie tienen un paso para claro y otro para oscuro, y cambiar el tema exige ir a
+    /// Ajustes y volver, que recarga la página: no hace falta escuchar ningún evento.
+    /// </summary>
+    private bool _dark = true;
+
     public ReportsViewModel(
         ReportsQuery reports,
         NavigationService navigation,
         IFileSaver saver,
-        ToastCenter toasts)
+        ToastCenter toasts,
+        HubContext hub,
+        SettingsService settings)
     {
         _reports = reports;
         _navigation = navigation;
         _saver = saver;
         _toasts = toasts;
+        _hub = hub;
+        _settings = settings;
 
         KindOptions = new List<ReportKindOption> { AllKinds }
             .Concat(Enum.GetValues<ReportKind>().Select(k => new ReportKindOption(k, ReportKinds.Display(k))))
@@ -272,6 +301,20 @@ public sealed partial class ReportsViewModel : ViewModelBase
     [ObservableProperty] private bool _hasAnnex;
 
     /// <summary>
+    /// La firma del pie —«Atalaya · Organización»— cuando las tarjetas de hallazgo se llevaron el
+    /// final del documento (F36). Cierra el DOCUMENTO, así que va detrás de ellas y no dentro de la
+    /// última tarjeta.
+    /// </summary>
+    [ObservableProperty] private FlowDocument? _footDocument;
+
+    /// <summary>
+    /// Lo que el informe escribe entre la cobertura y los hallazgos —incidencias, patrones
+    /// silenciados, directivas, veredictos degradados—, tal cual. No se toca: solo se ha quedado
+    /// al otro lado de las barras de cobertura, que es donde estaba.
+    /// </summary>
+    [ObservableProperty] private FlowDocument? _middleDocument;
+
+    /// <summary>
     /// Por dónde se corta. Es el encabezado literal que escribe <c>ReportBuilder.AppendAnnex</c>;
     /// vive aquí como constante para que renombrarlo allí y no aquí sea un cambio que se ve —el
     /// anexo dejaría de plegarse— y no uno que se pierde.
@@ -282,6 +325,39 @@ public sealed partial class ReportsViewModel : ViewModelBase
 
     /// <summary>«21 ago 2026 · 10:32 · XBlast · alvaro».</summary>
     [ObservableProperty] private string _viewerSubtitle = string.Empty;
+
+    /// <summary>
+    /// <b>La página del informe</b> (F36): la portada, las cifras, las gráficas y las tarjetas de
+    /// hallazgo, compuestas del registro de la sesión con el markdown como cuerpo. Sin registro es
+    /// <see cref="ReportPage.Plain"/> y la vista pinta lo de siempre.
+    /// </summary>
+    [ObservableProperty] private ReportPage _page = ReportPage.Plain;
+
+    /// <summary>El color de la aplicación de este informe, por hash de su slug (D-314).</summary>
+    [ObservableProperty] private Brush? _appBrush;
+
+    /// <summary>La fecha del informe, para la portada. La misma que la fila de la lista.</summary>
+    [ObservableProperty] private string _viewerWhen = string.Empty;
+
+    [ObservableProperty] private string _viewerBy = string.Empty;
+
+    [ObservableProperty] private string _viewerApp = string.Empty;
+
+    /// <summary>«8 sep 2026 · 10:32 · alvaro · Claude Code · claude-opus-4.7» (F36 §1.1).</summary>
+    [ObservableProperty] private string _coverMeta = string.Empty;
+
+    /// <summary>El rosco de gravedad de los hallazgos nuevos (`SeverityPalette`, D-316).</summary>
+    public ObservableCollection<DonutSegment> SeverityRing { get; } = new();
+
+    /// <summary>El número del centro del rosco: cuántos hallazgos nuevos hay en total.</summary>
+    [ObservableProperty] private string _severityTotal = string.Empty;
+
+    [ObservableProperty] private bool _hasSeverityRing;
+
+    /// <summary>La barra de origen (D-887). Vacía cuando el informe no lo escribe.</summary>
+    public ObservableCollection<OriginBar> OriginBars { get; } = new();
+
+    [ObservableProperty] private bool _hasOrigin;
 
     /// <summary>
     /// El enlace a los hallazgos solo aparece en informes de SESIÓN: un consolidado de cierre o un
@@ -502,13 +578,28 @@ public sealed partial class ReportsViewModel : ViewModelBase
 
         OpenReport = row;
         (string cuerpo, string? anexo) = SplitAnnex(_reports.Read(row.Entry));
-        Document = MarkdownFlowDocument.Build(cuerpo, OpenExternal);
+
+        // F36 — LA PÁGINA SE COMPONE ANTES DE PINTAR NADA. El cuerpo que va al renderizador es el
+        // que la página deja: sin la sección de hallazgos, que se pinta como tarjetas. El resto del
+        // texto es exactamente el mismo (D-441: el `.md` ni se toca ni se reconstruye).
+        Page = ReportPage.Compose(
+            row.Entry, row.Entry.Session, cuerpo, _reports.FindingIndex(row.Slug));
+        ApplyPageColors(row);
+
+        Document = MarkdownFlowDocument.Build(Page.HasCover ? Page.Body : cuerpo, OpenExternal);
+        MiddleDocument = Page.HasMiddle ? MarkdownFlowDocument.Build(Page.Middle, OpenExternal) : null;
+        FootDocument = Page.HasFoot ? MarkdownFlowDocument.Build(Page.Foot, OpenExternal) : null;
         // El anexo, SIN medida de lectura: sus tablas son de nueve columnas y en una columna de
         // 720 px se parten. No es prosa, son datos.
         AnnexDocument = anexo is null ? null : MarkdownFlowDocument.Build(anexo, OpenExternal, measure: 0);
         HasAnnex = anexo is not null;
         ViewerTitle = row.Title;
         ViewerSubtitle = string.Join(" · ", new[] { row.When, row.AppName, row.By }
+            .Where(s => !string.IsNullOrWhiteSpace(s) && s != Unknown));
+        ViewerWhen = row.When;
+        ViewerApp = row.AppName;
+        ViewerBy = row.By;
+        CoverMeta = string.Join(" · ", new[] { row.When, row.By, Page.Provider }
             .Where(s => !string.IsNullOrWhiteSpace(s) && s != Unknown));
         // F29 §1 — el informe NO se reescribe (F23: el informe es lo que se vio ese día), pero se
         // dice cuándo se cerró su hueco de coste. Al pie de la cabecera, que es donde acaba lo que
@@ -533,7 +624,14 @@ public sealed partial class ReportsViewModel : ViewModelBase
         OpenReport = null;
         Document = null;
         AnnexDocument = null;
+        MiddleDocument = null;
+        FootDocument = null;
         HasAnnex = false;
+        Page = ReportPage.Plain;
+        SeverityRing.Clear();
+        OriginBars.Clear();
+        HasSeverityRing = false;
+        HasOrigin = false;
         RaiseScopeChanged();
     }
 
@@ -612,6 +710,137 @@ public sealed partial class ReportsViewModel : ViewModelBase
         => OpenReport is { Entry.FindingId: { } id } row && Ulid.TryParse(id, out Ulid finding)
             ? _navigation.NavigateToAsync<FindingDetailViewModel>(vm => vm.Load(row.Slug, finding))
             : Task.CompletedTask;
+
+    /// <summary>
+    /// Los colores de la página: el punto de la aplicación (D-314) y el rosco de gravedad
+    /// (`SeverityPalette`, D-316). Se resuelven aquí y no en el XAML porque salen de un reparto
+    /// sobre el portafolio COMPLETO —filtrar la lista no puede repintar a nadie— y porque cada
+    /// color tiene su paso para claro y para oscuro (D-317).
+    /// </summary>
+    private void ApplyPageColors(ReportRow row)
+    {
+        _dark = !string.Equals(_settings.Current.Theme, "light", StringComparison.OrdinalIgnoreCase);
+
+        try
+        {
+            var palette = SeriesPalette.Assign(_hub.Store.ListAppSlugs());
+            AppBrush = Paint(SeriesPalette.For(row.Slug, palette).For(_dark));
+        }
+        catch (Exception)
+        {
+            // Sin hub legible el punto no se pinta; la portada sigue.
+            AppBrush = null;
+        }
+
+        SeverityRing.Clear();
+        foreach (ReportSlice slice in Page.Severities)
+        {
+            SeverityRing.Add(new DonutSegment(
+                slice.Name,
+                slice.Count,
+                Paint(SeverityPalette.Hex(SeverityOf(slice.Name))),
+                $"{slice.Name} — {slice.Count} hallazgo(s)"));
+        }
+
+        HasSeverityRing = SeverityRing.Count > 0;
+        SeverityTotal = Page.Severities.Sum(s => s.Count).ToString(CultureInfo.CurrentCulture);
+
+        OriginBars.Clear();
+        int max = Page.Origins.Count == 0 ? 0 : Page.Origins.Max(o => o.Count);
+        foreach (ReportSlice origin in Page.Origins)
+        {
+            double share = max == 0 ? 0 : (double)origin.Count / max;
+            OriginBars.Add(new OriginBar(
+                origin.Name,
+                origin.Count,
+                new GridLength(Math.Max(share, 0.001), GridUnitType.Star),
+                new GridLength(Math.Max(1 - share, 0.001), GridUnitType.Star)));
+        }
+
+        HasOrigin = OriginBars.Count > 0;
+    }
+
+    /// <summary>El nombre de una gravedad, de vuelta a su valor. El rotulado único de UI-0027.</summary>
+    private static Severity SeverityOf(string name) => name switch
+    {
+        "Crítica" => Severity.Critica,
+        "Alta" => Severity.Alta,
+        "Media" => Severity.Media,
+        _ => Severity.Baja,
+    };
+
+    private static Brush Paint(string hex)
+    {
+        var color = (Color)ColorConverter.ConvertFromString(hex);
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+
+    /// <summary>
+    /// <b>Copiar resumen</b> (F36 §1.3): la frase ejecutiva y las tarjetas como texto plano, que es
+    /// lo que se pega en un correo sin adjuntar el <c>.md</c>. Mismo aviso que el resto de copias de
+    /// la aplicación, y si el portapapeles no está se dice en vez de fingir que se copió (D-1038).
+    /// </summary>
+    [RelayCommand]
+    private void CopySummary()
+    {
+        if (!Page.HasSummary)
+        {
+            return;
+        }
+
+        Copy(Page.Summary, "Resumen del informe");
+    }
+
+    /// <summary>Una tarjeta suelta, con el mismo «Copiar» que las del panel.</summary>
+    [RelayCommand]
+    private void CopyStat(ReportStat? stat)
+    {
+        if (stat is not null)
+        {
+            Copy(stat.CopyText, stat.Title);
+        }
+    }
+
+    private void Copy(string text, string what)
+    {
+        try
+        {
+            System.Windows.Clipboard.SetText(text);
+            _toasts.Show($"«{what}» copiado al portapapeles.");
+        }
+        catch (Exception)
+        {
+            _toasts.Show("No se pudo copiar: el portapapeles no estaba disponible.");
+        }
+    }
+
+    /// <summary>
+    /// La ficha de un hallazgo del informe (F36 §1.5). Solo se ofrece cuando el alias que el
+    /// informe escribe corresponde a un hallazgo que sigue en el hub: un «Abrir» que no abre nada
+    /// es peor que no tenerlo.
+    /// </summary>
+    [RelayCommand]
+    private Task OpenFindingCard(ReportFinding? finding)
+        => finding is { FindingId: { } id } && OpenReport is { } row && Ulid.TryParse(id, out Ulid ulid)
+            ? _navigation.NavigateToAsync<FindingDetailViewModel>(vm => vm.Load(row.Slug, ulid))
+            : Task.CompletedTask;
+
+    /// <summary>
+    /// Pulsar una entrada del índice lleva a SU tarjeta en el cuerpo. El salto lo hace la vista
+    /// —es colocación, no estado—, así que el view-model solo dice a cuál.
+    /// </summary>
+    public event Action<ReportFinding>? FindingRequested;
+
+    [RelayCommand]
+    private void GoToFinding(ReportFinding? finding)
+    {
+        if (finding is not null)
+        {
+            FindingRequested?.Invoke(finding);
+        }
+    }
 
     /// <summary>Devuelve toda la barra de filtros a su valor inicial.</summary>
     [RelayCommand]

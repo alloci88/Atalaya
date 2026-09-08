@@ -1,4 +1,5 @@
-﻿using Atalaya.App;
+﻿using System.Windows.Documents;
+using Atalaya.App;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Domain;
@@ -186,6 +187,78 @@ public sealed class ReportReadingTests
         var heading = doc.OfType<Markdig.Syntax.HeadingBlock>().Single();
 
         MarkdownFlowDocument.HeadingSeverity(heading)!.Value.Severity.Should().Be("Crítica");
+    }
+
+    // ================================================================ Las citas (F36 §1.4)
+
+    /// <summary>
+    /// <b>Una cita se pinta según lo que DICE</b> (F36 §1.4).
+    /// <para>
+    /// Las citas de nuestros informes iban las tres con la misma raya azul: el aviso de que un
+    /// arreglo sigue SIN COMMITEAR se leía igual que la nota que explica qué hace verificar. Es el
+    /// mismo defecto que F27 arregló con la gravedad —una cosa importante escrita en el mismo tono
+    /// que el resto— y se arregla igual: reconociéndola por texto, sin tocar el texto.
+    /// </para>
+    /// <para>
+    /// Este test es de REGLA y no de forma: no comprueba de qué ámbar es el ámbar, sino qué frase
+    /// se lee como aviso, cuál como cerrado y cuál como explicación. Se rompe en silencio —la
+    /// cita simplemente vuelve a salir neutra— y por eso tiene test.
+    /// </para>
+    /// </summary>
+    [Theory]
+    // Arreglo asistido: lo que queda abierto, en ámbar.
+    [InlineData(
+        "**Estos cambios NO están commiteados.** El arreglo asistido escribe en el clon local",
+        MarkdownFlowDocument.CalloutTone.Warning)]
+    [InlineData(
+        "El proyecto afectado (`X.csproj`) **no tiene proyecto de tests** que lo cubra.",
+        MarkdownFlowDocument.CalloutTone.Warning)]
+    // Arreglo asistido: lo que se cerró, en verde. Y va en verde AUNQUE siga diciendo «sin
+    // publicar»: lo que la cita afirma es que el commit está hecho.
+    [InlineData(
+        "**Commiteados en `abc1234`.** El arreglo está commiteado en el clon local de quien lo "
+        + "lanzó, **sin publicar**: el push sigue siendo suyo.",
+        MarkdownFlowDocument.CalloutTone.Done)]
+    // Verificación: una explicación, en neutro.
+    [InlineData(
+        "Verificar **juzga el código que hay ahora**. Que el código anclado haya desaparecido es "
+        + "precisamente lo que hace un arreglo.",
+        MarkdownFlowDocument.CalloutTone.Neutral)]
+    [InlineData(
+        "**No hay cambios en el clon.** Esta sesión terminó sin tocar ningún fichero.",
+        MarkdownFlowDocument.CalloutTone.Neutral)]
+    internal void Una_cita_se_clasifica_por_lo_que_dice(string quote, MarkdownFlowDocument.CalloutTone expected)
+        => MarkdownFlowDocument.ToneOf(quote).Should().Be(expected);
+
+    /// <summary>
+    /// <b>Y las que el generador escribe de verdad</b>, no una paráfrasis: las dos constantes de
+    /// <c>ReportBuilder</c> se leen desde ahí, para que cambiarlas allí y no aquí sea un cambio que
+    /// se ve y no uno que se pierde.
+    /// </summary>
+    [Fact]
+    public void Las_dos_citas_del_arreglo_son_las_que_el_generador_escribe()
+    {
+        MarkdownFlowDocument.ToneOf(ReportBuilder.UncommittedNotice)
+            .Should().Be(MarkdownFlowDocument.CalloutTone.Warning);
+
+        MarkdownFlowDocument.ToneOf(ReportBuilder.CommittedNotice("abc1234"))
+            .Should().Be(MarkdownFlowDocument.CalloutTone.Done);
+    }
+
+    /// <summary>
+    /// <b>Y no se toca una palabra.</b> Lo que cambia es el color de la raya y del fondo; el texto
+    /// que llega al documento es el que el informe escribió, entero (D-441).
+    /// </summary>
+    [Fact]
+    public void Clasificar_una_cita_no_le_cambia_el_texto()
+    {
+        const string markdown = "> **Estos cambios NO están commiteados.** El push sigue siendo suyo.";
+
+        FlowDocument doc = MarkdownFlowDocument.Build(markdown);
+        string text = new TextRange(doc.ContentStart, doc.ContentEnd).Text;
+
+        text.Should().Contain("Estos cambios NO están commiteados.")
+            .And.Contain("El push sigue siendo suyo.");
     }
 
     private static string Root()

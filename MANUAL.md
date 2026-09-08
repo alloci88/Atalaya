@@ -892,13 +892,42 @@ texto** — que mira **dentro** del informe, así que «ReadCSV» encuentra el i
 lo menciona aunque no sepas de qué sesión salió. Sin tildes y sin mayúsculas: da igual
 cómo lo escribas.
 
-Un clic abre el informe **renderizado dentro de la aplicación**, con sus tablas, sus
-listas y su código legibles, y con su scroll propio. Desde ahí:
+Un clic abre el informe **como una página**, no como un markdown pintado. Arriba, una
+**portada** con el título, la aplicación con su punto de color, la fecha, el autor y el
+proveedor con su modelo, y debajo **una frase** que dice lo que pasó en esa sesión de un
+vistazo: *«Se auditaron 2 unidades de 851 · 3 hallazgos nuevos, 1 alta · 58 AI credits en
+2 min 33 s»*. Lo que no hay, no se nombra.
+
+Después, **las cifras**: hallazgos nuevos, unidades auditadas, coste y duración, cada una
+con su **Copiar**, y al lado el **rosco de gravedad** y la **barra de origen** —cuántos
+hallazgos vienen de una regla del catálogo y cuántos del criterio del auditor—. Ninguna de
+esas cifras se calcula aquí: son las que el informe ya escribió.
+
+El **texto del informe** se lee a la izquierda, en su medida de lectura de siempre, con dos
+cambios de forma y ninguno de contenido: **la cobertura** se ve como una barra de pasadas
+por unidad —un tramo por pasada, hueco el que salió seco— con el motivo de cierre al lado, y
+**cada hallazgo es una tarjeta** con el borde de su gravedad, su regla, su línea y un
+**Abrir** que lleva a su ficha cuando el hallazgo sigue en el hub. Las citas van teñidas
+según lo que dicen: **ámbar** lo que queda abierto —*«NO están commiteados»*, *«no tiene
+proyecto de tests»*—, **verde** lo cerrado —*«Commiteados en `sha`»*— y neutro las
+explicaciones.
+
+A la derecha, si la ventana da de sí, un **carril** con el **índice de hallazgos por
+gravedad** —pulsa uno y salta a su tarjeta— y las acciones. En una ventana estrecha el carril
+baja debajo del texto. Desde el carril:
 
 - **Descargar .md** guarda una copia donde tú elijas, con un nombre que dice qué es
   (`atalaya-{app}-{tipo}-{fecha}.md`).
+- **Copiar resumen** se lleva la frase de portada y las cuatro cifras como texto: es el
+  informe en cinco líneas, para pegarlo en un correo sin adjuntar nada.
 - **Ver hallazgos de esta sesión** abre Hallazgos filtrado por esa aplicación.
-- **Volver** devuelve la lista tal y como la dejaste, con sus filtros y su posición.
+- **Volver** —el eslabón «Informes» de la miga— devuelve la lista tal y como la dejaste, con
+  sus filtros y su posición.
+
+El **anexo técnico** sigue plegado y a ancho completo, ahora al pie de la página.
+
+Un informe que no tenga sesión detrás —los importados de v4— se lee como siempre: su texto y
+nada más. No se inventa una cifra para llenar la portada.
 
 Los informes son **inmutables**: esta vista solo lee. Los enlaces que un informe
 contenga se abren en tu navegador, nunca dentro de la ventana.

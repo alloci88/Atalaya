@@ -247,12 +247,18 @@ internal static class TestFactory
         HubContext hub,
         NavigationService? navigation = null,
         IFileSaver? saver = null,
-        ToastCenter? toasts = null)
+        ToastCenter? toasts = null,
+        SettingsService? settings = null)
         => new(
             new ReportsQuery(hub),
             navigation ?? new NavigationService(new EmptyServiceProvider()),
             saver ?? new RecordingFileSaver(null),
-            toasts ?? new ToastCenter());
+            toasts ?? new ToastCenter(),
+            hub,
+            // F36 — el tema decide el paso de cada color de serie (D-317). Sin ajustes cargados
+            // vale el de por defecto: lo que se comprueba en los tests son las cifras y el reparto,
+            // no el tono.
+            settings ?? Settings(new AppPaths(Path.GetDirectoryName(hub.HubPaths.Root)!)));
 
     /// <summary>
     /// La carcasa (MainViewModel) con lo mínimo para poder construirla. Existe para los avisos que
