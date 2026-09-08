@@ -40,6 +40,16 @@ public sealed record ReportStat(
 
     public bool HasChips => Chips.Count > 0;
 
+    /// <summary>
+    /// Cuando la cifra ES un estado, el tono con el que se pinta. Solo lo lleva «Build» (F36-2 §3):
+    /// verde y rojo ahí no son decoración, son el dato — que es donde D-316 permite la paleta
+    /// semántica. Las demás cifras van en <see cref="ReportTone.Neutral"/> y con la tinta de
+    /// siempre: teñir un recuento diría algo que el recuento no dice.
+    /// </summary>
+    public ReportTone Tone { get; init; } = ReportTone.Neutral;
+
+    public bool HasTone => Tone != ReportTone.Neutral;
+
     /// <summary>La cifra con su unidad, para el texto que se copia.</summary>
     public string Amount => string.IsNullOrEmpty(Unit) ? Value : $"{Value} {Unit}";
 
@@ -149,6 +159,38 @@ public sealed record ReportFindingIndex(
 {
     public static ReportFindingIndex Empty { get; } =
         new(new Dictionary<string, string>(), new Dictionary<string, string>());
+
+    /// <summary>
+    /// <b>Los re-anclajes que escribió cada verificación</b> (BUGFIX-ANCLA, D-1037), por sesión y
+    /// hallazgo: <c>«{ulid de la sesión}|{ulid del hallazgo}» → «re-anclado 507 → 497»</c>.
+    /// <para>
+    /// Se lee del EVENTO de la ficha y no del texto del informe, porque el informe no lo escribe:
+    /// verificar re-ancla en disco desde BUGFIX-ANCLA y lo dice en el mismo evento del historial.
+    /// Un informe anterior a esa fecha no tiene ninguno, y ahí la tarjeta no lleva pastilla — que
+    /// es la verdad, no un hueco.
+    /// </para>
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Reanchors { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// <b>Cuándo se verificó por última vez cada hallazgo</b>, con su desenlace. Es lo que permite
+    /// que un informe de arreglo diga «Verificado»: ese veredicto es POSTERIOR al arreglo y vive en
+    /// la ficha, no en el registro del arreglo ni en su informe (F36-2 §3).
+    /// </summary>
+    public IReadOnlyDictionary<string, ReportVerdictEvent> LastVerdicts { get; init; } =
+        new Dictionary<string, ReportVerdictEvent>(StringComparer.Ordinal);
+
+    /// <summary>La llave de un re-anclaje: la sesión que lo hizo y el hallazgo que lo recibió.</summary>
+    public static string MoveKey(string sessionId, string findingId) => $"{sessionId}|{findingId}";
+
+    /// <summary>«re-anclado 507 → 497» de esta sesión sobre este hallazgo, o vacío.</summary>
+    public string Reanchor(string sessionId, string findingId)
+        => Reanchors.TryGetValue(MoveKey(sessionId, findingId), out string? moved) ? moved : string.Empty;
+
+    /// <summary>El último veredicto de este hallazgo, o null si nunca se verificó.</summary>
+    public ReportVerdictEvent? LastVerdict(string findingId)
+        => LastVerdicts.TryGetValue(findingId, out ReportVerdictEvent? v) ? v : null;
 
     /// <summary>La llave por título: la unidad y el título, que es lo que el informe escribe.</summary>
     public static string Key(string unit, string title) => $"{unit.Trim()}|{title.Trim()}";
@@ -266,6 +308,46 @@ public sealed record ReportPage
 
     public bool HasSummary => Summary.Length > 0;
 
+    // ------------------------------------------------------- F36-2 · verificación y arreglo
+
+    /// <summary>
+    /// <b>Los veredictos de una verificación, uno por tarjeta</b> y en el orden del informe
+    /// (F36-2 §2). Vacío en los otros dos tipos.
+    /// </summary>
+    public IReadOnlyList<ReportVerdict> Verdicts { get; private init; } = Array.Empty<ReportVerdict>();
+
+    public bool HasVerdicts => Verdicts.Count > 0;
+
+    /// <summary>El rosco de veredictos, en el orden en que se decide y sin los que no hay.</summary>
+    public IReadOnlyList<ReportSlice> VerdictSlices { get; private init; } = Array.Empty<ReportSlice>();
+
+    /// <summary>
+    /// El índice del carril de una verificación: <b>por veredicto y no por gravedad</b>, con los
+    /// resueltos al final. Lo que hay que decidir es lo que sigue abierto.
+    /// </summary>
+    public IReadOnlyList<ReportVerdict> VerdictIndex { get; private init; } = Array.Empty<ReportVerdict>();
+
+    /// <summary>
+    /// <b>El estado del arreglo</b>, leído de <c>fixes/{ulid}.json</c> (D-1033) y, cuando no hay
+    /// registro, del cuerpo. Null en los otros dos tipos y en un arreglo que no declare ninguno.
+    /// </summary>
+    public ReportFixState? FixState { get; private init; }
+
+    public bool HasFixState => FixState is not null;
+
+    /// <summary>Los ficheros que tocó el arreglo, para la barra de +/− (F36-2 §3).</summary>
+    public IReadOnlyList<ReportFileChange> Files { get; private init; } = Array.Empty<ReportFileChange>();
+
+    /// <summary>La compilación del arreglo, leída del cuerpo. Null cuando el informe no la trae.</summary>
+    public ReportBuild? Build { get; private init; }
+
+    public bool HasBuild => Build is not null;
+
+    /// <summary>«Qué cambió y por qué», tal cual. Es prosa y va en su medida de lectura (F27).</summary>
+    public string Story { get; private init; } = string.Empty;
+
+    public bool HasStory => Story.Trim().Length > 0;
+
     // ------------------------------------------------------------------ composición
 
     /// <summary>
@@ -280,11 +362,24 @@ public sealed record ReportPage
         ReportEntry entry,
         AuditSession? session,
         string body,
-        ReportFindingIndex? hub = null)
+        ReportFindingIndex? hub = null,
+        FixRecord? fix = null)
     {
         if (session is null)
         {
             return Plain;
+        }
+
+        // Los otros dos tipos se componen aparte: sus cuerpos tienen otras secciones y cada una se
+        // pinta de una forma. El de sesión no se toca (F36-1b).
+        if (entry.Kind == ReportKind.Verificacion)
+        {
+            return ComposeVerify(entry, session, body ?? string.Empty, hub);
+        }
+
+        if (session.Mode == AuditMode.Fix)
+        {
+            return ComposeFix(entry, session, body ?? string.Empty, hub, fix);
         }
 
         (string head, string cover, string middle, string? section, string foot) =
@@ -309,9 +404,8 @@ public sealed record ReportPage
                 .ToList(),
         };
 
-        // Las cifras y las gráficas son del informe de SESIÓN (F36 Entrega 1). Los otros dos tipos
-        // se quedan con la portada, el carril y las tarjetas de hallazgo hasta la Entrega 2: media
-        // fila de tarjetas vacías diría menos que ninguna.
+        // Consolidado y operaciones se quedan con la portada, el carril y las tarjetas de hallazgo:
+        // no tienen cifras propias, y media fila de tarjetas vacías diría menos que ninguna.
         if (entry.Kind != ReportKind.Sesion)
         {
             return page;
@@ -759,7 +853,7 @@ public sealed record ReportPage
             UnitsDetail(head),
             "Las unidades que el barrido cubrió en esta sesión, y cómo cerró cada grupo."));
 
-        stats.Add(CostStat(entry, session));
+        stats.Add(CostStat(entry, session.Units.Count, "por unidad"));
 
         string elapsed = Elapsed(session);
         stats.Add(new ReportStat(
@@ -781,7 +875,7 @@ public sealed record ReportPage
     /// reconciliación que la lista ya aplica (F29 §1): cuando las dos no coinciden, es porque el
     /// coste se cerró después, y eso lo dice la línea de «calculado a posteriori» que ya está.
     /// </summary>
-    private static ReportStat CostStat(ReportEntry entry, AuditSession session)
+    private static ReportStat CostStat(ReportEntry entry, int divisor, string per)
     {
         if (entry.Cost is not { } credits)
         {
@@ -796,9 +890,8 @@ public sealed record ReportPage
                 CostFormat.Caveat);
         }
 
-        int units = session.Units.Count;
-        string per = units > 0
-            ? string.Create(AppCulture.Display, $"{credits / units:0.#} por unidad")
+        string each = divisor > 0
+            ? string.Create(AppCulture.Display, $"{credits / divisor:0.#} {per}")
             : string.Empty;
 
         return new ReportStat(
@@ -806,7 +899,7 @@ public sealed record ReportPage
             "Coste",
             CostFormat.Marked(CostFormat.Number(credits), entry.CostIsEstimate),
             CostFormat.BillingUnit,
-            per,
+            each,
             CostFormat.Both(credits));
     }
 
@@ -870,6 +963,16 @@ public sealed record ReportPage
             parts.Add(string.Create(AppCulture.Display, $"{nuevos} {noun}"));
         }
 
+        AppendCost(parts, entry, session);
+        return string.Join(" · ", parts);
+    }
+
+    /// <summary>
+    /// «58,0 AI credits en 2 min 33 s», que es como acaban las tres frases ejecutivas. Lo que no
+    /// se sabe no se nombra: sin coste queda «en 2 min 33 s» y sin reloj, el coste a secas.
+    /// </summary>
+    internal static void AppendCost(List<string> parts, ReportEntry entry, AuditSession session)
+    {
         string cost = entry.Cost is { } credits
             ? $"{CostFormat.Number(credits)} {CostFormat.BillingUnit}"
             : entry.Billed ? string.Empty : CostFormat.SubscriptionCostShort;
@@ -886,8 +989,6 @@ public sealed record ReportPage
         {
             parts.Add($"en {elapsed}");
         }
-
-        return string.Join(" · ", parts);
     }
 
     /// <summary>La frase y las tarjetas, en ese orden. Es lo que se lleva «Copiar resumen».</summary>
@@ -906,4 +1007,349 @@ public sealed record ReportPage
 
         return sb.ToString().TrimEnd();
     }
+
+    // ================================================================ F36-2 · la verificación
+
+    /// <summary>
+    /// <b>La página de una verificación</b> (F36-2 §2).
+    /// <para>
+    /// <b>Todo lo que se pinta sale del CUERPO, y el §0 dice por qué</b>: el registro de una sesión
+    /// <c>verify</c> se escribe con <c>counters</c> a cero y <c>units</c> vacía —los trece de este
+    /// hub—, así que no tiene ni un veredicto. Lo que sí tiene, y de ahí sale, es el coste, la
+    /// duración, el proveedor y el modelo. Es la regla de D-1046 aplicada tal cual: dos fuentes y
+    /// solo dos.
+    /// </para>
+    /// <para>
+    /// La excepción es el <b>re-anclaje</b>, que no está en ninguna de las dos: lo escribió el
+    /// EVENTO de la verificación en la ficha del hallazgo (D-1037). Se lee de ahí, y un informe
+    /// anterior a BUGFIX-ANCLA no lo lleva porque entonces no se escribía.
+    /// </para>
+    /// </summary>
+    private static ReportPage ComposeVerify(
+        ReportEntry entry, AuditSession session, string body, ReportFindingIndex? hub)
+    {
+        ReportSections cut = ReportSections.Split(body);
+        var verdicts = ReportReader.ReadVerdicts(
+            cut.Section(ReportReader.VerdictsHeading), hub, session.Id.ToString());
+
+        // LA FICHA DEL DOCUMENTO se lleva la cabecera, la cita de qué es verificar y las notas de
+        // la sesión, que repiten los veredictos con otras palabras. No se borra ni se reescribe
+        // nada (D-441): se pliega, y el texto sigue entero a un clic.
+        string sheet = Join(
+            cut.Head,
+            Join(cut.Rest(ReportReader.VerdictsHeading, ReportReader.NotesHeading).ToArray()),
+            cut.Section(ReportReader.NotesHeading));
+
+        var slices = CountVerdicts(verdicts);
+        var stats = VerifyStats(entry, verdicts);
+        string lead = VerifyLead(entry, session, verdicts);
+
+        return new ReportPage
+        {
+            HasCover = true,
+            Provider = $"{ProviderNames.Display(session.Provider)} · {session.Model ?? "n/d"}",
+            Sheet = sheet,
+            Foot = cut.Foot,
+            Verdicts = verdicts,
+            VerdictSlices = slices,
+            VerdictIndex = verdicts
+                .OrderBy(v => ReportVerdicts.Order.ToList().IndexOf(v.Kind))
+                .ThenBy(v => v.Alias, StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            Lead = lead,
+            Stats = stats,
+            Summary = SummaryText(lead, stats),
+        };
+    }
+
+    /// <summary>Dónde cae un desenlace en el orden en que se decide.</summary>
+    private static int Rank(ReportVerdictKind kind) => ReportVerdicts.Order.ToList().IndexOf(kind);
+
+    /// <summary>
+    /// El reparto por veredicto, en el orden en que se decide y <b>sin los que no hay</b>: un tramo
+    /// de rosco a cero no es un tramo (D-318). «Otro» agrupa por la palabra literal del informe, así
+    /// que dos veredictos que no reconocemos no se mezclan en un mismo tramo.
+    /// </summary>
+    internal static IReadOnlyList<ReportSlice> CountVerdicts(IReadOnlyList<ReportVerdict> verdicts)
+        => verdicts
+            .GroupBy(v => (v.Kind, Name: ReportVerdicts.Group(v.Kind, v.Verdict)))
+            .OrderBy(g => Rank(g.Key.Kind))
+            .ThenBy(g => g.Key.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new ReportSlice(g.Key.Name, g.Count()))
+            .ToList();
+
+    /// <summary>
+    /// Las cuatro cifras de una verificación. <b>No localizado y no concluyente van de subtítulo de
+    /// «Verificados»</b> y no de tarjeta propia: son los desenlaces raros —cero de trece en este
+    /// hub— y una fila con dos tarjetas a cero se lee peor que cuatro llenas (D-318).
+    /// </summary>
+    private static IReadOnlyList<ReportStat> VerifyStats(
+        ReportEntry entry, IReadOnlyList<ReportVerdict> verdicts)
+    {
+        int resueltos = verdicts.Count(v => v.Kind == ReportVerdictKind.Resuelto);
+        int activos = verdicts.Count(v => v.Kind == ReportVerdictKind.Activo);
+        int moved = Reanchored(verdicts);
+
+        string otros = string.Join(" · ", verdicts
+            .Where(v => v.Kind is not (ReportVerdictKind.Resuelto or ReportVerdictKind.Activo))
+            .GroupBy(v => (v.Kind, v.Verdict))
+            .OrderBy(g => Rank(g.Key.Kind))
+            .Select(g => ReportVerdicts.Tally(g.Key.Kind, g.Count(), g.Key.Verdict)));
+
+        return new List<ReportStat>
+        {
+            new(
+                "verified",
+                "Verificados",
+                verdicts.Count.ToString(AppCulture.Display),
+                null,
+                otros,
+                "Los hallazgos que esta sesión le puso delante al instrumento. Cada uno tiene su "
+                + "tarjeta abajo, con lo que se le enseñó y lo que contestó."),
+            new(
+                "resolved",
+                "Resueltos",
+                resueltos.ToString(AppCulture.Display),
+                null,
+                string.Empty,
+                "El defecto ya no está, y con evidencia: verificar es la única forma de resolver "
+                + "un hallazgo (D-557)."),
+            new(
+                "active",
+                "Siguen activos",
+                activos.ToString(AppCulture.Display),
+                null,
+                moved == 0 ? string.Empty : moved == 1 ? "1 re-anclado" : $"{moved} re-anclados",
+                "El instrumento miró el código de hoy y el defecto sigue ahí."),
+            CostStat(entry, verdicts.Count, "por hallazgo"),
+        };
+    }
+
+    /// <summary>Cuántos veredictos movieron el ancla en esta sesión (D-1037).</summary>
+    internal static int Reanchored(IReadOnlyList<ReportVerdict> verdicts)
+        => verdicts.Count(v => v.HasReanchor);
+
+    /// <summary>
+    /// <b>La frase de una verificación</b>: «Se verificaron 3 hallazgos · 2 resueltos · 1 sigue
+    /// activo · 1 re-anclado · 0,15 $ en 48 s». Concordada, y <b>solo los veredictos con datos</b>
+    /// — enumerar «0 no localizados» gasta media línea en no decir nada (D-318).
+    /// </summary>
+    internal static string VerifyLead(
+        ReportEntry entry, AuditSession session, IReadOnlyList<ReportVerdict> verdicts)
+    {
+        var parts = new List<string>();
+        if (verdicts.Count > 0)
+        {
+            string verb = verdicts.Count == 1 ? "Se verificó" : "Se verificaron";
+            string noun = verdicts.Count == 1 ? "hallazgo" : "hallazgos";
+            parts.Add(string.Create(AppCulture.Display, $"{verb} {verdicts.Count} {noun}"));
+        }
+        else
+        {
+            parts.Add("Ningún hallazgo llegó al instrumento");
+        }
+
+        foreach (IGrouping<(ReportVerdictKind Kind, string Verdict), ReportVerdict> group in verdicts
+            .GroupBy(v => (v.Kind, v.Verdict))
+            .OrderBy(g => Rank(g.Key.Kind)))
+        {
+            parts.Add(ReportVerdicts.Tally(group.Key.Kind, group.Count(), group.Key.Verdict));
+        }
+
+        int moved = Reanchored(verdicts);
+        if (moved > 0)
+        {
+            parts.Add(moved == 1 ? "1 re-anclado" : $"{moved} re-anclados");
+        }
+
+        AppendCost(parts, entry, session);
+        return string.Join(" · ", parts);
+    }
+
+    // ================================================================ F36-2 · el arreglo asistido
+
+    internal const string RisksHeading = "## Riesgos declarados";
+
+    internal const string CommitHeading = "## Sugerencia de commit";
+
+    /// <summary>
+    /// <b>La página de un arreglo asistido</b> (F36-2 §3).
+    /// <para>
+    /// <b>El estado sale del REGISTRO</b> —<c>fixes/{ulid}.json</c>, D-1033— porque ahí es donde
+    /// está el hecho: el párrafo del informe es una frase que se sustituye encima cuando el commit
+    /// llega (D-1034), y un informe que nadie reescribiera seguiría diciendo «NO están commiteados»
+    /// de un arreglo que sí lo está. Los ficheros, sus recuentos y la compilación no están en
+    /// ningún registro, así que se leen del cuerpo — la regla de D-1046, otra vez.
+    /// </para>
+    /// </summary>
+    private static ReportPage ComposeFix(
+        ReportEntry entry,
+        AuditSession session,
+        string body,
+        ReportFindingIndex? hub,
+        FixRecord? fix)
+    {
+        ReportSections cut = ReportSections.Split(body);
+        var files = ReportReader.ReadFiles(cut.Section(ReportReader.FilesHeading));
+        ReportBuild? build = ReportReader.ReadBuild(cut.Section(ReportReader.BuildHeading));
+        ReportFixState? state = ReadFixState(entry, session, cut.Head, files.Count, hub, fix);
+
+        // La cabecera y la cita de «no están commiteados» se pliegan: el estado ya está en la
+        // portada, y en grande. Con las directivas, que son de la misma clase de dato.
+        string sheet = Join(
+            cut.Head,
+            Join(cut.Rest(
+                ReportReader.SummaryHeading,
+                ReportReader.FilesHeading,
+                ReportReader.BuildHeading,
+                RisksHeading,
+                CommitHeading).ToArray()));
+
+        // Lo que esta página no lee se pinta tal cual y junto, debajo de la compilación: los
+        // riesgos declarados y la sugerencia de commit siguen siendo el mismo texto.
+        string rest = Join(cut.Section(RisksHeading), cut.Section(CommitHeading));
+
+        var stats = FixStats(entry, files, build);
+        string lead = FixLead(entry, session, files, build);
+
+        return new ReportPage
+        {
+            HasCover = true,
+            Provider = $"{ProviderNames.Display(session.Provider)} · {session.Model ?? "n/d"}",
+            Sheet = sheet,
+            Middle = rest,
+            Foot = cut.Foot,
+            Story = ReportReader.StripHeading(cut.Section(ReportReader.SummaryHeading)),
+            Files = files,
+            Build = build,
+            FixState = state,
+            Lead = lead,
+            Stats = stats,
+            Summary = SummaryText(lead, stats),
+        };
+    }
+
+    /// <summary>
+    /// El estado que se pinta. <b>Manda el registro</b>; sin registro se lee del cuerpo, que es lo
+    /// único que queda. Y encima de los dos, <b>«Verificado»</b>: un veredicto posterior sobre el
+    /// hallazgo que se arregló es lo que dice que este arreglo llegó a comprobarse (D-504) — y no
+    /// se aplica sobre una sesión que no tocó nada, porque ahí no había nada que verificar.
+    /// </summary>
+    internal static ReportFixState? ReadFixState(
+        ReportEntry entry,
+        AuditSession session,
+        string head,
+        int touched,
+        ReportFindingIndex? hub,
+        FixRecord? fix)
+    {
+        ReportFixState? state = ReportReader.FixStateFromRecord(fix)
+                                ?? ReportReader.FixStateFromBody(head, touched);
+        if (state is null || state.Kind == ReportFixStateKind.SinCambios)
+        {
+            return state;
+        }
+
+        string? findingId = entry.FindingId ?? session.FixFindingId;
+        if (findingId is null || hub?.LastVerdict(findingId) is not { } verdict
+            || verdict.Utc <= session.StartedUtc)
+        {
+            return state;
+        }
+
+        // El commit no se pierde: pasa al detalle, que es donde cabe entero con su autor.
+        string detail = state.Kind == ReportFixStateKind.Commiteado
+            ? JoinLine(" · ", $"commiteado en {state.Sha}{(state.HasDetail ? " " + state.Detail : string.Empty)}", verdict.Label)
+            : JoinLine(" · ", "sin commitear", verdict.Label);
+
+        return state with { Kind = ReportFixStateKind.Verificado, Detail = detail };
+    }
+
+    /// <summary>Las cuatro cifras de un arreglo: ficheros, cambios, compilación y coste.</summary>
+    private static IReadOnlyList<ReportStat> FixStats(
+        ReportEntry entry, IReadOnlyList<ReportFileChange> files, ReportBuild? build)
+    {
+        int added = files.Sum(f => f.Added);
+        int removed = files.Sum(f => f.Removed);
+        int outside = files.Count(f => f.OutOfScope);
+
+        return new List<ReportStat>
+        {
+            new(
+                "files",
+                "Ficheros",
+                files.Count.ToString(AppCulture.Display),
+                null,
+                outside == 0
+                    ? string.Empty
+                    : outside == 1 ? "1 fuera del hallazgo" : $"{outside} fuera del hallazgo",
+                "Los ficheros que el arreglo dejó escritos en el clon."),
+            new(
+                "lines",
+                "Cambios",
+                $"+{added} −{removed}",
+                null,
+                string.Empty,
+                "Líneas añadidas y quitadas, sumando todos los ficheros tocados."),
+            new(
+                "build",
+                "Build",
+                build?.Text ?? ReportsUnknown,
+                null,
+                JoinLine(" · ", build?.Reason ?? string.Empty, build?.Tests ?? string.Empty),
+                "El resultado de compilar y pasar los tests al cerrar el arreglo.")
+            {
+                Tone = build?.Tone ?? ReportTone.Neutral,
+            },
+            CostStat(entry, 0, string.Empty),
+        };
+    }
+
+    /// <summary>
+    /// <b>La frase de un arreglo</b>: «MEJ-0046 · 1 fichero · +0 −38 · build verde · 0,27 $ en
+    /// 54 s». El alias sale del registro (H9.1), lo demás del cuerpo, y lo que no hay no se nombra.
+    /// </summary>
+    internal static string FixLead(
+        ReportEntry entry,
+        AuditSession session,
+        IReadOnlyList<ReportFileChange> files,
+        ReportBuild? build)
+    {
+        var parts = new List<string>();
+        string alias = entry.FindingAlias ?? session.FixFindingAlias ?? string.Empty;
+        if (alias.Length > 0)
+        {
+            parts.Add(alias);
+        }
+
+        if (files.Count == 0)
+        {
+            parts.Add("sin cambios en el clon");
+        }
+        else
+        {
+            parts.Add(files.Count == 1 ? "1 fichero" : $"{files.Count} ficheros");
+            parts.Add($"+{files.Sum(f => f.Added)} −{files.Sum(f => f.Removed)}");
+        }
+
+        if (build is { Tone: ReportTone.Success or ReportTone.Danger })
+        {
+            parts.Add(build.Tone == ReportTone.Success ? "build verde" : "build rojo");
+        }
+
+        AppendCost(parts, entry, session);
+        return string.Join(" · ", parts);
+    }
+
+    /// <summary>Junta trozos de texto dejando una línea en blanco, y sin los vacíos.</summary>
+    private static string Join(params string[] parts)
+        => string.Join("\n\n", parts.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p.Trim('\n', '\r')));
+
+    /// <summary>
+    /// Junta trozos cortos en una línea, y sin los vacíos. <b>Nombre propio y no una sobrecarga de
+    /// <see cref="Join(string[])"/></b>: con tres cadenas, C# elegía la del separador y el primer
+    /// trozo se convertía en el pegamento — la cabecera desaparecía de la ficha del documento.
+    /// </summary>
+    private static string JoinLine(string separator, params string[] parts)
+        => string.Join(separator, parts.Where(p => !string.IsNullOrWhiteSpace(p)));
 }

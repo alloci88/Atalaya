@@ -509,6 +509,18 @@ editores es la única puerta).
 
 ## Cerrado
 
+- **F36 · Entrega 2 — Los informes de verificación y de arreglo** — los otros dos tipos heredan la
+  página de F36-1b (portada, una fila en rejilla, «Ficha del documento» plegada, carril de 380,
+  tarjetas a dos columnas) y ponen dentro lo suyo. **Verificación**: frase con los desenlaces,
+  cuatro cifras, **rosco de veredictos** en colores de estado, **una tarjeta por veredicto con el
+  borde del veredicto y no de la gravedad** —con lo que se le enseñó al instrumento y el
+  razonamiento del modelo—, el **re-anclaje** leído del evento de la ficha (D-1037) y el índice del
+  carril por veredicto. **Arreglo**: el **estado en la portada y en grande** leído de
+  `fixes/{ulid}.json` (sin commitear / commiteado con su autor / verificado), la barra de +/− por
+  fichero, la compilación como tarjeta con la salida plegada y la prosa a 720. De paso, un informe
+  de arreglo deja de pedir prestada la portada de una auditoría. 21 casos nuevos; medido sobre el
+  hub real (13 verificaciones y 20 arreglos). Ver D-1052.
+
 - **F35-4 / «Ciclos y temáticas»: una cinta con escala** — la cinta pasa de bloques de ancho fijo
   sin eje a un **eje de tiempo real compartido por todas las aplicaciones**, del primer ciclo hasta
   hoy (suelo de una semana, el mismo que los demás ejes, marcas en fechas redondas, línea de hoy). Cada bloque empieza en su

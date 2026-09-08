@@ -943,6 +943,52 @@ nada más. No se inventa una cifra para llenar la portada.
 Los informes son **inmutables**: esta vista solo lee. Los enlaces que un informe
 contenga se abren en tu navegador, nunca dentro de la ventana.
 
+#### Un informe de verificación, en pantalla
+
+La misma página, con lo que una verificación tiene que contestar. La frase de portada dice el
+desenlace de un vistazo: *«Se verificaron 3 hallazgos · 2 resueltos · 1 sigue activo · 1
+re-anclado · 15 AI credits en 48 s»*. En la fila, **Verificados · Resueltos · Siguen activos ·
+Coste** —con su coste por hallazgo— y el **rosco de veredictos** con su leyenda; los desenlaces
+raros —un *no localizado*, un *no concluyente*— van como subtítulo de «Verificados», y el rosco
+solo lleva los tramos que existen.
+
+**Cada veredicto es una tarjeta**, en el orden del informe, con **el borde en el color del
+veredicto y no en el de la gravedad**: lo que se decide aquí es si el hallazgo sigue vivo. Lleva
+su pastilla de veredicto, el alias y el título, la gravedad en pastilla pequeña, dónde estaba,
+**qué código se le enseñó al instrumento** en una línea, y el razonamiento del modelo dentro. Un
+*no localizado* dice además qué hacer, con las mismas palabras que la ficha del hallazgo.
+
+Si el veredicto **re-ancló** el hallazgo —verificar también sirve para eso—, la tarjeta lo dice con
+una pastilla neutra *«re-anclado 507 → 497»* y la frase lo cuenta. Sale del propio evento de la
+verificación, así que un informe anterior a que Atalaya re-anclara al verificar no la lleva.
+
+El índice del carril va **por veredicto**, no por gravedad, con los resueltos al final: lo que hay
+que decidir es lo que sigue abierto. Y la cabecera, la explicación de qué es verificar y las
+«Notas de la sesión» —que repiten los veredictos con otras palabras— se pliegan en **Ficha del
+documento**.
+
+#### Un informe de arreglo asistido, en pantalla
+
+Lo primero, en la portada y en grande, **el estado del arreglo**: **Sin commitear** en ámbar,
+**Commiteado `5249598`** en verde —con quién lo firmó— o **Verificado** cuando el hallazgo tiene un
+veredicto posterior. Es la única pregunta que se hace sobre un arreglo, y **lo dice el registro del
+arreglo**, no el texto: el informe se escribe antes de que decidas quedarte los cambios, así que su
+párrafo puede haber envejecido. Un arreglo que no tocó ningún fichero dice **Sin cambios**.
+
+La frase resume el resto: *«MEJ-0046 · 1 fichero · +0 −38 · build verde · 27 AI credits en 54 s»*.
+En la fila, **Ficheros · Cambios · Build · Coste** —el build en verde o en rojo, con la razón corta
+si está en rojo y «sin tests» cuando el proyecto no tiene ninguno— y una **barra de +/− por
+fichero**, una fila por fichero tocado, proporcional al que más cambió.
+
+En el cuerpo: **Qué cambió y por qué** como prosa, y **Compilación y tests** como una tarjeta con
+el veredicto a la vista y los errores y la salida completa plegados detrás — son cientos de líneas
+de compilador. «Ficheros tocados» no se repite en lista: ya está en la barra. Los riesgos
+declarados y la sugerencia de commit se pintan tal cual, debajo. La cabecera y la cita del commit
+van a **Ficha del documento**: el estado ya está arriba.
+
+El carril mantiene **Ver el hallazgo (MEJ-0046)**, que aquí es la única vía a la ficha, junto a
+«Descargar .md» y «Copiar resumen».
+
 #### Cómo está montado un informe de sesión
 
 Un informe de sesión tiene **dos lectores**: quien tiene que arreglar los hallazgos de su código,

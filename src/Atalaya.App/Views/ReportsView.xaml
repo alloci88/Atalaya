@@ -175,6 +175,143 @@
             <Setter Property="Margin" Value="{StaticResource Pad.M.Top}" />
         </Style>
 
+        <!-- ============================================================ F36-2 · veredictos
+
+             EL BORDE DE UNA TARJETA DE VEREDICTO ES EL VEREDICTO, no la gravedad. En una
+             verificación lo que se decide es si el hallazgo sigue vivo; la gravedad va también,
+             en pastilla pequeña, porque es el contexto — pero no es la conclusión, y el borde es
+             lo que se lee sin leer.
+
+             Los cuatro tonos son los que la aplicación YA usa: verde de «resuelto», el azul de
+             «Activo» de la pastilla de estado de un hallazgo, el ámbar de aviso y el neutro. Ni
+             uno nuevo (D-316). -->
+        <Style x:Key="Verdict.Card" TargetType="Border" BasedOn="{StaticResource Card}">
+            <Setter Property="Padding" Value="{StaticResource Pad.S}" />
+            <Setter Property="CornerRadius" Value="{StaticResource Radius.S}" />
+            <Setter Property="BorderThickness" Value="{StaticResource Finding.Edge}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.TextMuted}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Kind}" Value="Resuelto">
+                    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Success.Ink}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Activo">
+                    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary.Ink}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="NoLocalizado">
+                    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Warning.Ink}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- La pastilla del veredicto, con el relleno teñido de su estado. -->
+        <Style x:Key="Verdict.Pill" TargetType="Border" BasedOn="{StaticResource Pill}">
+            <Setter Property="Background" Value="{DynamicResource Brush.Surface2}" />
+            <Setter Property="Margin" Value="{StaticResource Pad.XXS.Right}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Kind}" Value="Resuelto">
+                    <Setter Property="Background" Value="{DynamicResource Brush.Success.Soft}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Activo">
+                    <Setter Property="Background" Value="{DynamicResource Brush.Primary.Soft}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="NoLocalizado">
+                    <Setter Property="Background" Value="{DynamicResource Brush.Warning.Soft}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="Verdict.Pill.Text" TargetType="TextBlock" BasedOn="{StaticResource Pill.Text}">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Kind}" Value="Resuelto">
+                    <Setter Property="Foreground" Value="{DynamicResource Brush.Success.Ink}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Activo">
+                    <Setter Property="Foreground" Value="{DynamicResource Brush.Primary.Ink}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="NoLocalizado">
+                    <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.Ink}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- LA PASTILLA DEL RE-ANCLAJE es NEUTRA a propósito (D-1037): que el ancla se moviera no
+             es ni bueno ni malo — es que el defecto sigue ahí y ahora está bien apuntado. -->
+        <Style x:Key="Report.Move" TargetType="Border" BasedOn="{StaticResource Pill}">
+            <Setter Property="Background" Value="{DynamicResource Brush.Surface2}" />
+            <Setter Property="BorderThickness" Value="{StaticResource Border.Hairline}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Brush.Line}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="{StaticResource Pad.XS.Left}" />
+        </Style>
+
+        <!-- El punto del índice de veredictos: el mismo color que el borde de su tarjeta. -->
+        <Style x:Key="Verdict.Dot" TargetType="Border">
+            <Setter Property="Width" Value="8" />
+            <Setter Property="Height" Value="8" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Background" Value="{DynamicResource Brush.TextMuted}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Kind}" Value="Resuelto">
+                    <Setter Property="Background" Value="{DynamicResource Brush.Success.Ink}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="Activo">
+                    <Setter Property="Background" Value="{DynamicResource Brush.Primary.Ink}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Kind}" Value="NoLocalizado">
+                    <Setter Property="Background" Value="{DynamicResource Brush.Warning.Ink}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ============================================================ F36-2 · el arreglo
+
+             EL ESTADO DE UN ARREGLO, en la portada y en grande. Es la única pregunta que un
+             director hace sobre uno, y estaba dentro de una cita a mitad del documento. Ámbar
+             mientras siga sin commitear, verde en cuanto lo esté: los mismos dos tonos con los
+             que la cita se pinta desde F36 §1.4, ahora donde se ven. -->
+        <Style x:Key="Report.State" TargetType="Border" BasedOn="{StaticResource Pill}">
+            <Setter Property="Padding" Value="{StaticResource Pad.S}" />
+            <Setter Property="Background" Value="{DynamicResource Brush.Surface2}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding FixState.Tone}" Value="Success">
+                    <Setter Property="Background" Value="{DynamicResource Brush.Success.Soft}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding FixState.Tone}" Value="Warning">
+                    <Setter Property="Background" Value="{DynamicResource Brush.Warning.Soft}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="Report.State.Text" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="{StaticResource FontSize.Lead}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding FixState.Tone}" Value="Success">
+                    <Setter Property="Foreground" Value="{DynamicResource Brush.Success.Ink}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding FixState.Tone}" Value="Warning">
+                    <Setter Property="Foreground" Value="{DynamicResource Brush.Warning.Ink}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- LA CIFRA DE UNA TARJETA QUE ES UN ESTADO. Solo la lleva «Build»: verde y rojo ahí son
+             el dato y no un adorno. Las demás cifras se quedan con la tinta de siempre. -->
+        <Style x:Key="Report.Stat.Value" TargetType="TextBlock">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tone}" Value="Success">
+                    <Setter Property="Foreground" Value="{DynamicResource Brush.Success.Ink}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tone}" Value="Danger">
+                    <Setter Property="Foreground" Value="{DynamicResource Brush.Danger.Ink}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- El punto del índice: el mismo color que el borde de su tarjeta. -->
         <Style x:Key="Report.SevDot" TargetType="Border">
             <Setter Property="Width" Value="8" />
@@ -494,6 +631,31 @@
                                            Margin="{StaticResource Pad.XS.Left}" />
                             </StackPanel>
 
+                            <!-- EL ESTADO DEL ARREGLO, EN LA PORTADA Y EN GRANDE (F36-2 §3).
+                                 Estaba dentro de una cita a mitad del documento, y es la única
+                                 pregunta que un director hace sobre un arreglo. Sale del REGISTRO
+                                 —`fixes/{ulid}.json`, D-1033—, que es donde está el hecho: el
+                                 párrafo del informe es una frase que se reescribe encima cuando
+                                 llega el commit (D-1034). El tooltip dice de dónde salió (N-2). -->
+                            <Border Style="{StaticResource Report.State}"
+                                    HorizontalAlignment="Left"
+                                    Margin="{StaticResource Pad.S.Top}"
+                                    DataContext="{Binding Page}"
+                                    ToolTip="{Binding FixState.Source}"
+                                    Visibility="{Binding HasFixState, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding FixState.Text}"
+                                               Style="{StaticResource Report.State.Text}"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding FixState.Detail}"
+                                               Style="{StaticResource Text.Meta}"
+                                               VerticalAlignment="Center"
+                                               TextWrapping="Wrap"
+                                               Margin="{StaticResource Pad.XS.Left}"
+                                               Visibility="{Binding FixState.HasDetail, Converter={StaticResource BoolToVisibility}}" />
+                                </StackPanel>
+                            </Border>
+
                             <!-- LA FRASE EJECUTIVA (F36 §1.1). Plantilla determinista, sin modelo:
                                  lo que pasó en esta sesión en un renglón, concordado, y sin nombrar
                                  lo que no hay. -->
@@ -558,6 +720,7 @@
                                                  `Run`: es lo único que comparte línea base en WPF
                                                  (D-983 §9, D-990). -->
                                             <TextBlock HorizontalAlignment="Center"
+                                                       Style="{StaticResource Report.Stat.Value}"
                                                        Margin="{StaticResource Pad.XS.Top}">
                                                 <Run Text="{Binding Value, Mode=OneWay}"
                                                      FontSize="{StaticResource FontSize.H2}" FontWeight="SemiBold" />
@@ -656,6 +819,115 @@
                                 </Border>
                             </DataTemplate>
 
+                            <!-- EL ROSCO DE VEREDICTOS (F36-2 §2), con su leyenda al lado como el
+                                 de gravedad. Los colores son los de ESTADO —resuelto en verde,
+                                 «sigue activo» con el azul que la pastilla de estado de un hallazgo
+                                 ya usa, «no localizado» en ámbar de aviso y «no concluyente» en
+                                 neutro—: aquí el estado ES el dato, que es donde D-316 deja usar la
+                                 paleta semántica. Y solo los tramos que hay (D-318). -->
+                            <DataTemplate DataType="{x:Type vm:VerdictTile}">
+                                <Border Style="{StaticResource Stat.Card}"
+                                        ToolTip="Cómo acabó cada hallazgo que se le puso delante al instrumento.">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.Row="0" Text="Veredictos" Style="{StaticResource Stat.Label}" />
+                                        <Grid Grid.Row="1" Margin="{StaticResource Pad.XS.Top}"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid Grid.Column="0" Width="96" Height="96">
+                                                <c:DonutRing Segments="{Binding Segments}" RingThickness="14" />
+                                                <TextBlock Text="{Binding Total}"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           FontSize="{StaticResource FontSize.Lead}"
+                                                           FontWeight="SemiBold" />
+                                            </Grid>
+                                            <ItemsControl Grid.Column="1" ItemsSource="{Binding Legend}"
+                                                          VerticalAlignment="Center"
+                                                          Margin="{StaticResource Pad.S.Left}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal"
+                                                                    Margin="{StaticResource Pad.XXS.Bottom}">
+                                                            <Border Style="{StaticResource Verdict.Dot}" />
+                                                            <TextBlock Text="{Binding Name}"
+                                                                       Style="{StaticResource Text.Meta}"
+                                                                       VerticalAlignment="Center"
+                                                                       Margin="{StaticResource Pad.XS.Left}" />
+                                                            <TextBlock Text="{Binding Count}"
+                                                                       Style="{StaticResource Text.Meta}"
+                                                                       FontWeight="SemiBold"
+                                                                       VerticalAlignment="Center"
+                                                                       Margin="{StaticResource Pad.XS.Left}" />
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+
+                            <!-- LA BARRA DE +/− POR FICHERO (F36-2 §3). Una fila por fichero tocado,
+                                 con la ruta encima y el recuento al final, y proporcional al fichero
+                                 que MÁS cambió: repartir cada barra contra su propio total las
+                                 dejaría todas llenas y no habría nada que comparar.
+
+                                 Verde lo añadido y rojo lo quitado, que es lo que un diff pinta con
+                                 esos dos colores en todas partes — y son los de estado (D-316), no
+                                 dos tonos nuevos. -->
+                            <DataTemplate DataType="{x:Type vm:FilesTile}">
+                                <Border Style="{StaticResource Stat.Card}"
+                                        ToolTip="Lo que el arreglo añadió y quitó en cada fichero que tocó.">
+                                    <StackPanel>
+                                        <TextBlock Text="Ficheros tocados" Style="{StaticResource Stat.Label}" />
+                                        <ItemsControl ItemsSource="{Binding Bars}"
+                                                      Margin="{StaticResource Pad.XS.Top}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Margin="{StaticResource Pad.XS.Bottom}">
+                                                        <!-- `c:PathText` acorta POR EL MEDIO (P-01):
+                                                             el final de una ruta es lo que la
+                                                             identifica. Y el estilo declara ese
+                                                             tipo, así que en un `TextBlock`
+                                                             reventaría al colocar (D-1047). -->
+                                                        <c:PathText Full="{Binding Path}"
+                                                                    Style="{StaticResource Text.Path}"
+                                                                    FontSize="{StaticResource FontSize.Meta}"
+                                                                    Foreground="{DynamicResource Brush.TextMuted}" />
+                                                        <Grid Margin="{StaticResource Pad.XXS.Top}">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="{Binding Added}" />
+                                                                <ColumnDefinition Width="{Binding Removed}" />
+                                                                <ColumnDefinition Width="{Binding Rest}" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <Rectangle Grid.Column="0" Height="10" RadiusX="3" RadiusY="3"
+                                                                       HorizontalAlignment="Stretch"
+                                                                       VerticalAlignment="Center"
+                                                                       Fill="{DynamicResource Brush.Success.Ink}" />
+                                                            <Rectangle Grid.Column="1" Height="10" RadiusX="3" RadiusY="3"
+                                                                       HorizontalAlignment="Stretch"
+                                                                       VerticalAlignment="Center"
+                                                                       Fill="{DynamicResource Brush.Danger.Ink}" />
+                                                            <TextBlock Grid.Column="3" Text="{Binding Tally}"
+                                                                       Style="{StaticResource Text.Meta}"
+                                                                       Margin="{StaticResource Pad.XS.Left}"
+                                                                       VerticalAlignment="Center" />
+                                                        </Grid>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+
                             <!-- EL ORIGEN, dos barras completas (F36-1b §1.3). La etiqueta va
                                  ENCIMA de la barra y no a su izquierda: medido, «Criterio del
                                  auditor» ocupa ~150 px de los ~400 de la tarjeta, y con la etiqueta
@@ -737,6 +1009,121 @@
 
                         <!-- · La lectura · -->
                         <StackPanel>
+
+                            <!-- ·· Cada VEREDICTO, una tarjeta (F36-2 §2) ··
+
+                                 El borde izquierdo es el color del veredicto y no el de la
+                                 gravedad: en una verificación lo que se decide es si el hallazgo
+                                 sigue vivo. La gravedad va igualmente, en pastilla pequeña, porque
+                                 es el contexto — pero no es la conclusión.
+
+                                 En dos columnas con la misma rejilla y el mismo umbral que las
+                                 tarjetas de hallazgo: es el mismo tipo de bloque. -->
+                            <ItemsControl x:Name="VerdictCards"
+                                          ItemsSource="{Binding Page.Verdicts}"
+                                          Margin="{StaticResource Pad.M.Bottom}"
+                                          Visibility="{Binding Page.HasVerdicts, Converter={StaticResource BoolToVisibility}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <c:ColumnsPanel
+                                            MinColumnWidth="{x:Static c:ReportLayout.CardMinWidth}"
+                                            MaxColumns="2"
+                                            Gap="{x:Static c:ReportLayout.Gap}" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource Verdict.Card}"
+                                                Margin="{StaticResource Pad.XS.Bottom}">
+                                            <StackPanel>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0"
+                                                               Text="{Binding IndexLabel}"
+                                                               Style="{StaticResource Text.Small}"
+                                                               FontWeight="SemiBold"
+                                                               TextWrapping="Wrap" />
+                                                    <Button Grid.Column="1" Content="Abrir"
+                                                            Style="{StaticResource Button.Link}"
+                                                            FontSize="{StaticResource FontSize.Meta}"
+                                                            VerticalAlignment="Top"
+                                                            Command="{Binding DataContext.OpenVerdictCardCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip="Abre la ficha de este hallazgo"
+                                                            Visibility="{Binding CanOpen, Converter={StaticResource BoolToVisibility}}" />
+                                                </Grid>
+
+                                                <StackPanel Orientation="Horizontal"
+                                                            Margin="{StaticResource Pad.XXS.Top}">
+                                                    <Border Style="{StaticResource Verdict.Pill}">
+                                                        <TextBlock Text="{Binding Label}"
+                                                                   Style="{StaticResource Verdict.Pill.Text}" />
+                                                    </Border>
+                                                    <Border Style="{StaticResource Report.SevPill}">
+                                                        <TextBlock Text="{Binding Severity}"
+                                                                   Style="{StaticResource Report.SevPill.Text}" />
+                                                    </Border>
+                                                    <!-- EL RE-ANCLAJE SE VE (D-1037). Neutro: que
+                                                         el ancla se moviera no es ni bueno ni malo
+                                                         — es que el defecto sigue ahí y ahora está
+                                                         bien apuntado. -->
+                                                    <Border Style="{StaticResource Report.Move}"
+                                                            ToolTip="Verificar también re-ancla: el veredicto miró el código de hoy y dejó el hallazgo apuntando a la línea que juzgó."
+                                                            Visibility="{Binding HasReanchor, Converter={StaticResource BoolToVisibility}}">
+                                                        <TextBlock Text="{Binding Reanchor}"
+                                                                   Style="{StaticResource Pill.Text}" />
+                                                    </Border>
+                                                </StackPanel>
+
+                                                <TextBlock Text="{Binding Where}"
+                                                           Style="{StaticResource Text.Meta}"
+                                                           TextWrapping="Wrap"
+                                                           Margin="{StaticResource Pad.XXS.Top}"
+                                                           Visibility="{Binding HasWhere, Converter={StaticResource BoolToVisibility}}" />
+
+                                                <!-- QUÉ CÓDIGO SE LE ENSEÑÓ, en una línea. Es la
+                                                     pieza que nadie más guarda: sin ella, releer un
+                                                     «no concluyente» no dice si al instrumento le
+                                                     faltó contexto o le faltó criterio (F16 §F). -->
+                                                <TextBlock Style="{StaticResource Text.Meta}"
+                                                           TextWrapping="Wrap"
+                                                           Margin="{StaticResource Pad.XXS.Top}"
+                                                           Visibility="{Binding HasBasis, Converter={StaticResource BoolToVisibility}}">
+                                                    <Run Text="Código que se le enseñó:" FontWeight="SemiBold" />
+                                                    <Run Text="{Binding Basis, Mode=OneWay}" />
+                                                </TextBlock>
+
+                                                <!-- Y QUÉ HACER, cuando hay algo que hacer. Con las
+                                                     mismas palabras que la ficha: dos frases
+                                                     distintas para el mismo callejón se leen como
+                                                     dos situaciones distintas. -->
+                                                <TextBlock Text="{Binding NextStep}"
+                                                           Style="{StaticResource Text.Meta}"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource Brush.Warning.Ink}"
+                                                           TextWrapping="Wrap"
+                                                           Margin="{StaticResource Pad.XXS.Top}"
+                                                           Visibility="{Binding HasNextStep, Converter={StaticResource BoolToVisibility}}" />
+
+                                                <!-- El texto del juez, tal cual y con el mismo
+                                                     renderizador que el resto del documento. -->
+                                                <FlowDocumentScrollViewer
+                                                    Document="{Binding Body, Converter={StaticResource MarkdownToDocument}}"
+                                                    VerticalScrollBarVisibility="Disabled"
+                                                    HorizontalScrollBarVisibility="Auto"
+                                                    IsToolBarVisible="False"
+                                                    Background="Transparent"
+                                                    HorizontalAlignment="Left"
+                                                    Foreground="{DynamicResource Brush.Text}"
+                                                    Margin="{StaticResource Pad.XS.Top}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
 
                             <!-- ·· Cada hallazgo, una tarjeta (F36 §1.5), y PRIMERO (F36-1b §1.6) ··
 
@@ -839,6 +1226,63 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+
+                            <!-- ·· QUÉ CAMBIÓ Y POR QUÉ (F36-2 §3) ··
+
+                                 Es PROSA, así que va en la medida de lectura de F27 — que el propio
+                                 documento aplica sobre su texto, no esta columna (F36-1b §1.7). Lo
+                                 que el arreglo tocó no se repite aquí en lista: ya está en la barra
+                                 de +/− de la fila de arriba. -->
+                            <Border Style="{StaticResource Card}"
+                                    Margin="{StaticResource Pad.S.Bottom}"
+                                    Visibility="{Binding Page.HasStory, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel>
+                                    <TextBlock Text="Qué cambió y por qué" Style="{StaticResource Stat.Label}" />
+                                    <FlowDocumentScrollViewer
+                                        Document="{Binding StoryDocument}"
+                                        VerticalScrollBarVisibility="Disabled"
+                                        HorizontalScrollBarVisibility="Auto"
+                                        IsToolBarVisible="False"
+                                        Background="Transparent"
+                                        HorizontalAlignment="Left"
+                                        Foreground="{DynamicResource Brush.Text}" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- ·· COMPILACIÓN Y TESTS, una tarjeta con la salida plegada ··
+
+                                 El veredicto se lee de un vistazo; los errores nuevos, los
+                                 preexistentes, lo que quedó fuera del alcance y la salida completa
+                                 van detrás de un pliegue. Son cientos de líneas de compilador: un
+                                 informe de dos ficheros tocados medía cuarenta mil caracteres, y
+                                 treinta y ocho mil eran esto. -->
+                            <Border Style="{StaticResource Card}"
+                                    Margin="{StaticResource Pad.S.Bottom}"
+                                    Visibility="{Binding Page.HasBuild, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel>
+                                    <TextBlock Text="Compilación y tests" Style="{StaticResource Stat.Label}" />
+                                    <FlowDocumentScrollViewer
+                                        Document="{Binding BuildDocument}"
+                                        VerticalScrollBarVisibility="Disabled"
+                                        HorizontalScrollBarVisibility="Auto"
+                                        IsToolBarVisible="False"
+                                        Background="Transparent"
+                                        HorizontalAlignment="Left"
+                                        Foreground="{DynamicResource Brush.Text}" />
+                                    <Expander Header="Errores y salida completa"
+                                              Margin="{StaticResource Pad.XS.Top}"
+                                              Visibility="{Binding Page.Build.HasDetail, Converter={StaticResource BoolToVisibility}}">
+                                        <FlowDocumentScrollViewer
+                                            Document="{Binding BuildDetailDocument}"
+                                            MaxHeight="{StaticResource Read.MaxWidth}"
+                                            VerticalScrollBarVisibility="Auto"
+                                            HorizontalScrollBarVisibility="Auto"
+                                            IsToolBarVisible="False"
+                                            Background="Transparent"
+                                            Foreground="{DynamicResource Brush.Text}" />
+                                    </Expander>
+                                </StackPanel>
+                            </Border>
 
                             <!-- ·· Cobertura: una barra de pasadas por unidad, DESPUÉS ··
 
@@ -990,6 +1434,52 @@
                                             Style="{StaticResource Rail.Action}"
                                             ToolTip="Abre la ficha del hallazgo que arregló esta sesión"
                                             Visibility="{Binding CanOpenFinding, Converter={StaticResource BoolToVisibility}}" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- EL ÍNDICE DE UNA VERIFICACIÓN VA POR VEREDICTO, no por gravedad
+                                 (F36-2 §2): lo que hay que decidir es lo que sigue abierto, y los
+                                 resueltos van al final porque ya no piden nada. Misma fila y mismo
+                                 gesto que el de gravedad; lo que cambia es el color del punto y el
+                                 orden. -->
+                            <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.M}"
+                                    CornerRadius="{StaticResource Radius.M}"
+                                    Margin="{StaticResource Pad.S.Top}"
+                                    Visibility="{Binding Page.HasVerdicts, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel>
+                                    <TextBlock Text="Veredictos" Style="{StaticResource Stat.Label}"
+                                               Margin="{StaticResource Pad.XS.Bottom}" />
+                                    <ItemsControl ItemsSource="{Binding Page.VerdictIndex}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Button Style="{StaticResource Report.IndexEntry}"
+                                                        Command="{Binding DataContext.GoToVerdictCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding}"
+                                                        ToolTip="{Binding Title}">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Grid.Column="0" Style="{StaticResource Verdict.Dot}"
+                                                                VerticalAlignment="Top"
+                                                                Margin="{StaticResource Pad.XXS.Top}" />
+                                                        <StackPanel Grid.Column="1"
+                                                                    Margin="{StaticResource Pad.XS.Left}">
+                                                            <TextBlock Text="{Binding Alias}"
+                                                                       Style="{StaticResource Text.Meta}"
+                                                                       FontWeight="SemiBold" />
+                                                            <TextBlock Text="{Binding Title}"
+                                                                       Style="{StaticResource Text.Meta}"
+                                                                       TextWrapping="Wrap"
+                                                                       MaxHeight="{StaticResource Rail.TwoLines}"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                 </StackPanel>
                             </Border>
 

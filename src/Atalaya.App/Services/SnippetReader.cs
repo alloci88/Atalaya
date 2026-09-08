@@ -404,14 +404,24 @@ public static class SnippetReader
             return (SnippetState.Reanclado, hit.Line,
                 $"El código anclado ya no está en la línea {loc.Line} (commit "
                 + $"{ShortSha(anchoredCommit)}); se enseña «{hit.Member}» actual.",
-                "Verifica para confirmarlo o cerrarlo.");
+                ReanchoredNextStep);
         }
 
         return (SnippetState.NoLocalizado, inRange ? loc.Line : lines.Length,
             $"No localizado: ni el código anclado en la línea {loc.Line} ni el símbolo del hallazgo "
             + $"aparecen ya en {loc.Path} (commit anclado {ShortSha(anchoredCommit)}). No se resalta "
-            + "ninguna línea.", "Verifica para re-anclarlo o cerrarlo.");
+            + "ninguna línea.", NotLocatedNextStep);
     }
+
+    /// <summary>
+    /// Qué hacer con un hallazgo cuyo ancla se perdió pero cuyo símbolo sigue ahí. Va como
+    /// constante porque lo dice también la tarjeta de un veredicto en Informes (F36-2 §2): dos
+    /// frases distintas para el mismo callejón se leen como dos situaciones distintas.
+    /// </summary>
+    public const string ReanchoredNextStep = "Verifica para confirmarlo o cerrarlo.";
+
+    /// <inheritdoc cref="ReanchoredNextStep"/>
+    public const string NotLocatedNextStep = "Verifica para re-anclarlo o cerrarlo.";
 
     private static string ShortSha(string? sha)
         => string.IsNullOrWhiteSpace(sha) ? "desconocido" : (sha!.Length <= 8 ? sha : sha[..8]);

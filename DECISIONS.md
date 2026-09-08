@@ -18918,3 +18918,75 @@ exactamente lo que N-6 no autoriza. Queda apuntado.
 no. Sobre el marcado —montar el carril con su tema para medir dos márgenes costaría más que lo que
 prueba—: la separación es de arriba y sale de un token, no se usa `Stack.Gap` en ese panel, y el
 botón sin separación es el incondicional. La tanda queda en **2.695 casos** (2.160 en la aplicación).
+
+## F36 · Entrega 2 — Los informes de verificación y de arreglo
+
+### D-1052 — El veredicto es el borde, el estado del arreglo es un hecho del registro, y el re-anclaje se ve
+
+Los otros dos tipos de informe heredan la página de F36-1b tal cual —portada, una fila en rejilla,
+«Ficha del documento» plegada, carril de 380, tarjetas a dos columnas— y cada uno pone dentro lo
+suyo. **La regla de las dos fuentes de D-1046 se aplica igual, y el §0 la afila**: el registro de
+una verificación se escribe con `counters` a cero y `units` vacía —los trece de este hub—, así que
+**no tiene ni un veredicto** y todo el cuadro se lee del cuerpo; el de un arreglo tiene el hallazgo
+y el consumo, pero **el estado del commit vive en `fixes/{ulid}.json`** (D-1033) y no en el
+documento. Tres decisiones salen de ahí.
+
+**(1) En una verificación el borde de la tarjeta es el VEREDICTO, no la gravedad.** Lo que se
+decide releyendo una verificación es si el hallazgo sigue vivo; la gravedad va también, en pastilla
+pequeña, porque es el contexto — pero pintarla en el borde diría que lo que importa es lo grave que
+era, y no lo es. Los cuatro tonos son los que la aplicación ya tiene —el verde de «resuelto», el
+azul de la pastilla «Activo» de un hallazgo, el ámbar de aviso y el neutro—, ninguno nuevo (D-316),
+y por eso el rosco los toma **del diccionario del tema** en vez de guardar una copia que se pueda
+desviar. El índice del carril va por veredicto y con los resueltos al final. Y la página nombra los
+cuatro con el vocabulario de estado de D-504/D-505: la única palabra que cambia respecto del
+documento es «confirmado» → «sigue activo», que es como se decide en la ficha y en Hallazgos; la
+del informe sigue escrita, a un clic, dentro de «Ficha del documento».
+
+**(2) El estado de un arreglo va en la portada y en grande, y lo dice el REGISTRO.** *Sin
+commitear* en ámbar, *Commiteado `5249598`* en verde con su «como Nombre \<correo\>» (BUGFIX-F32-2),
+y *Verificado* cuando el hallazgo arreglado tiene un veredicto posterior a la sesión —el commit no
+se pierde, baja al detalle—. Manda el registro y no el texto porque el informe se escribe **antes**
+de que el usuario decida quedarse los cambios y la frase se sustituye encima después (D-1034): uno
+que no llegara a reescribirse seguiría afirmando «NO están commiteados» de un arreglo que sí lo
+está. Sin registro —una sesión que no tocó nada no escribe ninguno— se lee del cuerpo, que es la
+regla de D-1046; y ahí **manda la lista de ficheros sobre la cita**, porque un informe anterior a
+R10 §7 escribía el aviso aunque no hubiera nada que commitear. En este hub las dos fuentes coinciden
+en los veinte.
+
+**(3) El re-anclaje se ve, y por eso hay una tercera lectura.** Verificar también re-ancla
+(BUGFIX-ANCLA, D-1037), y eso no está en el registro ni en el informe: lo escribió el **evento** de
+la verificación en el historial del hallazgo. Se lee de ahí —«re-anclado 507 → 497», en pastilla
+neutra y en la frase— y un informe anterior a BUGFIX-ANCLA no lleva ninguna, que es la verdad y no
+un hueco. Dos de los trece informes de este hub la llevan.
+
+**Y lo que se pliega.** En una verificación, «Notas de la sesión» repite los veredictos con otras
+palabras: se va a «Ficha del documento» con la cabecera y la cita de qué es verificar. En un
+arreglo, la salida del compilador —treinta y ocho mil de los cuarenta y un mil caracteres de un
+informe de dos ficheros— se pliega detrás del veredicto, y «Ficheros tocados» **desaparece del
+cuerpo** porque la barra de +/− de la fila de arriba ya lo dice. Nada se borra ni se reescribe: la
+suma de los trozos vuelve a ser el documento (D-441), y hay un test que lo exige en los dos tipos.
+
+**De paso, un informe de arreglo deja de pedir prestada la portada de una sesión.** Un `fix` es un
+`ReportKind.Sesion` para la lista, así que hasta hoy le salían las cuatro cifras de una auditoría
+—«0 hallazgos nuevos», «0 unidades»— sobre un documento que no habla de eso. Ahora se compone por
+el modo de su sesión.
+
+**Cobertura (N-5): 21 casos de regla, ninguno de forma.** Cada cifra de los dos tipos contra el
+informe que `ReportBuilder` escribió para la MISMA sesión; las frases concuerdan en singular y
+enumeran solo los veredictos que hay; los veredictos salen en el orden del informe y el índice del
+carril en el de decisión; el rosco no lleva tramos a cero; el re-anclaje aparece **con** evento y no
+sin él —y el test comprueba además que el informe no lo escribe, que es por lo que hace falta
+leerlo del evento—; los tres estados del arreglo desde el registro, más el veredicto anterior que
+no verifica y la **discrepancia** entre registro y texto resuelta a favor del registro; una sesión
+que no tocó nada no pide commitear nada; el build en rojo lleva la línea literal del informe como
+razón y sin compilación no se pinta ni verde ni rojo; la barra lleva una fila por fichero y es
+proporcional; la ficha del documento lleva exactamente lo que la portada repite; sin registro los
+dos tipos se quedan en el cuerpo; la suma de los trozos es el cuerpo; el borde de un veredicto
+dispara sobre el veredicto y **no** sobre la gravedad, y sus columnas usan el umbral de F36-1b; y
+los cuatro colores del rosco son claves del tema que existen en los dos temas. La tanda queda en
+**2.716 casos** (2.181 en la aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: el aspecto. Sí está medido sobre el hub real —13
+verificaciones y 20 arreglos— que los 33 se componen sin perder texto, que los 20 arreglos declaran
+estado, que las dos fuentes del estado no discrepan en ninguno y que los dos re-anclajes que existen
+salen. Cómo se ve, lo mira el usuario en el `dist`. Ciclo N-8.

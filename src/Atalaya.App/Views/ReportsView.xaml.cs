@@ -71,6 +71,7 @@ public partial class ReportsView : UserControl
         {
             _bound = vm;
             vm.FindingRequested += ScrollTo;
+            vm.VerdictRequested += ScrollTo;
             vm.AnnexRequested += ShowAnnex;
         }
     }
@@ -80,6 +81,7 @@ public partial class ReportsView : UserControl
         if (_bound is not null)
         {
             _bound.FindingRequested -= ScrollTo;
+            _bound.VerdictRequested -= ScrollTo;
             _bound.AnnexRequested -= ShowAnnex;
             _bound = null;
         }
@@ -87,6 +89,10 @@ public partial class ReportsView : UserControl
 
     private void ScrollTo(ReportFinding finding)
         => Find(FindingCards, finding)?.BringIntoView();
+
+    /// <summary>Y el índice de una verificación lleva a su tarjeta de veredicto (F36-2 §2).</summary>
+    private void ScrollTo(ReportVerdict verdict)
+        => Find(VerdictCards, verdict)?.BringIntoView();
 
     /// <summary>
     /// El enlace del carril despliega el anexo y baja hasta él. Desplegarlo es parte del gesto: un

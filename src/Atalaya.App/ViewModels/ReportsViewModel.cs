@@ -53,6 +53,33 @@ public sealed record SeverityTile(
 /// <inheritdoc cref="SeverityTile"/>
 public sealed record OriginTile(IReadOnlyList<OriginBar> Bars);
 
+/// <summary>Una entrada de la leyenda del rosco de veredictos (F36-2 §2).</summary>
+public sealed record VerdictLegendItem(ReportVerdictKind Kind, string Name, int Count);
+
+/// <summary>
+/// <b>El rosco de VEREDICTOS</b> de un informe de verificación (F36-2 §2), azulejo de la misma
+/// rejilla que las cifras (D-990). Sus colores son los de ESTADO —resuelto, activo, aviso y
+/// neutro—, que es donde D-316 deja usar la paleta semántica: aquí el estado ES el dato.
+/// </summary>
+public sealed record VerdictTile(
+    IReadOnlyList<DonutSegment> Segments, IReadOnlyList<VerdictLegendItem> Legend, string Total);
+
+/// <summary>
+/// Una fila de la barra de +/− de un arreglo (F36-2 §3): un fichero, lo que se le añadió y lo que
+/// se le quitó, proporcional al fichero que más cambió.
+/// <para>
+/// Tres <c>GridLength</c> y no dos porque son tres tramos —lo añadido, lo quitado y lo que sobra
+/// hasta el ancho de la barra más larga—, y así una fila de «+2 −0» no se lee igual de larga que
+/// una de «+40 −38». Verde y rojo son los de ESTADO (D-316): añadir y quitar líneas es lo que un
+/// diff pinta con esos dos colores en todas partes.
+/// </para>
+/// </summary>
+public sealed record FileBar(
+    string Path, string Tally, bool OutOfScope, GridLength Added, GridLength Removed, GridLength Rest);
+
+/// <inheritdoc cref="FileBar"/>
+public sealed record FilesTile(IReadOnlyList<FileBar> Bars);
+
 /// <summary>
 /// Una fila de la barra de origen del informe (F36 §1): de dónde salieron los hallazgos, del
 /// catálogo de reglas o del criterio del auditor (D-887).
@@ -356,6 +383,15 @@ public sealed partial class ReportsViewModel : ViewModelBase
     /// <summary>El color de la aplicación de este informe, por hash de su slug (D-314).</summary>
     [ObservableProperty] private Brush? _appBrush;
 
+    /// <summary>«Qué cambió y por qué» de un arreglo, como prosa (F36-2 §3).</summary>
+    [ObservableProperty] private FlowDocument? _storyDocument;
+
+    /// <summary>El veredicto de la compilación, dentro de su tarjeta.</summary>
+    [ObservableProperty] private FlowDocument? _buildDocument;
+
+    /// <summary>Los errores y la salida completa, plegados debajo del veredicto.</summary>
+    [ObservableProperty] private FlowDocument? _buildDetailDocument;
+
     /// <summary>La fecha del informe, para la portada. La misma que la fila de la lista.</summary>
     [ObservableProperty] private string _viewerWhen = string.Empty;
 
@@ -597,7 +633,11 @@ public sealed partial class ReportsViewModel : ViewModelBase
         // que la página deja: sin la sección de hallazgos, que se pinta como tarjetas. El resto del
         // texto es exactamente el mismo (D-441: el `.md` ni se toca ni se reconstruye).
         Page = ReportPage.Compose(
-            row.Entry, row.Entry.Session, cuerpo, _reports.FindingIndex(row.Slug));
+            row.Entry,
+            row.Entry.Session,
+            cuerpo,
+            _reports.FindingIndex(row.Slug),
+            _reports.Fix(row.Slug, row.Entry.ReportId));
         ApplyPageColors(row);
 
         // LA FICHA DEL DOCUMENTO va aparte y PLEGADA (F36-1b §1.5): es la cabecera y el resumen,
@@ -605,6 +645,15 @@ public sealed partial class ReportsViewModel : ViewModelBase
         Document = MarkdownFlowDocument.Build(Page.HasCover ? Page.Sheet : cuerpo, OpenExternal);
         MiddleDocument = Page.HasMiddle ? MarkdownFlowDocument.Build(Page.Middle, OpenExternal) : null;
         FootDocument = Page.HasFoot ? MarkdownFlowDocument.Build(Page.Foot, OpenExternal) : null;
+        // «Qué cambió y por qué» es PROSA y va en la medida de lectura de F27, que el propio
+        // documento aplica. Lo demás del arreglo —los ficheros y la compilación— no lo es.
+        StoryDocument = Page.HasStory ? MarkdownFlowDocument.Build(Page.Story, OpenExternal) : null;
+        BuildDocument = Page.Build is { HasLead: true } b
+            ? MarkdownFlowDocument.Build(b.Lead, OpenExternal, measure: 0)
+            : null;
+        BuildDetailDocument = Page.Build is { HasDetail: true } d
+            ? MarkdownFlowDocument.Build(d.Detail, OpenExternal, measure: 0)
+            : null;
         // El anexo, SIN medida de lectura: sus tablas son de nueve columnas y en una columna de
         // 720 px se parten. No es prosa, son datos.
         AnnexDocument = anexo is null ? null : MarkdownFlowDocument.Build(anexo, OpenExternal, measure: 0);
@@ -641,6 +690,9 @@ public sealed partial class ReportsViewModel : ViewModelBase
         AnnexDocument = null;
         MiddleDocument = null;
         FootDocument = null;
+        StoryDocument = null;
+        BuildDocument = null;
+        BuildDetailDocument = null;
         HasAnnex = false;
         Page = ReportPage.Plain;
         Tiles.Clear();
@@ -758,6 +810,44 @@ public sealed partial class ReportsViewModel : ViewModelBase
                 Page.Severities.Sum(s => s.Count).ToString(CultureInfo.CurrentCulture)));
         }
 
+        // EL ROSCO DE VEREDICTOS (F36-2 §2), en colores de estado y solo con los que hay.
+        if (Page.VerdictSlices.Count > 0)
+        {
+            Tiles.Add(new VerdictTile(
+                Page.VerdictSlices
+                    .Select(s => new DonutSegment(
+                        s.Name,
+                        s.Count,
+                        StateBrush(KindOf(s.Name)),
+                        $"{s.Name} — {s.Count} hallazgo(s)"))
+                    .ToList(),
+                Page.VerdictSlices
+                    .Select(s => new VerdictLegendItem(KindOf(s.Name), s.Name, s.Count))
+                    .ToList(),
+                Page.VerdictSlices.Sum(s => s.Count).ToString(CultureInfo.CurrentCulture)));
+        }
+
+        // LA BARRA DE +/− POR FICHERO (F36-2 §3). Proporcional al fichero que más cambió: repartir
+        // cada barra contra su propio total las dejaría todas llenas y no habría nada que comparar.
+        if (Page.Files.Count > 0)
+        {
+            int most = Page.Files.Max(f => f.Total);
+            Tiles.Add(new FilesTile(Page.Files
+                .Select(f =>
+                {
+                    double added = most == 0 ? 0 : (double)f.Added / most;
+                    double removed = most == 0 ? 0 : (double)f.Removed / most;
+                    return new FileBar(
+                        f.Path,
+                        f.Tally,
+                        f.OutOfScope,
+                        Star(added),
+                        Star(removed),
+                        Star(1 - added - removed));
+                })
+                .ToList()));
+        }
+
         if (Page.Origins.Count > 0)
         {
             // La barra se reparte contra el TOTAL, no contra la mayor: dos barras que llegaran
@@ -777,6 +867,37 @@ public sealed partial class ReportsViewModel : ViewModelBase
         }
 
         HasTiles = Tiles.Count > 0;
+    }
+
+    /// <summary>
+    /// Un tramo de barra. Nunca cero exacto: una columna de estrella a cero desaparece y con ella
+    /// la fila entera cuando los tres tramos valen cero.
+    /// </summary>
+    private static GridLength Star(double share)
+        => new(Math.Max(share, 0.001), GridUnitType.Star);
+
+    /// <summary>El nombre de un grupo de veredictos, de vuelta a su desenlace.</summary>
+    private static ReportVerdictKind KindOf(string group) => group switch
+    {
+        "Resueltos" => ReportVerdictKind.Resuelto,
+        "Siguen activos" => ReportVerdictKind.Activo,
+        "No localizados" => ReportVerdictKind.NoLocalizado,
+        "No concluyentes" => ReportVerdictKind.NoConcluyente,
+        _ => ReportVerdictKind.Otro,
+    };
+
+    /// <summary>
+    /// El pincel de un estado, <b>tomado del TEMA</b> y no de una constante nueva: son los mismos
+    /// «resuelto», «activo» y «aviso» que la aplicación lleva pintando desde siempre (D-316), y
+    /// leerlos del diccionario evita que exista una segunda copia que se pueda desviar. Si el tema
+    /// no estuviera cargado —fuera de la aplicación— queda el neutro, que no afirma nada.
+    /// </summary>
+    private static Brush StateBrush(ReportVerdictKind kind)
+    {
+        string key = ReportVerdicts.BrushKey(ReportVerdicts.Tone(kind));
+        return Application.Current?.TryFindResource(key) as Brush
+               ?? Application.Current?.TryFindResource("Brush.TextMuted") as Brush
+               ?? Brushes.Gray;
     }
 
     /// <summary>El nombre de una gravedad, de vuelta a su valor. El rotulado único de UI-0027.</summary>
@@ -835,6 +956,28 @@ public sealed partial class ReportsViewModel : ViewModelBase
         => finding is { FindingId: { } id } && OpenReport is { } row && Ulid.TryParse(id, out Ulid ulid)
             ? _navigation.NavigateToAsync<FindingDetailViewModel>(vm => vm.Load(row.Slug, ulid))
             : Task.CompletedTask;
+
+    /// <summary>
+    /// La ficha del hallazgo de un veredicto (F36-2 §2). Misma regla que la tarjeta de un hallazgo:
+    /// solo cuando el informe se resuelve contra una ficha que sigue en el hub.
+    /// </summary>
+    [RelayCommand]
+    private Task OpenVerdictCard(ReportVerdict? verdict)
+        => verdict is { FindingId: { } id } && OpenReport is { } row && Ulid.TryParse(id, out Ulid ulid)
+            ? _navigation.NavigateToAsync<FindingDetailViewModel>(vm => vm.Load(row.Slug, ulid))
+            : Task.CompletedTask;
+
+    [RelayCommand]
+    private void GoToVerdict(ReportVerdict? verdict)
+    {
+        if (verdict is not null)
+        {
+            VerdictRequested?.Invoke(verdict);
+        }
+    }
+
+    /// <inheritdoc cref="FindingRequested"/>
+    public event Action<ReportVerdict>? VerdictRequested;
 
     /// <summary>
     /// Pulsar una entrada del índice lleva a SU tarjeta en el cuerpo. El salto lo hace la vista

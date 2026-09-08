@@ -208,6 +208,9 @@ public sealed class ReportsQuery
     private readonly Dictionary<string, ReportFindingIndex> _findings =
         new(StringComparer.OrdinalIgnoreCase);
 
+    private readonly Dictionary<string, Dictionary<string, FixRecord>> _fixes =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public ReportsQuery(HubContext hub)
     {
         _hub = hub;
@@ -223,6 +226,7 @@ public sealed class ReportsQuery
             _cache = null;
             _contents.Clear();
             _findings.Clear();
+            _fixes.Clear();
         }
     }
 
@@ -349,10 +353,13 @@ public sealed class ReportsQuery
         var byAlias = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var byTitle = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var ambiguous = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var moves = new Dictionary<string, string>(StringComparer.Ordinal);
+        var verdicts = new Dictionary<string, ReportVerdictEvent>(StringComparer.Ordinal);
         try
         {
             foreach (Finding f in _hub.Store.ListFindings(slug))
             {
+                ReadEvents(f, moves, verdicts);
                 if (!string.IsNullOrWhiteSpace(f.DisplayId))
                 {
                     byAlias[f.DisplayId!] = f.Id.ToString();
@@ -379,12 +386,95 @@ public sealed class ReportsQuery
             byTitle.Remove(key);
         }
 
-        var index = new ReportFindingIndex(byAlias, byTitle);
+        var index = new ReportFindingIndex(byAlias, byTitle)
+        {
+            Reanchors = moves,
+            LastVerdicts = verdicts,
+        };
+
         lock (_gate)
         {
             _findings[slug] = index;
             return index;
         }
+    }
+
+    /// <summary>«re-anclado 507 → 497», tal y como lo escribe <c>VerifyCoordinator</c> (D-1037).</summary>
+    private static readonly System.Text.RegularExpressions.Regex Moved =
+        new(@"re-anclado\s+\d+\s*→\s*\d+", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// <b>Lo que el historial de un hallazgo sabe y su informe no.</b> Dos cosas, y las dos vienen
+    /// del mismo sitio: los eventos que llevan sesión.
+    /// <list type="bullet">
+    /// <item>El <b>re-anclaje</b> que hizo una verificación (D-1037), que va dentro del evento del
+    /// veredicto y no en el informe — el informe se escribió sin él.</item>
+    /// <item>El <b>último veredicto</b> del hallazgo, que es lo que permite a un informe de arreglo
+    /// decir «Verificado»: ese veredicto es posterior al arreglo y no está en su registro.</item>
+    /// </list>
+    /// Los eventos de arreglo también llevan sesión y NO son veredictos: se descartan por su tipo.
+    /// </summary>
+    private static void ReadEvents(
+        Finding f,
+        Dictionary<string, string> moves,
+        Dictionary<string, ReportVerdictEvent> verdicts)
+    {
+        string id = f.Id.ToString();
+        foreach (HistoryEntry h in f.History)
+        {
+            if (h.SessionId is not { Length: > 0 } session
+                || h.Event is FindingEvent.FixProposed or FindingEvent.FixCommitted)
+            {
+                continue;
+            }
+
+            if (h.Detail is { Length: > 0 } detail
+                && Moved.Match(detail) is { Success: true } m)
+            {
+                moves[ReportFindingIndex.MoveKey(session, id)] = m.Value;
+            }
+
+            if (!verdicts.TryGetValue(id, out ReportVerdictEvent? last) || h.Utc >= last.Utc)
+            {
+                verdicts[id] = new ReportVerdictEvent(h.Utc, h.Event);
+            }
+        }
+    }
+
+    /// <summary>
+    /// <b>El registro de un arreglo</b> (D-1033): el hecho de si sus cambios están commiteados y
+    /// con quién quedaron firmados. Null cuando esa sesión no dejó ninguno — que es lo que pasa
+    /// cuando no tocó ningún fichero.
+    /// </summary>
+    public FixRecord? Fix(string slug, string sessionId)
+    {
+        lock (_gate)
+        {
+            if (_fixes.TryGetValue(slug, out Dictionary<string, FixRecord>? cached))
+            {
+                return cached.TryGetValue(sessionId, out FixRecord? hit) ? hit : null;
+            }
+        }
+
+        var map = new Dictionary<string, FixRecord>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (FixRecord record in _hub.Store.ListFixes(slug))
+            {
+                map[record.Id.ToString()] = record;
+            }
+        }
+        catch (Exception)
+        {
+            // Un registro ilegible deja el estado leyéndose del cuerpo, no deja la página sin abrir.
+        }
+
+        lock (_gate)
+        {
+            _fixes[slug] = map;
+        }
+
+        return map.TryGetValue(sessionId, out FixRecord? found) ? found : null;
     }
 
     /// <summary>
