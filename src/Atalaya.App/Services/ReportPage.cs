@@ -7,6 +7,16 @@ using Atalaya.Domain.Model;
 namespace Atalaya.App.Services;
 
 /// <summary>
+/// <b>Una pastilla de gravedad dentro del subtítulo de una tarjeta</b> (retoque de F36-1b). El
+/// reparto por gravedad se pintaba en texto plano —«1 alta · 5 medias · 4 bajas»— dentro de la
+/// misma tarjeta cuyo vecino es el rosco de colores: la gravedad se ve sin leer en el informe
+/// (F27), en Portafolio, en Hallazgos y en el rosco de al lado, y ahí no.
+/// </summary>
+/// <param name="Severity">El nombre bien escrito, que es lo que elige el color (UI-0027).</param>
+/// <param name="Text">«1 alta», con su concordancia. Es lo que ya decía el texto plano.</param>
+public sealed record ReportChip(string Severity, string Text);
+
+/// <summary>
 /// Una de las cifras de cabecera de un informe (F36 §1.2): número grande, subtítulo y «Copiar».
 /// <para>
 /// Es hermana de <c>StatCard</c> —la del panel— y no la misma: aquélla lleva tendencia contra un
@@ -17,6 +27,19 @@ namespace Atalaya.App.Services;
 public sealed record ReportStat(
     string Key, string Title, string Value, string? Unit, string Subtitle, string ToolTip)
 {
+    /// <summary>
+    /// El subtítulo en pastillas, cuando lo que enumera son gravedades. Vacío en las demás
+    /// tarjetas, que llevan su subtítulo en texto — «1 completa · 849 pendientes» no es una escala
+    /// de colores y pintarla como si lo fuera sería inventarse un significado.
+    /// <para>
+    /// <b>Y el texto sigue estando</b>: <see cref="Subtitle"/> no cambia, porque es lo que se
+    /// copia. Las pastillas son cómo se dibuja lo mismo.
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<ReportChip> Chips { get; init; } = Array.Empty<ReportChip>();
+
+    public bool HasChips => Chips.Count > 0;
+
     /// <summary>La cifra con su unidad, para el texto que se copia.</summary>
     public string Amount => string.IsNullOrEmpty(Unit) ? Value : $"{Value} {Unit}";
 
@@ -720,7 +743,13 @@ public sealed record ReportPage
             null,
             string.Join(" · ", severities.Select(s => $"{s.Count} {Lower(s.Name, s.Count)}")),
             "Los hallazgos que esta sesión dio de alta. El reparto por gravedad es el de las "
-            + "tarjetas de abajo, que son los mismos hallazgos."));
+            + "tarjetas de abajo, que son los mismos hallazgos.")
+        {
+            // UNA PASTILLA POR GRAVEDAD PRESENTE, y ninguna por las que no hay: el color dice «hay
+            // algo de esta gravedad», y una pastilla a cero diría lo contrario de su número
+            // (UI-0051, D-318).
+            Chips = severities.Select(s => new ReportChip(s.Name, $"{s.Count} {Lower(s.Name, s.Count)}")).ToList(),
+        });
 
         stats.Add(new ReportStat(
             "units",

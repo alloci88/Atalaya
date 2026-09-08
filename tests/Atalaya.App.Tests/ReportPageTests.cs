@@ -643,6 +643,54 @@ public sealed class ReportPageTests
             .And.Contain("MaxHeight=\"{StaticResource Rail.TwoLines}\"");
     }
 
+    /// <summary>
+    /// <b>El reparto por gravedad de la tarjeta va en PASTILLAS</b>, las del sistema (retoque de
+    /// F36-1b).
+    /// <para>
+    /// La gravedad se ve sin leer en Portafolio, en Hallazgos, en el informe (F27) y en el rosco
+    /// que está justo al lado de esta tarjeta — y aquí se pintaba en texto plano: «1 alta · 5
+    /// medias · 4 bajas». Una pastilla por gravedad PRESENTE, y ninguna por las que no hay: el
+    /// color dice «hay algo de esta gravedad» y una pastilla a cero diría lo contrario de su propio
+    /// número (UI-0051, D-318).
+    /// </para>
+    /// <para>
+    /// <b>El texto no se pierde</b>: el subtítulo sigue diciendo lo mismo, porque es lo que se
+    /// copia. Lo que cambia es cómo se dibuja.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void La_tarjeta_de_hallazgos_reparte_la_gravedad_en_pastillas()
+    {
+        ReportPage page = Page();
+        ReportStat findings = page.Stats.Single(s => s.Key == "findings");
+
+        // Una por gravedad presente, en orden de gravedad y con la concordancia de siempre.
+        findings.HasChips.Should().BeTrue();
+        findings.Chips.Select(c => c.Severity).Should().Equal("Alta", "Media", "Baja");
+        findings.Chips.Select(c => c.Text).Should().Equal("1 alta", "1 media", "1 baja");
+        findings.Chips.Should().HaveSameCount(page.Severities,
+            "una pastilla por gravedad con datos, ni una más");
+
+        // Y el texto sigue ahí: es lo que se copia.
+        findings.Subtitle.Should().Be("1 alta · 1 media · 1 baja");
+        findings.CopyText.Should().Contain(findings.Subtitle);
+
+        // Las demás tarjetas NO llevan pastillas: «1 completa · 849 pendientes» no es una escala de
+        // colores, y pintarla como si lo fuera sería inventarse un significado.
+        page.Stats.Where(s => s.Key != "findings").Should().OnlyContain(s => !s.HasChips);
+
+        // Y se DIBUJAN como pastillas, con los cuatro tonos reservados (D-316): el subtítulo en
+        // texto solo aparece cuando no hay pastillas que poner.
+        string xaml = ViewLayout.Xaml("ReportsView.xaml");
+        xaml.Should().Contain("ItemsSource=\"{Binding Chips}\"")
+            .And.Contain("Style=\"{StaticResource Report.SevPill}\"")
+            .And.Contain("Style=\"{StaticResource Report.SevPill.Text}\"");
+        foreach (string clave in new[] { "Brush.Sev.Crit.Soft", "Brush.Sev.High.Soft", "Brush.Sev.Med.Soft", "Brush.Sev.Low.Soft" })
+        {
+            xaml.Should().Contain(clave, "los cuatro rellenos son los reservados, no unos nuevos");
+        }
+    }
+
     private static string Squash(string text)
         => new string(text.Where(c => !char.IsWhiteSpace(c)).ToArray());
 }

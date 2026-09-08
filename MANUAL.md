@@ -901,8 +901,9 @@ vistazo: *«Se auditaron 2 unidades de 851 · 3 hallazgos nuevos · 58 AI credit
 Después, en una sola fila, **las cifras y las dos gráficas**: hallazgos nuevos, unidades
 auditadas, coste y duración, más el **rosco de gravedad** con su leyenda y las **barras de
 origen** —cuántos hallazgos vienen de una regla del catálogo y cuántos del criterio del
-auditor, con su número y su porcentaje—. Ninguna de esas cifras se calcula aquí: son las que
-el informe ya escribió, y el desglose por gravedad está en su tarjeta y en el rosco.
+auditor, con su número y su porcentaje—. El desglose por gravedad va en la tarjeta de
+hallazgos, con **las pastillas de color de siempre** y solo las gravedades que hay. Ninguna de
+esas cifras se calcula aquí: son las que el informe ya escribió.
 
 La **cabecera y el resumen** del informe van plegados en **Ficha del documento**, cerrado:
 dicen con otras palabras lo que la portada acaba de decir, y antes había que atravesarlos

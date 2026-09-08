@@ -18854,3 +18854,33 @@ vigilaba el camino del informe de arreglo a SU hallazgo se queda, y ahora declar
 no está. La tanda queda en **2.693 casos** (2.158 en la aplicación).
 
 **Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8.
+
+### D-1050 — La gravedad se ve sin leer también en la tarjeta, y los botones del carril dejan de ser una barra
+
+**Dos retoques más sobre el `dist`** (N-6).
+
+**El reparto por gravedad va en PASTILLAS**, las mismas que el informe pinta en su línea de Resumen
+(F27) y las mismas que el resto de la aplicación: relleno teñido y tinta de la severidad, los cuatro
+tonos reservados de D-316 y ninguno nuevo. Se pintaba en texto plano —«1 alta · 5 medias · 4
+bajas»— dentro de la única tarjeta que tiene el rosco de colores como vecino: la gravedad se ve sin
+leer en Portafolio, en Hallazgos, en el informe y en el rosco de al lado, y ahí no. **Una por
+gravedad presente y ninguna por las que no hay**: el color dice «hay algo de esta gravedad» y una
+pastilla a cero diría lo contrario de su propio número (UI-0051, D-318). El subtítulo en texto **no
+desaparece** —es lo que se copia—: las pastillas son cómo se dibuja lo mismo, y va en la tarjeta
+compartida, así que los otros dos tipos de informe lo heredan cuando lleguen. Las demás tarjetas
+siguen en texto: «1 completa · 849 pendientes» no es una escala de colores, y pintarla como si lo
+fuera sería inventarse un significado. El estilo es local y no `Pill.Sev` porque aquélla dispara
+sobre el enum —«Critica», sin tilde— y en un informe la gravedad es la palabra que se escribió.
+
+**Y los botones del carril se centran y respiran.** Iban estirados de borde a borde y a 8 px unos de
+otros: tres barras pegadas que se leen como una sola. Ahora van centrados, con el relleno de tarjeta
+de la casa y la separación de la casa —`Pad.M` y `Space.S`—, no con dos números elegidos aquí.
+Medido sobre la vista real, en un carril de 380: los dos botones centrados en 189,5 y 190,5 contra
+un centro de tarjeta de 190, a 16 px del borde y **12 entre sí**.
+
+**Cobertura (N-5): un caso.** La tarjeta produce una pastilla por gravedad presente, en orden y con
+la concordancia de siempre; ninguna otra tarjeta lleva; el subtítulo sigue siendo el que se copia; y
+el dibujo usa los cuatro rellenos reservados. La tanda queda en **2.694 casos** (2.159 en la
+aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8.

@@ -122,6 +122,42 @@
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
 
+        <!-- LA PASTILLA DE GRAVEDAD DEL SUBTÍTULO (retoque de F36-1b). Es la misma que el informe
+             pinta en su línea de Resumen (F27) y la misma que `Pill.Sev` da en el resto de la
+             aplicación: relleno teñido y tinta de la severidad, los cuatro de D-316. Va aquí y no se
+             reutiliza `Pill.Sev` porque aquélla dispara sobre el enum —«Critica», sin tilde— y en un
+             informe la gravedad es la palabra que se escribió, con su tilde. -->
+        <Style x:Key="Report.SevPill" TargetType="Border" BasedOn="{StaticResource Pill}">
+            <Setter Property="Background" Value="{DynamicResource Brush.Sev.Low.Soft}" />
+            <Setter Property="Margin" Value="{StaticResource Pad.XXS.Right}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Severity}" Value="Crítica">
+                    <Setter Property="Background" Value="{DynamicResource Brush.Sev.Crit.Soft}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Severity}" Value="Alta">
+                    <Setter Property="Background" Value="{DynamicResource Brush.Sev.High.Soft}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Severity}" Value="Media">
+                    <Setter Property="Background" Value="{DynamicResource Brush.Sev.Med.Soft}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="Report.SevPill.Text" TargetType="TextBlock" BasedOn="{StaticResource Pill.Text}">
+            <Setter Property="Foreground" Value="{DynamicResource Brush.Sev.Low}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Severity}" Value="Crítica">
+                    <Setter Property="Foreground" Value="{DynamicResource Brush.Sev.Crit}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Severity}" Value="Alta">
+                    <Setter Property="Foreground" Value="{DynamicResource Brush.Sev.High}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Severity}" Value="Media">
+                    <Setter Property="Foreground" Value="{DynamicResource Brush.Sev.Med}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- El punto del índice: el mismo color que el borde de su tarjeta. -->
         <Style x:Key="Report.SevDot" TargetType="Border">
             <Setter Property="Width" Value="8" />
@@ -513,10 +549,37 @@
                                                      Foreground="{DynamicResource Brush.TextMuted}" />
                                             </TextBlock>
 
+                                            <!-- EL SUBTÍTULO, EN PASTILLAS cuando lo que enumera
+                                                 son gravedades: la gravedad se ve sin leer en todas
+                                                 partes menos aquí, y aquí tenía el rosco de colores
+                                                 al lado diciendo lo mismo en color. En las demás
+                                                 tarjetas sigue en texto — «1 completa · 849
+                                                 pendientes» no es una escala de colores. -->
+                                            <ItemsControl ItemsSource="{Binding Chips}"
+                                                          HorizontalAlignment="Center"
+                                                          Margin="{StaticResource Pad.XS.Top}"
+                                                          Visibility="{Binding HasChips, Converter={StaticResource BoolToVisibility}}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel Orientation="Horizontal"
+                                                                   HorizontalAlignment="Center" />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Style="{StaticResource Report.SevPill}">
+                                                            <TextBlock Text="{Binding Text}"
+                                                                       Style="{StaticResource Report.SevPill.Text}" />
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
                                             <TextBlock Text="{Binding Subtitle}" Style="{StaticResource Text.Small}"
                                                        TextWrapping="Wrap" TextAlignment="Center"
                                                        HorizontalAlignment="Center"
-                                                       Margin="{StaticResource Pad.XXS.Top}" />
+                                                       Margin="{StaticResource Pad.XXS.Top}"
+                                                       Visibility="{Binding HasChips, Converter={StaticResource InverseBoolToVisibility}}" />
                                         </StackPanel>
                                     </Grid>
                                 </Border>
@@ -878,16 +941,21 @@
                                 <TranslateTransform x:Name="RailShift" />
                             </StackPanel.RenderTransform>
 
+                            <!-- LOS BOTONES, CENTRADOS Y CON AIRE. Iban estirados de borde a borde
+                                 y a 8 px unos de otros: tres barras pegadas que se leen como una
+                                 sola. El relleno de la tarjeta y la separación salen de los tokens
+                                 de la casa —`Pad.M` y `Space.S`—, no de dos números elegidos aquí. -->
                             <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.M}"
                                     CornerRadius="{StaticResource Radius.M}">
-                                <StackPanel c:Stack.Gap="{StaticResource Space.XS}">
+                                <StackPanel c:Stack.Gap="{StaticResource Space.S}"
+                                            HorizontalAlignment="Center">
                                     <!-- SIN RESALTE DE ACENTO: descargar el `.md` no es la
                                          acción principal de esta página. Leer el informe lo es, y
                                          eso no es un botón. -->
                                     <Button Content="Descargar .md"
                                             Command="{Binding DownloadCommand}"
                                             Style="{StaticResource Button.Secondary}"
-                                            HorizontalAlignment="Stretch"
+                                            HorizontalAlignment="Center"
                                             ToolTip="Guarda una copia del informe donde tú elijas" />
                                     <!-- «Copiar resumen» se lleva la frase y las cifras como texto:
                                          es el informe en cinco líneas, para pegarlo en un correo sin
@@ -896,13 +964,13 @@
                                     <Button Content="Copiar resumen"
                                             Command="{Binding CopySummaryCommand}"
                                             Style="{StaticResource Button.Secondary}"
-                                            HorizontalAlignment="Stretch"
+                                            HorizontalAlignment="Center"
                                             ToolTip="Copia la frase de portada y las cifras como texto"
                                             Visibility="{Binding Page.HasSummary, Converter={StaticResource BoolToVisibility}}" />
                                     <Button Content="{Binding OpenFindingLabel}"
                                             Command="{Binding OpenFindingCommand}"
                                             Style="{StaticResource Button.Secondary}"
-                                            HorizontalAlignment="Stretch"
+                                            HorizontalAlignment="Center"
                                             ToolTip="Abre la ficha del hallazgo que arregló esta sesión"
                                             Visibility="{Binding CanOpenFinding, Converter={StaticResource BoolToVisibility}}" />
                                 </StackPanel>
