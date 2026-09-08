@@ -725,6 +725,129 @@ public sealed class DesignTokenTests
             + Environment.NewLine + string.Join(Environment.NewLine, culpables));
     }
 
+    /// <summary>
+    /// <b>UN ESTILO SE APLICA AL TIPO QUE DECLARA</b> (BUGFIX-F36-1).
+    /// <para>
+    /// <b>De dónde viene, medido.</b> F36 puso <c>Style="{StaticResource Text.Path}"</c> sobre un
+    /// <c>TextBlock</c>, y ese estilo declara <c>TargetType="c:PathText"</c>. WPF no avisa al
+    /// compilar: revienta al <b>colocar</b>, dentro de <c>FrameworkElement.MeasureCore</c>, con
+    /// «El TargetType "PathText" no coincide con el tipo de elemento "TextBlock"». Y colocar se
+    /// reintenta en cada pasada de render, así que fueron <b>23 excepciones en 460 ms</b>, cada una
+    /// con su cuadro modal encima de la anterior, hasta agotar la pila del hilo de interfaz:
+    /// <c>0xC00000FD</c> en el Visor de sucesos y la aplicación cerrada.
+    /// </para>
+    /// <para>
+    /// <b>Por qué ningún test lo vio, y por eso está éste.</b> Los 2.680 estaban en verde. El de
+    /// recorte de aquí al lado mira si un elemento escribe su propio <c>TextTrimming</c>, y aquel
+    /// <c>TextBlock</c> no escribía ninguno — se lo daba el estilo—, así que pasaba de largo. Y
+    /// <c>ViewLayout.LoadRoot</c>, que es lo único que MIDE una vista, <b>borra todos los
+    /// <c>Style=</c></b> antes de montarla, porque los estilos viven en <c>Styles.xaml</c> y ése
+    /// necesita la paleta: es decir, el único medidor que hay es ciego por construcción a esta
+    /// clase de defecto. Comprobarlo sobre el marcado es lo que sí lo ve.
+    /// </para>
+    /// <para>
+    /// <b>Y es de regla, no de forma</b>: no dice qué estilo lleva cada cosa —eso es diseño—, dice
+    /// que un estilo no se puede poner sobre un tipo que no es el suyo. Se rompe con un
+    /// copiar-pegar, no falla al compilar, y lo que pasa después no es que se vea mal: es que la
+    /// vista no se puede colocar.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Ningun_elemento_lleva_un_estilo_de_otro_tipo()
+    {
+        var estilos = EstilosPorClave();
+        var culpables = new List<string>();
+
+        foreach (string file in Directory.EnumerateFiles(XamlRoot(), "*.xaml", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(XamlRoot(), file).Replace('\\', '/');
+            string body = Regex.Replace(File.ReadAllText(file), "<!--.*?-->", string.Empty, RegexOptions.Singleline);
+
+            foreach (Match m in Regex.Matches(body, @"<(?<el>[\w:.]+)\b(?<attrs>(?:[^>""]|""[^""]*"")*?)/?>"))
+            {
+                Match style = Regex.Match(
+                    m.Groups["attrs"].Value, @"\sStyle=""\{StaticResource\s+(?<k>[^}""]+)\}""");
+                if (!style.Success || !estilos.TryGetValue(style.Groups["k"].Value.Trim(), out string? target))
+                {
+                    continue;
+                }
+
+                // Los TIPOS de verdad, no sus nombres: `Button.Secondary` sobre un `ui:Button` es
+                // correcto —deriva de `Button`— y comparar cadenas lo daría por malo.
+                Type? declarado = TipoDe(target);
+                Type? usado = TipoDe(m.Groups["el"].Value);
+                if (declarado is null || usado is null || declarado.IsAssignableFrom(usado))
+                {
+                    continue;
+                }
+
+                int line = body.Take(m.Index).Count(c => c == '\n') + 1;
+                culpables.Add($"{relative}:{line} — <{m.Groups["el"].Value}> con «{style.Groups["k"].Value}» "
+                    + $"(TargetType {target})");
+            }
+        }
+
+        culpables.Should().BeEmpty(
+            "un estilo puesto sobre un tipo que no es el suyo no falla al compilar: revienta al "
+            + "COLOCAR, en cada pasada de render, y se lleva la aplicación por delante:"
+            + Environment.NewLine + string.Join(Environment.NewLine, culpables));
+    }
+
+    /// <summary>Clave → <c>TargetType</c> declarado, de todos los diccionarios de la aplicación.</summary>
+    private static Dictionary<string, string> EstilosPorClave()
+    {
+        var estilos = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (string file in Directory.EnumerateFiles(XamlRoot(), "*.xaml", SearchOption.AllDirectories))
+        {
+            string body = Regex.Replace(File.ReadAllText(file), "<!--.*?-->", string.Empty, RegexOptions.Singleline);
+            foreach (Match m in Regex.Matches(body, @"<Style\b(?<attrs>[^>]*)>"))
+            {
+                string attrs = m.Groups["attrs"].Value;
+                Match key = Regex.Match(attrs, @"x:Key=""(?<k>[^""]+)""");
+                Match target = Regex.Match(attrs, @"TargetType=""(?:\{x:Type\s+)?(?<t>[^""}]+)\}?""");
+                if (key.Success && target.Success)
+                {
+                    estilos[key.Groups["k"].Value] = target.Groups["t"].Value.Trim();
+                }
+            }
+        }
+
+        return estilos;
+    }
+
+    /// <summary>
+    /// El tipo detrás de un nombre de elemento XAML. Los tres espacios de nombres que la aplicación
+    /// usa —WPF, los controles de la casa y los de WPF-UI— y nada más: lo que no se resuelva no se
+    /// juzga, que es mejor que juzgarlo mal.
+    /// </summary>
+    private static Type? TipoDe(string name)
+    {
+        string local = name.Contains(':') ? name[(name.IndexOf(':') + 1)..] : name;
+        string prefix = name.Contains(':') ? name[..name.IndexOf(':')] : string.Empty;
+
+        return prefix switch
+        {
+            "c" => typeof(Atalaya.App.Controls.PathText).Assembly.GetType($"Atalaya.App.Controls.{local}"),
+            "ui" => typeof(Wpf.Ui.Controls.Button).Assembly.GetType($"Wpf.Ui.Controls.{local}"),
+            "" => Wpf(local),
+            _ => null,
+        };
+    }
+
+    /// <summary>Un tipo del espacio de nombres por defecto de XAML: los cinco de siempre de WPF.</summary>
+    private static Type? Wpf(string local)
+    {
+        string[] spaces =
+        {
+            "System.Windows.Controls", "System.Windows.Shapes", "System.Windows",
+            "System.Windows.Documents", "System.Windows.Controls.Primitives",
+        };
+
+        return spaces
+            .Select(s => typeof(System.Windows.Controls.Button).Assembly.GetType($"{s}.{local}"))
+            .FirstOrDefault(t => t is not null);
+    }
+
     private static string XamlRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

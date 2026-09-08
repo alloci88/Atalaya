@@ -69,6 +69,29 @@ public static class UnhandledErrors
     }
 
     /// <summary>
+    /// <b>La ventana en la que una excepción repetida deja de avisar</b> (BUGFIX-F36-1).
+    /// <para>
+    /// Diez segundos es un número elegido para el caso que lo destapó: una excepción de LAYOUT se
+    /// repite en cada pasada de render, o sea decenas de veces por segundo. Cualquier ventana de más
+    /// de un latido de render agrupa el bucle entero; diez deja además que dos pulsaciones distintas
+    /// del mismo botón —que no son un bucle— avisen las dos.
+    /// </para>
+    /// </summary>
+    public static readonly TimeSpan RepeatWindow = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// La cuenta de lo que se calló, para el aviso que sí se enseña: «(y 22 repeticiones más del
+    /// mismo error, que no se han avisado.)». Vacío cuando no hubo ninguna.
+    /// </summary>
+    internal static string RepeatSuffix(int repeats)
+        => repeats <= 0
+            ? string.Empty
+            : Environment.NewLine + Environment.NewLine
+              + (repeats == 1
+                  ? "(Hubo 1 repetición más del mismo error, que no se avisó.)"
+                  : $"(Hubo {repeats} repeticiones más del mismo error, que no se avisaron.)");
+
+    /// <summary>
     /// Engancha el manejador del hilo de interfaz. Devuelve un testigo para soltarlo, que es lo que
     /// permite probarlo sobre un <see cref="Dispatcher"/> propio sin tocar el de la aplicación.
     /// </summary>
@@ -77,13 +100,31 @@ public static class UnhandledErrors
     /// Qué se le enseña al usuario. Opcional: en un test no hay a quién enseñárselo, y en
     /// producción es un cuadro de diálogo.
     /// </param>
+    /// <param name="clock">El reloj de la agrupación. Existe para poder probarla sin esperar.</param>
     public static IDisposable Install(
-        Dispatcher dispatcher, Action<string> report, Action<string>? show = null)
+        Dispatcher dispatcher,
+        Action<string> report,
+        Action<string>? show = null,
+        Func<DateTimeOffset>? clock = null)
     {
+        var repeats = new RepeatGate(RepeatWindow, clock ?? (() => DateTimeOffset.UtcNow));
+
         void OnDispatcher(object? _, DispatcherUnhandledExceptionEventArgs e)
         {
-            Safely(() => report(Describe(e.Exception, "hilo de interfaz")));
-            Safely(() => show?.Invoke(UserMessage));
+            (bool first, int swallowed) = repeats.Admit(e.Exception);
+
+            if (first)
+            {
+                Safely(() => report(Describe(e.Exception, "hilo de interfaz")));
+                Safely(() => show?.Invoke(UserMessage + RepeatSuffix(swallowed)));
+            }
+            else
+            {
+                // La repetición se apunta en UNA línea y sin pila: la pila ya está escrita arriba, y
+                // veintitrés copias de la misma convierten el registro en un muro donde no se
+                // encuentra la primera — que es la única que dice algo.
+                Safely(() => report(Repeated(e.Exception, swallowed)));
+            }
 
             // ESTO es lo que impide que la ventana desaparezca. Un error dentro de una operación no
             // puede llevarse por delante la aplicación entera: lo que se pierde es la operación, y
@@ -93,6 +134,83 @@ public static class UnhandledErrors
 
         dispatcher.UnhandledException += OnDispatcher;
         return new Unsubscriber(() => dispatcher.UnhandledException -= OnDispatcher);
+    }
+
+    /// <summary>La línea de una repetición: qué fue y cuántas van. Sin pila.</summary>
+    internal static string Repeated(Exception? ex, int count)
+        => $"Excepción repetida (hilo de interfaz, nº {count}, misma pila): "
+           + (ex is null ? "sin excepción" : $"{ex.GetType().FullName}: {ex.Message}");
+
+    /// <summary>
+    /// <b>Un bucle avisa UNA vez</b> (BUGFIX-F36-1).
+    /// <para>
+    /// <b>El defecto que lo trajo, medido.</b> Un estilo aplicado a un tipo que no era el suyo
+    /// reventaba al COLOCAR, y colocar se reintenta en cada pasada de render: 23 excepciones en 460
+    /// ms. Cada una abría su propio <c>MessageBox</c>, y un modal <b>bombea mensajes</b> — dentro de
+    /// su bucle corría otra pasada de layout, que volvía a lanzar, que abría otro modal <b>sobre la
+    /// misma pila</b>. Veintitrés bucles modales anidados agotaron la pila del hilo de interfaz y
+    /// Windows mató el proceso con <c>0xC00000FD</c> (desbordamiento de pila). <b>Eso no lo puede
+    /// contener ningún manejador gestionado</b>: cuando la pila se acaba, el CLR ni siquiera intenta
+    /// llamar a nadie. Por eso el manejador «no contuvo» el final — no llegó a verlo.
+    /// </para>
+    /// <para>
+    /// <b>La regla que queda</b>: un aviso por pila y por ventana. Lo que se agrupa es el AVISO, que
+    /// es lo que tapa la pantalla y lo que anida bucles modales; el registro conserva la primera
+    /// entera y una línea corta por repetición, así que no se pierde ni el diagnóstico ni la cuenta.
+    /// </para>
+    /// <para>
+    /// La firma es <b>tipo + mensaje + pila</b>. La pila sola no basta —dos fallos distintos pueden
+    /// romper en el mismo sitio— y el mensaje solo tampoco. No se guarda la excepción: solo su
+    /// firma y su marca de tiempo, para que esto no retenga nada.
+    /// </para>
+    /// </summary>
+    internal sealed class RepeatGate
+    {
+        private readonly TimeSpan _window;
+        private readonly Func<DateTimeOffset> _clock;
+        private readonly object _gate = new();
+
+        private string? _signature;
+        private DateTimeOffset _last;
+        private int _count;
+
+        public RepeatGate(TimeSpan window, Func<DateTimeOffset> clock)
+        {
+            _window = window;
+            _clock = clock;
+        }
+
+        /// <summary>
+        /// ¿Se avisa de ésta? <c>Repeats</c> es cuántas se callaron desde el último aviso: va en el
+        /// aviso siguiente, para que una ráfaga no desaparezca sin dejar su cuenta.
+        /// </summary>
+        public (bool First, int Repeats) Admit(Exception? ex)
+        {
+            string signature = Signature(ex);
+            DateTimeOffset now = _clock();
+
+            lock (_gate)
+            {
+                bool same = signature == _signature && now - _last < _window;
+                _signature = signature;
+                _last = now;
+
+                if (!same)
+                {
+                    int swallowed = _count;
+                    _count = 0;
+                    return (true, swallowed);
+                }
+
+                _count++;
+                return (false, _count);
+            }
+        }
+
+        private static string Signature(Exception? ex)
+            => ex is null
+                ? "(sin excepción)"
+                : $"{ex.GetType().FullName}|{ex.Message}|{ex.StackTrace}";
     }
 
     /// <summary>

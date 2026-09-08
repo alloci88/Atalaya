@@ -18651,3 +18651,115 @@ allí y no aquí sea un cambio que se ve; y el partido del cuerpo no pierde text
 quepan en la misma fila sin apretarse, que el rosco y el borde de gravedad se lean en los dos temas,
 que el carril baje donde tiene que bajar y que las tarjetas de hallazgo no dejen la columna de
 lectura hecha una escalera, lo mira el usuario en el `dist`. Ciclo N-8.
+
+## BUGFIX-F36-1 — El estilo puesto sobre otro tipo, y el aviso que se comió la pila
+
+### D-1047 — Un estilo no falla al compilar: revienta al COLOCAR, y colocar se reintenta para siempre
+
+**§0 · La causa, medida** (N-2). El síntoma: abrir Informes en el `dist` de `8311231` encadenaba
+avisos y la aplicación acababa cerrándose. El registro de esa ejecución
+(`logs/atalaya-20260908_001.log`) da la primera excepción y su pila:
+
+```
+2026-09-08 11:05:15.943 +02:00 [ERR] Excepción no capturada (hilo de interfaz):
+System.Windows.Markup.XamlParseException: El TargetType "PathText" no coincide con el tipo de
+elemento "TextBlock".
+   at System.Windows.FrameworkTemplate.LoadTemplateXaml(...)
+   at System.Windows.FrameworkTemplate.ApplyTemplateContent(...)
+   at System.Windows.FrameworkElement.ApplyTemplate()
+   at System.Windows.FrameworkElement.MeasureCore(Size availableSize)
+   at System.Windows.Controls.StackPanel.MeasureOverride(Size constraint)
+   at System.Windows.ContextLayoutManager.UpdateLayout()
+   at System.Windows.Media.MediaContext.RenderMessageHandler(Object resizedCompositionTarget)
+System.InvalidOperationException: El TargetType "PathText" no coincide con el tipo de elemento
+"TextBlock".
+   at System.Windows.Style.CheckTargetType(Object element)
+```
+
+**La causa es de una línea.** F36 puso el título de grupo de las tarjetas de hallazgo como
+`<TextBlock Style="{StaticResource Text.Path}">`, y `Text.Path` declara
+`TargetType="c:PathText"`. WPF no lo mira al compilar ni al registrar el estilo: lo mira cuando
+alguien lo **aplica**, y aplicar ocurre dentro de `MeasureCore`.
+
+**Por qué se repite: es el CICLO DE LAYOUT.** No es por informe de la lista —el bucle arranca al
+abrir uno— ni un enlace: la pila lo dice entera, `MediaContext.RenderMessageHandler` →
+`ContextLayoutManager.UpdateLayout` → `MeasureCore`. El elemento nunca llega a realizarse, así que
+el layout se queda sucio y **cada latido de render vuelve a intentarlo**. Medido en el registro:
+**23 excepciones entre 11:05:15.943 y 11:05:16.403**, 460 ms.
+
+**Y por qué el manejador global no lo contuvo al final.** Lo contuvo 23 veces —`e.Handled = true`,
+y por eso hubo 23 avisos y no un cierre inmediato—; lo que no pudo contener fue la consecuencia.
+Cada aviso era un `MessageBox.Show`, y **un modal bombea mensajes**: dentro de su bucle corría otra
+pasada de render, que volvía a lanzar, que abría otro modal **sobre la misma pila**. Veintitrés
+bucles modales anidados agotaron la pila del hilo de interfaz. El Visor de sucesos lo dice sin
+ambigüedad —*Application Error*, 11:05:16—:
+
+```
+Nombre de aplicación con errores: Atalaya.exe
+Nombre del módulo con errores: TextShaping.dll
+Código de excepción: 0xc00000fd        (STACK_OVERFLOW)
+```
+
+**Un desbordamiento de pila no lo puede recoger ningún manejador gestionado**: cuando la pila se
+acaba, el CLR ni siquiera intenta llamar a nadie. Por eso el registro termina cortado a mitad de
+una pila. El manejador no falló; lo que falló es que **avisar 23 veces del mismo error era la
+propia causa del cierre**.
+
+**§1 · El arreglo, en dos piezas independientes.**
+
+**(a) El elemento correcto.** El título de grupo pasa a `<c:PathText Full="{Binding Unit}">`, que
+además es lo que una ruta necesita: `Text.Path` acorta **por el medio**, y el final de
+`.../Controls/SnippetScroll.cs` es lo que identifica el fichero (P-01). No es que un `TextBlock` se
+viera peor: es que con ese estilo la vista no se puede colocar.
+
+**(b) Un bucle avisa UNA vez.** `UnhandledErrors` agrupa por **firma —tipo, mensaje y pila— dentro
+de una ventana de 10 s**: la primera se apunta entera y se enseña; las repeticiones se apuntan en
+una línea corta numerada y **no se enseñan**. Pasada la ventana se vuelve a avisar, y ese aviso
+lleva la cuenta de lo que se calló («Hubo 22 repeticiones más del mismo error, que no se
+avisaron.»), porque callar para siempre sería cambiar un defecto por otro. Diez segundos es un
+número elegido para el caso: una excepción de layout se repite decenas de veces por segundo, así
+que cualquier ventana mayor que un latido de render agrupa el bucle entero, y diez deja que dos
+pulsaciones distintas del mismo botón —que no son un bucle— avisen las dos. **Lo que se agrupa es
+el AVISO**, que es lo que tapa la pantalla y lo que anida bucles modales; el registro conserva el
+diagnóstico y la cuenta.
+
+**§2 · Por qué los 2.680 estaban en verde, y la regla que queda.**
+
+Tres barreras existían y ninguna podía ver esto:
+
+| Barrera | Por qué no lo vio |
+|---|---|
+| El test de recorte (P-01) | Mira si un elemento escribe **su propio** `TextTrimming`; aquel `TextBlock` no escribía ninguno —se lo daba el estilo—, así que pasaba de largo |
+| `ViewLayout.LoadRoot`, el único medidor de vistas | **Borra todos los `Style=`** antes de montar, porque los estilos viven en `Styles.xaml` y ése necesita la paleta: es ciego por construcción a esta clase de defecto |
+| `--selfcheck` | Mide **la primera vista** (Portafolio) y los diálogos. Informes no la pinta nadie — y aunque la pintara, la tarjeta de hallazgo vive en un `DataTemplate` que solo se realiza **con datos** |
+
+Es la **tercera** vez que un `dist` con build y tests en verde revienta al pintar por un estilo (las
+dos anteriores están en el comentario de `PaintDialogs`). Las tres comparten la misma forma: *un
+estilo no falla al compilar ni al registrarse; falla cuando alguien lo aplica*. **La regla que
+queda: ningún elemento lleva un estilo cuyo `TargetType` no sea el suyo, y se comprueba sobre el
+marcado de todas las vistas.** Va sobre el marcado y no midiendo porque el defecto puede vivir
+dentro de un `DataTemplate` que solo se realiza con datos: ninguna pasada headless lo realizaría, y
+el marcado sí está siempre. Se comprueba con los **tipos de verdad**, no con sus nombres
+(`Button.Secondary` sobre un `ui:Button` es correcto porque deriva de `Button`).
+
+**Cobertura (N-5): 4 casos de regla.** El de estilos barre las 25 vistas y los diccionarios y
+**se comprobó que ve el defecto**: devuelto el `TextBlock` a su sitio, falla nombrando
+`Views/ReportsView.xaml:612 — <TextBlock> con «Text.Path» (TargetType c:PathText)`. Los tres de
+agrupación: 23 excepciones iguales seguidas dan **un** aviso y 23 líneas de registro —la primera
+con pila y las 22 restantes numeradas y sin ella—; pasada la ventana se vuelve a avisar con la
+cuenta de lo callado; y dos excepciones **distintas** seguidas avisan las dos, porque lo que se
+agrupa es la repetición de una y no el hecho de que haya varias. La tanda queda en **2.684 casos**
+(2.149 en la aplicación).
+
+**§3 · Reproducido con el `dist`, no con tests.** Se montó un banco de un solo uso fuera de la
+solución que carga los mismos diccionarios de tema, el hub REAL de esta máquina **en solo lectura**
+y la vista Informes de verdad, abre un informe de sesión y le pide medida y colocación a 1440×900 y
+a 1000×900 —los dos lados del pliegue del carril—. Con la línea defectuosa devuelta a su sitio
+reproduce **la misma pila** del registro (`ApplyTemplate` → `MeasureCore` → `StackPanel` →
+`UpdateLayout`); con el arreglo, `excepciones apuntadas: 0 · avisos enseñados: 0` a los dos anchos,
+sobre los 72 informes del hub. La página que sale es la que el encargo pedía: *«Se auditó 1 unidad
+de 850 · 10 hallazgos nuevos, 1 alta · 57,9 AI credits en 2 min 33 s»*, 4 cifras, 10 tarjetas de
+hallazgo, 3 tramos de rosco y 2 barras de origen.
+
+**Lo que NO se ha comprobado, y se dice**: el aspecto, que sigue pendiente del `dist` (N-8). Lo que
+sí está comprobado ahora es que la vista **se coloca**, que es lo que faltaba.

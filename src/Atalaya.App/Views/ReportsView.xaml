@@ -699,9 +699,18 @@
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <StackPanel Margin="{StaticResource Pad.S.Bottom}">
-                                                    <TextBlock Text="{Binding Unit}"
-                                                               Style="{StaticResource Text.Path}"
-                                                               Margin="{StaticResource Pad.XS.Bottom}" />
+                                                    <!-- `c:PathText` y no un `TextBlock`: `Text.Path`
+                                                         acorta POR EL MEDIO, y es lo que una ruta
+                                                         necesita (P-01) — el final de
+                                                         «.../Controls/SnippetScroll.cs» es lo que
+                                                         identifica el fichero. Y el estilo declara
+                                                         ese tipo, así que en un `TextBlock` no es
+                                                         que se vea peor: revienta al colocar. -->
+                                                    <c:PathText Full="{Binding Unit}"
+                                                                Style="{StaticResource Text.Path}"
+                                                                FontSize="{StaticResource FontSize.Small}"
+                                                                Foreground="{DynamicResource Brush.TextMuted}"
+                                                                Margin="{StaticResource Pad.XS.Bottom}" />
                                                     <ItemsControl ItemsSource="{Binding Findings}">
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>

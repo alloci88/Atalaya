@@ -216,6 +216,128 @@ public sealed class BugfixF32Tests
         }
     }
 
+    // ============================================================ (3) un bucle avisa UNA vez
+
+    /// <summary>
+    /// <b>Un bucle no tapa la pantalla</b> (BUGFIX-F36-1).
+    /// <para>
+    /// <b>De dónde viene, medido.</b> Un estilo puesto sobre un tipo que no era el suyo reventaba
+    /// al COLOCAR, y colocar se reintenta en cada pasada de render: <b>23 excepciones en 460 ms</b>.
+    /// Cada una abría su <c>MessageBox</c>, y un modal <b>bombea mensajes</b> — dentro de su bucle
+    /// corría otra pasada de layout, que volvía a lanzar, que abría otro modal <b>sobre la misma
+    /// pila</b>—. Veintitrés bucles modales anidados agotaron la pila del hilo de interfaz:
+    /// <c>0xC00000FD</c> en el Visor de sucesos y la aplicación cerrada. <b>Ese final no lo puede
+    /// contener ningún manejador gestionado</b>: cuando la pila se acaba, el CLR ni siquiera intenta
+    /// llamar a nadie.
+    /// </para>
+    /// <para>
+    /// <b>La regla que queda</b>: misma pila dentro de la ventana, un solo aviso. Lo que se agrupa
+    /// es el AVISO —lo que tapa la pantalla y lo que anida bucles modales—; el registro se queda la
+    /// primera entera y una línea corta con el número de repetición, así que no se pierde ni el
+    /// diagnóstico ni la cuenta.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Veintitres_excepciones_iguales_seguidas_avisan_una_sola_vez()
+    {
+        ViewLayout.OnUiThread(() =>
+        {
+            Dispatcher dispatcher = Dispatcher.CurrentDispatcher;
+            var apuntado = new List<string>();
+            var dicho = new List<string>();
+            var reloj = new DateTimeOffset(2026, 9, 8, 11, 5, 15, TimeSpan.Zero);
+
+            using (UnhandledErrors.Install(dispatcher, apuntado.Add, dicho.Add, () => reloj))
+            {
+                // La misma pila 23 veces en menos de medio segundo: el bucle de layout del `dist`.
+                for (int i = 0; i < 23; i++)
+                {
+                    reloj = reloj.AddMilliseconds(20);
+                    dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(Reventar));
+                    dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+                }
+            }
+
+            // UN aviso. Veintitrés modales encima del mismo hilo son lo que agotó la pila.
+            dicho.Should().ContainSingle("un bucle avisa una vez, no una por pasada de render");
+
+            // Y el registro se queda la primera ENTERA —con su pila, que es lo que se diagnostica—
+            // y una línea corta por cada repetición, numerada.
+            apuntado.Should().HaveCount(23);
+            apuntado[0].Should().Contain("hilo de interfaz").And.Contain("BugfixF32Tests");
+            apuntado[1].Should().StartWith("Excepción repetida").And.Contain("nº 1")
+                .And.NotContain("   at ", "una pila repetida 22 veces es un muro, no un registro");
+            apuntado[22].Should().Contain("nº 22");
+        });
+    }
+
+    /// <summary>
+    /// <b>Pasada la ventana, se vuelve a avisar — y el aviso lleva la cuenta de lo que se calló.</b>
+    /// Un error que sigue pasando diez minutos después no es el mismo suceso, y callarlo para
+    /// siempre sería cambiar un defecto por otro: la pantalla tapada por un silencio.
+    /// </summary>
+    [Fact]
+    public void Pasada_la_ventana_se_vuelve_a_avisar_y_el_aviso_dice_cuantas_se_callaron()
+    {
+        ViewLayout.OnUiThread(() =>
+        {
+            Dispatcher dispatcher = Dispatcher.CurrentDispatcher;
+            var dicho = new List<string>();
+            var reloj = new DateTimeOffset(2026, 9, 8, 11, 5, 15, TimeSpan.Zero);
+
+            using (UnhandledErrors.Install(dispatcher, _ => { }, dicho.Add, () => reloj))
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(Reventar));
+                    dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+                }
+
+                reloj = reloj.Add(UnhandledErrors.RepeatWindow).AddSeconds(1);
+                dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(Reventar));
+                dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+            }
+
+            dicho.Should().HaveCount(2);
+            dicho[0].Should().Be(UnhandledErrors.UserMessage, "la primera no se ha callado nada");
+            dicho[1].Should().StartWith(UnhandledErrors.UserMessage)
+                .And.Contain("2 repeticiones más", "las dos que se callaron entre medias, contadas");
+        });
+    }
+
+    /// <summary>
+    /// <b>Dos errores DISTINTOS avisan los dos</b>, aunque lleguen seguidos. Lo que se agrupa es la
+    /// repetición de uno, no el hecho de que haya varios: agrupar por tiempo y no por pila taparía
+    /// el segundo problema con el primero.
+    /// </summary>
+    [Fact]
+    public void Dos_excepciones_distintas_seguidas_avisan_las_dos()
+    {
+        ViewLayout.OnUiThread(() =>
+        {
+            Dispatcher dispatcher = Dispatcher.CurrentDispatcher;
+            var dicho = new List<string>();
+            var reloj = new DateTimeOffset(2026, 9, 8, 11, 5, 15, TimeSpan.Zero);
+
+            using (UnhandledErrors.Install(dispatcher, _ => { }, dicho.Add, () => reloj))
+            {
+                dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(Reventar));
+                dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+                dispatcher.BeginInvoke(
+                    DispatcherPriority.Normal,
+                    new Action(() => throw new InvalidOperationException("otra cosa")));
+                dispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
+            }
+
+            dicho.Should().HaveCount(2);
+        });
+    }
+
+    /// <summary>El cebo de los tres de arriba: siempre la MISMA pila y el mismo mensaje.</summary>
+    private static void Reventar()
+        => throw new InvalidOperationException(
+            "El TargetType \"PathText\" no coincide con el tipo de elemento \"TextBlock\".");
+
     private sealed class NoDiscard : IFixDiscardConfirmer
     {
         public bool Confirm(IReadOnlyList<string> files) => false;
