@@ -159,9 +159,10 @@
         </Style>
 
         <!-- UNA ACCIÓN DEL CARRIL. Tres cosas que se veían mal y tienen tres causas distintas:
-             - **Anchos distintos** (129 y 139): centrados uno a uno, cada botón medía su texto. Con
-               la pila centrada y los botones estirados, la pila mide lo que el más ancho y los
-               demás se igualan a él — una columna de botones, no tres etiquetas sueltas.
+             - **Anchos distintos** (129 y 139): centrados uno a uno, cada botón medía su texto.
+               Estirados dentro de la tarjeta miden los tres lo mismo y lo mismo que ella, que es
+               como estaban antes de centrarlos — una columna de botones, no tres etiquetas
+               sueltas—; y ocupando el ancho de la tarjeta, centrarlos ya no hace falta: lo están.
              - **Demasiado juntos**: 8 px primero y 12 después. `Space.M`, que es la separación de
                la casa entre bloques.
              - **Más pegados arriba que abajo** (17 contra 29): la separación iba como margen
@@ -963,7 +964,7 @@
                                  de la casa —`Pad.M` y `Space.S`—, no de dos números elegidos aquí. -->
                             <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.M}"
                                     CornerRadius="{StaticResource Radius.M}">
-                                <StackPanel HorizontalAlignment="Center">
+                                <StackPanel>
                                     <!-- SIN RESALTE DE ACENTO: descargar el `.md` no es la
                                          acción principal de esta página. Leer el informe lo es, y
                                          eso no es un botón.

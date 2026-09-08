@@ -18891,8 +18891,11 @@ El carril se vio con los botones de tamaños distintos, juntos y con más aire a
 **tres defectos**, no uno, y solo dos se ven en una captura.
 
 **Anchos distintos** (129 y 139 px): centrar cada botón por su cuenta hace que cada uno mida su
-texto. Con la **pila centrada** y los botones **estirados**, la pila mide lo que el más ancho y los
-demás se igualan a él: una columna de botones en vez de tres etiquetas sueltas.
+texto. **Estirados dentro de la tarjeta** miden los tres lo mismo y lo mismo que ella —346 px en un
+carril de 380—, que es el ancho que tenían antes de centrarlos: una columna de botones en vez de
+tres etiquetas sueltas. Y ocupando el ancho de la tarjeta, centrarlos ya no hace falta: lo están.
+Se probó el paso intermedio —pila centrada y botones estirados a lo que midiera el más ancho— y
+quedaban estrechos para el carril: 139 px de botón en 348 de tarjeta.
 
 **Demasiado juntos**: iban a 8 px y luego a 12. `Space.M`, que es la separación de la casa entre
 bloques.
@@ -18904,8 +18907,8 @@ arreglo—. `Stack.Gap` no se lo quita al último visible porque no es el últim
 saberlo: sus márgenes se reparten cuando el panel se lee del XAML, antes de que ningún enlace haya
 decidido quién se ve. **La separación pasa a ir ARRIBA**, y el único botón que siempre está
 —«Descargar .md»— es el que no la lleva: así el hueco no depende de cuántos hermanos estén
-colapsados. Medido después: 16 arriba y 16 abajo, 16 entre ellos, los dos de 139 px y centrados en
-190,5 contra un centro de tarjeta de 190.
+colapsados. Medido después: 16 arriba, 16 abajo y 16 entre ellos, y los dos botones de 346 px
+en una tarjeta de 380 con su relleno de 16.
 
 **`Stack.Gap` no se toca**, aunque el defecto sea suyo: lo usan veinte paneles y arreglarlo ahí
 —recolocar los márgenes cuando cambia una visibilidad— movería la separación de todos ellos, que es
