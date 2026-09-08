@@ -18493,3 +18493,44 @@ periodo cambia de expectativa, que es justo lo que esta entrega cambia. La tanda
 **Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8. Que el relleno de un 4 % se vea
 —son siete píxeles—, que las marcas del eje no se pisen a 1.280, y que la fila de una aplicación
 recién dada de alta no quede como una raya contra el borde derecho, lo mira el usuario en el `dist`.
+
+## F34-R — El hover que se fundía con su columna
+
+### D-1045 — Heredar el resaltado de la casa está bien salvo sobre la superficie del propio resaltado
+
+**El defecto, medido.** En la columna de hallazgos de la sesión en vivo, pasar el ratón por una
+tarjeta no se notaba. La causa es de una línea: `Session.FindingCard` hereda de `Button.Secondary`,
+que resalta pasando el fondo a `Brush.Surface2`, y **la columna de hallazgos ES `Brush.Surface2`**.
+Al entrar el ratón la tarjeta tomaba exactamente el color de su columna y —sin borde, porque el
+estilo lo quitaba— desaparecía justo en el momento en que se la está señalando. Heredar el
+resaltado de la casa era lo correcto en cualquier otra superficie; sobre la superficie del propio
+resaltado, no. **La regla que queda: un estado heredado hay que comprobarlo contra el fondo sobre
+el que se va a pintar, no contra el fondo para el que se diseñó.**
+
+**El arreglo, con lo que ya hay y sin color nuevo.** El fondo no cambia; lo que se enciende es el
+**borde**, en `Brush.Primary.Fill`. No es un tono inventado: es el acento que la casa ya usa como
+borde de **estado** —el de un campo con el foco (`TextControlFocusedBorderBrush`), el de un
+desplegable enfocado (`ComboBoxBorderBrushFocused`) y el del botón de acento
+(`AccentButtonBorderBrush`)—. La otra opción que se pedía valorar, subir un paso de superficie, **no
+existe**: se miró y en la paleta no hay ningún `Surface3`, así que habría exigido un color nuevo.
+El borde ocupa su sitio **en reposo, transparente**: si apareciera al entrar el ratón, la tarjeta
+encogería un píxel por lado y el texto bailaría.
+
+**Y va por el borde y no por la superficie porque las superficies no dan, medido**: el fondo de la
+tarjeta y el de su columna están a **ΔE 2,05** en tema claro (`#F2EBDD` sobre `#F6F0E4`) y a **8,6**
+en oscuro; ningún juego de superficies de esta paleta separaría la tarjeta lo suficiente. El acento
+está a **ΔE 85 (claro) y 64 (oscuro)** de la columna, y a 85 y 70 de la propia tarjeta: eso sí se ve.
+
+**Un hallazgo del camino, que no se toca porque no es lo que se pidió**: esos ΔE 2,05 dicen que en
+tema claro la tarjeta **en reposo** tampoco se distingue casi de su columna. Queda apuntado; moverlo
+es otra decisión.
+
+**Cobertura (N-5): dos casos de regla, sobre RECURSOS y sin XAML.** El primero fija la regla en los
+dos temas: el resaltado heredado es exactamente el fondo de la columna —si eso dejara de ser cierto
+el test sobra, y lo dice—, las dos superficies están demasiado cerca para llevar ellas el estado, y
+el borde encendido se ve contra la columna y contra la propia tarjeta con margen medido, no por ser
+un hexadecimal distinto. El segundo fija que el borde **no es un color nuevo**: que la paleta no
+tiene `Surface3`, y que los tres estados de borde de la casa ya eran `Color.Primary.Fill`. La tanda
+queda en **2.661 casos** (2.125 en la aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8.

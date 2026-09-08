@@ -8,20 +8,48 @@
         <!-- F34 §2 — LA TARJETA DE UN HALLAZGO DE LA COLUMNA, QUE AHORA SE PULSA.
 
              Es un `Button` y no un `Border` con un gesto encima, y va `BasedOn` el estilo implícito
-             de la casa (`Button.Secondary`): de ahí salen el resaltado de hover —el mismo
-             `Brush.Surface2` que enciende una fila del Inventario o cualquier botón de la
-             aplicación—, el cursor de mano y el apagado. No se dibuja un segundo resaltado: se
-             hereda el que ya hay.
+             de la casa (`Button.Secondary`): de ahí salen el cursor de mano y el apagado.
 
              Lo que se cambia del estilo base es lo que la convierte en tarjeta y no en botón: el
-             relleno de la superficie que ya tenía, sin borde, el contenido estirado a lo ancho y
-             sin la altura mínima de un control —una tarjeta mide lo que mide su texto—. -->
+             relleno de la superficie que ya tenía, el contenido estirado a lo ancho y sin la altura
+             mínima de un control —una tarjeta mide lo que mide su texto—.
+
+             Y EL HOVER ES SUYO, que es lo que se arregla aquí. `Button.Secondary` resalta pasando
+             el fondo a `Brush.Surface2`, y la columna de hallazgos ES `Brush.Surface2`: al pasar el
+             ratón la tarjeta tomaba exactamente el color de su columna y se fundía con ella —al no
+             tener borde, desaparecía justo cuando se la está señalando—. Heredar el resaltado de la
+             casa era lo correcto sobre cualquier otra superficie; sobre la propia superficie del
+             resaltado, no.
+
+             EL ARREGLO, con lo que ya hay en la paleta y sin color nuevo: el fondo NO cambia y lo
+             que se enciende es el BORDE, en `Brush.Primary.Fill`. Es el acento que la casa ya usa
+             como borde de ESTADO: el de un campo con el foco (`TextControlFocusedBorderBrush`), el
+             de un desplegable enfocado y el del botón de acento. No hay `Brush.Surface3` en la
+             paleta —se miró—, así que subir un paso de superficie no era una opción sin inventar un
+             color.
+
+             Y va por el borde y no por la superficie porque LAS SUPERFICIES NO DAN: medido, el
+             fondo de la tarjeta y el de su columna están a ΔE 2,05 en tema claro (`#F2EBDD` sobre
+             `#F6F0E4`) y a 8,6 en oscuro, así que ningún juego de superficies de esta paleta
+             separaría la tarjeta lo bastante. El acento está a ΔE 85 y 64 de la columna: eso sí se
+             ve. (De paso queda apuntado que en claro la tarjeta EN REPOSO tampoco se distingue casi
+             de su columna; no se toca aquí, que no es lo que se pidió.)
+
+             El borde ocupa su sitio EN REPOSO, transparente: si apareciera al entrar el ratón, la
+             tarjeta encogería un píxel por lado y el texto bailaría. -->
         <Style x:Key="Session.FindingCard" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
             <Setter Property="Background" Value="{DynamicResource Brush.Bg}" />
-            <Setter Property="BorderThickness" Value="{StaticResource Pad.Zero}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="{StaticResource Border.Hairline}" />
             <Setter Property="Padding" Value="{StaticResource Pad.ButtonSmall}" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="MinHeight" Value="0" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource Brush.Bg}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Primary.Fill}" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
     </UserControl.Resources>
     <Grid>

@@ -1,4 +1,6 @@
-﻿using Atalaya.App.Services;
+﻿using System.Text.RegularExpressions;
+using System.Windows.Media;
+using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.Copilot;
 using Atalaya.Domain;
@@ -539,6 +541,125 @@ public sealed class SessionViewModelTests : IDisposable
         public Task<IReadOnlyList<AgentModel>> ListModelsAsync(CancellationToken ct) => _inner.ListModelsAsync(ct);
         public Task AuditUnitAsync(AuditUnitRequest r, IAuditToolbox t, CancellationToken ct) => _inner.AuditUnitAsync(r, t, ct);
         public Task VerifyAsync(VerifyRequest r, IVerifyToolbox t, CancellationToken ct) => _inner.VerifyAsync(r, t, ct);
+    }
+
+
+    /// <summary>
+    /// <b>La tarjeta de un hallazgo se distingue de su columna al pasar el ratón</b> (F34, retoque).
+    /// <para>
+    /// El defecto: <c>Button.Secondary</c> resalta pasando el fondo a <c>Brush.Surface2</c>, y la
+    /// columna de hallazgos <b>es</b> <c>Brush.Surface2</c>. Al pasar el ratón la tarjeta tomaba
+    /// exactamente el color de su columna y —sin borde— desaparecía justo cuando se la está
+    /// señalando. Heredar el resaltado de la casa es lo correcto sobre cualquier otra superficie;
+    /// sobre la propia superficie del resaltado, no.
+    /// </para>
+    /// <para>
+    /// La regla que queda, y es la que se mide: <b>en hover, el fondo o el borde de la tarjeta
+    /// tienen que ser distintos del fondo de la columna, en los DOS temas</b>. Y no «distintos» de
+    /// un dígito hexadecimal: con margen, porque dos colores a un ΔE de tres se confunden igual.
+    /// Se comparan RECURSOS de la paleta, no XAML: lo que se protege es que el estado se vea, no
+    /// dónde está escrito.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData("Light")]
+    [InlineData("Dark")]
+    public void La_tarjeta_de_un_hallazgo_no_se_funde_con_su_columna_al_pasar_el_raton(string theme)
+    {
+        Dictionary<string, string> palette = PaletteOf(theme);
+
+        string columna = palette["Color.Surface2"];
+        string fondo = palette["Color.Bg"];
+        string borde = palette["Color.Primary.Fill"];
+        string resaltadoDeLaCasa = palette["Color.Surface2"];
+
+        // El punto de partida, para que el test explique por qué existe: el resaltado heredado ES
+        // el fondo de la columna. Si esto dejara de ser verdad, este test sobra.
+        resaltadoDeLaCasa.Should().Be(
+            columna, "el resaltado de Button.Secondary es el mismo tono que la columna de hallazgos");
+
+        // Y POR QUÉ EL ARREGLO VA POR EL BORDE: las superficies no dan. Medido, el fondo de la
+        // tarjeta y el de su columna están a ΔE 2,05 en claro y 8,6 en oscuro — ningún juego de
+        // superficies de esta paleta separaría la tarjeta lo suficiente, y no hay un Surface3 al
+        // que subir.
+        Distancia(fondo, columna).Should().BeLessThan(
+            10, $"en {theme}, las dos superficies están demasiado cerca para llevar ellas el estado");
+
+        // Lo que sí se ve: el borde encendido, contra la columna y contra la propia tarjeta.
+        Distancia(borde, columna).Should().BeGreaterThan(
+            20, $"en {theme}, el borde encendido tiene que verse contra la columna");
+        Distancia(borde, fondo).Should().BeGreaterThan(
+            20, $"en {theme}, el borde encendido tiene que verse contra la propia tarjeta");
+    }
+
+    /// <summary>
+    /// Y el borde del hover <b>no es un color nuevo</b>: es el acento que la casa ya usa como borde
+    /// de estado —el de un campo con el foco, el de un desplegable enfocado y el del botón de
+    /// acento—. La paleta no tiene ningún <c>Surface3</c> al que subir, y por eso el arreglo va por
+    /// el borde y no por la superficie.
+    /// </summary>
+    [Theory]
+    [InlineData("Light")]
+    [InlineData("Dark")]
+    public void El_borde_del_hover_es_un_estado_que_ya_existia_en_la_paleta(string theme)
+    {
+        Dictionary<string, string> palette = PaletteOf(theme);
+
+        palette.Should().NotContainKey(
+            "Color.Surface3", "no hay un tercer paso de superficie: subir uno exigiría un color nuevo");
+
+        string xaml = Source($"src/Atalaya.App/Themes/Palette.{theme}.xaml");
+        foreach (string estado in new[]
+                 {
+                     "TextControlFocusedBorderBrush", "ComboBoxBorderBrushFocused", "AccentButtonBorderBrush",
+                 })
+        {
+            xaml.Should().MatchRegex(
+                $@"x:Key=""{estado}""\s+Color=""\{{StaticResource Color\.Primary\.Fill\}}""",
+                $"«{estado}» ya era el acento de borde de la casa");
+        }
+    }
+
+    /// <summary>Los `Color` declarados en una paleta, leídos del XAML del repositorio.</summary>
+    private static Dictionary<string, string> PaletteOf(string theme)
+        => Regex.Matches(
+                Source($"src/Atalaya.App/Themes/Palette.{theme}.xaml"),
+                @"<Color x:Key=""([^""]+)"">\s*(#[0-9A-Fa-f]{6})\s*</Color>")
+            .ToDictionary(m => m.Groups[1].Value, m => m.Groups[2].Value, StringComparer.Ordinal);
+
+    /// <summary>Distancia CIEDE76 entre dos colores. Por debajo de ~10 dos tonos se confunden.</summary>
+    private static double Distancia(string a, string b)
+    {
+        (double L1, double A1, double B1) = Lab(a);
+        (double L2, double A2, double B2) = Lab(b);
+        return Math.Sqrt(((L1 - L2) * (L1 - L2)) + ((A1 - A2) * (A1 - A2)) + ((B1 - B2) * (B1 - B2)));
+    }
+
+    private static (double L, double A, double B) Lab(string hex)
+    {
+        var c = (Color)ColorConverter.ConvertFromString(hex);
+        double r = Linear(c.R / 255.0), g = Linear(c.G / 255.0), b = Linear(c.B / 255.0);
+        double x = ((r * 0.4124) + (g * 0.3576) + (b * 0.1805)) / 0.95047;
+        double y = (r * 0.2126) + (g * 0.7152) + (b * 0.0722);
+        double z = ((r * 0.0193) + (g * 0.1192) + (b * 0.9505)) / 1.08883;
+        double fx = F(x), fy = F(y), fz = F(z);
+        return ((116 * fy) - 16, 500 * (fx - fy), 200 * (fy - fz));
+
+        static double F(double t) => t > 0.008856 ? Math.Cbrt(t) : (7.787 * t) + (16.0 / 116);
+    }
+
+    private static double Linear(double c)
+        => c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+
+    private static string Source(string relative)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Atalaya.sln")))
+        {
+            dir = dir.Parent;
+        }
+
+        return File.ReadAllText(Path.Combine(dir!.FullName, relative.Replace('/', Path.DirectorySeparatorChar)));
     }
 
     public void Dispose()
