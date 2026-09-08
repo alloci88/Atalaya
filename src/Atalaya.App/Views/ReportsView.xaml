@@ -158,6 +158,22 @@
             </Style.Triggers>
         </Style>
 
+        <!-- UNA ACCIÓN DEL CARRIL. Tres cosas que se veían mal y tienen tres causas distintas:
+             - **Anchos distintos** (129 y 139): centrados uno a uno, cada botón medía su texto. Con
+               la pila centrada y los botones estirados, la pila mide lo que el más ancho y los
+               demás se igualan a él — una columna de botones, no tres etiquetas sueltas.
+             - **Demasiado juntos**: 8 px primero y 12 después. `Space.M`, que es la separación de
+               la casa entre bloques.
+             - **Más pegados arriba que abajo** (17 contra 29): la separación iba como margen
+               INFERIOR con `Stack.Gap`, y el último botón visible se quedaba con el suyo colgando
+               porque detrás había un hermano COLAPSADO —«Ver el hallazgo», que solo sale en un
+               arreglo—. Ahora la separación va ARRIBA y el primer botón, que es el único que
+               siempre está, no la lleva: así no hay hueco colgando lo colapsado que esté el resto. -->
+        <Style x:Key="Rail.Action" TargetType="Button" BasedOn="{StaticResource Button.Secondary}">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="{StaticResource Pad.M.Top}" />
+        </Style>
+
         <!-- El punto del índice: el mismo color que el borde de su tarjeta. -->
         <Style x:Key="Report.SevDot" TargetType="Border">
             <Setter Property="Width" Value="8" />
@@ -947,15 +963,17 @@
                                  de la casa —`Pad.M` y `Space.S`—, no de dos números elegidos aquí. -->
                             <Border Style="{StaticResource Card}" Padding="{StaticResource Pad.M}"
                                     CornerRadius="{StaticResource Radius.M}">
-                                <StackPanel c:Stack.Gap="{StaticResource Space.S}"
-                                            HorizontalAlignment="Center">
+                                <StackPanel HorizontalAlignment="Center">
                                     <!-- SIN RESALTE DE ACENTO: descargar el `.md` no es la
                                          acción principal de esta página. Leer el informe lo es, y
-                                         eso no es un botón. -->
+                                         eso no es un botón.
+
+                                         Y es el primero y el único que SIEMPRE está, así que es el
+                                         que no lleva separación por arriba. -->
                                     <Button Content="Descargar .md"
                                             Command="{Binding DownloadCommand}"
                                             Style="{StaticResource Button.Secondary}"
-                                            HorizontalAlignment="Center"
+                                            HorizontalAlignment="Stretch"
                                             ToolTip="Guarda una copia del informe donde tú elijas" />
                                     <!-- «Copiar resumen» se lleva la frase y las cifras como texto:
                                          es el informe en cinco líneas, para pegarlo en un correo sin
@@ -963,14 +981,12 @@
                                          copiar de la página: había cinco para una sola cosa. -->
                                     <Button Content="Copiar resumen"
                                             Command="{Binding CopySummaryCommand}"
-                                            Style="{StaticResource Button.Secondary}"
-                                            HorizontalAlignment="Center"
+                                            Style="{StaticResource Rail.Action}"
                                             ToolTip="Copia la frase de portada y las cifras como texto"
                                             Visibility="{Binding Page.HasSummary, Converter={StaticResource BoolToVisibility}}" />
                                     <Button Content="{Binding OpenFindingLabel}"
                                             Command="{Binding OpenFindingCommand}"
-                                            Style="{StaticResource Button.Secondary}"
-                                            HorizontalAlignment="Center"
+                                            Style="{StaticResource Rail.Action}"
                                             ToolTip="Abre la ficha del hallazgo que arregló esta sesión"
                                             Visibility="{Binding CanOpenFinding, Converter={StaticResource BoolToVisibility}}" />
                                 </StackPanel>

@@ -18884,3 +18884,34 @@ el dibujo usa los cuatro rellenos reservados. La tanda queda en **2.694 casos** 
 aplicación).
 
 **Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8.
+
+### D-1051 — Tres cosas mal en tres botones, y tres causas distintas
+
+El carril se vio con los botones de tamaños distintos, juntos y con más aire abajo que arriba. Son
+**tres defectos**, no uno, y solo dos se ven en una captura.
+
+**Anchos distintos** (129 y 139 px): centrar cada botón por su cuenta hace que cada uno mida su
+texto. Con la **pila centrada** y los botones **estirados**, la pila mide lo que el más ancho y los
+demás se igualan a él: una columna de botones en vez de tres etiquetas sueltas.
+
+**Demasiado juntos**: iban a 8 px y luego a 12. `Space.M`, que es la separación de la casa entre
+bloques.
+
+**Y el tercero, que no se ve venir**: 17 px de aire arriba contra 29 abajo. La separación iba como
+margen INFERIOR con `Stack.Gap`, y el último botón **visible** se quedaba con el suyo colgando
+porque detrás tenía un hermano **colapsado** —«Ver el hallazgo», que solo sale en un informe de
+arreglo—. `Stack.Gap` no se lo quita al último visible porque no es el último hijo, y no puede
+saberlo: sus márgenes se reparten cuando el panel se lee del XAML, antes de que ningún enlace haya
+decidido quién se ve. **La separación pasa a ir ARRIBA**, y el único botón que siempre está
+—«Descargar .md»— es el que no la lleva: así el hueco no depende de cuántos hermanos estén
+colapsados. Medido después: 16 arriba y 16 abajo, 16 entre ellos, los dos de 139 px y centrados en
+190,5 contra un centro de tarjeta de 190.
+
+**`Stack.Gap` no se toca**, aunque el defecto sea suyo: lo usan veinte paneles y arreglarlo ahí
+—recolocar los márgenes cuando cambia una visibilidad— movería la separación de todos ellos, que es
+exactamente lo que N-6 no autoriza. Queda apuntado.
+
+**Cobertura (N-5): un caso**, y solo del tercero: los otros dos se ven en la primera captura y éste
+no. Sobre el marcado —montar el carril con su tema para medir dos márgenes costaría más que lo que
+prueba—: la separación es de arriba y sale de un token, no se usa `Stack.Gap` en ese panel, y el
+botón sin separación es el incondicional. La tanda queda en **2.695 casos** (2.160 en la aplicación).

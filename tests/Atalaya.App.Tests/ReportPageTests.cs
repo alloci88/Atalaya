@@ -691,6 +691,53 @@ public sealed class ReportPageTests
         }
     }
 
+    /// <summary>
+    /// <b>Los botones del carril son una columna, no tres etiquetas sueltas</b> (retoque de
+    /// F36-1b).
+    /// <para>
+    /// Se vieron tres cosas y tenían tres causas distintas, y la tercera es la que este test cuida
+    /// porque es la única invisible: la separación iba como margen INFERIOR con <c>Stack.Gap</c>, y
+    /// el último botón VISIBLE se quedaba con el suyo colgando porque detrás tenía un hermano
+    /// colapsado —«Ver el hallazgo», que solo sale en un informe de arreglo—. Medido: 17 px de aire
+    /// arriba contra 29 abajo. La separación va ahora ARRIBA, y el único botón que siempre está es
+    /// el que no la lleva; así el hueco no depende de cuántos hermanos estén colapsados.
+    /// </para>
+    /// <para>
+    /// Los otros dos —anchos distintos y demasiado juntos— se ven en la primera captura; éste no,
+    /// y por eso está escrito. Va sobre el marcado: montar el carril entero con su tema para medir
+    /// dos márgenes costaría más que lo que prueba.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Las_acciones_del_carril_separan_por_arriba_y_no_por_abajo()
+    {
+        string xaml = ViewLayout.Xaml("ReportsView.xaml");
+        int card = xaml.IndexOf("Command=\"{Binding DownloadCommand}\"", StringComparison.Ordinal);
+        int end = xaml.IndexOf("Text=\"Hallazgos\"", card, StringComparison.Ordinal);
+        string acciones = xaml[card..end];
+
+        // La separación es de ARRIBA y sale de los tokens de la casa.
+        xaml.Should().Contain("<Style x:Key=\"Rail.Action\" TargetType=\"Button\"")
+            .And.Contain("<Setter Property=\"Margin\" Value=\"{StaticResource Pad.M.Top}\" />");
+
+        // Y NO por abajo: `Stack.Gap` deja el margen del último visible colgando cuando detrás hay
+        // un hermano colapsado, que es el caso de este carril en todo lo que no sea un arreglo.
+        acciones.Should().NotContain("Stack.Gap",
+            "el margen inferior del último visible cuelga si detrás hay un colapsado");
+
+        // El botón que SIEMPRE está es el que no lleva separación: si la llevara uno condicional,
+        // el aire de arriba dependería de si ese botón sale o no.
+        acciones.Should().Contain("Style=\"{StaticResource Button.Secondary}\"",
+            "«Descargar .md», el único incondicional, va sin el estilo que separa");
+        foreach (string condicional in new[] { "CopySummaryCommand", "OpenFindingCommand" })
+        {
+            int at = acciones.IndexOf(condicional, StringComparison.Ordinal);
+            at.Should().BeGreaterThan(0);
+            acciones[at..].Should().StartWith(condicional)
+                .And.Contain("Rail.Action", "los condicionales sí la llevan");
+        }
+    }
+
     private static string Squash(string text)
         => new string(text.Where(c => !char.IsWhiteSpace(c)).ToArray());
 }
