@@ -210,14 +210,54 @@ public sealed record ReportVerdictEvent(DateTimeOffset Utc, FindingEvent Event)
     };
 }
 
+/// <summary>
+/// <b>De qué ámbito es un fichero que el arreglo tocó</b> (D-546). El ámbito lo decide el hallazgo:
+/// sus ficheros se editan directamente, y cualquier otro pasa por una autorización del usuario que
+/// <b>la sesión registra</b>. <see cref="Desconocido"/> es lo que se pinta cuando esa sesión no
+/// dejó las notas —los informes anteriores a que se escribieran—: sin registro, sin marca.
+/// </summary>
+public enum ReportFileScope
+{
+    Desconocido,
+
+    /// <summary>Un fichero del hallazgo. Entra sin permiso porque el ámbito es suyo.</summary>
+    Hallazgo,
+
+    /// <summary>Fuera del hallazgo, y el usuario lo autorizó fichero a fichero.</summary>
+    Autorizado,
+}
+
 /// <summary>Un fichero que el arreglo tocó, con su recuento (F36-2 §3).</summary>
-/// <param name="OutOfScope">El informe lo marcó como «fuera del hallazgo, autorizado por el usuario».</param>
-public sealed record ReportFileChange(string Path, int Added, int Removed, bool OutOfScope)
+/// <param name="Scope">
+/// De dónde salió el permiso para tocarlo, leído de las notas de la SESIÓN (D-546) y no del cuerpo:
+/// el registro es donde la autorización queda anotada.
+/// </param>
+public sealed record ReportFileChange(string Path, int Added, int Removed, ReportFileScope Scope)
 {
     /// <summary>«+4 −0», con el signo menos de <c>FixFile.Tally</c> — es el mismo texto.</summary>
     public string Tally => $"+{Added} −{Removed}";
 
     public int Total => Added + Removed;
+
+    public bool OutOfScope => Scope == ReportFileScope.Autorizado;
+
+    /// <summary>La marca de la barra. Vacía cuando la sesión no registró el ámbito.</summary>
+    public string Mark => Scope switch
+    {
+        ReportFileScope.Hallazgo => "hallazgo",
+        ReportFileScope.Autorizado => "fuera del hallazgo",
+        _ => string.Empty,
+    };
+
+    public bool HasMark => Mark.Length > 0;
+
+    /// <summary>Lo que dice el tooltip de la ruta: la ruta entera y de dónde vino el permiso.</summary>
+    public string ToolTip => Scope switch
+    {
+        ReportFileScope.Hallazgo => $"{Path} — es un fichero del hallazgo: entra en el ámbito sin permiso.",
+        ReportFileScope.Autorizado => $"{Path} — fuera del hallazgo; lo autorizaste durante la sesión.",
+        _ => Path,
+    };
 }
 
 /// <summary>El estado de un arreglo, que es la única pregunta que un director hace sobre uno.</summary>
@@ -268,6 +308,19 @@ public sealed record ReportFixState(
 
     public bool HasDetail => Detail.Length > 0;
 
+    /// <summary>
+    /// Lo que se ENSEÑA del detalle. Un «como Nombre &lt;correo.muy.largo@empresa.com&gt;» empuja la
+    /// pastilla del estado hasta el otro lado de la portada, así que a partir de
+    /// <see cref="Fit"/> caracteres se recorta con puntos suspensivos — y el entero queda en el
+    /// tooltip, que es la única forma de recortar sin mentir (P-01).
+    /// </summary>
+    public string DetailShort => Detail.Length <= Fit ? Detail : Detail[..Fit].TrimEnd() + "…";
+
+    public bool DetailElided => Detail.Length > Fit;
+
+    /// <summary>Lo que cabe al lado del estado sin empujarlo. Medido sobre la portada real.</summary>
+    internal const int Fit = 24;
+
     /// <summary>De dónde sale el estado. Se dice, como toda procedencia (N-2).</summary>
     public string Source => FromRecord
         ? "Lo dice el registro del arreglo (fixes/), que es donde queda el hecho."
@@ -279,6 +332,12 @@ public sealed record ReportFixState(
 /// guarda nada de esto: el veredicto del build, los tests y la salida viven solo en el informe.
 /// </summary>
 /// <param name="Reason">La razón corta cuando está en rojo: la línea de «Veredicto» del informe.</param>
+/// <param name="Tests">
+/// Lo que el informe dice de los tests, tal cual: «sin tests» cuando el proyecto no tiene ninguno
+/// —un hecho del repositorio (H9.1 §3)— o lo que escribió la línea de «Tests». <b>No se cuenta
+/// cuántos son</b>: ni el registro ni el informe lo escriben, y sacarlo de la salida del compilador
+/// sería inventarse una medida (D-318).
+/// </param>
 /// <param name="Lead">Las líneas del veredicto, tal cual, para la tarjeta.</param>
 /// <param name="Detail">Los errores y la salida completa, que van plegados.</param>
 public sealed record ReportBuild(
@@ -367,6 +426,46 @@ public sealed record ReportSections(
         int at = text.IndexOf(NL + "## ", from, StringComparison.Ordinal);
         return at < 0 ? -1 : at + 1;
     }
+}
+
+/// <summary>
+/// <b>El resolutor por texto devuelve TEXTO, no markdown</b> (F36-2b §1.4).
+/// <para>
+/// Una línea del informe que se pinta como un dato suelto —«**la unidad entera**, porque…»— llega
+/// con sus asteriscos, y fuera del renderizador de markdown un asterisco es un asterisco. Se
+/// quitan las marcas de énfasis, de código y de enlace, y <b>no se toca nada más</b>: el texto es
+/// el mismo, sin la notación que servía para dibujarlo.
+/// </para>
+/// </summary>
+internal static class PlainText
+{
+    /// <summary>La negrita: <c>**x**</c> y <c>__x__</c>. Va primero, o la cursiva se la come.</summary>
+    private static readonly Regex Strong = new(
+        @"\*\*(?<t>.+?)\*\*|__(?<t>.+?)__",
+        RegexOptions.Compiled | RegexOptions.Singleline);
+
+    /// <summary>La cursiva: <c>*x*</c> y <c>_x_</c>, sin tocar el guion bajo de un identificador.</summary>
+    private static readonly Regex Emphasis = new(
+        @"(?<![\w*])\*(?<t>[^*]+?)\*(?![\w*])|(?<![\w_])_(?<t>[^_]+?)_(?![\w_])",
+        RegexOptions.Compiled);
+
+    /// <summary>Un enlace: <c>[texto](destino)</c>. Se queda el texto, que es lo que se lee.</summary>
+    private static readonly Regex Link = new(@"\[(?<t>[^\]]*)\]\([^)]*\)", RegexOptions.Compiled);
+
+    public static string Of(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        string plain = Link.Replace(text, Inner);
+        plain = Strong.Replace(plain, Inner);
+        plain = Emphasis.Replace(plain, Inner);
+        return plain.Replace("`", string.Empty, StringComparison.Ordinal).Trim();
+    }
+
+    private static string Inner(Match m) => m.Groups["t"].Value;
 }
 
 /// <summary>
@@ -486,17 +585,21 @@ internal static class ReportReader
                         // El informe escribe el NOMBRE DEL ENUM —«Critica», sin tilde—; la pantalla
                         // usa el rotulado único de la aplicación (UI-0027). No se traduce nada: es
                         // el mismo valor escrito como se escribe en todas partes.
-                        severity = Enum.TryParse(value, out Severity s) ? SeverityNames.Display(s) : value;
+                        severity = Enum.TryParse(PlainText.Of(value), out Severity s)
+                            ? SeverityNames.Display(s)
+                            : PlainText.Of(value);
                         continue;
                     case "Ubicación":
-                        where = value.Trim('`');
+                        where = PlainText.Of(value);
                         path = where.Contains(':') ? where[..where.LastIndexOf(':')] : where;
                         continue;
                     case "Código que se le enseñó":
-                        basis = value;
+                        // TEXTO, NO MARKDOWN: «**la unidad entera**» se pinta en una línea suelta,
+                        // fuera del renderizador, y ahí un asterisco es un asterisco (§1.4).
+                        basis = PlainText.Of(value);
                         continue;
                     case "Veredicto":
-                        verdict = value;
+                        verdict = PlainText.Of(value);
                         continue;
                 }
             }
@@ -523,8 +626,17 @@ internal static class ReportReader
             id is null ? string.Empty : hub?.Reanchor(sessionId, id) ?? string.Empty);
     }
 
-    /// <summary>Los ficheros que el arreglo tocó, con su «+N −M». «- Ninguno.» no da ninguno.</summary>
-    internal static IReadOnlyList<ReportFileChange> ReadFiles(string section)
+    /// <summary>
+    /// Los ficheros que el arreglo tocó, con su «+N −M». «- Ninguno.» no da ninguno.
+    /// <para>
+    /// Los recuentos salen del CUERPO —el registro guarda rutas y huellas, no líneas—, y el
+    /// <b>ámbito</b> de <paramref name="scopes"/>, que sale de las notas de la sesión (D-546). Sin
+    /// notas, sin marca: no se deduce del texto del informe, porque el ámbito es una decisión que
+    /// se tomó y se anotó, no una frase.
+    /// </para>
+    /// </summary>
+    internal static IReadOnlyList<ReportFileChange> ReadFiles(
+        string section, IReadOnlyDictionary<string, ReportFileScope>? scopes = null)
     {
         var result = new List<ReportFileChange>();
         foreach (string raw in (section ?? string.Empty).Split('\n'))
@@ -532,16 +644,49 @@ internal static class ReportReader
             Match m = FileLine.Match(raw.TrimEnd('\r').Trim());
             if (m.Success)
             {
+                string path = m.Groups["p"].Value;
                 result.Add(new ReportFileChange(
-                    m.Groups["p"].Value,
+                    path,
                     int.Parse(m.Groups["a"].Value, AppCulture.Display),
                     int.Parse(m.Groups["r"].Value, AppCulture.Display),
-                    m.Groups["x"].Value.Contains("fuera del hallazgo", StringComparison.Ordinal)));
+                    scopes is not null && scopes.TryGetValue(path, out ReportFileScope scope)
+                        ? scope
+                        : ReportFileScope.Desconocido));
             }
         }
 
         return result;
     }
+
+    /// <summary>
+    /// <b>El ámbito de cada fichero, leído de las notas de la SESIÓN</b> (D-546). El arreglo anota
+    /// «tocado: ruta (+N −M)» por cada fichero y le añade «— fuera del hallazgo, autorizado por el
+    /// usuario» a los que salieron del ámbito: la autorización queda ahí, que es donde se tomó.
+    /// Una sesión sin esas notas devuelve un mapa vacío y las barras salen sin marca.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, ReportFileScope> Scopes(AuditSession session)
+    {
+        var map = new Dictionary<string, ReportFileScope>(StringComparer.OrdinalIgnoreCase);
+        foreach (string note in session.Notes)
+        {
+            Match m = TouchedNote.Match(note);
+            if (m.Success)
+            {
+                // La marca va DETRÁS del recuento, así que se mira la nota entera y no el trozo
+                // que casó: `m.Value` se queda en el paréntesis y todo salía «del hallazgo».
+                map[m.Groups["p"].Value.Trim()] = note.Contains(
+                    "fuera del hallazgo", StringComparison.Ordinal)
+                    ? ReportFileScope.Autorizado
+                    : ReportFileScope.Hallazgo;
+            }
+        }
+
+        return map;
+    }
+
+    /// <summary>«tocado: ruta (+5 −5) — fuera del hallazgo, autorizado por el usuario».</summary>
+    private static readonly Regex TouchedNote = new(
+        @"^tocado:\s+(?<p>.+?)\s+\(\+\d+\s*−\d+\)", RegexOptions.Compiled);
 
     /// <summary>
     /// La compilación. <b>Verde y rojo salen de lo que el informe escribió</b>: rojo con errores
@@ -605,8 +750,8 @@ internal static class ReportReader
         return new ReportBuild(
             red ? ReportTone.Danger : ReportTone.Success,
             verdict,
-            red ? verdict : string.Empty,
-            noTests ? "sin tests" : string.Empty,
+            red ? PlainText.Of(verdict) : string.Empty,
+            noTests ? "sin tests" : PlainText.Of(tests),
             StripHeading(lead),
             detail);
     }

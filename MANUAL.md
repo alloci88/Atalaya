@@ -895,15 +895,23 @@ cómo lo escribas.
 Un clic abre el informe **como una página**, no como un markdown pintado. Arriba, una
 **portada** con el título, la aplicación con su punto de color, la fecha, el autor y el
 proveedor con su modelo, y debajo **una frase** que dice lo que pasó en esa sesión de un
-vistazo: *«Se auditaron 2 unidades de 851 · 3 hallazgos nuevos · 58 AI credits en
-2 min 33 s»*. Lo que no hay, no se nombra.
+vistazo: *«Se auditaron 2 unidades de 851 · 3 hallazgos nuevos · 58 AI credits · 9 llamadas ·
+2 min 33 s»*. Las **llamadas al modelo** son lo que explica por qué una sesión costó lo que costó.
+Lo que no hay, no se nombra.
 
-Después, en una sola fila, **las cifras y las dos gráficas**: hallazgos nuevos, unidades
-auditadas, coste y duración, más el **rosco de gravedad** con su leyenda y las **barras de
-origen** —cuántos hallazgos vienen de una regla del catálogo y cuántos del criterio del
-auditor, con su número y su porcentaje—. El desglose por gravedad va en la tarjeta de
-hallazgos, con **las pastillas de color de siempre** y solo las gravedades que hay. Ninguna de
-esas cifras se calcula aquí: son las que el informe ya escribió.
+Después, **una fila que llega al borde**. Reparte el ancho entre las tarjetas que hay —no entre
+las columnas que caben, así que nunca queda hueco a la derecha— y una tarjeta puede **valer por
+dos** cuando lleva una lista dentro. En un informe de sesión son: hallazgos nuevos, unidades
+auditadas, coste y duración, el **rosco de gravedad** con su leyenda, las **barras de origen**
+—cuántos hallazgos vienen de una regla del catálogo y cuántos del criterio del auditor— y las
+**acciones**. En una ventana estrecha se reparten en varias filas, equilibradas, y cada una sigue
+llenando el ancho. El desglose por gravedad va en la tarjeta de hallazgos, con **las pastillas de
+color de siempre** y solo las gravedades que hay. Ninguna de esas cifras se calcula aquí: son las
+que el informe ya escribió.
+
+La **última tarjeta son las acciones**, en los tres tipos: **Descargar .md**, **Copiar resumen** y,
+en un arreglo, **Ver el hallazgo**. Están en la fila y no en el carril porque el carril es opcional
+y descargar el informe hay que poder hacerlo siempre.
 
 La **cabecera y el resumen** del informe van plegados en **Ficha del documento**, cerrado:
 dicen con otras palabras lo que la portada acaba de decir, y antes había que atravesarlos
@@ -921,21 +929,24 @@ que salió seco— con el motivo de cierre al lado. Las citas van teñidas segú
 **ámbar** lo que queda abierto —*«NO están commiteados»*, *«no tiene proyecto de tests»*—,
 **verde** lo cerrado —*«Commiteados en `sha`»*— y neutro las explicaciones.
 
-A la derecha, si la ventana da de sí, un **carril** con las acciones y el **índice de
-hallazgos por gravedad** —cada entrada con su alias y su título; pulsa una y salta a su
-tarjeta—. El carril se queda quieto mientras bajas por el cuerpo. En una ventana estrecha
-baja debajo del texto. Desde el carril:
+A la derecha, **si hay índice que aportar**, un **carril**: aparece a partir de **cuatro tarjetas**
+en el cuerpo —hallazgos o veredictos—. Con menos, el índice sería la misma lista dos veces y el
+cuerpo se queda con el ancho entero. Lleva el **índice** —cada entrada con su alias y su título;
+pulsa una y salta a su tarjeta— y el enlace al anexo. Se queda quieto mientras bajas por el cuerpo,
+y en una ventana estrecha baja debajo del texto.
+
+Las acciones de la fila hacen esto:
 
 - **Descargar .md** guarda una copia donde tú elijas, con un nombre que dice qué es
   (`atalaya-{app}-{tipo}-{fecha}.md`).
-- **Copiar resumen** se lleva la frase de portada y las cuatro cifras como texto: es el
-  informe en cinco líneas, para pegarlo en un correo sin adjuntar nada. Es el único copiar
-  de la página — las tarjetas no llevan el suyo porque éste ya se las lleva todas.
+- **Copiar resumen** se lleva la frase de portada y las cifras como texto: es el informe en cinco
+  líneas, para pegarlo en un correo sin adjuntar nada. Es el único copiar de la página.
 - **Volver** —el eslabón «Informes» de la miga— devuelve la lista tal y como la dejaste, con
   sus filtros y su posición.
 
-El **anexo técnico** sigue plegado y a ancho completo al pie de la página; desde el carril
-se baja a él con **Anexo técnico ↓** — en 380 px no se leen unas tablas de nueve columnas.
+El **anexo técnico** sigue plegado y a ancho completo al pie de la página. Se baja a él con
+**Anexo técnico ↓**, que está en el carril cuando lo hay y al final de «Ficha del documento»
+cuando no. Y la **firma** del documento cierra la página en una línea, como metadato.
 
 Un informe que no tenga sesión detrás —los importados de v4— se lee como siempre: su texto y
 nada más. No se inventa una cifra para llenar la portada.
@@ -946,11 +957,15 @@ contenga se abren en tu navegador, nunca dentro de la ventana.
 #### Un informe de verificación, en pantalla
 
 La misma página, con lo que una verificación tiene que contestar. La frase de portada dice el
-desenlace de un vistazo: *«Se verificaron 3 hallazgos · 2 resueltos · 1 sigue activo · 1
-re-anclado · 15 AI credits en 48 s»*. En la fila, **Verificados · Resueltos · Siguen activos ·
-Coste** —con su coste por hallazgo— y el **rosco de veredictos** con su leyenda; los desenlaces
-raros —un *no localizado*, un *no concluyente*— van como subtítulo de «Verificados», y el rosco
-solo lleva los tramos que existen.
+desenlace de un vistazo: *«Se verificó 1 hallazgo · 1 sigue activo · 1 re-anclado · 15 AI credits ·
+2 llamadas · 48 s»*.
+
+En la fila: el **Veredicto** en grande y en su color —**Resuelto**, **Sigue activo**, **No
+localizado** o **No concluyente**—, que vale por dos tarjetas; la **Gravedad** del hallazgo en su
+pastilla; el **Coste**; la **Duración**; las **Llamadas al modelo**; y las **acciones**. Verificar
+se lanza desde la ficha de un hallazgo, así que no hay recuentos que repartir: con varios —el caso
+raro— la misma tarjeta los cuenta («2 resueltos · 1 sigue activo») y las tarjetas del cuerpo los
+listan.
 
 **Cada veredicto es una tarjeta**, en el orden del informe, con **el borde en el color del
 veredicto y no en el de la gravedad**: lo que se decide aquí es si el hallazgo sigue vivo. Lleva
@@ -959,13 +974,14 @@ su pastilla de veredicto, el alias y el título, la gravedad en pastilla pequeñ
 *no localizado* dice además qué hacer, con las mismas palabras que la ficha del hallazgo.
 
 Si el veredicto **re-ancló** el hallazgo —verificar también sirve para eso—, la tarjeta lo dice con
-una pastilla neutra *«re-anclado 507 → 497»* y la frase lo cuenta. Sale del propio evento de la
-verificación, así que un informe anterior a que Atalaya re-anclara al verificar no la lleva.
+una pastilla neutra *«re-anclado 507 → 497»*, la tarjeta del veredicto lo lleva de subtítulo y la
+frase lo cuenta. Sale del propio evento de la verificación, así que un informe anterior a que
+Atalaya re-anclara al verificar no la lleva. Un *no localizado* dice de subtítulo qué hacer con él.
 
-El índice del carril va **por veredicto**, no por gravedad, con los resueltos al final: lo que hay
-que decidir es lo que sigue abierto. Y la cabecera, la explicación de qué es verificar y las
-«Notas de la sesión» —que repiten los veredictos con otras palabras— se pliegan en **Ficha del
-documento**.
+Cuando hay cuatro veredictos o más, el índice del carril va **por veredicto**, no por gravedad, con
+los resueltos al final: lo que hay que decidir es lo que sigue abierto. Con menos no hay carril. Y
+la cabecera, la explicación de qué es verificar y las «Notas de la sesión» —que repiten los
+veredictos con otras palabras— se pliegan en **Ficha del documento**.
 
 #### Un informe de arreglo asistido, en pantalla
 
@@ -975,19 +991,28 @@ veredicto posterior. Es la única pregunta que se hace sobre un arreglo, y **lo 
 arreglo**, no el texto: el informe se escribe antes de que decidas quedarte los cambios, así que su
 párrafo puede haber envejecido. Un arreglo que no tocó ningún fichero dice **Sin cambios**.
 
-La frase resume el resto: *«MEJ-0046 · 1 fichero · +0 −38 · build verde · 27 AI credits en 54 s»*.
-En la fila, **Ficheros · Cambios · Build · Coste** —el build en verde o en rojo, con la razón corta
-si está en rojo y «sin tests» cuando el proyecto no tiene ninguno— y una **barra de +/− por
-fichero**, una fila por fichero tocado, proporcional al que más cambió.
+La frase resume el resto: *«MEJ-0046 · 1 fichero · +0 −38 · build verde · 27 AI credits ·
+10 llamadas · 54 s»*.
 
-En el cuerpo: **Qué cambió y por qué** como prosa, y **Compilación y tests** como una tarjeta con
-el veredicto a la vista y los errores y la salida completa plegados detrás — son cientos de líneas
-de compilador. «Ficheros tocados» no se repite en lista: ya está en la barra. Los riesgos
-declarados y la sugerencia de commit se pintan tal cual, debajo. La cabecera y la cita del commit
-van a **Ficha del documento**: el estado ya está arriba.
+En la fila: **Ficheros tocados**, que vale por dos tarjetas y lleva una **barra de +/− por
+fichero** —la ruta con su tooltip, los números al final, proporcional al que más cambió—; **Build**
+en verde o en rojo, con la razón corta si está en rojo y «sin tests» cuando el proyecto no tiene
+ninguno; **Coste**; **Duración**; **Llamadas al modelo**; y las **acciones**, entre ellas **Ver el
+hallazgo (MEJ-0046)**, que aquí es la única vía a la ficha.
 
-El carril mantiene **Ver el hallazgo (MEJ-0046)**, que aquí es la única vía a la ficha, junto a
-«Descargar .md» y «Copiar resumen».
+Cada barra dice **de qué ámbito es su fichero**: **hallazgo** el del hallazgo, que entra sin
+permiso, y **fuera del hallazgo** el que autorizaste durante la sesión; el subtítulo lo cuenta
+(«3 ficheros · 2 fuera del hallazgo, autorizados»). Sale de lo que la sesión registró: un arreglo
+que no lo anotó sale sin marcas. Se ven cuatro ficheros y el resto se despliega con **+N más**,
+dentro de la tarjeta.
+
+En el cuerpo, **Qué cambió y por qué** y **Compilación y tests** van **mitad y mitad** cuando la
+ventana da de sí, y una debajo de otra cuando no; la prosa se lee en su medida de siempre. Los
+errores y la salida completa van plegados dentro de Compilación — son cientos de líneas de
+compilador. «Ficheros tocados» no se repite en lista: ya está en la barra. La **sugerencia de
+commit** está abierta mientras el arreglo siga *sin commitear*, que es cuando sirve; commiteado o
+verificado se pliega y su título dice dónde acabó: *«Sugerencia de commit · usada en `e660243`»*.
+La cabecera y la cita del commit van a **Ficha del documento**: el estado ya está arriba.
 
 #### Cómo está montado un informe de sesión
 

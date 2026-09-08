@@ -18990,3 +18990,79 @@ los cuatro colores del rosco son claves del tema que existen en los dos temas. L
 verificaciones y 20 arreglos— que los 33 se componen sin perder texto, que los 20 arreglos declaran
 estado, que las dos fuentes del estado no discrepan en ninguno y que los dos re-anclajes que existen
 salen. Cómo se ve, lo mira el usuario en el `dist`. Ciclo N-8.
+
+## F36-2b — Segunda pasada, y tres reglas para los tres informes
+
+### D-1053 — La fila reparte lo que hay, las acciones son una tarjeta y el carril solo existe si es un índice
+
+**Tres reglas que valen para los tres tipos, y salen de mirar el `dist`.**
+
+**(1) La fila reparte el ancho ENTERO entre lo que hay, no entre lo que cabe.** `ColumnsPanel`
+cuenta cuántas columnas de su ancho mínimo entran y reparte entre ésas sin mirar cuántas tarjetas
+hay — lo correcto en el portafolio, donde son una lista que crece—; en la fila de un informe son un
+cuadro fijo, así que con cinco tarjetas y seis columnas quedaba un canalón a la derecha. Entra
+`TilesPanel`: cada azulejo declara cuánto vale —una unidad, o **dos** los que llevan una lista
+dentro, «Ficheros tocados» y el veredicto—, y el ancho se divide entre las unidades de la fila. Los
+tres tipos suman siete unidades y caben en una fila desde ~1.850 px; por debajo se reparten en
+filas **equilibradas** —siete en dos son cuatro y tres, no seis y una— y cada una vuelve a llenar el
+ancho. `ColumnsPanel` no se toca: lo usan cinco vistas.
+
+**(2) Las acciones son la última tarjeta de la fila.** Estaban en el carril, y el carril es
+opcional: en un informe de un solo hallazgo desaparecían con él, y con ellas «Descargar .md».
+Descargar el informe hay que poder hacerlo siempre.
+
+**(3) El carril solo existe si tiene índice que aportar**: a partir de **cuatro** tarjetas de
+cuerpo. Con una —una verificación normal— el índice repetía la única tarjeta que había y se llevaba
+380 px del ancho. Sin carril, el cuerpo ocupa la página y el enlace al anexo baja al final de
+«Ficha del documento»: que no haya índice no puede esconder el anexo. Y `ReadingPanel` aprende que
+**un carril colapsado no es un carril** — antes le seguía cediendo su ancho a algo que no se pinta.
+
+**Y tres correcciones comunes.** El **resolutor por texto devuelve TEXTO**: «\*\*la unidad
+entera\*\*» se pinta fuera del renderizador de markdown, y ahí un asterisco es un asterisco. La
+**firma** pasa de párrafo suelto a media pantalla a una línea de metadato al pie, alineada con el
+cuerpo —la raya es del dibujo, el `.md` la conserva—. Y la **frase ejecutiva lleva las llamadas al
+modelo**: «… · 27,0 AI credits · 10 llamadas · 54 s». Son tres datos y tres segmentos; el coste y el
+reloj dejan de ir pegados con un «en», y una sesión que no registró llamadas no las nombra (D-318).
+
+**Lo propio de cada tipo.** En **verificación** se van las tres tarjetas de recuento y el rosco:
+verificar se lanza desde la ficha de UNO, así que «Verificados 1 · Resueltos 1 · Siguen activos 0»
+eran tres tarjetas para decir una cosa y el rosco tenía un solo tramo, que no es un reparto. En su
+sitio, el **veredicto en grande y en su color** —vale por dos— con el re-anclaje o el paso siguiente
+de un «no localizado» como subtítulo, y la **gravedad** en su pastilla. En **arreglo** se van
+«Ficheros» y «Cambios», que repetían lo que la barra de al lado ya dice, y la barra sube a la
+primera posición valiendo por dos: cuatro ficheros a la vista y el resto tras un «+N más» que
+despliega dentro de la tarjeta, porque la fila no puede crecer con el número de ficheros. Cada barra
+lleva su **marca de ámbito** —«hallazgo» o «fuera del hallazgo»— leída de las **notas de la sesión**
+(D-546), que es donde la autorización quedó anotada: sin notas, sin marca; no se deduce del texto
+una decisión que se tomó y se registró. Los dos tipos ganan **Duración** y **Llamadas al modelo**, y
+el **coste pierde su subtítulo**: «15,3 por hallazgo» debajo de «0,15 $» no repartía nada —un
+arreglo arregla un hallazgo— y encima mezclaba unidades, porque el reparto iba siempre en credits y
+la cifra sigue al conmutador de divisa. En una auditoría sí hay reparto, y ahí el subtítulo sigue
+siendo **el del informe** (D-591).
+
+**Y dos más del arreglo.** «Qué cambió y por qué» y «Compilación y tests» van **mitad y mitad**
+desde el mismo umbral que las tarjetas de hallazgo: ninguna llena una columna de 1.860 px y la
+prosa se para en su medida de lectura de todos modos (F27). Y la **sugerencia de commit se pliega**
+cuando el arreglo está commiteado o verificado —el mensaje ya está en el commit y esto es el
+borrador de algo que se hizo—, con el título diciendo dónde acabó: «Sugerencia de commit · usada en
+`e660243`». Con «sin commitear» sigue abierta, que es cuando sirve. No se borra ni se reescribe
+(D-441).
+
+**Cobertura (N-5): 23 casos nuevos y 5 con expectativa cambiada.** Nuevos: la fila llena el ancho
+sobre el panel de verdad y la doble mide dos unidades y el hueco; las filas se equilibran a cuatro
+anchos; el carril aparece a partir de cuatro tarjetas y un carril colapsado no le quita ancho al
+cuerpo —también sobre el panel—; las acciones están en la tarjeta y **ninguna** en el carril; el
+enlace al anexo existe con carril y sin él; los cuatro veredictos en grande con su subtítulo y su
+tono; la gravedad en pastilla y sin cifra; el coste sin subtítulo en los dos tipos; el ámbito de
+cada fichero desde las notas y **sin notas, sin marca**; «+N más» a partir del quinto; la sugerencia
+plegada con commiteado y con verificado y abierta sin commitear; el autor recortado con su entero
+en el tooltip; el subtítulo del build con y sin proyecto de tests; la línea real con `**…**` sale
+sin asteriscos; y la firma en una línea y sin la raya. Cambian de expectativa las dos frases
+ejecutivas —llevan las llamadas—, las dos filas de cifras y el test del carril de F36-1b, que pasa
+a proteger que las acciones **no** vuelvan allí. La tanda queda en **2.739 casos** (2.204 en la
+aplicación).
+
+**Lo que NO se ha comprobado, y se dice**: el aspecto. Sí está medido sobre el hub real —13
+verificaciones y 20 arreglos— que los 33 se componen sin perder texto, que ninguno saca ya un
+asterisco suelto, que los 20 arreglos declaran estado y ámbito por fichero, y que ninguno de los 33
+pide carril. Cómo se ve, lo mira el usuario en el `dist`. Ciclo N-8.

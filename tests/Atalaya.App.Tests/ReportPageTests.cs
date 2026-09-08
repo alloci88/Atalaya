@@ -203,9 +203,17 @@ public sealed class ReportPageTests
     [Fact]
     public void La_frase_ejecutiva_sale_de_las_mismas_cifras()
     {
-        ReportPage page = Page();
+        (ReportEntry entry, AuditSession session, string body) = Case();
+        ReportPage page = ReportPage.Compose(entry, session, body, Hub());
 
-        page.Lead.Should().Be("Se auditaron 2 unidades de 851 · 3 hallazgos nuevos · 58,0 AI credits en 2 min 33 s");
+        // LAS LLAMADAS AL MODELO VAN EN LA FRASE (F36-2b §1.6): es lo que explica por qué una
+        // sesión costó lo que costó, y el coste y el reloj dejan de ir pegados con un «en».
+        page.Lead.Should().Be(
+            "Se auditaron 2 unidades de 851 · 3 hallazgos nuevos · 58,0 AI credits · 9 llamadas · 2 min 33 s");
+        session.Usage.Calls.Should().Be(9,
+            "la cifra sale del REGISTRO, como el coste y la duración; el informe la escribe en su "
+            + "anexo —«9 llamada(s) al modelo»— desde el mismo sitio");
+        body.Should().NotBeEmpty();
     }
 
     /// <summary>
@@ -246,6 +254,24 @@ public sealed class ReportPageTests
         ReportPage page = ReportPage.Compose(entry, session, body);
 
         page.Lead.Should().StartWith("Se auditó 1 unidad de 2 · 1 hallazgo nuevo · ");
+        page.Lead.Should().EndWith("9 llamadas · 2 min 33 s", "las llamadas van entre el coste y el reloj");
+    }
+
+    /// <summary>
+    /// <b>Una sesión que no registró llamadas no las nombra</b> (D-318). Las hay: seis de las
+    /// setenta y tres de este hub llegaron sin consumo. Un «0 llamadas» diría que no se habló con
+    /// el modelo, y lo que pasa es que no se apuntó.
+    /// </summary>
+    [Fact]
+    public void Sin_llamadas_registradas_la_frase_no_las_nombra()
+    {
+        (ReportEntry entry, AuditSession session, string body) = Case();
+        session.Usage.Calls = 0;
+
+        ReportPage page = ReportPage.Compose(entry, session, body, Hub());
+
+        page.Lead.Should().NotContain("llamada");
+        page.Lead.Should().EndWith("58,0 AI credits · 2 min 33 s");
     }
 
     // ================================================================ sin registro
@@ -692,50 +718,151 @@ public sealed class ReportPageTests
     }
 
     /// <summary>
-    /// <b>Los botones del carril son una columna, no tres etiquetas sueltas</b> (retoque de
-    /// F36-1b).
+    /// <b>Las acciones son la última tarjeta de la fila, y ya no están en el carril</b> (F36-2b
+    /// §1.2).
     /// <para>
-    /// Se vieron tres cosas y tenían tres causas distintas, y la tercera es la que este test cuida
-    /// porque es la única invisible: la separación iba como margen INFERIOR con <c>Stack.Gap</c>, y
-    /// el último botón VISIBLE se quedaba con el suyo colgando porque detrás tenía un hermano
-    /// colapsado —«Ver el hallazgo», que solo sale en un informe de arreglo—. Medido: 17 px de aire
-    /// arriba contra 29 abajo. La separación va ahora ARRIBA, y el único botón que siempre está es
-    /// el que no la lleva; así el hueco no depende de cuántos hermanos estén colapsados.
+    /// <b>Por qué se mudaron.</b> El carril solo existe cuando hay índice que aportar (§1.3), así
+    /// que en un informe de un solo hallazgo —todos los de arreglo y casi todos los de
+    /// verificación— desaparecía con él, y con él «Descargar .md». Descargar el informe hay que
+    /// poder hacerlo siempre, mire lo que mire la página.
     /// </para>
     /// <para>
-    /// Los otros dos —anchos distintos y demasiado juntos— se ven en la primera captura; éste no,
-    /// y por eso está escrito. Va sobre el marcado: montar el carril entero con su tema para medir
-    /// dos márgenes costaría más que lo que prueba.
+    /// Lo que este test protege es que <b>no vuelvan al carril</b> y que las tres estén en la
+    /// tarjeta: los tres comandos se enlazan desde ahí, y el carril no enlaza ninguno. Se rompe
+    /// con un copiar-pegar y no falla al compilar — el botón se queda donde no se ve.
     /// </para>
     /// </summary>
     [Fact]
-    public void Las_acciones_del_carril_separan_por_arriba_y_no_por_abajo()
+    public void Las_acciones_van_en_la_fila_y_no_en_el_carril()
     {
         string xaml = ViewLayout.Xaml("ReportsView.xaml");
-        int card = xaml.IndexOf("Command=\"{Binding DownloadCommand}\"", StringComparison.Ordinal);
-        int end = xaml.IndexOf("Text=\"Hallazgos\"", card, StringComparison.Ordinal);
-        string acciones = xaml[card..end];
 
-        // La separación es de ARRIBA y sale de los tokens de la casa.
-        xaml.Should().Contain("<Style x:Key=\"Rail.Action\" TargetType=\"Button\"")
-            .And.Contain("<Setter Property=\"Margin\" Value=\"{StaticResource Pad.M.Top}\" />");
+        int tile = xaml.IndexOf("DataType=\"{x:Type vm:ActionsTile}\"", StringComparison.Ordinal);
+        tile.Should().BeGreaterThan(0, "las acciones son una tarjeta de la fila");
+        int endTile = xaml.IndexOf("</DataTemplate>", tile, StringComparison.Ordinal);
+        string acciones = xaml[tile..endTile];
 
-        // Y NO por abajo: `Stack.Gap` deja el margen del último visible colgando cuando detrás hay
-        // un hermano colapsado, que es el caso de este carril en todo lo que no sea un arreglo.
-        acciones.Should().NotContain("Stack.Gap",
-            "el margen inferior del último visible cuelga si detrás hay un colapsado");
-
-        // El botón que SIEMPRE está es el que no lleva separación: si la llevara uno condicional,
-        // el aire de arriba dependería de si ese botón sale o no.
-        acciones.Should().Contain("Style=\"{StaticResource Button.Secondary}\"",
-            "«Descargar .md», el único incondicional, va sin el estilo que separa");
-        foreach (string condicional in new[] { "CopySummaryCommand", "OpenFindingCommand" })
+        foreach (string comando in new[] { "DownloadCommand", "CopySummaryCommand", "OpenFindingCommand" })
         {
-            int at = acciones.IndexOf(condicional, StringComparison.Ordinal);
-            at.Should().BeGreaterThan(0);
-            acciones[at..].Should().StartWith(condicional)
-                .And.Contain("Rail.Action", "los condicionales sí la llevan");
+            acciones.Should().Contain(comando, "las tres acciones viven en la tarjeta");
         }
+
+        // Y el carril NO enlaza ninguna: lo que queda en él es el índice y el enlace al anexo.
+        int rail = xaml.IndexOf("<StackPanel x:Name=\"Rail\"", StringComparison.Ordinal);
+        rail.Should().BeGreaterThan(0);
+        string carril = xaml[rail..];
+        foreach (string comando in new[] { "DownloadCommand", "CopySummaryCommand", "OpenFindingCommand" })
+        {
+            carril.Should().NotContain(comando,
+                "una acción en el carril desaparece con él, y el carril es opcional");
+        }
+    }
+
+    /// <summary>
+    /// <b>El carril solo existe si tiene índice que aportar</b> (F36-2b §1.3): a partir de cuatro
+    /// tarjetas de cuerpo. Con tres, el índice es la misma lista dos veces y se lleva 380 px del
+    /// ancho del cuerpo — se vio en el <c>dist</c> con una verificación de un solo veredicto.
+    /// <para>
+    /// Se comprueba además <b>contra el panel de verdad</b>: un carril colapsado no le puede seguir
+    /// quitando su ancho al cuerpo, que es lo que pasaría si el panel solo mirara cuántos hijos
+    /// tiene.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData(3, false)]
+    [InlineData(4, true)]
+    [InlineData(10, true)]
+    public void El_carril_aparece_a_partir_de_cuatro_tarjetas(int cards, bool rail)
+    {
+        ReportLayout.NeedsRail(cards).Should().Be(rail);
+
+        double bodyWidth = 0;
+        ViewLayout.OnUiThread(() =>
+        {
+            var panel = new ReadingPanel
+            {
+                ReadWidth = ReportLayout.ReadWidth,
+                RailWidth = ReportLayout.RailWidth,
+                Gap = ReportLayout.Gap,
+            };
+            var body = new Border { Background = Brushes.Gray };
+            var carril = new Border
+            {
+                Background = Brushes.Gray,
+                Visibility = rail ? Visibility.Visible : Visibility.Collapsed,
+            };
+            panel.Children.Add(body);
+            panel.Children.Add(carril);
+
+            ViewLayout.Layout(panel, 2538, 900);
+            bodyWidth = body.ActualWidth;
+        });
+
+        bodyWidth.Should().Be(
+            rail ? 2538 - ReportLayout.Gap - ReportLayout.RailWidth : 2538,
+            "sin carril el cuerpo se queda con el ancho entero");
+    }
+
+    /// <summary>
+    /// <b>La fila reparte el ancho ENTERO</b> (F36-2b §1.1), y una tarjeta puede valer dos unidades.
+    /// <para>
+    /// Con <c>ColumnsPanel</c> la fila se partía en tantas columnas como cupieran y las tarjetas
+    /// llenaban las primeras: con cinco tarjetas y seis columnas quedaba un canalón a la derecha,
+    /// que es lo que se vio en el <c>dist</c>. Aquí se comprueba sobre el panel de verdad que la
+    /// suma de las tarjetas y sus huecos es el ancho disponible, y que la doble mide exactamente el
+    /// doble más un hueco.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void La_fila_reparte_el_ancho_entero_y_una_tarjeta_puede_valer_dos()
+    {
+        var anchos = new List<double>();
+
+        ViewLayout.OnUiThread(() =>
+        {
+            var panel = new TilesPanel
+            {
+                MinUnitWidth = ReportLayout.TileMinWidth,
+                Gap = ReportLayout.Gap,
+            };
+
+            // La fila de un arreglo: la doble de «Ficheros tocados» y cinco de una unidad.
+            foreach (int span in new[] { 2, 1, 1, 1, 1, 1 })
+            {
+                var tile = new Border { Background = Brushes.Gray, Child = new Border { Height = 90 } };
+                TilesPanel.SetSpan(tile, span);
+                panel.Children.Add(tile);
+            }
+
+            ViewLayout.Layout(panel, 2538, 400);
+            anchos.AddRange(panel.Children.OfType<FrameworkElement>().Select(c => c.ActualWidth));
+        });
+
+        anchos.Should().HaveCount(6);
+        (anchos.Sum() + (5 * ReportLayout.Gap)).Should().BeApproximately(2538, 0.5,
+            "la fila llega al borde: no hay canalón a la derecha");
+        anchos.Skip(1).Distinct().Should().ContainSingle("las cinco sencillas miden lo mismo");
+        anchos[0].Should().BeApproximately((anchos[1] * 2) + ReportLayout.Gap, 0.5,
+            "la doble vale dos unidades y el hueco de en medio");
+    }
+
+    /// <summary>
+    /// Y cuando no caben todas de ancho, las filas se <b>equilibran</b>: siete unidades en dos filas
+    /// son cuatro y tres, no seis y una. Es una función pura, así que se comprueba sin montar nada.
+    /// </summary>
+    [Theory]
+    [InlineData(7, new[] { 6 })]
+    [InlineData(6, new[] { 3, 3 })]
+    [InlineData(3, new[] { 2, 2, 2 })]
+    [InlineData(1, new[] { 1, 1, 1, 1, 1, 1 })]
+    public void Cuando_no_caben_todas_las_filas_se_equilibran(int perRow, int[] esperado)
+    {
+        var spans = new[] { 2, 1, 1, 1, 1, 1 };
+
+        TilesPanel.Rows(spans, perRow).Should().Equal(esperado);
+
+        // Y no se pierde ninguna tarjeta por el camino, quepan las que quepan.
+        TilesPanel.Rows(spans, perRow).Sum().Should().Be(spans.Length);
     }
 
     private static string Squash(string text)

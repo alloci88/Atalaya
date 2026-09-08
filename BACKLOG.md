@@ -509,6 +509,19 @@ editores es la única puerta).
 
 ## Cerrado
 
+- **F36-2b · Verificación y arreglo, segunda pasada, y tres reglas para los tres informes** — la
+  **fila reparte el ancho entero** entre lo que hay (`TilesPanel`; una tarjeta puede valer dos
+  unidades y las filas se equilibran cuando no caben), las **acciones son la última tarjeta** y
+  dejan el carril, y el **carril solo existe con cuatro o más tarjetas** de cuerpo —con menos, el
+  cuerpo ocupa la página y el enlace al anexo baja a «Ficha del documento»—. Además: el resolutor
+  por texto devuelve texto (se acabaron los `**` sueltos), la firma va al pie en una línea de
+  metadato y la frase lleva las **llamadas al modelo**. En **verificación**, el veredicto en grande
+  sustituye a tres recuentos y al rosco de un tramo, con Gravedad, Duración y Llamadas al lado. En
+  **arreglo**, la barra de ficheros sube a primera posición con su **marca de ámbito** leída de las
+  notas de la sesión (D-546) y su «+N más», se van «Ficheros» y «Cambios», la prosa y la
+  compilación van mitad y mitad, y la sugerencia de commit se pliega cuando ya está commiteada. El
+  coste pierde el «N por hallazgo», que no repartía nada y mezclaba unidades. Ver D-1053.
+
 - **F36 · Entrega 2 — Los informes de verificación y de arreglo** — los otros dos tipos heredan la
   página de F36-1b (portada, una fila en rejilla, «Ficha del documento» plegada, carril de 380,
   tarjetas a dos columnas) y ponen dentro lo suyo. **Verificación**: frase con los desenlaces,

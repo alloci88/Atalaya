@@ -72,6 +72,17 @@ public sealed class ReadingPanel : Panel
     public bool SideBySide(double available)
         => !double.IsInfinity(available) && available >= ReadWidth + Gap + RailWidth;
 
+    /// <summary>
+    /// El carril, <b>si lo hay</b>. Un carril COLAPSADO no es un carril: el cuerpo se queda con el
+    /// ancho entero en vez de dejarle 380 px a algo que no se pinta. Un informe con menos de cuatro
+    /// tarjetas no tiene índice que aportar (F36-2b §1.3) y ésa es la forma de decirlo desde el
+    /// marcado, con la visibilidad que ya estaba enlazada.
+    /// </summary>
+    private UIElement? Rail()
+        => InternalChildren.Count > 1 && InternalChildren[1].Visibility != Visibility.Collapsed
+            ? InternalChildren[1]
+            : null;
+
     protected override Size MeasureOverride(Size available)
     {
         if (InternalChildren.Count == 0)
@@ -80,9 +91,11 @@ public sealed class ReadingPanel : Panel
         }
 
         UIElement body = InternalChildren[0];
-        UIElement? rail = InternalChildren.Count > 1 ? InternalChildren[1] : null;
+        UIElement? rail = Rail();
 
-        bool side = SideBySide(available.Width);
+        // SIN CARRIL NO HAY DOS COLUMNAS: el cuerpo se queda con el ancho entero. Sin esto, un
+        // informe sin índice seguía cediendo 380 px + hueco a algo que no se pinta.
+        bool side = rail is not null && SideBySide(available.Width);
         double width = double.IsInfinity(available.Width) ? ReadWidth : available.Width;
         double bodyWidth = side ? width - Gap - RailWidth : width;
         double railWidth = side ? RailWidth : width;
@@ -106,9 +119,9 @@ public sealed class ReadingPanel : Panel
         }
 
         UIElement body = InternalChildren[0];
-        UIElement? rail = InternalChildren.Count > 1 ? InternalChildren[1] : null;
+        UIElement? rail = Rail();
 
-        bool side = SideBySide(final.Width);
+        bool side = rail is not null && SideBySide(final.Width);
         double bodyWidth = side ? final.Width - Gap - RailWidth : final.Width;
 
         if (side)

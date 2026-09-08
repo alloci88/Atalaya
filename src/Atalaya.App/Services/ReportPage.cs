@@ -50,6 +50,14 @@ public sealed record ReportStat(
 
     public bool HasTone => Tone != ReportTone.Neutral;
 
+    /// <summary>
+    /// <b>Cuánto vale esta tarjeta en la fila</b> (F36-2b §1.1): una unidad, o dos las que llevan
+    /// dentro una lista o una palabra larga —«Ficheros tocados» y el veredicto—. La fila reparte su
+    /// ancho entre las unidades que hay, así que declarar dos no le quita sitio a nadie: se lo pide
+    /// al reparto.
+    /// </summary>
+    public int Span { get; init; } = 1;
+
     /// <summary>La cifra con su unidad, para el texto que se copia.</summary>
     public string Amount => string.IsNullOrEmpty(Unit) ? Value : $"{Value} {Unit}";
 
@@ -298,7 +306,19 @@ public sealed record ReportPage
     /// <summary>La firma del pie, que va detrás de las tarjetas de hallazgo.</summary>
     public string Foot { get; private init; } = string.Empty;
 
-    public bool HasFoot => Foot.Length > 0;
+    public bool HasFoot => FootLine.Length > 0;
+
+    /// <summary>
+    /// <b>La firma, en una línea</b> (F36-2b §1.5). Es «Atalaya · Maxam» detrás de una raya: como
+    /// párrafo de markdown quedaba suelta a media página, con el tamaño del cuerpo y sin nada que
+    /// la atara. Se pinta como metadato al pie, alineada con el cuerpo. La raya se va con el
+    /// dibujo, no con el texto: el <c>.md</c> sigue igual.
+    /// </summary>
+    public string FootLine => Foot
+        .Replace("\r", string.Empty, StringComparison.Ordinal)
+        .Split('\n')
+        .Select(l => l.Trim())
+        .FirstOrDefault(l => l.Length > 0 && !l.All(c => c == '-')) ?? string.Empty;
 
     /// <summary>
     /// Lo que se lleva «Copiar resumen»: la frase ejecutiva y las tarjetas, en ese orden. Es el
@@ -307,6 +327,14 @@ public sealed record ReportPage
     public string Summary { get; private init; } = string.Empty;
 
     public bool HasSummary => Summary.Length > 0;
+
+    /// <summary>
+    /// <b>Hay carril</b> (F36-2b §1.3): el cuerpo trae bastantes tarjetas como para que un índice
+    /// aporte algo. Con tres o menos, el índice es la misma lista dos veces y se lleva 380 px del
+    /// ancho del cuerpo — se vio en el <c>dist</c> con una verificación de un solo veredicto.
+    /// </summary>
+    public bool HasRail => Controls.ReportLayout.NeedsRail(
+        Groups.Count > 0 ? Findings.Count : Verdicts.Count);
 
     // ------------------------------------------------------- F36-2 · verificación y arreglo
 
@@ -317,9 +345,6 @@ public sealed record ReportPage
     public IReadOnlyList<ReportVerdict> Verdicts { get; private init; } = Array.Empty<ReportVerdict>();
 
     public bool HasVerdicts => Verdicts.Count > 0;
-
-    /// <summary>El rosco de veredictos, en el orden en que se decide y sin los que no hay.</summary>
-    public IReadOnlyList<ReportSlice> VerdictSlices { get; private init; } = Array.Empty<ReportSlice>();
 
     /// <summary>
     /// El índice del carril de una verificación: <b>por veredicto y no por gravedad</b>, con los
@@ -347,6 +372,22 @@ public sealed record ReportPage
     public string Story { get; private init; } = string.Empty;
 
     public bool HasStory => Story.Trim().Length > 0;
+
+    /// <summary>La sección «Sugerencia de commit» del informe, tal cual.</summary>
+    public string Commit { get; private init; } = string.Empty;
+
+    public bool HasCommit => Commit.Trim().Length > 0;
+
+    /// <summary>
+    /// <b>La sugerencia ya se usó</b>: el arreglo está commiteado o verificado, así que el mensaje
+    /// está en el commit y esto es el borrador. Se pliega en vez de irse (D-441).
+    /// </summary>
+    public bool CommitDone { get; private init; }
+
+    /// <summary>«Sugerencia de commit · usada en `e660243`», que es lo que dice el pliegue.</summary>
+    public string CommitTitle => CommitDone && FixState is { Sha.Length: > 0 } state
+        ? $"Sugerencia de commit · usada en {state.Sha}"
+        : "Sugerencia de commit";
 
     // ------------------------------------------------------------------ composición
 
@@ -890,6 +931,11 @@ public sealed record ReportPage
                 CostFormat.Caveat);
         }
 
+        // SIN SUBTÍTULO CUANDO NO HAY REPARTO QUE HACER (F36-2b §3). Un arreglo arregla un
+        // hallazgo y una verificación verifica uno: «15,3 por hallazgo» debajo de «0,15 $» no
+        // repartía nada y encima mezclaba unidades —el reparto iba siempre en credits y la cifra
+        // sigue al conmutador de divisa—. En una auditoría sí lo hay, y ahí el texto es EL DEL
+        // INFORME, con su mismo formato (D-591).
         string each = divisor > 0
             ? string.Create(AppCulture.Display, $"{credits / divisor:0.#} {per}")
             : string.Empty;
@@ -968,27 +1014,40 @@ public sealed record ReportPage
     }
 
     /// <summary>
-    /// «58,0 AI credits en 2 min 33 s», que es como acaban las tres frases ejecutivas. Lo que no
-    /// se sabe no se nombra: sin coste queda «en 2 min 33 s» y sin reloj, el coste a secas.
+    /// «58,0 AI credits · 9 llamadas · 2 min 33 s», que es como acaban las tres frases ejecutivas.
+    /// <b>Tres datos y tres segmentos</b> (F36-2b §1.6): las llamadas al modelo son lo que explica
+    /// por qué una sesión de dos ficheros costó lo que costó, y hasta aquí solo estaban dentro del
+    /// documento. Lo que no se sabe no se nombra (D-318): sin coste queda el reloj a secas, y una
+    /// sesión sin llamadas registradas —las hay— no escribe el segundo.
     /// </summary>
     internal static void AppendCost(List<string> parts, ReportEntry entry, AuditSession session)
     {
         string cost = entry.Cost is { } credits
             ? $"{CostFormat.Number(credits)} {CostFormat.BillingUnit}"
             : entry.Billed ? string.Empty : CostFormat.SubscriptionCostShort;
-        string elapsed = Elapsed(session);
-        if (cost.Length > 0 && elapsed.Length > 0)
-        {
-            parts.Add($"{cost} en {elapsed}");
-        }
-        else if (cost.Length > 0)
+        if (cost.Length > 0)
         {
             parts.Add(cost);
         }
-        else if (elapsed.Length > 0)
+
+        if (Calls(session) is { Length: > 0 } calls)
         {
-            parts.Add($"en {elapsed}");
+            parts.Add(calls);
         }
+
+        if (Elapsed(session) is { Length: > 0 } elapsed)
+        {
+            parts.Add(elapsed);
+        }
+    }
+
+    /// <summary>«4 llamadas» / «1 llamada», o vacío si la sesión no las registró.</summary>
+    internal static string Calls(AuditSession session)
+    {
+        int calls = session.Usage.Calls;
+        return calls <= 0
+            ? string.Empty
+            : string.Create(AppCulture.Display, $"{calls} {(calls == 1 ? "llamada" : "llamadas")}");
     }
 
     /// <summary>La frase y las tarjetas, en ese orden. Es lo que se lleva «Copiar resumen».</summary>
@@ -1040,7 +1099,6 @@ public sealed record ReportPage
             Join(cut.Rest(ReportReader.VerdictsHeading, ReportReader.NotesHeading).ToArray()),
             cut.Section(ReportReader.NotesHeading));
 
-        var slices = CountVerdicts(verdicts);
         var stats = VerifyStats(entry, verdicts);
         string lead = VerifyLead(entry, session, verdicts);
 
@@ -1051,7 +1109,6 @@ public sealed record ReportPage
             Sheet = sheet,
             Foot = cut.Foot,
             Verdicts = verdicts,
-            VerdictSlices = slices,
             VerdictIndex = verdicts
                 .OrderBy(v => ReportVerdicts.Order.ToList().IndexOf(v.Kind))
                 .ThenBy(v => v.Alias, StringComparer.OrdinalIgnoreCase)
@@ -1066,63 +1123,140 @@ public sealed record ReportPage
     private static int Rank(ReportVerdictKind kind) => ReportVerdicts.Order.ToList().IndexOf(kind);
 
     /// <summary>
-    /// El reparto por veredicto, en el orden en que se decide y <b>sin los que no hay</b>: un tramo
-    /// de rosco a cero no es un tramo (D-318). «Otro» agrupa por la palabra literal del informe, así
-    /// que dos veredictos que no reconocemos no se mezclan en un mismo tramo.
-    /// </summary>
-    internal static IReadOnlyList<ReportSlice> CountVerdicts(IReadOnlyList<ReportVerdict> verdicts)
-        => verdicts
-            .GroupBy(v => (v.Kind, Name: ReportVerdicts.Group(v.Kind, v.Verdict)))
-            .OrderBy(g => Rank(g.Key.Kind))
-            .ThenBy(g => g.Key.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(g => new ReportSlice(g.Key.Name, g.Count()))
-            .ToList();
-
-    /// <summary>
-    /// Las cuatro cifras de una verificación. <b>No localizado y no concluyente van de subtítulo de
-    /// «Verificados»</b> y no de tarjeta propia: son los desenlaces raros —cero de trece en este
-    /// hub— y una fila con dos tarjetas a cero se lee peor que cuatro llenas (D-318).
+    /// <b>La fila de una verificación</b> (F36-2b §3): el veredicto en grande —vale por dos—, la
+    /// gravedad, el coste, la duración y las llamadas.
+    /// <para>
+    /// <b>Por qué se fue el recuento.</b> Verificar se lanza desde la ficha de UN hallazgo, así que
+    /// «Verificados 1 · Resueltos 1 · Siguen activos 0» son tres tarjetas para decir una cosa, y un
+    /// rosco de un solo tramo no es un reparto. Lo que hay que leer es el desenlace, y ése es el
+    /// que ocupa el sitio. Con varios —el caso raro— la misma tarjeta los cuenta.
+    /// </para>
     /// </summary>
     private static IReadOnlyList<ReportStat> VerifyStats(
         ReportEntry entry, IReadOnlyList<ReportVerdict> verdicts)
     {
-        int resueltos = verdicts.Count(v => v.Kind == ReportVerdictKind.Resuelto);
-        int activos = verdicts.Count(v => v.Kind == ReportVerdictKind.Activo);
-        int moved = Reanchored(verdicts);
-
-        string otros = string.Join(" · ", verdicts
-            .Where(v => v.Kind is not (ReportVerdictKind.Resuelto or ReportVerdictKind.Activo))
-            .GroupBy(v => (v.Kind, v.Verdict))
-            .OrderBy(g => Rank(g.Key.Kind))
-            .Select(g => ReportVerdicts.Tally(g.Key.Kind, g.Count(), g.Key.Verdict)));
-
         return new List<ReportStat>
         {
-            new(
-                "verified",
-                "Verificados",
+            VerdictStat(verdicts),
+            SeverityStat(verdicts),
+            CostStat(entry, 0, string.Empty),
+            DurationStat(entry.Session),
+            CallsStat(entry.Session),
+        };
+    }
+
+    /// <summary>
+    /// <b>El veredicto, en grande y en su color</b>. Con uno solo dice cuál fue; con varios, el
+    /// reparto. El subtítulo lleva lo que hay que hacer a continuación cuando lo hay: el re-anclaje
+    /// que el veredicto escribió (D-1037), o el paso siguiente de un «no localizado» — con las
+    /// mismas palabras que la ficha.
+    /// </summary>
+    private static ReportStat VerdictStat(IReadOnlyList<ReportVerdict> verdicts)
+    {
+        if (verdicts.Count == 0)
+        {
+            return new ReportStat(
+                "verdict", "Veredicto", ReportsUnknown, null,
+                "ningún hallazgo llegó al instrumento",
+                "Esta sesión no llegó a pedirle un veredicto a nadie.") { Span = 2 };
+        }
+
+        if (verdicts.Count > 1)
+        {
+            string reparto = string.Join(" · ", verdicts
+                .GroupBy(v => (v.Kind, v.Verdict))
+                .OrderBy(g => Rank(g.Key.Kind))
+                .Select(g => ReportVerdicts.Tally(g.Key.Kind, g.Count(), g.Key.Verdict)));
+
+            int moved = Reanchored(verdicts);
+            return new ReportStat(
+                "verdict",
+                "Veredictos",
                 verdicts.Count.ToString(AppCulture.Display),
                 null,
-                otros,
-                "Los hallazgos que esta sesión le puso delante al instrumento. Cada uno tiene su "
-                + "tarjeta abajo, con lo que se le enseñó y lo que contestó."),
-            new(
-                "resolved",
-                "Resueltos",
-                resueltos.ToString(AppCulture.Display),
-                null,
-                string.Empty,
-                "El defecto ya no está, y con evidencia: verificar es la única forma de resolver "
-                + "un hallazgo (D-557)."),
-            new(
-                "active",
-                "Siguen activos",
-                activos.ToString(AppCulture.Display),
-                null,
-                moved == 0 ? string.Empty : moved == 1 ? "1 re-anclado" : $"{moved} re-anclados",
-                "El instrumento miró el código de hoy y el defecto sigue ahí."),
-            CostStat(entry, verdicts.Count, "por hallazgo"),
+                moved == 0 ? reparto : $"{reparto} · {(moved == 1 ? "1 re-anclado" : $"{moved} re-anclados")}",
+                "Cómo acabó cada hallazgo que se le puso delante al instrumento.")
+            {
+                Span = 2,
+            };
+        }
+
+        ReportVerdict one = verdicts[0];
+        string subtitle = one.HasReanchor
+            ? one.Reanchor
+            : one.HasNextStep ? one.NextStep : string.Empty;
+
+        return new ReportStat(
+            "verdict",
+            "Veredicto",
+            Capitalize(one.Label),
+            null,
+            subtitle,
+            "Lo que el instrumento dijo del hallazgo mirando el código de hoy.")
+        {
+            Span = 2,
+            Tone = one.Tone,
         };
+    }
+
+    /// <summary>«sigue activo» → «Sigue activo»: en una cifra de tarjeta, la primera va en alta.</summary>
+    private static string Capitalize(string text)
+        => text.Length == 0 ? text : char.ToUpper(text[0], AppCulture.Display) + text[1..];
+
+    /// <summary>
+    /// La gravedad del hallazgo verificado, con la pastilla de siempre. Con varios, una por gravedad
+    /// presente y ninguna por las que no hay — la misma regla que la tarjeta de hallazgos (UI-0051).
+    /// </summary>
+    private static ReportStat SeverityStat(IReadOnlyList<ReportVerdict> verdicts)
+    {
+        var chips = new[] { Severity.Critica, Severity.Alta, Severity.Media, Severity.Baja }
+            .Select(s => (Name: SeverityNames.Display(s),
+                          Count: verdicts.Count(v => v.Severity == SeverityNames.Display(s))))
+            .Where(x => x.Count > 0)
+            .ToList();
+
+        return new ReportStat(
+            "severity",
+            "Gravedad",
+            string.Empty,
+            null,
+            string.Join(" · ", chips.Select(c => verdicts.Count == 1 ? c.Name : $"{c.Count} {Lower(c.Name, c.Count)}")),
+            "La gravedad con la que se registró el hallazgo. No la decide la verificación.")
+        {
+            Chips = chips
+                .Select(c => new ReportChip(
+                    c.Name, verdicts.Count == 1 ? c.Name : $"{c.Count} {Lower(c.Name, c.Count)}"))
+                .ToList(),
+        };
+    }
+
+    /// <summary>El reloj de pared, en su propia tarjeta. La misma de siempre.</summary>
+    private static ReportStat DurationStat(AuditSession? session)
+    {
+        string elapsed = session is null ? string.Empty : Elapsed(session);
+        return new ReportStat(
+            "duration",
+            "Duración",
+            elapsed.Length > 0 ? elapsed : ReportsUnknown,
+            null,
+            elapsed.Length > 0 ? string.Empty : "la sesión no registró cuándo terminó",
+            "Reloj de pared entre el arranque de la sesión y su cierre.");
+    }
+
+    /// <summary>
+    /// <b>Las llamadas al modelo</b>: lo que explica por qué una sesión de un fichero costó lo que
+    /// costó. Sale del registro, del mismo <c>usage.calls</c> que el informe escribe en su cabecera.
+    /// </summary>
+    private static ReportStat CallsStat(AuditSession? session)
+    {
+        int calls = session?.Usage.Calls ?? 0;
+        return new ReportStat(
+            "calls",
+            "Llamadas al modelo",
+            calls > 0 ? calls.ToString(AppCulture.Display) : ReportsUnknown,
+            null,
+            calls > 0 ? string.Empty : "la sesión no las registró",
+            "Cuántas veces se le pidió algo al modelo durante la sesión.");
     }
 
     /// <summary>Cuántos veredictos movieron el ancla en esta sesión (D-1037).</summary>
@@ -1190,7 +1324,8 @@ public sealed record ReportPage
         FixRecord? fix)
     {
         ReportSections cut = ReportSections.Split(body);
-        var files = ReportReader.ReadFiles(cut.Section(ReportReader.FilesHeading));
+        var files = ReportReader.ReadFiles(
+            cut.Section(ReportReader.FilesHeading), ReportReader.Scopes(session));
         ReportBuild? build = ReportReader.ReadBuild(cut.Section(ReportReader.BuildHeading));
         ReportFixState? state = ReadFixState(entry, session, cut.Head, files.Count, hub, fix);
 
@@ -1205,9 +1340,14 @@ public sealed record ReportPage
                 RisksHeading,
                 CommitHeading).ToArray()));
 
-        // Lo que esta página no lee se pinta tal cual y junto, debajo de la compilación: los
-        // riesgos declarados y la sugerencia de commit siguen siendo el mismo texto.
-        string rest = Join(cut.Section(RisksHeading), cut.Section(CommitHeading));
+        // Los riesgos declarados se pintan tal cual, debajo de la compilación.
+        string rest = cut.Section(RisksHeading);
+
+        // LA SUGERENCIA DE COMMIT SE PLIEGA CUANDO YA ES HISTORIA (F36-2b §2): con el arreglo
+        // commiteado, el mensaje está en el commit y la sección es el borrador de algo que ya se
+        // hizo. Con «sin commitear» sigue a la vista, porque entonces es lo que hay que usar.
+        string commit = cut.Section(CommitHeading);
+        bool done = state is { Kind: ReportFixStateKind.Commiteado or ReportFixStateKind.Verificado };
 
         var stats = FixStats(entry, files, build);
         string lead = FixLead(entry, session, files, build);
@@ -1223,6 +1363,8 @@ public sealed record ReportPage
             Files = files,
             Build = build,
             FixState = state,
+            Commit = commit,
+            CommitDone = done && commit.Trim().Length > 0,
             Lead = lead,
             Stats = stats,
             Summary = SummaryText(lead, stats),
@@ -1269,28 +1411,8 @@ public sealed record ReportPage
     private static IReadOnlyList<ReportStat> FixStats(
         ReportEntry entry, IReadOnlyList<ReportFileChange> files, ReportBuild? build)
     {
-        int added = files.Sum(f => f.Added);
-        int removed = files.Sum(f => f.Removed);
-        int outside = files.Count(f => f.OutOfScope);
-
         return new List<ReportStat>
         {
-            new(
-                "files",
-                "Ficheros",
-                files.Count.ToString(AppCulture.Display),
-                null,
-                outside == 0
-                    ? string.Empty
-                    : outside == 1 ? "1 fuera del hallazgo" : $"{outside} fuera del hallazgo",
-                "Los ficheros que el arreglo dejó escritos en el clon."),
-            new(
-                "lines",
-                "Cambios",
-                $"+{added} −{removed}",
-                null,
-                string.Empty,
-                "Líneas añadidas y quitadas, sumando todos los ficheros tocados."),
             new(
                 "build",
                 "Build",
@@ -1302,7 +1424,25 @@ public sealed record ReportPage
                 Tone = build?.Tone ?? ReportTone.Neutral,
             },
             CostStat(entry, 0, string.Empty),
+            DurationStat(entry.Session),
+            CallsStat(entry.Session),
         };
+    }
+
+    /// <summary>
+    /// <b>El subtítulo de «Ficheros tocados»</b>: cuántos son y cuántos salieron del ámbito del
+    /// hallazgo con permiso (D-546). Lo de fuera solo se nombra cuando la sesión lo registró: sin
+    /// notas no hay marca, y decir «0 fuera del hallazgo» afirmaría algo que no se sabe (D-318).
+    /// </summary>
+    internal static string FilesSubtitle(IReadOnlyList<ReportFileChange> files)
+    {
+        string count = files.Count == 1 ? "1 fichero" : $"{files.Count} ficheros";
+        int outside = files.Count(f => f.OutOfScope);
+        return outside == 0
+            ? count
+            : outside == 1
+                ? $"{count} · 1 fuera del hallazgo, autorizado"
+                : $"{count} · {outside} fuera del hallazgo, autorizados";
     }
 
     /// <summary>
@@ -1340,6 +1480,9 @@ public sealed record ReportPage
         AppendCost(parts, entry, session);
         return string.Join(" · ", parts);
     }
+
+    /// <summary>El encabezado de una sección se va: el pliegue ya lleva su título.</summary>
+    internal static string WithoutHeading(string section) => ReportReader.StripHeading(section);
 
     /// <summary>Junta trozos de texto dejando una línea en blanco, y sin los vacíos.</summary>
     private static string Join(params string[] parts)

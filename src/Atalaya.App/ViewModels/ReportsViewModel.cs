@@ -48,21 +48,18 @@ public sealed record SeverityLegendItem(string Severity, int Count);
 /// 130 y las gráficas 180.
 /// </summary>
 public sealed record SeverityTile(
-    IReadOnlyList<DonutSegment> Segments, IReadOnlyList<SeverityLegendItem> Legend, string Total);
+    IReadOnlyList<DonutSegment> Segments, IReadOnlyList<SeverityLegendItem> Legend, string Total)
+{
+    /// <summary>Una unidad de la fila. Lo declaran todos los azulejos: el panel lo lee de aquí.</summary>
+    public int Span => 1;
+}
 
 /// <inheritdoc cref="SeverityTile"/>
-public sealed record OriginTile(IReadOnlyList<OriginBar> Bars);
-
-/// <summary>Una entrada de la leyenda del rosco de veredictos (F36-2 §2).</summary>
-public sealed record VerdictLegendItem(ReportVerdictKind Kind, string Name, int Count);
-
-/// <summary>
-/// <b>El rosco de VEREDICTOS</b> de un informe de verificación (F36-2 §2), azulejo de la misma
-/// rejilla que las cifras (D-990). Sus colores son los de ESTADO —resuelto, activo, aviso y
-/// neutro—, que es donde D-316 deja usar la paleta semántica: aquí el estado ES el dato.
-/// </summary>
-public sealed record VerdictTile(
-    IReadOnlyList<DonutSegment> Segments, IReadOnlyList<VerdictLegendItem> Legend, string Total);
+public sealed record OriginTile(IReadOnlyList<OriginBar> Bars)
+{
+    /// <inheritdoc cref="SeverityTile.Span"/>
+    public int Span => 1;
+}
 
 /// <summary>
 /// Una fila de la barra de +/− de un arreglo (F36-2 §3): un fichero, lo que se le añadió y lo que
@@ -74,11 +71,49 @@ public sealed record VerdictTile(
 /// diff pinta con esos dos colores en todas partes.
 /// </para>
 /// </summary>
+/// <param name="Mark">
+/// «hallazgo» o «fuera del hallazgo» (D-546), leído de las notas de la sesión. Vacío cuando la
+/// sesión no lo registró: sin registro, sin marca.
+/// </param>
 public sealed record FileBar(
-    string Path, string Tally, bool OutOfScope, GridLength Added, GridLength Removed, GridLength Rest);
+    string Path,
+    string Tally,
+    string Mark,
+    bool OutOfScope,
+    string ToolTip,
+    GridLength Added,
+    GridLength Removed,
+    GridLength Rest)
+{
+    public bool HasMark => Mark.Length > 0;
+}
 
-/// <inheritdoc cref="FileBar"/>
-public sealed record FilesTile(IReadOnlyList<FileBar> Bars);
+/// <summary>
+/// <b>Los ficheros tocados como azulejo</b> (F36-2b §2). Vale por DOS unidades de la fila: lleva
+/// una lista dentro, y una lista en una columna de 348 px se convierte en rutas cortadas.
+/// </summary>
+/// <param name="Hidden">
+/// Cuántos no caben de entrada. Se enseñan cuatro y el resto se despliega en sitio: la fila no
+/// puede crecer con el número de ficheros — con doce, la portada se iría de la pantalla.
+/// </param>
+public sealed record FilesTile(string Subtitle, IReadOnlyList<FileBar> Bars, int Hidden)
+{
+    public int Span => 2;
+
+    public bool HasHidden => Hidden > 0;
+
+    public string MoreLabel => Hidden == 1 ? "+1 más" : $"+{Hidden} más";
+}
+
+/// <summary>
+/// <b>Las acciones, como una tarjeta más de la fila</b> (F36-2b §1.2). Estaban en el carril, y el
+/// carril solo existe cuando hay índice que aportar: dejarlas allí las hacía desaparecer en los
+/// informes de un solo hallazgo, que son la mayoría de los de verificación y todos los de arreglo.
+/// </summary>
+public sealed record ActionsTile(bool CanCopy, bool CanOpenFinding, string OpenFindingLabel)
+{
+    public int Span => 1;
+}
 
 /// <summary>
 /// Una fila de la barra de origen del informe (F36 §1): de dónde salieron los hallazgos, del
@@ -348,13 +383,6 @@ public sealed partial class ReportsViewModel : ViewModelBase
     [ObservableProperty] private bool _hasAnnex;
 
     /// <summary>
-    /// La firma del pie —«Atalaya · Organización»— cuando las tarjetas de hallazgo se llevaron el
-    /// final del documento (F36). Cierra el DOCUMENTO, así que va detrás de ellas y no dentro de la
-    /// última tarjeta.
-    /// </summary>
-    [ObservableProperty] private FlowDocument? _footDocument;
-
-    /// <summary>
     /// Lo que el informe escribe entre la cobertura y los hallazgos —incidencias, patrones
     /// silenciados, directivas, veredictos degradados—, tal cual. No se toca: solo se ha quedado
     /// al otro lado de las barras de cobertura, que es donde estaba.
@@ -391,6 +419,22 @@ public sealed partial class ReportsViewModel : ViewModelBase
 
     /// <summary>Los errores y la salida completa, plegados debajo del veredicto.</summary>
     [ObservableProperty] private FlowDocument? _buildDetailDocument;
+
+    /// <summary>La sugerencia de commit, tal cual. Plegada cuando el arreglo ya está commiteado.</summary>
+    [ObservableProperty] private FlowDocument? _commitDocument;
+
+    /// <summary>
+    /// La sugerencia de commit nace ABIERTA mientras no se haya commiteado: entonces es lo que hay
+    /// que usar. Commiteado o verificado, se pliega — el mensaje está en el commit (F36-2b §2).
+    /// </summary>
+    [ObservableProperty] private bool _commitOpen;
+
+    /// <summary>
+    /// <b>El enlace al anexo, fuera del carril</b> (F36-2b §1.3): cuando no hay carril el camino al
+    /// anexo se queda al final de «Ficha del documento». Que no haya índice no puede esconder el
+    /// anexo.
+    /// </summary>
+    [ObservableProperty] private bool _hasAnnexOutsideRail;
 
     /// <summary>La fecha del informe, para la portada. La misma que la fila de la lista.</summary>
     [ObservableProperty] private string _viewerWhen = string.Empty;
@@ -644,7 +688,6 @@ public sealed partial class ReportsViewModel : ViewModelBase
         // o sea lo que la portada acaba de decir. El texto no se toca ni se borra; se pliega.
         Document = MarkdownFlowDocument.Build(Page.HasCover ? Page.Sheet : cuerpo, OpenExternal);
         MiddleDocument = Page.HasMiddle ? MarkdownFlowDocument.Build(Page.Middle, OpenExternal) : null;
-        FootDocument = Page.HasFoot ? MarkdownFlowDocument.Build(Page.Foot, OpenExternal) : null;
         // «Qué cambió y por qué» es PROSA y va en la medida de lectura de F27, que el propio
         // documento aplica. Lo demás del arreglo —los ficheros y la compilación— no lo es.
         StoryDocument = Page.HasStory ? MarkdownFlowDocument.Build(Page.Story, OpenExternal) : null;
@@ -654,10 +697,15 @@ public sealed partial class ReportsViewModel : ViewModelBase
         BuildDetailDocument = Page.Build is { HasDetail: true } d
             ? MarkdownFlowDocument.Build(d.Detail, OpenExternal, measure: 0)
             : null;
+        CommitDocument = Page.HasCommit
+            ? MarkdownFlowDocument.Build(ReportPage.WithoutHeading(Page.Commit), OpenExternal, measure: 0)
+            : null;
+        CommitOpen = Page.HasCommit && !Page.CommitDone;
         // El anexo, SIN medida de lectura: sus tablas son de nueve columnas y en una columna de
         // 720 px se parten. No es prosa, son datos.
         AnnexDocument = anexo is null ? null : MarkdownFlowDocument.Build(anexo, OpenExternal, measure: 0);
         HasAnnex = anexo is not null;
+        HasAnnexOutsideRail = HasAnnex && !Page.HasRail;
         ViewerTitle = row.Title;
         ViewerSubtitle = string.Join(" · ", new[] { row.When, row.AppName, row.By }
             .Where(s => !string.IsNullOrWhiteSpace(s) && s != Unknown));
@@ -689,11 +737,13 @@ public sealed partial class ReportsViewModel : ViewModelBase
         Document = null;
         AnnexDocument = null;
         MiddleDocument = null;
-        FootDocument = null;
         StoryDocument = null;
         BuildDocument = null;
         BuildDetailDocument = null;
+        CommitDocument = null;
+        CommitOpen = false;
         HasAnnex = false;
+        HasAnnexOutsideRail = false;
         Page = ReportPage.Plain;
         Tiles.Clear();
         HasTiles = false;
@@ -791,6 +841,34 @@ public sealed partial class ReportsViewModel : ViewModelBase
         }
 
         Tiles.Clear();
+
+        // LA BARRA DE +/− POR FICHERO va la PRIMERA y vale por dos (F36-2b §2): es lo que un
+        // arreglo hizo, y las cifras de al lado son cómo le fue. Proporcional al fichero que más
+        // cambió: repartir cada barra contra su propio total las dejaría todas llenas.
+        if (Page.Files.Count > 0)
+        {
+            int most = Page.Files.Max(f => f.Total);
+            Tiles.Add(new FilesTile(
+                ReportPage.FilesSubtitle(Page.Files),
+                Page.Files
+                    .Select(f =>
+                    {
+                        double added = most == 0 ? 0 : (double)f.Added / most;
+                        double removed = most == 0 ? 0 : (double)f.Removed / most;
+                        return new FileBar(
+                            f.Path,
+                            f.Tally,
+                            f.Mark,
+                            f.OutOfScope,
+                            f.ToolTip,
+                            Star(added),
+                            Star(removed),
+                            Star(1 - added - removed));
+                    })
+                    .ToList(),
+                Math.Max(0, Page.Files.Count - FilesAtAGlance)));
+        }
+
         foreach (ReportStat stat in Page.Stats)
         {
             Tiles.Add(stat);
@@ -808,44 +886,6 @@ public sealed partial class ReportsViewModel : ViewModelBase
                     .ToList(),
                 Page.Severities.Select(s => new SeverityLegendItem(s.Name, s.Count)).ToList(),
                 Page.Severities.Sum(s => s.Count).ToString(CultureInfo.CurrentCulture)));
-        }
-
-        // EL ROSCO DE VEREDICTOS (F36-2 §2), en colores de estado y solo con los que hay.
-        if (Page.VerdictSlices.Count > 0)
-        {
-            Tiles.Add(new VerdictTile(
-                Page.VerdictSlices
-                    .Select(s => new DonutSegment(
-                        s.Name,
-                        s.Count,
-                        StateBrush(KindOf(s.Name)),
-                        $"{s.Name} — {s.Count} hallazgo(s)"))
-                    .ToList(),
-                Page.VerdictSlices
-                    .Select(s => new VerdictLegendItem(KindOf(s.Name), s.Name, s.Count))
-                    .ToList(),
-                Page.VerdictSlices.Sum(s => s.Count).ToString(CultureInfo.CurrentCulture)));
-        }
-
-        // LA BARRA DE +/− POR FICHERO (F36-2 §3). Proporcional al fichero que más cambió: repartir
-        // cada barra contra su propio total las dejaría todas llenas y no habría nada que comparar.
-        if (Page.Files.Count > 0)
-        {
-            int most = Page.Files.Max(f => f.Total);
-            Tiles.Add(new FilesTile(Page.Files
-                .Select(f =>
-                {
-                    double added = most == 0 ? 0 : (double)f.Added / most;
-                    double removed = most == 0 ? 0 : (double)f.Removed / most;
-                    return new FileBar(
-                        f.Path,
-                        f.Tally,
-                        f.OutOfScope,
-                        Star(added),
-                        Star(removed),
-                        Star(1 - added - removed));
-                })
-                .ToList()));
         }
 
         if (Page.Origins.Count > 0)
@@ -866,8 +906,19 @@ public sealed partial class ReportsViewModel : ViewModelBase
                 .ToList()));
         }
 
+        // Y LAS ACCIONES, LA ÚLTIMA (F36-2b §1.2). Van en la fila y no en el carril porque el
+        // carril solo existe cuando hay índice que aportar, y descargar el informe hay que poder
+        // hacerlo siempre.
+        Tiles.Add(new ActionsTile(Page.HasSummary, CanOpenFinding, OpenFindingLabel));
+
         HasTiles = Tiles.Count > 0;
     }
+
+    /// <summary>
+    /// Cuántas barras de fichero se ven de entrada. Cuatro: es lo que cabe en una tarjeta al alto
+    /// de las demás, y a partir de ahí la fila crecería con el arreglo en vez de con la página.
+    /// </summary>
+    internal const int FilesAtAGlance = 4;
 
     /// <summary>
     /// Un tramo de barra. Nunca cero exacto: una columna de estrella a cero desaparece y con ella

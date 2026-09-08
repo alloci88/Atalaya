@@ -65,6 +65,30 @@ public static class ReportLayout
         => page >= TwoColumnsFrom ? 2 : 1;
 
     /// <summary>
+    /// <b>A partir de cuántas tarjetas de cuerpo hay carril</b> (F36-2b §1.3). Un índice de tres
+    /// entradas al lado de tres tarjetas no es un índice: es la misma lista dos veces, y se lleva
+    /// 380 px del ancho del cuerpo. Con cuatro ya hay algo que recorrer.
+    /// </summary>
+    public const int RailFrom = 4;
+
+    /// <summary>Hay bastante que indexar como para que el carril valga su ancho.</summary>
+    public static bool NeedsRail(int cards) => cards >= RailFrom;
+
+    /// <summary>Lo que le queda al cuerpo SIN carril al lado: la página entera menos su cromo.</summary>
+    public static double FullWidth(double page) => page - Chrome;
+
+    /// <summary>
+    /// El ancho mínimo de media fila del cuerpo — la prosa del arreglo y su compilación, una al
+    /// lado de la otra. <b>Se deriva del mismo umbral</b> que las tarjetas de hallazgo, sobre el
+    /// ancho de un cuerpo sin carril: un arreglo no tiene carril (§1.3), así que su mitad no es la
+    /// mitad de <see cref="BodyWidth"/>.
+    /// </summary>
+    public static double HalfMinWidth => (FullWidth(TwoColumnsFrom) - Gap) / 2;
+
+    /// <summary>Cuántas columnas coge el cuerpo de un arreglo en una ventana de este ancho.</summary>
+    public static int HalfColumns(double page) => page >= TwoColumnsFrom ? 2 : 1;
+
+    /// <summary>
     /// Dónde se coloca el carril fijo mientras se hace scroll: pegado arriba hasta que su pie
     /// llegaría al final del cuerpo, y ahí se para. Sin el tope, un carril corto seguiría bajando y
     /// acabaría fuera de su columna.

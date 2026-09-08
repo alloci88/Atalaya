@@ -1,5 +1,7 @@
+using System.Windows;
 using Atalaya.App.Controls;
 using Atalaya.App.Services;
+using Atalaya.App.ViewModels;
 using Atalaya.Domain;
 using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Ids;
@@ -178,6 +180,15 @@ public sealed class ReportVerifyFixPageTests
             }
             : new List<(string, string, bool)>();
 
+        // LAS NOTAS QUE ESCRIBE EL ARREGLO (D-546): una por fichero, y las autorizadas lo dicen.
+        // Es de ahí de donde la página lee el ámbito — del registro, no del texto.
+        session.Notes.Add($"Arreglo asistido de {finding.DisplayId}: {finding.Title}");
+        foreach ((string path, string tally, bool inScope) in files)
+        {
+            session.Notes.Add($"tocado: {path} ({tally})"
+                + (inScope ? string.Empty : " — fuera del hallazgo, autorizado por el usuario"));
+        }
+
         string markdown = ReportBuilder.BuildFixReport(
             App(), session, finding, files,
             "Se quitó el bloque muerto y se validó el parámetro.",
@@ -238,25 +249,63 @@ public sealed class ReportVerifyFixPageTests
         (ReportEntry entry, AuditSession session, string body) = VerifyCase();
         ReportPage page = ReportPage.Compose(entry, session, body);
 
-        ReportStat verificados = page.Stats.Single(s => s.Key == "verified");
-        verificados.Value.Should().Be("3");
+        // CON VARIOS VEREDICTOS, LA TARJETA LOS CUENTA. Con uno —el caso normal— dice cuál fue.
+        ReportStat veredicto = page.Stats.Single(s => s.Key == "verdict");
+        veredicto.Value.Should().Be("3");
+        veredicto.Span.Should().Be(2, "lleva una enumeración dentro");
+        veredicto.Subtitle.Should().Be("1 sigue activo · 1 no localizado · 1 resuelto");
         body.Should().Contain("**Hallazgos verificados**: 3",
             "la cifra de la tarjeta es la que el informe escribió");
-
-        // Los desenlaces raros van de subtítulo de «Verificados», no de tarjeta propia.
-        verificados.Subtitle.Should().Be("1 no localizado");
-        body.Should().Contain("**Veredicto**: no localizado");
-
-        page.Stats.Single(s => s.Key == "resolved").Value.Should().Be("1");
-        body.Should().Contain("**Veredicto**: resuelto");
-
-        page.Stats.Single(s => s.Key == "active").Value.Should().Be("1");
-        body.Should().Contain("**Veredicto**: confirmado");
+        foreach (string escrito in new[] { "confirmado", "resuelto", "no localizado" })
+        {
+            body.Should().Contain($"**Veredicto**: {escrito}");
+        }
 
         ReportStat coste = page.Stats.Single(s => s.Key == "cost");
         coste.Value.Should().Be("15,0");
         body.Should().Contain("15,0 AI credits", "el coste sale del mismo CreditCalculator");
-        coste.Subtitle.Should().Be("5 por hallazgo");
+        coste.Subtitle.Should().BeEmpty(
+            "un arreglo arregla un hallazgo y una verificación verifica uno: no hay reparto");
+
+        page.Stats.Single(s => s.Key == "duration").Value.Should().Be("48 s");
+        page.Stats.Single(s => s.Key == "calls").Value.Should().Be("4");
+        body.Should().Contain("**4 llamada(s) al modelo**", "las llamadas salen del mismo registro");
+
+        // Y las tres tarjetas de recuento se han ido: verificar se lanza desde la ficha de UNO.
+        page.Stats.Select(s => s.Key).Should().NotContain(new[] { "verified", "resolved", "active" });
+        // Y el rosco se ha ido con ellas: verificar sale de la ficha de UNO, así que era un rosco
+        // de un solo tramo — que no es un reparto, es un círculo (F36-2b §3).
+        ViewLayout.Xaml("ReportsView.xaml").Should().NotContain("vm:VerdictTile");
+    }
+
+    /// <summary>
+    /// <b>Con un solo veredicto, la tarjeta dice CUÁL fue</b>, en grande y en su color, y el
+    /// subtítulo lleva lo que hay que hacer a continuación cuando lo hay. Los cuatro desenlaces.
+    /// </summary>
+    [Theory]
+    [InlineData("resuelto", "Resuelto", "")]
+    [InlineData("confirmado", "Sigue activo", "")]
+    [InlineData("no localizado", "No localizado", "Verifica para re-anclarlo o cerrarlo.")]
+    [InlineData("no concluyente", "No concluyente", "")]
+    public void El_veredicto_de_un_solo_hallazgo_va_en_grande_con_su_subtitulo(
+        string escrito, string enPantalla, string subtitulo)
+    {
+        (ReportEntry entry, AuditSession session, string body) = VerifyCase(new[]
+        {
+            Line("BUG-0001", Severity.Alta, escrito),
+        });
+
+        ReportPage page = ReportPage.Compose(entry, session, body);
+
+        ReportStat veredicto = page.Stats.Single(s => s.Key == "verdict");
+        veredicto.Value.Should().Be(enPantalla);
+        veredicto.Subtitle.Should().Be(subtitulo);
+        veredicto.Tone.Should().Be(ReportVerdicts.Tone(ReportVerdicts.Of(escrito)));
+
+        // La gravedad va en su tarjeta, con la pastilla de siempre. Nunca como cifra.
+        ReportStat gravedad = page.Stats.Single(s => s.Key == "severity");
+        gravedad.Value.Should().BeEmpty("una gravedad no es un número");
+        gravedad.Chips.Select(c => c.Severity).Should().Equal("Alta");
     }
 
     /// <summary>
@@ -270,7 +319,7 @@ public sealed class ReportVerifyFixPageTests
 
         page.Lead.Should().Be(
             "Se verificaron 3 hallazgos · 1 sigue activo · 1 no localizado · 1 resuelto "
-            + "· 15,0 AI credits en 48 s");
+            + "· 15,0 AI credits · 4 llamadas · 48 s");
         page.Lead.Should().NotContain("no concluyente", "lo que no hay no se nombra (D-318)");
         page.Lead.Should().NotContain("Alta", "la gravedad no es el desenlace");
     }
@@ -294,6 +343,7 @@ public sealed class ReportVerifyFixPageTests
         ReportPage page = ReportPage.Compose(entry, session, body);
 
         page.Lead.Should().StartWith("Se verificó 1 hallazgo · 1 sigue activo · ");
+        page.Lead.Should().EndWith("4 llamadas · 48 s");
     }
 
     /// <summary>
@@ -339,32 +389,6 @@ public sealed class ReportVerifyFixPageTests
         page.VerdictIndex.Should().HaveSameCount(page.Verdicts);
     }
 
-    /// <summary>
-    /// <b>El rosco lleva un tramo por veredicto del informe y ninguno a cero</b> (D-318): un tramo a
-    /// cero no es un tramo, y una leyenda de cuatro con tres tramos obliga a contar para saber cuál
-    /// falta.
-    /// </summary>
-    [Fact]
-    public void El_rosco_de_veredictos_solo_lleva_los_que_existen()
-    {
-        ReportPage page = VerifyPage();
-
-        page.VerdictSlices.Select(s => s.Name).Should().Equal(
-            "Siguen activos", "No localizados", "Resueltos");
-        page.VerdictSlices.Select(s => s.Count).Should().AllSatisfy(c => c.Should().BePositive());
-        page.VerdictSlices.Sum(s => s.Count).Should().Be(page.Verdicts.Count,
-            "los tramos son los veredictos del informe, todos y solo ellos");
-
-        // Y con un solo desenlace, un solo tramo.
-        (ReportEntry entry, AuditSession session, string body) = VerifyCase(new[]
-        {
-            Line("BUG-0001", Severity.Alta, "resuelto"),
-            Line("BUG-0002", Severity.Baja, "resuelto"),
-        });
-        ReportPage solos = ReportPage.Compose(entry, session, body);
-        solos.VerdictSlices.Should().ContainSingle().Which.Count.Should().Be(2);
-    }
-
     // ================================================================ §2 · el re-anclaje
 
     /// <summary>
@@ -398,7 +422,8 @@ public sealed class ReportVerifyFixPageTests
         activo.HasReanchor.Should().BeTrue();
         activo.Reanchor.Should().Be("re-anclado 507 → 497");
         con.Lead.Should().Contain("· 1 re-anclado", "la frase lo cuenta");
-        con.Stats.Single(s => s.Key == "active").Subtitle.Should().Be("1 re-anclado");
+        con.Stats.Single(s => s.Key == "verdict").Subtitle.Should()
+            .Contain("re-anclado", "y la tarjeta del veredicto también");
         body.Should().NotContain("re-anclado 507",
             "el informe NO lo escribe: por eso hay que leerlo del evento");
 
@@ -411,7 +436,7 @@ public sealed class ReportVerifyFixPageTests
 
         sin.Verdicts.Should().OnlyContain(v => !v.HasReanchor);
         sin.Lead.Should().NotContain("re-anclado");
-        sin.Stats.Single(s => s.Key == "active").Subtitle.Should().BeEmpty();
+        sin.Stats.Single(s => s.Key == "verdict").Subtitle.Should().NotContain("re-anclado");
     }
 
     // ================================================================ §3 · el estado del arreglo
@@ -540,23 +565,27 @@ public sealed class ReportVerifyFixPageTests
         (ReportEntry entry, AuditSession session, string body) = FixCase(Green());
         ReportPage page = ReportPage.Compose(entry, session, body);
 
-        page.Stats.Single(s => s.Key == "files").Value.Should().Be("2");
-        page.Stats.Single(s => s.Key == "files").Subtitle.Should().Be("1 fuera del hallazgo");
-        body.Should().Contain("**fuera del hallazgo**, autorizado por el usuario");
-
-        page.Stats.Single(s => s.Key == "lines").Value.Should().Be("+4 −39");
+        // «Ficheros» y «Cambios» se han ido: repetían lo que la barra de al lado ya dice.
+        page.Stats.Select(s => s.Key).Should().NotContain(new[] { "files", "lines" });
+        ReportPage.FilesSubtitle(page.Files).Should().Be("2 ficheros · 1 fuera del hallazgo, autorizado");
         body.Should().Contain("(+0 −38)").And.Contain("(+4 −1)",
-            "la suma de la tarjeta son los recuentos que el informe escribió");
+            "los recuentos de la barra son los que el informe escribió");
+
+        page.Stats.Single(s => s.Key == "duration").Value.Should().Be("54 s");
+        page.Stats.Single(s => s.Key == "calls").Value.Should().Be("10");
 
         ReportStat build = page.Stats.Single(s => s.Key == "build");
         build.Value.Should().Be("Verde");
         build.Tone.Should().Be(ReportTone.Success);
         build.Subtitle.Should().Be("sin tests", "es un hecho del repositorio, no un resultado (H9.1 §3)");
 
-        page.Stats.Single(s => s.Key == "cost").Value.Should().Be("27,0");
+        ReportStat coste = page.Stats.Single(s => s.Key == "cost");
+        coste.Value.Should().Be("27,0");
+        coste.Subtitle.Should().BeEmpty("un arreglo arregla un hallazgo: no hay reparto que hacer");
         body.Should().Contain("27,0 AI credits");
 
-        page.Lead.Should().Be("MEJ-0046 · 2 ficheros · +4 −39 · build verde · 27,0 AI credits en 54 s");
+        page.Lead.Should().Be(
+            "MEJ-0046 · 2 ficheros · +4 −39 · build verde · 27,0 AI credits · 10 llamadas · 54 s");
     }
 
     /// <summary>
@@ -600,7 +629,17 @@ public sealed class ReportVerifyFixPageTests
 
         page.Files.Select(f => f.Path).Should().Equal("src/Uno.cs", "src/Dos.cs");
         page.Files.Select(f => f.Tally).Should().Equal("+0 −38", "+4 −1");
-        page.Files.Select(f => f.OutOfScope).Should().Equal(false, true);
+        // EL ÁMBITO SALE DE LAS NOTAS DE LA SESIÓN (D-546), no del texto del informe.
+        page.Files.Select(f => f.Scope).Should()
+            .Equal(ReportFileScope.Hallazgo, ReportFileScope.Autorizado);
+        page.Files.Select(f => f.Mark).Should().Equal("hallazgo", "fuera del hallazgo");
+
+        // Y sin notas, sin marca: no se deduce del informe una decisión que se tomó y se anotó.
+        session.Notes.Clear();
+        ReportPage sinNotas = ReportPage.Compose(entry, session, body);
+        sinNotas.Files.Should().OnlyContain(f => !f.HasMark);
+        ReportPage.FilesSubtitle(sinNotas.Files).Should().Be("2 ficheros",
+            "sin registro no se cuenta lo que salió del ámbito");
 
         // Proporcional: el fichero de 38 cambios llena la barra y el de 5 ocupa 5/38 de ella.
         int mayor = page.Files.Max(f => f.Total);
@@ -670,8 +709,8 @@ public sealed class ReportVerifyFixPageTests
         }
 
         fix.Story.Should().Be("Se quitó el bloque muerto y se validó el parámetro.");
-        fix.Middle.Should().Contain("## Sugerencia de commit",
-            "lo que esta página no lee se sigue pintando tal cual");
+        fix.Commit.Should().Contain("Arregla lo que había que arreglar",
+            "la sugerencia sale a su propio pliegue, sin reescribirse");
     }
 
     /// <summary>
@@ -712,6 +751,229 @@ public sealed class ReportVerifyFixPageTests
     {
         (ReportEntry entry, AuditSession session, string body) = FixCase(Green());
         return ReportPage.Compose(entry, session, body);
+    }
+
+
+    // ================================================================ F36-2b · la segunda pasada
+
+    /// <summary>
+    /// <b>El resolutor por texto devuelve TEXTO, no markdown</b> (F36-2b §1.4).
+    /// <para>
+    /// «Código que se le enseñó» se pinta como un dato suelto, fuera del renderizador de markdown,
+    /// y ahí un asterisco es un asterisco: la línea real de un veredicto sobre la unidad entera
+    /// salía con ellos. Se comprueba con esa línea, la que <c>ReportBuilder</c> escribe.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Lo_que_se_lee_del_cuerpo_sale_sin_asteriscos()
+    {
+        (ReportEntry entry, AuditSession session, string body) = VerifyCase(new[]
+        {
+            Line("BUG-0001", Severity.Alta, "no concluyente", VerifyBasis.Unidad),
+        });
+
+        // La línea del informe SÍ lleva la negrita: el `.md` no se toca (D-441).
+        body.Should().Contain("**la unidad entera**");
+
+        ReportPage page = ReportPage.Compose(entry, session, body);
+
+        ReportVerdict verdict = page.Verdicts.Single();
+        verdict.Basis.Should().StartWith("la unidad entera, porque");
+        verdict.Basis.Should().NotContain("*", "un asterisco fuera del markdown es un asterisco");
+        verdict.Where.Should().NotContain("`", "y una comilla invertida, una comilla invertida");
+    }
+
+    /// <summary>
+    /// <b>La firma va al pie, en una línea</b> (F36-2b §1.5). Como párrafo de markdown quedaba
+    /// suelta a media pantalla; la raya que la precede es del dibujo, no del texto — el <c>.md</c>
+    /// sigue teniéndola.
+    /// </summary>
+    [Fact]
+    public void La_firma_sale_en_una_linea_y_sin_la_raya()
+    {
+        foreach (ReportPage page in new[] { VerifyPage(), FixPage() })
+        {
+            page.HasFoot.Should().BeTrue();
+            page.Foot.Should().StartWith("---", "el trozo del documento la lleva");
+            page.FootLine.Should().Be("Atalaya · Org");
+            page.FootLine.Should().NotContain("-", "la raya es del dibujo, no de la firma");
+        }
+    }
+
+    /// <summary>
+    /// <b>La sugerencia de commit se pliega cuando ya es historia</b> (F36-2b §2): con el arreglo
+    /// commiteado el mensaje está en el commit, y esto es el borrador de algo que ya se hizo. Con
+    /// «sin commitear» sigue abierta, porque entonces es lo que hay que usar.
+    /// </summary>
+    [Fact]
+    public void La_sugerencia_de_commit_se_pliega_cuando_el_arreglo_ya_esta_commiteado()
+    {
+        Finding finding = Fixed("MEJ-0046");
+
+        (ReportEntry entry, AuditSession session, string body) = FixCase(Green(), finding: finding);
+        ReportPage abierta = ReportPage.Compose(entry, session, body, null, Record(session, null, null));
+        abierta.HasCommit.Should().BeTrue();
+        abierta.CommitDone.Should().BeFalse("sin commitear, es lo que hay que usar");
+        abierta.CommitTitle.Should().Be("Sugerencia de commit");
+
+        (entry, session, body) = FixCase(Green(), sha: "e660243", finding: finding);
+        ReportPage plegada = ReportPage.Compose(
+            entry, session, body, null, Record(session, "e660243", null));
+        plegada.CommitDone.Should().BeTrue();
+        plegada.CommitTitle.Should().Be("Sugerencia de commit · usada en e660243");
+        plegada.Commit.Should().Contain("Arregla lo que había que arreglar",
+            "se pliega, no se borra (D-441)");
+
+        // Y verificado también: el commit sigue estando, así que el borrador sigue siendo historia.
+        var hub = new ReportFindingIndex(
+            new Dictionary<string, string>(), new Dictionary<string, string>())
+        {
+            LastVerdicts = new Dictionary<string, ReportVerdictEvent>(StringComparer.Ordinal)
+            {
+                [finding.Id.ToString()] =
+                    new ReportVerdictEvent(session.StartedUtc.AddHours(1), FindingEvent.Resolved),
+            },
+        };
+        ReportPage verificado = ReportPage.Compose(
+            entry, session, body, hub, Record(session, "e660243", null));
+        verificado.FixState!.Kind.Should().Be(ReportFixStateKind.Verificado);
+        verificado.CommitDone.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// <b>El correo del autor no empuja la portada</b> (F36-2b §2). Se recorta con puntos
+    /// suspensivos y el entero queda en el tooltip: recortar sin decirlo es lo que P-01 prohíbe.
+    /// </summary>
+    [Fact]
+    public void El_autor_del_commit_se_recorta_cuando_no_cabe()
+    {
+        (ReportEntry entry, AuditSession session, string body) = FixCase(Green(), sha: "5249598");
+
+        ReportPage corto = ReportPage.Compose(
+            entry, session, body, null, Record(session, "5249598", "Ana <a@x.io>"));
+        corto.FixState!.DetailElided.Should().BeFalse();
+        corto.FixState.DetailShort.Should().Be(corto.FixState.Detail);
+
+        ReportPage largo = ReportPage.Compose(
+            entry, session, body, null,
+            Record(session, "5249598", "Álvaro López Ciller <alvaro.lopez.ciller@empresa.com>"));
+        largo.FixState!.DetailElided.Should().BeTrue();
+        largo.FixState.DetailShort.Should().EndWith("…").And.HaveLength(ReportFixState.Fit + 1);
+        largo.FixState.Detail.Should().Contain("alvaro.lopez.ciller@empresa.com",
+            "el entero sigue estando: es lo que va al tooltip");
+    }
+
+    /// <summary>
+    /// <b>El carril no existe si no tiene índice que aportar</b> (F36-2b §1.3), y una verificación
+    /// de un veredicto es justo ese caso: la tarjeta del índice repetía la única del cuerpo.
+    /// </summary>
+    [Fact]
+    public void Una_verificacion_de_un_veredicto_no_tiene_carril()
+    {
+        VerifyPage().HasRail.Should().BeFalse("un veredicto no necesita índice");
+        FixPage().HasRail.Should().BeFalse("un arreglo no tiene tarjetas de cuerpo que indexar");
+
+        // Con cuatro, sí. Se monta con cuatro veredictos de verdad, no con un contador a mano.
+        (ReportEntry entry, AuditSession session, string body) = VerifyCase(new[]
+        {
+            Line("BUG-0001", Severity.Alta, "confirmado"),
+            Line("BUG-0002", Severity.Media, "resuelto"),
+            Line("BUG-0003", Severity.Baja, "resuelto"),
+            Line("BUG-0004", Severity.Baja, "resuelto"),
+        });
+
+        ReportPage cuatro = ReportPage.Compose(entry, session, body);
+        cuatro.Verdicts.Should().HaveCount(4);
+        cuatro.HasRail.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// <b>La tarjeta de acciones lleva las acciones que la página puede ofrecer</b> (F36-2b §1.2):
+    /// las dos de siempre, y en un arreglo la tercera — que aquí es la única vía a la ficha.
+    /// </summary>
+    [Fact]
+    public void La_tarjeta_de_acciones_lleva_las_dos_o_las_tres()
+    {
+        var dos = new ActionsTile(CanCopy: true, CanOpenFinding: false, "Ver el hallazgo");
+        dos.Span.Should().Be(1);
+        dos.CanOpenFinding.Should().BeFalse();
+
+        var tres = new ActionsTile(CanCopy: true, CanOpenFinding: true, "Ver el hallazgo (MEJ-0046)");
+        tres.OpenFindingLabel.Should().Contain("MEJ-0046",
+            "el identificador va en el rótulo, no en un tooltip");
+
+        // Y el enlace al anexo no se va con el carril: sin carril baja a la ficha del documento.
+        string xaml = ViewLayout.Xaml("ReportsView.xaml");
+        xaml.Split("Content=\"Anexo técnico ↓\"").Should().HaveCount(3,
+            "hay un enlace en el carril y otro en la ficha, uno visible cada vez");
+        xaml.Should().Contain("Binding HasAnnexOutsideRail");
+    }
+
+    /// <summary>
+    /// <b>Cuatro barras a la vista y el resto en un «+N más»</b> (F36-2b §2). La fila no puede
+    /// crecer con el número de ficheros: con doce, la portada se iría de la pantalla.
+    /// </summary>
+    [Theory]
+    [InlineData(3, 0, "")]
+    [InlineData(4, 0, "")]
+    [InlineData(5, 1, "+1 más")]
+    [InlineData(9, 5, "+5 más")]
+    public void Las_barras_de_mas_de_cuatro_ficheros_se_despliegan(int files, int hidden, string label)
+    {
+        var bars = Enumerable.Range(0, files)
+            .Select(i => new FileBar(
+                $"src/{i}.cs", "+1 −1", "hallazgo", false, "t",
+                new GridLength(1, GridUnitType.Star),
+                new GridLength(1, GridUnitType.Star),
+                new GridLength(1, GridUnitType.Star)))
+            .ToList();
+
+        var tile = new FilesTile("x", bars, Math.Max(0, files - ReportsViewModel.FilesAtAGlance));
+
+        tile.Hidden.Should().Be(hidden);
+        tile.HasHidden.Should().Be(hidden > 0);
+        if (hidden > 0)
+        {
+            tile.MoreLabel.Should().Be(label);
+        }
+
+        tile.Bars.Should().HaveCount(files, "todas están: lo que cambia es cuántas se ven de golpe");
+        tile.Span.Should().Be(2);
+    }
+
+    /// <summary>
+    /// <b>El build dice «sin tests» o lo que el informe diga de ellos</b>, y en rojo la razón corta.
+    /// No se cuenta cuántos tests hay: ni el registro ni el informe lo escriben, y sacarlo de la
+    /// salida del compilador sería inventarse una medida (D-318).
+    /// </summary>
+    [Fact]
+    public void El_subtitulo_del_build_sale_de_lo_que_el_informe_dice_de_los_tests()
+    {
+        (ReportEntry entry, AuditSession session, string body) = FixCase(Green());
+        ReportPage sinTests = ReportPage.Compose(entry, session, body);
+        sinTests.Stats.Single(s => s.Key == "build").Subtitle.Should().Be("sin tests");
+        body.Should().Contain("no tiene proyectos de tests", "es un hecho del repositorio (H9.1 §3)");
+
+        // Con proyecto de tests, lo que el informe escribió en su línea de «Tests».
+        AuditSession conTests = FixSession(Ulids.NewUlid().ToString(), "MEJ-0046");
+        Finding finding = Fixed("MEJ-0046");
+        string markdown = ReportBuilder.BuildFixReport(
+            App(), conTests, finding,
+            new List<(string, string, bool)> { ("src/Uno.cs", "+1 −1", true) },
+            "resumen", null, "título", string.Empty, Green(), "Org",
+            new FixTestSituation("App/App.csproj", new[] { "App.Tests/App.Tests.csproj" }, true),
+            TestRates.Table());
+        (string conBody, _) = Atalaya.App.ViewModels.ReportsViewModel.SplitAnnex(markdown);
+
+        var conEntry = new ReportEntry(
+            "app", "App", conTests.Id.ToString(), "x.md", "t", ReportKind.Sesion,
+            conTests.StartedUtc, ReportDateSource.Session, conTests.By, "Fix", null, null, null,
+            CreditCalculator.Calculate(conTests, TestRates.Table()).Credits,
+            CostFormat.BillingUnit, HasSession: true, Session: conTests);
+
+        ReportPage page = ReportPage.Compose(conEntry, conTests, conBody);
+        page.Stats.Single(s => s.Key == "build").Subtitle.Should().Be("pasan");
+        conBody.Should().Contain("**Tests**: pasan");
     }
 
     // ================================================================ el dibujo
