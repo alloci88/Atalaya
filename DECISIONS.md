@@ -19105,4 +19105,9 @@ estilo de título —que una lleve el de sección y la otra el de metadato no fa
 valiera más—, ese estilo es el de la casa, y las dos respiran y centran su prosa. La tanda queda en
 **2.740 casos** (2.205 en la aplicación).
 
+**Y un cuarto**, visto después: en «BUG-0236 · Media» el separador llevaba su paso solo por la
+izquierda, así que se quedaba pegado a la pastilla. Pasa a llevarlo **por los dos lados**, con un
+token nuevo del mismo paso pequeño —`Pad.XS.H`, que no existía: la casa tenía el par vertical y no
+el horizontal—, y la pastilla se alinea con el texto de su línea.
+
 **Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8.

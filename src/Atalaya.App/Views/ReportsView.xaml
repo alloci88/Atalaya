@@ -831,10 +831,15 @@
                                                            Style="{StaticResource Text.Small}"
                                                            VerticalAlignment="Center"
                                                            Visibility="{Binding HasPrefix, Converter={StaticResource BoolToVisibility}}" />
+                                                <!-- EL SEPARADOR RESPIRA POR LOS DOS LADOS. Con la
+                                                     separación solo a la izquierda se quedaba
+                                                     pegado a la pastilla: «BUG-0236 ·Media». El
+                                                     paso pequeño de la casa a cada lado, no dos
+                                                     números elegidos aquí. -->
                                                 <TextBlock Text="·" Style="{StaticResource Text.Small}"
                                                            Foreground="{DynamicResource Brush.TextMuted}"
                                                            VerticalAlignment="Center"
-                                                           Margin="{StaticResource Pad.XS.Left}"
+                                                           Margin="{StaticResource Pad.XS.H}"
                                                            Visibility="{Binding HasPrefix, Converter={StaticResource BoolToVisibility}}" />
                                                 <ItemsControl ItemsSource="{Binding Chips}"
                                                               VerticalAlignment="Center">
@@ -846,9 +851,11 @@
                                                     </ItemsControl.ItemsPanel>
                                                     <ItemsControl.ItemTemplate>
                                                         <DataTemplate>
-                                                            <Border Style="{StaticResource Report.SevPill}">
+                                                            <Border Style="{StaticResource Report.SevPill}"
+                                                                    VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding Text}"
-                                                                           Style="{StaticResource Report.SevPill.Text}" />
+                                                                           Style="{StaticResource Report.SevPill.Text}"
+                                                                           VerticalAlignment="Center" />
                                                             </Border>
                                                         </DataTemplate>
                                                     </ItemsControl.ItemTemplate>

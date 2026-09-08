@@ -128,6 +128,10 @@
     <Thickness x:Key="Pad.S.Right">0,0,12,0</Thickness>
     <Thickness x:Key="Pad.XXS.V">0,4</Thickness>
 
+    <!-- El paso pequeño A CADA LADO. Lo pide un separador entre dos cosas —«BUG-0236 · Media»—:
+         con el margen solo a un lado se pega a su vecino de la derecha. -->
+    <Thickness x:Key="Pad.XS.H">8,0</Thickness>
+
     <!-- Las dos sangrías de la conversación del arreglo: la del cuerpo de un mensaje bajo el
          nombre de quien habla, y la del bloque que cuelga de él. Salen del ancho del avatar más su
          hueco; están aquí para que las dos vistas densas usen la MISMA. -->
