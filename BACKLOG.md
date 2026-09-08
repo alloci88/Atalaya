@@ -511,7 +511,7 @@ editores es la única puerta).
 
 - **F35-4 / «Ciclos y temáticas»: una cinta con escala** — la cinta pasa de bloques de ancho fijo
   sin eje a un **eje de tiempo real compartido por todas las aplicaciones**, del primer ciclo hasta
-  hoy (suelo de cuatro semanas, marcas en fechas redondas, línea de hoy). Cada bloque empieza en su
+  hoy (suelo de una semana, el mismo que los demás ejes, marcas en fechas redondas, línea de hoy). Cada bloque empieza en su
   fecha y mide su duración; **se rellena según su cobertura** en el color de su temática, con lo
   pendiente en el neutro del rosco; los **huecos se ven** y ocupan lo que duraron. El periodo deja
   de recortar la cinta: es historia. Tooltip, clic y el cálculo de los tramos (D-831), intactos.

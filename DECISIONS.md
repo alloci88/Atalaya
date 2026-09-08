@@ -18402,10 +18402,15 @@ entero ejercitan el valor nuevo solos. La tanda queda en **2.649 casos** (2.114 
 
 Ninguna de las dos tiene ciclos anteriores ni huecos, así que **los huecos no se pueden cuadrar
 contra este hub y se dice**: van probados con datos escritos para el caso. Y con el eje ya puesto,
-la vista real pintada da: eje de **28 días** (el suelo, porque el primer ciclo es de hace cuatro),
-marcas en lunes —17 ago, 24 ago, 31 ago, 7 sept—, línea de hoy en el extremo derecho, el bloque de
-XBLAST en x=1.126 con 158 px de ancho y **6,8 px de relleno** (4,3 %), y el de Atalaya con 24,6 px
-y **sin relleno**. Cuadra con la tabla.
+la vista real pintada da: el eje arranca en el primer tramo —el ciclo de XBLAST—, con la línea de
+hoy en el extremo derecho, el bloque de XBLAST llenando casi todo el eje con un **relleno del
+4,3 %** y el de Atalaya ocupando su cuarto final y **sin relleno**. Cuadra con la tabla.
+
+> **Retoque declarado.** El suelo del eje se midió primero en cuatro semanas y se bajó a **siete
+> días** antes de cerrar: con cuatro, un hub de cuatro días de vida dibujaba sus dos ciclos
+> apretados contra el borde derecho de tres semanas y media vacías — exactamente lo que la regla
+> del eje de D-1040 quita en las demás gráficas. Con el mismo suelo que ellas, la cinta empieza
+> donde empieza el dato.
 
 **El defecto que arregla.** La cinta pintaba **bloques de ancho fijo, uno tras otro y sin eje**: un
 ciclo de cuatro días y uno de seis meses medían lo mismo y estaban en el mismo sitio. Contestaba
@@ -18418,8 +18423,12 @@ uno y cuánto se tardó en volver», que es lo que se le pide a un historial.
    cualquiera de ellas hasta **hoy**, con marcas en fechas **redondas** —lunes hasta dos meses, día
    1 hasta poco más de un año, trimestres después— y una **línea vertical de hoy**, que no es una
    marca más: es el ancla (D-593). Cada bloque empieza en su fecha y mide su duración; el abierto
-   llega a la línea de hoy. **Suelo de cuatro semanas**: sin él, una aplicación con un solo ciclo
-   de cuatro días llenaría la pantalla y la escala diría lo contrario de lo que hay.
+   llega a la línea de hoy. **Suelo de siete días**, la misma regla que el resto de ejes del panel
+   (D-1040): el eje empieza donde empieza el primer tramo, y solo se alarga hacia atrás cuando ese
+   inicio queda a menos de una semana de hoy. Sin suelo, una aplicación con un ciclo de dos horas
+   llenaría la pantalla y la escala diría lo contrario de lo que hay; con más suelo del necesario
+   —el primer valor fueron cuatro semanas—, un historial corto se dibuja contra el borde derecho de
+   un desierto, que es el defecto que la regla del eje de F35 vino a quitar.
 2. **El bloque enseña su avance**: relleno de izquierda a derecha proporcional a la cobertura
    —auditadas de auditables, la misma cifra del tooltip—, en el color de la temática, y el resto en
    el neutro apagado del rosco de cobertura (D-316). El rótulo lo dice: «C1 · General · 4,3 %» —el
@@ -18453,8 +18462,9 @@ ahora todo su dibujo depende de un ancho que llega después: se le pone la misma
 pintando la vista de verdad con la secuencia de verdad, no solo con el control suelto.
 
 **Cobertura (N-5): 15 casos, la mitad sobre el dibujo.** `RibbonGeometry` se separa del control para
-poder afirmarla sin pintar un píxel (la misma razón de D-832): el eje va del primer tramo a hoy y
-nunca baja de cuatro semanas; sin tramos sigue existiendo y no divide por cero; las marcas caen en
+poder afirmarla sin pintar un píxel (la misma razón de D-832): el eje va del primer tramo a hoy
+—sin alargarlo cuando el tramo ya pasa de una semana— y nunca baja de siete días; sin tramos sigue
+existiendo y no divide por cero; las marcas caen en
 lunes, en día 1 o en trimestres según el rango y ninguna se sale; cada bloque queda en la x de su
 inicio y mide su duración **sobre los cuatro anchos de página de la casa**, con el abierto muriendo
 en la línea de hoy y el de tres horas siendo un hilo —no un bloque igual que uno de cincuenta

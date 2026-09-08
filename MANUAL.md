@@ -625,7 +625,7 @@ Debajo, diez gráficas:
    color en una columna fija) y, en cada fila, sus ciclos colocados por fecha: **cada bloque
    empieza donde empezó el ciclo y mide lo que duró**, así que un ciclo de cuatro días y uno de
    seis meses ya no se parecen. El eje es **uno solo, compartido por todas las aplicaciones** —del
-   primer ciclo registrado hasta hoy, con un mínimo de cuatro semanas para que un ciclo corto no
+   primer ciclo registrado hasta hoy, con un mínimo de una semana para que un ciclo de horas no
    llene la pantalla—, lleva marcas en fechas redondas (lunes, o día 1 según el rango) y una
    **línea vertical en hoy**. El ciclo abierto llega hasta esa línea. **Este eje no lo recorta el
    selector de periodo**: la cinta es historia, como la antigüedad de la deuda.

@@ -44,11 +44,14 @@ public sealed record RibbonTick(DateTime When, double X, string Text);
 public sealed class RibbonGeometry
 {
     /// <summary>
-    /// Lo mínimo que mide el eje. Sin este suelo, una aplicación con un solo ciclo de cuatro días
-    /// llenaría la pantalla de lado a lado y parecería un historial largo: la escala diría lo
-    /// contrario de lo que hay.
+    /// Lo mínimo que mide el eje: <b>siete días</b>, la misma regla que el resto de ejes del panel
+    /// (D-1040). Sin suelo, una aplicación con un solo ciclo de dos horas llenaría la pantalla de
+    /// lado a lado y la escala diría lo contrario de lo que hay; con más suelo del necesario, un
+    /// historial corto se dibujaría contra el borde derecho de un desierto. El eje empieza donde
+    /// empieza el primer tramo, y solo se alarga hacia atrás cuando ese inicio queda a menos de
+    /// una semana de hoy.
     /// </summary>
-    public const double MinAxisDays = 28;
+    public const double MinAxisDays = 7;
 
     /// <summary>
     /// Lo mínimo que mide un bloque. No es un ancho «legible» como el de F17.2 —el ancho es la
@@ -73,7 +76,7 @@ public sealed class RibbonGeometry
         Ticks = ticks;
     }
 
-    /// <summary>El extremo izquierdo del eje: el inicio del primer tramo, o el suelo de cuatro semanas.</summary>
+    /// <summary>El extremo izquierdo: el inicio del primer tramo, o el suelo de una semana.</summary>
     public DateTime From { get; }
 
     /// <summary>El extremo derecho: HOY. La cinta llega hasta hoy siempre (D-593).</summary>
@@ -119,7 +122,7 @@ public sealed class RibbonGeometry
         DateTime to = spans.Count == 0 ? today : spans.Max(s => s.To) > today ? spans.Max(s => s.To) : today;
 
         // Y empieza en el primer tramo de CUALQUIER aplicación —el eje es uno solo, compartido—,
-        // con el suelo de cuatro semanas por delante.
+        // alargándose hacia atrás solo si ese inicio no llega al suelo de una semana.
         DateTime earliest = spans.Count == 0 ? to : spans.Min(s => s.From);
         DateTime floor = to.AddDays(-MinAxisDays);
         DateTime from = earliest < floor ? earliest : floor;

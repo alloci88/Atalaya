@@ -70,27 +70,35 @@ public sealed class CycleRibbonLayoutTests
 
     /// <summary>
     /// <b>Un eje compartido por todas las aplicaciones</b>: del inicio del primer tramo de
-    /// cualquiera de ellas hasta hoy. Y nunca menos de cuatro semanas, para que un ciclo de cuatro
-    /// días no llene la pantalla y parezca un historial largo.
+    /// cualquiera de ellas hasta hoy. El suelo son <b>siete días</b>, la misma regla que el resto
+    /// de ejes del panel (D-1040): el eje empieza donde empieza el primer tramo, y solo se alarga
+    /// hacia atrás cuando ese inicio queda a menos de una semana de hoy.
     /// </summary>
     [Fact]
-    public void El_eje_va_del_primer_tramo_hasta_hoy_y_nunca_mide_menos_de_cuatro_semanas()
+    public void El_eje_va_del_primer_tramo_hasta_hoy_y_nunca_mide_menos_de_siete_dias()
     {
         RibbonGeometry largo = RibbonGeometry.For(Uneven(), Today, 1000);
         largo.From.Should().Be(Today.AddDays(-120), "el primer tramo de CUALQUIER aplicación");
         largo.To.Should().Be(Today, "el eje llega hasta hoy (D-593)");
         largo.TodayX.Should().Be(1000);
 
-        // Una sola app con un ciclo de cuatro días: el eje se abre a cuatro semanas.
-        var corto = new[] { new RibbonTrack("Una", new[] { Span("C1 · General", Today.AddDays(-4), Today, open: true) }) };
+        // Un ciclo de VEINTE días: el suelo no pinta nada, el eje empieza donde empieza el tramo.
+        var veinte = new[] { new RibbonTrack("Una", new[] { Span("C1 · General", Today.AddDays(-20), Today, open: true) }) };
+        RibbonGeometry sinSuelo = RibbonGeometry.For(veinte, Today, 1000);
+        sinSuelo.Days.Should().Be(20);
+        sinSuelo.From.Should().Be(Today.AddDays(-20));
+        sinSuelo.Blocks.Single().Left.Should().BeApproximately(0, 0.5, "el primer tramo abre el eje");
+
+        // Uno de DOS días: ahí sí manda el suelo, y el eje se alarga hacia atrás hasta siete.
+        var corto = new[] { new RibbonTrack("Una", new[] { Span("C1 · General", Today.AddDays(-2), Today, open: true) }) };
         RibbonGeometry suelo = RibbonGeometry.For(corto, Today, 1000);
-        suelo.Days.Should().Be(RibbonGeometry.MinAxisDays);
-        suelo.From.Should().Be(Today.AddDays(-28));
+        suelo.Days.Should().Be(RibbonGeometry.MinAxisDays).And.Be(7);
+        suelo.From.Should().Be(Today.AddDays(-7));
         suelo.To.Should().Be(Today);
 
-        // Y el bloque ocupa lo suyo: cuatro días de veintiocho, contra el borde derecho.
+        // Y el bloque ocupa lo suyo: dos días de siete, contra el borde derecho.
         RibbonBlock block = suelo.Blocks.Single();
-        block.Left.Should().BeApproximately(1000 * 24 / 28.0, 0.5);
+        block.Left.Should().BeApproximately(1000 * 5 / 7.0, 0.5);
         block.Right.Should().BeApproximately(1000, 0.5);
     }
 
