@@ -1,5 +1,6 @@
 using Atalaya.App.Services;
 using Atalaya.Storage.Sync;
+using Atalaya.Tests;
 using FluentAssertions;
 using LibGit2Sharp;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -24,7 +25,7 @@ public sealed class HubSyncRegistrationTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "atalaya-hubsync", Guid.NewGuid().ToString("N"));
         _remote = Path.Combine(_root, "remote.git");
-        Repository.Init(_remote, isBare: true);
+        TestGit.Init(_remote, isBare: true);
         _paths = new AppPaths(Path.Combine(_root, "local"));
         _settings = new SettingsService(_paths);
         _settings.Load();
@@ -165,7 +166,7 @@ public sealed class HubSyncRegistrationTests : IDisposable
 
         // The deployment now names a different hub (e.g. the organization's repo).
         string moved = Path.Combine(_root, "organizacion.git");
-        Repository.Init(moved, isBare: true);
+        TestGit.Init(moved, isBare: true);
         var migrated = new HubContext(
             _paths, _settings, _account, new DeployConfig { HubUrl = moved }, NullLoggerFactory.Instance);
 

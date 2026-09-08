@@ -6,6 +6,7 @@ using Atalaya.Domain.Hashing;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Inventory;
+using Atalaya.Tests;
 using FluentAssertions;
 using LibGit2Sharp;
 using Xunit;
@@ -56,7 +57,7 @@ public sealed class VerdictGuardTests : IDisposable
         _governance = new GovernanceService(_hub, _ulids);
 
         // Un clon git REAL: la capa 1 de la guarda compara commits, así que necesitan ser de verdad.
-        Repository.Init(_clone);
+        TestGit.Init(_clone);
         Write("A.cs", OriginalUnit);
         Write("B.cs", "class B { }");
         Commit("inicial");

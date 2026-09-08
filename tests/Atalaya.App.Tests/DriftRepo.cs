@@ -2,6 +2,7 @@ using Atalaya.App.Services;
 using Atalaya.Domain;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
+using Atalaya.Tests;
 using LibGit2Sharp;
 
 namespace Atalaya.App.Tests;
@@ -28,7 +29,7 @@ internal sealed class DriftRepo : IDisposable
 
         Clone = Path.Combine(_base, "clone");
         Directory.CreateDirectory(Clone);
-        Repository.Init(Clone);
+        TestGit.Init(Clone);
 
         Paths = new AppPaths(Path.Combine(_base, "local"));
         Settings = new SettingsService(Paths);

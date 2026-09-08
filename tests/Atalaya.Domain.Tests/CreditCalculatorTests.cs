@@ -185,10 +185,10 @@ public sealed class CreditCalculatorTests
     [Theory]
     // barato: 1.000.000 × 1 $/M + 200.000 × 5 $/M = 1 + 1 = 2 $ → 200 credits
     // caro:    1.000.000 × 5 $/M + 200.000 × 25 $/M = 5 + 5 = 10 $ → 1.000 credits
-    [InlineData("barato", 1.00, 5.00, 200.0)]
-    [InlineData("caro", 5.00, 25.00, 1000.0)]
+    [InlineData("barato", 200.0)]
+    [InlineData("caro", 1000.0)]
     public void La_misma_sesion_cuesta_lo_que_diga_la_tarifa_de_SU_modelo(
-        string model, double inRate, double outRate, double expectedCredits)
+        string model, double expectedCredits)
     {
         var rates = new ModelRateTable
         {

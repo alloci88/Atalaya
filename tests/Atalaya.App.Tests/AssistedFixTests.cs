@@ -7,6 +7,7 @@ using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Inventory;
+using Atalaya.Tests;
 using FluentAssertions;
 using Xunit;
 
@@ -1406,11 +1407,11 @@ public sealed class AssistedFixTests : IDisposable
     public async Task Sin_identidad_de_git_no_se_commitea_y_se_dice_que_falta()
     {
         LiveFixService fix = await FixedSession();
-        using (var repo = new LibGit2Sharp.Repository(_clone))
-        {
-            repo.Config.Unset("user.name", LibGit2Sharp.ConfigurationLevel.Local);
-            repo.Config.Set("user.name", string.Empty, LibGit2Sharp.ConfigurationLevel.Local);
-        }
+
+        // OMPT-BUGFIX-CI — LA QUITA ESTE TEST, EXPLÍCITAMENTE. Desde que la fábrica se la pone a
+        // todo clon que crea, «sin identidad» es un estado que hay que construir, no el que salga
+        // de la máquina: así este test es rojo por lo que dice y verde en cualquier puesto.
+        Atalaya.Tests.TestGit.ClearIdentity(_clone);
 
         FixCommitResult result = fix.CommitChanges();
 
@@ -1642,7 +1643,7 @@ public sealed class AssistedFixTests : IDisposable
     {
         // Un hub que SÍ tiene remoto —así que se intenta publicar— y cuyo remoto no está.
         // Es el mismo desenlace que un hub que no contesta, sin sacar nada a la red (N-1).
-        LibGit2Sharp.Repository.Init(_hub.HubPaths.Root);
+        TestGit.Init(_hub.HubPaths.Root);
         using (var hubRepo = new LibGit2Sharp.Repository(_hub.HubPaths.Root))
         {
             hubRepo.Network.Remotes.Add("origin", Path.Combine(_root, "no-existe.git"));

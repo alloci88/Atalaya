@@ -19111,3 +19111,80 @@ token nuevo del mismo paso pequeño —`Pad.XS.H`, que no existía: la casa ten�
 el horizontal—, y la pastilla se alinea con el texto de su línea.
 
 **Lo que NO se ha comprobado, y se dice**: el aspecto. Ciclo N-8.
+
+### D-1055 — Los tests llevan su propia identidad de git: la máquina no cuenta
+
+**El defecto, y de quién era.** La publicación por Actions caía con tests rojos que en el puesto de
+quien desarrolla estaban verdes. Ninguno era del producto: los repositorios temporales que los
+tests crean nacían sin `user.name` ni `user.email`, así que quien commiteaba en ellos acababa
+cayendo a la identidad **global de la máquina**. En un puesto esa global existe y lo tapaba; en un
+runner recién creado no existe, y el commit del arreglo asistido moría con «Este clon no tiene
+identidad de git configurada». El arnés dependía de dónde se ejecutaba, que es justo lo que un
+arnés no puede hacer.
+
+**Medido antes de tocar nada (N-2), y la reproducción del encargo NO era la del runner.** El
+encargo proponía anular la global con `GIT_CONFIG_GLOBAL=NUL` y `GIT_CONFIG_SYSTEM=NUL`. Así salen
+**8 rojos y 2.197 verdes**, no quince. La causa se midió con una sonda de LibGit2Sharp 0.31 en el
+banco: con esas dos variables puestas, `Configuration.BuildFrom(null)` **sigue devolviendo**
+`user.name = Su Nombre` — el `GlobalSettings.GetConfigSearchPaths` sigue apuntando a
+`C:/Users/<usuario>/`. **libgit2 no mira `GIT_CONFIG_GLOBAL` ni `GIT_CONFIG_SYSTEM`: solo el CLI de
+git los respeta.** La receta cegaba a un motor de los dos.
+
+La condición del runner se emula apuntando además `HOME`, `USERPROFILE`, `HOMEDRIVE` y `HOMEPATH` a
+una carpeta vacía —con eso la sonda ya devuelve `<null>` en las dos claves—. Así salen **10 rojos y
+2.195 verdes**: nueve de `AssistedFixTests` y uno de `VerifyAfterRestructureTests`, todos por el
+mismo motivo. Los dos que la receta del encargo no veía son los que usan un git falso que rechaza
+(`Un_commit_que_falla_deja_el_arbol_igual_y_dice_por_que` y
+`Si_falla_el_commit_el_paso_queda_rojo_y_no_se_intenta_ninguno_mas`): con libgit2 ciego, el rechazo
+llega **antes** por identidad y no por el hook, así que el motivo que afirman ya no es el que sale.
+
+**Y cinco de los quince no se reproducen, en ninguna de las dos condiciones — se dice (N-2).** Los
+dos de `PublishVerificationTests`, los dos de `ReconnectSyncTests` y el de `ThresholdPolicySyncTests`
+salen **verdes** con la global anulada y con libgit2 ciego. No es casualidad ni suerte del orden:
+esos commits no leen la config de la máquina en ningún momento. La firma de `HubSyncService` llega
+**por el constructor** —`(name, name + "@example.com")` en `PublishVerificationTests`, y
+`HubContext.ResolveIdentity()` en los otros dos, que ya cae a `Environment.UserName` y nunca puede
+volver vacía—. La hipótesis de «commit sin firma por libgit2» del encargo no se sostiene contra lo
+medido; qué tumbó exactamente a esos cinco en aquel run **no se ha averiguado**, y hasta que haya un
+`.trx` que lo nombre queda anotado en el BACKLOG en vez de arreglado a ciegas.
+
+**La regla que queda.** **Ningún test depende de la configuración de git de la máquina.** Todo
+repositorio temporal que un test crea lleva su identidad en la config **LOCAL** desde el momento de
+crearlo —`user.name = Atalaya Tests`, `user.email = tests@atalaya.local`—, puesta en la **fábrica**
+y no test a test. Y al revés: los tests que prueban «sin identidad → fallo con su motivo» la
+**quitan explícitamente** en su repo, para seguir siendo verdes en una máquina que sí la tiene.
+Local y no una variable de entorno por lo medido arriba: la config local del repositorio es lo único
+que leen los **dos** motores que esta casa usa, y en los dos gana sobre la global.
+
+**Dónde vive.** `tests/Shared/TestGit.cs`, **enlazado** desde `Atalaya.App.Tests` y
+`Atalaya.Storage.Tests` —los dos proyectos que crean repositorios—, con tres puertas: `Init` (que
+sustituye a `Repository.Init` en los catorce sitios donde se llamaba a pelo, remotos `--bare`
+incluidos), `SetIdentity` (que usa además `TestFactory.MakeClone`, siempre e idempotente, también
+sobre una carpeta que ya era un repo) y `ClearIdentity`, que la borra y la escribe vacía —lo único
+que gana a una global existente—. `VersionStampTests` ya se la ponía con el CLI desde F8 y se queda
+como está: cumplía la regla antes de que la regla tuviera nombre.
+
+**Lo que NO se toca.** `FixCommitter` y `HubSyncService` quedan **exactamente igual**: D-1033 se
+mantiene —el commit sale con la identidad del clon y no se inventa un autor—, y que
+`HubSyncService` caiga a la global cuando la del repo falta es producto, no arnés. Lo que cambia es
+que el test la provea. **Y el workflow tampoco**: no se le añade `git config --global`. Ese runner
+limpio es la prueba, y ponerle una identidad taparía el defecto en vez de arreglarlo — que es
+exactamente cómo llegó hasta aquí.
+
+**Cobertura (N-5): uno, y protege una cosa.** `TestGitIdentityTests` recorre las **dos puertas** por
+las que un test crea un repositorio y exige (a) que la identidad esté en el nivel **LOCAL** y (b) que
+un `git commit` de verdad, **con `GIT_CONFIG_GLOBAL` y `GIT_CONFIG_SYSTEM` anuladas**, salga bien y
+con **ese** autor. Lo que se rompería en silencio sin él: volver a escribir `Repository.Init` a pelo
+en un test nuevo. No falla en el puesto de nadie, y reaparece semanas después como diez rojos en una
+publicación. Se comprueba el CLI y el nivel local —y no una variable— porque ninguna variable puede
+cegar a los dos motores a la vez, y un test que se apoyara en ella probaría media casa. La tanda
+queda en **2.742 casos** (2.207 en la aplicación).
+
+**Dos avisos de compilación, de paso.** El `xUnit1026` de `CreditCalculatorTests`: la teoría recibía
+`inRate` y `outRate` y no los usaba, y no podía usarlos —la tabla lleva **las dos** tarifas a la vez,
+que es el punto del test: cada sesión con la suya—, así que se van de la firma y de los
+`InlineData`; el comentario de encima ya llevaba la aritmética. Y el `CS8602` de
+`VerifyAfterRestructureTests`: `Detail` es anulable y se desreferenciaba a pelo. La compilación
+queda en **0 avisos**.
+
+**Nada visible cambia**: no se ha tocado ni una vista, ni un texto de la aplicación, ni el producto.

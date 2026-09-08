@@ -5,6 +5,7 @@ using Atalaya.Domain;
 using Atalaya.Domain.Hashing;
 using Atalaya.Domain.Model;
 using Atalaya.Inventory;
+using Atalaya.Tests;
 using FluentAssertions;
 using LibGit2Sharp;
 using Xunit;
@@ -142,7 +143,7 @@ public sealed class CloneLinkTests : IDisposable
     {
         string huerfano = Path.Combine(_root, "sin-origin");
         Directory.CreateDirectory(huerfano);
-        Repository.Init(huerfano);
+        TestGit.Init(huerfano);
         _machines.SetClonePath("xblast", huerfano);
 
         _links.For("xblast").State.Should().Be(CloneLinkState.Problema);
@@ -390,7 +391,7 @@ public sealed class CloneLinkTests : IDisposable
     {
         string path = Path.Combine(_root, "origen");
         Directory.CreateDirectory(path);
-        Repository.Init(path);
+        TestGit.Init(path);
         File.WriteAllText(Path.Combine(path, "A.cs"), "class A { }");
         using var repo = new Repository(path);
         Commands.Stage(repo, "*");

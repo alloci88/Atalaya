@@ -1,3 +1,4 @@
+using Atalaya.Tests;
 using LibGit2Sharp;
 
 namespace Atalaya.Storage.Tests;
@@ -15,7 +16,7 @@ public sealed class TempRepo : IDisposable
         _base = Path.Combine(Path.GetTempPath(), "atalaya-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_base);
         BareRemotePath = Path.Combine(_base, "remote.git");
-        Repository.Init(BareRemotePath, isBare: true);
+        TestGit.Init(BareRemotePath, isBare: true);
     }
 
     /// <summary>Path to the bare remote, usable directly as a clone URL.</summary>

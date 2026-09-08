@@ -132,6 +132,13 @@ internal static class TestFactory
             LibGit2Sharp.Repository.Init(folder);
         }
 
+        // OMPT-BUGFIX-CI — LA IDENTIDAD, AQUÍ Y NO TEST A TEST. Un clon que nace sin ella acaba
+        // commiteando con la identidad GLOBAL de la máquina: verde en el puesto de quien
+        // desarrolla, rojo en un runner limpio. Se pone SIEMPRE, también sobre una carpeta que ya
+        // era un repo — es idempotente, y lo que se compra es que el resultado no dependa de dónde
+        // se ejecute. Ver Shared/TestGit.cs.
+        Atalaya.Tests.TestGit.SetIdentity(folder);
+
         using var repo = new LibGit2Sharp.Repository(folder);
         if (repo.Network.Remotes["origin"] is null)
         {

@@ -232,7 +232,7 @@ public sealed class VerifyAfterRestructureTests : IDisposable
         outcome.Applied.Should().Be(1);
         Finding stored = _hub.Store.TryReadFinding(Slug, _findingId.ToString())!;
         stored.Status.Should().Be(FindingStatus.Activo, "no puede haberse arreglado lo que no ha cambiado");
-        stored.History.Should().Contain(h => h.Detail.Contains("degradado a presente"));
+        stored.History.Should().Contain(h => h.Detail != null && h.Detail.Contains("degradado a presente"));
     }
 
     // ---------------------------------------------------------------- ayudas

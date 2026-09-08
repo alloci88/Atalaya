@@ -2,6 +2,7 @@ using Atalaya.App.Services;
 using Atalaya.Domain.Model;
 using Atalaya.Storage;
 using Atalaya.Storage.Sync;
+using Atalaya.Tests;
 using FluentAssertions;
 using LibGit2Sharp;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -30,7 +31,7 @@ public sealed class HubSyncNowTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "atalaya-syncnow", Guid.NewGuid().ToString("N"));
         _remote = Path.Combine(_root, "remote.git");
-        Repository.Init(_remote, isBare: true);
+        TestGit.Init(_remote, isBare: true);
         _paths = new AppPaths(Path.Combine(_root, "local"));
         _settings = new SettingsService(_paths);
         _settings.Load();

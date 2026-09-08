@@ -4,8 +4,8 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-07 (R13-2 — se retira «Otro (comando personalizado)»: el registro de
-editores es la única puerta).
+Última revisión: 2026-09-08 (OMPT-BUGFIX-CI — los tests llevan su propia identidad de git; la
+máquina no cuenta).
 
 ## En vuelo
 
@@ -507,7 +507,29 @@ editores es la única puerta).
 - **Verify sobre hallazgos medidos**: mensaje «Confirmado: N LOC ≥ umbral». Cosmético, caso de
   esquina.
 
+- **Los cinco rojos de Actions que no se reproducen, con su `.trx` delante.** El parte del run que
+  disparó OMPT-BUGFIX-CI listaba quince rojos; diez se reprodujeron, se explicaron y están
+  arreglados (D-1055). Los otros cinco —dos de `PublishVerificationTests`, dos de
+  `ReconnectSyncTests` y uno de `ThresholdPolicySyncTests`— salen **verdes** tanto con la global de
+  git anulada como con libgit2 ciego (`HOME` a una carpeta vacía), y por construcción no pueden
+  fallar por identidad: su firma llega por el constructor de `HubSyncService` y nunca puede volver
+  vacía. Así que la causa **no se ha averiguado** y no se ha tocado nada por si acaso. El workflow ya
+  sube el `.trx` de cada run (`if: always()`, BUGFIX-RELEASE §3): si vuelven a caer, se leen ahí los
+  nombres y la pila, que es la única evidencia que falta.
+
 ## Cerrado
+
+- **OMPT-BUGFIX-CI · Los tests llevan su propia identidad de git** — los repositorios temporales de
+  los tests nacían sin `user.name` ni `user.email` y acababan commiteando con la identidad **global
+  de la máquina**: verde en el puesto de quien desarrolla, rojo en el runner de Actions. Ahora la
+  identidad se pone en la config **LOCAL** al crear el repositorio, en una fábrica compartida
+  (`tests/Shared/TestGit.cs`, enlazada desde `Atalaya.App.Tests` y `Atalaya.Storage.Tests`) que
+  sustituye a `Repository.Init` en los catorce sitios donde se llamaba a pelo, y `TestFactory.MakeClone`
+  se la pone también; los tests que prueban «sin identidad → fallo con motivo» la quitan
+  explícitamente. Ni `FixCommitter` ni `HubSyncService` se tocan (D-1033 intacto) y al workflow **no**
+  se le añade `git config --global`: ese runner limpio es la prueba. Un test nuevo recorre las dos
+  puertas de la fábrica. De paso, los avisos `xUnit1026` de `CreditCalculatorTests` y `CS8602` de
+  `VerifyAfterRestructureTests`: la compilación queda en 0. Ver D-1055.
 
 - **F36-2b · Verificación y arreglo, segunda pasada, y tres reglas para los tres informes** — la
   **fila reparte el ancho entero** entre lo que hay (`TilesPanel`; una tarjeta puede valer dos

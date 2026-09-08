@@ -7,6 +7,7 @@ using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
 using Atalaya.Inventory;
+using Atalaya.Tests;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -85,7 +86,7 @@ public sealed class HubPublishTimeoutTests : IDisposable
         // EL CLON, ANTES DE ESCRIBIR NADA: `git clone` exige un directorio vacío, y el hub se
         // escribe dentro de él. Primero el clon del `--bare` local, y con él ya montado se puebla.
         string bare = Path.Combine(_root, "remote.git");
-        LibGit2Sharp.Repository.Init(bare, isBare: true);
+        TestGit.Init(bare, isBare: true);
         _hub.EnsureSync();
         _hub.Sync!.EnsureCloned(bare);
 

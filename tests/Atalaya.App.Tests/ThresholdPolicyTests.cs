@@ -8,6 +8,7 @@ using Atalaya.Domain.Model;
 using Atalaya.Inventory;
 using Atalaya.Storage;
 using Atalaya.Storage.Sync;
+using Atalaya.Tests;
 using FluentAssertions;
 using LibGit2Sharp;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -382,7 +383,7 @@ public sealed class ThresholdPolicySyncTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "atalaya-politica-sync", Guid.NewGuid().ToString("N"));
         _remote = Path.Combine(_root, "remote.git");
-        Repository.Init(_remote, isBare: true);
+        TestGit.Init(_remote, isBare: true);
     }
 
     public void Dispose()

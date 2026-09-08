@@ -40,4 +40,10 @@
                       CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- OMPT-BUGFIX-CI — la fabrica de repositorios de los tests, compartida con
+       Atalaya.Storage.Tests: un test no depende de la identidad de git de la maquina. -->
+  <ItemGroup>
+    <Compile Include="..\Shared\TestGit.cs" Link="TestGit.cs" />
+  </ItemGroup>
+
 </Project>
