@@ -23,7 +23,7 @@ public partial class BrandMark : UserControl
     /// se oscurecen en tema oscuro, que es exactamente lo contrario de lo que esta superficie
     /// tiene que hacer. No es «tocar la paleta de la aplicación» — es el papel bajo una firma.
     /// </summary>
-    private static readonly Brush PlateBrush = Freeze("#F4F5F7");
+    private static readonly Brush PlateBrush = FrozenBrush("#F4F5F7");
 
     public static readonly DependencyProperty LogoHeightProperty = DependencyProperty.Register(
         nameof(LogoHeight), typeof(double), typeof(BrandMark), new PropertyMetadata(26.0, OnLogoHeightChanged));
@@ -112,7 +112,7 @@ public partial class BrandMark : UserControl
         }
     }
 
-    private static Brush Freeze(string hex)
+    private static Brush FrozenBrush(string hex)
     {
         var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
         brush.Freeze();
