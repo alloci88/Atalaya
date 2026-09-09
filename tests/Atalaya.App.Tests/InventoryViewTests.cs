@@ -186,6 +186,167 @@ public sealed class InventoryViewTests : IDisposable
     private static UnitNode Unit(InventoryViewModel vm, string path)
         => vm.Modules.SelectMany(m => m.Units).Single(u => u.Path == path);
 
+    /// <summary>
+    /// Dos proyectos con carpetas de verdad, con la forma que tiene X-BLAST: una carpeta con
+    /// unidades propias Y una subcarpeta (no se pliega), otra que cuelga sola de su proyecto, y
+    /// una unidad colgando del proyecto a pelo.
+    /// </summary>
+    private void SeedTree()
+        => SeedInventory(
+            ("Core", "src/Core/Raiz.cs", UnitState.Pendiente),
+            ("Core", "src/Core/Class/Suya.cs", UnitState.Auditada),
+            ("Core", "src/Core/Class/Objects3D/Uno.cs", UnitState.Pendiente),
+            ("Core", "src/Core/Class/Objects3D/Dos.cs", UnitState.Auditada),
+            ("Core", "src/Core/Forms/Tres.cs", UnitState.Pendiente),
+            ("Utils", "src/Utils/Helpers/Cuatro.cs", UnitState.Pendiente));
+
+    /// <summary>Las carpetas tal y como las ve la vista: colgando de las filas, no de una lista.</summary>
+    private static List<FolderNode> Folders(InventoryViewModel vm)
+    {
+        var found = new List<FolderNode>();
+
+        void Walk(IEnumerable<object> children)
+        {
+            foreach (FolderNode folder in children.OfType<FolderNode>())
+            {
+                found.Add(folder);
+                Walk(folder.Children);
+            }
+        }
+
+        foreach (ModuleNode module in vm.Modules)
+        {
+            Walk(module.Children);
+        }
+
+        return found;
+    }
+
+    private static FolderNode Folder(InventoryViewModel vm, string name)
+        => Folders(vm).Single(f => f.Name == name);
+
+    // =============================================================== §5 carpetas (F37)
+
+    /// <summary>
+    /// F37 §1.3 — <b>la carpeta cuenta como el proyecto</b>: auditadas sobre total, y sobre TODO
+    /// lo que lleva dentro, subcarpetas incluidas. Una carpeta que contara solo lo suyo diría
+    /// «1/1» de un `Class` con doce unidades debajo, que es un número que engaña.
+    /// </summary>
+    [Fact]
+    public async Task La_carpeta_cuenta_las_auditadas_de_todo_lo_que_lleva_dentro()
+    {
+        SeedTree();
+        InventoryViewModel vm = await Loaded();
+
+        Folder(vm, "Class").Header.Should().Be("Class  (2/3)", "la suya y las dos de Objects3D");
+        Folder(vm, "Objects3D").Header.Should().Be("Objects3D  (1/2)");
+        Folder(vm, "Forms").Header.Should().Be("Forms  (0/1)");
+        vm.Modules.Single(m => m.Name == "Core").Header.Should().Be("Core  (2/5)");
+    }
+
+    /// <summary>
+    /// F37 §1.1 y §1.8 sobre la vista montada: las carpetas van primero y las unidades sueltas del
+    /// proyecto detrás, y una carpeta con unidades propias NO se pliega con su única subcarpeta.
+    /// </summary>
+    [Fact]
+    public async Task El_proyecto_ensena_carpetas_primero_y_luego_sus_unidades_sueltas()
+    {
+        SeedTree();
+        InventoryViewModel vm = await Loaded();
+
+        ModuleNode core = vm.Modules.Single(m => m.Name == "Core");
+        core.Children.Select(Etiqueta).Should().Equal("Class", "Forms", "Raiz.cs");
+        Folder(vm, "Class").Children.Select(Etiqueta).Should().Equal("Objects3D", "Suya.cs");
+
+        vm.Modules.Single(m => m.Name == "Utils").Children
+            .OfType<FolderNode>().Single().Name.Should().Be("Helpers");
+    }
+
+    private static string Etiqueta(object row) => row switch
+    {
+        FolderNode f => f.Name,
+        UnitNode u => u.FileName,
+        _ => "?",
+    };
+
+    /// <summary>
+    /// F37 §1.3 — <b>marcar la carpeta marca todo lo de dentro; desmarcar una la deja a medias</b>.
+    /// Y lo que llega a «Auditar selección» siguen siendo LAS UNIDADES, exactamente las marcadas:
+    /// la carpeta agrupa y se marca, no se audita, y no tiene ruta con la que colarse en la lista.
+    /// </summary>
+    [Fact]
+    public async Task Marcar_la_carpeta_marca_lo_de_dentro_y_lo_que_se_audita_siguen_siendo_unidades()
+    {
+        SeedTree();
+        InventoryViewModel vm = await Loaded();
+        FolderNode clase = Folder(vm, "Class");
+
+        clase.IsChecked = true;
+
+        clase.Units.Should().OnlyContain(u => u.IsSelected);
+        clase.IsChecked.Should().Be(true);
+        vm.SelectedUnits().Should().BeEquivalentTo(new[]
+        {
+            "src/Core/Class/Suya.cs",
+            "src/Core/Class/Objects3D/Uno.cs",
+            "src/Core/Class/Objects3D/Dos.cs",
+        }, "las tres de dentro, y ninguna carpeta: una carpeta no tiene ruta de unidad");
+
+        Unit(vm, "src/Core/Class/Objects3D/Uno.cs").IsSelected = false;
+
+        clase.IsChecked.Should().BeNull("dos de tres: ni marcada ni vacía");
+        clase.SelectionNote.Should().Be("2 de 3 seleccionadas");
+        Folder(vm, "Objects3D").IsChecked.Should().BeNull("la de dentro también está a medias");
+        vm.SelectedCount.Should().Be(2);
+    }
+
+    /// <summary>
+    /// F37 §1.7 — «Seleccionar pendientes» marca unidades como siempre; las carpetas reflejan el
+    /// estado <b>sin abrirse</b>. Quien pulsa ese botón quiere lanzar, no navegar: desplegar el
+    /// árbol entero le dejaría la lista donde no estaba.
+    /// </summary>
+    [Fact]
+    public async Task Seleccionar_pendientes_refleja_el_estado_en_las_carpetas_sin_abrirlas()
+    {
+        SeedTree();
+        InventoryViewModel vm = await Loaded();
+
+        vm.SelectPendingCommand.Execute(null);
+
+        Folder(vm, "Forms").IsChecked.Should().Be(true, "su única unidad es pendiente");
+        Folder(vm, "Class").IsChecked.Should().BeNull("Suya.cs y Dos.cs ya estaban auditadas");
+        Folders(vm).Should().OnlyContain(f => !f.IsExpanded, "marcar no es desplegar");
+    }
+
+    /// <summary>
+    /// F37 §1.5 — <b>buscar abre las carpetas con coincidencias y esconde las demás; al vaciar,
+    /// vuelven al estado anterior</b>. Lo forzado por la búsqueda no se recuerda: si se recordara,
+    /// una búsqueda dejaría el árbol abierto para siempre y el usuario no sabría por qué.
+    /// </summary>
+    [Fact]
+    public async Task Buscar_abre_las_carpetas_con_coincidencias_y_las_devuelve_al_vaciar()
+    {
+        SeedTree();
+        InventoryViewModel vm = await Loaded();
+        // Una decisión a mano, que tiene que sobrevivir a la búsqueda. Va por el comando porque
+        // es el gesto de verdad: lo que se recuerda es lo que el usuario decide, no lo que la vista
+        // se pone a sí misma al reconstruirse.
+        vm.ToggleGroupCommand.Execute(Folder(vm, "Forms"));
+
+        vm.SearchText = "Objects3D";
+
+        Folders(vm).Select(f => f.Name).Should().Equal(
+            new[] { "Class/Objects3D" },
+            "solo lo que tiene coincidencias: Forms y Helpers no existen mientras se busca, y "
+            + "sin las unidades propias de Class la cadena que queda es de una sola subcarpeta");
+        Folders(vm).Should().OnlyContain(f => f.IsExpanded, "lo que se busca se ve");
+
+        vm.SearchText = string.Empty;
+
+        Folder(vm, "Class").IsExpanded.Should().BeFalse("vuelve a su estado por defecto");
+        Folder(vm, "Forms").IsExpanded.Should().BeTrue("y la decisión a mano sigue en pie");
+    }
+
     // =============================================================== §1 plegar y desplegar
 
     [Fact]
@@ -200,13 +361,51 @@ public sealed class InventoryViewTests : IDisposable
         vm.ToggleAllLabel.Should().Be("Colapsar todo");
     }
 
+    /// <summary>
+    /// <b>F37 §1.4 — los proyectos abren abiertos, y sus carpetas cerradas.</b> Sustituye a la
+    /// regla de la lista corta, que plegaba los proyectos en cuanto pasaban de cinco: con las
+    /// carpetas dentro, un proyecto abierto ya NO vuelca sus 597 unidades encima — vuelca sus
+    /// carpetas, que son doce. Lo que hacía ilegible la lista era el número de unidades, y eso lo
+    /// resuelve ahora el nivel de carpeta; plegar además el proyecto solo escondía el recuento.
+    /// </summary>
     [Fact]
-    public async Task Con_muchos_modulos_el_arbol_abre_plegado()
+    public async Task Los_proyectos_abren_abiertos_y_sus_carpetas_cerradas()
+    {
+        SeedTree();
+        InventoryViewModel vm = await Loaded();
+
+        vm.Modules.Should().HaveCount(2).And.OnlyContain(m => m.IsExpanded);
+        Folders(vm).Should().NotBeEmpty().And.OnlyContain(f => !f.IsExpanded);
+        vm.AllCollapsed.Should().BeFalse();
+        vm.ToggleAllLabel.Should().Be("Colapsar todo");
+    }
+
+    /// <summary>Y con muchos proyectos también: la regla ya no mira cuántos hay.</summary>
+    [Fact]
+    public async Task Con_muchos_proyectos_siguen_abriendose_abiertos()
     {
         SeedModules(GroupExpansionMemory.SmallListGroups + 3);
         InventoryViewModel vm = await Loaded();
 
+        vm.Modules.Should().OnlyContain(m => m.IsExpanded);
+        vm.AllCollapsed.Should().BeFalse();
+    }
+
+    /// <summary>
+    /// F37 §1.4 — «Colapsar todo» cierra las DOS cosas. Si dejara las carpetas abiertas, volver a
+    /// desplegar un proyecto lo abriría de par en par, que es justo lo que se acaba de cerrar.
+    /// </summary>
+    [Fact]
+    public async Task Colapsar_todo_cierra_proyectos_y_carpetas()
+    {
+        SeedTree();
+        InventoryViewModel vm = await Loaded();
+        vm.ToggleGroupCommand.Execute(Folders(vm).First());
+
+        vm.ToggleAllGroupsCommand.Execute(null);
+
         vm.Modules.Should().OnlyContain(m => !m.IsExpanded);
+        Folders(vm).Should().OnlyContain(f => !f.IsExpanded);
         vm.AllCollapsed.Should().BeTrue();
         vm.ToggleAllLabel.Should().Be("Expandir todo");
     }

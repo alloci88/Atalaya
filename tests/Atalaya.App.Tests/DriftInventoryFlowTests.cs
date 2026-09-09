@@ -186,6 +186,44 @@ public sealed class DriftInventoryFlowTests : IDisposable
             "más toqueteada, antes; A no cambió y no sale");
     }
 
+    /// <summary>
+    /// <b>F37 §1.6 — con un filtro de deriva puesto, la carpeta cuenta sobre las que pasan.</b>
+    /// El árbol se construye con las unidades que se ENSEÑAN, así que una carpeta cuyas unidades
+    /// no pasan el filtro no llega a existir, y la que existe cuenta lo que hay dentro de la lista
+    /// filtrada. Un recuento sobre el ciclo entero al lado de una lista recortada sería el número
+    /// que no cuadra con lo que se está mirando.
+    /// </summary>
+    [Fact]
+    public async Task Con_el_filtro_de_deriva_la_carpeta_solo_existe_y_cuenta_si_algo_pasa()
+    {
+        string c1 = Commit(
+            "inicial",
+            ("Core/Forms/A.cs", "1"), ("Core/Forms/B.cs", "1"), ("Core/Class/C.cs", "1"));
+        Audit(c1, "Core/Forms/A.cs", "Core/Forms/B.cs", "Core/Class/C.cs");
+        Commit("tocan las dos de Forms", ("Core/Forms/A.cs", "2"), ("Core/Forms/B.cs", "2"));
+
+        InventoryViewModel vm = await Page();
+        vm.DriftFilter = 1;
+
+        var carpetas = vm.Modules
+            .SelectMany(m => m.Children.OfType<FolderNode>())
+            .ToList();
+
+        carpetas.Select(f => f.Header).Should().Equal(
+            new[] { "Forms  (2/2)" },
+            "Class no tiene ninguna cambiada, así que con el filtro puesto no existe");
+
+        vm.DriftFilter = 0;
+
+        vm.Modules.SelectMany(m => m.Children.OfType<FolderNode>())
+            .Select(f => f.Header)
+            .Should().Equal(new[] { "Class  (1/1)", "Forms  (2/2)" }, "sin filtro vuelven las dos");
+    }
+
+    /// <summary>
+    /// Y las pastillas de estado siguen en la UNIDAD, no en la carpeta (§1.6): la deriva es de un
+    /// fichero concreto, y una carpeta «cambiada» no diría cuál.
+    /// </summary>
     [Fact]
     public async Task El_indicador_de_la_fila_es_ortogonal_al_estado_de_auditoria()
     {
@@ -351,7 +389,9 @@ public sealed class DriftInventoryFlowTests : IDisposable
     {
         foreach ((string path, string content) in files)
         {
-            File.WriteAllText(Path.Combine(_clone, path), content);
+            string full = Path.Combine(_clone, path);
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            File.WriteAllText(full, content);
         }
 
         using var repo = new Repository(_clone);

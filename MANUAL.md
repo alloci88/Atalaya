@@ -163,8 +163,28 @@ se lanza. Sin sesiones sin coste, no hay insignia.
 
 ### Inventario
 
-Las unidades de la aplicación en el ciclo vigente, por módulos, con su estado
+Las unidades de la aplicación en el ciclo vigente, por proyectos y **por carpetas**, con su estado
 —**pendiente**, **auditada** o **grande**— y el panel lateral del ciclo.
+
+**Las carpetas.** Bajo cada proyecto, las unidades se agrupan por su carpeta dentro de él, unas
+dentro de otras. Solo aparece la carpeta que lleva alguna unidad —directamente o más abajo—: una
+carpeta sin unidades no existe para el inventario. Cada fila de carpeta lleva su chevrón, su nombre
+y su recuento «(auditadas/total)», igual que el proyecto, contando todo lo que tiene dentro.
+
+- **Una cadena de una sola subcarpeta se enseña como una fila**: si `Class` no tiene unidades
+  propias y solo contiene `Objects3D`, se lee «Class/Objects3D». Si `Class` tiene además unidades
+  suyas, o dos subcarpetas, no se pliega — ahí la carpeta ya separa algo.
+- **Una carpeta no se audita.** Su casilla marca o quita todo lo que lleva dentro, subcarpetas
+  incluidas, y con parte marcado lo dice al lado («2 de 3 seleccionadas»). Lo que se lanza sigue
+  siendo **Auditar selección**, sobre las unidades marcadas.
+- **Al abrir, los proyectos están abiertos y las carpetas cerradas**; **Colapsar todo** cierra las
+  dos cosas. Lo que pliegues o despliegues se recuerda mientras la ventana esté abierta, y no se
+  guarda en disco.
+- **Buscar** abre las carpetas donde hay coincidencias y esconde las demás; al vaciar la búsqueda,
+  todo vuelve a como lo tenías.
+- Con el **filtro de deriva** puesto, solo se ven las carpetas con unidades que lo pasan, y el
+  recuento de la carpeta es sobre ésas. Las pastillas de estado y de deriva siguen en la unidad: son
+  de un fichero concreto.
 
 Con la ventana estrecha ese panel no cabe al lado y se pliega: aparece el botón **Resumen del
 ciclo** en la cabecera, y abre lo mismo como un cajón sobre la lista. Todo lo que hay dentro

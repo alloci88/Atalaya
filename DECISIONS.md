@@ -19304,3 +19304,73 @@ ejecución**, para que un cuelgue se cuente y se mate en vez de bloquearlo.
 
 **Nada visible cambia**: ni una vista, ni un texto de la aplicación. `LastError` —lo único de esto
 que un usuario llega a leer— dice exactamente lo que decía.
+
+
+## F37 — Inventario por carpetas
+
+### D-1057 — La carpeta agrupa y se marca; no se audita
+
+Un párrafo para la fase (N-7) y solo lo declarado (N-6).
+
+**De dónde sale, medido (§0).** El inventario real de X-BLAST tiene **923 unidades en 22
+proyectos**, repartidas por **74 carpetas distintas** del clon. Entre el proyecto y la unidad no
+había nada: abrir `XBLASTCore` volcaba **597 filas** seguidas, y la carpeta —que está en la ruta
+desde el primer ciclo— no se leía en ninguna parte, porque la fila de unidad enseña el nombre del
+fichero y no la ruta. Con el nivel de carpeta, esas 597 pasan a **12 filas** al abrir el proyecto.
+En toda la aplicación el árbol añade **62 filas de carpeta**: de 945 filas se pasa a **1007**, un
+6,6 % más, a cambio de que ninguna lista se abra con más de un puñado. La **profundidad máxima es
+2** (`Class/Objects2D`), la misma antes y después de plegar: **cadenas de una sola subcarpeta hay
+cero** en X-BLAST, porque todas sus carpetas intermedias tienen unidades propias. La regla del
+plegado se implementa igual —es la que evita el escalón que no separa nada el día que aparezca—,
+pero se dice con todas las letras que **hoy, aquí, no pliega ninguna**: afirmar lo contrario sería
+inventarse un número (N-2).
+
+**La regla, que es lo único nuevo que puede romperse en silencio: la carpeta agrupa y se marca; no
+se audita.** No tiene acciones propias, no tiene ruta de unidad y no puede llegar nunca a una lista
+de lanzamiento. Lo que se audita son las unidades que se marcan **a través** de ella, con «Auditar
+selección», que no cambia ni una línea. La casilla de la carpeta es de tres estados en el modelo
+—marcada, vacía, a medias— y de dos en el dibujo, con la selección parcial dicha en palabras («2 de
+3 seleccionadas»), exactamente como la del proyecto desde F5.13: la plantilla de WPF-UI 3.0.5 pinta
+el indeterminado con el mismo relleno de acento que el marcado, así que una casilla «a medias»
+azul maciza se lee como marcada. Dos casillas hermanas con dos convenciones distintas habrían sido
+peor que la que ya hay.
+
+**El árbol se cuelga del modelo de filas, no de la vista, y el escaneo no se entera.** La carpeta ya
+está dentro de la ruta canónica (D-549), así que agrupar es de la vista: `UnitFolderTree` es una
+**función pura** —rutas dentro, carpetas fuera— y `ModuleNode.Units` sigue siendo la lista **plana**
+de todo el proyecto, la única con la que se cuenta y se marca. `Children` es solo cómo se dibuja.
+Dos listas de «lo seleccionado» es el incidente del 2026-08-26, y no se repite.
+
+**Dónde está el proyecto, y por qué se deduce.** El inventario guarda la ruta relativa al clon y el
+nombre del módulo; no guarda el directorio del manifiesto. La carpeta del proyecto se deduce del
+**prefijo de directorio común** a sus unidades, **cortado en el segmento que se llama como el
+módulo** si aparece — sin ese corte, `XBLASTMatLab` y `XBLASTUtils`, cuyas unidades viven todas en
+`Class/`, se leerían como si el proyecto fuera `XBLASTMatLab/Class` y esa carpeta desaparecería. Y
+se calcula con el **ciclo entero**, no con lo que queda tras buscar o filtrar: con las unidades
+filtradas el prefijo común baja de nivel y el proyecto parecería mudarse a cada búsqueda.
+
+**Lo que sí cambia de comportamiento, y estaba pedido: el estado por defecto.** Los proyectos abren
+**abiertos** y sus carpetas **cerradas**; «Colapsar todo» cierra las dos cosas. Cae para el
+inventario la regla de la lista corta (`GroupExpansionMemory.SmallListGroups`), que plegaba los
+proyectos en cuanto pasaban de cinco: lo que hacía ilegible la lista era el número de **unidades**,
+y eso lo resuelve ahora el nivel de carpeta. En Hallazgos la regla sigue igual. Buscar **fuerza**
+abiertas las carpetas con coincidencias sin escribir esa apertura en la memoria de sesión, así que
+al vaciar la búsqueda todo vuelve a como estaba —incluido lo que el usuario había plegado a mano—.
+El estado de apertura sigue viviendo en memoria y **no se persiste**.
+
+**Con un filtro de deriva puesto**, la carpeta solo existe si algo suyo lo pasa, y cuenta sobre lo
+que pasa: el árbol se construye con las unidades que se **enseñan**. Las pastillas de estado y de
+deriva siguen en la **unidad** — son de un fichero concreto, y una carpeta «cambiada» no diría cuál.
+
+**Lo que no se toca**: el escaneo, el re-escaneo, la deriva, los estados de unidad, «Auditar
+selección», «Seleccionar pendientes / cambiadas», el resumen lateral, la tira del re-escaneo
+(D-1029) y el aviso de deriva. Ni una consulta, ni un fichero del hub, ni un número.
+
+**Tests: 17 nuevos** (uno sustituye al de la lista corta, que ya no es la regla). Ocho de la función
+pura —carpetas solo con unidades, el plegado de una cadena, los dos casos que NO se pliegan, el
+orden, la carpeta del proyecto con y sin el nombre del módulo en la ruta, y las **cifras del §0
+sobre las rutas reales de X-BLAST** (`tests/Atalaya.App.Tests/Fixtures/xblast-units.tsv`: 62 filas,
+1007 contra 945, profundidad 2)—; ocho de la vista —recuentos por carpeta, orden de las filas, el
+tri-estado y que «Auditar selección» sigue recibiendo unidades y solo unidades, «Seleccionar
+pendientes» sin abrir nada, buscar y volver, y el estado por defecto con «Colapsar todo»—; y uno del
+recuento con el filtro de deriva puesto.

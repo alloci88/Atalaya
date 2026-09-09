@@ -114,6 +114,12 @@
     <!-- La sangría de una fila de unidad bajo su módulo. El margen derecho reserva el ancho de la
          barra de desplazamiento: sin él, «🔒 alguien» se corta contra ella en las filas reclamadas. -->
     <Thickness x:Key="Pad.UnitRow">32,4,16,8</Thickness>
+
+    <!-- La sangría de lo que cuelga de una CARPETA (F37). Menor que la del proyecto: la del
+         proyecto separa dos cosas distintas —el grupo y su contenido—, y ésta solo marca un
+         escalón más dentro del mismo grupo. Sin margen derecho: el de la fila de unidad ya
+         reservó el ancho de la barra de desplazamiento, y volver a reservarlo lo sumaría. -->
+    <Thickness x:Key="Pad.FolderRow">20,0,0,0</Thickness>
     <Thickness x:Key="Pad.FieldLabel">0,8,0,4</Thickness>
     <Thickness x:Key="Pad.Chip">0,0,8,4</Thickness>
     <Thickness x:Key="Pad.S.Top">0,12,0,0</Thickness>

@@ -52,11 +52,33 @@ public sealed partial class GroupCollapse : ObservableObject
     /// </summary>
     public void Adopt(IReadOnlyList<ICollapsibleGroup> groups)
     {
-        _groups = groups;
         bool openByDefault = groups.Count <= GroupExpansionMemory.SmallListGroups;
+        Adopt(groups, _ => null, _ => openByDefault);
+    }
+
+    /// <summary>
+    /// La misma adopción, con las dos reglas que el inventario necesita distintas (F37 §1.4-§1.5)
+    /// y que en una lista de un solo tipo de grupo no hacen falta:
+    /// <list type="bullet">
+    /// <item><paramref name="forced"/> — un estado que se impone POR ENCIMA de lo que el usuario
+    /// decidió, sin borrar su decisión. Es lo que hace que buscar abra las carpetas con
+    /// coincidencias aunque estuvieran cerradas a mano, y que al vaciar la búsqueda vuelvan a
+    /// estar como estaban: lo forzado no se recuerda, así que al dejar de forzarse no queda
+    /// rastro. <c>null</c> para un grupo es «aquí no me meto».</item>
+    /// <item><paramref name="byDefault"/> — qué se abre cuando el usuario no ha dicho nada, POR
+    /// GRUPO. La regla de la lista corta vale cuando todos los grupos son iguales; con proyectos y
+    /// carpetas mezclados no, porque el estado por defecto de cada uno es distinto.</item>
+    /// </list>
+    /// </summary>
+    public void Adopt(
+        IReadOnlyList<ICollapsibleGroup> groups,
+        Func<ICollapsibleGroup, bool?> forced,
+        Func<ICollapsibleGroup, bool> byDefault)
+    {
+        _groups = groups;
         foreach (ICollapsibleGroup group in groups)
         {
-            group.IsExpanded = _memory.Remembered(group.Key) ?? openByDefault;
+            group.IsExpanded = forced(group) ?? _memory.Remembered(group.Key) ?? byDefault(group);
         }
 
         Refresh();

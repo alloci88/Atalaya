@@ -118,7 +118,21 @@ public sealed partial class ModuleNode : ObservableObject, ICollapsibleGroup
     /// <summary>La app a la que pertenece. Entra en la clave de plegado: los módulos se repiten.</summary>
     public required string Slug { get; init; }
 
+    /// <summary>
+    /// TODAS las unidades del proyecto que están a la vista, en plano. Es la lista con la que se
+    /// cuenta, se marca y se refleja el tri-estado, y por eso NO se reparte por carpetas: el árbol
+    /// de carpetas (F37) es una forma de enseñarlas, no otra manera de tenerlas. Dos listas serían
+    /// dos contabilidades, y el incidente del 2026-08-26 ya enseñó lo que cuesta eso.
+    /// </summary>
     public ObservableCollection<UnitNode> Units { get; } = new();
+
+    /// <summary>
+    /// Lo que se DIBUJA colgando del proyecto (F37 §1): sus carpetas de primer nivel y, detrás,
+    /// las unidades que no están en ninguna. Mezcla <see cref="FolderNode"/> y
+    /// <see cref="UnitNode"/> porque son las dos cosas que puede haber en un nivel, y cada una
+    /// trae su plantilla.
+    /// </summary>
+    public ObservableCollection<object> Children { get; } = new();
 
     public int Total => Units.Count;
 
@@ -229,6 +243,145 @@ public sealed partial class ModuleNode : ObservableObject, ICollapsibleGroup
 
         // Lo derivado se anuncia SIEMPRE, cambie o no el tri-estado: pasar de «1 de 12» a «2 de 12»
         // deja IsChecked en null las dos veces, y la nota tiene que moverse igualmente.
+        OnPropertyChanged(nameof(IsAllSelected));
+        OnPropertyChanged(nameof(SelectedUnits));
+        OnPropertyChanged(nameof(SelectionNote));
+        OnPropertyChanged(nameof(HasSelectionNote));
+
+        if (state == IsChecked)
+        {
+            return;
+        }
+
+        _suspend = true;
+        IsChecked = state;
+        _suspend = false;
+    }
+}
+
+/// <summary>
+/// <b>Una carpeta del proyecto</b> (F37 §1): la fila que va entre el proyecto y sus unidades.
+/// <para>
+/// <b>La carpeta agrupa y se marca; no se audita.</b> No tiene acciones propias y nunca llega a
+/// una lista de lanzamiento: lo que se audita son las unidades que se marcan a través de ella, con
+/// «Auditar selección», que no cambia. Por eso la carpeta no tiene ruta de unidad ni estado — lo
+/// único que sabe hacer es contar lo que lleva dentro y reflejar si está marcado.
+/// </para>
+/// <para>
+/// Se pliega con la MISMA lógica que el proyecto (<see cref="GroupCollapse"/>) porque es el mismo
+/// gesto: dos implementaciones del plegado divergen a la primera corrección.
+/// </para>
+/// </summary>
+public sealed partial class FolderNode : ObservableObject, ICollapsibleGroup
+{
+    private bool _suspend;
+
+    /// <summary>
+    /// Lo que se lee. Con la cadena plegada lleva varios tramos —«Class/Objects3D»—, porque esa
+    /// cadena es UNA fila.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// La carpeta en canónico, relativa a su proyecto. Es la identidad estable de la fila: el
+    /// nombre cambia cuando la cadena se pliega o deja de plegarse, la ruta no.
+    /// </summary>
+    public required string RelativePath { get; init; }
+
+    /// <summary>La app. Entra en la clave de plegado: dos apps repiten nombres de carpeta.</summary>
+    public required string Slug { get; init; }
+
+    /// <summary>El proyecto al que cuelga. También entra en la clave: «Forms» se repite en once.</summary>
+    public required string Module { get; init; }
+
+    /// <summary>Subcarpetas primero y unidades después, en canónico (§1.8).</summary>
+    public ObservableCollection<object> Children { get; } = new();
+
+    /// <summary>
+    /// TODAS las unidades de dentro, también las de sus subcarpetas. Es lo que cuenta la cabecera
+    /// y lo que marca la casilla: «marcar la carpeta marca todo lo de dentro».
+    /// </summary>
+    public ObservableCollection<UnitNode> Units { get; } = new();
+
+    public int Total => Units.Count;
+
+    public int Audited => Units.Count(u => u.State == UnitState.Auditada);
+
+    /// <summary>
+    /// «Class  (3/12)», el mismo formato que el proyecto. Con un filtro de deriva puesto cuenta
+    /// sobre las que pasan el filtro, porque el árbol se construye con las que se enseñan (§1.6).
+    /// </summary>
+    public string Header => $"{Name}  ({Audited}/{Total})";
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// El proyecto usa «inv {slug} {nombre}»; la carpeta añade su ruta detrás de un separador que
+    /// no puede aparecer en un nombre de proyecto, así que los dos espacios de claves no se pisan.
+    /// </remarks>
+    public string Key => $"inv {Slug} {Module} · {RelativePath}";
+
+    [ObservableProperty]
+    private bool _isExpanded;
+
+    partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(ExpandGlyph));
+
+    public string ExpandGlyph => IsExpanded ? "▾" : "▸";
+
+    /// <summary>
+    /// El tri-estado de la carpeta: marcada, sin marcar, o indeterminada con selección parcial.
+    /// Lo escribe SIEMPRE <see cref="RefreshCheckState"/> a partir de sus unidades — es un reflejo
+    /// de la selección, nunca su origen.
+    /// </summary>
+    [ObservableProperty]
+    private bool? _isChecked = false;
+
+    /// <inheritdoc cref="ModuleNode.SelectionRequested"/>
+    internal Action<FolderNode, bool>? SelectionRequested { get; set; }
+
+    partial void OnIsCheckedChanged(bool? value)
+    {
+        if (_suspend)
+        {
+            return;   // lo puso RefreshCheckState: reflejar la selección no puede cambiarla
+        }
+
+        RequestToggle();
+    }
+
+    /// <inheritdoc cref="ModuleNode.RequestToggle"/>
+    internal void RequestToggle() => SelectionRequested?.Invoke(this, !IsAllSelected);
+
+    /// <summary>
+    /// Lo que PINTA la casilla, por la misma razón que en el proyecto (F5.13): la plantilla de
+    /// WPF-UI 3.0.5 resuelve el indeterminado y el marcado con el mismo relleno de acento, así que
+    /// una casilla «a medias» se ve idéntica a una marcada. El tri-estado sigue estando —es la
+    /// semántica correcta y es lo que se interroga—, pero lo que se ve a medias se dice con
+    /// palabras (<see cref="SelectionNote"/>), que no se pueden confundir con un relleno.
+    /// </summary>
+    public bool IsAllSelected => Units.Count > 0 && Units.All(u => u.IsSelected);
+
+    public int SelectedUnits => Units.Count(u => u.IsSelected);
+
+    /// <inheritdoc cref="ModuleNode.SelectionNote"/>
+    public string SelectionNote
+    {
+        get
+        {
+            int selected = SelectedUnits;
+            return selected == 0 || selected == Units.Count
+                ? string.Empty
+                : $"{selected} de {Units.Count} seleccionadas";
+        }
+    }
+
+    public bool HasSelectionNote => SelectionNote.Length > 0;
+
+    /// <inheritdoc cref="ModuleNode.RefreshCheckState"/>
+    internal void RefreshCheckState()
+    {
+        int selected = Units.Count(u => u.IsSelected);
+        bool? state = selected == 0 ? false : selected == Units.Count ? true : null;
+
         OnPropertyChanged(nameof(IsAllSelected));
         OnPropertyChanged(nameof(SelectedUnits));
         OnPropertyChanged(nameof(SelectionNote));

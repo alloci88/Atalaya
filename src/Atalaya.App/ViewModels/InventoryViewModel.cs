@@ -81,6 +81,13 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
     private IReadOnlyList<InventoryUnit> _allUnits = Array.Empty<InventoryUnit>();
 
     /// <summary>
+    /// Todas las carpetas del árbol a la vista, en plano (F37). Se guardan para dos cosas y solo
+    /// dos: refrescar su tri-estado cuando cambia la selección, y entregárselas al plegado junto
+    /// con los proyectos, que es lo que hace que «Colapsar todo» las cierre también.
+    /// </summary>
+    private List<FolderNode> _folders = new();
+
+    /// <summary>
     /// La deriva vigente, por ruta. <c>null</c> mientras no se ha calculado: el inventario se abre
     /// SIN esperarla —leer estados y lanzar una auditoría no la necesitan— y las columnas aparecen
     /// cuando llega. Nunca se persiste (F9, principio rector).
@@ -628,6 +635,7 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
     private void Rebuild()
     {
         Modules.Clear();
+        _folders = new List<FolderNode>();
         AppConfig? app = string.IsNullOrEmpty(Slug) ? null : _hub.Store.TryReadApp(Slug);
         if (app is null)
         {
@@ -739,6 +747,17 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
         // tienen que salir iguales, o parece que algo se ha movido solo.
         bool byCommits = DriftFilter == 1;
         var built = new List<ModuleNode>();
+        var folders = new List<FolderNode>();
+
+        // DÓNDE ESTÁ CADA PROYECTO se decide con el ciclo ENTERO, no con lo que queda tras buscar
+        // o filtrar (F37). Con las unidades filtradas, el prefijo común puede bajar varios niveles
+        // y el proyecto parecería mudarse a cada búsqueda.
+        var roots = units
+            .GroupBy(u => u.Module, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => UnitFolderTree.ProjectRoot(g.Key, g.Select(u => u.Path)),
+                StringComparer.Ordinal);
         var groups = filtered.GroupBy(u => u.Module).ToList();
         IEnumerable<IGrouping<string, InventoryUnit>> ordered = byCommits
             ? groups
@@ -774,12 +793,32 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
                 node.Units.Add(unit);
             }
 
+            // EL ÁRBOL DE CARPETAS, DESDE LAS MISMAS RUTAS (F37 §1.1). Se cuelga del modelo de
+            // filas que ya existe —las `UnitNode` son LAS MISMAS instancias, no copias—, así que
+            // marcar por la carpeta, por el proyecto o por la fila toca un solo objeto.
+            UnitFolder tree = UnitFolderTree.BuildUnder(
+                roots[group.Key],
+                node.Units.Select(u => u.Path).ToList());
+            var byPath = node.Units.ToDictionary(u => u.Path, StringComparer.Ordinal);
+            Attach(tree, node.Children, node.Name, byPath, byCommits, folders);
+
             node.RefreshCheckState();
             node.SelectionRequested = OnModuleSelectionRequested;
             built.Add(node);
         }
 
-        _collapse.Adopt(built);
+        _folders = folders;
+
+        // Proyectos y carpetas se pliegan con la MISMA pieza: «Colapsar todo» cierra las dos cosas
+        // (§1.4). Lo que cambia entre ellos es el estado por defecto —proyectos abiertos, carpetas
+        // cerradas— y que buscar abre lo que tiene coincidencias sin borrar lo que el usuario
+        // decidió a mano (§1.5).
+        bool searching = search.Length > 0;
+        _collapse.Adopt(
+            built.Cast<ICollapsibleGroup>().Concat(folders).ToList(),
+            forced: _ => searching ? true : null,
+            byDefault: g => g is ModuleNode);
+
         foreach (ModuleNode node in built)
         {
             Modules.Add(node);
@@ -788,6 +827,79 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
         RefreshSelectionState();
         IsEmpty = Modules.Count == 0;
     }
+
+    /// <summary>
+    /// Cuelga una rama del árbol de carpetas de su fila, y devuelve TODAS las unidades que quedan
+    /// debajo — que es lo que cada carpeta necesita para contar y para marcarse entera.
+    /// <para>
+    /// Carpetas primero y unidades después (§1.8). El orden dentro de cada grupo es canónico,
+    /// salvo con el filtro de cambiadas puesto: ahí manda «más toqueteada, antes» (F9 §3), y se
+    /// aplica igual a las carpetas que a los proyectos — si el proyecto se ordena por lo caliente
+    /// que está y sus carpetas por el abecedario, la lista deja de contestar la pregunta.
+    /// </para>
+    /// </summary>
+    private IReadOnlyList<UnitNode> Attach(
+        UnitFolder branch,
+        ObservableCollection<object> into,
+        string module,
+        IReadOnlyDictionary<string, UnitNode> byPath,
+        bool byCommits,
+        List<FolderNode> all)
+    {
+        var inside = new List<UnitNode>();
+
+        IEnumerable<UnitFolder> folders = byCommits
+            ? branch.Folders
+                .OrderByDescending(MaxCommits)
+                .ThenBy(f => f.Name, StringComparer.Ordinal)
+            : branch.Folders;
+
+        foreach (UnitFolder folder in folders)
+        {
+            var node = new FolderNode
+            {
+                Name = folder.Name,
+                RelativePath = folder.RelativePath,
+                Slug = Slug,
+                Module = module,
+            };
+
+            IReadOnlyList<UnitNode> below = Attach(folder, node.Children, module, byPath, byCommits, all);
+            foreach (UnitNode unit in below)
+            {
+                node.Units.Add(unit);
+            }
+
+            node.RefreshCheckState();
+            node.SelectionRequested = OnFolderSelectionRequested;
+            all.Add(node);
+            into.Add(node);
+            inside.AddRange(below);
+        }
+
+        IEnumerable<string> units = byCommits
+            ? branch.Units.OrderByDescending(CommitsOf).ThenBy(p => p, StringComparer.Ordinal)
+            : branch.Units;
+
+        foreach (string path in units)
+        {
+            UnitNode unit = byPath[path];
+            into.Add(unit);
+            inside.Add(unit);
+        }
+
+        return inside;
+    }
+
+    /// <summary>Los commits que ha acumulado lo más tocado de una rama. Cero si nada se movió.</summary>
+    private int MaxCommits(UnitFolder folder)
+    {
+        int mine = folder.Units.Count == 0 ? 0 : folder.Units.Max(CommitsOf);
+        int below = folder.Folders.Count == 0 ? 0 : folder.Folders.Max(MaxCommits);
+        return Math.Max(mine, below);
+    }
+
+    private int CommitsOf(string path) => _drift.TryGetValue(path, out UnitDrift? d) ? d.Commits : 0;
 
     /// <summary>Los nodos que están a la vista. Lo que se ve, no lo que hay.</summary>
     private IEnumerable<UnitNode> VisibleUnits => Modules.SelectMany(m => m.Units);
@@ -819,6 +931,16 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
             if (module.Name == unit.Module)
             {
                 module.RefreshCheckState();
+            }
+        }
+
+        // Y las carpetas de ESE proyecto, que también reflejan la marca. Solo las suyas: una
+        // unidad no puede cambiar el tri-estado de una carpeta de otro proyecto.
+        foreach (FolderNode folder in _folders)
+        {
+            if (folder.Module == unit.Module)
+            {
+                folder.RefreshCheckState();
             }
         }
 
@@ -1009,6 +1131,13 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
             module.RefreshCheckState();
         }
 
+        // Las carpetas se ponen al día SIN abrirse (§1.7): «Seleccionar pendientes» marca
+        // unidades, no despliega el árbol — quien pulsa ese botón quiere lanzar, no navegar.
+        foreach (FolderNode folder in _folders)
+        {
+            folder.RefreshCheckState();
+        }
+
         RefreshSelectionState();
     }
 
@@ -1021,9 +1150,45 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
     [RelayCommand]
     private void ToggleModule(ModuleNode? group) => group?.RequestToggle();
 
-    /// <inheritdoc cref="GroupCollapse.Toggle"/>
+    /// <summary>
+    /// El gesto de la casilla de una carpeta (F37 §1.3). Existe por lo mismo que el del proyecto:
+    /// la casilla pinta <see cref="FolderNode.IsAllSelected"/>, que es de dos estados, así que el
+    /// gesto llega por su propia vía.
+    /// </summary>
     [RelayCommand]
-    private void ToggleGroup(ModuleNode? group) => _collapse.Toggle(group);
+    private void ToggleFolder(FolderNode? folder) => folder?.RequestToggle();
+
+    /// <summary>
+    /// Lo que la carpeta pide, aplicado sobre el conjunto de seleccionadas, que sigue siendo el
+    /// único dueño de la selección (F37: la carpeta agrupa y se marca; no se audita).
+    /// <para>
+    /// UNA CARPETA NO ES UNA UNIDAD: lo que entra en el conjunto son SIEMPRE las rutas de las
+    /// unidades que lleva dentro, las de sus subcarpetas incluidas. La carpeta no tiene ruta de
+    /// unidad y no puede llegar nunca a la lista de lanzamiento.
+    /// </para>
+    /// </summary>
+    private void OnFolderSelectionRequested(FolderNode folder, bool select)
+    {
+        _selectionFromDrift = false;
+        foreach (UnitNode unit in folder.Units)
+        {
+            if (select)
+            {
+                _selected.Add(unit.Path);
+            }
+            else
+            {
+                _selected.Remove(unit.Path);
+            }
+        }
+
+        SyncVisibleFromSelection();
+    }
+
+    /// <inheritdoc cref="GroupCollapse.Toggle"/>
+    /// <remarks>El mismo comando para el proyecto y para la carpeta: es el mismo gesto (§1.4).</remarks>
+    [RelayCommand]
+    private void ToggleGroup(ICollapsibleGroup? group) => _collapse.Toggle(group);
 
     /// <inheritdoc cref="GroupCollapse.ToggleAll"/>
     [RelayCommand]

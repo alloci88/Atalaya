@@ -4,8 +4,8 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-08 (BUGFIX-CI-2 — la puerta del push se soltaba tarde; un test de
-publicación afirma con el motivo).
+Última revisión: 2026-09-09 (F37 — el inventario se agrupa por carpetas; la carpeta agrupa y se
+marca, no se audita).
 
 ## En vuelo
 
@@ -542,6 +542,18 @@ publicación afirma con el motivo).
     puede afirmar sin reloj.
 
 ## Cerrado
+
+- **F37 · Inventario por carpetas** — entre el proyecto y la unidad había 597 filas seguidas en
+  `XBLASTCore` y ninguna forma de leer la carpeta, que está en la ruta desde el primer ciclo. Ahora
+  las unidades se agrupan por su carpeta relativa al proyecto, anidadas, con recuento
+  «(auditadas/total)» y casilla que marca todo lo de dentro; una cadena de una sola subcarpeta se
+  enseña como una fila. **La carpeta agrupa y se marca; no se audita**: sin acciones propias, sin
+  ruta de unidad, y lo que se lanza sigue siendo «Auditar selección» sobre lo marcado. Proyectos
+  abiertos y carpetas cerradas al entrar; «Colapsar todo» cierra las dos; buscar abre lo que tiene
+  coincidencias y al vaciar vuelve todo a su sitio; con filtro de deriva, la carpeta solo existe si
+  algo suyo pasa. El escaneo, el re-escaneo y la deriva no se tocan: agrupar es de la vista
+  (`UnitFolderTree`, función pura). Cifras medidas sobre X-BLAST: 923 unidades, 22 proyectos, 74
+  carpetas, +62 filas (945 → 1007), profundidad 2, cero cadenas que plegar hoy. Ver D-1057.
 
 - **BUGFIX-CI-2 · Un «publicado» que sale bien no puede tumbar al siguiente** — el hilo de
   `CommitAndPush` avisaba al que esperaba (`done.TrySetResult(Push())`) **antes** de soltar la puerta

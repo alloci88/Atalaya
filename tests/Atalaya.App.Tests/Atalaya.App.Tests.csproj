@@ -40,6 +40,13 @@
                       CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- F37 §0 — las rutas reales de X-BLAST. El árbol de carpetas se mide sobre el inventario que
+       existe, no sobre uno inventado: 923 unidades en 22 proyectos es donde se ve si la vista gana
+       o pierde filas. -->
+  <ItemGroup>
+    <Content Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- OMPT-BUGFIX-CI — la fabrica de repositorios de los tests, compartida con
        Atalaya.Storage.Tests: un test no depende de la identidad de git de la maquina. -->
   <ItemGroup>
