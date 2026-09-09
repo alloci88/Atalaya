@@ -151,7 +151,8 @@ public sealed class SelfUpdateService
         if (new AboutInfo(null, _currentVersion(), null).IsDevelopmentBuild)
         {
             return new UpdateReadiness(false,
-                "Esto es un build local: se actualiza recompilando, no descargando.");
+                "Esto es un build local: para actualizar, trae los cambios del repositorio "
+                + "(git pull) y recompila; no se descarga nada.");
         }
 
         if (!_deploy.ChecksForUpdates)

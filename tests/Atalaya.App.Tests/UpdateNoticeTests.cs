@@ -185,7 +185,10 @@ public sealed class UpdateNoticeTests : IDisposable
 
         readiness.CanUpdate.Should().BeFalse();
         readiness.Reason.Should().Contain("build local");
-        readiness.Reason.Should().Contain("recompilando", "y se dice qué hacer en su lugar");
+        readiness.Reason.Should().Contain("git pull").And.Contain("recompila",
+            "y se dice qué hacer en su lugar, con el gesto entero: traer los cambios Y recompilar. "
+            + "Sin el «git pull», «recompilar» se lee como «vuelve a compilar lo que ya tienes», "
+            + "que no trae la release de la que habla el aviso");
     }
 
     /// <summary>Un build local por delante de la release publicada sigue callando (D-729).</summary>

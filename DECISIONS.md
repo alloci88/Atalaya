@@ -8021,6 +8021,12 @@ quedó sin decidir. Se elige **que salga**, con su explicación y sin botón:
 - Lo que no puede pasar —y era la queja legítima del parte— es **ofrecer una acción que luego no
   está**. El botón lo decide `SelfUpdateService.CanOffer()`, y su ausencia se explica en el propio
   banner: «Esto es un build local: se actualiza recompilando, no descargando».
+  <br>**Redactado de nuevo el 2026-09-09**, mismo sitio y mismo estilo: «Esto es un build local:
+  para actualizar, trae los cambios del repositorio (git pull) y recompila; no se descarga nada».
+  «Recompilando» a secas se lee como «vuelve a compilar lo que ya tienes», que no trae la release
+  de la que habla el aviso justo encima: faltaba el primer paso, que es el que la trae. Los dos
+  bloques de abajo citan el banner **tal y como se vio el día que se verificó** (D-749) y por eso
+  no se retocan: son el registro de una comprobación, no la frase vigente.
 
 La versión que enseña es la **base** (1.0.3 para un `1.0.3-dev.5+ffc63d8`), que es con la que se
 comparó: el banner enseña los números que usó la decisión, y la línea de abajo dice el resto.

@@ -2173,9 +2173,10 @@ retira sola en cuanto pueda, en algún arranque posterior.
 
 - **Hay una sesión en curso**: auditoría, verificación o arreglo asistido. Actualizar la cortaría,
   y eso tira trabajo ya pagado a Copilot. Termina o detén la sesión y el botón vuelve.
-- **Es un build local**, de los que en «Acerca de» aparecen como `· build local`. Ésos se
-  actualizan recompilando. El aviso **sí sale** —es útil saber que hubo release— pero es
-  informativo: enseña las dos versiones y dice por qué no hay botón.
+- **Es un build local**, de los que en «Acerca de» aparecen como `· build local`. Para actualizar
+  uno de ésos, trae los cambios del repositorio (`git pull`) y recompila; no se descarga nada. El
+  aviso **sí sale** —es útil saber que hubo release— pero es informativo: enseña las dos versiones
+  y dice por qué no hay botón.
 - **No hay cuenta conectada**, o el despliegue no declara `appRepoUrl`.
 - **Falta `AtalayaUpdater.exe`** en tu carpeta: un paquete incompleto no puede sustituirse solo.
 
