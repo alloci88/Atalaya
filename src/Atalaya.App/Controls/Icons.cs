@@ -36,6 +36,17 @@ public static class Icons
     public static Geometry Portfolio { get; } = P(
         "M5,4 L19,4 A2,2 0 0 1 21,6 L21,18 A2,2 0 0 1 19,20 L5,20 A2,2 0 0 1 3,18 L3,6 A2,2 0 0 1 5,4 Z M3,10 L21,10");
 
+    /// <summary>
+    /// La carpeta de una fila del inventario (F37 §1.3): pestaña, cuerpo y esquinas redondeadas,
+    /// en el mismo trazo de 24×24 que los demás. Es el vigesimoséptimo, y se añade porque no había
+    /// ninguno: <see cref="Portfolio"/> es una carpeta-TABLERO —cuerpo con cabecera— y significa
+    /// otra cosa; reutilizarlo habría hecho que una carpeta del árbol y el portafolio se dibujaran
+    /// igual.
+    /// </summary>
+    public static Geometry Folder { get; } = P(
+        "M3,7 A2,2 0 0 1 5,5 L9.5,5 L11.5,7.5 L19,7.5 A2,2 0 0 1 21,9.5 L21,17 "
+        + "A2,2 0 0 1 19,19 L5,19 A2,2 0 0 1 3,17 Z");
+
     /// <summary>Hallazgos: el triángulo de aviso. Es lo que un hallazgo es.</summary>
     public static Geometry Findings { get; } = P(
         "M12,3 L21,19 L3,19 Z M12,10 L12,14 M12,16.9 L12,17.1");

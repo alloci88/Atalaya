@@ -319,6 +319,36 @@ public sealed class InventoryViewTests : IDisposable
     }
 
     /// <summary>
+    /// F37 §1.3 — <b>la carpeta va del color de identidad de su aplicación</b> (D-314), con su
+    /// paso por tema (D-317), y ese color es lo único que significa: «esto es de esta app».
+    /// <para>
+    /// <b>Lo que protege.</b> Que a nadie se le ocurra pintarla de ámbar —que es AVISO (D-316), y
+    /// doscientas carpetas en ámbar serían doscientos avisos— ni de una severidad, que es
+    /// gravedad. Y que el color siga al tema: el paso claro escrito sobre el fondo oscuro es un
+    /// tono apagado que no se distingue del texto normal, y al revés no se lee.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task La_carpeta_va_del_color_de_la_aplicacion_y_sigue_al_tema()
+    {
+        SeedTree();
+        SeriesColor color = SeriesPalette.For("app", SeriesPalette.Assign(_hub.Store.ListAppSlugs()));
+
+        InventoryViewModel vm = await Loaded();
+        string oscuro = color.Ink(dark: true);
+        Folders(vm).Should().NotBeEmpty().And.OnlyContain(f => f.Ink == oscuro);
+
+        AppSettings ajustes = _settings.Current;
+        ajustes.Theme = "light";
+        _settings.Save(ajustes);
+        await vm.LoadAsync();
+
+        string claro = color.Ink(dark: false);
+        Folders(vm).Should().OnlyContain(f => f.Ink == claro);
+        claro.Should().NotBe(SeverityPalette.Media, "el ámbar es aviso, no identidad");
+    }
+
+    /// <summary>
     /// F37 §1.5 — <b>buscar abre las carpetas con coincidencias y esconde las demás; al vaciar,
     /// vuelven al estado anterior</b>. Lo forzado por la búsqueda no se recuerda: si se recordara,
     /// una búsqueda dejaría el árbol abierto para siempre y el usuario no sabría por qué.

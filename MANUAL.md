@@ -168,8 +168,11 @@ Las unidades de la aplicación en el ciclo vigente, por proyectos y **por carpet
 
 **Las carpetas.** Bajo cada proyecto, las unidades se agrupan por su carpeta dentro de él, unas
 dentro de otras. Solo aparece la carpeta que lleva alguna unidad —directamente o más abajo—: una
-carpeta sin unidades no existe para el inventario. Cada fila de carpeta lleva su chevrón, su nombre
-y su recuento «(auditadas/total)», igual que el proyecto, contando todo lo que tiene dentro.
+carpeta sin unidades no existe para el inventario. Cada fila de carpeta lleva su chevrón, un
+**icono de carpeta**, su nombre y su recuento «(auditadas/total)», igual que el proyecto, contando
+todo lo que tiene dentro. El icono y el nombre van del **color de la aplicación** —el mismo que su
+punto en el portafolio y su línea en las gráficas—, que no quiere decir nada más que eso; las
+unidades van en el color de texto de siempre.
 
 - **Una cadena de una sola subcarpeta se enseña como una fila**: si `Class` no tiene unidades
   propias y solo contiene `Objects3D`, se lee «Class/Objects3D». Si `Class` tiene además unidades

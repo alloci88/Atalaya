@@ -11,9 +11,29 @@ namespace Atalaya.App.Services;
 /// vecino — que es justo lo que la regla quiere evitar.
 /// </para>
 /// </summary>
-public sealed record SeriesColor(string Name, string Light, string Dark)
+/// <param name="LightInk">
+/// El paso para TEXTO sobre fondo claro, cuando el de gráfica no llega. <c>null</c> —lo normal—
+/// significa «el mismo»: ver <see cref="Ink"/>.
+/// </param>
+public sealed record SeriesColor(string Name, string Light, string Dark, string? LightInk = null)
 {
     public string For(bool dark) => dark ? Dark : Light;
+
+    /// <summary>
+    /// <b>El mismo color, en su paso de TEXTO</b> (F37 §1.3).
+    /// <para>
+    /// <see cref="For"/> da el paso de GRÁFICA: una línea de 1,6 px o un tramo de rosco, que son
+    /// objetos gráficos y a los que WCAG pide 3:1. Escribir un nombre con ese valor es otra cosa
+    /// —texto pequeño, 4,5:1— y medido resulta que **dos de los seis no llegan** sobre el fondo
+    /// claro: turquesa da 3,89:1 y oliva 3,79:1 sobre <c>Color.Surface</c>. Los otros cuatro sí, y
+    /// por eso su paso de texto ES el de gráfica: no se inventa un valor donde no hacía falta.
+    /// </para>
+    /// <para>
+    /// En oscuro no hay dos pasos: los valores de <see cref="Dark"/> ya se eligieron para destacar
+    /// sobre fondo oscuro (D-317) y el peor de los seis da 5,03:1.
+    /// </para>
+    /// </summary>
+    public string Ink(bool dark) => dark ? Dark : LightInk ?? Light;
 }
 
 /// <summary>
@@ -147,13 +167,25 @@ public static class SeriesPalette
     /// <summary>Cuántas aplicaciones tienen color propio. El resto se agrupa en «Otras».</summary>
     public const int MaxNamedSeries = 6;
 
+    /// <remarks>
+    /// <b>Los valores de gráfica no cambian ni un dígito</b> (D-314, D-317): son los que pintan
+    /// líneas, roscos y puntos desde F5.9. Lo que dos de ellos estrenan en F37 es un tercer valor,
+    /// el paso de TEXTO sobre fondo claro, porque el de gráfica no llega a AA escrito — ver
+    /// <see cref="SeriesColor.Ink"/>. Los dos se eligieron con el método de F35-2: mismo tono,
+    /// bajando luminosidad hasta pasar 4,5:1 sobre la superficie más clara, y comprobando que el
+    /// resultado sigue a <b>ΔE ≥ 20,1</b> de TODO lo reservado —severidades, estados, flujo y
+    /// acciones— y de las otras cinco familias de aplicación. Medido: turquesa
+    /// <c>#0F8A80 → #03766C</c> (4,64:1; ΔE 26,4 al reservado más próximo) y oliva
+    /// <c>#5C8A16 → #497508</c> (4,62:1; ΔE 20,5, que es «éxito»). Un tono nuevo habría cambiado
+    /// la identidad de dos aplicaciones; un paso más oscuro de la misma familia, no.
+    /// </remarks>
     public static IReadOnlyList<SeriesColor> Steps { get; } = new SeriesColor[]
     {
         new("violeta", "#6E56CF", "#A491F7"),
-        new("turquesa", "#0F8A80", "#35CBBB"),
+        new("turquesa", "#0F8A80", "#35CBBB", LightInk: "#03766C"),
         new("magenta", "#B83280", "#EE79BC"),
         new("añil", "#2E4CC8", "#7C94FF"),
-        new("oliva", "#5C8A16", "#9CCB4A"),
+        new("oliva", "#5C8A16", "#9CCB4A", LightInk: "#497508"),
         new("pizarra", "#4E6472", "#93AEC0"),
     };
 

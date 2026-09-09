@@ -647,6 +647,7 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
 
         AppName = app.Name;
         CycleN = app.CurrentCycle;
+        FolderInk = ResolveFolderInk();
 
         // Se recalcula en cada reconstrucción, que es lo que corre al entrar, al sincronizar y al
         // volver la ventana al primer plano (F5.8 §1). Un vínculo roto entre dos vistas de la
@@ -862,6 +863,7 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
                 RelativePath = folder.RelativePath,
                 Slug = Slug,
                 Module = module,
+                Ink = FolderInk,
             };
 
             IReadOnlyList<UnitNode> below = Attach(folder, node.Children, module, byPath, byCommits, all);
@@ -889,6 +891,34 @@ public sealed partial class InventoryViewModel : ViewModelBase, IAppScoped
         }
 
         return inside;
+    }
+
+    /// <summary>
+    /// El color con el que se escriben las carpetas: el de identidad de ESTA aplicación (D-314) en
+    /// su paso de texto (F37 §1.3). Se guarda resuelto porque el reparto de la paleta se hace sobre
+    /// el portafolio COMPLETO —filtrar o buscar no puede repintar a nadie— y porque cada color
+    /// tiene su valor por tema (D-317).
+    /// </summary>
+    public string FolderInk { get; private set; } = SeriesPalette.Steps[0].Ink(dark: true);
+
+    private string ResolveFolderInk()
+    {
+        bool dark = !string.Equals(_settings.Current.Theme, "light", StringComparison.OrdinalIgnoreCase);
+
+        IReadOnlyDictionary<string, int> palette;
+        try
+        {
+            palette = SeriesPalette.Assign(_hub.Store.ListAppSlugs());
+        }
+        catch (Exception)
+        {
+            // Sin poder leer el portafolio, el color sale igualmente del hash del slug —que es de
+            // donde sale siempre (D-314)— y solo se pierde el desempate por colisión. Nunca se
+            // queda sin color: un `Foreground` sin pincel es texto invisible, no texto normal.
+            palette = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        return SeriesPalette.For(Slug, palette).Ink(dark);
     }
 
     /// <summary>Los commits que ha acumulado lo más tocado de una rama. Cero si nada se movió.</summary>

@@ -119,9 +119,21 @@
                                        Width="18"
                                        Style="{StaticResource Text.Meta}"
                                        VerticalAlignment="Center" />
+
+                            <!-- EL GLIFO Y EL NOMBRE, DEL COLOR DE LA APLICACIÓN (D-314). Son la
+                                 misma cosa a la vista, así que van del mismo color: un icono en
+                                 tinta normal al lado de un nombre de color se lee como un
+                                 descuido. El color viaja en el nodo porque el reparto de la
+                                 paleta se hace sobre el portafolio completo y tiene un valor por
+                                 tema (D-317) — nada de eso cabe en un recurso estático. -->
+                            <Path Data="{x:Static c:Icons.Folder}"
+                                  Style="{StaticResource Icon.Small}"
+                                  Stroke="{Binding Ink}"
+                                  Margin="{StaticResource Pad.XXS.Right}" />
+
                             <TextBlock Text="{Binding Header}"
                                        FontWeight="SemiBold"
-                                       Foreground="{DynamicResource Brush.Text}"
+                                       Foreground="{Binding Ink}"
                                        VerticalAlignment="Center" />
                             <Border Style="{StaticResource Pill}"
                                     Margin="{StaticResource Pad.XS.Left}"

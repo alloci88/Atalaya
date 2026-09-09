@@ -19362,6 +19362,34 @@ El estado de apertura sigue viviendo en memoria y **no se persiste**.
 que pasa: el árbol se construye con las unidades que se **enseñan**. Las pastillas de estado y de
 deriva siguen en la **unidad** — son de un fichero concreto, y una carpeta «cambiada» no diría cuál.
 
+**La fila de carpeta se distingue a la vista, y el color es el de la aplicación.** Un glifo de
+carpeta delante del nombre —`Icons.Folder`, el vigesimoséptimo, en el mismo trazo de 24×24 que los
+otros veintiséis; `Portfolio` es una carpeta-TABLERO y significa otra cosa— y el nombre en el
+**color de identidad de la aplicación** (D-314). No en ámbar: el ámbar es aviso (D-316) y
+doscientas carpetas en ámbar serían doscientos avisos. El color de la app no significa nada más
+que «esto es de esta aplicación», que es exactamente lo que una carpeta añade. El glifo va del
+mismo color que el nombre porque son la misma cosa a la vista. La unidad sigue en tinta normal.
+
+**Y ahí apareció lo único que no estaba previsto, medido (N-2): dos de los seis colores de
+aplicación no se pueden LEER en tema claro.** Los seis se eligieron como colores de GRÁFICA —una
+línea de 1,6 px, un tramo de rosco—, a los que WCAG pide 3:1. Escritos son texto pequeño y piden
+4,5:1, y **turquesa da 3,89:1 y oliva 3,79:1** sobre `Color.Surface`. Con el reparto por hash de
+D-314, quién puede leer sus carpetas lo decidiría el slug. La respuesta es un **paso de texto**:
+`SeriesColor.Ink`, que para cuatro de los seis ES el de gráfica —no se inventa un valor donde no
+hacía falta— y para los dos que no llegan es el mismo tono un escalón más oscuro, elegido con el
+método de F35-2: turquesa `#0F8A80 → #03766C` (4,64:1) y oliva `#5C8A16 → #497508` (4,62:1), los
+dos a **ΔE ≥ 20,1** de todo lo reservado —severidades, estados, flujo y acciones— y de las otras
+cinco familias. **Los valores de gráfica no cambian ni un dígito**: ni un rosco, ni una línea, ni
+el punto de un informe. En oscuro no hacen falta dos pasos — el peor de los seis da 5,03:1.
+
+**Un hallazgo del camino que NO se arregla, porque no es lo que se pidió (N-6).** Al medir contra
+todo lo reservado salió que **«violeta» (`#6E56CF`), color de aplicación desde F5.9, está a ΔE 18,6
+de «nuevos» del flujo de hallazgos (`#8E44AD`)** — por debajo de la vara de 20,1 que F35-2 fijó
+para la familia de acciones, y desde mucho antes de esta fase. Cambiarlo repintaría la identidad de
+una aplicación y las gráficas donde sale. Va al BACKLOG con su número; el test de aquí exige la
+vara a los pasos que **esta** fase elige, y lo dice con todas las letras en vez de rebajarla en
+silencio.
+
 **Lo que no se toca**: el escaneo, el re-escaneo, la deriva, los estados de unidad, «Auditar
 selección», «Seleccionar pendientes / cambiadas», el resumen lateral, la tira del re-escaneo
 (D-1029) y el aviso de deriva. Ni una consulta, ni un fichero del hub, ni un número.
@@ -19372,5 +19400,8 @@ orden, la carpeta del proyecto con y sin el nombre del módulo en la ruta, y las
 sobre las rutas reales de X-BLAST** (`tests/Atalaya.App.Tests/Fixtures/xblast-units.tsv`: 62 filas,
 1007 contra 945, profundidad 2)—; ocho de la vista —recuentos por carpeta, orden de las filas, el
 tri-estado y que «Auditar selección» sigue recibiendo unidades y solo unidades, «Seleccionar
-pendientes» sin abrir nada, buscar y volver, y el estado por defecto con «Colapsar todo»—; y uno del
-recuento con el filtro de deriva puesto.
+pendientes» sin abrir nada, buscar y volver, el estado por defecto con «Colapsar todo», y que el
+color de la carpeta es el de la app y sigue al tema—; uno del recuento con el filtro de deriva
+puesto; y dos de paleta en `PaletteResourceTests`: que los seis colores de aplicación, en su paso
+de texto, llegan a AA sobre las tres superficies de los dos temas, y que los pasos que esta fase
+estrena siguen siendo su color y no pisan nada reservado.

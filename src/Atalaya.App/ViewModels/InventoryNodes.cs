@@ -294,6 +294,22 @@ public sealed partial class FolderNode : ObservableObject, ICollapsibleGroup
     /// <summary>El proyecto al que cuelga. También entra en la clave: «Forms» se repite en once.</summary>
     public required string Module { get; init; }
 
+    /// <summary>
+    /// <b>El color de identidad de esta aplicación</b> (D-314), en su paso de texto y para el tema
+    /// vigente. Lo pintan el glifo de carpeta y el nombre, que son la misma cosa a la vista.
+    /// <para>
+    /// Viaja como cadena, igual que <see cref="UnitNode.DriftInk"/>: WPF convierte a
+    /// <c>Brush</c> al enlazar y el nodo se queda sin tipos de interfaz, así que se puede
+    /// interrogar en un test sin levantar una ventana.
+    /// </para>
+    /// <para>
+    /// <b>Por qué el de la aplicación y no el ámbar.</b> El ámbar es AVISO (D-316) y doscientas
+    /// carpetas en ámbar serían doscientos avisos. El color de la app no significa nada más que
+    /// «esto es de esta aplicación», que es exactamente lo que una carpeta añade.
+    /// </para>
+    /// </summary>
+    public required string Ink { get; init; }
+
     /// <summary>Subcarpetas primero y unidades después, en canónico (§1.8).</summary>
     public ObservableCollection<object> Children { get; } = new();
 

@@ -473,6 +473,14 @@ marca, no se audita).
 
 ## Aplazado a decisión
 
+- **«Violeta» de aplicación está a ΔE 18,6 de «nuevos» del flujo de hallazgos** — medido en F37 al
+  comprobar los pasos de texto contra todo lo reservado. `#6E56CF` (color de app desde F5.9, D-314)
+  y `#8E44AD` (`FlowPalette.New`) quedan por debajo de la vara de **20,1** que F35-2 fijó, y a esa
+  distancia dos tonos se confunden en una gráfica de flujo con un punto de aplicación al lado.
+  Arreglarlo es repintar la identidad de una aplicación y todas las gráficas donde sale, así que no
+  se toca sin pedirlo (N-6). Las dos salidas: mover «violeta» dentro de su familia, o mover
+  «nuevos», que solo se usa en una gráfica. Ver D-1057.
+
 - **Integración con Microsoft Planner.** El prompt de F6.2 está listo; falta el registro de la
   aplicación en Entra ID y decidir el momento.
 
@@ -543,7 +551,10 @@ marca, no se audita).
 
 ## Cerrado
 
-- **F37 · Inventario por carpetas** — entre el proyecto y la unidad había 597 filas seguidas en
+- **F37 · Inventario por carpetas** — la fila de carpeta lleva icono propio (`Icons.Folder`) y va
+  del color de identidad de la app (D-314), no del ámbar de aviso (D-316); dos de los seis colores
+  de aplicación estrenan **paso de texto** porque como texto no llegaban a AA en tema claro. Entre
+  el proyecto y la unidad había 597 filas seguidas en
   `XBLASTCore` y ninguna forma de leer la carpeta, que está en la ruta desde el primer ciclo. Ahora
   las unidades se agrupan por su carpeta relativa al proyecto, anidadas, con recuento
   «(auditadas/total)» y casilla que marca todo lo de dentro; una cadena de una sola subcarpeta se
