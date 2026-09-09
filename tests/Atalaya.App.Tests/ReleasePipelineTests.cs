@@ -122,6 +122,270 @@ public sealed class ReleasePipelineTests
             "el run que hay que poder leer es el que ha fallado, no el que ha ido bien");
     }
 
+
+    // ================================ BUGFIX-RELEASE-2: y además, que sea PowerShell válido
+
+    /// <summary>
+    /// <b>Cada bloque <c>run:</c> del workflow es PowerShell que PARSEA</b> (BUGFIX-RELEASE-2).
+    /// <para>
+    /// Lo medido: el paso «Comprobar el despliegue empaquetado» llevaba
+    /// <c>«…y lo publica $esperado: el actu…»</c> y PowerShell no lo aceptaba —<i>Variable
+    /// reference is not valid. ':' was not followed by a valid variable name character</i>—,
+    /// porque <c>$nombre:</c> es la forma de nombrar un ámbito o una unidad (<c>$env:RUTA</c>) y
+    /// no una variable seguida de dos puntos. El paso <b>ni siquiera llegaba a ejecutarse</b>:
+    /// reventaba al leerlo, con la publicación ya montada.
+    /// </para>
+    /// <para>
+    /// <b>Y por qué el test que vigilaba ese paso no lo vio</b>: comprobaba su <b>texto</b>, y el
+    /// texto seguía entero. Un guion puede decir exactamente lo que tiene que decir y no
+    /// compilar. Así que aquí se parsea de verdad, con el parser de PowerShell y <b>sin ejecutar
+    /// nada</b>: <c>Parser::ParseFile</c> devuelve el árbol y los errores de sintaxis, y ni un
+    /// solo comando corre.
+    /// </para>
+    /// <para>
+    /// Se miran <b>todos</b> los <c>run:</c> y no solo los que declaran <c>shell: pwsh</c>: el
+    /// job corre en <c>windows-latest</c>, donde el intérprete por defecto de un <c>run:</c>
+    /// también es PowerShell. Y las expresiones <c>${{ … }}</c> se sustituyen antes de parsear,
+    /// que es lo que hace GitHub — el shell nunca las ve—: parsearlas dentro sería probar otro
+    /// guion distinto del que se ejecuta.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Cada_bloque_run_del_workflow_es_PowerShell_valido()
+    {
+        IReadOnlyList<WorkflowScript> blocks = PowerShellBlocks();
+
+        blocks.Count.Should().BeGreaterThan(7,
+            "si dejaran de encontrarse bloques, este test estaría en verde sin mirar nada");
+        blocks.Select(b => b.Step).Should().Contain("Comprobar el despliegue empaquetado",
+            "el paso que se rompió es el primero que hay que estar mirando");
+
+        SyntaxErrors(blocks).Should().BeEmpty(
+            "un run: que no parsea no llega a ejecutarse: el workflow muere en el runner");
+    }
+
+    /// <summary>
+    /// <b>El cebo, escrito como test</b>: el defecto exacto que tumbó la publicación tiene que
+    /// salir roto, y su versión corregida limpia. Sin esto, un extractor que no encontrara nada
+    /// —o un parser que se tragara los errores— dejaría el test de arriba en verde para siempre.
+    /// </summary>
+    [Fact]
+    public void El_defecto_que_tumbo_la_publicacion_lo_caza_el_parser()
+    {
+        var cebo = new WorkflowScript("cebo", "throw \"y lo publica $esperado: el resto\"");
+        var sano = new WorkflowScript("sano", "throw \"y lo publica ${esperado}: el resto\"");
+
+        SyntaxErrors(new[] { cebo }).Should().ContainSingle(
+            "«$esperado:» no es una referencia de variable válida")
+            .Which.Should().Contain("cebo");
+
+        SyntaxErrors(new[] { sano }).Should().BeEmpty("y «${esperado}:» sí lo es");
+    }
+
+    // --------------------------------------------- de dónde salen los guiones, y quién los parsea
+
+    /// <summary>Un <c>run:</c> del workflow: de qué paso es, y qué se le manda al shell.</summary>
+    public sealed record WorkflowScript(string Step, string Script);
+
+    /// <summary>
+    /// Los <c>run:</c> del workflow, con el paso al que pertenecen. Se lee a mano y no con un
+    /// parser de YAML —no hay ninguno en esta casa, y este fichero lo escribimos nosotros—: un
+    /// paso empieza en <c>- name:</c>, y un bloque <c>run:</c> es lo que viene detrás sangrado por
+    /// debajo de su clave, ya sea literal (<c>|</c>) o plegado (<c>&gt;</c>, que junta las líneas
+    /// con un espacio, igual que hace YAML).
+    /// </summary>
+    private static IReadOnlyList<WorkflowScript> PowerShellBlocks()
+    {
+        string[] lines = File.ReadAllLines(WorkflowPath());
+        var blocks = new List<WorkflowScript>();
+        string step = "(sin nombre)";
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string line = lines[i];
+            string trimmed = line.TrimStart();
+
+            if (trimmed.StartsWith("- name:", StringComparison.Ordinal))
+            {
+                step = trimmed["- name:".Length..].Trim();
+                continue;
+            }
+
+            if (!trimmed.StartsWith("run:", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            int indent = line.Length - trimmed.Length;
+            string rest = trimmed["run:".Length..].Trim();
+
+            // `run: dotnet restore …` en una línea: el guion es esa línea y no hay más.
+            if (rest.Length > 0 && rest != "|" && rest != ">")
+            {
+                blocks.Add(new WorkflowScript(step, Expand(rest)));
+                continue;
+            }
+
+            var body = new List<string>();
+            int j = i + 1;
+            for (; j < lines.Length; j++)
+            {
+                if (lines[j].Trim().Length == 0)
+                {
+                    body.Add(string.Empty);
+                    continue;
+                }
+
+                if (lines[j].Length - lines[j].TrimStart().Length <= indent)
+                {
+                    break;
+                }
+
+                body.Add(lines[j]);
+            }
+
+            i = j - 1;
+            while (body.Count > 0 && body[^1].Length == 0)
+            {
+                body.RemoveAt(body.Count - 1);
+            }
+
+            string script = rest == ">"
+                ? string.Join(" ", body.Select(b => b.Trim()))
+                : Dedent(body);
+
+            if (script.Trim().Length > 0)
+            {
+                blocks.Add(new WorkflowScript(step, Expand(script)));
+            }
+        }
+
+        return blocks;
+    }
+
+    /// <summary>El sangrado del bloque literal se quita, que es lo que hace YAML al leerlo.</summary>
+    private static string Dedent(IReadOnlyList<string> body)
+    {
+        int margin = body.Where(b => b.Length > 0)
+            .Select(b => b.Length - b.TrimStart().Length)
+            .DefaultIfEmpty(0)
+            .Min();
+
+        return string.Join("\n", body.Select(b => b.Length > margin ? b[margin..] : string.Empty));
+    }
+
+    /// <summary>
+    /// Las expresiones de GitHub se sustituyen ANTES de que el shell vea nada, así que aquí
+    /// también: se cambian por un valor cualquiera. Lo que se parsea es el guion que se ejecuta.
+    /// </summary>
+    private static string Expand(string script)
+        => System.Text.RegularExpressions.Regex.Replace(script, @"\$\{\{[^}]*\}\}", "valor");
+
+    /// <summary>
+    /// Los errores de sintaxis de cada guion, en <b>una sola</b> llamada al intérprete: se
+    /// escriben a disco con extensión <c>.ps1</c> y PowerShell los parsea todos de una pasada.
+    /// <para>
+    /// <b>Parsear no ejecuta.</b> <c>ParseFile</c> devuelve el árbol y la lista de errores; ni un
+    /// comando del workflow llega a correr, que es lo que hace que este test se pueda tener.
+    /// </para>
+    /// <para>
+    /// Se prefiere <c>pwsh</c> —el shell que declara el workflow y el que hay en el runner— y se
+    /// cae a <c>powershell</c> donde no esté: el parser es el mismo para esta clase de error.
+    /// </para>
+    /// </summary>
+    private static IReadOnlyList<string> SyntaxErrors(IReadOnlyList<WorkflowScript> blocks)
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "atalaya-wf-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var byName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            for (int i = 0; i < blocks.Count; i++)
+            {
+                string name = i.ToString("00");
+                byName[name] = blocks[i].Step;
+                File.WriteAllText(
+                    Path.Combine(dir, name + ".ps1"), blocks[i].Script,
+                    new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            }
+
+            // Todo con comillas simples por dentro: lo que sale de aquí viaja como UN argumento.
+            string command =
+                "Get-ChildItem -LiteralPath '" + dir.Replace("'", "''") + "' -Filter *.ps1 | "
+                + "Sort-Object Name | ForEach-Object { "
+                + "$n = $_.BaseName; $err = $null; "
+                + "$null = [System.Management.Automation.Language.Parser]::ParseFile("
+                + "$_.FullName, [ref]$null, [ref]$err); "
+                + "foreach ($e in $err) { $n + '|' + $e.Extent.StartLineNumber + '|' + $e.Message } }";
+
+            return Parse(command).Replace("\r\n", "\n").Split('\n')
+                .Where(l => l.Contains('|'))
+                .Select(l =>
+                {
+                    string[] parts = l.Split('|', 3);
+                    string paso = byName.TryGetValue(parts[0].Trim(), out string? name)
+                        ? name : parts[0];
+                    return $"«{paso}» línea {parts[1]}: {parts[2].Trim()}";
+                })
+                .ToList();
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+            catch (IOException)
+            {
+                // Un temporal que no se deja borrar no invalida lo que ya se ha leído.
+            }
+        }
+    }
+
+    /// <summary>Lanza el intérprete a parsear y devuelve lo que escribió.</summary>
+    private static string Parse(string command)
+    {
+        foreach (string shell in new[] { "pwsh", "powershell" })
+        {
+            var info = new System.Diagnostics.ProcessStartInfo(shell)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            info.ArgumentList.Add("-NoProfile");
+            info.ArgumentList.Add("-NonInteractive");
+            info.ArgumentList.Add("-Command");
+            info.ArgumentList.Add(command);
+
+            System.Diagnostics.Process? proc;
+            try
+            {
+                proc = System.Diagnostics.Process.Start(info);
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                continue;   // Ese intérprete no está en esta máquina: se prueba el siguiente.
+            }
+
+            using (proc)
+            {
+                proc.Should().NotBeNull();
+                string salida = proc!.StandardOutput.ReadToEnd() + proc.StandardError.ReadToEnd();
+                proc.WaitForExit(60_000).Should().BeTrue("parsear no puede tardar un minuto");
+                return salida;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "No hay ni pwsh ni powershell en esta máquina: el workflow no se puede parsear.");
+    }
+
+    private static string WorkflowPath()
+        => Path.Combine(RepoRoot(), ".github", "workflows", "release.yml");
+
     /// <summary>El botón vive en el aviso de versión, con su progreso y su explicación.</summary>
     [Fact]
     public void El_aviso_de_version_ofrece_el_boton_de_actualizar()

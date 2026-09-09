@@ -173,7 +173,7 @@ jobs:
           $cfg = Get-Content $deploy -Raw | ConvertFrom-Json
           $esperado = 'https://github.com/${{ github.repository }}'
           if ($cfg.appRepoUrl -ne $esperado) {
-            throw "El paquete dice «$($cfg.appRepoUrl)» y lo publica $esperado: el actualizador buscaría las Releases donde no están."
+            throw "El paquete dice «$($cfg.appRepoUrl)» y lo publica ${esperado}: el actualizador buscaría las Releases donde no están."
           }
           Write-Host "El actualizador del paquete apunta a $esperado."
 

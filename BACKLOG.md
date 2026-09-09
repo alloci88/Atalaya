@@ -691,6 +691,15 @@ marca, no se audita).
   **un tope se prueba con reloj, no con valor**, y con las dos cotas de D-1022. Cebo: con el
   código anterior el test nuevo **cuelga el testhost**. Ver D-1036.
 
+- **BUGFIX-RELEASE-2 · El paso que no llegaba a ejecutarse** — «Comprobar el despliegue
+  empaquetado» moría en el runner con `Variable reference is not valid`: `$esperado:` no es una
+  variable seguida de dos puntos, sino la forma de nombrar un ámbito (`$env:RUTA`). Se escribe
+  `${esperado}:`. Lo que importa es por qué no lo vio nadie: el test que vigilaba ese paso miraba
+  su **texto**, y un guion puede decir lo que tiene que decir y no compilar. Regla nueva: **cada
+  bloque `run:` del workflow se parsea** con el parser de PowerShell —`ParseFile`, que devuelve
+  los errores sin ejecutar nada—, sustituyendo antes las expresiones `${{ … }}` como hace GitHub.
+  Dos casos, uno de ellos el cebo escrito como test. Ver D-1060.
+
 - **BUGFIX-F32-3 · «Me quedo los cambios» con un fichero nuevo** — el arreglo creó el test que
   cubría el defecto y el paso 1 murió con `pathspec '…' did not match any file(s) known to git`:
   `commit --only` solo acepta rutas que git ya conoce, y F32 se probó solo con ficheros

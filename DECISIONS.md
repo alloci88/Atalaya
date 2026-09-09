@@ -19551,3 +19551,53 @@ rechaza se trata como rechazo. No hay caso de un fichero del arreglo **ignorado*
 `.gitignore`: la regla lo prepararía igual —añadirlo por su ruta es lo que pide quien pulsa—, pero
 eso no ha pasado nunca y no se ha probado. Y no se ha vuelto a pulsar el botón en el `dist` con una
 sesión real: lo reproducido es el fallo de `--only`, con su mensaje delante.
+
+## BUGFIX-RELEASE-2 — El paso que no llegaba a ejecutarse
+
+### D-1060 — Un `run:` del workflow se parsea, no se lee
+
+**Lo medido.** El paso «Comprobar el despliegue empaquetado» falla en el runner antes de hacer
+nada: `Variable reference is not valid. ':' was not followed by a valid variable name character`,
+sobre `"…y lo publica $esperado: el actu…"`. La causa es de PowerShell y no del workflow:
+`$nombre:` es la forma de nombrar un **ámbito o una unidad** —`$env:RUTA`, `$global:x`—, no una
+variable seguida de dos puntos, así que el intérprete busca un nombre detrás del `:` y no lo
+encuentra. Se escribe `${esperado}:` y ya está. Comprobado con el parser de verdad: la línea de
+antes da **1 error**, la de ahora **0**. Revisadas las demás cadenas del paso —y del fichero
+entero—: `$esperado:` era la única con ese patrón; `$env:ZIP`, `$env:SUM`, `$env:GITHUB_ENV` y
+`$env:GITHUB_OUTPUT` son justo lo contrario, el uso legítimo del `:`.
+
+**Y lo que importa: por qué no lo vio el test que vigilaba ese paso.** `ReleasePipelineTests`
+comprobaba su **texto** —que el `appRepoUrl` se compara, que el mensaje nombra las dos partes— y el
+texto seguía entero. **Un guion puede decir exactamente lo que tiene que decir y no compilar.** Es
+la misma clase de agujero que BUGFIX-ARRANQUE: 1.661 tests en verde sobre una versión que no
+arrancaba, porque nadie montaba el contenedor.
+
+**La regla que entra: cada bloque `run:` del workflow se PARSEA, con el parser de PowerShell.**
+`[System.Management.Automation.Language.Parser]::ParseFile` devuelve el árbol y los errores de
+sintaxis **sin ejecutar ni un comando**, que es lo que hace que esta prueba se pueda tener en una
+máquina de desarrollo: parsear el paso que publica una Release no publica nada. Se miran **todos**
+los `run:` y no solo los que declaran `shell: pwsh` — el job corre en `windows-latest`, donde el
+intérprete por defecto también es PowerShell—, y las expresiones `${{ … }}` se **sustituyen antes**
+de parsear, que es lo que hace GitHub: el shell nunca las ve, y parsearlas dentro probaría un guion
+distinto del que se ejecuta. Se prefiere `pwsh`, que es el que declara el workflow y el que hay en
+el runner, y se cae a `powershell` donde no esté — en esta máquina solo hay el segundo, y el error
+de esta clase lo da igual—.
+
+**Lo visible (N-6): nada.** El workflow cambia una llave por dos y sigue diciendo lo mismo; ninguna
+vista se mueve. Y no se toca **qué** comprueba el paso (D-1058), ni el resto del ritual de
+publicación.
+
+**Cobertura (N-5): dos casos.** Uno recorre el workflow —exige encontrar bloques y, entre ellos, el
+paso que se rompió— y falla nombrando el paso y la línea de cada error de sintaxis. Y **el cebo,
+escrito como test**: el defecto exacto con `$esperado:` tiene que salir roto y su corrección
+limpia; sin él, un extractor que no encontrara nada dejaría el primero en verde para siempre.
+Comprobado además contra el fichero real: devolviendo el defecto al workflow, el test se pone rojo
+con «*«Comprobar el despliegue empaquetado» línea 10: La referencia de variable no es válida*».
+**2.774 en verde.**
+
+**Lo que NO se ha comprobado, y se dice**: parsear no es ejecutar. Que un `run:` sea sintácticamente
+válido no dice nada de que haga lo que debe —eso lo siguen diciendo los tests de texto que ya
+había—, ni de que los comandos existan en el runner. Y el parser que corre aquí es el de Windows
+PowerShell 5.1, no el de `pwsh` 7 que usa el workflow: para esta clase de error son el mismo, pero
+una sintaxis exclusiva de 7 saldría como falso error en esta máquina y no ha habido ninguna que lo
+provoque.

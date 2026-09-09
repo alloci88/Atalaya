@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using LibGit2Sharp;
 
 namespace Atalaya.App.Services;
