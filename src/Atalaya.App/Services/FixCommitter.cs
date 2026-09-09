@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using LibGit2Sharp;
 
 namespace Atalaya.App.Services;
@@ -53,6 +53,17 @@ public sealed class FixCommitRejected : Exception
 /// árbol es suyo). Un <c>git add</c> seguido de <c>git commit</c> se habría llevado por delante
 /// todo lo que estuviera en el índice.
 /// </para>
+/// <para>
+/// <b>Y por qué además hace falta añadir</b> (BUGFIX-F32-3). <c>--only</c> solo acepta rutas que
+/// git YA conoce: un fichero <b>nuevo</b> —y el arreglo los crea, un test que cubre el defecto es
+/// el caso normal— no lo es, y el commit muere con
+/// <c>pathspec '…' did not match any file(s) known to git</c> sin llegar a intentarse. Así que los
+/// ficheros del arreglo que git no conoce se añaden al índice <b>ellos solos</b>, uno a uno y por
+/// su ruta, justo antes del commit; los que ya conoce siguen entrando por <c>--only</c>, sin tocar
+/// el índice. <b>Nunca</b> un <c>add -A</c> ni un <c>add .</c>: eso es exactamente lo que
+/// <c>--only</c> existe para evitar. Y si el commit falla después, <b>ese añadido se deshace</b>
+/// —la regla de D-1034 incluye el índice: un fallo deja el clon como estaba, también preparado—.
+/// </para>
 /// </summary>
 public sealed class FixCommitter
 {
@@ -89,7 +100,9 @@ public sealed class FixCommitter
     /// <para>
     /// <b>Nada se toca si algo falla.</b> Todos los rechazos ocurren ANTES de llamar a git, y el
     /// único que puede ocurrir después es el de git mismo, que no modifica el árbol de trabajo al
-    /// abortar. Un commit fallido no descarta nada ni deja el repositorio a medias.
+    /// abortar. Un commit fallido no descarta nada ni deja el repositorio a medias — y desde
+    /// BUGFIX-F32-3 eso incluye el <b>índice</b>: lo único que se prepara aquí son los ficheros
+    /// nuevos del arreglo, y si el commit no sale se despreparan.
     /// </para>
     /// </summary>
     /// <param name="title">La primera línea. Vacío se rechaza: un commit sin asunto no se hace.</param>
@@ -132,19 +145,37 @@ public sealed class FixCommitter
             ? title!.Trim()
             : title!.Trim() + "\n\n" + description!.Trim();
 
+        // Las rutas, como las escribe git: el índice se consulta y se commitea con barras.
+        List<string> targets = paths.Select(p => p.Replace('\\', '/')).ToList();
+
         string messageFile = Path.Combine(
             Path.GetTempPath(), $"atalaya-commit-{Guid.NewGuid():N}.txt");
+
+        // Lo preparado AQUÍ, y solo eso, es lo que se despreparará si el commit no sale.
+        IReadOnlyList<string> staged = Array.Empty<string>();
 
         try
         {
             // Sin BOM: git se lo tragaría dentro del asunto del commit.
             File.WriteAllText(messageFile, message, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
+            // BUGFIX-F32-3 — LOS FICHEROS DEL ARREGLO QUE GIT NO CONOCE, AL ÍNDICE, Y SOLO
+            // ELLOS. `--only` no sabe commitear una ruta que git no conoce todavía, y el arreglo
+            // crea ficheros: un test que cubre el defecto es el caso normal, no el raro.
+            try
+            {
+                staged = StageUnknown(cloneRoot!, targets);
+            }
+            catch (Exception ex)
+            {
+                return Fail($"No se pudieron preparar los ficheros nuevos del arreglo: {ex.Message}");
+            }
+
             // --cleanup=whitespace y no el `strip` de por defecto: una descripción que empiece una
             // línea por «#» es texto del usuario, no un comentario que git deba comerse.
             string arguments = "commit --only --cleanup=whitespace -F "
                 + Quote(messageFile) + " --"
-                + string.Concat(paths.Select(p => " " + Quote(p.Replace('\\', '/'))));
+                + string.Concat(targets.Select(p => " " + Quote(p)));
 
             ProcessOutcome outcome;
             try
@@ -155,19 +186,19 @@ public sealed class FixCommitter
             {
                 // El caso normal aquí es que no haya `git` en el PATH. Es un fallo como otro
                 // cualquiera: se dice y no se toca nada.
-                return Fail($"No se pudo ejecutar git: {ex.Message}");
+                return Undo(cloneRoot!, staged, $"No se pudo ejecutar git: {ex.Message}");
             }
 
             if (outcome.TimedOut)
             {
-                return Fail(
+                return Undo(cloneRoot!, staged,
                     $"El commit no volvió en {Timeout.TotalSeconds:0} s y se ha cortado. Tus "
                     + "cambios siguen en el clon, sin commitear." + Tail(outcome.Output));
             }
 
             if (outcome.ExitCode != 0)
             {
-                return Fail(
+                return Undo(cloneRoot!, staged,
                     "git rechazó el commit. Tus cambios siguen en el clon, exactamente como "
                     + "estaban." + Tail(outcome.Output));
             }
@@ -175,11 +206,14 @@ public sealed class FixCommitter
             string sha = GitInfo.HeadSha(cloneRoot);
             return sha is { Length: > 0 } && sha != "unknown"
                 ? new FixCommitResult(true, sha, Author: AuthorOf(cloneRoot!))
+                // Aquí NO se despara nada: git volvió con 0, así que el commit está hecho y lo
+                // que se preparó ya está dentro de su árbol. Deshacerlo sería inventarse un
+                // cambio en el índice que git no hizo.
                 : Fail("git dijo que el commit salió bien, pero no se pudo leer el nuevo HEAD.");
         }
         catch (Exception ex)
         {
-            return Fail($"No se pudo commitear: {ex.Message}");
+            return Undo(cloneRoot!, staged, $"No se pudo commitear: {ex.Message}");
         }
         finally
         {
@@ -192,6 +226,77 @@ public sealed class FixCommitter
                 // Un temporal que no se deja borrar no puede tumbar un commit que ya se hizo.
             }
         }
+    }
+
+    /// <summary>
+    /// <b>Prepara los ficheros del arreglo que git todavía no conoce, y solo ésos</b>
+    /// (BUGFIX-F32-3). Devuelve cuáles ha preparado, que es lo que hay que deshacer si el commit
+    /// no sale.
+    /// <para>
+    /// La condición es una sola y no una lectura de estados: <b>que la ruta no esté en el
+    /// índice</b>. Cubre el fichero nuevo y el ignorado por igual, y —lo que importa— <b>nunca
+    /// toca una ruta que ya estuviera preparada</b>, sea del arreglo o del usuario: si está en el
+    /// índice, git ya la conoce, <c>--only</c> la commitea y aquí no hay nada que hacer. Un
+    /// fichero que el arreglo tocara y que ya no esté en el disco tampoco se prepara: no hay qué.
+    /// </para>
+    /// <para>
+    /// Va por LibGit2Sharp y no por el CLI, al revés que el commit, y el criterio es el mismo que
+    /// eligió el CLI en D-1033: <b>preparar no dispara ningún hook</b>. Y se prepara ruta a ruta,
+    /// nunca con <c>-A</c> ni con <c>.</c> — eso es justo lo que <c>--only</c> existe para evitar—.
+    /// </para>
+    /// </summary>
+    private static IReadOnlyList<string> StageUnknown(string cloneRoot, IReadOnlyList<string> paths)
+    {
+        var staged = new List<string>();
+        using var repo = new Repository(cloneRoot);
+
+        foreach (string path in paths)
+        {
+            if (repo.Index[path] is not null || !File.Exists(Path.Combine(cloneRoot, path)))
+            {
+                continue;
+            }
+
+            Commands.Stage(repo, path);
+            staged.Add(path);
+        }
+
+        return staged;
+    }
+
+    /// <summary>
+    /// <b>Deshace exactamente lo que se preparó</b> —el <c>git reset -- ruta</c> de cada una— y
+    /// devuelve el fallo (BUGFIX-F32-3). La regla de D-1034 es que un paso 1 que falla no cambia
+    /// nada, y el índice es parte del clon: un fichero nuevo que se quedara preparado sería un
+    /// cambio que el usuario no pidió y que además se colaría en su siguiente commit.
+    /// <para>
+    /// Despreparar no toca el árbol de trabajo: el fichero sigue en el disco, byte a byte, sin
+    /// seguimiento — que es como estaba antes de pulsar.
+    /// </para>
+    /// </summary>
+    private static FixCommitResult Undo(
+        string cloneRoot, IReadOnlyList<string> staged, string reason)
+    {
+        if (staged.Count == 0)
+        {
+            return Fail(reason);
+        }
+
+        try
+        {
+            using var repo = new Repository(cloneRoot);
+            Commands.Unstage(repo, staged);
+        }
+        catch (Exception ex)
+        {
+            // No poder despreparar no cambia el desenlace —el commit no se hizo—, pero el usuario
+            // tiene que enterarse de que le queda algo en el índice.
+            return Fail(reason
+                + $"\n\n[además, no se pudieron despreparar {staged.Count} fichero(s) nuevo(s) "
+                + $"del arreglo: {ex.Message}]");
+        }
+
+        return Fail(reason);
     }
 
     /// <summary>

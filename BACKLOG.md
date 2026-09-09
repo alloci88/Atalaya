@@ -691,6 +691,16 @@ marca, no se audita).
   **un tope se prueba con reloj, no con valor**, y con las dos cotas de D-1022. Cebo: con el
   código anterior el test nuevo **cuelga el testhost**. Ver D-1036.
 
+- **BUGFIX-F32-3 · «Me quedo los cambios» con un fichero nuevo** — el arreglo creó el test que
+  cubría el defecto y el paso 1 murió con `pathspec '…' did not match any file(s) known to git`:
+  `commit --only` solo acepta rutas que git ya conoce, y F32 se probó solo con ficheros
+  modificados. Los cambios quedaron intactos (D-1034 cumplido). Ahora los ficheros del arreglo que
+  git no conoce se preparan **ellos solos** —ruta a ruta, nunca `-A` ni `.`— justo antes del
+  commit, y si éste falla **se desprepara** lo que se preparó: la regla de D-1034 incluye el
+  índice. Medido: el toolbox solo sabe **crear** y **modificar** —`apply_edit` y nada más—, así
+  que borrar y renombrar se dicen y no se cubren. Tres casos de regla y un cebo más en el de
+  D-1033; cebos comprobados en los dos sitios. Ver D-1059.
+
 - **BUGFIX-F32-2 · El autor en la línea del hash, y los tres bytes que se caían** — dos cosas
   que se vieron con el primer commit real. El commit salió como «Su Nombre» (el `user.name`
   de ese clon): correcto por D-1033, pero invisible hasta después; ahora la línea del hash

@@ -19466,3 +19466,88 @@ ellos sustituyendo al que exigía justo lo contrario del hub. Dos en `AboutVersi
 el README apuntan al repositorio del despliegue, y el ejemplo del README enseña el hub y el
 proveedor vacíos. Y uno en `ReleasePipelineTests`: el workflow sigue exigiendo que el paquete apunte
 al repositorio que lo publica. **2.767 en verde.**
+
+## BUGFIX-F32-3 — Quedarse los cambios cuando el arreglo ha creado un fichero
+
+### D-1059 — Solo lo del arreglo, también cuando es nuevo; y un fallo devuelve índice y árbol
+
+**Medido en uso real antes de tocar nada (N-2).** 09/09, clon personal de Atalaya, arreglo
+terminado que había creado `tests/Atalaya.App.Tests/Controls/BrandMarkTests.cs` —un fichero nuevo,
+sin seguimiento—. Al pulsar «Me quedo los cambios», el **paso 1** cae con:
+
+```
+error: pathspec 'tests/Atalaya.App.Tests/Controls/BrandMarkTests.cs' did not match any file(s) known to git
+```
+
+Y **nada más pasa**: los cambios siguen en el clon, `HEAD` donde estaba, los cuatro pasos
+siguientes sin intentarse. D-1034 se cumplió al carácter; lo que falló fue el paso, no el
+desenlace. **La causa, comprobada en un clon de pruebas**: `git commit --only -- rutas` solo acepta
+rutas que git **ya conoce**, y un fichero sin seguimiento no lo es. F32 se probó con ficheros
+modificados —los siete tests de D-1033 tocan uno solo, y ya existía—, así que el caso más normal
+que hay —**el arreglo escribe el test que cubre el defecto**, que es justo lo que su encargo le
+pide— no había pasado por aquí nunca.
+
+**Y qué produce el toolbox, que es lo que decide cuánto hay que cubrir.** Tres herramientas y no
+más: `read_file`, `apply_edit` y `run_build_and_tests` (`FixSessionPrompt`, `FixToolText`). La
+única que escribe es `apply_edit`, y sabe hacer exactamente dos cosas: **sustituir** un fragmento
+literal de un fichero que existe, y **crear** uno que no existe —`oldText` vacío, y solo si no
+existía (D-545)—. **No puede borrar y no puede renombrar**: no hay herramienta que lo haga, ni
+camino que lo componga —una sustitución que deje el fichero vacío deja un fichero vacío, que sigue
+siendo el mismo fichero seguido—. Así que **los dos casos se dicen y no se cubren**, que es lo que
+pedía el encargo si la medida salía así. De propina, medido en el mismo clon de pruebas: un fichero
+**borrado** del árbol sí pasa por `--only` —git conoce la ruta, y el commit registra el borrado—, y
+un **renombrado** fallaría por su mitad nueva, que es este mismo defecto. Si algún día el toolbox
+gana esas dos operaciones, lo que hay que añadir es un `git rm --cached` con la misma forma y su
+test.
+
+**La regla que entra.** Justo antes del `commit --only`, los ficheros del arreglo que **git no
+conoce** se añaden al índice **ellos solos**, uno a uno y por su ruta. La condición es una sola y
+no una lectura de estados: **que la ruta no esté en el índice**. Cubre el fichero nuevo y el
+ignorado por igual y, sobre todo, **nunca toca una ruta que ya estuviera preparada** — si está en
+el índice, git ya la conoce y `--only` la commitea sin ayuda, sea del arreglo o del usuario—. Los
+ya conocidos siguen entrando por `--only`, **sin tocar el índice**, que es la razón de ser de
+D-1033. **Nunca un `add -A` ni un `add .` ni un `commit -a`**: eso es exactamente lo que `--only`
+existe para evitar, y lo que se llevaría por delante el árbol del usuario (D-684).
+
+**Y si el commit falla después de añadir, el añadido se deshace** (`git reset -- ruta`, ruta a
+ruta, y solo las que se prepararon aquí). **La regla de D-1034 incluye el índice**: un fichero nuevo
+que se quedara preparado sería un cambio que el usuario no pidió, invisible en el árbol y que
+además se colaría en el siguiente commit que hiciera él. Despreparar no toca el disco: el fichero
+sigue donde estaba, byte a byte y sin seguimiento — el criterio de D-560, aplicado al índice—. Si
+git vuelve con **0** no se despara nada: el commit está hecho y lo preparado ya está dentro de su
+árbol; deshacerlo sería inventarse un cambio que git no hizo. Y si el `reset` es lo que falla, el
+desenlace no cambia —el commit no se hizo— pero el motivo lo dice, porque le queda algo en el
+índice.
+
+**Por qué preparar va por LibGit2Sharp y commitear sigue yendo por el CLI.** El mismo criterio que
+eligió el CLI en D-1033, leído al derecho: allí la razón era que **los hooks tienen que correr**, y
+preparar **no dispara ningún hook**. Lo que necesita el CLI se queda en el CLI; lo demás vuelve a
+donde está el resto de esta casa. De paso, eso deja el fallo probable —un `pre-commit` que
+rechaza— con el índice **de verdad** tocado y el `reset` **de verdad** ejecutado aunque el proceso
+de git esté doblado, que es lo que hace comprobable la regla de arriba.
+
+**Lo visible (N-6): nada.** Ni una vista se mueve, ni un texto cambia. Lo que cambia es que un
+arreglo que crea un fichero llega al final en vez de morir en el paso 1. No se toca **qué** se
+commitea —siguen siendo los ficheros de `fixes/{ulid}.json`—, ni **con qué mensaje**, ni **con qué
+identidad** (D-1033), ni los cinco pasos ni sus ramas de fallo (D-1034), ni el escritor de
+`apply_edit` (D-1035).
+
+**Cobertura (N-5): tres casos de regla y un cebo más en el de D-1033.** (1) Un arreglo que **crea**
+un fichero: el commit lo lleva, y solo a él. (2) Uno que crea **y** modifica, con los dos cebos que
+son el caso real —un fichero del usuario **sin seguimiento** y otro suyo **ya preparado**—: el
+commit lleva los dos del arreglo y los dos del usuario quedan como estaban, uno sin preparar y el
+otro preparado. (3) Un commit que **falla después de preparar** —un `pre-commit` doblado que
+devuelve 1—: el índice sin el fichero nuevo, el fichero otra vez sin seguimiento y byte a byte,
+`HEAD` donde estaba y la pantalla sin commitear. Y al test de D-1033 se le añade un **tercer cebo**,
+un fichero del usuario sin seguimiento, que es el que dice que se preparan **solo** los del
+arreglo. **Cebos comprobados en los dos sitios**: sin preparar los nuevos, los casos (1) y (2) se
+ponen rojos con el mensaje literal del uso real —`did not match any file(s) known to git`—; sin el
+`reset`, el caso (3) se pone rojo por las dos comprobaciones del índice. La tanda queda en **2.770
+en verde**.
+
+**Lo que NO se ha comprobado, y se dice**: sigue sin correr ningún `pre-commit` de verdad —el
+runner está doblado para ese caso, como decía D-1033—, así que lo que se prueba es que un git que
+rechaza se trata como rechazo. No hay caso de un fichero del arreglo **ignorado** por
+`.gitignore`: la regla lo prepararía igual —añadirlo por su ruta es lo que pide quien pulsa—, pero
+eso no ha pasado nunca y no se ha probado. Y no se ha vuelto a pulsar el botón en el `dist` con una
+sesión real: lo reproducido es el fallo de `--only`, con su mensaje delante.

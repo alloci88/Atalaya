@@ -28,6 +28,9 @@ public sealed class AssistedFixTests : IDisposable
     private const string RepoUrl = "https://github.com/org/xblast.git";
     private const string UnitPath = "Common/CommonStatics.cs";
 
+    /// <summary>El fichero que el arreglo CREA: el test del defecto (BUGFIX-F32-3).</summary>
+    private const string NewTestPath = "Tests/CommonStaticsTests.cs";
+
     private static readonly string OriginalCode = string.Join("\r\n", new[]
     {
         "namespace Common;",
@@ -1319,6 +1322,13 @@ public sealed class AssistedFixTests : IDisposable
             LibGit2Sharp.Commands.Stage(repo, "Common/Mio.cs");
         }
 
+        // Cebo 3 (BUGFIX-F32-3): un tercero ajeno SIN SEGUIMIENTO. Desde que los ficheros nuevos
+        // del arreglo se preparan, éste es el cebo que dice que se preparan SOLO ellos: un
+        // `add -A` o un `add .` se lo llevaría, y `--only` ni lo miraría.
+        string sinSeguir = Path.Combine(_clone, "Common", "Borrador.cs");
+        File.WriteAllText(sinSeguir, "// un borrador mío, ni preparado ni terminado\r\n");
+        byte[] sinSeguirAntes = File.ReadAllBytes(sinSeguir);
+
         FixCommitResult result = fix.CommitChanges();
 
         result.Ok.Should().BeTrue(result.Error);
@@ -1338,9 +1348,12 @@ public sealed class AssistedFixTests : IDisposable
             status.Modified.Select(e => e.FilePath).Should().Contain("Common/Reader.cs");
             status.Added.Select(e => e.FilePath).Should().Contain("Common/Mio.cs",
                 "lo que el usuario tenía en el índice sigue en el índice (D-684)");
+            status.Untracked.Select(e => e.FilePath).Should().Contain("Common/Borrador.cs",
+                "lo que el usuario no había preparado sigue sin preparar (BUGFIX-F32-3)");
         }
 
         File.ReadAllText(ajeno).Should().Be(ajenoAntes);
+        File.ReadAllBytes(sinSeguir).Should().Equal(sinSeguirAntes);
     }
 
     /// <summary>
@@ -1400,6 +1413,118 @@ public sealed class AssistedFixTests : IDisposable
         vm.IsCommitted.Should().BeFalse();
         vm.ClosedUncommitted.Should().BeTrue("la pantalla no cambia si el commit no se hizo");
         vm.CanDiscardAll.Should().BeTrue("y se puede seguir descartando");
+    }
+
+
+    // ============================ BUGFIX-F32-3: cuando el arreglo CREA un fichero
+
+    /// <summary>
+    /// <b>Un fichero NUEVO del arreglo entra en el commit</b> (BUGFIX-F32-3), que es lo que F32 no
+    /// podía hacer: <c>--only</c> solo acepta rutas que git ya conoce, así que el paso 1 moría con
+    /// <c>pathspec '…' did not match any file(s) known to git</c> — medido en uso real, con un
+    /// arreglo que añadió el test que cubría el defecto—.
+    /// <para>
+    /// Cebo comprobado: sin preparar los nuevos, este test se pone rojo con ese mismo mensaje.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task El_commit_lleva_el_fichero_nuevo_del_arreglo()
+    {
+        LiveFixService fix = await FixedSessionCreating();
+
+        FixCommitResult result = fix.CommitChanges();
+
+        result.Ok.Should().BeTrue(result.Error);
+        Committed().Should().BeEquivalentTo(new[] { NewTestPath }, "y solo a él");
+    }
+
+    /// <summary>
+    /// <b>Uno nuevo y otro ya conocido entran los dos; los del usuario, ninguno</b>
+    /// (BUGFIX-F32-3). Es el caso real entero: el arreglo toca la unidad y crea su test, y el
+    /// usuario tiene cosas suyas a medias (D-684).
+    /// <para>
+    /// Los dos cebos son los dos estados en los que puede estar lo del usuario, y cada uno
+    /// atrapa un descuido distinto: el <b>sin seguimiento</b> se lo llevaría un <c>add -A</c> o
+    /// un <c>add .</c> —y por eso se prepara ruta a ruta—, y el <b>preparado</b> se lo llevaría
+    /// commitear sin <c>--only</c>. Los dos tienen que quedar exactamente como estaban.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task El_commit_lleva_el_nuevo_y_el_modificado_y_deja_lo_del_usuario_como_estaba()
+    {
+        LiveFixService fix = await FixedSessionCreating(alsoModify: true);
+
+        // Cebo 1: del usuario, SIN SEGUIMIENTO.
+        string sinSeguir = Path.Combine(_clone, "Common", "Borrador.cs");
+        File.WriteAllText(sinSeguir, "// un borrador mío\r\n");
+        byte[] sinSeguirAntes = File.ReadAllBytes(sinSeguir);
+
+        // Cebo 2: del usuario, YA PREPARADO en el índice.
+        string preparado = Path.Combine(_clone, "Common", "Mio.cs");
+        File.WriteAllText(preparado, "// esto lo iba a commitear yo\r\n");
+        using (var repo = new LibGit2Sharp.Repository(_clone))
+        {
+            LibGit2Sharp.Commands.Stage(repo, "Common/Mio.cs");
+        }
+
+        FixCommitResult result = fix.CommitChanges();
+
+        result.Ok.Should().BeTrue(result.Error);
+        Committed().Should().BeEquivalentTo(new[] { NewTestPath, UnitPath });
+
+        using (var repo = new LibGit2Sharp.Repository(_clone))
+        {
+            LibGit2Sharp.RepositoryStatus status = repo.RetrieveStatus(
+                new LibGit2Sharp.StatusOptions { IncludeUntracked = true });
+            status.Untracked.Select(e => e.FilePath).Should().Contain("Common/Borrador.cs",
+                "lo suyo sin preparar sigue sin preparar");
+            status.Added.Select(e => e.FilePath).Should().Contain("Common/Mio.cs",
+                "y lo suyo preparado sigue preparado (D-684)");
+        }
+
+        File.ReadAllBytes(sinSeguir).Should().Equal(sinSeguirAntes);
+    }
+
+    /// <summary>
+    /// <b>Si el commit falla después de preparar, se despara</b> (BUGFIX-F32-3). La regla de
+    /// D-1034 —un paso 1 que falla no cambia nada— incluye el <b>índice</b>: un fichero nuevo que
+    /// se quedara preparado sería un cambio que el usuario no pidió, y además se colaría en el
+    /// siguiente commit que hiciera él.
+    /// <para>
+    /// Cebo comprobado: sin el <c>reset</c>, el fichero nuevo se queda en el índice y este test
+    /// se pone rojo por las dos comprobaciones del índice.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Un_commit_que_falla_despues_de_preparar_deja_el_indice_como_estaba()
+    {
+        LiveFixService fix = await FixedSessionCreating(
+            new RejectingGit("pre-commit: el fichero nuevo no lleva cabecera de licencia"));
+
+        string nuevo = Path.Combine(_clone, NewTestPath);
+        byte[] antes = File.ReadAllBytes(nuevo);
+        string headAntes = GitInfo.HeadSha(_clone);
+        IndexPaths().Should().NotContain(NewTestPath, "antes de pulsar no está preparado");
+
+        FixCommitResult result = fix.CommitChanges();
+
+        result.Ok.Should().BeFalse();
+        result.Error.Should().Contain("git rechazó el commit")
+            .And.Contain("cabecera de licencia", "la cola de lo que dijo el hook");
+
+        // El índice, como estaba.
+        IndexPaths().Should().NotContain(NewTestPath);
+        using (var repo = new LibGit2Sharp.Repository(_clone))
+        {
+            repo.RetrieveStatus(new LibGit2Sharp.StatusOptions { IncludeUntracked = true })
+                .Untracked.Select(e => e.FilePath).Should().Contain(NewTestPath,
+                    "vuelve a estar sin seguimiento, que es como estaba");
+        }
+
+        // Y el árbol, byte a byte: despreparar no toca el disco (D-560).
+        File.ReadAllBytes(nuevo).Should().Equal(antes);
+        GitInfo.HeadSha(_clone).Should().Be(headAntes);
+        fix.CommittedSha.Should().BeNull();
     }
 
     /// <summary>Sin identidad de git no se inventa un autor: se falla con el motivo (F32 §1).</summary>
@@ -1816,6 +1941,57 @@ public sealed class AssistedFixTests : IDisposable
         fix.HasFinished.Should().BeTrue(fix.FailureMessage);
         fix.Files.Should().ContainSingle();
         return fix;
+    }
+
+
+    /// <summary>
+    /// Una sesión terminada cuyo arreglo <b>crea</b> un fichero —el test que cubre el defecto, que
+    /// es justo lo que el encargo del agente le pide— y, si se le dice, toca además la unidad.
+    /// </summary>
+    private async Task<LiveFixService> FixedSessionCreating(
+        IProcessRunner? git = null, bool alsoModify = false)
+    {
+        var script = new List<FixStep>();
+        if (alsoModify)
+        {
+            script.Add(new FixStep(Edit: new FixStepEdit(UnitPath, "es donde está el defecto",
+                new[] { new FixEdit("var bytes = new byte[hex.Length / 2];",
+                    "if (hex.Length % 2 != 0) throw new ArgumentException(nameof(hex));\r\n"
+                    + "        var bytes = new byte[hex.Length / 2];") })));
+        }
+
+        script.Add(new FixStep(Edit: new FixStepEdit(NewTestPath, "cubre el defecto",
+            new[] { new FixEdit(string.Empty, "// el test de la longitud impar\r\n") })));
+        script.Add(new FixStep(Done: new FixDoneArgs(
+            "Valida la longitud.", "Arregla BUG-0003", "Con el test que lo cubre.", null)));
+
+        var agent = new FakeCopilotAgent(fixScript: _ => script.ToArray());
+
+        LiveFixService fix = new(
+            _hub, () => agent, _machines, _ulids, _settings, new ReferenceCollector(), _snapshots,
+            Launcher(), _busy, new BuildRunner(new NoProcess()),
+            committer: new FixCommitter(git));
+
+        await fix.StartAsync(new FixSessionRequest(Slug, _findingId));
+        fix.HasFinished.Should().BeTrue(fix.FailureMessage);
+        fix.Files.Should().HaveCount(alsoModify ? 2 : 1);
+        return fix;
+    }
+
+    /// <summary>Qué llevó el último commit del clon, que es lo único que dice si entró de más.</summary>
+    private IReadOnlyList<string> Committed()
+    {
+        using var repo = new LibGit2Sharp.Repository(_clone);
+        LibGit2Sharp.Commit head = repo.Head.Tip!;
+        return repo.Diff.Compare<LibGit2Sharp.TreeChanges>(head.Parents.First().Tree, head.Tree)
+            .Select(c => c.Path).ToList();
+    }
+
+    /// <summary>Lo que hay en el índice, para poder decir que no se quedó nada preparado.</summary>
+    private IReadOnlyList<string> IndexPaths()
+    {
+        using var repo = new LibGit2Sharp.Repository(_clone);
+        return repo.Index.Select(e => e.Path).ToList();
     }
 
     /// <summary>Un git que rechaza el commit, como haría un <c>pre-commit</c> con política.</summary>
