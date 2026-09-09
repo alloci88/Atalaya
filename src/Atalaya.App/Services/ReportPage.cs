@@ -336,7 +336,8 @@ public sealed record ReportPage
     public bool HasFoot => FootLine.Length > 0;
 
     /// <summary>
-    /// <b>La firma, en una línea</b> (F36-2b §1.5). Es «Atalaya · Maxam» detrás de una raya: como
+    /// <b>La firma, en una línea</b> (F36-2b §1.5). Es «Atalaya · Acme» —o «Atalaya» a secas, sin
+    /// organización configurada (F38 §1.4): las DOS formas salen por aquí— detrás de una raya: como
     /// párrafo de markdown quedaba suelta a media página, con el tamaño del cuerpo y sin nada que
     /// la atara. Se pinta como metadato al pie, alineada con el cuerpo. La raya se va con el
     /// dibujo, no con el texto: el <c>.md</c> sigue igual.

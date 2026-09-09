@@ -22,16 +22,20 @@
 
                 <!-- LA CABECERA: el icono, el nombre y, a la derecha, la marca.
 
-                     LA MARCA VA AQUÍ, a la derecha del nombre, como en la tarjeta de
-                     identidad de Cuenta: es la cabecera la que dice de quién es esto. Suelta entre
-                     la ficha y los botones era un logotipo flotando en mitad de una tarjeta, sin
-                     nada a lo que pertenecer. Es uno de los DOS sitios donde la marca aparece
-                     (F6.4). Sin organización en el hub no se pinta, y la fila se queda con el
-                     icono y el nombre. -->
+                     LA MARCA VA AQUÍ, a la derecha del nombre: es la cabecera la que dice de quién
+                     es esto. Sin organización en el hub no se pinta, y la fila se queda con el
+                     icono y el nombre.
+
+                     F38 · Y la marca es AHORA EL NOMBRE de la organización configurada, no un
+                     logotipo. Éste es el ÚNICO emplazamiento que queda de los tres de F6.4: la
+                     bienvenida no tiene cuenta conectada de la que sacar el nombre, y la tarjeta
+                     de Cuenta ya lo escribe bajo el usuario. Aquí no lo dice nadie más — la ficha
+                     de abajo soltó su fila de organización cuando el logotipo la decía. -->
                 <DockPanel>
-                    <controls:BrandMark DockPanel.Dock="Right" LogoHeight="30"
+                    <controls:BrandMark DockPanel.Dock="Right"
                                         VerticalAlignment="Center"
-                                        Visibility="{Binding Info.HasOrganization, Converter={StaticResource BoolToVisibility}}" />
+                                        Margin="{StaticResource Pad.M.Left}"
+                                        Organization="{Binding Info.Organization}" />
                     <!-- El `.ico` se pide con el fotograma de su tamaño; sin `DecodePixelWidth` se
                          decodifica por el de 256 y se encoge, que es el borrón que la variante de
                          silueta existe para evitar. -->

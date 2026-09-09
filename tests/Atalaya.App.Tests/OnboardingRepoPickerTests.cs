@@ -21,7 +21,7 @@ namespace Atalaya.App.Tests;
 /// </summary>
 public sealed class OnboardingRepoPickerTests : IDisposable
 {
-    private const string Org = "Applied-Advanced-Solutions-AAS";
+    private const string Org = "acme";
 
     private readonly string _root;
     private readonly string _clone;
@@ -45,15 +45,15 @@ public sealed class OnboardingRepoPickerTests : IDisposable
         // CommitAndPush del final no hace nada: cero red (N-1).
         settings.Current.HubUrlOverride = Path.Combine(_root, "remote");
         _hub = TestFactory.Hub(_paths, settings);
-        _hub.Store.WriteHub(new HubInfo { OrganizationName = "AAS" });
+        _hub.Store.WriteHub(new HubInfo { OrganizationName = "Acme" });
         _machines = new MachineConfigStore(_paths.MachinesJson);
     }
 
     /// <summary>La lista que contesta la API, con dos repositorios de la organización.</summary>
     private const string TwoRepos = """
         [
-          {"name":"XBLAST","clone_url":"https://github.com/Applied-Advanced-Solutions-AAS/XBLAST.git"},
-          {"name":"Atalaya","clone_url":"https://github.com/Applied-Advanced-Solutions-AAS/Atalaya.git"}
+          {"name":"XBLAST","clone_url":"https://github.com/acme/XBLAST.git"},
+          {"name":"Atalaya","clone_url":"https://github.com/acme/Atalaya.git"}
         ]
         """;
 
@@ -97,7 +97,7 @@ public sealed class OnboardingRepoPickerTests : IDisposable
 
         vm.Name.Should().Be("XBLAST");
         vm.HasName.Should().BeTrue();
-        vm.RepoUrl.Should().Be("https://github.com/Applied-Advanced-Solutions-AAS/XBLAST.git");
+        vm.RepoUrl.Should().Be("https://github.com/acme/XBLAST.git");
     }
 
     /// <summary>
@@ -122,12 +122,12 @@ public sealed class OnboardingRepoPickerTests : IDisposable
         vm.Repositories.Should().HaveCount(2, "el eco no es una búsqueda: la lista no se recorta");
         vm.Repositories.Should().Contain(xblast);
         vm.SelectedRepository.Should().BeSameAs(xblast);
-        vm.RepoUrl.Should().Be("https://github.com/Applied-Advanced-Solutions-AAS/XBLAST.git");
+        vm.RepoUrl.Should().Be("https://github.com/acme/XBLAST.git");
 
         // Y escribir de verdad sí filtra, sin perder por ello lo ya elegido.
         vm.RepoQuery = "Ata";
         vm.Repositories.Should().ContainSingle().Which.Name.Should().Be("Atalaya");
-        vm.RepoUrl.Should().Be("https://github.com/Applied-Advanced-Solutions-AAS/XBLAST.git");
+        vm.RepoUrl.Should().Be("https://github.com/acme/XBLAST.git");
     }
 
     // =========================================================== Lo que ya está en el hub, marcado
@@ -145,7 +145,7 @@ public sealed class OnboardingRepoPickerTests : IDisposable
         {
             Slug = "xblast",
             Name = "XBLAST",
-            RepoUrl = "https://github.com/Applied-Advanced-Solutions-AAS/XBLAST",
+            RepoUrl = "https://github.com/acme/XBLAST",
             CurrentCycle = 1,
         });
 
@@ -191,7 +191,7 @@ public sealed class OnboardingRepoPickerTests : IDisposable
 
         // El mismo control, escrito a mano: es una URL, así que vale como URL — y de ella sale el
         // nombre igual que si se hubiera elegido de la lista.
-        vm.RepoQuery = "https://github.com/Applied-Advanced-Solutions-AAS/XBLAST.git";
+        vm.RepoQuery = "https://github.com/acme/XBLAST.git";
         vm.Name.Should().Be("XBLAST");
 
         vm.ClonePath = _clone;
@@ -200,7 +200,7 @@ public sealed class OnboardingRepoPickerTests : IDisposable
 
         AppConfig? app = _hub.Store.TryReadApp("xblast");
         app.Should().NotBeNull();
-        app!.RepoUrl.Should().Be("https://github.com/Applied-Advanced-Solutions-AAS/XBLAST.git");
+        app!.RepoUrl.Should().Be("https://github.com/acme/XBLAST.git");
         _machines.Load().ClonePathFor("xblast").Should().Be(_clone);
     }
 

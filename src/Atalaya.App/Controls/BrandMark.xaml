@@ -5,25 +5,18 @@
     HorizontalAlignment="Left">
 
     <!--
-        La firma corporativa (F6.4 §2). Tres sitios y ni uno más: la bienvenida, la página
-        Cuenta y el «Acerca de». La aplicación es la herramienta; el logo es la firma, no el
-        papel pintado.
+        La marca en pantalla ES LA ORGANIZACIÓN CONFIGURADA, y sin organización no hay marca
+        (F38 §1). Hasta aquí esto pintaba un logotipo corporativo fijo que venía en `assets/`,
+        con una placa clara debajo para que sus letras grises se leyeran en tema oscuro. La
+        aplicación ha salido de esa organización: el logotipo, sus dos variantes, sus fuentes y
+        la placa se han ido con ella.
 
-        La PLACA existe por un problema concreto: el logotipo tiene las letras en gris oscuro
-        y sobre el fondo oscuro de la aplicación no se leen. Recolorearlo no es decisión
-        nuestra —los manuales de marca no lo permiten—, así que lo que se cambia es lo de
-        DEBAJO: una superficie clara con aire alrededor. En tema claro la placa es transparente
-        y desaparece; el día que llegue la versión en negativo, tampoco hará falta en oscuro.
+        Lo que queda es el nombre que declare el hub. Es texto, así que no hay asset que
+        desplegar, no hay tema al que reaccionar y no hay nada que se lea mal sobre un fondo
+        oscuro. Sin nombre el control se COLAPSA —ni marco vacío, ni hueco reservado (D-464
+        sigue en pie, con otro contenido)—, que es lo que ve un despliegue sin organización.
     -->
-    <Border x:Name="Plate"
-            CornerRadius="{StaticResource Radius.L}"
-            Padding="{StaticResource Pad.M}"
-            HorizontalAlignment="Left"
-            Background="Transparent">
-        <Image x:Name="Logo"
-               Stretch="Uniform"
-               HorizontalAlignment="Left"
-               RenderOptions.BitmapScalingMode="HighQuality"
-               SnapsToDevicePixels="True" />
-    </Border>
+    <TextBlock x:Name="OrgText"
+               Style="{StaticResource Text.Meta}"
+               VerticalAlignment="Center" />
 </UserControl>

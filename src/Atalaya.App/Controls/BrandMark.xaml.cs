@@ -1,121 +1,55 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using Atalaya.App.Services;
-using Wpf.Ui.Appearance;
 
 namespace Atalaya.App.Controls;
 
 /// <summary>
-/// El hueco del logotipo corporativo (F6.4 §2). Se resuelve solo: busca el asset, elige el que
-/// corresponde al tema y decide si hace falta placa.
+/// La marca en pantalla: <b>la organización configurada, o nada</b> (F38 §1).
 /// <para>
-/// <b>Sin asset, el hueco desaparece.</b> No hay marco vacío, ni interrogante, ni traza de error:
-/// un despliegue sin marca es una situación normal. Es la diferencia entre un hueco preparado y
-/// un hueco roto.
+/// <b>Qué era y por qué cambia.</b> Hasta F38 esto resolvía un logotipo corporativo en disco,
+/// elegía variante según el tema y le ponía una placa clara debajo cuando hacía falta. La
+/// aplicación ha salido de aquella organización, así que el logotipo ya no es de nadie: lo que
+/// identifica un despliegue es el nombre que declara su hub, y ése es texto.
+/// </para>
+/// <para>
+/// <b>Sin organización, el hueco desaparece.</b> Ni marco vacío, ni interrogante, ni «—»: un
+/// despliegue sin organización es una situación normal, no un error (D-464, con otro contenido).
 /// </para>
 /// </summary>
 public partial class BrandMark : UserControl
 {
+    public static readonly DependencyProperty OrganizationProperty = DependencyProperty.Register(
+        nameof(Organization), typeof(string), typeof(BrandMark), new PropertyMetadata(null, OnOrganizationChanged));
+
     /// <summary>
-    /// El blanco de la placa. Es un color LITERAL a propósito y no un token del tema: los tokens
-    /// se oscurecen en tema oscuro, que es exactamente lo contrario de lo que esta superficie
-    /// tiene que hacer. No es «tocar la paleta de la aplicación» — es el papel bajo una firma.
+    /// El nombre de la organización, tal y como lo da el hub. Nulo o en blanco significa «este
+    /// despliegue no declara ninguna», que es el caso por defecto desde que
+    /// <c>appsettings.deploy.json</c> sale sin organización.
     /// </summary>
-    private static readonly Brush PlateBrush = FrozenBrush("#F4F5F7");
-
-    public static readonly DependencyProperty LogoHeightProperty = DependencyProperty.Register(
-        nameof(LogoHeight), typeof(double), typeof(BrandMark), new PropertyMetadata(26.0, OnLogoHeightChanged));
-
-    /// <summary>Alto del logotipo en píxeles. El ancho lo pone su proporción.</summary>
-    public double LogoHeight
+    public string? Organization
     {
-        get => (double)GetValue(LogoHeightProperty);
-        set => SetValue(LogoHeightProperty, value);
+        get => (string?)GetValue(OrganizationProperty);
+        set => SetValue(OrganizationProperty, value);
     }
 
     public BrandMark()
     {
         InitializeComponent();
-        Logo.Height = LogoHeight;
-
-        // La suscripción se ata al ciclo de vida del control, no a su construcción: un control
-        // que se descarga y se vuelve a cargar —y el de la barra de título vive tanto como la
-        // ventana— tiene que seguir enterándose del cambio de tema. El «-=» previo evita
-        // suscribirse dos veces si Loaded se dispara más de una vez.
-        Loaded += (_, _) =>
-        {
-            ApplicationThemeManager.Changed -= OnThemeChanged;
-            ApplicationThemeManager.Changed += OnThemeChanged;
-            Refresh();
-        };
-        Unloaded += (_, _) => ApplicationThemeManager.Changed -= OnThemeChanged;
         Refresh();
     }
 
-    private static void OnLogoHeightChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        => ((BrandMark)d).Logo.Height = (double)e.NewValue;
-
-    private void OnThemeChanged(ApplicationTheme theme, Color accent) => Refresh();
+    private static void OnOrganizationChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        => ((BrandMark)d).Refresh();
 
     /// <summary>
-    /// Vuelve a preguntar qué logo toca. Se llama al cargar y cuando cambia el tema, que son los
-    /// dos únicos momentos en que la respuesta puede cambiar.
+    /// El nombre se recorta —el hub puede traerlo con espacios— y, si no queda nada, el control
+    /// se colapsa entero: no basta con dejar el texto vacío, porque el hueco seguiría ocupando su
+    /// sitio en la fila que lo contiene.
     /// </summary>
     private void Refresh()
     {
-        bool dark = ApplicationThemeManager.GetAppTheme() != ApplicationTheme.Light;
-        BrandLogo? logo = BrandAssets.ForApp.Resolve(dark);
-
-        if (logo is null)
-        {
-            Logo.Source = null;
-            Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        Logo.Source = Load(logo.Path);
-        if (Logo.Source is null)
-        {
-            // El fichero está pero no se pudo decodificar. Mismo desenlace que si no estuviera:
-            // callar y desaparecer, nunca enseñar un roto.
-            Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        Plate.Background = logo.NeedsPlate ? PlateBrush : Brushes.Transparent;
-        Plate.Padding = logo.NeedsPlate ? new Thickness(16, 12, 16, 12) : new Thickness(0);
-        Visibility = Visibility.Visible;
-    }
-
-    /// <summary>
-    /// Carga el PNG SIN dejarlo bloqueado en disco (<c>OnLoad</c>): con la caché por defecto, el
-    /// fichero se queda abierto y quien quiera sustituir el logo tendría que cerrar la aplicación.
-    /// </summary>
-    private static BitmapImage? Load(string path)
-    {
-        try
-        {
-            var image = new BitmapImage();
-            image.BeginInit();
-            image.CacheOption = BitmapCacheOption.OnLoad;
-            image.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-            image.UriSource = new Uri(path, UriKind.Absolute);
-            image.EndInit();
-            image.Freeze();
-            return image;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
-
-    private static Brush FrozenBrush(string hex)
-    {
-        var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
-        brush.Freeze();
-        return brush;
+        string name = Organization?.Trim() ?? string.Empty;
+        OrgText.Text = name;
+        Visibility = name.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 }

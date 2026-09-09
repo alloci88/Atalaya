@@ -420,15 +420,16 @@ Todo lo visual vive en `assets/`. Lo versionado incluye tanto las **fuentes** co
 | `atalaya-icon.svg` | El icono. Fuente de los tamaños 32, 48, 64 y 256. |
 | `atalaya-icon-small.svg` | El mismo icono como **silueta**, fuente de 16 y 24. A 16 px el halo, el degradado y la tronera son ruido: la variante pequeña los suelta y engorda los rasgos. |
 | `atalaya.ico` | **Generado.** Multi-tamaño (16, 24, 32, 48, 64, 256). Es el icono del ejecutable, de la ventana, del Alt-Tab, de la barra de tareas y del aviso propio de la app. |
-| `maxam-logo-source.png` | El logotipo corporativo tal y como lo entregó comunicación. No se toca. |
-| `maxam-logo.png` | **Generado.** Lo que la aplicación pinta en tema claro. Copia byte a byte de su fuente, que ya viene con transparencia. |
-| `maxam-logo-dark-source.png` | La versión en negativo (letras claras), tal y como la entregó comunicación. |
-| `maxam-logo-dark.png` | **Generado.** Lo que la aplicación pinta en tema oscuro. Es *opcional*: si falta, el logotipo normal se pinta sobre una placa clara de soporte. |
+
+Y eso es todo lo que hay: **`assets/` no guarda ningún logotipo de organización**. La marca que
+Atalaya enseña en pantalla es el **nombre de la organización configurada** —el `organizationLogin`
+del despliegue, o el que declare el hub—, que es un dato y no una imagen. Sin organización no se
+enseña marca alguna: ni logo, ni nombre, ni hueco reservado.
 
 Para regenerar lo generado tras tocar un SVG:
 
 ```powershell
-pwsh scripts/build-assets.ps1            # regenera atalaya.ico y las dos variantes del logo
+pwsh scripts/build-assets.ps1            # regenera atalaya.ico
 pwsh scripts/build-assets.ps1 -Verify    # además falla si lo versionado no coincide con sus fuentes
 ```
 
@@ -436,10 +437,9 @@ Detrás hay una herramienta .NET (`scripts/IconGen/`) **fuera de `Atalaya.sln`**
 los SVG con SVG.NET y escribe el contenedor ICO. Es determinista — mismas fuentes, mismos
 bytes—, así que regenerar sin cambios no ensucia el árbol.
 
-> **El logotipo corporativo no se altera.** La única preparación permitida es técnica
-> (dejar el fondo en transparencia). Recolorearlo o redibujarlo no es decisión del equipo
-> de producto: la versión en negativo la entrega comunicación, y lo que hace la aplicación
-> es elegir cuál de las dos toca según el tema.
+> **El icono es de casa.** La torre de `atalaya-icon.svg` es original y se dibuja aquí; no
+> se toma prestada de ningún juego de iconos de terceros. Lo que la aplicación pinta como
+> marca de organización es texto, así que no hay ninguna imagen ajena que mantener.
 
 ## Limitaciones conocidas
 

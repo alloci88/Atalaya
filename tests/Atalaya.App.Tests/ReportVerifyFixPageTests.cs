@@ -81,13 +81,13 @@ public sealed class ReportVerifyFixPageTests
     };
 
     private static (ReportEntry Entry, AuditSession Session, string Body) VerifyCase(
-        IReadOnlyList<ReportBuilder.VerifyLine>? lines = null)
+        IReadOnlyList<ReportBuilder.VerifyLine>? lines = null, string? organization = "Org")
     {
         AuditSession session = VerifySession();
         lines ??= Lines();
         string markdown = ReportBuilder.BuildVerifyReport(
             App(), session, lines, new[] { "BUG-0001: confirmado — el defecto sigue ahí." },
-            "Org", TestRates.Table());
+            organization, TestRates.Table());
         (string body, _) = Atalaya.App.ViewModels.ReportsViewModel.SplitAnnex(markdown);
 
         var entry = new ReportEntry(
@@ -831,6 +831,25 @@ public sealed class ReportVerifyFixPageTests
             page.FootLine.Should().Be("Atalaya · Org");
             page.FootLine.Should().NotContain("-", "la raya es del dibujo, no de la firma");
         }
+    }
+
+    /// <summary>
+    /// <b>El resolutor del pie reconoce las DOS formas de la firma</b> (F38 §1.4). Con
+    /// organización configurada firma «Atalaya · Acme»; sin ella, «Atalaya» a secas — y eso ya
+    /// no es el caso raro: desde que la marca es la organización configurada, un despliegue sin
+    /// organización es lo normal. La forma corta no se había ejercitado nunca aquí, y es
+    /// justamente la que se lleva por delante un resolutor que dé por hecho el separador.
+    /// </summary>
+    [Theory]
+    [InlineData("Acme", "Atalaya · Acme")]
+    [InlineData(null, "Atalaya")]
+    public void El_pie_se_lee_con_organizacion_y_sin_ella(string? organization, string expected)
+    {
+        (ReportEntry entry, AuditSession session, string body) = VerifyCase(organization: organization);
+        ReportPage page = ReportPage.Compose(entry, session, body);
+
+        page.HasFoot.Should().BeTrue("el informe siempre va firmado, haya organización o no");
+        page.FootLine.Should().Be(expected);
     }
 
     /// <summary>

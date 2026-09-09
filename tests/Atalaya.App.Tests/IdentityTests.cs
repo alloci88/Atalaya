@@ -1,7 +1,9 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Linq;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Resources;
 using System.Reflection;
+using Atalaya.App.Controls;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
@@ -206,134 +208,32 @@ public sealed class IdentityTests : IDisposable
         stream.Length.Should().BeGreaterThan(1000, "es el .ico entero, no un hueco");
     }
 
-    // =============================================================== §2 · el logotipo
-
-    /// <summary>
-    /// Sin asset, el hueco DESAPARECE. Ni marco vacío, ni interrogante, ni traza: un despliegue
-    /// sin marca es una situación normal, no un error. Es la diferencia entre un hueco preparado
-    /// y un hueco roto.
-    /// </summary>
-    [Fact]
-    public void Sin_ningun_asset_no_hay_nada_que_pintar()
-    {
-        var assets = new BrandAssets(Dir());
-
-        assets.HasAny.Should().BeFalse();
-        assets.Resolve(dark: true).Should().BeNull();
-        assets.Resolve(dark: false).Should().BeNull();
-    }
-
-    /// <summary>
-    /// El caso de hoy: solo está el logotipo normal, con las letras en gris oscuro. En claro se
-    /// lee tal cual; en oscuro NO, y por eso pide placa. Recolorearlo no es decisión nuestra, así
-    /// que lo que se cambia es lo de debajo.
-    /// </summary>
-    [Fact]
-    public void Con_solo_el_logotipo_normal_el_tema_oscuro_pide_placa()
-    {
-        string dir = Dir(BrandAssets.LogoFile);
-        var assets = new BrandAssets(dir);
-
-        assets.HasAny.Should().BeTrue();
-        assets.Resolve(dark: false).Should().Be(
-            new BrandLogo(Path.Combine(dir, BrandAssets.LogoFile), NeedsPlate: false));
-        assets.Resolve(dark: true).Should().Be(
-            new BrandLogo(Path.Combine(dir, BrandAssets.LogoFile), NeedsPlate: true));
-    }
-
-    /// <summary>
-    /// Y el día que comunicación entregue el negativo, basta con dejarlo en la carpeta: el tema
-    /// oscuro lo usa y la placa deja de hacer falta. Sin recompilar y sin tocar una línea.
-    /// </summary>
-    [Fact]
-    public void Con_la_version_en_negativo_el_tema_oscuro_la_usa_y_suelta_la_placa()
-    {
-        string dir = Dir(BrandAssets.LogoFile, BrandAssets.DarkLogoFile);
-        var assets = new BrandAssets(dir);
-
-        assets.Resolve(dark: true).Should().Be(
-            new BrandLogo(Path.Combine(dir, BrandAssets.DarkLogoFile), NeedsPlate: false));
-        assets.Resolve(dark: false).Should().Be(
-            new BrandLogo(Path.Combine(dir, BrandAssets.LogoFile), NeedsPlate: false),
-            "en claro sigue mandando el logotipo normal");
-    }
-
-    /// <summary>
-    /// Y si por lo que sea solo está el negativo, se enseña igual y SIN placa: una placa clara
-    /// bajo letras claras sería peor que ninguna.
-    /// </summary>
-    [Fact]
-    public void Con_solo_el_negativo_se_usa_en_los_dos_temas_y_nunca_con_placa()
-    {
-        string dir = Dir(BrandAssets.DarkLogoFile);
-        var assets = new BrandAssets(dir);
-
-        assets.Resolve(dark: true)!.NeedsPlate.Should().BeFalse();
-        assets.Resolve(dark: false)!.NeedsPlate.Should().BeFalse();
-        assets.Resolve(dark: false)!.Path.Should().EndWith(BrandAssets.DarkLogoFile);
-    }
-
-    /// <summary>
-    /// <b>El logotipo NO se toca.</b> Lo desplegado tiene que ser byte a byte lo que entregó
-    /// comunicación: ni recoloreado, ni redibujado, ni siquiera vuelto a codificar. La única
-    /// preparación permitida era técnica —fondo a transparencia— y esta fuente ya venía con él,
-    /// así que el paso correcto era no hacer nada.
-    /// </summary>
-    [Fact]
-    public void El_logotipo_desplegado_es_byte_a_byte_el_que_entrego_comunicacion()
-    {
-        byte[] source = File.ReadAllBytes(Asset("maxam-logo-source.png"));
-        byte[] deployed = File.ReadAllBytes(Asset(BrandAssets.LogoFile));
-
-        deployed.Should().Equal(source);
-    }
-
-    /// <summary>
-    /// Las DOS variantes viajan junto al ejecutable —sin eso el hueco se colapsaría siempre— y
-    /// las fuentes no: no se despliega lo que no se pinta.
-    /// </summary>
-    [Fact]
-    public void Las_dos_variantes_se_despliegan_junto_al_ejecutable_y_las_fuentes_no()
-    {
-        string dir = Path.Combine(AppContext.BaseDirectory, BrandAssets.FolderName);
-
-        File.Exists(Path.Combine(dir, BrandAssets.LogoFile)).Should().BeTrue("el csproj lo copia a la salida");
-        File.Exists(Path.Combine(dir, BrandAssets.DarkLogoFile)).Should()
-            .BeTrue("la versión en negativo llegó y también se despliega");
-
-        Directory.EnumerateFiles(dir, "*-source.png").Should()
-            .BeEmpty("las fuentes se quedan en el repositorio");
-        Source("src/Atalaya.App/Atalaya.App.csproj").Should()
-            .Contain("maxam-logo*-source.png", "el comodín excluye las fuentes de las DOS variantes");
-    }
-
     // =============================================================== §2 · la contención
 
     /// <summary>
-    /// <b>Dónde NO va la marca.</b> Tres emplazamientos y ni uno más: la bienvenida, la página
-    /// Cuenta y el «Acerca de». La aplicación es la herramienta; el logo es la firma, no el papel
-    /// pintado. Este test es el que impide que dentro de seis meses haya un logo en el rail.
+    /// <b>Dónde NO va la marca.</b> Era de tres emplazamientos —bienvenida, Cuenta y «Acerca
+    /// de»— y con F38 queda UNO: la cabecera de «Acerca de».
+    /// <para>
+    /// Los otros dos se caen por la misma regla, no por gusto. La bienvenida no tiene cuenta
+    /// conectada de la que sacar el nombre de la organización, así que su marca solo podía estar
+    /// vacía; y la tarjeta de Cuenta ya escribe la organización bajo el nombre del usuario, así
+    /// que una segunda marca en la misma fila sería el mismo dato dos veces.
+    /// </para>
     /// <para>
     /// La barra de título NO cuenta: lo que va ahí es el icono de la APLICACIÓN, que es de casa.
+    /// Este test sigue siendo el que impide que dentro de seis meses haya una marca en el raíl.
     /// </para>
     /// </summary>
     [Fact]
-    public void La_marca_solo_aparece_en_los_tres_sitios_acordados()
+    public void La_marca_solo_aparece_en_el_unico_sitio_acordado()
     {
-        var placements = new Dictionary<string, int>
-        {
-            ["src/Atalaya.App/Views/AccountView.xaml"] = 2,   // bienvenida + organización
-            ["src/Atalaya.App/Views/AboutView.xaml"] = 1,
-        };
-
-        foreach ((string file, int expected) in placements)
-        {
-            Regex.Matches(Source(file), "controls:BrandMark").Count.Should().Be(expected, $"en {file}");
-        }
+        Regex.Matches(Source("src/Atalaya.App/Views/AboutView.xaml"), "controls:BrandMark")
+            .Count.Should().Be(1, "la cabecera de «Acerca de», y ahí se acaba");
 
         foreach (string forbidden in new[]
                  {
                      "src/Atalaya.App/MainWindow.xaml",
+                     "src/Atalaya.App/Views/AccountView.xaml",
                      "src/Atalaya.App/Views/SessionView.xaml",
                      "src/Atalaya.App/Views/FindingsView.xaml",
                      "src/Atalaya.App/Views/MetricsView.xaml",
@@ -345,8 +245,133 @@ public sealed class IdentityTests : IDisposable
                  })
         {
             Source(forbidden).Should().NotContain("BrandMark", $"la marca no va en {forbidden}");
-            Source(forbidden).Should().NotContain("maxam", $"ni por la puerta de atrás en {forbidden}");
         }
+    }
+
+    /// <summary>
+    /// <b>La marca sale de la organización configurada, y de ningún sitio más</b> (F38 §1).
+    /// El único emplazamiento que queda ata su texto al dato del hub; lo que NO puede volver a
+    /// hacer es pintarse siempre. Se mira en el XAML porque es ahí donde se rompería: cambiar el
+    /// enlace por un literal compila igual de bien y no lo nota nadie hasta que un despliegue sin
+    /// organización enseña el nombre de otra.
+    /// </summary>
+    [Fact]
+    public void La_marca_de_la_cabecera_esta_atada_a_la_organizacion_del_hub()
+    {
+        string about = Source("src/Atalaya.App/Views/AboutView.xaml");
+
+        about.Should().Contain("Organization=\"{Binding Info.Organization}\"",
+            "el texto de la marca es el nombre que da el hub, no una constante");
+        about.Should().NotContain("LogoHeight", "ya no hay logotipo que dimensionar");
+    }
+
+    /// <summary>
+    /// <b>Sin organización configurada no hay marca, ni hueco reservado</b> (F38 §1), y se
+    /// comprueba sobre el modelo: el despliegue por defecto sale sin <c>organizationLogin</c>
+    /// —lo dejó vacío el arreglo del actualizador— y ésa es la situación normal, no un error.
+    /// <para>
+    /// La tarjeta de Cuenta esconde entonces su línea de organización en vez de escribir un
+    /// rótulo con nada detrás, que es la versión de «hueco roto» de este caso.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Sin_organizacion_configurada_la_cuenta_no_reserva_hueco_de_marca()
+    {
+        new DeployConfig().ChecksOrgMembership.Should()
+            .BeFalse("un despliegue sin organización es una situación normal");
+        new DeployConfig { OrganizationLogin = "   " }.ChecksOrgMembership.Should()
+            .BeFalse("un nombre en blanco tampoco es una organización");
+        new DeployConfig { OrganizationLogin = "Acme" }.ChecksOrgMembership.Should().BeTrue();
+
+        Source("src/Atalaya.App/Views/AccountView.xaml").Should()
+            .Contain("Visibility=\"{Binding ShowOrganization",
+                "la línea entera se esconde, rótulo incluido");
+    }
+
+    /// <summary>
+    /// <b>Lo que Windows enseña en Propiedades del ejecutable</b> (F38 §1.5). Company, Product y
+    /// Copyright son los de la aplicación y no los de ninguna organización. Sin estas propiedades
+    /// declaradas MSBuild las deriva del nombre del ensamblado y deja Copyright vacío: salían bien
+    /// por accidente, y lo que sale bien por accidente se rompe sin que nadie lo vea.
+    /// </summary>
+    [Fact]
+    public void El_binario_dice_de_quien_es()
+    {
+        Assembly app = typeof(AboutInfo).Assembly;
+
+        app.GetCustomAttribute<AssemblyCompanyAttribute>()!.Company.Should().Be("Atalaya");
+        app.GetCustomAttribute<AssemblyProductAttribute>()!.Product.Should().Be("Atalaya");
+        app.GetCustomAttribute<AssemblyCopyrightAttribute>()!.Copyright.Should()
+            .StartWith("©").And.Contain("Álvaro López Ciller");
+    }
+
+    /// <summary>
+    /// <b>El barrido: la marca de la organización donde nació Atalaya no vuelve</b> (F38).
+    /// Es EL test de esta fase — el que impide que dentro de seis meses alguien la reintroduzca
+    /// en un XAML, en un fixture o en el README sin que nadie se entere. DECISIONS y BACKLOG
+    /// quedan fuera a propósito: son historia, y reescribirla para que no nombre lo que pasó
+    /// sería mentir sobre por qué está esto aquí.
+    /// </summary>
+    [Fact]
+    public void Ninguna_marca_de_la_antigua_organizacion_sobrevive_en_el_producto()
+    {
+        // Partidos a propósito: enteros, ESTE fichero sería el primer infractor que
+        // encontrara su propio barrido.
+        string[] words = { "max" + "am", "applied-" + "advanced" };
+        var offenders = new List<string>();
+
+        foreach (string file in ProductFiles())
+        {
+            string text = File.ReadAllText(file).ToLowerInvariant();
+            foreach (string word in words)
+            {
+                if (text.Contains(word, StringComparison.Ordinal))
+                {
+                    offenders.Add($"{Path.GetRelativePath(RepoRoot(), file)} → «{word}»");
+                }
+            }
+        }
+
+        offenders.Should().BeEmpty("la marca de la antigua organización no vive en el producto (F38)");
+    }
+
+    /// <summary>
+    /// Los ficheros que SÍ se barren: el código, los tests, los workflows, los scripts y los dos
+    /// documentos que un usuario lee. Se excluyen <c>bin</c>/<c>obj</c> —artefactos, no fuentes—
+    /// y los <c>.md</c> de DECISIONS y BACKLOG, que son historia.
+    /// </summary>
+    private static IEnumerable<string> ProductFiles()
+    {
+        string root = RepoRoot();
+        var extensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".cs", ".xaml", ".csproj", ".props", ".targets", ".json", ".ps1", ".yml", ".yaml",
+            ".resx", ".tsv", ".txt", ".sln", ".svg",
+        };
+
+        foreach (string dir in new[] { "src", "tests", ".github", "scripts", "assets" })
+        {
+            string full = Path.Combine(root, dir);
+            if (!Directory.Exists(full))
+            {
+                continue;
+            }
+
+            foreach (string file in Directory.EnumerateFiles(full, "*", SearchOption.AllDirectories))
+            {
+                string relative = Path.GetRelativePath(root, file);
+                bool built = relative
+                    .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                    .Any(segment => segment is "bin" or "obj");
+                if (!built && extensions.Contains(Path.GetExtension(file)))
+                {
+                    yield return file;
+                }
+            }
+        }
+
+        yield return Path.Combine(root, "README.md");
+        yield return Path.Combine(root, "MANUAL.md");
     }
 
     // =============================================================== §2 · la firma del informe
@@ -355,9 +380,9 @@ public sealed class IdentityTests : IDisposable
     public void El_informe_de_sesion_lo_firma_la_organizacion()
     {
         string report = ReportBuilder.BuildSessionReport(
-            AppOf(), SessionOf(), Array.Empty<Finding>(), pendingUnits: 0, largeUnits: 0, organization: "Maxam");
+            AppOf(), SessionOf(), Array.Empty<Finding>(), pendingUnits: 0, largeUnits: 0, organization: "Acme");
 
-        report.TrimEnd().Should().EndWith("Atalaya · Maxam");
+        report.TrimEnd().Should().EndWith("Atalaya · Acme");
         report.Should().Contain("---", "la firma va separada del cuerpo");
     }
 
@@ -379,9 +404,9 @@ public sealed class IdentityTests : IDisposable
     public void El_consolidado_de_cierre_tambien_va_firmado()
     {
         string report = ReportBuilder.BuildCycleCloseReport(
-            AppOf(), closedCycle: 1, promoted: 0, findings: Array.Empty<Finding>(), organization: "Maxam");
+            AppOf(), closedCycle: 1, promoted: 0, findings: Array.Empty<Finding>(), organization: "Acme");
 
-        report.TrimEnd().Should().EndWith("Atalaya · Maxam");
+        report.TrimEnd().Should().EndWith("Atalaya · Acme");
     }
 
     // =============================================================== §3 · Acerca de
@@ -422,10 +447,10 @@ public sealed class IdentityTests : IDisposable
         sin.HasOrganization.Should().BeFalse();
         sin.Signature.Should().Be("Atalaya");
 
-        var con = new AboutInfo("  Maxam  ", "1.2.3", "https://github.com/org/repo");
+        var con = new AboutInfo("  Acme  ", "1.2.3", "https://github.com/org/repo");
         con.HasOrganization.Should().BeTrue();
-        con.Organization.Should().Be("Maxam", "se recorta el espacio sobrante");
-        con.Signature.Should().Be("Atalaya · Maxam", "la misma firma que va al pie del informe");
+        con.Organization.Should().Be("Acme", "se recorta el espacio sobrante");
+        con.Signature.Should().Be("Atalaya · Acme", "la misma firma que va al pie del informe");
     }
 
     /// <summary>
@@ -446,11 +471,11 @@ public sealed class IdentityTests : IDisposable
         var settings = new SettingsService(paths);
         settings.Load();
         HubContext hub = TestFactory.Hub(paths, settings);
-        hub.Store.WriteHub(new HubInfo { OrganizationName = "Maxam" });
+        hub.Store.WriteHub(new HubInfo { OrganizationName = "Acme" });
 
         var vm = new AboutViewModel(hub);
 
-        vm.Info.Organization.Should().Be("Maxam");
+        vm.Info.Organization.Should().Be("Acme");
         vm.Info.Version.Should().Be(AboutInfo.CurrentVersion());
         vm.RailKey.Should().Be("about", "el raíl resalta su entrada mientras la página está delante");
         vm.Title.Should().Be("Acerca de");
@@ -485,6 +510,14 @@ public sealed class IdentityTests : IDisposable
         string script = Source("scripts/build-assets.ps1");
         script.Should().Contain("atalaya-icon.svg").And.Contain("atalaya-icon-small.svg");
         script.Should().Contain("IconGen");
+        // F38 · Y `assets/` se queda SOLO con el icono de casa. Un logotipo de organización
+        // vuelto a dejar caer aquí es la forma en que esto reaparecería: se despliega solo, sin
+        // que nadie escriba una línea de código.
+        Directory.EnumerateFiles(Path.Combine(RepoRoot(), "assets"))
+            .Select(Path.GetFileName)
+            .Should().BeEquivalentTo(
+                new[] { "atalaya-icon.svg", "atalaya-icon-small.svg", "atalaya.ico" },
+                "la marca de una organización es un dato del hub, no un asset (F38)");
 
         File.Exists(Path.Combine(RepoRoot(), "scripts", "IconGen", "IconGen.csproj")).Should().BeTrue();
         Source("Atalaya.sln").Should().NotContain("IconGen", "la herramienta no entra en la solución");

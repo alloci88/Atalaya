@@ -3,8 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-    xmlns:c="clr-namespace:Atalaya.App.Controls"
-    xmlns:controls="clr-namespace:Atalaya.App.Controls">
+    xmlns:c="clr-namespace:Atalaya.App.Controls">
     <!--
         F26 Parte C — CUENTA.
 
@@ -162,11 +161,10 @@
                     </StackPanel>
                 </Border>
 
-                <!-- F6.4 · La firma de la bienvenida. Discreta y DEBAJO del bloque de conexión:
-                     quien abre la aplicación por primera vez viene a conectarse, no a mirar un
-                     logo. Si no hay asset, el hueco se colapsa solo. -->
-                <controls:BrandMark LogoHeight="24" Margin="{StaticResource Pad.L}"
-                                    HorizontalAlignment="Center" />
+                <!-- F38 · Aquí iba la firma de la bienvenida, un logotipo corporativo fijo. Se
+                     va sin sustituto: la marca es ahora la organización configurada (F38 §1) y
+                     en esta pantalla todavía no hay cuenta conectada de la que sacarla. Un hueco
+                     que solo puede estar vacío no es un hueco, es un margen. -->
             </StackPanel>
 
             <!-- ============ AUTORIZANDO: el código en grande ============ -->
@@ -228,11 +226,13 @@
                             </Border.Background>
                         </Border>
 
-                        <!-- F6.4 · La firma, junto a la organización a la que pertenece la cuenta.
-                             Es el único sitio de una vista de trabajo donde va, y va aquí porque es
-                             aquí donde se habla de la organización. -->
-                        <controls:BrandMark DockPanel.Dock="Right" LogoHeight="22"
-                                            VerticalAlignment="Center" />
+                        <!-- F38 · Aquí iba el logotipo corporativo, a la derecha de la fila. La
+                             marca es ahora la organización configurada, y en esta tarjeta la
+                             organización YA está escrita: la línea de debajo del nombre la dice.
+                             Repetirla al otro lado de la fila sería el mismo dato dos veces
+                             (F26 §C, revisión). Se va el logotipo y no lo sustituye nada.
+                             El avatar que sigue a la izquierda es el del USUARIO, no el de la
+                             organización: es el único que la cuenta conectada trae. -->
 
                         <StackPanel VerticalAlignment="Center">
                             <!-- UN nombre, no dos (F26 §C, revisión). `DisplayName` cae en el login

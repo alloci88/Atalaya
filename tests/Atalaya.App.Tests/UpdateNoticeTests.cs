@@ -21,7 +21,7 @@ namespace Atalaya.App.Tests;
 /// </summary>
 public sealed class UpdateNoticeTests : IDisposable
 {
-    private const string RepoUrl = "https://github.com/Applied-Advanced-Solutions-AAS/Atalaya";
+    private const string RepoUrl = "https://github.com/acme/Atalaya";
 
     private readonly string _root;
     private readonly AppPaths _paths;

@@ -17,7 +17,7 @@ namespace Atalaya.App.Tests;
 /// </summary>
 public sealed class UpdateCheckTests : IDisposable
 {
-    private const string RepoUrl = "https://github.com/Applied-Advanced-Solutions-AAS/Atalaya";
+    private const string RepoUrl = "https://github.com/acme/Atalaya";
 
     private readonly string _root;
     private readonly AppPaths _paths;
@@ -187,7 +187,7 @@ public sealed class UpdateCheckTests : IDisposable
         stub.Requests.Should().ContainSingle();
         stub.Requests[0].Headers.Authorization!.Parameter.Should().Be("token-de-la-cuenta");
         stub.Requests[0].RequestUri!.AbsolutePath
-            .Should().Be("/repos/Applied-Advanced-Solutions-AAS/Atalaya/releases/latest");
+            .Should().Be("/repos/acme/Atalaya/releases/latest");
     }
 
     // ---------------------------------------------------------------- descarte

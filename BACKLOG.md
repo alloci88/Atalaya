@@ -4,7 +4,8 @@ Lo que queda por hacer, y lo que se decidió no hacer todavía. Vive en el repo 
 igual que `MANUAL.md` y `DECISIONS.md` (norma **N-4**): cada fase mueve a «Cerrado» lo que entrega
 y apunta lo que deja pendiente. Un backlog que solo ve una persona no es del equipo.
 
-Última revisión: 2026-09-09 (F37 — el inventario se agrupa por carpetas; la carpeta agrupa y se
+Última revisión: 2026-09-09 (F38 — la marca es la organización configurada; sin organización, sin
+marca. Antes: F37 — el inventario se agrupa por carpetas; la carpeta agrupa y se
 marca, no se audita).
 
 ## En vuelo
@@ -555,6 +556,15 @@ marca, no se audita).
     puede afirmar sin reloj.
 
 ## Cerrado
+
+- **F38 · Sin marca ajena** — Atalaya sale de la organización donde nació y no queda ni una
+  referencia a ella en el producto: 59 apariciones en `src/`, tests, `scripts/` y README pasan a
+  **0** (DECISIONS y BACKLOG se quedan: son historia). Se van los cuatro PNG del logotipo, su rama
+  del `.csproj`, su resolutor (`BrandAssets`), su placa y su paso en `IconGen`. `BrandMark` deja de
+  pintar una imagen y pinta el **nombre de la organización configurada**, o nada — y de los tres
+  emplazamientos queda uno, la cabecera de «Acerca de». `Company`, `Product`, `Authors` y
+  `Copyright` se declaran a mano en `Directory.Build.props` en vez de salir bien por accidente. El
+  icono de la aplicación **no se toca**: ya era propio. Ver D-1061.
 
 - **F37 · Inventario por carpetas** — la fila de carpeta lleva icono propio (`Icons.Folder`) y va
   del color de identidad de la app (D-314), no del ámbar de aviso (D-316); dos de los seis colores

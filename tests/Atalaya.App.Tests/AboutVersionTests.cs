@@ -11,7 +11,7 @@ namespace Atalaya.App.Tests;
 /// un 404.
 /// <para>
 /// El parte: el diálogo decía «Versión 1.0.0» sobre un binario publicado en local desde un árbol
-/// que ya iba por la 1.0.3, y los enlaces llevaban a <c>github.com/maxam/atalaya</c>, que no
+/// que ya iba por la 1.0.3, y los enlaces llevaban a <c>github.com/acme/atalaya</c>, que no
 /// existe. Lo primero no era una mentira sobre lo compilado —el props decía 1.0.0— pero sí inducía
 /// a error: alguien podía reportar un fallo «de la 1.0.0» venido de un build sin publicar.
 /// </para>
@@ -84,12 +84,12 @@ public sealed class AboutVersionTests
     public void Los_enlaces_salen_del_despliegue_y_el_manual_se_deriva()
     {
         var info = new AboutInfo(null, "1.0.3",
-            "https://github.com/Applied-Advanced-Solutions-AAS/Atalaya");
+            "https://github.com/acme/Atalaya");
 
         info.HasRepository.Should().BeTrue();
-        info.Repository.Should().Be("https://github.com/Applied-Advanced-Solutions-AAS/Atalaya");
+        info.Repository.Should().Be("https://github.com/acme/Atalaya");
         info.Manual.Should().Be(
-            "https://github.com/Applied-Advanced-Solutions-AAS/Atalaya/blob/main/MANUAL.md");
+            "https://github.com/acme/Atalaya/blob/main/MANUAL.md");
     }
 
     [Fact]

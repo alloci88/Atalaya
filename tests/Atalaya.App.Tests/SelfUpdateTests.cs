@@ -21,7 +21,7 @@ namespace Atalaya.App.Tests;
 /// </summary>
 public sealed class SelfUpdateTests : IDisposable
 {
-    private const string RepoUrl = "https://github.com/Applied-Advanced-Solutions-AAS/Atalaya";
+    private const string RepoUrl = "https://github.com/acme/Atalaya";
 
     private readonly string _root;
     private readonly string _appDir;
@@ -695,7 +695,7 @@ public sealed class SelfUpdateTests : IDisposable
     /// <summary>Una instalación creíble dentro de una carpeta que sincroniza OneDrive.</summary>
     private string InstallUnderOneDrive()
     {
-        string dir = Path.Combine(_root, "OneDrive - MAXAM", "Escritorio", "Atalaya-v1.1.1-win-x64");
+        string dir = Path.Combine(_root, "OneDrive - Acme", "Escritorio", "Atalaya-v1.1.1-win-x64");
         Directory.CreateDirectory(dir);
         File.WriteAllText(Path.Combine(dir, "Atalaya.exe"), "vieja");
         File.WriteAllText(Path.Combine(dir, SelfUpdateService.RunnerExe), "relevo");

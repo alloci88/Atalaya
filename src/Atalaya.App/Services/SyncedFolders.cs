@@ -103,7 +103,7 @@ public static class SyncedFolders
 
     /// <summary>
     /// El nombre de una carpeta raíz de sincronización. Se aceptan las formas con sufijo —
-    /// «OneDrive - MAXAM», «Dropbox (Empresa)»— porque es como las nombran los clientes cuando la
+    /// «OneDrive - Acme», «Dropbox (Empresa)»— porque es como las nombran los clientes cuando la
     /// cuenta es de una organización, que es el caso que trae este arreglo.
     /// </summary>
     private static string? ByName(string segment)

@@ -68,7 +68,7 @@ public sealed class AboutInfo
     /// <summary>Sin organización no se escribe una línea vacía: el bloque no aparece.</summary>
     public bool HasOrganization => Organization is not null;
 
-    /// <summary>«Atalaya · Maxam», o solo «Atalaya». Es la misma firma que va al pie del informe.</summary>
+    /// <summary>«Atalaya · Acme», o solo «Atalaya». Es la misma firma que va al pie del informe.</summary>
     public string Signature => HasOrganization ? $"Atalaya · {Organization}" : "Atalaya";
 
     /// <summary>Este binario NO viene del workflow de release.</summary>

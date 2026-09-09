@@ -1176,7 +1176,9 @@ frase «disponible si lo activas»: te dice que existe y cómo activarlo si te i
 
 Está en el raíl, debajo de Ajustes. Es la ficha del binario que estás ejecutando, y es la pantalla a
 la que ir cuando algo va raro y hay que decir con qué se está trabajando: **la versión** y **la fecha
-del binario**, con el logotipo de tu organización en la cabecera de la tarjeta.
+del binario**, con el nombre de tu organización en la cabecera de la tarjeta. Si el
+despliegue no declara ninguna, la cabecera se queda con el icono y el nombre de Atalaya: no
+se reserva hueco para una marca que no existe.
 
 Y cuatro acciones: **Buscar actualizaciones** —pregunta a GitHub en el momento, sin esperar al
 chequeo periódico, y contesta ahí mismo—, **Novedades** (las notas de las versiones publicadas),

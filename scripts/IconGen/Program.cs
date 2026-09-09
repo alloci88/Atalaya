@@ -8,10 +8,15 @@ namespace Atalaya.IconGen;
 /// <summary>
 /// Construye los assets de identidad de Atalaya (F6.4) a partir de sus fuentes.
 /// <para>
-/// <b>Qué produce.</b> <c>assets/atalaya.ico</c> multi-tamaño (16, 24, 32, 48, 64, 256) y las
-/// dos variantes del logotipo, <c>maxam-logo.png</c> y <c>maxam-logo-dark.png</c>. Es
+/// <b>Qué produce.</b> <c>assets/atalaya.ico</c> multi-tamaño (16, 24, 32, 48, 64, 256). Es
 /// determinista: mismas fuentes, mismos bytes, así que regenerar sin cambiar nada no ensucia el
 /// árbol de git.
+/// </para>
+/// <para>
+/// <b>Y ya no prepara ningún logotipo corporativo.</b> Preparaba dos variantes de la marca de la
+/// organización donde nació Atalaya; esa marca se ha ido con ella (F38). Lo que identifica a un
+/// despliegue es el NOMBRE de su organización, que vive en el hub y no es un asset. Aquí quedan
+/// el icono de casa y sus dos SVG.
 /// </para>
 /// <para>
 /// <b>Por qué dos SVG.</b> Los tamaños grandes salen de <c>atalaya-icon.svg</c> y los dos
@@ -41,7 +46,6 @@ public static class Program
             string assets = Path.Combine(root, "assets");
 
             BuildIcon(assets);
-            PrepareLogo(assets);
             return 0;
         }
         catch (Exception ex)
@@ -212,76 +216,6 @@ public static class Program
 
         return buffer.ToArray();
     }
-
-    // ---------- El logo corporativo ----------
-
-    /// <summary>
-    /// Prepara <c>maxam-logo.png</c> desde su fuente. El único tratamiento permitido es
-    /// técnico: dejar el fondo en transparencia. Recolorear, redibujar o retocar el logotipo
-    /// no es decisión nuestra y esta herramienta no sabe hacerlo.
-    /// <para>
-    /// Si la fuente YA viene con transparencia se copia byte a byte, sin volver a codificarla:
-    /// la forma más segura de no alterar una marca es no tocar sus píxeles.
-    /// </para>
-    /// </summary>
-    private static void PrepareLogo(string assets)
-    {
-        // Las dos variantes se preparan igual: el logotipo normal (letras gris oscuro) y su
-        // negativo (letras claras), cada uno desde SU fuente. Que el negativo sea opcional no lo
-        // convierte en un caso aparte — si está, pasa por el mismo sitio.
-        Prepare(assets, "maxam-logo-source.png", "maxam-logo.png", required: true);
-        Prepare(assets, "maxam-logo-dark-source.png", "maxam-logo-dark.png", required: false);
-    }
-
-    private static void Prepare(string assets, string sourceFile, string targetFile, bool required)
-    {
-        string source = Path.Combine(assets, sourceFile);
-        string target = Path.Combine(assets, targetFile);
-
-        if (!File.Exists(source))
-        {
-            Console.WriteLine(required
-                ? $"AVISO  no hay assets/{sourceFile}: el logo se salta."
-                : $"  (sin assets/{sourceFile}: la variante es opcional)");
-            return;
-        }
-
-        using var image = new Bitmap(source);
-        if (HasTransparentBackground(image))
-        {
-            image.Dispose();
-            File.Copy(source, target, overwrite: true);
-            Console.WriteLine($"OK  {target}  (la fuente ya venía con transparencia: copia literal)");
-            return;
-        }
-
-        using var cut = new Bitmap(image.Width, image.Height, PixelFormat.Format32bppArgb);
-        for (int y = 0; y < image.Height; y++)
-        {
-            for (int x = 0; x < image.Width; x++)
-            {
-                Color c = image.GetPixel(x, y);
-                cut.SetPixel(x, y, IsWhite(c) ? Color.Transparent : c);
-            }
-        }
-
-        cut.Save(target, ImageFormat.Png);
-        Console.WriteLine($"OK  {target}  (fondo blanco pasado a transparencia)");
-    }
-
-    /// <summary>Las cuatro esquinas transparentes: la fuente ya trae su canal alfa hecho.</summary>
-    private static bool HasTransparentBackground(Bitmap image)
-        => image.GetPixel(0, 0).A == 0
-           && image.GetPixel(image.Width - 1, 0).A == 0
-           && image.GetPixel(0, image.Height - 1).A == 0
-           && image.GetPixel(image.Width - 1, image.Height - 1).A == 0;
-
-    /// <summary>
-    /// Blanco «de fondo», con holgura para el antialias del borde de las letras. El umbral es
-    /// alto a propósito: el gris del logotipo es #51555A y el rojo #FE2413, así que ningún
-    /// píxel de la marca se acerca a esto por accidente.
-    /// </summary>
-    private static bool IsWhite(Color c) => c.A > 0 && c.R >= 245 && c.G >= 245 && c.B >= 245;
 
     // ---------- Utilidades ----------
 

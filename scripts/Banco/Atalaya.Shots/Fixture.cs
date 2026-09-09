@@ -80,7 +80,7 @@ public sealed class Fixture : IDisposable
         var hub = new HubContext(
             paths, settings, account, new DeployConfig(),
             Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
-        hub.Store.WriteHub(new HubInfo { OrganizationName = "Applied-Advanced-Solutions-AAS" });
+        hub.Store.WriteHub(new HubInfo { OrganizationName = "Acme" });
 
         const string slug = "atalayabanco";
         hub.Store.WriteApp(new AppConfig

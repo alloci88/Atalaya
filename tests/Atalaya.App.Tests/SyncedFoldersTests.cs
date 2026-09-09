@@ -30,9 +30,9 @@ public sealed class SyncedFoldersTests
     [Fact]
     public void Una_ruta_bajo_la_variable_de_OneDrive_se_reconoce()
     {
-        Func<string, string?> env = Env(("OneDrive", @"C:\Users\ana\OneDrive - MAXAM"));
+        Func<string, string?> env = Env(("OneDrive", @"C:\Users\ana\OneDrive - Acme"));
 
-        SyncedFolders.Detect(@"C:\Users\ana\OneDrive - MAXAM\Escritorio\Atalaya", env)
+        SyncedFolders.Detect(@"C:\Users\ana\OneDrive - Acme\Escritorio\Atalaya", env)
             .Should().Be("OneDrive");
     }
 
@@ -50,9 +50,9 @@ public sealed class SyncedFoldersTests
     /// </summary>
     [Theory]
     [InlineData(@"C:\Users\ana\OneDrive\Escritorio\Atalaya-v1.1.1-win-x64", "OneDrive")]
-    [InlineData(@"C:\Users\ana\OneDrive - MAXAM\Escritorio\Atalaya-v1.1.1-win-x64", "OneDrive")]
+    [InlineData(@"C:\Users\ana\OneDrive - Acme\Escritorio\Atalaya-v1.1.1-win-x64", "OneDrive")]
     [InlineData(@"C:\Users\ana\Dropbox\Apps\Atalaya", "Dropbox")]
-    [InlineData(@"C:\Users\ana\Dropbox (MAXAM)\Atalaya", "Dropbox")]
+    [InlineData(@"C:\Users\ana\Dropbox (Acme)\Atalaya", "Dropbox")]
     [InlineData(@"C:\Users\ana\Google Drive\Atalaya", "Google Drive")]
     [InlineData(@"G:\Mi unidad\Atalaya", "Google Drive")]
     public void El_nombre_de_la_carpeta_raiz_basta(string path, string expected)
@@ -75,7 +75,7 @@ public sealed class SyncedFoldersTests
 
     /// <summary>
     /// «OneDriveAntiguo» no es OneDrive, y «Dropboxeo» tampoco es Dropbox. Se acepta el nombre
-    /// exacto o el nombre seguido de un separador —«OneDrive - MAXAM», «Dropbox (MAXAM)»—, que son
+    /// exacto o el nombre seguido de un separador —«OneDrive - Acme», «Dropbox (Acme)»—, que son
     /// las formas que de verdad crean los clientes.
     /// </summary>
     [Theory]

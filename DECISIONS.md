@@ -19601,3 +19601,93 @@ había—, ni de que los comandos existan en el runner. Y el parser que corre aq
 PowerShell 5.1, no el de `pwsh` 7 que usa el workflow: para esta clase de error son el mismo, pero
 una sintaxis exclusiva de 7 saldría como falso error en esta máquina y no ha habido ninguna que lo
 provoque.
+
+## F38 — Sin marca ajena: la marca es la organización configurada
+
+Atalaya sale de la organización donde nació. La regla que queda escrita, y que rige de aquí en
+adelante: **la marca de la aplicación es la organización configurada; sin organización, no hay
+marca** —ni logotipo, ni nombre, ni hueco reservado—. La marca del **binario** es otra cosa y es
+propia: Atalaya.
+
+### D-1061 — Todo lo que era de la antigua organización, y a dónde ha ido
+
+El inventario previo (N-2), contado sobre lo que git tiene —así que sin `bin`/`obj`—, dio
+**59 apariciones** de «maxam» / «Applied-Advanced-Solutions-AAS» en el producto: **8** en `src/`,
+**36** en tests y fixtures, **11** en `scripts/`, **4** en el README, **0** en `.github/` y **0**
+en el MANUAL. Más **4 PNG** —las dos variantes del logotipo y sus dos fuentes, 35 kB— y la rama del
+`.csproj` que las desplegaba. En la historia había otras **17** (15 en DECISIONS, 2 en BACKLOG),
+que se quedan donde están. Después del barrido: **0** en el producto.
+
+- **El logotipo se va entero, no se sustituye.** `BrandAssets` —el resolutor que elegía variante
+  según el tema y decidía si hacía falta placa— y los cuatro PNG desaparecen, con su rama del
+  `.csproj`, su paso en `IconGen` y su párrafo en `build-assets.ps1`. Todo aquello existía para un
+  problema concreto: unas letras grises que no se leían sobre fondo oscuro (D-461, D-463, D-474).
+  Sin logotipo no hay problema de contraste que resolver, así que la placa se va con él en vez de
+  quedarse «por si acaso» pintando un fondo que ya no cubre nada.
+
+- **`BrandMark` sobrevive, con otro contenido: el NOMBRE.** No se retira porque sigue habiendo
+  algo que decir —de quién es este despliegue— y porque es el gancho del test de contención. Lo
+  que cambia es de qué está hecho: un `TextBlock` atado a `Info.Organization` en vez de un `Image`
+  atado a un fichero. Se lleva por delante la suscripción al cambio de tema (D-478) y la placa
+  literal (D-462): el texto usa los tokens del tema como cualquier otro texto, que es justo lo que
+  una imagen de marca no podía hacer.
+
+- **De tres emplazamientos a UNO, y por la propia regla.** D-465 puso la marca en la bienvenida,
+  en Cuenta y en «Acerca de». Con la marca siendo el nombre de la organización, dos se caen solos:
+  **la bienvenida** no tiene cuenta conectada de la que sacar el nombre —su marca solo podía estar
+  vacía, y un hueco que solo puede estar vacío es un margen, no un hueco—; y **la tarjeta de
+  Cuenta** ya escribe la organización bajo el nombre del usuario, así que una segunda marca al
+  otro lado de la misma fila sería el mismo dato dos veces, que es exactamente lo que F26 §C quitó
+  de esa tarjeta. Queda **la cabecera de «Acerca de»**, donde además es el único sitio que lo dice:
+  la ficha soltó su fila de organización el día que el logotipo la decía por ella.
+
+- **El avatar sigue siendo el del USUARIO.** Se consideró enseñar el de la organización junto al
+  nombre, como se hace con el de la cuenta. No se hace: el modelo no lo tiene —`GitHubUser` trae
+  el del usuario y nadie pide el de la organización—, y traerlo sería una llamada nueva a GitHub,
+  o sea lógica, y esta fase es de marca y metadatos.
+
+- **El icono NO se toca, porque ya era de casa.** La torre de `atalaya-icon.svg` es original y su
+  `.ico` multi-tamaño se sigue generando igual (F6.4 §1). Se comprobó antes de proponer un icono
+  nuevo: sustituir un icono propio por otro propio habría sido rehacer trabajo bueno.
+
+- **El binario dice de quién es, y ahora lo dice a propósito.** `Company`, `Product`, `Authors` y
+  `Copyright` se declaran en `Directory.Build.props`. Antes MSBuild los derivaba del nombre del
+  ensamblado: Windows enseñaba «Atalaya» en Producto **por accidente** y nada en Copyright. Lo que
+  sale bien por accidente se rompe el día que alguien cambia el `AssemblyName`, y no lo ve nadie.
+
+**Lo visible (N-6), tres cosas y ni una más.** *Cuenta*: desaparece el logotipo de la tarjeta de
+identidad y el de debajo del bloque de conexión; la organización se sigue leyendo donde ya estaba,
+en su línea bajo el nombre del usuario. *«Acerca de»*: donde había un logotipo hay ahora el nombre
+de la organización, y sin organización la fila se queda con el icono y el nombre. *Informes
+nuevos*: la firma del pie es «Atalaya · {organización}» o «Atalaya» — y como el despliegue sale
+sin organización, la segunda forma pasa a ser la habitual. **Ningún `.md` ya escrito se toca**
+(D-441) y no se mueve nada más.
+
+**Cobertura (N-5): cinco tests nuevos, uno reescrito, ocho retirados. 2.772 en verde.**
+- **El barrido, que es EL test de la fase**: ningún `.cs`, `.xaml`, `.csproj`, `.json`, `.ps1`,
+  `.yml`, `.svg` ni fixture de `src/`, `tests/`, `.github/`, `scripts/` y `assets/`, ni el README
+  ni el MANUAL, contiene «maxam» ni «applied-advanced». Es lo que impide que vuelva sin que nadie
+  se entere. Los dos literales van partidos en el propio test, o sería su primer infractor.
+- **La marca está atada al hub**: el único emplazamiento enlaza su texto a `Info.Organization`.
+  Cambiarlo por un literal compila igual de bien y no lo nota nadie hasta que un despliegue ajeno
+  enseña el nombre de otro.
+- **Sin organización no se reserva hueco**, sobre el modelo: `ChecksOrgMembership` es falso con el
+  campo vacío o en blanco, y la línea de Cuenta se esconde entera, rótulo incluido.
+- **El binario**: `Company`, `Product` y `Copyright` del ensamblado principal.
+- **El pie, en sus DOS formas** (reescrito donde el pie existe): «Atalaya · Acme» y «Atalaya» a
+  secas. La forma corta nunca se había ejercitado, y es la que se lleva por delante un resolutor
+  que dé por hecho el separador — que es justo la que ahora se ve siempre.
+- **La contención pasa de tres emplazamientos a uno**, y `assets/` queda cerrado a tres ficheros:
+  un logotipo vuelto a dejar caer ahí se desplegaría solo, sin que nadie escriba una línea.
+- **Se retiran ocho**: los seis del asset del logotipo —las cuatro combinaciones de variantes, la
+  copia byte a byte de la fuente, el despliegue de las dos— y los dos de la placa, que se iban con
+  `BrandMarkTests`. Prueban un resolutor y un pincel que ya no existen.
+
+**Lo que NO se ha comprobado, y se dice.** Que el nombre de la organización se lea bien en la
+cabecera de «Acerca de» en los dos temas es cosa de mirarlo (N-8): el `dist` está reconstruido y
+`--selfcheck` en verde, pero el verde no dice nada del aspecto. Los prompts de los agentes se
+revisaron y **no nombraban** a la antigua organización ni a ninguna de sus aplicaciones, así que
+§1.7 no cambió ni un token — el conteo antes/después es el mismo porque no había nada que
+sustituir. Y «XBLAST», que sí aparece como nombre de aplicación de ejemplo en tests y documentos,
+**se queda**: no es la marca de la organización, no está en el barrido y moverlo habría sido
+rehacer lo que nadie pidió (N-6).

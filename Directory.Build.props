@@ -32,6 +32,19 @@
          lo que «Acerca de» lee (y lo que SemVer permite adornar). -->
     <Version Condition="'$(Version)' == ''">$(AtalayaFallbackVersion)</Version>
 
+    <!-- F38 — LA MARCA DEL BINARIO, EXPLÍCITA.
+
+         Sin estas cuatro propiedades MSBuild las deriva del nombre del ensamblado y deja
+         `Copyright` vacío: Windows enseñaba «Atalaya» en Producto por accidente y nada en
+         Copyright. Un metadato que sale bien por defecto es uno que se rompe el día que cambia el
+         `AssemblyName`. La marca de la APLICACIÓN es Atalaya y no la de ninguna organización: lo
+         que sale de la organización configurada es la firma en pantalla y el pie del informe, que
+         se leen del hub en tiempo de ejecución (F38 §1). -->
+    <Company>Atalaya</Company>
+    <Product>Atalaya</Product>
+    <Authors>Álvaro López Ciller</Authors>
+    <Copyright>© 2026 Álvaro López Ciller</Copyright>
+
     <LangVersion>12</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
