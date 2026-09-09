@@ -186,6 +186,43 @@ public sealed class AboutVersionTests
         deploy.ChecksForUpdates.Should().BeTrue();
     }
 
+    /// <summary>
+    /// Y los documentos enlazan a ESE repositorio, no a otro.
+    /// <para>
+    /// Son las dos únicas copias de la URL que viven fuera del despliegue —el enlace de descarga
+    /// del MANUAL y el ejemplo del README, que dice ser «los valores REALES»— y las dos se
+    /// derivan aquí del propio <c>appRepoUrl</c>. Mudarse de repositorio y dejarse una detrás no
+    /// rompe ninguna compilación: manda a la gente a un 404, que es de dónde viene este fichero
+    /// de tests.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void El_manual_y_el_readme_apuntan_al_repositorio_del_despliegue()
+    {
+        string repo = DeployConfig.Load(
+            Path.Combine(Root().FullName, "src", "Atalaya.App")).AppRepoUrl;
+
+        Source("MANUAL.md").Should().Contain($"{repo}/releases",
+            "de esa página se descarga el zip de la última versión");
+        Source("README.md").Should().Contain($"\"appRepoUrl\": \"{repo}\"",
+            "el ejemplo del README dice ser los valores REALES del despliegue");
+    }
+
+    /// <summary>
+    /// El hub y el client id NO viajan de fábrica, y el README enseña esa misma verdad: el
+    /// ejemplo de un fichero de despliegue con el hub de una organización dentro es lo que hace
+    /// que alguien lo copie tal cual y acabe sincronizando contra un hub que no es el suyo.
+    /// </summary>
+    [Fact]
+    public void El_ejemplo_del_readme_trae_el_hub_y_el_proveedor_vacios()
+    {
+        string readme = Source("README.md");
+
+        readme.Should().Contain("\"hubUrl\": \"\"");
+        readme.Should().Contain("\"gitHubClientId\": \"\"");
+        readme.Should().Contain("\"organizationLogin\": \"\"");
+    }
+
     private static bool IsBuildOutput(string path)
         => path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
         || path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal);

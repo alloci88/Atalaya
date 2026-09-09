@@ -184,9 +184,9 @@ valor de fábrica; el fichero de disco gana):
 
 ```json
 {
-  "hubUrl": "https://github.com/Applied-Advanced-Solutions-AAS/atalaya-hub",
-  "appRepoUrl": "https://github.com/Applied-Advanced-Solutions-AAS/Atalaya",
-  "gitHubClientId": "<CLIENT_ID>",
+  "hubUrl": "",
+  "appRepoUrl": "https://github.com/alloci88/Atalaya",
+  "gitHubClientId": "",
   "organizationLogin": ""
 }
 ```
@@ -195,6 +195,13 @@ valor de fábrica; el fichero de disco gana):
 > `src/Atalaya.App/appsettings.deploy.json`. Se escriben aquí una vez y se leen de ahí: los enlaces
 > del «Acerca de» y el chequeo de versión salen de `appRepoUrl`, nunca de una URL escrita en el
 > código (BUGFIX-VERSION).
+
+> **Y de fábrica solo viene el `appRepoUrl`.** El hub, el client id y la organización van
+> **vacíos** a propósito: son de CADA despliegue, no del código. Quien instala Atalaya conecta su
+> cuenta en **Cuenta** y elige su hub al configurarla; escribir aquí los de una organización
+> concreta haría que cualquier copia del repositorio saliera apuntando a un hub que no es el suyo.
+> El `appRepoUrl` sí viene puesto porque es el repositorio de la propia Atalaya —el sitio del que
+> salen SUS Releases— y ése es el mismo para todo el mundo.
 
 - **`hubUrl`** — el repositorio audit-hub. El usuario nunca lo ve ni lo escribe. **Migrar el
   hub al repo de la organización = cambiar esta línea en el despliegue**, cero acciones de

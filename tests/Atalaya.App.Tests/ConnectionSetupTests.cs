@@ -49,7 +49,8 @@ public sealed class ConnectionSetupTests : IDisposable
 
         DeployConfig config = DeployConfig.Load(dir);
 
-        // The embedded default ships the hub URL, so the app still knows where the hub lives.
+        // Whatever the embedded default says is what a broken override falls back to. The point
+        // is that a corrupt file changes nothing, not that the hub happens to be set.
         config.HubUrl.Should().Be(DeployConfig.LoadEmbedded().HubUrl);
     }
 
@@ -60,10 +61,36 @@ public sealed class ConnectionSetupTests : IDisposable
             .ChecksOrgMembership.Should().BeFalse();
     }
 
+    /// <summary>
+    /// The embedded default ships NO hub, NO client id and NO organization. Those three belong to
+    /// each DEPLOYMENT, not to the code: baking one team's hub into the repository would make
+    /// every copy of it start up pointing at somebody else's hub. They are set where they are
+    /// used — the account in «Cuenta», the hub when the app is configured — and until then the
+    /// app SAYS so instead of failing later (<see cref="ConnectionHelp.NoClientId"/>).
+    /// </summary>
     [Fact]
-    public void The_embedded_default_carries_the_hub_url_so_users_never_type_it()
+    public void The_embedded_default_ships_no_hub_and_no_provider()
     {
-        DeployConfig.LoadEmbedded().HasHubUrl.Should().BeTrue();
+        DeployConfig embedded = DeployConfig.LoadEmbedded();
+
+        embedded.HasHubUrl.Should().BeFalse("el hub es de cada despliegue, no del código");
+        embedded.HasClientId.Should().BeFalse("y la OAuth App con la que se conecta, también");
+        embedded.ChecksOrgMembership.Should().BeFalse("no hay organización contra la que mirar");
+    }
+
+    /// <summary>
+    /// Lo único que SÍ viene puesto de fábrica, y por eso se escribe aquí el literal: el
+    /// repositorio de la propia Atalaya, que es el mismo para todo el mundo porque es de donde
+    /// salen SUS Releases. Si esta línea y la del workflow dejaran de decir lo mismo, el paquete
+    /// publicado buscaría sus versiones donde no están.
+    /// </summary>
+    [Fact]
+    public void The_embedded_default_ships_the_releases_repository()
+    {
+        DeployConfig embedded = DeployConfig.LoadEmbedded();
+
+        embedded.AppRepoUrl.Should().Be("https://github.com/alloci88/Atalaya");
+        embedded.ChecksForUpdates.Should().BeTrue();
     }
 
     // ---------- D3: one token, three consumers ----------

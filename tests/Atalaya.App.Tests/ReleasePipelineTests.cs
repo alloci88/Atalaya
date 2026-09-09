@@ -66,6 +66,27 @@ public sealed class ReleasePipelineTests
     }
 
     /// <summary>
+    /// El paquete que sale de una Release lleva el actualizador apuntando al MISMO repositorio
+    /// que la publica.
+    /// <para>
+    /// Es de los acuerdos que se rompen en silencio: la Release sale perfecta y el zip que la
+    /// gente se descarga busca sus versiones nuevas en otro sitio, cosa que no se ve hasta que
+    /// alguien pulsa «Actualizar» semanas después. El workflow lo comprueba antes de comprimir;
+    /// esto comprueba que lo sigue comprobando.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void El_workflow_exige_que_el_paquete_apunte_al_repositorio_que_lo_publica()
+    {
+        string yaml = Workflow();
+
+        yaml.Should().Contain("$cfg.appRepoUrl", "se mira el appRepoUrl EMPAQUETADO");
+        yaml.Should().Contain("https://github.com/${{ github.repository }}",
+            "y se compara con el repositorio que está publicando");
+        yaml.Should().Contain("throw \"El paquete dice", "y un desajuste tumba la publicación");
+    }
+
+    /// <summary>
     /// Un publish local tiene que producir la MISMA forma de carpeta que una Release. Si no, la
     /// única manera de probar la actualización sería publicando de verdad.
     /// </summary>

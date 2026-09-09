@@ -453,6 +453,11 @@ marca, no se audita).
 
 ## Despliegue al equipo
 
+- **El hub y el client id, desde la ventana.** Desde D-1058 el despliegue viene con `hubUrl` y
+  `gitHubClientId` **vacíos** —son de cada despliegue, no del código— y los dos huecos se explican
+  bien en pantalla, pero rellenarlos sigue siendo editar `appsettings.deploy.json` junto al
+  ejecutable. Mientras el despliegue lo monte quien compila, vale; en cuanto lo instale alguien
+  más, ese fichero es el paso que no se puede pedir por escrito.
 - Dar permiso de **write** al equipo en `atalaya-hub`.
 - ~~`dist` **self-contained**~~ — resuelto en F8: lo que se reparte es el zip de la Release, que
   se publica siempre self-contained y no exige runtime en la máquina destino. `publish.ps1` sigue

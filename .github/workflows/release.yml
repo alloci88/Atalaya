@@ -153,9 +153,14 @@ jobs:
           }
           '{0:n1} MB' -f ((Get-Item 'dist/AtalayaUpdater.exe').Length / 1MB)
 
-      # El fichero de despliegue del repo viaja en el zip: es lo que apunta al hub, a la OAuth App
-      # y al propio repositorio de Releases. El publish ya lo copia, pero se afirma aquí porque un
-      # zip sin él arranca sin hub y el fallo aparecería lejos de su causa.
+      # El fichero de despliegue del repo viaja en el zip: es lo que apunta al repositorio de
+      # Releases. El publish ya lo copia, pero se afirma aquí porque un zip sin él no sabría a
+      # dónde mirar y el fallo aparecería lejos de su causa.
+      #
+      # Y se comprueba que el `appRepoUrl` empaquetado ES el repositorio que está publicando. Es
+      # el acuerdo que se rompe en silencio: la Release sale perfecta y el actualizador de ese
+      # paquete busca sus versiones en otro repositorio, cosa que nadie descubre hasta que alguien
+      # pulsa «Actualizar» semanas después. Aquí cuesta un segundo y falla con nombres.
       - name: Comprobar el despliegue empaquetado
         shell: pwsh
         run: |
@@ -164,6 +169,13 @@ jobs:
             Copy-Item 'src/Atalaya.App/appsettings.deploy.json' $deploy
           }
           Get-Content $deploy
+
+          $cfg = Get-Content $deploy -Raw | ConvertFrom-Json
+          $esperado = 'https://github.com/${{ github.repository }}'
+          if ($cfg.appRepoUrl -ne $esperado) {
+            throw "El paquete dice «$($cfg.appRepoUrl)» y lo publica $esperado: el actualizador buscaría las Releases donde no están."
+          }
+          Write-Host "El actualizador del paquete apunta a $esperado."
 
       # Y que el binario diga la versión del tag. Si esto falla, el desajuste tag↔binario se ve
       # aquí y no en la máquina de un compañero tres semanas después.

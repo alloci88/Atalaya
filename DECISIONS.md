@@ -19411,3 +19411,58 @@ color de la carpeta es el de la app y sigue al tema—; uno del recuento con el 
 puesto; y dos de paleta en `PaletteResourceTests`: que los seis colores de aplicación, en su paso
 de texto, llegan a AA sobre las tres superficies de los dos temas, y que los pasos que esta fase
 estrena siguen siendo su color y no pisan nada reservado.
+
+## RELEASE-PERSONAL — Las Releases salen del repositorio personal
+
+### D-1058 — El despliegue solo trae de fábrica lo que es igual para todo el mundo
+
+Atalaya se publica desde ahora en **`alloci88/Atalaya`**, y `appsettings.deploy.json` cambia en dos
+sentidos a la vez, que conviene no confundir:
+
+- **`appRepoUrl` → `https://github.com/alloci88/Atalaya`.** Es el repositorio de la PROPIA Atalaya,
+  de donde salen sus Releases (D-620): lo consulta el aviso de versión al arrancar y es el sitio del
+  que el botón «Actualizar» descarga el zip. Viene puesto de fábrica porque **es el mismo para todo
+  el mundo** — no hay un despliegue que tenga «otra» Atalaya.
+- **`hubUrl`, `gitHubClientId` y `organizationLogin` → vacíos.** Estos tres son de **cada
+  despliegue**, no del código: el hub guarda las auditorías de UN equipo, la OAuth App la registra
+  UNA organización y la pertenencia se comprueba contra ELLA. Dejarlos escritos en el repositorio
+  hacía que cualquier copia suya arrancara apuntando al hub de otro, que es exactamente lo que un
+  repositorio que se puede clonar no puede hacer. Se rellenan donde se usan: la cuenta se conecta en
+  **Cuenta** y el hub se elige al configurar la instalación.
+
+**Y el vacío no rompe nada en silencio, que es la mitad que importa.** Los tres huecos ya tenían su
+camino desde F2: sin client id, «Conectar con GitHub» sale deshabilitado y dice qué falta y dónde
+(`ConnectionHelp.NoClientId`); sin hub, la conexión lo dice igual (`NoHubUrl`); y
+`organizationLogin` vacío **significa** «no compruebes la pertenencia», que es lo correcto con un
+repositorio personal — el clon es la puerta real (D1). Lo que sí hay que decir con todas las letras
+es que **hoy esos dos valores no se escriben desde la ventana**: se ponen en el
+`appsettings.deploy.json` que viaja junto al ejecutable, que es justo lo que el mensaje de error
+manda hacer. Queda apuntado en el BACKLOG.
+
+**El workflow deja de fiarse de que las dos cosas coincidan.** `release.yml` no nombraba ningún
+repositorio —publica en aquel donde corre— y por eso podía publicar tan campante un paquete cuyo
+actualizador apuntara a otro sitio. Ahora, antes de comprimir, compara el `appRepoUrl` **del zip**
+con `https://github.com/${{ github.repository }}` y tumba la publicación si no son el mismo. Es de
+los acuerdos que se rompen sin ruido: la Release sale perfecta, y el fallo aparece semanas después
+en la máquina de otro, el día que pulsa «Actualizar» y le contestan las versiones de un repositorio
+que no es el suyo. Aquí cuesta un segundo y falla con los dos nombres delante.
+
+**Los documentos dejan de tener copias sueltas de la URL.** El enlace de descarga del MANUAL y el
+ejemplo del README —que dice ser «los valores REALES del despliegue»— se comprueban ahora **contra
+el propio `appRepoUrl`**, no contra un literal escrito otra vez: mudarse de repositorio y dejarse
+una detrás no rompe ninguna compilación, solo manda a la gente a un 404, que es de dónde viene todo
+el fichero de tests de BUGFIX-VERSION.
+
+**Lo que NO se toca.** La regla de que ninguna URL de repositorio vive en el código sigue igual y
+sigue vigilada. El PAT de respaldo, la migración de `hubUrl` de los usuarios pre-F2 y el
+comportamiento de `organizationLogin` vacío son de F2 y no se rediseñan aquí. Y la línea del BACKLOG
+que pide descargar el zip de la 1.0.3 con `--repo Applied-Advanced-Solutions-AAS/Atalaya` **se queda
+como está** (N-6): es el registro de una verificación pendiente sobre una release que vive ahí, no
+una URL vigente.
+
+**Tests: 5.** Dos en `ConnectionSetupTests` —el despliegue de fábrica no trae hub, ni client id, ni
+organización; y sí trae el repositorio de las Releases, con el literal escrito una sola vez—, uno de
+ellos sustituyendo al que exigía justo lo contrario del hub. Dos en `AboutVersionTests`: el MANUAL y
+el README apuntan al repositorio del despliegue, y el ejemplo del README enseña el hub y el
+proveedor vacíos. Y uno en `ReleasePipelineTests`: el workflow sigue exigiendo que el paquete apunte
+al repositorio que lo publica. **2.767 en verde.**

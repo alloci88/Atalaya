@@ -13,7 +13,7 @@ algo está hecho como está, `DECISIONS.md`.
 ## Empezar
 
 1. **Instala.** Descarga el zip de la última versión desde la
-   [página de Releases](https://github.com/Applied-Advanced-Solutions-AAS/Atalaya/releases),
+   [página de Releases](https://github.com/alloci88/Atalaya/releases),
    descomprímelo donde quieras y ejecuta **`Atalaya.exe`**. No hay instalador ni permisos de
    administrador: es una carpeta. Y no hace falta tener .NET instalado — el paquete lo lleva
    dentro.
