@@ -1,7 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 using Atalaya.App.Services;
 using Atalaya.App.Views;
-using Atalaya.Copilot;
 using Atalaya.Domain.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;

@@ -90,15 +90,6 @@ public sealed class ProviderDecouplingTests
     /// </summary>
     private static readonly string[] StillNamesAHouse =
     {
-        // A2 — el mapa de nombres del histórico saca los identificadores de las constantes de cada
-        // driver, así que importa los dos proyectos.
-        "src/Atalaya.App/Services/ProviderNames.cs",
-
-        // A2 — los ajustes por proveedor: el `using` ya no hace falta aquí, y el identificador
-        // comparado a mano es el que se va con el mapa por proveedor.
-        "src/Atalaya.App/ViewModels/SettingsViewModel.cs",
-        "src/Atalaya.App/Services/SettingsService.cs",
-
         // B — el coste: de qué casa es una sesión sin casa escrita, y cómo cuenta cada una sus
         // tokens de entrada. El contrato ya lo declara (Accounting, ClaimsUnattributedSessions);
         // falta que el cálculo lo pregunte en vez de comparar cadenas.

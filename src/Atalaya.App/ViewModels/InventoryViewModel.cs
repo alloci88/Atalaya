@@ -1,7 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 using Atalaya.App.Services;
 using Atalaya.App.Views;
-using Atalaya.ClaudeCode;
 using Atalaya.Domain;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;
