@@ -19691,3 +19691,22 @@ revisaron y **no nombraban** a la antigua organización ni a ninguna de sus apli
 sustituir. Y «XBLAST», que sí aparece como nombre de aplicación de ejemplo en tests y documentos,
 **se queda**: no es la marca de la organización, no está en el barrido y moverlo habría sido
 rehacer lo que nadie pidió (N-6).
+
+## A1 — Cuánto cuesta hoy una sesión de agente, medido
+
+Entrega de medida (N-2): no se tocó ni una línea de producto, de tests ni de documentación salvo
+este párrafo y el informe. **El tiempo de máquina no es el cuello de botella**: build incremental
+**1,81 s**, suite entera **80,10 s** de reloj con **2.772 tests en verde**, `--selfcheck` **1,04 s**
+y `dist` **9,17 s**. Dentro de esos 80 s el reparto es desigual hasta lo absurdo —la suma de
+duraciones del `.trx` es de 299,34 s y **`FactoryResetTests`, 14 tests, se lleva 72,36 s, el 24 %**,
+con dos tests sueltos en 64 s— y el tiempo se va en **git, no en WPF**: **el 69,6 % está en ficheros
+que montan repositorios**, mientras los **1.449 unitarios puros cuestan 55,81 s entre todos**. El
+coste que sí es grande es el de **arranque, y es de lectura**: `DECISIONS.md` tiene **19.693 líneas
+y 474 bloques `D-xxxx`** —**~354.000 tokens estimados** por `bytes/4`—, de los que **solo ~15 ids
+(3,2 %) están declarados como superados** por otra decisión posterior, así que casi todo sigue
+formalmente vigente; y sin embargo **cada una de las cinco fases recientes solo necesitó entre el
+1,8 % y el 11,1 %** del fichero, medido por sus referencias cruzadas. El cierre, en cambio, escribe
+poco y no borra nunca: **las cinco fases suman +545 líneas a `DECISIONS.md` y −0**. Las cifras, sus
+comandos, las tres tablas y lo que no se ha podido medir están en **`docs/MEDIDA-AGILIDAD.md`**; el
+`medida.trx` que las respalda no se commitea (`.gitignore`, líneas 14 y 18). Esta entrada no decide
+nada: la siguiente fase decide qué se toca.
