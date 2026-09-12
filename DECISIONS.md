@@ -19686,3 +19686,29 @@ anterior lo dice con **«revisa D-xxx»** en su primera línea, para que ESTADO 
 buscándola, y ESTADO se actualiza en la misma entrega que cambia una regla. La sesión, que es la
 cifra que A1 no pudo medir: **de 12:34 a 12:51 del 2026-09-12, 17 minutos**, catorce agentes de área
 en paralelo más dos, y un integrador.
+
+## PROV-1 — Todo lo que hoy da por hecho que el proveedor es Copilot
+
+Medida (N-2) antes de añadir proveedores: **no se cambia producto**, y la única edición de código es
+un comentario. **125 sitios** dan hoy por hecho que el proveedor es Copilot —17 en dominio, 13 en el
+proyecto del proveedor, 70 en app y vistas, 25 en `MANUAL.md`; **2 L, 30 M, 93 S**—, y tres focos
+concentran casi todo: la unidad de coste, el nombre por defecto de `ProviderNames.Display` y el
+alojamiento del vocabulario común —prompt, reglas, temáticas, rúbrica y directivas— dentro de
+`Atalaya.Copilot`, que es por lo que la aplicación entera arrastra el SDK. La abstracción existe y
+aguanta donde audita: `IAuditorProvider` tiene **13 miembros** y cuatro capacidades opcionales bien
+declaradas, pero de **23 capacidades miradas 15 quedan fuera del contrato**, seis de ellas resueltas
+con un `if` que nombra al proveedor repartido en nueve sitios — la frontera es nítida: dentro del
+motor del barrido manda la capacidad declarada, fuera —el dinero, los ajustes y las vistas— manda la
+comparación por cadena. De las **36 guardas** ganadas en bugfixes, **21 viven en dominio compartido y
+las hereda un proveedor nuevo; 15 están en el transporte** y hay que repetirlas, incluida la de
+volver a copiar a mano las siete descripciones de las tools de auditoría, que no tienen `FixToolText`
+y **ya divergen**: `unit_done` lleva una frase de más para Claude Code. Las tarifas por proveedor
+están implementadas y con test pero no se pueden usar —falta la columna en Ajustes, y `IsBilled`
+compara contra la cadena `"claude-code"`, así que una casa nueva **factura por omisión**—; de
+credenciales fuera de sitio, **ninguna**. Y se reconcilian las dos cifras de bloques `D-` que A1 y A2
+daban distintas: **474 encabezados `### D-` + 592 viñetas `- **D-` = 1.066 líneas, menos 7
+identificadores repetidos = 1.059 decisiones**, que es la de A2; la de A1 contaba solo encabezados.
+El criterio queda escrito en `DocsTests`, que sigue en verde con **2.775** tests. El detalle, con
+fichero y línea en cada fila, en **`docs/INVENTARIO-PROVEEDORES.md`**. Sesión **de 13:01 a 13:16 del
+2026-09-12, 15 minutos**, seis agentes en paralelo y un integrador. Esta entrega dice qué hay; el
+diseño es de la siguiente.

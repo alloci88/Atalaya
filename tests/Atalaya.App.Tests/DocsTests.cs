@@ -32,7 +32,26 @@ public sealed class DocsTests
     private const int TopeDeLineas = 1_500;
     private const int TopeDeBytes = 120 * 1024;
 
-    /// <summary>Un bloque de decisión: <c>### D-nnn …</c> o <c>- **D-nnn …</c>.</summary>
+    /// <summary>
+    /// Un bloque de decisión: <c>### D-nnn …</c> o <c>- **D-nnn …</c>.
+    /// <para>
+    /// Las dos formas cuentan porque las dos son decisiones de verdad. Las secciones antiguas de
+    /// DECISIONS escriben cada decisión como viñeta en negrita dentro de un párrafo y las nuevas
+    /// como encabezado propio; una cita de ESTADO a una decisión escrita como viñeta es tan
+    /// legítima como a una escrita como encabezado. Lo que las hace bloque es lo mismo en las dos:
+    /// el <c>D-nnn</c> abre su propia unidad de texto. Un <c>D-nnn</c> en mitad de una frase no es
+    /// un bloque, es una referencia — por eso el patrón va anclado al principio de línea.
+    /// </para>
+    /// <para>
+    /// De aquí salieron las dos cifras de DECISIONS que no cuadraban. A1 contó solo encabezados:
+    /// <c>474</c>. A2 contó además las viñetas, <c>592</c> líneas más —<c>1.066</c> en total—, y de
+    /// esas siete repiten un identificador ya escrito (algún <c>D-</c> aparece dos veces, y el
+    /// <c>D-786</c> está en las dos formas), así que quedan <c>1.059</c> decisiones distintas.
+    /// Ninguna de las dos cifras está mal tecleada: contaron cosas distintas, y la buena es la de
+    /// A2. El criterio se escribe aquí una sola vez, con nombre, para que no pueda divergir en dos
+    /// expresiones sueltas.
+    /// </para>
+    /// </summary>
     private static readonly Regex BloqueDeDecision =
         new(@"^(?:### |- \*\*)(D-\d+)\b", RegexOptions.Compiled);
 
