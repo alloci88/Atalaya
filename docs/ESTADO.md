@@ -628,7 +628,7 @@ Se regenera de `DECISIONS.md`, y ante contradicción **manda `DECISIONS.md`**.
 - Si la sesión arrancó sin servidor MCP, la unidad se para: «no hay defectos» y «no se pudo mirar» no se ven igual. (D-778)
 - El modelo de Claude Code se elige por alias de familia —`opus`, `sonnet`, `haiku`— y por defecto queda vacío. (D-779)
 - Los alias viven en un solo fichero, el driver; ningún otro fichero de producción nombra un id de modelo versionado. (D-779)
-- El modelo es un campo por proveedor: `copilotModel` y `claudeCodeModel`. (D-779)
+- El modelo es una entrada por proveedor en `providerModels`, indexada por su identificador; lo guardado con los nombres viejos se adopta una vez. (D-779, PROV-2)
 - Cada muestra de coste viaja con su `CostUnit`, y la sesión guarda con qué proveedor y qué modelo se auditó. (D-780)
 - Las sesiones que no escribieron casa las reclama el proveedor que declara reclamarlas. (D-780, PROV-2)
 - La estimación previa solo promedia sesiones del proveedor que va a auditar. (D-780)
