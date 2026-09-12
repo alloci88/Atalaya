@@ -1517,7 +1517,7 @@ public sealed class MetricsQuery
         => sessions
             .Select(s => (Session: s, Cost: rates.Of(s)))
             .Where(x => x.Cost.HasValue)
-            .GroupBy(x => string.IsNullOrWhiteSpace(x.Session.Provider) ? LegacyProviderId : x.Session.Provider!,
+            .GroupBy(x => LedgerIdOf(x.Session.Provider, hub),
                      StringComparer.OrdinalIgnoreCase)
             .Select(g =>
             {
@@ -1580,8 +1580,20 @@ public sealed class MetricsQuery
         }
     }
 
-    /// <summary>Lo que era toda sesión antes de que hubiera un segundo proveedor.</summary>
-    private const string LegacyProviderId = "copilot";
+    /// <summary>
+    /// <b>Bajo qué casa se agrupa una sesión</b> (PROV-2 §2). Una sesión anterior a F14 no lleva
+    /// proveedor escrito, y eso NO es un dato que falte: era de quien ya estaba, porque no había
+    /// otro. Quién reclama ese histórico lo <b>declara el contrato</b>
+    /// (<c>ClaimsUnattributedSessions</c>); aquí vivía su identificador escrito a mano, que es
+    /// justo lo que hacía que añadir una casa obligara a tocar Métricas.
+    /// <para>
+    /// Un identificador que esta versión ya no trae se agrupa <b>tal cual</b>: el histórico no se
+    /// reescribe porque un proveedor se retire.
+    /// </para>
+    /// </summary>
+    private static string LedgerIdOf(string? provider, HubContext hub)
+        => hub.Providers?.WhoWrote(provider)?.ProviderId
+           ?? (provider ?? string.Empty).Trim();
 
     /// <summary>
     /// El nombre legible de un identificador guardado. Sale de <see cref="ProviderNames"/>, que es

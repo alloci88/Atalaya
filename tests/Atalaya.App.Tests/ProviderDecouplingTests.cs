@@ -82,21 +82,14 @@ public sealed class ProviderDecouplingTests
            || relative.StartsWith("src/" + OptionalHouseProject + "/", StringComparison.Ordinal);
 
     /// <summary>
-    /// <b>DEUDA DE ESTA ENTREGA, no exención.</b> Sitios que todavía nombran a una casa y que
-    /// están repartidos a OTROS agentes de PROV-2: los ajustes de modelo por proveedor, el mapa de
-    /// nombres del histórico y el cálculo del coste. Se listan aquí en vez de arreglarse desde
-    /// fuera para que dos agentes no editen el mismo fichero (N-10), y <b>el integrador vacía esta
-    /// lista al mergear</b>: cuando esté vacía, la regla es completa.
+    /// <b>La lista vacía es el final de PROV-2.</b> Aquí vivió, durante el reparto, lo que
+    /// todavía nombraba a una casa y estaba en manos de otro agente —los ajustes de modelo, el
+    /// mapa de nombres del histórico y el cálculo del coste—: se listaba en vez de arreglarse
+    /// desde fuera para que dos agentes no editaran el mismo fichero (N-10). El integrador la
+    /// vació al mergear, y vacía es como tiene que quedarse: cada nombre que vuelva aquí es una
+    /// casa que alguien ha vuelto a escribir a mano.
     /// </summary>
-    private static readonly string[] StillNamesAHouse =
-    {
-        // B — el coste: de qué casa es una sesión sin casa escrita, y cómo cuenta cada una sus
-        // tokens de entrada. El contrato ya lo declara (Accounting, ClaimsUnattributedSessions);
-        // falta que el cálculo lo pregunte en vez de comparar cadenas.
-        "src/Atalaya.App/Services/CostEstimator.cs",
-        "src/Atalaya.App/Services/MetricsQuery.cs",
-        "src/Atalaya.Domain/Model/CreditCalculator.cs",
-    };
+    private static readonly string[] StillNamesAHouse = Array.Empty<string>();
 
     // ====================================================================== la puerta del código
 
