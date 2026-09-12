@@ -87,10 +87,20 @@ internal static class TestFactory
         return settings;
     }
 
-    public static HubContext Hub(AppPaths paths, SettingsService settings, DeployConfig? deploy = null)
+    /// <param name="account">
+    /// La cuenta que verá este hub. Se admite de fuera para los tests que necesitan CONECTARLA a
+    /// mitad —la identidad de commit de D-037 sale del perfil, así que sin cuenta no hay perfil que
+    /// mirar—; sin ella se monta una desconectada, que es como arranca todo test.
+    /// </param>
+    public static HubContext Hub(
+        AppPaths paths,
+        SettingsService settings,
+        DeployConfig? deploy = null,
+        GitHubAccountService? account = null)
     {
         AssertIsolated(paths);
-        return new HubContext(paths, settings, Account(paths), deploy ?? new DeployConfig(), NullLoggerFactory.Instance);
+        return new HubContext(
+            paths, settings, account ?? Account(paths), deploy ?? new DeployConfig(), NullLoggerFactory.Instance);
     }
 
     /// <inheritdoc cref="CloneLinkService"/>

@@ -271,8 +271,24 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// </summary>
     public string ProviderNotice =>
         "Con quién auditas TÚ, en esta máquina: cada uno usa la cuenta que tiene. Se aplica a la "
-        + "siguiente sesión, y queda escrito en ella y en su informe. El arreglo asistido sigue "
-        + "siendo de Copilot.";
+        + "siguiente sesión, y queda escrito en ella y en su informe. " + FixerNotice;
+
+    /// <summary>
+    /// Quién arregla, <b>preguntándoselo al proveedor</b> (PROV-2 §5). Hasta aquí esta línea decía
+    /// «El arreglo asistido sigue siendo de Copilot», que es falso desde F16: arregla el proveedor
+    /// elegido, y solo si sabe (<c>IAssistedFixProvider</c>). Una casa escrita a mano en un texto
+    /// es una afirmación que nadie vuelve a comprobar; el nombre lo declara el propio proveedor.
+    /// <para>
+    /// Se mira el <b>seleccionado</b> en la página y no el guardado, igual que
+    /// <see cref="CurrentProvider"/>: el resto del aviso ya habla de la elección que se está
+    /// haciendo, y decir «arregla X» mientras el desplegable enseña Y sería el mismo desfase otra
+    /// vez, solo que de un segundo de duración.
+    /// </para>
+    /// </summary>
+    private string FixerNotice
+        => CurrentProvider is Atalaya.Agents.IAssistedFixProvider
+            ? $"El arreglo asistido también es de {CurrentProvider.ProviderName}."
+            : $"{CurrentProvider.ProviderName} audita, pero no hace arreglos asistidos.";
 
     public override string Title => "Ajustes";
 
