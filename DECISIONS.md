@@ -4,56 +4,11 @@ Registro de decisiones tomadas en zonas **[LIBERTAD]** o ante ambigüedades no
 bloqueantes del prompt de construcción. Las decisiones **[NO NEGOCIABLE]** del
 prompt no se repiten aquí salvo para anclar un detalle de implementación.
 
-## Normas de la casa (N-1…N-5)
+## Normas de la casa
 
-Se citan por su número a lo largo de este fichero. Las tres primeras vienen de los prompts de
-construcción; la cuarta se establece en F6.10, la quinta en R3, y las tres últimas —N-6, N-7 y
-N-8— en el cierre de F27, que es donde se vio lo que cuesta no tenerlas.
-
-- **N-1 — Lo que toca el sync se prueba de verdad.** Cambio en la sincronización con el hub →
-  tests de integración contra un remoto local `--bare`, sin red.
-- **N-2 — Diagnóstico con evidencia, o incertidumbre declarada.** Nunca se adivina una causa: se
-  mide, se enseña lo medido, y lo que no se ha comprobado se dice que no se ha comprobado.
-- **N-3 — Nada se da por cerrado con commits sin publicar.** En esta máquina el `git push` es
-  **exclusivamente del usuario**: el agente commitea y, al cerrar, lista los commits locales
-  pendientes con sus hashes para que el usuario los publique. Un agente que pushea aquí se salta
-  la única revisión que hay.
-- **N-4 — El backlog es del equipo, y vive en el repo.** `BACKLOG.md` se mantiene al día igual que
-  `MANUAL.md` y `DECISIONS.md`: cada fase mueve lo que entrega a «Cerrado» y apunta lo que deja
-  pendiente. Un backlog que solo ve una persona no es un backlog del equipo, es una nota suya —y
-  desaparece con ella.
-
-- **N-5 — Un test por comportamiento que pueda romperse, no por control que se toca.** Antes de
-  escribir uno: ¿qué regla protege, y qué se rompería **en silencio** si no existiera? Si la
-  respuesta es «nada que un usuario notara al primer clic», no se escribe. Los tests de forma —que
-  un XAML tenga un control— no valen; los de regla —que un duplicado se detecte, que el nombre
-  salga del repo elegido— sí. El parte dice cuántos añade y por qué cada uno, en una línea. Se
-  establece en R3 (**D-935**).
-
-- **N-6 — Todo cambio visible se declara antes de hacerse.** En una fase de interfaz, el parte lleva
-  una **lista de cambios visibles por vista** —una línea y su captura cada uno— y **nada cambia de
-  disposición sin que el usuario lo haya pedido por escrito**. Un prompt que diga «ajusta» no
-  autoriza a mover. Se establece en el cierre de F27, después de que siete arreglos de un informe de
-  auditoría se llevaran por delante el raíl, las tarjetas del portafolio y el centrado de dos
-  formularios sin que nadie los hubiera pedido: la auditoría dice qué está mal, no autoriza a
-  rehacer. Un hallazgo es una propuesta hasta que el usuario la acepta.
-
-- **N-7 — Pruebas y documentación proporcionales al cambio.** En una fase de presentación: **una
-  entrada de DECISIONS por fase**, no por raíz ni por hallazgo; **tests solo de regla y solo si hay
-  regla nueva**; **capturas solo de lo que cambia**, y en dos combinaciones. Verificar siete cambios
-  cosméticos no puede costar más que hacerlos. Se establece en el cierre de F27, donde diez entradas
-  de DECISIONS, quince tests y cuatro recorridos completos del banco documentaron un trabajo de
-  presentación con el aparato de uno de arquitectura. La norma se aplica a sí misma: las diez
-  entradas de F27 se refunden en **D-1001**, una.
-
-- **N-8 — El agente no se revisa a sí mismo la interfaz.** En fases de presentación el ciclo es
-  **cambio → build → tests → `dist` → parar**. Nada de banco de capturas, nada de recorridos, nada
-  de mirar y volver a tocar: el usuario abre el `dist` y revisa en tres minutos lo que al agente le
-  cuesta horas — y además el recorrido **conduce la aplicación con el ratón de verdad**, así que
-  secuestra la máquina de quien está delante. Lo único automático que se conserva es
-  **`--selfcheck`** (segundos): el arranque completo sin ventana y, desde F27, **pintando la primera
-  vista**, para que un `dist` que no arranca no llegue al usuario. El banco de capturas queda como
-  herramienta **a demanda para auditorías**, no como parte del desarrollo.
+Las normas de la casa viven ahora en [`docs/NORMAS.md`](docs/NORMAS.md). Son diez, N-1 a N-10, y se
+citan por su número a lo largo de este fichero. Un agente las lee de allí al arrancar, junto con
+`docs/ESTADO.md` y su spec (N-9).
 
 ## Toolchain / entorno
 
@@ -19710,3 +19665,24 @@ poco y no borra nunca: **las cinco fases suman +545 líneas a `DECISIONS.md` y �
 comandos, las tres tablas y lo que no se ha podido medir están en **`docs/MEDIDA-AGILIDAD.md`**; el
 `medida.trx` que las respalda no se commitea (`.gitignore`, líneas 14 y 18). Esta entrada no decide
 nada: la siguiente fase decide qué se toca.
+
+## A2 — Lo que se lee deja de ser la historia
+
+Lo que un agente lee al arrancar deja de ser `DECISIONS.md`. Nace **`docs/ESTADO.md`**: trece áreas,
+**849 reglas vigentes**, **898 líneas**, **94,5 kB** —**~24.200 tokens estimados** por `bytes/4`, el
+**6,8 %** de DECISIONS— y **540 decisiones citadas** de las 1.059 que el fichero tiene como bloque;
+cada regla en una frase, en presente, terminada en su `D-`, sin una línea de historia. Las **normas
+de la casa se mudan a `docs/NORMAS.md`**, íntegras y con el título por fin honrado —**N-1 a N-10**,
+que eran ocho y decían cinco—, con dos nuevas: **N-9**, que un agente arranca por NORMAS, ESTADO y
+su spec y que DECISIONS no se lee sino que se consulta, y **N-10**, reparto en paralelo por defecto.
+Aquí queda solo el puntero. Las specs pasan a vivir en el repositorio (**N-4**): `specs/PLANTILLA.md`
+fija el formato —Por qué · Comportamiento · Reglas que protege · Lo que NO se toca · Definición de
+hecho · Reparto · Cierre, con los tamaños S/M/L—, y `specs/A1-MEDIDA.md` y `specs/A2-ESTADO.md`
+archivan las dos primeras tal cual. Tres tests nuevos en `DocsTests` sostienen lo anterior: que
+ninguna cita de ESTADO apunte a una decisión que nadie escribió, que ESTADO no rebase su tope de
+1.500 líneas y 120 kB, y que cada norma exista una sola vez y solo en NORMAS. **2.775 en verde**;
+`src/` no se toca, y el producto no cambia. De aquí en adelante, una entrada que revise una decisión
+anterior lo dice con **«revisa D-xxx»** en su primera línea, para que ESTADO se pueda regenerar
+buscándola, y ESTADO se actualiza en la misma entrega que cambia una regla. La sesión, que es la
+cifra que A1 no pudo medir: **de 12:34 a 12:51 del 2026-09-12, 17 minutos**, catorce agentes de área
+en paralelo más dos, y un integrador.
