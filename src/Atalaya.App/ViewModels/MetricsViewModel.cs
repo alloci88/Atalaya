@@ -5,7 +5,6 @@ using System.Windows.Media;
 using Atalaya.App.Controls;
 using Atalaya.App.Services;
 using Atalaya.App.Views;
-using Atalaya.Copilot;
 using Atalaya.Domain;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;

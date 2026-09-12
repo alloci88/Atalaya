@@ -55,8 +55,13 @@
     <ProjectReference Include="..\Atalaya.Storage\Atalaya.Storage.csproj" />
     <ProjectReference Include="..\Atalaya.Inventory\Atalaya.Inventory.csproj" />
     <ProjectReference Include="..\Atalaya.Agents\Atalaya.Agents.csproj" />
-    <ProjectReference Include="..\Atalaya.Copilot\Atalaya.Copilot.csproj" />
-    <ProjectReference Include="..\Atalaya.ClaudeCode\Atalaya.ClaudeCode.csproj" />
+
+    <!-- PROV-2 §1 — AQUÍ YA NO SE NOMBRA A NINGUNA CASA.
+         Estaban Atalaya.Copilot y Atalaya.ClaudeCode, y por la primera la aplicación entera
+         arrastraba el SDK de GitHub Copilot en tiempo de compilación (PROV-1). Lo que se
+         referencia ahora es la COMPOSICIÓN: quien sabe montar los proveedores de esta versión y
+         devolverlos en su orden. Un tercer proveedor entra ahí y esta línea no cambia. -->
+    <ProjectReference Include="..\Atalaya.Providers\Atalaya.Providers.csproj" />
     <ProjectReference Include="..\Atalaya.ImportV4\Atalaya.ImportV4.csproj" />
 
     <!-- F14 — el puente MCP viaja JUNTO a la aplicación, no como assembly referenciado.

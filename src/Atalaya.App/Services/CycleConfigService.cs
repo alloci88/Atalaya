@@ -1,5 +1,4 @@
-﻿using Atalaya.Copilot;
-using Atalaya.Domain;
+﻿using Atalaya.Domain;
 using Atalaya.Domain.Model;
 
 namespace Atalaya.App.Services;

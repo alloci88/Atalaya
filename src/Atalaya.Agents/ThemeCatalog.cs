@@ -1,7 +1,7 @@
 using System.Text;
 using Atalaya.Domain;
 
-namespace Atalaya.Copilot;
+namespace Atalaya.Agents;
 
 /// <summary>
 /// El catálogo de TEMÁTICAS de la casa (F17 §1): qué busca cada lupa y qué NO debe reportar.

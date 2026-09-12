@@ -1,7 +1,7 @@
 using System.Text;
 using Atalaya.Domain.Model;
 
-namespace Atalaya.Copilot;
+namespace Atalaya.Agents;
 
 /// <summary>
 /// Una directiva del proyecto YA LEÍDA del clon (F7): su ruta, su texto íntegro y el hash de ese

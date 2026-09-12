@@ -24,6 +24,13 @@
     <!-- F14: la eleccion de proveedor y el tratamiento del coste se prueban aqui, con la app. -->
     <ProjectReference Include="..\..\src\Atalaya.ClaudeCode\Atalaya.ClaudeCode.csproj" />
 
+    <!-- PROV-2 §1 — EXPLÍCITA, y a propósito. Esto llegaba de rebote por Atalaya.App, que
+         referenciaba el proyecto de Copilot; desde que la aplicación no lo referencia, un
+         proyecto de PRUEBAS que quiera el doble de esa casa (FakeCopilotAgent, el agente de
+         776 tests) tiene que pedirlo por su nombre. La regla del desacople es sobre la
+         aplicación y el dominio, no sobre los tests: aquí se monta a mano lo que haga falta. -->
+    <ProjectReference Include="..\..\src\Atalaya.Copilot\Atalaya.Copilot.csproj" />
+
     <!-- F16 — el puente, como ejecutable: la sesión de arreglo se prueba con la cadena entera
          (CLI falso → puente → tubería → servidor MCP → toolbox de verdad). -->
     <ProjectReference Include="..\..\src\Atalaya.Mcp\Atalaya.Mcp.csproj"

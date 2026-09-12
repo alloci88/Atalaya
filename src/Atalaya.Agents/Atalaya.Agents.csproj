@@ -6,6 +6,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- PROV-2 §1: la costura del anfitrion (AgentHostServices) entrega una fabrica de
+         registros. Es la abstraccion, no una implementacion: quien la rellena decide si
+         detras hay Serilog, la consola o nada. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Atalaya.Domain\Atalaya.Domain.csproj" />
   </ItemGroup>
 

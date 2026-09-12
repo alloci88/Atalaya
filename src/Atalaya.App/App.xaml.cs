@@ -4,11 +4,10 @@ using System.Windows;
 using Atalaya.App.Services;
 using Atalaya.App.ViewModels;
 using Atalaya.App.Views;
-using Atalaya.ClaudeCode;
-using Atalaya.Copilot;
 using Atalaya.Domain.Abstractions;
 using Atalaya.Domain.Ids;
 using Atalaya.Inventory;
+using Atalaya.Providers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -280,57 +279,47 @@ public partial class App : Application
         services.AddSingleton(sp => new DriftQuery(sp.GetRequiredService<HubContext>()));
         services.AddSingleton<ImportService>();
 
-        // Copilot: the real SDK agent, authenticated with the account token (D3) and always
-        // running the CLI bundled with the SDK package — no npm install, no `copilot /login`.
-        // The token is read lazily on every start, so connecting or switching account takes
-        // effect immediately. With no account token the adapter falls back to the pre-F2
-        // behaviour (UseLoggedInUser = true) so existing machines keep working.
-        services.AddSingleton<IAssistedFixProvider>(sp =>
-        {
-            var settings = sp.GetRequiredService<SettingsService>();
-            AppSettings s = settings.Current;
-            var account = sp.GetRequiredService<GitHubAccountService>();
-            return new RealCopilotAgent(
-                s.CopilotBaseDirectory,
-                sp.GetRequiredService<ILoggerFactory>().CreateLogger("Copilot"),
-                // F5.1: leído en cada sesión, no capturado aquí — cambiar el modelo en Ajustes
-                // surte efecto en la siguiente auditoría sin reiniciar la app.
-                modelProvider: () => settings.Current.CopilotModel,
-                // F5.1 otra vez: leído en cada envío, no capturado aquí (BUGFIX-AJUSTES).
-                sendTimeout: () => TimeSpan.FromMinutes(
-                    Math.Max(SettingsLimits.MinCopilotTimeoutMinutes, settings.Current.CopilotTimeoutMinutes)),
-                tokenProvider: () => account.Token,
-                loginProvider: () => account.Current?.Login);
-        });
-
-        // F14 — el SEGUNDO proveedor: Claude Code, por el CLI que el usuario ya tiene.
+        // PROV-2 §1 — QUIÉN PUEDE AUDITAR. La aplicación ya no lo sabe.
         //
-        // Atalaya no lo instala ni guarda credenciales de Anthropic: lo busca en el PATH y usa la
-        // sesión que el CLI tenga iniciada, igual que con Copilot usa el login de GitHub. El
-        // puente MCP viaja en la carpeta de la aplicación (ver el .csproj) y es lo que `claude`
-        // lanza como servidor de herramientas.
-        services.AddSingleton<ClaudeCodeProvider>(sp =>
+        // Aquí se construían los dos proveedores a mano, cada uno con sus lambdas leyendo el
+        // ajuste que esa casa usaba, y por eso `Atalaya.App` tenía que referenciar el proyecto de
+        // cada casa —y con Copilot, arrastrar su SDK entero—. PROV-1 midió que ése era el motivo
+        // por el que un tercer proveedor no cabía sin tocar media aplicación.
+        //
+        // Lo que queda aquí es rellenar la COSTURA: qué modelo, qué plazo, qué carpeta, qué
+        // credencial y dónde escribir, todo pedido POR IDENTIFICADOR DE PROVEEDOR y sin nombrar a
+        // nadie. Quién se monta con eso, y en qué ORDEN —el primero es el que la pantalla Cuenta
+        // enseña arriba—, lo decide `Atalaya.Providers`, el único sitio que conoce las casas.
+        services.AddSingleton(sp =>
         {
             var settings = sp.GetRequiredService<SettingsService>();
-            return new ClaudeCodeProvider(
-                bridgeExecutable: McpBridge.ResolvePath(),
-                // Leído en CADA sesión, por la misma razón que el de Copilot (BUGFIX-AJUSTES).
-                modelProvider: () => settings.Current.ClaudeCodeModel,
-                workDirectory: () => Path.Combine(paths.Root, "claude"),
-                logger: sp.GetRequiredService<ILoggerFactory>().CreateLogger("ClaudeCode"));
-        });
+            var account = sp.GetRequiredService<GitHubAccountService>();
+            var loggers = sp.GetRequiredService<ILoggerFactory>();
 
-        // Los dos proveedores, EN ORDEN y nombrados uno a uno. Se listan aquí en vez de dejar que
-        // el contenedor los recolecte por su interfaz porque ese orden es el que ve el usuario —el
-        // primero es el de fábrica, y el que la pantalla Cuenta enseña arriba— y no puede depender
-        // de en qué línea quedó registrado cada uno.
-        services.AddSingleton(sp => new AuditorProviderRegistry(
-            sp.GetRequiredService<SettingsService>(),
-            new IAuditorProvider[]
-            {
-                sp.GetRequiredService<IAssistedFixProvider>(),
-                sp.GetRequiredService<ClaudeCodeProvider>(),
-            }));
+            // Todo son FUNCIONES, y se leen en cada uso, por lo de BUGFIX-AJUSTES: capturar aquí
+            // el modelo o el plazo obligaba a reiniciar para que cambiarlos en Ajustes sirviera.
+            var host = new AgentHostServices(
+                Model: providerId => settings.ModelFor(providerId),
+                // Hoy el plazo es uno para todos; se pide por proveedor porque el día que una casa
+                // necesite el suyo el sitio donde ponerlo ya está, y no hay que mover la costura.
+                SendTimeout: _ => TimeSpan.FromMinutes(Math.Max(
+                    SettingsLimits.MinCopilotTimeoutMinutes, settings.Current.CopilotTimeoutMinutes)),
+                WorkDirectory: providerId => paths.ForProvider(providerId),
+                AccountToken: () => account.Token,
+                AccountLogin: () => account.Current?.Login,
+                // El llavero de la cuenta, si esta máquina lo tiene fijado a mano. Vacío —lo
+                // normal— significa «donde lo deje quien lo escribió», que es lo que hace que el
+                // login que ya hubiera en la máquina se siga encontrando.
+                AccountDirectory: () => settings.Current.CopilotBaseDirectory,
+                // El puente MCP viaja en la carpeta de la aplicación (ver el .csproj).
+                BridgeExecutable: () => McpBridge.ResolvePath(),
+                Logger: providerId => loggers.CreateLogger(providerId));
+
+            // El registro los TIENE: el contenedor lo libera a él al cerrar, y él a ellos. Sin
+            // eso, el runtime del proveedor se quedaba vivo con sus tuberías abiertas y el
+            // proceso de Atalaya no terminaba (ver OnExit).
+            return new AuditorProviderRegistry(settings, AuditorProviders.Build(host));
+        });
 
         // Quien recibe UN proveedor recibe el elegido AHORA. Solo vale para servicios transitorios
         // —los coordinadores, que se crean uno por sesión—: un singleton que lo capturase se
@@ -518,9 +507,10 @@ public partial class App : Application
     /// manteniendo el proceso <c>Atalaya.exe</c> en pie tras cerrar la ventana.
     /// </para>
     /// <para>
-    /// Y aunque llegara a ejecutarse, <c>_host.Dispose()</c> reventaba: el contenedor guarda
-    /// <see cref="RealCopilotAgent"/>, que implementa <c>IAsyncDisposable</c> pero NO
-    /// <c>IDisposable</c>, y el camino síncrono de liberación lanza
+    /// Y aunque llegara a ejecutarse, <c>_host.Dispose()</c> reventaba: colgando del contenedor
+    /// hay un proveedor que implementa <c>IAsyncDisposable</c> pero NO <c>IDisposable</c>
+    /// —desde PROV-2 lo libera <see cref="Services.AuditorProviderRegistry.DisposeAsync"/>,
+    /// que cuelga de él—, y el camino síncrono de liberación lanza
     /// <c>InvalidOperationException</c> en ese caso. Hay que liberar por la vía asíncrona.
     /// </para>
     /// <para>

@@ -373,7 +373,7 @@ public sealed class InverseBoolConverter : IValueConverter
 public sealed class ThemeToLabelConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        => value is AuditTheme t ? Copilot.ThemeCatalog.Display(t) : string.Empty;
+        => value is AuditTheme t ? ThemeCatalog.Display(t) : string.Empty;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotSupportedException();

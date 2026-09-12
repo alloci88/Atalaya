@@ -1,4 +1,3 @@
-using Atalaya.Copilot;
 using Atalaya.Domain.Hashing;
 using Atalaya.Domain.Ids;
 using Atalaya.Domain.Model;

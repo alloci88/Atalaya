@@ -1,6 +1,6 @@
 using Atalaya.Domain;
 
-namespace Atalaya.Copilot;
+namespace Atalaya.Agents;
 
 /// <summary>A checklist rule: a stable id, its pillar, a short title and what to look for.</summary>
 public sealed record RuleDef(string RuleId, Pillar Pillar, string Title, string Look);

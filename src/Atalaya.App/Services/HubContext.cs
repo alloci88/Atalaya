@@ -366,7 +366,7 @@ public sealed class HubContext
     /// </summary>
     private static string? DescribeRule(string ruleId)
     {
-        Copilot.RuleDef? rule = Copilot.RuleCatalog.Find(ruleId);
+        RuleDef? rule = RuleCatalog.Find(ruleId);
         return rule is null ? null : $"{rule.Title}: {rule.Look}";
     }
 

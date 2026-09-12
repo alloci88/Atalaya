@@ -253,7 +253,7 @@ public sealed record CycleSpan(
     public string Label => $"C{CycleN} · {ThemesLabel}";
 
     /// <summary>Las temáticas por las que pasó, en orden y sin repetir las consecutivas.</summary>
-    public string ThemesLabel => string.Join(" → ", DistinctThemes.Select(Copilot.ThemeCatalog.Display));
+    public string ThemesLabel => string.Join(" → ", DistinctThemes.Select(ThemeCatalog.Display));
 
     public IReadOnlyList<AuditTheme> DistinctThemes
     {
@@ -1133,7 +1133,7 @@ public sealed class MetricsQuery
     /// o una retirada— se enseña con su id: es lo que hay, y esconder la fila sería peor.
     /// </summary>
     internal static string RuleName(string ruleId)
-        => Copilot.RuleCatalog.Find(ruleId)?.Title ?? ruleId;
+        => RuleCatalog.Find(ruleId)?.Title ?? ruleId;
 
     // ---------- Gráfica 7: la cinta de ciclos (F17 §6) ----------
 

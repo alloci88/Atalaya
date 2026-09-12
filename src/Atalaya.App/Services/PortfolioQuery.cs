@@ -132,11 +132,11 @@ public sealed record AppCard(
     /// <summary>La lupa del ciclo vigente (F17): un distintivo en la tarjeta, con su color.</summary>
     public AuditTheme Theme { get; init; } = AuditTheme.General;
 
-    public string ThemeLabel => Copilot.ThemeCatalog.Display(Theme);
+    public string ThemeLabel => ThemeCatalog.Display(Theme);
 
     public string ThemeTooltip => Theme == AuditTheme.General
         ? "Ciclo General: el criterio completo."
-        : $"Ciclo temático de {Copilot.ThemeCatalog.Display(Theme)}: el auditor busca solo esa familia de defectos. "
+        : $"Ciclo temático de {ThemeCatalog.Display(Theme)}: el auditor busca solo esa familia de defectos. "
           + "Un ciclo temático no sustituye a uno General.";
 
     /// <summary>
