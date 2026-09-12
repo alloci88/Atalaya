@@ -125,7 +125,11 @@ public sealed class SettingsRatesSurfaceTests
 
         xaml.Should().Contain("{Binding ShowRates, Converter={StaticResource BoolToVisibility}}",
             "la sección de tarifas se enseña dentro de la página, no en un diálogo");
-        xaml.Should().Contain("{Binding Rates.Rows}", "con su tabla de verdad");
+        // R-PROV2 — la tabla pinta `Visible`, que es `Rows` pasado por el filtro de proveedor.
+        // `Rows` sigue siendo la colección entera y es lo que se guarda; el test que lo protege es
+        // `ModelRatesTests.El_filtro_por_proveedor_es_de_vista_y_guardar_no_pierde_las_otras_casas`.
+        xaml.Should().Contain("{Binding Rates.Visible}", "con su tabla de verdad, filtrada");
+        xaml.Should().Contain("{Binding Rates.ProviderOptions}", "y con el filtro por proveedor");
         // F29 §1 — aquí estaba «{Binding Rates.MissingModels}», la lista ámbar de modelos usados
         // sin tarifa. Se retira: desde Ajustes no se puede reconciliar nada, y un aviso sobre el que
         // no se puede actuar se aprende a ignorar. Queda una línea neutra con el recuento y el

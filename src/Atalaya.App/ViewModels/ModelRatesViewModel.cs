@@ -1,4 +1,6 @@
 ﻿using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Windows.Data;
 using Atalaya.App.Services;
 using Atalaya.Domain.Model;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -66,6 +68,17 @@ public sealed partial class RateRow : ObservableObject
 }
 
 /// <summary>
+/// Una opción del filtro por proveedor (R-PROV2). Mismo patrón que los combos de V3: la primera
+/// opción es «Todos», vale <c>null</c> y es el arranque (F5.4 §2). Sin ella, filtrar sería un viaje
+/// sin billete de vuelta — y en una tabla que se guarda entera, también un sitio donde perder filas
+/// de vista sin saber que están.
+/// </summary>
+public sealed record ProviderFilterOption(string? Id, string Label)
+{
+    public override string ToString() => Label;
+}
+
+/// <summary>
 /// La pantalla de tarifas por modelo (F15).
 /// <para>
 /// <b>Vive en Ajustes desde R2</b>, y antes en Métricas. El argumento de D-770 —se edita donde se
@@ -103,10 +116,87 @@ public sealed partial class ModelRatesViewModel : ObservableObject
     {
         _rates = rates;
         _gaps = gaps;
+
+        // La vista se monta ANTES de cargar: `Load` añade filas y rehace el combo, y las dos cosas
+        // se apoyan en ella.
+        Visible = CollectionViewSource.GetDefaultView(Rows);
+        Visible.Filter = fila => fila is RateRow row && Passes(row);
+
         Load();
     }
 
+    /// <summary>
+    /// <b>TODAS las tarifas de la tabla, filtre lo que filtre el usuario.</b> Es la fuente de la
+    /// verdad y es lo que <see cref="Save"/> escribe: el filtro es de VISTA, y lo que se guarda no
+    /// puede depender de lo que se esté mirando. Si guardar recorriera lo visible, filtrar por una
+    /// casa y pulsar «Guardar tarifas» borraría del hub las de todas las demás — sin un aviso, sin
+    /// un error, y sin que se notara hasta que a alguien le saliera «tarifa no configurada».
+    /// </summary>
     public ObservableCollection<RateRow> Rows { get; } = new();
+
+    /// <summary>Lo que la tabla ENSEÑA: <see cref="Rows"/> pasado por el filtro (R-PROV2).</summary>
+    public ICollectionView Visible { get; }
+
+    /// <summary>«Todos»: la opción neutra, la primera y la de arranque (F5.4 §2).</summary>
+    public static readonly ProviderFilterOption AllProviders = new(null, "Todos");
+
+    /// <summary>
+    /// Las casas que se pueden elegir: las registradas en esta máquina más las que tengan tarifas
+    /// escritas en el hub — incluidas las que esta versión ya no traiga, o sus filas no habría
+    /// manera de encontrarlas.
+    /// </summary>
+    public ObservableCollection<ProviderFilterOption> ProviderOptions { get; } = new();
+
+    /// <summary>
+    /// Nullable a propósito: si el combo se queda sin opciones, WPF pone la selección a null, y
+    /// eso tiene que leerse como «Todos» y no reventar.
+    /// </summary>
+    [ObservableProperty] private ProviderFilterOption? _selectedProvider = AllProviders;
+
+    /// <summary>
+    /// <b>Con una casa elegida, su columna sobra</b> (R-PROV2): diría lo mismo en todas las filas.
+    /// Se esconde —no se quita: con «Todos» vuelve— y la tabla se queda en las seis de siempre.
+    /// </summary>
+    public bool ShowProviderColumn => SelectedProvider?.Id is null;
+
+    partial void OnSelectedProviderChanged(ProviderFilterOption? value)
+    {
+        Visible.Refresh();
+        OnPropertyChanged(nameof(ShowProviderColumn));
+    }
+
+    /// <summary>¿Esta fila pasa el filtro? Con «Todos» pasan todas.</summary>
+    private bool Passes(RateRow row)
+        => SelectedProvider?.Id is not { } id
+           || string.Equals(row.Provider?.Trim(), id, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Rehace la lista de casas del combo conservando la elección. Si la elegida ya no tiene
+    /// tarifas ni está registrada, se vuelve a «Todos»: un filtro que no puede enseñar nada es un
+    /// callejón sin salida.
+    /// </summary>
+    private void RefreshProviderOptions()
+    {
+        string? elegido = SelectedProvider?.Id;
+
+        var ids = Rows.Select(r => r.Provider)
+            .Concat(_rates.KnownProviders)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(ProviderNames.Display, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        ProviderOptions.Clear();
+        ProviderOptions.Add(AllProviders);
+        foreach (string id in ids)
+        {
+            ProviderOptions.Add(new ProviderFilterOption(id, ProviderNames.Display(id)));
+        }
+
+        SelectedProvider = ProviderOptions.FirstOrDefault(o =>
+            string.Equals(o.Id, elegido, StringComparison.OrdinalIgnoreCase)) ?? AllProviders;
+    }
 
     [ObservableProperty] private string _status = string.Empty;
 
@@ -192,6 +282,7 @@ public sealed partial class ModelRatesViewModel : ObservableObject
             // Sin hub todavía —o con el fichero ilegible— no se inventa una tabla en memoria que
             // guardar pisaría el día que el hub aparezca.
             Status = "Todavía no hay tabla de tarifas en el hub. Se siembra sola al conectar con él.";
+            RefreshProviderOptions();
             RefreshMissing();
             return;
         }
@@ -209,6 +300,8 @@ public sealed partial class ModelRatesViewModel : ObservableObject
             Rows.Add(new RateRow(rate));
         }
 
+        RefreshProviderOptions();
+        Visible.Refresh();
         RefreshMissing();
         _savedFingerprint = Fingerprint();
         Watch();
@@ -234,10 +327,10 @@ public sealed partial class ModelRatesViewModel : ObservableObject
     [RelayCommand]
     private void AddRow() => Rows.Add(new RateRow
     {
-        // Nace con la casa de fábrica escrita (PROV-2 §3): es de quien son casi todas las tarifas
-        // de esta tabla, y la columna es obligatoria. Se puede cambiar; lo que no se puede es
-        // dejarla en blanco.
-        Provider = _rates.FactoryProviderId,
+        // Nace con la casa ELEGIDA en el filtro, y con la de fábrica si no hay ninguna (PROV-2 §3,
+        // R-PROV2): con un filtro puesto, una fila nueva de otra casa nacería invisible. La columna
+        // es obligatoria; se puede cambiar, lo que no se puede es dejarla en blanco.
+        Provider = SelectedProvider?.Id ?? _rates.FactoryProviderId,
         EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow),
     });
 

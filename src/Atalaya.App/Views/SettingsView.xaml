@@ -278,6 +278,10 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <!-- R-PROV2: la fila del filtro. Es el Único añadido de disposición de
+                                 esta entrega, y va PEGADA a la rejilla porque la acción se coloca
+                                 junto a lo que actúa (D-999). -->
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
@@ -365,21 +369,53 @@
                              cabecera va DENTRO de él, o se separaría de sus columnas al primer
                              arrastre. Ninguna columna se recorta ni siquiera en el mínimo: cada
                              MinWidth es su medida más su relleno. -->
-                        <Border Grid.Row="4" Style="{StaticResource Panel}"
+                        <!-- EL FILTRO POR PROVEEDOR (R-PROV2). Es de VISTA: no cambia lo que se
+                             guarda ni lo que se siembra — «Guardar tarifas» escribe la tabla entera,
+                             se esté mirando la que se esté. «Todos» es la primera opción y el
+                             arranque (F5.4 §2), y con una casa elegida su columna se esconde porque
+                             diría lo mismo en todas las filas. -->
+                        <StackPanel Grid.Row="4" Orientation="Horizontal"
+                                    Margin="{StaticResource Pad.S.Bottom}"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding CanManageRates, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock Text="Proveedor:" Style="{StaticResource Text.Small}"
+                                       VerticalAlignment="Center" Margin="{StaticResource Pad.XXS.Right}" />
+                            <ComboBox ItemsSource="{Binding Rates.ProviderOptions}"
+                                      SelectedItem="{Binding Rates.SelectedProvider}"
+                                      AutomationProperties.Name="Filtrar las tarifas por proveedor"
+                                      DisplayMemberPath="Label"
+                                      MinWidth="{StaticResource Field.SelectWidth}"
+                                      VerticalAlignment="Center"
+                                      ToolTip="Solo cambia lo que se ve. Guardar escribe la tabla entera." />
+                        </StackPanel>
+
+                        <Border Grid.Row="5" Style="{StaticResource Panel}"
                                 Visibility="{Binding CanManageRates, Converter={StaticResource BoolToVisibility}}">
                             <ScrollViewer Style="{StaticResource Scroll}" x:Name="RatesScroll"
                                           HorizontalScrollBarVisibility="Auto"
                                           VerticalScrollBarVisibility="Disabled">
-                                <Grid MinWidth="870"
+                                <Grid MinWidth="730" Grid.IsSharedSizeScope="True"
                                       Width="{Binding ViewportWidth, ElementName=RatesScroll}">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="1.05*" MinWidth="105" />
+                                        <!-- LA COLUMNA QUE SE ESCONDE (R-PROV2). Va en `Auto` con
+                                             tamaño compartido y no en estrella como las otras seis:
+                                             así mide lo que mide su contenido —102 px medidos— y, en
+                                             cuanto ese contenido se oculta, se colapsa sola a 0 y
+                                             las seis restantes se reparten el hueco. El tamaño
+                                             compartido es lo que mantiene cuadradas la cabecera y
+                                             las filas, que son rejillas distintas.
+
+                                             Ni un binding en un `ColumnDefinition`: se probó y no
+                                             re-evalúa cuando cambia el `DataContext`, así que la
+                                             columna se quedaba abierta. Lo que se ata es la
+                                             `Visibility` del contenido, que sí es un control. -->
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Tarifa.Proveedor" />
                                         <ColumnDefinition Width="1.45*" MinWidth="145" />
                                         <ColumnDefinition Width="1.05*" MinWidth="105" />
                                         <ColumnDefinition Width="1.05*" MinWidth="105" />
                                         <ColumnDefinition Width="1.1*" MinWidth="110" />
                                         <ColumnDefinition Width="1.2*" MinWidth="120" />
-                                        <ColumnDefinition Width="2*" MinWidth="180" />
+                                        <ColumnDefinition Width="2*" MinWidth="145" />
                                     </Grid.ColumnDefinitions>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
@@ -394,7 +430,8 @@
                                          tarifa por proveedor + modelo, así que la columna deja de
                                          ser opcional: una tarifa sin ella es una que no se sabe a
                                          quién le cobra. Va la primera porque es la que agrupa. -->
-                                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="{StaticResource Pad.Row}">
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="{StaticResource Pad.Row}"
+                                                Visibility="{Binding Rates.ShowProviderColumn, Converter={StaticResource BoolToVisibility}}">
                                         <TextBlock Text="Proveedor" Style="{StaticResource Table.Header}" />
                                     </StackPanel>
                                     <StackPanel Grid.Row="0" Grid.Column="1" Margin="{StaticResource Pad.Row}">
@@ -428,24 +465,30 @@
                                         <TextBlock Text="Nota" Style="{StaticResource Table.Header}" />
                                     </StackPanel>
 
+                                    <!-- LO QUE SE ENSEÑA ES `Visible`, NO `Rows` (R-PROV2). `Rows`
+                                         sigue siendo la tabla entera y es lo que se guarda: si
+                                         aquí se atara la colección y el guardado recorriera lo
+                                         pintado, filtrar y pulsar Guardar borraría del hub las
+                                         tarifas de las demás casas sin decir nada. -->
                                     <ItemsControl Grid.Row="1" Grid.ColumnSpan="7"
-                                                  ItemsSource="{Binding Rates.Rows}">
+                                                  ItemsSource="{Binding Rates.Visible}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
                                                 <Border BorderBrush="{DynamicResource Brush.Line}"
                                                         BorderThickness="{StaticResource Border.Bottom}">
                                                     <Grid>
                                                         <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="1.05*" MinWidth="105" />
+                                                            <ColumnDefinition Width="Auto" SharedSizeGroup="Tarifa.Proveedor" />
                                                             <ColumnDefinition Width="1.45*" MinWidth="145" />
                                                             <ColumnDefinition Width="1.05*" MinWidth="105" />
                                                             <ColumnDefinition Width="1.05*" MinWidth="105" />
                                                             <ColumnDefinition Width="1.1*" MinWidth="110" />
                                                             <ColumnDefinition Width="1.2*" MinWidth="120" />
-                                                            <ColumnDefinition Width="2*" MinWidth="180" />
+                                                            <ColumnDefinition Width="2*" MinWidth="145" />
                                                         </Grid.ColumnDefinitions>
                                                         <TextBox Grid.Column="0" Text="{Binding Provider}"
-                                                                 Style="{StaticResource Field.Cell}" />
+                                                                 Style="{StaticResource Field.Cell}"
+                                                                 Visibility="{Binding DataContext.Rates.ShowProviderColumn, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource BoolToVisibility}}" />
                                                         <TextBox Grid.Column="1" Text="{Binding Model}"
                                                                  Style="{StaticResource Field.Cell}"
                                                                  FontWeight="SemiBold" />
@@ -468,12 +511,12 @@
                             </ScrollViewer>
                         </Border>
 
-                        <c:EmptyState Grid.Row="4"
+                        <c:EmptyState Grid.Row="5"
                                       Glyph="{x:Static c:Icons.Metrics}"
                                       Message="Todavía no hay tabla de tarifas en el hub. Se siembra sola al conectar con él."
                                       Visibility="{Binding CanManageRates, Converter={StaticResource InverseBoolToVisibility}}" />
 
-                        <Border Grid.Row="5" Style="{StaticResource Notice.Warning}"
+                        <Border Grid.Row="6" Style="{StaticResource Notice.Warning}"
                                 Margin="{StaticResource Pad.S.Top}"
                                 Visibility="{Binding Rates.Status, Converter={StaticResource NotEmptyToVisibility}}">
                             <DockPanel>

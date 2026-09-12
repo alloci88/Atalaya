@@ -19775,21 +19775,32 @@ sustituto— más una treintena adaptados de firma sin cambiar lo que prueban; l
 **de 13:24 a 15:25 del 2026-09-12, 2 horas**, cinco agentes de área en paralelo y un integrador.
 Ningún proveedor nuevo entra hoy: lo que entra es la puerta.
 
-## R-PROV2 — La tabla de tarifas cabe entera
+## R-PROV2 — Tarifas: filtro por proveedor, y la tabla se ve entera
 
-Medido antes de tocar (N-2): con la fuente y los tamaños de `Tokens.xaml`, las siete columnas de
-Ajustes → Tarifas piden **101 · 140 · 102 · 102 · 105 · 116 px más la nota — 666 sin ella—**, y el
-hueco de la columna de contenido son **950** (960 de `Setting.ContentWidth` menos el relleno del
-scroll y el filete del panel); los dos temas miden igual, porque las paletas no declaran ni fuente ni
-tamaño. El `MinWidth` de 1.080 que dejó PROV-2 no era lo que la tabla necesitaba: era 414 px de más,
-así que la tabla no cabía **nunca** y la barra horizontal —que es la de la propia rejilla, no la de la
-página— colgaba de su borde inferior, o sea debajo de las 31 tarifas, y para llegar a la última
-columna había que bajar hasta el final y volver.
-
-Se toma la **salida preferida**: cabe. Los pesos reparten en la proporción medida y cada `MinWidth`
-es la medida de su columna más su relleno, así que el mínimo de la rejilla baja de **1.080 a 870** y
-a tamaño de diseño la tabla se ve entera **sin barra**. Comprobado midiendo el reparto real de la
-rejilla: a 950 y a 870 cabe y **ninguna columna se recorta**; a 734 —el hueco a 1280×720 con el raíl
-desplegado— la rejilla se queda en 870 y saca su propio desplazamiento, que es «reorganizar» en una
-tabla (D-944). Ni una columna se quita, ni se reordena, ni se toca el tamaño de fuente. Sin tests
-nuevos: es de forma (N-5, N-7). ESTADO no cambia —ninguna regla nueva—. Un agente, de 19:51 a 19:59 del 2026-09-12: 8 minutos.
+PROV-2 dejó la tabla de Ajustes → Tarifas con una columna más y un `MinWidth` de 1.080, y el usuario
+lo vio en el `dist`: no cabía, y la barra horizontal —que es la de la propia rejilla, no la de la
+página— cuelga de su borde inferior, o sea **debajo de las 31 tarifas**, así que para llegar a la
+última columna había que bajar hasta el final y volver. Medido antes de tocar (N-2) con la fuente y
+los tamaños de `Tokens.xaml`: las siete columnas piden **102 · 140 · 102 · 102 · 105 · 116 px más la
+nota —666 sin ella—**, y el hueco de la columna de contenido son **950** (`Setting.ContentWidth` 960
+menos el relleno del scroll y el filete del panel); los dos temas miden igual, porque las paletas no
+declaran ni fuente ni tamaño, y el ancho no sale de la regla de F5.4 §6 sino de D-1009 —Ajustes es
+una página del raíl y la ventana arranca maximizada—. O sea que el 1.080 eran **414 px de más**. Se
+toma la salida preferida de (3): **cabe**. Los pesos reparten en la proporción medida, cada
+`MinWidth` es la medida de su columna más su relleno y el mínimo de la rejilla baja a **730**, así
+que a tamaño de diseño la tabla se ve entera **sin barra**; por debajo la rejilla conserva su propio
+desplazamiento, que es «reorganizar» en una tabla (D-944). Encima, un **filtro por proveedor** sobre
+la tabla, en una fila nueva pegada a la rejilla —el único añadido de disposición—: «Todos» es la
+primera opción, vale null y es el arranque (F5.4 §2), las demás salen de las casas registradas más
+las que tengan tarifas escritas —incluidas las que esta versión ya no traiga—, y una fila nueva nace
+con la casa elegida. Es **de vista**: `Rows` sigue siendo la tabla entera y es lo que se guarda, que
+es la regla que protege el único test de la entrega —guardar con el filtro puesto borraría del hub
+las tarifas de las demás casas, sin error y sin aviso—. Con una casa elegida **su columna se
+esconde**, porque diría lo mismo en todas las filas: va en `Auto` con tamaño compartido, así que se
+colapsa sola a 0 y las seis restantes se reparten el hueco —**y así la tabla filtrada cabe también a
+1.280×720**, donde con las siete no cabe—. Se probó antes atar el ancho del `ColumnDefinition` a la
+vista, con `Style` y con binding directo, y **no funciona**: no re-evalúa al cambiar el
+`DataContext` y la columna se quedaba abierta; lo que se ata es la `Visibility` del contenido, que
+sí es un control. Comprobado midiendo el reparto real de la rejilla en las cuatro combinaciones, con
+cabecera y filas siempre cuadradas. Ninguna columna se quita ni se reordena; ni fuente ni disposición
+se tocan. Un agente, de 01:07 a 01:25 del 2026-09-13: 18 minutos.

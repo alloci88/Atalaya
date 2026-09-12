@@ -419,4 +419,59 @@ public sealed class ModelRatesTests : IDisposable
         session.Usage.Add(0, outputTokens, 0, 0, null);
         _hub.Store.WriteSession(session);
     }
+
+    // ================================================================ el filtro por proveedor
+
+    /// <summary>
+    /// <b>El filtro es de VISTA</b> (R-PROV2): «Todos» existe, es la primera opción y el arranque
+    /// (F5.4 §2), y con una casa elegida solo se ven las suyas — pero la tabla que se guarda sigue
+    /// siendo la entera.
+    /// <para>
+    /// <b>Lo que se rompería en silencio sin este test:</b> que «Guardar tarifas» recorriera lo
+    /// que está pintado en vez de la colección completa. Filtrar por una casa, corregir un precio
+    /// y guardar borraría del hub las tarifas de todas las demás. No hay error, no hay aviso y la
+    /// pantalla se queda igual de bien: se descubre semanas después, cuando a alguien le sale
+    /// «tarifa no configurada» en un modelo que sí tenía precio.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void El_filtro_por_proveedor_es_de_vista_y_guardar_no_pierde_las_otras_casas()
+    {
+        DateOnly hoy = DateOnly.FromDateTime(DateTime.UtcNow);
+        _rates.Save(new ModelRateTable
+        {
+            Rates =
+            {
+                new ModelRate("gpt-5", "copilot", 1m, 5m, 0.1m, null, hoy, null),
+                new ModelRate("opus", "otra-reventa", 2m, 8m, 0.2m, null, hoy, null),
+            },
+        });
+
+        var vm = new ModelRatesViewModel(_rates);
+
+        vm.ProviderOptions.First().Should().Be(ModelRatesViewModel.AllProviders,
+            "la opción neutra va la primera, y vale null");
+        vm.SelectedProvider.Should().Be(ModelRatesViewModel.AllProviders,
+            "y es con la que se abre: filtrar no puede ser un viaje sin billete de vuelta");
+        vm.Visible.Cast<RateRow>().Select(r => r.Model).Should().BeEquivalentTo(
+            new[] { "gpt-5", "opus" }, "con «Todos» se ven todas");
+        vm.ShowProviderColumn.Should().BeTrue("y la columna que dice de quién es cada una, también");
+
+        vm.SelectedProvider = vm.ProviderOptions.First(o =>
+            string.Equals(o.Id, "otra-reventa", StringComparison.OrdinalIgnoreCase));
+
+        vm.Visible.Cast<RateRow>().Select(r => r.Model).Should().Equal(
+            new[] { "opus" }, "con una casa elegida solo se ven las suyas");
+        vm.ShowProviderColumn.Should().BeFalse(
+            "su columna diría lo mismo en todas las filas, así que se esconde");
+        vm.Rows.Should().HaveCount(2, "pero la tabla sigue entera por debajo");
+
+        vm.SaveCommand.Execute(null);
+
+        vm.Saved.Should().BeTrue();
+        _rates.Current!.Rates.Should().HaveCount(2,
+            "guardar con el filtro puesto escribe la tabla ENTERA, no lo que se estaba mirando");
+        _rates.Current.Find("gpt-5", "copilot").Should().NotBeNull(
+            "la tarifa de la casa que el filtro escondía sigue en el hub");
+    }
 }

@@ -1683,6 +1683,10 @@ todo lo que ya estuviera escrito sin proveedor queda como **GitHub Copilot**, qu
 esos precios. Puede haber dos filas del mismo modelo con proveedores distintos, y entonces **la
 tarifa atada a un proveedor gana a la genérica de ese modelo**: se aplica siempre la más concreta.
 
+**Y encima de la tabla hay un filtro por proveedor**, que abre en «Todos»: elegir una casa deja
+a la vista solo sus tarifas y esconde la columna «Proveedor», que ahí diría lo mismo en todas las
+filas. Solo cambia lo que ves: **«Guardar tarifas» escribe la tabla entera**, filtres o no.
+
 Un detalle que importa al editarla:
 
 - **Caché escrita en blanco ≠ 0.** En blanco significa «este modelo no la cobra aparte» y esos

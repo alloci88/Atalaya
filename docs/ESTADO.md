@@ -647,6 +647,7 @@ Se regenera de `DECISIONS.md`, y ante contradicción **manda `DECISIONS.md`**.
 - Si las cachés suman más que la entrada, la entrada facturable es cero: nunca se emite un coste negativo. (D-785)
 - Toda tarifa lleva proveedor, y es obligatorio: el mismo modelo cuesta distinto según quién facture. (D-786, PROV-2)
 - La siembra rellena ese proveedor: lo que hoy se siembra sin él queda sembrado como Copilot. (D-932, PROV-2)
+- Ajustes → Tarifas filtra por proveedor con «Todos» de arranque; es de vista, y guardar escribe la tabla entera. (D-933, R-PROV2)
 - Caché escrita en blanco significa «este modelo no la cobra aparte», y no es cero. (D-786)
 - El coste de cada sesión usa la tarifa de su modelo registrado; nunca se aplica la de otro modelo parecido. (D-787)
 - Sin modelo registrado, «modelo no registrado»; con modelo sin tarifa, «tarifa no configurada»; sin tokens, «—». (D-787)

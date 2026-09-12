@@ -53,6 +53,15 @@ public sealed class ModelRatesService
     public string FactoryProviderId => _hub.FactoryProviderId;
 
     /// <summary>
+    /// <b>Las casas que esta máquina conoce</b> (R-PROV2), para el filtro de la tabla. Son las
+    /// registradas; las que además tengan tarifas escritas las añade quien lee la tabla, porque en
+    /// el hub puede haber la tarifa de una casa que esta versión ya no traiga y esconderla dejaría
+    /// filas imposibles de encontrar.
+    /// </summary>
+    public IReadOnlyList<string> KnownProviders
+        => _hub.Providers?.All.Select(p => p.ProviderId).ToList() ?? (IReadOnlyList<string>)Array.Empty<string>();
+
+    /// <summary>
     /// Con qué identificador se busca la tarifa de la casa que escribió una sesión (PROV-2 §3).
     /// No es siempre el que la sesión guardó: las anteriores a F14 no guardaron ninguno.
     /// </summary>
