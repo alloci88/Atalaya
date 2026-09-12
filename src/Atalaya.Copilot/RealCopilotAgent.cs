@@ -95,6 +95,29 @@ public sealed class RealCopilotAgent : IAssistedFixProvider, IThreadedAuditor, I
     public string ProviderName => "GitHub Copilot";
 
     /// <summary>
+    /// <b>El de fábrica</b> (PROV-2 §2): el requisito del equipo y a quien se cae el registro. Lo
+    /// declara esta casa en vez de buscarlo el registro por su tipo concreto.
+    /// </summary>
+    public bool IsFactoryDefault => true;
+
+    /// <summary>
+    /// <b>Las sesiones sin casa escrita son de aquí</b> (PROV-2 §2, revisa D-780): antes de F14
+    /// no había otra, así que no se escribía ninguna.
+    /// </summary>
+    public bool ClaimsUnattributedSessions => true;
+
+    /// <summary>
+    /// <b>Factura AI credits, a 0,01 $ el credit</b> (PROV-2 §3, revisa D-786). El dominio cuenta
+    /// en dólares; la equivalencia vigente vive aquí, que es la casa que la usa, y no en el
+    /// cálculo — el día que GitHub la cambie, se cambia en esta línea.
+    /// </summary>
+    public ProviderBilling Billing { get; } =
+        new(Unit: "credits", UnitLong: "AI credits", UsdPerUnit: 0.01m);
+
+    /// <summary>Donde esta casa guardaba su modelo antes de que hubiera mapa (PROV-2 §2).</summary>
+    public string? LegacyModelSettingKey => "copilotModel";
+
+    /// <summary>
     /// La clasificación de esta casa (F14): el clasificador de errores del SDK, que ya existía y
     /// que sabe distinguir cuota de asiento de credencial. La interfaz solo le pone nombre común.
     /// </summary>

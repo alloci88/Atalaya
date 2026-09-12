@@ -1,3 +1,5 @@
+using Atalaya.Domain.Model;
+
 namespace Atalaya.Agents;
 
 /// <summary>
@@ -107,6 +109,46 @@ public interface IAuditorProvider
     /// </para>
     /// </summary>
     bool IsPresent => true;
+
+    /// <summary>
+    /// <b>Cómo cuenta ESTA casa sus tokens de entrada</b> (PROV-2 §2, revisa D-785). Copilot
+    /// incluye la caché en la entrada y Claude Code la excluye; invertirlo desvía todos los
+    /// costes, así que lo declara quien lo sabe en vez de adivinarlo una tabla por nombre.
+    /// <para>
+    /// El valor por defecto es el del histórico: <b>la entrada incluye la caché</b>. Es la forma
+    /// con la que se escribió todo lo que hay en el hub antes de que hubiera dos casas, y la
+    /// fórmula se blinda después para que un supuesto equivocado no produzca un coste negativo.
+    /// </para>
+    /// </summary>
+    TokenAccounting Accounting => TokenAccounting.InputIncludesCache;
+
+    /// <summary>
+    /// <b>El de fábrica</b> (PROV-2 §2): a quien se cae el registro cuando el ajuste no nombra a
+    /// nadie conocido, y el que la pantalla Cuenta enseña arriba. Lo declara quien es el requisito
+    /// del equipo; antes se buscaba por el tipo concreto de una casa.
+    /// </summary>
+    bool IsFactoryDefault => false;
+
+    /// <summary>
+    /// <b>Las sesiones que no escribieron casa son mías</b> (PROV-2 §2, revisa D-780). El
+    /// histórico anterior a que hubiera dos proveedores no guardaba ninguno porque no había otro;
+    /// tratarlo como un dato que falta partiría en dos los hubs con más historia. Lo reclama quien
+    /// ya estaba, y nadie más puede reclamarlo.
+    /// </summary>
+    bool ClaimsUnattributedSessions => false;
+
+    /// <summary>
+    /// <b>Cómo factura y en qué se enseña lo que gasta</b> (PROV-2 §3). El dominio cuenta en
+    /// dólares; la unidad propia —si la hay— y la equivalencia vigente las declara la casa.
+    /// </summary>
+    ProviderBilling Billing => ProviderBilling.Default;
+
+    /// <summary>
+    /// <b>Con qué nombre guardaba su modelo en los ajustes antes de PROV-2</b>, para poder
+    /// adoptarlo una vez y no perderle el ajuste a nadie. Null en una casa nueva, que nace ya en
+    /// el mapa por identificador de proveedor y no tiene histórico que adoptar.
+    /// </summary>
+    string? LegacyModelSettingKey => null;
 
     /// <summary>Model in use, if known (for session records).</summary>
     string? ModelName { get; }

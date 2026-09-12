@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Text.Json;
 using Atalaya.Agents;
+using Atalaya.Domain.Model;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -28,7 +29,8 @@ namespace Atalaya.ClaudeCode;
 /// nunca falla mudo.
 /// </para>
 /// </summary>
-public sealed class ClaudeCodeProvider : IAssistedFixProvider, IThreadedAuditor, INarratingAuditor
+public sealed class ClaudeCodeProvider
+    : IAssistedFixProvider, IThreadedAuditor, INarratingAuditor, ICuttingAuditor
 {
     /// <summary>
     /// El identificador que se escribe en sesiones, hallazgos e informes. Constante, y no un
@@ -156,6 +158,26 @@ public sealed class ClaudeCodeProvider : IAssistedFixProvider, IThreadedAuditor,
 
     /// <inheritdoc/>
     public bool IsPresent => ResolveCli() is not null;
+
+    /// <summary>
+    /// <b>La entrada EXCLUYE la caché</b> (PROV-2 §2, revisa D-785): el CLI informa lo cacheado
+    /// aparte —<c>input_tokens</c> 6 con <c>cache_read_input_tokens</c> 19.990— y lo declara esta
+    /// casa, que es la que conoce su dialecto.
+    /// </summary>
+    public TokenAccounting Accounting => TokenAccounting.InputExcludesCache;
+
+    /// <summary>
+    /// <b>Cómo se dice lo que cuesta</b> (PROV-2 §3, revisa D-821). Esta casa corre contra la
+    /// suscripción personal de quien la usa y la siembra no le pone tarifa, así que no hay importe
+    /// que calcular: la frase la declara ella y no es «tarifa no configurada», que insinuaría una
+    /// deuda de configuración que no existe. El día que alguien le escriba una tarifa en la tabla,
+    /// se tarifa como cualquiera — es la tarifa la que decide, no un <c>if</c> con su nombre.
+    /// </summary>
+    public ProviderBilling Billing { get; } =
+        new(NoRateNote: "incluido en tu suscripción de Claude");
+
+    /// <summary>Donde esta casa guardaba su modelo antes de que hubiera mapa (PROV-2 §2).</summary>
+    public string? LegacyModelSettingKey => "claudeCodeModel";
 
     /// <inheritdoc/>
     public string? ModelName

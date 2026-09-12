@@ -1,4 +1,5 @@
 using Atalaya.Copilot;
+using Atalaya.Domain.Model;
 
 namespace Atalaya.App.Services;
 
@@ -48,12 +49,46 @@ public sealed class AuditorProviderRegistry
     public IReadOnlyList<IAuditorProvider> All => _providers;
 
     /// <summary>
-    /// A quién se cae cuando el ajuste no nombra a nadie conocido: Copilot, que es con quien
-    /// funcionaba todo antes de F14. Una máquina con un ajuste corrupto o con el nombre de un
+    /// A quién se cae cuando el ajuste no nombra a nadie conocido: el <b>de fábrica</b>, que es
+    /// quien lo declara (PROV-2 §2). Una máquina con un ajuste corrupto o con el nombre de un
     /// proveedor retirado audita, no se queda sin poder auditar.
+    /// <para>
+    /// Antes se buscaba por el tipo concreto de una casa, y eso ataba el registro —y con él la
+    /// aplicación entera— al proyecto de ese proveedor. Ahora lo dice el contrato: si nadie se
+    /// declara de fábrica, manda el orden de registro, que es el que ve el usuario.
+    /// </para>
     /// </summary>
     public IAuditorProvider Fallback
-        => _providers.FirstOrDefault(p => p.ProviderId == RealCopilotAgent.Id) ?? _providers[0];
+        => _providers.FirstOrDefault(p => p.IsFactoryDefault) ?? _providers[0];
+
+    /// <summary>
+    /// <b>Quién escribió esto que ya está en el hub</b> (PROV-2 §2), o <c>null</c> si esta versión
+    /// ya no trae esa casa.
+    /// <para>
+    /// Sin identificador escrito es de quien reclame el histórico sin atribuir —antes de F14 no
+    /// había otra casa, así que no se escribía ninguna (revisa D-780)—, y quien lo reclama lo
+    /// declara en el contrato en vez de comparar una cadena contra su nombre.
+    /// </para>
+    /// </summary>
+    public IAuditorProvider? WhoWrote(string? providerId)
+        => string.IsNullOrWhiteSpace(providerId)
+            ? _providers.FirstOrDefault(p => p.ClaimsUnattributedSessions)
+            : _providers.FirstOrDefault(p =>
+                  string.Equals(p.ProviderId, providerId, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Cómo contaba sus tokens de entrada la casa que escribió esa sesión (PROV-2 §2). De una que
+    /// esta versión ya no trae se supone la forma del de fábrica, que es la del histórico.
+    /// </summary>
+    public TokenAccounting AccountingOf(string? providerId)
+        => (WhoWrote(providerId) ?? Fallback).Accounting;
+
+    /// <summary>
+    /// Cómo factura y en qué se enseña lo que gastó esa casa (PROV-2 §3). De una retirada no se
+    /// inventa unidad: dólares, que es la unidad del dominio.
+    /// </summary>
+    public ProviderBilling BillingOf(string? providerId)
+        => WhoWrote(providerId)?.Billing ?? ProviderBilling.Default;
 
     /// <summary>
     /// El proveedor con el que se lanzaría una sesión AHORA. Se resuelve en cada lectura: cambiar
