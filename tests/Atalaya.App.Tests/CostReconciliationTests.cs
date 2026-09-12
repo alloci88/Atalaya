@@ -68,11 +68,11 @@ public sealed class CostReconciliationTests : IDisposable
 
         _rates.CostOf(vieja).Why.Should().Be(CostUnavailable.RateMissing);
 
-        _rates.Save(new ModelRateTable { Rates = { new ModelRate("un-modelo-nuevo", 0m, 10m, 0m) } });
+        _rates.Save(new ModelRateTable { Rates = { new ModelRate("un-modelo-nuevo", string.Empty, 0m, 10m, 0m) } });
 
         // Ni se ha tocado el fichero de la sesión ni se ha reconciliado nada: la fórmula la
         // recalcula al leerla.
-        _rates.CostOf(Reload(vieja.Id)).Credits.Should().Be(2m);
+        _rates.CostOf(Reload(vieja.Id)).Usd.Should().Be(0.02m);
     }
 
     /// <summary>
@@ -115,7 +115,7 @@ public sealed class CostReconciliationTests : IDisposable
 
         // La tarifa entra en la tabla del hub, que es donde se editan los precios.
         ModelRateTable table = _rates.Current!;
-        table.Rates.Add(new ModelRate("modelo-raro", 0m, 10m, 0m));
+        table.Rates.Add(new ModelRate("modelo-raro", string.Empty, 0m, 10m, 0m));
         _rates.Save(table);
 
         // Al volver, el grupo NO desaparece: pasa a «listo para calcular».
@@ -128,7 +128,7 @@ public sealed class CostReconciliationTests : IDisposable
 
         _reconciler.GapOf(Slug).Sessions.Should().Be(0,
             "ya no falta ninguna: el agregado deja de ser parcial");
-        _reconciler.LookupFor(Slug).Of(Reload(sesion.Id)).Credits.Should().Be(3m);
+        _reconciler.LookupFor(Slug).Of(Reload(sesion.Id)).Usd.Should().Be(0.03m);
     }
 
     /// <summary>
@@ -141,7 +141,7 @@ public sealed class CostReconciliationTests : IDisposable
     {
         _rates.Save(new ModelRateTable
         {
-            Rates = { new ModelRate("modelo-a", 0m, 10m, 0m), new ModelRate("modelo-b", 0m, 20m, 0m) },
+            Rates = { new ModelRate("modelo-a", string.Empty, 0m, 10m, 0m), new ModelRate("modelo-b", string.Empty, 0m, 20m, 0m) },
         });
 
         AuditSession sesion = Session(ModelIds.Auto, outputTokens: 3_000);
@@ -161,7 +161,7 @@ public sealed class CostReconciliationTests : IDisposable
         CostResult cost = _reconciler.LookupFor(Slug).Of(Reload(sesion.Id));
 
         // 1.000 a 10 $/M = 0,01 $ = 1 credit; 2.000 a 20 $/M = 0,04 $ = 4 credits.
-        cost.Credits.Should().Be(5m);
+        cost.Usd.Should().Be(0.05m);
         cost.IsEstimate.Should().BeFalse("sumar lo que costó cada llamada no es estimar");
     }
 
@@ -185,7 +185,7 @@ public sealed class CostReconciliationTests : IDisposable
         _reconciler.Reconcile(Slug, TestRates.Model).Sessions.Should().Be(1);
 
         CostResult cost = _reconciler.LookupFor(Slug).Of(Reload(sesion.Id));
-        cost.Credits.Should().Be(4m);
+        cost.Usd.Should().Be(4m);
         cost.IsEstimate.Should().BeTrue("nadie midió con qué modelo corrió");
         cost.EstimatedWith!.AssignedModel.Should().Be(TestRates.Model);
         CostFormat.Marked("4,0", cost).Should().Be("4,0" + CostFormat.EstimateMark);
@@ -246,12 +246,12 @@ public sealed class CostReconciliationTests : IDisposable
         _hub.Store.WriteSession(sesion);
         _reconciler.Reconcile(Slug, TestRates.Model);
 
-        _reconciler.LookupFor(Slug).Of(Reload(sesion.Id)).Credits.Should().Be(1m);
+        _reconciler.LookupFor(Slug).Of(Reload(sesion.Id)).Usd.Should().Be(1m);
 
         // La organización corrige el precio: el doble.
-        _rates.Save(new ModelRateTable { Rates = { new ModelRate(TestRates.Model, 0m, 20m, 0m) } });
+        _rates.Save(new ModelRateTable { Rates = { new ModelRate(TestRates.Model, string.Empty, 0m, 20m, 0m) } });
 
-        _reconciler.LookupFor(Slug).Of(Reload(sesion.Id)).Credits.Should().Be(2m,
+        _reconciler.LookupFor(Slug).Of(Reload(sesion.Id)).Usd.Should().Be(0.02m,
             "el coste sigue siendo un derivado que se recalcula en cada lectura (D-788)");
     }
 

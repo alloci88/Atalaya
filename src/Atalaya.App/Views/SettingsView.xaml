@@ -282,7 +282,7 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <TextBlock Grid.Row="0" Text="Tarifas de GitHub Copilot" Style="{StaticResource Setting.SectionTitle}" />
+                        <TextBlock Grid.Row="0" Text="Tarifas por modelo" Style="{StaticResource Setting.SectionTitle}" />
 
                         <!-- F29 §2 — LA DIVISA, LA PRIMERA FILA DE LA SECCIÓN. Es lo único de aquí
                              que cambia lo que se ve en todas las demás pantallas, y es de esta
@@ -360,9 +360,10 @@
                             <ScrollViewer Style="{StaticResource Scroll}" x:Name="RatesScroll"
                                           HorizontalScrollBarVisibility="Auto"
                                           VerticalScrollBarVisibility="Disabled">
-                                <Grid MinWidth="910"
+                                <Grid MinWidth="1080"
                                       Width="{Binding ViewportWidth, ElementName=RatesScroll}">
                                     <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="1.5*" MinWidth="170" />
                                         <ColumnDefinition Width="2*" MinWidth="220" />
                                         <ColumnDefinition Width="1*" MinWidth="110" />
                                         <ColumnDefinition Width="1*" MinWidth="110" />
@@ -375,42 +376,49 @@
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
 
-                                    <Border Grid.Row="0" Grid.ColumnSpan="6"
+                                    <Border Grid.Row="0" Grid.ColumnSpan="7"
                                             BorderBrush="{DynamicResource Brush.LineStrong}"
                                             BorderThickness="{StaticResource Border.Bottom}" />
 
+                                    <!-- PROV-2 §3 — EL PROVEEDOR, DELANTE DEL MODELO. El coste se
+                                         tarifa por proveedor + modelo, así que la columna deja de
+                                         ser opcional: una tarifa sin ella es una que no se sabe a
+                                         quién le cobra. Va la primera porque es la que agrupa. -->
                                     <StackPanel Grid.Row="0" Grid.Column="0" Margin="{StaticResource Pad.Row}">
-                                        <TextBlock Text="Modelo" Style="{StaticResource Table.Header}" />
+                                        <TextBlock Text="Proveedor" Style="{StaticResource Table.Header}" />
                                     </StackPanel>
                                     <StackPanel Grid.Row="0" Grid.Column="1" Margin="{StaticResource Pad.Row}">
+                                        <TextBlock Text="Modelo" Style="{StaticResource Table.Header}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="2" Margin="{StaticResource Pad.Row}">
                                         <TextBlock Text="Entrada" Style="{StaticResource Table.Header}"
                                                    HorizontalAlignment="Right" />
                                         <TextBlock Text="{x:Static s:CostFormat.RateColumnUnit}" Style="{StaticResource Table.HeaderUnit}"
                                                    HorizontalAlignment="Right" />
                                     </StackPanel>
-                                    <StackPanel Grid.Row="0" Grid.Column="2" Margin="{StaticResource Pad.Row}">
+                                    <StackPanel Grid.Row="0" Grid.Column="3" Margin="{StaticResource Pad.Row}">
                                         <TextBlock Text="Salida" Style="{StaticResource Table.Header}"
                                                    HorizontalAlignment="Right" />
                                         <TextBlock Text="{x:Static s:CostFormat.RateColumnUnit}" Style="{StaticResource Table.HeaderUnit}"
                                                    HorizontalAlignment="Right" />
                                     </StackPanel>
-                                    <StackPanel Grid.Row="0" Grid.Column="3" Margin="{StaticResource Pad.Row}">
+                                    <StackPanel Grid.Row="0" Grid.Column="4" Margin="{StaticResource Pad.Row}">
                                         <TextBlock Text="Caché leída" Style="{StaticResource Table.Header}"
                                                    HorizontalAlignment="Right" />
                                         <TextBlock Text="{x:Static s:CostFormat.RateColumnUnit}" Style="{StaticResource Table.HeaderUnit}"
                                                    HorizontalAlignment="Right" />
                                     </StackPanel>
-                                    <StackPanel Grid.Row="0" Grid.Column="4" Margin="{StaticResource Pad.Row}">
+                                    <StackPanel Grid.Row="0" Grid.Column="5" Margin="{StaticResource Pad.Row}">
                                         <TextBlock Text="Caché escrita" Style="{StaticResource Table.Header}"
                                                    HorizontalAlignment="Right" />
                                         <TextBlock Text="{x:Static s:CostFormat.RateColumnUnit}" Style="{StaticResource Table.HeaderUnit}"
                                                    HorizontalAlignment="Right" />
                                     </StackPanel>
-                                    <StackPanel Grid.Row="0" Grid.Column="5" Margin="{StaticResource Pad.Row}">
+                                    <StackPanel Grid.Row="0" Grid.Column="6" Margin="{StaticResource Pad.Row}">
                                         <TextBlock Text="Nota" Style="{StaticResource Table.Header}" />
                                     </StackPanel>
 
-                                    <ItemsControl Grid.Row="1" Grid.ColumnSpan="6"
+                                    <ItemsControl Grid.Row="1" Grid.ColumnSpan="7"
                                                   ItemsSource="{Binding Rates.Rows}">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -418,6 +426,7 @@
                                                         BorderThickness="{StaticResource Border.Bottom}">
                                                     <Grid>
                                                         <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="1.5*" MinWidth="170" />
                                                             <ColumnDefinition Width="2*" MinWidth="220" />
                                                             <ColumnDefinition Width="1*" MinWidth="110" />
                                                             <ColumnDefinition Width="1*" MinWidth="110" />
@@ -425,18 +434,20 @@
                                                             <ColumnDefinition Width="1*" MinWidth="140" />
                                                             <ColumnDefinition Width="2*" MinWidth="200" />
                                                         </Grid.ColumnDefinitions>
-                                                        <TextBox Grid.Column="0" Text="{Binding Model}"
+                                                        <TextBox Grid.Column="0" Text="{Binding Provider}"
+                                                                 Style="{StaticResource Field.Cell}" />
+                                                        <TextBox Grid.Column="1" Text="{Binding Model}"
                                                                  Style="{StaticResource Field.Cell}"
                                                                  FontWeight="SemiBold" />
-                                                        <TextBox Grid.Column="1" Text="{Binding Input}"
+                                                        <TextBox Grid.Column="2" Text="{Binding Input}"
                                                                  Style="{StaticResource Field.Cell.Number}" />
-                                                        <TextBox Grid.Column="2" Text="{Binding Output}"
+                                                        <TextBox Grid.Column="3" Text="{Binding Output}"
                                                                  Style="{StaticResource Field.Cell.Number}" />
-                                                        <TextBox Grid.Column="3" Text="{Binding CachedInput}"
+                                                        <TextBox Grid.Column="4" Text="{Binding CachedInput}"
                                                                  Style="{StaticResource Field.Cell.Number}" />
-                                                        <TextBox Grid.Column="4" Text="{Binding CacheWrite}"
+                                                        <TextBox Grid.Column="5" Text="{Binding CacheWrite}"
                                                                  Style="{StaticResource Field.Cell.Number}" />
-                                                        <TextBox Grid.Column="5" Text="{Binding Note}"
+                                                        <TextBox Grid.Column="6" Text="{Binding Note}"
                                                                  Style="{StaticResource Field.Cell.Note}" />
                                                     </Grid>
                                                 </Border>

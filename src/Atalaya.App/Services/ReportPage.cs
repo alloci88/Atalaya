@@ -952,11 +952,9 @@ public sealed record ReportPage
             return new ReportStat(
                 "cost",
                 "Coste",
-                entry.Billed ? ReportsUnknown : CostFormat.SubscriptionCostShort,
+                entry.NoRateNote is null ? ReportsUnknown : CostFormat.UnpricedShort,
                 null,
-                entry.Billed
-                    ? "no hay tarifa para el modelo de esta sesión"
-                    : CostFormat.SubscriptionCost,
+                entry.NoRateNote ?? "no hay tarifa para el modelo de esta sesión",
                 CostFormat.Caveat);
         }
 
@@ -966,7 +964,7 @@ public sealed record ReportPage
         // sigue al conmutador de divisa—. En una auditoría sí lo hay, y ahí el texto es EL DEL
         // INFORME, con su mismo formato (D-591).
         string each = divisor > 0
-            ? string.Create(AppCulture.Display, $"{credits / divisor:0.#} {per}")
+            ? string.Create(AppCulture.Display, $"{CostFormat.Lens.Amount(credits) / divisor:0.#} {per}")
             : string.Empty;
 
         return new ReportStat(
@@ -1059,7 +1057,7 @@ public sealed record ReportPage
     {
         string cost = entry.Cost is { } credits
             ? $"{CostFormat.Number(credits)} {CostFormat.BillingUnit}"
-            : entry.Billed ? string.Empty : CostFormat.SubscriptionCostShort;
+            : entry.NoRateNote is null ? string.Empty : CostFormat.UnpricedShort;
         if (cost.Length > 0)
         {
             parts.Add(cost);

@@ -22,11 +22,17 @@ namespace Atalaya.App.Tests;
 /// <para>
 /// <b>F16-RETOQUE §1 y la respuesta de verdad.</b> Ninguna de las dos era la buena, porque las dos
 /// daban por hecho que ahí faltaba algo por configurar. No falta nada: el consumo de Claude Code va
-/// contra la suscripción personal de quien lo usa y <b>no factura a la organización</b>, así que no
-/// se tarifa. Lo que se fija aquí es que hay un solo criterio, que los dos sitios lo usan, y —lo
-/// más importante— que a una casa no tarifada <b>no le puede salir jamás</b> un «tarifa no
-/// configurada»: el aviso existe para que alguien vaya a arreglar una tabla, y aquí no hay tabla
-/// que arreglar.
+/// contra la suscripción personal de quien lo usa, así que no se tarifa. Lo que se fija aquí es que
+/// hay un solo criterio, que los dos sitios lo usan, y —lo más importante— que a esa casa <b>no le
+/// puede salir jamás</b> un «tarifa no configurada»: el aviso existe para que alguien vaya a
+/// arreglar una tabla, y aquí no hay tabla que arreglar.
+/// </para>
+/// <para>
+/// <b>PROV-2 §3 — y ahora sin un <c>if</c> que nombre una casa.</b> Lo que decide si un consumo se
+/// tarifa es que exista tarifa para su proveedor y su modelo; lo que se lee cuando no la hay lo
+/// declara la casa, en su <c>ProviderBilling.NoRateNote</c>. El comportamiento no cambia —esta
+/// clase lo comprueba— pero la regla ya no está escrita en el dominio: el día que alguien escriba
+/// una tarifa para esa casa, se tarifa como cualquier otra.
 /// </para>
 /// </summary>
 public sealed class CostFormatTests : IDisposable
@@ -68,42 +74,73 @@ public sealed class CostFormatTests : IDisposable
     public void El_pie_dice_lo_mismo_que_el_informe_de_esa_misma_sesion()
     {
         AuditSession session = Session(ClaudeCodeProvider.Id, model: "opus");
-        var cost = CreditCalculator.Calculate(session, TestRates.Table());
-        cost.Why.Should().Be(CostUnavailable.NotBilled);
+        var cost = CostCalculator.Calculate(
+            session, DeCopilot(), null, TestProviders.ClaudeTraits);
 
-        string footer = CostFormat.OfSession(cost, session.Provider);
+        // No hay tarifa suya escrita, así que no hay importe — y no es un hueco: su casa dice qué
+        // se lee en su lugar, y eso viaja dentro del resultado.
+        cost.Why.Should().Be(CostUnavailable.RateMissing);
+        cost.IsUnpriced.Should().BeTrue();
+
+        string footer = CostFormat.OfSession(cost);
         string report = ReportBuilder.BuildSessionReport(
-            App(), session, Array.Empty<Finding>(), 0, 0, "Org", TestRates.Table());
+            App(), session, Array.Empty<Finding>(), 0, 0, "Org", DeCopilot(), TestProviders.Claude);
 
         footer.Should().Be("incluido en tu suscripción de Claude");
         report.Should().Contain($"- **Coste**: {footer}");
     }
 
     /// <summary>
-    /// <b>La regla, blindada donde se decide.</b> A una casa que no factura no le puede salir
-    /// «tarifa no configurada» — ni «modelo no registrado», ni «sin tokens registrados»— haga lo
-    /// que haga el hub: da igual que el modelo esté en la tabla, que no esté, que no haya modelo o
-    /// que no haya ni un token. La pregunta que esos avisos hacen —«¿qué falta por configurar?»—
-    /// no tiene sentido aquí, y un aviso que ladra sin causa se aprende a ignorar.
+    /// <b>La regla, blindada donde se decide.</b> A una casa que declara su frase no le puede
+    /// salir «tarifa no configurada» — ni «modelo no registrado», ni «sin tokens registrados»—
+    /// mientras no haya tarifa suya en la tabla: da igual que el modelo no esté, que no haya
+    /// modelo o que no haya ni un token. La pregunta que esos avisos hacen —«¿qué falta por
+    /// configurar?»— no tiene sentido aquí, y un aviso que ladra sin causa se aprende a ignorar.
+    /// <para>
+    /// La tabla es la de Copilot, con su proveedor escrito: es lo que hay en un hub después de la
+    /// migración de PROV-2 §3, y lo que hace que una tarifa de una casa no le ponga precio a otra.
+    /// </para>
     /// </summary>
     [Theory]
-    [InlineData(TestRates.Model)]   // este modelo SÍ tiene tarifa en la tabla
+    [InlineData(TestRates.Model)]   // este modelo tiene tarifa… pero de OTRA casa
     [InlineData("opus")]            // no está en ninguna
     [InlineData(null)]              // ni siquiera hay modelo registrado
-    public void A_una_casa_que_no_factura_no_le_puede_salir_una_tarifa_que_falta(string? model)
+    public void A_una_casa_sin_tarifa_no_le_puede_salir_una_tarifa_que_falta(string? model)
     {
         foreach (long tokens in new long[] { 0, 1000 })
         {
-            CostResult cost = CreditCalculator.Calculate(
-                model, ClaudeCodeProvider.Id, tokens, tokens, tokens, tokens, TestRates.Table());
+            CostResult cost = CostCalculator.Calculate(
+                model, ClaudeCodeProvider.Id, tokens, tokens, tokens, tokens,
+                DeCopilot(), TestProviders.ClaudeTraits);
 
-            cost.Why.Should().Be(CostUnavailable.NotBilled);
-            cost.Credits.Should().BeNull("un número aquí sería un cobro que nadie hace");
+            cost.IsUnpriced.Should().BeTrue();
+            cost.Usd.Should().BeNull("un número aquí sería un cobro que nadie hace");
 
-            string text = CostFormat.OfSession(cost, ClaudeCodeProvider.Id);
-            text.Should().Be(CostFormat.SubscriptionCost);
+            string text = CostFormat.OfSession(cost);
+            text.Should().Be(TestProviders.ClaudeNote);
             text.Should().NotContain("tarifa").And.NotContain("credits").And.NotContain("no calculable");
         }
+    }
+
+    /// <summary>
+    /// <b>Y la puerta se abre sola.</b> El día que alguien escriba una tarifa para esa casa, se
+    /// tarifa como cualquier otra: la frase de «sin tarifa» no es una exención, es lo que se lee
+    /// mientras no haya precio. Es la mitad de PROV-2 §3 que no se puede comprobar con la otra.
+    /// </summary>
+    [Fact]
+    public void Con_tarifa_escrita_esa_casa_se_tarifa_como_cualquiera()
+    {
+        var table = new ModelRateTable
+        {
+            Rates = { new ModelRate("opus", ClaudeCodeProvider.Id, 0m, 1000.00m, 0m) },
+        };
+
+        CostResult cost = CostCalculator.Calculate(
+            "opus", ClaudeCodeProvider.Id, 0, 2_000, 0, 0, table, TestProviders.ClaudeTraits);
+
+        cost.Usd.Should().Be(2m);
+        cost.IsUnpriced.Should().BeFalse("con precio escrito ya no hay nada que excusar");
+        CostFormat.OfSession(cost, CostLens.Dollars).Should().Be("2,00 $");
     }
 
     /// <summary>
@@ -116,13 +153,13 @@ public sealed class CostFormatTests : IDisposable
     {
         string footer = CostFormat.SessionFooter(
             14, 2786, 10975, 201371, 22525,
-            CostResult.Unavailable(CostUnavailable.NotBilled), ClaudeCodeProvider.Id);
+            CostResult.Unavailable(CostUnavailable.RateMissing, "opus", TestProviders.ClaudeNote));
 
         footer.Should().StartWith("14 llamadas · ");
         footer.Should().Contain("2.786 entrada").And.Contain("10.975 salida");
         footer.Should().Contain("201.371 leída").And.Contain("22.525 escrita");
         // F17-RETOQUE: el orden es llamadas → coste → tokens, en las dos casas.
-        footer.Should().Contain($"coste: {CostFormat.SubscriptionCost}");
+        footer.Should().Contain($"coste: {TestProviders.ClaudeNote}");
         footer.IndexOf("coste:", StringComparison.Ordinal).Should()
             .BeLessThan(footer.IndexOf("2.786 entrada", StringComparison.Ordinal));
         footer.Should().NotContain("credits");
@@ -134,7 +171,8 @@ public sealed class CostFormatTests : IDisposable
     /// </summary>
     [Fact]
     public void Con_factura_el_pie_sigue_diciendo_credits()
-        => CostFormat.SessionFooter(3, 1000, 200, 0, 0, new CostResult(68.2m), RealCopilotAgent.Id)
+        => CostFormat.SessionFooter(
+                3, 1000, 200, 0, 0, new CostResult(0.682m), TestProviders.CopilotLens)
             .Should().Be("3 llamadas · 68,2 AI credits · 1.000 entrada · 200 salida");
 
     /// <summary>
@@ -147,9 +185,9 @@ public sealed class CostFormatTests : IDisposable
     [InlineData(CostUnavailable.TokensMissing)]
     public void Ningun_texto_de_coste_nombra_un_SDK(CostUnavailable why)
     {
-        // Solo se prueba con la casa que factura: a la otra no le llega nunca uno de estos tres
-        // motivos —los para IsBilled antes—, y fingir que sí probaría un camino que no existe.
-        CostFormat.OfSession(CostResult.Unavailable(why), RealCopilotAgent.Id)
+        // Solo con la casa que no declara ninguna frase de «sin tarifa»: a la que sí la declara
+        // no le sale un motivo, le sale su frase, y eso ya lo comprueban los tests de arriba.
+        CostFormat.OfSession(CostResult.Unavailable(why), TestProviders.CopilotLens)
             .Should().NotContain("SDK")
             .And.StartWith("coste no calculable (");
     }
@@ -162,12 +200,14 @@ public sealed class CostFormatTests : IDisposable
     [Fact]
     public void El_numero_lleva_la_unidad_de_lo_que_factura()
     {
-        var cost = new CostResult(68.2m);
+        var cost = new CostResult(0.682m);
 
-        CostFormat.OfSession(cost, RealCopilotAgent.Id).Should().Be("68,2 AI credits");
+        CostFormat.OfSession(cost, TestProviders.CopilotLens).Should().Be("68,2 AI credits");
 
-        // Y una sesión anterior a F14, sin proveedor escrito, es Copilot: no había otro.
-        CostFormat.OfSession(cost, null).Should().Be("68,2 AI credits");
+        // Y sin lente —lo que se escribe antes de saber de quién es el gasto— manda la preferencia
+        // de esta máquina sobre la casa de referencia, que es exactamente lo mismo.
+        CostFormat.Billing = TestProviders.Copilot.Billing;
+        CostFormat.OfSession(cost).Should().Be("68,2 AI credits");
     }
 
     /// <summary>
@@ -184,7 +224,8 @@ public sealed class CostFormatTests : IDisposable
             new OpenSessionStore(_paths))
         {
             Provider = ClaudeCodeProvider.Id,
-            CostResult = CostResult.Unavailable(CostUnavailable.NotBilled),
+            CostResult = CostResult.Unavailable(
+                CostUnavailable.RateMissing, "opus", TestProviders.ClaudeNote),
             InputTokens = 900,
             OutputTokens = 120,
             Calls = 4,
@@ -194,11 +235,14 @@ public sealed class CostFormatTests : IDisposable
 
         view.CostText.Should().Be(CostFormat.SessionFooter(
             live.Calls, live.InputTokens, live.OutputTokens,
-            live.CacheReadTokens, live.CacheWriteTokens, live.CostResult, live.Provider));
+            live.CacheReadTokens, live.CacheWriteTokens, live.CostResult, live.CostLens));
         view.CostText.Should().NotContain("SDK").And.NotContain("tarifa");
     }
 
     private static AppConfig App() => new() { Slug = "app", Name = "App", RepoUrl = "https://github.com/org/app.git", CurrentCycle = 1 };
+
+    /// <inheritdoc cref="TestRates.OfFactory"/>
+    private static ModelRateTable DeCopilot() => TestRates.OfFactory();
 
     private static AuditSession Session(string provider, string model) => new()
     {

@@ -298,7 +298,7 @@ public sealed class SessionCoordinator
     {
         try
         {
-            return _hub.Store.TryReadModelRates();
+            return _hub.ModelRates();
         }
         catch (Exception)
         {
@@ -492,11 +492,12 @@ public sealed class SessionCoordinator
                 }
             }
 
-            // F15 — lo que viaja a la vista en vivo son CREDITS derivados de los tokens con la
+            // F15 — lo que viaja a la vista en vivo es el IMPORTE derivado de los tokens con la
             // tarifa del modelo de esta sesión, no el número que informó el proveedor: aquél está
             // en peticiones premium, la unidad retirada. Se deriva aquí, en el mismo sitio que lo
             // acumula, para que la cifra en vivo y la del informe sean la misma cuenta.
-            CostResult live = CreditCalculator.Calculate(session, ModelRates());
+            CostResult live = CostCalculator.Calculate(
+                session, ModelRates(), null, _agent.CostTraits());
             UsageUpdated?.Invoke(new LiveUsage(
                 session.Usage.InputTokens,
                 session.Usage.OutputTokens,
@@ -505,8 +506,9 @@ public sealed class SessionCoordinator
                 live,
                 session.Provider,
                 session.Usage.Calls,
-                PromptBudget.From(session),
-                sessionTurns));
+                PromptBudget.From(session, _agent.Accounting),
+                sessionTurns,
+                CostLens.For(_agent.Billing, CostFormat.Currency)));
         }
 
         _agent.TextStreamed += OnText;
@@ -1102,7 +1104,7 @@ public sealed class SessionCoordinator
         int pending = inventory.Units.Count(u => u.State == UnitState.Pendiente);
         int large = inventory.Units.Count(u => u.State == UnitState.Grande);
         string report = ReportBuilder.BuildSessionReport(
-            app, session, newFindings, pending, large, _hub.OrganizationName, ModelRates());
+            app, session, newFindings, pending, large, _hub.OrganizationName, ModelRates(), _agent);
         _hub.Store.WriteReport(request.Slug, sessionId.ToString(), report);
 
         // BUGFIX-PUSH — el del cierre también lleva reloj y voz, pero NO tumba la sesión: aquí ya

@@ -129,7 +129,7 @@ public sealed class DeprecatedModesTests : IDisposable
         // se lee y la carpeta lo que desambigua dos «Common.cs» de módulos distintos.
         report2.Should().Contain("**Modo**: Integral")
             .And.Contain("**Common.cs** (src/)")
-            .And.Contain("4,0 AI credits");
+            .And.Contain("400,0 AI credits");
         report2.Should().NotContain("premium requests",
             "la unidad retirada desaparece del frontal; los tokens, que son el hecho, se quedan");
         report = report2;

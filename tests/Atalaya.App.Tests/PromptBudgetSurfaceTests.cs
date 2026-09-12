@@ -133,11 +133,11 @@ public sealed class PromptBudgetSurfaceTests
         PromptBudget budget = PromptBudget.From(Session(withComposition: true));
 
         string footer = CostFormat.SessionFooter(
-            20, 570_000, 24_000, 450_000, 100_000, new CostResult(193.3m), RealCopilotAgent.Id);
+            20, 570_000, 24_000, 450_000, 100_000, new CostResult(1.933m), TestProviders.CopilotLens);
         footer.Should().NotContain("código");
 
         IReadOnlyList<FooterSegment> segments = CostFormat.UsageSegments(
-            20, 570_000, 24_000, 450_000, 100_000, new CostResult(193.3m), RealCopilotAgent.Id, budget);
+            20, 570_000, 24_000, 450_000, 100_000, new CostResult(1.933m), TestProviders.CopilotLens, budget);
 
         // F23 §6 — la composición es diagnóstico y pasa al TOOLTIP, entera. Ya no hace falta una
         // forma abreviada para cuando falta sitio: no compite por el sitio de la línea.
@@ -153,7 +153,7 @@ public sealed class PromptBudgetSurfaceTests
         PromptBudget budget = PromptBudget.From(Session(withComposition: false));
 
         CostFormat.UsageSegments(
-                20, 570_000, 24_000, 450_000, 100_000, new CostResult(193.3m), RealCopilotAgent.Id, budget)
+                20, 570_000, 24_000, 450_000, 100_000, new CostResult(1.933m), TestProviders.CopilotLens, budget)
             .Should().NotContain(s => s.Full.Contains("código", StringComparison.Ordinal));
 
         CostFormat.BudgetShort(null).Should().BeEmpty();

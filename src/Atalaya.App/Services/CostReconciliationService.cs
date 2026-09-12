@@ -36,8 +36,8 @@ public sealed record CostGapGroup(
 /// reconciliadas» a secas no contesta la pregunta por la que se abrió, que es cuánto costó aquello.
 /// </para>
 /// </summary>
-/// <param name="Credits">Los AI credits de esas sesiones. Null si ninguna se pudo valorar.</param>
-public sealed record ReconciliationOutcome(int Sessions, decimal? Credits);
+/// <param name="Usd">El importe de esas sesiones, en dólares. Null si ninguna se pudo valorar.</param>
+public sealed record ReconciliationOutcome(int Sessions, decimal? Usd);
 
 /// <summary>Cuántas sesiones sin coste tiene una aplicación. Lo que dice la insignia.</summary>
 public sealed record AppCostGap(string Slug, int Sessions, IReadOnlyList<CostGapGroup> Groups)
@@ -116,7 +116,7 @@ public sealed class CostReconciliationService
 
     /// <summary>Con qué se pone precio a las sesiones de una aplicación.</summary>
     public CostLookup LookupFor(string slug)
-        => new(_rates.Current, ReadReconciliations(slug));
+        => new(_rates.Current, ReadReconciliations(slug), _hub.CostTraits);
 
     /// <summary>Lo mismo para el hub entero: lo que necesitan Métricas y la lista de informes.</summary>
     public CostLookup Lookup()
@@ -130,7 +130,7 @@ public sealed class CostReconciliationService
             }
         }
 
-        return new CostLookup(_rates.Current, all);
+        return new CostLookup(_rates.Current, all, _hub.CostTraits);
     }
 
     /// <summary>
@@ -153,7 +153,7 @@ public sealed class CostReconciliationService
     private IReadOnlyList<SessionCostGap> GapsFor(string slug, IReadOnlyCollection<Ulid>? alsoInclude)
     {
         Dictionary<Ulid, CostReconciliation> reconciled = ReadReconciliations(slug);
-        var lookup = new CostLookup(_rates.Current, reconciled);
+        var lookup = new CostLookup(_rates.Current, reconciled, _hub.CostTraits);
         IReadOnlyList<AuditSession> sessions = _hub.Store.ListSessions(slug);
 
         var gaps = lookup.GapsOf(sessions).ToList();
@@ -172,7 +172,8 @@ public sealed class CostReconciliationService
                 continue;
             }
 
-            gaps.Add(CostReconciler.Inspect(session, _rates.Current));
+            gaps.Add(CostReconciler.Inspect(
+                session, _rates.Current, _hub.CostTraits(session.Provider)));
         }
 
         return gaps;
@@ -248,7 +249,10 @@ public sealed class CostReconciliationService
         IReadOnlyList<SessionCostGap> gaps = steps.Run(Leer, () => GapsFor(slug, scope));
 
         List<(SessionCostGap Gap, CostReconciliation Decision)> decided = steps.Run(Calcular, () =>
-            gaps.Select(g => (Gap: g, Decision: Decide(g, rates, assignedModel, by, today)))
+            gaps.Select(g => (
+                    Gap: g,
+                    Decision: Decide(
+                        g, rates, assignedModel, by, today, _hub.CostTraits(g.Session.Provider))))
                 .Where(p => p.Decision is not null)
                 .Select(p => (p.Gap, Decision: p.Decision!))
                 .ToList());
@@ -287,9 +291,9 @@ public sealed class CostReconciliationService
         decimal? total = null;
         foreach (AuditSession session in sessions)
         {
-            if (lookup.Of(session).Credits is { } credits)
+            if (lookup.Of(session).Usd is { } usd)
             {
-                total = (total ?? 0m) + credits;
+                total = (total ?? 0m) + usd;
             }
         }
 
@@ -298,8 +302,13 @@ public sealed class CostReconciliationService
 
     /// <summary>Qué se puede escribir de esta sesión, o null si todavía nada.</summary>
     private static CostReconciliation? Decide(
-        SessionCostGap gap, ModelRateTable? rates, string? assignedModel, string by, DateOnly today)
+        SessionCostGap gap, ModelRateTable? rates, string? assignedModel, string by, DateOnly today,
+        ProviderCostTraits traits)
     {
+        // Con qué identificador se busca la tarifa: el que declare su casa, que no es siempre el
+        // que la sesión escribió (PROV-2 §3).
+        string? provider = traits.ProviderId ?? gap.Session.Provider;
+
         var record = new CostReconciliation
         {
             SessionId = gap.Session.Id,
@@ -321,7 +330,7 @@ public sealed class CostReconciliationService
         //    abierto. No hay nada que elegir —el coste ya sale de la fórmula de siempre—, solo que
         //    dejar constancia de cuándo se cerró: es lo que el informe enseña como «calculado a
         //    posteriori».
-        if (gap.Reason == CostGapReason.SinTarifa && rates?.Find(gap.Model, gap.Session.Provider) is not null)
+        if (gap.Reason == CostGapReason.SinTarifa && rates?.Find(gap.Model, provider) is not null)
         {
             record.How = CostResolution.TarifaAnadida;
             return record;
@@ -331,7 +340,7 @@ public sealed class CostReconciliationService
         //    sesión se queda sin coste: inventar una tarifa «parecida» es lo que D-787 prohíbe.
         if (gap.Reason == CostGapReason.Desconocido
             && assignedModel is { Length: > 0 }
-            && rates?.Find(assignedModel, gap.Session.Provider) is not null)
+            && rates?.Find(assignedModel, provider) is not null)
         {
             record.How = CostResolution.TarifaAsignada;
             record.AssignedModel = assignedModel;

@@ -55,11 +55,11 @@ public sealed partial class RateRow : ObservableObject
 
         return new ModelRate(
             Model.Trim(),
+            Provider.Trim(),
             Input,
             Output,
             CachedInput,
             write,
-            string.IsNullOrWhiteSpace(Provider) ? null : Provider.Trim(),
             EffectiveFrom ?? DateOnly.FromDateTime(DateTime.UtcNow),
             string.IsNullOrWhiteSpace(Note) ? null : Note.Trim());
     }
@@ -198,11 +198,13 @@ public sealed partial class ModelRatesViewModel : ObservableObject
 
         Source = table.Source ?? string.Empty;
 
-        // Solo lo que factura (F16-RETOQUE §1). Un hub sembrado antes de este cambio tiene
-        // escritas las tarifas de `claude-code`; el cálculo ya las ignora, y enseñarlas aquí sería
-        // ofrecer editar un precio que no gobierna nada. Desaparecen del hub al primer guardado.
-        foreach (ModelRate rate in ModelRatesService.Billable(table)
-                     .OrderBy(r => r.Model, StringComparer.OrdinalIgnoreCase))
+        // TODAS las tarifas de la tabla (PROV-2 §3). Aquí se filtraban las de la casa que no
+        // facturaba, porque una tarifa suya no gobernaba nada: con el coste tarifado por
+        // proveedor+modelo, la de cualquier casa gobierna lo suyo, y esconder la que alguien haya
+        // escrito sería justo lo contrario de lo que hace falta.
+        foreach (ModelRate rate in table.Rates
+                     .OrderBy(r => r.Provider, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(r => r.Model, StringComparer.OrdinalIgnoreCase))
         {
             Rows.Add(new RateRow(rate));
         }
@@ -230,7 +232,14 @@ public sealed partial class ModelRatesViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void AddRow() => Rows.Add(new RateRow { EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow) });
+    private void AddRow() => Rows.Add(new RateRow
+    {
+        // Nace con la casa de fábrica escrita (PROV-2 §3): es de quien son casi todas las tarifas
+        // de esta tabla, y la columna es obligatoria. Se puede cambiar; lo que no se puede es
+        // dejarla en blanco.
+        Provider = _rates.FactoryProviderId,
+        EffectiveFrom = DateOnly.FromDateTime(DateTime.UtcNow),
+    });
 
     [RelayCommand]
     private void RemoveRow(RateRow? row)
@@ -265,15 +274,15 @@ public sealed partial class ModelRatesViewModel : ObservableObject
                 return;
             }
 
-            // F16-RETOQUE §1 — esta tabla es la de lo que FACTURA a la organización. Una tarifa
-            // para una casa que corre contra la suscripción de quien la usa no gobernaría nada, y
-            // dejarla entrar solo conseguiría que alguien la mantuviera para siempre creyendo que
-            // sirve para algo.
-            if (!CreditCalculator.IsBilled(rate.Provider))
+            // PROV-2 §3 — LA PUERTA QUE SE CIERRA ES LA OTRA. Aquí se rechazaba una tarifa cuya
+            // casa no facturaba; ahora la de cualquier casa es legítima y lo que no se puede es
+            // dejarla sin dueño: el coste se tarifa por proveedor + modelo, y una tarifa sin
+            // proveedor es una que no se sabe a quién le cobra.
+            if (!rate.IsProviderSpecific)
             {
-                Status = $"«{rate.Model}» ({rate.Provider}): esa casa no factura a la organización "
-                    + "—su consumo va contra la suscripción de quien la usa—, así que no lleva "
-                    + "tarifa. Quita la fila. No se ha guardado nada.";
+                Status = $"«{rate.Model}»: falta el proveedor. Una tarifa dice a qué casa le cobra "
+                    + "—el coste se calcula por proveedor y modelo—, así que la columna no puede "
+                    + "quedar en blanco. No se ha guardado nada.";
                 return;
             }
 

@@ -85,8 +85,11 @@ public class PromptBudgetTests
         AuditSession claude = Session("claude-code", Units());
         claude.Usage.Add(40_000, 5_000, 30_000, 6_000, null, calls: 4);
 
-        PromptBudget.From(copilot).PromptTokens.Should().Be(40_000);
-        PromptBudget.From(claude).PromptTokens.Should().Be(76_000, "40.000 + 30.000 leídos + 6.000 escritos");
+        // La semántica la declara cada casa y llega por parámetro desde PROV-2 §3; el dominio ya
+        // no tiene un mapa por nombre. Lo que se fija aquí es que aplicarla bien cambia el prompt.
+        PromptBudget.From(copilot, TokenAccounting.InputIncludesCache).PromptTokens.Should().Be(40_000);
+        PromptBudget.From(claude, TokenAccounting.InputExcludesCache).PromptTokens
+            .Should().Be(76_000, "40.000 + 30.000 leídos + 6.000 escritos");
     }
 
     /// <summary>

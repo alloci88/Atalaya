@@ -106,6 +106,13 @@ public partial class App : Application
         // la lista de informes, y la primera que se pintara antes la enseñaría en la otra unidad.
         CostFormat.Currency = CostCurrencies.Parse(settings.Current.CostCurrency);
 
+        // PROV-2 §3 — y de qué casa es la moneda que esa preferencia pide. Lo dice el registro:
+        // la de fábrica, que es la que le factura a la organización. Aquí no se escribe el nombre
+        // de ninguna. Lo que se mira por periodo lo resuelve luego cada consulta, que es quien
+        // sabe quién gastó; esto es solo el valor por defecto de lo que se escribe sin contexto.
+        CostFormat.Billing = _host.Services
+            .GetRequiredService<AuditorProviderRegistry>().Fallback.Billing;
+
         MainViewModel main = _host.Services.GetRequiredService<MainViewModel>();
 
         // F26 §A (D-963): cómo dejaste el raíl, ANTES de enseñar la ventana. El primer

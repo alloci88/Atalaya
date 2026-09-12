@@ -59,7 +59,7 @@ public sealed class ReportCultureTests
         // 67.500 tokens de salida son 67,5 credits, así que el informe sigue teniendo un coste con
         // decimales que escribir — que es lo que este test vigila: que la coma sea la española.
         Model = TestRates.Model,
-        Usage = new UsageTotals { InputTokens = 1000, OutputTokens = TestRates.OutputFor(cost) },
+        Usage = new UsageTotals { InputTokens = 1000, OutputTokens = TestRates.OutputForCredits(cost) },
     };
 
     public static TheoryData<string> HostileCultures => new() { string.Empty, "en-US", "de-DE" };

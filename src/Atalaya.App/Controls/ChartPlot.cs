@@ -94,6 +94,23 @@ public sealed class ChartPlot : Canvas
         new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));
 
     /// <summary>
+    /// <b>En qué unidad se escriben esos costes</b> (PROV-2 §3). Los valores que llegan son
+    /// dólares —la unidad del dominio—; la lente los pasa a la moneda de la casa que gastó cuando
+    /// gastó una sola. La pone quien agrega, no el control: un eje que eligiera por su cuenta
+    /// acabaría rotulado en otra unidad que la tarjeta de al lado.
+    /// </summary>
+    public static readonly DependencyProperty CostLensProperty = DependencyProperty.Register(
+        nameof(CostLens), typeof(Services.CostLens), typeof(ChartPlot),
+        new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+
+    /// <inheritdoc cref="CostLensProperty"/>
+    public Services.CostLens? CostLens
+    {
+        get => (Services.CostLens?)GetValue(CostLensProperty);
+        set => SetValue(CostLensProperty, value);
+    }
+
+    /// <summary>
     /// <b>El número encima de cada barra con datos</b> (F35-3 §1.1). Es opcional y por defecto va
     /// apagado: en una gráfica de veintiocho cubos los números se pisarían unos a otros, y en una
     /// de cuatro —los cubos de antigüedad— leer el valor exacto no puede costar apuntar con el
@@ -568,7 +585,7 @@ public sealed class ChartPlot : Canvas
     /// </summary>
     private string Format(double value)
         => IsCost
-            ? Services.CostFormat.Tick((decimal)value)
+            ? Services.CostFormat.Tick((decimal)value, CostLens)
             : value.ToString(ValueFormat, CultureInfo.CurrentCulture);
 
     private Size Measure(string text)

@@ -154,7 +154,8 @@ public sealed class AuditorProviderTests : IDisposable
         dashboard.CostIsPartial.Should().BeFalse(
             "pedir una tarifa para lo que no factura es justo lo que no hay que hacer");
         dashboard.HasUntariffed.Should().BeTrue();
-        dashboard.UntariffedNotice.Should().Contain("Claude Code").And.Contain("suscripción");
+        dashboard.UntariffedNotice.Should().Contain(TestProviders.ClaudeNote,
+            "la frase la declara la casa, y el panel la repite sin nombrarla a mano");
     }
 
     /// <summary>
@@ -170,7 +171,8 @@ public sealed class AuditorProviderTests : IDisposable
 
         SessionRow row = dashboard.Sessions.Should().ContainSingle().Subject;
         row.Provider.Should().Be("Claude Code");
-        row.Billed.Should().BeFalse();
+        row.NoRateNote.Should().Be(TestProviders.ClaudeNote,
+            "la casa declara qué se lee cuando no lleva precio, y la fila lo enseña");
         row.Cost.Should().BeNull("no hay coste que enseñar, y un cero afirmaría que fue gratis");
         row.Tokens.Should().Contain("tokens");
         row.TokensDetail.Should().Contain("entrada").And.Contain("salida");
@@ -235,9 +237,10 @@ public sealed class AuditorProviderTests : IDisposable
         WriteSession("claude-code", cost: 1m, unit: "USD (tarifa de lista)", perUnitCost: 1m);
 
         CostEstimate estimate = CostEstimator.Estimate(
-            _hub.Store.ListSessions("app"), units: 2, maxPasses: 5, "claude-code", TestRates.Table());
+            _hub.Store.ListSessions("app"), units: 2, maxPasses: 5, "claude-code",
+            TestRates.OfFactory(), TestProviders.Registry().CostTraitsOf);
 
-        estimate.Billed.Should().BeFalse();
+        estimate.IsUnpriced.Should().BeTrue();
         estimate.Total.Should().BeNull();
         estimate.Breakdown.Should().Contain("sin coste para la organización");
         estimate.Provenance.Should().Contain("suscripción");
@@ -281,7 +284,9 @@ public sealed class AuditorProviderTests : IDisposable
     {
         var confirmation = new AuditLaunchConfirmation(
             "XBLAST",
-            CostEstimator.Estimate(Array.Empty<AuditSession>(), 2, 5, "claude-code"),
+            CostEstimator.Estimate(
+                Array.Empty<AuditSession>(), 2, 5, "claude-code",
+                rates: null, TestProviders.Registry().CostTraitsOf),
             "Claude Code",
             "opus");
 

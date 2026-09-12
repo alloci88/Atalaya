@@ -29,7 +29,10 @@ public sealed class ModelRatesService
         {
             try
             {
-                return _hub.Store.TryReadModelRates();
+                // PROV-2 §3 — con la columna de proveedor adoptada, que es lo que hace el lector
+                // del hub: las 31 tarifas que ya existen se sembraron sin ella y son la lista de
+                // precios de la casa de fábrica. Nadie pierde su tabla y ningún precio cambia.
+                return _hub.ModelRates();
             }
             catch (Exception)
             {
@@ -42,6 +45,18 @@ public sealed class ModelRatesService
 
     /// <summary>¿Hay tabla? Lo pregunta la pantalla, para decir por qué está vacía.</summary>
     public bool IsSeeded => Current is not null;
+
+    /// <summary>
+    /// La casa de fábrica, con la que nace una fila nueva de la tabla de tarifas (PROV-2 §3).
+    /// Vacío sin registro, y entonces la fila pide el proveedor antes de dejarse guardar.
+    /// </summary>
+    public string FactoryProviderId => _hub.FactoryProviderId;
+
+    /// <summary>
+    /// Con qué identificador se busca la tarifa de la casa que escribió una sesión (PROV-2 §3).
+    /// No es siempre el que la sesión guardó: las anteriores a F14 no guardaron ninguno.
+    /// </summary>
+    public ProviderCostTraits TraitsOf(string? providerId) => _hub.CostTraits(providerId);
 
     /// <summary>
     /// Escribe la tabla que le den <b>y la publica</b>. Quien llama es la pantalla de gestión, que
@@ -61,8 +76,9 @@ public sealed class ModelRatesService
     }
 
     /// <summary>
-    /// <b>Siembra lo que falte, sin pisar nada, y lo publica</b> (R2 §2). Devuelve cuántas tarifas
-    /// se han añadido; 0 significa que la tabla ya estaba al día y que no se ha escrito nada.
+    /// <b>Siembra lo que falte, sin pisar nada, y lo publica</b> (R2 §2). Devuelve cuántas filas
+    /// se han escrito —sembradas de nuevo, o adoptando el proveedor de fábrica que les faltaba
+    /// (PROV-2 §3)—; 0 significa que la tabla ya estaba al día y que no se ha tocado nada.
     /// <para>
     /// <b>Sembrar ya no es un gesto de nadie.</b> Esto era <c>EnsureSeeded</c> y lo llamaba la
     /// pantalla al abrirse: mientras nadie visitara Métricas → Tarifas · Gestionar, el hub no tenía
@@ -97,47 +113,60 @@ public sealed class ModelRatesService
             return 0;
         }
 
-        ModelRateSeed.SeedFill fill = ModelRateSeed.Fill(existing);
-        if (fill.Added.Count == 0)
+        ModelRateSeed.SeedFill fill = ModelRateSeed.Fill(existing, _hub.FactoryProviderId);
+        if (!fill.HasChanges)
         {
             return 0;
         }
 
         _hub.Store.WriteModelRates(fill.Table);
-        _hub.Sync?.CommitAndPush(
-            $"tarifas: siembra automática de {fill.Added.Count} tarifa(s) que faltaban");
-        return fill.Added.Count;
+        _hub.Sync?.CommitAndPush(Commit(fill));
+        return fill.Added.Count + fill.Adopted;
+    }
+
+    /// <summary>
+    /// Qué dice el commit del hub, que es la atribución de esta tabla (D-786): lo sembrado, lo
+    /// adoptado, o las dos cosas. Un mensaje que dijera «siembra» cuando lo único que pasó fue
+    /// ponerle proveedor a lo que ya había haría ilegible el histórico de la tabla.
+    /// </summary>
+    private static string Commit(ModelRateSeed.SeedFill fill)
+    {
+        if (fill.Added.Count == 0)
+        {
+            return $"tarifas: {fill.Adopted} tarifa(s) adoptan el proveedor de fábrica";
+        }
+
+        string seeded = $"tarifas: siembra automática de {fill.Added.Count} tarifa(s) que faltaban";
+        return fill.Adopted == 0
+            ? seeded
+            : $"{seeded}; {fill.Adopted} adoptan el proveedor de fábrica";
     }
 
 
     /// <summary>
-    /// Las tarifas que esta tabla puede tener: las de una casa que <b>factura</b> (F16-RETOQUE §1).
-    /// <para>
-    /// Un hub sembrado antes de este cambio tiene escritas las cuatro tarifas de <c>claude-code</c>
-    /// que traía la siembra. No hacen daño —el cálculo ya las ignora, porque esa casa no llega
-    /// nunca a preguntar por una tarifa—, pero sí confunden a quien abra la pantalla: son filas que
-    /// se pueden editar y que no gobiernan nada. Se filtran al enseñarlas, y desaparecen del hub la
-    /// primera vez que alguien guarde.
-    /// </para>
+    /// <b>Aquí vivió <c>Billable</c></b>, que escondía las tarifas de la casa que no facturaba
+    /// (F16-RETOQUE §1). Se retira con <c>IsBilled</c> (PROV-2 §3): con la columna de proveedor,
+    /// <b>una tarifa de cualquier casa es legítima</b>, y esconder la que alguien haya escrito era
+    /// justo lo contrario de lo que hace falta ahora — el día que se le ponga precio a una casa,
+    /// tiene que verse y poderse corregir como la de cualquier otra.
     /// </summary>
-    public static IEnumerable<ModelRate> Billable(ModelRateTable table)
-        => table.Rates.Where(r => CreditCalculator.IsBilled(r.Provider));
-
     /// <summary>
     /// El coste de una sesión con la tarifa de SU modelo. Es el único camino por el que la
-    /// aplicación convierte tokens en credits, para que no haya dos aritméticas.
+    /// aplicación pone precio a unos tokens, para que no haya dos aritméticas.
     /// </summary>
-    public CostResult CostOf(AuditSession session) => CreditCalculator.Calculate(session, Current);
+    public CostResult CostOf(AuditSession session)
+        => CostCalculator.Calculate(session, Current, null, _hub.CostTraits(session.Provider));
 
     /// <summary>
     /// Los modelos que APARECEN en las sesiones del hub y no tienen tarifa configurada (F15). Es lo
     /// que la pantalla de tarifas señala: sin esta lista, un modelo nuevo se traduce en agregados
     /// parciales sin que nadie sepa qué falta añadir.
     /// <para>
-    /// <b>Solo de las casas que FACTURAN</b> (F16-RETOQUE §1). Un modelo que solo se ha usado con
-    /// Claude Code no le falta ninguna tarifa: es que no lleva ninguna. Listarlo aquí pediría
-    /// configurar un precio que no debe existir, y quien lo configurara empezaría a ver un coste
-    /// donde no lo hay.
+    /// <b>Solo de las casas a las que les FALTA una</b> (F16-RETOQUE §1, sin el <c>if</c> por
+    /// nombre desde PROV-2 §3). A un modelo que solo se ha usado con una casa que declara qué se
+    /// lee cuando no lleva precio no le falta ninguna tarifa: es que no lleva ninguna. Listarlo
+    /// aquí pediría configurar un precio que esa casa dice que no existe, y quien lo configurara
+    /// empezaría a ver un coste donde no lo hay. Lo declara ella; aquí no se compara ningún nombre.
     /// </para>
     /// </summary>
     public IReadOnlyList<(string Model, string? Provider, int Sessions)> ModelsWithoutRate()
@@ -149,7 +178,8 @@ public sealed class ModelRatesService
         {
             foreach (AuditSession session in _hub.Store.ListSessions(slug))
             {
-                if (!CreditCalculator.IsBilled(session.Provider))
+                ProviderCostTraits traits = _hub.CostTraits(session.Provider);
+                if (traits.NoRateNote is { Length: > 0 })
                 {
                     continue;
                 }
@@ -169,15 +199,16 @@ public sealed class ModelRatesService
                     continue;
                 }
 
-                if (table?.Find(model, session.Provider) is not null)
+                string? provider = traits.ProviderId ?? session.Provider;
+                if (table?.Find(model, provider) is not null)
                 {
                     continue;
                 }
 
-                string key = $"{session.Provider} {model}";
+                string key = $"{provider} {model}";
                 missing[key] = missing.TryGetValue(key, out var seen)
                     ? seen with { Sessions = seen.Sessions + 1 }
-                    : (model, session.Provider, 1);
+                    : (model, provider, 1);
             }
         }
 

@@ -178,9 +178,9 @@ public sealed class ReportRow
     public string Cost => Entry.Cost is { } c
         ? Atalaya.App.Services.CostFormat.Marked(
             $"{Atalaya.App.Services.CostFormat.Number(c)} {Entry.CostUnit}", Entry.CostIsEstimate)
-        : Entry.Billed
+        : Entry.NoRateNote is null
             ? ReportsViewModel.Unknown
-            : Atalaya.App.Services.CostFormat.SubscriptionCostShort;
+            : Atalaya.App.Services.CostFormat.UnpricedShort;
 
     /// <summary>
     /// La frase entera detrás de la celda de coste, para el tooltip. Con un coste estimado
@@ -189,9 +189,7 @@ public sealed class ReportRow
     /// </summary>
     public string CostDetail => Entry.CostIsEstimate
         ? Atalaya.App.Services.CostFormat.EstimateTooltip(Entry.Reconciled)
-        : Entry.Billed
-            ? Atalaya.App.Services.CostFormat.Caveat
-            : Atalaya.App.Services.CostFormat.SubscriptionCost;
+        : Entry.NoRateNote ?? Atalaya.App.Services.CostFormat.Caveat;
 
     public string Title => Entry.Title;
 }

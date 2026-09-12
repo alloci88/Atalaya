@@ -191,10 +191,10 @@ public sealed class MetricsQueryTests : IDisposable
 
         donut.Slices.Select(s => s.Action).Should().Equal(
             AuditAction.Auditoria, AuditAction.Verificacion, AuditAction.Arreglo);
-        donut.Slices.Single(s => s.Action == AuditAction.Auditoria).Credits.Should().Be(105m);
-        donut.Slices.Single(s => s.Action == AuditAction.Verificacion).Credits.Should().Be(12m);
+        donut.Slices.Single(s => s.Action == AuditAction.Auditoria).Usd.Should().Be(105m);
+        donut.Slices.Single(s => s.Action == AuditAction.Verificacion).Usd.Should().Be(12m);
         ActionSlice arreglo = donut.Slices.Single(s => s.Action == AuditAction.Arreglo);
-        arreglo.Credits.Should().Be(90m);
+        arreglo.Usd.Should().Be(90m);
         arreglo.Sessions.Should().Be(2, "los dos arreglos");
 
         // El cuadre: los tramos son el coste del periodo, ni un credit de más ni de menos.
@@ -221,7 +221,7 @@ public sealed class MetricsQueryTests : IDisposable
         MetricsDashboard d = Build();
         ActionCostDonut donut = d.ByAction.Single(x => x.Slug == "app");
 
-        donut.Slices.Single(s => s.Action == AuditAction.Gestion).Credits.Should()
+        donut.Slices.Single(s => s.Action == AuditAction.Gestion).Usd.Should()
             .Be(30m, "un cierre que costara algo no puede desaparecer del reparto");
         donut.Total.Should().Be(d.CostInPeriod!.Value);
     }

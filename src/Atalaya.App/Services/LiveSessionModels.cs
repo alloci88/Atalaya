@@ -480,4 +480,9 @@ public sealed record LiveUsage(
     string? Provider,
     int Calls,
     PromptBudget? Budget = null,
-    int Turns = 0);
+    int Turns = 0,
+
+    // PROV-2 §3 — en qué unidad se escribe ese importe. Una sesión en vivo es de UNA casa, así
+    // que la lente es la suya: viene de quien la lanzó, que es quien la conoce, y no de una
+    // constante del formateador.
+    CostLens? Lens = null);

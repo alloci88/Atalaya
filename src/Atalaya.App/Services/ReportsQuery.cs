@@ -88,7 +88,7 @@ public sealed record ReportEntry(
     bool HasSession,
     string? FindingId = null,
     string? FindingAlias = null,
-    bool Billed = true,
+    string? NoRateNote = null,
     CostReconciliation? Reconciled = null,
     AuditSession? Session = null)
 {
@@ -173,7 +173,7 @@ public sealed class ReportsQuery
     {
         try
         {
-            return _hub.Store.TryReadModelRates();
+            return _hub.ModelRates();
         }
         catch (Exception)
         {
@@ -564,6 +564,18 @@ public sealed class ReportsQuery
             SessionCounters c = session.Counters;
             CostReconciliation? reconciled = null;
             reconciliations?.TryGetValue(session.Id, out reconciled);
+
+            // F15 — derivado de los tokens con la tarifa del modelo de la sesión, igual que en
+            // Métricas y en el informe. Una sola aritmética para el mismo número.
+            // F29 §1 — y con su reconciliación, si la hubo.
+            CostResult cost = CostCalculator.Calculate(
+                session, Rates(), reconciled, _hub.CostTraits(session.Provider));
+
+            // La lista enseña el coste de CADA sesión, y cada una es de una sola casa: la lente es
+            // la suya, con la preferencia de esta máquina por delante (PROV-2 §3).
+            CostLens lens = CostLens.For(
+                _hub.Providers?.BillingOf(session.Provider), CostFormat.Currency);
+
             return new ReportEntry(
                 slug,
                 appName,
@@ -578,18 +590,15 @@ public sealed class ReportsQuery
                 session.Units.Count,
                 c.New,
                 c.Resolved,
-                // F15 — derivado de los tokens con la tarifa del modelo de la sesión, igual que en
-                // Métricas y en el informe. Una sola aritmética para el mismo número.
-                // F29 §1 — y con su reconciliación, si la hubo: en la LISTA el coste sale
-                // calculado, aunque el informe que se abre siga siendo el que se escribió aquel día.
-                CreditCalculator.Calculate(session, Rates(), reconciled).Credits,
-                CostFormat.BillingUnit,
+                cost.Usd,
+                lens.LongSymbol,
                 HasSession: true,
                 FindingId: session.FixFindingId,
                 FindingAlias: session.FixFindingAlias,
-                // F16-RETOQUE §1 — si su casa no factura, la fila no dice «—» (que es «no se
-                // sabe»): dice que va contra la suscripción, que sí se sabe.
-                Billed: CreditCalculator.IsBilled(session.Provider),
+                // F16-RETOQUE §1 — si su casa declara que no lleva precio, la fila no dice «—»
+                // (que es «no se sabe»): dice lo que esa casa diga, que sí se sabe. Desde PROV-2
+                // §3 la frase la trae el cálculo; aquí no se compara ningún nombre.
+                NoRateNote: cost.NoRateNote,
                 Reconciled: reconciled,
                 // F36 — la página del informe se compone del REGISTRO, así que viaja con la fila:
                 // volver a leerlo del disco al abrir sería una segunda lectura que puede diferir

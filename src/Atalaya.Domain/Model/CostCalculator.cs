@@ -33,13 +33,6 @@ public enum CostUnavailable
 
     /// <summary>La sesión no guardó tokens (muy antigua, o proveedor que no los dio).</summary>
     TokensMissing,
-
-    /// <summary>
-    /// Este proveedor <b>no factura a la organización</b>, así que su consumo no se tarifa
-    /// (F16-RETOQUE §1). No es un dato que falte ni una tarifa por configurar: es que no hay
-    /// factura que calcular. Los tokens y las llamadas siguen registrándose.
-    /// </summary>
-    NotBilled,
 }
 
 /// <summary>
@@ -57,7 +50,7 @@ public sealed record CostSplit(decimal CacheWrite, decimal Output, decimal Cache
     public decimal Total => CacheWrite + Output + Cached + Fresh;
 
     /// <summary>Los cuatro conceptos con su nombre, en el orden de la casa. Sin los que son cero.</summary>
-    public IReadOnlyList<(string Concepto, decimal Credits)> Items
+    public IReadOnlyList<(string Concepto, decimal Usd)> Items
         => new[]
             {
                 ("escritura de caché", CacheWrite),
@@ -69,17 +62,26 @@ public sealed record CostSplit(decimal CacheWrite, decimal Output, decimal Cache
             .ToList();
 
     /// <summary>Qué fracción del total es ese concepto. 0 cuando no hay total que repartir.</summary>
-    public double ShareOf(decimal credits) => Total <= 0m ? 0 : (double)(credits / Total);
+    public double ShareOf(decimal usd) => Total <= 0m ? 0 : (double)(usd / Total);
 }
 
 /// <summary>
-/// El coste de algo, con su procedencia. Nunca es solo un número: o hay credits, o hay un motivo.
+/// El coste de algo, con su procedencia. Nunca es solo un número: o hay importe, o hay un motivo.
 /// </summary>
-/// <param name="Credits">Los AI credits. Null cuando no se puede calcular.</param>
+/// <param name="Usd">
+/// El importe, <b>en dólares</b> (PROV-2 §3). Null cuando no se puede calcular.
+/// <para>
+/// Hasta PROV-2 esto eran AI credits. Dejó de valer en cuanto dos casas pueden gastar en el mismo
+/// periodo: los credits son la moneda de UNA de ellas, y una suma de unidades distintas no es un
+/// número. El dólar es la unidad de TODAS las tarifas publicadas, así que es la única en la que el
+/// dominio puede sumar; quien tenga moneda propia convierte al enseñarla, con la equivalencia que
+/// declara su <c>ProviderBilling</c> y no una constante del dominio.
+/// </para>
+/// </param>
 /// <param name="Why">Por qué no se puede, cuando no se puede.</param>
 /// <param name="BillableInputTokens">Los tokens de entrada que SÍ se facturan a tarifa plena.</param>
 public sealed record CostResult(
-    decimal? Credits,
+    decimal? Usd,
     CostUnavailable Why = CostUnavailable.None,
     long BillableInputTokens = 0,
     long CachedInputTokens = 0,
@@ -89,7 +91,7 @@ public sealed record CostResult(
     CostSplit? Split = null)
 {
     /// <summary>Se ha podido calcular.</summary>
-    public bool HasValue => Credits is not null;
+    public bool HasValue => Usd is not null;
 
     /// <summary>
     /// <b>El número es una estimación, no una medida</b> (F29 §1). Solo lo es cuando nadie supo con
@@ -101,11 +103,30 @@ public sealed record CostResult(
 
     public bool IsEstimate => EstimatedWith is not null;
 
-    /// <summary>Los dólares detrás de los credits. 1 credit = 0,01 $.</summary>
-    public decimal? Usd => Credits / 100m;
+    /// <summary>
+    /// <b>Lo que dice la casa que escribió esto cuando su modelo no lleva tarifa</b> (PROV-2 §3):
+    /// «incluido en tu suscripción de Claude». Null cuando no declara ninguna, que es lo normal.
+    /// <para>
+    /// Viaja DENTRO del resultado, por lo mismo que viaja <see cref="Why"/>: el pie, el informe, la
+    /// lista de informes y las cuatro cifras de Métricas pasan por el mismo embudo, y a la primera
+    /// que se olvidara de preguntar saldría un «tarifa no configurada» donde no falta ninguna
+    /// tarifa. Es lo que F16-RETOQUE §1 consiguió con un <c>if</c> que nombraba una casa, y que
+    /// PROV-2 conserva sin el <c>if</c>: ahora lo declara quien responde por la frase.
+    /// </para>
+    /// </summary>
+    public string? NoRateNote { get; init; }
 
-    public static CostResult Unavailable(CostUnavailable why, string? model = null)
-        => new(null, why, Model: model);
+    /// <summary>
+    /// <b>No es un hueco: es que no lleva precio</b> (PROV-2 §3). Su casa lo declara, así que no
+    /// marca el agregado como parcial, no pide reconciliación y se cuenta aparte. Una casa que no
+    /// lo declara y no tiene tarifa sí es un hueco, como cualquiera — y el día que alguien escriba
+    /// una tarifa para ésta, se tarifa como cualquiera.
+    /// </summary>
+    public bool IsUnpriced => Usd is null && NoRateNote is { Length: > 0 };
+
+    public static CostResult Unavailable(
+        CostUnavailable why, string? model = null, string? noRateNote = null)
+        => new(null, why, Model: model) { NoRateNote = noRateNote };
 }
 
 /// <summary>
@@ -142,60 +163,26 @@ public sealed record CostResult(
 /// </item>
 /// </list>
 /// <para>
-/// <b>Y desde F16-RETOQUE esa segunda casa ya no pasa por aquí.</b> El consumo de Claude Code va
-/// contra la suscripción personal de quien lo usa y <b>no factura a la organización</b>, así que no
-/// se tarifa: <see cref="IsBilled"/> lo para en la puerta y el resultado es
-/// <see cref="CostUnavailable.NotBilled"/>. La medida de arriba no se borra —costó comprobarla y
-/// explica por qué <see cref="AccountingOf"/> dice lo que dice—, pero ya no se usa para poner un
-/// número delante de nadie. Lo que factura, y lo único que esta clase valora, es Copilot.
+/// <b>Y desde PROV-2 la unidad de aquí es el DÓLAR</b> (§3). Era el AI credit, la moneda con la
+/// que GitHub factura Copilot, y funcionó mientras hubo una sola casa que gastara. Con dos, sumar
+/// credits es sumar unidades distintas; el dólar es la unidad de todas las tarifas publicadas, así
+/// que es la única en la que este cálculo puede devolver un total. La equivalencia «1 credit =
+/// 0,01 $» no desapareció: se mudó a donde vive quien la usa, la <c>ProviderBilling</c> de Copilot,
+/// y se aplica al ENSEÑAR la cifra, no al calcularla.
+/// </para>
+/// <para>
+/// <b>Y ya no hay ninguna casa parada en la puerta.</b> Hasta PROV-2 un <c>IsBilled</c> comparaba
+/// el proveedor con una cadena literal y devolvía «no facturable» antes de mirar tokens ni tarifas.
+/// Lo que decide ahora si un consumo se tarifa es lo único que de verdad lo decide: <b>que exista
+/// tarifa para su proveedor y su modelo</b>. Una casa que corre contra la suscripción de quien la
+/// usa no lleva tarifa sembrada, así que sigue sin número — pero por no tener precio, no por
+/// llamarse como se llama, y el día que alguien le escriba una tarifa se tarifa como cualquiera.
+/// Lo que esa casa tenga que decir en su lugar lo declara ella, en
+/// <see cref="ProviderCostTraits.NoRateNote"/>, y viaja dentro del <see cref="CostResult"/>.
 /// </para>
 /// </summary>
-public static class CreditCalculator
+public static class CostCalculator
 {
-    /// <summary>Lo que vale un credit, en dólares. Publicado por GitHub.</summary>
-    public const decimal UsdPerCredit = 0.01m;
-
-    /// <summary>
-    /// Cómo cuenta cada casa. Es un mapa y no una propiedad del proveedor porque esto se aplica
-    /// sobre sesiones <b>ya guardadas</b> —Métricas relee meses de historia— y el proveedor que las
-    /// escribió puede no estar registrado hoy, o no existir ya en esta versión.
-    /// </summary>
-    /// <summary>
-    /// ¿El consumo de esta casa <b>factura a la organización</b>? (F16-RETOQUE §1).
-    /// <para>
-    /// <b>La decisión de producto.</b> Claude Code corre contra la <b>suscripción personal</b> de
-    /// quien lo usa: nadie le pasa una factura a la organización por esos tokens. Tarifarlo exigía
-    /// mantener a mano una copia de la lista de precios de Anthropic — un dato que cambia sin
-    /// avisar y que, en cuanto se quedara viejo, dejaría de ser ruido para pasar a ser
-    /// desinformación. Así que no se tarifa: se cuentan las llamadas y los tokens, que son hechos
-    /// medidos, y el coste se dice como lo que es.
-    /// </para>
-    /// <para>
-    /// <b>Vive aquí y no en la vista</b>, y ése es el punto: es el mismo embudo por el que pasan el
-    /// pie, el informe, la lista de informes y las cuatro cifras de Métricas. Puesto en cualquier
-    /// otro sitio habría que acordarse de preguntarlo N veces, y a la primera que se olvidara
-    /// saldría un «tarifa no configurada» por una tarifa que no debe existir.
-    /// </para>
-    /// <para>
-    /// Un proveedor vacío es Copilot —lo único que había antes de F14— y sí factura. Uno que esta
-    /// versión no conozca se supone facturable: es la suposición conservadora, porque hace que su
-    /// gasto se vea en vez de desaparecer del panel sin decir nada.
-    /// </para>
-    /// </summary>
-    public static bool IsBilled(string? providerId)
-        => !string.Equals(providerId?.Trim(), "claude-code", StringComparison.OrdinalIgnoreCase);
-
-    public static TokenAccounting AccountingOf(string? providerId) => providerId?.ToLowerInvariant() switch
-    {
-        // Sin proveedor escrito es Copilot: es lo único que había antes de F14.
-        null or "" or "copilot" => TokenAccounting.InputIncludesCache,
-        "claude-code" => TokenAccounting.InputExcludesCache,
-
-        // Uno que no conocemos: se asume la forma de Copilot, que es la del histórico. Y de todos
-        // modos el reparto se blinda abajo, así que un supuesto equivocado no produce negativos.
-        _ => TokenAccounting.InputIncludesCache,
-    };
-
     /// <summary>
     /// El coste de un consumo de tokens con la tarifa de SU modelo.
     /// <para>
@@ -204,6 +191,11 @@ public static class CreditCalculator
     /// modelo parecido, que es la clase de aproximación que convierte un panel en una invención.
     /// </para>
     /// </summary>
+    /// <param name="traits">
+    /// Lo que la casa que escribió esto declara: con qué identificador se busca su tarifa, cómo
+    /// cuenta sus tokens de entrada y qué se lee cuando no lleva precio (PROV-2 §3). Null es el
+    /// histórico: el proveedor tal cual venga, la entrada con la caché dentro y ninguna frase.
+    /// </param>
     public static CostResult Calculate(
         string? model,
         string? provider,
@@ -211,38 +203,37 @@ public static class CreditCalculator
         long outputTokens,
         long cacheReadTokens,
         long cacheWriteTokens,
-        ModelRateTable? rates)
+        ModelRateTable? rates,
+        ProviderCostTraits? traits = null)
     {
-        // Lo PRIMERO, antes que mirar tokens o tarifas: si esta casa no factura a la organización,
-        // no hay nada que tarifar y no puede haber ningún motivo de los otros tres. Preguntarlo
-        // aquí —y no en cada vista— es lo que garantiza que a un proveedor no tarifado no le pueda
-        // ladrar jamás un «tarifa no configurada» (F16-RETOQUE §1).
-        if (!IsBilled(provider))
-        {
-            return CostResult.Unavailable(CostUnavailable.NotBilled, model);
-        }
+        ProviderCostTraits casa = traits ?? ProviderCostTraits.Historical(provider);
+        string? note = casa.NoRateNote;
+
+        // El identificador con el que se busca la tarifa sale de la casa y no del campo escrito:
+        // una sesión anterior a F14 no guardó ninguno, y la tabla sí nombra a la que la escribió.
+        string? rateProvider = casa.ProviderId ?? provider;
 
         if (inputTokens <= 0 && outputTokens <= 0 && cacheReadTokens <= 0 && cacheWriteTokens <= 0)
         {
-            return CostResult.Unavailable(CostUnavailable.TokensMissing, model);
+            return CostResult.Unavailable(CostUnavailable.TokensMissing, model, note);
         }
 
         if (string.IsNullOrWhiteSpace(model))
         {
-            return CostResult.Unavailable(CostUnavailable.ModelUnknown, model);
+            return CostResult.Unavailable(CostUnavailable.ModelUnknown, model, note);
         }
 
-        ModelRate? rate = rates?.Find(model, provider);
+        ModelRate? rate = rates?.Find(model, rateProvider);
         if (rate is null)
         {
-            return CostResult.Unavailable(CostUnavailable.RateMissing, model);
+            return CostResult.Unavailable(CostUnavailable.RateMissing, model, note);
         }
 
         // ¿Se cobra la escritura de caché aparte? Si sí, esos tokens salen del montón de entrada y
         // van a su propia tarifa. Si no —null—, son entrada normal y se quedan donde están.
         bool writeBilledApart = rate.CacheWritePerMillion is not null;
 
-        long billableInput = AccountingOf(provider) == TokenAccounting.InputIncludesCache
+        long billableInput = casa.Accounting == TokenAccounting.InputIncludesCache
             ? inputTokens - cacheReadTokens - (writeBilledApart ? cacheWriteTokens : 0)
             : inputTokens;
 
@@ -262,18 +253,14 @@ public static class CreditCalculator
         decimal usd = fresh + cached + written + output;
 
         return new CostResult(
-            usd / UsdPerCredit,
+            usd,
             CostUnavailable.None,
             billableInput,
             cacheReadTokens,
             cacheWriteTokens,
             outputTokens,
             model,
-            new CostSplit(
-                written / UsdPerCredit,
-                output / UsdPerCredit,
-                cached / UsdPerCredit,
-                fresh / UsdPerCredit));
+            new CostSplit(written, output, cached, fresh));
     }
 
     /// <summary>
@@ -288,7 +275,10 @@ public static class CreditCalculator
     /// </para>
     /// </summary>
     public static CostResult Calculate(
-        AuditSession session, ModelRateTable? rates, CostReconciliation? reconciled = null)
+        AuditSession session,
+        ModelRateTable? rates,
+        CostReconciliation? reconciled = null,
+        ProviderCostTraits? traits = null)
     {
         CostResult direct = Calculate(
             session.Model,
@@ -297,7 +287,8 @@ public static class CreditCalculator
             session.Usage.OutputTokens,
             session.Usage.CacheReadTokens,
             session.Usage.CacheWriteTokens,
-            rates);
+            rates,
+            traits);
 
         if (direct.HasValue
             || reconciled is null
@@ -308,8 +299,8 @@ public static class CreditCalculator
 
         return reconciled.How switch
         {
-            CostResolution.PorLlamada => ByCall(session, rates, direct),
-            CostResolution.TarifaAsignada => Assigned(session, rates, reconciled, direct),
+            CostResolution.PorLlamada => ByCall(session, rates, direct, traits),
+            CostResolution.TarifaAsignada => Assigned(session, rates, reconciled, direct, traits),
 
             // La tarifa se añadió a la tabla y luego alguien la quitó: se vuelve a lo que hay, que
             // es «tarifa no configurada». Una reconciliación no puede fabricar un precio.
@@ -327,15 +318,16 @@ public static class CreditCalculator
     /// la sesión entera, que es la mentira que D-787 fue a impedir.
     /// </para>
     /// </summary>
-    private static CostResult ByCall(AuditSession session, ModelRateTable? rates, CostResult direct)
+    private static CostResult ByCall(
+        AuditSession session, ModelRateTable? rates, CostResult direct, ProviderCostTraits? traits)
     {
         IReadOnlyList<CallSample> calls = CostReconciler.CallsOf(session);
-        if (!CostReconciler.CanCostByCall(session, rates))
+        if (!CostReconciler.CanCostByCall(session, rates, traits))
         {
             return direct;
         }
 
-        decimal credits = 0m;
+        decimal usd = 0m;
         decimal write = 0m, output = 0m, cached = 0m, fresh = 0m;
         long billable = 0;
         foreach (CallSample call in calls)
@@ -343,7 +335,7 @@ public static class CreditCalculator
             CostResult one = Calculate(
                 call.Model, session.Provider,
                 call.InputTokens, call.OutputTokens, call.CacheReadTokens, call.CacheWriteTokens,
-                rates);
+                rates, traits);
 
             // Una llamada sin tokens no cuesta: se salta, no invalida la sesión.
             if (!one.HasValue)
@@ -351,7 +343,7 @@ public static class CreditCalculator
                 continue;
             }
 
-            credits += one.Credits ?? 0m;
+            usd += one.Usd ?? 0m;
             billable += one.BillableInputTokens;
             if (one.Split is { } s)
             {
@@ -363,7 +355,7 @@ public static class CreditCalculator
         }
 
         return new CostResult(
-            credits,
+            usd,
             CostUnavailable.None,
             billable,
             session.Usage.CacheReadTokens,
@@ -378,7 +370,11 @@ public static class CreditCalculator
     /// tokens de la sesión, con el modelo asignado. Sale marcado como estimación y así viaja.
     /// </summary>
     private static CostResult Assigned(
-        AuditSession session, ModelRateTable? rates, CostReconciliation reconciled, CostResult direct)
+        AuditSession session,
+        ModelRateTable? rates,
+        CostReconciliation reconciled,
+        CostResult direct,
+        ProviderCostTraits? traits)
     {
         CostResult estimated = Calculate(
             reconciled.AssignedModel,
@@ -387,7 +383,8 @@ public static class CreditCalculator
             session.Usage.OutputTokens,
             session.Usage.CacheReadTokens,
             session.Usage.CacheWriteTokens,
-            rates);
+            rates,
+            traits);
 
         return estimated.HasValue
             ? estimated with { Model = session.Model, EstimatedWith = reconciled }

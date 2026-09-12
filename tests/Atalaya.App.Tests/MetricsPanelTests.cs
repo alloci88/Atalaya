@@ -472,13 +472,13 @@ public sealed class MetricsPanelTests : IDisposable
         await vm.LoadAsync();
 
         IReadOnlyList<double> crudo = vm.CostSeries.Single().Values;
-        crudo.Sum().Should().BeApproximately(12, 0.001);
+        crudo.Sum().Should().BeApproximately(0.12, 0.00001);
 
         vm.Cumulative = true;
         IReadOnlyList<double> acumulado = vm.CostSeries.Single().Values;
 
         acumulado.Should().BeInAscendingOrder("una curva de mercado no baja");
-        acumulado[^1].Should().BeApproximately(12, 0.001, "acaba en el total del periodo");
+        acumulado[^1].Should().BeApproximately(0.12, 0.00001, "acaba en el total del periodo");
     }
 
     // ============================================ Gráfica de resoluciones (F6.1)
@@ -1353,7 +1353,7 @@ public sealed class MetricsPanelTests : IDisposable
             session.Units.Add(new UnitVerdictRecord($"src/A{i}.cs", "src", "auditada", null));
         }
 
-        TestRates.CostAs(session, cost, inputTokens: 100);
+        TestRates.CostAsCredits(session, cost, inputTokens: 100);
         _hub.Store.WriteSession(session);
         return session;
     }

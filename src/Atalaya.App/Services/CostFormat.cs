@@ -1,14 +1,21 @@
-﻿using Atalaya.Domain.Model;
+﻿using Atalaya.Agents;
+using Atalaya.Domain.Model;
 
 namespace Atalaya.App.Services;
 
-/// <summary>En qué unidad se ENSEÑA un coste (F29 §2). Es presentación: el hub no la conoce.</summary>
+/// <summary>
+/// <b>Qué prefiere ESTA máquina</b> (F29 §2, subordinada al gasto en PROV-2 §3). Es presentación:
+/// el hub no la conoce.
+/// </summary>
 public enum CostCurrency
 {
-    /// <summary>AI credits, la unidad en la que factura GitHub. Un decimal.</summary>
+    /// <summary>
+    /// La moneda de la casa que gastó, cuando la tiene y cuando gastó ella sola: «68,2 credits».
+    /// Con mezcla de casas no hay moneda que valga y se cae a dólares, con su nota.
+    /// </summary>
     Credits,
 
-    /// <summary>Dólares, a 0,01 $ por credit. Dos decimales, con el símbolo detrás.</summary>
+    /// <summary>Dólares siempre. Dos decimales, con el símbolo detrás.</summary>
     Usd,
 }
 
@@ -23,20 +30,25 @@ public enum CostCurrency
 /// que el «0 %» de cobertura con trabajo hecho — dice que no costó nada, y costó.
 /// </para>
 /// <para>
-/// <b>Y desde F29 es también el único sitio que sabe en qué DIVISA se enseña</b> (§2). La unidad
-/// del hub sigue siendo el credit —los tokens y los credits se guardan como siempre—; los dólares
-/// son una lente de lectura de esta máquina. Por eso la divisa vive aquí y no en cada vista: si el
-/// pie, el azulejo y la lista de informes tuvieran que acordarse de convertir, a la primera que se
+/// <b>Y desde F29 es también el único sitio que sabe en qué DIVISA se enseña</b> (§2). Lo que
+/// llega hasta aquí son siempre <b>dólares</b> —la unidad del dominio desde PROV-2 §3—; la moneda
+/// de una casa es una lente de lectura, y la conversión ocurre aquí y solo aquí. Si el pie, el
+/// azulejo y la lista de informes tuvieran que acordarse de convertir, a la primera que se
 /// olvidara habría dos monedas en la misma pantalla.
 /// </para>
 /// </summary>
 public static class CostFormat
 {
     /// <summary>
-    /// <b>La divisa activa de esta máquina</b> (F29 §2). La pone el arranque leyendo los ajustes y
-    /// la cambia la fila de Ajustes → Tarifas. Es estática por lo mismo que <see cref="AppCulture"/>
-    /// y que el tema: la lee todo lo que escribe un coste, y pasarla de mano en mano por doce
-    /// firmas acabaría con una que no la recibe.
+    /// <b>La divisa que prefiere esta máquina</b> (F29 §2). La pone el arranque leyendo los
+    /// ajustes y la cambia la fila de Ajustes → Tarifas. Es estática por lo mismo que
+    /// <see cref="AppCulture"/> y que el tema: la lee todo lo que escribe un coste, y pasarla de
+    /// mano en mano por doce firmas acabaría con una que no la recibe.
+    /// <para>
+    /// <b>Desde PROV-2 §3 es una preferencia, no una orden</b>: «créditos» solo se puede servir
+    /// cuando todo el gasto que se mira es de una casa que tiene moneda propia. Quién gastó lo
+    /// sabe la consulta, así que quien agrega construye la <see cref="CostLens"/> y la pasa.
+    /// </para>
     /// <para>
     /// <b>Los informes NO la miran</b>: escriben las dos cifras siempre (<see cref="Both"/>). Un
     /// informe se lee dentro de años y no puede depender de una preferencia de una máquina.
@@ -45,10 +57,25 @@ public static class CostFormat
     public static CostCurrency Currency { get; set; } = CostCurrency.Credits;
 
     /// <summary>
+    /// <b>La casa de referencia de esta máquina</b>: la de fábrica, la que le factura a la
+    /// organización. La pone el arranque preguntándole al registro (PROV-2 §3) — aquí no se
+    /// escribe el nombre de ninguna.
+    /// <para>
+    /// Es el valor por defecto de <see cref="Lens"/>, y por tanto de todo lo que se escribe sin
+    /// decir de quién es el gasto: el diálogo de lanzamiento, un pie antes de que arranque nada.
+    /// Sin ella, dólares — que es lo que se supone de una casa que no declara moneda propia.
+    /// </para>
+    /// </summary>
+    public static ProviderBilling Billing { get; set; } = ProviderBilling.Default;
+
+    /// <summary>La lente por defecto: la preferencia de esta máquina sobre la casa de referencia.</summary>
+    public static CostLens Lens => CostLens.For(Billing, Currency);
+
+    /// <summary>
     /// Cómo se llama la unidad activa. En un sitio, para que no se escriba de dos maneras — ni en
     /// C# ni en XAML, donde hay un test que lo recorre.
     /// </summary>
-    public static string Unit => Currency == CostCurrency.Usd ? UsdSymbol : "credits";
+    public static string Unit => Lens.Symbol;
 
     /// <summary>El símbolo del dólar, detrás de la cifra, como ya lo escribía Métricas.</summary>
     public const string UsdSymbol = "$";
@@ -60,7 +87,7 @@ public static class CostFormat
     /// </summary>
     public const string RateColumnUnit = "$ por millón";
 
-    /// <summary>Lo mínimo que se puede escribir en credits, con su decimal.</summary>
+    /// <summary>Lo mínimo que se puede escribir en la moneda de una casa, con su decimal.</summary>
     private const decimal SmallestShown = 0.1m;
 
     /// <summary>Y lo mínimo en dólares, con los suyos. Un céntimo.</summary>
@@ -70,51 +97,49 @@ public static class CostFormat
     public const string Unknown = "—";
 
     /// <summary>
-    /// Cómo se dice el coste de una casa que <b>no factura a la organización</b> (F16-RETOQUE §1).
+    /// <b>Una palabra para la celda de tabla donde no cabe la frase de la casa.</b> Va siempre con
+    /// la frase larga en el tooltip: no es una segunda versión de la verdad, es la misma abreviada.
     /// <para>
-    /// No es un hueco ni un «no se sabe»: es la respuesta completa. Claude Code corre contra la
-    /// suscripción personal de quien lo usa, así que la pregunta «¿cuánto ha costado esto?» tiene
-    /// contestación exacta y no hace falta ninguna tabla de precios para darla. Vive en una
-    /// constante porque la dicen el pie, el informe, la lista de informes y el diálogo de
-    /// lanzamiento, y una frase escrita cuatro veces acaba diciendo cuatro cosas.
+    /// Aquí vivió <c>SubscriptionCost</c>, la frase entera —«incluido en tu suscripción de
+    /// Claude»— escrita en una constante que llevaba el nombre de una casa dentro. Se mudó al
+    /// contrato (PROV-2 §3): la declara quien responde por ella y viaja dentro del
+    /// <see cref="CostResult"/>. Lo que queda aquí es la abreviatura, que no nombra a nadie.
     /// </para>
     /// </summary>
-    public const string SubscriptionCost = "incluido en tu suscripción de Claude";
+    public const string UnpricedShort = "suscripción";
 
     /// <summary>
-    /// Lo mismo, en una palabra, para una celda de tabla. <b>Va siempre con la frase larga en el
-    /// tooltip</b>: no es una segunda versión de la verdad, es la misma abreviada donde no cabe.
+    /// La unidad LARGA de la divisa activa: «AI credits», o el símbolo del dólar. Es la que
+    /// acompaña a una cifra suelta en una tarjeta.
     /// </summary>
-    public const string SubscriptionCostShort = "suscripción";
+    public static string BillingUnit => Lens.LongSymbol;
 
     /// <summary>
-    /// La unidad LARGA de la divisa activa: «AI credits», que es como factura GitHub (F15, D-789
-    /// revisado), o el símbolo del dólar. Es la que acompaña a una cifra suelta en una tarjeta.
-    /// </summary>
-    public static string BillingUnit => Currency == CostCurrency.Usd ? UsdSymbol : "AI credits";
-
-    /// <summary>
-    /// El importe sin unidad, en la divisa activa («68,2» en credits, «0,68» en dólares).
+    /// El importe sin unidad, en la lente que se le pase («68,2» en credits, «0,68» en dólares).
     /// <para>
-    /// El argumento son SIEMPRE credits: es lo que el hub guarda y lo único que
-    /// <see cref="CreditCalculator"/> produce. La conversión ocurre aquí y solo aquí, con
-    /// <see cref="CreditCalculator.UsdPerCredit"/>, que es donde D-786 dejó escrito lo que vale un
-    /// credit — el día que cambie, cambia ahí.
+    /// El argumento son SIEMPRE dólares: es lo único que <see cref="CostCalculator"/> produce
+    /// desde PROV-2 §3. La conversión a la moneda de una casa ocurre aquí y solo aquí, con la
+    /// equivalencia que esa casa declara — el día que cambie, cambia donde ella vive.
     /// </para>
     /// </summary>
-    public static string Number(decimal? credits)
-        => Currency == CostCurrency.Usd ? UsdNumber(credits) : CreditNumber(credits);
-
-    /// <summary>
-    /// Los credits, sin unidad («68,2»). Un decimal, que es la precisión con la que el panel de
-    /// GitHub enseña sus cifras y suficiente para decidir.
-    /// </summary>
-    public static string CreditNumber(decimal? credits)
+    public static string Number(decimal? usd, CostLens? lens = null)
     {
-        if (credits is not { } value)
+        CostLens l = lens ?? Lens;
+        return l.IsOwnUnit ? OwnUnitNumber(usd, l) : UsdNumber(usd);
+    }
+
+    /// <summary>
+    /// El importe en la moneda de una casa, sin unidad («68,2»). Un decimal, que es la precisión
+    /// con la que el panel del proveedor enseña sus cifras y suficiente para decidir.
+    /// </summary>
+    public static string OwnUnitNumber(decimal? usd, CostLens lens)
+    {
+        if (usd is not { } dollars)
         {
             return Unknown;
         }
+
+        decimal value = lens.Amount(dollars);
 
         if (value <= 0m)
         {
@@ -138,14 +163,13 @@ public static class CostFormat
     /// Los dólares, sin símbolo («1,85»). Dos decimales — y la misma regla del redondeo: si hubo
     /// gasto y no llega al céntimo se dice «&lt; 0,01», nunca un «0,00» que afirmaría que fue gratis.
     /// </summary>
-    public static string UsdNumber(decimal? credits)
+    public static string UsdNumber(decimal? amount)
     {
-        if (credits is not { } value)
+        if (amount is not { } usd)
         {
             return Unknown;
         }
 
-        decimal usd = value * CreditCalculator.UsdPerCredit;
         if (usd <= 0m)
         {
             return 0m.ToString("0.00", AppCulture.Display);
@@ -166,14 +190,17 @@ public static class CostFormat
     /// una rejilla no es un gasto, es dónde cae el 0, el 1,25 y el 2,50 de la escala, y un «&lt; 0,01»
     /// colgado del eje no dice nada de nada.
     /// </summary>
-    public static string Tick(decimal credits)
-        => Currency == CostCurrency.Usd
-            ? (credits * CreditCalculator.UsdPerCredit).ToString("0.##", AppCulture.Display)
-            : credits.ToString("0.#", AppCulture.Display);
+    public static string Tick(decimal usd, CostLens? lens = null)
+    {
+        CostLens l = lens ?? Lens;
+        return l.IsOwnUnit
+            ? l.Amount(usd).ToString("0.#", AppCulture.Display)
+            : usd.ToString("0.##", AppCulture.Display);
+    }
 
-    /// <summary>El importe con su unidad, en la divisa activa: «68,2 credits» o «0,68 $».</summary>
-    public static string Of(decimal? credits)
-        => credits is null ? Unknown : $"{Number(credits)} {Unit}";
+    /// <summary>El importe con su unidad, en la lente activa: «68,2 credits» o «0,68 $».</summary>
+    public static string Of(decimal? usd, CostLens? lens = null)
+        => usd is null ? Unknown : $"{Number(usd, lens)} {(lens ?? Lens).Symbol}";
 
     /// <summary>
     /// <b>Las dos cifras, para lo que se guarda</b> (F29 §2): «185,3 AI credits (1,85 $)».
@@ -183,10 +210,24 @@ public static class CostFormat
     /// caracteres y ahorra tener que saber a cuánto estaba el credit aquel día.
     /// </para>
     /// </summary>
-    public static string Both(decimal? credits)
-        => credits is null
-            ? Unknown
-            : $"{CreditNumber(credits)} AI credits ({UsdNumber(credits)} {UsdSymbol})";
+    public static string Both(decimal? usd, CostLens? lens = null)
+    {
+        if (usd is null)
+        {
+            return Unknown;
+        }
+
+        // SIN MIRAR LA PREFERENCIA DE ESTA MÁQUINA: lo escriben los informes, y un informe se lee
+        // dentro de años en otro puesto. Sin lente explícita manda la casa de referencia, que es
+        // exactamente lo que esto hacía antes de PROV-2 §3 cuando escribía «AI credits» siempre.
+        CostLens l = lens ?? CostLens.Recorded(Billing);
+
+        // Sin moneda propia no hay dos cifras que dar: el dólar ES la unidad de la tarifa, y
+        // repetirlo entre paréntesis no registraría nada que no estuviera ya escrito.
+        return l.IsOwnUnit
+            ? $"{OwnUnitNumber(usd, l)} {l.LongSymbol} ({UsdNumber(usd)} {UsdSymbol})"
+            : $"{UsdNumber(usd)} {UsdSymbol}";
+    }
 
     /// <summary>
     /// <b>El coste de una sesión, con UN solo criterio y consciente de la casa</b> (F16 §B,
@@ -200,19 +241,17 @@ public static class CostFormat
     /// </para>
     /// <para>
     /// La verdad es una: desde F15 el coste se DERIVA de los tokens con la tarifa del modelo, así
-    /// que cuando no hay número el motivo es uno de los de <see cref="CostUnavailable"/>. Y desde
-    /// F16-RETOQUE hay uno que <b>no es un hueco</b>: una casa que no factura a la organización no
-    /// tiene coste que calcular, y eso se dice entero —«incluido en tu suscripción de Claude»— sin
-    /// el «no calculable» delante, que insinuaría que falta algo por configurar.
+    /// que cuando no hay número el motivo es uno de los de <see cref="CostUnavailable"/>. Y hay
+    /// uno que <b>no es un hueco</b>: cuando la casa que lo escribió declara qué se lee si su
+    /// modelo no lleva tarifa, eso se dice entero —«incluido en tu suscripción de Claude»— sin el
+    /// «no calculable» delante, que insinuaría que falta algo por configurar. Desde PROV-2 §3 la
+    /// frase la trae el propio <see cref="CostResult"/>: aquí ya no se compara ningún nombre.
     /// </para>
     /// </summary>
-    public static string OfSession(CostResult cost, string? providerId)
-        => cost.Why switch
-        {
-            CostUnavailable.NotBilled => SubscriptionCost,
-            CostUnavailable.None => WithUnit(cost.Credits, providerId),
-            _ => $"coste no calculable ({Reason(cost.Why)})",
-        };
+    public static string OfSession(CostResult cost, CostLens? lens = null)
+        => cost.HasValue ? WithUnit(cost.Usd, lens)
+            : cost.IsUnpriced ? cost.NoRateNote!
+            : $"coste no calculable ({Reason(cost.Why)})";
 
     /// <summary>
     /// <b>El coste de una sesión tal y como lo registra un INFORME</b> (F29 §2): con las dos
@@ -224,17 +263,15 @@ public static class CostFormat
     /// (F29 §1): eso también tiene que quedar escrito.
     /// </para>
     /// </summary>
-    public static string OfSessionForReport(CostResult cost, string? providerId)
-        => cost.Why switch
-        {
-            CostUnavailable.NotBilled => SubscriptionCost,
-            CostUnavailable.None => Both(cost.Credits)
-                + (cost.EstimatedWith is { } r
-                    ? $" — coste estimado con tarifa de {r.AssignedModel}, asignada por {r.By} "
-                      + $"el {r.On.ToString("dd/MM/yyyy", AppCulture.Display)}"
-                    : string.Empty),
-            _ => $"coste no calculable ({Reason(cost.Why)})",
-        };
+    public static string OfSessionForReport(CostResult cost, CostLens? lens = null)
+        => cost.HasValue
+            ? Both(cost.Usd, lens)
+              + (cost.EstimatedWith is { } r
+                  ? $" — coste estimado con tarifa de {r.AssignedModel}, asignada por {r.By} "
+                    + $"el {r.On.ToString("dd/MM/yyyy", AppCulture.Display)}"
+                  : string.Empty)
+            : cost.IsUnpriced ? cost.NoRateNote!
+            : $"coste no calculable ({Reason(cost.Why)})";
 
     /// <summary>
     /// Los tokens de una sesión, por tipo: «2.786 entrada · 10.975 salida · caché 201.371 leída /
@@ -300,7 +337,7 @@ public static class CostFormat
     /// sugeriría que se midió y salió cero.
     /// </para>
     /// </summary>
-    public static string CostSplitLine(CostResult cost)
+    public static string CostSplitLine(CostResult cost, CostLens? lens = null)
     {
         if (cost.Split is not { } split || split.Total <= 0m)
         {
@@ -308,7 +345,7 @@ public static class CostFormat
         }
 
         return string.Join(" · ", split.Items.Select(
-            i => $"{i.Concepto} {Number(i.Credits)} ({PercentText.Of(split.ShareOf(i.Credits))})"));
+            i => $"{i.Concepto} {Number(i.Usd, lens)} ({PercentText.Of(split.ShareOf(i.Usd))})"));
     }
 
     /// <summary>El concepto que más pesa, para un pie que no tiene sitio para los cuatro.</summary>
@@ -319,8 +356,8 @@ public static class CostFormat
             return string.Empty;
         }
 
-        (string concepto, decimal credits) = split.Items.OrderByDescending(i => i.Credits).First();
-        return $"{concepto} {PercentText.Of(split.ShareOf(credits))}";
+        (string concepto, decimal usd) = split.Items.OrderByDescending(i => i.Usd).First();
+        return $"{concepto} {PercentText.Of(split.ShareOf(usd))}";
     }
 
     /// <summary>
@@ -365,8 +402,8 @@ public static class CostFormat
     /// </summary>
     public static string SessionFooter(
         int calls, long input, long output, long cacheRead, long cacheWrite,
-        CostResult cost, string? providerId)
-        => string.Join(" · ", UsageSegments(calls, input, output, cacheRead, cacheWrite, cost, providerId).Select(s => s.Full));
+        CostResult cost, CostLens? lens = null)
+        => string.Join(" · ", UsageSegments(calls, input, output, cacheRead, cacheWrite, cost, lens).Select(s => s.Full));
 
     /// <summary>
     /// Los tres trozos del consumo, con sus formas y su prioridad (F17-RETOQUE): llamadas, que no
@@ -382,12 +419,12 @@ public static class CostFormat
     /// </summary>
     public static IReadOnlyList<FooterSegment> UsageSegments(
         int calls, long input, long output, long cacheRead, long cacheWrite,
-        CostResult cost, string? providerId, PromptBudget? budget = null, int turns = 0)
+        CostResult cost, CostLens? lens = null, PromptBudget? budget = null, int turns = 0)
     {
         var segments = new List<FooterSegment>
         {
             FooterSegment.Of($"{calls} llamadas"),
-            new(new[] { CostLong(cost, providerId), CostShort(cost) }, Priority: 1, Bold: true),
+            new(new[] { CostLong(cost, lens), CostShort(cost, lens) }, Priority: 1, Bold: true),
         };
 
         // Los tokens, en dos formas: el desglose y el total («330.124 tokens»). El total ES la
@@ -407,7 +444,7 @@ public static class CostFormat
         // F20 §1 — el reparto del coste, detrás del coste y delante de los tokens en importancia:
         // es lo que dice DÓNDE apretar. Cede antes que el coste y después que los tokens, y su
         // forma mínima es el concepto que manda con su porcentaje.
-        string reparto = CostSplitLine(cost);
+        string reparto = CostSplitLine(cost, lens);
         if (reparto.Length > 0)
         {
             segments.Add(FooterSegment.Hidden(reparto));
@@ -425,23 +462,22 @@ public static class CostFormat
         return segments;
     }
 
-    private static string CostLong(CostResult cost, string? providerId)
-        => cost.Why == CostUnavailable.NotBilled ? $"coste: {SubscriptionCost}" : OfSession(cost, providerId);
+    private static string CostLong(CostResult cost, CostLens? lens)
+        => cost.IsUnpriced ? $"coste: {cost.NoRateNote}" : OfSession(cost, lens);
 
     /// <summary>La forma corta del coste: el número con su unidad, o dos palabras cuando no hay número.</summary>
-    private static string CostShort(CostResult cost)
-        => cost.Why == CostUnavailable.NotBilled
-            ? $"coste: {SubscriptionCostShort}"
-            : cost.HasValue ? $"{Number(cost.Credits)} {Unit}" : "coste: —";
+    private static string CostShort(CostResult cost, CostLens? lens)
+        => cost.IsUnpriced
+            ? $"coste: {UnpricedShort}"
+            : cost.HasValue ? $"{Number(cost.Usd, lens)} {(lens ?? Lens).Symbol}" : "coste: —";
 
     /// <summary>
-    /// El número con la unidad de la casa que lo factura: «68,2 AI credits» —o «0,68 $» con la
-    /// divisa puesta en dólares (F29 §2)—. Ya no hay una segunda forma —el «equivalente API» de
-    /// D-789— porque ya no hay un segundo coste: lo que no factura no se tarifa y no llega hasta
-    /// aquí (F16-RETOQUE §1).
+    /// El número con la unidad larga de la lente: «68,2 AI credits» —o «0,68 $» cuando se enseña
+    /// en dólares—. Ya no hay una segunda forma: el «equivalente API» de D-789 murió con la
+    /// segunda naturaleza de coste.
     /// </summary>
-    public static string WithUnit(decimal? credits, string? providerId)
-        => $"{Number(credits)} {BillingUnit}";
+    public static string WithUnit(decimal? usd, CostLens? lens = null)
+        => $"{Number(usd, lens)} {(lens ?? Lens).LongSymbol}";
 
     /// <summary>
     /// <b>El asterisco de un coste estimado</b> (F29 §1). Va pegado a la cifra allá donde se
@@ -470,7 +506,10 @@ public static class CostFormat
     /// El coste con su motivo cuando no lo hay. Es la forma que se enseña en las vistas: un número,
     /// o una frase que dice por qué no hay número — jamás un cero de relleno.
     /// </summary>
-    public static string Of(CostResult cost) => cost.HasValue ? Of(cost.Credits) : Reason(cost.Why);
+    public static string Of(CostResult cost, CostLens? lens = null)
+        => cost.HasValue ? Of(cost.Usd, lens)
+            : cost.IsUnpriced ? cost.NoRateNote!
+            : Reason(cost.Why);
 
     /// <summary>Por qué no hay coste, en una línea.</summary>
     public static string Reason(CostUnavailable why) => why switch
@@ -478,7 +517,6 @@ public static class CostFormat
         CostUnavailable.ModelUnknown => "modelo no registrado",
         CostUnavailable.RateMissing => "tarifa no configurada",
         CostUnavailable.TokensMissing => "sin tokens registrados",
-        CostUnavailable.NotBilled => SubscriptionCost,
         _ => Unknown,
     };
 
@@ -487,29 +525,48 @@ public static class CostFormat
     /// hace — no hay tipo de cambio configurado, e inventarse uno sería fabricar una precisión que
     /// no tenemos (N-2).
     /// </summary>
-    public static string Dollars(decimal? credits)
-        => credits is null ? Unknown : UsdNumber(credits) + " " + UsdSymbol;
+    public static string Dollars(decimal? usd)
+        => usd is null ? Unknown : UsdNumber(usd) + " " + UsdSymbol;
 
     /// <summary>
     /// La MISMA cifra en la otra divisa, para el tooltip: quien mira dólares quiere ver los credits
     /// que factura GitHub, y quien mira credits, lo que cuestan. Es lo que hace que cambiar la
     /// preferencia no esconda nunca la otra mitad.
     /// </summary>
-    public static string Equivalent(decimal? credits)
-        => credits is null
-            ? Unknown
-            : Currency == CostCurrency.Usd
-                ? $"{CreditNumber(credits)} AI credits"
-                : Dollars(credits);
+    public static string Equivalent(decimal? usd, CostLens? lens = null)
+    {
+        if (usd is null)
+        {
+            return Unknown;
+        }
+
+        CostLens l = lens ?? Lens;
+
+        // Quien mira dólares quiere ver la moneda de la casa que factura, y quien mira esa moneda,
+        // lo que cuesta. Sin moneda propia no hay otra mitad que enseñar: los dólares ya son la
+        // cifra, y repetirla no dice nada.
+        return l.IsOwnUnit
+            ? Dollars(usd)
+            : CostLens.For(Billing, CostCurrency.Credits) is { IsOwnUnit: true } own
+                ? $"{OwnUnitNumber(usd, own)} {own.LongSymbol}"
+                : Dollars(usd);
+    }
 
     /// <summary>
     /// Qué hay que saber del número que se enseña. Con una sola naturaleza de coste —la factura de
     /// la organización— la salvedad es una sola: qué es un credit, y a cuánto está.
     /// </summary>
-    public static string Caveat =>
-        Currency == CostCurrency.Usd
-            ? "Dólares, a 0,01 $ por AI credit: lo que GitHub factura por estos tokens."
-            : "AI credits: lo que GitHub factura por estos tokens. 1 credit = 0,01 $.";
+    public static string Caveat => CaveatFor(null);
+
+    /// <inheritdoc cref="Caveat"/>
+    public static string CaveatFor(CostLens? lens)
+    {
+        CostLens l = lens ?? Lens;
+        return l.IsOwnUnit
+            ? $"{l.LongSymbol}: lo que se factura por estos tokens, "
+              + $"a {l.UsdPerUnit.ToString("0.##", AppCulture.Display)} $ cada uno."
+            : "Dólares: lo que se factura por estos tokens, a la tarifa publicada de cada modelo.";
+    }
 }
 
 /// <summary>

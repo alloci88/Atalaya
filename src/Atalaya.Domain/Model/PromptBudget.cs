@@ -22,9 +22,9 @@ namespace Atalaya.Domain.Model;
 /// </para>
 /// <para>
 /// <b>La entrada real depende de quién cuenta.</b> Copilot mete la caché dentro de <c>In</c> y
-/// Claude Code la deja fuera (D-785). Aquí se usa exactamente el mismo criterio que el cálculo de
-/// credits, <see cref="CreditCalculator.AccountingOf"/>: dos reglas parecidas para el mismo número
-/// acaban discrepando.
+/// Claude Code la deja fuera (D-785). Aquí se usa exactamente el mismo criterio que el cálculo del
+/// coste —<see cref="ProviderCostTraits.Accounting"/>, que lo declara cada casa desde PROV-2 §3—:
+/// dos reglas parecidas para el mismo número acaban discrepando.
 /// </para>
 /// </summary>
 public sealed record PromptBudget
@@ -132,16 +132,21 @@ public sealed record PromptBudget
     /// Deriva el presupuesto de una sesión ya escrita. No lanza y no rellena: una sesión sin
     /// desglose devuelve lo que sí sabe, con <see cref="HasComposition"/> en false.
     /// </summary>
-    public static PromptBudget From(AuditSession session)
+    /// <param name="accounting">
+    /// Cómo contaba sus tokens de entrada la casa que escribió la sesión (PROV-2 §3). Lo declara
+    /// ella y lo resuelve el registro; null es la forma del histórico, la entrada con la caché
+    /// dentro, que es con la que se escribió todo lo anterior a que hubiera dos casas.
+    /// </param>
+    public static PromptBudget From(AuditSession session, TokenAccounting? accounting = null)
     {
-        TokenAccounting accounting = CreditCalculator.AccountingOf(session.Provider);
+        TokenAccounting cuenta = accounting ?? TokenAccounting.InputIncludesCache;
         long input = Math.Max(0, session.Usage.InputTokens);
         long read = Math.Max(0, session.Usage.CacheReadTokens);
         long write = Math.Max(0, session.Usage.CacheWriteTokens);
 
         // Con Copilot la entrada YA es el prompt entero; con Claude Code hay que sumarle la caché,
-        // que va por fuera. Es la misma regla que usa el cálculo de credits (D-785).
-        long promptTokens = accounting == TokenAccounting.InputIncludesCache
+        // que va por fuera. Es la misma regla que usa el cálculo del coste (D-785).
+        long promptTokens = cuenta == TokenAccounting.InputIncludesCache
             ? input
             : input + read + write;
 

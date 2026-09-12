@@ -157,7 +157,7 @@ public sealed class ThreadSurfaceTests
     {
         IReadOnlyList<FooterSegment> segments = CostFormat.UsageSegments(
             20, 28_050, 15_670, 235_327, 51_077,
-            CostResult.Unavailable(CostUnavailable.RateMissing), "claude-code", null, turns: 17);
+            CostResult.Unavailable(CostUnavailable.RateMissing), null, null, turns: 17);
 
         segments.Single(x => x.Full.Contains("escrita/turno")).TooltipOnly.Should().BeTrue();
     }

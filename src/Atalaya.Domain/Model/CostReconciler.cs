@@ -47,34 +47,41 @@ public static class CostReconciler
     /// <summary>
     /// Las sesiones de una aplicación que <b>deberían</b> tener coste y no lo tienen.
     /// <para>
-    /// Deja fuera lo que no es un hueco: lo que no factura a la organización (no hay coste que
-    /// calcular) y lo que no guardó tokens (no hay nada que valorar — D-787 ya decía que eso no
-    /// cuenta como parcial, y manchar el aviso con esas sesiones enseña a ignorarlo).
+    /// Deja fuera lo que no es un hueco: lo que su casa declara que no lleva precio
+    /// (<see cref="CostResult.IsUnpriced"/> — no hay coste que calcular, y desde PROV-2 §3 lo dice
+    /// quien responde por la frase en vez de un <c>if</c> por nombre) y lo que no guardó tokens (no
+    /// hay nada que valorar — D-787 ya decía que eso no cuenta como parcial, y manchar el aviso con
+    /// esas sesiones enseña a ignorarlo).
     /// </para>
     /// </summary>
     public static IReadOnlyList<SessionCostGap> GapsOf(
         IEnumerable<AuditSession> sessions,
         ModelRateTable? rates,
-        Func<AuditSession, CostReconciliation?>? reconciled = null)
+        Func<AuditSession, CostReconciliation?>? reconciled = null,
+        Func<string?, ProviderCostTraits>? traits = null)
     {
+        Func<string?, ProviderCostTraits> rasgos = traits ?? ProviderCostTraits.Default;
         var gaps = new List<SessionCostGap>();
         foreach (AuditSession session in sessions)
         {
-            CostResult cost = CreditCalculator.Calculate(session, rates, reconciled?.Invoke(session));
+            CostResult cost = CostCalculator.Calculate(
+                session, rates, reconciled?.Invoke(session), rasgos(session.Provider));
             if (cost.HasValue
-                || cost.Why is CostUnavailable.NotBilled or CostUnavailable.TokensMissing)
+                || cost.IsUnpriced
+                || cost.Why is CostUnavailable.TokensMissing)
             {
                 continue;
             }
 
-            gaps.Add(Inspect(session, rates));
+            gaps.Add(Inspect(session, rates, rasgos(session.Provider)));
         }
 
         return gaps;
     }
 
     /// <summary>Lo que se sabe de UNA sesión sin coste: por qué, y con qué se podría cerrar.</summary>
-    public static SessionCostGap Inspect(AuditSession session, ModelRateTable? rates)
+    public static SessionCostGap Inspect(
+        AuditSession session, ModelRateTable? rates, ProviderCostTraits? traits = null)
     {
         string model = session.Model?.Trim() ?? string.Empty;
         CostGapReason reason = model.Length == 0 || ModelIds.IsPlaceholder(model)
@@ -89,7 +96,8 @@ public static class CostReconciler
             .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        return new SessionCostGap(session, reason, model, callModels, CanCostByCall(session, rates));
+        return new SessionCostGap(
+            session, reason, model, callModels, CanCostByCall(session, rates, traits));
     }
 
     /// <summary>
@@ -102,7 +110,8 @@ public static class CostReconciler
     /// consumo parecido.
     /// </para>
     /// </summary>
-    public static bool CanCostByCall(AuditSession session, ModelRateTable? rates)
+    public static bool CanCostByCall(
+        AuditSession session, ModelRateTable? rates, ProviderCostTraits? traits = null)
     {
         IReadOnlyList<CallSample> samples = CallsOf(session);
         if (samples.Count == 0 || rates is null)
@@ -110,11 +119,12 @@ public static class CostReconciler
             return false;
         }
 
+        string? provider = traits?.ProviderId ?? session.Provider;
         foreach (CallSample sample in samples)
         {
             string model = sample.Model?.Trim() ?? string.Empty;
             if (model.Length == 0 || ModelIds.IsPlaceholder(model)
-                || rates.Find(model, session.Provider) is null)
+                || rates.Find(model, provider) is null)
             {
                 return false;
             }
