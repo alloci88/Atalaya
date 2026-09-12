@@ -405,11 +405,18 @@
                                              compartido es lo que mantiene cuadradas la cabecera y
                                              las filas, que son rejillas distintas.
 
+                                             EL NOMBRE DEL GRUPO NO LLEVA PUNTO (BUGFIX-CUENTA).
+                                             WPF exige un identificador y valida al CARGAR: con un
+                                             punto lanza `ArgumentException` al aplicar la plantilla
+                                             de cada fila, o sea una vez por tarifa. No lo coge el
+                                             compilador ni un barrido del XAML como texto: solo
+                                             pintar la vista.
+
                                              Ni un binding en un `ColumnDefinition`: se probó y no
                                              re-evalúa cuando cambia el `DataContext`, así que la
                                              columna se quedaba abierta. Lo que se ata es la
                                              `Visibility` del contenido, que sí es un control. -->
-                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Tarifa.Proveedor" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="TarifaProveedor" />
                                         <ColumnDefinition Width="1.45*" MinWidth="145" />
                                         <ColumnDefinition Width="1.05*" MinWidth="105" />
                                         <ColumnDefinition Width="1.05*" MinWidth="105" />
@@ -478,7 +485,7 @@
                                                         BorderThickness="{StaticResource Border.Bottom}">
                                                     <Grid>
                                                         <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="Auto" SharedSizeGroup="Tarifa.Proveedor" />
+                                                            <ColumnDefinition Width="Auto" SharedSizeGroup="TarifaProveedor" />
                                                             <ColumnDefinition Width="1.45*" MinWidth="145" />
                                                             <ColumnDefinition Width="1.05*" MinWidth="105" />
                                                             <ColumnDefinition Width="1.05*" MinWidth="105" />
