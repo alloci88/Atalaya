@@ -593,6 +593,13 @@ verificaciones. Si alguna sesión usó un modelo sin tarifa, un aviso encima de 
 dice —falta gasto por contar y no se disimula— y el enlace **Ajustes → Tarifas** te lleva a
 arreglarlo.
 
+**La divisa se adapta a lo que haya en el periodo.** El credit es la unidad de Copilot, así que
+solo se enseña mientras **todo** el gasto del periodo sea suyo; en cuanto entra en la cuenta una
+sola sesión de otra casa, las cuatro cifras pasan a **dólares** —la única unidad en la que esos
+gastos se pueden sumar sin inventarse una conversión— y una **nota de una línea** bajo la primera
+tarjeta te lo dice, ahí mismo y sin colores de alarma. No señala nada roto: explica por qué hoy
+lees «1.240 $» donde ayer leías credits.
+
 **Esta cifra es la factura de tu organización, y solo eso.** Las sesiones de Claude Code no entran:
 ese consumo va contra la suscripción de quien las lanzó y no se tarifa. Si las hubo, encima de las
 cifras se dice con cuántas fueron — no para que busques una tarifa que falta, sino para que sepas
@@ -1668,6 +1675,13 @@ tarifas escritas, desaparecen la primera vez que guardes.
 La pantalla te señala **los modelos que estás usando y no tienen tarifa**, con cuántas sesiones
 esperan por ellos. Eso es lo que convierte un «parcial» en algo que puedes arreglar. Solo aparecen
 modelos de las casas que facturan: a un modelo usado con Claude Code no le falta ninguna tarifa.
+
+**La primera columna de la tabla es «Proveedor»**, delante de «Modelo»: dice **qué casa factura**
+ese precio, porque el mismo modelo cuesta distinto según quién lo revenda y un precio sin dueño no
+se puede cuadrar contra ninguna factura. No hay que rellenarla a mano: **la siembra la rellena**, y
+todo lo que ya estuviera escrito sin proveedor queda como **GitHub Copilot**, que es de quien eran
+esos precios. Puede haber dos filas del mismo modelo con proveedores distintos, y entonces **la
+tarifa atada a un proveedor gana a la genérica de ese modelo**: se aplica siempre la más concreta.
 
 Un detalle que importa al editarla:
 
