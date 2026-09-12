@@ -100,6 +100,21 @@ public partial class App : Application
         string? sweepNotice = settings.MigrateSweepCapDefault();
         // R13-2: y el editor «Otro», que ya no existe. Mismo patrón: la frase se enseña una vez.
         string? editorNotice = settings.MigrateRetiredEditor();
+
+        // PROV-2 §2 — las CASAS, antes de que nada las nombre o les pregunte el modelo.
+        //
+        // Sembrar los nombres aquí es lo que permite que los informes y las métricas —que leen
+        // sesiones de hace meses desde sitios sin registro delante— dejen de tener escritos los
+        // nombres de las dos casas. Éste es el ÚNICO escritor del mapa; sin sembrar, un
+        // identificador sale tal cual, que es lo correcto para una casa retirada.
+        //
+        // Y la adopción del modelo, por la misma razón que las promociones de arriba: las
+        // máquinas traen su modelo escrito con el nombre viejo del campo, y el mapa nuevo no las
+        // alcanza. Sin esto, una actualización le borra a todo el mundo el modelo que tenía
+        // elegido — y no lo descubriría hasta la siguiente auditoría, ya lanzada.
+        var providers = _host.Services.GetRequiredService<AuditorProviderRegistry>();
+        ProviderNames.Seed(providers.All);
+        settings.AdoptLegacyProviderModels(providers.All);
         ThemeService.Apply(settings.Current.Theme);
         // F29 §2 — la divisa, antes de que nada escriba un coste. Va aquí y no dentro de la primera
         // vista que la necesite por lo mismo que el tema: la leen el pie, las tarjetas, Métricas y
@@ -290,17 +305,22 @@ public partial class App : Application
             var settings = sp.GetRequiredService<SettingsService>();
             AppSettings s = settings.Current;
             var account = sp.GetRequiredService<GitHubAccountService>();
-            return new RealCopilotAgent(
+            // PROV-2 §2: el modelo sale del mapa por proveedor y la clave es el identificador que
+            // declara el propio proveedor. Se cierra sobre la variable para no volver a escribir
+            // aquí el id de nadie: la composición construye las casas, no las nombra dos veces.
+            RealCopilotAgent? copilot = null;
+            copilot = new RealCopilotAgent(
                 s.CopilotBaseDirectory,
                 sp.GetRequiredService<ILoggerFactory>().CreateLogger("Copilot"),
                 // F5.1: leído en cada sesión, no capturado aquí — cambiar el modelo en Ajustes
                 // surte efecto en la siguiente auditoría sin reiniciar la app.
-                modelProvider: () => settings.Current.CopilotModel,
+                modelProvider: () => settings.ModelFor(copilot!.ProviderId),
                 // F5.1 otra vez: leído en cada envío, no capturado aquí (BUGFIX-AJUSTES).
                 sendTimeout: () => TimeSpan.FromMinutes(
                     Math.Max(SettingsLimits.MinCopilotTimeoutMinutes, settings.Current.CopilotTimeoutMinutes)),
                 tokenProvider: () => account.Token,
                 loginProvider: () => account.Current?.Login);
+            return copilot;
         });
 
         // F14 — el SEGUNDO proveedor: Claude Code, por el CLI que el usuario ya tiene.
@@ -312,12 +332,15 @@ public partial class App : Application
         services.AddSingleton<ClaudeCodeProvider>(sp =>
         {
             var settings = sp.GetRequiredService<SettingsService>();
-            return new ClaudeCodeProvider(
+            ClaudeCodeProvider? claude = null;
+            claude = new ClaudeCodeProvider(
                 bridgeExecutable: McpBridge.ResolvePath(),
-                // Leído en CADA sesión, por la misma razón que el de Copilot (BUGFIX-AJUSTES).
-                modelProvider: () => settings.Current.ClaudeCodeModel,
+                // Leído en CADA sesión, por la misma razón que el de Copilot (BUGFIX-AJUSTES), y
+                // por su entrada del mapa, como el de cualquier casa (PROV-2 §2).
+                modelProvider: () => settings.ModelFor(claude!.ProviderId),
                 workDirectory: () => Path.Combine(paths.Root, "claude"),
                 logger: sp.GetRequiredService<ILoggerFactory>().CreateLogger("ClaudeCode"));
+            return claude;
         });
 
         // Los dos proveedores, EN ORDEN y nombrados uno a uno. Se listan aquí en vez de dejar que

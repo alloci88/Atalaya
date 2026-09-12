@@ -1,4 +1,7 @@
+using Atalaya.Agents;
 using Atalaya.App.Services;
+using Atalaya.ClaudeCode;
+using Atalaya.Copilot;
 using FluentAssertions;
 using Xunit;
 
@@ -104,20 +107,83 @@ public sealed class SettingsServiceTests : IDisposable
     }
 
     /// <summary>
-    /// El otro miembro de la familia, comprobado y sano: <c>copilotModel</c> también cambió de
-    /// valor por defecto ("gpt-5" en F5.1 → vacío en F5.15) y también quedó escrito en las
-    /// máquinas de entonces. Ese NO necesita migración porque <c>ModelResolver</c> ya lo cura en
-    /// caliente: un modelo que la cuenta no ofrece se sustituye y se guarda. Lo que este test fija
-    /// es que el modelo guardado se lee tal cual y no se pisa al cargar.
+    /// <b>PROV-2 §2 — la adopción de los modelos guardados con el nombre viejo.</b> Un
+    /// <c>settings.json</c> de hoy trae el modelo de cada casa en su campo propio
+    /// —<c>copilotModel</c>, <c>claudeCodeModel</c>—; al pasar a un mapa por identificador, los
+    /// dos acaban en el mapa, cada uno en la entrada de su casa.
+    /// <para>
+    /// <b>Lo que se rompería en silencio sin esto</b>: una actualización le borra a todo el mundo
+    /// el modelo que tenía elegido, y no lo descubre hasta la siguiente auditoría — que es la
+    /// peor forma posible de enterarse, con el barrido ya lanzado. Cada casa declara con qué
+    /// nombre guardaba el suyo (<c>LegacyModelSettingKey</c>), así que la aplicación no tiene que
+    /// saberse la tabla.
+    /// </para>
     /// </summary>
     [Fact]
-    public void El_modelo_guardado_se_respeta_al_cargar()
+    public void Los_modelos_guardados_con_el_nombre_viejo_se_adoptan_en_el_mapa()
     {
         Directory.CreateDirectory(_root);
-        File.WriteAllText(_paths.SettingsJson, """{"copilotModel":"gpt-5"}""");
+        File.WriteAllText(
+            _paths.SettingsJson,
+            """{"copilotModel":"gpt-5","claudeCodeModel":"opus"}""");
 
-        new SettingsService(_paths).Load().CopilotModel.Should().Be("gpt-5");
+        var settings = new SettingsService(_paths);
+        settings.Load();
+        settings.AdoptLegacyProviderModels(Houses()).Should().BeTrue();
+
+        settings.ModelFor("copilot").Should().Be("gpt-5");
+        settings.ModelFor("claude-code").Should().Be("opus");
+
+        // Y sobrevive al reinicio: la adopción ESCRIBE, no se recalcula en cada arranque.
+        var next = new SettingsService(_paths);
+        next.Load();
+        next.ModelFor("copilot").Should().Be("gpt-5");
+        next.ModelFor("claude-code").Should().Be("opus");
     }
+
+    /// <summary>
+    /// Y el que estuviera vacío sigue vacío: adoptar no es inventar. Un campo viejo sin valor no
+    /// crea entrada, y vacío sigue queriendo decir «pregúntaselo al runtime» (F5.15).
+    /// </summary>
+    [Fact]
+    public void Una_casa_sin_modelo_guardado_sigue_sin_modelo()
+    {
+        Directory.CreateDirectory(_root);
+        File.WriteAllText(
+            _paths.SettingsJson,
+            """{"copilotModel":"gpt-5","claudeCodeModel":""}""");
+
+        var settings = new SettingsService(_paths);
+        settings.Load();
+        settings.AdoptLegacyProviderModels(Houses());
+
+        settings.ModelFor("copilot").Should().Be("gpt-5");
+        settings.ModelFor("claude-code").Should().BeEmpty();
+        settings.Current.ProviderModels.Should().ContainSingle();
+    }
+
+    /// <summary>
+    /// Y no pisa lo que el usuario ya eligió: una adopción que corriera en cada arranque no sería
+    /// una adopción, sería un ajuste que no se deja cambiar (la lección de la promoción de F6.9).
+    /// </summary>
+    [Fact]
+    public void La_adopcion_no_pisa_el_modelo_que_ya_esta_en_el_mapa()
+    {
+        Directory.CreateDirectory(_root);
+        File.WriteAllText(
+            _paths.SettingsJson,
+            """{"copilotModel":"gpt-5","providerModels":{"copilot":"gpt-6-elegido-a-mano"}}""");
+
+        var settings = new SettingsService(_paths);
+        settings.Load();
+        settings.AdoptLegacyProviderModels(Houses()).Should().BeFalse();
+
+        settings.ModelFor("copilot").Should().Be("gpt-6-elegido-a-mano");
+    }
+
+    /// <summary>Las dos casas de verdad, que son quienes declaran su nombre viejo de ajuste.</summary>
+    private static IReadOnlyList<IAuditorProvider> Houses()
+        => new IAuditorProvider[] { new RealCopilotAgent(), new ClaudeCodeProvider(string.Empty) };
 
     public void Dispose()
     {

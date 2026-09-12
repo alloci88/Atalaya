@@ -24,6 +24,11 @@
     <!-- F14: la eleccion de proveedor y el tratamiento del coste se prueban aqui, con la app. -->
     <ProjectReference Include="..\..\src\Atalaya.ClaudeCode\Atalaya.ClaudeCode.csproj" />
 
+    <!-- PROV-2 §5 — el doble que no es de ninguna casa vive junto al contrato, en
+         Atalaya.Agents.Tests. El barrido de punta a punta con un proveedor de mentira se conduce
+         desde aqui, que es donde esta el arnes de la aplicacion. -->
+    <ProjectReference Include="..\Atalaya.Agents.Tests\Atalaya.Agents.Tests.csproj" />
+
     <!-- F16 — el puente, como ejecutable: la sesión de arreglo se prueba con la cadena entera
          (CLI falso → puente → tubería → servidor MCP → toolbox de verdad). -->
     <ProjectReference Include="..\..\src\Atalaya.Mcp\Atalaya.Mcp.csproj"

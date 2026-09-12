@@ -240,7 +240,11 @@ public sealed class SettingsViewModelTests : IDisposable
 
         vm.SelectedModelId = "claude-sonnet-4.5";
 
-        new SettingsService(_paths).Load().CopilotModel.Should().Be("claude-sonnet-4.5");
+        // PROV-2 §2 — en la entrada del proveedor que está configurando la página, no en un campo
+        // con el nombre de una casa concreta.
+        var reloaded = new SettingsService(_paths);
+        reloaded.Load();
+        reloaded.ModelFor(agent.ProviderId).Should().Be("claude-sonnet-4.5");
     }
 
     /// <summary>
@@ -251,7 +255,7 @@ public sealed class SettingsViewModelTests : IDisposable
     [Fact]
     public void El_modelo_por_defecto_no_es_un_nombre_que_pueda_caducar()
     {
-        _settings.Current.CopilotModel.Should().BeEmpty(
+        _settings.Current.ProviderModels.Should().BeEmpty(
             "un id de modelo es un dato del proveedor con fecha de caducidad, no una constante");
         NewViewModel().SelectedModelId.Should().BeEmpty();
     }
@@ -379,7 +383,7 @@ public sealed class SettingsViewModelTests : IDisposable
         carriers.Should().BeEquivalentTo(new[] { "ClaudeCodeProvider.cs" },
             "los alias son cosa del driver que conoce su CLI; repartidos, uno se quedaría viejo");
 
-        new AppSettings().ClaudeCodeModel.Should().BeEmpty(
+        new AppSettings().ProviderModels.Should().BeEmpty(
             "vacío significa «que elija el CLI»: una instalación de cero no nace con un modelo escrito");
         new AppSettings().AuditorProvider.Should().BeEmpty(
             "y sin proveedor escrito se audita con Copilot, que es como funcionaba antes de F14");
@@ -431,13 +435,12 @@ public sealed class SettingsViewModelTests : IDisposable
     [Fact]
     public async Task When_the_list_cannot_be_fetched_settings_still_work_and_say_why()
     {
-        // Con un modelo ya elegido en esta máquina: es el caso en el que hay algo que conservar.
-        AppSettings configured = _settings.Current;
-        configured.CopilotModel = "modelo-elegido";
-        _settings.Save(configured);
-
         var agent = new FakeCopilotAgent(
             modelsScript: () => throw new InvalidOperationException("sin conexión con GitHub"));
+
+        // Con un modelo ya elegido en esta máquina: es el caso en el que hay algo que conservar.
+        _settings.SetModelFor(agent.ProviderId, "modelo-elegido");
+
         SettingsViewModel vm = NewViewModel(agent);
 
         await vm.LoadAsync();
@@ -448,18 +451,18 @@ public sealed class SettingsViewModelTests : IDisposable
 
         // Y Ajustes sigue siendo usable: guardar no se rompe ni pierde el modelo.
         vm.MaxPassesPerUnit = 3;
-        AppSettings reloaded = new SettingsService(_paths).Load();
+        var reloadedService = new SettingsService(_paths);
+        AppSettings reloaded = reloadedService.Load();
         reloaded.MaxPassesPerUnit.Should().Be(3);
-        reloaded.CopilotModel.Should().Be("modelo-elegido");
+        reloadedService.ModelFor(agent.ProviderId).Should().Be("modelo-elegido");
     }
 
     [Fact]
     public async Task A_configured_model_that_vanished_from_the_catalogue_is_kept_and_flagged()
     {
-        _settings.Current.CopilotModel = "gpt-4-retirado";
-        _settings.Save(_settings.Current);
-
         var agent = new FakeCopilotAgent(modelsScript: () => new[] { new AgentModel("gpt-5", "GPT-5", 1.0) });
+        _settings.SetModelFor(agent.ProviderId, "gpt-4-retirado");
+
         SettingsViewModel vm = NewViewModel(agent);
 
         await vm.LoadAsync();

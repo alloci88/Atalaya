@@ -1,4 +1,5 @@
 using Atalaya.Agents;
+using Atalaya.ClaudeCode;
 using Atalaya.Copilot;
 using FluentAssertions;
 using GitHub.Copilot;
@@ -25,15 +26,59 @@ namespace Atalaya.Copilot.Tests;
 /// </summary>
 public sealed class UnitThreadSurfaceTests
 {
-    /// <summary>El catálogo de la auditoría es el de siempre, palabra por palabra con el de la otra casa.</summary>
+    /// <summary>
+    /// <b>Las herramientas son las mismas en los dos transportes</b> (PROV-2 §3): misma lista,
+    /// mismo orden y misma descripción.
+    /// <para>
+    /// <b>Y se comparan los dos catálogos ENTRE SÍ</b>, no cada uno contra una lista escrita a
+    /// mano. Aquí antes había una lista de seis nombres tecleados, y precisamente por eso
+    /// <c>unit_done</c> pudo divergir durante siete fases: la descripción de MCP llevaba una frase
+    /// de más y ningún test miraba las dos. Lo que se rompería en silencio si esto no existiera es
+    /// que el mismo prompt de unidad significara dos cosas según quién lo leyera, y entonces una
+    /// discrepancia entre las dos casas ya no se podría atribuir al modelo — que es la única razón
+    /// por la que hay dos.
+    /// </para>
+    /// <para>El orden también se afirma: <c>unit_done</c> la última es D-883, no una casualidad.</para>
+    /// </summary>
     [Fact]
-    public void El_catalogo_de_la_auditoria_ofrece_las_seis_herramientas_de_siempre()
+    public void El_catalogo_de_la_auditoria_es_el_mismo_en_los_dos_transportes()
     {
         SessionConfig config = new RealCopilotAgent().BuildAuditSessionConfig(new RecordingToolbox());
+        IReadOnlyList<McpTool> mcp = AuditorTools.ForAudit(new RecordingToolbox());
 
-        config.Tools!.Select(t => t.Name).Should().Equal(
-            "submit_findings", "submit_finding", "report_verdicts",
-            "add_locations", "unit_done", "read_signatures");
+        config.Tools!.Select(t => t.Name).Should().Equal(mcp.Select(t => t.Name));
+        config.Tools!.Select(t => t.Name).Should().Equal(AuditToolText.Audit);
+        config.Tools!.Select(t => t.Description).Should().Equal(mcp.Select(t => t.Description));
+    }
+
+    /// <summary>
+    /// <b>La terminalidad la declara el TRANSPORTE, y la descripción compartida no la menciona</b>
+    /// (PROV-2 §3). El SDK de Copilot tiene el concepto —<c>IsTerminal</c>— y no hace falta
+    /// decirlo con palabras; MCP no lo tiene, así que su transporte lo compone a partir de la
+    /// misma marca declarada, y las palabras son las mismas para cualquier terminal futura.
+    /// <para>
+    /// Lo que se rompería en silencio sin esto: que la frase volviera a la descripción compartida
+    /// —donde estaba— y las dos casas recibieran otra vez instrucciones distintas.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void La_terminalidad_no_viaja_en_la_descripcion_compartida()
+    {
+        AuditToolText.UnitDoneDescription.Should().NotContain("HAS TERMINADO",
+            "la frase es de la terminalidad, y la terminalidad es una marca, no un texto");
+        AuditToolText.Terminal.Should().Equal(AuditToolText.UnitDone);
+
+        McpTool unitDone = AuditorTools.ForAudit(new RecordingToolbox())
+            .Single(t => t.Name == AuditToolText.UnitDone);
+
+        unitDone.IsTerminal.Should().BeTrue();
+        McpTerminal.Describe(unitDone).Should()
+            .Be(AuditToolText.UnitDoneDescription + McpTerminal.Suffix,
+                "por MCP la terminalidad solo se puede decir con palabras, y las pone el transporte");
+
+        SessionConfig config = new RealCopilotAgent().BuildAuditSessionConfig(new RecordingToolbox());
+        Describe(config, AuditToolText.UnitDone).Should().Be(AuditToolText.UnitDoneDescription,
+            "el SDK ya tiene `IsTerminal`: aquí decirlo con palabras sería decirlo dos veces");
     }
 
     /// <summary>

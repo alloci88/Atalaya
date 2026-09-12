@@ -322,34 +322,18 @@ public sealed class RealCopilotAgent : IAssistedFixProvider, IThreadedAuditor, I
 
         string ReadSignatures(string path) => toolbox.ReadSignatures(path);
 
+        // PROV-2 §3 — el nombre y la descripción de cada herramienta salen de `AuditToolText`, que
+        // es la MISMA fuente que lee el driver de la otra casa. La terminalidad sí es de este
+        // transporte: el SDK tiene concepto para ella (`IsTerminal`), así que aquí se declara y no
+        // se dice con palabras. El ORDEN es el del prompt y no se toca (D-883).
         var config = NewSessionConfig();
-        AddTool(config, SubmitFindings, "submit_findings",
-            "PREFERIDA. Reporta TODOS los hallazgos de la unidad en UNA sola llamada, pasando un array. "
-            + "Devuelve un array de {accepted, duplicateOf, error, id} en el mismo orden; el id es el ULID "
-            + "del hallazgo creado, y es con el que luego le das veredicto o le añades ubicaciones.");
-        AddTool(config, SubmitFinding, "submit_finding",
-            "Fallback singular. Úsala solo si por alguna razón no puedes agrupar; cada llamada añade un turno. "
-            + "Devuelve {accepted, duplicateOf, error, id}, con el ULID del hallazgo creado.");
-        AddTool(config, ReportVerdicts, "report_verdicts",
-            "OBLIGATORIA cuando la unidad tiene hallazgos existentes. Un array con un veredicto por CADA "
-            + "hallazgo listado: {findingId (ULID exacto de la lista), verdict "
-            + "(presente|arreglado|no-es-defecto|no-verificable), evidence}. Usa 'arreglado' SOLO si el "
-            + "código cambió y por eso el problema ya no está; si lo que ocurre es que discrepas de quien "
-            + "lo reportó, usa 'no-es-defecto' con tu razonamiento. Devuelve un array de {accepted, error} "
-            + "en el mismo orden.");
-        AddTool(config, AddLocations, "add_locations",
-            "Extiende un hallazgo YA existente con ubicaciones nuevas de esta misma unidad. Úsala cuando "
-            + "el MISMO defecto aparece en varios sitios: un defecto sistémico es UN hallazgo con N "
-            + "ubicaciones, no N hallazgos. findingId debe ser un ULID de la lista de existentes o de uno "
-            + "que hayas reportado en esta unidad.");
-        AddTool(config, UnitDone, "unit_done",
-            "Cierra la unidad en curso con un resumen. Si el prompt trae TIPOS DE PROBLEMA SILENCIADOS y "
-            + "te has callado alguna detección por uno de ellos, declara cuántas en suppressedByPattern: "
-            + "un array de {patternId (el id EXACTO del prompt, p. ej. P-2), count}. Déjalo vacío si no te "
-            + "has callado nada.",
-            terminal: true);
-        AddTool(config, ReadSignatures, "read_signatures",
-            "Devuelve las firmas (no cuerpos) de las dependencias directas de la unidad.");
+        AddTool(config, SubmitFindings, AuditToolText.SubmitFindings, AuditToolText.SubmitFindingsDescription);
+        AddTool(config, SubmitFinding, AuditToolText.SubmitFinding, AuditToolText.SubmitFindingDescription);
+        AddTool(config, ReportVerdicts, AuditToolText.ReportVerdicts, AuditToolText.ReportVerdictsDescription);
+        AddTool(config, AddLocations, AuditToolText.AddLocations, AuditToolText.AddLocationsDescription);
+        AddTool(config, UnitDone, AuditToolText.UnitDone, AuditToolText.UnitDoneDescription,
+            terminal: AuditToolText.IsTerminal(AuditToolText.UnitDone));
+        AddTool(config, ReadSignatures, AuditToolText.ReadSignatures, AuditToolText.ReadSignaturesDescription);
 
         return config;
     }
@@ -362,8 +346,7 @@ public sealed class RealCopilotAgent : IAssistedFixProvider, IThreadedAuditor, I
             => toolbox.SubmitVerdict(findingUlid, verdict, evidence);
 
         var config = NewSessionConfig();
-        AddTool(config, SubmitVerdict, "submit_verdict",
-            "Registra el veredicto de un hallazgo por su ULID: confirmado | resuelto | no-verificable.");
+        AddTool(config, SubmitVerdict, AuditToolText.SubmitVerdict, AuditToolText.SubmitVerdictDescription);
 
         await RunAsync(config, request.Prompt, ct);
     }
