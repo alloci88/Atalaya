@@ -31,8 +31,9 @@ public static class RuleExclusionMigration
 
     /// <summary>
     /// Traduce el <c>ruleId</c> a la frase que describe el tipo de problema. La firma toma un
-    /// diccionario en vez de leer el catálogo porque el catálogo vive en <c>Atalaya.Copilot</c>,
-    /// que depende de <c>Storage</c> y no al revés.
+    /// diccionario en vez de leer el catálogo porque el catálogo vive en <c>Atalaya.Agents</c>
+    /// —desde PROV-2; antes, en el proyecto de una casa— y <c>Storage</c> no lo referencia: es la
+    /// capa de disco, y lo que sabe de reglas se lo dice quien la llama.
     /// </summary>
     public delegate string? DescribeRule(string ruleId);
 

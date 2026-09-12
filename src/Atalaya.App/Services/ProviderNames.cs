@@ -79,9 +79,10 @@ public static class ProviderNames
     }
 
     /// <summary>
-    /// <b>Si lo que se busca es si esa casa FACTURA, se pregunta en otro sitio</b>:
-    /// <see cref="CreditCalculator.IsBilled"/> (F16-RETOQUE §1). Aquí vivió un reenvío durante un
-    /// rato y se quitó — dos puertas a la misma decisión son dos sitios donde mirar cuando alguien
-    /// quiera cambiarla, y esta clase es la de los NOMBRES.
+    /// <b>Si lo que se busca es si esa casa tiene precio, no se pregunta a nadie</b>: desde PROV-2
+    /// §3 lo contesta la tabla de tarifas —hay importe si hay tarifa para ese proveedor y ese
+    /// modelo—, y la frase de cuando no la hay la declara el propio proveedor en su
+    /// <c>Billing</c>. Aquí vivió un reenvío a la vieja decisión por cadena y se quitó: dos
+    /// puertas a la misma pregunta son dos sitios donde mirar, y esta clase es la de los NOMBRES.
     /// </summary>
 }

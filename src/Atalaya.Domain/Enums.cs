@@ -151,7 +151,7 @@ public enum SessionTrigger
 /// temática del ciclo que lo detectó; lo anterior a F17 se lee como General, que es lo que era.
 /// <para>
 /// Catálogo cerrado de la casa, versionado junto a la rúbrica de severidad (mismo sitio, mismo
-/// régimen): los criterios de cada una viven en <c>ThemeCatalog</c>, en <c>Atalaya.Copilot</c>.
+/// régimen): los criterios de cada una viven en <c>ThemeCatalog</c>, en <c>Atalaya.Agents</c>.
 /// Aquí solo está el vocabulario, que es lo que el dominio necesita para guardar y comparar.
 /// </para>
 /// </summary>

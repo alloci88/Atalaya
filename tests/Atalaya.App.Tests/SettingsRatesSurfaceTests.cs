@@ -143,11 +143,14 @@ public sealed class SettingsRatesSurfaceTests
         xaml.Should().NotContain("Tarifas de GitHub Copilot",
             "con proveedor por fila, titularla con el nombre de una casa sería falso");
         xaml.Should().Contain("Proveedor", "y la columna de proveedor está, delante del modelo");
-        xaml.Should().Contain("la tabla pública de GitHub Copilot",
-            "de dónde salen los precios, dicho donde se corrigen");
+        xaml.Should().Contain("por proveedor y modelo",
+            "de qué son los precios, dicho donde se corrigen");
+        xaml.Should().NotContain("no están en esta tabla",
+            "PROV-2 §3: la tabla admite la tarifa de cualquier casa, así que decir que una no cabe "
+            + "sería falso — lo cierto es que sin tarifa escrita no se tarifa");
         // R8 recorta la frase —de tres oraciones a dos— pero la regla es la misma: la pantalla
         // tiene que decir que la tabla se rellena sola.
-        xaml.Should().Contain("Atalaya los siembra y completa sola",
+        xaml.Should().Contain("Atalaya siembra los publicados de la casa de fábrica",
             "y que no hay que rellenarla a mano");
 
         typeof(SettingsViewModel).GetProperty("CanManageRates").Should().NotBeNull();

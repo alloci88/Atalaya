@@ -310,16 +310,16 @@
                         <!-- UNA línea, y el resto plegado (R8). La visible dice qué son estos
                              precios y de dónde salen —que es lo que hace falta para mirar la tabla—
                              y baja de tres frases a dos. Lo que se pliega son las dos salvedades:
-                             una caja en blanco no es un cero, y Claude Code no entra aquí. Las dos
-                             importan el día que se editan; ninguna, el resto de los días. -->
+                             una caja en blanco no es un cero, y que una casa sin tarifa escrita no
+                             se tarifa. Las dos importan el día que se editan; ninguna, el resto. -->
                         <StackPanel Grid.Row="2" Margin="{StaticResource Pad.L.Bottom}">
                             <TextBlock Style="{StaticResource Text.Small}"
                                        MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
-                                       Text="Precios de la tabla pública de GitHub Copilot, por millón de tokens. Atalaya los siembra y completa sola; aquí solo se corrige lo que no cuadre." />
+                                       Text="Precios por millón de tokens, por proveedor y modelo. Atalaya siembra los publicados de la casa de fábrica y completa lo que falte; aquí solo se corrige lo que no cuadre." />
                             <ToggleButton x:Name="MasTarifas" Style="{StaticResource Toggle.More}" />
                             <TextBlock Style="{StaticResource Setting.More}"
                                        MaxWidth="{StaticResource Read.MaxWidth}" HorizontalAlignment="Left"
-                                       Text="Caché escrita en blanco significa que ese modelo no la cobra aparte y esos tokens son entrada normal; no es lo mismo que escribir un 0. Las sesiones de Claude Code no se tarifan —van contra tu suscripción— y por eso no están en esta tabla."
+                                       Text="Caché escrita en blanco significa que ese modelo no la cobra aparte y esos tokens son entrada normal; no es lo mismo que escribir un 0. Una casa sin tarifa escrita aquí no se tarifa: sus tokens y sus llamadas se siguen registrando, y su coste se dice con la frase que ella declara."
                                        Visibility="{Binding IsChecked, ElementName=MasTarifas, Converter={StaticResource BoolToVisibility}}" />
                         </StackPanel>
 
